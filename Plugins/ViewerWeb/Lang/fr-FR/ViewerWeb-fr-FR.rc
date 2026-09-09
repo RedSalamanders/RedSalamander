@@ -12,9 +12,9 @@ BEGIN
         MENUITEM "&Actualiser\tF5", IDM_VIEWERWEB_FILE_REFRESH
         POPUP "Autres &fichiers"
         BEGIN
-            MENUITEM "&Suivant\tSpace, Ctrl+Down", IDM_VIEWERWEB_OTHER_NEXT
             MENUITEM "&Précédent\tBackspace, Ctrl+Up", IDM_VIEWERWEB_OTHER_PREVIOUS
-            MENUITEM "&Premier\tCtrl+Home", IDM_VIEWERWEB_OTHER_FIRST
+            MENUITEM "&Suivant\tSpace, Ctrl+Down", IDM_VIEWERWEB_OTHER_NEXT
+            MENUITEM "P&remier\tCtrl+Home", IDM_VIEWERWEB_OTHER_FIRST
             MENUITEM "&Dernier\tCtrl+End", IDM_VIEWERWEB_OTHER_LAST
         END
         MENUITEM SEPARATOR
@@ -30,14 +30,13 @@ BEGIN
     BEGIN
         MENUITEM "Zoom &avant\tCtrl++", IDM_VIEWERWEB_VIEW_ZOOM_IN
         MENUITEM "Zoom a&rrière\tCtrl+-", IDM_VIEWERWEB_VIEW_ZOOM_OUT
-        MENUITEM "&Réinitialiser le zoom\tCtrl+0", IDM_VIEWERWEB_VIEW_ZOOM_RESET
-        MENUITEM SEPARATOR
-        MENUITEM "Afficher/masquer les &outils de développement\tF12", IDM_VIEWERWEB_VIEW_DEVTOOLS
+        MENUITEM "R&éinitialiser le zoom\tCtrl+0", IDM_VIEWERWEB_VIEW_ZOOM_RESET
     END
     POPUP "&Outils"
     BEGIN
         MENUITEM "Copier &URL\tCtrl+L", IDM_VIEWERWEB_TOOLS_COPY_URL
         MENUITEM "Ouvrir dans le &navigateur\tCtrl+Enter", IDM_VIEWERWEB_TOOLS_OPEN_EXTERNAL
+        MENUITEM "Afficher/masquer les outils de &développement\tF12", IDM_VIEWERWEB_VIEW_DEVTOOLS
         MENUITEM SEPARATOR
         MENUITEM "Tout &développer (JSON/JSONL)", IDM_VIEWERWEB_TOOLS_JSON_EXPAND_ALL
         MENUITEM "Tout &réduire (JSON/JSONL)", IDM_VIEWERWEB_TOOLS_JSON_COLLAPSE_ALL

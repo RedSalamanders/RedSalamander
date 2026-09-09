@@ -194,12 +194,14 @@ enum class FontRole : uint8_t
 
 enum class ButtonVariant : uint8_t
 {
-    Standard,  // Default button
-    DropDown,  // Button with chevron, opens flyout
-    Split,     // Left action + right dropdown divider
-    Hyperlink, // Text-only, accent color, underline on hover
-    IconOnly,  // Square aspect, icon-only (no text label)
-    Repeat,    // Fires continuously while held
+    Standard,   // Default button
+    DropDown,   // Button with chevron, opens flyout
+    Selector,   // Current-value selector; whole surface opens flyout, no split action
+    Split,      // Left action + right dropdown divider
+    Hyperlink,  // Text-only, accent color, underline on hover
+    IconOnly,   // Square aspect, icon-only (no text label)
+    Disclosure, // Card/group-integrated expand/collapse chevron without button chrome
+    Repeat,     // Fires continuously while held
 };
 
 enum class EasingCurve : uint8_t
@@ -327,6 +329,7 @@ struct ContextMenuSessionCallbacks
     std::function<std::optional<ContextMenuRootSwitchRequest>(size_t hoverIndex, std::uintptr_t sequence)> switchRootFromMenuBarHover;
     ContextMenuRootHorizontalAlignment rootHorizontalAlignment = ContextMenuRootHorizontalAlignment::Start;
     ContextMenuRootVerticalPlacement rootVerticalPlacement     = ContextMenuRootVerticalPlacement::Below;
+    float minRootWidthDip                                      = 0.0f;
     float maxRootHeightDip                                     = 0.0f;
     bool focusFirstNavigableItem                               = false;
     bool ignoreInitialLeftButtonUp                             = false;
@@ -867,8 +870,10 @@ struct ButtonVisualStyle
 
 inline constexpr float kButtonCornerRadiusDip         = 4.0f;
 inline constexpr float kButtonDropDownChevronWidthDip = 20.0f;
+inline constexpr float kButtonSelectorChevronWidthDip = 24.0f;
 inline constexpr float kButtonSplitDropDownSegmentDip = 32.0f;
 inline constexpr wchar_t kButtonDropDownChevronGlyph  = L'\xE70D';
+inline constexpr wchar_t kButtonFallbackChevronGlyph  = L'\x25BE';
 
 enum class ButtonChromeFocusRing : uint8_t
 {
@@ -909,6 +914,7 @@ struct ButtonChromeResolvedStyle
     D2D1_COLOR_F border   = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
     D2D1_COLOR_F focus    = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
     D2D1_COLOR_F text     = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+    D2D1_COLOR_F chevron  = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
     bool showFill         = true;
     bool showBorder       = false;
     bool showFocus        = false;
@@ -941,6 +947,22 @@ struct ButtonChromeDrawSpec
     std::optional<ButtonChromeCustomStyle> customStyle;
 };
 
+class WindowHost;
+
+enum class ChevronDirection : uint8_t
+{
+    Left,
+    Up,
+    Right,
+    Down,
+};
+
+struct DisclosureChevronVisualState final
+{
+    ChevronDirection direction = ChevronDirection::Right;
+    float rotationDegrees = 0.0f;
+};
+
 [[nodiscard]] float GetButtonChromeDropDownSegmentWidthDip(ButtonVariant variant) noexcept;
 [[nodiscard]] ButtonChromeLayout ComputeButtonChromeLayout(const D2D1_RECT_F& bounds, ButtonVariant variant, float scale = 1.0f) noexcept;
 [[nodiscard]] ButtonChromeResolvedStyle ResolveButtonChromeResolvedStyle(const ThemePalette& theme, const ButtonChromeDrawSpec& spec) noexcept;
@@ -950,6 +972,18 @@ void DrawButtonChrome(ID2D1RenderTarget* target,
                       IDWriteTextFormat* iconFormat,
                       const ThemePalette& theme,
                       const ButtonChromeDrawSpec& spec) noexcept;
+void DrawChevronGlyph(WindowHost& host,
+                      const D2D1_RECT_F& rect,
+                      ChevronDirection direction,
+                      const D2D1_COLOR_F& color) noexcept;
+[[nodiscard]] DisclosureChevronVisualState ResolveDisclosureChevronVisualState(
+    float expandedProgress,
+    ChevronDirection collapsedDirection = ChevronDirection::Right) noexcept;
+void DrawDisclosureChevron(WindowHost& host,
+                           const D2D1_RECT_F& rect,
+                           float expandedProgress,
+                           const D2D1_COLOR_F& color,
+                           ChevronDirection collapsedDirection = ChevronDirection::Right) noexcept;
 
 struct LabelVisualStyle
 {
@@ -1344,6 +1378,13 @@ enum class WindowHostCursorKind : uint8_t
 {
     Default,
     HorizontalResize,
+    Hand,
+};
+
+enum class AccessibilityRole : uint8_t
+{
+    Default,
+    Status,
 };
 
 class Control
@@ -1405,10 +1446,19 @@ public:
     [[nodiscard]] bool IsCompactDensity() const noexcept;
     void SetConnectedAnimationKey(std::wstring key);
     [[nodiscard]] std::wstring_view GetConnectedAnimationKey() const noexcept;
+    void SetTooltipText(std::wstring tooltipText);
+    [[nodiscard]] std::wstring_view GetTooltipText() const noexcept;
     void SetAccessibleName(std::wstring name);
     [[nodiscard]] std::wstring_view GetAccessibleName() const noexcept;
     void SetAccessibleHelpText(std::wstring helpText);
     [[nodiscard]] std::wstring_view GetAccessibleHelpText() const noexcept;
+    void SetAccessibleAutomationId(std::wstring automationId);
+    [[nodiscard]] std::wstring_view GetAccessibleAutomationId() const noexcept;
+    void SetAccessibilityRole(AccessibilityRole role) noexcept;
+    [[nodiscard]] AccessibilityRole GetAccessibilityRole() const noexcept;
+    void SetAccessibleInvoke(std::function<void(WindowHost&)> onInvoke);
+    [[nodiscard]] bool SupportsAccessibleInvoke() const noexcept;
+    bool InvokeAccessible(WindowHost& host);
     void SetOnContextMenu(std::function<void(POINT screenPoint, bool keyboardInvocation)> onContextMenu);
 
 protected:
@@ -1467,8 +1517,12 @@ private:
     std::optional<FlowDirection> _explicitFlowDirection;
     std::optional<Density> _explicitDensity;
     std::wstring _connectedAnimationKey;
+    std::wstring _tooltipText;
     std::wstring _accessibleName;
     std::wstring _accessibleHelpText;
+    std::wstring _accessibleAutomationId;
+    AccessibilityRole _accessibilityRole = AccessibilityRole::Default;
+    std::function<void(WindowHost&)> _onAccessibleInvoke;
     std::function<void(POINT screenPoint, bool keyboardInvocation)> _onContextMenu;
     std::shared_ptr<int> _lifetimeToken = std::make_shared<int>(0);
 };
@@ -1638,14 +1692,17 @@ public:
     [[nodiscard]] bool IsPrimary() const noexcept;
     void SetVariant(ButtonVariant variant) noexcept;
     [[nodiscard]] ButtonVariant GetVariant() const noexcept;
-    void SetTooltipText(std::wstring tooltipText);
-    [[nodiscard]] std::wstring_view GetTooltipText() const noexcept;
+    void SetDisclosureCollapsedDirection(ChevronDirection direction) noexcept;
+    void SetDisclosureExpanded(bool expanded) noexcept;
+    void ClearDisclosureState() noexcept;
     void SetOnClick(std::function<void()> onClick);
     void SetOnDropDownClick(std::function<void()> onDropDownClick);
     bool Invoke(WindowHost& host, bool focusSelf);
     void SetPressedVisual(bool pressed) noexcept;
     [[nodiscard]] float DebugGetHoverAnimationProgress() const noexcept;
     [[nodiscard]] float DebugGetFocusAnimationProgress() const noexcept;
+    [[nodiscard]] float DebugGetDisclosureAnimationProgress() const noexcept;
+    [[nodiscard]] bool DebugIsDisclosureAnimationActive() const noexcept;
 #if defined(ENABLE_TESTS)
     [[nodiscard]] bool DebugIsPressed() const noexcept;
 #endif
@@ -1678,20 +1735,34 @@ private:
         bool active         = false;
     };
 
+    struct DisclosureTransitionState final
+    {
+        float progress      = 0.0f;
+        float startProgress = 0.0f;
+        float target        = 0.0f;
+        uint64_t startTickMs = 0u;
+        bool initialized    = false;
+        bool active         = false;
+    };
+
     void UpdateInteractionTransition(WindowHost& host, InteractionTransitionState& transition, float target) noexcept;
     [[nodiscard]] bool AdvanceInteractionTransition(const WindowHost& host, InteractionTransitionState& transition, uint64_t nowTickMs) noexcept;
+    [[nodiscard]] bool AdvanceDisclosureTransition(WindowHost& host, uint64_t nowTickMs) noexcept;
     [[nodiscard]] bool IsDropDownInvocationPoint(D2D1_POINT_2F point) const noexcept;
     [[nodiscard]] bool InvokeDropDown(WindowHost& host);
 
     static constexpr uint64_t _interactionAnimationDurationMs = 140u;
+    static constexpr uint64_t _disclosureAnimationDurationMs  = 240u;
     static constexpr float _dropDownChevronWidthDip           = kButtonDropDownChevronWidthDip;
     static constexpr float _splitDropDownWidthDip             = kButtonSplitDropDownSegmentDip;
     std::wstring _text;
-    std::wstring _tooltipText;
     std::function<void()> _onClick;
     std::function<void()> _onDropDownClick;
     InteractionTransitionState _hoverTransition{};
     InteractionTransitionState _focusTransition{};
+    DisclosureTransitionState _disclosureTransition{};
+    std::optional<bool> _disclosureExpanded;
+    ChevronDirection _disclosureCollapsedDirection = ChevronDirection::Right;
     bool _pressed          = false;
     bool _pressedDropDown  = false;
     bool _dropDownOpen     = false;
@@ -1803,6 +1874,11 @@ public:
     [[nodiscard]] double GetMaximum() const noexcept;
     void SetIndeterminate(bool indeterminate) noexcept;
     [[nodiscard]] bool IsIndeterminate() const noexcept;
+    void SetTrackHeightDip(float heightDip) noexcept;
+    [[nodiscard]] float GetTrackHeightDip() const noexcept;
+    void SetSegmentedValues(double primaryValue, double secondaryValue, D2D1_COLOR_F secondaryColor) noexcept;
+    void ClearSegmentedValues() noexcept;
+    [[nodiscard]] bool HasSegmentedValues() const noexcept;
 
     void Paint(WindowHost& host) const override;
     bool Tick(WindowHost& host, uint64_t nowTickMs) override;
@@ -1811,9 +1887,148 @@ private:
     double _value                 = 0.0;
     double _minimum               = 0.0;
     double _maximum               = 100.0;
+    double _primarySegmentValue   = 0.0;
+    double _secondarySegmentValue = 0.0;
+    D2D1_COLOR_F _secondarySegmentColor = D2D1::ColorF(D2D1::ColorF::Orange);
+    bool _segmented               = false;
     bool _indeterminate           = false;
+    float _trackHeightDip         = 0.0f;
     mutable float _animationPhase = 0.0f;
     uint64_t _lastTickMs          = 0;
+};
+
+struct ThroughputGraphHueWeight final
+{
+    float hueDegrees = -1.0f;
+    double weight    = 0.0;
+    uint8_t colorSlot = (std::numeric_limits<uint8_t>::max)();
+};
+
+struct ThroughputGraphSample final
+{
+    static constexpr size_t kMaxSamples    = 180u;
+    static constexpr size_t kMaxHueWeights = 16u;
+    static constexpr uint8_t kInvalidColorSlot = (std::numeric_limits<uint8_t>::max)();
+
+    double value       = 0.0;
+    float hueDegrees   = -1.0f;
+    uint8_t colorSlot  = kInvalidColorSlot;
+    std::array<ThroughputGraphHueWeight, kMaxHueWeights> hueWeights{};
+    size_t hueWeightCount = 0u;
+};
+
+struct ThroughputGraphBandPaintOptions final
+{
+    D2D1_COLOR_F baseFillColor{};
+    bool rainbowMode    = false;
+    bool perStreamBands = false;
+    bool highContrast   = false;
+    bool dark           = false;
+};
+
+struct ThroughputGraphBandPaintMetrics final
+{
+    size_t sampleCount          = 0u;
+    size_t quadCount            = 0u;
+    size_t geometryCount        = 0u;
+    size_t activeColorSlotCount = 0u;
+    uint64_t renderDurationUs   = 0u;
+    float fillAlpha             = 0.0f;
+    bool bandsActive            = false;
+};
+
+// One semantic gate is shared by the retained control and legacy/fallback host:
+// Rainbow may color one admitted stream, while ordinary themes require history
+// that proves at least two concurrent stream slots. High Contrast always wins.
+[[nodiscard]] bool ShouldRenderThroughputGraphBands(bool rainbowMode,
+                                                    bool perStreamBands,
+                                                    bool highContrast,
+                                                    size_t maximumConcurrentColorSlots) noexcept;
+
+// Canonical fixed-slot band painter used by all throughput graph hosts. Stream
+// colorSlot values are bounded by ThroughputGraphSample::kMaxHueWeights; one
+// internal fallback batch covers samples without stream attribution.
+[[nodiscard]] ThroughputGraphBandPaintMetrics PaintThroughputGraphBands(ID2D1RenderTarget* target,
+                                                                         const D2D1_RECT_F& bounds,
+                                                                         std::span<const ThroughputGraphSample> samples,
+                                                                         double displayedLatestValue,
+                                                                         double maximum,
+                                                                         const ThroughputGraphBandPaintOptions& options) noexcept;
+
+struct ThroughputGraphDebugState final
+{
+    size_t sampleCount   = 0u;
+    size_t hueBandCount  = 0u;
+    size_t renderedQuadCount     = 0u;
+    size_t renderedGeometryCount = 0u;
+    size_t activeColorSlotCount  = 0u;
+    bool usesRainbowStroke = false;
+    bool bandsActive        = false;
+    bool transitionActive  = false;
+    bool reducedMotion     = false;
+    bool highContrast      = false;
+    uint64_t bandRenderDurationUs = 0u;
+    float bandFillAlpha          = 0.0f;
+    double displayedLatestValue = 0.0;
+    double targetLatestValue    = 0.0;
+    bool currentValueMarkerVisible = false;
+    bool secondarySeriesVisible = false;
+    bool secondarySeriesColorCustomized = false;
+    bool currentValueTrailingLabelVisible = false;
+    double displayedCurrentValue   = 0.0;
+    double targetCurrentValue      = 0.0;
+};
+
+// Canonical rainbow color for throughput samples and any UI that identifies the
+// same transfer stream outside the graph.
+[[nodiscard]] D2D1_COLOR_F ThroughputGraphColorFromHue(float hueDegrees, bool dark) noexcept;
+
+// Reusable throughput history control. It renders an optional limit marker,
+// rainbow sample strokes, and per-stream hue-weight bands while honoring the
+// host's reduced-motion and high-contrast palette contracts.
+class ThroughputGraph final : public Control
+{
+public:
+    ThroughputGraph() = default;
+
+    void SetSamples(std::span<const ThroughputGraphSample> samples);
+    void SetSecondarySamples(std::span<const double> samples);
+    void SetSecondarySeriesColor(D2D1_COLOR_F color) noexcept;
+    void SetLimit(double value) noexcept;
+    void SetCurrentValueMarker(double value, std::wstring label, std::wstring trailingLabel = {});
+    void SetOverlayText(std::wstring text);
+    void SetRainbowMode(bool enabled) noexcept;
+    void SetPerStreamBands(bool enabled) noexcept;
+    void SetTransitionDuration(uint64_t durationMs) noexcept;
+    [[nodiscard]] ThroughputGraphDebugState GetDebugState() const noexcept;
+
+    void Paint(WindowHost& host) const override;
+    bool Tick(WindowHost& host, uint64_t nowTickMs) override;
+
+private:
+    std::vector<ThroughputGraphSample> _samples;
+    std::vector<double> _secondarySamples;
+    std::optional<D2D1_COLOR_F> _secondarySeriesColor;
+    std::wstring _overlayText;
+    std::wstring _currentValueLabel;
+    std::wstring _currentValueTrailingLabel;
+    double _limit = 0.0;
+    double _displayedLatestValue = 0.0;
+    double _transitionStartValue = 0.0;
+    double _targetLatestValue    = 0.0;
+    double _displayedCurrentValue = 0.0;
+    double _currentValueTransitionStart = 0.0;
+    double _targetCurrentValue = 0.0;
+    uint64_t _transitionStartTickMs = 0u;
+    uint64_t _currentValueTransitionStartTickMs = 0u;
+    uint64_t _transitionDurationMs  = 160u;
+    bool _rainbowMode    = false;
+    bool _perStreamBands = false;
+    bool _transitionActive = false;
+    bool _currentValueTransitionActive = false;
+    mutable bool _lastReducedMotion = false;
+    mutable bool _lastHighContrast  = false;
+    mutable ThroughputGraphBandPaintMetrics _lastBandPaintMetrics{};
 };
 
 enum class SliderOrientation : uint8_t
@@ -1978,6 +2193,7 @@ public:
         mutable wil::com_ptr<IDWriteTextFormat> measuredTitleTextFormat;
         mutable DWRITE_READING_DIRECTION measuredTitleReadingDirection = DWRITE_READING_DIRECTION_LEFT_TO_RIGHT;
         bool closable                                                  = false;
+        bool visible                                                   = true;
     };
 
     TabControl();
@@ -1989,7 +2205,7 @@ public:
         InvalidateTabHeaderLayoutCache();
         if (! _selectedIndex.has_value())
         {
-            _selectedIndex = 0u;
+            _selectedIndex = _tabs.size() - 1u;
         }
         SyncLayout();
         return child;
@@ -2002,7 +2218,12 @@ public:
     [[nodiscard]] std::wstring_view GetTabTooltip(size_t index) const noexcept;
     void SetTabClosable(size_t index, bool closable) noexcept;
     [[nodiscard]] bool IsTabClosable(size_t index) const noexcept;
+    void SetTabVisible(size_t index, bool visible) noexcept;
+    [[nodiscard]] bool IsTabVisible(size_t index) const noexcept;
+    void SetTabReorderingEnabled(bool enabled) noexcept;
+    [[nodiscard]] bool IsTabReorderingEnabled() const noexcept;
     [[nodiscard]] size_t GetTabCount() const noexcept;
+    [[nodiscard]] size_t GetVisibleTabCount() const noexcept;
     void SetSelectedIndex(std::optional<size_t> index) noexcept;
     [[nodiscard]] std::optional<size_t> GetSelectedIndex() const noexcept;
     [[nodiscard]] Control* GetSelectedPage() noexcept;
@@ -2010,6 +2231,7 @@ public:
     void SetOnSelectionChanged(std::function<void(size_t)> onSelectionChanged);
     void SetOnTabCloseRequested(std::function<bool(size_t)> onTabCloseRequested);
     void SetOnTabClosed(std::function<void(size_t)> onTabClosed);
+    void SetOnTabReordered(std::function<void(size_t, size_t)> onTabReordered);
 
     void Paint(WindowHost& host) const override;
     bool OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
@@ -2103,6 +2325,7 @@ private:
     std::function<void(size_t)> _onSelectionChanged;
     std::function<bool(size_t)> _onTabCloseRequested;
     std::function<void(size_t)> _onTabClosed;
+    std::function<void(size_t, size_t)> _onTabReordered;
     std::optional<size_t> _selectedIndex;
     std::optional<size_t> _hoveredTabIndex;
     std::optional<size_t> _pressedTabIndex;
@@ -2110,6 +2333,7 @@ private:
     std::optional<size_t> _draggingTabIndex;
     D2D1_POINT_2F _dragStartPoint = D2D1::Point2F();
     float _headerScrollOffsetDip  = 0.0f;
+    bool _tabReorderingEnabled    = true;
     bool _dragReordering          = false;
     mutable TabHeaderLayoutCache _tabHeaderLayoutCache;
 };
@@ -3526,6 +3750,7 @@ public:
     [[nodiscard]] bool DebugGetNativeTextInputCaretRect(D2D1_RECT_F& outRectDip, RECT& outScreenRectPx) const noexcept;
     [[nodiscard]] NativeTextInputEventCounters DebugGetNativeTextInputEventCounters() const noexcept;
     void DebugSetNativeTextInputImePayloadForTest(NativeTextInputImePayload payload);
+    void DebugDetachForProcessExit() noexcept;
     void DebugSetForceNullSolidBrushes(bool force) noexcept;
     [[nodiscard]] const Control* DebugHitTestControl(D2D1_POINT_2F pointDip) noexcept;
     [[nodiscard]] WindowHostCursorKind DebugResolveCursorKindForPoint(D2D1_POINT_2F pointDip) noexcept;
@@ -3543,6 +3768,11 @@ public:
 #endif
 
 private:
+    friend void ShutdownAllWindowHostsForProcessExit() noexcept;
+
+    void Detach(bool processExit) noexcept;
+    void DetachForProcessExit() noexcept;
+    void AbandonRetainedControlObserversForProcessExit() noexcept;
     [[nodiscard]] bool EnsureDeviceIndependentResources() const noexcept;
     [[nodiscard]] bool EnsureDeviceResources() noexcept;
     [[nodiscard]] bool EnsureSizeDependentResources(bool allowHidden = false) noexcept;
@@ -3578,6 +3808,8 @@ private:
     [[nodiscard]] bool TryGetNativeTextInputCaretRects(D2D1_RECT_F& outRectDip, RECT& outClientRectPx, RECT& outScreenRectPx) const noexcept;
     void PruneStaleInteractionState() noexcept;
     void ResetRootInteractionState() noexcept;
+    void UpdateSupplementalTooltipTarget(D2D1_POINT_2F pointDip) noexcept;
+    void ValidateSupplementalTooltipTarget() noexcept;
     [[nodiscard]] bool HandleTabNavigation(bool reverse) noexcept;
     [[nodiscard]] bool RouteFocusedCharInput(wchar_t ch, UINT modifiers, const wchar_t* perfDetail) noexcept;
     void RecordNativeTextInputKeyToStateMetric(
@@ -3737,6 +3969,10 @@ private:
     Control* _hoveredControl  = nullptr;
     Control* _capturedControl = nullptr;
     Control* _focusedControl  = nullptr;
+    Control* _supplementalTooltipControl = nullptr;
+    std::weak_ptr<int> _supplementalTooltipLifetime;
+    std::wstring _supplementalTooltipText;
+    D2D1_POINT_2F _supplementalTooltipPointDip = D2D1::Point2F();
     Button* _defaultButton    = nullptr;
     Button* _cancelButton     = nullptr;
     PointerDoubleClickCandidate _pendingPointerDoubleClick;
@@ -3753,4 +3989,38 @@ private:
     uint64_t _lastAnimationTickMs       = 0;
     bool _animationSuspendedWhileHidden = false;
 };
+
+struct TransientSurfaceBackdrop final
+{
+    void SetCapture(WindowHostBitmapCapture capture) noexcept;
+    void Reset() noexcept;
+    [[nodiscard]] bool HasCapture() const noexcept;
+
+    WindowHostBitmapCapture capture;
+    mutable wil::com_ptr<ID2D1Bitmap1> cachedBitmap;
+    mutable wil::com_ptr<ID2D1Device> cachedDevice;
+};
+
+struct TransientSurfaceOptions final
+{
+    float cornerRadiusDip = 18.0f;
+    bool drawShadow       = true;
+    bool pressed          = false;
+    TransientSurfaceBackdrop* backdrop = nullptr;
+};
+
+// Canonical material for small owned transient surfaces such as passive status
+// popups. The caller owns placement, transforms, opacity, and content; this
+// helper owns the shared app-rendered backdrop, fill, border, and shadow policy.
+// The popup HWND must keep its DWM system backdrop disabled.
+[[nodiscard]] bool CaptureTransientSurfaceBackdrop(const RECT& surfaceScreenRect,
+                                                   TransientSurfaceBackdrop& outBackdrop,
+                                                   std::wstring_view componentName) noexcept;
+void PaintTransientSurface(WindowHost& host,
+                           const D2D1_RECT_F& surfaceRect,
+                           const TransientSurfaceOptions& options = {}) noexcept;
+
+[[nodiscard]] bool RaiseWindowHostAccessibilityNotification(HWND hwnd,
+                                                            std::wstring_view notification,
+                                                            std::wstring_view activityId) noexcept;
 } // namespace RedSalamander::DxUi

@@ -11,6 +11,7 @@ namespace
 struct WStringViewHash
 {
     using is_transparent = void;
+    bool ignoreCase = true;
 
     size_t operator()(std::wstring_view value) const noexcept
     {
@@ -19,8 +20,8 @@ struct WStringViewHash
         uint64_t hash = 14695981039346656037ull; // FNV-1a 64-bit offset basis
         for (const wchar_t ch : value)
         {
-            const wchar_t lower = static_cast<wchar_t>(std::towlower(static_cast<wint_t>(ch)));
-            hash ^= static_cast<uint64_t>(lower);
+            const wchar_t effective = ignoreCase ? static_cast<wchar_t>(std::towlower(static_cast<wint_t>(ch))) : ch;
+            hash ^= static_cast<uint64_t>(effective);
             hash *= 1099511628211ull; // FNV-1a 64-bit prime
         }
         return static_cast<size_t>(hash);
@@ -35,10 +36,11 @@ struct WStringViewHash
 struct WStringViewEq
 {
     using is_transparent = void;
+    bool ignoreCase = true;
 
     bool operator()(std::wstring_view left, std::wstring_view right) const noexcept
     {
-        return wil::compare_string_ordinal(left, right, true) == wistd::weak_ordering::equivalent;
+        return wil::compare_string_ordinal(left, right, ignoreCase) == wistd::weak_ordering::equivalent;
     }
 };
 
@@ -77,16 +79,6 @@ std::wstring NormalizeFocusMemoryFolderKey(const std::filesystem::path& folder)
     return NormalizeFocusMemoryKey(NormalizeFolderPathForFocusMemory(folder));
 }
 
-std::wstring NormalizeFocusMemoryRootKey(const std::filesystem::path& folder)
-{
-    const std::filesystem::path normalized = NormalizeFolderPathForFocusMemory(folder);
-    const std::filesystem::path root       = normalized.root_path();
-    if (root.empty())
-    {
-        return {};
-    }
-    return NormalizeFocusMemoryKey(root);
-}
 } // namespace
 
 void FolderView::UpdateCompareNoDifferencesState() noexcept
@@ -197,6 +189,9 @@ void FolderView::StopEnumerationThread() noexcept
     {
         std::lock_guard guard(_enumerationMutex);
         _pendingEnumerationPath.reset();
+        _pendingEnumerationFileSystem.reset();
+        _pendingEnumerationPluginId.clear();
+        _pendingEnumerationInstanceContext.clear();
         _iconLoadQueue.clear();
         _thumbnailLoadQueue.clear();
         _iconLoadingActive.store(false, std::memory_order_release);
@@ -248,6 +243,9 @@ void FolderView::EnumerationWorker(std::stop_token stopToken)
         std::filesystem::path folder;
         uint64_t generation     = 0;
         bool hasEnumerationWork = false;
+        wil::com_ptr<IFileSystem> fileSystem;
+        std::wstring pluginId;
+        std::wstring instanceContext;
 
         {
             std::unique_lock lock(_enumerationMutex);
@@ -268,6 +266,9 @@ void FolderView::EnumerationWorker(std::stop_token stopToken)
             {
                 folder     = std::move(_pendingEnumerationPath.value());
                 generation = _pendingEnumerationGeneration;
+                fileSystem = std::move(_pendingEnumerationFileSystem);
+                pluginId = std::move(_pendingEnumerationPluginId);
+                instanceContext = std::move(_pendingEnumerationInstanceContext);
                 _pendingEnumerationPath.reset();
             }
         }
@@ -275,7 +276,12 @@ void FolderView::EnumerationWorker(std::stop_token stopToken)
         // Process folder enumeration if requested
         if (hasEnumerationWork && ! folder.empty())
         {
-            auto payload = ExecuteEnumeration(folder, generation, stopToken);
+            auto payload = ExecuteEnumeration(folder,
+                                              generation,
+                                              stopToken,
+                                              std::move(fileSystem),
+                                              std::move(pluginId),
+                                              std::move(instanceContext));
             if (payload && ! stopToken.stop_requested() && generation == _enumerationGeneration.load(std::memory_order_acquire))
             {
                 if (_hWnd)
@@ -303,7 +309,10 @@ void FolderView::EnumerationWorker(std::stop_token stopToken)
 
 std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(const std::filesystem::path& folder,
                                                                                uint64_t generation,
-                                                                               std::stop_token stopToken)
+                                                                               std::stop_token stopToken,
+                                                                               wil::com_ptr<IFileSystem> fileSystem,
+                                                                               std::wstring pluginId,
+                                                                               std::wstring instanceContext)
 {
     TRACER_CTX(folder.c_str());
 
@@ -313,14 +322,14 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
     payload->generation = generation;
     payload->status     = S_OK;
 
-    if (! _fileSystem)
+    if (! fileSystem)
     {
         payload->status = HRESULT_FROM_WIN32(ERROR_DLL_NOT_FOUND);
         return payload;
     }
 
     auto borrowed =
-        DirectoryInfoCache::GetInstance().BorrowDirectoryInfo(_fileSystem.get(), folder, DirectoryInfoCache::BorrowMode::AllowEnumerate, stopToken);
+        DirectoryInfoCache::GetInstance().BorrowDirectoryInfo(fileSystem.get(), folder, DirectoryInfoCache::BorrowMode::AllowEnumerate, stopToken);
     if (borrowed.Status() != S_OK)
     {
         payload->status = borrowed.Status();
@@ -552,6 +561,43 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
             payload->items.reserve(directories.size() + files.size());
             payload->items.insert(payload->items.end(), std::make_move_iterator(directories.begin()), std::make_move_iterator(directories.end()));
             payload->items.insert(payload->items.end(), std::make_move_iterator(files.begin()), std::make_move_iterator(files.end()));
+
+            size_t artifactCandidateCount = 0u;
+            size_t artifactProjectedCount = 0u;
+            const auto artifactStartedAt = std::chrono::steady_clock::now();
+            for (FolderItem& item : payload->items)
+            {
+                if (stopToken.stop_requested() || _enumerationGeneration.load(std::memory_order_acquire) != generation)
+                {
+                    return nullptr;
+                }
+                if (! FileOperationArtifacts::HasPossibleArtifactName(item.displayName))
+                {
+                    continue;
+                }
+                ++artifactCandidateCount;
+                FileOperationArtifacts::Projection projection{};
+                const HRESULT projectHr = FileOperationArtifacts::ProjectProviderChildObject(fileSystem.get(),
+                                                                                               folder.native(),
+                                                                                               item.displayName,
+                                                                                               pluginId,
+                                                                                               instanceContext,
+                                                                                               projection);
+                if (projectHr == S_OK && projection.classification != FileOperationArtifacts::Classification::Ordinary)
+                {
+                    item.artifactProjection = std::make_shared<FileOperationArtifacts::Projection>(std::move(projection));
+                    ++artifactProjectedCount;
+                }
+            }
+            Debug::Perf::Emit(L"fileops.artifact.folder_projection.us",
+                              L"name-shape-only",
+                              Debug::Perf::ElapsedUs(artifactStartedAt),
+                              static_cast<uint64_t>(artifactProjectedCount),
+                              static_cast<uint64_t>(artifactCandidateCount),
+                              S_OK);
+            Debug::Perf::EmitValue(L"fileops.artifact.folder_projection.probe_candidates",
+                                   static_cast<uint64_t>(artifactCandidateCount),
+                                   S_OK);
 
             Debug::Info(L"FolderView enumeration completed: {} directories, {} files (total: {})", directories.size(), files.size(), payload->items.size());
 
@@ -886,6 +932,9 @@ void FolderView::CancelPendingEnumeration()
     {
         std::lock_guard guard(_enumerationMutex);
         _pendingEnumerationPath.reset();
+        _pendingEnumerationFileSystem.reset();
+        _pendingEnumerationPluginId.clear();
+        _pendingEnumerationInstanceContext.clear();
         _iconLoadQueue.clear();
         _thumbnailLoadQueue.clear();
         _iconLoadingActive.store(false, std::memory_order_release);
@@ -926,6 +975,8 @@ void FolderView::CancelPendingEnumeration()
 
 void FolderView::EnumerateFolder()
 {
+    DisarmPotentialDrag();
+
     // Stop idle layout pre-creation from previous folder
     if (_idleLayoutTimer != 0 && _hWnd)
     {
@@ -933,7 +984,29 @@ void FolderView::EnumerateFolder()
         _idleLayoutTimer = 0;
     }
 
-    _items.clear();
+    if (! _pendingNavigationDisplayedModel.has_value() && _displayedFolder.has_value())
+    {
+        _pendingNavigationDisplayedModel = PendingNavigationDisplayedModel{
+            .displayedFolder = _displayedFolder,
+            .displayedLocationKey = _displayedLocationKey,
+            .items = std::move(_items),
+            .itemsArenaBuffer = std::move(_itemsArenaBuffer),
+            .itemsFolder = std::move(_itemsFolder),
+            .selectionStats = _selectionStats,
+            .focusedIndex = _focusedIndex,
+            .hoveredIndex = _hoveredIndex,
+            .anchorIndex = _anchorIndex,
+            .resolutionReason = _lastCurrentResolutionReason,
+            .scrollOffset = _scrollOffset,
+            .horizontalOffset = _horizontalOffset,
+        };
+    }
+    else
+    {
+        _items.clear();
+        _itemsArenaBuffer.reset();
+        _itemsFolder.clear();
+    }
     _columnLayout.clear();
     _columnCounts.clear();
     _columnPrefixSums.clear();
@@ -943,6 +1016,7 @@ void FolderView::EnumerateFolder()
     _focusedIndex      = static_cast<size_t>(-1);
     _anchorIndex       = static_cast<size_t>(-1);
     _hoveredIndex      = static_cast<size_t>(-1);
+    _selectionStats    = {};
 
     LayoutItems();
     UpdateScrollMetrics();
@@ -973,10 +1047,26 @@ void FolderView::EnumerateFolder()
             _pendingExternalCommandAfterEnumeration.reset();
         }
     }
+    if (_pendingExternalSelectionAfterEnumeration && _currentFolder)
+    {
+        const std::wstring currentKey = NormalizeFocusMemoryFolderKey(_currentFolder.value());
+        const std::wstring targetKey  = NormalizeFocusMemoryFolderKey(_pendingExternalSelectionAfterEnumeration->targetFolder);
+        if (! currentKey.empty() && currentKey == targetKey)
+        {
+            _pendingExternalSelectionAfterEnumeration->generation = generation;
+        }
+        else
+        {
+            _pendingExternalSelectionAfterEnumeration.reset();
+        }
+    }
     {
         std::lock_guard guard(_enumerationMutex);
         _pendingEnumerationPath       = *_currentFolder;
         _pendingEnumerationGeneration = generation;
+        _pendingEnumerationFileSystem = _fileSystem;
+        _pendingEnumerationPluginId = _fileSystemPluginId;
+        _pendingEnumerationInstanceContext = _fileSystemInstanceContext;
     }
     _enumerationCv.notify_one();
 
@@ -1037,7 +1127,7 @@ void FolderView::OnDirectoryImpact(std::unique_ptr<DirectoryInfoCache::Directory
                 bool fromWasSelected = false;
                 for (const auto& item : _items)
                 {
-                    if (item.selected && WStringViewEq{}(item.displayName, impact->renamedFromDisplayName))
+                    if (item.selected && EquivalentProviderComponent(item.displayName, impact->renamedFromDisplayName))
                     {
                         fromWasSelected = true;
                         break;
@@ -1048,7 +1138,7 @@ void FolderView::OnDirectoryImpact(std::unique_ptr<DirectoryInfoCache::Directory
                 {
                     for (const auto& rename : _pendingRefreshSelectionRenames)
                     {
-                        if (rename.fromWasSelected && WStringViewEq{}(rename.toDisplayName, impact->renamedFromDisplayName))
+                        if (rename.fromWasSelected && EquivalentProviderComponent(rename.toDisplayName, impact->renamedFromDisplayName))
                         {
                             fromWasSelected = true;
                             break;
@@ -1061,7 +1151,7 @@ void FolderView::OnDirectoryImpact(std::unique_ptr<DirectoryInfoCache::Directory
                     const auto missingIt = std::find_if(_recentlyMissingRefreshSelections.begin(),
                                                         _recentlyMissingRefreshSelections.end(),
                                                         [&](const RecentlyMissingRefreshSelection& selection) noexcept
-                    { return WStringViewEq{}(selection.displayName, impact->renamedFromDisplayName); });
+                    { return EquivalentProviderComponent(selection.displayName, impact->renamedFromDisplayName); });
                     if (missingIt != _recentlyMissingRefreshSelections.end())
                     {
                         fromWasSelected = true;
@@ -1072,7 +1162,7 @@ void FolderView::OnDirectoryImpact(std::unique_ptr<DirectoryInfoCache::Directory
                 bool collapsedChain  = false;
                 for (auto& rename : _pendingRefreshSelectionRenames)
                 {
-                    if (WStringViewEq{}(rename.toDisplayName, impact->renamedFromDisplayName))
+                    if (EquivalentProviderComponent(rename.toDisplayName, impact->renamedFromDisplayName))
                     {
                         rename.toDisplayName.assign(impact->renamedToDisplayName);
                         rename.fromWasSelected = rename.fromWasSelected || fromWasSelected;
@@ -1143,31 +1233,327 @@ void FolderView::RequestRefreshFromCache()
             _pendingExternalCommandAfterEnumeration.reset();
         }
     }
+    if (_pendingExternalSelectionAfterEnumeration && _currentFolder)
+    {
+        const std::wstring currentKey = NormalizeFocusMemoryFolderKey(_currentFolder.value());
+        const std::wstring targetKey  = NormalizeFocusMemoryFolderKey(_pendingExternalSelectionAfterEnumeration->targetFolder);
+        if (! currentKey.empty() && currentKey == targetKey)
+        {
+            _pendingExternalSelectionAfterEnumeration->generation = generation;
+        }
+        else
+        {
+            _pendingExternalSelectionAfterEnumeration.reset();
+        }
+    }
     {
         std::lock_guard guard(_enumerationMutex);
         _pendingEnumerationPath       = *_currentFolder;
         _pendingEnumerationGeneration = generation;
+        _pendingEnumerationFileSystem = _fileSystem;
+        _pendingEnumerationPluginId = _fileSystemPluginId;
+        _pendingEnumerationInstanceContext = _fileSystemInstanceContext;
     }
     _enumerationCv.notify_one();
 }
 
 void FolderView::ApplyCurrentSort()
 {
-    ApplyCurrentSort({}, static_cast<size_t>(-1));
+    DisarmPotentialDrag();
+    CurrentResolutionInput input{};
+    input.sameLogicalLocation = true;
+    input.previousSelectionStats = _selectionStats;
+    if (_focusedIndex < _items.size())
+    {
+        const FolderItem& current = _items[_focusedIndex];
+        input.survivingIdentity = std::wstring(current.displayName);
+        input.previousCurrentIdentity = input.survivingIdentity;
+        input.genericRepairProbe = CurrentRepairProbe{
+            .displayName = std::wstring(current.displayName),
+            .extensionOffset = current.extensionOffset,
+            .isDirectory = current.isDirectory,
+            .sizeBytes = current.sizeBytes,
+            .lastWriteTime = current.lastWriteTime,
+            .fileAttributes = current.fileAttributes,
+            .unsortedOrder = current.unsortedOrder,
+        };
+    }
+    if (_anchorIndex < _items.size())
+    {
+        input.previousAnchorIdentity = std::wstring(_items[_anchorIndex].displayName);
+    }
+    ApplyCurrentSort(std::move(input));
 }
 
-void FolderView::ApplyCurrentSort(std::wstring_view preferredFocusedPath, size_t fallbackFocusIndex)
+std::wstring FolderView::BuildLogicalLocationKey(const std::filesystem::path& folder) const noexcept
+{
+    std::wstring key;
+    const auto appendSegment = [&](std::wstring_view segment)
+    {
+        key.append(std::to_wstring(segment.size()));
+        key.push_back(L':');
+        key.append(segment);
+        key.push_back(L'|');
+    };
+
+    appendSegment(_fileSystemPluginId);
+    appendSegment(_fileSystemInstanceContext);
+
+    if (_fileSystemPathIdentity.has_value() && _fileSystemPathIdentity->pathTextStableIdentity)
+    {
+        const std::optional<std::wstring> pathKey = TryMakePathKey(_fileSystemPathIdentity.value(), folder.native());
+        if (pathKey.has_value())
+        {
+            key.append(L"stable|");
+            appendSegment(pathKey.value());
+            return key;
+        }
+    }
+
+    key.append(L"live|");
+    // Unstable path text is valid only for this live provider object. Context changes on the
+    // same object remain independently addressable and restorable through the context segment.
+    key.append(std::to_wstring(_fileSystemLiveInstanceEpoch));
+    key.push_back(L'|');
+    appendSegment(folder.native());
+    return key;
+}
+
+bool FolderView::EquivalentProviderComponent(std::wstring_view left, std::wstring_view right) const noexcept
+{
+    if (_fileSystemPathIdentity.has_value() && _fileSystemPathIdentity->pathTextStableIdentity)
+    {
+        return EquivalentComponent(_fileSystemPathIdentity.value(), left, right);
+    }
+    return left == right;
+}
+
+std::optional<size_t> FolderView::FindItemByProviderIdentity(std::wstring_view displayName) const noexcept
+{
+    if (displayName.empty())
+    {
+        return std::nullopt;
+    }
+    for (size_t index = 0u; index < _items.size(); ++index)
+    {
+        if (EquivalentProviderComponent(_items[index].displayName, displayName))
+        {
+            return index;
+        }
+    }
+    return std::nullopt;
+}
+
+bool FolderView::ItemOrdersBeforeForCurrentSort(const FolderItem& left, const FolderItem& right) const noexcept
+{
+    const auto compareInt = [&](const int comparison) noexcept
+    {
+        return _sortDirection == SortDirection::Ascending ? comparison < 0 : comparison > 0;
+    };
+
+    const auto compareName = [&](const FolderItem& lhs, const FolderItem& rhs) noexcept
+    {
+        const int comparison = OrdinalString::Compare(lhs.displayName, rhs.displayName, true);
+        if (comparison != 0)
+        {
+            return compareInt(comparison);
+        }
+
+        const int caseComparison = OrdinalString::Compare(lhs.displayName, rhs.displayName, false);
+        if (caseComparison != 0)
+        {
+            return compareInt(caseComparison);
+        }
+
+        return lhs.unsortedOrder < rhs.unsortedOrder;
+    };
+
+    if (left.isDirectory != right.isDirectory)
+    {
+        return left.isDirectory && ! right.isDirectory;
+    }
+
+    switch (_sortBy)
+    {
+        case SortBy::Name: return compareName(left, right);
+        case SortBy::Extension:
+        {
+            const int extensionComparison = OrdinalString::Compare(left.GetExtension(), right.GetExtension(), true);
+            return extensionComparison != 0 ? compareInt(extensionComparison) : compareName(left, right);
+        }
+        case SortBy::Time:
+            if (left.lastWriteTime != right.lastWriteTime)
+            {
+                return _sortDirection == SortDirection::Ascending ? left.lastWriteTime < right.lastWriteTime
+                                                                  : left.lastWriteTime > right.lastWriteTime;
+            }
+            return compareName(left, right);
+        case SortBy::Size:
+            if (! left.isDirectory && ! right.isDirectory && left.sizeBytes != right.sizeBytes)
+            {
+                return _sortDirection == SortDirection::Ascending ? left.sizeBytes < right.sizeBytes : left.sizeBytes > right.sizeBytes;
+            }
+            return compareName(left, right);
+        case SortBy::Attributes:
+            if (left.fileAttributes != right.fileAttributes)
+            {
+                return _sortDirection == SortDirection::Ascending ? left.fileAttributes < right.fileAttributes
+                                                                  : left.fileAttributes > right.fileAttributes;
+            }
+            return compareName(left, right);
+        case SortBy::None: return left.unsortedOrder < right.unsortedOrder;
+    }
+
+    return compareName(left, right);
+}
+
+FolderView::CurrentResolutionResult FolderView::ResolveCurrentAfterSort(const CurrentResolutionInput& input) const noexcept
+{
+    if (_items.empty())
+    {
+        return {.reason = CurrentResolutionReason::Empty};
+    }
+
+    const auto resolveIdentity = [&](const std::optional<std::wstring>& identity,
+                                     const CurrentResolutionReason reason) noexcept -> std::optional<CurrentResolutionResult>
+    {
+        if (! identity.has_value())
+        {
+            return std::nullopt;
+        }
+        if (const std::optional<size_t> index = FindItemByProviderIdentity(identity.value()); index.has_value())
+        {
+            return CurrentResolutionResult{.index = index.value(), .reason = reason};
+        }
+        return std::nullopt;
+    };
+
+    if (const auto explicitTarget = resolveIdentity(input.explicitHostTarget, CurrentResolutionReason::ExplicitHostTarget);
+        explicitTarget.has_value())
+    {
+        return explicitTarget.value();
+    }
+
+    const auto resolveRepairProbe = [&](const CurrentRepairProbe& probe,
+                                        const CurrentResolutionReason successorReason,
+                                        const CurrentResolutionReason predecessorReason) noexcept
+        -> std::optional<CurrentResolutionResult>
+    {
+        const auto isExcluded = [&](std::wstring_view identity) noexcept
+        {
+            return std::ranges::any_of(probe.excludedIdentities, [&](const std::wstring& excluded) noexcept
+            { return EquivalentProviderComponent(identity, excluded); });
+        };
+
+        if (_sortBy == SortBy::None)
+        {
+            if (probe.sortNoneSuccessor.has_value() && ! isExcluded(probe.sortNoneSuccessor.value()))
+            {
+                if (const auto successor = resolveIdentity(probe.sortNoneSuccessor, successorReason); successor.has_value())
+                {
+                    return successor.value();
+                }
+            }
+            if (probe.sortNonePredecessor.has_value() && ! isExcluded(probe.sortNonePredecessor.value()))
+            {
+                if (const auto predecessor = resolveIdentity(probe.sortNonePredecessor, predecessorReason); predecessor.has_value())
+                {
+                    return predecessor.value();
+                }
+            }
+            return std::nullopt;
+        }
+
+        FolderItem probeItem{};
+        probeItem.displayName = probe.displayName;
+        probeItem.extensionOffset = probe.extensionOffset;
+        probeItem.isDirectory = probe.isDirectory;
+        probeItem.sizeBytes = probe.sizeBytes;
+        probeItem.lastWriteTime = probe.lastWriteTime;
+        probeItem.fileAttributes = probe.fileAttributes;
+        probeItem.unsortedOrder = probe.unsortedOrder;
+
+        const auto insertion = std::lower_bound(_items.begin(), _items.end(), probeItem,
+                                                [&](const FolderItem& item, const FolderItem& value) noexcept
+        { return ItemOrdersBeforeForCurrentSort(item, value); });
+        for (auto successor = insertion; successor != _items.end(); ++successor)
+        {
+            if (! isExcluded(successor->displayName))
+            {
+                return CurrentResolutionResult{
+                    .index = static_cast<size_t>(successor - _items.begin()),
+                    .reason = successorReason,
+                };
+            }
+        }
+        for (auto predecessor = insertion; predecessor != _items.begin();)
+        {
+            --predecessor;
+            if (! isExcluded(predecessor->displayName))
+            {
+                return CurrentResolutionResult{
+                    .index = static_cast<size_t>(predecessor - _items.begin()),
+                    .reason = predecessorReason,
+                };
+            }
+        }
+        return std::nullopt;
+    };
+
+    if (input.genericRepairProbe.has_value() && input.genericRepairProbe->hostRemovalRepair)
+    {
+        if (const auto hostRepair = resolveRepairProbe(input.genericRepairProbe.value(),
+                                                       CurrentResolutionReason::HostRemovalIntent,
+                                                       CurrentResolutionReason::HostRemovalIntent);
+            hostRepair.has_value())
+        {
+            return hostRepair.value();
+        }
+    }
+
+    if (const auto surviving = resolveIdentity(input.survivingIdentity, CurrentResolutionReason::SurvivingIdentity); surviving.has_value())
+    {
+        return surviving.value();
+    }
+
+    if (input.genericRepairProbe.has_value() && ! input.genericRepairProbe->hostRemovalRepair)
+    {
+        if (const auto genericRepair = resolveRepairProbe(input.genericRepairProbe.value(),
+                                                          CurrentResolutionReason::GenericSuccessor,
+                                                          CurrentResolutionReason::GenericPredecessor);
+            genericRepair.has_value())
+        {
+            return genericRepair.value();
+        }
+    }
+
+    if (const auto restored = resolveIdentity(input.navigationMemoryRestore, CurrentResolutionReason::NavigationMemoryRestore);
+        restored.has_value())
+    {
+        return restored.value();
+    }
+
+    return {.index = 0u, .reason = CurrentResolutionReason::FirstItem};
+}
+
+void FolderView::ApplyCurrentSort(CurrentResolutionInput resolutionInput)
 {
     constexpr auto invalidIndex = static_cast<size_t>(-1);
+    Debug::Perf::Scope focusResolvePerf(L"folder.focus.resolve_us");
+    focusResolvePerf.SetValue0(static_cast<uint64_t>(_items.size()));
 
     if (_items.empty())
     {
-        const bool focusChanged     = _focusedIndex != invalidIndex;
-        const bool selectionChanged = _selectionStats.selectedFolders != 0u || _selectionStats.selectedFiles != 0u || _selectionStats.singleItem.has_value();
+        const bool focusChanged     = _focusedIndex != invalidIndex || resolutionInput.previousCurrentIdentity.has_value();
+        const bool selectionChanged = resolutionInput.selectionMembershipChanged ||
+            resolutionInput.previousSelectionStats.selectedFolders != 0u || resolutionInput.previousSelectionStats.selectedFiles != 0u ||
+            resolutionInput.previousSelectionStats.singleItem.has_value();
         _focusedIndex               = invalidIndex;
         _anchorIndex                = invalidIndex;
         _hoveredIndex               = invalidIndex;
         _selectionStats             = {};
+        _lastCurrentResolutionReason = CurrentResolutionReason::Empty;
+        focusResolvePerf.SetValue1(static_cast<uint64_t>(_lastCurrentResolutionReason));
         if (selectionChanged)
         {
             NotifySelectionChanged();
@@ -1182,101 +1568,8 @@ void FolderView::ApplyCurrentSort(std::wstring_view preferredFocusedPath, size_t
     Debug::Perf::Scope perf(L"FolderView.ApplyCurrentSort");
     perf.SetValue0(_items.size());
 
-    std::wstring_view focusedName = preferredFocusedPath;
-    if (focusedName.empty() && _focusedIndex != invalidIndex && _focusedIndex < _items.size())
-    {
-        focusedName = _items[_focusedIndex].displayName;
-    }
-
-    std::unordered_set<std::wstring_view> selectedNames;
-    selectedNames.reserve(_items.size());
-    for (const auto& item : _items)
-    {
-        if (item.selected)
-        {
-            selectedNames.insert(item.displayName);
-        }
-    }
-
-    auto compareInt = [&](int cmp) noexcept
-    {
-        if (_sortDirection == SortDirection::Ascending)
-        {
-            return cmp < 0;
-        }
-        return cmp > 0;
-    };
-
-    auto compareName = [&](const FolderItem& a, const FolderItem& b) noexcept
-    {
-        const int cmp = OrdinalString::Compare(a.displayName, b.displayName, true);
-        if (cmp != 0)
-        {
-            return compareInt(cmp);
-        }
-
-        const int caseCmp = OrdinalString::Compare(a.displayName, b.displayName, false);
-        if (caseCmp != 0)
-        {
-            return compareInt(caseCmp);
-        }
-
-        return a.unsortedOrder < b.unsortedOrder;
-    };
-
-    auto compare = [&](const FolderItem& a, const FolderItem& b) noexcept
-    {
-        if (a.isDirectory != b.isDirectory)
-        {
-            return a.isDirectory && ! b.isDirectory;
-        }
-
-        switch (_sortBy)
-        {
-            case SortBy::Name: return compareName(a, b);
-            case SortBy::Extension:
-            {
-                const auto extA  = a.GetExtension();
-                const auto extB  = b.GetExtension();
-                const int extCmp = OrdinalString::Compare(extA, extB, true);
-                if (extCmp != 0)
-                {
-                    return compareInt(extCmp);
-                }
-                return compareName(a, b);
-            }
-            case SortBy::Time:
-            {
-                if (a.lastWriteTime != b.lastWriteTime)
-                {
-                    return _sortDirection == SortDirection::Ascending ? (a.lastWriteTime < b.lastWriteTime) : (a.lastWriteTime > b.lastWriteTime);
-                }
-                return compareName(a, b);
-            }
-            case SortBy::Size:
-            {
-                if (! a.isDirectory && ! b.isDirectory && a.sizeBytes != b.sizeBytes)
-                {
-                    return _sortDirection == SortDirection::Ascending ? (a.sizeBytes < b.sizeBytes) : (a.sizeBytes > b.sizeBytes);
-                }
-                return compareName(a, b);
-            }
-            case SortBy::Attributes:
-            {
-                if (a.fileAttributes != b.fileAttributes)
-                {
-                    return _sortDirection == SortDirection::Ascending ? (a.fileAttributes < b.fileAttributes) : (a.fileAttributes > b.fileAttributes);
-                }
-                return compareName(a, b);
-            }
-            case SortBy::None:
-            {
-                return a.unsortedOrder < b.unsortedOrder;
-            }
-        }
-
-        return compareName(a, b);
-    };
+    const auto compare = [&](const FolderItem& left, const FolderItem& right) noexcept
+    { return ItemOrdersBeforeForCurrentSort(left, right); };
 
     // Parallel sorting has enough scheduling overhead that medium interactive folders are faster
     // on the sequential path; keep parallelism for genuinely large directories.
@@ -1289,15 +1582,12 @@ void FolderView::ApplyCurrentSort(std::wstring_view preferredFocusedPath, size_t
         std::sort(_items.begin(), _items.end(), compare);
     }
 
-    size_t newFocusedIndex = invalidIndex;
-    size_t firstSelected   = invalidIndex;
     SelectionStats stats{};
     const FolderItem* singleSelected = nullptr;
     uint32_t selectedTotal           = 0;
     for (size_t i = 0; i < _items.size(); ++i)
     {
         auto& item    = _items[i];
-        item.selected = selectedNames.contains(item.displayName);
         item.focused  = false;
 
         if (item.selected)
@@ -1322,35 +1612,19 @@ void FolderView::ApplyCurrentSort(std::wstring_view preferredFocusedPath, size_t
             }
         }
 
-        if (firstSelected == invalidIndex && item.selected)
-        {
-            firstSelected = i;
-        }
-
-        if (! focusedName.empty() && item.displayName == focusedName)
-        {
-            newFocusedIndex = i;
-        }
     }
 
-    if (newFocusedIndex == invalidIndex)
+    const CurrentResolutionResult resolution = ResolveCurrentAfterSort(resolutionInput);
+    _focusedIndex = resolution.index;
+    _anchorIndex = _focusedIndex;
+    if (resolutionInput.sameLogicalLocation && resolutionInput.previousAnchorIdentity.has_value())
     {
-        if (firstSelected != invalidIndex)
+        if (const std::optional<size_t> survivingAnchor = FindItemByProviderIdentity(resolutionInput.previousAnchorIdentity.value());
+            survivingAnchor.has_value())
         {
-            newFocusedIndex = firstSelected;
-        }
-        else if (focusedName.empty() && fallbackFocusIndex != invalidIndex)
-        {
-            newFocusedIndex = std::min(fallbackFocusIndex, _items.size() - 1);
-        }
-        else if (focusedName.empty())
-        {
-            newFocusedIndex = 0;
+            _anchorIndex = survivingAnchor.value();
         }
     }
-
-    _focusedIndex = newFocusedIndex;
-    _anchorIndex  = newFocusedIndex;
 
     if (_focusedIndex < _items.size())
     {
@@ -1367,9 +1641,44 @@ void FolderView::ApplyCurrentSort(std::wstring_view preferredFocusedPath, size_t
         stats.singleItem       = details;
     }
 
+    const auto selectedDetailsEqual = [](const std::optional<SelectionStats::SelectedItemDetails>& left,
+                                         const std::optional<SelectionStats::SelectedItemDetails>& right) noexcept
+    {
+        if (left.has_value() != right.has_value())
+        {
+            return false;
+        }
+        if (! left.has_value())
+        {
+            return true;
+        }
+        return left->isDirectory == right->isDirectory && left->sizeBytes == right->sizeBytes &&
+            left->lastWriteTime == right->lastWriteTime && left->fileAttributes == right->fileAttributes;
+    };
+    const bool selectionMembershipChanged = resolutionInput.selectionMembershipChanged ||
+        resolutionInput.previousSelectionStats.selectedFiles != stats.selectedFiles ||
+        resolutionInput.previousSelectionStats.selectedFolders != stats.selectedFolders;
+    const bool selectionChanged = selectionMembershipChanged ||
+        resolutionInput.previousSelectionStats.selectedFileBytes != stats.selectedFileBytes ||
+        ! selectedDetailsEqual(resolutionInput.previousSelectionStats.singleItem, stats.singleItem);
+
     _hoveredIndex   = static_cast<size_t>(-1);
     _selectionStats = stats;
-    NotifySelectionChanged();
+    _lastCurrentResolutionReason = resolution.reason;
+    focusResolvePerf.SetValue1(static_cast<uint64_t>(_lastCurrentResolutionReason));
+    if (selectionChanged)
+    {
+        NotifySelectionChanged(selectionMembershipChanged ? SelectionChangeKind::Membership : SelectionChangeKind::ItemMetadata);
+    }
+    bool focusChanged = ! resolutionInput.sameLogicalLocation || ! resolutionInput.previousCurrentIdentity.has_value();
+    if (! focusChanged && _focusedIndex < _items.size())
+    {
+        focusChanged = ! EquivalentProviderComponent(resolutionInput.previousCurrentIdentity.value(), _items[_focusedIndex].displayName);
+    }
+    if (focusChanged)
+    {
+        NotifyFocusedItemChanged();
+    }
     RememberFocusedItemForDisplayedFolder();
 }
 
@@ -1392,15 +1701,7 @@ void FolderView::RememberFocusedItemForDisplayedFolder() noexcept
         return;
     }
 
-    EnsureFocusMemoryRootForFolder(_displayedFolder.value());
-
-    const std::wstring folderKey = NormalizeFocusMemoryFolderKey(_displayedFolder.value());
-    if (folderKey.empty())
-    {
-        return;
-    }
-
-    _focusMemory.insert_or_assign(folderKey, std::wstring(_items[_focusedIndex].displayName));
+    static_cast<void>(RecordFocusMemoryEntry(_displayedFolder.value(), _items[_focusedIndex].displayName));
 }
 
 void FolderView::RememberFocusedItemForFolder(const std::filesystem::path& folder, std::wstring_view itemDisplayName) noexcept
@@ -1410,21 +1711,540 @@ void FolderView::RememberFocusedItemForFolder(const std::filesystem::path& folde
         return;
     }
 
-    const std::wstring rootKey = NormalizeFocusMemoryRootKey(folder);
-    if (_focusMemoryRootKey != rootKey)
+    const std::wstring locationKey = BuildLogicalLocationKey(folder);
+    if (! locationKey.empty())
     {
-        _focusMemory.clear();
-        _focusMemoryRootKey = rootKey;
+        _pendingExplicitCurrentTarget = PendingExplicitCurrentTarget{
+            .locationKey = locationKey,
+            .displayName = std::wstring(itemDisplayName),
+        };
     }
 
-    const std::wstring folderKey = NormalizeFocusMemoryFolderKey(folder);
-    if (folderKey.empty())
+    static_cast<void>(RecordFocusMemoryEntry(folder, itemDisplayName));
+}
+
+uint64_t FolderView::BeginRemovalFocusTracking(const std::vector<std::filesystem::path>& removedPaths,
+                                               const FileSystemPathIdentity& pathIdentity)
+{
+    constexpr auto invalidIndex = static_cast<size_t>(-1);
+
+    if (! pathIdentity.pathTextStableIdentity || ! _displayedFolder || ! _currentFolder ||
+        ! EquivalentPath(pathIdentity, _displayedFolder->native(), _currentFolder->native()) ||
+        _focusedIndex == invalidIndex || _focusedIndex >= _items.size() || removedPaths.empty())
+    {
+        return 0u;
+    }
+
+    PendingRemovalFocus entry{};
+    entry.folderPath = _displayedFolder.value();
+    entry.pathIdentity = pathIdentity;
+    entry.removedFocusDisplayName.assign(_items[_focusedIndex].displayName);
+    entry.folderPathGeneration = _folderPathGeneration;
+    entry.focusOwnershipEpoch = _removalFocusOwnershipEpoch;
+    entry.sortEpoch = _removalFocusSortEpoch;
+    entry.providerEpoch = _removalFocusProviderEpoch;
+
+    Debug::Perf::Scope beginPerf(L"folder.removal_focus.begin_us");
+    beginPerf.SetValue0(static_cast<uint64_t>(_items.size()));
+    beginPerf.SetValue1(static_cast<uint64_t>(removedPaths.size()));
+
+    bool focusedSourceFound = false;
+    entry.sources.reserve(removedPaths.size());
+    for (size_t sourceIndex = 0u; sourceIndex < removedPaths.size(); ++sourceIndex)
+    {
+        const std::filesystem::path& path = removedPaths[sourceIndex];
+        if (! EquivalentPath(pathIdentity, path.parent_path().native(), _itemsFolder.native()))
+        {
+            continue;
+        }
+
+        PendingRemovalFocus::Source source{.sourceIndex = sourceIndex, .displayName = path.filename().wstring()};
+        if (EquivalentComponent(pathIdentity, source.displayName, entry.removedFocusDisplayName))
+        {
+            entry.focusedSourceIndex = sourceIndex;
+            focusedSourceFound = true;
+        }
+        entry.sources.push_back(std::move(source));
+    }
+
+    if (! focusedSourceFound)
+    {
+        return 0u;
+    }
+
+    uint64_t token = _nextRemovalFocusToken++;
+    if (token == 0u)
+    {
+        token = _nextRemovalFocusToken++;
+    }
+    entry.token = token;
+    _pendingRemovalFocus.push_back(std::move(entry));
+    return token;
+}
+
+void FolderView::CompleteRemovalFocusTracking(uint64_t token, std::span<const RemovalDisposition> sourceDispositions) noexcept
+{
+    if (token == 0u)
     {
         return;
     }
 
-    _focusMemory.insert_or_assign(folderKey, std::wstring(itemDisplayName));
+    const auto pending = std::find_if(_pendingRemovalFocus.begin(), _pendingRemovalFocus.end(),
+                                      [token](const PendingRemovalFocus& entry) noexcept { return entry.token == token; });
+    if (pending == _pendingRemovalFocus.end())
+    {
+        return;
+    }
+
+    if (pending->folderPathGeneration != _folderPathGeneration || pending->focusOwnershipEpoch != _removalFocusOwnershipEpoch ||
+        pending->sortEpoch != _removalFocusSortEpoch || pending->providerEpoch != _removalFocusProviderEpoch ||
+        pending->focusedSourceIndex >= sourceDispositions.size() ||
+        sourceDispositions[pending->focusedSourceIndex] != RemovalDisposition::Removed)
+    {
+        _pendingRemovalFocus.erase(pending);
+        return;
+    }
+
+    for (PendingRemovalFocus::Source& source : pending->sources)
+    {
+        source.provenRemoved = source.sourceIndex < sourceDispositions.size() &&
+                               sourceDispositions[source.sourceIndex] == RemovalDisposition::Removed;
+    }
+
+    pending->committed = true;
+    pending->commitEnumerationGeneration = _enumerationGeneration.load(std::memory_order_acquire);
+    pending->commitSequence = _nextRemovalFocusCommitSequence++;
+    if (pending->commitSequence == 0u)
+    {
+        pending->commitSequence = _nextRemovalFocusCommitSequence++;
+    }
+    pending->expiresAt = std::chrono::steady_clock::now() + std::chrono::seconds{30};
 }
+
+std::optional<std::vector<std::wstring>> FolderView::ResolvePendingRemovalFocusForEnumeration(
+    uint64_t generation,
+    const std::filesystem::path& currentFolder,
+    const std::vector<FolderItem>& items)
+{
+    const auto now = std::chrono::steady_clock::now();
+    std::erase_if(_pendingRemovalFocus,
+                  [&](const PendingRemovalFocus& pending) noexcept
+    {
+        return (pending.committed && pending.expiresAt <= now) || pending.folderPathGeneration != _folderPathGeneration ||
+               pending.focusOwnershipEpoch != _removalFocusOwnershipEpoch || pending.sortEpoch != _removalFocusSortEpoch ||
+               pending.providerEpoch != _removalFocusProviderEpoch ||
+               ! EquivalentPath(pending.pathIdentity, pending.folderPath.native(), currentFolder.native());
+    });
+
+    uint64_t newestReflectedSequence = 0u;
+    std::optional<std::vector<std::wstring>> newestProvenRemovedIdentities;
+    for (auto pending = _pendingRemovalFocus.begin(); pending != _pendingRemovalFocus.end();)
+    {
+        if (! pending->committed || generation <= pending->commitEnumerationGeneration)
+        {
+            ++pending;
+            continue;
+        }
+
+        const bool removedFocusSurvived = std::ranges::any_of(items, [&](const FolderItem& item) noexcept
+        { return EquivalentComponent(pending->pathIdentity, item.displayName, pending->removedFocusDisplayName); });
+        if (removedFocusSurvived)
+        {
+            ++pending;
+            continue;
+        }
+
+        std::vector<std::wstring> provenRemovedIdentities;
+        provenRemovedIdentities.reserve(pending->sources.size());
+        for (const PendingRemovalFocus::Source& source : pending->sources)
+        {
+            if (source.provenRemoved)
+            {
+                provenRemovedIdentities.push_back(source.displayName);
+            }
+        }
+        if (pending->commitSequence >= newestReflectedSequence)
+        {
+            newestReflectedSequence = pending->commitSequence;
+            newestProvenRemovedIdentities = std::move(provenRemovedIdentities);
+        }
+        pending = _pendingRemovalFocus.erase(pending);
+    }
+    return newestProvenRemovedIdentities;
+}
+
+#if defined(ENABLE_TESTS)
+std::wstring FolderView::DebugValidateRemovalFocusContractsForSelfTest()
+{
+    const std::filesystem::path folder = LR"(C:\focus-contract)";
+    const FileSystemPathIdentity insensitive = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem();
+    FileSystemPathIdentity sensitive = insensitive;
+    sensitive.componentComparison = FileSystemPathComponentComparison::OrdinalCaseSensitive;
+
+    const auto makeItems = [](const std::vector<std::wstring>& names)
+    {
+        std::vector<FolderItem> items(names.size());
+        for (size_t index = 0u; index < names.size(); ++index)
+        {
+            items[index].displayName = names[index];
+            items[index].unsortedOrder = index;
+        }
+        return items;
+    };
+
+    struct ResolutionObservation final
+    {
+        bool intentAccepted = false;
+        std::wstring currentDisplayName;
+        CurrentResolutionReason reason = CurrentResolutionReason::Unresolved;
+        std::vector<std::wstring> provenRemovedIdentities;
+    };
+
+    const auto resolveExact = [&](const std::vector<std::wstring>& ordered,
+                                  size_t focusedOrderedIndex,
+                                  const std::vector<std::wstring>& requested,
+                                  std::span<const RemovalDisposition> dispositions,
+                                  const FileSystemPathIdentity& identity,
+                                  const std::vector<std::wstring>& refreshed) -> ResolutionObservation
+    {
+        FolderView view;
+        view._fileSystemPathIdentity = identity;
+        view._items = makeItems(ordered);
+        view._focusedIndex = focusedOrderedIndex;
+
+        PendingRemovalFocus pending{};
+        pending.token = 1u;
+        pending.folderPath = folder;
+        pending.pathIdentity = identity;
+        pending.removedFocusDisplayName = ordered[focusedOrderedIndex];
+        for (size_t sourceIndex = 0u; sourceIndex < requested.size(); ++sourceIndex)
+        {
+            pending.sources.push_back(PendingRemovalFocus::Source{
+                .sourceIndex = sourceIndex,
+                .displayName = requested[sourceIndex],
+            });
+            if (EquivalentComponent(identity, requested[sourceIndex], pending.removedFocusDisplayName))
+            {
+                pending.focusedSourceIndex = sourceIndex;
+            }
+        }
+        view._pendingRemovalFocus.push_back(std::move(pending));
+        view.CompleteRemovalFocusTracking(1u, dispositions);
+        if (view._pendingRemovalFocus.empty() || ! view._pendingRemovalFocus.front().committed)
+        {
+            return {};
+        }
+
+        const uint64_t reflectedGeneration = view._pendingRemovalFocus.front().commitEnumerationGeneration + 1u;
+        std::optional<std::vector<std::wstring>> provenRemoved =
+            view.ResolvePendingRemovalFocusForEnumeration(reflectedGeneration, folder, makeItems(refreshed));
+        if (! provenRemoved.has_value())
+        {
+            return {};
+        }
+
+        const FolderItem& priorCurrent = view._items[focusedOrderedIndex];
+        CurrentResolutionInput input{};
+        input.sameLogicalLocation = true;
+        input.genericRepairProbe = CurrentRepairProbe{
+            .displayName = std::wstring(priorCurrent.displayName),
+            .extensionOffset = priorCurrent.extensionOffset,
+            .isDirectory = priorCurrent.isDirectory,
+            .sizeBytes = priorCurrent.sizeBytes,
+            .lastWriteTime = priorCurrent.lastWriteTime,
+            .fileAttributes = priorCurrent.fileAttributes,
+            .unsortedOrder = priorCurrent.unsortedOrder,
+            .excludedIdentities = std::move(provenRemoved.value()),
+            .hostRemovalRepair = true,
+        };
+
+        view._items = makeItems(refreshed);
+        std::stable_sort(view._items.begin(), view._items.end(), [&](const FolderItem& left, const FolderItem& right) noexcept
+        { return view.ItemOrdersBeforeForCurrentSort(left, right); });
+        const CurrentResolutionResult result = view.ResolveCurrentAfterSort(input);
+        return ResolutionObservation{
+            .intentAccepted = true,
+            .currentDisplayName = result.index < view._items.size() ? std::wstring(view._items[result.index].displayName) : std::wstring{},
+            .reason = result.reason,
+            .provenRemovedIdentities = std::move(input.genericRepairProbe.value().excludedIdentities),
+        };
+    };
+
+    const std::vector<std::wstring> ordered{L"A", L"B", L"C", L"D"};
+    const std::vector<std::wstring> requested{L"B", L"C"};
+    const std::array<RemovalDisposition, 2> focusedSuccessOtherFailure{
+        RemovalDisposition::Removed, RemovalDisposition::Retained};
+    const ResolutionObservation retainedFailure =
+        resolveExact(ordered, 1u, requested, focusedSuccessOtherFailure, insensitive, {L"D", L"A", L"C"});
+    if (! retainedFailure.intentAccepted || retainedFailure.currentDisplayName != L"C" ||
+        retainedFailure.reason != CurrentResolutionReason::HostRemovalIntent)
+    {
+        return L"focused Removed/other Retained did not keep survivor C under resulting keyed order";
+    }
+    const std::array<RemovalDisposition, 2> focusedFailureOtherSuccess{
+        RemovalDisposition::Retained, RemovalDisposition::Removed};
+    if (resolveExact(ordered, 1u, requested, focusedFailureOtherSuccess, insensitive, {L"D", L"A", L"B"}).intentAccepted)
+    {
+        return L"focused Retained/other Removed incorrectly committed focus migration";
+    }
+    const std::array<RemovalDisposition, 2> falseOutcome{
+        RemovalDisposition::Retained, RemovalDisposition::Removed};
+    if (resolveExact(ordered, 1u, requested, falseOutcome, insensitive, {L"D", L"A", L"B"}).intentAccepted)
+    {
+        return L"a Retained disposition incorrectly proved removal of the focused source";
+    }
+    const std::array<RemovalDisposition, 1> missingFocusedOutcome{RemovalDisposition::Retained};
+    if (resolveExact(ordered, 1u, requested, missingFocusedOutcome, insensitive, {L"D", L"A", L"B"}).intentAccepted)
+    {
+        return L"a missing focused-source outcome did not fail closed";
+    }
+    const std::array<RemovalDisposition, 2> canceledOutcome{
+        RemovalDisposition::Retained, RemovalDisposition::Removed};
+    if (resolveExact(ordered, 1u, requested, canceledOutcome, insensitive, {L"D", L"A", L"B"}).intentAccepted)
+    {
+        return L"cancellation incorrectly committed focus migration";
+    }
+    const std::array<RemovalDisposition, 2> allSuccess{
+        RemovalDisposition::Removed, RemovalDisposition::Removed};
+    const ResolutionObservation allRemoved = resolveExact(ordered, 1u, requested, allSuccess, insensitive, {L"D", L"A"});
+    if (! allRemoved.intentAccepted || allRemoved.currentDisplayName != L"D" ||
+        allRemoved.reason != CurrentResolutionReason::HostRemovalIntent)
+    {
+        return L"all-Removed completion did not select canonical successor D from unsorted enumeration input";
+    }
+    const ResolutionObservation removedBeforeCurrent = resolveExact({L"A", L"B", L"C", L"D", L"E"},
+                                                                     2u,
+                                                                     {L"A", L"C"},
+                                                                     allSuccess,
+                                                                     insensitive,
+                                                                     {L"E", L"B", L"D"});
+    if (! removedBeforeCurrent.intentAccepted || removedBeforeCurrent.currentDisplayName != L"D")
+    {
+        return L"successful removals before current did not use the current probe's canonical successor D";
+    }
+    const std::vector<std::wstring> caseOrdered{L"A", L"README", L"Readme", L"Z"};
+    const std::vector<std::wstring> caseRequested{L"README"};
+    const std::array<RemovalDisposition, 1> caseSuccess{RemovalDisposition::Removed};
+    const ResolutionObservation caseSensitive =
+        resolveExact(caseOrdered, 1u, caseRequested, caseSuccess, sensitive, {L"Z", L"Readme", L"A"});
+    if (! caseSensitive.intentAccepted || caseSensitive.currentDisplayName != L"Readme")
+    {
+        return L"case-sensitive provider identity conflated case-only siblings";
+    }
+    const std::array<RemovalDisposition, 1> focusedOnlySuccess{RemovalDisposition::Removed};
+    const ResolutionObservation fartherSuccessor =
+        resolveExact(ordered, 1u, {L"B"}, focusedOnlySuccess, insensitive, {L"D", L"A"});
+    if (! fartherSuccessor.intentAccepted || fartherSuccessor.currentDisplayName != L"D")
+    {
+        return L"a disappeared pre-delete neighbor hid a farther refreshed survivor";
+    }
+    const ResolutionObservation skipProvenRemoved = resolveExact(ordered, 1u, requested, allSuccess, insensitive, {L"C", L"D", L"A"});
+    if (! skipProvenRemoved.intentAccepted || skipProvenRemoved.currentDisplayName != L"D" ||
+        skipProvenRemoved.reason != CurrentResolutionReason::HostRemovalIntent)
+    {
+        return L"canonical removal repair did not skip a proven-removed identity retained by a stale payload";
+    }
+    const ResolutionObservation onlyProvenRemoved = resolveExact(ordered, 1u, requested, allSuccess, insensitive, {L"C"});
+    if (! onlyProvenRemoved.intentAccepted || onlyProvenRemoved.currentDisplayName != L"C" ||
+        onlyProvenRemoved.reason != CurrentResolutionReason::FirstItem)
+    {
+        return L"specialized removal intent nominated a proven-removed fallback instead of using the invariant fallback";
+    }
+
+    {
+        FolderView view;
+        constexpr size_t kBeginSnapshotCount = 4096u;
+        std::vector<std::wstring> names;
+        names.reserve(kBeginSnapshotCount);
+        for (size_t index = 0u; index < kBeginSnapshotCount; ++index)
+        {
+            names.push_back(std::format(L"removal-focus-snapshot-item-{:04}", index));
+        }
+        view._displayedFolder = folder;
+        view._currentFolder = folder;
+        view._itemsFolder = folder;
+        view._items = makeItems(names);
+        view._focusedIndex = 100u;
+        const uint64_t token = view.BeginRemovalFocusTracking({folder / names[100]}, insensitive);
+        if (token == 0u || view._pendingRemovalFocus.empty())
+        {
+            return L"BeginRemovalFocusTracking failed on a large synthetic folder";
+        }
+        const PendingRemovalFocus& pending = view._pendingRemovalFocus.front();
+        if (pending.removedFocusDisplayName != names[100] || pending.sources.size() != 1u ||
+            pending.sources.front().displayName != names[100])
+        {
+            return L"BeginRemovalFocusTracking did not retain only the focused source proof snapshot";
+        }
+        const std::array<RemovalDisposition, 1> beginSuccess{RemovalDisposition::Removed};
+        view.CompleteRemovalFocusTracking(token, beginSuccess);
+        if (view._pendingRemovalFocus.empty() || ! view._pendingRemovalFocus.front().committed)
+        {
+            return L"sources-only Begin snapshot did not commit after explicit focused Removed";
+        }
+        const uint64_t reflectedGeneration = view._pendingRemovalFocus.front().commitEnumerationGeneration + 1u;
+        std::vector<std::wstring> refreshed = names;
+        refreshed.erase(refreshed.begin() + 100);
+        const std::optional<std::vector<std::wstring>> provenRemoved =
+            view.ResolvePendingRemovalFocusForEnumeration(reflectedGeneration, folder, makeItems(refreshed));
+        if (! provenRemoved.has_value() || provenRemoved->size() != 1u || provenRemoved.value()[0] != names[100])
+        {
+            return L"sources-only Begin snapshot did not produce the focused exact-removal proof";
+        }
+    }
+
+    const auto addCommitted = [&](FolderView& view,
+                                  std::wstring removedFocusDisplayName,
+                                  uint64_t sequence,
+                                  uint64_t commitGeneration,
+                                  std::vector<std::wstring> provenRemoved = {})
+    {
+        PendingRemovalFocus pending{};
+        pending.token = sequence;
+        pending.folderPath = folder;
+        pending.pathIdentity = insensitive;
+        pending.removedFocusDisplayName = std::move(removedFocusDisplayName);
+        if (provenRemoved.empty())
+        {
+            provenRemoved.push_back(pending.removedFocusDisplayName);
+        }
+        for (size_t sourceIndex = 0u; sourceIndex < provenRemoved.size(); ++sourceIndex)
+        {
+            pending.sources.push_back(PendingRemovalFocus::Source{
+                .sourceIndex = sourceIndex,
+                .displayName = std::move(provenRemoved[sourceIndex]),
+                .provenRemoved = true,
+            });
+        }
+        pending.folderPathGeneration = view._folderPathGeneration;
+        pending.focusOwnershipEpoch = view._removalFocusOwnershipEpoch;
+        pending.sortEpoch = view._removalFocusSortEpoch;
+        pending.providerEpoch = view._removalFocusProviderEpoch;
+        pending.commitEnumerationGeneration = commitGeneration;
+        pending.commitSequence = sequence;
+        pending.expiresAt = std::chrono::steady_clock::now() + std::chrono::seconds{30};
+        pending.committed = true;
+        view._pendingRemovalFocus.push_back(std::move(pending));
+    };
+
+    {
+        FolderView view;
+        addCommitted(view, L"B", 1u, 10u);
+        ++view._removalFocusOwnershipEpoch;
+        if (view.ResolvePendingRemovalFocusForEnumeration(11u, folder, makeItems({L"A", L"C"})).has_value() ||
+            ! view._pendingRemovalFocus.empty())
+        {
+            return L"newer user focus ownership did not cancel an older removal intent";
+        }
+    }
+    {
+        FolderView view;
+        view._displayedFolder = folder;
+        view._currentFolder = folder;
+        view._itemsFolder = folder;
+        view._items = makeItems({L"A", L"B", L"C"});
+        view._focusedIndex = 1u;
+        view._anchorIndex = 1u;
+        view._items[1].focused = true;
+        view._items[0].selected = true;
+        view._items[2].selected = true;
+        view._selectionStats.selectedFiles = 2u;
+        addCommitted(view, L"B", 1u, 10u);
+        const uint64_t ownershipBeforeSelectionClear = view._removalFocusOwnershipEpoch;
+        view.ClearSelection();
+        const std::optional<std::vector<std::wstring>> provenRemoved =
+            view.ResolvePendingRemovalFocusForEnumeration(11u, folder, makeItems({L"A", L"C"}));
+        if (view._removalFocusOwnershipEpoch != ownershipBeforeSelectionClear || ! provenRemoved.has_value() ||
+            provenRemoved->size() != 1u || provenRemoved.value()[0] != L"B")
+        {
+            return L"selection-only clear changed current ownership or invalidated a committed removal intent";
+        }
+    }
+    {
+        FolderView view;
+        view._displayedFolder = folder;
+        view._currentFolder = folder;
+        view._itemsFolder = folder;
+        view._items = makeItems({L"A", L"B", L"C"});
+        view._focusedIndex = 1u;
+        view._anchorIndex = 1u;
+        view._items[1].focused = true;
+        addCommitted(view, L"B", 1u, 10u);
+        view.FocusItem(2u, false);
+        if (view.ResolvePendingRemovalFocusForEnumeration(11u, folder, makeItems({L"A", L"C"})).has_value() ||
+            ! view._pendingRemovalFocus.empty())
+        {
+            return L"actual current-item ownership change did not invalidate a committed removal intent";
+        }
+    }
+    for (const uint32_t changedEpoch : {0u, 1u, 2u})
+    {
+        FolderView view;
+        addCommitted(view, L"B", 1u, 10u);
+        if (changedEpoch == 0u)
+        {
+            ++view._folderPathGeneration;
+        }
+        else if (changedEpoch == 1u)
+        {
+            ++view._removalFocusSortEpoch;
+        }
+        else
+        {
+            ++view._removalFocusProviderEpoch;
+        }
+        if (view.ResolvePendingRemovalFocusForEnumeration(11u, folder, makeItems({L"A", L"C"})).has_value() ||
+            ! view._pendingRemovalFocus.empty())
+        {
+            return L"navigation, sort, or provider epoch change did not invalidate an older removal intent";
+        }
+    }
+    {
+        FolderView view;
+        addCommitted(view, L"B", 1u, 10u);
+        if (view.ResolvePendingRemovalFocusForEnumeration(10u, folder, makeItems({L"A", L"C"})).has_value() ||
+            view._pendingRemovalFocus.size() != 1u)
+        {
+            return L"an in-flight enumeration was accepted as post-completion evidence";
+        }
+        if (view.ResolvePendingRemovalFocusForEnumeration(11u, folder, makeItems({L"A", L"B", L"C"})).has_value() ||
+            view._pendingRemovalFocus.size() != 1u)
+        {
+            return L"an unreflected newer snapshot consumed the pending removal intent";
+        }
+        const std::optional<std::vector<std::wstring>> provenRemoved =
+            view.ResolvePendingRemovalFocusForEnumeration(12u, folder, makeItems({L"A", L"C"}));
+        if (! provenRemoved.has_value() || provenRemoved->size() != 1u || provenRemoved.value()[0] != L"B" ||
+            ! view._pendingRemovalFocus.empty())
+        {
+            return L"a reflected post-completion snapshot did not resolve the retained intent";
+        }
+    }
+    for (const bool reverseInsertion : {false, true})
+    {
+        FolderView view;
+        if (reverseInsertion)
+        {
+            addCommitted(view, L"D", 2u, 10u);
+            addCommitted(view, L"B", 1u, 10u);
+        }
+        else
+        {
+            addCommitted(view, L"B", 1u, 10u);
+            addCommitted(view, L"D", 2u, 10u);
+        }
+        const std::optional<std::vector<std::wstring>> provenRemoved =
+            view.ResolvePendingRemovalFocusForEnumeration(11u, folder, makeItems({L"A", L"C", L"E"}));
+        if (! provenRemoved.has_value() || provenRemoved->size() != 1u || provenRemoved.value()[0] != L"D" ||
+            ! view._pendingRemovalFocus.empty())
+        {
+            return L"coalesced removal intents were not all consumed with newest-sequence precedence";
+        }
+    }
+
+    return {};
+}
+#endif
 
 void FolderView::QueueCommandAfterNextEnumeration(UINT commandId,
                                                   const std::filesystem::path& targetFolder,
@@ -1448,33 +2268,183 @@ void FolderView::QueueCommandAfterNextEnumeration(UINT commandId,
     _pendingExternalCommandAfterEnumeration = std::move(pending);
 }
 
-void FolderView::EnsureFocusMemoryRootForFolder(const std::filesystem::path& folder) noexcept
+void FolderView::SelectDisplayNamesAfterNextEnumeration(const std::filesystem::path& targetFolder,
+                                                        std::vector<std::wstring> displayNames) noexcept
 {
-    const std::wstring rootKey = NormalizeFocusMemoryRootKey(folder);
-    if (_focusMemoryRootKey != rootKey)
+    if (targetFolder.empty() || displayNames.empty())
     {
-        _focusMemory.clear();
-        _focusMemoryRootKey = rootKey;
+        _pendingExternalSelectionAfterEnumeration.reset();
+        return;
     }
+
+    PendingExternalSelection pending{};
+    pending.targetFolder = targetFolder;
+    pending.displayNames = std::move(displayNames);
+    _pendingExternalSelectionAfterEnumeration = std::move(pending);
+}
+
+std::optional<std::wstring> FolderView::TryBuildFocusMemoryLocationKey(const std::filesystem::path& folder) const noexcept
+{
+    if (_fileSystemPathIdentity.has_value() && _fileSystemPathIdentity->pathTextStableIdentity &&
+        ! TryMakePathKey(_fileSystemPathIdentity.value(), folder.native()).has_value())
+    {
+        return std::nullopt;
+    }
+
+    std::wstring locationKey = BuildLogicalLocationKey(folder);
+    if (locationKey.empty())
+    {
+        return std::nullopt;
+    }
+    return locationKey;
+}
+
+std::optional<std::wstring> FolderView::TryBuildFocusMemoryItemIdentityKey(const std::wstring_view itemDisplayName) const noexcept
+{
+    if (itemDisplayName.empty())
+    {
+        return std::nullopt;
+    }
+
+    if (_fileSystemPathIdentity.has_value() && _fileSystemPathIdentity->pathTextStableIdentity)
+    {
+        return TryMakeComponentKey(_fileSystemPathIdentity.value(), itemDisplayName);
+    }
+    return std::wstring(itemDisplayName);
+}
+
+void FolderView::RecordFocusMemoryNoCache(const FocusMemoryNoCacheReason reason) noexcept
+{
+    ++_focusMemoryNoCacheCount;
+    _focusMemoryLastNoCacheReason = reason;
+    switch (reason)
+    {
+    case FocusMemoryNoCacheReason::LocationIdentity:
+        ++_focusMemoryLocationIdentityNoCacheCount;
+        break;
+    case FocusMemoryNoCacheReason::ItemIdentity:
+        ++_focusMemoryItemIdentityNoCacheCount;
+        break;
+    case FocusMemoryNoCacheReason::OversizedEntry:
+        ++_focusMemoryOversizedEntryNoCacheCount;
+        break;
+    case FocusMemoryNoCacheReason::None:
+        break;
+    }
+}
+
+void FolderView::TouchFocusMemoryEntry(FocusMemoryEntry& entry) noexcept
+{
+    _focusMemoryRecency.splice(_focusMemoryRecency.begin(), _focusMemoryRecency, entry.recencyIterator);
+    entry.recencyIterator = _focusMemoryRecency.begin();
+}
+
+void FolderView::EvictFocusMemoryEntry(const FocusMemoryRecencyList::iterator recencyIterator) noexcept
+{
+    const std::wstring* const locationKey = *recencyIterator;
+    if (! locationKey)
+    {
+        std::terminate();
+    }
+    const auto mapIterator = _focusMemory.find(*locationKey);
+    if (mapIterator == _focusMemory.end() || mapIterator->second.payloadBytes > _focusMemoryPayloadBytes)
+    {
+        std::terminate();
+    }
+
+    _focusMemoryPayloadBytes -= mapIterator->second.payloadBytes;
+    _focusMemoryRecency.erase(recencyIterator);
+    _focusMemory.erase(mapIterator);
+    ++_focusMemoryEvictionCount;
+}
+
+void FolderView::ClearFocusMemory() noexcept
+{
+    _focusMemoryRecency.clear();
+    _focusMemory.clear();
+    _focusMemoryPayloadBytes = 0u;
+}
+
+bool FolderView::RecordFocusMemoryEntry(const std::filesystem::path& folder, const std::wstring_view itemDisplayName) noexcept
+{
+    std::optional<std::wstring> locationKey = TryBuildFocusMemoryLocationKey(folder);
+    if (! locationKey.has_value())
+    {
+        RecordFocusMemoryNoCache(FocusMemoryNoCacheReason::LocationIdentity);
+        return false;
+    }
+
+    std::optional<std::wstring> itemIdentityKey = TryBuildFocusMemoryItemIdentityKey(itemDisplayName);
+    if (! itemIdentityKey.has_value())
+    {
+        RecordFocusMemoryNoCache(FocusMemoryNoCacheReason::ItemIdentity);
+        return false;
+    }
+
+    constexpr size_t maximumPayloadCodeUnits = kFocusMemoryMaxPayloadBytes / sizeof(wchar_t);
+    if (locationKey->size() > maximumPayloadCodeUnits || itemIdentityKey->size() > maximumPayloadCodeUnits - locationKey->size())
+    {
+        RecordFocusMemoryNoCache(FocusMemoryNoCacheReason::OversizedEntry);
+        return false;
+    }
+    const size_t payloadBytes = (locationKey->size() + itemIdentityKey->size()) * sizeof(wchar_t);
+
+    const auto existing = _focusMemory.find(locationKey.value());
+    if (existing != _focusMemory.end())
+    {
+        if (existing->second.payloadBytes > _focusMemoryPayloadBytes)
+        {
+            std::terminate();
+        }
+        _focusMemoryPayloadBytes -= existing->second.payloadBytes;
+        existing->second.itemIdentityKey = std::move(itemIdentityKey.value());
+        existing->second.payloadBytes = payloadBytes;
+        _focusMemoryPayloadBytes += payloadBytes;
+        TouchFocusMemoryEntry(existing->second);
+    }
+    else
+    {
+        auto [inserted, didInsert] = _focusMemory.emplace(std::move(locationKey.value()), FocusMemoryEntry{});
+        if (! didInsert)
+        {
+            std::terminate();
+        }
+        inserted->second.itemIdentityKey = std::move(itemIdentityKey.value());
+        inserted->second.payloadBytes = payloadBytes;
+        _focusMemoryRecency.push_front(std::addressof(inserted->first));
+        inserted->second.recencyIterator = _focusMemoryRecency.begin();
+        _focusMemoryPayloadBytes += payloadBytes;
+    }
+
+    while (_focusMemory.size() > kFocusMemoryMaxEntries || _focusMemoryPayloadBytes > kFocusMemoryMaxPayloadBytes)
+    {
+        EvictFocusMemoryEntry(std::prev(_focusMemoryRecency.end()));
+    }
+    _focusMemoryLastNoCacheReason = FocusMemoryNoCacheReason::None;
+    return true;
 }
 
 std::wstring FolderView::GetRememberedFocusedItemPathForFolder(const std::filesystem::path& folder) noexcept
 {
-    EnsureFocusMemoryRootForFolder(folder);
-
-    const std::wstring folderKey = NormalizeFocusMemoryFolderKey(folder);
-    if (folderKey.empty())
+    const std::optional<std::wstring> locationKey = TryBuildFocusMemoryLocationKey(folder);
+    if (! locationKey.has_value())
     {
+        RecordFocusMemoryNoCache(FocusMemoryNoCacheReason::LocationIdentity);
         return {};
     }
 
-    const auto it = _focusMemory.find(folderKey);
+    const auto it = _focusMemory.find(locationKey.value());
     if (it == _focusMemory.end())
     {
+        ++_focusMemoryMissCount;
+        _focusMemoryLastNoCacheReason = FocusMemoryNoCacheReason::None;
         return {};
     }
 
-    return it->second;
+    ++_focusMemoryHitCount;
+    _focusMemoryLastNoCacheReason = FocusMemoryNoCacheReason::None;
+    TouchFocusMemoryEntry(it->second);
+    return it->second.itemIdentityKey;
 }
 
 void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> payload)
@@ -1503,6 +2473,10 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
         {
             _pendingExternalCommandAfterEnumeration.reset();
         }
+        if (_pendingExternalSelectionAfterEnumeration && _pendingExternalSelectionAfterEnumeration->generation == payload->generation)
+        {
+            _pendingExternalSelectionAfterEnumeration.reset();
+        }
         return;
     }
 
@@ -1518,6 +2492,33 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
         {
             _pendingExternalCommandAfterEnumeration.reset();
         }
+        if (_pendingExternalSelectionAfterEnumeration && _pendingExternalSelectionAfterEnumeration->generation == payload->generation)
+        {
+            _pendingExternalSelectionAfterEnumeration.reset();
+        }
+
+        if (_pendingNavigationDisplayedModel.has_value())
+        {
+            PendingNavigationDisplayedModel displayed = std::move(_pendingNavigationDisplayedModel.value());
+            _pendingNavigationDisplayedModel.reset();
+            _displayedFolder = std::move(displayed.displayedFolder);
+            _displayedLocationKey = std::move(displayed.displayedLocationKey);
+            _items = std::move(displayed.items);
+            _itemsArenaBuffer = std::move(displayed.itemsArenaBuffer);
+            _itemsFolder = std::move(displayed.itemsFolder);
+            _selectionStats = displayed.selectionStats;
+            _focusedIndex = displayed.focusedIndex;
+            _hoveredIndex = displayed.hoveredIndex;
+            _anchorIndex = displayed.anchorIndex;
+            _lastCurrentResolutionReason = displayed.resolutionReason;
+            _scrollOffset = displayed.scrollOffset;
+            _horizontalOffset = displayed.horizontalOffset;
+            _columnLayout.clear();
+            _columnCounts.clear();
+            _columnPrefixSums.clear();
+            _itemMetricsCached = false;
+            LayoutItems();
+        }
 
         ReportError(L"EnumerateFolder", payload->status);
         UpdateScrollMetrics();
@@ -1529,46 +2530,144 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
     }
 
     ClearErrorOverlay(ErrorOverlayKind::Enumeration);
+    DisarmPotentialDrag();
 
-    const auto invalidIndex     = static_cast<size_t>(-1);
+    const auto invalidIndex = static_cast<size_t>(-1);
+    const std::wstring targetLocationKey = _currentFolder ? BuildLogicalLocationKey(_currentFolder.value()) : std::wstring{};
+    const bool isRefresh = ! targetLocationKey.empty() && targetLocationKey == _displayedLocationKey;
+    if (isRefresh && _pendingNavigationDisplayedModel.has_value())
+    {
+        PendingNavigationDisplayedModel displayed = std::move(_pendingNavigationDisplayedModel.value());
+        _pendingNavigationDisplayedModel.reset();
+        _displayedFolder = std::move(displayed.displayedFolder);
+        _displayedLocationKey = std::move(displayed.displayedLocationKey);
+        _items = std::move(displayed.items);
+        _itemsArenaBuffer = std::move(displayed.itemsArenaBuffer);
+        _itemsFolder = std::move(displayed.itemsFolder);
+        _selectionStats = displayed.selectionStats;
+        _focusedIndex = displayed.focusedIndex;
+        _hoveredIndex = displayed.hoveredIndex;
+        _anchorIndex = displayed.anchorIndex;
+        _lastCurrentResolutionReason = displayed.resolutionReason;
+        _scrollOffset = displayed.scrollOffset;
+        _horizontalOffset = displayed.horizontalOffset;
+    }
+
+    CurrentResolutionInput currentResolution{};
+    currentResolution.sameLogicalLocation = isRefresh;
+    currentResolution.previousSelectionStats = ! isRefresh && _pendingNavigationDisplayedModel.has_value()
+        ? _pendingNavigationDisplayedModel->selectionStats
+        : _selectionStats;
+    const bool hadSelectionBeforeResult = currentResolution.previousSelectionStats.selectedFiles != 0u ||
+        currentResolution.previousSelectionStats.selectedFolders != 0u;
+    currentResolution.selectionMembershipChanged = ! isRefresh && hadSelectionBeforeResult;
     size_t previousFocusedIndex = invalidIndex;
-    std::wstring previousFocusName;
     if (_focusedIndex != invalidIndex && _focusedIndex < _items.size())
     {
         previousFocusedIndex = _focusedIndex;
-        previousFocusName.assign(_items[_focusedIndex].displayName);
+        const FolderItem& previousCurrent = _items[_focusedIndex];
+        currentResolution.previousCurrentIdentity = std::wstring(previousCurrent.displayName);
+        if (isRefresh)
+        {
+            currentResolution.genericRepairProbe = CurrentRepairProbe{
+                .displayName = std::wstring(previousCurrent.displayName),
+                .extensionOffset = previousCurrent.extensionOffset,
+                .isDirectory = previousCurrent.isDirectory,
+                .sizeBytes = previousCurrent.sizeBytes,
+                .lastWriteTime = previousCurrent.lastWriteTime,
+                .fileAttributes = previousCurrent.fileAttributes,
+                .unsortedOrder = previousCurrent.unsortedOrder,
+            };
+        }
+    }
+    if (isRefresh && _anchorIndex != invalidIndex && _anchorIndex < _items.size())
+    {
+        currentResolution.previousAnchorIdentity = std::wstring(_items[_anchorIndex].displayName);
     }
 
-    bool isRefresh = false;
-    if (_displayedFolder && _currentFolder)
-    {
-        isRefresh = NormalizeFocusMemoryFolderKey(_displayedFolder.value()) == NormalizeFocusMemoryFolderKey(_currentFolder.value());
-    }
     if (! isRefresh)
     {
         ExitIncrementalSearch();
     }
 
-    std::wstring preferredFocusPath;
-    size_t fallbackFocusIndex = invalidIndex;
-    if (isRefresh)
+    if (_pendingExplicitCurrentTarget.has_value() && _pendingExplicitCurrentTarget->locationKey == targetLocationKey)
     {
-        preferredFocusPath = previousFocusName;
-        fallbackFocusIndex = previousFocusedIndex;
+        currentResolution.explicitHostTarget = std::move(_pendingExplicitCurrentTarget->displayName);
+        _pendingExplicitCurrentTarget.reset();
+    }
 
-        if (_currentFolder)
+    if (isRefresh && currentResolution.previousCurrentIdentity.has_value())
+    {
+        const auto survivingCurrent = std::find_if(payload->items.begin(), payload->items.end(), [&](const FolderItem& item) noexcept
+        { return EquivalentProviderComponent(item.displayName, currentResolution.previousCurrentIdentity.value()); });
+        if (survivingCurrent != payload->items.end())
         {
-            const std::wstring rememberedFocusPath = GetRememberedFocusedItemPathForFolder(_currentFolder.value());
-            if (! rememberedFocusPath.empty() && rememberedFocusPath != previousFocusName)
-            {
-                preferredFocusPath = rememberedFocusPath;
-            }
+            currentResolution.survivingIdentity = std::wstring(survivingCurrent->displayName);
         }
     }
-    else if (_currentFolder)
+    if (! isRefresh && _currentFolder)
     {
-        preferredFocusPath = GetRememberedFocusedItemPathForFolder(_currentFolder.value());
-        fallbackFocusIndex = invalidIndex;
+        std::wstring remembered = GetRememberedFocusedItemPathForFolder(_currentFolder.value());
+        if (! remembered.empty())
+        {
+            currentResolution.navigationMemoryRestore = std::move(remembered);
+        }
+    }
+
+    if (isRefresh && _currentFolder)
+    {
+        if (std::optional<std::vector<std::wstring>> provenRemoved =
+                ResolvePendingRemovalFocusForEnumeration(payload->generation, _currentFolder.value(), payload->items);
+            provenRemoved.has_value() && currentResolution.genericRepairProbe.has_value())
+        {
+            CurrentRepairProbe& probe = currentResolution.genericRepairProbe.value();
+            probe.hostRemovalRepair = true;
+            probe.excludedIdentities = std::move(provenRemoved.value());
+        }
+    }
+
+    if (isRefresh && currentResolution.genericRepairProbe.has_value() && ! currentResolution.survivingIdentity.has_value() &&
+        _sortBy == SortBy::None && previousFocusedIndex != invalidIndex)
+    {
+        std::vector<std::wstring_view> resultingIdentities;
+        resultingIdentities.reserve(payload->items.size());
+        for (const FolderItem& item : payload->items)
+        {
+            resultingIdentities.push_back(item.displayName);
+        }
+        const bool ignoreCase = _fileSystemPathIdentity.has_value() && _fileSystemPathIdentity->pathTextStableIdentity &&
+            _fileSystemPathIdentity->componentComparison == FileSystemPathComponentComparison::OrdinalIgnoreCase;
+        const auto identityBefore = [ignoreCase](std::wstring_view left, std::wstring_view right) noexcept
+        { return OrdinalString::Compare(left, right, ignoreCase) < 0; };
+        std::sort(resultingIdentities.begin(), resultingIdentities.end(), identityBefore);
+        const auto survives = [&](std::wstring_view identity) noexcept
+        {
+            const auto candidate = std::lower_bound(resultingIdentities.begin(), resultingIdentities.end(), identity, identityBefore);
+            return candidate != resultingIdentities.end() && EquivalentProviderComponent(*candidate, identity);
+        };
+
+        CurrentRepairProbe& probe = currentResolution.genericRepairProbe.value();
+        const auto isExcluded = [&](std::wstring_view identity) noexcept
+        {
+            return std::ranges::any_of(probe.excludedIdentities, [&](const std::wstring& excluded) noexcept
+            { return EquivalentProviderComponent(identity, excluded); });
+        };
+        for (size_t index = previousFocusedIndex + 1u; index < _items.size(); ++index)
+        {
+            if (survives(_items[index].displayName) && ! isExcluded(_items[index].displayName))
+            {
+                probe.sortNoneSuccessor = std::wstring(_items[index].displayName);
+                break;
+            }
+        }
+        for (size_t index = previousFocusedIndex; index-- > 0u;)
+        {
+            if (survives(_items[index].displayName) && ! isExcluded(_items[index].displayName))
+            {
+                probe.sortNonePredecessor = std::wstring(_items[index].displayName);
+                break;
+            }
+        }
     }
 
     std::vector<PendingRefreshSelectionRename> refreshSelectionRenames;
@@ -1586,7 +2685,10 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
     if (isRefresh && ! _items.empty())
     {
         // Build lookup map of old items by path for O(1) access
-        std::unordered_map<std::wstring_view, size_t, WStringViewHash, WStringViewEq> oldItemsByPath;
+        const bool ignoreCase = _fileSystemPathIdentity.has_value() && _fileSystemPathIdentity->pathTextStableIdentity &&
+            _fileSystemPathIdentity->componentComparison == FileSystemPathComponentComparison::OrdinalIgnoreCase;
+        std::unordered_map<std::wstring_view, size_t, WStringViewHash, WStringViewEq> oldItemsByPath(
+            0u, WStringViewHash{.ignoreCase = ignoreCase}, WStringViewEq{.ignoreCase = ignoreCase});
         oldItemsByPath.reserve(_items.size());
         std::vector<bool> oldItemsObserved(_items.size(), false);
         for (size_t i = 0; i < _items.size(); ++i)
@@ -1648,7 +2750,8 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
             }
 
             return std::ranges::any_of(payload->items,
-                                       [&](const FolderItem& item) noexcept { return WStringViewEq{}(item.displayName, selection.displayName); });
+                                       [&](const FolderItem& item) noexcept
+            { return EquivalentProviderComponent(item.displayName, selection.displayName); });
         });
 
         for (size_t oldIndex = 0; oldIndex < _items.size(); ++oldIndex)
@@ -1659,10 +2762,12 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
                 continue;
             }
 
+            currentResolution.selectionMembershipChanged = true;
+
             const auto missingIt = std::find_if(_recentlyMissingRefreshSelections.begin(),
                                                 _recentlyMissingRefreshSelections.end(),
                                                 [&](const RecentlyMissingRefreshSelection& selection) noexcept
-            { return WStringViewEq{}(selection.displayName, oldItem.displayName); });
+            { return EquivalentProviderComponent(selection.displayName, oldItem.displayName); });
             if (missingIt != _recentlyMissingRefreshSelections.end())
             {
                 missingIt->expiresAt = expiresAt;
@@ -1675,7 +2780,8 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
 
         if (! refreshSelectionRenames.empty())
         {
-            std::unordered_map<std::wstring_view, std::vector<const PendingRefreshSelectionRename*>, WStringViewHash, WStringViewEq> renamesByTarget;
+            std::unordered_map<std::wstring_view, std::vector<const PendingRefreshSelectionRename*>, WStringViewHash, WStringViewEq> renamesByTarget(
+                0u, WStringViewHash{.ignoreCase = ignoreCase}, WStringViewEq{.ignoreCase = ignoreCase});
             renamesByTarget.reserve(refreshSelectionRenames.size());
             for (const auto& rename : refreshSelectionRenames)
             {
@@ -1720,6 +2826,7 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
                         newItem.selected = true;
                         ++selectionPreserved;
                         ++renameSelectionTransferCount;
+                        currentResolution.selectionMembershipChanged = true;
                         break;
                     }
                 }
@@ -1770,6 +2877,7 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
     _items            = std::move(payload->items);
     _itemsArenaBuffer = std::move(payload->arenaBuffer); // Keep arena alive for string_views
     _itemsFolder      = std::move(payload->folder);      // For computing full paths
+    _pendingNavigationDisplayedModel.reset();
 #ifdef ENABLE_TESTS
     SelfTest::AppendSelfTestTrace(std::format(L"FolderView::ProcessEnumerationResult: assigned items count={}", _items.size()));
 #endif
@@ -1778,10 +2886,11 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
         _items[i].unsortedOrder = i;
     }
     _displayedFolder = _currentFolder;
+    _displayedLocationKey = targetLocationKey;
     _focusedIndex    = invalidIndex;
     _anchorIndex     = invalidIndex;
     _hoveredIndex    = invalidIndex;
-    ApplyCurrentSort(preferredFocusPath, fallbackFocusIndex);
+    ApplyCurrentSort(std::move(currentResolution));
 #ifdef ENABLE_TESTS
     SelfTest::AppendSelfTestTrace(std::format(L"FolderView::ProcessEnumerationResult: after sort focusedIndex={} displayedFolder='{}'",
                                               _focusedIndex,
@@ -2017,6 +3126,18 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
             // which another refresh could migrate the command to a different positional neighbor.
             OnCommandMessage(pending.commandId);
         }
+    }
+    if (_pendingExternalSelectionAfterEnumeration && _pendingExternalSelectionAfterEnumeration->generation == payload->generation)
+    {
+        PendingExternalSelection pending = std::move(_pendingExternalSelectionAfterEnumeration.value());
+        _pendingExternalSelectionAfterEnumeration.reset();
+        SetSelectionByDisplayNamePredicate(
+            [&pending](std::wstring_view displayName) noexcept
+            {
+                return std::ranges::any_of(pending.displayNames, [displayName](const std::wstring& wanted) noexcept
+                { return displayName == wanted || OrdinalString::EqualsNoCase(displayName, wanted); });
+            },
+            true);
     }
 #ifdef ENABLE_TESTS
     SelfTest::AppendSelfTestTrace(L"FolderView::ProcessEnumerationResult: end");

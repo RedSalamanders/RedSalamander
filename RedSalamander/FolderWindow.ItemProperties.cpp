@@ -3,6 +3,7 @@
 #include "AppTheme.h"
 #include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
+#include "FileOperationArtifactRegistry.h"
 #include "Resource.h"
 #include "WindowMaximizeBehavior.h"
 #include "WindowMessages.h"
@@ -68,13 +69,30 @@ struct ItemPropertiesDocument
     std::vector<ItemPropertiesStream> streams;
 };
 
+enum class ItemPropertiesArtifactObjectState : uint8_t
+{
+    NotApplicable,
+    Present,
+    Missing,
+    Unavailable,
+};
+
+struct ItemPropertiesArtifactExplanation
+{
+    bool possibleNameShape = false;
+    ItemPropertiesArtifactObjectState objectState = ItemPropertiesArtifactObjectState::NotApplicable;
+    uint32_t classifierQueryCount = 0u;
+};
+
 using ItemPropertiesOpenStreamCallback = std::function<HRESULT(std::wstring_view streamName)>;
+using ItemPropertiesMutationGuardCallback = std::function<HRESULT()>;
 
 struct ItemPropertiesLoadResult
 {
     uint64_t generation = 0u;
     HRESULT hr          = E_FAIL;
     std::string jsonUtf8;
+    ItemPropertiesArtifactExplanation artifact;
 };
 
 class ItemPropertiesWindow;
@@ -87,8 +105,12 @@ struct ItemPropertiesLoadWork
     uint64_t generation          = 0u;
     std::filesystem::path itemPath;
     wil::com_ptr<IFileSystemIO> itemIo;
+    wil::com_ptr<IFileSystem> fileSystem;
+    std::wstring pluginId;
+    std::wstring instanceContext;
 #ifdef ENABLE_TESTS
     uint32_t delayMs = 0u;
+    uint32_t fault   = 0u; // 1 = provider failure, 2 = malformed provider JSON
 #endif
 };
 
@@ -287,6 +309,7 @@ constexpr UINT_PTR kItemPropertiesLoadingTimerId = 1u;
 
 #ifdef ENABLE_TESTS
 std::atomic_uint32_t g_nextItemPropertiesLoadDelayMs{0u};
+std::atomic_uint32_t g_nextItemPropertiesLoadFault{0u};
 #endif
 
 [[nodiscard]] bool IsCompactItemPropertiesSection(std::wstring_view title)
@@ -814,6 +837,66 @@ void NormalizeItemPropertiesSectionOrder(ItemPropertiesDocument& doc)
     return (std::max)(kFallbackHeightDip, std::ceil(metrics.height));
 }
 
+void AppendItemPropertiesArtifactExplanation(ItemPropertiesDocument& doc,
+                                             const ItemPropertiesArtifactExplanation& explanation)
+{
+    if (! explanation.possibleNameShape)
+    {
+        return;
+    }
+
+    const auto text = [](UINT id, std::wstring_view fallback)
+    { return LoadItemPropertiesString(id, fallback); };
+    const std::wstring unavailable = text(IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_UNAVAILABLE, L"Unavailable");
+
+    ItemPropertiesSection section{
+        .title = text(IDS_ITEM_PROPERTIES_SECTION_FILE_OPERATIONS, L"File Operations"),
+    };
+    const auto append = [&](UINT keyId, std::wstring_view keyFallback, std::wstring value)
+    { section.fields.push_back(ItemPropertiesField{.key = text(keyId, keyFallback), .value = std::move(value)}); };
+    const auto appendUnavailable = [&](UINT keyId, std::wstring_view keyFallback)
+    { append(keyId, keyFallback, unavailable); };
+
+    append(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CLASSIFICATION,
+           L"Classification",
+           text(IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE, L"Possible interrupted-operation artifact"));
+    append(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_REASON,
+           L"Reason",
+           text(IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_NAME_REASON, L"Name matches a generated File Operations artifact pattern"));
+    appendUnavailable(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_OPERATION, L"Operation");
+    appendUnavailable(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_TASK, L"Task");
+    appendUnavailable(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_TIME, L"Time");
+    appendUnavailable(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_KIND, L"Artifact kind");
+    appendUnavailable(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_PHASE, L"Durable phase");
+    appendUnavailable(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_DESTINATION, L"Intended destination");
+    appendUnavailable(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_FINAL_NAME, L"Final name");
+    appendUnavailable(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_PUBLICATION, L"Publication");
+    appendUnavailable(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_SOURCE, L"Source");
+    appendUnavailable(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CLEANUP, L"Cleanup");
+    appendUnavailable(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_VERIFICATION, L"Verification");
+
+    std::wstring currentObject = unavailable;
+    if (explanation.objectState == ItemPropertiesArtifactObjectState::Present)
+    {
+        currentObject = text(IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_PRESENT, L"Present");
+    }
+    else if (explanation.objectState == ItemPropertiesArtifactObjectState::Missing)
+    {
+        currentObject = text(IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_MISSING, L"Missing");
+    }
+    append(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CURRENT_OBJECT, L"Current object", std::move(currentObject));
+    append(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CLAIM_MATCH,
+           L"Claim match",
+           text(IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_NO_CLAIM, L"No valid operation record or ownership claim was found"));
+    appendUnavailable(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_RECOVERY, L"Recovery");
+    append(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_SAFE_ACTIONS,
+           L"Safe actions",
+           text(IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_SAFE_ACTIONS,
+                L"Read, open, edit, preview, copy, and export remain available; RedSalamander warns before manager-owned mutation"));
+
+    doc.sections.push_back(std::move(section));
+}
+
 [[nodiscard]] std::wstring BuildItemPropertiesText(const ItemPropertiesDocument& doc) noexcept
 {
     std::wstring text;
@@ -996,14 +1079,22 @@ public:
                          const AppTheme& theme,
                          std::filesystem::path itemPath,
                          wil::com_ptr<IFileSystemIO> itemIo,
+                         wil::com_ptr<IFileSystem> fileSystem,
+                         std::wstring pluginId,
+                         std::wstring instanceContext,
                          wil::com_ptr<IFileSystemItemStreams> streamOps,
-                         ItemPropertiesOpenStreamCallback openStream) noexcept
+                         ItemPropertiesOpenStreamCallback openStream,
+                         ItemPropertiesMutationGuardCallback mutationGuard) noexcept
         : _settings(settings),
           _theme(theme),
           _itemPath(std::move(itemPath)),
           _itemIo(std::move(itemIo)),
+          _fileSystem(std::move(fileSystem)),
+          _pluginId(std::move(pluginId)),
+          _instanceContext(std::move(instanceContext)),
           _streamOps(std::move(streamOps)),
           _openStream(std::move(openStream)),
+          _mutationGuard(std::move(mutationGuard)),
           _windowToken(g_nextItemPropertiesWindowToken.fetch_add(1u, std::memory_order_relaxed)),
           _contentText(BuildItemPropertiesLoadingText())
     {
@@ -1130,6 +1221,7 @@ public:
         out.viewableStreamCount     = _viewableStreamCount;
         out.loading                 = _loading;
         out.loadFailed              = _loadFailed;
+        out.artifactClassifierQueryCount = _artifactExplanation.classifierQueryCount;
         if (_contentScroll)
         {
             const D2D1_RECT_F bounds    = _contentScroll->GetBounds();
@@ -1450,7 +1542,10 @@ private:
             {
                 _loadingMessageLabel->SetTextColor(_dxHost.GetTheme().errorText);
             }
-            return;
+            if (_loading)
+            {
+                return;
+            }
         }
 
         for (const ItemPropertiesSection& section : _doc.sections)
@@ -1569,7 +1664,11 @@ private:
                     _loadingMessageLabel->SetBounds(D2D1::RectF(
                         cardRect.left + kPadX + spinnerW + kStreamGap, cardRect.top + kPadTop, cardRect.right - kPadX, cardRect.bottom - kPadBottom));
                 }
-                return cardH;
+                if (_sectionControls.empty())
+                {
+                    return cardH;
+                }
+                y += cardH; // C5: a failure card may be followed by the host's File Operations section
             }
 
             auto sectionCardHeight = [&](const ItemPropertiesSectionControls& controls, float sectionW) noexcept
@@ -1822,8 +1921,12 @@ private:
         work->generation  = _loadGeneration;
         work->itemPath    = _itemPath;
         work->itemIo      = _itemIo;
+        work->fileSystem  = _fileSystem;
+        work->pluginId    = _pluginId;
+        work->instanceContext = _instanceContext;
 #ifdef ENABLE_TESTS
         work->delayMs = g_nextItemPropertiesLoadDelayMs.exchange(0u, std::memory_order_relaxed);
+        work->fault   = g_nextItemPropertiesLoadFault.exchange(0u, std::memory_order_relaxed);
 #endif
 
         const BOOL queued = ::TrySubmitThreadpoolCallback(
@@ -1851,6 +1954,31 @@ private:
             result->generation = workItem->generation;
             result->hr         = E_FAIL;
 
+            if (FileOperationArtifacts::HasPossibleArtifactName(workItem->itemPath.filename().native()))
+            {
+                result->artifact.possibleNameShape = true;
+                result->artifact.classifierQueryCount = 1u;
+                FileOperationArtifacts::Candidate candidate{};
+                const HRESULT artifactHr = FileOperationArtifacts::CaptureProviderObjectCandidate(
+                    workItem->fileSystem.get(),
+                    workItem->itemPath.native(),
+                    workItem->pluginId,
+                    workItem->instanceContext,
+                    candidate);
+                if (artifactHr == S_FALSE)
+                {
+                    result->artifact.objectState = ItemPropertiesArtifactObjectState::Missing;
+                }
+                else if (artifactHr == S_OK && candidate.probeState == FileOperationArtifacts::ProbeState::Present)
+                {
+                    result->artifact.objectState = ItemPropertiesArtifactObjectState::Present;
+                }
+                else
+                {
+                    result->artifact.objectState = ItemPropertiesArtifactObjectState::Unavailable;
+                }
+            }
+
             const char* jsonUtf8 = nullptr;
             result->hr           = workItem->itemIo ? workItem->itemIo->GetItemProperties(workItem->itemPath.c_str(), &jsonUtf8) : E_POINTER;
             if (SUCCEEDED(result->hr))
@@ -1864,6 +1992,18 @@ private:
                     result->hr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
                 }
             }
+#ifdef ENABLE_TESTS
+            if (workItem->fault == 1u)
+            {
+                result->hr = E_FAIL;
+                result->jsonUtf8.clear();
+            }
+            else if (workItem->fault == 2u)
+            {
+                result->hr       = S_OK;
+                result->jsonUtf8 = "{\"sections\":[{\"title\":\"General\",\"fields\":[";
+            }
+#endif
 
             auto* window = ! workItem->hwnd ? nullptr : reinterpret_cast<ItemPropertiesWindow*>(::GetWindowLongPtrW(workItem->hwnd, GWLP_USERDATA));
             if (window != workItem->window || window->_windowToken != workItem->windowToken)
@@ -1894,6 +2034,7 @@ private:
         }
 
         StopLoadingAnimation();
+        _artifactExplanation = result->artifact;
 
         if (FAILED(result->hr))
         {
@@ -1909,6 +2050,7 @@ private:
         }
 
         _doc        = doc.value();
+        AppendItemPropertiesArtifactExplanation(_doc, _artifactExplanation);
         _loading    = false;
         _loadFailed = false;
         _loadingMessageText.clear();
@@ -1927,12 +2069,17 @@ private:
         _loading            = false;
         _loadFailed         = true;
         _loadingMessageText = FormatStringResource(nullptr, IDS_FMT_PROPERTIES_LOAD_FAILED, static_cast<unsigned long>(hr));
-        _contentText        = LoadStringResource(nullptr, IDS_CAPTION_PROPERTIES);
-        _contentText.append(L"\r\n\r\n");
-        _contentText.append(_loadingMessageText);
-        _fieldCount           = 0u;
-        _removableStreamCount = 0u;
-        _viewableStreamCount  = 0u;
+        // C5: the host's File Operations explanation does not depend on the provider's properties;
+        // a Possible artifact name keeps its section beside the failure text.
+        AppendItemPropertiesArtifactExplanation(_doc, _artifactExplanation);
+        UpdateDerivedDocumentState();
+        std::wstring failureText = LoadStringResource(nullptr, IDS_CAPTION_PROPERTIES);
+        failureText.append(L"\r\n\r\n").append(_loadingMessageText);
+        if (! _contentText.empty())
+        {
+            failureText.append(L"\r\n\r\n").append(_contentText);
+        }
+        _contentText = std::move(failureText);
         RebuildCards();
         LayoutControls();
         _dxHost.RefreshAccessibilitySnapshot();
@@ -2021,37 +2168,16 @@ private:
         return 0;
     }
 
-    [[nodiscard]] HRESULT RefreshDocumentFromIo() noexcept
+    // C5: re-read the properties the same way the initial load does: on the worker, with a fresh
+    // bounded classification for a Possible name, a generation token, and the window-lifetime check.
+    void BeginReload() noexcept
     {
-        if (! _itemIo)
-        {
-            return E_POINTER;
-        }
-
-        const char* jsonUtf8  = nullptr;
-        const HRESULT hrProps = _itemIo->GetItemProperties(_itemPath.c_str(), &jsonUtf8);
-        if (FAILED(hrProps))
-        {
-            return hrProps;
-        }
-        if (! jsonUtf8 || jsonUtf8[0] == '\0')
-        {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-        }
-
-        const std::optional<ItemPropertiesDocument> doc = TryParseItemPropertiesJson(std::string_view(jsonUtf8));
-        if (! doc.has_value())
-        {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-        }
-
-        _doc = doc.value();
-        UpdateDerivedDocumentState();
         _dxHost.SetFocusControl(_root);
+        StartLoadPropertiesAsync();
+        StartLoadingAnimation();
         RebuildCards();
         LayoutControls();
         _dxHost.RefreshAccessibilitySnapshot();
-        return S_OK;
     }
 
     void ShowRemoveStreamError(std::wstring_view streamName, HRESULT hr) noexcept
@@ -2099,6 +2225,14 @@ private:
         {
             return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         }
+        if (_mutationGuard)
+        {
+            const HRESULT guardHr = _mutationGuard();
+            if (guardHr != S_OK)
+            {
+                return guardHr;
+            }
+        }
 
         const std::wstring streamNameText(streamName);
         const HRESULT hrRemove = _streamOps->DeleteItemStream(_itemPath.c_str(), streamNameText.c_str());
@@ -2111,19 +2245,7 @@ private:
             return hrRemove;
         }
 
-        const HRESULT hrRefresh = RefreshDocumentFromIo();
-        if (FAILED(hrRefresh))
-        {
-            std::erase_if(_doc.streams, [&](const ItemPropertiesStream& stream) noexcept { return stream.name == streamNameText; });
-            UpdateDerivedDocumentState();
-            _dxHost.SetFocusControl(_root);
-            RebuildCards();
-            LayoutControls();
-            _dxHost.RefreshAccessibilitySnapshot();
-            Debug::Warning(
-                L"ItemProperties: stream '{}' was removed but properties refresh failed (hr=0x{:08X}).", streamNameText, static_cast<unsigned long>(hrRefresh));
-        }
-
+        BeginReload();
         return hrRemove;
     }
 
@@ -2172,10 +2294,15 @@ private:
     AppTheme _theme{};
     std::filesystem::path _itemPath;
     wil::com_ptr<IFileSystemIO> _itemIo;
+    wil::com_ptr<IFileSystem> _fileSystem;
+    std::wstring _pluginId;
+    std::wstring _instanceContext;
     wil::com_ptr<IFileSystemItemStreams> _streamOps;
     ItemPropertiesOpenStreamCallback _openStream;
+    ItemPropertiesMutationGuardCallback _mutationGuard;
     uint64_t _windowToken = 0u;
     ItemPropertiesDocument _doc;
+    ItemPropertiesArtifactExplanation _artifactExplanation;
     std::wstring _contentText;
     std::wstring _loadingMessageText = LoadStringResource(nullptr, IDS_PROPERTIES_LOADING);
     std::optional<std::wstring> _pendingRemoveStreamName;
@@ -2229,11 +2356,23 @@ HRESULT ShowItemPropertiesWindow(HWND owner,
                                  const AppTheme& theme,
                                  std::filesystem::path itemPath,
                                  wil::com_ptr<IFileSystemIO> itemIo,
+                                 wil::com_ptr<IFileSystem> fileSystem,
+                                 std::wstring pluginId,
+                                 std::wstring instanceContext,
                                  wil::com_ptr<IFileSystemItemStreams> streamOps,
-                                 ItemPropertiesOpenStreamCallback openStream) noexcept
+                                 ItemPropertiesOpenStreamCallback openStream,
+                                 ItemPropertiesMutationGuardCallback mutationGuard) noexcept
 {
-    auto* window =
-        new (std::nothrow) ItemPropertiesWindow(settings, theme, std::move(itemPath), std::move(itemIo), std::move(streamOps), std::move(openStream));
+    auto* window = new (std::nothrow) ItemPropertiesWindow(settings,
+                                                           theme,
+                                                           std::move(itemPath),
+                                                           std::move(itemIo),
+                                                           std::move(fileSystem),
+                                                           std::move(pluginId),
+                                                           std::move(instanceContext),
+                                                           std::move(streamOps),
+                                                           std::move(openStream),
+                                                           std::move(mutationGuard));
     if (! window)
     {
         return E_OUTOFMEMORY;
@@ -2774,7 +2913,7 @@ HRESULT FolderWindow::ShowItemPropertiesFromFolderView(Pane pane, std::filesyste
             ownerWindow = _hWnd.get();
         }
 
-        ViewerOpenContext context{};
+        ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
         context.ownerWindow           = ownerWindow;
         context.fileSystem            = fileSystem.get();
         context.fileSystemName        = fileSystemName.empty() ? nullptr : fileSystemName.c_str();
@@ -2789,7 +2928,32 @@ HRESULT FolderWindow::ShowItemPropertiesFromFolderView(Pane pane, std::filesyste
         return OpenViewerWithPlugin(L"builtin/viewer-text", context);
     };
 
-    return ShowItemPropertiesWindow(_hWnd.get(), _settings, _theme, std::move(path), std::move(io), std::move(streamOps), std::move(openStream));
+    const std::wstring pluginId = state.pluginId;
+    const std::wstring instanceContext = state.instanceContext;
+    ItemPropertiesMutationGuardCallback mutationGuard =
+        [this, fileSystem, pluginId, instanceContext, itemPath = path]() noexcept -> HRESULT
+    {
+        EnsureFileOperations();
+        if (! _fileOperations)
+        {
+            return E_UNEXPECTED;
+        }
+        const std::array paths{itemPath};
+        return ConfirmExternalArtifactTouchForProvider(
+            fileSystem.get(), pluginId, instanceContext, paths);
+    };
+
+    return ShowItemPropertiesWindow(_hWnd.get(),
+                                    _settings,
+                                    _theme,
+                                    std::move(path),
+                                    std::move(io),
+                                    std::move(fileSystem),
+                                    pluginId,
+                                    instanceContext,
+                                    std::move(streamOps),
+                                    std::move(openStream),
+                                    std::move(mutationGuard));
 }
 
 #ifdef ENABLE_TESTS
@@ -2861,5 +3025,10 @@ std::wstring DebugBuildItemPropertiesContentTextFromJson(std::string_view jsonUt
 void DebugSetNextItemPropertiesLoadDelayMs(uint32_t delayMs) noexcept
 {
     g_nextItemPropertiesLoadDelayMs.store(delayMs, std::memory_order_relaxed);
+}
+
+void DebugSetNextItemPropertiesLoadFault(uint32_t fault) noexcept
+{
+    g_nextItemPropertiesLoadFault.store(fault, std::memory_order_relaxed);
 }
 #endif

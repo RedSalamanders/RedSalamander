@@ -1,4 +1,5 @@
 #include "DxUiTestHelpers.h"
+#include "DxUi/DxUi.AccessibilityTextUnits.h"
 
 #include <atomic>
 #include <chrono>
@@ -9,6 +10,48 @@
 
 namespace
 {
+
+void TestAccessibilityTextUnitHelperSharesGraphemeWordLineAndFallbackPolicy()
+{
+    using namespace RedSalamander::DxUi;
+
+    const std::wstring text = L"A\U0001F642e\u0301 word\r\nline";
+    const TextRangeUnitMoveResult emojiMove =
+        MoveAccessibilityTextPositionByUnit(text, 1u, TextUnit_Character, 1);
+    Require(emojiMove.position == 3u && emojiMove.moved == 1,
+            "shared UIA character movement keeps a surrogate pair intact");
+    const AccessibilityTextUnitSpan combiningSpan =
+        GetEnclosingAccessibilityTextUnitSpan(text, 4u, TextUnit_Character);
+    Require(combiningSpan.start == 3u && combiningSpan.end == 5u,
+            "shared UIA character expansion keeps a combining sequence intact");
+
+    const AccessibilityTextUnitSpan formatSpan =
+        GetEnclosingAccessibilityTextUnitSpan(text, 7u, TextUnit_Format);
+    const AccessibilityTextUnitSpan wordSpan =
+        GetEnclosingAccessibilityTextUnitSpan(text, 7u, TextUnit_Word);
+    Require(formatSpan.start == wordSpan.start && formatSpan.end == wordSpan.end,
+            "unsupported Format falls forward to the shared Word boundary");
+    const AccessibilityTextUnitSpan paragraphSpan =
+        GetEnclosingAccessibilityTextUnitSpan(text, 7u, TextUnit_Paragraph);
+    Require(paragraphSpan.start == 0u && paragraphSpan.end == text.size(),
+            "unsupported Paragraph falls forward to Document instead of backward to Line");
+    const TextRangeUnitMoveResult paragraphForward =
+        MoveAccessibilityTextPositionByUnit(text, 7u, TextUnit_Paragraph, 1);
+    Require(paragraphForward.position == text.size() && paragraphForward.moved == 1,
+            "unsupported Paragraph movement advances once to the Document end");
+    const TextRangeUnitMoveResult paragraphBackward =
+        MoveAccessibilityTextPositionByUnit(text, 7u, TextUnit_Paragraph, -1);
+    Require(paragraphBackward.position == 0u && paragraphBackward.moved == -1,
+            "unsupported Paragraph endpoint movement retreats once to the Document start");
+    const AccessibilityTextUnitSpan pageSpan =
+        GetEnclosingAccessibilityTextUnitSpan(text, 7u, TextUnit_Page);
+    Require(pageSpan.start == 0u && pageSpan.end == text.size(),
+            "unsupported Page falls forward to Document");
+    const TextRangeUnitMoveResult lineMove =
+        MoveAccessibilityTextPositionByUnit(text, 7u, TextUnit_Line, 1);
+    Require(lineMove.position == 12u && lineMove.moved == 1,
+            "shared UIA line movement treats CRLF as one boundary");
+}
 
 void TestAccessibilityTargetPublishesImmutableSnapshotBeforeTreeTeardown()
 {
@@ -31,12 +74,35 @@ void TestAccessibilityTargetPublishesImmutableSnapshotBeforeTreeTeardown()
 
     const size_t publishEmpty = unregisterBlock.find("PublishEmptyAccessibilitySnapshot(*target)");
     const size_t clearHost    = unregisterBlock.find("target->host.store(nullptr");
+    const size_t disconnectProvider = unregisterBlock.find("UiaDisconnectProvider(providerToDisconnect.get())");
     const size_t retireProviderMap = unregisterBlock.find("UiaReturnRawElementProvider(hwnd, 0, 0, nullptr)");
     Require(publishEmpty != std::string::npos, "accessibility unregister publishes an empty snapshot");
     Require(clearHost != std::string::npos && publishEmpty < clearHost,
             "accessibility unregister publishes the empty snapshot before clearing the live host pointer");
-    Require(retireProviderMap != std::string::npos && clearHost < retireProviderMap,
-            "accessibility unregister retires the HWND provider map after clearing the live host pointer");
+    Require(disconnectProvider != std::string::npos && clearHost < disconnectProvider,
+            "accessibility unregister disconnects the retained root provider after clearing the live host pointer");
+    Require(retireProviderMap != std::string::npos && disconnectProvider < retireProviderMap,
+            "accessibility unregister retires the HWND provider map after disconnecting the retained root provider");
+
+    Require(source.find("wil::com_ptr_nothrow<IRawElementProviderSimple> rootProvider") != std::string::npos,
+            "accessibility target retains one root provider identity per attached host");
+    Require(source.find("AcquireCanonicalRootProvider") != std::string::npos,
+            "accessibility exposes one target-owned canonical root-provider factory");
+    const size_t canonicalFactory = source.find("AcquireCanonicalRootProvider");
+    const size_t textRangeQuery   = source.find("HRESULT AccessibilityTextRangeProvider::QueryInterface", canonicalFactory);
+    Require(canonicalFactory != std::string::npos && textRangeQuery != std::string::npos && canonicalFactory < textRangeQuery,
+            "accessibility canonical root-provider factory source block is found");
+    const std::string canonicalFactoryBlock = source.substr(canonicalFactory, textRangeQuery - canonicalFactory);
+    Require(canonicalFactoryBlock.find("target->rootProvider.attach") != std::string::npos &&
+                canonicalFactoryBlock.find("target->rootProvider.query_to") != std::string::npos,
+            "canonical root-provider factory retains one target identity and returns it through QI/AddRef");
+    const size_t createRootProvider = source.find("IRawElementProviderFragmentRoot* AccessibilityProvider::CreateRootProvider");
+    const size_t createChildProvider = source.find("IRawElementProviderFragment* AccessibilityProvider::CreateChildProvider", createRootProvider);
+    Require(createRootProvider != std::string::npos && createChildProvider != std::string::npos && createRootProvider < createChildProvider,
+            "accessibility root-provider factory source block is found");
+    const std::string createRootProviderBlock = source.substr(createRootProvider, createChildProvider - createRootProvider);
+    Require(createRootProviderBlock.find("AcquireCanonicalRootProvider(_target)") != std::string::npos,
+            "fragment children resolve the retained host root provider identity");
 
     const std::filesystem::path windowHostSourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.WindowHost.cpp";
     std::ifstream windowHostInput(windowHostSourcePath);
@@ -294,8 +360,11 @@ void TestAccessibilityProviderFactoriesUseSharedMakeProviderHelper()
     Require(factoryBlock.find("new (std::nothrow)") == std::string::npos, "Accessibility provider factory methods do not duplicate nothrow allocation");
     Require(factoryBlock.find("target->Release()") == std::string::npos,
             "Accessibility provider factory methods do not duplicate target release-on-allocation-failure");
-    Require(factoryBlock.find("MakeProvider<IRawElementProviderFragmentRoot, AccessibilityProvider>") != std::string::npos,
-            "Accessibility root provider factory uses the shared helper");
+    Require(factoryBlock.find("AcquireCanonicalRootProvider(_target)") != std::string::npos,
+            "Accessibility root provider factory reuses the canonical provider helper");
+    Require(source.find("if (! target->rootProvider)") != std::string::npos &&
+                source.find("target->rootProvider.attach(static_cast<IRawElementProviderSimple*>(provider))") != std::string::npos,
+            "canonical Accessibility root creation is guarded by and retained in the target-owned cache");
     Require(factoryBlock.find("MakeProvider<ITextRangeProvider, AccessibilityTextRangeProvider>") != std::string::npos,
             "Accessibility text-range provider factory uses the shared helper");
 }
@@ -1609,6 +1678,90 @@ void TestAccessibilityProviderExposesDirectSemanticRootControls()
     RequireSucceeded(focusedProvider.query_to(focusedSimple.put()), "direct-root focused provider exposes IRawElementProviderSimple");
     Require(ReadProviderStringProperty(*focusedSimple.get(), UIA_ValueValuePropertyId, "direct-root focused combo exposes value") == L"current",
             "direct-root focus lookup returns the semantic root combo provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> fragmentRoot;
+    RequireSucceeded(hitProvider->get_FragmentRoot(fragmentRoot.put()), "direct-root child FragmentRoot lookup succeeds");
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> secondFactoryRoot;
+    secondFactoryRoot.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(secondFactoryRoot != nullptr, "direct-root repeated factory lookup returns a provider");
+
+    wil::com_ptr_nothrow<IUnknown> rootIdentity;
+    wil::com_ptr_nothrow<IUnknown> hitIdentity;
+    wil::com_ptr_nothrow<IUnknown> focusedIdentity;
+    wil::com_ptr_nothrow<IUnknown> fragmentRootIdentity;
+    wil::com_ptr_nothrow<IUnknown> secondFactoryIdentity;
+    RequireSucceeded(rootProvider.query_to(rootIdentity.put()), "direct-root provider exposes canonical IUnknown identity");
+    RequireSucceeded(hitProvider.query_to(hitIdentity.put()), "direct-root point hit exposes IUnknown identity");
+    RequireSucceeded(focusedProvider.query_to(focusedIdentity.put()), "direct-root focus exposes IUnknown identity");
+    RequireSucceeded(fragmentRoot.query_to(fragmentRootIdentity.put()), "direct-root FragmentRoot exposes IUnknown identity");
+    RequireSucceeded(secondFactoryRoot.query_to(secondFactoryIdentity.put()), "direct-root repeated factory exposes IUnknown identity");
+    Require(rootIdentity.get() == hitIdentity.get() && rootIdentity.get() == focusedIdentity.get() &&
+                rootIdentity.get() == fragmentRootIdentity.get() && rootIdentity.get() == secondFactoryIdentity.get(),
+            "all root-returning accessibility paths preserve one canonical COM identity per HWND");
+}
+
+void TestAccessibilityProviderIdentityRetiresAcrossSameHwndReattach()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto oldRoot    = std::make_unique<Button>(L"Old action");
+    auto* oldButton = oldRoot.get();
+    oldButton->SetBounds(D2D1::RectF(0.0f, 0.0f, 140.0f, 32.0f));
+    window.Host().SetRoot(std::move(oldRoot));
+    window.Host().SetFocusControl(oldButton);
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> oldProvider;
+    oldProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(oldProvider != nullptr, "same-HWND lifecycle test creates the old root provider");
+    wil::com_ptr_nothrow<IUnknown> oldIdentity;
+    RequireSucceeded(oldProvider.query_to(oldIdentity.put()), "same-HWND lifecycle old provider exposes IUnknown identity");
+
+    const HWND reusedHwnd = window.Hwnd();
+    POINT oldHitPoint{40, 16};
+    Require(ClientToScreen(reusedHwnd, &oldHitPoint) != FALSE, "same-HWND lifecycle converts the old hit point to screen coordinates");
+
+    window.Host().Detach();
+    Require(window.Host().Attach(reusedHwnd), "same-HWND lifecycle reattaches the host to the exact saved HWND");
+
+    auto newRoot    = std::make_unique<Button>(L"New action");
+    auto* newButton = newRoot.get();
+    newButton->SetBounds(D2D1::RectF(0.0f, 0.0f, 140.0f, 32.0f));
+    window.Host().SetRoot(std::move(newRoot));
+    window.Host().SetFocusControl(newButton);
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> newProvider;
+    newProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(newProvider != nullptr, "same-HWND lifecycle creates the new root provider after reattach");
+    wil::com_ptr_nothrow<IUnknown> newIdentity;
+    RequireSucceeded(newProvider.query_to(newIdentity.put()), "same-HWND lifecycle new provider exposes IUnknown identity");
+    Require(oldIdentity.get() != newIdentity.get(), "same-HWND lifecycle reattach creates a distinct canonical provider identity");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> repeatedNewProvider;
+    repeatedNewProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    wil::com_ptr_nothrow<IUnknown> repeatedNewIdentity;
+    Require(repeatedNewProvider != nullptr, "same-HWND lifecycle repeated new-provider acquisition succeeds");
+    RequireSucceeded(repeatedNewProvider.query_to(repeatedNewIdentity.put()),
+                     "same-HWND lifecycle repeated new provider exposes IUnknown identity");
+    Require(newIdentity.get() == repeatedNewIdentity.get(), "same-HWND lifecycle preserves canonical identity within the new attachment");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> retiredFocus;
+    RequireSucceeded(oldProvider->GetFocus(retiredFocus.put()), "same-HWND lifecycle old provider focus query remains callable");
+    Require(retiredFocus == nullptr, "same-HWND lifecycle old provider cannot expose focus from the new attachment");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> retiredHit;
+    RequireSucceeded(oldProvider->ElementProviderFromPoint(static_cast<double>(oldHitPoint.x),
+                                                           static_cast<double>(oldHitPoint.y),
+                                                           retiredHit.put()),
+                     "same-HWND lifecycle old provider hit-test remains callable");
+    Require(retiredHit == nullptr, "same-HWND lifecycle old provider cannot hit-test into the new attachment");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> newFocus;
+    RequireSucceeded(newProvider->GetFocus(newFocus.put()), "same-HWND lifecycle new provider focus query succeeds");
+    Require(newFocus != nullptr, "same-HWND lifecycle new provider resolves the new focused control");
+    wil::com_ptr_nothrow<IUnknown> newFocusIdentity;
+    RequireSucceeded(newFocus.query_to(newFocusIdentity.put()), "same-HWND lifecycle new focused provider exposes IUnknown identity");
+    Require(newFocusIdentity.get() == newIdentity.get(), "same-HWND lifecycle new focus resolves through the new canonical root identity");
 }
 
 void TestAccessibilityLabelOnlyRootDoesNotUseDirectSemanticRootCollapse()
@@ -2101,12 +2254,12 @@ void TestAccessibilityProviderExposesTextPatternForTextField()
     moved = 0;
     RequireSucceeded(selectedRange->Move(TextUnit_Character, 1, &moved), "text field selected range moves by character");
     Require(moved == 1, "text field selected range reports moved characters");
-    Require(ReadTextRangeText(*selectedRange.get(), -1, "text field selected range exposes moved text") == L"lpha ",
-            "text field selected range movement preserves range length");
+    Require(ReadTextRangeText(*selectedRange.get(), -1, "text field selected range exposes moved text") == L"l",
+            "text field selected character movement normalizes to one requested text unit");
     RequireSucceeded(selectedRange->Select(), "text field selected range Select succeeds");
     const std::optional<std::pair<size_t, size_t>> selectedAfterRangeSelect = field->GetSelectionRange();
     Require(selectedAfterRangeSelect.has_value(), "text field selected range Select applies a retained selection");
-    Require(selectedAfterRangeSelect.value().first == 1u && selectedAfterRangeSelect.value().second == 6u,
+    Require(selectedAfterRangeSelect.value().first == 1u && selectedAfterRangeSelect.value().second == 2u,
             "text field selected range Select applies the UIA range to the retained TextField");
     SAFEARRAY* selectedRectangles = nullptr;
     RequireSucceeded(selectedRange->GetBoundingRectangles(&selectedRectangles), "text field selected range bounding rectangles lookup succeeds");
@@ -5190,10 +5343,65 @@ void TestAccessibilityProviderExposesSliderRangeValuePattern()
     Require(slider->GetValue() == 68.0, "slider range-value SetValue updates the underlying control value");
 }
 
+void TestAccessibilityStatusRootExposesChildrenAndNonFocusingInvoke()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    uint32_t invokeCount = 0u;
+    auto root = std::make_unique<Panel>();
+    root->SetBounds(D2D1::RectF(0.0f, 0.0f, 320.0f, 160.0f));
+    root->SetAccessibilityRole(AccessibilityRole::Status);
+    root->SetAccessibleAutomationId(L"TransientStatus");
+    root->SetAccessibleName(L"Theme changed to Dark");
+    root->SetFocusable(false);
+    root->SetAccessibleInvoke([&invokeCount](WindowHost&) { ++invokeCount; });
+    auto* previous = root->AddChild<Label>(L"Light");
+    previous->SetBounds(D2D1::RectF(16.0f, 16.0f, 120.0f, 40.0f));
+    previous->SetAccessibleAutomationId(L"TransientStatus.Previous");
+    auto* current = root->AddChild<Label>(L"Dark");
+    current->SetBounds(D2D1::RectF(100.0f, 60.0f, 220.0f, 100.0f));
+    current->SetAccessibleAutomationId(L"TransientStatus.Current");
+    window.Host().SetRoot(std::move(root));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "status-root test creates a root provider");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> rootSimple;
+    RequireSucceeded(rootProvider.query_to(rootSimple.put()), "status root exposes provider-simple");
+    Require(ReadProviderLongProperty(*rootSimple.get(), UIA_ControlTypePropertyId, "status root exposes control type") == UIA_StatusBarControlTypeId,
+            "explicit status root collapses into the WindowHost fragment root");
+    Require(ReadProviderStringProperty(*rootSimple.get(), UIA_AutomationIdPropertyId, "status root exposes automation id") == L"TransientStatus",
+            "status root retains its stable automation id");
+    Require(! ReadProviderBoolProperty(*rootSimple.get(), UIA_IsKeyboardFocusablePropertyId, "status root exposes focusability"),
+            "status root remains non-focusable");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> rootFragment;
+    RequireSucceeded(rootProvider.query_to(rootFragment.put()), "status root exposes fragment navigation");
+    wil::com_ptr_nothrow<IRawElementProviderFragment> firstChild;
+    RequireSucceeded(rootFragment->Navigate(NavigateDirection_FirstChild, firstChild.put()), "status root first-child navigation succeeds");
+    Require(firstChild != nullptr, "collapsed status root retains its semantic text children");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> firstChildSimple;
+    RequireSucceeded(firstChild.query_to(firstChildSimple.put()), "status child exposes provider-simple");
+    Require(ReadProviderStringProperty(*firstChildSimple.get(), UIA_AutomationIdPropertyId, "status child exposes automation id") ==
+                L"TransientStatus.Previous",
+            "status child retains its stable automation id");
+
+    wil::com_ptr_nothrow<IUnknown> invokeUnknown;
+    RequireSucceeded(rootSimple->GetPatternProvider(UIA_InvokePatternId, invokeUnknown.put()), "status root Invoke lookup succeeds");
+    Require(invokeUnknown != nullptr, "status root exposes Invoke");
+    wil::com_ptr_nothrow<IInvokeProvider> invoke;
+    RequireSucceeded(invokeUnknown.query_to(invoke.put()), "status root Invoke supports IInvokeProvider");
+    RequireSucceeded(invoke->Invoke(), "status root Invoke succeeds");
+    Require(invokeCount == 1u, "status root Invoke calls the non-focusing callback exactly once");
+    Require(GetFocus() != window.Hwnd(), "status root Invoke does not focus its host window");
+}
+
 } // namespace
 
 void RunAccessibilityTests()
 {
+    TestAccessibilityTextUnitHelperSharesGraphemeWordLineAndFallbackPolicy();
     TestAccessibilityTargetPublishesImmutableSnapshotBeforeTreeTeardown();
     TestAccessibilityLiveHostResolutionIsWindowThreadOnly();
     TestAccessibilityProviderTraversalSurvivesConcurrentRootReplacement();
@@ -5220,6 +5428,7 @@ void RunAccessibilityTests()
     TestAccessibilityProviderRefreshesButtonSemanticProperties();
     TestAccessibilityProviderRefreshesLabelAssociations();
     TestAccessibilityProviderExposesDirectSemanticRootControls();
+    TestAccessibilityProviderIdentityRetiresAcrossSameHwndReattach();
     TestAccessibilityLabelOnlyRootDoesNotUseDirectSemanticRootCollapse();
     TestAccessibilityDirectSemanticRootMatchesUiAutomationClientTree();
     TestAccessibilityDirectSemanticRootTreeSelectionMatchesUiAutomationClientTree();
@@ -5258,4 +5467,5 @@ void RunAccessibilityTests()
     TestAccessibilityProviderPointHitsClipAndTranslateScrollPanelChildren();
     TestAccessibilityProviderExposesGridCellToggleAndRangePatterns();
     TestAccessibilityProviderExposesSliderRangeValuePattern();
+    TestAccessibilityStatusRootExposesChildrenAndNonFocusingInvoke();
 }

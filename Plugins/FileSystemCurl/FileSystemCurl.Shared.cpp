@@ -3,6 +3,7 @@
 #include "HandleIo.h"
 #include "CurlProcessRuntime.h"
 #include "YyjsonHelpers.h"
+#include "StringConversion.h"
 
 using namespace FileSystemCurlInternal;
 
@@ -546,7 +547,8 @@ namespace FileSystemCurlInternal
     return TryLocalSystemTimeToFileTime(localTime, fileTime);
 }
 
-[[nodiscard]] bool TryParseUnixListLine(std::string_view line, FilesInformationCurl::Entry& out) noexcept
+[[nodiscard]] bool TryParseUnixListLine(std::string_view line, FilesInformationCurl::Entry& out, bool includeDotEntries = false,
+                                       std::wstring_view timestampLeaf = {}) noexcept
 {
     if (line.size() < 2)
     {
@@ -559,7 +561,13 @@ namespace FileSystemCurlInternal
     }
 
     const char type = line[0];
-    if (type != 'd' && type != '-' && type != 'l')
+    const bool directory = type == 'd';
+    const bool symlink   = type == 'l';
+    const bool regular   = type == '-';
+    // Device, socket, fifo, and door names are real directory entries. Accept
+    // them as Unix so they cannot fall through to the DOS size-token heuristic.
+    const bool special   = type == 'c' || type == 'b' || type == 's' || type == 'p' || type == 'D';
+    if (! directory && ! symlink && ! regular && ! special)
     {
         return false;
     }
@@ -612,13 +620,13 @@ namespace FileSystemCurlInternal
     }
 
     std::string_view namePart = line.substr(pos);
-    if (IsDotOrDotDotName(namePart))
+    if (! includeDotEntries && IsDotOrDotDotName(namePart))
     {
         return false;
     }
 
     const size_t arrow = namePart.find(" -> ");
-    if (arrow != std::string_view::npos)
+    if (type == 'l' && arrow != std::string_view::npos)
     {
         namePart = namePart.substr(0, arrow);
     }
@@ -631,20 +639,43 @@ namespace FileSystemCurlInternal
         sizeParsed           = (ec == std::errc{} && ptr == sv.data() + sv.size());
     }
 
-    out                  = {};
-    out.attributes       = (type == 'd') ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL;
-    out.sizeBytes        = sizeBytes;
-    out.sizeKnown        = (type != 'd') && sizeParsed; // size column is meaningful only for regular files
-    out.name             = Utf16FromUtf8(namePart);
+    // Repeated strict lookups reuse the current row's name allocation. Reset
+    // every metadata field; a previous occupant's size/times are not evidence.
+    std::wstring reusableName = std::move(out.name);
+    reusableName.clear();
+    out                       = {};
+    out.name                  = std::move(reusableName);
+    if (directory)
+    {
+        out.attributes = FILE_ATTRIBUTE_DIRECTORY;
+    }
+    else if (special)
+    {
+        out.attributes = FILE_ATTRIBUTE_DEVICE;
+    }
+    else
+    {
+        out.attributes = FILE_ATTRIBUTE_NORMAL;
+    }
+    out.sizeBytes  = sizeBytes;
+    // The size column is meaningful for regular files and symlink payloads.
+    // Device/socket/fifo rows often carry major,minor or a dummy 0.
+    out.sizeKnown = (regular || symlink) && sizeParsed;
+    if (! Common::Strings::TryUtf16FromUtf8Strict(namePart, out.name))
+    {
+        return false;
+    }
     __int64 modifiedTime = 0;
-    if (TryParseUnixListTimestamp(monthTok.value(), dayTok.value(), timeOrYearTok.value(), modifiedTime))
+    if ((timestampLeaf.empty() || out.name == timestampLeaf) &&
+        TryParseUnixListTimestamp(monthTok.value(), dayTok.value(), timeOrYearTok.value(), modifiedTime))
     {
         out.lastWriteTime = modifiedTime;
     }
     return ! out.name.empty();
 }
 
-[[nodiscard]] bool TryParseDosListLine(std::string_view line, FilesInformationCurl::Entry& out) noexcept
+[[nodiscard]] bool TryParseDosListLine(std::string_view line, FilesInformationCurl::Entry& out, bool includeDotEntries = false,
+                                      std::wstring_view timestampLeaf = {}) noexcept
 {
     // Example:
     // 01-02-24  03:04PM       <DIR>          Folder
@@ -693,12 +724,16 @@ namespace FileSystemCurlInternal
     }
 
     std::string_view namePart = line.substr(pos);
-    if (IsDotOrDotDotName(namePart))
+    if (! includeDotEntries && IsDotOrDotDotName(namePart))
     {
         return false;
     }
 
-    out = {};
+    // Preserve only name storage, never metadata from a previous parsed row.
+    std::wstring reusableName = std::move(out.name);
+    reusableName.clear();
+    out                       = {};
+    out.name                  = std::move(reusableName);
     if (EqualsAsciiIgnoreCase(sizeOrDir.value(), "<DIR>"))
     {
         out.attributes = FILE_ATTRIBUTE_DIRECTORY;
@@ -709,7 +744,7 @@ namespace FileSystemCurlInternal
         const auto sv        = sizeOrDir.value();
         uint64_t parsed      = 0;
         const auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), parsed);
-        if (ec != std::errc{} || ptr == sv.data())
+        if (ec != std::errc{} || ptr != sv.data() + sv.size())
         {
             return false;
         }
@@ -718,9 +753,19 @@ namespace FileSystemCurlInternal
         out.sizeKnown  = true;
     }
 
-    out.name             = Utf16FromUtf8(namePart);
+    if (! Common::Strings::TryUtf16FromUtf8Strict(namePart, out.name))
+    {
+        return false;
+    }
     __int64 modifiedTime = 0;
-    if (TryParseDosListTimestamp(dateTok.value(), timeTok.value(), modifiedTime))
+    if (! TryParseDosListTimestamp(dateTok.value(), timeTok.value(), modifiedTime))
+    {
+        // Date and time tokens are the DOS dialect discriminator. A numeric
+        // third token alone is not enough — Unix socket/device rows would
+        // otherwise become phantom files named from the leftover columns.
+        return false;
+    }
+    if (timestampLeaf.empty() || out.name == timestampLeaf)
     {
         out.lastWriteTime = modifiedTime;
     }
@@ -1882,7 +1927,12 @@ void CurlShareUnlock(CURL* /*handle*/, curl_lock_data data, void* userptr) noexc
 
         curl_share_setopt(share, CURLSHOPT_SHARE, CURL_LOCK_DATA_DNS);
         curl_share_setopt(share, CURLSHOPT_SHARE, CURL_LOCK_DATA_SSL_SESSION);
-        curl_share_setopt(share, CURLSHOPT_SHARE, CURL_LOCK_DATA_CONNECT);
+        // R0f-Curl-OR2: the connection pool is deliberately NOT shared. Easy handles run
+        // concurrently on several host worker threads (parallel copies) and libcurl's pooled
+        // connection matching raced with another thread's teardown (access violation in
+        // url_match_destination, three crash dumps). Each pooled easy handle keeps its own
+        // connections; the handle pool hands a handle to one thread at a time, so reuse stays
+        // thread-confined. DNS and TLS session sharing remain safe under the lock callbacks.
 
         std::lock_guard lock(ctx.lifecycleMutex);
         ctx.share = share;
@@ -1907,8 +1957,8 @@ void CleanupCurlShareHandle() noexcept
 CurlEasyPool::BorrowedHandle CurlEasyPool::Borrow(std::wstring_view limiterKey) noexcept
 {
     std::wstring key{limiterKey};
-    std::vector<unique_curl_easy> cleanup;
-    unique_curl_easy handle;
+    std::vector<Handles> cleanup;
+    Handles handles;
 
     const uint64_t now = GetTickCount64();
     {
@@ -1929,32 +1979,37 @@ CurlEasyPool::BorrowedHandle CurlEasyPool::Borrow(std::wstring_view limiterKey) 
             {
                 _idle.erase(it);
             }
-            handle = std::move(entry.handle);
+            handles = std::move(entry.handles);
         }
     }
 
-    if (! handle)
+    if (! handles.easy)
     {
-        handle.reset(curl_easy_init());
-        if (! handle)
+        handles.easy.reset(curl_easy_init());
+        if (! handles.easy)
         {
             CancelBorrow();
             return {};
         }
     }
-    else
-    {
-        curl_easy_reset(handle.get());
-    }
-
-    return BorrowedHandle(this, std::move(key), std::move(handle));
+    return BorrowedHandle(this, std::move(key), std::move(handles));
 }
 
-void CurlEasyPool::ReturnHandle(std::wstring key, unique_curl_easy handle) noexcept
+void CurlEasyPool::ReturnHandle(std::wstring key, Handles handles) noexcept
 {
-    if (! handle)
+    if (! handles.easy)
     {
         return;
+    }
+
+    // Cleanup may invoke FTP/IMAP callbacks. Drop per-call callback/data pointers
+    // before publishing an idle handle or destroying it on shutdown/overflow;
+    // resetting only on the next borrow leaves expired caller storage reachable.
+    // curl_easy_reset preserves connection, DNS and TLS-session reuse.
+    curl_easy_reset(handles.easy.get());
+    if (handles.cursorEasy)
+    {
+        curl_easy_reset(handles.cursorEasy.get());
     }
 
     const uint64_t now = GetTickCount64();
@@ -1975,7 +2030,7 @@ void CurlEasyPool::ReturnHandle(std::wstring key, unique_curl_easy handle) noexc
         {
             return; // drop handle — pool is full for this connection
         }
-        vec.push_back(IdleEntry(std::move(handle), now));
+        vec.push_back(IdleEntry(std::move(handles), now));
     }
 }
 
@@ -1990,7 +2045,7 @@ void CurlEasyPool::CancelBorrow() noexcept
 
 void CurlEasyPool::BeginShutdown() noexcept
 {
-    std::vector<unique_curl_easy> cleanup;
+    std::vector<Handles> cleanup;
     {
         std::scoped_lock lock(_mutex);
         _shutdownRequested = true;
@@ -1998,9 +2053,9 @@ void CurlEasyPool::BeginShutdown() noexcept
         {
             for (IdleEntry& entry : entries)
             {
-                if (entry.handle)
+                if (entry.handles.easy)
                 {
-                    cleanup.push_back(std::move(entry.handle));
+                    cleanup.push_back(std::move(entry.handles));
                 }
             }
         }
@@ -2014,16 +2069,16 @@ bool CurlEasyPool::CanUnloadNow() noexcept
     return _shutdownRequested && _activeBorrowCount == 0u && _idle.empty();
 }
 
-void CurlEasyPool::EvictExpired(uint64_t now, std::vector<unique_curl_easy>& cleanup) noexcept
+void CurlEasyPool::EvictExpired(uint64_t now, std::vector<Handles>& cleanup) noexcept
 {
     for (auto it = _idle.begin(); it != _idle.end();)
     {
         auto& vec = it->second;
         for (auto& entry : vec)
         {
-            if ((now - entry.returnedAtMs) >= kIdleExpiryMs && entry.handle)
+            if ((now - entry.returnedAtMs) >= kIdleExpiryMs && entry.handles.easy)
             {
-                cleanup.push_back(std::move(entry.handle));
+                cleanup.push_back(std::move(entry.handles));
             }
         }
         std::erase_if(vec, [&](const IdleEntry& e) { return (now - e.returnedAtMs) >= kIdleExpiryMs; });
@@ -2105,6 +2160,59 @@ HRESULT RunDebugCurlRuntimeProbe() noexcept
 }
 #endif
 
+namespace
+{
+thread_local const FileSystemOptions* t_curlOperationOptions = nullptr;
+
+// R0f-Curl: libcurl invokes the progress callback at least once per second for the whole transfer,
+// including while a control command waits for the server, so polling the host's operation control
+// here gives every FTP/SFTP/SCP call a quiet point of about one second after Cancel or a deadline.
+int CurlOperationControlXferInfo(void* clientp, curl_off_t, curl_off_t, curl_off_t, curl_off_t) noexcept
+{
+    return FAILED(FileSystemCheckOperationControl(static_cast<const FileSystemOptions*>(clientp))) ? 1 : 0;
+}
+} // namespace
+
+const FileSystemOptions* CurlCurrentOperationOptions() noexcept
+{
+    return t_curlOperationOptions;
+}
+
+CurlOperationOptionsScope::CurlOperationOptionsScope(const FileSystemOptions* options) noexcept : _previous(t_curlOperationOptions)
+{
+    if (options != nullptr)
+    {
+        t_curlOperationOptions = options;
+    }
+}
+
+CurlOperationOptionsScope::~CurlOperationOptionsScope()
+{
+    t_curlOperationOptions = _previous;
+}
+
+long CurlLowSpeedTimeSeconds(unsigned long operationTimeoutMs) noexcept
+{
+    constexpr long kLowSpeedTimeSecondsDefault = 60L;
+    if (operationTimeoutMs == 0u)
+    {
+        return kLowSpeedTimeSecondsDefault;
+    }
+    const unsigned long opSec = operationTimeoutMs / 1000u;
+    return opSec == 0u ? 1L : static_cast<long>((std::min)(opSec, static_cast<unsigned long>(kLowSpeedTimeSecondsDefault)));
+}
+
+// The provider-owned bound after which a call whose server stopped answering returns on its own:
+// the connect timeout or the low-speed abort, whichever is longer. It is the route's
+// providerWatchdogTimeoutMs; cooperative cancellation through the progress callback is faster.
+uint32_t CurlProviderWatchdogTimeoutMs(unsigned long connectTimeoutMs, unsigned long operationTimeoutMs) noexcept
+{
+    constexpr unsigned long kDefaultConnectTimeoutMs = 10'000ul;
+    const unsigned long lowSpeedMs = static_cast<unsigned long>(CurlLowSpeedTimeSeconds(operationTimeoutMs)) * 1000ul;
+    const unsigned long bound      = (std::max)(connectTimeoutMs == 0u ? kDefaultConnectTimeoutMs : connectTimeoutMs, lowSpeedMs);
+    return static_cast<uint32_t>((std::min)(bound, static_cast<unsigned long>(std::numeric_limits<uint32_t>::max())));
+}
+
 [[nodiscard]] HRESULT HResultFromCurl(CURLcode code) noexcept
 {
 #pragma warning(push)
@@ -2114,7 +2222,13 @@ HRESULT RunDebugCurlRuntimeProbe() noexcept
     switch (code)
     {
         case CURLE_OK: return S_OK;
-        case CURLE_ABORTED_BY_CALLBACK: return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        case CURLE_ABORTED_BY_CALLBACK:
+        {
+            // Report the host's own verdict (cancel versus deadline) when the abort came from the
+            // operation-control progress callback.
+            const HRESULT controlHr = t_curlOperationOptions != nullptr ? FileSystemCheckOperationControl(t_curlOperationOptions) : S_OK;
+            return FAILED(controlHr) ? controlHr : HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
         case CURLE_UNSUPPORTED_PROTOCOL: return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         case CURLE_URL_MALFORMAT: return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
         case CURLE_REMOTE_FILE_NOT_FOUND: return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
@@ -2134,10 +2248,75 @@ HRESULT RunDebugCurlRuntimeProbe() noexcept
         case CURLE_SSL_CERTPROBLEM: return SEC_E_CERT_UNKNOWN;
         case CURLE_SSL_ISSUER_ERROR: return SEC_E_CERT_UNKNOWN;
         case CURLE_OPERATION_TIMEDOUT: return HRESULT_FROM_WIN32(ERROR_SEM_TIMEOUT);
-        default: return E_FAIL;
+        default:
+            // Keep the provider's existing failure contract, but retain the raw
+            // transport code for diagnosis without URLs, credentials or payloads.
+            Debug::Perf::Emit(L"FileOps.Curl.UnmappedTransportFailure", L"curl-code", 0u, static_cast<uint64_t>(code), 0u, E_FAIL);
+            return E_FAIL;
     }
 #pragma warning(pop)
 }
+
+namespace
+{
+void RecordCurlConnectionFailure(CURL* curl, CURLcode code, const wchar_t* phase) noexcept
+{
+    if (code != CURLE_COULDNT_CONNECT)
+    {
+        return;
+    }
+
+    // Transport-local diagnostics: capture the easy handle's OS error before
+    // reset/return. Common HRESULT helpers do not own this libcurl state. Never
+    // retain URLs, profiles, control replies, error text, or credentials here.
+    long osError                = 0;
+    const bool osErrorAvailable = curl_easy_getinfo(curl, CURLINFO_OS_ERRNO, &osError) == CURLE_OK && osError > 0;
+    long localPort              = 0;
+    long remotePort             = 0;
+    long responseCode           = 0;
+    static_cast<void>(curl_easy_getinfo(curl, CURLINFO_LOCAL_PORT, &localPort));
+    static_cast<void>(curl_easy_getinfo(curl, CURLINFO_PRIMARY_PORT, &remotePort));
+    static_cast<void>(curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode));
+    // Ports may be nonpositive/unavailable or describe an established FTP
+    // control connection, not the failed secondary data socket. Preserve the
+    // reported values without inventing endpoint attribution.
+    const std::wstring detail =
+        std::format(L"phase={};osErrorAvailable={};localPort={};remotePort={};responseCode={}", phase, osErrorAvailable, localPort, remotePort, responseCode);
+    Debug::Perf::Emit(L"FileOps.Curl.ConnectionFailure",
+                      detail.c_str(),
+                      0u,
+                      static_cast<uint64_t>(code),
+                      osErrorAvailable ? static_cast<uint64_t>(osError) : 0u,
+                      HRESULT_FROM_WIN32(ERROR_CONNECTION_REFUSED));
+#ifdef ENABLE_TESTS
+    if (osErrorAvailable && osError == WSAEADDRINUSE)
+    {
+        // A fresh wildcard bind distinguishes contemporaneous allocation failure
+        // from a failed connection tuple. It is only an observation, never retry
+        // authority or proof of global exhaustion; other threads can release ports.
+        const auto started       = std::chrono::steady_clock::now();
+        unsigned short port      = 0u;
+        const HRESULT probeHr    = ProbeCurlEphemeralBindForSelfTest(port);
+        const uint64_t elapsedUs = Debug::Perf::ElapsedUs(started);
+        Debug::Perf::Emit(L"FileOps.Curl.ConnectionAllocationProbe", phase, elapsedUs, static_cast<uint64_t>(osError), port, probeHr);
+        for (const bool bindFirst : {false, true})
+        {
+            const auto connectStarted        = std::chrono::steady_clock::now();
+            unsigned short localProbePort    = 0u;
+            const wchar_t* stage             = nullptr;
+            const HRESULT connectHr          = ProbeCurlLoopbackConnectForSelfTest(bindFirst, localProbePort, stage);
+            const std::wstring connectDetail = std::format(L"phase={};explicitBind={};stage={}", phase, bindFirst, stage);
+            Debug::Perf::Emit(L"FileOps.Curl.LoopbackConnectProbe",
+                              connectDetail.c_str(),
+                              Debug::Perf::ElapsedUs(connectStarted),
+                              bindFirst ? 1u : 0u,
+                              localProbePort,
+                              connectHr);
+        }
+    }
+#endif
+}
+} // namespace
 
 void ApplyCommonCurlOptions(CURL* curl, const ConnectionInfo& conn, const FileSystemOptions* options, bool forUpload) noexcept
 {
@@ -2200,17 +2379,19 @@ void ApplyCommonCurlOptions(CURL* curl, const ConnectionInfo& conn, const FileSy
 
     // Avoid hanging forever on stalled connections (no progress).
     constexpr long kLowSpeedLimitBytesPerSecond = 1L;
-    constexpr long kLowSpeedTimeSecondsDefault  = 60L;
-
-    long lowSpeedTimeSeconds = kLowSpeedTimeSecondsDefault;
-    if (conn.operationTimeoutMs != 0)
-    {
-        const unsigned long opSec = conn.operationTimeoutMs / 1000u;
-        lowSpeedTimeSeconds       = opSec == 0 ? 1L : static_cast<long>((std::min)(opSec, static_cast<unsigned long>(kLowSpeedTimeSecondsDefault)));
-    }
+    const long lowSpeedTimeSeconds              = CurlLowSpeedTimeSeconds(conn.operationTimeoutMs);
 
     curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, kLowSpeedLimitBytesPerSecond);
     curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, lowSpeedTimeSeconds);
+
+    if (options != nullptr)
+    {
+        // R0f-Curl: cooperative cancel/deadline polling for this transfer. Callers that install
+        // their own progress callback pass nullptr here and keep it.
+        curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CurlOperationControlXferInfo);
+        curl_easy_setopt(curl, CURLOPT_XFERINFODATA, const_cast<FileSystemOptions*>(options));
+        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+    }
 
 #ifdef CURLOPT_FTP_RESPONSE_TIMEOUT
     if (conn.protocol == Protocol::Ftp)
@@ -2395,6 +2576,471 @@ size_t CurlWriteToListParser(void* ptr, size_t size, size_t nmemb, void* userdat
 }
 } // namespace
 
+#ifdef ENABLE_TESTS
+std::optional<CurlFailedConnectPorts> CurlDirectoryCursor::ParseFailedConnectTraceForSelfTest(curl_infotype type, std::string_view text) noexcept
+{
+    // Test-local pinned-libcurl diagnostic grammar, not a generic network parser.
+    // Only our IPv4 loopback fixture is in scope. Borrow text, retain only ports,
+    // and never copy addresses, error suffixes, headers or protocol payloads.
+    constexpr std::string_view prefix = "connect to 127.0.0.1 port ";
+    if (type != CURLINFO_TEXT || ! text.starts_with(prefix))
+    {
+        return std::nullopt;
+    }
+    text.remove_prefix(prefix.size());
+    CurlFailedConnectPorts ports;
+    const auto remote = std::from_chars(text.data(), text.data() + (std::min)(text.size(), size_t{6u}), ports.remote);
+    if (remote.ec != std::errc{} || ports.remote < 1 || ports.remote > 65535)
+    {
+        return std::nullopt;
+    }
+    text.remove_prefix(static_cast<size_t>(remote.ptr - text.data()));
+    constexpr std::array<std::string_view, 3u> localPrefixes{{" from 127.0.0.1 port ", " from 0.0.0.0 port ", " from  port "}};
+    const auto localPrefix = std::ranges::find_if(localPrefixes, [&](std::string_view candidate) noexcept { return text.starts_with(candidate); });
+    if (localPrefix == localPrefixes.end())
+    {
+        return std::nullopt;
+    }
+    text.remove_prefix(localPrefix->size());
+    const auto local = std::from_chars(text.data(), text.data() + (std::min)(text.size(), size_t{6u}), ports.local);
+    if (local.ec != std::errc{} || ports.local < -1 || ports.local > 65535)
+    {
+        return std::nullopt;
+    }
+    text.remove_prefix(static_cast<size_t>(local.ptr - text.data()));
+    return text.starts_with(" failed: ") ? std::optional<CurlFailedConnectPorts>{ports} : std::nullopt;
+}
+#endif
+
+struct CurlDirectoryCursor::Impl final
+{
+    Impl() = default;
+    ~Impl()
+    {
+        ReleaseTransfer();
+    }
+    Impl(const Impl&)            = delete;
+    Impl& operator=(const Impl&) = delete;
+    Impl(Impl&&)                 = delete;
+    Impl& operator=(Impl&&)      = delete;
+
+    // Only called by the owning worker, outside libcurl callbacks. Retained
+    // directory rows do not need to retain a completed transport/cache borrow.
+    void ReleaseTransfer() noexcept
+    {
+        if (attached)
+        {
+            static_cast<void>(curl_multi_remove_handle(multi, cursorEasy));
+            attached = false;
+        }
+#ifdef ENABLE_TESTS
+        if (cursorEasy)
+        {
+            // Disable verbose first so clearing the callback cannot expose stderr.
+            // Clear borrowed diagnostic state while this Impl is still alive.
+            static_cast<void>(curl_easy_setopt(cursorEasy, CURLOPT_VERBOSE, 0L));
+            static_cast<void>(curl_easy_setopt(cursorEasy, CURLOPT_DEBUGFUNCTION, nullptr));
+            static_cast<void>(curl_easy_setopt(cursorEasy, CURLOPT_DEBUGDATA, nullptr));
+        }
+#endif
+        cursorEasy = nullptr;
+        multi      = nullptr;
+        // ReturnHandle resets every borrowed callback before publishing idle
+        // handles and preserves the multi's reusable connection cache.
+        easy = CurlEasyPool::BorrowedHandle{};
+    }
+
+#ifdef ENABLE_TESTS
+    static int CaptureFailedConnect(CURL* curl, curl_infotype type, char* data, size_t size, void* cookie) noexcept
+    {
+        auto* self = static_cast<Impl*>(cookie);
+        if (! self || curl != self->cursorEasy || ! data || type != CURLINFO_TEXT)
+        {
+            return 0;
+        }
+        const auto ports = CurlDirectoryCursor::ParseFailedConnectTraceForSelfTest(type, std::string_view(data, size));
+        if (! ports.has_value())
+        {
+            return 0;
+        }
+        const int priorError      = WSAGetLastError();
+        auto restoreError         = wil::scope_exit([priorError]() noexcept { WSASetLastError(priorError); });
+        self->failedConnectPorts  = ports;
+        const std::wstring detail = std::format(L"phase=cursor;stage=connect;localPort={}", ports.value().local);
+        Debug::Perf::Emit(L"FileOps.Curl.SocketConnectFailure",
+                          detail.c_str(),
+                          0u,
+                          static_cast<uint64_t>(ports.value().remote),
+                          static_cast<uint64_t>((std::max)(ports.value().local, 0)),
+                          HRESULT_FROM_WIN32(ERROR_CONNECTION_REFUSED));
+        return 0;
+    }
+#endif
+
+    // Read ahead only into the existing fixed buffer, including fragmented
+    // small listings. A paused callback consumes none of its bytes: libcurl
+    // redelivers that whole chunk on the same thread when Next resumes.
+    static size_t Write(char* data, size_t size, size_t count, void* cookie) noexcept
+    {
+        auto& self = *static_cast<Impl*>(cookie);
+        if (size != 0u && count > self.chunk.size() / size)
+        {
+            self.status = HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW);
+            return CURL_WRITEFUNC_ERROR;
+        }
+        const size_t bytes = size * count;
+        if (bytes == 0u)
+        {
+            return 0u;
+        }
+        if (self.chunkOffset == self.chunkSize)
+        {
+            self.chunkOffset = 0u;
+            self.chunkSize   = 0u;
+        }
+        if (bytes > self.chunk.size() - self.chunkSize)
+        {
+            self.paused = true;
+            return CURL_WRITEFUNC_PAUSE;
+        }
+        std::memcpy(self.chunk.data() + self.chunkSize, data, bytes);
+        self.chunkSize += bytes;
+        return bytes;
+    }
+
+    [[nodiscard]] HRESULT ParseLine(FilesInformationCurl::Entry& entry, std::wstring_view timestampLeaf) noexcept
+    {
+        std::string_view text(line.data(), lineSize);
+        lineSize = 0u;
+        if (! text.empty() && text.back() == '\r')
+        {
+            text.remove_suffix(1u);
+        }
+        if (text.empty())
+        {
+            return S_FALSE;
+        }
+        if (text.starts_with("total "))
+        {
+            uint64_t ignored        = 0u;
+            const std::string total = TrimAscii(text.substr(6u));
+            const auto result       = std::from_chars(total.data(), total.data() + total.size(), ignored);
+            return result.ec == std::errc{} && result.ptr == total.data() + total.size() ? S_FALSE : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+        if (! Common::Strings::IsValidUtf8Strict(text) || text.find('\0') != std::string_view::npos ||
+            (! TryParseUnixListLine(text, entry, true, timestampLeaf) && ! TryParseDosListLine(text, entry, true, timestampLeaf)))
+        {
+            // An unknown dialect is not a names-only deletion authority. Never
+            // silently drop a malformed row and later report a complete tree.
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+        if (entry.name == L"." || entry.name == L"..")
+        {
+            return S_FALSE;
+        }
+        return entry.name.empty() || entry.name.find_first_of(L"/\\\r\n") != std::wstring::npos ? HRESULT_FROM_WIN32(ERROR_INVALID_NAME) : S_OK;
+    }
+
+    // Consume only the current bounded transport chunk. S_FALSE means either
+    // more transport data is needed or, when complete, the listing is exhausted.
+    [[nodiscard]] HRESULT ConsumeChunk(FilesInformationCurl::Entry& entry, std::wstring_view timestampLeaf) noexcept
+    {
+        while (chunkOffset < chunkSize)
+        {
+            const char* first      = chunk.data() + chunkOffset;
+            const size_t available = chunkSize - chunkOffset;
+            const auto* newline    = static_cast<const char*>(std::memchr(first, '\n', available));
+            const size_t take      = newline ? static_cast<size_t>(newline - first) : available;
+            if (take > line.size() - lineSize)
+            {
+                return HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW);
+            }
+            if (take != 0u)
+            {
+                std::memcpy(line.data() + lineSize, first, take);
+                lineSize += take;
+            }
+            chunkOffset += take + (newline ? 1u : 0u);
+            if (newline)
+            {
+                const HRESULT parsed = ParseLine(entry, timestampLeaf);
+                if (parsed != S_FALSE)
+                {
+                    return parsed;
+                }
+            }
+        }
+        return complete && lineSize != 0u ? ParseLine(entry, timestampLeaf) : S_FALSE;
+    }
+
+    CurlEasyPool::BorrowedHandle easy;
+    CURLM* multi     = nullptr; // Borrowed from easy; the pool retains the connection cache.
+    CURL* cursorEasy = nullptr; // Borrowed cursor-only handle; never used by curl_easy_perform.
+#ifdef ENABLE_TESTS
+    std::optional<CurlFailedConnectPorts> failedConnectPorts;
+#endif
+    std::function<HRESULT()> checkpoint;
+    std::string url;
+    std::array<char, CURL_MAX_WRITE_SIZE> chunk{};
+    std::array<char, CURL_MAX_WRITE_SIZE> line{};
+    size_t chunkOffset  = 0u;
+    size_t chunkSize    = 0u;
+    size_t lineSize     = 0u;
+    uint32_t watchdogMs = 0u;
+    HRESULT status      = S_OK;
+    bool attached       = false;
+    bool paused         = false;
+    bool complete       = false;
+};
+
+CurlDirectoryCursor::CurlDirectoryCursor() noexcept = default;
+CurlDirectoryCursor::~CurlDirectoryCursor()         = default;
+
+HRESULT CurlDirectoryCursor::Open(const ConnectionInfo& conn, std::wstring_view path, std::function<HRESULT()> checkpoint) noexcept
+{
+    static_assert(sizeof(Impl) + CURL_MAX_WRITE_SIZE <= kMetadataReservationBytes);
+    if (_impl || ! checkpoint || conn.protocol == Protocol::Imap)
+    {
+        return E_INVALIDARG;
+    }
+    HRESULT hr = checkpoint();
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    hr = EnsureCurlInitialized();
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    auto impl  = std::make_unique<Impl>();
+    impl->easy = GetCurlEasyPool().Borrow(conn.limiterKey);
+    if (! impl->easy)
+    {
+        return E_OUTOFMEMORY;
+    }
+    impl->multi      = impl->easy.GetOrCreateMulti();
+    impl->cursorEasy = impl->easy.GetOrCreateCursorEasy();
+    if (! impl->cursorEasy || ! impl->multi)
+    {
+        return E_OUTOFMEMORY;
+    }
+    impl->url = BuildUrl(conn, path, true, true);
+    if (impl->url.empty())
+    {
+        return E_INVALIDARG;
+    }
+    impl->checkpoint = std::move(checkpoint);
+    impl->watchdogMs = CurlProviderWatchdogTimeoutMs(conn.connectTimeoutMs, conn.operationTimeoutMs);
+    ApplyCommonCurlOptions(impl->cursorEasy, conn, CurlCurrentOperationOptions(), false);
+    // Walkers finish this listing (or fail closed) before opening a child cursor,
+    // so a paused parent never sits idle across subtree work. Next still owns an
+    // active-wait watchdog for the current pump; cancel/deadline stay per-checkpoint.
+    curl_easy_setopt(impl->cursorEasy, CURLOPT_TIMEOUT_MS, 0L);
+    curl_easy_setopt(impl->cursorEasy, CURLOPT_LOW_SPEED_TIME, 0L);
+    curl_easy_setopt(impl->cursorEasy, CURLOPT_URL, impl->url.c_str());
+    curl_easy_setopt(impl->cursorEasy, CURLOPT_WRITEFUNCTION, Impl::Write);
+    curl_easy_setopt(impl->cursorEasy, CURLOPT_WRITEDATA, impl.get());
+    curl_easy_setopt(impl->cursorEasy, CURLOPT_FAILONERROR, 1L);
+#ifdef ENABLE_TESTS
+    // Install the suppressing callback and owned context before enabling verbose;
+    // no diagnostic text can reach stderr, and no socket behavior is replaced.
+    if (curl_easy_setopt(impl->cursorEasy, CURLOPT_DEBUGFUNCTION, Impl::CaptureFailedConnect) != CURLE_OK ||
+        curl_easy_setopt(impl->cursorEasy, CURLOPT_DEBUGDATA, impl.get()) != CURLE_OK || curl_easy_setopt(impl->cursorEasy, CURLOPT_VERBOSE, 1L) != CURLE_OK)
+    {
+        return E_FAIL;
+    }
+#endif
+    if (curl_multi_add_handle(impl->multi, impl->cursorEasy) != CURLM_OK)
+    {
+        return E_FAIL;
+    }
+    impl->attached = true;
+    _impl          = std::move(impl);
+    return S_OK;
+}
+
+uint64_t CurlDirectoryCursor::RetainedPathBytes() const noexcept
+{
+    // URL is retained here and copied by CURLOPT_URL; decoded frame paths are
+    // charged by the walker. Opaque TLS/socket state is not a metadata metric.
+    return _impl ? static_cast<uint64_t>(_impl->url.capacity() + 1u) * 2u : 0u;
+}
+
+#ifdef ENABLE_TESTS
+std::optional<CurlFailedConnectPorts> CurlDirectoryCursor::FailedConnectPortsForSelfTest() const noexcept
+{
+    return _impl ? _impl->failedConnectPorts : std::nullopt;
+}
+
+bool CurlDirectoryCursor::HasActiveTransferForSelfTest() const noexcept
+{
+    return _impl && static_cast<bool>(_impl->easy);
+}
+#endif
+
+HRESULT CurlDirectoryCursor::Next(FilesInformationCurl::Entry& entry, std::wstring_view timestampLeaf) noexcept
+{
+    if (! _impl)
+    {
+        return E_UNEXPECTED;
+    }
+    Impl& state                      = *_impl;
+    const ULONGLONG started          = GetTickCount64();
+    const auto releaseFailedTransfer = wil::scope_exit([&]() noexcept
+    {
+        if (FAILED(state.status))
+        {
+            state.ReleaseTransfer();
+        }
+    });
+    for (;;)
+    {
+        if (FAILED(state.status))
+        {
+            return state.status;
+        }
+        state.status = state.checkpoint();
+        if (FAILED(state.status))
+        {
+            return state.status;
+        }
+        // A small listing must reach its final reply before yielding to child
+        // traversal. A larger listing yields at the same bounded pause point.
+        if (state.complete || state.paused)
+        {
+            const HRESULT parsed = state.ConsumeChunk(entry, timestampLeaf);
+            if (parsed != S_FALSE)
+            {
+                state.status = parsed;
+                return parsed;
+            }
+            if (state.complete)
+            {
+                return S_FALSE;
+            }
+        }
+        if (GetTickCount64() - started >= state.watchdogMs)
+        {
+            state.status = HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+            return state.status;
+        }
+        if (state.paused)
+        {
+            state.paused           = false;
+            const CURLcode unpause = curl_easy_pause(state.cursorEasy, CURLPAUSE_CONT);
+            if (unpause != CURLE_OK)
+            {
+                state.status = HResultFromCurl(unpause);
+                return state.status;
+            }
+            // Unpause may synchronously deliver the cached chunk.
+            if (state.paused)
+            {
+                continue;
+            }
+        }
+        int running = 0;
+        if (curl_multi_perform(state.multi, &running) != CURLM_OK)
+        {
+            state.status = E_FAIL;
+            return state.status;
+        }
+        int remaining = 0;
+        while (CURLMsg* message = curl_multi_info_read(state.multi, &remaining))
+        {
+            if (message->msg == CURLMSG_DONE)
+            {
+                RecordCurlConnectionFailure(state.cursorEasy, message->data.result, L"cursor");
+                state.complete = true;
+                if (SUCCEEDED(state.status))
+                {
+                    state.status = HResultFromCurl(message->data.result);
+                }
+            }
+        }
+        if (state.complete)
+        {
+            // Capture result/OS diagnostics and drain messages before the
+            // pooled handles are reset. Buffered records stay owned by Impl.
+            state.ReleaseTransfer();
+        }
+        if (FAILED(state.status) || state.complete || state.paused)
+        {
+            continue;
+        }
+        if (running == 0 || curl_multi_poll(state.multi, nullptr, 0u, 50, nullptr) != CURLM_OK)
+        {
+            state.status = E_FAIL;
+            return state.status;
+        }
+    }
+}
+
+#ifdef ENABLE_TESTS
+HRESULT CurlDirectoryCursor::ParseChunksForSelfTest(std::span<const std::string_view> chunks,
+                                                   std::vector<FilesInformationCurl::Entry>& entries,
+                                                   std::wstring_view lookupLeaf,
+                                                   uint64_t* inspectedRows) noexcept
+{
+    // Deterministic callback/framing seam: no socket, pool borrow, or alternate
+    // parser. Production Next owns transport completion and cancellation proof.
+    auto state = std::make_unique<Impl>();
+    entries.clear();
+    if (inspectedRows)
+    {
+        *inspectedRows = 0u;
+    }
+    FilesInformationCurl::Entry entry{};
+    for (size_t index = 0u;;)
+    {
+        state->complete = index == chunks.size();
+        if (! state->complete)
+        {
+            std::string delivered(chunks[index]); // The libcurl callback accepts writable storage.
+            const size_t accepted = Impl::Write(delivered.data(), 1u, delivered.size(), state.get());
+            if (accepted == delivered.size())
+            {
+                ++index;
+            }
+            else if (accepted != CURL_WRITEFUNC_PAUSE)
+            {
+                return FAILED(state->status) ? state->status : E_UNEXPECTED;
+            }
+        }
+        if (! state->complete && ! state->paused)
+        {
+            continue;
+        }
+        for (;;)
+        {
+            const HRESULT hr = state->ConsumeChunk(entry, lookupLeaf);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+            if (hr == S_FALSE)
+            {
+                break;
+            }
+            if (inspectedRows)
+            {
+                ++*inspectedRows;
+            }
+            if (lookupLeaf.empty() || entry.name == lookupLeaf)
+            {
+                entries.push_back(std::move(entry));
+            }
+        }
+        if (state->complete)
+        {
+            return S_OK;
+        }
+        state->paused = false; // Redeliver the unconsumed callback on resume.
+    }
+}
+#endif
+
 size_t CurlWriteToFile(void* ptr, size_t size, size_t nmemb, void* userdata) noexcept
 {
     if (! ptr || ! userdata)
@@ -2511,31 +3157,6 @@ namespace FileSystemCurlInternal
     return Common::HandleIo::GetFileSizeBounded(file, (std::numeric_limits<uint64_t>::max)(), out);
 }
 
-[[nodiscard]] wil::unique_hfile CreateTemporaryDeleteOnCloseFile() noexcept
-{
-    wchar_t tempPath[MAX_PATH]{};
-    const DWORD tempPathLen = GetTempPathW(ARRAYSIZE(tempPath), tempPath);
-    if (tempPathLen == 0 || tempPathLen >= ARRAYSIZE(tempPath))
-    {
-        return {};
-    }
-
-    wchar_t tempName[MAX_PATH]{};
-    if (GetTempFileNameW(tempPath, L"rsc", 0, tempName) == 0)
-    {
-        return {};
-    }
-
-    HANDLE handle = CreateFileW(tempName,
-                                GENERIC_READ | GENERIC_WRITE,
-                                FILE_SHARE_READ,
-                                nullptr,
-                                CREATE_ALWAYS,
-                                FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE | FILE_FLAG_SEQUENTIAL_SCAN,
-                                nullptr);
-
-    return wil::unique_hfile(handle);
-}
 } // namespace FileSystemCurlInternal
 
 namespace FileSystemCurlInternal
@@ -2701,12 +3322,43 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
 
 [[nodiscard]] std::string RemotePathForCommand(const ConnectionInfo& conn, std::wstring_view pluginPath) noexcept
 {
-    std::string remote = JoinRemotePath(conn.basePath, pluginPath);
+    // URLs and quote-command operands have different grammars. Reuse the
+    // captured literal base path, never the URL-escaped representation.
+    const std::wstring path = JoinPluginPathWide(conn.basePathWide, pluginPath);
+    if (path.find_first_of(L"\r\n") != std::wstring::npos || path.find(L'\0') != std::wstring::npos)
+    {
+        return {}; // No control-line injection or C-string truncation.
+    }
+    std::string remote = Common::Strings::Utf8FromUtf16StrictOrEmpty(path);
+    if (remote.empty())
+    {
+        return {};
+    }
     while (remote.size() > 1u && remote.back() == '/')
     {
         remote.pop_back();
     }
-    return remote.empty() ? std::string("/") : remote;
+    if (conn.protocol == Protocol::Ftp)
+    {
+        // FTP has one pathname occupying the rest of the command line; quotes
+        // are literal filename bytes, not a libcurl argument parser convention.
+        return remote;
+    }
+    // SFTP (also used for SCP namespace commands) tokenizes its operands.
+    // This is libcurl quote grammar, not shell or Windows argv escaping.
+    std::string quoted;
+    quoted.reserve(remote.size() + 2u);
+    quoted.push_back('"');
+    for (const char ch : remote)
+    {
+        if (ch == '\\' || ch == '"')
+        {
+            quoted.push_back('\\');
+        }
+        quoted.push_back(ch);
+    }
+    quoted.push_back('"');
+    return quoted;
 }
 
 namespace
@@ -2735,6 +3387,60 @@ namespace
     }
 
     return delay;
+}
+
+struct FtpControlReplyCapture final
+{
+    long lastOtherFailureReplyCode = 0;
+    bool sawAuthenticationFailure  = false;
+    bool sawPrimitiveUnavailable   = false;
+};
+
+// FTP NOBODY synthesizes metadata into the body callback even without HEADER.
+// Unlike payload/string sinks, a size probe retains no response bytes and must
+// never depend on the GUI process's CRT stdout. Keep this transport-only sink here.
+constexpr size_t ConsumeCurlProbeMetadata(char* /*data*/, size_t size, size_t count, void* /*context*/) noexcept
+{
+    if (size != 0u && count > (std::numeric_limits<size_t>::max)() / size)
+    {
+        return CURL_WRITEFUNC_ERROR;
+    }
+    return size * count;
+}
+
+static_assert(ConsumeCurlProbeMetadata(nullptr, 1u, CURL_MAX_HTTP_HEADER, nullptr) == CURL_MAX_HTTP_HEADER);
+static_assert(ConsumeCurlProbeMetadata(nullptr, 0u, (std::numeric_limits<size_t>::max)(), nullptr) == 0u);
+static_assert(ConsumeCurlProbeMetadata(nullptr, 2u, (std::numeric_limits<size_t>::max)(), nullptr) == CURL_WRITEFUNC_ERROR);
+
+int CaptureFtpControlReply(CURL* /*curl*/, curl_infotype type, char* data, size_t size, void* context) noexcept
+{
+    auto* capture = static_cast<FtpControlReplyCapture*>(context);
+    if (! capture || (type != CURLINFO_HEADER_IN && type != CURLINFO_TEXT) || ! data)
+    {
+        return 0;
+    }
+
+    const size_t replyOffset = (size >= 5u && data[0] == '<' && data[1] == ' ') ? 2u : 0u;
+    if (size < replyOffset + 3u || data[replyOffset] < '0' || data[replyOffset] > '9' || data[replyOffset + 1u] < '0' || data[replyOffset + 1u] > '9' ||
+        data[replyOffset + 2u] < '0' || data[replyOffset + 2u] > '9')
+    {
+        return 0;
+    }
+
+    const long replyCode = static_cast<long>((data[replyOffset] - '0') * 100 + (data[replyOffset + 1u] - '0') * 10 + (data[replyOffset + 2u] - '0'));
+    if (replyCode == 530)
+    {
+        capture->sawAuthenticationFailure = true;
+    }
+    else if (replyCode == 500 || replyCode == 502 || replyCode == 504)
+    {
+        capture->sawPrimitiveUnavailable = true;
+    }
+    else if (replyCode >= 400)
+    {
+        capture->lastOtherFailureReplyCode = replyCode;
+    }
+    return 0;
 }
 
 } // namespace
@@ -2774,6 +3480,7 @@ namespace
     constexpr unsigned int kMaxAttempts = 3u;
     char errorBuffer[CURL_ERROR_SIZE]{};
     CURLcode code = CURLE_FAILED_INIT;
+    FtpControlReplyCapture ftpReply{};
 
     for (unsigned int attempt = 0; attempt < kMaxAttempts; ++attempt)
     {
@@ -2785,13 +3492,28 @@ namespace
         curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl.get(), CURLOPT_NOBODY, 1L); // FTP: issues SIZE (no RETR); SFTP: stat. No data body transferred.
         curl_easy_setopt(curl.get(), CURLOPT_FAILONERROR, 1L);
+        curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, ConsumeCurlProbeMetadata);
+        curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, nullptr);
+        curl_easy_setopt(curl.get(), CURLOPT_HEADERFUNCTION, ConsumeCurlProbeMetadata);
+        curl_easy_setopt(curl.get(), CURLOPT_HEADERDATA, nullptr);
 
         errorBuffer[0] = '\0';
         curl_easy_setopt(curl.get(), CURLOPT_ERRORBUFFER, errorBuffer);
 
-        ApplyCommonCurlOptions(curl.get(), conn, nullptr, false);
+        ApplyCommonCurlOptions(curl.get(), conn, CurlCurrentOperationOptions(), false);
+        if (conn.protocol == Protocol::Ftp)
+        {
+            ftpReply = {};
+            // CURLOPT_VERBOSE routes the current transfer's FTP control replies
+            // through the debug callback. The callback records numeric status
+            // only; it never retains or logs commands, payloads, or credentials.
+            curl_easy_setopt(curl.get(), CURLOPT_VERBOSE, 1L);
+            curl_easy_setopt(curl.get(), CURLOPT_DEBUGFUNCTION, CaptureFtpControlReply);
+            curl_easy_setopt(curl.get(), CURLOPT_DEBUGDATA, &ftpReply);
+        }
 
         code = curl_easy_perform(curl.get());
+        RecordCurlConnectionFailure(curl.get(), code, L"size-probe");
         if (code == CURLE_OK)
         {
             break;
@@ -2805,19 +3527,82 @@ namespace
         Sleep(CurlRetryDelayMs(attempt + 1u));
     }
 
+    curl_off_t contentLength = -1;
+    const bool contentLengthKnown = code == CURLE_OK &&
+                                    curl_easy_getinfo(curl.get(), CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &contentLength) == CURLE_OK && contentLength >= 0;
+    if (contentLengthKnown)
+    {
+        sizeOut      = ClampCurlOffToUInt64(contentLength);
+        sizeKnownOut = true;
+        return S_OK;
+    }
+
+    long responseCode = ftpReply.lastOtherFailureReplyCode;
+    if (conn.protocol != Protocol::Ftp)
+    {
+        static_cast<void>(curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &responseCode));
+    }
+    if (conn.protocol == Protocol::Ftp && ftpReply.sawAuthenticationFailure)
+    {
+        return HRESULT_FROM_WIN32(ERROR_LOGON_FAILURE);
+    }
+    if (conn.protocol == Protocol::Ftp && responseCode == 550)
+    {
+        return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+    }
+    if (conn.protocol == Protocol::Ftp && responseCode >= 400)
+    {
+        return HRESULT_FROM_WIN32(ERROR_BAD_NET_RESP);
+    }
+    if (conn.protocol == Protocol::Ftp && ftpReply.sawPrimitiveUnavailable)
+    {
+        // The endpoint explicitly does not implement the targeted SIZE
+        // command. libcurl can report CURLE_OK for an FTP NOBODY request even
+        // when SIZE itself returned one of these replies, so classify the
+        // protocol response independently of the transfer return code.
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
     if (code != CURLE_OK)
     {
         return HResultFromCurl(code);
     }
 
-    curl_off_t contentLength = -1;
-    if (curl_easy_getinfo(curl.get(), CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &contentLength) == CURLE_OK && contentLength >= 0)
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ResolveCurlSourceSizeCommitment(const ConnectionInfo& conn,
+                                                      std::wstring_view pluginPath,
+                                                      uint64_t listedSizeBytes,
+                                                      bool listedSizeKnown,
+                                                      CurlSourceSizeCommitment& commitmentOut) noexcept
+{
+    commitmentOut = CurlSourceSizeCommitment{.sizeBytes = listedSizeBytes, .known = listedSizeKnown};
+
+    uint64_t probedSizeBytes = 0u;
+    bool probedSizeKnown     = false;
+    const HRESULT probeHr    = CurlProbeRemoteFileSize(conn, pluginPath, probedSizeBytes, probedSizeKnown);
+    if (SUCCEEDED(probeHr))
     {
-        sizeOut      = ClampCurlOffToUInt64(contentLength);
-        sizeKnownOut = true;
+        if (probedSizeKnown)
+        {
+            commitmentOut.sizeBytes = probedSizeBytes;
+            commitmentOut.known     = true;
+        }
+        return S_OK;
     }
 
-    return S_OK;
+    if (probeHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
+    {
+        // Preserve the listing commitment when present, or return an explicit
+        // unknown-size result for the caller's Copy-versus-Move policy.
+        return S_OK;
+    }
+
+    // Cancellation, authentication, disappearance, and transport failures are
+    // not evidence that the targeted primitive is merely unavailable. Do not
+    // hide them behind a possibly stale directory-listing value.
+    return NormalizeCancellation(probeHr);
 }
 
 [[nodiscard]] HRESULT CurlPerformList(const ConnectionInfo& conn, std::wstring_view pluginPath, std::string& outListing) noexcept
@@ -2862,7 +3647,7 @@ namespace
         errorBuffer[0] = '\0';
         curl_easy_setopt(curl.get(), CURLOPT_ERRORBUFFER, errorBuffer);
 
-        ApplyCommonCurlOptions(curl.get(), conn, nullptr, false);
+        ApplyCommonCurlOptions(curl.get(), conn, CurlCurrentOperationOptions(), false);
 
         code = curl_easy_perform(curl.get());
         if (code == CURLE_OK)
@@ -2955,7 +3740,7 @@ namespace
         errorBuffer[0] = '\0';
         curl_easy_setopt(curl.get(), CURLOPT_ERRORBUFFER, errorBuffer);
 
-        ApplyCommonCurlOptions(curl.get(), conn, nullptr, false);
+        ApplyCommonCurlOptions(curl.get(), conn, CurlCurrentOperationOptions(), false);
 
         code = curl_easy_perform(curl.get());
         if (code == CURLE_OK)
@@ -3061,42 +3846,24 @@ namespace
         list.reset(appended);
     }
 
-    constexpr unsigned int kMaxAttempts = 3u;
     char errorBuffer[CURL_ERROR_SIZE]{};
-    CURLcode code = CURLE_FAILED_INIT;
+    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, CurlWriteToString);
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &sink);
+    curl_easy_setopt(curl.get(), CURLOPT_NOBODY, 1L);
+    curl_easy_setopt(curl.get(), CURLOPT_FAILONERROR, 1L);
+    curl_easy_setopt(curl.get(), CURLOPT_QUOTE, list.get());
+    curl_easy_setopt(curl.get(), CURLOPT_ERRORBUFFER, errorBuffer);
+    ApplyCommonCurlOptions(curl.get(), conn, CurlCurrentOperationOptions(), false);
 
-    for (unsigned int attempt = 0; attempt < kMaxAttempts; ++attempt)
+    // Every caller mutates the namespace. A lost reply may follow a committed command;
+    // replay could remove a replacement or rename it over the first result. Execute
+    // once, with no unrelated directory transfer after the command acknowledgement.
+    const CURLcode code = curl_easy_perform(curl.get());
+    RecordCurlConnectionFailure(curl.get(), code, L"quote");
+    if (code == CURLE_OK)
     {
-        if (attempt > 0)
-        {
-            sink.clear();
-            curl_easy_reset(curl.get());
-        }
-
-        curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, CurlWriteToString);
-        curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &sink);
-        curl_easy_setopt(curl.get(), CURLOPT_DIRLISTONLY, 1L);
-        curl_easy_setopt(curl.get(), CURLOPT_FAILONERROR, 1L);
-        curl_easy_setopt(curl.get(), CURLOPT_QUOTE, list.get());
-
-        errorBuffer[0] = '\0';
-        curl_easy_setopt(curl.get(), CURLOPT_ERRORBUFFER, errorBuffer);
-
-        ApplyCommonCurlOptions(curl.get(), conn, nullptr, false);
-
-        code = curl_easy_perform(curl.get());
-        if (code == CURLE_OK)
-        {
-            return S_OK;
-        }
-
-        if (attempt + 1u >= kMaxAttempts || ! IsCurlTransientTransferError(code))
-        {
-            break;
-        }
-
-        Sleep(CurlRetryDelayMs(attempt + 1u));
+        return S_OK;
     }
 
     long responseCode = 0;
@@ -3177,7 +3944,12 @@ void PrepareProgressContextForRetry(TransferProgressContext* progressCtx) noexce
 } // namespace
 
 [[nodiscard]] HRESULT CurlDownloadToFile(
-    const ConnectionInfo& conn, std::wstring_view pluginPath, HANDLE file, const FileSystemOptions* options, TransferProgressContext* progressCtx) noexcept
+    const ConnectionInfo& conn,
+    std::wstring_view pluginPath,
+    HANDLE file,
+    const FileSystemOptions* options,
+    TransferProgressContext* progressCtx,
+    std::optional<uint64_t> expectedSizeBytes) noexcept
 {
     HRESULT hr = EnsureCurlInitialized();
     if (FAILED(hr))
@@ -3238,10 +4010,49 @@ void PrepareProgressContextForRetry(TransferProgressContext* progressCtx) noexce
             ApplyCommonCurlOptions(curl.get(), conn, options, false);
         }
 
+        if (expectedSizeBytes.has_value())
+        {
+            // Do not let libcurl stop at the endpoint's advertised length. The
+            // independently probed source size is this operation's commitment,
+            // so the write path must observe and reject both short and overlong
+            // bodies itself.
+            curl_easy_setopt(curl.get(), CURLOPT_IGNORE_CONTENT_LENGTH, 1L);
+        }
+
         const CURLcode code = curl_easy_perform(curl.get());
         if (code == CURLE_OK)
         {
+            if (expectedSizeBytes.has_value())
+            {
+                uint64_t downloadedSizeBytes = 0u;
+                const HRESULT sizeHr         = GetFileSizeBytes(file, downloadedSizeBytes);
+                if (FAILED(sizeHr))
+                {
+                    return sizeHr;
+                }
+                if (downloadedSizeBytes != expectedSizeBytes.value())
+                {
+                    return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+                }
+            }
             return S_OK;
+        }
+
+        if (code == CURLE_PARTIAL_FILE && expectedSizeBytes.has_value())
+        {
+            uint64_t downloadedSizeBytes = 0u;
+            const HRESULT sizeHr         = GetFileSizeBytes(file, downloadedSizeBytes);
+            if (FAILED(sizeHr))
+            {
+                return sizeHr;
+            }
+            if (downloadedSizeBytes != expectedSizeBytes.value())
+            {
+                // A clean protocol close with fewer bytes than the authoritative
+                // source commitment is an integrity failure, not a transient
+                // connection failure eligible for an automatic retry.
+                return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+            }
         }
 
         if (code == CURLE_ABORTED_BY_CALLBACK && progressCtx && FAILED(progressCtx->abortHr))
@@ -3421,8 +4232,52 @@ FileSystemCurl::FileSystemCurl(FileSystemCurlProtocol protocol, IHost* host) : _
 
     if (host)
     {
+        static_cast<void>(host->QueryInterface(__uuidof(IHostAlerts), _hostAlerts.put_void()));
         static_cast<void>(host->QueryInterface(__uuidof(IHostConnections), _hostConnections.put_void()));
     }
+}
+
+void FileSystemCurl::ObserveCurlCleanupDebt(const CurlPublicationResult& result) const noexcept
+{
+    if (result.cleanupDebtCount == 0u)
+    {
+        return;
+    }
+
+    Debug::Warning(L"FileSystemCurl: operation retained {} remote recovery item(s) (kindMask={:#x}, cleanupHr={:#x}).",
+                   result.cleanupDebtCount,
+                   result.cleanupDebtMask,
+                   static_cast<unsigned long>(result.cleanupHr));
+    Debug::Perf::Emit(L"FileOps.Curl.CleanupDebt",
+                      L"aggregate retained remote recovery items",
+                      0u,
+                      result.cleanupDebtCount,
+                      result.cleanupDebtMask,
+                      result.cleanupHr);
+
+    if (! _hostAlerts)
+    {
+        return;
+    }
+
+    const std::wstring title = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_CLEANUP_DEBT_TITLE);
+    const std::wstring message =
+        FormatStringResource(g_hInstance, IDS_FILESYSTEMCURL_CLEANUP_DEBT_MESSAGE, result.cleanupDebtCount);
+    if (message.empty())
+    {
+        return;
+    }
+
+    HostAlertRequest request{};
+    request.sizeBytes    = sizeof(request);
+    request.scope        = HOST_ALERT_SCOPE_APPLICATION;
+    request.modality     = HOST_ALERT_MODELESS;
+    request.severity     = HOST_ALERT_WARNING;
+    request.targetWindow = nullptr;
+    request.title        = title.empty() ? nullptr : title.c_str();
+    request.message      = message.c_str();
+    request.closable     = TRUE;
+    static_cast<void>(_hostAlerts->ShowAlert(&request, nullptr));
 }
 
 FileSystemCurl::~FileSystemCurl()
@@ -3445,9 +4300,30 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::QueryInterface(REFIID riid, void** ppv
         return S_OK;
     }
 
+    if (riid == __uuidof(IFileSystemPathCapabilities2))
+    {
+        *ppvObject = static_cast<IFileSystemPathCapabilities2*>(static_cast<IFileSystem*>(this));
+        AddRef();
+        return S_OK;
+    }
+
+    if (riid == __uuidof(IFileSystemRouteCapabilities))
+    {
+        *ppvObject = static_cast<IFileSystemRouteCapabilities*>(static_cast<FileSystemRouteCapabilitiesBase*>(this));
+        AddRef();
+        return S_OK;
+    }
+
     if (riid == __uuidof(IFileSystemIO))
     {
         *ppvObject = static_cast<IFileSystemIO*>(this);
+        AddRef();
+        return S_OK;
+    }
+
+    if (riid == __uuidof(IFileSystemAtomicWriter))
+    {
+        *ppvObject = static_cast<IFileSystemAtomicWriter*>(this);
         AddRef();
         return S_OK;
     }
@@ -4258,11 +5134,18 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::ExecuteDriveMenuCommand(unsigned int /
     return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemCurl::GetCapabilities(const char** jsonUtf8) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemCurl::GetPathCapabilities(const wchar_t* path,
+                                                               FileSystemOperation operation,
+                                                               const char** jsonUtf8) noexcept
 {
     if (jsonUtf8 == nullptr)
     {
         return E_POINTER;
+    }
+    *jsonUtf8 = nullptr;
+    if (path == nullptr || path[0] == L'\0' || operation < FILESYSTEM_COPY || operation > FILESYSTEM_CREATE_DIRECTORY)
+    {
+        return E_INVALIDARG;
     }
 
     std::lock_guard lock(_stateMutex);
@@ -4274,35 +5157,47 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetCapabilities(const char** jsonUtf8)
     {
         _capabilitiesJson = R"json(
 {
-  "version": 1,
+  "version": 2,
+  "pathProfile": "imap-mailbox",
+  "rootId": "configured-mailbox-root",
   "operations": {
     "copy": false,
     "move": false,
-    "delete": true,
+    "nativeMove": false,
+    "delete": false,
     "rename": false,
+    "createDirectory": false,
     "properties": true,
     "read": true,
-    "write": false
+    "write": false,
+    "recycle": false
   },
   "concurrency": {
     "copyMoveMax": 1,
     "deleteMax": 1,
     "deleteRecycleBinMax": 1
   },
-  "crossFileSystem": {
-    "export": { "copy": ["*"], "move": ["*"] },
+  "transfer": {
+    "export": { "copy": ["*"], "move": [] },
     "import": { "copy": [], "move": [] }
   },
-  "pathIdentity": {
-    "version": 1,
+  "identity": { "object": "imapUid", "revision": "none", "boundDelete": false, "conditionalDelete": false },
+  "publication": { "exclusiveStage": false, "conditionalPublish": false, "committedSize": false },
+  "links": { "preserveFileLink": false, "preserveDirectoryLink": false, "retargetInTree": false, "exactLinkRemoval": false },
+  "metadata": { "motw": "reported-loss", "alternateStreams": "reported-loss", "extendedAttributes": "reported-loss", "sparse": "reported-loss", "efs": "reported-loss" },
+  "verification": { "hostReadback": false, "providerProof": "none" },
+  "cancellation": { "abort": false, "deadline": false, "routeClass": "uncontained", "providerWatchdogTimeoutMs": 0 },
+  "names": {
     "pathTextStableIdentity": true,
-    "componentComparison": "ordinalCaseSensitive",
+    "comparison": "ordinalCaseSensitive",
     "normalization": "none",
     "preferredSeparator": "/",
     "acceptedSeparators": ["/"],
     "casePreserving": true,
-    "caseOnlyRename": "notApplicable"
-  }
+    "caseOnlyRename": "notApplicable",
+    "maxComponentUtf16": 255
+  },
+  "directories": { "model": "providerVirtual" }
 }
 )json";
     }
@@ -4310,41 +5205,99 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetCapabilities(const char** jsonUtf8)
     {
         _capabilitiesJson = std::format(
             R"json({{
-  "version": 1,
+  "version": 2,
+  "pathProfile": "curl-remote-path",
+  "rootId": "configured-connection-root",
   "operations": {{
     "copy": true,
     "move": true,
+    "nativeMove": true,
     "delete": true,
     "rename": true,
+    "createDirectory": true,
     "properties": true,
     "read": true,
-    "write": true
+    "write": true,
+    "recycle": false
   }},
   "concurrency": {{
     "copyMoveMax": {},
     "deleteMax": {},
     "deleteRecycleBinMax": 1
   }},
-  "crossFileSystem": {{
-    "export": {{ "copy": ["*"], "move": ["*"] }},
-    "import": {{ "copy": ["*"], "move": ["*"] }}
+  "transfer": {{
+    "export": {{ "copy": ["*"], "move": [] }},
+    "import": {{ "copy": ["*"], "move": [] }}
   }},
-  "pathIdentity": {{
-    "version": 1,
+  "identity": {{ "object": "none", "revision": "none", "boundDelete": false, "conditionalDelete": false }},
+  "publication": {{ "exclusiveStage": false, "conditionalPublish": false, "committedSize": false }},
+  "links": {{ "preserveFileLink": false, "preserveDirectoryLink": false, "retargetInTree": false, "exactLinkRemoval": false }},
+  "metadata": {{ "motw": "reported-loss", "alternateStreams": "reported-loss", "extendedAttributes": "reported-loss", "sparse": "reported-loss", "efs": "reported-loss" }},
+  "verification": {{ "hostReadback": false, "providerProof": "none" }},
+  "cancellation": {{ "abort": false, "deadline": true, "routeClass": "providerWatchdog", "providerWatchdogTimeoutMs": {} }},
+  "names": {{
     "pathTextStableIdentity": true,
-    "componentComparison": "ordinalCaseSensitive",
+    "comparison": "ordinalCaseSensitive",
     "normalization": "none",
     "preferredSeparator": "/",
     "acceptedSeparators": ["/"],
     "casePreserving": true,
-    "caseOnlyRename": "supported"
-  }}
+    "caseOnlyRename": "notApplicable",
+    "maxComponentUtf16": 255
+  }},
+  "directories": {{ "model": "providerVirtual" }}
 }})json",
             copyMoveMax,
-            deleteMax);
+            deleteMax,
+            CurlProviderWatchdogTimeoutMs(_settings.connectTimeoutMs, _settings.operationTimeoutMs));
     }
 
     *jsonUtf8 = _capabilitiesJson.c_str();
+    return S_OK;
+}
+
+HRESULT FileSystemCurl::BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                                        FileSystemOperation operation,
+                                                        FileSystemRouteDescriptor& descriptor) noexcept
+{
+    static_cast<void>(operation);
+    if (path == nullptr || path[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    std::lock_guard lock(_stateMutex);
+    const bool imap = _protocol == FileSystemCurlProtocol::Imap;
+    descriptor = {};
+    descriptor.providerId = _metaData.id != nullptr ? _metaData.id : L"";
+    descriptor.pathProfileId = imap ? L"imap-mailbox" : L"curl-remote-path";
+    descriptor.rootId = imap ? L"configured-mailbox-root" : L"configured-connection-root";
+    descriptor.availability = FILESYSTEM_ROUTE_AVAILABLE;
+    // R0f-Curl: FTP/SFTP/SCP transfers poll the operation control from libcurl's progress callback
+    // and the transport timeouts bound a server that stops answering. IMAP stays read-only and
+    // uncontained (no mutation is ever admitted on a mailbox).
+    descriptor.cancellationRoute = imap ? FILESYSTEM_CANCELLATION_UNCONTAINED : FILESYSTEM_CANCELLATION_PROVIDER_WATCHDOG;
+    descriptor.providerWatchdogTimeoutMs = imap ? 0u : CurlProviderWatchdogTimeoutMs(_settings.connectTimeoutMs, _settings.operationTimeoutMs);
+    descriptor.cancellationDeadline = ! imap;
+    descriptor.namespaceKind = FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER;
+    descriptor.componentComparison = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
+    descriptor.caseOnlyRename = FILESYSTEM_ROUTE_CASE_ONLY_NOT_APPLICABLE;
+    descriptor.copyMoveMaxConcurrency = imap ? 1u : std::clamp(_settings.copyMoveMaxConcurrency, 1u, 8u);
+    descriptor.deleteMaxConcurrency = imap ? 1u : std::clamp(_settings.deleteMaxConcurrency, 1u, 8u);
+    descriptor.deleteRecycleBinMaxConcurrency = 1u;
+    descriptor.copyOperation = ! imap;
+    descriptor.moveOperation = ! imap;
+    descriptor.nativeMoveOperation = ! imap;
+    descriptor.deleteOperation = ! imap;
+    descriptor.renameOperation = ! imap;
+    descriptor.createDirectoryOperation = ! imap;
+    descriptor.propertiesOperation = true;
+    descriptor.readOperation = true;
+    descriptor.writeOperation = ! imap;
+    descriptor.exportCopyAll = true;
+    // R0f-Curl: cross-provider Copy into FTP/SFTP/SCP is a full file-manager destination. Move
+    // export/import stay denied until the source can be deleted conditionally (no bound delete).
+    descriptor.importCopyAll = ! imap;
     return S_OK;
 }
 

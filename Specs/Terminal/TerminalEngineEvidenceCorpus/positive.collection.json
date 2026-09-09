@@ -1,0 +1,246 @@
+{
+  "formatId": "red-salamander-terminal-engine-evidence",
+  "schemaVersion": 1,
+  "recordKind": "collection",
+  "runId": "2026-07-30_120000",
+  "createdUtc": "2026-07-30T12:00:00Z",
+  "repositoryCommit": "1111111111111111111111111111111111111111",
+  "repositoryClean": true,
+  "machineHash": "0123456789ab",
+  "schemaSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "harness": {
+    "version": "1.0.0",
+    "sourceSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "frozen": {
+    "requirementsSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "scoreAnchorsSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "fixtureCorpusSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "measurementProtocolSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "candidateUniverseSha256": "abababababababababababababababababababababababababababababababab",
+    "candidateSetSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "candidateReviewSha256": "1010101010101010101010101010101010101010101010101010101010101010",
+    "candidateAssessmentSha256": "1212121212121212121212121212121212121212121212121212121212121212"
+  },
+  "platform": "x64",
+  "configuration": "Release",
+  "nativeAttestation": {
+    "processMachine": "UNKNOWN",
+    "nativeMachine": "AMD64",
+    "windowsBuild": "10.0.26200.0",
+    "isNative": true,
+    "minimumSupportedBuild": "22000.2600",
+    "minimumOsProof": "pe-import-audit",
+    "minimumOsEvidenceSha256": "1212121212121212121212121212121212121212121212121212121212121212"
+  },
+  "toolchain": {
+    "compilerId": "msvc",
+    "version": "19.50.10000",
+    "identitySha256": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "collectionPolicy": {
+    "bootstrap": true,
+    "clean": true,
+    "offline": true,
+    "bootstrapInputSetSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "networkIsolation": "runner-enforced"
+  },
+  "candidates": [
+    {
+      "candidateId": "contour",
+      "pin": "0397f9cfbfcc94d46103d3cff70ebf59326dd695",
+      "pinSha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "outcome": "complete",
+      "gates": [
+        {
+          "gateId": "G1",
+          "status": "pass",
+          "resultCategory": "passed",
+          "evidenceSha256": "0101010101010101010101010101010101010101010101010101010101010101"
+        },
+        {
+          "gateId": "G2",
+          "status": "pass",
+          "resultCategory": "passed",
+          "evidenceSha256": "0202020202020202020202020202020202020202020202020202020202020202"
+        },
+        {
+          "gateId": "G3",
+          "status": "pass",
+          "resultCategory": "passed",
+          "evidenceSha256": "0303030303030303030303030303030303030303030303030303030303030303"
+        },
+        {
+          "gateId": "G4",
+          "status": "pass",
+          "resultCategory": "passed",
+          "evidenceSha256": "0404040404040404040404040404040404040404040404040404040404040404"
+        },
+        {
+          "gateId": "G5",
+          "status": "pass",
+          "resultCategory": "passed",
+          "evidenceSha256": "0505050505050505050505050505050505050505050505050505050505050505"
+        },
+        {
+          "gateId": "G6",
+          "status": "pass",
+          "resultCategory": "passed",
+          "evidenceSha256": "0606060606060606060606060606060606060606060606060606060606060606"
+        },
+        {
+          "gateId": "G7",
+          "status": "pass",
+          "resultCategory": "passed",
+          "evidenceSha256": "0707070707070707070707070707070707070707070707070707070707070707"
+        },
+        {
+          "gateId": "G8",
+          "status": "pass",
+          "resultCategory": "passed",
+          "evidenceSha256": "0808080808080808080808080808080808080808080808080808080808080808"
+        },
+        {
+          "gateId": "G9",
+          "status": "pass",
+          "resultCategory": "passed",
+          "evidenceSha256": "0909090909090909090909090909090909090909090909090909090909090909"
+        },
+        {
+          "gateId": "G10",
+          "status": "pass",
+          "resultCategory": "passed",
+          "evidenceSha256": "1010101010101010101010101010101010101010101010101010101010101010"
+        },
+        {
+          "gateId": "G11",
+          "status": "pass",
+          "resultCategory": "passed",
+          "evidenceSha256": "1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        {
+          "gateId": "G12",
+          "status": "pass",
+          "resultCategory": "passed",
+          "evidenceSha256": "1212121212121212121212121212121212121212121212121212121212121212"
+        }
+      ],
+      "evidenceObjects": [
+        {
+          "evidenceId": "artifact.identity",
+          "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+          "sizeBytes": "18446744073709551615",
+          "resultCategory": "verified"
+        }
+      ],
+      "measurements": [
+        {
+          "metricId": "parse.throughput",
+          "unit": "microseconds",
+          "warmupCount": 3,
+          "samples": [
+            "0",
+            "42",
+            "18446744073709551615"
+          ]
+        }
+      ]
+    },
+    {
+      "candidateId": "ghostty",
+      "pin": "70c498ac3273661aebf6cce9904c0d42b2e5d299",
+      "pinSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+      "outcome": "early-failure",
+      "gates": [
+        {
+          "gateId": "G1",
+          "status": "pass",
+          "resultCategory": "passed",
+          "evidenceSha256": "1313131313131313131313131313131313131313131313131313131313131313"
+        },
+        {
+          "gateId": "G2",
+          "status": "fail",
+          "resultCategory": "mandatory-failure",
+          "evidenceSha256": "1414141414141414141414141414141414141414141414141414141414141414"
+        },
+        {
+          "gateId": "G3",
+          "status": "not-run",
+          "resultCategory": "failed-G2",
+          "evidenceSha256": null
+        },
+        {
+          "gateId": "G4",
+          "status": "not-run",
+          "resultCategory": "failed-G2",
+          "evidenceSha256": null
+        },
+        {
+          "gateId": "G5",
+          "status": "not-run",
+          "resultCategory": "failed-G2",
+          "evidenceSha256": null
+        },
+        {
+          "gateId": "G6",
+          "status": "not-run",
+          "resultCategory": "failed-G2",
+          "evidenceSha256": null
+        },
+        {
+          "gateId": "G7",
+          "status": "not-run",
+          "resultCategory": "failed-G2",
+          "evidenceSha256": null
+        },
+        {
+          "gateId": "G8",
+          "status": "not-run",
+          "resultCategory": "failed-G2",
+          "evidenceSha256": null
+        },
+        {
+          "gateId": "G9",
+          "status": "not-run",
+          "resultCategory": "failed-G2",
+          "evidenceSha256": null
+        },
+        {
+          "gateId": "G10",
+          "status": "not-run",
+          "resultCategory": "failed-G2",
+          "evidenceSha256": null
+        },
+        {
+          "gateId": "G11",
+          "status": "not-run",
+          "resultCategory": "failed-G2",
+          "evidenceSha256": null
+        },
+        {
+          "gateId": "G12",
+          "status": "not-run",
+          "resultCategory": "failed-G2",
+          "evidenceSha256": null
+        }
+      ],
+      "earlyFailure": {
+        "firstFailedGate": "G2",
+        "failureCode": "arm64-build-failed",
+        "reproducerSha256": "6666666666666666666666666666666666666666666666666666666666666666",
+        "reproducerSizeBytes": "4096"
+      }
+    },
+    {
+      "candidateId": "web-runtime-control",
+      "pin": "control-v1",
+      "pinSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+      "outcome": "constraint-control",
+      "controlFailure": {
+        "constraintId": "web-runtime-second-stack",
+        "evidenceSha256": "8888888888888888888888888888888888888888888888888888888888888888"
+      }
+    }
+  ]
+}

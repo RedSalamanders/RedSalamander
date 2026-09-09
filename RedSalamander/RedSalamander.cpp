@@ -58,6 +58,8 @@
 
 #include "BatchRenameWindow.h"
 #include "CommandRegistry.h"
+#include "CommandRuntimeState.h"
+#include "CommandPaletteWindow.h"
 #include "CompareDirectoriesWindow.h"
 #include "ConnectionCredentialPromptDialog.h"
 #include "ConnectionManagerWindow.h"
@@ -70,6 +72,7 @@
 #include "FileActionResolver.h"
 #include "FileSystemPluginManager.h"
 #include "FindFilesWindow.h"
+#include "FloatingTerminalWindow.h"
 #include "FolderWindow.h"
 #include "Framework.h"
 #include "HostServices.h"
@@ -80,6 +83,7 @@
 #include "RedSalamander.h"
 #include "SessionState.h"
 #include "SettingsHotReload.h"
+#include "SettingsFileLauncher.h"
 #include "SettingsSave.h"
 #include "SettingsSchemaExport.h"
 #include "ShortcutDefaults.h"
@@ -88,16 +92,20 @@
 #include "SplashScreen.h"
 #include "StartupMetrics.h"
 #include "Ui/AnimationDispatcher.h"
+#include "Ui/ThemeCycleOverlayWindow.h"
 #include "ViewerPluginManager.h"
 #include "WindowMessages.h"
 #include "WindowPlacementPersistence.h"
 #include "WindowSizing.h"
 
 #ifdef ENABLE_TESTS
+#include "CommandDispatch.h"
 #include "CommandDispatch.Debug.h"
 #include "Commands.SelfTest.h"
 #include "CompareDirectoriesEngine.SelfTest.h"
 #include "FolderWindow.FileOperations.SelfTest.h"
+#include "TestWindowActivationGuard.h"
+#include "TestSupport/DirectedSelfTestInputWarning.h"
 #endif
 
 PCWSTR REDSALAMANDER_TEXT_VERSION = L"RedSalamander " VERSINFO_VERSION;
@@ -119,6 +127,7 @@ struct ApplicationContext final
     std::atomic<HWND> folderWindowHandle{nullptr};
     ThemeMode themeMode = ThemeMode::System;
     Common::Settings::Settings settings;
+    RedSalamander::Ui::ThemeCycleOverlayWindow themeCycleOverlay;
 };
 
 ApplicationContext g_applicationContext;
@@ -130,6 +139,7 @@ FolderWindow& g_folderWindow           = g_applicationContext.folderWindow;
 std::atomic<HWND>& g_hFolderWindow     = g_applicationContext.folderWindowHandle;
 ThemeMode& g_themeMode                 = g_applicationContext.themeMode;
 Common::Settings::Settings& g_settings = g_applicationContext.settings;
+RedSalamander::Ui::ThemeCycleOverlayWindow& g_themeCycleOverlay = g_applicationContext.themeCycleOverlay;
 }
 
 #ifdef ENABLE_TESTS
@@ -144,7 +154,10 @@ Common::Settings::Settings& GetApplicationSettingsForSelfTest() noexcept
 }
 #endif
 
-void ApplyThemeId(HWND hWnd, std::wstring_view themeId);
+void ApplyThemeId(HWND hWnd, std::wstring_view themeId, bool preserveThemeCycleOverlay = false);
+void SelectThemeTarget(HWND hWnd, std::wstring_view themeId, RedSalamander::Ui::CommandInvocationSource source);
+void SelectAdjacentTheme(HWND hWnd, int direction, RedSalamander::Ui::CommandInvocationSource source);
+[[nodiscard]] std::vector<RedSalamander::Ui::ThemeCycleOverlayTheme> BuildThemeCycleRing();
 
 namespace
 {
@@ -170,6 +183,7 @@ enum class RuntimeSettingsSaveOwner : uint8_t
 };
 
 std::atomic<RuntimeSettingsSaveOwner> g_runtimeSettingsSaveOwner{RuntimeSettingsSaveOwner::None};
+std::atomic_bool g_mainWindowCloseCommitted{false};
 #ifdef ENABLE_TESTS
 constexpr UINT kFatalErrorDialogDebugGetSnapshotMessage   = WM_APP + 0x71;
 constexpr UINT kFatalErrorDialogDebugScrollByWheelMessage = WM_APP + 0x72;
@@ -2455,24 +2469,7 @@ void CaptureRuntimeSettings(Common::Settings::Settings& settings, HWND hWnd) noe
 {
     if (hWnd)
     {
-        WINDOWPLACEMENT placement{};
-        placement.length = sizeof(placement);
-        if (GetWindowPlacement(hWnd, &placement))
-        {
-            Common::Settings::WindowPlacement wp;
-            wp.state = placement.showCmd == SW_SHOWMAXIMIZED ? Common::Settings::WindowState::Maximized : Common::Settings::WindowState::Normal;
-
-            const RECT rc         = placement.rcNormalPosition;
-            wp.bounds.x           = rc.left;
-            wp.bounds.y           = rc.top;
-            const int savedWidth  = static_cast<int>(rc.right - rc.left);
-            const int savedHeight = static_cast<int>(rc.bottom - rc.top);
-            wp.bounds.width       = std::max(1, savedWidth);
-            wp.bounds.height      = std::max(1, savedHeight);
-            wp.dpi                = GetDpiForWindow(hWnd);
-
-            settings.windows[kMainWindowId] = std::move(wp);
-        }
+        WindowPlacementPersistence::Save(settings, kMainWindowId, hWnd);
     }
 
     if (const HWND prefs = GetPreferencesDialogHandle())
@@ -2685,6 +2682,7 @@ void SaveAppSettings(HWND hWnd) noexcept
         expected, RuntimeSettingsSaveOwner::NormalShutdown, std::memory_order_acq_rel, std::memory_order_acquire);
     if (saveSettings)
     {
+        PrepareFloatingTerminalWindowForAppShutdown();
         CaptureRuntimeSettings(hWnd);
     }
 
@@ -2694,6 +2692,10 @@ void SaveAppSettings(HWND hWnd) noexcept
         ++g_debugSessionEndSettingsSnapshot.normalTeardownCallCount;
     }
 #endif
+    if (const HWND floatingTerminal = GetFloatingTerminalWindowHandle())
+    {
+        SendMessageW(floatingTerminal, WM_CLOSE, 0u, 0);
+    }
     g_folderWindow.CloseAllViewers();
     const auto pluginSchemas = CollectPluginConfigurationSchemas(g_settings);
     if (g_hFolderWindow.exchange(nullptr, std::memory_order_acq_rel))
@@ -2895,38 +2897,6 @@ static HMENU FindSubMenuAfterCommand(HMENU menu, UINT commandId) noexcept
     return GetSubMenu(menu, commandPos + 1);
 }
 
-static HMENU FindSubMenuAfterCommandRecursive(HMENU menu, UINT commandId) noexcept
-{
-    HMENU found = FindSubMenuAfterCommand(menu, commandId);
-    if (found)
-    {
-        return found;
-    }
-
-    const int count = GetMenuItemCount(menu);
-    if (count <= 0)
-    {
-        return nullptr;
-    }
-
-    for (int pos = 0; pos < count; ++pos)
-    {
-        HMENU subMenu = GetSubMenu(menu, pos);
-        if (! subMenu)
-        {
-            continue;
-        }
-
-        found = FindSubMenuAfterCommandRecursive(subMenu, commandId);
-        if (found)
-        {
-            return found;
-        }
-    }
-
-    return nullptr;
-}
-
 static void DeleteMenuItemsFromPosition(HMENU menu, int startPos) noexcept
 {
     if (! menu)
@@ -3028,6 +2998,10 @@ static bool MenuContainsCommandIdRecursive(HMENU menu, UINT commandId) noexcept
         case IDM_PANE_SHOW_FOLDERS_HISTORY: return FluentIcons::kHistory;
         case IDM_PANE_FIND: return FluentIcons::kFind;
         case IDM_PANE_OPEN_COMMAND_SHELL: return FluentIcons::kCommandPrompt;
+        case IDM_LEFT_TERMINAL_PANE: return FluentIcons::kCommandPrompt;
+        case IDM_RIGHT_TERMINAL_PANE: return FluentIcons::kCommandPrompt;
+        case IDM_TERMINAL_OPEN_FLOATING_WINDOW: return FluentIcons::kOpenFile;
+        case IDM_APP_COMMAND_PALETTE: return FluentIcons::kCommandPrompt;
     }
 
     return 0;
@@ -3196,13 +3170,21 @@ static void EnsureMenuHandles(HWND hWnd) noexcept
 
         if (! g_newTemplateMenu)
         {
-            g_newTemplateMenu = FindSubMenuAfterCommand(g_filesMenu, IDM_PANE_UNPACK);
+            std::vector<HMENU> newTemplatePath;
+            if (TryFindMenuPathToCommand(g_filesMenu, IDM_PANE_NEW_TEMPLATE_BASE, newTemplatePath) && ! newTemplatePath.empty())
+            {
+                g_newTemplateMenu = newTemplatePath.back();
+            }
         }
     }
 
     if (! g_userMenu)
     {
-        g_userMenu = FindSubMenuAfterCommandRecursive(mainMenu, IDM_APP_REREAD_ASSOCIATIONS);
+        std::vector<HMENU> userMenuPath;
+        if (TryFindMenuPathToCommand(mainMenu, IDM_PANE_USER_MENU_BASE, userMenuPath) && ! userMenuPath.empty())
+        {
+            g_userMenu = userMenuPath.back();
+        }
     }
 
     if (! g_openFileExplorerMenu)
@@ -3922,7 +3904,7 @@ void ShowUserMenuPopup(HWND hWnd) noexcept
     }
 }
 
-void RebuildShellNewTemplateMenuDynamicItems(HMENU menu)
+void RebuildShellNewTemplateMenuDynamicItems(HMENU menu, FolderWindow::Pane pane)
 {
     if (! menu)
     {
@@ -3931,11 +3913,10 @@ void RebuildShellNewTemplateMenuDynamicItems(HMENU menu)
 
     Debug::Perf::Scope perf(L"shellnew.menu_populate_us");
 
-    constexpr int kFirstDynamicPosition = 2;
+    constexpr int kFirstDynamicPosition = 3;
     DeleteMenuItemsFromPosition(menu, kFirstDynamicPosition);
     g_newTemplateMenuIdToTemplateId.clear();
 
-    const FolderWindow::Pane pane                                   = g_folderWindow.GetFocusedPane();
     const std::vector<FolderWindow::ShellNewTemplateMenuItem> items = g_folderWindow.CollectShellNewTemplateMenuItems(pane);
 
     UINT nextId      = IDM_PANE_NEW_TEMPLATE_BASE;
@@ -3962,6 +3943,11 @@ void RebuildShellNewTemplateMenuDynamicItems(HMENU menu)
 
     perf.SetValue0(static_cast<uint64_t>(items.size()));
     perf.SetValue1(written);
+}
+
+void RebuildShellNewTemplateMenuDynamicItems(HMENU menu)
+{
+    RebuildShellNewTemplateMenuDynamicItems(menu, g_folderWindow.GetFocusedPane());
 }
 
 void RebuildGoToMenuDynamicItems(FolderWindow::Pane pane, HMENU goToMenu, UINT hotPathsCommandId, UINT hotPathBaseId, UINT historyBaseId)
@@ -4406,6 +4392,8 @@ void SplitMenuText(std::wstring_view raw, std::wstring& text, std::wstring& shor
         case IDM_RIGHT_DISPLAY_THUMBNAILS: return L"cmd/pane/viewOptions/toggleThumbnails";
         case IDM_LEFT_PREVIEW_PANE:
         case IDM_RIGHT_PREVIEW_PANE: return L"cmd/pane/viewOptions/togglePreviewPane";
+        case IDM_LEFT_TERMINAL_PANE:
+        case IDM_RIGHT_TERMINAL_PANE: return L"cmd/pane/openCommandShell";
 
         case IDM_LEFT_SORT_NONE:
         case IDM_RIGHT_SORT_NONE: return L"cmd/pane/sort/none";
@@ -5803,6 +5791,20 @@ MainMenuBarHost g_mainMenuBarHost;
 
 } // namespace
 
+void PopulateShellNewTemplateMenuForFolderView(HMENU menu, HWND folderViewHwnd) noexcept
+{
+    FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+    if (folderViewHwnd == g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left))
+    {
+        pane = FolderWindow::Pane::Left;
+    }
+    else if (folderViewHwnd == g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Right))
+    {
+        pane = FolderWindow::Pane::Right;
+    }
+    RebuildShellNewTemplateMenuDynamicItems(menu, pane);
+}
+
 #ifdef ENABLE_TESTS
 [[nodiscard]] wchar_t DebugGetMainMenuIconGlyph(UINT menuCommandId) noexcept
 {
@@ -6096,16 +6098,11 @@ ShortcutManager g_shortcutManager;
 
 void ReloadShortcutsFromSettings()
 {
-    if (! g_settings.shortcuts.has_value())
-    {
-        g_shortcutManager.Clear();
-        if (g_hFolderWindow.load(std::memory_order_acquire))
-        {
-            g_folderWindow.SetShortcutManager(nullptr);
-        }
-        return;
-    }
-
+    // The canonical settings document omits factory-default shortcuts. Rebuild
+    // that effective runtime state before refreshing consumers; absence on disk
+    // means defaults, while explicit unassigned sentinels suppress individual
+    // default chords.
+    ShortcutDefaults::EnsureShortcutsInitialized(g_settings);
     g_shortcutManager.Load(g_settings.shortcuts.value());
     if (g_hFolderWindow.load(std::memory_order_acquire))
     {
@@ -6188,7 +6185,6 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
     const std::wstring caption = LoadStringResource(nullptr, IDS_CAPTION_NOT_IMPLEMENTED);
 
     HostAlertRequest request{};
-    request.version      = 1;
     request.sizeBytes    = sizeof(request);
     request.scope        = (ownerWindow && IsWindow(ownerWindow)) ? HOST_ALERT_SCOPE_WINDOW : HOST_ALERT_SCOPE_APPLICATION;
     request.modality     = HOST_ALERT_MODELESS;
@@ -6200,7 +6196,9 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
     static_cast<void>(HostShowAlert(request));
 }
 
-[[nodiscard]] bool ExecuteCommandById(HWND ownerWindow, std::wstring_view commandId) noexcept
+[[nodiscard]] bool ExecuteCommandById(HWND ownerWindow,
+                                      std::wstring_view commandId,
+                                      RedSalamander::Ui::CommandInvocationSource source) noexcept
 {
     if (commandId.empty())
     {
@@ -6304,9 +6302,116 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
         return true;
     }
 
+    const CommandInfo* runtimeCommand = FindCommandInfo(commandId);
+    CommandRuntimeState runtimeState{};
+    if (! ResolveCommandRuntimeStateFromWindow(ownerWindow,
+                                               GetFocus(),
+                                               commandId,
+                                               runtimeCommand != nullptr ? runtimeCommand->stateSource : CommandStateSource::LegacyHost,
+                                               runtimeState) ||
+        ! runtimeState.enabled)
+    {
+        return false;
+    }
+
+    if (commandId == L"cmd/app/commandPalette")
+    {
+        if (! g_settings.shortcuts.has_value())
+        {
+            return false;
+        }
+        const HWND focused = GetFocus();
+        const bool terminalContext = IsFloatingTerminalInputTarget(focused) ||
+            (g_hFolderWindow.load(std::memory_order_acquire) && g_folderWindow.IsTerminalInputTarget(focused));
+        const HWND paletteOwner = GetFloatingTerminalWindowHandle() != nullptr &&
+                GetAncestor(focused, GA_ROOT) == GetFloatingTerminalWindowHandle()
+            ? GetFloatingTerminalWindowHandle()
+            : ownerWindow;
+        ShowCommandPaletteWindow(paletteOwner, g_settings.shortcuts.value(), terminalContext, ResolveConfiguredTheme());
+        return true;
+    }
+
+    if (commandId == L"cmd/app/openSettingsFile")
+    {
+        Common::Settings::Settings settingsToCreate = g_settings;
+        settingsToCreate.monitor.reset();
+        std::filesystem::path settingsPath;
+        const HRESULT hr = SettingsFileLauncher::Open(ownerWindow, kAppId, settingsToCreate, settingsPath);
+        if (FAILED(hr))
+        {
+            Debug::Error(L"Open Settings File failed for '{}': 0x{:08X}.", settingsPath.wstring(), static_cast<unsigned long>(hr));
+            const std::wstring message =
+                FormatStringResource(nullptr, IDS_FMT_PREFS_OPEN_SETTINGS_FILE_FAILED, settingsPath.wstring(), static_cast<unsigned long>(hr));
+            const std::wstring caption = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+            static_cast<void>(MessageBoxW(ownerWindow, message.c_str(), caption.c_str(), MB_OK | MB_ICONERROR));
+        }
+        return true;
+    }
+
+    if (commandId == L"cmd/app/systemMenu")
+    {
+        const HWND focusedRoot = GetAncestor(GetFocus(), GA_ROOT);
+        const HWND target = focusedRoot == GetFloatingTerminalWindowHandle() ? focusedRoot : ownerWindow;
+        SendMessageW(target, WM_SYSCOMMAND, SC_KEYMENU, static_cast<LPARAM>(L' '));
+        return true;
+    }
+
+    if (commandId == L"cmd/terminal/openFloatingWindow")
+    {
+        std::optional<FloatingTerminalOpenRequest> request = GetActiveFloatingTerminalRequest();
+        if (! request.has_value() && g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            const std::optional<std::filesystem::path> path = g_folderWindow.GetActiveTerminalLaunchPath();
+            if (path.has_value())
+            {
+                request = FloatingTerminalOpenRequest{
+                    .profileId = L"builtin/terminal", .providerId = L"builtin/file-system", .canonicalPath = path->wstring()};
+            }
+        }
+        return request.has_value() &&
+            SUCCEEDED(ShowFloatingTerminalWindow(ownerWindow, g_settings, request.value(), ResolveConfiguredTheme()));
+    }
+
+    if (commandId.starts_with(L"cmd/terminal/") || commandId == L"cmd/pane/focus/left" ||
+        commandId == L"cmd/pane/focus/right" || commandId == L"cmd/pane/switchPaneFocus" ||
+        commandId == L"cmd/pane/resizeSplitter/left" || commandId == L"cmd/pane/resizeSplitter/right")
+    {
+        const HWND focused = GetFocus();
+        if (IsFloatingTerminalInputTarget(focused) || GetAncestor(focused, GA_ROOT) == GetFloatingTerminalWindowHandle())
+        {
+            return ExecuteFloatingTerminalCommand(commandId);
+        }
+        return g_hFolderWindow.load(std::memory_order_acquire) && g_folderWindow.ExecuteTerminalHostCommand(commandId);
+    }
+
     if (commandId == L"cmd/app/theme/select" && themeId.has_value())
     {
-        ApplyThemeId(ownerWindow, themeId.value());
+        if (source == RedSalamander::Ui::CommandInvocationSource::FunctionBarPointer)
+        {
+            SelectThemeTarget(ownerWindow, themeId.value(), source);
+        }
+        else
+        {
+            ApplyThemeId(ownerWindow, themeId.value());
+        }
+        return true;
+    }
+
+    if (commandId == L"cmd/app/theme/selectNext" &&
+        (source == RedSalamander::Ui::CommandInvocationSource::KeyboardShortcut ||
+         source == RedSalamander::Ui::CommandInvocationSource::FunctionBarPointer ||
+         source == RedSalamander::Ui::CommandInvocationSource::SelfTest))
+    {
+        SelectAdjacentTheme(ownerWindow, 1, source);
+        return true;
+    }
+
+    if (commandId == L"cmd/app/theme/selectPrev" &&
+        (source == RedSalamander::Ui::CommandInvocationSource::KeyboardShortcut ||
+         source == RedSalamander::Ui::CommandInvocationSource::FunctionBarPointer ||
+         source == RedSalamander::Ui::CommandInvocationSource::SelfTest))
+    {
+        SelectAdjacentTheme(ownerWindow, -1, source);
         return true;
     }
 
@@ -6541,6 +6646,16 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
         g_folderWindow.CommandRefresh(pane);
         return true;
     }
+    if (commandId == L"cmd/pane/bringFilenameToCommandLine" || commandId == L"cmd/pane/bringFullPathToTerminal")
+    {
+        if (! g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            return false;
+        }
+        const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+        g_folderWindow.CommandInsertFocusedPathInTerminal(pane, commandId == L"cmd/pane/bringFullPathToTerminal");
+        return true;
+    }
     if (commandId == L"cmd/pane/executeOpen")
     {
         return SendKeyToFocusedFolderView(VK_RETURN);
@@ -6709,9 +6824,11 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
     return true;
 }
 
-[[nodiscard]] bool DispatchShortcutCommand(HWND ownerWindow, std::wstring_view commandId) noexcept
+[[nodiscard]] bool DispatchShortcutCommand(HWND ownerWindow,
+                                           std::wstring_view commandId,
+                                           RedSalamander::Ui::CommandInvocationSource source) noexcept
 {
-    return ExecuteCommandById(ownerWindow, commandId);
+    return ExecuteCommandById(ownerWindow, commandId, source);
 }
 
 LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noexcept
@@ -6729,7 +6846,7 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
         return 0;
     }
 
-    static_cast<void>(DispatchShortcutCommand(ownerWindow, commandOpt.value()));
+    static_cast<void>(DispatchShortcutCommand(ownerWindow, commandOpt.value(), RedSalamander::Ui::CommandInvocationSource::FunctionBarPointer));
     return 0;
 }
 
@@ -6760,7 +6877,134 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
         return true;
     }
 
-    return DispatchShortcutCommand(ownerWindow, commandOpt.value());
+    return DispatchShortcutCommand(ownerWindow, commandOpt.value(), RedSalamander::Ui::CommandInvocationSource::KeyboardShortcut);
+}
+
+[[nodiscard]] bool TryHandleApplicationShortcutKeyDown(HWND ownerWindow, const MSG& msg) noexcept
+{
+    if (msg.message != WM_KEYDOWN && msg.message != WM_SYSKEYDOWN)
+    {
+        return false;
+    }
+    const auto command = g_shortcutManager.FindApplicationCommand(
+        static_cast<uint32_t>(msg.wParam),
+        GetCurrentShortcutModifiers(),
+        Common::Keyboard::ScanCodeFromKeyMessageLParam(msg.lParam),
+        Common::Keyboard::IsExtendedKeyMessageLParam(msg.lParam));
+    if (! command.has_value())
+    {
+        return false;
+    }
+    if (ShortcutIds::IsUnassignedCommandId(command.value()))
+    {
+        return true;
+    }
+    if (ShortcutIds::IsPassThroughCommandId(command.value()))
+    {
+        return false;
+    }
+    return DispatchShortcutCommand(ownerWindow, command.value(), RedSalamander::Ui::CommandInvocationSource::KeyboardShortcut);
+}
+
+struct ConsumedTerminalKey final
+{
+    uint32_t virtualKey = 0u;
+    uint16_t scanCode = 0u;
+    bool extended = false;
+    bool systemKey = false;
+};
+
+std::optional<ConsumedTerminalKey> g_consumedTerminalKey;
+
+void RememberConsumedTerminalKey(const MSG& msg) noexcept
+{
+    g_consumedTerminalKey = ConsumedTerminalKey{
+        .virtualKey = static_cast<uint32_t>(msg.wParam),
+        .scanCode = Common::Keyboard::ScanCodeFromKeyMessageLParam(msg.lParam),
+        .extended = Common::Keyboard::IsExtendedKeyMessageLParam(msg.lParam),
+        .systemKey = msg.message == WM_SYSKEYDOWN,
+    };
+}
+
+[[nodiscard]] bool TryConsumeTerminalKeyUp(const MSG& msg) noexcept
+{
+    if (! g_consumedTerminalKey.has_value() || (msg.message != WM_KEYUP && msg.message != WM_SYSKEYUP))
+    {
+        return false;
+    }
+    const ConsumedTerminalKey key = g_consumedTerminalKey.value();
+    if (key.virtualKey != static_cast<uint32_t>(msg.wParam) ||
+        key.scanCode != Common::Keyboard::ScanCodeFromKeyMessageLParam(msg.lParam) ||
+        key.extended != Common::Keyboard::IsExtendedKeyMessageLParam(msg.lParam) || key.systemKey != (msg.message == WM_SYSKEYUP))
+    {
+        return false;
+    }
+    g_consumedTerminalKey.reset();
+    return true;
+}
+
+[[nodiscard]] bool TryHandleTerminalShortcutKeyDown(HWND ownerWindow, HWND terminalTarget, const MSG& msg) noexcept
+{
+    if (msg.message != WM_KEYDOWN && msg.message != WM_SYSKEYDOWN)
+    {
+        return false;
+    }
+
+    const uint32_t virtualKey = static_cast<uint32_t>(msg.wParam);
+    const uint32_t modifiers = GetCurrentShortcutModifiers();
+    std::optional<std::wstring_view> command = g_shortcutManager.FindTerminalCommand(
+        virtualKey,
+        modifiers,
+        Common::Keyboard::ScanCodeFromKeyMessageLParam(msg.lParam),
+        Common::Keyboard::IsExtendedKeyMessageLParam(msg.lParam));
+    if (command.has_value() && ShortcutIds::IsPassThroughCommandId(command.value()))
+    {
+        return false;
+    }
+    if (command.has_value() && ShortcutIds::IsUnassignedCommandId(command.value()))
+    {
+        RememberConsumedTerminalKey(msg);
+        return true;
+    }
+    if (! command.has_value())
+    {
+        command = g_shortcutManager.FindApplicationCommand(
+            virtualKey,
+            modifiers,
+            Common::Keyboard::ScanCodeFromKeyMessageLParam(msg.lParam),
+            Common::Keyboard::IsExtendedKeyMessageLParam(msg.lParam));
+    }
+    if (! command.has_value())
+    {
+        command = g_shortcutManager.FindFunctionBarCommand(virtualKey, modifiers);
+    }
+    if (! command.has_value())
+    {
+        return false;
+    }
+
+    TerminalShortcutRoute route = TerminalShortcutRoute::PassThrough;
+    const HRESULT routeHr = IsFloatingTerminalInputTarget(terminalTarget)
+        ? RouteFloatingTerminalShortcut(terminalTarget, command.value(), msg, modifiers, route)
+        : g_folderWindow.RouteTerminalShortcut(terminalTarget, command.value(), msg, modifiers, route);
+    if (FAILED(routeHr))
+    {
+        return false;
+    }
+    if (route == TerminalShortcutRoute::PassThrough)
+    {
+        return false;
+    }
+
+    if (route == TerminalShortcutRoute::InvokeHostCommand)
+    {
+        if (! DispatchShortcutCommand(ownerWindow, command.value(), RedSalamander::Ui::CommandInvocationSource::KeyboardShortcut))
+        {
+            return false;
+        }
+    }
+    RememberConsumedTerminalKey(msg);
+    return true;
 }
 
 [[nodiscard]] bool TryHandleFolderViewShortcutKeyDown(HWND ownerWindow, const MSG& msg) noexcept
@@ -6796,13 +7040,14 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
         }
     }
 
-    const std::optional<std::wstring_view> commandOpt = g_shortcutManager.FindFolderViewCommand(vk, modifiers);
+    const std::optional<std::wstring_view> commandOpt = g_shortcutManager.FindFolderViewCommand(
+        vk, modifiers, Common::Keyboard::ScanCodeFromKeyMessageLParam(msg.lParam), Common::Keyboard::IsExtendedKeyMessageLParam(msg.lParam));
     if (! commandOpt.has_value())
     {
         return false;
     }
 
-    return DispatchShortcutCommand(ownerWindow, commandOpt.value());
+    return DispatchShortcutCommand(ownerWindow, commandOpt.value(), RedSalamander::Ui::CommandInvocationSource::KeyboardShortcut);
 }
 
 [[nodiscard]] bool TryReclaimMainFolderViewFocusOnEscape(HWND ownerWindow, const MSG& msg) noexcept
@@ -6949,7 +7194,7 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
     const std::wstring_view commandId = CanonicalizeCommandId(commandOpt.value());
     if (commandId.starts_with(L"cmd/app/"))
     {
-        return DispatchShortcutCommand(mainWindow, commandId);
+        return DispatchShortcutCommand(mainWindow, commandId, RedSalamander::Ui::CommandInvocationSource::KeyboardShortcut);
     }
 
     return DispatchShortcutCommandToCompareWindow(compareWindow, commandId);
@@ -6976,7 +7221,8 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
         }
     }
 
-    const std::optional<std::wstring_view> commandOpt = g_shortcutManager.FindFolderViewCommand(vk, modifiers);
+    const std::optional<std::wstring_view> commandOpt = g_shortcutManager.FindFolderViewCommand(
+        vk, modifiers, Common::Keyboard::ScanCodeFromKeyMessageLParam(msg.lParam), Common::Keyboard::IsExtendedKeyMessageLParam(msg.lParam));
     if (! commandOpt.has_value())
     {
         return false;
@@ -6985,7 +7231,7 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
     const std::wstring_view commandId = CanonicalizeCommandId(commandOpt.value());
     if (commandId.starts_with(L"cmd/app/"))
     {
-        return DispatchShortcutCommand(mainWindow, commandId);
+        return DispatchShortcutCommand(mainWindow, commandId, RedSalamander::Ui::CommandInvocationSource::KeyboardShortcut);
     }
 
     return DispatchShortcutCommandToCompareWindow(compareWindow, commandId);
@@ -7115,8 +7361,10 @@ constexpr wchar_t kRedSalamanderHelpText[] =
     L"  --compare-selftest              Run CompareDirectories self-test suite.\r\n"
     L"  --commands-selftest             Run Commands self-test suite.\r\n"
     L"  --fileops-selftest              Run FileOperations self-test suite.\r\n"
+    L"  --selftest-no-activate          Prevent noninteractive Compare/FileOperations selftests from taking foreground activation or keyboard focus.\r\n"
     L"  --selftest-fail-fast            Stop after first failing self-test case.\r\n"
     L"  --selftest-case=NAME            Run the exact matching self-test case, a case-prefix family when NAME ends in '_', or comma-separated exact cases.\r\n"
+    L"  --selftest-family=NAME          Run one governed Commands source family in a separate process.\r\n"
     L"  --selftest-crash-case=NAME      Raise an access violation when the exact matching self-test case starts; crash-signal proof only.\r\n"
     L"  --selftest-flaky-proof-case=NAME Fail the named case in suite context for classifier proof; exact-case and shuffle retries pass.\r\n"
     L"  --selftest-order-proof-case=NAME Fail the named case in suite/shuffle context for classifier proof; exact-case retry passes.\r\n"
@@ -7168,15 +7416,122 @@ constexpr wchar_t kRedSalamanderHelpText[] =
 }
 } // namespace
 
+bool DispatchApplicationCommand(HWND ownerWindow,
+                                std::wstring_view commandId,
+                                RedSalamander::Ui::CommandInvocationSource source) noexcept
+{
+    return ExecuteCommandById(ownerWindow, commandId, source);
+}
+
+bool ResolveCommandRuntimeStateFromWindow(HWND ownerWindow,
+                                          HWND invocationOrigin,
+                                          std::wstring_view commandId,
+                                          CommandStateSource stateSource,
+                                          CommandRuntimeState& state) noexcept
+{
+    state = {};
+    if (commandId.empty())
+    {
+        state.enabled = false;
+        return false;
+    }
+
+    const bool terminalCommand = commandId.starts_with(L"cmd/terminal/");
+    if (! terminalCommand && stateSource != CommandStateSource::TerminalActions)
+    {
+        return true;
+    }
+
+    const HWND floatingRoot = GetFloatingTerminalWindowHandle();
+    const bool floatingContext = floatingRoot != nullptr &&
+        ((invocationOrigin != nullptr && GetAncestor(invocationOrigin, GA_ROOT) == floatingRoot) || ownerWindow == floatingRoot);
+    if (floatingContext)
+    {
+        return QueryFloatingTerminalCommandState(commandId, state);
+    }
+    if (g_hFolderWindow.load(std::memory_order_acquire))
+    {
+        return g_folderWindow.QueryTerminalHostCommandState(invocationOrigin, commandId, state);
+    }
+
+    state.enabled = false;
+    return true;
+}
+
 [[nodiscard]] bool DispatchShortcutCommandFromWindow(HWND ownerWindow, std::wstring_view commandId) noexcept
 {
-    return DispatchShortcutCommand(ownerWindow, commandId);
+    return DispatchShortcutCommand(ownerWindow, commandId, RedSalamander::Ui::CommandInvocationSource::KeyboardShortcut);
 }
 
 #ifdef ENABLE_TESTS
 bool DebugDispatchShortcutCommand(HWND ownerWindow, std::wstring_view commandId) noexcept
 {
-    return DispatchShortcutCommand(ownerWindow, commandId);
+    if (commandId == L"cmd/pane/selectCalculateDirectorySizeNext" && g_hFolderWindow.load(std::memory_order_acquire) &&
+        ! g_folderWindow.GetFocusedFolderViewHwnd())
+    {
+        // UI automation can lose foreground activation between directed input steps. Keep
+        // this test-only seam on the real command-to-key route without forcing a focus
+        // transition that intentionally exits integrated Quick Search.
+        return SendKeyToFolderView(g_folderWindow.GetActivePane(), VK_SPACE);
+    }
+    return DispatchShortcutCommand(ownerWindow, commandId, RedSalamander::Ui::CommandInvocationSource::SelfTest);
+}
+
+RedSalamander::Ui::ThemeCycleOverlayDebugSnapshot DebugGetThemeCycleOverlaySnapshot() noexcept
+{
+    return g_themeCycleOverlay.DebugGetSnapshot();
+}
+
+HWND DebugGetThemeCycleOverlayWindowHandle() noexcept
+{
+    return g_themeCycleOverlay.GetHwnd();
+}
+
+IRawElementProviderFragmentRoot* DebugCreateThemeCycleOverlayAccessibilityProvider() noexcept
+{
+    return g_themeCycleOverlay.DebugCreateAccessibilityProvider();
+}
+
+bool DebugCaptureThemeCycleOverlayBitmap(RedSalamander::DxUi::WindowHostBitmapCapture& capture) noexcept
+{
+    return g_themeCycleOverlay.DebugCaptureBitmap(capture);
+}
+
+void DebugHideThemeCycleOverlay() noexcept
+{
+    g_themeCycleOverlay.Hide();
+}
+
+void DebugAdvanceThemeCycleOverlayTo(uint64_t nowTickMs) noexcept
+{
+    g_themeCycleOverlay.DebugAdvanceTo(nowTickMs);
+}
+
+void DebugDismissThemeCycleOverlay() noexcept
+{
+    g_themeCycleOverlay.DebugDismissImmediately();
+}
+
+void DebugSetForceThemeCycleDismissTimerFailure(bool force) noexcept
+{
+    g_themeCycleOverlay.DebugSetForceDismissTimerFailure(force);
+}
+
+void DebugSimulateThemeCycleOverlayDeviceLoss() noexcept
+{
+    g_themeCycleOverlay.DebugSimulateDeviceLoss();
+}
+
+void DebugSelectThemeTarget(HWND ownerWindow,
+                            std::wstring_view themeId,
+                            RedSalamander::Ui::CommandInvocationSource source) noexcept
+{
+    SelectThemeTarget(ownerWindow, themeId, source);
+}
+
+std::vector<RedSalamander::Ui::ThemeCycleOverlayTheme> DebugBuildThemeCycleRing()
+{
+    return BuildThemeCycleRing();
 }
 
 void DebugReloadShortcutsFromSettings() noexcept
@@ -7373,6 +7728,33 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     StartupMetrics::Initialize();
 
 #ifdef ENABLE_TESTS
+    RedSalamander::TestSupport::ScopedWindowActivationBlocker selfTestActivationBlocker;
+    const bool explicitNoActivate = hasArg(L"--selftest-no-activate");
+    const bool selectedSafeSuite  = hasArg(L"--compare-selftest") || hasArg(L"--fileops-selftest");
+    const bool selectedFocusSuite = hasArg(L"--selftest") || hasArg(L"--commands-selftest");
+    if (explicitNoActivate && (! selectedSafeSuite || selectedFocusSuite))
+    {
+        Debug::Error(L"--selftest-no-activate requires --compare-selftest or --fileops-selftest and cannot be combined with Commands.");
+        return 2;
+    }
+    // Warn before startup can activate a Commands test window. The suite and
+    // its directed-input probes borrow this one process-lifetime surface.
+    const bool needsInputWarning = selectedFocusSuite && ! hasArg(L"--selftest-list-cases");
+    const RedSalamander::TestSupport::DirectedSelfTestInputWarning inputWarning(nullptr, needsInputWarning);
+    if (needsInputWarning && ! inputWarning.IsVisible())
+    {
+        Debug::Error(L"Failed to display the foreground-input selftest warning.");
+        return 2;
+    }
+    if (selectedSafeSuite && ! selectedFocusSuite)
+    {
+        if (! selfTestActivationBlocker.Start())
+        {
+            Debug::ErrorWithLastError(L"Failed to install the self-test no-activation guard.");
+            return 2;
+        }
+    }
+
     QueueRedSalamanderMonitorLaunch();
 #endif
 
@@ -7384,7 +7766,9 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 #ifndef ENABLE_TESTS
     std::wstring unsupportedSelfTestArg;
     if (hasArg(L"--selftest") || hasArg(L"--compare-selftest") || hasArg(L"--commands-selftest") || hasArg(L"--fileops-selftest") ||
-        hasArg(L"--selftest-fail-fast") || hasArg(L"--selftest-list-cases") || getArgValue(L"--selftest-case=", unsupportedSelfTestArg) ||
+        hasArg(L"--selftest-fail-fast") || hasArg(L"--selftest-list-cases") || hasArg(L"--selftest-no-activate") ||
+        getArgValue(L"--selftest-case=", unsupportedSelfTestArg) ||
+        getArgValue(L"--selftest-family=", unsupportedSelfTestArg) ||
         getArgValue(L"--selftest-crash-case=", unsupportedSelfTestArg) || getArgValue(L"--selftest-repeat=", unsupportedSelfTestArg) ||
         getArgValue(L"--selftest-shuffle=", unsupportedSelfTestArg) ||
         getArgValue(L"--selftest-flaky-proof-case=", unsupportedSelfTestArg) ||
@@ -7403,6 +7787,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     g_selfTestOptions.timeoutScale     = kSelfTestTimeoutMultiplierDefault;
     g_selfTestOptions.writeJsonSummary = true;
     g_selfTestOptions.caseFilter.clear();
+    g_selfTestOptions.commandsFamily.clear();
     g_selfTestOptions.repeatCount = kSelfTestRepeatDefault;
     g_selfTestOptions.repeatIndex = 1u;
     g_selfTestOptions.shuffleSeed.reset();
@@ -7430,6 +7815,17 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     if (getArgValue(L"--selftest-case=", caseFilterArg))
     {
         g_selfTestOptions.caseFilter = std::move(caseFilterArg);
+    }
+
+    std::wstring commandsFamilyArg;
+    if (getArgValue(L"--selftest-family=", commandsFamilyArg))
+    {
+        if (! hasArg(L"--commands-selftest") || ! CommandsSelfTest::IsKnownFamily(commandsFamilyArg))
+        {
+            Debug::Error(L"--selftest-family requires --commands-selftest and a known Commands family name.");
+            return 2;
+        }
+        g_selfTestOptions.commandsFamily = std::move(commandsFamilyArg);
     }
 
     std::wstring repeatArg;
@@ -7641,7 +8037,8 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     CrashQuarantine::OfferPluginDisableIfPreviousCrashDetected(g_settings);
 
 #ifdef ENABLE_TESTS
-    const bool runHeadlessCompareSelfTest = g_runCompareDirectoriesSelfTest && ! g_runFileOpsSelfTest && ! g_runCommandsSelfTest;
+    const bool runHeadlessCompareSelfTest = g_runCompareDirectoriesSelfTest && ! g_runFileOpsSelfTest && ! g_runCommandsSelfTest &&
+                                            ! CompareDirectoriesSelfTest::RequiresHostServices(g_selfTestOptions);
     const bool anySelfTest                = g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest;
 #else
     const bool runHeadlessCompareSelfTest = false;
@@ -7895,6 +8292,18 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         const HWND root                   = msg.hwnd ? GetAncestor(msg.hwnd, GA_ROOT) : nullptr;
         const bool isMainWindowMessage    = (root == *hWnd);
         const bool isCompareWindowMessage = IsCompareDirectoriesWindowMessageRoot(root);
+        if (isMainWindowMessage && msg.message == WM_MOUSEMOVE && g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            static_cast<void>(g_folderWindow.HandlePanePointerFocus(msg.hwnd));
+        }
+        const HWND floatingTerminalWindow = GetFloatingTerminalWindowHandle();
+        const bool isFloatingTerminalWindowMessage = floatingTerminalWindow != nullptr && root == floatingTerminalWindow;
+        const bool terminalInputTarget = IsFloatingTerminalInputTarget(msg.hwnd) ||
+            (isMainWindowMessage && g_hFolderWindow.load(std::memory_order_acquire) && g_folderWindow.IsTerminalInputTarget(msg.hwnd));
+        if ((msg.message == WM_ACTIVATEAPP && msg.wParam == FALSE) || (terminalInputTarget && msg.message == WM_KILLFOCUS))
+        {
+            g_consumedTerminalKey.reset();
+        }
         TraceFindFilesApplicationLoopMessage(msg, root, L"dequeue");
 
         if ((msg.message == WM_SYSKEYDOWN || msg.message == WM_KEYDOWN) && msg.wParam == static_cast<WPARAM>(VK_ESCAPE))
@@ -7924,7 +8333,12 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
             }
         }
 
-        if (g_mainMenuHandle)
+        if (terminalInputTarget)
+        {
+            altDown = false;
+            altUsed = false;
+        }
+        if (g_mainMenuHandle && ! terminalInputTarget)
         {
             if (isMainWindowMessage)
             {
@@ -7987,7 +8401,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
             }
         }
 
-        if (isMainWindowMessage && g_hFolderWindow.load(std::memory_order_acquire))
+        if (isMainWindowMessage && ! terminalInputTarget && g_hFolderWindow.load(std::memory_order_acquire))
         {
             const uint32_t currentModifiers = GetCurrentShortcutModifiers();
             if (currentModifiers != functionBarModifiers)
@@ -8011,7 +8425,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
             }
         }
 
-        if (isMainWindowMessage && g_hFolderWindow.load(std::memory_order_acquire))
+        if (isMainWindowMessage && ! terminalInputTarget && g_hFolderWindow.load(std::memory_order_acquire))
         {
             const uint32_t vk = static_cast<uint32_t>(msg.wParam);
             if (msg.message == WM_KEYDOWN || msg.message == WM_SYSKEYDOWN)
@@ -8041,19 +8455,36 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
                     const std::optional<std::wstring_view> commandOpt = g_shortcutManager.FindFunctionBarCommand(vk, modifiers);
                     if (commandOpt.has_value() && CanonicalizeCommandId(commandOpt.value()) == L"cmd/app/showShortcuts")
                     {
-                        static_cast<void>(DispatchShortcutCommand(*hWnd, commandOpt.value()));
+                        static_cast<void>(DispatchShortcutCommand(
+                            *hWnd, commandOpt.value(), RedSalamander::Ui::CommandInvocationSource::KeyboardShortcut));
                         continue;
                     }
                 }
             }
         }
 
-        if (isMainWindowMessage && ! editFocused && TryReclaimMainFolderViewFocusOnEscape(*hWnd, msg))
+        if (TryConsumeTerminalKeyUp(msg))
         {
             continue;
         }
 
-        if (isMainWindowMessage && ! editFocused)
+        if (terminalInputTarget && TryHandleTerminalShortcutKeyDown(isFloatingTerminalWindowMessage ? root : *hWnd, msg.hwnd, msg))
+        {
+            continue;
+        }
+
+        if ((isMainWindowMessage || isCompareWindowMessage || isFloatingTerminalWindowMessage) && ! editFocused && ! terminalInputTarget &&
+            TryHandleApplicationShortcutKeyDown(*hWnd, msg))
+        {
+            continue;
+        }
+
+        if (isMainWindowMessage && ! editFocused && ! terminalInputTarget && TryReclaimMainFolderViewFocusOnEscape(*hWnd, msg))
+        {
+            continue;
+        }
+
+        if (isMainWindowMessage && ! editFocused && ! terminalInputTarget)
         {
             if (TryHandleShortcutKeyDown(*hWnd, msg))
             {
@@ -8078,7 +8509,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
             }
         }
 
-        if (! isMainWindowMessage || editFocused || ! TranslateAccelerator(*hWnd, hAccelTable.get(), &msg))
+        if (terminalInputTarget || ! isMainWindowMessage || editFocused || ! TranslateAccelerator(*hWnd, hAccelTable.get(), &msg))
         {
             TraceFindFilesApplicationLoopMessage(msg, root, L"dispatch");
             TranslateMessage(&msg);
@@ -8191,6 +8622,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, [[maybe_unused]] _In_opt_ HINSTA
 std::optional<HWND> InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
     g_hInstance = hInstance; // Store instance handle in our global variable
+    g_mainWindowCloseCommitted.store(false, std::memory_order_release);
+    HostResetPromptShutdown();
 
 #ifdef ENABLE_TESTS
     if (IsRunningAnySelfTest())
@@ -8370,6 +8803,16 @@ std::optional<HWND> InitInstance(HINSTANCE hInstance, int nCmdShow)
         SelfTest::AppendSelfTestTrace(L"InitInstance: ShowWindow/UpdateWindow ok");
     }
 #endif
+    #ifdef ENABLE_TESTS
+    if (! IsRunningAnySelfTest())
+    #endif
+    {
+        const HRESULT restoreHr = RestoreFloatingTerminalWindowAfterStartup(hWnd.get(), g_settings, ResolveConfiguredTheme());
+        if (FAILED(restoreHr))
+        {
+            Debug::Warning(L"Floating terminal restore failed (hr=0x{:08X})", static_cast<unsigned long>(restoreHr));
+        }
+    }
     static_cast<void>(PostMessageW(hWnd.get(), WndMsg::kAppStartupInputReady, 0, 0));
 
     {
@@ -8448,6 +8891,8 @@ static void ApplyAppTheme(HWND hWnd)
     }
 
     UpdateShortcutsWindowTheme(theme);
+    UpdateCommandPaletteWindowTheme(theme);
+    UpdateFloatingTerminalWindowTheme(theme);
     UpdateConnectionManagerWindowsTheme(theme);
     UpdateConnectionCredentialPromptWindowsTheme(theme);
     UpdateCompareDirectoriesWindowsTheme(theme);
@@ -8468,7 +8913,9 @@ static void ApplyAppTheme(HWND hWnd)
     }
 }
 
-[[nodiscard]] std::vector<std::wstring_view> BuildThemeCycleIds()
+[[nodiscard]] std::wstring ResolveThemeCycleDisplayName(std::wstring_view themeId);
+
+[[nodiscard]] std::vector<RedSalamander::Ui::ThemeCycleOverlayTheme> BuildThemeCycleRing()
 {
     constexpr std::array<std::wstring_view, 5> kBuiltInThemeIds = {
         std::wstring_view{L"builtin/system"},
@@ -8480,24 +8927,100 @@ static void ApplyAppTheme(HWND hWnd)
 
     const CustomThemeGroups customThemes = CollectCustomThemeGroups();
 
-    std::vector<std::wstring_view> ids;
-    ids.reserve(kBuiltInThemeIds.size() + customThemes.fileThemes.size() + customThemes.settingsThemes.size());
-    ids.insert(ids.end(), kBuiltInThemeIds.begin(), kBuiltInThemeIds.end());
+    std::vector<RedSalamander::Ui::ThemeCycleOverlayTheme> ring;
+    ring.reserve(kBuiltInThemeIds.size() + customThemes.fileThemes.size() + customThemes.settingsThemes.size());
+    for (const std::wstring_view id : kBuiltInThemeIds)
+    {
+        ring.push_back(RedSalamander::Ui::ThemeCycleOverlayTheme{std::wstring(id), ResolveThemeCycleDisplayName(id)});
+    }
 
     for (const auto* def : customThemes.fileThemes)
     {
-        ids.push_back(def->id);
+        ring.push_back(RedSalamander::Ui::ThemeCycleOverlayTheme{def->id, ResolveThemeCycleDisplayName(def->id)});
     }
     for (const auto* def : customThemes.settingsThemes)
     {
-        ids.push_back(def->id);
+        ring.push_back(RedSalamander::Ui::ThemeCycleOverlayTheme{def->id, ResolveThemeCycleDisplayName(def->id)});
     }
 
-    return ids;
+    return ring;
 }
 
-void ApplyThemeId(HWND hWnd, std::wstring_view themeId)
+[[nodiscard]] std::wstring ResolveThemeCycleDisplayName(std::wstring_view themeId)
 {
+    if (themeId == L"builtin/system")
+    {
+        return LoadStringResource(nullptr, IDS_PREFS_THEMES_BASE_SYSTEM);
+    }
+    if (themeId == L"builtin/light")
+    {
+        return LoadStringResource(nullptr, IDS_PREFS_THEMES_BASE_LIGHT);
+    }
+    if (themeId == L"builtin/dark")
+    {
+        return LoadStringResource(nullptr, IDS_PREFS_THEMES_BASE_DARK);
+    }
+    if (themeId == L"builtin/rainbow")
+    {
+        return LoadStringResource(nullptr, IDS_PREFS_THEMES_BASE_RAINBOW);
+    }
+    if (themeId == L"builtin/highContrast")
+    {
+        return LoadStringResource(nullptr, IDS_PREFS_THEMES_BASE_HIGH_CONTRAST);
+    }
+    if (const Common::Settings::ThemeDefinition* const definition = FindThemeById(themeId); definition && ! definition->name.empty())
+    {
+        return definition->name;
+    }
+    return std::wstring(themeId);
+}
+
+[[nodiscard]] RedSalamander::Ui::ThemeCycleOverlayAccessibility BuildThemeCycleOverlayAccessibility(
+    const RedSalamander::Ui::ThemeCycleOverlaySnapshot& snapshot)
+{
+    RedSalamander::Ui::ThemeCycleOverlayAccessibility accessibility{};
+    if (snapshot.previousDisplayName.empty() && snapshot.nextDisplayName.empty())
+    {
+        accessibility.notification =
+            FormatStringResource(nullptr, IDS_THEME_CYCLE_OVERLAY_UIA_CURRENT_ONLY, snapshot.currentDisplayName);
+    }
+    else
+    {
+        accessibility.notification = FormatStringResource(nullptr,
+                                                           IDS_THEME_CYCLE_OVERLAY_UIA_FULL,
+                                                           snapshot.currentDisplayName,
+                                                           snapshot.previousDisplayName,
+                                                           snapshot.nextDisplayName);
+        accessibility.previousName =
+            FormatStringResource(nullptr, IDS_THEME_CYCLE_OVERLAY_PREVIOUS_NAME, snapshot.previousDisplayName);
+        accessibility.nextName = FormatStringResource(nullptr, IDS_THEME_CYCLE_OVERLAY_NEXT_NAME, snapshot.nextDisplayName);
+    }
+    accessibility.currentName = FormatStringResource(nullptr, IDS_THEME_CYCLE_OVERLAY_CURRENT_NAME, snapshot.currentDisplayName);
+    accessibility.dismissAction = LoadStringResource(nullptr, IDS_THEME_CYCLE_OVERLAY_DISMISS_ACTION);
+    accessibility.dismissHelp   = LoadStringResource(nullptr, IDS_THEME_CYCLE_OVERLAY_DISMISS_HELP);
+    return accessibility;
+}
+
+[[nodiscard]] bool IsThemeCycleOverlaySource(RedSalamander::Ui::CommandInvocationSource source) noexcept
+{
+    return source == RedSalamander::Ui::CommandInvocationSource::KeyboardShortcut ||
+           source == RedSalamander::Ui::CommandInvocationSource::ThemeMenu ||
+           source == RedSalamander::Ui::CommandInvocationSource::FunctionBarPointer ||
+           source == RedSalamander::Ui::CommandInvocationSource::SelfTest;
+}
+
+[[nodiscard]] uint64_t NextThemeCycleOverlayGeneration() noexcept
+{
+    static uint64_t generation = 0u;
+    return ++generation;
+}
+
+void ApplyThemeId(HWND hWnd, std::wstring_view themeId, bool preserveThemeCycleOverlay)
+{
+    if (! preserveThemeCycleOverlay)
+    {
+        g_themeCycleOverlay.Hide();
+    }
     g_settings.theme.currentThemeId = std::wstring(themeId);
     if (const auto* def = FindThemeById(themeId))
     {
@@ -8511,27 +9034,95 @@ void ApplyThemeId(HWND hWnd, std::wstring_view themeId)
     ApplyAppTheme(hWnd);
 }
 
-void SelectAdjacentTheme(HWND hWnd, int direction)
+void PresentThemeCycleOverlay(HWND hWnd,
+                              RedSalamander::Ui::ThemeCycleOverlaySnapshot snapshot,
+                              RedSalamander::Ui::ThemeCycleOverlayAccessibility accessibility)
 {
-    const std::vector<std::wstring_view> ids = BuildThemeCycleIds();
-    if (ids.empty())
+    if (! hWnd || IsWindow(hWnd) == FALSE || IsWindowVisible(hWnd) == FALSE || IsWindowEnabled(hWnd) == FALSE || IsIconic(hWnd) != FALSE)
     {
+        g_themeCycleOverlay.Hide();
         return;
     }
 
-    const auto findTheme = [&](std::wstring_view id) { return std::find(ids.begin(), ids.end(), id); };
+    const AppTheme theme = ResolveConfiguredTheme();
+    const HRESULT hr = g_themeCycleOverlay.Show(hWnd, MakeAppThemeDxPalette(theme), std::move(snapshot), std::move(accessibility));
+    if (FAILED(hr))
+    {
+        Debug::Warning(L"Theme cycle overlay could not be presented (hr=0x{:08X}).", static_cast<unsigned>(hr));
+    }
+}
+
+void SelectAdjacentTheme(HWND hWnd, int direction, RedSalamander::Ui::CommandInvocationSource source)
+{
+    const auto inputAcceptedAt = std::chrono::steady_clock::now();
+    const std::vector<RedSalamander::Ui::ThemeCycleOverlayTheme> ring = BuildThemeCycleRing();
+    if (ring.empty())
+    {
+        g_themeCycleOverlay.Hide();
+        return;
+    }
+
+    const auto findTheme = [&](std::wstring_view id)
+    {
+        return std::find_if(ring.begin(), ring.end(), [id](const RedSalamander::Ui::ThemeCycleOverlayTheme& theme) { return theme.themeId == id; });
+    };
 
     auto currentIt = findTheme(g_settings.theme.currentThemeId);
-    if (currentIt == ids.end())
+    if (currentIt == ring.end())
     {
         const std::wstring fallbackThemeId = ThemeIdFromThemeMode(g_themeMode);
         currentIt                          = findTheme(fallbackThemeId);
     }
 
-    const size_t currentIndex = currentIt != ids.end() ? static_cast<size_t>(std::distance(ids.begin(), currentIt)) : 0u;
-    const size_t count        = ids.size();
+    const size_t currentIndex = currentIt != ring.end() ? static_cast<size_t>(std::distance(ring.begin(), currentIt)) : 0u;
+    const size_t count        = ring.size();
     const size_t nextIndex    = direction >= 0 ? (currentIndex + 1u) % count : (currentIndex + count - 1u) % count;
-    ApplyThemeId(hWnd, ids[nextIndex]);
+    const RedSalamander::Ui::ThemeCycleDirection overlayDirection =
+        direction >= 0 ? RedSalamander::Ui::ThemeCycleDirection::Next : RedSalamander::Ui::ThemeCycleDirection::Previous;
+    RedSalamander::Ui::ThemeCycleOverlaySnapshot snapshot =
+        RedSalamander::Ui::BuildThemeCycleOverlaySnapshot(ring, nextIndex, overlayDirection, NextThemeCycleOverlayGeneration(), inputAcceptedAt);
+    RedSalamander::Ui::ThemeCycleOverlayAccessibility accessibility = BuildThemeCycleOverlayAccessibility(snapshot);
+    const auto applyStartedAt = std::chrono::steady_clock::now();
+    ApplyThemeId(hWnd, ring[nextIndex].themeId, true);
+    Debug::Perf::EmitDurationUs(L"theme.cycle.apply_us", Debug::Perf::ElapsedUs(applyStartedAt));
+
+    if (IsThemeCycleOverlaySource(source))
+    {
+        PresentThemeCycleOverlay(hWnd, std::move(snapshot), std::move(accessibility));
+    }
+}
+
+void SelectThemeTarget(HWND hWnd, std::wstring_view themeId, RedSalamander::Ui::CommandInvocationSource source)
+{
+    if (themeId == g_settings.theme.currentThemeId)
+    {
+        return;
+    }
+
+    if (! IsThemeCycleOverlaySource(source))
+    {
+        ApplyThemeId(hWnd, themeId);
+        return;
+    }
+
+    const auto inputAcceptedAt = std::chrono::steady_clock::now();
+    const std::vector<RedSalamander::Ui::ThemeCycleOverlayTheme> ring = BuildThemeCycleRing();
+    const auto target = std::find_if(ring.begin(), ring.end(), [themeId](const RedSalamander::Ui::ThemeCycleOverlayTheme& theme)
+    { return theme.themeId == themeId; });
+    if (target == ring.end())
+    {
+        ApplyThemeId(hWnd, themeId);
+        return;
+    }
+
+    const size_t selectedIndex = static_cast<size_t>(std::distance(ring.begin(), target));
+    RedSalamander::Ui::ThemeCycleOverlaySnapshot snapshot = RedSalamander::Ui::BuildThemeCycleOverlaySnapshot(
+        ring, selectedIndex, RedSalamander::Ui::ThemeCycleDirection::Direct, NextThemeCycleOverlayGeneration(), inputAcceptedAt);
+    RedSalamander::Ui::ThemeCycleOverlayAccessibility accessibility = BuildThemeCycleOverlayAccessibility(snapshot);
+    const auto applyStartedAt = std::chrono::steady_clock::now();
+    ApplyThemeId(hWnd, ring[selectedIndex].themeId, true);
+    Debug::Perf::EmitDurationUs(L"theme.cycle.apply_us", Debug::Perf::ElapsedUs(applyStartedAt));
+    PresentThemeCycleOverlay(hWnd, std::move(snapshot), std::move(accessibility));
 }
 
 [[nodiscard]] bool HasOpenItemPropertiesWindow() noexcept
@@ -8918,7 +9509,7 @@ LRESULT OnMainWindowSettingsFileChanged(HWND hWnd, LPARAM lParam) noexcept
         return 0;
     }
 
-    const SettingsHotReload::ChangedSettingsLoadResult loadResult = SettingsHotReload::TryLoadChangedSettings();
+    const SettingsHotReload::ChangedSettingsLoadResult loadResult = SettingsHotReload::TryLoadChangedSettingsForNotification(*payload);
     switch (loadResult.status)
     {
         case SettingsHotReload::ChangedSettingsStatus::NoChange:
@@ -9577,8 +10168,17 @@ void OpenExternalHelp(HWND ownerWindow) noexcept
     }
 }
 
-LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
+LRESULT OnMainWindowCommand(HWND hWnd,
+                             UINT id,
+                             UINT codeNotify,
+                             HWND hwndCtl,
+                             RedSalamander::Ui::CommandInvocationSource source)
 {
+    if (g_mainWindowCloseCommitted.load(std::memory_order_acquire))
+    {
+        return 0;
+    }
+
     const UINT wmId = id;
     switch (wmId)
     {
@@ -9608,6 +10208,9 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             }
             break;
         }
+        case IDM_APP_COMMAND_PALETTE:
+            static_cast<void>(ExecuteCommandById(hWnd, L"cmd/app/commandPalette", source));
+            break;
         case IDM_APP_FULL_SCREEN:
         {
             ToggleFullScreen(hWnd);
@@ -9665,6 +10268,7 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             g_folderWindow.CommandToggleFileOperationsIssuesPane();
             UpdatePaneMenuChecks();
             break;
+        case IDM_VIEW_FILE_OPERATIONS: g_folderWindow.CommandShowFileOperations(); break;
         case IDM_APP_COMPARE:
         {
             const auto showErrorAlert = [&](unsigned int messageStringId) noexcept
@@ -9673,7 +10277,6 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
                 const std::wstring message = LoadStringResource(nullptr, messageStringId);
 
                 HostAlertRequest request{};
-                request.version      = 1;
                 request.sizeBytes    = sizeof(request);
                 request.scope        = HOST_ALERT_SCOPE_WINDOW;
                 request.modality     = HOST_ALERT_MODELESS;
@@ -9690,7 +10293,6 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
                 const std::wstring message = FormatStringResource(nullptr, IDS_FMT_INVALID_PATH, pathText);
 
                 HostAlertRequest request{};
-                request.version      = 1;
                 request.sizeBytes    = sizeof(request);
                 request.scope        = HOST_ALERT_SCOPE_WINDOW;
                 request.modality     = HOST_ALERT_MODELESS;
@@ -9800,13 +10402,13 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             break;
         }
         case IDM_APP_SWAP_PANES: g_folderWindow.SwapPanes(); break;
-        case IDM_VIEW_THEME_PREV: SelectAdjacentTheme(hWnd, -1); break;
-        case IDM_VIEW_THEME_NEXT: SelectAdjacentTheme(hWnd, 1); break;
-        case IDM_VIEW_THEME_SYSTEM: ApplyThemeId(hWnd, L"builtin/system"); break;
-        case IDM_VIEW_THEME_LIGHT: ApplyThemeId(hWnd, L"builtin/light"); break;
-        case IDM_VIEW_THEME_DARK: ApplyThemeId(hWnd, L"builtin/dark"); break;
-        case IDM_VIEW_THEME_RAINBOW: ApplyThemeId(hWnd, L"builtin/rainbow"); break;
-        case IDM_VIEW_THEME_HIGH_CONTRAST_APP: ApplyThemeId(hWnd, L"builtin/highContrast"); break;
+        case IDM_VIEW_THEME_PREV: SelectAdjacentTheme(hWnd, -1, source); break;
+        case IDM_VIEW_THEME_NEXT: SelectAdjacentTheme(hWnd, 1, source); break;
+        case IDM_VIEW_THEME_SYSTEM: SelectThemeTarget(hWnd, L"builtin/system", source); break;
+        case IDM_VIEW_THEME_LIGHT: SelectThemeTarget(hWnd, L"builtin/light", source); break;
+        case IDM_VIEW_THEME_DARK: SelectThemeTarget(hWnd, L"builtin/dark", source); break;
+        case IDM_VIEW_THEME_RAINBOW: SelectThemeTarget(hWnd, L"builtin/rainbow", source); break;
+        case IDM_VIEW_THEME_HIGH_CONTRAST_APP: SelectThemeTarget(hWnd, L"builtin/highContrast", source); break;
         case IDM_VIEW_PLUGINS_MANAGE:
         {
             const AppTheme theme = ResolveConfiguredTheme();
@@ -10520,6 +11122,11 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             g_folderWindow.CommandOpenCommandShell(pane);
             break;
         }
+        case IDM_LEFT_TERMINAL_PANE: g_folderWindow.CommandOpenCommandShell(FolderWindow::Pane::Left); break;
+        case IDM_RIGHT_TERMINAL_PANE: g_folderWindow.CommandOpenCommandShell(FolderWindow::Pane::Right); break;
+        case IDM_TERMINAL_OPEN_FLOATING_WINDOW:
+            static_cast<void>(ExecuteCommandById(hWnd, L"cmd/terminal/openFloatingWindow", source));
+            break;
         case IDM_PANE_QUICK_SEARCH:
         {
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
@@ -10538,6 +11145,9 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             g_folderWindow.CommandBringFilenameToCommandLine(pane);
             break;
         }
+        case IDM_PANE_BRING_FULL_PATH_TO_TERMINAL:
+            static_cast<void>(ExecuteCommandById(hWnd, L"cmd/pane/bringFullPathToTerminal", source));
+            break;
         case IDM_PANE_OPEN_CURRENT_FOLDER:
         {
             const FolderWindow::Pane pane                   = g_folderWindow.GetFocusedPane();
@@ -10591,7 +11201,9 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         case IDM_PANE_EDIT_NEW:
         case IDM_PANE_VIEW_SPACE:
         case IDM_PANE_COPY_TO_OTHER:
+        case IDM_PANE_COPY_TO_OTHER_WITH_OPTIONS:
         case IDM_PANE_MOVE_TO_OTHER:
+        case IDM_PANE_MOVE_TO_OTHER_WITH_OPTIONS:
         case IDM_PANE_CREATE_DIR:
         case IDM_PANE_DELETE:
         case IDM_PANE_PERMANENT_DELETE:
@@ -10609,7 +11221,9 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
                 case IDM_PANE_EDIT_NEW: g_folderWindow.CommandEditNew(pane); break;
                 case IDM_PANE_VIEW_SPACE: g_folderWindow.CommandViewSpace(pane); break;
                 case IDM_PANE_COPY_TO_OTHER: g_folderWindow.CommandCopyToOtherPane(pane); break;
+                case IDM_PANE_COPY_TO_OTHER_WITH_OPTIONS: g_folderWindow.CommandCopyToOtherPane(pane, true); break;
                 case IDM_PANE_MOVE_TO_OTHER: g_folderWindow.CommandMoveToOtherPane(pane); break;
+                case IDM_PANE_MOVE_TO_OTHER_WITH_OPTIONS: g_folderWindow.CommandMoveToOtherPane(pane, true); break;
                 case IDM_PANE_CREATE_DIR: g_folderWindow.CommandCreateDirectory(pane); break;
                 case IDM_PANE_DELETE: g_folderWindow.CommandDelete(pane); break;
                 case IDM_PANE_PERMANENT_DELETE: g_folderWindow.CommandPermanentDelete(pane); break;
@@ -10947,7 +11561,7 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             const auto it = g_customThemeMenuIdToThemeId.find(cmdId);
             if (it != g_customThemeMenuIdToThemeId.end())
             {
-                ApplyThemeId(hWnd, it->second);
+                SelectThemeTarget(hWnd, it->second, source);
                 break;
             }
 
@@ -11301,10 +11915,20 @@ LRESULT OnMainWindowClose(HWND hWnd)
     }
 #endif
 
+    if (g_mainWindowCloseCommitted.load(std::memory_order_acquire))
+    {
+        return 0;
+    }
+
     if (! g_folderWindow.ConfirmCancelAllFileOperations(hWnd))
     {
         return 0;
     }
+
+    g_mainWindowCloseCommitted.store(true, std::memory_order_release);
+    HostBeginPromptShutdown();
+
+    PrepareFloatingTerminalWindowForAppShutdown();
 
     // Ensure non-owned top-level windows release graphics resources before we tear down the process.
     // The D2D debug layer breaks on shutdown if any D2D objects are still alive at DLL unload time.
@@ -11315,7 +11939,12 @@ LRESULT OnMainWindowClose(HWND hWnd)
 
     // Post the final destroy so any auxiliary windows that just received WM_CLOSE can process their own
     // posted teardown before the main window posts WM_QUIT.
-    static_cast<void>(PostMessageW(hWnd, kFinalizeMainWindowCloseMessage, 0, 0));
+    if (PostMessageW(hWnd, kFinalizeMainWindowCloseMessage, 0, 0) == FALSE)
+    {
+        Debug::ErrorWithLastError(L"Shutdown: failed to queue final main-window close.");
+        g_mainWindowCloseCommitted.store(false, std::memory_order_release);
+        HostResetPromptShutdown();
+    }
     return 0;
 }
 
@@ -11328,7 +11957,10 @@ LRESULT OnMainWindowEndSession(HWND hWnd, bool sessionEnding) noexcept
 {
     if (sessionEnding)
     {
+        g_mainWindowCloseCommitted.store(true, std::memory_order_release);
+        HostBeginPromptShutdown();
         HostClearConnectionSessionState();
+        PrepareFloatingTerminalWindowForAppShutdown();
         CaptureAndSaveRuntimeSettingsForSessionEnd(hWnd);
     }
     return 0;
@@ -11349,6 +11981,8 @@ LRESULT OnMainWindowSessionChange(WPARAM reason) noexcept
 
 LRESULT OnMainWindowDestroy(HWND hWnd)
 {
+    g_mainWindowCloseCommitted.store(true, std::memory_order_release);
+    HostBeginPromptShutdown();
     static_cast<void>(WTSUnRegisterSessionNotification(hWnd));
     HostClearConnectionSessionState();
     SettingsHotReload::StopWatchingForProcessShutdown();
@@ -11358,6 +11992,11 @@ LRESULT OnMainWindowDestroy(HWND hWnd)
     if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
     {
         SettingsHotReload::BeginProcessShutdown();
+        PrepareFloatingTerminalWindowForAppShutdown();
+        if (const HWND floatingTerminal = GetFloatingTerminalWindowHandle())
+        {
+            SendMessageW(floatingTerminal, WM_CLOSE, 0u, 0);
+        }
         g_folderWindow.CloseAllViewers();
         g_folderWindow.SetSettings(nullptr);
         if (g_hFolderWindow.exchange(nullptr, std::memory_order_acq_rel))
@@ -11475,6 +12114,11 @@ bool DebugScrollFatalErrorDialogByWheelDetents(int detents) noexcept
 void DebugResetSessionEndSettingsSaveForSelfTest() noexcept
 {
     g_runtimeSettingsSaveOwner.store(RuntimeSettingsSaveOwner::None, std::memory_order_release);
+    // A confirmed WM_ENDSESSION permanently commits shutdown in production. The Commands suite keeps
+    // the same window alive after exercising that path, so its test-only reset must restore every gate
+    // that would otherwise suppress later commands and prompts.
+    g_mainWindowCloseCommitted.store(false, std::memory_order_release);
+    HostResetPromptShutdown();
     const std::scoped_lock lock(g_debugSessionEndSettingsMutex);
     g_debugSessionEndSettingsWriter   = nullptr;
     g_debugSessionEndSettingsSnapshot = {};
@@ -11501,12 +12145,27 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 #ifdef ENABLE_TESTS
         case kCommandsSelfTestStartMessage: return RunCommandsSelfTestAndRequestShutdown(hWnd);
 #endif
-        case WM_COMMAND: return OnMainWindowCommand(hWnd, LOWORD(wParam), HIWORD(wParam), reinterpret_cast<HWND>(lParam));
+        case WM_COMMAND:
+        {
+            const RedSalamander::Ui::CommandInvocationSource source =
+                HIWORD(wParam) == 0u && lParam == 0 ? RedSalamander::Ui::CommandInvocationSource::ThemeMenu
+                                                   : RedSalamander::Ui::CommandInvocationSource::OtherWmCommand;
+            return OnMainWindowCommand(hWnd, LOWORD(wParam), HIWORD(wParam), reinterpret_cast<HWND>(lParam), source);
+        }
         case WndMsg::kFunctionBarInvoke: return OnFunctionBarInvoke(hWnd, wParam, lParam);
-        case WndMsg::kSettingsApplied: return OnMainWindowSettingsApplied(hWnd);
+        case WndMsg::kSettingsApplied: g_themeCycleOverlay.Hide(); return OnMainWindowSettingsApplied(hWnd);
         case WndMsg::kPluginsChanged: return OnMainWindowPluginsChanged(hWnd);
         case WndMsg::kConnectionManagerConnect: return OnMainWindowConnectionManagerConnect(hWnd, wParam, lParam);
-        case WndMsg::kSettingsFileChanged: return OnMainWindowSettingsFileChanged(hWnd, lParam);
+        case WndMsg::kSettingsFileChanged: g_themeCycleOverlay.Hide(); return OnMainWindowSettingsFileChanged(hWnd, lParam);
+        case WndMsg::kTerminalSessionExited:
+        {
+            auto event = TakeMessagePayload<TerminalEvent>(lParam);
+            if (event)
+            {
+                g_folderWindow.HandleTerminalSessionExited(*event);
+            }
+            return 0;
+        }
         case WndMsg::kPreferencesRequestSettingsSnapshot: CaptureRuntimeSettings(hWnd); return 0;
         case WndMsg::kPaneRestoreFolderFocus:
         {
@@ -11547,13 +12206,33 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             return DefWindowProcW(hWnd, message, wParam, lParam);
         case WM_SYSCOMMAND: return OnMainWindowSysCommand(hWnd, wParam, lParam);
         case WM_INITMENUPOPUP: OnInitMenuPopup(hWnd, reinterpret_cast<HMENU>(wParam)); return 0;
-        case WM_ACTIVATE: return OnMainWindowActivate(hWnd, LOWORD(wParam));
+        case WM_ACTIVATE:
+            if (LOWORD(wParam) == WA_INACTIVE)
+            {
+                g_themeCycleOverlay.Hide();
+            }
+            return OnMainWindowActivate(hWnd, LOWORD(wParam));
         case WM_EXITMENULOOP: return OnMainWindowExitMenuLoop(hWnd, static_cast<BOOL>(wParam));
         case WM_SETFOCUS: return OnMainWindowSetFocus(hWnd);
         case WM_PAINT: return OnMainWindowPaint(hWnd);
         case WndMsg::kAppStartupInputReady: return OnMainWindowStartupInputReady(hWnd);
-        case WM_SIZE: return OnMainWindowSize(hWnd, LOWORD(lParam), HIWORD(lParam));
-        case WM_DPICHANGED: return OnMainWindowDpiChanged(hWnd, static_cast<UINT>(HIWORD(wParam)), reinterpret_cast<const RECT*>(lParam));
+        case WM_MOVE: g_themeCycleOverlay.OnOwnerGeometryChanged(); return DefWindowProcW(hWnd, message, wParam, lParam);
+        case WM_SIZE:
+        {
+            const LRESULT result = OnMainWindowSize(hWnd, LOWORD(lParam), HIWORD(lParam));
+            g_themeCycleOverlay.OnOwnerAvailabilityChanged();
+            g_themeCycleOverlay.OnOwnerGeometryChanged();
+            return result;
+        }
+        case WM_DPICHANGED:
+        {
+            const LRESULT result = OnMainWindowDpiChanged(hWnd, static_cast<UINT>(HIWORD(wParam)), reinterpret_cast<const RECT*>(lParam));
+            g_themeCycleOverlay.OnOwnerGeometryChanged();
+            return result;
+        }
+        case WM_DISPLAYCHANGE: g_themeCycleOverlay.OnOwnerGeometryChanged(); return DefWindowProcW(hWnd, message, wParam, lParam);
+        case WM_ENABLE:
+        case WM_SHOWWINDOW: g_themeCycleOverlay.OnOwnerAvailabilityChanged(); return DefWindowProcW(hWnd, message, wParam, lParam);
         case WM_GETMINMAXINFO:
             if (auto* info = reinterpret_cast<MINMAXINFO*>(lParam))
             {
@@ -11576,15 +12255,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 DestroyWindow(hWnd);
             }
             return 0;
-        case WM_QUERYENDSESSION: return OnMainWindowQueryEndSession();
-        case WM_ENDSESSION: return OnMainWindowEndSession(hWnd, wParam != FALSE);
+        case WM_QUERYENDSESSION: g_themeCycleOverlay.Hide(); return OnMainWindowQueryEndSession();
+        case WM_ENDSESSION: g_themeCycleOverlay.Hide(); return OnMainWindowEndSession(hWnd, wParam != FALSE);
         case WM_WTSSESSION_CHANGE: return OnMainWindowSessionChange(wParam);
         case WM_CLOSE: return OnMainWindowClose(hWnd);
         case WM_SETTINGCHANGE:
         case WM_THEMECHANGED:
         case WM_DWMCOLORIZATIONCOLORCHANGED:
-        case WM_SYSCOLORCHANGE: return OnMainWindowThemeChanged(hWnd);
-        case WM_DESTROY: return OnMainWindowDestroy(hWnd);
+        case WM_SYSCOLORCHANGE: g_themeCycleOverlay.Hide(); return OnMainWindowThemeChanged(hWnd);
+        case WM_DESTROY: g_themeCycleOverlay.Hide(); return OnMainWindowDestroy(hWnd);
         default: return DefWindowProcW(hWnd, message, wParam, lParam);
     }
 }

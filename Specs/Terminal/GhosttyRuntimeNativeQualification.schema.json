@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://red-salamander.invalid/schemas/ghostty-runtime-native-qualification-v1.json",
+  "title": "Red Salamander Ghostty native ARM64 qualification evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "schemaVersion",
+    "generatedUtc",
+    "sourceCommit",
+    "workflowRunId",
+    "workflowRunAttempt",
+    "testSeed",
+    "candidate",
+    "host",
+    "testHarness",
+    "runtime",
+    "tests"
+  ],
+  "properties": {
+    "formatId": { "const": "red-salamander-ghostty-native-qualification" },
+    "schemaVersion": { "const": 1 },
+    "generatedUtc": { "type": "string", "format": "date-time" },
+    "sourceCommit": { "$ref": "#/$defs/sha1" },
+    "workflowRunId": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+    "workflowRunAttempt": { "type": "integer", "minimum": 1 },
+    "testSeed": { "type": "string", "pattern": "^0x[0-9a-f]{8}$" },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "commit", "tree", "lockFileSha256", "lockCanonicalDigest", "overlaySha256" ],
+      "properties": {
+        "commit": { "$ref": "#/$defs/sha1" },
+        "tree": { "$ref": "#/$defs/sha1" },
+        "lockFileSha256": { "$ref": "#/$defs/sha256" },
+        "lockCanonicalDigest": { "$ref": "#/$defs/sha256" },
+        "overlaySha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "osArchitecture", "processArchitecture", "pythonArchitecture", "pythonVersion", "osVersion" ],
+      "properties": {
+        "osArchitecture": { "const": "Arm64" },
+        "processArchitecture": { "const": "Arm64" },
+        "pythonArchitecture": { "const": "ARM64" },
+        "pythonVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "osVersion": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "testHarness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runnerMode",
+        "runnerSource",
+        "runnerSourceSha256",
+        "transportOnlyOverride",
+        "cAbiDiagnosticModuleClone",
+        "cAbiStrip",
+        "cAbiOmitFramePointer",
+        "cAbiUnwindTables",
+        "codeFiveRetryUsed",
+        "codeFiveRetryExecutableSha256",
+        "codeFiveRetryStatus"
+      ],
+      "properties": {
+        "runnerMode": { "const": "simple" },
+        "runnerSource": { "const": "pinned-zig-default-test-runner" },
+        "runnerSourceSha256": { "$ref": "#/$defs/sha256" },
+        "transportOnlyOverride": { "const": true },
+        "cAbiDiagnosticModuleClone": { "const": true },
+        "cAbiStrip": { "const": false },
+        "cAbiOmitFramePointer": { "const": false },
+        "cAbiUnwindTables": { "const": "sync" },
+        "codeFiveRetryUsed": { "const": false },
+        "codeFiveRetryExecutableSha256": { "type": "null" },
+        "codeFiveRetryStatus": { "const": "not-needed" }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identitySha256",
+        "dllSha256",
+        "dllNormalizedSha256",
+        "dllSizeBytes",
+        "machine",
+        "exportCount",
+        "exportSetSha256",
+        "importModules",
+        "dependencyIds",
+        "noticeIds"
+      ],
+      "properties": {
+        "identitySha256": { "$ref": "#/$defs/sha256" },
+        "dllSha256": { "$ref": "#/$defs/sha256" },
+        "dllNormalizedSha256": { "$ref": "#/$defs/sha256" },
+        "dllSizeBytes": { "type": "integer", "minimum": 1 },
+        "machine": { "const": "ARM64" },
+        "exportCount": { "type": "integer", "minimum": 1 },
+        "exportSetSha256": { "$ref": "#/$defs/sha256" },
+        "importModules": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z0-9_.+-]+\\.dll$" }
+        },
+        "dependencyIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "noticeIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        }
+      }
+    },
+    "tests": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [ "target", "status" ],
+        "properties": {
+          "target": { "enum": [ "test-lib-vt", "test-lib-vt-build", "test-lib-vt-schema" ] },
+          "status": { "const": "passed" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9.-]{0,63}$" },
+    "sha1": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

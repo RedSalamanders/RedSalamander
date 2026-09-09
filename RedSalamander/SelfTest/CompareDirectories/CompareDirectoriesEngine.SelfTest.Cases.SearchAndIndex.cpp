@@ -7,7 +7,7 @@ SelfTest::RunCase(options,
     state.Require(CreateFileSystemSearch(baseFs, search), L"Local file system plugin missing IFileSystemSearch.");
 
     const char* capabilities = nullptr;
-    const HRESULT hr         = baseFs->GetCapabilities(&capabilities);
+    const HRESULT hr = baseFs->GetPathCapabilities(L"/", FILESYSTEM_COPY, &capabilities);
     state.Require(SUCCEEDED(hr) && capabilities != nullptr,
                   std::format(L"Local file system GetCapabilities failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     if (capabilities != nullptr)
@@ -141,7 +141,7 @@ SelfTest::RunCase(options,
     const auto verifyCapabilities = [&](std::string_view configuredPreference) noexcept
     {
         const char* capabilities     = nullptr;
-        const HRESULT capabilitiesHr = created.fileSystem->GetCapabilities(&capabilities);
+        const HRESULT capabilitiesHr = created.fileSystem->GetPathCapabilities(L"/", FILESYSTEM_COPY, &capabilities);
         state.Require(SUCCEEDED(capabilitiesHr) && capabilities != nullptr,
                       std::format(L"Local file system GetCapabilities failed for {}. hr=0x{:08X}",
                                   std::wstring(configuredPreference.begin(), configuredPreference.end()),
@@ -1385,6 +1385,47 @@ SelfTest::RunCase(options,
     state.Require(! warmStats.snapshotPath.empty(), L"Warm indexed query should report the snapshot path.");
     state.Require(CollectIndexedCandidateNames(warmCandidates) == coldNames, L"Warm indexed query should match the cold candidate set.");
 
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"local_index_fileops_artifacts_remain_visible",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"index_fileops_artifacts_visible", caseRoot),
+                  L"Failed to prepare the File Operations artifact visibility root.");
+    const std::array<std::wstring, 5u> names{{
+        L"visible.rs_tmp_0123456789abcdef0123456789abcdef_1",
+        L"visible.rs_bak_{01234567-89AB-CDEF-0123-456789ABCDEF}",
+        L"visible.rs_ren_0123456789abcdef0123456789abcdef",
+        L"visible.rs_copy_tmp_01234567_89abcdef_0123456789abcdef",
+        L"visible.~rs-write-{01234567-89AB-CDEF-0123-456789ABCDEF}.tmp",
+    }};
+    for (const std::wstring& name : names)
+    {
+        state.Require(SelfTest::WriteTextFile(caseRoot / name, "visible"),
+                      std::format(L"Failed to create visible artifact-shaped file '{}'.", name));
+    }
+
+    LocalSearchIndexCore::Repository repository;
+    LocalSearchIndexCore::QueryStats stats{};
+    std::vector<LocalSearchIndexCore::Candidate> candidates;
+    const auto startedAt = std::chrono::steady_clock::now();
+    const HRESULT hr = RunIndexedNameQuery(repository, caseRoot.wstring(), L"*", stats, candidates);
+    const uint64_t elapsedUs = Debug::Perf::ElapsedUs(startedAt);
+    const std::vector<std::wstring> indexedNames = CollectIndexedCandidateNames(candidates);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"Artifact visibility indexed query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    for (const std::wstring& name : names)
+    {
+        state.Require(std::ranges::find(indexedNames, name) != indexedNames.end(),
+                      std::format(L"Local index suppressed File Operations artifact-shaped name '{}'.", name));
+    }
+    Debug::Perf::EmitDurationUs(L"fileops.artifact.index.visibility.us", elapsedUs,
+                                static_cast<uint64_t>(indexedNames.size()),
+                                static_cast<uint64_t>(names.size()), hr);
     return state.failure.empty();
 });
 
@@ -3166,9 +3207,10 @@ SelfTest::RunCase(options,
     state.Require(contains(fileOpsDiagnosticsSource, "const size_t overflow = _diagnosticsPendingFlush.size() - maxPendingFlush") &&
                       contains(fileOpsDiagnosticsSource, "_diagnosticsPendingFlush.erase(_diagnosticsPendingFlush.begin(),"),
                   L"FileOps diagnostics pending flush trimming must remove overflow entries in one bulk erase.");
-    state.Require(contains(localIndexSource, "IsRedSalamanderStagedTempName") && contains(localIndexSource, ".rs_tmp_") &&
-                      contains(localIndexSource, ".rs_copy_tmp_") && contains(localIndexSource, ".~rs-write-"),
-                  L"Local search index hydration must skip RedSalamander staged temp sibling names.");
+    state.Require(! contains(localIndexSource, "IsRedSalamanderStagedTempName") &&
+                      ! contains(localIndexSource, "IsRedSalamanderStagedTempName(name)") &&
+                      ! contains(localIndexSource, "IsRedSalamanderStagedTempName(entry.name)"),
+                  L"Local search index enumeration must never suppress File Operations artifact names.");
 
     return state.failure.empty();
 });
@@ -4012,9 +4054,33 @@ SelfTest::RunCase(options,
         return false;
     }
 
-    wil::unique_handle slowClient(::CreateFileW(pipeName.c_str(), GENERIC_READ | GENERIC_WRITE, 0u, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    // This client intentionally uses synchronous I/O so it can hold a partial frame open. The
+    // readiness status request can consume the current server pipe instance, so wait for the
+    // replacement instance instead of treating that normal hand-off as a test failure.
+    wil::unique_handle slowClient;
+    DWORD slowClientError = ERROR_FILE_NOT_FOUND;
+    const auto connectDeadline = std::chrono::steady_clock::now() +
+                                 std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(2'000))};
+    while (std::chrono::steady_clock::now() < connectDeadline)
+    {
+        slowClient.reset(
+            ::CreateFileW(pipeName.c_str(), GENERIC_READ | GENERIC_WRITE, 0u, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+        if (slowClient)
+        {
+            break;
+        }
+
+        slowClientError = ::GetLastError();
+        if (slowClientError != ERROR_FILE_NOT_FOUND && slowClientError != ERROR_PIPE_BUSY && slowClientError != ERROR_SEM_TIMEOUT)
+        {
+            break;
+        }
+
+        static_cast<void>(::WaitNamedPipeW(pipeName.c_str(), 50u));
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
     state.Require(! ! slowClient,
-                  std::format(L"Failed to connect slow partial client to search service pipe. error={}", static_cast<unsigned long>(::GetLastError())));
+                  std::format(L"Failed to connect slow partial client to search service pipe. error={}", static_cast<unsigned long>(slowClientError)));
     if (! slowClient)
     {
         return false;
@@ -7573,11 +7639,11 @@ SelfTest::RunCase(options,
     request.includeFiles       = true;
     request.includeDirectories = false;
 
-    bool seedReadyForQueryCutover = false;
+    uint32_t seededVolumeState = SqliteIndexStore::kVolumeStateImportedLegacySnapshot;
     {
         ForegroundSearchServiceProcess service;
         std::wstring serviceError;
-        state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
+        state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
         if (! state.failure.empty())
         {
             return false;
@@ -7595,6 +7661,13 @@ SelfTest::RunCase(options,
                 if (SUCCEEDED(hr) && predicate(outStatus))
                 {
                     return true;
+                }
+
+                const std::wstring exitSummary = service.TryCaptureExitedOutputForFailure();
+                if (! exitSummary.empty())
+                {
+                    state.Require(false, std::format(L"{}{}", failureMessage, exitSummary));
+                    return false;
                 }
 
                 std::this_thread::sleep_for(std::chrono::milliseconds{200});
@@ -7649,8 +7722,8 @@ SelfTest::RunCase(options,
         {
             return false;
         }
-        seedReadyForQueryCutover = seededVolumeInfo.state == SqliteIndexStore::kVolumeStateReady;
-        state.Require(warmStatus.readyForQueryCutover == seedReadyForQueryCutover,
+        seededVolumeState = seededVolumeInfo.state;
+        state.Require(warmStatus.readyForQueryCutover == (seededVolumeState == SqliteIndexStore::kVolumeStateReady),
                       std::format(L"Seed warmup status readiness must match persisted volume state. statusReady={} volumeState={}.",
                                   warmStatus.readyForQueryCutover,
                                   seededVolumeInfo.state));
@@ -7683,7 +7756,8 @@ SelfTest::RunCase(options,
         LocalSearchIndexCore::QueryStats coldStats{};
         std::vector<LocalSearchIndexCore::Candidate> coldCandidates;
         const LocalSearchIndexCore::FallbackReason expectedColdFallbackReason =
-            seedReadyForQueryCutover ? LocalSearchIndexCore::FallbackReason::StoreStale : LocalSearchIndexCore::FallbackReason::CutoverBlocked;
+            seededVolumeState == SqliteIndexStore::kVolumeStateImportedLegacySnapshot ? LocalSearchIndexCore::FallbackReason::CutoverBlocked
+                                                                                      : LocalSearchIndexCore::FallbackReason::StoreStale;
         HRESULT hr = SearchServiceBroker::Query(request, &BrokerProgressRecorder::ProgressThunk, &recorder, nullptr, nullptr, coldCandidates, &coldStats);
         state.Require(SUCCEEDED(hr), std::format(L"Cold-start stale-root SQLite service query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
         if (FAILED(hr))
@@ -7911,9 +7985,9 @@ SelfTest::RunCase(options,
     {
         return false;
     }
-    state.Require(primingStats.fallbackReason == LocalSearchIndexCore::FallbackReason::CutoverBlocked,
-                  L"External rotation priming query should cache the pending-legacy cutover block.");
-    state.Require(primingStats.usedLiveScanFallback, L"External rotation priming query should fall back while a pending legacy volume exists.");
+    state.Require(primingStats.fallbackReason == LocalSearchIndexCore::FallbackReason::None,
+                  L"A ready requested volume should not inherit another volume's pending-legacy cutover block.");
+    state.Require(primingStats.usedSqliteStore, L"A ready requested volume should remain directly queryable while another volume awaits cutover.");
 
     SqliteIndexStore::ReplaceVolumeRequest rotatedRequest = initialRequest;
     addFileEntry(rotatedRequest, 3u, L"beta.txt");
@@ -9461,8 +9535,11 @@ SelfTest::RunCase(options,
         if (! persistentStoreReady)
         {
             state.Require(queryStats.sqliteCutoverBlocked, L"An unready aggregate startup store should report blocked SQLite cutover.");
-            state.Require(queryStats.fallbackReason == LocalSearchIndexCore::FallbackReason::CutoverBlocked,
-                          L"An unready aggregate startup store should report a cutover-blocked fallback reason.");
+            const LocalSearchIndexCore::FallbackReason expectedFallbackReason =
+                volumeInfoA.state == SqliteIndexStore::kVolumeStateImportedLegacySnapshot ? LocalSearchIndexCore::FallbackReason::CutoverBlocked
+                                                                                           : LocalSearchIndexCore::FallbackReason::StoreStale;
+            state.Require(queryStats.fallbackReason == expectedFallbackReason,
+                          L"An unready startup store should classify the requested persisted volume rather than an unrelated aggregate state.");
         }
     }
     state.Require(! queryStats.snapshotSaved, L"Startup-warmed SQLite service query should not create a compatibility snapshot runtime store.");
@@ -9544,7 +9621,15 @@ SelfTest::RunCase(options,
     });
 
     const std::filesystem::path storageRoot        = caseRoot / L"service-store";
-    const std::filesystem::path sqlitePath         = caseRoot / L"startup-failure-index.sqlite3";
+    std::filesystem::path sqliteDirectory = caseRoot / L"sqlite-store";
+    constexpr size_t kExtendedPathProofLength = static_cast<size_t>(MAX_PATH) + 32u;
+    while ((sqliteDirectory / L"startup-failure-index.sqlite3").native().size() < kExtendedPathProofLength)
+    {
+        sqliteDirectory /= L"extended-path-segment";
+    }
+    const std::filesystem::path sqlitePath = sqliteDirectory / L"startup-failure-index.sqlite3";
+    state.Require(sqlitePath.native().size() >= kExtendedPathProofLength,
+                  L"Startup warmup failure fixture should force extended-length SQLite bootstrap and inspection.");
     const std::wstring previousPipeOverride        = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
     const std::wstring previousRootOverride        = GetEnvVarTrimmed(SearchServiceBroker::kDiscoverRootsEnvVar);
     const std::wstring previousWarmupDelayOverride = GetEnvVarTrimmed(L"REDSALAMANDER_SEARCH_SERVICE_STARTUP_WARMUP_DELAY_MS");
@@ -9744,8 +9829,14 @@ SelfTest::RunCase(options,
         if (! survivingVolumeReady)
         {
             state.Require(queryStats.sqliteCutoverBlocked, L"An unready surviving volume should report blocked SQLite cutover.");
-            state.Require(queryStats.fallbackReason == LocalSearchIndexCore::FallbackReason::CutoverBlocked,
-                          L"An unready surviving volume should report a cutover-blocked fallback reason.");
+            const auto expectedFallbackReason = preQueryVolumeInfo.state == SqliteIndexStore::kVolumeStateCurrentnessUnproven
+                                                    ? LocalSearchIndexCore::FallbackReason::StoreStale
+                                                    : LocalSearchIndexCore::FallbackReason::CutoverBlocked;
+            state.Require(queryStats.fallbackReason == expectedFallbackReason,
+                          std::format(L"An unready surviving volume reported fallback reason {} instead of {} for persisted state {}.",
+                                      static_cast<unsigned int>(queryStats.fallbackReason),
+                                      static_cast<unsigned int>(expectedFallbackReason),
+                                      preQueryVolumeInfo.state));
         }
     }
 
@@ -9777,6 +9868,16 @@ SelfTest::RunCase(options,
         return false;
     }
 
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_service_foreground_rejects_second_instance", caseRoot),
+                  L"Failed to prepare the isolated duplicate-instance store root.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring storageRootArgument = std::format(L"--storage-root=\"{}\"", caseRoot.wstring());
+
     const std::wstring previousPipeOverride     = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
     const std::wstring previousInstanceOverride = GetEnvVarTrimmed(kInstanceEventEnvVar);
     const std::wstring pipeName                 = MakeUniquePipeName();
@@ -9798,7 +9899,7 @@ SelfTest::RunCase(options,
 
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
-    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, storageRootArgument), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -9806,13 +9907,20 @@ SelfTest::RunCase(options,
 
     CapturedProcessResult result{};
     std::wstring runError;
-    const std::vector<std::wstring> commandLine{L"--run-foreground", std::format(L"--pipe-name={}", pipeName)};
+    const std::vector<std::wstring> commandLine{
+        L"--run-foreground",
+        std::format(L"--pipe-name={}", pipeName),
+        std::format(L"--storage-root={}", caseRoot.wstring()),
+    };
     state.Require(RunProcessAndCaptureOutput(servicePath.wstring(), commandLine, static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), result, runError),
                   runError);
     if (! state.failure.empty())
     {
         return false;
     }
+
+    const std::wstring primaryExitSummary = service.TryCaptureExitedOutputForFailure();
+    state.Require(primaryExitSummary.empty(), std::format(L"The primary foreground service exited before the duplicate probe completed.{}", primaryExitSummary));
 
     state.Require(result.exitCode != 0u, L"The second foreground launch should fail when another instance is already running.");
     state.Require(result.output.contains("already running"), L"The duplicate-instance failure should explain that another instance is already running.");
@@ -9821,6 +9929,174 @@ SelfTest::RunCase(options,
 #else
     state.Require(result.output.contains("RedSalamanderSearchService"), L"The duplicate-instance failure should mention the Release service name.");
 #endif
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"search_service_store_writer_ownership_is_resource_scoped",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    constexpr wchar_t kLegacyInstanceEventEnvVar[] = L"REDSALAMANDER_SEARCH_SERVICE_INSTANCE_EVENT";
+    constexpr wchar_t kStoreWriterLockName[]        = L".red-salamander-search-writer.lock";
+
+    const std::filesystem::path servicePath = GetSiblingExecutablePath(L"RedSalamanderSearchService.exe");
+    std::error_code existsEc;
+    state.Require(! servicePath.empty() && std::filesystem::exists(servicePath, existsEc),
+                  std::format(L"Service executable not found: {}", servicePath.wstring()));
+
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_service_store_writer_ownership", caseRoot),
+                  L"Failed to prepare the SearchService writer-ownership root.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path storeADirectory = caseRoot / L"store-a";
+    const std::filesystem::path storeBDirectory = caseRoot / L"store-b";
+    const std::filesystem::path storeAPath      = storeADirectory / L"index.sqlite3";
+    const std::filesystem::path storeBPath      = storeBDirectory / L"index.sqlite3";
+    std::error_code createEc;
+    std::filesystem::create_directories(storeADirectory, createEc);
+    state.Require(! createEc, std::format(L"Failed to create the store-A directory. error={}", createEc.value()));
+    state.Require(SelfTest::WriteTextFile(storeADirectory / kStoreWriterLockName, "stale closed lock file"),
+                  L"Failed to create the stale closed store-writer lock fixture.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring previousPipeOverride        = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring previousLegacyEventOverride = GetEnvVarTrimmed(kLegacyInstanceEventEnvVar);
+    const std::wstring legacyEventName = std::format(LR"(Global\RedSalamander.SearchService.Precreated.Test.{})", MakeGuidText());
+    state.Require(::SetEnvironmentVariableW(kLegacyInstanceEventEnvVar, legacyEventName.c_str()) != 0,
+                  L"Failed to override the legacy SearchService instance event name.");
+    wil::unique_handle precreatedLegacyEvent(::CreateEventW(nullptr, TRUE, FALSE, legacyEventName.c_str()));
+    state.Require(static_cast<bool>(precreatedLegacyEvent), L"Failed to precreate the legacy Global SearchService event.");
+    const auto restoreOverrides = wil::scope_exit([&] noexcept
+    {
+        static_cast<void>(::SetEnvironmentVariableW(
+            SearchServiceBroker::kPipeNameEnvVar, previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str()));
+        static_cast<void>(::SetEnvironmentVariableW(
+            kLegacyInstanceEventEnvVar, previousLegacyEventOverride.empty() ? nullptr : previousLegacyEventOverride.c_str()));
+    });
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const auto setPipeOverride = [&](std::wstring_view pipeName) noexcept -> bool
+    {
+        const std::wstring value(pipeName);
+        return ::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, value.c_str()) != 0;
+    };
+    const auto sqliteArguments = [](const std::filesystem::path& sqlitePath)
+    {
+        return std::format(L"--store-backend=sqlite --sqlite-path=\"{}\"", sqlitePath.wstring());
+    };
+
+    const std::wstring pipeA = MakeUniquePipeName();
+    state.Require(setPipeOverride(pipeA), L"Failed to select the store-A foreground pipe.");
+    ForegroundSearchServiceProcess serviceA;
+    std::wstring serviceError;
+    state.Require(serviceA.Start(pipeA, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, sqliteArguments(storeAPath)),
+                  std::format(L"A precreated legacy Global event or stale closed lock file blocked isolated store A. {}", serviceError));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    CapturedProcessResult sameStoreResult{};
+    std::wstring runError;
+    const std::wstring sameStorePipe = MakeUniquePipeName();
+    const std::vector<std::wstring> sameStoreCommandLine{
+        L"--run-foreground",
+        std::format(L"--pipe-name={}", sameStorePipe),
+        L"--store-backend=sqlite",
+        std::format(L"--sqlite-path={}", storeAPath.wstring()),
+    };
+    state.Require(RunProcessAndCaptureOutput(
+                      servicePath.wstring(), sameStoreCommandLine, static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), sameStoreResult, runError),
+                  runError);
+    state.Require(sameStoreResult.exitCode != 0u && sameStoreResult.output.contains("already running"),
+                  L"A live writer must reject a second foreground writer for the same resolved store.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    CapturedProcessResult compactResult{};
+    const std::vector<std::wstring> compactCommandLine{
+        L"--compact",
+        L"--store-backend=sqlite",
+        std::format(L"--sqlite-path={}", storeAPath.wstring()),
+    };
+    state.Require(RunProcessAndCaptureOutput(
+                      servicePath.wstring(), compactCommandLine, static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), compactResult, runError),
+                  runError);
+    state.Require(compactResult.exitCode != 0u && compactResult.output.contains("already running"),
+                  L"Offline compaction must share the same resolved-store writer ownership as foreground service mode.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring pipeB = MakeUniquePipeName();
+    state.Require(setPipeOverride(pipeB), L"Failed to select the store-B foreground pipe.");
+    ForegroundSearchServiceProcess serviceB;
+    state.Require(serviceB.Start(pipeB, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, sqliteArguments(storeBPath)),
+                  std::format(L"A live writer for store A incorrectly blocked independent store B. {}", serviceError));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    std::string serviceOutput;
+    state.Require(serviceB.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), serviceOutput, serviceError), serviceError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(serviceA.KillWithJobAndWaitForExit(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), serviceError), serviceError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring restartPipe = MakeUniquePipeName();
+    state.Require(setPipeOverride(restartPipe), L"Failed to select the restarted store-A foreground pipe.");
+    ForegroundSearchServiceProcess restartedServiceA;
+    state.Require(restartedServiceA.Start(
+                      restartPipe, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, sqliteArguments(storeAPath)),
+                  std::format(L"Abrupt owner exit did not release the store-A writer ownership. {}", serviceError));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    state.Require(
+        restartedServiceA.ShutdownAndWaitForExitAndCapture(static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), serviceOutput, serviceError), serviceError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path blockedParent = caseRoot / L"not-a-directory";
+    state.Require(SelfTest::WriteTextFile(blockedParent, "file blocks lock-directory creation"), L"Failed to create the blocked lock-directory fixture.");
+    CapturedProcessResult deniedResult{};
+    const std::wstring deniedPipe = MakeUniquePipeName();
+    const std::vector<std::wstring> deniedCommandLine{
+        L"--run-foreground",
+        std::format(L"--pipe-name={}", deniedPipe),
+        L"--store-backend=sqlite",
+        std::format(L"--sqlite-path={}", (blockedParent / L"index.sqlite3").wstring()),
+    };
+    state.Require(RunProcessAndCaptureOutput(
+                      servicePath.wstring(), deniedCommandLine, static_cast<DWORD>(SelfTest::ScaleTimeout(5'000)), deniedResult, runError),
+                  runError);
+    state.Require(deniedResult.exitCode != 0u && deniedResult.output.contains("store writer ownership"),
+                  L"An unusable store lock directory must fail closed with an actionable writer-ownership diagnostic.");
+
     return state.failure.empty();
 });
 
@@ -11552,6 +11828,10 @@ SelfTest::RunCase(options,
                   L"Failed to prepare search_service_rebuild_deleted_root root.");
     state.Require(SelfTest::WriteTextFile(caseRoot / L"stale.txt", "stale"), L"Failed to create stale.txt.");
 
+    std::filesystem::path storageRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_service_rebuild_deleted_root_store", storageRoot),
+                  L"Failed to prepare search_service_rebuild_deleted_root_store root.");
+
     const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
     const std::wstring pipeName             = MakeUniquePipeName();
     state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0, L"Failed to override the search service pipe.");
@@ -11563,7 +11843,6 @@ SelfTest::RunCase(options,
 
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
-    const std::filesystem::path storageRoot = caseRoot / L"service-store";
     const std::wstring extraArgs            = std::format(L"--storage-root=\"{}\" --store-backend=snapshot", storageRoot.wstring());
     state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
     if (! state.failure.empty())
@@ -12533,7 +12812,7 @@ SelfTest::RunCase(options,
     const std::filesystem::path storageRoot = caseRoot.parent_path() / (caseRoot.filename().wstring() + L"-service-store");
     const std::wstring extraArguments =
         std::format(L"--storage-root=\"{}\" --store-backend=snapshot --test-reject-marked-root", storageRoot.wstring());
-    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArguments), serviceError);
+    state.Require(service.Start(pipeName, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArguments), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -12567,6 +12846,9 @@ SelfTest::RunCase(options,
 
     RecordingSearchCallback rejectedCallback;
     const HRESULT rejectedHr = runSearch(rejectedRoot, rejectedCallback);
+    const std::wstring rejectedServiceExitSummary = service.TryCaptureExitedOutputForFailure();
+    state.Require(rejectedServiceExitSummary.empty(),
+                  std::format(L"Root-rejection service exited during the rejected-root query.{}", rejectedServiceExitSummary));
     state.Require(SUCCEEDED(rejectedHr),
                   std::format(L"Root-rejected service search should fall back successfully. hr=0x{:08X}", static_cast<unsigned long>(rejectedHr)));
     const auto rejectedProgress = rejectedCallback.ProgressSnapshots();

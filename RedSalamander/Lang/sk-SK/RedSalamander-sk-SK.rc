@@ -4,20 +4,21 @@
 
 LANGUAGE LANG_SLOVAK, SUBLANG_DEFAULT
 
-IDR_FOLDERVIEW_CONTEXT MENU
+IDR_FOLDERVIEW_ITEM_CONTEXT MENU
 BEGIN
 	    POPUP ""
 		    BEGIN
 		        MENUITEM "&Otvoriť",                       IDM_FOLDERVIEW_CONTEXT_OPEN
-		        MENUITEM "&Otvoriť pomocou...",               IDM_FOLDERVIEW_CONTEXT_OPEN_WITH
-		        MENUITEM "&Zobraziť priestor",                 IDM_FOLDERVIEW_CONTEXT_VIEW_SPACE
+		        MENUITEM "Otvoriť &pomocou...",               IDM_FOLDERVIEW_CONTEXT_OPEN_WITH
+		        MENUITEM "&Vypočítať obsadený priestor",      IDM_FOLDERVIEW_CONTEXT_VIEW_SPACE
 		        MENUITEM SEPARATOR
-		        MENUITEM "&Odstrániť",                     IDM_FOLDERVIEW_CONTEXT_DELETE
-		        MENUITEM "&Presunúť...",                    IDM_FOLDERVIEW_CONTEXT_MOVE
-		        MENUITEM "&Premenovať",                     IDM_FOLDERVIEW_CONTEXT_RENAME
-	        MENUITEM SEPARATOR
-	        MENUITEM "&Kopírovať",                       IDM_FOLDERVIEW_CONTEXT_COPY
+		        MENUITEM "Vys&trihnúť",                    IDM_FOLDERVIEW_CONTEXT_CUT
+		        MENUITEM "&Kopírovať",                     IDM_FOLDERVIEW_CONTEXT_COPY
 		        MENUITEM "&Prilepiť",                      IDM_FOLDERVIEW_CONTEXT_PASTE
+		        MENUITEM SEPARATOR
+		        MENUITEM "&Presunúť...",                  IDM_FOLDERVIEW_CONTEXT_MOVE
+		        MENUITEM "&Odstrániť...",                 IDM_FOLDERVIEW_CONTEXT_DELETE
+		        MENUITEM "Pre&menovať...",                IDM_FOLDERVIEW_CONTEXT_RENAME
 		        MENUITEM SEPARATOR
 		        MENUITEM "&Vlastnosti",                 IDM_FOLDERVIEW_CONTEXT_PROPERTIES
 #if defined(_DEBUG) || defined(DEBUG)
@@ -30,7 +31,7 @@ BEGIN
 		                MENUITEM "&Upozornenie [dbg]",                    IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_WARNING
 		                MENUITEM "&Informácie [dbg]",                IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_INFORMATION
 		                MENUITEM "&Čakajte prosím [dbg]",                IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_BUSY
-		                MENUITEM "&Čakajte prosím (so zrušením) [dbg]",  IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL
+		                MENUITEM "Č&akajte prosím (so zrušením) [dbg]",  IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL
 		            END
 		            POPUP "&Nemodálne (neblokuje) [dbg]"
 		            BEGIN
@@ -45,6 +46,47 @@ BEGIN
 #endif
 		    END
 		END
+
+IDR_FOLDERVIEW_BACKGROUND_CONTEXT MENU
+BEGIN
+    POPUP ""
+    BEGIN
+        MENUITEM "&Prilepiť",                      IDM_FOLDERVIEW_CONTEXT_PASTE
+        POPUP "&Nové"
+        BEGIN
+            MENUITEM "&Priečinok...",              IDM_PANE_CREATE_DIR
+            MENUITEM "&Upraviť nový súbor...",     IDM_PANE_EDIT_NEW
+            MENUITEM SEPARATOR
+            MENUITEM "(prázdne)",                  0, GRAYED
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "&Obnoviť",                       IDM_FOLDERVIEW_CONTEXT_REFRESH
+        MENUITEM "Vypočítať obsadený &priestor",   IDM_FOLDERVIEW_CONTEXT_VIEW_SPACE
+#if defined(_DEBUG) || defined(DEBUG)
+        MENUITEM SEPARATOR
+        POPUP "&Ukážka prekrytia [dbg]"
+        BEGIN
+            POPUP "&Modálne (blokuje vstup) [dbg]"
+            BEGIN
+                MENUITEM "&Chyba [dbg]",                      IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_ERROR
+                MENUITEM "&Upozornenie [dbg]",                IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_WARNING
+                MENUITEM "&Informácie [dbg]",                 IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_INFORMATION
+                MENUITEM "&Čakajte prosím [dbg]",             IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_BUSY
+                MENUITEM "Čakajte prosím (so &zrušením) [dbg]", IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL
+            END
+            POPUP "&Nemodálne (neblokuje) [dbg]"
+            BEGIN
+                MENUITEM "&Chyba [dbg]",                      IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_ERROR_NONMODAL
+                MENUITEM "&Upozornenie [dbg]",                IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_WARNING_NONMODAL
+                MENUITEM "&Informácie [dbg]",                 IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_INFORMATION_NONMODAL
+                MENUITEM "&Načítanie bolo zrušené (bez zatvorenia) [dbg]", IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_CANCELED
+            END
+            MENUITEM SEPARATOR
+            MENUITEM "&Skryť prekrytie [dbg]", IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_HIDE
+        END
+#endif
+    END
+END
 
 	IDC_REDSALAMANDER MENUEX
 BEGIN
@@ -69,7 +111,8 @@ BEGIN
         MENUITEM "&Podrobné",            IDM_LEFT_DISPLAY_DETAILED,MFT_STRING,MFS_ENABLED
         MENUITEM "&Extra podrobné",      IDM_LEFT_DISPLAY_EXTRA_DETAILED,MFT_STRING,MFS_ENABLED
         MENUITEM "&Miniatúry",          IDM_LEFT_DISPLAY_THUMBNAILS,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Panel ukážky",      IDM_LEFT_PREVIEW_PANE,MFT_STRING,MFS_ENABLED
+        MENUITEM "P&anel ukážky",      IDM_LEFT_PREVIEW_PANE,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Terminálové podokno", IDM_LEFT_TERMINAL_PANE,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         POPUP "&Zoradiť podľa",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
@@ -80,22 +123,22 @@ BEGIN
             MENUITEM "&Veľkosť",              IDM_LEFT_SORT_SIZE,MFT_STRING,MFS_ENABLED
             MENUITEM "&Atribúty",                 IDM_LEFT_SORT_ATTRIBUTES,MFT_STRING,MFS_ENABLED
         END
-        POPUP "&Zobraziť",                       65535,MFT_STRING,MFS_ENABLED
+        POPUP "Z&obraziť",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "&Skryté súbory",        IDM_LEFT_SHOW_HIDDEN_FILES,MFT_STRING,MFS_ENABLED
-            MENUITEM "&Systémové súbory",        IDM_LEFT_SHOW_SYSTEM_FILES,MFT_STRING,MFS_ENABLED
+            MENUITEM "S&ystémové súbory",        IDM_LEFT_SHOW_SYSTEM_FILES,MFT_STRING,MFS_ENABLED
             MENUITEM "&Prípony súborov",   IDM_LEFT_SHOW_FILE_EXTENSIONS,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "&Panel filtra",         IDM_LEFT_FILTER_BAR,MFT_STRING,MFS_ENABLED
             MENUITEM "&Navigačný panel",     IDM_LEFT_NAVIGATION_BAR,MFT_STRING,MFS_ENABLED
             MENUITEM "&Stavový riadok",            IDM_LEFT_STATUSBAR,MFT_STRING,MFS_ENABLED
         END
+        MENUITEM "O&bnoviť",                IDM_LEFT_REFRESH,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Filtrovať...",             IDM_LEFT_FILTER,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Tabla maximalizovať/obnoviť", IDM_LEFT_ZOOM_PANEL,MFT_STRING,MFS_ENABLED
         MENUITEM "&Vymeňte tabule",              IDM_APP_SWAP_PANES,MFT_STRING,MFS_ENABLED
         MENUITEM "&Cesta z iného panelu",       IDM_LEFT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Obnoviť",                IDM_LEFT_REFRESH,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Filtrovať...",             IDM_LEFT_FILTER,MFT_STRING,MFS_ENABLED
 #if defined(_DEBUG) || defined(DEBUG)
 	        MENUITEM MFT_SEPARATOR
 	        POPUP "&Ukážka prekrytia [dbg]",          65535,MFT_STRING,MFS_ENABLED
@@ -106,7 +149,7 @@ BEGIN
 	                MENUITEM "&Upozornenie [dbg]",                    IDM_LEFT_OVERLAY_SAMPLE_WARNING,MFT_STRING,MFS_ENABLED
 	                MENUITEM "&Informácie [dbg]",                IDM_LEFT_OVERLAY_SAMPLE_INFORMATION,MFT_STRING,MFS_ENABLED
 	                MENUITEM "&Čakajte prosím [dbg]",                IDM_LEFT_OVERLAY_SAMPLE_BUSY,MFT_STRING,MFS_ENABLED
-	                MENUITEM "&Čakajte prosím (so zrušením) [dbg]",  IDM_LEFT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL,MFT_STRING,MFS_ENABLED
+	                MENUITEM "Č&akajte prosím (so zrušením) [dbg]",  IDM_LEFT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL,MFT_STRING,MFS_ENABLED
 	            END
 	            POPUP "&Nemodálne (neblokuje) [dbg]",      65535,MFT_STRING,MFS_ENABLED
 	            BEGIN
@@ -122,44 +165,51 @@ BEGIN
 	    END
     POPUP "&Súbory",                         65535,MFT_STRING,MFS_ENABLED
     BEGIN
-        MENUITEM "&Premenovať...",               IDM_PANE_RENAME,MFT_STRING,MFS_ENABLED
         MENUITEM "&Otvoriť / Spustiť",       IDM_PANE_EXECUTE_OPEN,MFT_STRING,MFS_ENABLED
         MENUITEM "&Zobrazenie",                    IDM_PANE_VIEW,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Zobraziť šírku...", IDM_APP_VIEW_WIDTH,MFT_STRING,MFS_ENABLED
         MENUITEM "&Alternatívny pohľad",      IDM_PANE_ALTERNATE_VIEW,MFT_STRING,MFS_ENABLED
-        POPUP "&Zobraziť s",                      65535,MFT_STRING,MFS_ENABLED
+        POPUP "Zo&braziť s",                      65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "(prázdne)",                      0,MFT_STRING,MFS_GRAYED
         END
         MENUITEM "&Úpravy",                    IDM_PANE_EDIT,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Alternatívna úprava", IDM_PANE_ALTERNATE_EDIT,MFT_STRING,MFS_ENABLED
+        MENUITEM "A&lternatívna úprava", IDM_PANE_ALTERNATE_EDIT,MFT_STRING,MFS_ENABLED
         POPUP "&Upraviť pomocou",                      65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "(prázdne)",                      0,MFT_STRING,MFS_GRAYED
         END
-        MENUITEM "&Upraviť nový súbor...",   IDM_PANE_EDIT_NEW,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Kopírovať...",                  IDM_PANE_COPY_TO_OTHER,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Presunúť/premenovať...",           IDM_PANE_MOVE_TO_OTHER,MFT_STRING,MFS_ENABLED
-        POPUP "&Odstrániť",                         65535,MFT_STRING,MFS_ENABLED
-        BEGIN
-            MENUITEM "&Odstrániť",                   IDM_PANE_DELETE,MFT_STRING,MFS_ENABLED
-            MENUITEM "&Presuňte sa do koša",     IDM_PANE_MOVE_TO_RECYCLE_BIN,MFT_STRING,MFS_ENABLED
-        END
-        MENUITEM "&Trvalé odstránenie",   IDM_PANE_PERMANENT_DELETE,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Vlastnosti",        IDM_PANE_OPEN_PROPERTIES,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Kontextové menu",      IDM_PANE_CONTEXT_MENU,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Kontextová ponuka (aktuálny adresár)", IDM_PANE_CONTEXT_MENU_CURRENT_DIRECTORY,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Bezpečnosť...",                       IDM_PANE_OPEN_SECURITY,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
-        MENUITEM "&Zmeniť atribúty...", IDM_PANE_CHANGE_ATTRIBUTES,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Zmeniť prípad...",      IDM_PANE_CHANGE_CASE,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Zbaliť...",                     IDM_PANE_PACK,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Rozbaliť...",                   IDM_PANE_UNPACK,MFT_STRING,MFS_ENABLED
         POPUP "&Nové",                            65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "&Priečinok...",                IDM_PANE_CREATE_DIR,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Upraviť nový súbor...",   IDM_PANE_EDIT_NEW,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
-            MENUITEM "(prázdne)",                      0,MFT_STRING,MFS_GRAYED
+            MENUITEM "(prázdne)",                      IDM_PANE_NEW_TEMPLATE_BASE,MFT_STRING,MFS_GRAYED
+        END
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Premenovať...",               IDM_PANE_RENAME,MFT_STRING,MFS_ENABLED
+        MENUITEM "Hromadné pre&menovanie...",    IDM_PANE_BATCH_RENAME,MFT_STRING,MFS_ENABLED
+        MENUITEM "Zmeniť &veľkosť písmen...",      IDM_PANE_CHANGE_CASE,MFT_STRING,MFS_ENABLED
+        MENUITEM "Zmeniť &atribúty...", IDM_PANE_CHANGE_ATTRIBUTES,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Kopírovať",                     IDM_PANE_COPY_TO_OTHER,MFT_STRING,MFS_ENABLED
+        MENUITEM "Kopírovať s &možnosťami...",     IDM_PANE_COPY_TO_OTHER_WITH_OPTIONS,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Presunúť/premenovať",           IDM_PANE_MOVE_TO_OTHER,MFT_STRING,MFS_ENABLED
+        MENUITEM "Presunúť/premenovať s možnosťam&i...", IDM_PANE_MOVE_TO_OTHER_WITH_OPTIONS,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Zbaliť...",                     IDM_PANE_PACK,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Rozbaliť...",                   IDM_PANE_UNPACK,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Odstrániť...",                   IDM_PANE_DELETE,MFT_STRING,MFS_ENABLED
+        MENUITEM "Presunúť do &koša",     IDM_PANE_MOVE_TO_RECYCLE_BIN,MFT_STRING,MFS_ENABLED
+        MENUITEM "Odstrániť &natrvalo...",   IDM_PANE_PERMANENT_DELETE,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Vlastnosti",        IDM_PANE_OPEN_PROPERTIES,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Bezpečnosť...",                       IDM_PANE_OPEN_SECURITY,MFT_STRING,MFS_ENABLED
+        POPUP "Kontextová ponuka &Shell",      65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "Vybraná &položka...", IDM_PANE_CONTEXT_MENU,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Aktuálny priečinok...", IDM_PANE_CONTEXT_MENU_CURRENT_DIRECTORY,MFT_STRING,MFS_ENABLED
         END
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Koniec",                IDM_EXIT,MFT_STRING,MFS_ENABLED
@@ -169,82 +219,96 @@ BEGIN
         MENUITEM "&Vystrihnúť",                                IDM_PANE_CLIPBOARD_CUT,MFT_STRING,MFS_ENABLED
         MENUITEM "&Kopírovať",           IDM_PANE_CLIPBOARD_COPY,MFT_STRING,MFS_ENABLED
         MENUITEM "&Prilepiť",         IDM_PANE_CLIPBOARD_PASTE,MFT_STRING,MFS_ENABLED
-        MENUITEM "Prilepiť skratku",                      IDM_PANE_CLIPBOARD_PASTE_SHORTCUT,MFT_STRING,MFS_ENABLED
+        MENUITEM "Prilepiť &skratku",                      IDM_PANE_CLIPBOARD_PASTE_SHORTCUT,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
-        MENUITEM "Skopírujte cestu + názov ako text", IDM_PANE_COPY_PATH_AND_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
-        MENUITEM "Skopírovať meno ako text",  IDM_PANE_COPY_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
-        MENUITEM "Kopírovať cestu ako text",   IDM_PANE_COPY_PATH_AS_TEXT,MFT_STRING,MFS_ENABLED
-        MENUITEM "Skopírujte cestu UNC + názov ako text", IDM_PANE_COPY_PATH_AND_FILE_NAME,MFT_STRING,MFS_ENABLED
+        POPUP "Kopírovať ako &text",                       65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "Cesta + &názov", IDM_PANE_COPY_PATH_AND_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
+            MENUITEM "N&ázov",  IDM_PANE_COPY_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Cesta",   IDM_PANE_COPY_PATH_AS_TEXT,MFT_STRING,MFS_ENABLED
+            MENUITEM "Cesta &UNC + názov", IDM_PANE_COPY_PATH_AND_FILE_NAME,MFT_STRING,MFS_ENABLED
+        END
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Vybrať...",                           IDM_PANE_SELECTION_SELECT_DIALOG,MFT_STRING,MFS_ENABLED
         MENUITEM "&Zrušiť výber...",                         IDM_PANE_SELECTION_UNSELECT_DIALOG,MFT_STRING,MFS_ENABLED
         MENUITEM "&Invertovať výber",                    IDM_PANE_SELECTION_INVERT,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Vyberte možnosť Všetky",                          IDM_PANE_SELECTION_SELECT_ALL,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Zrušte výber všetkých",                        IDM_PANE_SELECTION_UNSELECT_ALL,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Obnoviť výber",                   IDM_PANE_SELECTION_RESTORE,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Vyberte položku Ďalej",          IDM_PANE_SELECT_NEXT,MFT_STRING,MFS_ENABLED
-        MENUITEM "Vyberte + Vypočítať veľkosť adresára + Ďalej", IDM_PANE_SELECT_CALC_DIR_SIZE_NEXT,MFT_STRING,MFS_ENABLED
-        POPUP "&Pokročilé",                       65535,MFT_STRING,MFS_ENABLED
+        MENUITEM "V&yberte možnosť Všetky",                          IDM_PANE_SELECTION_SELECT_ALL,MFT_STRING,MFS_ENABLED
+        MENUITEM "Z&rušte výber všetkých",                        IDM_PANE_SELECTION_UNSELECT_ALL,MFT_STRING,MFS_ENABLED
+        MENUITEM "Vy&berte položku Ďalej",          IDM_PANE_SELECT_NEXT,MFT_STRING,MFS_ENABLED
+        MENUITEM "Vybr&ať + vypočítať veľkosť adresára + ďalej", IDM_PANE_SELECT_CALC_DIR_SIZE_NEXT,MFT_STRING,MFS_ENABLED
+        POPUP "&Pokročilý výber",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "&Uložiť výber", IDM_PANE_SAVE_SELECTION,MFT_STRING,MFS_ENABLED
-            MENUITEM "&Načítať výber...", IDM_PANE_SELECTION_RESTORE,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Obnoviť výber...", IDM_PANE_SELECTION_RESTORE,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "&Vyberte možnosť Rovnaké rozšírenia",       IDM_PANE_SELECTION_SELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
-            MENUITEM "Zrušte výber rovnakých rozšírení",      IDM_PANE_SELECTION_UNSELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Zrušte výber rovnakých rozšírení",      IDM_PANE_SELECTION_UNSELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "&Vyberte možnosť Rovnaké mená",                   IDM_PANE_SELECTION_SELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
-            MENUITEM "Zrušte výber rovnakých mien",                  IDM_PANE_SELECTION_UNSELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Zrušte výber rovnakých mien",                  IDM_PANE_SELECTION_UNSELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "&Skryť vybrané mená",          IDM_PANE_SELECTION_HIDE_SELECTED_NAMES,MFT_STRING,MFS_ENABLED
-            MENUITEM "Skryť nevybrané mená",         IDM_PANE_SELECTION_HIDE_UNSELECTED_NAMES,MFT_STRING,MFS_ENABLED
-            MENUITEM "Zobraziť skryté mená",             IDM_PANE_SELECTION_SHOW_HIDDEN_NAMES,MFT_STRING,MFS_ENABLED
+            MENUITEM "S&kryť nevybrané mená",         IDM_PANE_SELECTION_HIDE_UNSELECTED_NAMES,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Zobraziť skryté mená",             IDM_PANE_SELECTION_SHOW_HIDDEN_NAMES,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
-            MENUITEM "Prejdite na predchádzajúci vybraný názov",         IDM_PANE_SELECTION_GOTO_PREV_SELECTED_NAME,MFT_STRING,MFS_ENABLED
-            MENUITEM "Prejdite na ďalšie vybraté meno",             IDM_PANE_SELECTION_GOTO_NEXT_SELECTED_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Prejdite na predchádzajúci vybraný názov",         IDM_PANE_SELECTION_GOTO_PREV_SELECTED_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "P&rejdite na ďalšie vybraté meno",             IDM_PANE_SELECTION_GOTO_NEXT_SELECTED_NAME,MFT_STRING,MFS_ENABLED
         END
     END
     POPUP "&Príkazy",                      65535,MFT_STRING,MFS_ENABLED
     BEGIN
-        MENUITEM "&Vytvoriť adresár...", IDM_PANE_CREATE_DIR,MFT_STRING,MFS_ENABLED
         MENUITEM "&Zmeniť adresár...", IDM_PANE_CHANGE_DIRECTORY,MFT_STRING,MFS_ENABLED
-	        MENUITEM "&Porovnať adresáre...", IDM_APP_COMPARE,MFT_STRING,MFS_ENABLED
-	        MENUITEM "&Vypočítajte obsadené miesto", IDM_PANE_VIEW_SPACE,MFT_STRING,MFS_ENABLED
-	        MENUITEM "&Nájsť súbory a adresáre...", IDM_PANE_FIND,MFT_STRING,MFS_ENABLED
-	        MENUITEM "&Vytvoriť zoznam súborov...", IDM_PANE_MAKE_FILE_LIST,MFT_STRING,MFS_ENABLED
-	        MENUITEM "&Prejdite na položku Skratka alebo Cieľ odkazu", IDM_PANE_GO_TO_SHORTCUT_OR_LINK_TARGET,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Nájsť súbory a adresáre...", IDM_PANE_FIND,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Rýchle vyhľadávanie", IDM_PANE_QUICK_SEARCH,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Porovnať adresáre...", IDM_APP_COMPARE,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Vypočítať obsadené miesto", IDM_PANE_VIEW_SPACE,MFT_STRING,MFS_ENABLED
+        MENUITEM "Vytvoriť &zoznam súborov...", IDM_PANE_MAKE_FILE_LIST,MFT_STRING,MFS_ENABLED
+        MENUITEM "Prejsť na &cieľ skratky alebo odkazu", IDM_PANE_GO_TO_SHORTCUT_OR_LINK_TARGET,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Zoznam otvorených súborov", IDM_PANE_LIST_OPENED_FILES,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Zobraziť históriu priečinkov", IDM_PANE_SHOW_FOLDERS_HISTORY,MFT_STRING,MFS_ENABLED
+        MENUITEM "Z&obraziť históriu priečinkov", IDM_PANE_SHOW_FOLDERS_HISTORY,MFT_STRING,MFS_ENABLED
+        MENUITEM "Otvoriť ponuku &aktívneho panela", IDM_PANE_MENU,MFT_STRING,MFS_ENABLED
+        MENUITEM "Paleta &príkazov...", IDM_APP_COMMAND_PALETTE,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
-        MENUITEM "&Pripojiť sieťový disk...", IDM_PANE_CONNECT,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Odpojiť...", IDM_PANE_DISCONNECT,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Zdieľané adresáre...", IDM_PANE_SHARES,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Správca pripojení...", IDM_PANE_CONNECTION_MANAGER,MFT_STRING,MFS_ENABLED
+        POPUP "&Pripojenia",                      65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "&Správca pripojení...", IDM_PANE_CONNECTION_MANAGER,MFT_STRING,MFS_ENABLED
+            MENUITEM "Pripojiť sieťový &disk...", IDM_PANE_CONNECT,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Odpojiť...", IDM_PANE_DISCONNECT,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Zdieľané adresáre...", IDM_PANE_SHARES,MFT_STRING,MFS_ENABLED
+        END
         MENUITEM MFT_SEPARATOR
-        MENUITEM "&Command Shell", IDM_PANE_OPEN_COMMAND_SHELL,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Rýchle vyhľadávanie", IDM_PANE_QUICK_SEARCH,MFT_STRING,MFS_ENABLED
-        MENUITEM "Preneste aktuálny adresár do príkazového riadka", IDM_PANE_BRING_CURRENT_DIR_TO_COMMAND_LINE,MFT_STRING,MFS_ENABLED
-        MENUITEM "Preneste názov súboru na príkazový riadok", IDM_PANE_BRING_FILENAME_TO_COMMAND_LINE,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Ponuka panela", IDM_PANE_MENU,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Znovu si prečítajte asociácie", IDM_APP_REREAD_ASSOCIATIONS,MFT_STRING,MFS_ENABLED
+        POPUP "&Terminál",                         65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "Okno &príkazového riadka", IDM_TERMINAL_OPEN_FLOATING_WINDOW,MFT_STRING,MFS_ENABLED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "Vložiť &aktuálny adresár", IDM_PANE_BRING_CURRENT_DIR_TO_COMMAND_LINE,MFT_STRING,MFS_ENABLED
+            MENUITEM "Vložiť &zameranú položku", IDM_PANE_BRING_FILENAME_TO_COMMAND_LINE,MFT_STRING,MFS_ENABLED
+            MENUITEM "Vložiť celú &cestu", IDM_PANE_BRING_FULL_PATH_TO_TERMINAL,MFT_STRING,MFS_ENABLED
+        END
+        MENUITEM MFT_SEPARATOR
         POPUP "&Používateľské menu",                          65535,MFT_STRING,MFS_ENABLED
         BEGIN
-            MENUITEM "(prázdne)",                     0,MFT_STRING,MFS_GRAYED
+            MENUITEM "(prázdne)",                     IDM_PANE_USER_MENU_BASE,MFT_STRING,MFS_GRAYED
         END
         POPUP "&Otvorte Prieskumník súborov",               65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "&Aktuálny priečinok", IDM_PANE_OPEN_CURRENT_FOLDER,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
-            MENUITEM "Pracovná plocha",                  IDM_APP_OPEN_FILE_EXPLORER_DESKTOP,MFT_STRING,MFS_ENABLED
-            MENUITEM "dokumenty",                IDM_APP_OPEN_FILE_EXPLORER_DOCUMENTS,MFT_STRING,MFS_ENABLED
-            MENUITEM "sťahovanie",                IDM_APP_OPEN_FILE_EXPLORER_DOWNLOADS,MFT_STRING,MFS_ENABLED
-            MENUITEM "Obrázky",                 IDM_APP_OPEN_FILE_EXPLORER_PICTURES,MFT_STRING,MFS_ENABLED
-            MENUITEM "Hudba",                    IDM_APP_OPEN_FILE_EXPLORER_MUSIC,MFT_STRING,MFS_ENABLED
-            MENUITEM "Videá",                   IDM_APP_OPEN_FILE_EXPLORER_VIDEOS,MFT_STRING,MFS_ENABLED
-            MENUITEM "OneDrive",                 IDM_APP_OPEN_FILE_EXPLORER_ONEDRIVE,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Pracovná plocha",                  IDM_APP_OPEN_FILE_EXPLORER_DESKTOP,MFT_STRING,MFS_ENABLED
+            MENUITEM "&dokumenty",                IDM_APP_OPEN_FILE_EXPLORER_DOCUMENTS,MFT_STRING,MFS_ENABLED
+            MENUITEM "&sťahovanie",                IDM_APP_OPEN_FILE_EXPLORER_DOWNLOADS,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Obrázky",                 IDM_APP_OPEN_FILE_EXPLORER_PICTURES,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Hudba",                    IDM_APP_OPEN_FILE_EXPLORER_MUSIC,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Videá",                   IDM_APP_OPEN_FILE_EXPLORER_VIDEOS,MFT_STRING,MFS_ENABLED
+            MENUITEM "O&neDrive",                 IDM_APP_OPEN_FILE_EXPLORER_ONEDRIVE,MFT_STRING,MFS_ENABLED
         END
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Znovu načítať asociácie", IDM_APP_REREAD_ASSOCIATIONS,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Predvoľby...", IDM_FILE_PREFERENCES,MFT_STRING,MFS_ENABLED
     END
-    POPUP "&Pluginy",                       65535,MFT_STRING,MFS_ENABLED
+    POPUP "P&luginy",                       65535,MFT_STRING,MFS_ENABLED
     BEGIN
         MENUITEM "&Správca doplnkov...",           IDM_VIEW_PLUGINS_MANAGE,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
@@ -257,25 +321,27 @@ BEGIN
             MENUITEM "&Vysoký kontrast (systém)",     IDM_VIEW_THEME_HIGH_CONTRAST,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "&Systém",                     IDM_VIEW_THEME_SYSTEM,MFT_STRING,MFS_ENABLED
-            MENUITEM "&Svetlý",                      IDM_VIEW_THEME_LIGHT,MFT_STRING,MFS_ENABLED
+            MENUITEM "S&vetlý",                      IDM_VIEW_THEME_LIGHT,MFT_STRING,MFS_ENABLED
             MENUITEM "&Tmavý",                       IDM_VIEW_THEME_DARK,MFT_STRING,MFS_ENABLED
             MENUITEM "&Dúha",                    IDM_VIEW_THEME_RAINBOW,MFT_STRING,MFS_ENABLED
-            MENUITEM "&Vysoký kontrast (aplikácia)",        IDM_VIEW_THEME_HIGH_CONTRAST_APP,MFT_STRING,MFS_ENABLED
+            MENUITEM "V&ysoký kontrast (aplikácia)",        IDM_VIEW_THEME_HIGH_CONTRAST_APP,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
-            MENUITEM "Predchádzajúca téma",              IDM_VIEW_THEME_PREV,MFT_STRING,MFS_ENABLED
-            MENUITEM "Ďalšia téma",                  IDM_VIEW_THEME_NEXT,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Predchádzajúca téma",              IDM_VIEW_THEME_PREV,MFT_STRING,MFS_ENABLED
+            MENUITEM "Ď&alšia téma",                  IDM_VIEW_THEME_NEXT,MFT_STRING,MFS_ENABLED
         END
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Prepnúť na celú obrazovku", IDM_APP_FULL_SCREEN,MFT_STRING,MFS_ENABLED
+        MENUITEM "Zobraziť ší&rku...", IDM_APP_VIEW_WIDTH,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
         MENUITEM "&Ponuka okna",            IDM_VIEW_WINDOW_MENU,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Prepnúť zameranie tably",            IDM_VIEW_SWITCH_PANE_FOCUS,MFT_STRING,MFS_ENABLED
+        MENUITEM "P&repnúť zameranie tably",            IDM_VIEW_SWITCH_PANE_FOCUS,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "Súborové &operácie", IDM_VIEW_FILE_OPERATIONS,MFT_STRING,MFS_ENABLED
         MENUITEM "&Súborové operácie zlyhali", IDM_VIEW_FILEOPS_FAILED_ITEMS,MFT_STRING,MFS_ENABLED
         MENUITEM "&Panel funkcií",                IDM_VIEW_FUNCTIONBAR,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Panel s ponukami",                    IDM_VIEW_MENUBAR,MFT_STRING,MFS_ENABLED
-        MENUITEM MFT_SEPARATOR
-        MENUITEM "&Predvoľby...",              IDM_FILE_PREFERENCES,MFT_STRING,MFS_ENABLED
+        MENUITEM "P&anel s ponukami",                    IDM_VIEW_MENUBAR,MFT_STRING,MFS_ENABLED
     END
-    POPUP "&Správne",                         65535,MFT_STRING,MFS_ENABLED
+    POPUP "Sp&rávne",                         65535,MFT_STRING,MFS_ENABLED
     BEGIN
         MENUITEM "&Zmeniť Disk",        IDM_RIGHT_CHANGE_DRIVE,MFT_STRING,MFS_ENABLED
         POPUP "&Prejsť na",                         65535,MFT_STRING,MFS_ENABLED
@@ -296,7 +362,8 @@ BEGIN
         MENUITEM "&Podrobné",            IDM_RIGHT_DISPLAY_DETAILED,MFT_STRING,MFS_ENABLED
         MENUITEM "&Extra podrobné",      IDM_RIGHT_DISPLAY_EXTRA_DETAILED,MFT_STRING,MFS_ENABLED
         MENUITEM "&Miniatúry",          IDM_RIGHT_DISPLAY_THUMBNAILS,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Panel ukážky",      IDM_RIGHT_PREVIEW_PANE,MFT_STRING,MFS_ENABLED
+        MENUITEM "P&anel ukážky",      IDM_RIGHT_PREVIEW_PANE,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Terminálové podokno", IDM_RIGHT_TERMINAL_PANE,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         POPUP "&Zoradiť podľa",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
@@ -307,22 +374,22 @@ BEGIN
             MENUITEM "&Veľkosť",              IDM_RIGHT_SORT_SIZE,MFT_STRING,MFS_ENABLED
             MENUITEM "&Atribúty",                 IDM_RIGHT_SORT_ATTRIBUTES,MFT_STRING,MFS_ENABLED
         END
-        POPUP "&Zobraziť",                       65535,MFT_STRING,MFS_ENABLED
+        POPUP "Z&obraziť",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "&Skryté súbory",        IDM_RIGHT_SHOW_HIDDEN_FILES,MFT_STRING,MFS_ENABLED
-            MENUITEM "&Systémové súbory",        IDM_RIGHT_SHOW_SYSTEM_FILES,MFT_STRING,MFS_ENABLED
+            MENUITEM "S&ystémové súbory",        IDM_RIGHT_SHOW_SYSTEM_FILES,MFT_STRING,MFS_ENABLED
             MENUITEM "&Prípony súborov",   IDM_RIGHT_SHOW_FILE_EXTENSIONS,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "&Panel filtra",         IDM_RIGHT_FILTER_BAR,MFT_STRING,MFS_ENABLED
             MENUITEM "&Navigačný panel",     IDM_RIGHT_NAVIGATION_BAR,MFT_STRING,MFS_ENABLED
             MENUITEM "&Stavový riadok",            IDM_RIGHT_STATUSBAR,MFT_STRING,MFS_ENABLED
         END
+        MENUITEM "O&bnoviť",                IDM_RIGHT_REFRESH,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Filtrovať...",             IDM_RIGHT_FILTER,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Tabla maximalizovať/obnoviť", IDM_RIGHT_ZOOM_PANEL,MFT_STRING,MFS_ENABLED
         MENUITEM "&Vymeňte tabule",              IDM_APP_SWAP_PANES,MFT_STRING,MFS_ENABLED
         MENUITEM "&Cesta z iného panelu",       IDM_RIGHT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Obnoviť",                IDM_RIGHT_REFRESH,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Filtrovať...",             IDM_RIGHT_FILTER,MFT_STRING,MFS_ENABLED
 #if defined(_DEBUG) || defined(DEBUG)
 	        MENUITEM MFT_SEPARATOR
 	        POPUP "&Ukážka prekrytia [dbg]",          65535,MFT_STRING,MFS_ENABLED
@@ -333,7 +400,7 @@ BEGIN
 	                MENUITEM "&Upozornenie [dbg]",                    IDM_RIGHT_OVERLAY_SAMPLE_WARNING,MFT_STRING,MFS_ENABLED
 	                MENUITEM "&Informácie [dbg]",                IDM_RIGHT_OVERLAY_SAMPLE_INFORMATION,MFT_STRING,MFS_ENABLED
 	                MENUITEM "&Čakajte prosím [dbg]",                IDM_RIGHT_OVERLAY_SAMPLE_BUSY,MFT_STRING,MFS_ENABLED
-	                MENUITEM "&Čakajte prosím (so zrušením) [dbg]",  IDM_RIGHT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL,MFT_STRING,MFS_ENABLED
+	                MENUITEM "Č&akajte prosím (so zrušením) [dbg]",  IDM_RIGHT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL,MFT_STRING,MFS_ENABLED
 	            END
 	            POPUP "&Nemodálne (neblokuje) [dbg]",      65535,MFT_STRING,MFS_ENABLED
 	            BEGIN
@@ -347,7 +414,7 @@ BEGIN
 	        END
 #endif
 	    END
-	    POPUP "&Pomocník",                          65535,MFT_STRING | MFT_RIGHTJUSTIFY,MFS_ENABLED
+	    POPUP "P&omocník",                          65535,MFT_STRING | MFT_RIGHTJUSTIFY,MFS_ENABLED
     BEGIN
         MENUITEM "&Zobraziť skratky...", IDM_APP_SHOW_SHORTCUTS,MFT_STRING,MFS_ENABLED
         MENUITEM "&Externá pomoc",        IDM_APP_EXTERNAL_HELP,MFT_STRING,MFS_ENABLED
@@ -445,11 +512,12 @@ BEGIN
     IDS_PREFS_CAT_KEYBOARD  "Klávesnica"
     IDS_PREFS_CAT_KEYBOARD_DESC "Klávesové skratky."
     IDS_PREFS_CAT_MOUSE     "Myška"
-    IDS_PREFS_CAT_MOUSE_DESC "Myšové skratky."
-    IDS_PREFS_MOUSE_PLACEHOLDER "Konfigurácia gesta myši je plánovaná pre budúcu verziu."
-    IDS_PREFS_MOUSE_EMPTY_TITLE "Zatiaľ žiadne nastavenia myši"
-    IDS_PREFS_MOUSE_EMPTY_BODY "Konfigurácia gesta myši je plánovaná pre budúcu verziu."
-    IDS_PREFS_MOUSE_EMPTY_CAPTION "Aktuálne správanie myši stále používa štandardné vstavané predvolené nastavenia."
+    IDS_PREFS_CAT_MOUSE_DESC "Zameranie panela a správanie ukazovateľa."
+    IDS_PREFS_MOUSE_SECTION_PANE_FOCUS "Zameranie panela"
+    IDS_PREFS_MOUSE_LABEL_FOCUS_FOLLOWS_POINTER "Zameranie sleduje ukazovateľ"
+    IDS_PREFS_MOUSE_DESC_FOCUS_FOLLOWS_POINTER "Vždy presunie zameranie klávesnice do panela pod ukazovateľom bez kliknutia."
+    IDS_PREFS_MOUSE_LABEL_FOCUS_FOLLOWS_POINTER_TERMINAL_OPEN "Zameranie sleduje ukazovateľ pri zobrazenom termináli"
+    IDS_PREFS_MOUSE_DESC_FOCUS_FOLLOWS_POINTER_TERMINAL_OPEN "Presunie zameranie klávesnice do panela pod ukazovateľom, keď je v niektorom paneli zobrazená karta Terminál."
     IDS_PREFS_CAT_THEMES    "Témy"
     IDS_PREFS_CAT_THEMES_DESC "Vyberte a upravte témy."
     IDS_PREFS_CAT_PLUGINS   "Pluginy"
@@ -757,6 +825,13 @@ BEGIN
     IDS_PREFS_THEMES_BASE_DARK "Tmavý"
     IDS_PREFS_THEMES_BASE_RAINBOW "Dúha"
     IDS_PREFS_THEMES_BASE_HIGH_CONTRAST "Vysoký kontrast (aplikácia)"
+    IDS_THEME_CYCLE_OVERLAY_UIA_FULL "Motív zmenený na {0}. Predchádzajúci: {1}. Nasledujúci: {2}."
+    IDS_THEME_CYCLE_OVERLAY_UIA_CURRENT_ONLY "Motív zmenený na {0}."
+    IDS_THEME_CYCLE_OVERLAY_PREVIOUS_NAME "Predchádzajúci motív: {0}"
+    IDS_THEME_CYCLE_OVERLAY_CURRENT_NAME "Aktuálny motív: {0}"
+    IDS_THEME_CYCLE_OVERLAY_NEXT_NAME "Nasledujúci motív: {0}"
+    IDS_THEME_CYCLE_OVERLAY_DISMISS_ACTION "Skryť oznámenie o motíve"
+    IDS_THEME_CYCLE_OVERLAY_DISMISS_HELP "Kliknutím alebo ťuknutím kdekoľvek na toto oznámenie ho skryjete."
     IDS_PREFS_THEMES_NEW_THEME_ENTRY "<Nová téma>"
     IDS_PREFS_THEMES_DEFAULT_NEW_NAME "Nová téma"
     IDS_PREFS_THEMES_FILE_FILTER "Theme files (*.theme.json5)\0*.theme.json5\0JSON5 files (*.json5)\0*.json5\0All files (*.*)\0*.*\0\0"
@@ -891,6 +966,9 @@ BEGIN
     IDS_PREFS_PLUGINS_COL_ID "Id"
     IDS_PREFS_PLUGINS_TYPE_FILE_SYSTEM "Systém súborov"
     IDS_PREFS_PLUGINS_TYPE_VIEWER "Divák"
+    IDS_PREFS_PLUGINS_TYPE_TERMINAL "Terminál"
+    IDS_CMD_BRING_FULL_PATH_TO_TERMINAL "Vložiť celú cestu do terminálu"
+    IDS_CMD_DESC_BRING_FULL_PATH_TO_TERMINAL "Otvorí alebo znova použije terminál v protiľahlom paneli a vloží celú cestu."
     IDS_PREFS_PLUGINS_ORIGIN_EMBEDDED "Vložené"
     IDS_PREFS_PLUGINS_ORIGIN_OPTIONAL "Voliteľné"
     IDS_PREFS_PLUGINS_ORIGIN_CUSTOM "Vlastné"
@@ -1165,9 +1243,9 @@ BEGIN
     IDS_MSG_CLIPBOARD_LOCAL_FOLDER_REQUIRED              "Skratka prilepenia je k dispozícii iba v priečinkoch lokálneho systému súborov."
     IDS_MSG_CLIPBOARD_NO_SHORTCUT_SOURCE                 "Schránka neobsahuje cesty k súborom pre odkaz na prilepenie."
     IDS_FMT_CLIPBOARD_PASTE_SHORTCUT_FAILED              "Nepodarilo sa vytvoriť skratku pre {0}. VÝSLEDOK: 0x{1:08X}."
-    IDS_COMMAND_LINE_LABEL                               "príkaz:"
-    IDS_MSG_COMMAND_LINE_LOCAL_FOLDER_REQUIRED           "Vstup z príkazového riadka vyžaduje lokálny priečinok Windows na aktívnom paneli."
-    IDS_MSG_COMMAND_LINE_ITEM_REQUIRED                   "Najprv vyberte alebo zaostrite súbor alebo priečinok."
+    IDS_MSG_TERMINAL_LOCAL_FOLDER_REQUIRED               "Vloženie do terminálu vyžaduje lokálny priečinok Windows na aktívnom paneli."
+    IDS_MSG_TERMINAL_ITEM_REQUIRED                       "Najprv vyberte alebo zaostrite súbor alebo priečinok."
+    IDS_MSG_TERMINAL_LOCATION_UNSUPPORTED                "Umiestnenie aktívneho panela nemožno otvoriť v termináli, pretože jeho poskytovateľ nemá overené podporné umiestnenie Windows ani WSL."
     IDS_FMT_COMMAND_LINE_LAUNCH_FAILED                   "Systém Windows nemohol spustiť príkazový riadok. HRESULT: 0x{0:08X}."
     IDS_USER_MENU_UNAVAILABLE_TITLE                      "Položka ponuky používateľa nie je k dispozícii"
     IDS_FMT_USER_MENU_ITEM_UNAVAILABLE                   "Položka užívateľského menu ""{0}"" nie je dostupná pre {1}."
@@ -1309,15 +1387,20 @@ BEGIN
     IDS_FILEOPS_BTN_MODE_PARALLEL                         "Paralelne"
     IDS_FILEOPS_MODE_NEW_TASKS                            "Nové úlohy:"
     IDS_MSG_FILEOPS_CANCEL_ALL_CONFIRM                    "Zrušiť všetky operácie so súbormi?"
-    IDS_FILEOPS_CALCULATING                               "Prebieha výpočet..."
-    IDS_FMT_FILEOPS_CALCULATING_TIME                      "Prebieha výpočet... (uplynulo {0})"
+    IDS_FILEOPS_DISCOVERING                               "Zisťovanie..."
+    IDS_FMT_FILEOPS_DISCOVERING_TIME                      "Zisťovanie... (uplynulo {0})"
+    IDS_FMT_FILEOPS_DISCOVERY_PROGRESS                    "{0} z {1} zatiaľ, {2:L} z {3:L} položiek"
+    IDS_FMT_FILEOPS_ETA_PROVISIONAL                       "Zostáva: {0} (stále sa zisťuje)"
+    IDS_FMT_FILEOPS_KNOWN_WORK                            "Známa práca: {0} %"
+    IDS_FMT_FILEOPS_GLOBAL_DISCOVERING_COUNT              "{0} zisťuje, celok môže narásť"
     IDS_FILEOPS_PREPARING                                 "Pripravuje sa..."
     IDS_FMT_FILEOPS_PREPARING_TIME                        "Pripravuje sa... ({0} uplynulo)"
-    IDS_FILEOPS_BTN_SKIP                                  "Preskočiť predletovú kontrolu"
+    IDS_FILEOPS_BTN_SKIP                                  "Preskočiť zisťovanie"
     IDS_FMT_FILEOPS_FILES_FOLDERS                         "Položky {0:L} (súbory {1:L}, priečinky {2:L})"
     IDS_FILEOPS_GRAPH_PAUSED                              "Pozastavené"
     IDS_FILEOPS_GRAPH_WAITING                             "Čaká sa na dokončenie predchádzajúceho"
-    IDS_FILEOPS_GRAPH_CALCULATING                         "Prebieha výpočet..."
+    IDS_FILEOPS_GRAPH_DISCOVERING                         "Zisťovanie..."
+    IDS_FILEOPS_DISCOVERING_AS_NEEDED                     "Zisťovanie podľa potreby..."
     IDS_CAPTION_FILEOPS_CANCEL_ALL                        "Zrušiť všetky operácie"
     IDS_MSG_FILEOPS_CANCEL_ALL_POPUP                      "Naozaj chcete zrušiť všetky čakajúce operácie so súbormi?"
     IDS_CAPTION_FILEOPS_EXIT                              "Ukončiť aplikáciu"
@@ -1327,6 +1410,9 @@ BEGIN
     IDS_FMT_FILEOPS_CONFLICT_EXISTS_NAMED                 "„{0}“ už v cieli existuje."
     IDS_FILEOPS_CONFLICT_NONEMPTY_DIRECTORY               "Cieľový adresár nie je prázdny."
     IDS_FILEOPS_CONFLICT_REPARSE_POINT                    "Cieľ je odkaz alebo bod zmeny spracovania."
+    IDS_FILEOPS_CONFLICT_TYPE_MISMATCH                    "Typ zdrojovej položky nezodpovedá typu cieľovej položky."
+    IDS_FILEOPS_CONFLICT_NAME_NOT_REPRESENTABLE           "Cieľ nedokáže reprezentovať tento názov položky."
+    IDS_FILEOPS_CONFLICT_TARGET                           "Požadovaný cieľ odkazu sa nepodarilo publikovať."
     IDS_FILEOPS_CONFLICT_READONLY                         "Položka je len na čítanie."
     IDS_FILEOPS_CONFLICT_ACCESS_DENIED                    "Prístup odmietnutý."
     IDS_FILEOPS_CONFLICT_SHARING                          "Súbor sa používa."
@@ -1336,15 +1422,20 @@ BEGIN
     IDS_FILEOPS_CONFLICT_NETWORK                          "Sieť je nedostupná."
     IDS_FILEOPS_CONFLICT_UNKNOWN                          "Operácia zlyhala (neznáma chyba)."
     IDS_FILEOPS_CONFLICT_RETRY_FAILED                     "Opakovaný pokus zlyhal."
+    IDS_FMT_FILEOPS_CONFLICT_ATTEMPT_FAILED               "Pokus {0} zlyhal."
+    IDS_FILEOPS_FAILURE_SURFACE_TEXT                      "Okno operácií so súbormi nemohlo spustiť svoju grafiku. Operácie pokračujú na pozadí. Použite Zrušiť všetko na ich zastavenie alebo Zavrieť na skrytie tohto okna."
+    IDS_FILEOPS_BTN_CLOSE                                 "Zavrieť"
+    IDS_FILEOPS_CONSENT_PERMANENT_DELETE_BY_NAME          "Toto umiestnenie nedokáže preukázať, na ktorý objekt názov odkazuje. Odstráni sa to, čo bude pri spustení odstraňovania pod každým vybraným názvom."
     IDS_FILEOPS_CONFLICT_APPLY_TO_ALL                     "Použiť vybratú akciu na všetky podobné konflikty"
     IDS_FILEOPS_CONFLICT_APPLY_TO_ALL_SHORT               "Všetky podobné"
     IDS_FILEOPS_CONFLICT_BTN_OVERWRITE                    "Prepísať"
+    IDS_FILEOPS_CONFLICT_BTN_KEEP_BOTH                    "Ponechať obe"
     IDS_FILEOPS_CONFLICT_BTN_REPLACE_READONLY             "Nahradiť iba na čítanie"
+    IDS_FILEOPS_CONFLICT_BTN_REPLACE_LINK                 "Nahradiť odkaz"
     IDS_FILEOPS_CONFLICT_BTN_PERMANENT_DELETE             "Natrvalo odstrániť"
     IDS_FILEOPS_CONFLICT_BTN_RETRY                        "Skúste to znova"
     IDS_FILEOPS_CONFLICT_BTN_SKIP                         "Preskočiť položku"
     IDS_FILEOPS_CONFLICT_BTN_MORE                         "Viac..."
-    IDS_MSG_FILEOPS_REPARSE_FOLLOW_WARNING                "Nasledujúce ciele prepracovania sa môžu vrátiť do prepojených priečinkov, uniknúť vybratému stromu alebo bežať oveľa dlhšie, ako sa očakávalo.\r\n\r\nPokračovať?"
     IDS_FILEOPS_CONFLICT_UNSUPPORTED_REPARSE              "Bod zmeny spracovania adresára nemožno pre túto operáciu zachovať."
     IDS_FILEOPS_STATUS_COMPLETED                          "Dokončené"
     IDS_FILEOPS_STATUS_PARTIAL                            "Doplnené o preskočené položky"
@@ -1358,8 +1449,53 @@ BEGIN
     IDS_FILEOPS_BTN_CLEAR_COMPLETED                       "Vymazanie dokončené"
     IDS_FILEOP_BTN_SHOW_LOG                               "Zobraziť denník"
     IDS_FILEOPS_STATUS_CANCELED                           "Zrušené"
+    IDS_FMT_FILEOPS_BADGE_COMPLETED_TOOLTIP               "Úspešne dokončené: {0:L}"
+    IDS_FMT_FILEOPS_BADGE_PARTIAL_TOOLTIP                 "Dokončené s čiastočnými výsledkami alebo upozorneniami: {0:L}"
+    IDS_FMT_FILEOPS_BADGE_FAILED_TOOLTIP                  "Neúspešné: {0:L}"
+    IDS_FMT_FILEOPS_BADGE_CANCELED_TOOLTIP                "Zrušené: {0:L}"
+    IDS_FMT_FILEOPS_BADGE_INDETERMINATE_TOOLTIP           "Neznámy výsledok: {0:L}"
     IDS_FILEOPS_STATUS_NEEDS_ATTENTION                    "Vyžaduje pozornosť"
-    IDS_FMT_FILEOPS_GLOBAL_STATUS_SUMMARY                 "{0:L} beží, {1:L} čaká, {2:L} vyžaduje pozornosť"
+    IDS_FILEOPS_STATUS_WAITING_FOR_DECISION               "Čaká sa na vaše rozhodnutie"
+    IDS_FILEOPS_CONFLICT_READING_DETAILS                  "Načítavajú sa podrobnosti pre rozhodnutie..."
+    IDS_FILEOPS_OWNED_STAGE_CLEANUP_UNKNOWN               "Konečný cieľ nebol publikovaný. Vyčistenie dočasnej položky sa nepodarilo potvrdiť, takže mohol zostať možný artefakt. Automatický opakovaný pokus je zablokovaný."
+    IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE                   "Možný artefakt prerušenej operácie"
+    IDS_FILEOPS_ARTIFACT_TOUCH_TITLE                      "Upozornenie na artefakt operácie"
+    IDS_FMT_FILEOPS_ARTIFACT_TOUCH_WARNING                "Táto požiadavka sa dotýka {0:L} možných artefaktov operácie. Ich údaje môžu byť neúplné. Pokračovanie môže zmeniť práve tieto aktuálne objekty."
+    IDS_FMT_FILEOPS_ARTIFACT_TOUCH_BLOCKED                "Táto požiadavka sa dotýka {0:L} artefaktov operácie, ale Red Salamander nemôže overiť všetky aktuálne identity. Operácia sa nespustila."
+    IDS_FILEOPS_ARTIFACT_MENU_TITLE                       "Artefakt operácie"
+    IDS_FILEOPS_ARTIFACT_ACTION_INSPECT                   "Skontrolovať iba na čítanie"
+    IDS_FILEOPS_ARTIFACT_ACTION_REVEAL                    "Zobraziť v paneli"
+    IDS_ITEM_PROPERTIES_SECTION_FILE_OPERATIONS           "Operácie so súbormi"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CLASSIFICATION     "Klasifikácia"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_REASON             "Dôvod"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_OPERATION          "Operácia"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_TASK               "Úloha"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_TIME               "Čas"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_KIND               "Druh artefaktu"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_PHASE              "Trvalá fáza"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_DESTINATION        "Zamýšľaný cieľ"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_FINAL_NAME         "Konečný názov"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_PUBLICATION        "Publikovanie"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_SOURCE             "Zdroj"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CLEANUP            "Vyčistenie"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_VERIFICATION       "Overenie"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CURRENT_OBJECT     "Aktuálny objekt"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CLAIM_MATCH        "Zhoda záznamu"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_RECOVERY           "Obnovenie"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_SAFE_ACTIONS       "Bezpečné akcie"
+    IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_UNAVAILABLE        "Nedostupné"
+    IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_NAME_REASON        "Názov zodpovedá vzoru artefaktu vytvoreného Operáciami so súbormi"
+    IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_NO_CLAIM           "Nenašiel sa platný záznam operácie ani nárok na vlastníctvo"
+    IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_SAFE_ACTIONS       "Čítanie, otvorenie, úpravy, náhľad, kopírovanie a export zostávajú dostupné; RedSalamander varuje pred zmenou spravovanou aplikáciou"
+    IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_PRESENT            "Prítomný"
+    IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_MISSING            "Chýba"
+    IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_ADMITTED            "prijatie"
+    IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_EXECUTING           "vykonávanie"
+    IDS_FMT_FILEOPS_INTERRUPTED_MOVE_SUMMARY               "ID prerušenej operácie {0}: Presun bol prerušený po trvalej fáze {1}. Prijatý plán obsahuje {2:L} natívnych, {3:L} spravovaných a {4:L} iba kopírovaných položiek v {5:L} kvalifikovaných zdrojových umiestneniach. Zdroj aj cieľ môžu existovať. Pred ďalšou akciou uvedené umiestnenia obnovte alebo otvorte. Red Salamander nebude nič automaticky obnovovať ani odstraňovať."
+    IDS_FMT_FILEOPS_GLOBAL_RUNNING_COUNT                  "Prebieha: {0:L}"
+    IDS_FMT_FILEOPS_GLOBAL_WAITING_COUNT                  "Čaká: {0:L}"
+    IDS_FMT_FILEOPS_GLOBAL_ATTENTION_COUNT                "Vyžaduje pozornosť: {0:L}"
+    IDS_FILEOPS_GLOBAL_STATUS_SEPARATOR                   ", "
     IDS_FMT_FILEOPS_GLOBAL_STATUS_WITH_SPEED              "{0} · {1}/s"
     IDS_FMT_FILEOPS_GLOBAL_STATUS_WITH_ETA_SPEED          "{0} · {1} · {2}/s"
     IDS_FILEOPS_STATUS_RUNNING                            "Beží"
@@ -1367,6 +1503,80 @@ BEGIN
     IDS_FILEOPS_STATUS_PARTIAL_SHORT                      "Čiastočné"
     IDS_FILEOPS_STATUS_FAILED_SHORT                       "Zlyhalo"
     IDS_FILEOPS_BTN_START_NOW                             "Spustiť"
+    IDS_FILEOPS_QUEUE_MOVE_UP                             "Posunúť vo fronte nahor"
+    IDS_FILEOPS_QUEUE_MOVE_DOWN                           "Posunúť vo fronte nadol"
+    IDS_FILEOPS_TOGGLE_DETAILS                            "Zobraziť alebo skryť podrobnosti"
+    IDS_FILEOPS_TOGGLE_TASK_DETAILS                       "Rozbaliť alebo zbaliť úlohu"
+    IDS_FILEOPS_COMPLETED_GROUP_ACCESSIBLE                "Dokončené úlohy"
+    IDS_FILEOPS_AGGREGATE_PROGRESS                        "Celkový priebeh operácií so súbormi"
+    IDS_FILEOPS_THROUGHPUT_GRAPH                          "História prenosovej rýchlosti"
+    IDS_FILEOPS_FOOTER_OPTIONS                            "Možnosti"
+    IDS_FILEOPS_CONFIRM_LINKS                             "Odkazy"
+    IDS_FILEOPS_CONFIRM_LINKS_PRESERVE                    "Zachovať"
+    IDS_FILEOPS_CONFIRM_LINKS_SKIP                        "Preskočiť"
+    IDS_FILEOPS_CONFIRM_VERIFY                            "Overiť skopírovaný obsah"
+    IDS_FILEOPS_CONFIRM_VERIFY_UNSUPPORTED                "Overiť skopírovaný obsah — pre tento cieľ nie je k dispozícii"
+    IDS_FILEOPS_CONFIRM_VERIFY_NOT_APPLICABLE             "Overiť skopírovaný obsah — nevzťahuje sa na natívny presun"
+    IDS_FILEOPS_CONFIRM_VERIFY_RUNTIME_CHECK               "Overiť skopírovaný obsah — podpora sa overí pri spustení operácie"
+    IDS_FILEOPS_CONFIRM_START                             "Spustenie"
+    IDS_FILEOPS_CONFIRM_BANDWIDTH                         "Šírka pásma"
+    IDS_FILEOPS_CONFIRM_CLIPBOARD_MOVE_WARNING            "Spustením tohto presunu sa spotrebuje zoznam vystrihnutých položiek. Ak položku nemožno odstrániť, zdroj zostane zachovaný a zoznam vystrihnutých položiek sa neobnoví."
+    IDS_FILEOPS_CONSENT_LOW_SPACE                         "Cieľ hlási nedostatok voľného miesta. Pokračovanie môže zlyhať po zverejnení časti práce."
+    IDS_FILEOPS_CONSENT_SPACE_UNKNOWN                     "Cieľ nemôže zistiť dostupné miesto. Operácia môže pokračovať až do skutočnej chyby zápisu."
+    IDS_FILEOPS_CONSENT_EFS_PLAINTEXT                     "Šifrované zdrojové údaje by sa v cieli zapísali ako obyčajný text."
+    IDS_FILEOPS_CONSENT_SPARSE_INFLATION                  "Cieľ nemôže zachovať riedke pridelenie a spotrebuje celú logickú veľkosť."
+    IDS_FILEOPS_CONSENT_PLACEHOLDER_HYDRATION             "Pokračovanie vyžaduje stiahnutie obsahu zástupného súboru."
+    IDS_FILEOPS_CONSENT_METADATA_LOSS                     "Presun by stratil bezpečnostne významné metadáta, napríklad Mark-of-the-Web, alternatívne prúdy alebo rozšírené atribúty."
+    IDS_FILEOPS_CONSENT_BTN_CONTINUE                      "Pokračovať"
+    IDS_FILEOPS_CONSENT_BTN_PLAINTEXT                     "Kopírovať ako obyčajný text"
+    IDS_FILEOPS_CONSENT_BTN_DOWNLOAD                      "Stiahnuť a pokračovať"
+    IDS_FILEOPS_CONSENT_BTN_MOVE_ANYWAY                   "Napriek tomu presunúť"
+    IDS_FILEOPS_CONSENT_BTN_KEEP_SOURCE                   "Ponechať zdroj"
+    IDS_FMT_FILEOPS_CONSENT_FACTS_ITEMS_BYTES             "Ovplyvnené položky: {0:L}  •  Údaje: {1}"
+    IDS_FILEOPS_CONSENT_SAME_HOST_OVERLAP                 "Iná úloha pracuje na rovnakom mieste"
+    IDS_FILEOPS_CONSENT_BTN_QUEUE_AFTER                   "Zaradiť za tieto úlohy"
+    IDS_FILEOPS_CONSENT_BTN_DONT_START                    "Nespúšťať"
+    IDS_FILEOPS_CONSENT_BTN_RUN_CONCURRENT                "Spustiť súčasne"
+    IDS_FILEOPS_CONSENT_SAME_HOST_LIVE_OUTPUT             "Iná úloha sem stále zapisuje výstup"
+    IDS_FILEOPS_CONSENT_PERMANENT_DELETE                  "Trvalé odstránenie"
+    IDS_FMT_FILEOPS_LIVE_OUTPUT_QUESTION                  "Úloha #{0} sem stále zapisuje výstup. Zmena tejto položky teraz môže znehodnotiť výsledok danej úlohy."
+    IDS_FILEOPS_CONSENT_BTN_QUEUE_UNTIL_FINISHED           "Počkať na dokončenie druhej úlohy"
+    IDS_FILEOPS_CONSENT_BTN_DELETE_LIVE_OUTPUT             "Napriek tomu odstrániť"
+    IDS_FILEOPS_CONSENT_BTN_RENAME_LIVE_OUTPUT             "Napriek tomu premenovať"
+    IDS_FILEOPS_CONSENT_BTN_REPLACE_LIVE_OUTPUT            "Napriek tomu nahradiť"
+    IDS_FMT_FILEOPS_OVERLAP_REMOVES_READ                  "Táto úloha môže odstrániť položky, ktoré úloha #{0} stále číta."
+    IDS_FMT_FILEOPS_OVERLAP_SAME_NAMES                    "Táto úloha a úloha #{0} môžu vytvoriť alebo nahradiť rovnaké názvy."
+    IDS_FMT_FILEOPS_OVERLAP_SAME_MEMBERS                  "Táto úloha a úloha #{0} môžu odstrániť alebo premenovať rovnaké položky."
+    IDS_FMT_FILEOPS_OVERLAP_REMOVES_PUBLISHED             "Táto úloha môže odstrániť alebo premenovať to, čo úloha #{0} zapisuje."
+    IDS_FMT_FILEOPS_OVERLAP_REPLACES_READ                 "Táto úloha môže nahradiť položky, ktoré úloha #{0} stále číta."
+    IDS_FMT_FILEOPS_CONSENT_FACTS_ITEMS                   "Ovplyvnené položky: {0:L}"
+    IDS_FMT_FILEOPS_CONSENT_FACTS_BYTES                   "Ovplyvnené údaje: {0}"
+    IDS_FILEOPS_RESULT_COPIED                              "Skopírované"
+    IDS_FILEOPS_RESULT_MOVED                               "Presunuté"
+    IDS_FILEOPS_RESULT_COPIED_SOURCE_KEPT                  "Skopírované; zdroj ponechaný"
+    IDS_FILEOPS_RESULT_MOVED_SOURCE_FOLDER_KEPT            "Presunuté; zdrojový priečinok ponechaný"
+    IDS_FILEOPS_RESULT_SKIPPED                             "Preskočené"
+    IDS_FILEOPS_RESULT_UNKNOWN                             "Výsledok nie je známy"
+    IDS_FILEOPS_STATUS_VERIFYING                           "Overovanie"
+    IDS_FILEOPS_RESULT_VERIFIED                            "Overené"
+    IDS_FILEOPS_RESULT_VERIFICATION_FAILED                 "Overenie zlyhalo"
+    IDS_FILEOPS_RESULT_VERIFICATION_UNAVAILABLE            "Overenie nie je k dispozícii"
+    IDS_FILEOPS_RESULT_VERIFICATION_CANCELED               "Overenie zrušené"
+    IDS_FILEOPS_RESULT_SOURCE_UNKNOWN                      "Výsledok zdroja nie je známy"
+    IDS_FILEOPS_RESULT_COMPLETED_CLEANUP_RETAINED          "Dokončené; položka na vyčistenie zostala zachovaná."
+    IDS_FILEOPS_CLEANUP_ITEM_RETAINED                      "Po dokončení požadovanej operácie zostala položka na vyčistenie zachovaná. Neuskutočnil sa žiadny automatický opakovaný pokus."
+    IDS_FILEOPS_RETAINED_VERIFICATION_CANCELED             "Skopírované; zdroj zostal zachovaný, pretože overenie bolo zrušené."
+    IDS_FILEOPS_RETAINED_VERIFICATION_UNAVAILABLE          "Skopírované; zdroj zostal zachovaný, pretože požadované overenie obsahu nebolo k dispozícii."
+    IDS_FILEOPS_RETAINED_VERIFICATION_FAILED               "Skopírované; zdroj zostal zachovaný, pretože overenie obsahu zlyhalo."
+    IDS_FMT_FILEOPS_PROGRESS_SEGMENTS_ACCESSIBLE            "Prenos dokončený na {0} %; overenie dokončené na {1} %."
+    IDS_FILEOPS_CLIPBOARD_MOVE_QUEUED                     "Presun zaradený — zoznam vystrihnutých položiek bol vymazaný."
+    IDS_FILEOPS_CLIPBOARD_MOVE_CLEAR_FAILED               "Presun sa nespustil, pretože zoznam vystrihnutých položiek sa nepodarilo vymazať. Zdroj zostal nezmenený. RedSalamander rovnaký zoznam znova neprijme."
+    IDS_FILEOPS_CLIPBOARD_SOURCES_REMAIN                  "Niektoré zdroje zostali. Zoznam vystrihnutých položiek sa spotreboval pri spustení presunu a nebol obnovený."
+    IDS_FILEOP_BTN_OPEN_SOURCE                            "Otvoriť zdroj"
+    IDS_FILEOP_BTN_SELECT_RETAINED                        "Vybrať ponechané položky"
+    IDS_FILEOP_BTN_CUT_RETAINED_AGAIN                     "Znova vystrihnúť ponechané položky"
+    IDS_FILEOPS_RETAINED_SOURCE_CHANGED                   "Množina ponechaných zdrojov sa po presune zmenila. Nič nebolo vybrané ani vložené do schránky."
+    IDS_FILEOPS_CLIPBOARD_SOURCE_UNKNOWN                  "Stav niektorých zdrojov nie je známy. Zoznam vystrihnutých položiek sa pri spustení presunu spotreboval a neobnovil."
     IDS_FILEOPS_CHECK_AUTODISMISS_OFF                     "Automatické odmietnutie bolo úspešné/zrušené"
     IDS_FILEOPS_CHECK_AUTODISMISS_ON                      "Automatické odmietnutie bolo úspešné/zrušené"
     IDS_FILEOP_BTN_EXPORT_ISSUES                          "Problémy s exportom"
@@ -1414,9 +1624,11 @@ BEGIN
     IDS_CMD_EDIT_NEW                                      "Upraviť Nový"
     IDS_CMD_ALTERNATE_EDIT                                "Alternatívna úprava"
     IDS_CMD_COPY                                          "Kopírovať"
+    IDS_CMD_COPY_WITH_OPTIONS                             "Kopírovať s možnosťami"
     IDS_CMD_SORT_BY_TIME                                  "Zoradiť podľa času"
     IDS_CMD_PACK                                          "Zbaliť"
     IDS_CMD_MOVE                                          "Pohybujte sa"
+    IDS_CMD_MOVE_WITH_OPTIONS                             "Presunúť/Premenovať s možnosťami"
     IDS_CMD_SORT_BY_SIZE                                  "Zoradiť podľa veľkosti"
     IDS_CMD_UNPACK                                        "Rozbaľte"
     IDS_CMD_LOAD_SELECTION                                "Výber zaťaženia"
@@ -1448,10 +1660,10 @@ BEGIN
 	    IDS_CMD_UP_ONE_DIRECTORY                              "O jeden adresár"
 	    IDS_CMD_SWITCH_PANE_FOCUS                             "Prepnúť zameranie tably"
 	    IDS_CMD_EXECUTE_OPEN                                  "Vykonať / otvoriť"
-	    IDS_CMD_BRING_FILENAME_TO_COMMAND_LINE                "Preneste názov súboru na príkazový riadok"
+	    IDS_CMD_BRING_FILENAME_TO_COMMAND_LINE                "Vložiť zameranú položku do terminálu"
 	    IDS_CMD_OPEN_PROPERTIES                               "Otvorte Vlastnosti"
 	    IDS_CMD_SELECT_CALC_DIR_SIZE_NEXT                     "Vyberte + Vypočítať veľkosť adresára + Ďalej"
-	    IDS_CMD_BRING_CURRENT_DIR_TO_COMMAND_LINE             "Preneste aktuálny adresár do príkazového riadka"
+	    IDS_CMD_BRING_CURRENT_DIR_TO_COMMAND_LINE             "Vložiť aktuálny adresár do terminálu"
 	    IDS_CMD_WINDOW_MENU                                   "Ponuka okna"
 	    IDS_CMD_QUICK_SEARCH                                  "Rýchle vyhľadávanie"
 	    IDS_CMD_SELECT_NEXT                                   "Vyberte položku Ďalej"
@@ -1482,6 +1694,7 @@ BEGIN
 		    IDS_CMD_HISTORY_FORWARD                               "História dopredu"
 		    IDS_CMD_GO_DRIVE_ROOT                                 "Prejdite do koreňového adresára jednotky"
 		    IDS_FMT_CMD_GO_DRIVE_ROOT_WITH_LETTER                 "Prejsť do koreňového adresára disku ({0}:\\)"
+		    IDS_CMD_SHOW_FILE_OPERATIONS                          "Zobraziť súborové operácie"
 		    IDS_CMD_TOGGLE_FILEOPS_FAILED_ITEMS                   "Prepnúť položky zlyhali pri operáciách so súbormi"
 		    IDS_CMD_FOCUS_ADDRESS_BAR                             "Zamerať panel s adresou"
 		    IDS_CMD_GO_ROOT_DIRECTORY                             "Prejdite do koreňového adresára"
@@ -1523,6 +1736,7 @@ BEGIN
 		    IDS_CMD_SELECT_FILE_SYSTEM_PLUGIN                      "Vyberte doplnok File System Plugin"
 		    IDS_PREVIEW_TAB_FOLDER                                 "Priečinok"
 		    IDS_PREVIEW_TAB_PREVIEW                                "Ukážka"
+		    IDS_PREVIEW_TAB_TERMINAL                               "Terminál"
 		    IDS_PREVIEW_EMPTY                                      "Na ukážku nebol vybratý žiadny súbor."
 		    IDS_PREVIEW_FOLDER_FMT                                 "Priečinok: {0}"
 		    IDS_PREVIEW_UNSUPPORTED                                "Ukážka je k dispozícii pre lokálne súbory v tejto zostave."
@@ -1549,14 +1763,16 @@ BEGIN
 		    IDS_CMD_SHORT_THEME_SELECT_NEXT                      "NextTheme"
 		    IDS_CMD_SHORT_THEME_SELECT_PREV                      "PrevTheme"
 		    IDS_CMD_SHORT_THEME_SYSTEM_HIGH_CONTRAST_INDICATOR   "HiContrast"
+		    IDS_CMD_SHORT_SHOW_FILE_OPERATIONS                   "Operácie"
 		    IDS_CMD_SHORT_TOGGLE_FILEOPS_FAILED_ITEMS            "FailedOps"
 		    IDS_CMD_SHORT_TOGGLE_FUNCTION_BAR                    "FuncBar"
 		    IDS_CMD_SHORT_TOGGLE_MENU_BAR                        "MenuBar"
 		    IDS_CMD_SHORT_VIEW_WIDTH                             "VwWidth"
 		    IDS_CMD_SHORT_ALTERNATE_VIEW                         "AltVw"
 		    IDS_CMD_SHORT_BATCH_RENAME                           "BatchRen"
-		    IDS_CMD_SHORT_BRING_CURRENT_DIR_TO_COMMAND_LINE      "DirToCmd"
-		    IDS_CMD_SHORT_BRING_FILENAME_TO_COMMAND_LINE         "NameToCmd"
+		    IDS_CMD_SHORT_BRING_CURRENT_DIR_TO_COMMAND_LINE      "DirToTerm"
+		    IDS_CMD_SHORT_BRING_FILENAME_TO_COMMAND_LINE         "PoložTerm"
+		    IDS_CMD_SHORT_BRING_FULL_PATH_TO_TERMINAL             "CestaTerm"
 		    IDS_CMD_SHORT_CHANGE_ATTRIBUTES                      "ChgAttr"
 		    IDS_CMD_SHORT_CHANGE_CASE                            "ChgCase"
 		    IDS_CMD_SHORT_CHANGE_DIRECTORY                       "ChgDir"
@@ -1572,6 +1788,7 @@ BEGIN
 		    IDS_CMD_SHORT_COPY_PATH_AND_NAME_AS_TEXT             "CopyPathNm"
 		    IDS_CMD_SHORT_COPY_PATH_AS_TEXT                      "CopyPath"
 		    IDS_CMD_SHORT_COPY                                   "Kopírovať"
+		    IDS_CMD_SHORT_COPY_WITH_OPTIONS                      "KopMožn"
 		    IDS_CMD_SHORT_COPY_PATH_AND_FILE_NAME                "CopyUNC"
 		    IDS_CMD_SHORT_MAKE_DIRECTORY                         "MakeDir"
 		    IDS_CMD_SHORT_DELETE                                 "Odstrániť"
@@ -1599,6 +1816,7 @@ BEGIN
 		    IDS_CMD_SHORT_MAKE_FILE_LIST                         "Zoznam súborov"
 		    IDS_CMD_SHORT_MENU                                   "Menu"
 		    IDS_CMD_SHORT_MOVE                                   "Pohybujte sa"
+		    IDS_CMD_SHORT_MOVE_WITH_OPTIONS                      "PresMožn"
 		    IDS_CMD_SHORT_MOVE_TO_RECYCLE_BIN                    "Recyklovať"
 		    IDS_CMD_SHORT_NAVIGATE_PATH                          "GoPath"
 		    IDS_CMD_SHORT_NEW_FROM_TEMPLATE                      "NewTmpl"
@@ -1677,8 +1895,8 @@ BEGIN
 		    IDS_CMD_DESC_SHORTCUTS                                "Zobraziť všetky nakonfigurované skratky."
 		    IDS_CMD_DESC_VIEW_WIDTH                               "Upravte šírku pohľadu."
 		    IDS_CMD_DESC_ALTERNATE_VIEW                           "Prepnutie alternatívneho režimu zobrazenia."
-		    IDS_CMD_DESC_BRING_CURRENT_DIR_TO_COMMAND_LINE        "Vložte aktuálny adresár do príkazového riadku."
-		    IDS_CMD_DESC_BRING_FILENAME_TO_COMMAND_LINE           "Vložte názov vybraného súboru do príkazového riadka."
+		    IDS_CMD_DESC_BRING_CURRENT_DIR_TO_COMMAND_LINE        "Vloží aktuálny adresár do terminálu v protiľahlom paneli bez odoslania klávesu Enter."
+		    IDS_CMD_DESC_BRING_FILENAME_TO_COMMAND_LINE           "Otvorí alebo znova použije terminál v protiľahlom paneli a vloží názov pri zhodnom sledovanom priečinku, inak celú cestu."
 		    IDS_CMD_DESC_CHANGE_ATTRIBUTES                        "Zmeňte atribúty súboru pre výber."
 		    IDS_CMD_DESC_CHANGE_CASE                              "Zmeňte veľkosť písmen pre výber."
 		    IDS_CMD_DESC_CHANGE_DIRECTORY                         "Zmeňte adresár pomocou výzvy na cestu."
@@ -1693,6 +1911,7 @@ BEGIN
 		    IDS_CMD_DESC_COPY_PATH_AND_NAME_AS_TEXT               "Skopírujte celú cestu a názov ako text."
 		    IDS_CMD_DESC_COPY_PATH_AS_TEXT                        "Skopírujte cestu k priečinku ako text."
 		    IDS_CMD_DESC_COPY                                     "Skopírujte na druhý panel."
+		    IDS_CMD_DESC_COPY_WITH_OPTIONS                        "Vyberte možnosti a potom skopírujte na druhý panel."
 		    IDS_CMD_DESC_MAKE_DIRECTORY                           "Vytvorte nový adresár."
 		    IDS_CMD_DESC_DELETE                                   "Odstráňte výber."
 		    IDS_CMD_DESC_DISCONNECT                               "Odpojte sa od aktuálnej polohy."
@@ -1711,6 +1930,7 @@ BEGIN
 		    IDS_CMD_DESC_LOAD_SELECTION                           "Načítať uložený výber."
 		    IDS_CMD_DESC_MENU                                     "Otvorte hlavnú ponuku pre aktívny panel."
 		    IDS_CMD_DESC_MOVE                                     "Presuňte sa na druhý panel."
+		    IDS_CMD_DESC_MOVE_WITH_OPTIONS                        "Vyberte možnosti a potom presuňte alebo premenujte na druhý panel."
 		    IDS_CMD_DESC_MOVE_TO_RECYCLE_BIN                      "Presuňte výber do koša."
 		    IDS_CMD_DESC_OPEN_CURRENT_FOLDER                      "Otvorte aktuálny priečinok."
 		    IDS_CMD_DESC_OPEN_PROPERTIES                          "Otvorte dialógové okno vlastností pre výber."
@@ -1787,6 +2007,7 @@ BEGIN
     IDS_BATCH_RENAME_ISSUE_NAME_INVALID_CHARACTER         "Názov obsahuje neplatný znak"
     IDS_BATCH_RENAME_ISSUE_NAME_TOO_LONG                  "Názov je príliš dlhý"
     IDS_BATCH_RENAME_ISSUE_NAME_DUPLICATE                 "Duplicitný názov v rovnakom priečinku"
+    IDS_BATCH_RENAME_ISSUE_SOURCE_DUPLICATE               "Táto zdrojová položka je uvedená viackrát"
     IDS_BATCH_RENAME_ISSUE_NAME_UNCHANGED                 "Názov sa nemení"
     IDS_BATCH_RENAME_ISSUE_NAME_CASE_ONLY                 "Mení sa iba veľkosť písmen"
     IDS_BATCH_RENAME_ISSUE_NAME_EDGE_SPACE_OR_DOT         "Názov sa začína alebo končí medzerou, alebo sa končí bodkou"
@@ -1800,6 +2021,7 @@ BEGIN
     IDS_BATCH_RENAME_ISSUE_REGEX_INVALID                  "Neplatný regulárny výraz"
     IDS_BATCH_RENAME_ISSUE_REGEX_ERROR                    "Chyba regulárneho výrazu"
     IDS_BATCH_RENAME_ISSUE_PROVIDER_PATH_IDENTITY_UNKNOWN  "Identita cesty poskytovateľa nie je k dispozícii"
+    IDS_BATCH_RENAME_ISSUE_NAME_DEPENDENCY_CYCLE           "Tieto názvy tvoria cyklus závislostí. Použite dočasný medzinázov a potom spustite druhý acyklický priechod."
     IDS_BATCH_RENAME_HELPER_NAME                          "Name"
     IDS_BATCH_RENAME_HELPER_STEM                          "File name without extension"
     IDS_BATCH_RENAME_HELPER_EXT                           "Extension"
@@ -1874,6 +2096,7 @@ BEGIN
 		    IDS_CMD_DESC_HISTORY_BACK                             "Prejdite späť do histórie."
 		    IDS_CMD_DESC_HISTORY_FORWARD                          "Posúvajte sa v histórii dopredu."
 		    IDS_CMD_DESC_GO_DRIVE_ROOT                            "Prejdite do koreňového adresára vybranej jednotky."
+		    IDS_CMD_DESC_SHOW_FILE_OPERATIONS                     "Zobraziť okno súborových operácií."
 		    IDS_CMD_DESC_TOGGLE_FILEOPS_FAILED_ITEMS              "Zobraziť alebo skryť tablu položiek, ktoré zlyhali pri operácii súboru."
 		    IDS_CMD_DESC_FOCUS_ADDRESS_BAR                        "Zamerajte panel s adresou na aktívny panel."
 		    IDS_CMD_DESC_GO_ROOT_DIRECTORY                        "Prejdite do koreňového adresára."
@@ -1931,11 +2154,9 @@ BEGIN
     IDS_PREFS_HOT_PATHS_BROWSE_ELLIPSIS               "Prehliadať..."
     IDS_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN          "Pri priraďovaní otvorte stránku predvolieb"
     IDS_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN_DESC     "Po priradení slotu z panela otvorte stránku preferencií Hot Paths."
-    IDS_PREFS_FILEOPS_SECTION_PRECALC                 "Predbežná kalkulácia"
-    IDS_PREFS_FILEOPS_PRECALC_ENABLED_TITLE           "Povoliť skenovanie pred výpočtom"
-    IDS_PREFS_FILEOPS_PRECALC_ENABLED_DESC            "Pred spustením skenujte, kopírujte a presúvajte výbery, aby boli súčty a odhadovaný čas k dispozícii skôr."
-    IDS_PREFS_FILEOPS_PRECALC_WORKERS_TITLE           "Predkalkulační pracovníci"
-    IDS_PREFS_FILEOPS_PRECALC_WORKERS_DESC            "Počet pracovníkov v pozadí použitých na prechádzku stromom pred výpočtom hostiteľa."
+    IDS_PREFS_FILEOPS_SECTION_VERIFICATION            "Overenie"
+    IDS_PREFS_FILEOPS_VERIFY_AFTER_COPY_TITLE          "Overiť skopírované súbory"
+    IDS_PREFS_FILEOPS_VERIFY_AFTER_COPY_DESC           "Po zverejnení porovnať obsah skopírovaných bežných súborov. Operácia môže znova prečítať každý skopírovaný bajt."
     IDS_PREFS_FILEOPS_SECTION_BANDWIDTH               "Šírka pásma"
     IDS_PREFS_FILEOPS_BANDWIDTH_PRESET_TITLE          "Predvolený rýchlostný limit"
     IDS_PREFS_FILEOPS_BANDWIDTH_PRESET_DESC           "Predvolený rýchlostný limit na úlohu pre nové úlohy kopírovania a presúvania. Ak chcete zadať konkrétnu hodnotu, vyberte možnosť Vlastné. Úlohy to môžu stále prepísať v kontextovom okne priebehu."
@@ -2171,4 +2392,123 @@ BEGIN
     IDS_FIND_RESULT_MENU_COPY_TO_DESTINATION          "Kopírovať do cieľa"
     IDS_FIND_RESULT_MENU_MOVE_TO_DESTINATION          "Presuňte sa do cieľa"
     IDS_FMT_FILEOPS_CONFLICT_DATE_TIME                "{0} {1}"
+    IDS_CMD_COMMAND_PALETTE                           "Paleta príkazov RedSalamander"
+    IDS_CMD_OPEN_SETTINGS_FILE                        "Otvoriť súbor nastavení"
+    IDS_CMD_TERMINAL_SESSION_MENU                     "Ponuka relácie terminálu"
+    IDS_CMD_TERMINAL_FIND                             "Nájsť text v termináli"
+    IDS_CMD_TERMINAL_SUGGESTIONS                      "Návrhy z histórie príkazov"
+    IDS_CMD_TERMINAL_TAB_NEW                          "Nová karta terminálu / druhý panel"
+    IDS_CMD_TERMINAL_OPEN_FLOATING_WINDOW             "Otvoriť plávajúci terminál / nová karta"
+    IDS_CMD_TERMINAL_TAB_NEXT                         "Ďalšia karta terminálu / obsah"
+    IDS_CMD_TERMINAL_TAB_PREVIOUS                     "Predchádzajúca karta terminálu / obsah"
+    IDS_CMD_TERMINAL_TAB_SELECT_1                     "Vybrať kartu terminálu / obsah 1"
+    IDS_CMD_TERMINAL_TAB_SELECT_2                     "Vybrať kartu terminálu / obsah 2"
+    IDS_CMD_TERMINAL_TAB_SELECT_3                     "Vybrať kartu terminálu / obsah 3"
+    IDS_CMD_TERMINAL_TAB_SELECT_4                     "Vybrať plávajúcu kartu terminálu 4"
+    IDS_CMD_TERMINAL_TAB_SELECT_5                     "Vybrať plávajúcu kartu terminálu 5"
+    IDS_CMD_TERMINAL_TAB_SELECT_6                     "Vybrať plávajúcu kartu terminálu 6"
+    IDS_CMD_TERMINAL_TAB_SELECT_7                     "Vybrať plávajúcu kartu terminálu 7"
+    IDS_CMD_TERMINAL_TAB_SELECT_8                     "Vybrať plávajúcu kartu terminálu 8"
+    IDS_CMD_TERMINAL_TAB_LAST                         "Vybrať poslednú kartu terminálu / obsah"
+    IDS_CMD_TERMINAL_CLOSE                            "Zavrieť kartu terminálu"
+    IDS_CMD_PANE_RESIZE_SPLITTER_LEFT                 "Posunúť oddeľovač doľava"
+    IDS_CMD_PANE_RESIZE_SPLITTER_RIGHT                "Posunúť oddeľovač doprava"
+    IDS_CMD_PANE_FOCUS_LEFT                           "Aktivovať ľavý panel"
+    IDS_CMD_PANE_FOCUS_RIGHT                          "Aktivovať pravý panel"
+    IDS_CMD_TERMINAL_COPY_SELECTION_OR_PASSTHROUGH    "Kopírovať výber alebo odovzdať vstup"
+    IDS_CMD_TERMINAL_SCROLL_LINE_DOWN                 "Posunúť o riadok nadol"
+    IDS_CMD_TERMINAL_SCROLL_PAGE_DOWN                 "Posunúť o stranu nadol"
+    IDS_CMD_TERMINAL_SCROLL_LINE_UP                   "Posunúť o riadok nahor"
+    IDS_CMD_TERMINAL_SCROLL_PAGE_UP                   "Posunúť o stranu nahor"
+    IDS_CMD_TERMINAL_SCROLL_TOP                       "Posunúť na začiatok"
+    IDS_CMD_TERMINAL_SCROLL_BOTTOM                    "Posunúť na koniec"
+    IDS_CMD_TERMINAL_FONT_INCREASE                    "Zväčšiť písmo terminálu"
+    IDS_CMD_TERMINAL_FONT_DECREASE                    "Zmenšiť písmo terminálu"
+    IDS_CMD_TERMINAL_FONT_RESET                       "Obnoviť písmo terminálu"
+    IDS_CMD_CONTENT_TAB_NEXT                          "Ďalší obsah panela"
+    IDS_CMD_CONTENT_TAB_PREVIOUS                      "Predchádzajúci obsah panela"
+    IDS_CMD_CONTENT_TAB_FOLDER                        "Vybrať obsah Priečinok"
+    IDS_CMD_CONTENT_TAB_PREVIEW                       "Vybrať obsah Ukážka"
+    IDS_CMD_CONTENT_TAB_TERMINAL                      "Vybrať obsah Terminál"
+    IDS_CMD_CONTENT_TAB_LAST                          "Vybrať posledný obsah panela"
+    IDS_CMD_DESC_COMMAND_PALETTE                       "Vyhľadá a spustí príkazy RedSalamander v aktívnom kontexte aplikácie."
+    IDS_CMD_DESC_OPEN_SETTINGS_FILE                    "Otvorí aktívny súbor globálnych nastavení aplikácie v predvolenom editore."
+    IDS_CMD_DESC_TERMINAL_SESSION_MENU                 "Otvorí ponuku relácie a profilu aktívneho terminálu."
+    IDS_CMD_DESC_TERMINAL_FIND                         "Vyhľadá text vo vyrovnávacej pamäti aktívneho terminálu."
+    IDS_CMD_DESC_TERMINAL_SUGGESTIONS                  "Vyhľadá v histórii príkazov shellu a vloží vybraný návrh."
+    IDS_CMD_DESC_TERMINAL_TAB_NEW                      "Otvorí novú kartu terminálu v druhom paneli pri vloženom zobrazení alebo v plávajúcom okne terminálu."
+    IDS_CMD_DESC_TERMINAL_OPEN_FLOATING_WINDOW         "Otvorí jediné plávajúce okno terminálu, alebo pridá kartu, ak je už otvorené."
+    IDS_CMD_DESC_TERMINAL_TAB_NEXT                     "Vyberie ďalšiu kartu terminálu alebo ďalší vložený obsah panela."
+    IDS_CMD_DESC_TERMINAL_TAB_PREVIOUS                 "Vyberie predchádzajúcu kartu terminálu alebo predchádzajúci vložený obsah panela."
+    IDS_CMD_DESC_TERMINAL_TAB_SELECT                   "Vyberie očíslovanú kartu terminálu alebo zodpovedajúci vložený obsah panela."
+    IDS_CMD_DESC_TERMINAL_TAB_LAST                     "Vyberie poslednú kartu terminálu alebo posledný vložený obsah panela."
+    IDS_CMD_DESC_TERMINAL_CLOSE                        "Zavrie aktívnu kartu terminálu alebo vloženú reláciu terminálu."
+    IDS_CMD_DESC_PANE_RESIZE_SPLITTER_LEFT             "Posunie oddeľovač panelov o jeden krok doľava."
+    IDS_CMD_DESC_PANE_RESIZE_SPLITTER_RIGHT            "Posunie oddeľovač panelov o jeden krok doprava."
+    IDS_CMD_DESC_PANE_FOCUS_LEFT                       "Presunie fokus klávesnice do ľavého panela."
+    IDS_CMD_DESC_PANE_FOCUS_RIGHT                      "Presunie fokus klávesnice do pravého panela."
+    IDS_CMD_DESC_TERMINAL_COPY_SELECTION_OR_PASSTHROUGH "Skopíruje a zruší výber v termináli; bez výberu odovzdá pôvodný vstup shellu."
+    IDS_CMD_DESC_TERMINAL_SCROLL_LINE_DOWN             "Posunie primárnu vyrovnávaciu pamäť aktívneho terminálu o jeden riadok nadol."
+    IDS_CMD_DESC_TERMINAL_SCROLL_PAGE_DOWN             "Posunie primárnu vyrovnávaciu pamäť aktívneho terminálu o jednu viditeľnú stranu nadol."
+    IDS_CMD_DESC_TERMINAL_SCROLL_LINE_UP               "Posunie primárnu vyrovnávaciu pamäť aktívneho terminálu o jeden riadok nahor."
+    IDS_CMD_DESC_TERMINAL_SCROLL_PAGE_UP               "Posunie primárnu vyrovnávaciu pamäť aktívneho terminálu o jednu viditeľnú stranu nahor."
+    IDS_CMD_DESC_TERMINAL_SCROLL_TOP                   "Posunie sa na začiatok primárnej vyrovnávacej pamäte aktívneho terminálu."
+    IDS_CMD_DESC_TERMINAL_SCROLL_BOTTOM                "Posunie sa na koniec a obnoví sledovanie výstupu aktívneho terminálu."
+    IDS_CMD_DESC_TERMINAL_FONT_INCREASE                "Zväčší písmo aktívnej relácie terminálu o jeden DIP."
+    IDS_CMD_DESC_TERMINAL_FONT_DECREASE                "Zmenší písmo aktívnej relácie terminálu o jeden DIP."
+    IDS_CMD_DESC_TERMINAL_FONT_RESET                   "Obnoví písmo aktívnej relácie terminálu na nakonfigurovanú základnú veľkosť."
+    IDS_CMD_DESC_CONTENT_TAB_NEXT                      "Vyberie ďalšiu dostupnú kartu obsahu v aktívnom paneli."
+    IDS_CMD_DESC_CONTENT_TAB_PREVIOUS                  "Vyberie predchádzajúcu dostupnú kartu obsahu v aktívnom paneli."
+    IDS_CMD_DESC_CONTENT_TAB_FOLDER                    "Vyberie obsah Priečinok v aktívnom paneli."
+    IDS_CMD_DESC_CONTENT_TAB_PREVIEW                   "Vyberie obsah Ukážka v aktívnom paneli, ak je dostupný."
+    IDS_CMD_DESC_CONTENT_TAB_TERMINAL                  "Vyberie obsah Terminál v aktívnom paneli, ak je dostupný."
+    IDS_CMD_DESC_CONTENT_TAB_LAST                      "Vyberie poslednú dostupnú kartu obsahu v aktívnom paneli."
+    IDS_CMD_SHORT_COMMAND_PALETTE                      "PalPríkazov"
+    IDS_CMD_SHORT_OPEN_SETTINGS_FILE                   "SúborNast"
+    IDS_CMD_SHORT_TERMINAL_SESSION_MENU                "MenuTerm"
+    IDS_CMD_SHORT_TERMINAL_FIND                        "HľadaťTerm"
+    IDS_CMD_SHORT_TERMINAL_SUGGESTIONS                 "Návrhy"
+    IDS_CMD_SHORT_TERMINAL_TAB_NEW                     "NováKarta"
+    IDS_CMD_SHORT_TERMINAL_OPEN_FLOATING_WINDOW        "PlávTerm"
+    IDS_CMD_SHORT_TERMINAL_TAB_NEXT                    "ĎalšíTerm"
+    IDS_CMD_SHORT_TERMINAL_TAB_PREVIOUS                "PredchTerm"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_1                "TermKarta1"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_2                "TermKarta2"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_3                "TermKarta3"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_4                "TermKarta4"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_5                "TermKarta5"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_6                "TermKarta6"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_7                "TermKarta7"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_8                "TermKarta8"
+    IDS_CMD_SHORT_TERMINAL_TAB_LAST                    "PoslednýTerm"
+    IDS_CMD_SHORT_TERMINAL_CLOSE                       "ZavrieťTerm"
+    IDS_CMD_SHORT_PANE_RESIZE_SPLITTER_LEFT            "DeličVľavo"
+    IDS_CMD_SHORT_PANE_RESIZE_SPLITTER_RIGHT           "DeličVpravo"
+    IDS_CMD_SHORT_PANE_FOCUS_LEFT                      "FokusVľavo"
+    IDS_CMD_SHORT_PANE_FOCUS_RIGHT                     "FokusVpravo"
+    IDS_CMD_SHORT_TERMINAL_COPY_SELECTION_OR_PASSTHROUGH "KópiaVstup"
+    IDS_CMD_SHORT_TERMINAL_SCROLL_LINE_DOWN            "RiadokNadol"
+    IDS_CMD_SHORT_TERMINAL_SCROLL_PAGE_DOWN            "StranaNadol"
+    IDS_CMD_SHORT_TERMINAL_SCROLL_LINE_UP              "RiadokNahor"
+    IDS_CMD_SHORT_TERMINAL_SCROLL_PAGE_UP              "StranaNahor"
+    IDS_CMD_SHORT_TERMINAL_SCROLL_TOP                  "Začiatok"
+    IDS_CMD_SHORT_TERMINAL_SCROLL_BOTTOM               "Koniec"
+    IDS_CMD_SHORT_TERMINAL_FONT_INCREASE               "PísmoPlus"
+    IDS_CMD_SHORT_TERMINAL_FONT_DECREASE               "PísmoMínus"
+    IDS_CMD_SHORT_TERMINAL_FONT_RESET                  "PísmoPredv"
+    IDS_CMD_SHORT_CONTENT_TAB_NEXT                     "ObsahĎalší"
+    IDS_CMD_SHORT_CONTENT_TAB_PREVIOUS                 "ObsahPredch"
+    IDS_CMD_SHORT_CONTENT_TAB_FOLDER                   "KartaPrieč"
+    IDS_CMD_SHORT_CONTENT_TAB_PREVIEW                  "KartaUkážka"
+    IDS_CMD_SHORT_CONTENT_TAB_TERMINAL                 "KartaTerm"
+    IDS_CMD_SHORT_CONTENT_TAB_LAST                     "ObsahPosl"
+    IDS_SHORTCUTS_GROUP_APPLICATION                    "Aplikácia"
+    IDS_SHORTCUTS_GROUP_TERMINAL                       "Terminál"
+    IDS_PREFS_KEYBOARD_PASS_THROUGH                    "Odovzdať terminálu"
+    IDS_PREFS_KEYBOARD_NO_ACTION                       "Žiadna akcia"
+    IDS_PREFS_KEYBOARD_PASS_THROUGH_DESC               "Odovzdá túto skratku terminálu bez spustenia príkazu RedSalamander."
+    IDS_PREFS_KEYBOARD_OVERRIDES_GLOBAL                "Prepisuje globálnu skratku"
+    IDS_COMMAND_PALETTE_SEARCH_CUE                     "Hľadať príkazy"
+    IDS_COMMAND_PALETTE_DISABLED                       "Zakázané"
+    IDS_PREFS_KEYBOARD_IMPORT_SCOPE_INVALID            "Klávesová skratka používa príkaz alebo fyzickú identitu klávesu, ktorá nie je v danom rozsahu platná. Odovzdanie je len pre Terminál a skratky panela funkcií používajú virtuálne klávesy."
 END

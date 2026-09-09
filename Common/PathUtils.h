@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <format>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -163,6 +164,42 @@ enum class WindowsPathClass
     return false;
 }
 
+// File-operation mutation envelope for the built-in Local provider. Accepts
+// ordinary absolute drive/UNC paths plus volume-GUID paths, while rejecting
+// Win32 device, NT object-manager, GLOBALROOT, relative, and incomplete roots.
+// This is a pathname admission check only; object identity still requires a
+// no-follow provider binding at the mutation boundary.
+[[nodiscard]] inline bool IsSupportedLocalFileOperationPath(std::wstring_view path) noexcept
+{
+    if (path.empty() || StartsWithAsciiNoCase(path, LR"(\\.\)") || StartsWithAsciiNoCase(path, LR"(\??\)") ||
+        StartsWithAsciiNoCase(path, LR"(\\??\)"))
+    {
+        return false;
+    }
+
+    switch (ClassifyWindowsPath(path))
+    {
+        case WindowsPathClass::DriveAbsolute:
+        case WindowsPathClass::ExtendedDriveAbsolute: return true;
+        case WindowsPathClass::Unc: return HasUncServerAndShare(path, 2u);
+        case WindowsPathClass::ExtendedUnc: return HasUncServerAndShare(path, 8u);
+        case WindowsPathClass::ExtendedOther:
+        {
+            if (! StartsWithAsciiNoCase(path, LR"(\\?\Volume{)"))
+            {
+                return false;
+            }
+            const size_t closeBrace = path.find(L'}', 11u);
+            return closeBrace != std::wstring_view::npos && closeBrace + 1u < path.size() && IsSeparator(path[closeBrace + 1u]);
+        }
+        case WindowsPathClass::Relative:
+        case WindowsPathClass::Rooted:
+        case WindowsPathClass::DriveRelative:
+        case WindowsPathClass::Device: return false;
+    }
+    return false;
+}
+
 // Adds an extended Win32 prefix without normalizing, resolving, or validating the input.
 // Only drive-absolute and UNC paths are transformed; all other path classes are returned unchanged.
 [[nodiscard]] inline std::wstring ToExtendedWin32Path(std::wstring_view path)
@@ -233,9 +270,47 @@ struct UniqueSiblingFileOptions final
     size_t maximumAttempts   = 32u;
 };
 
-template<typename UniqueFile>
+// Builds the familiar non-destructive sibling name used by "Keep both" flows.
+// The caller owns existence checks because the path may belong to any filesystem
+// provider; ordinal 2 produces "name (2).ext" (or "folder (2)").
+[[nodiscard]] inline HRESULT BuildUniqueSiblingPathCandidate(std::wstring_view siblingOf,
+                                                             bool isDirectory,
+                                                             size_t ordinal,
+                                                             std::wstring& pathOut) noexcept
+{
+    pathOut.clear();
+    if (ordinal < 2u)
+    {
+        return E_INVALIDARG;
+    }
+
+    const size_t separator = siblingOf.find_last_of(L"\\/");
+    if (separator == std::wstring_view::npos || separator + 1u >= siblingOf.size())
+    {
+        return E_INVALIDARG;
+    }
+
+    const std::wstring_view leaf = siblingOf.substr(separator + 1u);
+    size_t extensionOffset       = std::wstring_view::npos;
+    if (! isDirectory)
+    {
+        const size_t dot = leaf.find_last_of(L'.');
+        if (dot != std::wstring_view::npos && dot > 0u)
+        {
+            extensionOffset = dot;
+        }
+    }
+
+    const std::wstring_view stem = extensionOffset == std::wstring_view::npos ? leaf : leaf.substr(0u, extensionOffset);
+    const std::wstring_view extension = extensionOffset == std::wstring_view::npos ? std::wstring_view{} : leaf.substr(extensionOffset);
+    pathOut = std::format(L"{}{} ({}){}", siblingOf.substr(0u, separator + 1u), stem, ordinal, extension);
+    return S_OK;
+}
+
+template<typename UniqueFile, typename CandidateTokenFactory>
 [[nodiscard]] inline HRESULT CreateUniqueFileInDirectory(std::wstring_view directory,
                                                          const UniqueSiblingFileOptions& options,
+                                                         CandidateTokenFactory&& makeCandidateToken,
                                                          std::wstring& pathOut,
                                                          UniqueFile& fileOut) noexcept
 {
@@ -249,18 +324,15 @@ template<typename UniqueFile>
 
     for (size_t attempt = 0u; attempt < options.maximumAttempts; ++attempt)
     {
-        static_cast<void>(attempt);
-        GUID guid{};
-        const HRESULT guidHr = CoCreateGuid(&guid);
-        if (FAILED(guidHr))
+        std::wstring candidateToken;
+        const HRESULT tokenHr = makeCandidateToken(attempt, candidateToken);
+        if (FAILED(tokenHr))
         {
-            return guidHr;
+            return tokenHr;
         }
-
-        std::array<wchar_t, 40u> guidText{};
-        if (StringFromGUID2(guid, guidText.data(), static_cast<int>(guidText.size())) <= 0)
+        if (candidateToken.empty() || candidateToken.find_first_of(L"\\/") != std::wstring::npos)
         {
-            return E_FAIL;
+            return E_INVALIDARG;
         }
 
         std::wstring candidate(directory);
@@ -269,7 +341,7 @@ template<typename UniqueFile>
             candidate.push_back(L'\\');
         }
         candidate.append(options.prefix);
-        candidate.append(guidText.data());
+        candidate.append(candidateToken);
         candidate.append(options.suffix);
 
         UniqueFile file(CreateFileW(candidate.c_str(),
@@ -293,6 +365,35 @@ template<typename UniqueFile>
         }
     }
     return HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
+}
+
+template<typename UniqueFile>
+[[nodiscard]] inline HRESULT CreateUniqueFileInDirectory(std::wstring_view directory,
+                                                         const UniqueSiblingFileOptions& options,
+                                                         std::wstring& pathOut,
+                                                         UniqueFile& fileOut) noexcept
+{
+    return CreateUniqueFileInDirectory(directory,
+                                       options,
+                                       [](size_t /*attempt*/, std::wstring& candidateToken) noexcept
+    {
+        GUID guid{};
+        const HRESULT guidHr = CoCreateGuid(&guid);
+        if (FAILED(guidHr))
+        {
+            return guidHr;
+        }
+
+        std::array<wchar_t, 40u> guidText{};
+        if (StringFromGUID2(guid, guidText.data(), static_cast<int>(guidText.size())) <= 0)
+        {
+            return E_FAIL;
+        }
+        candidateToken.assign(guidText.data());
+        return S_OK;
+    },
+                                       pathOut,
+                                       fileOut);
 }
 
 // Creates and returns a sibling using CREATE_NEW. The path is published only after the

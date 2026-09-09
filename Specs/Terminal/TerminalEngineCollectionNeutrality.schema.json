@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:red-salamander:schema:terminal-engine-collection-neutrality:v1",
+  "title": "RedSalamander terminal-engine collection neutrality policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "version",
+    "surfacePaths",
+    "baselineAdditionalLiterals",
+    "exceptions",
+    "baselineProof"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "red-salamander-terminal-engine-collection-neutrality"
+    },
+    "version": {
+      "const": 1
+    },
+    "surfacePaths": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/relativePath"
+      }
+    },
+    "baselineAdditionalLiterals": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 256
+      }
+    },
+    "exceptions": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/exception"
+      }
+    },
+    "baselineProof": {
+      "$ref": "#/$defs/proof"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^[A-Za-z0-9._+-]+(?:/[A-Za-z0-9._+-]+)*$"
+    },
+    "exception": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "line",
+        "literal",
+        "lineSha256"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "literal": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 256,
+          "pattern": "^[a-z0-9][a-z0-9._+ -]{2,255}$"
+        },
+        "lineSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithmId",
+        "surfaceSetSha256",
+        "forbiddenLiteralSetSha256",
+        "exceptionSetSha256",
+        "findingCount",
+        "status",
+        "proofSha256"
+      ],
+      "properties": {
+        "algorithmId": {
+          "const": "terminal-engine-collection-neutrality-v1"
+        },
+        "surfaceSetSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "forbiddenLiteralSetSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "exceptionSetSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "findingCount": {
+          "const": 0
+        },
+        "status": {
+          "const": "verified"
+        },
+        "proofSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

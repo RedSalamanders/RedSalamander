@@ -108,6 +108,11 @@ uint32_t ArgbFromColorRef(COLORREF color) noexcept
 
 } // namespace
 
+uint32_t ColorToArgb(const D2D1::ColorF& color) noexcept
+{
+    return ArgbFromColor(color);
+}
+
 ThemeMode ParseThemeMode(std::wstring_view value) noexcept
 {
     const std::wstring lowered = ToLower(value);
@@ -673,6 +678,9 @@ static FileOperationsTheme MakeFileOperationsTheme(const NavigationViewTheme& na
     theme.progressBackground = navigationTheme.progressBackground;
     theme.progressTotal      = navigationTheme.progressOk;
     theme.progressItem       = navigationTheme.accent;
+    theme.progressVerify     = highContrast ? ColorFromCOLORREF(menuTheme.text)
+                                            : (menuTheme.darkBase ? D2D1::ColorF(1.0f, 0.80f, 0.35f)
+                                                                  : D2D1::ColorF(0.65f, 0.38f, 0.0f));
     theme.successText        = highContrast ? ColorFromCOLORREF(menuTheme.text)
                                             : (menuTheme.darkBase ? D2D1::ColorF(0.45f, 0.86f, 0.52f)
                                                                   : D2D1::ColorF(0.10f, 0.55f, 0.22f));
@@ -684,6 +692,7 @@ static FileOperationsTheme MakeFileOperationsTheme(const NavigationViewTheme& na
     theme.graphGrid       = D2D1::ColorF(border.r, border.g, border.b, 0.35f);
     theme.graphLimit      = D2D1::ColorF(disabled.r, disabled.g, disabled.b, 0.85f);
     theme.graphLine       = theme.progressItem;
+    theme.graphVerify     = theme.progressVerify;
 
     theme.scrollbarTrack = D2D1::ColorF(border.r, border.g, border.b, 0.12f);
     theme.scrollbarThumb = D2D1::ColorF(border.r, border.g, border.b, 0.40f);
@@ -979,6 +988,7 @@ void ApplyAppThemeColorOverrides(AppTheme& theme, const std::unordered_map<std::
     theme.fileOperations.progressBackground = theme.navigationView.progressBackground;
     theme.fileOperations.progressTotal      = theme.navigationView.progressOk;
     theme.fileOperations.progressItem       = theme.navigationView.accent;
+    theme.fileOperations.progressVerify     = theme.folderView.warningText;
 
     const D2D1::ColorF menuBorder   = ColorFromCOLORREF(theme.menu.border);
     const D2D1::ColorF menuDisabled = ColorFromCOLORREF(theme.menu.disabledText);
@@ -987,16 +997,19 @@ void ApplyAppThemeColorOverrides(AppTheme& theme, const std::unordered_map<std::
     theme.fileOperations.graphGrid      = D2D1::ColorF(menuBorder.r, menuBorder.g, menuBorder.b, 0.35f);
     theme.fileOperations.graphLimit     = D2D1::ColorF(menuDisabled.r, menuDisabled.g, menuDisabled.b, 0.85f);
     theme.fileOperations.graphLine      = theme.fileOperations.progressItem;
+    theme.fileOperations.graphVerify    = theme.fileOperations.progressVerify;
     theme.fileOperations.scrollbarTrack = D2D1::ColorF(menuBorder.r, menuBorder.g, menuBorder.b, 0.12f);
     theme.fileOperations.scrollbarThumb = D2D1::ColorF(menuBorder.r, menuBorder.g, menuBorder.b, 0.40f);
 
     applyD2D(L"fileOps.progressBackground", theme.fileOperations.progressBackground);
     applyD2D(L"fileOps.progressTotal", theme.fileOperations.progressTotal);
     applyD2D(L"fileOps.progressItem", theme.fileOperations.progressItem);
+    applyD2D(L"fileOps.progressVerify", theme.fileOperations.progressVerify);
     applyD2D(L"fileOps.graphBackground", theme.fileOperations.graphBackground);
     applyD2D(L"fileOps.graphGrid", theme.fileOperations.graphGrid);
     applyD2D(L"fileOps.graphLimit", theme.fileOperations.graphLimit);
     applyD2D(L"fileOps.graphLine", theme.fileOperations.graphLine);
+    applyD2D(L"fileOps.graphVerify", theme.fileOperations.graphVerify);
     applyD2D(L"fileOps.scrollbarTrack", theme.fileOperations.scrollbarTrack);
     applyD2D(L"fileOps.scrollbarThumb", theme.fileOperations.scrollbarThumb);
 
@@ -1072,10 +1085,12 @@ std::optional<uint32_t> FindAppThemeColorArgb(const AppTheme& theme, std::wstrin
     if (key == L"fileOps.progressBackground") return ArgbFromColor(theme.fileOperations.progressBackground);
     if (key == L"fileOps.progressTotal") return ArgbFromColor(theme.fileOperations.progressTotal);
     if (key == L"fileOps.progressItem") return ArgbFromColor(theme.fileOperations.progressItem);
+    if (key == L"fileOps.progressVerify") return ArgbFromColor(theme.fileOperations.progressVerify);
     if (key == L"fileOps.graphBackground") return ArgbFromColor(theme.fileOperations.graphBackground);
     if (key == L"fileOps.graphGrid") return ArgbFromColor(theme.fileOperations.graphGrid);
     if (key == L"fileOps.graphLimit") return ArgbFromColor(theme.fileOperations.graphLimit);
     if (key == L"fileOps.graphLine") return ArgbFromColor(theme.fileOperations.graphLine);
+    if (key == L"fileOps.graphVerify") return ArgbFromColor(theme.fileOperations.graphVerify);
     if (key == L"fileOps.scrollbarTrack") return ArgbFromColor(theme.fileOperations.scrollbarTrack);
     if (key == L"fileOps.scrollbarThumb") return ArgbFromColor(theme.fileOperations.scrollbarThumb);
     if (key == L"viewer.diff.addedBackground") return ArgbFromColor(theme.viewerDiff.addedBackground);

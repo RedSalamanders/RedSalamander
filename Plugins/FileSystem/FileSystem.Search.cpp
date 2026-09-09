@@ -1231,8 +1231,7 @@ HRESULT ReportServiceStatusSnapshot(SearchRuntime& runtime,
                                     std::wstring_view activeRoot) noexcept
 {
     const FileSystemSearchHostExtensions* const hostExtensions = runtime.hostExtensions;
-    if (! hostExtensions || hostExtensions->sizeBytes != sizeof(FileSystemSearchHostExtensions) ||
-        hostExtensions->version != FILESYSTEM_SEARCH_HOST_EXTENSIONS_V1 || ! hostExtensions->serviceStatusCallback)
+    if (! hostExtensions || hostExtensions->sizeBytes < sizeof(FileSystemSearchHostExtensions) || ! hostExtensions->serviceStatusCallback)
     {
         return S_OK;
     }
@@ -2624,13 +2623,13 @@ HRESULT STDMETHODCALLTYPE FileSystem::Search(const FileSystemSearchQuery* query,
     void* callbackCookie                                 = cookie;
     if (query->reserved != 0u)
     {
-        if (query->reserved != FILESYSTEM_SEARCH_HOST_EXTENSIONS_V1 || cookie == nullptr)
+        if (query->reserved != FILESYSTEM_SEARCH_HOST_EXTENSIONS_MARKER || cookie == nullptr)
         {
             return E_INVALIDARG;
         }
 
         hostExtensions = static_cast<const FileSystemSearchHostExtensions*>(cookie);
-        if (hostExtensions->sizeBytes != sizeof(FileSystemSearchHostExtensions) || hostExtensions->version != FILESYSTEM_SEARCH_HOST_EXTENSIONS_V1)
+        if (hostExtensions->sizeBytes < sizeof(FileSystemSearchHostExtensions))
         {
             return E_INVALIDARG;
         }

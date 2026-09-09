@@ -311,6 +311,30 @@ void InvalidateMoveClipboardAfterVerifiedCompletion(DWORD expectedSequenceNumber
     }
 }
 
+[[nodiscard]] HRESULT ConsumeMoveClipboardForAdmission(HWND ownerWindow, DWORD expectedSequenceNumber) noexcept
+{
+    if (expectedSequenceNumber == 0u || GetClipboardSequenceNumber() != expectedSequenceNumber)
+    {
+        return HRESULT_FROM_WIN32(ERROR_RETRY);
+    }
+    if (! OpenClipboardWithRetriesForFolderView(ownerWindow))
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+    const auto closeClipboard = wil::scope_exit([] { CloseClipboard(); });
+    if (GetClipboardSequenceNumber() != expectedSequenceNumber)
+    {
+        return HRESULT_FROM_WIN32(ERROR_RETRY);
+    }
+    if (EmptyClipboard() == 0)
+    {
+        const HRESULT hr = HRESULT_FROM_WIN32(GetLastError());
+        Debug::Warning(L"FolderView: failed to consume admitted MOVE clipboard (hr=0x{:08X}).", static_cast<unsigned long>(hr));
+        return hr;
+    }
+    return S_OK;
+}
+
 [[nodiscard]] bool IsShortcutSlotCollision(HRESULT hr) noexcept
 {
     return hr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) || hr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
@@ -434,7 +458,10 @@ bool FolderView::CommandViewWith(std::wstring_view actionId)
     return RequestViewFocusedItem(ViewFileRole::Primary, false, actionId);
 }
 
-bool FolderView::RequestViewFocusedItem(ViewFileRole role, bool activateFallback, std::wstring_view actionId)
+bool FolderView::RequestViewFocusedItem(ViewFileRole role,
+                                        bool activateFallback,
+                                        std::wstring_view actionId,
+                                        const bool forceInternal)
 {
     if (_focusedIndex == static_cast<size_t>(-1) || _focusedIndex >= _items.size())
     {
@@ -459,6 +486,7 @@ bool FolderView::RequestViewFocusedItem(ViewFileRole role, bool activateFallback
         request.role        = role;
         request.actionId    = std::wstring(actionId);
         request.focusedPath = GetItemFullPath(item);
+        request.forceInternal = forceInternal;
 
         for (const auto& candidate : _items)
         {
@@ -755,7 +783,7 @@ bool FolderView::CutSelectionToClipboard()
 {
     Debug::Perf::Scope perf(L"clipboard.cut_us");
 
-    if (! IsBuiltinFileSystemPlugin(_fileSystemPluginId))
+    if (! SupportsFileDropCut())
     {
         ShowClipboardOverlay(*this, IDS_CMD_CLIPBOARD_CUT, IDS_MSG_CLIPBOARD_LOCAL_SELECTION_REQUIRED, OverlaySeverity::Warning);
         return false;
@@ -776,6 +804,27 @@ bool FolderView::CutSelectionToClipboard()
     }
 
     return true;
+}
+
+bool FolderView::CutPathsToClipboard(const std::vector<std::filesystem::path>& paths)
+{
+    Debug::Perf::Scope perf(L"clipboard.cut_exact_paths_us");
+    if (paths.empty() || ! SupportsFileDropCut())
+    {
+        return false;
+    }
+    return SetFileDropClipboard(_hWnd.get(), paths, DROPEFFECT_MOVE);
+}
+
+bool FolderView::SupportsFileDropCut() const noexcept
+{
+    return _fileSystem && IsBuiltinFileSystemPlugin(_fileSystemPluginId);
+}
+
+bool FolderView::CanPasteItemsFromClipboard() const noexcept
+{
+    return _fileSystem && _currentFolder.has_value() && ! _currentFolder->empty() && IsCurrentFolderEnumerated() &&
+        IsClipboardFormatAvailable(CF_HDROP) != FALSE;
 }
 
 void FolderView::PasteItemsFromClipboard()
@@ -813,18 +862,16 @@ void FolderView::PasteItemsFromClipboard()
     {
         FileOperationRequest request{};
         request.operation         = operation;
+        request.origin            = FileOperationRequest::Origin::ClipboardPaste;
         request.sourcePaths       = std::move(sources);
         request.destinationFolder = _currentFolder.value();
         request.flags             = flags;
         if (moveRequested)
         {
-            request.completionCallback = [clipboardSequenceNumber](HRESULT completionHr) noexcept
-            {
-                if (SUCCEEDED(completionHr))
-                {
-                    InvalidateMoveClipboardAfterVerifiedCompletion(clipboardSequenceNumber);
-                }
-            };
+            request.moveClipboardSequence = clipboardSequenceNumber;
+            const HWND clipboardOwner      = _hWnd.get();
+            request.preWorkerReleaseBarrier = [clipboardOwner, clipboardSequenceNumber]() noexcept
+            { return ConsumeMoveClipboardForAdmission(clipboardOwner, clipboardSequenceNumber); };
         }
 
         const HRESULT hrStart = _fileOperationRequestCallback(std::move(request));
@@ -1191,21 +1238,33 @@ void FolderView::RenameFocusedItem()
         return;
     }
 
-    std::filesystem::path target = fullPath.parent_path() / prompt.text;
-    const FileSystemFlags flags  = FILESYSTEM_FLAG_NONE;
-    const HRESULT hr             = _fileSystem->RenameItem(fullPath.c_str(), target.c_str(), flags, nullptr, nullptr, nullptr);
-    if (FAILED(hr))
+    if (prompt.text == originalName)
     {
-        ReportError(L"Rename", hr);
         return;
     }
 
-    DirectoryInfoCache& cache = DirectoryInfoCache::GetInstance();
-    cache.NotifyPathMoved(_fileSystem.get(), fullPath, target);
-    if (! _currentFolder || ! cache.IsFolderWatched(_fileSystem.get(), _currentFolder.value()))
+    if (_fileOperationRequestCallback)
     {
-        ForceRefresh();
+        FileOperationRequest request{};
+        request.operation              = FILESYSTEM_RENAME;
+        request.origin                 = FileOperationRequest::Origin::InlineF2;
+        request.sourcePaths            = {fullPath};
+        request.sourceContextSpecified = true;
+        request.sourcePluginId         = _fileSystemPluginId;
+        request.sourceInstanceContext  = _fileSystemInstanceContext;
+        request.renameLeafName         = prompt.text;
+        const HRESULT startHr          = _fileOperationRequestCallback(std::move(request));
+        if (FAILED(startHr))
+        {
+            // No task was published, so the central task UI has nothing to reveal. The pane owns
+            // this pre-publication rejection and must not leave the accepted inline edit silent.
+            ReportError(L"Rename", startHr);
+        }
+        return;
     }
+
+    Debug::Error(L"FolderView::RenameFocusedItem missing FileOperationRequestCallback; refusing direct RenameItem fallback.");
+    ReportError(L"Rename", kMissingFileOperationHostHr);
 }
 
 void FolderView::ShowProperties()

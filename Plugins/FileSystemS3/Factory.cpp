@@ -162,3 +162,47 @@ extern "C" PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginRetainModuleUntilPr
 {
     return TRUE;
 }
+
+#if defined(ENABLE_TESTS)
+extern "C" PLUGFACTORY_API HRESULT __stdcall RedSalamanderS3MultipartSelfTests(unsigned int* passed, unsigned int* failed) noexcept
+{
+    if (! passed || ! failed)
+    {
+        return E_POINTER;
+    }
+
+    *passed = 0u;
+    *failed = 0u;
+    FileSystemS3Internal::RunDebugMultipartWriterContractSelfTest(*passed, *failed);
+    return *failed == 0u ? S_OK : E_FAIL;
+}
+
+extern "C" PLUGFACTORY_API HRESULT __stdcall RedSalamanderS3DirectoryTransferProbeSelfTests(unsigned int* passed, unsigned int* failed) noexcept
+{
+    if (! passed || ! failed)
+    {
+        return E_POINTER;
+    }
+
+    *passed = 0u;
+    *failed = 0u;
+    FileSystemS3Internal::RunCopySourceSerializationContractSelfTest(*passed, *failed);
+    FileSystemS3Internal::RunDirectoryTransferProbeContractSelfTest(*passed, *failed);
+    FileSystemS3Internal::RunSourceRevisionTransferContractSelfTest(*passed, *failed);
+    return *failed == 0u ? S_OK : E_FAIL;
+}
+
+// R0f-S3 containment witness on its own (the general debug export runs it too).
+extern "C" PLUGFACTORY_API HRESULT __stdcall RedSalamanderS3R0fContainmentSelfTests(unsigned int* passed, unsigned int* failed) noexcept
+{
+    if (! passed || ! failed)
+    {
+        return E_POINTER;
+    }
+
+    *passed = 0u;
+    *failed = 0u;
+    FileSystemS3Internal::RunS3StalledRequestCancelSelfTests(*passed, *failed);
+    return *failed == 0u ? S_OK : E_FAIL;
+}
+#endif

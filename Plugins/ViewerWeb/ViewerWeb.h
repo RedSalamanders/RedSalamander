@@ -121,7 +121,7 @@ private:
         ViewerWebKind kindSnapshot{};
         ViewerWebConfig configSnapshot{};
         bool hasThemeSnapshot = false;
-        ViewerTheme themeSnapshot{};
+        ViewerTheme themeSnapshot{.sizeBytes = sizeof(ViewerTheme)};
         bool markdownShowSourceSnapshot = false;
         wil::com_ptr<IFileSystem> fileSystemSnapshot;
         std::wstring metaIdSnapshot;

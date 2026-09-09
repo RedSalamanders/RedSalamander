@@ -65,7 +65,7 @@ Key engineering specs for the current search stack and self-test contract:
 Use the `build.ps1` PowerShell script for easy building:
 
 ```powershell
-# One-time: install dependencies (writes to .build\vcpkg_installed)
+# One-time: install dependencies (writes to .build\vcpkg_installed\<platform>)
 .\vcpkg-install.ps1
 
 # Build entire solution in Debug configuration (default)
@@ -106,11 +106,14 @@ Use the `build.ps1` PowerShell script for easy building:
 - `-Msix` : Build an MSIX package after a successful Release build
 - `-Msi` : Build an MSI package after a successful Release build
 
-The build preflight closes an ordinary interactive instance only when it is
-running from the exact output path being rebuilt. If that process is running a
-self-test, or Windows cannot expose its command line safely, the build aborts
-with the blocking PID, path, and command line instead of terminating the test.
-Wait for self-tests to finish before rebuilding the same configuration.
+Build and test artifact lifecycles serialize only when they use the same
+repository, platform, and configuration. Disjoint profiles and worktrees can
+otherwise proceed in parallel; same-platform MSBuild phases briefly share a
+separate lock because every configuration uses the same vcpkg triplet. The build
+never terminates an independently launched application: if
+its executable path exactly matches an output being replaced, the build aborts
+with PID, path, and available command-line diagnostics so you can close it and
+retry. Same-name processes at other paths are ignored.
 
 ### AddressSanitizer (`ASan Debug`)
 
@@ -135,7 +138,7 @@ Run them directly from the output folder:
 .\.build\x64\ASan Debug\RedSalamanderSearchService.exe --run-foreground
 ```
 
-The build now copies the required `clang_rt.asan_dynamic-*.dll` next to each ASan executable automatically. If you still see a missing ASan runtime DLL, rebuild after updating Visual Studio C++ tools and verify the ASan runtime exists under `$(VCToolsInstallDir)\bin\Host*\`.
+The build copies the required `clang_rt.asan_dynamic-*.dll` next to each ASan executable automatically and attests that staged DLL in the ASan build receipt. If you still see a missing ASan runtime DLL, rebuild after updating Visual Studio C++ tools and verify the ASan runtime exists under `$(VCToolsInstallDir)\bin\Host*\`.
 
 #### Visual Studio Build
 
@@ -155,7 +158,8 @@ The solution contains the following projects:
   - **File-system plugins**: `FileSystem`, `FileSystem7z`, `FileSystemCurl`, `FileSystemS3`, `FileSystemGoogleDrive`, `FileSystemMicrosoftDrive`, `FileSystemDummy`
   - **Viewer plugins**: `ViewerText`, `ViewerSqlite`, `ViewerSpace`, `ViewerImgRaw`, `ViewerVLC`, `ViewerPE`, `ViewerWeb`
 - **Tests**: 8 standalone test projects (e.g. `DxUiTests`, `PerformanceTests2`)
-- **Tools**: PowerShell tooling (+ Pester tests in `Tools\Tests`)
+- **Tools**: inventoried PowerShell commands and modules; start with
+  [`Tools/README.md`](Tools/README.md), and find Pester contracts in `Tools\Tests`
 - **PoC projects**: `ls1`, `ls2`, `ls3`, `ls4`, `FlipSequentialDiscard`, `MonitorTest`
 
 The solution also contains per-language localization satellite projects, so Solution Explorer shows far more than the core projects listed above.
@@ -173,9 +177,18 @@ Built executables and libraries are located in:
 
 All build outputs and intermediate files are written under `.build\` to keep the source tree clean.
 
-## Self-tests (Debug only)
+### Alternate data stream cleanup
 
-RedSalamander includes three debug-only self-test suites:
+`Tools\remove-ads.ps1` is the canonical `SupportsShouldProcess` command for removing NTFS named streams. It
+supports file/directory roots, recursion, a case-insensitive `-StreamName` filter, `-WhatIf`, and a truthful
+matched/previewed/removed/skipped/failed summary; any resolution, enumeration, or removal failure returns a
+nonzero exit code.
+
+## Self-tests (Debug by default; opt-in test-facing Release)
+
+RedSalamander includes three in-product self-test suites. Debug and ASan Debug builds expose them by default;
+test-facing Release builds require `RSBuildEnableTests=true`, while production Release builds omit all self-test
+entry points and hooks:
 
 - CompareDirectories self-test (`--compare-selftest`)
 - Commands self-test (`--commands-selftest`)
@@ -213,6 +226,20 @@ Note: `RedSalamander.exe` is a GUI app, so PowerShell may return to the prompt i
 
 `Tools\Run-AllTests.ps1` is the canonical local test runner. It builds (unless `-SkipBuild`), runs the selected suite(s), prints a color pass/fail/skip summary, writes `run-all-tests-results.json`, `run-all-tests-case-history.jsonl`, and `run-all-tests-dashboard.md`, and exits with code `0` when everything is green.
 
+Full and CI use aggregate v2 with separate repository/change verdicts and keep the v1
+compatibility sidecar. Fresh is the default and the required closeout/CI/release mode.
+Local exact resume and affected iteration are explicit:
+
+```powershell
+.\Tools\Run-AllTests.ps1 -Suite Full -ValidationMode Resume -ResumeFrom <run-id>
+.\Tools\Run-AllTests.ps1 -Suite Full -ValidationMode Affected -ImpactBase origin/master
+.\Tools\Run-AllTests.ps1 -Suite Commands -CommandsFamily file-operations -SkipBuild
+```
+
+Affected and Commands-family runs report repository `NOT_EVALUATED`. Commands families
+partition the broad native inventory but remain non-cacheable because they share
+`RedSalamander.exe`; they do not replace a broad Commands Full seal.
+
 ```powershell
 # The GitHub Actions PR gate, through the same unified runner CI uses:
 .\Tools\Run-AllTests.ps1 -Suite CI
@@ -230,7 +257,7 @@ Note: `RedSalamander.exe` is a GUI app, so PowerShell may return to the prompt i
 .\Tools\Run-AllTests.ps1 -Suite FileOps -SkipBuild -CaseFilter FileOps_ProviderCapabilityMatrix -SelfTestRepeat 2 -SelfTestShuffleSeed 789 -TimeoutMultiplier 0.1
 ```
 
-`-Suite CI` runs the PR gate through `Run-AllTests.ps1`: the three in-product self-test suites as separate processes, DxUiTests split per suite, FileSystemCurlTests, ViewerPETests plus the explicit prompt cases, ViewerSqliteTests, MonitorTest, LocalizationTests, RedConfigureTests, PerformanceTests2, the artifact-only `Tools\Tests` Pester pass, and the vcpkg-merge synthetic test.
+`-Suite CI` runs the PR gate through `Run-AllTests.ps1`: the three in-product self-test suites as separate processes, DxUiTests split per suite, FileSystemCurlTests, ViewerPETests plus the explicit prompt cases, ViewerSqliteTests, MonitorTest, LocalizationTests, RedConfigureTests, PerformanceTests2, the current tooling Pester profile, and the vcpkg-merge synthetic test. The current profile dynamically discovers ordinary `Tools\Tests` coverage while excluding the SHA-256-sealed historical Terminal cohort; use the explicit archival profile documented in `Tools/TerminalEngine/README.md` when reproducing Gate0 or Round4.
 
 `-Suite CI` also enables failure classification automatically. A standalone pass-on-rerun is reported as blocking `FLAKY`, and fail-again is blocking `REGRESSION`. For broad in-product suite failures, failed cases first rerun through `--selftest-case`; if those pass, the runner performs shuffle triage across three seeds. Pass-all-shuffle evidence becomes blocking `FLAKY`, fail-any-shuffle evidence becomes blocking `REGRESSION`, and missing shuffle evidence remains blocking `ISOLATION_SUSPECT`. Use `-ClassifyFailures` to enable the same retry evidence on non-CI suites.
 
@@ -240,30 +267,43 @@ Debug self-test builds expose `-SelfTestFlakyProofCase NAME` / `--selftest-flaky
 
 The expensive repeat+shuffle lane lives in `.github\workflows\nightly-flake.yml`, not the PR gate. It runs `-Suite All -SelfTestRepeat 5 -SelfTestShuffleSeed <seed> -ClassifyFailures` on schedule or manual dispatch and uploads `selftest-artifacts-nightly-shuffle`.
 
-Known flaky tests are tracked only through `Tools\test-quarantine.jsonl`. Each JSONL entry must name the harness/case, owner, opened/expires dates, issue/spec link, root-cause hypothesis, and fix-or-replace plan. Active or invalid entries keep the runner red. Active entries that match a runner harness adapter execute again in a separate repair lane, and `run-all-tests-results.json` records the repair attempt evidence. In GitHub Actions, the runner also appends classification counts, active quarantine owner/expiry, and repair-lane results to `GITHUB_STEP_SUMMARY`.
+The absence of `Tools\test-quarantine.jsonl` is the canonical no-quarantine state. When a reviewed temporary quarantine is required, create that JSONL blocking repair ledger or pass an explicit ledger through `-QuarantinePath`. Each entry must name the harness/case, owner, opened/expires dates, issue/spec link, root-cause hypothesis, and fix-or-replace plan. Active or invalid entries keep the runner red. Active entries that match a runner harness adapter execute again in a separate repair lane, and `run-all-tests-results.json` records the repair attempt evidence. In GitHub Actions, the runner also appends classification counts, active quarantine owner/expiry, and repair-lane results to `GITHUB_STEP_SUMMARY`.
+
+Across worktrees, the runner holds the Windows-session interactive mutex only
+while a plan entry that uses foreground focus, UI Automation, pointer, clipboard,
+prompts, or monitor ETW state is executing. Build/setup, noninteractive tests,
+archival, cleanup, and result reporting remain concurrent; quarantine repair
+attempts inherit the matched entry's interactive classification.
 
 Self-test crashes remain failures, but they should not erase evidence: suite `results.json` is flushed after every case, and an in-flight crash is written as `status: "crashed"` in partial aggregate results for the runner to report. Debug self-test builds expose `--selftest-crash-case=NAME` only for proving that crash-signal path.
 
-`-Suite Full` builds the full solution (test projects included) and additionally runs the broader closeout surface, including PluginContractTests, SettingsSchemaTests, CrashHandlingTests, and RedSalamanderMonitorEtwLatency. Results land under `REDSALAMANDER_TEST_ROOT\runs\<runId>\artifacts\selftest\last_run\`; by default the runner sets `REDSALAMANDER_TEST_ROOT` to `.build\TestSandbox`, sets `REDSALAMANDER_TEST_RUN_ID`, and ignores/clears inherited `REDSALAMANDER_SELFTEST_ROOT` values for normal runs.
+`-Suite Full` builds the full solution (test projects included) and additionally runs the broader closeout surface, including PluginContractTests, SettingsSchemaTests, CrashHandlingTests, and RedSalamanderMonitorEtwLatency. Results land under exact `X:\RedSalamander.Perf\runs\<runId>\artifacts\selftest\last_run\`, where `X:` defaults to the repository drive and may be any selected fixed local drive. First initialization uses `-AllowExternalTestRoot`; later runs require the ownership marker.
 
-Before launching child tests, the runner invokes `Tools\Clean-TestSandbox.ps1 -Apply -Confirm:$false` to remove known legacy self-test/temp roots that predate the unified sandbox. Run `Tools\Clean-TestSandbox.ps1` without `-Apply` for a dry-run listing, or pass `-SkipLegacySandboxCleanup` to the runner only for diagnosis.
+Test tooling never creates, audits, or cleans runtime data outside `X:\RedSalamander.Perf`. `Tools\Clean-TestSandbox.ps1` is dry-run by default and can remove only one explicitly named direct-child run beneath that marked root; historical locations must be handled manually outside the test workflow.
 
-The runner defaults to Debug configuration; self-tests only run in Debug builds.
+Self-test cases that launch another RedSalamander process must give that child a private unified
+`REDSALAMANDER_TEST_ROOT` and a safe `REDSALAMANDER_TEST_RUN_ID`, then restore the parent environment after the child
+finishes. A child must never share the parent process's canonical settings path: doing so can invalidate the parent's
+expected settings-file stamp and can turn a test-isolation defect into misleading settings-open or CAS failures.
+
+The runner defaults to Debug configuration. Debug and ASan Debug first-party builds enable self-test plumbing by
+default; a test-facing Release build must opt in explicitly with `RSBuildEnableTests=true`. Production Release builds
+omit those entry points and hooks.
 
 ### Self-test artifacts and results
 
 When launched through `Tools\Run-AllTests.ps1`, self-test output is written under:
 
 ```text
-<repoRoot>\.build\TestSandbox\runs\<runId>\artifacts\selftest\last_run\
+X:\RedSalamander.Perf\runs\<runId>\artifacts\selftest\last_run\
 ```
 
 The runner writes a per-invocation aggregate summary, and native self-tests resolve their `last_run` writer directly from `REDSALAMANDER_TEST_ROOT` plus `REDSALAMANDER_TEST_RUN_ID`:
 
-- `<repoRoot>\.build\TestSandbox\runs\<runId>\artifacts\selftest\last_run\`
-- `<repoRoot>\.build\TestSandbox\runs\<runId>\artifacts\selftest\last_run\run-all-tests-results.json`
-- `<repoRoot>\.build\TestSandbox\runs\<runId>\artifacts\selftest\last_run\run-all-tests-case-history.jsonl`
-- `<repoRoot>\.build\TestSandbox\runs\<runId>\artifacts\selftest\last_run\run-all-tests-dashboard.md`
+- `X:\RedSalamander.Perf\runs\<runId>\artifacts\selftest\last_run\`
+- `X:\RedSalamander.Perf\runs\<runId>\artifacts\selftest\last_run\run-all-tests-results.json`
+- `X:\RedSalamander.Perf\runs\<runId>\artifacts\selftest\last_run\run-all-tests-case-history.jsonl`
+- `X:\RedSalamander.Perf\runs\<runId>\artifacts\selftest\last_run\run-all-tests-dashboard.md`
 
 Key files:
 
@@ -361,7 +401,8 @@ See `Specs/Installer/Installer_Msi.md` for details.
 
 ### Installing dependencies
 
-Install all libraries from `vcpkg.json` into `.build\vcpkg_installed`. The vcpkg executable itself must come from a
+Install all libraries from `vcpkg.json` into `.build\vcpkg_installed\<platform>\<triplet>`. Each platform has a
+private vcpkg metadata root so an ARM64 manifest install cannot purge x64 packages, or vice versa. The vcpkg executable itself must come from a
 Git checkout at the exact commit in `vcpkg-tool.json`. A repo-local `vcpkg\vcpkg.exe` is discovered automatically:
 
 ```powershell
@@ -375,7 +416,7 @@ git -C .\vcpkg checkout --detach ((Get-Content .\vcpkg-tool.json -Raw | ConvertF
 .\vcpkg-install.ps1 -Platform ARM64
 ```
 
-The install script validates that local tool identity before modifying `.build\vcpkg_installed`. The repository and
+The install script validates that local tool identity before modifying the selected platform root beneath `.build\vcpkg_installed`. The repository and
 CI use manifest/toolchain integration and do not require or permit a user-wide `vcpkg integrate install` step. CI
 imports `vcpkg.props` and `vcpkg.targets` directly from the pinned checkout for the lifetime of the build so headers
 and the complete installed library set come from the same reviewed tool revision.

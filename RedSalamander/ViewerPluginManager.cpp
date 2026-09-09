@@ -225,7 +225,7 @@ HRESULT ViewerPluginManager::CreateViewerInstance(std::wstring_view pluginId, Co
         return HRESULT_FROM_WIN32(ERROR_BUSY);
     }
 
-    if (entry->disabled || ! entry->loadable || ! entry->module || ! entry->createFactory)
+    if (entry->type != PluginType::Viewer || entry->disabled || ! entry->loadable || ! entry->module || ! entry->createFactory)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
@@ -253,6 +253,52 @@ HRESULT ViewerPluginManager::CreateViewerInstance(std::wstring_view pluginId, Co
     }
 
     outViewer = std::move(viewer);
+    return S_OK;
+}
+
+HRESULT ViewerPluginManager::CreateTerminalInstance(std::wstring_view pluginId,
+                                                    Common::Settings::Settings& settings,
+                                                    wil::com_ptr<ITerminal>& outTerminal) noexcept
+{
+    outTerminal.reset();
+
+    PluginEntry* entry = FindPluginById(pluginId);
+    if (! entry)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+    if (entry->unloadDeferred || IsPluginPathDeferred(entry->path))
+    {
+        return HRESULT_FROM_WIN32(ERROR_BUSY);
+    }
+    if (entry->type != PluginType::Terminal || entry->disabled || ! entry->loadable || ! entry->module || ! entry->createFactory)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    FactoryOptions options{};
+    options.debugLevel = DEBUG_LEVEL_NONE;
+
+#pragma warning(push)
+#pragma warning(disable : 4191) // unsafe conversion from FARPROC
+    const auto createFactory = reinterpret_cast<CreateFactoryFunc>(entry->createFactory);
+#pragma warning(pop)
+
+    wil::com_ptr<ITerminal> terminal;
+    const HRESULT createHr = createFactory(__uuidof(ITerminal), &options, GetHostServices(), RequestedPluginIdPtr(*entry), terminal.put_void());
+    if (FAILED(createHr))
+    {
+        return createHr;
+    }
+
+    wil::com_ptr<IInformations> infos;
+    const HRESULT qiHr = terminal->QueryInterface(__uuidof(IInformations), infos.put_void());
+    if (SUCCEEDED(qiHr) && infos)
+    {
+        static_cast<void>(ApplyConfigurationFromSettings(*infos, entry->id, settings));
+    }
+
+    outTerminal = std::move(terminal);
     return S_OK;
 }
 
@@ -391,7 +437,8 @@ HRESULT ViewerPluginManager::GetConfigurationSchema(std::wstring_view pluginId, 
     {
         const wchar_t* requestedPluginId = entry->factoryPluginId.empty() ? nullptr : entry->factoryPluginId.c_str();
         const char* schema               = nullptr;
-        const HRESULT schemaHr           = getConfigurationSchema(__uuidof(IViewer), requestedPluginId, &schema);
+        const IID& requestedInterface = entry->type == PluginType::Terminal ? __uuidof(ITerminal) : __uuidof(IViewer);
+        const HRESULT schemaHr         = getConfigurationSchema(requestedInterface, requestedPluginId, &schema);
         if (SUCCEEDED(schemaHr))
         {
             outSchemaJsonUtf8 = SafeCoalesce(schema);
@@ -399,15 +446,16 @@ HRESULT ViewerPluginManager::GetConfigurationSchema(std::wstring_view pluginId, 
         }
     }
 
-    wil::com_ptr<IViewer> viewer;
-    const HRESULT createHr = createFactory(__uuidof(IViewer), &options, GetHostServices(), RequestedPluginIdPtr(*entry), viewer.put_void());
+    const IID& requestedInterface = entry->type == PluginType::Terminal ? __uuidof(ITerminal) : __uuidof(IViewer);
+    wil::com_ptr<IUnknown> instance;
+    const HRESULT createHr = createFactory(requestedInterface, &options, GetHostServices(), RequestedPluginIdPtr(*entry), instance.put_void());
     if (FAILED(createHr))
     {
         return createHr;
     }
 
     wil::com_ptr<IInformations> infos;
-    const HRESULT qiHr = viewer->QueryInterface(__uuidof(IInformations), infos.put_void());
+    const HRESULT qiHr = instance->QueryInterface(__uuidof(IInformations), infos.put_void());
     if (FAILED(qiHr) || ! infos)
     {
         return qiHr;
@@ -453,15 +501,16 @@ HRESULT ViewerPluginManager::GetConfiguration(std::wstring_view pluginId, Common
     const auto createFactory = reinterpret_cast<CreateFactoryFunc>(entry->createFactory);
 #pragma warning(pop)
 
-    wil::com_ptr<IViewer> viewer;
-    const HRESULT createHr = createFactory(__uuidof(IViewer), &options, GetHostServices(), RequestedPluginIdPtr(*entry), viewer.put_void());
+    const IID& requestedInterface = entry->type == PluginType::Terminal ? __uuidof(ITerminal) : __uuidof(IViewer);
+    wil::com_ptr<IUnknown> instance;
+    const HRESULT createHr = createFactory(requestedInterface, &options, GetHostServices(), RequestedPluginIdPtr(*entry), instance.put_void());
     if (FAILED(createHr))
     {
         return createHr;
     }
 
     wil::com_ptr<IInformations> infos;
-    const HRESULT qiHr = viewer->QueryInterface(__uuidof(IInformations), infos.put_void());
+    const HRESULT qiHr = instance->QueryInterface(__uuidof(IInformations), infos.put_void());
     if (FAILED(qiHr) || ! infos)
     {
         return qiHr;
@@ -507,15 +556,16 @@ HRESULT ViewerPluginManager::SetConfiguration(std::wstring_view pluginId, std::s
     const auto createFactory = reinterpret_cast<CreateFactoryFunc>(entry->createFactory);
 #pragma warning(pop)
 
-    wil::com_ptr<IViewer> viewer;
-    const HRESULT createHr = createFactory(__uuidof(IViewer), &options, GetHostServices(), RequestedPluginIdPtr(*entry), viewer.put_void());
+    const IID& requestedInterface = entry->type == PluginType::Terminal ? __uuidof(ITerminal) : __uuidof(IViewer);
+    wil::com_ptr<IUnknown> instance;
+    const HRESULT createHr = createFactory(requestedInterface, &options, GetHostServices(), RequestedPluginIdPtr(*entry), instance.put_void());
     if (FAILED(createHr))
     {
         return createHr;
     }
 
     wil::com_ptr<IInformations> infos;
-    const HRESULT qiHr = viewer->QueryInterface(__uuidof(IInformations), infos.put_void());
+    const HRESULT qiHr = instance->QueryInterface(__uuidof(IInformations), infos.put_void());
     if (FAILED(qiHr) || ! infos)
     {
         return qiHr;
@@ -658,6 +708,7 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
     struct Candidate
     {
         PluginOrigin origin = PluginOrigin::Embedded;
+        PluginType type     = PluginType::Viewer;
         std::filesystem::path path;
     };
 
@@ -665,7 +716,7 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
     std::unordered_set<std::wstring> seenPaths;
     seenPaths.reserve(static_cast<size_t>(8) + settings.plugins.customPluginPaths.size());
 
-    const auto tryAddCandidate = [&](PluginOrigin origin, const std::filesystem::path& path)
+    const auto tryAddCandidate = [&](PluginOrigin origin, PluginType type, const std::filesystem::path& path)
     {
         if (path.empty())
         {
@@ -678,13 +729,14 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
             return;
         }
 
-        candidates.push_back({origin, path});
+        candidates.push_back({origin, type, path});
     };
 
     const std::filesystem::path embeddedDir = _exeDir / L"Plugins";
-    tryAddCandidate(PluginOrigin::Embedded, embeddedDir / L"ViewerText.dll");
-    tryAddCandidate(PluginOrigin::Embedded, embeddedDir / L"ViewerSpace.dll");
-    tryAddCandidate(PluginOrigin::Embedded, embeddedDir / L"ViewerImgRaw.dll");
+    tryAddCandidate(PluginOrigin::Embedded, PluginType::Viewer, embeddedDir / L"ViewerText.dll");
+    tryAddCandidate(PluginOrigin::Embedded, PluginType::Viewer, embeddedDir / L"ViewerSpace.dll");
+    tryAddCandidate(PluginOrigin::Embedded, PluginType::Viewer, embeddedDir / L"ViewerImgRaw.dll");
+    tryAddCandidate(PluginOrigin::Embedded, PluginType::Terminal, embeddedDir / L"Terminal.dll");
 
     const std::filesystem::path optionalDir = GetOptionalPluginsDirectory();
     std::error_code ec;
@@ -697,7 +749,7 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
             const std::filesystem::path p = item->path();
             if (IsDllPath(p))
             {
-                tryAddCandidate(PluginOrigin::Optional, p);
+                tryAddCandidate(PluginOrigin::Optional, PluginType::Viewer, p);
             }
 
             item.increment(ec);
@@ -706,7 +758,7 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
 
     for (const auto& p : settings.plugins.customPluginPaths)
     {
-        tryAddCandidate(PluginOrigin::Custom, p);
+        tryAddCandidate(PluginOrigin::Custom, PluginType::Viewer, p);
     }
 
     std::unordered_set<std::wstring> seenIds;
@@ -818,7 +870,8 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
         }
 
         bool handledAsMulti = false;
-        bool isViewer       = true;
+        bool isRequestedType = true;
+        const IID& requestedInterface = candidate.type == PluginType::Terminal ? __uuidof(ITerminal) : __uuidof(IViewer);
 
         wil::unique_hmodule probe(LoadLibraryExW(candidate.path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH));
         if (probe)
@@ -831,10 +884,10 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
             {
                 const PluginMetaData* metaData = nullptr;
                 unsigned int count             = 0;
-                const HRESULT enumHr           = enumerate(__uuidof(IViewer), &metaData, &count);
+                const HRESULT enumHr           = enumerate(requestedInterface, &metaData, &count);
                 if (enumHr == E_NOINTERFACE)
                 {
-                    isViewer = false;
+                    isRequestedType = false;
                 }
                 else if (SUCCEEDED(enumHr))
                 {
@@ -852,6 +905,7 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
                         {
                             PluginEntry entry;
                             entry.origin          = candidate.origin;
+                            entry.type            = candidate.type;
                             entry.path            = candidate.path;
                             entry.factoryPluginId = SafeCoalesce(metaData[i].id);
                             tryLoadAndAddEntry(std::move(entry));
@@ -868,7 +922,7 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
             }
         }
 
-        if (! isViewer)
+        if (! isRequestedType)
         {
             continue;
         }
@@ -880,6 +934,7 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
 
         PluginEntry entry;
         entry.origin = candidate.origin;
+        entry.type   = candidate.type;
         entry.path   = candidate.path;
         tryLoadAndAddEntry(std::move(entry));
     }
@@ -1001,7 +1056,8 @@ HRESULT ViewerPluginManager::EnsureLoaded(PluginEntry& entry) noexcept
     {
         const PluginMetaData* metaData = nullptr;
         unsigned int count             = 0;
-        const HRESULT enumHr           = enumerate(__uuidof(IViewer), &metaData, &count);
+        const IID& requestedInterface  = entry.type == PluginType::Terminal ? __uuidof(ITerminal) : __uuidof(IViewer);
+        const HRESULT enumHr           = enumerate(requestedInterface, &metaData, &count);
         if (enumHr == E_NOINTERFACE)
         {
             return E_NOINTERFACE;
@@ -1077,8 +1133,9 @@ HRESULT ViewerPluginManager::EnsureLoaded(PluginEntry& entry) noexcept
     FactoryOptions options{};
     options.debugLevel = DEBUG_LEVEL_NONE;
 
-    wil::com_ptr<IViewer> viewer;
-    const HRESULT createHr = createFactory(__uuidof(IViewer), &options, GetHostServices(), RequestedPluginIdPtr(entry), viewer.put_void());
+    const IID& requestedInterface = entry.type == PluginType::Terminal ? __uuidof(ITerminal) : __uuidof(IViewer);
+    wil::com_ptr<IUnknown> instance;
+    const HRESULT createHr = createFactory(requestedInterface, &options, GetHostServices(), RequestedPluginIdPtr(entry), instance.put_void());
     if (createHr == E_NOINTERFACE)
     {
         return E_NOINTERFACE;
@@ -1090,7 +1147,7 @@ HRESULT ViewerPluginManager::EnsureLoaded(PluginEntry& entry) noexcept
     }
 
     wil::com_ptr<IInformations> infos;
-    const HRESULT qiHr = viewer->QueryInterface(__uuidof(IInformations), infos.put_void());
+    const HRESULT qiHr = instance->QueryInterface(__uuidof(IInformations), infos.put_void());
     if (FAILED(qiHr))
     {
         entry.loadError = std::format(L"IInformations not supported (hr=0x{:08X}).", static_cast<unsigned long>(qiHr));

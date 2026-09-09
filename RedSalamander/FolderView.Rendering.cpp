@@ -319,6 +319,8 @@ void FolderView::RecreateThemeBrushes()
     _selectedItemTextBrush.reset();
     _focusedBackgroundBrush.reset();
     _focusBrush.reset();
+    _artifactWarningFillBrush.reset();
+    _artifactWarningTextBrush.reset();
     _emptyFolderFocusCueBrush.reset();
     _incrementalSearchHighlightBrush.reset();
     _incrementalSearchIndicatorBackgroundBrush.reset();
@@ -342,7 +344,7 @@ void FolderView::RecreateThemeBrushes()
 
     {
         D2D1::ColorF textColor             = _theme.textNormal;
-        textColor.a                        = FolderViewVisualState::ResolveNormalTextAlpha(textColor.a, false, false);
+        textColor.a                        = Common::PaneVisualState::ResolveNormalTextAlpha(textColor.a, false, false);
         const HRESULT hrUnfocusedTextBrush = CreateFolderViewSolidColorBrush(textColor, _textUnfocusedBrush, SolidBrushLifetime::Cached);
         if (! CheckHR(hrUnfocusedTextBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(unfocused text)"))
         {
@@ -374,7 +376,7 @@ void FolderView::RecreateThemeBrushes()
 
     {
         D2D1::ColorF unfocusedDetailsColor    = detailsColor;
-        unfocusedDetailsColor.a               = FolderViewVisualState::ResolveNormalTextAlpha(unfocusedDetailsColor.a, false, false);
+        unfocusedDetailsColor.a               = Common::PaneVisualState::ResolveNormalTextAlpha(unfocusedDetailsColor.a, false, false);
         const HRESULT hrUnfocusedDetailsBrush = CreateFolderViewSolidColorBrush(unfocusedDetailsColor, _detailsTextUnfocusedBrush, SolidBrushLifetime::Cached);
         if (! CheckHR(hrUnfocusedDetailsBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(unfocused details text)"))
         {
@@ -392,7 +394,7 @@ void FolderView::RecreateThemeBrushes()
 
     {
         D2D1::ColorF unfocusedMetadataColor    = metadataColor;
-        unfocusedMetadataColor.a               = FolderViewVisualState::ResolveNormalTextAlpha(unfocusedMetadataColor.a, false, false);
+        unfocusedMetadataColor.a               = Common::PaneVisualState::ResolveNormalTextAlpha(unfocusedMetadataColor.a, false, false);
         const HRESULT hrUnfocusedMetadataBrush = CreateFolderViewSolidColorBrush(unfocusedMetadataColor, _metadataTextUnfocusedBrush, SolidBrushLifetime::Cached);
         if (! CheckHR(hrUnfocusedMetadataBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(unfocused metadata text)"))
         {
@@ -426,6 +428,19 @@ void FolderView::RecreateThemeBrushes()
 
     const HRESULT hrFocusBrush = CreateFolderViewSolidColorBrush(_theme.focusBorder, _focusBrush, SolidBrushLifetime::Cached);
     if (! CheckHR(hrFocusBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(focus)"))
+    {
+        return;
+    }
+
+    const HRESULT hrArtifactFill =
+        CreateFolderViewSolidColorBrush(_theme.warningBackground, _artifactWarningFillBrush, SolidBrushLifetime::Cached);
+    if (! CheckHR(hrArtifactFill, L"ID2D1DeviceContext::CreateSolidColorBrush(artifact warning fill)"))
+    {
+        return;
+    }
+    const HRESULT hrArtifactText =
+        CreateFolderViewSolidColorBrush(_theme.warningText, _artifactWarningTextBrush, SolidBrushLifetime::Cached);
+    if (! CheckHR(hrArtifactText, L"ID2D1DeviceContext::CreateSolidColorBrush(artifact warning text)"))
     {
         return;
     }
@@ -733,6 +748,8 @@ void FolderView::DiscardDeviceResources()
     _selectedItemTextBrush.reset();
     _focusedBackgroundBrush.reset();
     _focusBrush.reset();
+    _artifactWarningFillBrush.reset();
+    _artifactWarningTextBrush.reset();
     _emptyFolderFocusCueBrush.reset();
     _incrementalSearchHighlightBrush.reset();
     _incrementalSearchIndicatorBackgroundBrush.reset();
@@ -1496,7 +1513,7 @@ void FolderView::Render(const RECT& invalidRect)
                     D2D1::ColorF focusColor = _theme.focusBorder;
                     if (! _paneFocused)
                     {
-                        focusColor.a = FolderViewVisualState::ResolveFocusBorderAlpha(focusColor.a, _paneFocused);
+                        focusColor.a = Common::PaneVisualState::ResolveFocusBorderAlpha(focusColor.a, _paneFocused);
                     }
                     _focusBrush->SetColor(focusColor);
 
@@ -1554,7 +1571,7 @@ void FolderView::Render(const RECT& invalidRect)
                     D2D1::ColorF cueTextColor = _theme.textNormal;
                     if (! _paneFocused)
                     {
-                        cueTextColor.a = FolderViewVisualState::ResolveNormalTextAlpha(cueTextColor.a, false, false);
+                        cueTextColor.a = Common::PaneVisualState::ResolveNormalTextAlpha(cueTextColor.a, false, false);
                     }
                     if (! _emptyFolderFocusCueBrush &&
                         FAILED(CreateFolderViewSolidColorBrush(cueTextColor, _emptyFolderFocusCueBrush, SolidBrushLifetime::Cached)))
@@ -2419,7 +2436,7 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
 
                 if (! _paneFocused)
                 {
-                    focusColor.a = FolderViewVisualState::ResolveFocusBorderAlpha(focusColor.a, _paneFocused);
+                    focusColor.a = Common::PaneVisualState::ResolveFocusBorderAlpha(focusColor.a, _paneFocused);
                 }
 
                 _focusBrush->SetColor(focusColor);
@@ -2441,7 +2458,7 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
     float iconOpacity    = (item.fileAttributes & FILE_ATTRIBUTE_HIDDEN) != 0 ? 0.5f : 1.0f;
     if (! _paneFocused)
     {
-        iconOpacity = FolderViewVisualState::ResolveNormalIconOpacity(iconOpacity, _paneFocused);
+        iconOpacity = Common::PaneVisualState::ResolveNormalIconOpacity(iconOpacity, _paneFocused);
     }
     const bool drawingThumbnail = _thumbnailsVisible && item.thumbnail;
     ID2D1Bitmap1* bitmap        = drawingThumbnail ? item.thumbnail.get() : item.icon.get();
@@ -2491,7 +2508,7 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
         auto& placeholder = item.isDirectory ? _placeholderFolderIcon : _placeholderFileIcon;
         if (placeholder)
         {
-            const float placeholderOpacity = FolderViewVisualState::ResolvePlaceholderIconOpacity(_paneFocused);
+            const float placeholderOpacity = Common::PaneVisualState::ResolvePlaceholderIconOpacity(_paneFocused);
             _d2dContext->DrawBitmap(placeholder.get(), &iconRect, placeholderOpacity, D2D1_INTERPOLATION_MODE_LINEAR);
         }
         else
@@ -2499,6 +2516,32 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
             // Fallback if placeholders not created
             _d2dContext->FillRectangle(iconRect, _backgroundBrush.get());
             _d2dContext->DrawRectangle(iconRect, _focusBrush.get(), 1.0f);
+        }
+    }
+
+    if (item.artifactProjection &&
+        item.artifactProjection->classification != FileOperationArtifacts::Classification::Ordinary &&
+        _artifactWarningFillBrush && _artifactWarningTextBrush)
+    {
+        const float badgeDiameter = std::clamp(_iconSizeDip * 0.56f, 9.0f, 16.0f);
+        const float badgeRadius = badgeDiameter * 0.5f;
+        const D2D1_POINT_2F center = D2D1::Point2F(iconRect.right - badgeRadius * 0.55f,
+                                                   iconRect.bottom - badgeRadius * 0.55f);
+        const D2D1_ELLIPSE badge = D2D1::Ellipse(center, badgeRadius, badgeRadius);
+        ID2D1SolidColorBrush* const glyph = _artifactWarningTextBrush.get();
+        _d2dContext->FillEllipse(badge, _artifactWarningFillBrush.get());
+        _d2dContext->DrawEllipse(badge, _artifactWarningTextBrush.get(), 1.25f);
+        if (glyph)
+        {
+            const float stroke = std::max(1.25f, badgeDiameter * 0.12f);
+            _d2dContext->DrawLine(D2D1::Point2F(center.x, center.y - badgeRadius * 0.48f),
+                                  D2D1::Point2F(center.x, center.y + badgeRadius * 0.16f),
+                                  glyph,
+                                  stroke);
+            _d2dContext->FillEllipse(D2D1::Ellipse(D2D1::Point2F(center.x, center.y + badgeRadius * 0.50f),
+                                                    stroke * 0.58f,
+                                                    stroke * 0.58f),
+                                     glyph);
         }
     }
 

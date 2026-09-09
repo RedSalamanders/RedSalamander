@@ -144,7 +144,7 @@ const char* GetSchemaMtp() noexcept
     return S_OK;
 }
 
-#ifdef _DEBUG
+#if defined(ENABLE_TESTS)
 std::mutex g_pickerFakeBackendMutex;
 std::optional<std::string> g_pickerFakeBackendJson;
 
@@ -166,7 +166,7 @@ std::optional<std::string> g_pickerFakeBackendJson;
     outJsonUtf8.clear();
     outCount = 0u;
 
-#ifdef _DEBUG
+#if defined(ENABLE_TESTS)
     std::string fakeBackendJson;
     const bool useFakeBackend = TryGetPickerFakeBackendJson(fakeBackendJson);
     std::unique_ptr<FileSystemMtpInternal::IMtpBackend> fakeBackend;
@@ -183,7 +183,7 @@ std::optional<std::string> g_pickerFakeBackendJson;
     if (request.kind == FACTORY_CONNECTION_BROWSE_DEVICES)
     {
         std::vector<FileSystemMtpInternal::MtpConnectionBrowseDevice> devices;
-#ifdef _DEBUG
+#if defined(ENABLE_TESTS)
         const HRESULT hr =
             fakeBackend ? FileSystemMtpInternal::EnumerateMtpConnectionBrowseDevicesFromBackend(*fakeBackend, devices)
                         : FileSystemMtpInternal::EnumerateMtpConnectionBrowseDevices(devices);
@@ -209,7 +209,7 @@ std::optional<std::string> g_pickerFakeBackendJson;
         }
 
         std::vector<FileSystemMtpInternal::MtpConnectionBrowseStorage> storages;
-#ifdef _DEBUG
+#if defined(ENABLE_TESTS)
         const HRESULT hr =
             fakeBackend ? FileSystemMtpInternal::EnumerateMtpConnectionBrowseStoragesFromBackend(*fakeBackend, parentDeviceId, storages)
                         : FileSystemMtpInternal::EnumerateMtpConnectionBrowseStorages(parentDeviceId, storages);
@@ -324,7 +324,7 @@ extern "C" PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginRetainModuleUntilPr
     return RetainFileSystemMtpModuleUntilProcessExit() ? TRUE : FALSE;
 }
 
-#ifdef _DEBUG
+#if defined(ENABLE_TESTS)
 extern "C" PLUGFACTORY_API HRESULT __stdcall RedSalamanderMtpSetPickerFakeBackendForSelfTest(const char* fakeBackendJsonUtf8) noexcept
 {
     std::lock_guard lock(g_pickerFakeBackendMutex);

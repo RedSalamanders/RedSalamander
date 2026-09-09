@@ -1,5 +1,8 @@
 # Operation Astrolabe — Test Contract Architecture Migration
 
+> **FILE OPERATIONS CONTRACT (2026-08-21).** Keep source-contract guards proving that every production mutation ingress builds a typed immutable plan and that workers never read live verify/link settings. Relocation requires named green behavioral companions.
+
+
 | Field | Value |
 |---|---|
 | Status | WIP — independently routed architecture-quality work; not a release blocker |

@@ -1,11 +1,8 @@
 #include "FileSystem.Internal.h"
+#include "WslDistributionCatalog.h"
 #include "resource.h"
 
-#include <algorithm>
 #include <filesystem>
-#include <optional>
-#include <string_view>
-#include <vector>
 
 #include <shellapi.h>
 #include <shlobj.h>
@@ -29,156 +26,6 @@ std::wstring GetDriveFreeSpace(const wchar_t* drive)
     return L"";
 }
 
-struct WslDistributionEntry
-{
-    std::wstring name;
-    std::wstring networkPath;
-};
-
-constexpr wchar_t kLxssRegKey[]                  = L"Software\\Microsoft\\Windows\\CurrentVersion\\Lxss";
-constexpr std::wstring_view kDockerDistroPrefix  = L"docker-desktop";
-constexpr std::wstring_view kRancherDistroPrefix = L"rancher-desktop";
-
-wil::unique_hkey OpenWslRegKey() noexcept
-{
-    HKEY hKey = nullptr;
-    if (RegOpenKeyExW(HKEY_CURRENT_USER, kLxssRegKey, 0, KEY_READ, &hKey) == ERROR_SUCCESS)
-    {
-        return wil::unique_hkey{hKey};
-    }
-    return wil::unique_hkey{};
-}
-
-wil::unique_hkey OpenDistroKey(const wil::unique_hkey& wslKey, const std::wstring& guid) noexcept
-{
-    if (! wslKey)
-    {
-        return wil::unique_hkey{};
-    }
-
-    HKEY hKey = nullptr;
-    if (RegOpenKeyExW(wslKey.get(), guid.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS)
-    {
-        return wil::unique_hkey{hKey};
-    }
-    return wil::unique_hkey{};
-}
-
-bool EnumerateDistroGuids(const wil::unique_hkey& wslKey, std::vector<std::wstring>& guids) noexcept
-{
-    if (! wslKey)
-    {
-        return false;
-    }
-
-    guids.clear();
-
-    wchar_t buffer[39];
-    for (DWORD index = 0;; ++index)
-    {
-        DWORD length      = ARRAYSIZE(buffer);
-        const LONG result = RegEnumKeyExW(wslKey.get(), index, buffer, &length, nullptr, nullptr, nullptr, nullptr);
-        if (result == ERROR_NO_MORE_ITEMS)
-        {
-            break;
-        }
-
-        if (result == ERROR_SUCCESS && length == 38 && buffer[0] == L'{' && buffer[37] == L'}')
-        {
-            guids.emplace_back(buffer, length);
-        }
-    }
-
-    return true;
-}
-
-std::optional<std::wstring> ReadDistroName(const wil::unique_hkey& distroKey) noexcept
-{
-    if (! distroKey)
-    {
-        return std::nullopt;
-    }
-
-    wchar_t buffer[256];
-    DWORD bufferSize  = sizeof(buffer);
-    DWORD type        = 0;
-    const LONG result = RegQueryValueExW(distroKey.get(), L"DistributionName", nullptr, &type, reinterpret_cast<BYTE*>(buffer), &bufferSize);
-    if (result == ERROR_SUCCESS && type == REG_SZ)
-    {
-        return std::wstring(buffer);
-    }
-
-    return std::nullopt;
-}
-
-bool ShouldFilterDistroName(std::wstring_view name) noexcept
-{
-    if (name.size() >= kDockerDistroPrefix.size())
-    {
-        if (_wcsnicmp(name.data(), kDockerDistroPrefix.data(), kDockerDistroPrefix.size()) == 0)
-        {
-            return true;
-        }
-    }
-    if (name.size() >= kRancherDistroPrefix.size())
-    {
-        if (_wcsnicmp(name.data(), kRancherDistroPrefix.data(), kRancherDistroPrefix.size()) == 0)
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-std::vector<WslDistributionEntry> EnumerateWslDistributions() noexcept
-{
-    std::vector<WslDistributionEntry> distributions;
-
-    auto wslKey = OpenWslRegKey();
-    if (! wslKey)
-    {
-        return distributions;
-    }
-
-    std::vector<std::wstring> guids;
-    if (! EnumerateDistroGuids(wslKey, guids))
-    {
-        return distributions;
-    }
-
-    for (const auto& guid : guids)
-    {
-        auto distroKey = OpenDistroKey(wslKey, guid);
-        if (! distroKey)
-        {
-            continue;
-        }
-
-        const auto name = ReadDistroName(distroKey);
-        if (! name.has_value() || name.value().empty())
-        {
-            continue;
-        }
-
-        const std::wstring& nameValue = name.value();
-        if (ShouldFilterDistroName(nameValue))
-        {
-            continue;
-        }
-
-        WslDistributionEntry entry;
-        entry.name        = nameValue;
-        entry.networkPath = L"\\\\wsl.localhost\\" + nameValue;
-        distributions.push_back(std::move(entry));
-    }
-
-    std::sort(distributions.begin(), distributions.end(), [](const WslDistributionEntry& a, const WslDistributionEntry& b) {
-        return _wcsicmp(a.name.c_str(), b.name.c_str()) < 0;
-    });
-
-    return distributions;
-}
 } // namespace
 
 HRESULT STDMETHODCALLTYPE FileSystem::GetMenuItems(const NavigationMenuItem** items, unsigned int* count) noexcept
@@ -250,13 +97,14 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetMenuItems(const NavigationMenuItem** it
     tryAddKnownFolder(IDS_MENU_NAV_VIDEOS, FOLDERID_Videos);
     tryAddKnownFolder(IDS_MENU_NAV_ONEDRIVE, FOLDERID_SkyDrive);
 
-    const auto wslDistros = EnumerateWslDistributions();
+    const auto wslDistros = Common::Wsl::EnumerateDistributions();
     if (! wslDistros.empty())
     {
         addSeparator();
         for (const auto& distro : wslDistros)
         {
-            addRawEntry(distro.name, distro.networkPath, distro.networkPath);
+            std::wstring networkPath = L"\\\\wsl.localhost\\" + distro.name;
+            addRawEntry(distro.name, networkPath, networkPath);
         }
     }
 

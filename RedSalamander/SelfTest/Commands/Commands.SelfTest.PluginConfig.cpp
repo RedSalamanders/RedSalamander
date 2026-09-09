@@ -20,6 +20,17 @@
         return false;
     }
 
+    FileSystemOptions invalidLinkOptions{};
+    invalidLinkOptions.sizeBytes  = sizeof(FileSystemOptions);
+    invalidLinkOptions.linkPolicy = static_cast<FileSystemLinkPolicy>(0u);
+    state.Require(created.fileSystem->CopyItem(L"Z:\\red-salamander-invalid-link-source",
+                                               L"Z:\\red-salamander-invalid-link-destination",
+                                               FILESYSTEM_FLAG_NONE,
+                                               &invalidLinkOptions,
+                                               nullptr,
+                                               nullptr) == E_INVALIDARG,
+                  L"The reserved Follow ABI value must fail before Local provider I/O.");
+
     const char* schema     = nullptr;
     const HRESULT schemaHr = info->GetConfigurationSchema(&schema);
     state.Require(SUCCEEDED(schemaHr) && schema != nullptr,
@@ -37,7 +48,53 @@
         state.Require(schemaView.find("\"max\": 1000") != std::string_view::npos, L"Configuration schema missing recycleBinBatchSize max.");
         state.Require(schemaView.find("\"max\": 8") != std::string_view::npos, L"Configuration schema missing searchMaxDirectoryWalkers max.");
         state.Require(schemaView.find("\"max\": 16") != std::string_view::npos, L"Configuration schema missing copyMoveMaxConcurrency max.");
+        state.Require(schemaView.find("\"reparsePointPolicy\"") != std::string_view::npos &&
+                          schemaView.find("\"default\": \"preserve\"") != std::string_view::npos &&
+                          schemaView.find("\"value\": \"preserve\"") != std::string_view::npos &&
+                          schemaView.find("\"value\": \"skip\"") != std::string_view::npos,
+                      L"Configuration schema must expose only the canonical Preserve/Skip link policy.");
+        state.Require(schemaView.find("followTargets") == std::string_view::npos && schemaView.find("copyReparse") == std::string_view::npos,
+                      L"Configuration schema must not expose retired Follow or legacy copyReparse choices.");
     }
+
+    const HRESULT migrateFollowHr = info->SetConfiguration(R"json({"reparsePointPolicy":"followTargets"})json");
+    state.Require(SUCCEEDED(migrateFollowHr), L"Legacy followTargets configuration must migrate successfully.");
+    const char* migratedConfiguration = nullptr;
+    if (SUCCEEDED(migrateFollowHr))
+    {
+        const HRESULT getMigratedHr = info->GetConfiguration(&migratedConfiguration);
+        state.Require(SUCCEEDED(getMigratedHr) && migratedConfiguration != nullptr,
+                      L"Migrated followTargets configuration must be readable.");
+        if (migratedConfiguration != nullptr)
+        {
+            const std::string_view migratedView(migratedConfiguration);
+            state.Require(migratedView.find("\"reparsePointPolicy\":\"skip\"") != std::string_view::npos &&
+                              migratedView.find("followTargets") == std::string_view::npos,
+                          L"Legacy followTargets must serialize canonically as Skip.");
+        }
+    }
+
+    const HRESULT migratePreserveHr = info->SetConfiguration(R"json({"reparsePointPolicy":"copyReparse"})json");
+    state.Require(SUCCEEDED(migratePreserveHr), L"Legacy copyReparse configuration must migrate successfully.");
+    migratedConfiguration = nullptr;
+    if (SUCCEEDED(migratePreserveHr))
+    {
+        const HRESULT getMigratedHr = info->GetConfiguration(&migratedConfiguration);
+        state.Require(SUCCEEDED(getMigratedHr) && migratedConfiguration != nullptr,
+                      L"Migrated copyReparse configuration must be readable.");
+        if (migratedConfiguration != nullptr)
+        {
+            const std::string_view migratedView(migratedConfiguration);
+            state.Require(migratedView.find("\"reparsePointPolicy\":\"preserve\"") != std::string_view::npos &&
+                              migratedView.find("copyReparse") == std::string_view::npos,
+                          L"Legacy copyReparse must serialize canonically as Preserve.");
+        }
+    }
+
+    state.Require(info->SetConfiguration(R"json({"reparsePointPolicy":0})json") == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+                  L"The retired numeric Follow value must be rejected at the provider configuration boundary.");
+    state.Require(info->SetConfiguration(R"json({"reparsePointPolicy":"unknown"})json") == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+                  L"Unknown link-policy strings must be rejected instead of restoring an implicit behavior.");
 
     const std::string resetConfiguration =
         R"json({"concurrencyMode":"auto","copyMoveMaxConcurrency":4,"searchBackendPreference":"auto","recycleBinBatchSize":500,"searchMaxDirectoryWalkers":4})json";
@@ -440,8 +497,7 @@
         };
 
         const AppTheme appTheme = ResolveAppTheme(ThemeMode::Light, L"viewer-text-diff-selftest");
-        ViewerTheme theme{};
-        theme.version                       = 4u;
+        ViewerTheme theme{.sizeBytes = sizeof(ViewerTheme)};
         theme.dpi                           = 96u;
         theme.backgroundArgb                = argbFromColorF(appTheme.folderView.backgroundColor);
         theme.textArgb                      = argbFromColorF(appTheme.folderView.textNormal);
@@ -516,7 +572,7 @@
         }
 
         const std::wstring samplePathText = samplePath.wstring();
-        ViewerOpenContext context{};
+        ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
         context.fileSystem     = created.fileSystem.get();
         context.fileSystemName = L"File System";
         context.focusedPath    = samplePathText.c_str();
@@ -883,8 +939,7 @@
         };
 
         const AppTheme appTheme = ResolveAppTheme(requestedMode, rainbowSeed);
-        ViewerTheme theme{};
-        theme.version                       = 4u;
+        ViewerTheme theme{.sizeBytes = sizeof(ViewerTheme)};
         theme.dpi                           = 96u;
         theme.backgroundArgb                = argbFromColorF(appTheme.folderView.backgroundColor);
         theme.textArgb                      = argbFromColorF(appTheme.folderView.textNormal);
@@ -958,7 +1013,7 @@
         }
 
         const std::wstring diffPathText = diffPath.wstring();
-        ViewerOpenContext context{};
+        ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
         context.fileSystem     = created.fileSystem.get();
         context.fileSystemName = L"File System";
         context.focusedPath    = diffPathText.c_str();
@@ -1747,7 +1802,7 @@
     }
 
     const std::wstring samplePathText = samplePath.wstring();
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem     = created.fileSystem.get();
     context.fileSystemName = L"File System";
     context.focusedPath    = samplePathText.c_str();
@@ -3955,6 +4010,11 @@ private:
         return false;
     }
 
+    if (! PrepareMainWindowForIsolatedUiCase(mainWindow, state, L"plugin configuration tab-traversal validation"))
+    {
+        return false;
+    }
+
     constexpr std::wstring_view kBuiltinS3FileSystemId = L"builtin/file-system-s3";
     const FileSystemPluginManager::PluginEntry* entry  = FindFileSystemPluginById(kBuiltinS3FileSystemId);
     state.Require(entry != nullptr, L"builtin/file-system-s3 plugin entry unavailable for plugin configuration tab-traversal self-test.");
@@ -4076,6 +4136,50 @@ private:
             }
         }
 
+        const auto firstInputIsReady = [&](const PluginConfigurationDialogDebugSnapshot& value) noexcept
+        {
+            return value.focusKind == PluginConfigurationDialogDebugFocusKind::Edit && value.focusLabel == L"Default region" &&
+                   value.visibleDxCommandButtonHostCount == workerResult.baselineSnapshot.visibleDxCommandButtonHostCount &&
+                   value.visibleDxFormStaticHostCount == workerResult.baselineSnapshot.visibleDxFormStaticHostCount &&
+                   value.visibleDxFormInputHostCount == workerResult.baselineSnapshot.visibleDxFormInputHostCount && value.panelScrollPosY == 0;
+        };
+        const auto stableFocusDuration = SelfTest::Scale(300ms);
+        const auto stableFocusDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        auto stableFocusSince          = std::chrono::steady_clock::now();
+        bool firstInputFocusStable     = false;
+        while (std::chrono::steady_clock::now() < stableFocusDeadline)
+        {
+            PumpPendingMessages();
+            PluginConfigurationDialogDebugSnapshot snapshot{};
+            const auto now = std::chrono::steady_clock::now();
+            if (DebugGetPluginConfigurationDialogSnapshot(snapshot) && firstInputIsReady(snapshot))
+            {
+                workerResult.traversalSnapshot = std::move(snapshot);
+                if (now - stableFocusSince >= stableFocusDuration)
+                {
+                    firstInputFocusStable = true;
+                    break;
+                }
+            }
+            else
+            {
+                stableFocusSince = now;
+                static_cast<void>(DebugFocusPluginConfigurationDialogFirstInput());
+            }
+            std::this_thread::sleep_for(20ms);
+        }
+        workerResult.focusedFirstInput = firstInputFocusStable;
+        if (! workerResult.focusedFirstInput)
+        {
+            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands,
+                                       std::format(L"plugin-config first input focus did not remain stable: focusKind={} focusLabel='{}' scrollY={}",
+                                                   static_cast<int>(workerResult.traversalSnapshot.focusKind),
+                                                   workerResult.traversalSnapshot.focusLabel,
+                                                   workerResult.traversalSnapshot.panelScrollPosY));
+            static_cast<void>(DebugCancelPluginConfigurationDialog());
+            return;
+        }
+
         const auto sendTab = [&](const bool reverse,
                                  const PluginConfigurationDialogDebugFocusKind expectedKind,
                                  std::wstring_view expectedLabel,
@@ -4172,11 +4276,13 @@ private:
                       PluginConfigurationDialogDebugFocusKind::Toggle,
                       L"Use virtual-hosted style addressing",
                       L"use virtual-hosted style addressing toggle") ||
+            ! sendTab(false, PluginConfigurationDialogDebugFocusKind::Toggle, L"Anonymous access", L"anonymous access toggle") ||
             ! sendTab(false, PluginConfigurationDialogDebugFocusKind::Edit, L"Max keys per request", L"max keys edit") ||
             ! sendTab(false, PluginConfigurationDialogDebugFocusKind::CommandButton, LoadStringResource(nullptr, IDS_BTN_OK), L"OK button") ||
             ! sendTab(false, PluginConfigurationDialogDebugFocusKind::CommandButton, LoadStringResource(nullptr, IDS_BTN_CANCEL), L"Cancel button") ||
             ! sendTab(true, PluginConfigurationDialogDebugFocusKind::CommandButton, LoadStringResource(nullptr, IDS_BTN_OK), L"reverse OK button") ||
             ! sendTab(true, PluginConfigurationDialogDebugFocusKind::Edit, L"Max keys per request", L"reverse max keys edit") ||
+            ! sendTab(true, PluginConfigurationDialogDebugFocusKind::Toggle, L"Anonymous access", L"reverse anonymous access toggle") ||
             ! sendTab(true,
                       PluginConfigurationDialogDebugFocusKind::Toggle,
                       L"Use virtual-hosted style addressing",
@@ -4787,18 +4893,57 @@ private:
     std::string interfaceSource;
     const std::filesystem::path interfacePath = repoRoot / L"Common" / L"PlugInterfaces" / L"FileSystem.h";
     state.Require(ReadSourceFileUtf8(interfacePath, interfaceSource), std::format(L"Failed to read {}.", interfacePath.wstring()));
-    state.Require(interfaceSource.find("// Mandatory: returns filesystem capabilities as a UTF-8 JSON document.") != std::string::npos,
-                  L"IFileSystem::GetCapabilities must be documented as mandatory in the shared interface.");
-    state.Require(interfaceSource.find("// Optional: returns filesystem capabilities") == std::string::npos,
-                  L"IFileSystem::GetCapabilities must not be documented as optional.");
+    state.Require(interfaceSource.find("IFileSystemPathCapabilities2") != std::string::npos &&
+                      interfaceSource.find("GetPathCapabilities") != std::string::npos,
+                  L"The shared interface must expose mandatory path-scoped capability v2.");
+    state.Require(interfaceSource.find("1e924d87-2e62-4ab4-9f37-c565d465f25e") != std::string::npos &&
+                      interfaceSource.find("IFileSystemRouteCapabilities") != std::string::npos &&
+                      interfaceSource.find("GetRouteFacts") != std::string::npos &&
+                      interfaceSource.find("IsTransferPeerAllowed") != std::string::npos &&
+                      interfaceSource.find("ValidateChildName") != std::string::npos &&
+                      interfaceSource.find("GetChildNameCollisionKey") != std::string::npos &&
+                      interfaceSource.find("JoinPath") != std::string::npos,
+                  L"R2 must expose one separate typed route, peer, and provider-name capability IID.");
+    state.Require(interfaceSource.find("virtual HRESULT STDMETHODCALLTYPE GetCapabilities") == std::string::npos,
+                  L"The removed capability-v1 virtual method must not remain in the ABI.");
+    state.Require(interfaceSource.find("enum FileSystemDiscoveryMode") != std::string::npos &&
+                      interfaceSource.find("struct FileSystemDiscoveryProgress") != std::string::npos &&
+                      interfaceSource.find("FileSystemGetDiscoveryMode") != std::string::npos &&
+                      interfaceSource.find("FileSystemReportDiscoveryProgress") != std::string::npos,
+                  L"The operation-control ABI must expose size-validated single-pass discovery mode and progress callbacks.");
+    state.Require(interfaceSource.find("FileSystemOptionsHaveValidHeader") != std::string::npos &&
+                      interfaceSource.find("options->linkPolicy == FILESYSTEM_LINK_PRESERVE") != std::string::npos &&
+                      interfaceSource.find("options->linkPolicy == FILESYSTEM_LINK_SKIP") != std::string::npos,
+                  L"The shared options ABI must reserve every value except Preserve/Skip behind one provider validation helper.");
+    state.Require(interfaceSource.find("struct FileSystemLinkInformation") != std::string::npos &&
+                      interfaceSource.find("FILESYSTEM_LINK_TARGET_OUTSIDE_SOURCE_ROOT") != std::string::npos &&
+                      interfaceSource.find("FILESYSTEM_LINK_TARGET_MAPPED_INSIDE_SOURCE_ROOT") != std::string::npos &&
+                      interfaceSource.find("FILESYSTEM_LINK_TARGET_INSIDE_SOURCE_ROOT_UNMAPPABLE") != std::string::npos &&
+                      interfaceSource.find("FileSystemLinkTargetMapping targetMapping") != std::string::npos &&
+                      interfaceSource.find("uint32_t sourceRelativeTargetLengthUtf16") != std::string::npos &&
+                      interfaceSource.find("wchar_t* sourceRelativeTargetBuffer") != std::string::npos &&
+                      interfaceSource.find("struct FileSystemLinkTransform") != std::string::npos &&
+                      interfaceSource.find("ReadBoundLink") != std::string::npos &&
+                      interfaceSource.find("CreateExclusiveLink") != std::string::npos,
+                  L"The object-binding ABI must expose bounded semantic link read and exclusive link-stage publication contracts.");
+    state.Require(interfaceSource.find("d8ae290a-b84c-42ec-982c-7c01dedc7603") != std::string::npos &&
+                      interfaceSource.find("CreateExclusiveDirectory") != std::string::npos &&
+                      interfaceSource.find("IFileSystemBoundObject** expectedDestination") != std::string::npos &&
+                      interfaceSource.find("FILESYSTEM_FLAG_ALLOW_REPLACE_LINK") != std::string::npos,
+                  L"The Phase 3 ABI must expose exclusive directory stages and return exact destination authority with every destructive conflict receipt.");
+    state.Require(interfaceSource.find("fab04c49-9572-4a02-ab4e-36193c842057") == std::string::npos,
+                  L"The superseded object-binding IID must not remain after the Phase 3 vtable break.");
 
     std::string pluginSpec;
     const std::filesystem::path pluginSpecPath = repoRoot / L"Specs" / L"Plugins" / L"Plugins_VirtualFileSystem.md";
     state.Require(ReadSourceFileUtf8(pluginSpecPath, pluginSpec), std::format(L"Failed to read {}.", pluginSpecPath.wstring()));
-    state.Require(pluginSpec.find("### 4d. Capabilities (`IFileSystem::GetCapabilities`) (mandatory)") != std::string::npos,
-                  L"Virtual filesystem plugin spec must mark GetCapabilities as mandatory.");
-    state.Require(pluginSpec.find("Capabilities (`IFileSystem::GetCapabilities`) (optional)") == std::string::npos,
-                  L"Virtual filesystem plugin spec must not mark GetCapabilities as optional.");
+    state.Require(pluginSpec.find("IFileSystemPathCapabilities2") != std::string::npos,
+                  L"Virtual filesystem plugin spec must own path-scoped capability v2.");
+    state.Require(pluginSpec.find("IFileSystemRouteCapabilities") != std::string::npos &&
+                      pluginSpec.find("JSON is optional diagnostics") != std::string::npos,
+                  L"Virtual filesystem plugin spec must make typed route facts the only executable capability authority.");
+    state.Require(pluginSpec.find("provider ABI-v1 compatibility") == std::string::npos,
+                  L"Virtual filesystem plugin spec must not retain a capability-v1 compatibility path.");
 
     const std::array<std::filesystem::path, 3> testAdapterPaths{
         repoRoot / L"Tests" / L"ViewerSqliteTests" / L"ViewerSqliteTests.cpp",
@@ -4817,18 +4962,186 @@ private:
 
         const std::string pathText(path.string());
         const std::wstring pathMessage(pathText.begin(), pathText.end());
-        const std::vector<std::string_view> capabilitiesBodies = SourceFunctionBodies(source, "HRESULT STDMETHODCALLTYPE GetCapabilities");
-        state.Require(! capabilitiesBodies.empty(), std::format(L"{} must implement GetCapabilities.", std::wstring(pathText.begin(), pathText.end())));
+        const std::vector<std::string_view> capabilitiesBodies = SourceFunctionBodies(source, "HRESULT STDMETHODCALLTYPE GetPathCapabilities");
+        state.Require(! capabilitiesBodies.empty(), std::format(L"{} must implement GetPathCapabilities.", std::wstring(pathText.begin(), pathText.end())));
         for (const std::string_view capabilitiesBody : capabilitiesBodies)
         {
             state.Require(capabilitiesBody.find("return E_NOTIMPL;") == std::string_view::npos,
-                          std::format(L"{} must not use E_NOTIMPL for mandatory GetCapabilities.", pathMessage));
+                          std::format(L"{} must not use E_NOTIMPL for mandatory GetPathCapabilities.", pathMessage));
             state.Require(capabilitiesBody.find("return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);") == std::string_view::npos,
-                          std::format(L"{} must not use ERROR_NOT_SUPPORTED for mandatory GetCapabilities.", pathMessage));
+                          std::format(L"{} must not use ERROR_NOT_SUPPORTED for mandatory GetPathCapabilities.", pathMessage));
             state.Require(capabilitiesBody.find("*jsonUtf8 = nullptr;") == std::string_view::npos &&
                               capabilitiesBody.find("*jsonUtf8=nullptr;") == std::string_view::npos,
                           std::format(L"{} must return a non-empty capabilities JSON pointer.", pathMessage));
         }
+    }
+
+    const std::array<std::filesystem::path, 5> executableCapabilityConsumerPaths{
+        repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.cpp",
+        repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.State.cpp",
+        repoRoot / L"RedSalamander" / L"FolderView.cpp",
+        repoRoot / L"RedSalamander" / L"BatchRenameWindow.cpp",
+        repoRoot / L"Common" / L"FileSystemPathIdentity.cpp",
+    };
+    for (const std::filesystem::path& path : executableCapabilityConsumerPaths)
+    {
+        std::string source;
+        state.Require(ReadSourceFileUtf8(path, source), std::format(L"Failed to read {}.", path.wstring()));
+        if (source.empty())
+        {
+            return false;
+        }
+        state.Require(source.find("->GetPathCapabilities(") == std::string::npos &&
+                          source.find("TryParseCapabilitiesJson") == std::string::npos &&
+                          source.find("TryParseFileSystemPathIdentity") == std::string::npos,
+                      std::format(L"{} must not use capability JSON as executable route or path-identity authority.", path.wstring()));
+    }
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestProviderNamePolicyConsumptionSourceGuard(CaseState& state) noexcept
+{
+    const std::filesystem::path repoRoot = SelfTest::TryFindRepoRoot();
+    state.Require(! repoRoot.empty(), L"Repository root unavailable for provider name-policy consumption source guard.");
+    if (repoRoot.empty())
+    {
+        return false;
+    }
+
+    const auto readRequired = [&](const std::filesystem::path& relativePath, std::string& source) noexcept
+    {
+        const std::filesystem::path path = repoRoot / relativePath;
+        state.Require(ReadSourceFileUtf8(path, source), std::format(L"Failed to read {}.", path.wstring()));
+        return ! source.empty();
+    };
+
+    std::string routeHeader;
+    if (readRequired(L"Common/FileSystemRouteContract.h", routeHeader))
+    {
+        state.Require(routeHeader.find("struct ChildNameContractResult") != std::string::npos &&
+                          routeHeader.find("QueryChildNameContract") != std::string::npos,
+                      L"R7-A15 requires one canonical composite child-name validation/join/collision result.");
+    }
+
+    std::string fileOperationsSource;
+    if (readRequired(L"RedSalamander/FolderWindow.FileOperations.cpp", fileOperationsSource))
+    {
+        const std::string_view createDirectoryBody =
+            SourceBetween(fileOperationsSource, "HRESULT FolderWindow::FileOperationState::QualifyCreateDirectory", "HRESULT FolderWindow::StartFileOperationFromFolderView");
+        state.Require(! createDirectoryBody.empty() && createDirectoryBody.find("QueryChildNameContract") != std::string_view::npos,
+                      L"F7 admission must consume the canonical provider child-name contract.");
+        state.Require(createDirectoryBody.find("IsSupportedLocalFileOperationPath") == std::string_view::npos,
+                      L"F7 admission must not reapply Local/Win32 path validation after provider acceptance.");
+        state.Require(createDirectoryBody.find("JoinFileSystemPath") == std::string_view::npos &&
+                          createDirectoryBody.find("maxComponentUtf16") == std::string_view::npos &&
+                          createDirectoryBody.find("acceptedSeparators") == std::string_view::npos,
+                      L"F7 admission must not retain host path-identity name validation or joining.");
+        state.Require(fileOperationsSource.find("QueryChildNameContract") != std::string::npos &&
+                          fileOperationsSource.find("RenameOrigin::InlineRename") != std::string::npos,
+                      L"Inline F2 and Batch worker admission must consume the provider child-name contract.");
+        const std::string_view admitOperationBody = SourceBetween(fileOperationsSource,
+                                                                  "HRESULT FolderWindow::FileOperationState::AdmitOperation",
+                                                                  "HRESULT FolderWindow::FileOperationState::AdmitInlineRename");
+        // C1 (R1d-OR1 a3): the transfer leaf contract is a provider call and lives in Preparing on the
+        // task thread; the UI-thread admission keeps only the leaf-shape validation.
+        state.Require(! admitOperationBody.empty() && admitOperationBody.find("QueryChildNameContract") == std::string_view::npos,
+                      L"Transfer admission must not call the provider child-name contract on the UI thread (C1).");
+        state.Require(! admitOperationBody.empty() && admitOperationBody.find("QualifyLocalNativeMoveItemShape(") == std::string_view::npos,
+                      L"Transfer admission must not probe Local Native Move shapes on the UI thread (C1).");
+        state.Require(! admitOperationBody.empty() && admitOperationBody.find("BindObjectAuthority(") == std::string_view::npos,
+                      L"Permanent Delete admission must not bind the selected roots on the UI thread; Preparing pins them before the card confirms (C1).");
+        const std::string_view admitInlineRenameBody = SourceBetween(fileOperationsSource,
+                                                                     "HRESULT FolderWindow::FileOperationState::AdmitInlineRename",
+                                                                     "HRESULT FolderWindow::FileOperationState::Task::PrepareBatchRenameAdmission");
+        state.Require(! admitInlineRenameBody.empty() && admitInlineRenameBody.find("QueryChildNameContract") == std::string_view::npos,
+                      L"Inline F2 admission must not call the provider child-name contract on the UI thread (C1).");
+    }
+    std::string stateSource;
+    if (readRequired(L"RedSalamander/FolderWindow.FileOperations.State.cpp", stateSource))
+    {
+        const std::string_view destinationNamesBody = SourceBetween(stateSource,
+                                                                    "HRESULT FolderWindow::FileOperationState::Task::PrepareTransferDestinationNames",
+                                                                    "HRESULT FolderWindow::FileOperationState::Task::PrepareForExecution");
+        state.Require(! destinationNamesBody.empty() && destinationNamesBody.find("QueryChildNameContract") != std::string_view::npos &&
+                          destinationNamesBody.find("PlanRejectionBucket::InvalidDestinationName") != std::string_view::npos,
+                      L"Preparing must admit every transfer destination leaf through the provider child-name contract before any path is joined (R0-RC3 step 9, C1).");
+        state.Require(destinationNamesBody.find("RenameOrigin::InlineRename") != std::string_view::npos &&
+                          destinationNamesBody.find("PlanRejectionBucket::InvalidRename") != std::string_view::npos,
+                      L"Preparing must resolve an inline rename's pending join through the provider child-name contract (C1).");
+        state.Require(stateSource.find("PrepareNativeMoveShapes") == std::string::npos &&
+                          stateSource.find("QualifyLocalNativeMoveItemShapeForPreparing") == std::string::npos,
+                      L"Preparing performs no Native Move shape probe: a same-endpoint Move is Native for every item shape (Beeline).");
+        const std::string_view prepareForExecutionBody = SourceBetween(stateSource,
+                                                                       "HRESULT FolderWindow::FileOperationState::Task::PrepareForExecution",
+                                                                       "void FolderWindow::FileOperationState::Task::ThreadMain");
+        state.Require(! prepareForExecutionBody.empty() && prepareForExecutionBody.find("RunPermanentDeleteConfirmation()") != std::string_view::npos &&
+                          prepareForExecutionBody.find("RunPermanentDeleteConfirmation()") < prepareForExecutionBody.find("RunSameHostOverlapAdvisory()"),
+                      L"Preparing must run the permanent-delete confirmation on the card after the roots are pinned and before the overlap advisory (C1).");
+    }
+
+    std::string batchEngineSource;
+    if (readRequired(L"RedSalamander/BatchRenameEngine.cpp", batchEngineSource))
+    {
+        state.Require(batchEngineSource.find("HasWindowsInvalidLeafCharacter") == std::string::npos &&
+                          batchEngineSource.find("IsReservedDeviceName") == std::string::npos &&
+                          batchEngineSource.find("kWindowsMaxLeafNameLength") == std::string::npos,
+                      L"Batch Rename must not retain a Windows-only leaf-name authority after R7-A15.");
+    }
+
+    std::string batchWindowSource;
+    if (readRequired(L"RedSalamander/BatchRenameWindow.cpp", batchWindowSource))
+    {
+        const std::string_view providerValidationBody =
+            SourceBetween(batchWindowSource, "void ApplyProviderDestinationValidation", "[[nodiscard]] BatchRename::Plan BuildBatchRenamePlanForContext");
+        const std::string_view providerListingBody =
+            SourceBetween(batchWindowSource, "[[nodiscard]] HRESULT CollectProviderChildCollisionKeys", "void ApplyProviderDestinationValidation");
+        state.Require(! providerValidationBody.empty() && providerValidationBody.find("QueryChildNameContract") != std::string_view::npos,
+                       L"Batch Rename preview must consume provider validation, join, and collision keys.");
+        state.Require(batchWindowSource.find("ApplyLocalDestinationConflictValidation") == std::string::npos &&
+                           providerListingBody.find("ReadDirectoryInfo") != std::string_view::npos &&
+                           providerListingBody.find("QueryChildNameCollisionKey") != std::string_view::npos &&
+                           providerValidationBody.find("std::filesystem::directory_iterator") == std::string_view::npos,
+                       L"Batch Rename destination collision validation must be provider-agnostic.");
+    }
+
+    std::string changeCaseSource;
+    if (readRequired(L"RedSalamander/ChangeCase.cpp", changeCaseSource))
+    {
+        state.Require(changeCaseSource.find("QueryChildNameContract") != std::string::npos,
+                      L"Change Case must consume the canonical provider child-name contract.");
+        state.Require(changeCaseSource.find("GuessPreferredSeparator") == std::string::npos &&
+                          changeCaseSource.find("JoinFolderAndLeaf") == std::string::npos,
+                      L"Change Case must not guess a provider separator or joined path.");
+    }
+
+    std::string commandSource;
+    if (readRequired(L"RedSalamander/FolderWindow.FileSystem.Commands.cpp", commandSource))
+    {
+        state.Require(commandSource.find("DirectoryNamesMatch") == std::string::npos &&
+                          commandSource.find("treatSuggestedNamesCaseInsensitive") == std::string::npos,
+                      L"F7 suggested-name selection must not use a Local short-ID case rule.");
+        state.Require(commandSource.find("QueryChildNameContract") != std::string::npos,
+                      L"F7 suggested-name selection and retries must consume provider collision keys and joins.");
+        state.Require(commandSource.find("ChangeCase::BuildRenameOperations") != std::string::npos &&
+                          commandSource.find("ChangeCase::DebugApplyToPathsForTests") == std::string::npos,
+                      L"Production Change Case must perform discovery only and must not retain a private mutation executor.");
+    }
+
+    std::string fileSystemSource;
+    if (readRequired(L"RedSalamander/FolderWindow.FileSystem.cpp", fileSystemSource))
+    {
+        state.Require(fileSystemSource.find("FileOperations::RenameOrigin::ChangeCase") != std::string::npos &&
+                          fileSystemSource.find("AdmitScheduledRename(") != std::string::npos,
+                      L"Completed Change Case discovery must submit its typed operations to the central RenamePlan owner.");
+    }
+
+    std::string authoritativeSpec;
+    if (readRequired(L"Specs/FileSystem/FileSystem_FileOperations.md", authoritativeSpec))
+    {
+        state.Require(authoritativeSpec.find("rename commands consume them only in R7-A15") == std::string::npos &&
+                          authoritativeSpec.find("provider collision key") != std::string::npos,
+                      L"The authoritative File Operations spec must own the landed provider name-policy consumption contract.");
     }
 
     return state.failure.empty();
@@ -4861,6 +5174,1068 @@ private:
     state.Require(retryBody.find("PeekMessageW") == std::string_view::npos,
                   L"FolderView clipboard retry must not remove/pump arbitrary UI messages while retrying OpenClipboard.");
 
+    source.clear();
+    const std::filesystem::path unicodeClipboardPath = repoRoot / L"Common" / L"UnicodeClipboard.h";
+    state.Require(ReadSourceFileUtf8(unicodeClipboardPath, source), std::format(L"Failed to read {}.", unicodeClipboardPath.wstring()));
+    if (source.empty())
+    {
+        return false;
+    }
+
+    const std::string_view sharedRetryBody =
+        SourceBetween(source, "[[nodiscard]] inline bool TrySetUnicodeText", "} // namespace Common::Clipboard");
+    state.Require(! sharedRetryBody.empty(), L"Common::Clipboard::TrySetUnicodeText body was not found.");
+    state.Require(sharedRetryBody.find("kClipboardOpenAttemptCount") != std::string_view::npos &&
+                      sharedRetryBody.find("Sleep(kClipboardOpenRetryDelayMs)") != std::string_view::npos,
+                  L"Common::Clipboard::TrySetUnicodeText must bound and delay OpenClipboard retries.");
+    state.Require(sharedRetryBody.find("DispatchMessageW") == std::string_view::npos,
+                  L"Shared Unicode clipboard retry must not dispatch arbitrary UI messages while retrying OpenClipboard.");
+    state.Require(sharedRetryBody.find("TranslateMessage") == std::string_view::npos,
+                  L"Shared Unicode clipboard retry must not translate arbitrary UI messages while retrying OpenClipboard.");
+    state.Require(sharedRetryBody.find("PeekMessageW") == std::string_view::npos,
+                  L"Shared Unicode clipboard retry must not remove/pump arbitrary UI messages while retrying OpenClipboard.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFileOperationsPreparingLifecycleSourceGuard(CaseState& state) noexcept
+{
+    const std::filesystem::path repoRoot = SelfTest::TryFindRepoRoot();
+    state.Require(! repoRoot.empty(), L"Repository root unavailable for the File Operations Preparing lifecycle source guard.");
+    if (repoRoot.empty())
+    {
+        return false;
+    }
+
+    std::string internalHeader;
+    const std::filesystem::path internalHeaderPath = repoRoot / L"RedSalamander" / L"FolderWindow.FileOperationsInternal.h";
+    state.Require(ReadSourceFileUtf8(internalHeaderPath, internalHeader), std::format(L"Failed to read {}.", internalHeaderPath.wstring()));
+    state.Require(internalHeader.find("enum class TaskLifecyclePhase") != std::string::npos &&
+                      internalHeader.find("struct PreparationSnapshot") != std::string::npos &&
+                      internalHeader.find("preConsumptionDecisionGate") != std::string::npos &&
+                      internalHeader.find("enum class TaskPresentationState") != std::string::npos &&
+                      internalHeader.find("kTaskCardRevealDelayMs") != std::string::npos &&
+                      internalHeader.find("std::atomic<TaskLifecyclePhase> _lifecyclePhase") != std::string::npos &&
+                      internalHeader.find("std::atomic<std::shared_ptr<const PreparationSnapshot>> _preparationSnapshot") != std::string::npos &&
+                      internalHeader.find("unresolvedPreparingGate") == std::string::npos,
+                  L"Every task must expose one engine-owned lifecycle, immutable Preparing snapshot, and common pre-consumption decision gate.");
+
+    std::string stateSource;
+    const std::filesystem::path stateSourcePath = repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.State.cpp";
+    state.Require(ReadSourceFileUtf8(stateSourcePath, stateSource), std::format(L"Failed to read {}.", stateSourcePath.wstring()));
+    const size_t prepareCall = stateSource.find("PrepareForExecution()");
+    const size_t releaseWait = stateSource.find("_workerReleased.wait(false");
+    state.Require(prepareCall != std::string::npos && releaseWait != std::string::npos && prepareCall < releaseWait &&
+                      stateSource.find("BuildPreparationSnapshot") != std::string::npos &&
+                      stateSource.find("RunPreConsumptionDecisionGate") != std::string::npos,
+                  L"Worker startup must finish common preparation and publish immutable facts before any clipboard or mutation release wait.");
+
+    std::string runtimeSource;
+    const std::filesystem::path runtimeSourcePath = repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.State.Runtime.cpp";
+    state.Require(ReadSourceFileUtf8(runtimeSourcePath, runtimeSource), std::format(L"Failed to read {}.", runtimeSourcePath.wstring()));
+    state.Require(runtimeSource.find("task->_moveBreadcrumb.emplace") == std::string::npos,
+                  L"UI admission must not persist a Move breadcrumb before worker-owned Preparing and acceptance complete.");
+    const std::vector<std::string_view> startOperationBodies =
+        SourceFunctionBodies(runtimeSource, "HRESULT FolderWindow::FileOperationState::StartOperation");
+    state.Require(startOperationBodies.size() == 1u &&
+                      startOperationBodies.front().find("RequestTaskPresentationRefresh()") != std::string_view::npos &&
+                      startOperationBodies.front().find("EnsurePopupVisible()") == std::string_view::npos,
+                  L"Ordinary task admission must arm deferred task presentation instead of synchronously opening the popup.");
+
+    std::string fileOperationsSource;
+    const std::filesystem::path fileOperationsSourcePath = repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.cpp";
+    state.Require(ReadSourceFileUtf8(fileOperationsSourcePath, fileOperationsSource),
+                  std::format(L"Failed to read {}.", fileOperationsSourcePath.wstring()));
+    const std::vector<std::string_view> scheduledRenameBodies =
+        SourceFunctionBodies(fileOperationsSource, "HRESULT FolderWindow::FileOperationState::AdmitScheduledRename");
+    state.Require(scheduledRenameBodies.size() == 1u &&
+                      scheduledRenameBodies.front().find("_preConsumptionDecisionGate = std::move(preConsumptionDecisionGate)") !=
+                          std::string_view::npos &&
+                      scheduledRenameBodies.front().find("_preparationObserver = std::move(preparationObserver)") !=
+                          std::string_view::npos,
+                  L"Scheduled Rename must publish through the same common preparation decision and immutable observer hooks as ordinary tasks.");
+
+    std::string popupSource;
+    const std::filesystem::path popupSourcePath = repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.Popup.cpp";
+    state.Require(ReadSourceFileUtf8(popupSourcePath, popupSource), std::format(L"Failed to read {}.", popupSourcePath.wstring()));
+    constexpr std::string_view lifecyclePreparingCall = "TaskShowsPreparingStatus(task)";
+    const size_t firstLifecyclePreparingCall           = popupSource.find(lifecyclePreparingCall);
+    state.Require(popupSource.find("GetLifecyclePhase()") != std::string::npos &&
+                      popupSource.find("hasProgressNumbers") == std::string::npos &&
+                      firstLifecyclePreparingCall != std::string::npos &&
+                      popupSource.find(lifecyclePreparingCall, firstLifecyclePreparingCall + lifecyclePreparingCall.size()) != std::string::npos,
+                  L"The File Operations popup must render Preparing from the engine lifecycle instead of progress heuristics.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFileOperationsPhase0TypedContractSourceGuard(CaseState& state) noexcept
+{
+    const std::filesystem::path repoRoot = SelfTest::TryFindRepoRoot();
+    state.Require(! repoRoot.empty(), L"Repository root unavailable for File Operations Phase 0 source guard.");
+    if (repoRoot.empty())
+    {
+        return false;
+    }
+
+    std::string internalHeader;
+    const std::filesystem::path internalHeaderPath =
+        repoRoot / L"RedSalamander" / L"FolderWindow.FileOperationsInternal.h";
+    state.Require(ReadSourceFileUtf8(internalHeaderPath, internalHeader),
+                  std::format(L"Failed to read {}.", internalHeaderPath.wstring()));
+    constexpr std::array<std::string_view, 17> requiredPlanTokens{{
+        "enum class TransferIntent",
+        "enum class OperationStrategy",
+        "struct MoveStrategyQualificationFacts",
+        "enum class DeleteMode",
+        "enum class RenameOrigin",
+        "struct QualifiedEndpoint",
+        "std::optional<FileSystemPathIdentity> pathIdentity",
+        "struct ProviderIdentitySnapshot",
+        "struct TransferDestinationMapping",
+        "struct DestructiveConsentReceipt",
+        "struct OperationOptions",
+        "struct TransferPlan",
+        "struct RenamePlan",
+        "struct DeletePlan",
+        "using FileOperationPlan = std::variant",
+        "using FileOperationPlanGroup = std::vector<FileOperationPlan>",
+        "struct TypedConflictRecord",
+    }};
+    for (const std::string_view token : requiredPlanTokens)
+    {
+        state.Require(internalHeader.find(token) != std::string::npos,
+                      std::format(L"File Operations typed skeleton is missing '{}'.",
+                                  std::wstring(token.begin(), token.end())));
+    }
+    std::string folderWindowHeader;
+    const std::filesystem::path folderWindowHeaderPath = repoRoot / L"RedSalamander" / L"FolderWindow.h";
+    state.Require(ReadSourceFileUtf8(folderWindowHeaderPath, folderWindowHeader),
+                  std::format(L"Failed to read {}.", folderWindowHeaderPath.wstring()));
+    state.Require(folderWindowHeader.find("enum class PublicationState") != std::string::npos &&
+                      folderWindowHeader.find("enum class VerificationState") != std::string::npos &&
+                      folderWindowHeader.find("enum class SourceDisposition") != std::string::npos &&
+                      folderWindowHeader.find("enum class ItemCompletion") != std::string::npos,
+                  L"File Operations completion consumers must share the public typed result axes.");
+    state.Require(internalHeader.find("struct OperationAdmission") != std::string::npos &&
+                      internalHeader.find("HRESULT AdmitOperation(") != std::string::npos &&
+                      internalHeader.find("HRESULT StartOperation(OperationAdmission admission") != std::string::npos &&
+                      internalHeader.find("ExecutionMode executionMode                                        = ExecutionMode::PerItem") !=
+                          std::string::npos,
+                  L"File Operations must expose a typed-only queue-publication boundary and default transfer admission to guarded per-item execution.");
+    state.Require(internalHeader.find("enum class ObjectBindingState") != std::string::npos &&
+                      internalHeader.find("struct BoundObjectAuthority") != std::string::npos &&
+                      internalHeader.find("BindObjectAuthority(") != std::string::npos &&
+                      internalHeader.find("RevalidateObjectAuthority(") != std::string::npos &&
+                      internalHeader.find("enum class TransferSafetyState") != std::string::npos &&
+                      internalHeader.find("struct TransferMutationGuard") != std::string::npos &&
+                      internalHeader.find("PrepareTransferMutationGuard(") != std::string::npos &&
+                      internalHeader.find("RevalidateTransferMutationGuard(") != std::string::npos,
+                  L"File Operations must expose typed no-follow binding, containment, and exact mutation-boundary revalidation results.");
+    state.Require(internalHeader.find("Unspecified") != std::string::npos &&
+                      internalHeader.find("InlineRename") != std::string::npos &&
+                      internalHeader.find("RenameOrigin origin = RenameOrigin::Unspecified") != std::string::npos,
+                  L"Rename plans must fail closed with an explicit InlineRename or BatchRename origin.");
+    state.Require(internalHeader.find("_discoveryAheadActive") != std::string::npos &&
+                      internalHeader.find("_discoveryClosed") != std::string::npos &&
+                      internalHeader.find("FileSystemReportDiscoveryProgress") != std::string::npos &&
+                      internalHeader.find("RunPreCalculation") == std::string::npos &&
+                      internalHeader.find("_preCalc") == std::string::npos,
+                  L"The task must own one-pass discovery state and must not retain the retired pre-calculation thread or totals bridge.");
+    state.Require(internalHeader.find("FollowTargets") == std::string::npos &&
+                      internalHeader.find("_followTargetsWarning") == std::string::npos,
+                  L"The task contract must not retain a Follow enum, session grant, or obsolete warning state.");
+    state.Require(internalHeader.find("OperationStrategy strategy = OperationStrategy::Copy") != std::string::npos &&
+                      internalHeader.find("nativeDirectoryRaceFallback") == std::string::npos,
+                  L"Ordinary Copy must have an explicit Copy strategy, and a Native directory Move carries no prepared fallback plan.");
+
+    std::string fileOperationsSource;
+    const std::filesystem::path fileOperationsSourcePath =
+        repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.cpp";
+    state.Require(ReadSourceFileUtf8(fileOperationsSourcePath, fileOperationsSource),
+                  std::format(L"Failed to read {}.", fileOperationsSourcePath.wstring()));
+    state.Require(fileOperationsSource.find("_fileOperations->StartOperation(") == std::string::npos &&
+                      fileOperationsSource.find("_fileOperations->AdmitOperation(") != std::string::npos &&
+                      fileOperationsSource.find("TryGetFileSystemPluginIdentity") != std::string::npos &&
+                      fileOperationsSource.find("fileSystem->QueryInterface(IID_PPV_ARGS(informations.addressof()))") != std::string::npos &&
+                      fileOperationsSource.find("informations->GetMetaData(&metadata)") != std::string::npos &&
+                      fileOperationsSource.find("fileops.plan.construct_us") != std::string::npos &&
+                      fileOperationsSource.find("fileops.plan.admit_us") != std::string::npos,
+                  L"Production File Operations ingress must use central typed admission, derive out-of-pane provider identity from the explicit endpoint, and emit plan latency metrics.");
+    state.Require(fileOperationsSource.find("BuildProviderCandidateIndex") == std::string::npos &&
+                      fileOperationsSource.find("BuildConservativeCandidateIndex") == std::string::npos &&
+                      fileOperationsSource.find("fileops.artifact.capture.bind_count") != std::string::npos,
+                  L"Post-journal artifact projection must not construct a provider claim index; exact Possible-row capture retains explicit bind-count evidence.");
+
+    std::string artifactRegistrySource;
+    const std::filesystem::path artifactRegistrySourcePath =
+        repoRoot / L"RedSalamander" / L"FileOperationArtifactRegistry.cpp";
+    state.Require(ReadSourceFileUtf8(artifactRegistrySourcePath, artifactRegistrySource),
+                  std::format(L"Failed to read {}.", artifactRegistrySourcePath.wstring()));
+    state.Require(artifactRegistrySource.find("DebugMeasureArtifactNameShapeProjectionForTests") != std::string::npos &&
+                      artifactRegistrySource.find("DebugMeasureArtifactCandidateIndexForTests") == std::string::npos &&
+                      artifactRegistrySource.find("_indexedClaimCount") == std::string::npos &&
+                      artifactRegistrySource.find("_keys.insert") == std::string::npos,
+                  L"Artifact scaling evidence must exercise the production name-shape classifier and must not manufacture private claim keys.");
+
+    std::string folderViewEnumerationSource;
+    const std::filesystem::path folderViewEnumerationSourcePath =
+        repoRoot / L"RedSalamander" / L"FolderView.Enumeration.cpp";
+    state.Require(ReadSourceFileUtf8(folderViewEnumerationSourcePath, folderViewEnumerationSource),
+                  std::format(L"Failed to read {}.", folderViewEnumerationSourcePath.wstring()));
+    state.Require(folderViewEnumerationSource.find("HasPossibleArtifactName") != std::string::npos &&
+                      folderViewEnumerationSource.find("BuildProviderCandidateIndex") == std::string::npos &&
+                      folderViewEnumerationSource.find("IsWorthProbingChild") == std::string::npos &&
+                      folderViewEnumerationSource.find("fileops.artifact.folder_projection.probe_candidates") !=
+                          std::string::npos &&
+                      folderViewEnumerationSource.find("HasClaimLeafHint") == std::string::npos,
+                  L"FolderView artifact projection must use only the post-journal name-shape classifier and must not retain a synthetic claim index or global leaf hint.");
+
+    std::string findFilesSource;
+    const std::filesystem::path findFilesSourcePath =
+        repoRoot / L"RedSalamander" / L"FindFilesWindow.cpp";
+    state.Require(ReadSourceFileUtf8(findFilesSourcePath, findFilesSource),
+                  std::format(L"Failed to read {}.", findFilesSourcePath.wstring()));
+    state.Require(findFilesSource.find("HasPossibleArtifactName") != std::string::npos &&
+                      findFilesSource.find("BuildProviderCandidateIndex") == std::string::npos &&
+                      findFilesSource.find("IsWorthProbingPath") == std::string::npos &&
+                      findFilesSource.find("fileops.artifact.find_projection.lookup_rows") !=
+                          std::string::npos &&
+                      findFilesSource.find("HasClaimLeafHint") == std::string::npos,
+                  L"Find artifact projection must use only the post-journal name-shape classifier and must not retain a synthetic claim index or global leaf hint.");
+
+    std::string folderWindowSource;
+    const std::filesystem::path folderWindowSourcePath = repoRoot / L"RedSalamander" / L"FolderWindow.cpp";
+    state.Require(ReadSourceFileUtf8(folderWindowSourcePath, folderWindowSource),
+                  std::format(L"Failed to read {}.", folderWindowSourcePath.wstring()));
+    std::string viewersSource;
+    const std::filesystem::path viewersSourcePath = repoRoot / L"RedSalamander" / L"FolderWindow.Viewers.cpp";
+    state.Require(ReadSourceFileUtf8(viewersSourcePath, viewersSource),
+                  std::format(L"Failed to read {}.", viewersSourcePath.wstring()));
+    std::string itemPropertiesSource;
+    const std::filesystem::path itemPropertiesSourcePath = repoRoot / L"RedSalamander" / L"FolderWindow.ItemProperties.cpp";
+    state.Require(ReadSourceFileUtf8(itemPropertiesSourcePath, itemPropertiesSource),
+                  std::format(L"Failed to read {}.", itemPropertiesSourcePath.wstring()));
+    state.Require(folderWindowSource.find("SetExternalOpenGuardCallback") == std::string::npos &&
+                      viewersSource.find("ConfirmExternalArtifactTouch") == std::string::npos &&
+                      viewersSource.find("CollectExternalActionTouchedPaths") == std::string::npos &&
+                      findFilesSource.find("ConfirmExternalArtifactTouchForProvider") == std::string::npos,
+                  L"Name-only Possible artifacts must not be guarded on read/open/edit/preview/export or configured external-action paths.");
+    state.Require(itemPropertiesSource.find("FileOperationArtifacts::HasPossibleArtifactName(workItem->itemPath.filename().native())") !=
+                          std::string::npos &&
+                      itemPropertiesSource.find("FileOperationArtifacts::CaptureProviderObjectCandidate(") != std::string::npos &&
+                      itemPropertiesSource.find("work->fileSystem  = _fileSystem") != std::string::npos &&
+                      itemPropertiesSource.find("AppendItemPropertiesArtifactExplanation(_doc, _artifactExplanation)") != std::string::npos &&
+                      itemPropertiesSource.find("const HRESULT guardHr = _mutationGuard()") != std::string::npos,
+                  L"Item Properties must query Possible names on its retained worker, append the host-owned explanation, and guard its stream mutation.");
+    const std::vector<std::string_view> batchRenameUiAdmissionBodies =
+        SourceFunctionBodies(fileOperationsSource, "HRESULT FolderWindow::FileOperationState::AdmitBatchRename");
+    const std::vector<std::string_view> scheduledRenameUiAdmissionBodies =
+        SourceFunctionBodies(fileOperationsSource, "HRESULT FolderWindow::FileOperationState::AdmitScheduledRename");
+    const std::vector<std::string_view> batchRenameWorkerAdmissionBodies =
+        SourceFunctionBodies(fileOperationsSource, "HRESULT FolderWindow::FileOperationState::Task::PrepareBatchRenameAdmission");
+    state.Require(batchRenameUiAdmissionBodies.size() == 1u && scheduledRenameUiAdmissionBodies.size() == 1u &&
+                      batchRenameWorkerAdmissionBodies.size() == 1u,
+                  L"Scheduled Rename admission source guard expected one Batch wrapper, one central UI capture boundary, and one worker qualification boundary.");
+    if (batchRenameUiAdmissionBodies.size() == 1u && scheduledRenameUiAdmissionBodies.size() == 1u &&
+        batchRenameWorkerAdmissionBodies.size() == 1u)
+    {
+        state.Require(batchRenameUiAdmissionBodies.front().find("TryGetCapabilities(") == std::string_view::npos &&
+                          batchRenameUiAdmissionBodies.front().find("BindObjectAuthority(") == std::string_view::npos &&
+                          batchRenameUiAdmissionBodies.front().find("TryGetFileSystemParentPath(") == std::string_view::npos &&
+                          batchRenameUiAdmissionBodies.front().find("AdmitScheduledRename(") != std::string_view::npos,
+                      L"Batch Rename must remain a policy-free wrapper over central scheduled Rename admission.");
+        state.Require(scheduledRenameUiAdmissionBodies.front().find("TryGetCapabilities(") == std::string_view::npos &&
+                          scheduledRenameUiAdmissionBodies.front().find("BindObjectAuthority(") == std::string_view::npos &&
+                          scheduledRenameUiAdmissionBodies.front().find("TryGetFileSystemParentPath(") == std::string_view::npos &&
+                          scheduledRenameUiAdmissionBodies.front().find("batchrename.admission.ui_thread_us") != std::string_view::npos &&
+                          scheduledRenameUiAdmissionBodies.front().find("changecase.admission.ui_thread_us") != std::string_view::npos,
+                      L"Central scheduled Rename UI admission must perform immutable capture/publication only and measure Batch Rename and Change Case publication.");
+        state.Require(batchRenameWorkerAdmissionBodies.front().find("TryGetCapabilities(") != std::string_view::npos &&
+                          batchRenameWorkerAdmissionBodies.front().find("BindObjectAuthority(") != std::string_view::npos &&
+                          batchRenameWorkerAdmissionBodies.front().find("TryGetFileSystemParentPath(") != std::string_view::npos &&
+                          batchRenameWorkerAdmissionBodies.front().find("StorePlans(") != std::string_view::npos,
+                      L"Batch Rename worker admission must own path capabilities, provider-parent derivation, no-follow binding, and immutable plan publication.");
+    }
+
+    std::string runtimeSource;
+    const std::filesystem::path runtimeSourcePath =
+        repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.State.Runtime.cpp";
+    state.Require(ReadSourceFileUtf8(runtimeSourcePath, runtimeSource),
+                  std::format(L"Failed to read {}.", runtimeSourcePath.wstring()));
+    state.Require(runtimeSource.find("std::make_shared<const FileOperations::FileOperationPlanGroup>(std::move(plans))") != std::string::npos &&
+                      runtimeSource.find("void FolderWindow::FileOperationState::OnClipboardMoveReady") != std::string::npos &&
+                      runtimeSource.find("_acceptedMoveClipboardSequences") != std::string::npos &&
+                      runtimeSource.find("_workerReleased.store(true") != std::string::npos &&
+                      runtimeSource.find("ExecuteCompletedRetainedSourceAction") != std::string::npos &&
+                      runtimeSource.find("current.authority.identity.objectId != item.identity.objectId") != std::string::npos &&
+                      runtimeSource.find("archiveDeleteConsentCaptured") != std::string::npos &&
+                      runtimeSource.find("admission.capturedConsentKind.value_or(") != std::string::npos,
+                  L"Queue publication must retain immutable child plans, deduplicate clipboard Move sequences, preserve exact retained-source actions, and bind captured archive-delete consent to the admitted task nonce.");
+    state.Require(runtimeSource.find("HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS)") != std::string::npos &&
+                      runtimeSource.find("_completionShutdown.load(std::memory_order_acquire)") != std::string::npos,
+                  L"File Operations admission must fail closed at synchronous prompt boundaries after shutdown begins.");
+    state.Require(runtimeSource.find("if (typedPlan.intent == FileOperations::TransferIntent::Move)") != std::string::npos,
+                  L"Artifact touch collection must exempt Copy sources while retaining Move-source mutation coverage.");
+    const std::vector<std::string_view> artifactPromptBodies =
+        SourceFunctionBodies(runtimeSource, "void FolderWindow::FileOperationState::OnBatchRenameArtifactPrompt");
+    const std::vector<std::string_view> artifactDispatchBodies =
+        SourceFunctionBodies(fileOperationsSource, "LRESULT FolderWindow::OnFileOperationBatchRenameArtifactPrompt");
+    const std::vector<std::string_view> directAdmissionBodies =
+        SourceFunctionBodies(fileOperationsSource, "HRESULT FolderWindow::StartFileOperationForResolvedPaths(std::wstring_view");
+    const std::vector<std::string_view> externalArtifactTouchBodies =
+        SourceFunctionBodies(fileOperationsSource, "HRESULT FolderWindow::ConfirmExternalArtifactTouchForProvider");
+    const auto countOccurrences = [](const std::string_view source, const std::string_view needle) noexcept -> size_t
+    {
+        size_t count = 0u;
+        size_t offset = 0u;
+        while ((offset = source.find(needle, offset)) != std::string_view::npos)
+        {
+            ++count;
+            offset += needle.size();
+        }
+        return count;
+    };
+    state.Require(artifactPromptBodies.size() == 1u &&
+                      artifactPromptBodies.front().find("const uint64_t taskId = payload->taskId") != std::string_view::npos &&
+                      artifactPromptBodies.front().find("CompleteBatchRenameArtifactPromptByTaskId(") != std::string_view::npos &&
+                      artifactPromptBodies.front().find("task->CompleteBatchRenameArtifactPrompt(") == std::string_view::npos &&
+                      artifactDispatchBodies.size() == 1u &&
+                      artifactDispatchBodies.front().find("FileOperationPromptDispatchScope promptDispatch") != std::string_view::npos &&
+                      artifactDispatchBodies.front().find("++_fileOperationPromptDispatchDepth") == std::string_view::npos &&
+                      artifactDispatchBodies.front().find("CompleteBatchRenameArtifactPromptByTaskId(") != std::string_view::npos &&
+                      directAdmissionBodies.size() == 1u &&
+                      directAdmissionBodies.front().find("FileOperationPromptDispatchScope promptDispatch") != std::string_view::npos &&
+                      externalArtifactTouchBodies.size() == 1u &&
+                      externalArtifactTouchBodies.front().find("FileOperationPromptDispatchScope promptDispatch") != std::string_view::npos &&
+                      fileOperationsSource.find("FileOperationPromptDispatchScope::~FileOperationPromptDispatchScope() noexcept") !=
+                          std::string::npos &&
+                      countOccurrences(fileOperationsSource, "const FileOperationPromptDispatchScope promptDispatch(*this);") == 14u,
+                  L"Every FolderWindow File Operations admission or nested-prompt entrance must share the dispatch scope, retain only taskId across posted prompt pumps, defer state destruction, and wake a live task when payload adoption fails.");
+    state.Require(internalHeader.find("uint64_t interruptedOperationId = 0u") != std::string::npos &&
+                      runtimeSource.find("summary.taskId = _nextTaskId++") != std::string::npos &&
+                      runtimeSource.find("summary.interruptedOperationId = record.taskId") != std::string::npos &&
+                      runtimeSource.find("TryDecodeNavigationInstanceContext(source.instanceId)") != std::string::npos &&
+                      runtimeSource.find("TryDecodeNavigationInstanceContext(record.destination.instanceId)") != std::string::npos &&
+                      runtimeSource.find("summary.sourceInstanceContext = sourceInstanceContext.value()") != std::string::npos &&
+                      runtimeSource.find("summary.destinationInstanceContext = destinationInstanceContext.value()") != std::string::npos &&
+                      runtimeSource.find("summary.sourceInstanceContext = source.instanceId") == std::string::npos &&
+                      runtimeSource.find("summary.destinationInstanceContext = record.destination.instanceId") == std::string::npos &&
+                      runtimeSource.find("DismissCompletedTask(const uint64_t sessionTaskId)") != std::string::npos &&
+                      runtimeSource.find("summary.taskId == sessionTaskId") != std::string::npos &&
+                      runtimeSource.find("summary.taskId == record.taskId") == std::string::npos,
+                  L"Interrupted-Move projection must keep the session card key distinct from the explicitly named durable operation ID, decode comparison identity for pane navigation, and resolve dismissal through that session key.");
+
+    std::string popupHeader;
+    const std::filesystem::path popupHeaderPath =
+        repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.Popup.h";
+    state.Require(ReadSourceFileUtf8(popupHeaderPath, popupHeader),
+                  std::format(L"Failed to read {}.", popupHeaderPath.wstring()));
+    std::string popupSource;
+    const std::filesystem::path popupSourcePath =
+        repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.Popup.cpp";
+    state.Require(ReadSourceFileUtf8(popupSourcePath, popupSource),
+                  std::format(L"Failed to read {}.", popupSourcePath.wstring()));
+    state.Require(popupHeader.find("uint64_t interruptedOperationId") != std::string::npos &&
+                      popupSource.find("snap.interruptedOperationId") != std::string::npos &&
+                      popupSource.find("completed.interruptedOperationId") != std::string::npos,
+                  L"The popup snapshot must preserve the explicitly named durable operation ID while continuing to route actions by the session taskId.");
+    state.Require(popupSource.find("fileOps->OnPopupHiddenByUser()") != std::string::npos &&
+                      popupSource.find("ShowWindow(hwnd, SW_HIDE)") != std::string::npos &&
+                      fileOperationsSource.find("CommandShowFileOperations") != std::string::npos,
+                  L"File Operations Close must remain hide-only while actionable publication and the explicit Show File Operations command preserve decision-surface reachability.");
+    const std::vector<std::string_view> speedPromptBodies =
+        SourceFunctionBodies(popupSource, "[[nodiscard]] std::optional<uint64_t> ShowModal() noexcept");
+    state.Require(speedPromptBodies.size() == 1u &&
+                      speedPromptBodies.front().find("while (! _done && ! HostIsPromptShutdown())") != std::string_view::npos &&
+                      speedPromptBodies.front().find("DispatchMessageW(&msg);") != std::string_view::npos &&
+                      countOccurrences(speedPromptBodies.front(), "if (HostIsPromptShutdown())") >= 2u,
+                  L"The custom speed-limit modal drain must observe host prompt shutdown before waiting and after dispatching nested thread messages.");
+    const std::vector<std::string_view> speedPromptTaskBodies =
+        SourceFunctionBodies(popupSource, "bool FileOperationsPopupInternal::FileOperationsPopupState::ShowCustomSpeedLimitPromptForTask");
+    state.Require(speedPromptTaskBodies.size() == 1u &&
+                      speedPromptTaskBodies.front().find("FileOperationPromptDispatchScope") != std::string_view::npos &&
+                      speedPromptTaskBodies.front().find("const uint64_t taskId") != std::string_view::npos &&
+                      speedPromptTaskBodies.front().find("FindTask(taskId)") != std::string_view::npos &&
+                      speedPromptTaskBodies.front().find("task->SetDesiredSpeedLimit(promptResult.value())") == std::string_view::npos,
+                  L"The custom speed-limit prompt must retain FileOperationState across its nested pump and re-find the task by ID before submission.");
+    const std::vector<std::string_view> speedMenuBodies =
+        SourceFunctionBodies(popupSource, "void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu");
+    state.Require(speedMenuBodies.size() == 1u && speedMenuBodies.front().find("FileOperationPromptDispatchScope promptDispatch(*folderWindow);") != std::string_view::npos &&
+                      speedMenuBodies.front().find("selectedTask = fileOps->FindTask(taskId);") != std::string_view::npos,
+                  L"The live speed-limit menu's custom prompt must retain FileOperationState across its nested pump and re-find the task by ID before submission.");
+    const std::vector<std::string_view> popupCancelAllBodies =
+        SourceFunctionBodies(popupSource, "bool FileOperationsPopupInternal::FileOperationsPopupState::ConfirmCancelAll");
+    const std::vector<std::string_view> folderCancelAllBodies =
+        SourceFunctionBodies(fileOperationsSource, "bool FolderWindow::ConfirmCancelAllFileOperations");
+    state.Require(popupCancelAllBodies.size() == 1u && folderCancelAllBodies.size() == 1u &&
+                      popupCancelAllBodies.front().find("FileOperationPromptDispatchScope") != std::string_view::npos &&
+                      folderCancelAllBodies.front().find("FileOperationPromptDispatchScope") != std::string_view::npos,
+                  L"Both File Operations Cancel-All confirmation paths must retain FileOperationState across HostShowPrompt nested dispatch.");
+
+    std::string mainResources;
+    const std::filesystem::path mainResourcesPath = repoRoot / L"RedSalamander" / L"RedSalamander.rc";
+    state.Require(ReadSourceFileUtf8(mainResourcesPath, mainResources),
+                  std::format(L"Failed to read {}.", mainResourcesPath.wstring()));
+    state.Require(mainResources.find("Interrupted operation ID {0}: Move was interrupted") != std::string::npos &&
+                      mainResources.find("Move task {0} was interrupted") == std::string::npos,
+                  L"Interrupted-Move user text must label the durable value as an interrupted operation ID, never as another active task ID.");
+
+    std::string hostServicesSource;
+    const std::filesystem::path hostServicesSourcePath = repoRoot / L"RedSalamander" / L"HostServices.cpp";
+    state.Require(ReadSourceFileUtf8(hostServicesSourcePath, hostServicesSource),
+                  std::format(L"Failed to read {}.", hostServicesSourcePath.wstring()));
+    const std::vector<std::string_view> promptBodies = SourceFunctionBodies(hostServicesSource, "HRESULT ShowPromptOnUiThread");
+    state.Require(promptBodies.size() == 1u, L"Host prompt source guard expected one ShowPromptOnUiThread implementation.");
+    if (promptBodies.size() == 1u)
+    {
+        const size_t dispatchOffset = promptBodies.front().find("DispatchMessageW(&msg);");
+        const size_t stopOffset = promptBodies.front().find(
+            "if (state.completed || ! overlayWindow.IsVisible() || g_hostPromptShutdown.load(std::memory_order_acquire))", dispatchOffset);
+        state.Require(dispatchOffset != std::string_view::npos && stopOffset != std::string_view::npos && dispatchOffset < stopOffset,
+                      L"A host prompt must stop its nested message drain immediately after a dispatched close hides/completes it.");
+    }
+
+    std::string applicationSource;
+    const std::filesystem::path applicationSourcePath = repoRoot / L"RedSalamander" / L"RedSalamander.cpp";
+    state.Require(ReadSourceFileUtf8(applicationSourcePath, applicationSource),
+                  std::format(L"Failed to read {}.", applicationSourcePath.wstring()));
+    const std::vector<std::string_view> closeBodies = SourceFunctionBodies(applicationSource, "LRESULT OnMainWindowClose");
+    state.Require(closeBodies.size() == 1u, L"Main-window close source guard expected one OnMainWindowClose implementation.");
+    if (closeBodies.size() == 1u)
+    {
+        const size_t closeFenceOffset = closeBodies.front().find("g_mainWindowCloseCommitted.store(true");
+        const size_t promptFenceOffset = closeBodies.front().find("HostBeginPromptShutdown();");
+        const size_t finalizeOffset = closeBodies.front().find("PostMessageW(hWnd, kFinalizeMainWindowCloseMessage");
+        state.Require(closeFenceOffset != std::string_view::npos && promptFenceOffset != std::string_view::npos &&
+                          finalizeOffset != std::string_view::npos && closeFenceOffset < promptFenceOffset && promptFenceOffset < finalizeOffset,
+                      L"Application exit must fence commands and active prompt drains before queuing final main-window destruction.");
+    }
+    state.Require(applicationSource.find("if (g_mainWindowCloseCommitted.load(std::memory_order_acquire))") != std::string::npos,
+                  L"Main-window command dispatch must reject work after application exit is committed.");
+    const std::vector<std::string_view> startOperationBodies =
+        SourceFunctionBodies(runtimeSource, "HRESULT FolderWindow::FileOperationState::StartOperation");
+    const std::vector<std::string_view> clipboardReadyBodies =
+        SourceFunctionBodies(runtimeSource, "void FolderWindow::FileOperationState::OnClipboardMoveReady");
+    const std::vector<std::string_view> clipboardDispatchBodies =
+        SourceFunctionBodies(fileOperationsSource, "LRESULT FolderWindow::OnFileOperationClipboardMoveReady");
+    state.Require(startOperationBodies.size() == 1u && clipboardReadyBodies.size() == 1u && clipboardDispatchBodies.size() == 1u,
+                  L"Clipboard Move source guard expected one admission, readiness handler, and FolderWindow dispatch boundary.");
+    if (startOperationBodies.size() == 1u && clipboardReadyBodies.size() == 1u && clipboardDispatchBodies.size() == 1u)
+    {
+        const size_t clipboardTaskPublishOffset = startOperationBodies.front().find("_tasks.emplace_back(std::move(task))");
+        const size_t clipboardWorkerCreateOffset = startOperationBodies.front().find("rawTask->_thread = std::jthread");
+        const size_t clipboardBarrierOffset = clipboardReadyBodies.front().find("const HRESULT barrierHr = barrier()");
+        const size_t clipboardRefindOffset = clipboardReadyBodies.front().find("task = FindTask(taskId)", clipboardBarrierOffset);
+        state.Require(clipboardTaskPublishOffset != std::string_view::npos && clipboardWorkerCreateOffset != std::string_view::npos &&
+                          clipboardTaskPublishOffset < clipboardWorkerCreateOffset &&
+                          startOperationBodies.front().find("_selectedRootReadinessComplete.wait") == std::string_view::npos &&
+                          startOperationBodies.front().find("_preWorkerReleaseBarrier = std::move") != std::string_view::npos &&
+                          clipboardBarrierOffset != std::string_view::npos && clipboardRefindOffset != std::string_view::npos &&
+                          clipboardBarrierOffset < clipboardRefindOffset &&
+                          clipboardDispatchBodies.front().find("FileOperationPromptDispatchScope promptDispatch") != std::string_view::npos,
+                      L"Clipboard Move admission must return without a readiness wait, consume through a fenced asynchronous UI callback, and re-find the task before release.");
+    }
+
+    std::string diagnosticsSource;
+    const std::filesystem::path diagnosticsSourcePath =
+        repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.State.Diagnostics.cpp";
+    state.Require(ReadSourceFileUtf8(diagnosticsSourcePath, diagnosticsSource),
+                  std::format(L"Failed to read {}.", diagnosticsSourcePath.wstring()));
+    state.Require(diagnosticsSource.find("summary.unknownSourcePaths.push_back") != std::string::npos &&
+                      diagnosticsSource.find("IDS_FILEOPS_CLIPBOARD_SOURCE_UNKNOWN") != std::string::npos,
+                  L"Clipboard Move completion must preserve Unknown source paths separately and present indeterminate wording instead of claiming exact retained sources.");
+    state.Require(fileOperationsSource.find("accepted-mixed-root-group") != std::string::npos &&
+                      fileOperationsSource.find("sourcePartitions") != std::string::npos &&
+                      fileOperationsSource.find("executionPartitions") == std::string::npos &&
+                      fileOperationsSource.find("rejected a mixed-root selection") == std::string::npos,
+                  L"Mixed-root selections must split into per-endpoint child plans; admission performs no per-item shape split.");
+    state.Require(fileOperationsSource.find("nativeMoveSemanticTransform") == std::string::npos &&
+                      fileOperationsSource.find("const bool nativeMoveQualified = providerNativeMoveAdvertised;") != std::string::npos,
+                  L"Native admission is endpoint plus capability only: no link proof, no delete proof, no shape probe.");
+    state.Require(fileOperationsSource.find("fileops.identity.bind_us") != std::string::npos &&
+                      fileOperationsSource.find("fileops.identity.revalidate_us") != std::string::npos &&
+                      fileOperationsSource.find("fileops.identity.guard_us") != std::string::npos &&
+                      fileOperationsSource.find("fileops.identity.guard_revalidate_us") != std::string::npos &&
+                      fileOperationsSource.find("CrossCheckBoundObjectIdentity") != std::string::npos &&
+                      fileOperationsSource.find("UnsupportedDeviceNamespace") != std::string::npos &&
+                      fileOperationsSource.find("ProviderContractViolation") != std::string::npos,
+                  L"Object binding and transfer safety guards must emit timing metrics and fail typed validation on unsafe envelopes or malformed provider success.");
+    state.Require(fileOperationsSource.find("TryGetCapabilities(fileSystem, L\"/\"") == std::string::npos &&
+                      fileOperationsSource.find("TryGetCapabilities(sourceFileSystem, L\"/\"") == std::string::npos &&
+                      fileOperationsSource.find("TryGetCapabilities(destinationFileSystem, L\"/\"") == std::string::npos,
+                  L"Production capability gates must query the concrete source/destination path, never an instance-root placeholder.");
+    state.Require(fileOperationsSource.find("IsStrictDescendantPath(sourceEndpoint.pathIdentity.value(), sourcePath, destinationPath)") !=
+                      std::string::npos &&
+                      fileOperationsSource.find("TryGetFileSystemParentPath(typedPlan.sourceEndpoint.pathIdentity.value(), sourcePath, sourceParent)") !=
+                          std::string::npos &&
+                      fileOperationsSource.find("const bool mappingInDestination = EquivalentPath(destinationIdentity") != std::string::npos &&
+                      fileOperationsSource.find("DestinationInsideSource") != std::string::npos &&
+                      fileOperationsSource.find("std::filesystem::path(mapping->destinationProviderPath).parent_path()") == std::string::npos &&
+                      fileOperationsSource.find("pathIdentityForIndex") != std::string::npos &&
+                      fileOperationsSource.find("resolvedProviderParentForIndex") != std::string::npos &&
+                      fileOperationsSource.find("TryResolveTransferDestinationProviderPath(*transfer") != std::string::npos &&
+                      fileOperationsSource.find("GetDestinationFolder() / task->_sourcePaths[index].filename()") == std::string::npos &&
+                      fileOperationsSource.find("const std::filesystem::path parent = sourcePath.parent_path();") == std::string::npos &&
+                      fileOperationsSource.find("const std::filesystem::path parent = destination->parent_path();") == std::string::npos,
+                  L"Stable path-profile authority must own mapping containment, same-folder, destination-inside-source validation, and exact completion/cache/refresh destination derivation.");
+
+    std::string executorSource;
+    const std::filesystem::path executorSourcePath =
+        repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.State.cpp";
+    state.Require(ReadSourceFileUtf8(executorSourcePath, executorSource),
+                  std::format(L"Failed to read {}.", executorSourcePath.wstring()));
+    state.Require(executorSource.find("task.RequestActionablePromptPresentation()") != std::string::npos,
+                  L"Publishing an immutable actionable conflict decision must request restoration of the File Operations popup without submitting that decision.");
+    state.Require(executorSource.find("transferPlanBySourceIndex") != std::string::npos &&
+                      executorSource.find("_workerReleased.wait(false") != std::string::npos &&
+                      executorSource.find("transferPlanItemIndexBySourceIndex") != std::string::npos &&
+                      executorSource.find("TryResolveTransferDestinationProviderPath(") != std::string::npos &&
+                      executorSource.find("destinationItemText = JoinFolderAndLeaf(destinationFolderText, leaf)") == std::string::npos &&
+                      executorSource.find("prepareExactTransferGuard") != std::string::npos &&
+                      executorSource.find("revalidateExactTransferGuard") != std::string::npos &&
+                      executorSource.find("samePathCopy") != std::string::npos,
+                  L"Per-item Copy/Move execution must bind each child plan to exact pre-mutation and provider-boundary safety guards, including same-path Keep Both.");
+    state.Require(executorSource.find("itemStrategy == FileOperations::OperationStrategy::CopyOnly") != std::string::npos &&
+                      executorSource.find("if (_operation == FILESYSTEM_COPY || copyOnlyMove || managedMove)") != std::string::npos &&
+                      executorSource.find("move.copyOnly.sourceKept") != std::string::npos &&
+                      executorSource.find("move.managed.sourceKept") != std::string::npos &&
+                      executorSource.find("options.moveMode = FILESYSTEM_MOVE_NATIVE_ONLY") != std::string::npos &&
+                      executorSource.find("fileops.operation.strategy") != std::string::npos &&
+                      executorSource.find("copy.copy.same-root") != std::string::npos &&
+                      executorSource.find("copy.managed.same-root") == std::string::npos &&
+                      executorSource.find("move.copy-only.cross-root") != std::string::npos,
+                  L"Move Copy-only and Managed execution must share the guarded publication branch, report any source-kept downgrade, isolate provider-native Move behind NativeOnly, and emit bounded strategy/topology evidence.");
+    state.Require(executorSource.find("strategy.bulkTransferRejected") != std::string::npos &&
+                      executorSource.find("isTransferOperation && _executionMode != ExecutionMode::PerItem") != std::string::npos &&
+                      executorSource.find("strategy.managedMoveUnavailable") == std::string::npos &&
+                      executorSource.find("strategy.nativeBridgeRejected") == std::string::npos &&
+                      executorSource.find("RenameMergeDirectory") != std::string::npos &&
+                      executorSource.find("native_directory_race_requalified_after_noncommit") != std::string::npos &&
+                      executorSource.find("native_directory_race_requalified_before_mutation") == std::string::npos &&
+                      executorSource.find("native_directory_race_fallback_unavailable") == std::string::npos &&
+                      executorSource.find("executeQualifiedItemMutation") != std::string::npos &&
+                      executorSource.find("PrepareManagedSourceAuthority") != std::string::npos &&
+                      executorSource.find("FinalizeManagedSourceCleanup") != std::string::npos &&
+                      executorSource.find("ManagedSourceCleanupRecord") != std::string::npos &&
+                      executorSource.find("ClassifyManagedCleanupMutation") != std::string::npos &&
+                      executorSource.find("bridge.move.cleanupIndeterminate") != std::string::npos &&
+                      executorSource.find("Destination published; exact source cleanup is indeterminate") != std::string::npos &&
+                      executorSource.find("BeginConflictPrompt(task") != std::string::npos &&
+                      executorSource.find("boundObject->DeleteIfUnchanged") != std::string::npos &&
+                      executorSource.find("ClassifyManagedCleanupConflictBucket") != std::string::npos &&
+                      executorSource.find("DeleteCopiedSourceForMove") == std::string::npos &&
+                      executorSource.find("DeleteCopiedSourceEntryForMove") == std::string::npos &&
+                      executorSource.find("RecordCopiedDirectory") == std::string::npos &&
+                      executorSource.find("copiedEntries") == std::string::npos &&
+                      executorSource.find("ReaderMatchesHash") == std::string::npos &&
+                      executorSource.find("_fileSystem->CopyItems(pathArray") == std::string::npos &&
+                      executorSource.find("_fileSystem->MoveItems(pathArray") == std::string::npos &&
+                      executorSource.find("TryGetProviderParentPath") == std::string::npos &&
+                      executorSource.find("CrossCheckBoundObjectIdentity(source.authority, other") != std::string::npos,
+                  L"Transfer execution must reject unguarded bulk mutation and provider-native Move routed through a destination bridge; Managed Move must retain one exact cleanup record through retry/terminal classification, never recopy an indeterminate cleanup, and share one mutation dispatcher across serial/parallel paths.");
+    state.Require(executorSource.find("One item policy owns mutation retry, conflict decisions, terminal classification") != std::string::npos &&
+                      executorSource.find("class QualifiedItemPolicy final : public PerItemExecutionPolicy") != std::string::npos &&
+                      executorSource.find("const HRESULT itemHr = itemPolicy.Process(index);") != std::string::npos &&
+                      executorSource.find("scheduler.StartJob(this,") != std::string::npos &&
+                      executorSource.find("PerItemTaskScheduler::FailurePolicy::CancelTask") != std::string::npos &&
+                      executorSource.find("std::function<HRESULT(size_t)>") == std::string::npos &&
+                      executorSource.find("const auto processIndex =") == std::string::npos &&
+                      executorSource.find("if (_perItemMaxConcurrency > 1u)") != std::string::npos &&
+                      executorSource.find("Providers that require serialized/task-thread execution keep that thread") != std::string::npos &&
+                      executorSource.find("bool hadPartialFailureItems") == std::string::npos,
+                  L"Serial and parallel scheduling must call one per-item conflict/terminal policy; the serialized provider path stays on the task worker and must not retain a second policy loop.");
+    std::string fileOperationsSelfTestSource;
+    const std::filesystem::path fileOperationsSelfTestSourcePath =
+        repoRoot / L"RedSalamander" / L"SelfTest" / L"FileOperations" / L"FolderWindow.FileOperations.SelfTest.cpp";
+    state.Require(ReadSourceFileUtf8(fileOperationsSelfTestSourcePath, fileOperationsSelfTestSource),
+                  std::format(L"Failed to read {}.", fileOperationsSelfTestSourcePath.wstring()));
+    state.Require(fileOperationsSelfTestSource.find("TickFairstreamA(SelfTestState& state)") != std::string::npos &&
+                      fileOperationsSelfTestSource.find("TickFairstreamB(SelfTestState& state)") != std::string::npos &&
+                      fileOperationsSelfTestSource.find("TickFairstreamC(SelfTestState& state)") != std::string::npos &&
+                      fileOperationsSelfTestSource.find("TickProviderMatrix(SelfTestState& state)") != std::string::npos &&
+                      fileOperationsSelfTestSource.find("TickPhase5(SelfTestState& state)") != std::string::npos &&
+                      fileOperationsSelfTestSource.find("TickPhase6(SelfTestState& state)") != std::string::npos &&
+                      fileOperationsSelfTestSource.find("TickPhase7(SelfTestState& state)") != std::string::npos &&
+                      fileOperationsSelfTestSource.find("TickPhase8(SelfTestState& state)") != std::string::npos &&
+                      fileOperationsSelfTestSource.find("TickPhase9(SelfTestState& state)") != std::string::npos &&
+                      fileOperationsSelfTestSource.find("TickPhase10(SelfTestState& state)") != std::string::npos &&
+                      fileOperationsSelfTestSource.find("TickPhase11(SelfTestState& state)") != std::string::npos &&
+                      fileOperationsSelfTestSource.find("TickPhase12(SelfTestState& state)") != std::string::npos &&
+                      fileOperationsSelfTestSource.find("TickPhase13(SelfTestState& state)") != std::string::npos &&
+                      fileOperationsSelfTestSource.find("TickFairstreamPhases(SelfTestState& state)") == std::string::npos &&
+                      fileOperationsSelfTestSource.find("TickPhases05To06(SelfTestState& state)") == std::string::npos &&
+                      fileOperationsSelfTestSource.find("TickPhases07To09(SelfTestState& state)") == std::string::npos &&
+                      fileOperationsSelfTestSource.find("TickPhases10To13(SelfTestState& state)") == std::string::npos,
+                  L"Large File Operations UI fixtures must stay in separately compiled case/phase dispatchers so nested popup rendering retains UI-thread stack headroom.");
+    state.Require(fileOperationsSource.find("localNativeShapeInterfacesQueried") == std::string::npos &&
+                      fileOperationsSource.find("QualifyLocalNativeMoveItemShape") == std::string::npos &&
+                      executorSource.find("QualifyLocalNativeMoveItemShapeForPreparing(") == std::string::npos,
+                  L"Neither admission nor Preparing acquires IFileSystemIO for a Native Move shape probe (Beeline).");
+    state.Require(executorSource.find("MutationInterlockAccess::ReadSource") != std::string::npos &&
+                      executorSource.find("MutationInterlockAccess::WriteSource") != std::string::npos &&
+                      executorSource.find("MutationInterlockAccess::PublishDestination") != std::string::npos &&
+                      executorSource.find("TryGetFileSystemParentPath(destinationIdentity, currentPath, parentPath)") != std::string::npos &&
+                      executorSource.find("std::filesystem::path currentPath(destinationText)") == std::string::npos &&
+                      executorSource.find("destinationPath.parent_path()") == std::string::npos &&
+                      executorSource.find("g_fileOpsBridgeFailNextStageEntropyCount") != std::string::npos &&
+                      executorSource.find("random[0] = (static_cast<uint64_t>(GetCurrentProcessId())") == std::string::npos,
+                  L"Transfer execution must classify read/write/publish interlock roles, derive resolved parents from the admitted provider profile, and fail closed instead of generating a predictable stage name.");
+    state.Require(executorSource.find("scope.exactDeleteAuthority = retainDeleteAuthority") != std::string::npos &&
+                      executorSource.find("FILESYSTEM_BIND_DELETE") != std::string::npos &&
+                      executorSource.find("current.authority.identity.revisionId != pinned.revisionId") != std::string::npos &&
+                      executorSource.find("retainedScope->root->retained.authority.boundObject->DeleteIfUnchanged") != std::string::npos &&
+                      executorSource.find("_fileSystem->DeleteItem(sourceText.c_str(), itemFlags, &options") != std::string::npos,
+                  L"Permanent Delete must retain an exact no-follow delete authority, re-check each confirmed pathname against it after the card's answer (C1), and call DeleteIfUnchanged on it; only Recycle may retain the provider pathname DeleteItem route.");
+    state.Require(executorSource.find("cleanupRecord.authority.kind == FILESYSTEM_BOUND_DIRECTORY") != std::string::npos &&
+                      executorSource.find("cleanupError.value() == static_cast<DWORD>(ERROR_DIR_NOT_EMPTY)") != std::string::npos &&
+                      executorSource.find("source directory gained or retained an unselected child") != std::string::npos &&
+                      executorSource.find("managedMove && mutationResult.managedSourceRetained && SUCCEEDED(itemHr)") != std::string::npos,
+                  L"Managed Move must retain a bound source directory whose membership changed after discovery, avoid a misleading cleanup prompt, and propagate source-kept through successful nested results.");
+    state.Require(executorSource.find("CreateOwnedLinkStage") != std::string::npos &&
+                      executorSource.find("sourceBinding->ReadBoundLink") != std::string::npos &&
+                      executorSource.find("destinationBinding->CreateExclusiveLink") != std::string::npos &&
+                      executorSource.find("ownedStage->PublishAs") != std::string::npos &&
+                      executorSource.find("FinalizeManagedSourceCleanup") != std::string::npos &&
+                      executorSource.find("bridge.reparse.unsupported") != std::string::npos &&
+                      executorSource.find("PreparedLinkRecord") != std::string::npos &&
+                      executorSource.find("SparseLinkComponentMappingRecord") == std::string::npos &&
+                      executorSource.find("ActiveLinkTraversalFrame") == std::string::npos &&
+                      executorSource.find("DrainDeferredLinks") == std::string::npos &&
+                      executorSource.find("ClassifyLinkDependency") == std::string::npos &&
+                      executorSource.find("FileOps.Bridge.LinkDeferredMaxEntries") == std::string::npos &&
+                      executorSource.find("wholeTreeLinkMap") == std::string::npos &&
+                      executorSource.find("linkDependencyGraph") == std::string::npos,
+                  L"Preserve on the host bridge must read the exact no-follow link literally, create an exclusively owned link stage, publish conditionally in provider order with no deferral graph, arm exact Managed cleanup only after publication, and retain a typed unsupported-provider diagnostic.");
+    std::string traversalPolicyHeader;
+    const std::filesystem::path traversalPolicyHeaderPath = repoRoot / L"Common" / L"FileOperationTraversalPolicy.h";
+    state.Require(ReadSourceFileUtf8(traversalPolicyHeaderPath, traversalPolicyHeader),
+                  std::format(L"Failed to read {}.", traversalPolicyHeaderPath.wstring()));
+    state.Require(traversalPolicyHeader.find("kTraversalMaxDepth            = 128u") != std::string::npos &&
+                      traversalPolicyHeader.find("kTraversalMaxQueuedEntries      = 4'096u") != std::string::npos &&
+                      traversalPolicyHeader.find("kTraversalMaxQueuedPathBytes  = 16ull * 1024ull * 1024ull") != std::string::npos &&
+                      traversalPolicyHeader.find("kTraversalMaxMetadataBytes    = 8ull * 1024ull * 1024ull") != std::string::npos &&
+                      traversalPolicyHeader.find("kDiscoveryLowWater = 32u") != std::string::npos &&
+                      traversalPolicyHeader.find("kDiscoveryTarget   = 128u") != std::string::npos &&
+                      traversalPolicyHeader.find("kDiscoveryMaxTarget = 256u") != std::string::npos &&
+                      traversalPolicyHeader.find("DiscoveryQueueTarget") != std::string::npos &&
+                      traversalPolicyHeader.find("DiscoveryWorkerLimit") != std::string::npos,
+                  L"The shared File Operations traversal policy must own the quantitative ceilings and identical reservation calculations.");
+    state.Require(executorSource.find("FileOperationTraversalPolicy.h") != std::string::npos &&
+                      executorSource.find("Common::FileOperations::kTraversalMaxDepth") == std::string::npos &&
+                      executorSource.find("struct SequentialDirectoryFrame final") != std::string::npos &&
+                      executorSource.find("struct ProducerDirectoryFrame final") != std::string::npos &&
+                      executorSource.find("self(self,") == std::string::npos &&
+                      executorSource.find("Common::FileOperations::DiscoveryQueueTarget") != std::string::npos &&
+                      executorSource.find("Common::FileOperations::DiscoveryWorkerLimit") != std::string::npos &&
+                      executorSource.find("kFileOpsTraversalMaxDepth") == std::string::npos &&
+                      executorSource.find("kBridgeDiscoveryLowWater") == std::string::npos &&
+                      executorSource.find("bridge.traversal.depthLimit") != std::string::npos &&
+                      executorSource.find("bridge.traversal.entryLimit") != std::string::npos &&
+                      executorSource.find("bridge.traversal.pathBudget") != std::string::npos &&
+                      executorSource.find("bridge.traversal.metadataBudget") == std::string::npos &&
+                      executorSource.find("ReserveTraversalMetadata") == std::string::npos &&
+                      executorSource.find("std::set<std::wstring> exactChildNames") == std::string::npos &&
+                      executorSource.find("BridgeChildNameSet registeredChildNames") != std::string::npos &&
+                      executorSource.find("std::vector<std::pair<std::wstring, std::wstring>> stack") == std::string::npos,
+                  L"The host bridge must retain only bounded queued paths plus O(depth) directory state (one directory's listing is reported, not capped), stop on an exact quantitative ceiling for retained work, and never restore the retired whole-tree traversal stack.");
+    state.Require(executorSource.find("Common::FileOperations::kDiscoveryMaxTarget") != std::string::npos &&
+                      executorSource.find("BeginDiscovery()") != std::string::npos &&
+                      executorSource.find("SkipDiscovery()") != std::string::npos &&
+                      executorSource.find("_discoveryReservationReleasedTick.store(requestedTick") != std::string::npos &&
+                      executorSource.find("FileOps.Discovery.FirstMutationBeforeClose") != std::string::npos &&
+                      executorSource.find("FileOps.Discovery.SkipReleaseUs") != std::string::npos &&
+                      executorSource.find("FileOps.Discovery.Closed") != std::string::npos &&
+                      executorSource.find("InitializeFileSystemOptions(options, static_cast<void*>(&cookie))") != std::string::npos &&
+                      executorSource.find("options.operationControlCookie       = operationControlCookie") != std::string::npos &&
+                      executorSource.find("_discoverySkipped.load") != std::string::npos &&
+                      executorSource.find("RunPreCalculation") == std::string::npos,
+                  L"The host bridge must use one bounded discovery/execution traversal, preserve per-item cumulative callback identity, expose a one-way Skip mode, and emit terminal discovery metrics instead of a second recursive pass.");
+
+    std::string queueSource;
+    const std::filesystem::path queueSourcePath =
+        repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.State.Queue.cpp";
+    state.Require(ReadSourceFileUtf8(queueSourcePath, queueSource),
+                  std::format(L"Failed to read {}.", queueSourcePath.wstring()));
+    state.Require(queueSource.find("MutationInterlockAccessesConflict(left.access, right.access)") != std::string::npos &&
+                      queueSource.find("_preparedMutationInterlocks") != std::string::npos &&
+                      queueSource.find("PublishPreparedMutationInterlock") != std::string::npos &&
+                      queueSource.find("std::erase_if(_preparedMutationInterlocks") != std::string::npos,
+                  L"The overlapping-root scheduler must permit only ReadSource/ReadSource sharing and publish immutable scopes before advisory comparison, then transfer or withdraw that registration atomically.");
+
+    std::string archiveCommandsSource;
+    const std::filesystem::path archiveCommandsSourcePath =
+        repoRoot / L"RedSalamander" / L"FolderWindow.FileSystem.Commands.cpp";
+    state.Require(ReadSourceFileUtf8(archiveCommandsSourcePath, archiveCommandsSource),
+                  std::format(L"Failed to read {}.", archiveCommandsSourcePath.wstring()));
+    state.Require(archiveCommandsSource.find("DeleteUnpackedArchives") == std::string::npos &&
+                      archiveCommandsSource.find("FileOperationRequest::Origin::UnpackCleanup") != std::string::npos &&
+                      archiveCommandsSource.find("deleteRequest.archiveDeleteAfterConfirmed = true;") != std::string::npos,
+                  L"Unpack delete-after-success must submit a consent-carrying central DeletePlan and must not retain a private pathname delete helper.");
+
+    std::string localProviderSource;
+    const std::filesystem::path localProviderSourcePath = repoRoot / L"Plugins" / L"FileSystem" / L"FileSystem.cpp";
+    state.Require(ReadSourceFileUtf8(localProviderSourcePath, localProviderSource),
+                  std::format(L"Failed to read {}.", localProviderSourcePath.wstring()));
+    state.Require(localProviderSource.find("__uuidof(IFileSystemObjectBinding)") != std::string::npos &&
+                      localProviderSource.find("FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS") != std::string::npos &&
+                      localProviderSource.find("GetFileInformationByHandleEx(file, FileIdInfo") != std::string::npos &&
+                      localProviderSource.find("IsReparseTagNameSurrogate(attributes.ReparseTag)") != std::string::npos &&
+                      localProviderSource.find("class LocalBoundObject final") != std::string::npos &&
+                      localProviderSource.find("FileSystem::ReadBoundLink") != std::string::npos &&
+                      localProviderSource.find("FileSystem::CreateExclusiveLink") != std::string::npos &&
+                      localProviderSource.find("FileSystem::CreateExclusiveDirectory") != std::string::npos,
+                  L"The local provider must expose retained-handle, no-follow FILE_ID_INFO binding, exclusive file/link/directory stages, and classify only name-surrogate reparses as links.");
+    state.Require(localProviderSource.find("policy == \"skip\" || policy == \"followTargets\"") != std::string::npos &&
+                      localProviderSource.find("policy == \"preserve\" || policy == \"copyReparse\"") != std::string::npos &&
+                      localProviderSource.find("parsed = FileSystemReparsePointPolicy::Preserve;") != std::string::npos &&
+                      localProviderSource.find("case FileSystemReparsePointPolicy::Preserve: return \"preserve\";") != std::string::npos &&
+                      localProviderSource.find("FileSystemReparsePointPolicy::FollowTargets") == std::string::npos,
+                  L"Local configuration must silently migrate legacy Follow to Skip and serialize only canonical Preserve/Skip values.");
+
+    std::string localProviderHeader;
+    const std::filesystem::path localProviderHeaderPath = repoRoot / L"Plugins" / L"FileSystem" / L"FileSystem.h";
+    state.Require(ReadSourceFileUtf8(localProviderHeaderPath, localProviderHeader),
+                  std::format(L"Failed to read {}.", localProviderHeaderPath.wstring()));
+    state.Require(localProviderHeader.find("enum class FileSystemReparsePointPolicy") != std::string::npos &&
+                      localProviderHeader.find("FollowTargets") == std::string::npos &&
+                      localProviderHeader.find("\"default\": \"preserve\"") != std::string::npos &&
+                      localProviderHeader.find("\"value\": \"skip\"") != std::string::npos &&
+                      localProviderHeader.find("\"value\": \"followTargets\"") == std::string::npos,
+                  L"Local Preferences schema and runtime enum must expose Preserve/Skip only.");
+
+    std::string localProviderFileOpsSource;
+    const std::filesystem::path localProviderFileOpsSourcePath = repoRoot / L"Plugins" / L"FileSystem" / L"FileSystem.FileOps.cpp";
+    state.Require(ReadSourceFileUtf8(localProviderFileOpsSourcePath, localProviderFileOpsSource),
+                  std::format(L"Failed to read {}.", localProviderFileOpsSourcePath.wstring()));
+    state.Require(localProviderFileOpsSource.find("ValidateFileSystemOptions(options, FILESYSTEM_MOVE)") != std::string::npos &&
+                      localProviderFileOpsSource.find("Local Move is native-only for every moveMode") != std::string::npos &&
+                      localProviderFileOpsSource.find("MovePathInternal(context, source, destination);") != std::string::npos &&
+                      localProviderFileOpsSource.find("allowCopyFallback") == std::string::npos &&
+                      localProviderFileOpsSource.find("MoveCopyProofManifest") == std::string::npos &&
+                      localProviderFileOpsSource.find("DeleteCopiedSourceEntryForMove") == std::string::npos &&
+                      localProviderFileOpsSource.find("DestinationMatchesSourceFile") == std::string::npos &&
+                      localProviderFileOpsSource.find("REDSALAMANDER_FILEOPS_FORCE_MOVE_COPY_FALLBACK") == std::string::npos &&
+                      localProviderFileOpsSource.find("FileOps.Copy.ResumeSkippedIdentical") == std::string::npos &&
+                      localProviderFileOpsSource.find("RecordExistingIdenticalMoveCopyProof") == std::string::npos &&
+                      localProviderFileOpsSource.find("HashPlainFile") == std::string::npos &&
+                      localProviderFileOpsSource.find("PlainFilesEqualByContentNoFollow") == std::string::npos,
+                  L"Every Local Move mode must be native rename/merge-only; generic and reparse copy/delete fallbacks and their debug override must be absent, and content/hash equality must never silently choose Skip.");
+    state.Require(localProviderFileOpsSource.find("ResolveReparsePointPolicy(reparsePointPolicy, options)") != std::string::npos &&
+                      localProviderFileOpsSource.find("FileSystemReparsePointPolicy::FollowTargets") == std::string::npos &&
+                      localProviderFileOpsSource.find("ClassifyLocalCopyPathKind") != std::string::npos &&
+                      localProviderFileOpsSource.find("LocalCopyPathKind::SemanticLink") != std::string::npos &&
+                      localProviderFileOpsSource.find("LocalCopyPathKindFromFacts") != std::string::npos &&
+                      localProviderFileOpsSource.find("ReadBoundLocalLink") != std::string::npos &&
+                      localProviderFileOpsSource.find("CreateExclusiveLocalLink") != std::string::npos &&
+                      localProviderFileOpsSource.find("Literal Preserve") != std::string::npos &&
+                      localProviderFileOpsSource.find("TryRetargetPathIntoDestination") == std::string::npos &&
+                      localProviderFileOpsSource.find("SemanticCopyLinkState") == std::string::npos &&
+                      localProviderFileOpsSource.find("FILESYSTEM_LINK_TARGET_INSIDE_SOURCE_ROOT_UNMAPPABLE") == std::string::npos &&
+                      executorSource.find("typedPlan.options.linkPolicy") != std::string::npos &&
+                      executorSource.find("options.linkPolicy = capturedPolicy") != std::string::npos &&
+                      executorSource.find("ReparsePointPolicy::FollowTargets") == std::string::npos,
+                  L"Every admitted task must propagate its immutable Preserve/Skip snapshot to provider calls; Local must copy retained no-follow link payloads literally without following, resolving, or rewriting a target.");
+    const std::array<std::filesystem::path, 6> optionConsumerPaths{
+        repoRoot / L"Plugins" / L"FileSystem" / L"FileSystem.cpp",
+        repoRoot / L"Plugins" / L"FileSystemDummy" / L"FileSystemDummy.cpp",
+        repoRoot / L"Plugins" / L"FileSystemCurl" / L"FileSystemCurl.CopyMove.cpp",
+        repoRoot / L"Plugins" / L"FileSystemMicrosoftDrive" / L"FileSystemMicrosoftDrive.cpp",
+        repoRoot / L"Plugins" / L"FileSystemMtp" / L"FileSystemMtp.Core.cpp",
+        repoRoot / L"Plugins" / L"FileSystemS3" / L"FileSystemS3.Directory.cpp",
+    };
+    for (const std::filesystem::path& optionConsumerPath : optionConsumerPaths)
+    {
+        std::string optionConsumerSource;
+        state.Require(ReadSourceFileUtf8(optionConsumerPath, optionConsumerSource),
+                      std::format(L"Failed to read {}.", optionConsumerPath.wstring()));
+        state.Require(optionConsumerSource.find("FileSystemOptionsHaveValidHeader(options)") != std::string::npos &&
+                          optionConsumerSource.find("options->sizeBytes != sizeof(FileSystemOptions)") == std::string::npos,
+                      std::format(L"{} must reject reserved link-policy values through the shared options header validator.",
+                                  optionConsumerPath.wstring()));
+    }
+    std::string curlInternalHeader;
+    const std::filesystem::path curlInternalHeaderPath =
+        repoRoot / L"Plugins" / L"FileSystemCurl" / L"FileSystemCurl.Internal.h";
+    state.Require(ReadSourceFileUtf8(curlInternalHeaderPath, curlInternalHeader),
+                  std::format(L"Failed to read {}.", curlInternalHeaderPath.wstring()));
+    std::string curlSharedSource;
+    const std::filesystem::path curlSharedSourcePath = repoRoot / L"Plugins" / L"FileSystemCurl" / L"FileSystemCurl.Shared.cpp";
+    state.Require(ReadSourceFileUtf8(curlSharedSourcePath, curlSharedSource),
+                  std::format(L"Failed to read {}.", curlSharedSourcePath.wstring()));
+    state.Require(curlSharedSource.find("CURLSHOPT_SHARE, CURL_LOCK_DATA_DNS") != std::string::npos &&
+                      curlSharedSource.find("CURLSHOPT_SHARE, CURL_LOCK_DATA_SSL_SESSION") != std::string::npos &&
+                      curlSharedSource.find("CURLSHOPT_SHARE, CURL_LOCK_DATA_CONNECT") == std::string::npos,
+                  L"The Curl share handle must cover DNS and TLS sessions only; easy handles run on several host threads and libcurl's shared connection pool raced (R0f-Curl-OR2).");
+    std::string mtpCoreSource;
+    const std::filesystem::path mtpCoreSourcePath = repoRoot / L"Plugins" / L"FileSystemMtp" / L"FileSystemMtp.Core.cpp";
+    state.Require(ReadSourceFileUtf8(mtpCoreSourcePath, mtpCoreSource),
+                  std::format(L"Failed to read {}.", mtpCoreSourcePath.wstring()));
+    state.Require(mtpCoreSource.find("backend.DeleteItemByIdentity(normalizedPath, destinationPersistentId, false)") != std::string::npos &&
+                      mtpCoreSource.find("backend.DeleteItemByIdentity(destinationPath, destinationPersistentId, false)") != std::string::npos &&
+                      mtpCoreSource.find("backend.DeleteItemByIdentity(exactObject.path, entry.tempPuid, false)") != std::string::npos &&
+                      mtpCoreSource.find("backend.DeleteItem(normalizedPath, false)") == std::string::npos &&
+                      mtpCoreSource.find("backend.DeleteItem(destinationPath, false)") == std::string::npos &&
+                      mtpCoreSource.find("backend.DeleteItem(exactObject.path, false)") == std::string::npos,
+                  L"MTP overwrite commits and journal replay must delete the replaced object only through a live identity match, never by path after a cache hit (R0c-OR3).");
+    state.Require(curlInternalHeader.find("FileSystemOptionsHaveValidHeader(initialOptions)") != std::string::npos &&
+                      curlInternalHeader.find("initialOptions->sizeBytes != sizeof(FileSystemOptions)") == std::string::npos &&
+                      executorSource.find("options->sizeBytes != sizeof(FileSystemOptions)") == std::string::npos,
+                  L"Shared Curl operation state and host callbacks must reject reserved link-policy values through the common ABI validator.");
+    state.Require(localProviderFileOpsSource.find("FileOperationTraversalPolicy.h") != std::string::npos &&
+                      localProviderFileOpsSource.find("Common::FileOperations::kTraversalMaxDepth") != std::string::npos &&
+                      localProviderFileOpsSource.find("Common::FileOperations::kTraversalMaxQueuedEntries") != std::string::npos &&
+                      localProviderFileOpsSource.find("Common::FileOperations::kTraversalMaxQueuedPathBytes") != std::string::npos &&
+                      localProviderFileOpsSource.find("Common::FileOperations::kTraversalMaxMetadataBytes") != std::string::npos &&
+                      localProviderFileOpsSource.find("kRecursiveCopyMaxDepth") == std::string::npos &&
+                      localProviderFileOpsSource.find("RecursiveCopyWorkKind::Directory") == std::string::npos &&
+                      localProviderFileOpsSource.find("CreatedDirectoryMetadataTarget") == std::string::npos &&
+                      localProviderFileOpsSource.find("createdDirectories") == std::string::npos,
+                  L"Local recursive Copy must use bounded file/reparse work admission plus O(depth) directory traversal and post-order metadata restoration, without a retained whole-tree directory list.");
+    state.Require(localProviderFileOpsSource.find("Common::FileOperations::DiscoveryQueueTarget") != std::string::npos &&
+                      localProviderFileOpsSource.find("Common::FileOperations::DiscoveryWorkerLimit") != std::string::npos &&
+                      localProviderFileOpsSource.find("kRecursiveCopyDiscoveryLowWater") == std::string::npos &&
+                      localProviderFileOpsSource.find("ReportTopLevelDiscovery") != std::string::npos &&
+                      localProviderFileOpsSource.find("GetDiscoveryMode(rootContext)") != std::string::npos &&
+                      localProviderFileOpsSource.find("ReportDiscoveryProgress(rootContext") != std::string::npos &&
+                      localProviderFileOpsSource.find("host may provide totals via pre-calculation") == std::string::npos,
+                  L"Local Copy must report top-level leaf discovery plus its existing recursive traversal, bound discovery-ahead to 256 records, and switch to just-in-time without a totals pre-pass.");
+    state.Require(localProviderFileOpsSource.find("MoveDirectoryMergeByRename") == std::string::npos &&
+                      localProviderFileOpsSource.find("FileOps.Move.MergeRenamedEntries") == std::string::npos &&
+                      localProviderFileOpsSource.find("Folder merge belongs to the host Managed route") != std::string::npos &&
+                      localProviderFileOpsSource.find("! caseOnlyRename && destinationRegularDirectoryConflict") != std::string::npos,
+                  L"Local Native Move must be one provider mutation, never enumerate or partially rename a raced directory merge, and preserve exact-object case-only directory rename handling.");
+    state.Require(localProviderFileOpsSource.find("BuildUniqueSiblingName") != std::string::npos &&
+                      localProviderFileOpsSource.find("exclusiveTempFlags = renameFlags & ~MOVEFILE_REPLACE_EXISTING") != std::string::npos &&
+                      localProviderFileOpsSource.find(".rs_case_tmp_") != std::string::npos &&
+                      localProviderFileOpsSource.find("leaf.append(std::to_wstring(pid))") == std::string::npos &&
+                      localProviderFileOpsSource.find("const ULONGLONG tick = GetTickCount64();") == std::string::npos,
+                  L"Local case-only rename must fail closed on CSPRNG failure and claim an unpredictable temporary sibling atomically without replacing a raced object.");
+    state.Require(localProviderFileOpsSource.find("FileSystemIssueAction::ReplaceLink") != std::string::npos &&
+                      localProviderFileOpsSource.find("context.oneShotExpectedDestination") != std::string::npos &&
+                      localProviderFileOpsSource.find("sourceAuthority->RenameIfUnchanged") != std::string::npos &&
+                      localProviderFileOpsSource.find("error != ERROR_DATATYPE_MISMATCH") != std::string::npos,
+                  L"Local Copy and Native Move conflict retries must consume the host's exact destination receipt and keep folder-on-file collisions on the typed TypeMismatch surface.");
+    state.Require(localProviderFileOpsSource.find("struct DeleteWalkFrame final") != std::string::npos &&
+                      localProviderFileOpsSource.find("kDeleteTraversalMaxDepth") == std::string::npos &&
+                      localProviderFileOpsSource.find("kDeleteTraversalBatchEntries = 256u") != std::string::npos &&
+                      localProviderFileOpsSource.find("kDeleteTraversalMaxTerminalFailures = 4'096u") != std::string::npos &&
+                      localProviderFileOpsSource.find("kDeleteTraversalMaxFailurePathBytes = 16ull * 1024ull * 1024ull") !=
+                          std::string::npos &&
+                      localProviderFileOpsSource.find("DeleteDirectoryRecursiveBatched") != std::string::npos &&
+                      localProviderFileOpsSource.find("ReportDeleteDiscoveryObject") != std::string::npos &&
+                      localProviderFileOpsSource.find("FlattenDeleteDirectoryTree") == std::string::npos &&
+                      localProviderFileOpsSource.find("kMaxWorkItemsPerPass") == std::string::npos,
+                  L"Local recursive Delete must use one no-follow traversal with a 256-entry mutation batch, bounded terminal-failure retention, and no whole-tree flattening pass.");
+    state.Require(executorSource.find("_fileSystem->DeleteItem(sourceText.c_str(), itemFlags, &options") != std::string::npos &&
+                      executorSource.find("_fileSystem->DeleteItems(") != std::string::npos &&
+                      executorSource.find("pathArray, count, _flags, &options, this") != std::string::npos,
+                  L"Host Delete and Recycle execution must pass operation control so provider discovery reports feed the task-owned one-pass state.");
+
+    std::string dummyProviderSource;
+    const std::filesystem::path dummyProviderSourcePath =
+        repoRoot / L"Plugins" / L"FileSystemDummy" / L"FileSystemDummy.cpp";
+    state.Require(ReadSourceFileUtf8(dummyProviderSourcePath, dummyProviderSource),
+                  std::format(L"Failed to read {}.", dummyProviderSourcePath.wstring()));
+    state.Require(dummyProviderSource.find("options->moveMode != FILESYSTEM_MOVE_NATIVE_ONLY") != std::string::npos &&
+                      dummyProviderSource.find("HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItems") != std::string::npos,
+                  L"Dummy single and batch Move boundaries must accept only Default or NativeOnly mode.");
+
+    std::string microsoftDriveProviderSource;
+    const std::filesystem::path microsoftDriveProviderSourcePath =
+        repoRoot / L"Plugins" / L"FileSystemMicrosoftDrive" / L"FileSystemMicrosoftDrive.cpp";
+    state.Require(ReadSourceFileUtf8(microsoftDriveProviderSourcePath, microsoftDriveProviderSource),
+                  std::format(L"Failed to read {}.", microsoftDriveProviderSourcePath.wstring()));
+    state.Require(microsoftDriveProviderSource.find("options->moveMode != FILESYSTEM_MOVE_NATIVE_ONLY") != std::string::npos &&
+                      microsoftDriveProviderSource.find("RunDebugNativeOnlyMoveModeSelfTest") != std::string::npos &&
+                      microsoftDriveProviderSource.find("graph.CountRequests(L\"PATCH\") == 2u") != std::string::npos &&
+                      microsoftDriveProviderSource.find("graph.CountRequests(L\"DELETE\") == 0u") != std::string::npos,
+                  L"Microsoft Drive NativeOnly Move must prove an item-preserving Graph PATCH with no copy-delete fallback.");
+
+    std::string s3ProviderDirectorySource;
+    const std::filesystem::path s3ProviderDirectorySourcePath =
+        repoRoot / L"Plugins" / L"FileSystemS3" / L"FileSystemS3.Directory.cpp";
+    state.Require(ReadSourceFileUtf8(s3ProviderDirectorySourcePath, s3ProviderDirectorySource),
+                  std::format(L"Failed to read {}.", s3ProviderDirectorySourcePath.wstring()));
+    state.Require(s3ProviderDirectorySource.find("options->moveMode != FILESYSTEM_MOVE_NATIVE_ONLY") != std::string::npos &&
+                      s3ProviderDirectorySource.find("RunDebugNativeOnlyMoveModeSelfTest") != std::string::npos &&
+                      s3ProviderDirectorySource.find("ConditionalDeleteRequestCount() == 2u") != std::string::npos,
+                  L"S3 NativeOnly Move must prove its provider-owned pinned-revision publication and conditional-delete route.");
+
+    std::string folderViewFileOpsSource;
+    const std::filesystem::path folderViewFileOpsSourcePath =
+        repoRoot / L"RedSalamander" / L"FolderView.FileOps.cpp";
+    state.Require(ReadSourceFileUtf8(folderViewFileOpsSourcePath, folderViewFileOpsSource),
+                  std::format(L"Failed to read {}.", folderViewFileOpsSourcePath.wstring()));
+    state.Require(folderViewFileOpsSource.find("ConsumeMoveClipboardForAdmission") != std::string::npos &&
+                      folderViewFileOpsSource.find("request.moveClipboardSequence = clipboardSequenceNumber;") != std::string::npos &&
+                      folderViewFileOpsSource.find("request.completionCallback = [clipboardSequenceNumber]") == std::string::npos,
+                  L"Clipboard Move must be consumed at accepted admission, never deferred to terminal success.");
+    state.Require(folderViewFileOpsSource.find("FILESYSTEM_RENAME;") != std::string::npos &&
+                      folderViewFileOpsSource.find("FileOperationRequest::Origin::InlineF2") != std::string::npos &&
+                      folderViewFileOpsSource.find("ReportError(L\"Rename\", startHr)") != std::string::npos &&
+                      folderViewFileOpsSource.find("missing FileOperationRequestCallback; refusing direct RenameItem fallback") != std::string::npos &&
+                      folderViewFileOpsSource.find("ReportError(L\"Rename\", kMissingFileOperationHostHr)") != std::string::npos &&
+                      folderViewFileOpsSource.find("_fileSystem->RenameItem(fullPath") == std::string::npos,
+                  L"Inline F2 must submit a central RenamePlan, visibly reject pre-publication failures, and never restore the UI-thread provider RenameItem fallback.");
+
+    std::string fileOperationsExecutorSource;
+    const std::filesystem::path fileOperationsExecutorSourcePath =
+        repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.State.cpp";
+    state.Require(ReadSourceFileUtf8(fileOperationsExecutorSourcePath, fileOperationsExecutorSource),
+                  std::format(L"Failed to read {}.", fileOperationsExecutorSourcePath.wstring()));
+    state.Require(fileOperationsExecutorSource.find("ExecuteInlineRename") != std::string::npos &&
+                      fileOperationsExecutorSource.find("RenameIfUnchanged") != std::string::npos &&
+                      fileOperationsExecutorSource.find("RevalidateObjectAuthority") != std::string::npos &&
+                      fileOperationsExecutorSource.find("RenameOrigin::InlineRename") != std::string::npos,
+                  L"Inline F2 worker execution must use retained exact-object conditional rename and post-publication revalidation.");
+    state.Require(fileOperationsExecutorSource.find("ExecuteBatchRename") != std::string::npos &&
+                      fileOperationsExecutorSource.find("ExecuteBatchRenameMutation") != std::string::npos &&
+                      fileOperationsExecutorSource.find("CaptureReturnedObjectAuthority") != std::string::npos &&
+                      fileOperationsExecutorSource.find("RenameOrigin::BatchRename") != std::string::npos,
+                  L"Batch Rename must execute final/temp/restore hops through the central retained-authority rename boundary.");
+
+    std::string batchRenameWindowSource;
+    const std::filesystem::path batchRenameWindowSourcePath = repoRoot / L"RedSalamander" / L"BatchRenameWindow.cpp";
+    state.Require(ReadSourceFileUtf8(batchRenameWindowSourcePath, batchRenameWindowSource),
+                  std::format(L"Failed to read {}.", batchRenameWindowSourcePath.wstring()));
+    state.Require(batchRenameWindowSource.find("CentralExecutionRequest request") != std::string::npos &&
+                      batchRenameWindowSource.find("_context.onStartRename") != std::string::npos &&
+                      batchRenameWindowSource.find("_context.onCancelRename(_centralTaskId)") != std::string::npos &&
+                      batchRenameWindowSource.find("RunBatchRenameExecutionEngine(") == std::string::npos &&
+                      batchRenameWindowSource.find("->RenameItems(") == std::string::npos &&
+                      batchRenameWindowSource.find("->RenameItem(") == std::string::npos,
+                  L"The production Batch Rename window must submit/cancel a central task and own no provider mutation executor.");
+
+    std::string batchRenameSchedulerSource;
+    const std::filesystem::path batchRenameSchedulerSourcePath = repoRoot / L"RedSalamander" / L"BatchRenameExecutionEngine.cpp";
+    state.Require(ReadSourceFileUtf8(batchRenameSchedulerSourcePath, batchRenameSchedulerSource),
+                  std::format(L"Failed to read {}.", batchRenameSchedulerSourcePath.wstring()));
+    state.Require(batchRenameSchedulerSource.find("mutationCallback") != std::string::npos &&
+                      batchRenameSchedulerSource.find("IFileSystem") == std::string::npos &&
+                      batchRenameSchedulerSource.find("RenameItems(") == std::string::npos &&
+                      batchRenameSchedulerSource.find("RenameItem(") == std::string::npos,
+                  L"The Batch Rename dependency engine must remain a provider-free scheduler.");
+
+    std::string authoritativeSpec;
+    const std::filesystem::path authoritativeSpecPath =
+        repoRoot / L"Specs" / L"FileSystem" / L"FileSystem_FileOperations.md";
+    state.Require(ReadSourceFileUtf8(authoritativeSpecPath, authoritativeSpec),
+                  std::format(L"Failed to read {}.", authoritativeSpecPath.wstring()));
+    constexpr std::array<std::string_view, 10> ingressTokens{{
+        "F5/F6",
+        "Clipboard paste",
+        "Internal drag/drop",
+        "External OLE",
+        "Find Files",
+        "Compare Directories",
+        "Pack cleanup",
+        "Unpack cleanup",
+        "Inline F2",
+        "Batch Rename",
+    }};
+    for (const std::string_view token : ingressTokens)
+    {
+        state.Require(authoritativeSpec.find(token) != std::string::npos,
+                      std::format(L"Authoritative File Operations ingress table is missing '{}'.",
+                                  std::wstring(token.begin(), token.end())));
+    }
+
+    const auto requireSpecTokens = [&](const std::filesystem::path& relativePath,
+                                       std::wstring_view owner,
+                                       std::initializer_list<std::string_view> tokens) noexcept
+    {
+        std::string source;
+        const std::filesystem::path path = repoRoot / relativePath;
+        state.Require(ReadSourceFileUtf8(path, source), std::format(L"Failed to read {}.", path.wstring()));
+        for (const std::string_view token : tokens)
+        {
+            state.Require(source.find(token) != std::string::npos,
+                          std::format(L"{} is missing Phase 0 contract token '{}'.", owner, std::wstring(token.begin(), token.end())));
+        }
+    };
+
+    requireSpecTokens(L"Specs/UI/UI_FileOperationsPopup.md",
+                      L"File Operations popup spec",
+                      {"### Confirmation surface",
+                       "### Streaming discovery",
+                       "Discovering as needed",
+                       "the taskbar remains indeterminate while any included total",
+                       "### Inline-F2 completion exception",
+                       "Typed results, clipboard consumption, and Issues"});
+    requireSpecTokens(L"Specs/UI/UI_PreferencesDialog.md",
+                      L"Preferences spec",
+                      {"exactly `Preserve links` and `Skip links`", "configurationByPluginId", "never displays or accepts Follow"});
+    requireSpecTokens(L"Specs/Core/Core_SettingsStore.md",
+                      L"SettingsStore spec",
+                      {"configurationByPluginId[builtin/file-system].reparsePointPolicy", "not a\n`fileOperations` setting"});
+    requireSpecTokens(L"Specs/FileSystem/FileSystem_S3.md",
+                      L"S3 spec",
+                      {"### Directory models and durable empty directories", "`flatPrefix`", "zero-byte marker", "`native`"});
+    requireSpecTokens(L"Specs/Plugins/Plugins_VirtualFileSystem.md",
+                      L"Virtual filesystem spec",
+                      {"#### Built-in capability-v2 profile matrix",
+                       "`FileSystemGetDiscoveryMode`",
+                       "`FileSystemReportDiscoveryProgress`",
+                       "`local-win32`",
+                       "`dummy-local`",
+                       "`7z-archive`",
+                       "`s3-flat-prefix`"});
+    requireSpecTokens(L"Specs/FileSystem/FileSystem_FileOperations.md",
+                       L"File Operations artifact contract",
+                       {"### Artifact source of truth", "### Visibility and touch guard", "MUST NOT hide an item", "exact no-follow identities"});
+    requireSpecTokens(L"Specs/Core/Core_Search.md",
+                       L"Search artifact contract",
+                       {"MUST NOT suppress RedSalamander artifact names", "MUST NOT filter candidates", "recognized name shapes"});
+    requireSpecTokens(L"Specs/Core/Core_CompareDirectories.md",
+                      L"Compare artifact contract",
+                      {"### File Operations artifact projection", "Compare never filters an item", "exact-set artifact warning"});
+    requireSpecTokens(L"Specs/UI/UI_FindFilesWindow.md",
+                       L"Find artifact contract",
+                       {"### File Operations artifact results", "Find never removes or suppresses", "No name-shaped result exposes"});
+    requireSpecTokens(L"Specs/UI/UI_FolderView.md",
+                       L"FolderView artifact contract",
+                       {"**File Operations artifact presentation:**", "FolderView never hides", "Possible interrupted-operation artifact"});
+    requireSpecTokens(L"Specs/UI/UI_FileOperationsPopup.md",
+                       L"File Operations artifact popup contract",
+                       {"### Possible-artifact touch warning", "shared classifier projects only", "one-request grant"});
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFileOperationsLocalReaderCancellationSourceGuard(CaseState& state) noexcept
+{
+    const std::filesystem::path repoRoot = SelfTest::TryFindRepoRoot();
+    state.Require(! repoRoot.empty(), L"Repository root unavailable for Local reader cancellation source guard.");
+    if (repoRoot.empty())
+    {
+        return false;
+    }
+
+    std::string bridgeSource;
+    const std::filesystem::path bridgeSourcePath = repoRoot / L"RedSalamander" / L"FolderWindow.FileOperations.State.cpp";
+    state.Require(ReadSourceFileUtf8(bridgeSourcePath, bridgeSource), std::format(L"Failed to read {}.", bridgeSourcePath.wstring()));
+    // R3-3: the exact bound source is opened by OpenSourceReader (cleanup authority first, then the
+    // metadata binding) with the task's operation-control options; the legacy pathname reader is
+    // reached only when no binding exists.
+    state.Require(bridgeSource.find(
+                      "FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_CONTENT | FILESYSTEM_BIND_READ_METADATA") != std::string::npos &&
+                      bridgeSource.find("boundSource->OpenReader(&options, reader.put())") != std::string::npos &&
+                      bridgeSource.find("managedCleanupRecord.armed ? managedCleanupRecord.authority.boundObject.get() : sourceMetadataAuthority.boundObject.get()") !=
+                          std::string::npos,
+                  L"The bridge must retain exact source content authority and open its reader with task operation-control options before legacy fallback.");
+    state.Require(bridgeSource.find("struct CrossFileSystemBridge") != std::string::npos &&
+                      bridgeSource.find("struct CrossFileSystemBridge") < bridgeSource.find("::Task::ExecuteOperation() noexcept"),
+                  L"The cross-file-system bridge must be a namespace-scope type defined before ExecuteOperation, not a local class nested inside it.");
+
+    std::string localProviderSource;
+    const std::filesystem::path localProviderSourcePath = repoRoot / L"Plugins" / L"FileSystem" / L"FileSystem.cpp";
+    state.Require(ReadSourceFileUtf8(localProviderSourcePath, localProviderSource),
+                  std::format(L"Failed to read {}.", localProviderSourcePath.wstring()));
+    state.Require(localProviderSource.find("FILE_FLAG_OVERLAPPED") != std::string::npos &&
+                      localProviderSource.find("CancelIoEx(_file.get(), &overlapped)") != std::string::npos &&
+                      localProviderSource.find("GetOverlappedResult(_file.get(), &overlapped") != std::string::npos,
+                  L"Local readers must issue overlapped reads and cancel/drain the exact pending request when operation control aborts.");
     return state.failure.empty();
 }
 
@@ -4880,6 +6255,18 @@ void RunPluginConfigCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
     SelfTest::RunCase(options, suite, L"viewer_web_close_roundtrip", [](CaseState& state) noexcept { return TestViewerWebCloseRoundTrip(state); });
     SelfTest::RunCase(options, suite, L"file_system_capabilities_contract_source_guard", [](CaseState& state) noexcept {
         return TestFileSystemCapabilitiesContractSourceGuard(state);
+    });
+    SelfTest::RunCase(options, suite, L"file_operations_local_reader_cancellation_source_guard", [](CaseState& state) noexcept {
+        return TestFileOperationsLocalReaderCancellationSourceGuard(state);
+    });
+    SelfTest::RunCase(options, suite, L"file_system_provider_name_policy_consumption_source_guard", [](CaseState& state) noexcept {
+        return TestProviderNamePolicyConsumptionSourceGuard(state);
+    });
+    SelfTest::RunCase(options, suite, L"file_operations_phase0_typed_contract_source_guard", [](CaseState& state) noexcept {
+        return TestFileOperationsPhase0TypedContractSourceGuard(state);
+    });
+    SelfTest::RunCase(options, suite, L"file_operations_preparing_lifecycle_source_guard", [](CaseState& state) noexcept {
+        return TestFileOperationsPreparingLifecycleSourceGuard(state);
     });
     SelfTest::RunCase(options, suite, L"folder_view_clipboard_retry_no_reentrant_message_pump_source_guard", [](CaseState& state) noexcept {
         return TestFolderViewClipboardRetryNoReentrantPumpSourceGuard(state);

@@ -166,19 +166,19 @@ namespace
         return std::nullopt;
     }
 
-    yyjson_val* identity = yyjson_obj_get(root, "pathIdentity");
-    if (! identity)
-    {
-        identity = root;
-    }
-    if (! yyjson_is_obj(identity))
+    const Common::Json::MemberResult<int64_t> documentVersion =
+        Common::Json::GetInt64Member(root, "version", Common::Json::MemberRequirement::Required);
+    if (! documentVersion.HasValue() || documentVersion.value != 2)
     {
         return std::nullopt;
     }
 
-    const Common::Json::MemberResult<int64_t> version =
-        Common::Json::GetInt64Member(identity, "version", Common::Json::MemberRequirement::Required);
-    if (! version.HasValue() || version.value != 1)
+    yyjson_val* identity = yyjson_obj_get(root, "names");
+    if (! identity)
+    {
+        return std::nullopt;
+    }
+    if (! yyjson_is_obj(identity))
     {
         return std::nullopt;
     }
@@ -202,7 +202,7 @@ namespace
     }
 
     const Common::Json::MemberResult<std::string_view> comparison =
-        Common::Json::GetStringMember(identity, "componentComparison", Common::Json::MemberRequirement::Required);
+        Common::Json::GetStringMember(identity, "comparison", Common::Json::MemberRequirement::Required);
     FileSystemPathIdentity parsed{};
     parsed.pathTextStableIdentity = pathTextStableIdentity.value;
     if (comparison.HasValue() && comparison.value == "ordinalIgnoreCase")
@@ -285,7 +285,8 @@ FileSystemPathIdentity FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSyst
     };
 }
 
-std::optional<FileSystemPathIdentity> TryParseFileSystemPathIdentityContract(const std::string_view jsonUtf8, const std::wstring_view pluginId) noexcept
+std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentityContract(
+    const std::string_view jsonUtf8, const std::wstring_view pluginId) noexcept
 {
     static_cast<void>(pluginId);
 
@@ -300,16 +301,18 @@ std::optional<FileSystemPathIdentity> TryParseFileSystemPathIdentityContract(con
         return std::nullopt;
     }
 
-    return TryParseFileSystemPathIdentityContractFromRoot(yyjson_doc_get_root(doc.get()), pluginId);
+    return ParseDiagnosticFileSystemPathIdentityContractFromRoot(yyjson_doc_get_root(doc.get()), pluginId);
 }
 
-std::optional<FileSystemPathIdentity> TryParseFileSystemPathIdentityContractFromRoot(yyjson_val* root, const std::wstring_view pluginId) noexcept
+std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentityContractFromRoot(
+    yyjson_val* root, const std::wstring_view pluginId) noexcept
 {
     static_cast<void>(pluginId);
     return ParseFileSystemPathIdentityFromRoot(root, false);
 }
 
-std::optional<FileSystemPathIdentity> TryParseFileSystemPathIdentity(const std::string_view jsonUtf8, const std::wstring_view pluginId) noexcept
+std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentity(
+    const std::string_view jsonUtf8, const std::wstring_view pluginId) noexcept
 {
     static_cast<void>(pluginId);
 
@@ -327,7 +330,8 @@ std::optional<FileSystemPathIdentity> TryParseFileSystemPathIdentity(const std::
     return ParseFileSystemPathIdentityFromRoot(yyjson_doc_get_root(doc.get()), true);
 }
 
-std::optional<FileSystemPathIdentity> TryParseFileSystemRenamePathIdentity(const std::string_view jsonUtf8, const std::wstring_view pluginId) noexcept
+std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemRenamePathIdentity(
+    const std::string_view jsonUtf8, const std::wstring_view pluginId) noexcept
 {
     static_cast<void>(pluginId);
 
@@ -345,7 +349,7 @@ std::optional<FileSystemPathIdentity> TryParseFileSystemRenamePathIdentity(const
     yyjson_val* root = yyjson_doc_get_root(doc.get());
     const Common::Json::MemberResult<int64_t> version =
         Common::Json::GetInt64Member(root, "version", Common::Json::MemberRequirement::Required);
-    if (! root || ! yyjson_is_obj(root) || ! version.HasValue() || version.value != 1)
+    if (! root || ! yyjson_is_obj(root) || ! version.HasValue() || version.value != 2)
     {
         return std::nullopt;
     }
@@ -410,6 +414,113 @@ bool EquivalentPath(const FileSystemPathIdentity& identity, const std::wstring_v
     }
 }
 
+namespace
+{
+// Length of the UNC share root (`\\server\share` or `\\?\UNC\server\share`) at the start of
+// `path`, or 0 when the path is not a complete UNC path. The share root is the topmost container of
+// its route: nothing above it is an object a provider can bind or a parent a rename can target.
+[[nodiscard]] size_t UncShareRootLength(const FileSystemPathIdentity& identity, std::wstring_view path) noexcept
+{
+    // Only Win32-style identities have UNC roots. A slash-only provider path such as
+    // `//user@host/dir` is an ordinary provider path whose parent is `//user@host`.
+    if (! IsAcceptedSeparator(identity, L'\\'))
+    {
+        return 0u;
+    }
+    size_t serverStart = 0u;
+    if (path.size() > 8u && IsAcceptedSeparator(identity, path[0]) && IsAcceptedSeparator(identity, path[1]) && path[2] == L'?' &&
+        IsAcceptedSeparator(identity, path[3]) && (path[4] == L'U' || path[4] == L'u') && (path[5] == L'N' || path[5] == L'n') &&
+        (path[6] == L'C' || path[6] == L'c') && IsAcceptedSeparator(identity, path[7]))
+    {
+        serverStart = 8u;
+    }
+    else if (path.size() > 2u && IsAcceptedSeparator(identity, path[0]) && IsAcceptedSeparator(identity, path[1]) &&
+             ! IsAcceptedSeparator(identity, path[2]) && path[2] != L'?' && path[2] != L'.')
+    {
+        serverStart = 2u;
+    }
+    else
+    {
+        return 0u;
+    }
+
+    const size_t serverEnd = path.find_first_of(identity.acceptedSeparators, serverStart);
+    if (serverEnd == std::wstring_view::npos || serverEnd == serverStart || serverEnd + 1u >= path.size() ||
+        IsAcceptedSeparator(identity, path[serverEnd + 1u]))
+    {
+        return 0u;
+    }
+    const size_t shareEnd = path.find_first_of(identity.acceptedSeparators, serverEnd + 1u);
+    return shareEnd == std::wstring_view::npos ? path.size() : shareEnd;
+}
+} // namespace
+
+bool TryGetFileSystemParentPath(const FileSystemPathIdentity& identity,
+                                std::wstring_view path,
+                                std::wstring& parentOut) noexcept
+{
+    parentOut.clear();
+    if (path.empty() || identity.acceptedSeparators.empty())
+    {
+        return false;
+    }
+
+    while (path.size() > 1u && IsAcceptedSeparator(identity, path.back()))
+    {
+        path.remove_suffix(1u);
+    }
+
+    const size_t separator = path.find_last_of(identity.acceptedSeparators);
+    if (separator == std::wstring_view::npos || (separator == 0u && path.size() == 1u))
+    {
+        return false;
+    }
+    if (const size_t shareRootLength = UncShareRootLength(identity, path); shareRootLength != 0u && separator < shareRootLength)
+    {
+        // The share root itself has no parent.
+        return false;
+    }
+    if (separator == 0u)
+    {
+        parentOut.assign(path.substr(0u, 1u));
+        return true;
+    }
+    if (separator == 2u && path.size() >= 3u && path[1] == L':')
+    {
+        parentOut.assign(path.substr(0u, 3u));
+        return true;
+    }
+
+    parentOut.assign(path.substr(0u, separator));
+    return ! parentOut.empty();
+}
+
+bool TryGetFileSystemLeafName(const FileSystemPathIdentity& identity,
+                              std::wstring_view path,
+                              std::wstring& leafOut) noexcept
+{
+    leafOut.clear();
+    if (path.empty() || identity.acceptedSeparators.empty())
+    {
+        return false;
+    }
+
+    while (path.size() > 1u && IsAcceptedSeparator(identity, path.back()))
+    {
+        path.remove_suffix(1u);
+    }
+
+    const size_t separator = path.find_last_of(identity.acceptedSeparators);
+    const size_t leafOffset = separator == std::wstring_view::npos ? 0u : separator + 1u;
+    if (leafOffset >= path.size())
+    {
+        return false;
+    }
+
+    leafOut.assign(path.substr(leafOffset));
+    return ! leafOut.empty();
+}
+
 std::wstring JoinFileSystemPath(const FileSystemPathIdentity& identity, const std::wstring_view folder, const std::wstring_view leaf)
 {
     if (folder.empty())
@@ -460,7 +571,81 @@ bool IsStrictDescendantPath(const FileSystemPathIdentity& identity,
         }
         prefixOffset    = prefixSeparator + 1u;
         candidateOffset = candidateSeparator + 1u;
+        if (prefixOffset >= prefix.size())
+        {
+            // A provider root or directory spelling may end in its accepted separator ("C:\\",
+            // "/", or "folder/"). The trailing separator completes the prefix; any remaining
+            // candidate component makes the candidate a strict descendant.
+            return candidateOffset < candidate.size();
+        }
     }
+}
+
+bool TryGetFileSystemRelativePath(const FileSystemPathIdentity& identity,
+                                  const std::wstring_view root,
+                                  const std::wstring_view candidate,
+                                  std::wstring& relativeOut) noexcept
+{
+    relativeOut.clear();
+    if (! identity.pathTextStableIdentity || root.empty() || candidate.empty())
+    {
+        return false;
+    }
+    if (EquivalentPath(identity, root, candidate))
+    {
+        return true;
+    }
+    if (! IsStrictDescendantPath(identity, root, candidate))
+    {
+        return false;
+    }
+
+    size_t rootOffset      = 0u;
+    size_t candidateOffset = 0u;
+    for (;;)
+    {
+        const size_t rootSeparator      = FindNextAcceptedSeparator(identity, root, rootOffset);
+        const size_t candidateSeparator = FindNextAcceptedSeparator(identity, candidate, candidateOffset);
+        if (rootSeparator == std::wstring_view::npos)
+        {
+            // A root that ends in its separator ("C:\\" or "/") has already consumed the
+            // candidate's leading separator. Keep the current candidate component instead of
+            // incorrectly returning an empty suffix for the root's immediate child.
+            if (rootOffset < root.size())
+            {
+                candidateOffset = candidateSeparator == std::wstring_view::npos ? candidate.size() : candidateSeparator + 1u;
+            }
+            break;
+        }
+        if (candidateSeparator == std::wstring_view::npos)
+        {
+            return false;
+        }
+        rootOffset      = rootSeparator + 1u;
+        candidateOffset = candidateSeparator + 1u;
+    }
+
+    while (candidateOffset < candidate.size())
+    {
+        const size_t separator = FindNextAcceptedSeparator(identity, candidate, candidateOffset);
+        const size_t end       = separator == std::wstring_view::npos ? candidate.size() : separator;
+        const std::wstring_view component = candidate.substr(candidateOffset, end - candidateOffset);
+        if (component.empty())
+        {
+            return false;
+        }
+        if (! relativeOut.empty())
+        {
+            relativeOut.push_back(identity.preferredSeparator);
+        }
+        relativeOut.append(component);
+        if (separator == std::wstring_view::npos)
+        {
+            break;
+        }
+        candidateOffset = separator + 1u;
+    }
+    return ! relativeOut.empty();
 }
 
 std::wstring ReplaceFileSystemPathPrefix(const FileSystemPathIdentity& identity,

@@ -9,6 +9,7 @@
 #include "BatchRenameWindow.h"
 #include "DxUiThemePalette.h"
 #include "FolderWindowInternal.h"
+#include "FolderWindow.FileOperationsInternal.h"
 #include "HostServices.h"
 #include "NavigationLocation.h"
 #include "SelfTestCommon.h"
@@ -597,7 +598,9 @@ struct SymbolicLinkReparseDataBuffer final
     return point;
 }
 
-[[nodiscard]] HRESULT ShowShellContextMenuForPath(HWND owner, const std::filesystem::path& path) noexcept
+[[nodiscard]] HRESULT ShowShellContextMenuForPath(HWND owner,
+                                                  const std::filesystem::path& path,
+                                                  const std::function<HRESULT()>& beforeInvoke) noexcept
 {
     PIDLIST_ABSOLUTE rawPidl = nullptr;
     SFGAOF attributes        = 0;
@@ -648,6 +651,15 @@ struct SymbolicLinkReparseDataBuffer final
     if (chosenCommand == 0u)
     {
         return S_FALSE;
+    }
+
+    if (beforeInvoke)
+    {
+        const HRESULT guardHr = beforeInvoke();
+        if (guardHr != S_OK)
+        {
+            return guardHr;
+        }
     }
 
     CMINVOKECOMMANDINFOEX invoke{};
@@ -1115,8 +1127,6 @@ void FolderWindow::Destroy()
     _splitterGripBrush.reset();
     _splitterArrowHoverBrush.reset();
 
-    DestroyCommandLineControls();
-
     _functionBar.Destroy();
 #ifdef ENABLE_TESTS
     if (IsFolderWindowSelfTestTracingEnabled())
@@ -1291,6 +1301,11 @@ LRESULT FolderWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                 OnPreviewPaneRefreshTimer();
                 return 0;
             }
+            if (static_cast<UINT_PTR>(wp) == kFileOperationPresentationTimerId)
+            {
+                OnFileOperationPresentationChanged();
+                return 0;
+            }
             break;
         case WM_SETFOCUS: OnSetFocus(); return 0;
         case WM_DEVICECHANGE: return OnDeviceChange(static_cast<UINT>(wp), lp);
@@ -1311,7 +1326,26 @@ LRESULT FolderWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WndMsg::kPaneRestoreFolderFocus: static_cast<void>(TryRestoreActivePaneFolderViewFocus()); return 0;
         case WndMsg::kPaneSelectionSizeComputed: return OnPaneSelectionSizeComputed(lp);
         case WndMsg::kPaneSelectionSizeProgress: return OnPaneSelectionSizeProgress(lp);
-        case WndMsg::kFileOperationCompleted: return OnFileOperationCompleted(lp);
+        case WndMsg::kFileOperationCompleted: return OnFileOperationCompleted(wp, lp);
+        case WndMsg::kFileOperationBatchRenameArtifactPrompt: return OnFileOperationBatchRenameArtifactPrompt(wp, lp);
+        case WndMsg::kFileOperationClipboardMoveReady: return OnFileOperationClipboardMoveReady(wp, lp);
+        case WndMsg::kFileOperationPresentationChanged: OnFileOperationPresentationChanged(); return 0;
+#ifdef ENABLE_TESTS
+        case WndMsg::kFileOperationShutdownForSelfTest:
+            if (_fileOperations)
+            {
+                if (FileOperationState::Task* const task = _fileOperations->FindTask(static_cast<uint64_t>(wp)))
+                {
+                    task->RequestCancel();
+                }
+            }
+            ReleaseFileOpsBatchRenameBeforeExecutionPauseForSelfTest();
+            SetFileOpsBatchRenameBeforeExecutionPauseForSelfTest(false);
+            HostBeginPromptShutdown();
+            ShutdownFileOperations();
+            _debugFileOperationStateRetainedDuringNestedPromptShutdown = static_cast<bool>(_fileOperations);
+            return 0;
+#endif
         case WndMsg::kChangeCaseTaskUpdate: return OnChangeCaseTaskUpdate(lp);
         case WndMsg::kChangeCaseCompleted: return OnChangeCaseCompleted(lp);
         case WndMsg::kChangeAttributesTaskUpdate: return OnChangeAttributesTaskUpdate(lp);
@@ -1480,27 +1514,6 @@ LRESULT FolderWindow::OnNotify(LPARAM data)
 
 LRESULT FolderWindow::HandlePaneDxHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept
 {
-    if (_hCommandLineHost && hwnd == _hCommandLineHost.get())
-    {
-        if (msg == WM_NCDESTROY)
-        {
-            handled = true;
-            _commandLineHost.ReleaseMouseCapture();
-            _commandLineHost.Detach();
-            _commandLineLabel = nullptr;
-            _commandLineField = nullptr;
-            _hCommandLineHost.release();
-            return 0;
-        }
-
-        const LRESULT result = _commandLineHost.HandleMessage(hwnd, msg, wp, lp, handled);
-        if (msg == WM_SIZE)
-        {
-            UpdateCommandLineHostLayout();
-        }
-        return handled ? result : 0;
-    }
-
     const auto dispatch = [&](Pane pane,
                               wil::unique_hwnd& expectedHwnd,
                               RedSalamander::DxUi::WindowHost& host,
@@ -1790,25 +1803,33 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
         }
 
         {
-            std::wstring folderTabText  = LoadStringResource(nullptr, IDS_PREVIEW_TAB_FOLDER);
-            std::wstring previewTabText = LoadStringResource(nullptr, IDS_PREVIEW_TAB_PREVIEW);
+            std::wstring folderTabText   = LoadStringResource(nullptr, IDS_PREVIEW_TAB_FOLDER);
+            std::wstring previewTabText  = LoadStringResource(nullptr, IDS_PREVIEW_TAB_PREVIEW);
+            std::wstring terminalTabText = LoadStringResource(nullptr, IDS_PREVIEW_TAB_TERMINAL);
             auto tabs                   = std::make_unique<RedSalamander::DxUi::TabControl>();
             state.previewTabsControl    = tabs.get();
             tabs->SetFocusable(false);
+            tabs->SetTabReorderingEnabled(false);
             tabs->AddTab<RedSalamander::DxUi::Panel>(std::move(folderTabText));
             tabs->AddTab<RedSalamander::DxUi::Panel>(std::move(previewTabText));
+            tabs->AddTab<RedSalamander::DxUi::Panel>(std::move(terminalTabText));
             tabs->SetTabClosable(1u, true);
+            tabs->SetTabClosable(2u, true);
             tabs->SetSelectedIndex(0u);
-            tabs->SetOnSelectionChanged([this, pane](size_t index) noexcept { SetPreviewPaneTab(pane, index == 1u); });
-            tabs->SetOnTabCloseRequested([this](size_t index) noexcept
+            tabs->SetOnSelectionChanged([this, pane](size_t index) noexcept { SetPaneContentTab(pane, index); });
+            tabs->SetOnTabCloseRequested([this, pane](size_t index) noexcept
             {
-                if (index != 1u)
+                if (index == 1u)
                 {
-                    return false;
+                    ClosePreviewPane();
+                    return true;
                 }
-
-                ClosePreviewPane();
-                return true;
+                if (index == 2u)
+                {
+                    CloseTerminalPane(pane);
+                    return true;
+                }
+                return false;
             });
             state.previewTabsHost.SetRoot(std::move(tabs));
             state.previewTabsHost.SetTheme(MakeAppThemeDxPalette(_theme, _theme.windowBackground));
@@ -1949,15 +1970,21 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
                 }
             });
 
-            state.folderView.SetSelectionChangedCallback([this, pane](const FolderView::SelectionStats& stats)
+            state.folderView.SetSelectionChangedCallback(
+                [this, pane](const FolderView::SelectionStats& stats, FolderView::SelectionChangeKind changeKind)
             {
                 PaneState& s     = pane == Pane::Left ? _leftPane : _rightPane;
+                const bool recomputeExplicitFolderSize = changeKind == FolderView::SelectionChangeKind::ItemMetadata &&
+                    stats.selectedFolders != 0u && (s.selectionFolderBytesPending || s.selectionFolderBytesValid);
                 s.selectionStats = stats;
-                CancelSelectionSizeComputation(pane);
-                UpdatePaneStatusBar(pane);
-                if (_previewSourcePane.has_value() && _previewSourcePane.value() == pane)
+                if (recomputeExplicitFolderSize)
                 {
-                    RequestPreviewPaneRefresh();
+                    RequestSelectionSizeComputation(pane);
+                }
+                else
+                {
+                    CancelSelectionSizeComputation(pane);
+                    UpdatePaneStatusBar(pane);
                 }
             });
 
@@ -2029,15 +2056,6 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
         }
     }
 
-    {
-        Debug::Perf::Scope perf(L"FolderWindow.OnCreate.CommandLine.Create");
-        if (! CreateCommandLineControls(hwnd))
-        {
-            Debug::Error(L"FolderWindow::OnCreate failed to create command-line controls.");
-            return false;
-        }
-    }
-
     const int functionBarWidth  = std::max(0L, _functionBarRect.right - _functionBarRect.left);
     const int functionBarHeight = std::max(0L, _functionBarRect.bottom - _functionBarRect.top);
     HWND functionBarHwnd        = nullptr;
@@ -2081,6 +2099,9 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
         Debug::Perf::Scope perf(L"FolderWindow.OnCreate.ApplyTheme");
         ApplyTheme(ResolveAppTheme(ThemeMode::System, L"RedSalamander"));
     }
+    // FileOperationState loads non-terminal Move breadcrumbs before the HWND is fully published.
+    // Defer their conservative restart card until normal window-message dispatch is available.
+    static_cast<void>(PostMessageW(hwnd, WndMsg::kFileOperationPresentationChanged, 0, 0));
     return true;
 }
 
@@ -2252,8 +2273,6 @@ void FolderWindow::OnDestroy()
         ReleaseCapture();
         _draggingSplitter = false;
     }
-
-    DestroyCommandLineControls();
 
     auto destroyPane = [](PaneState& state)
     {
@@ -2535,6 +2554,131 @@ void FolderWindow::CommandBatchRename(Pane pane, std::optional<std::filesystem::
                                      std::span<const std::filesystem::path> sourcePaths, std::span<const std::filesystem::path> targetPaths) noexcept
     { RefreshPanesAfterBatchRename(sourcePluginId, sourceInstanceContext, sourcePaths, targetPaths); };
     context.onRevealPath = [this, pane](const std::filesystem::path& path) noexcept { return RevealBatchRenamePathInPane(pane, path); };
+    context.onStartRename = [this, pane, fileSystem = state.fileSystem](BatchRenamePaneContext::CentralExecutionRequest request,
+                                                                       uint64_t* taskIdOut) mutable -> HRESULT
+    {
+        if (taskIdOut)
+        {
+            *taskIdOut = 0u;
+        }
+        EnsureFileOperations();
+        if (! _fileOperations || ! fileSystem || ! request.onCompleted || ! request.pathIdentity.has_value())
+        {
+            return E_POINTER;
+        }
+
+        std::vector<BatchRenameExecutionOp> admittedOperations = request.operations;
+        const size_t operationCount = admittedOperations.size();
+        const FileSystemPathIdentity pathIdentity = request.pathIdentity.value();
+        std::function<void(BatchRenameExecutionResult)> completed = std::move(request.onCompleted);
+        auto completionCallback =
+            [operations = std::move(request.operations), operationCount, pathIdentity, completed = std::move(completed)](
+                const FileOperationCompletedEvent& event) mutable
+        {
+            BatchRenameExecutionResult result{};
+            result.hr = event.hr;
+            result.detail = SUCCEEDED(event.hr) ? (event.hr == S_FALSE ? L"partial" : L"success")
+                                                 : (IsBatchRenameCancellationHRESULT(event.hr) ? L"canceled" : L"rename_failed");
+            result.report.totalRows = operationCount;
+            result.report.canceled = IsBatchRenameCancellationHRESULT(event.hr);
+
+            for (const FileOperationItemOutcome& outcome : event.itemOutcomes)
+            {
+                if (outcome.sourceIndex >= operations.size())
+                {
+                    continue;
+                }
+                const BatchRenameExecutionOp& operation = operations[outcome.sourceIndex];
+                if (outcome.completion == FileOperations::ItemCompletion::Completed &&
+                    outcome.publication == FileOperations::PublicationState::Published &&
+                    outcome.sourceDisposition == FileOperations::SourceDisposition::Removed)
+                {
+                    ++result.report.completedRows;
+                    result.successfulSourcePaths.push_back(operation.originalSource);
+                    result.successfulTargetPaths.push_back(outcome.finalDestinationPath);
+                    result.report.undoEntries.push_back(BatchRenameUndoEntry{
+                        .currentPath = outcome.finalDestinationPath,
+                        .restoreName = operation.originalSource.filename().native(),
+                        .originalPath = operation.originalSource,
+                    });
+                    if (operation.isDirectory)
+                    {
+                        result.executedDirectoryMoves.push_back(ExecutedDirectoryMove{
+                            .sourcePath = operation.originalSource,
+                            .targetPath = outcome.finalDestinationPath,
+                        });
+                    }
+                }
+                else if (outcome.completion == FileOperations::ItemCompletion::Skipped)
+                {
+                    ++result.report.skippedRows;
+                }
+                else
+                {
+                    result.report.canceled = result.report.canceled || outcome.completion == FileOperations::ItemCompletion::Canceled;
+                    ++result.report.failedRows;
+                    if (SUCCEEDED(result.report.firstFailure))
+                    {
+                        result.report.firstFailure = outcome.status;
+                    }
+                }
+            }
+            if (result.report.completedRows + result.report.skippedRows + result.report.failedRows < operationCount)
+            {
+                const size_t missing = operationCount -
+                    (result.report.completedRows + result.report.skippedRows + result.report.failedRows);
+                result.report.failedRows += missing;
+                if (SUCCEEDED(result.report.firstFailure))
+                {
+                    result.report.firstFailure = FAILED(event.hr) ? event.hr : HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED);
+                }
+            }
+            if (FAILED(result.report.firstFailure))
+            {
+                result.report.firstFailureText = FormatHResultMessageWithCode(result.report.firstFailure);
+            }
+            for (BatchRenameUndoEntry& entry : result.report.undoEntries)
+            {
+                entry.currentPath = ApplyExecutedDirectoryMoves(pathIdentity, std::move(entry.currentPath), result.executedDirectoryMoves);
+            }
+            completed(std::move(result));
+        };
+        uint64_t taskId = 0u;
+        const HRESULT startHr = _fileOperations->AdmitBatchRename(
+            pane,
+            fileSystem,
+            std::move(admittedOperations),
+            std::move(request.onProgress),
+            [this, completionCallback = std::move(completionCallback)](const uint64_t publishedTaskId) mutable
+            {
+                _fileOperationRequestCompletionCallbacks.insert_or_assign(publishedTaskId, std::move(completionCallback));
+            },
+            &taskId);
+        if (FAILED(startHr) || taskId == 0u)
+        {
+            return FAILED(startHr) ? startHr : E_UNEXPECTED;
+        }
+        if (taskIdOut)
+        {
+            *taskIdOut = taskId;
+        }
+        return S_OK;
+    };
+    context.onCancelRename = [this](const uint64_t taskId) noexcept
+    {
+        if (! _fileOperations || taskId == 0u)
+        {
+            return;
+        }
+        std::vector<FileOperationState::Task*> tasks;
+        _fileOperations->CollectTasks(tasks);
+        const auto task = std::ranges::find_if(tasks, [taskId](const FileOperationState::Task* candidate) noexcept
+        { return candidate != nullptr && candidate->GetId() == taskId; });
+        if (task != tasks.end() && *task != nullptr)
+        {
+            (*task)->RequestCancel();
+        }
+    };
 
     static_cast<void>(ShowBatchRenameWindow(_hWnd.get(), *_settings, _theme, std::move(context)));
 }
@@ -2586,6 +2730,34 @@ void FolderWindow::CommandViewWith(Pane pane, std::wstring_view actionId)
 void FolderWindow::CommandEdit(Pane pane)
 {
     SetActivePane(pane);
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    const std::optional<std::filesystem::path> focusedPath = state.folderView.GetFocusedPath();
+    if (focusedPath.has_value())
+    {
+        const std::vector<FolderView::PathAttributes> attributes = state.folderView.GetSelectedOrFocusedPathAttributes();
+        const auto focusedAttributes = std::find_if(attributes.begin(), attributes.end(), [&](const FolderView::PathAttributes& item) noexcept
+        {
+            return OrdinalString::EqualsNoCasePath(item.path, focusedPath.value());
+        });
+        if (focusedAttributes != attributes.end() && (focusedAttributes->fileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u)
+        {
+            const HRESULT openHr = OpenTerminalPane(pane, focusedPath.value());
+            if (FAILED(openHr))
+            {
+                ShowPaneAlertOverlay(pane,
+                                     FolderView::ErrorOverlayKind::Operation,
+                                     FolderView::OverlaySeverity::Warning,
+                                     LoadStringResource(nullptr, IDS_CMD_OPEN_COMMAND_SHELL),
+                                     FormatStringResource(nullptr,
+                                                          IDS_FMT_COMMAND_LINE_LAUNCH_FAILED,
+                                                          static_cast<unsigned long>(static_cast<uint32_t>(openHr))),
+                                     openHr,
+                                     true,
+                                     false);
+            }
+            return;
+        }
+    }
     ClearFileActionFailure();
     static_cast<void>(TryEditFocusedFileWithEditor(pane, {}, false));
     static_cast<void>(ShowRecordedFileActionFailureOverlay(pane));
@@ -2663,7 +2835,7 @@ void FolderWindow::CommandContextMenuCurrentDirectory(Pane pane)
     }
 #endif
 
-    const HRESULT hr = ShowShellContextMenuForPath(_hWnd.get(), path);
+    const HRESULT hr = ShowShellContextMenuForPath(_hWnd.get(), path, {});
     if (FAILED(hr))
     {
         ShowShellActionFailedOverlay(*this, pane, path, hr);

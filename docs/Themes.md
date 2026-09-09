@@ -8,6 +8,8 @@ RedSalamander applies one theme across the main window, folder panes, navigation
 
 Use **View → Theme** for quick switching or **Preferences → Themes** to select, preview, duplicate, import, and export themes.
 
+When you switch from **View → Theme**, use **Previous Theme** / **Next Theme** (`Shift+F11` / `Shift+F12`), or click a theme command on the Function Bar, a centered status popup briefly shows the active theme in large type. The previous choice appears at the top-leading corner and the next choice at the bottom-trailing corner, so repeated shortcuts make the ring easy to follow. The popup stays fully readable for 900 ms after the latest change and then animates away; click anywhere on the visible popup to dismiss it immediately. Choosing the already active theme does nothing and does not restart the popup.
+
 Built-in choices are System, Light, Dark, Rainbow, and High Contrast App. Rainbow follows the current Windows light/dark preference and uses stable item identities for repeatable multicolor selections; it does not change randomly between paints. Windows Contrast Themes always take precedence over the selected application theme.
 
 The distribution also includes these editable version 2 theme files:

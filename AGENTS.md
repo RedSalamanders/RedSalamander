@@ -2,12 +2,7 @@
 
 ## Project Overview
 
-**RedSalamander** is a Windows-based C++ application featuring:
-- Advanced text visualization components (ColorTextView with D2D/DirectWrite rendering)
-- Real-time debugging and monitoring capabilities
-- High-performance graphics rendering using Direct2D, DirectWrite, and DXGI
-- Multi-threaded architecture with async operations
-- vcpkg-based dependency management
+**RedSalamander** is a Windows-native file manager and monitoring application built in MSVC `stdcpplatest` mode. It features dual-pane file management, plugin-based virtual file systems, advanced text visualization with Direct2D/DirectWrite rendering, and real-time debugging via ETW (Event Tracing for Windows).
 
 ## Project Requirements
 
@@ -17,6 +12,12 @@
 - **Build System**: Visual Studio 2026 with MSBuild
 - **Package Manager**: vcpkg
 - **Graphics APIs**: Direct2D, DirectWrite, Direct3D 11, DXGI
+
+## Canonical Agent Guidance
+
+- `AGENTS.md` (this file) is the canonical agent guidance for this repository. `CLAUDE.md` and `.github/copilot-instructions.md` are thin pointers to it; do not let them accumulate divergent content.
+- Project skills live in `.github/skills/` (one directory per skill; table below).
+- Cross-tool meta-skills (`improve`, `red-salamander-crash-forensics`) live only in `.agents/skills/`; do not create copies under `.claude/` or other tool-specific directories.
 
 ## Skills Reference
 
@@ -34,6 +35,8 @@ Detailed patterns and guidelines are available as Agent Skills in `.github/skill
 | [plugin-callbacks](.github/skills/plugin-callbacks/SKILL.md) | Plugin callback pattern with cookie |
 | [localization](.github/skills/localization/SKILL.md) | RC resources, STRINGTABLE, menus |
 | [file-actions](.github/skills/file-actions/SKILL.md) | File-action ID semantics, settings validation, direct dispatch, and regression coverage |
+| [build-preferences-pages](.github/skills/build-preferences-pages/SKILL.md) | End-to-end Preferences page workflow: draft state, dirty tracking, persistence, accessibility, specs, and tests |
+| [tooling-governance](.github/skills/tooling-governance/SKILL.md) | Inventory, placement, help, compatibility, caller, cache, and spec rules for scripts and tooling |
 | [theming](.github/skills/theming/SKILL.md) | Theme color keys and JSON5 themes |
 | [compiler-warnings](.github/skills/compiler-warnings/SKILL.md) | MSVC `/Wall` warning policy with documented PoC exceptions |
 | [async-threading](.github/skills/async-threading/SKILL.md) | Threading model and async patterns |
@@ -57,7 +60,51 @@ from the beginning. Do not defer perf validation to a later cleanup pass. See [p
 ### Spec Closeout is Mandatory
 Completed WIP plans MUST be moved to `Specs/Plans/Done/`. Any durable behavior, UI contract, validation rule, or workflow requirement discovered during implementation MUST be merged into the authoritative domain spec under `Specs/<Domain>/` (or repo-level guidance such as `AGENTS.md` / `Specs/Testing/*` when appropriate) before the work is considered closed. Do not leave normative requirements stranded only in `Specs/Plans/WIP/` or `Specs/Plans/Done/`.
 
+### Tooling Governance is Mandatory
+Before adding, moving, renaming, or materially changing a file under `Tools/`, read
+[`Tools/README.md`](Tools/README.md),
+[`Specs/Testing/Testing_ToolingGovernance.md`](Specs/Testing/Testing_ToolingGovernance.md),
+and the [tooling-governance skill](.github/skills/tooling-governance/SKILL.md).
+Update `Tools/tool-inventory.json`, public help, callers, focused tests, and the
+owning normative spec in the same change. Keep stable entrypoints at the Tools
+root, put reusable implementation in explicit modules, and preserve documented
+paths with thin compatibility shims when they may have external consumers.
+
 ### Regression Guards (Common Violations)
+- **Tools inventory and command surface are enforced:** every tracked file under
+  `Tools/` must have one effective classification in `Tools/tool-inventory.json`.
+  New public commands use `Verb-Noun.ps1`, include complete comment-based help,
+  and declare side effects and outputs. Function-only implementation belongs in
+  `Tools/Modules/` with explicit exports. Cache keys and workflow manifests must
+  cover the full behavioral dependency closure. See
+  `Specs/Testing/Testing_ToolingGovernance.md`.
+- **Build/test coordination is profile-scoped and non-destructive:** artifact
+  operations serialize by repository root plus platform/configuration; do not
+  block disjoint profile lifecycles or worktrees. MSBuild/vcpkg phases also use
+  the narrower repository+platform dependency lock because configurations share
+  one triplet; packaging alone uses a repository-wide lock because platforms
+  share installer inputs and `.build/AppPackages`. Process names alone are never ownership evidence. An independently
+  launched executable at an exact output path blocks
+  replacement with diagnostics but is never killed; automatic termination is
+  limited to descendants contained by the launching operation. The session-wide
+  interactive mutex covers only plan entries marked `RequiresInteractiveDesktop`,
+  including their quarantine repair attempts. See
+  `Specs/Build/Build_Toolchain.md` and `Specs/Testing/Testing_SelfTests.md`.
+- **Tests preserve desktop focus whenever possible:** GUI coverage uses the
+  governed no-activation mode unless its assertions require real foreground
+  input. Focus-taking suites use the existing `DirectedSelfTestInputWarning`
+  from `Tests/TestSupport/` before and during execution inside the runner's
+  desktop lease. Its large, non-activating, click-through surface stays centered
+  on the test app. Do not add duplicate warnings or weaken focus assertions.
+  See `Specs/Testing/Testing_SelfTests.md` for the activation classes and warning contract.
+- **Test paths are fail-closed:** all test-generated local scratch, temp, logs,
+  archives, and validation evidence must stay beneath exact
+  `X:\RedSalamander.Perf`, where `X:` is any selected fixed local drive.
+  `REDSALAMANDER_TEST_ROOT` is a request, not authorization; first creation and
+  alternate-volume FileOps coverage require explicit initialization plus the
+  ownership marker. Repository `.build` is a build-input/output location, never
+  a test-data sandbox. Test tooling never enumerates, writes, or cleans legacy runtime
+  data outside the selected root.
 - **Shared-helper reuse is mandatory:** before adding a consumer-local utility, search
   `Specs/Core/Core_SharedHelpers.md`, `Common/`, and (for test code) `Tests/TestSupport/`. Reuse or extend the
   canonical helper when its semantics match; do not reimplement it under a different name. A local variant is
@@ -118,14 +165,61 @@ Completed WIP plans MUST be moved to `Specs/Plans/Done/`. Any durable behavior, 
 - Blocking UI thread
 - Hardcoded UI strings (use `.rc` resources)
 
-## Project Structure
+## Architecture
+
+### Solution Structure (~21 core projects + localization satellites)
+
+```text
+RedSalamander/             # Main file manager application (incl. SelfTest\ suites)
+RedSalamanderMonitor/      # ETW monitoring/debug tool with ColorTextView
+RedSalamanderSearchService/# Background search/index Windows service (named pipe + SQLite)
+RedConfigure/              # Standalone configuration tool
+RedLauncher/               # Launcher app
+Common/                    # Shared library (utilities, settings, DxUi framework)
+  └── PlugInterfaces/      # COM-style plugin interfaces (IFileSystem, IViewer, ...)
+Plugins/                   # All plugin DLLs
+  ├── FileSystem, FileSystem7z, FileSystemCurl, FileSystemS3,
+  │   FileSystemGoogleDrive, FileSystemMicrosoftDrive, FileSystemDummy
+  └── ViewerText, ViewerSqlite, ViewerSpace, ViewerImgRaw,
+      ViewerVLC, ViewerPE, ViewerWeb
+Tests/                     # 8 standalone test projects (DxUiTests, PerformanceTests2, ...)
+Tools/                     # Inventoried commands/modules; start with Tools/README.md
+Installer/                 # MSIX + MSI packaging
+PoC/                       # Proof-of-concept projects
+```
+
+The solution additionally contains ~90 per-language localization satellite resource projects, so Solution Explorer shows far more than the core list.
+
+### Project Dependencies
+
+- **Common** → no dependencies (shared library)
+- **RedSalamanderMonitor** → Common
+- **RedSalamander** → Common + all plugins
+- **Plugins** → independent DLLs using PlugInterfaces
 
 ### Key Components
-- **RedSalamanderMonitor**: Main monitoring application
-- **ColorTextView**: High-performance text editor/viewer
-- **Common**: Shared utilities and helpers
-- **Plugins**: FileSystem, ViewerText, ViewerSpace
-- **PoC**: Proof-of-concept projects
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| FolderWindow | RedSalamander/ | Main window with dual-pane layout |
+| FolderView | RedSalamander/ | File list rendering, selection, drag-drop (split into ~10 .cpp files) |
+| ColorTextView | RedSalamanderMonitor/ | High-performance D2D text editor (~200KB implementation) |
+| PlugInterfaces | Common/PlugInterfaces/ | COM-style interfaces for plugins |
+| Helpers.h | Common/ | Core utilities, Debug logging, TraceLogging |
+| SettingsStore | Common/ | Registry-based settings persistence |
+
+### Plugin Architecture
+
+Plugins use COM-style interfaces with a factory entry point:
+
+```cpp
+extern "C" HRESULT RedSalamanderCreate(REFIID riid, const FactoryOptions*, IHost*, const wchar_t* pluginId, void** ppv);
+```
+
+Key interfaces in `Common/PlugInterfaces/`:
+- **IFileSystem** - Virtual file system operations (copy, move, delete, search)
+- **IViewer** - File viewer with theming support
+- **IHost** - Host callbacks for plugins
 
 ### Output Locations
 ```text
@@ -145,13 +239,22 @@ Use `build.ps1` for command-line builds. See [cpp-build skill](.github/skills/cp
 .\build.ps1 -ProjectName RedSalamander   # Build specific project
 ```
 
-To verify a change is green, use `.\Tools\Run-AllTests.ps1 -Suite Full` (builds + full suite) or `.\Tools\Run-AllTests.ps1 -SkipBuild` (in-process selftests only against an existing build). See README "Self-tests" for details.
+To verify a change is green, use `.\Tools\Run-AllTests.ps1 -Suite Full -ValidationMode Fresh` (builds + full suite) or `.\Tools\Run-AllTests.ps1 -SkipBuild` (receipt-verified existing build). Exact local continuation uses `-Suite Full -ValidationMode Resume -ResumeFrom <run-id>`; opt-in affected iteration uses `-Suite Full -ValidationMode Affected`. Affected and Commands-family runs report repository `NOT_EVALUATED` and never replace final Fresh Full. See README "Self-tests" for details.
 
 ## Dependencies
 
 - **WIL**: Windows Implementation Library (RAII wrappers)
 - **yyjson**: JSON parsing and serialization
 - **DirectX**: Graphics APIs (D2D, D3D11, DXGI)
+- Other key vcpkg packages: libraw, libjpeg-turbo, 7zip, pe-parse
+
+## Specifications
+
+Detailed component specs live under `Specs/`:
+- `Specs/UI/UI_FolderView.md`, `Specs/UI/UI_FolderWindow.md`, `Specs/UI/UI_NavigationView.md`
+- `Specs/Plugins/Plugins_VirtualFileSystem.md`, `Specs/Plugins/Plugins_ViewerPlugins.md`, `Specs/Plugins/Plugins_PluginAPI.md`
+- `Specs/UI/UI_PreferencesDialog.md`, `Specs/SettingsStore.schema.json`
+- `Specs/Core/Core_RedSalamanderMonitor.md`
 
 ## LLM Assistant Guidelines
 

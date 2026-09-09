@@ -2545,7 +2545,7 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::SomethingToSave(BOOL* pSomethingToSave) noe
 
 HRESULT STDMETHODCALLTYPE ViewerWeb::Open(const ViewerOpenContext* context) noexcept
 {
-    if (! context || ! context->focusedPath || context->focusedPath[0] == L'\0')
+    if (! context || context->sizeBytes < sizeof(ViewerOpenContext) || ! context->focusedPath || context->focusedPath[0] == L'\0')
     {
         return E_INVALIDARG;
     }
@@ -2704,7 +2704,7 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::Close() noexcept
 
 HRESULT STDMETHODCALLTYPE ViewerWeb::SetTheme(const ViewerTheme* theme) noexcept
 {
-    if (! theme || theme->version < 2u || theme->version > 4u)
+    if (! theme || theme->sizeBytes < sizeof(ViewerTheme))
     {
         return E_INVALIDARG;
     }
@@ -3413,7 +3413,6 @@ void ViewerWeb::ShowHostAlert(HWND targetWindow, HostAlertSeverity severity, con
     }
 
     HostAlertRequest request{};
-    request.version      = 1;
     request.sizeBytes    = sizeof(request);
     request.scope        = (targetWindow && IsWindow(targetWindow)) ? HOST_ALERT_SCOPE_WINDOW : HOST_ALERT_SCOPE_APPLICATION;
     request.modality     = HOST_ALERT_MODELESS;
@@ -3448,7 +3447,6 @@ bool ViewerWeb::OfferTextViewerFallbackPrompt() noexcept
     }
 
     HostPromptRequest request{};
-    request.version       = 1;
     request.sizeBytes     = sizeof(request);
     request.scope         = (_hWnd && IsWindow(_hWnd.get())) ? HOST_ALERT_SCOPE_WINDOW : HOST_ALERT_SCOPE_APPLICATION;
     request.severity      = HOST_ALERT_WARNING;
@@ -3514,7 +3512,6 @@ HRESULT ViewerWeb::OpenCurrentDocumentInTextViewer() noexcept
     }
 
     HostViewerOpenRequest request{};
-    request.version               = 1;
     request.sizeBytes             = sizeof(request);
     request.pluginId              = L"builtin/viewer-text";
     request.ownerWindow           = _hWnd.get();

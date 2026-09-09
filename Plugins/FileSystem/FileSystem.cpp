@@ -1,17 +1,24 @@
 #include "FileSystem.Internal.h"
+#include "Blake3Digest.h"
 #include "Helpers.h"
 #include "PathUtils.h"
+#include "SynchronousIoCancelWatch.h"
+#include "UriEncoding.h"
 #include "YyjsonHelpers.h"
 
 #include <array>
 #include <atomic>
 #include <cwctype>
 #include <limits>
+#include <memory>
+#include <mutex>
 #include <optional>
+#include <thread>
 
 #include <shlwapi.h>
 #include <shobjidl.h>
 #include <winioctl.h>
+#include <winternl.h>
 
 #include <yyjson.h>
 
@@ -21,6 +28,196 @@
 
 namespace
 {
+#if defined(ENABLE_TESTS)
+constexpr std::wstring_view kStagedCopyPromoteFailPathEnvVar  = L"REDSALAMANDER_FILEOPS_STAGED_COPY_PROMOTE_FAIL_PATH";
+constexpr std::wstring_view kStagedCopyPromoteFailFiredEnvVar = L"REDSALAMANDER_FILEOPS_STAGED_COPY_PROMOTE_FAIL_FIRED";
+constexpr std::wstring_view kFinalAttributesFailPathEnvVar     = L"REDSALAMANDER_FILEOPS_FINAL_ATTRIBUTES_FAIL_PATH";
+constexpr std::wstring_view kFinalAttributesFailFiredEnvVar    = L"REDSALAMANDER_FILEOPS_FINAL_ATTRIBUTES_FAIL_FIRED";
+constexpr std::wstring_view kMetadataForcePresentMaskEnvVar    = L"REDSALAMANDER_FILEOPS_METADATA_FORCE_PRESENT_MASK";
+constexpr std::wstring_view kMetadataFailMaskEnvVar            = L"REDSALAMANDER_FILEOPS_METADATA_FAIL_MASK";
+constexpr std::wstring_view kStageIdentityUnsupportedPathEnvVar = L"REDSALAMANDER_FILEOPS_STAGE_IDENTITY_UNSUPPORTED_PATH";
+constexpr std::wstring_view kStageIdentityUnsupportedFiredEnvVar = L"REDSALAMANDER_FILEOPS_STAGE_IDENTITY_UNSUPPORTED_FIRED";
+constexpr std::wstring_view kRenameCommittedFailurePathEnvVar = L"REDSALAMANDER_FILEOPS_RENAME_COMMITTED_FAILURE_PATH";
+constexpr std::wstring_view kRenameCommittedFailureFiredEnvVar = L"REDSALAMANDER_FILEOPS_RENAME_COMMITTED_FAILURE_FIRED";
+constexpr std::wstring_view kDeleteCommittedFailurePathEnvVar = L"REDSALAMANDER_FILEOPS_DELETE_COMMITTED_FAILURE_PATH";
+constexpr std::wstring_view kDeleteCommittedFailureFiredEnvVar = L"REDSALAMANDER_FILEOPS_DELETE_COMMITTED_FAILURE_FIRED";
+
+[[nodiscard]] uint32_t ReadSelfTestMetadataMask(std::wstring_view name) noexcept
+{
+    std::array<wchar_t, 32> value{};
+    const DWORD length = GetEnvironmentVariableW(name.data(), value.data(), static_cast<DWORD>(value.size()));
+    if (length == 0u || length >= value.size())
+    {
+        return 0u;
+    }
+    wchar_t* end = nullptr;
+    const unsigned long parsed = std::wcstoul(value.data(), &end, 0);
+    return end != value.data() && end != nullptr && *end == L'\0' ? static_cast<uint32_t>(parsed) : 0u;
+}
+
+[[nodiscard]] bool ShouldFailOwnedPublicationForSelfTest(const wchar_t* destinationPath,
+                                                         std::wstring_view pathEnvironmentVariable,
+                                                         std::wstring_view firedEnvironmentVariable,
+                                                         std::wstring_view counterName) noexcept
+{
+    const DWORD required = GetEnvironmentVariableW(pathEnvironmentVariable.data(), nullptr, 0u);
+    if (required == 0u)
+    {
+        return false;
+    }
+
+    std::wstring configured(static_cast<size_t>(required), L'\0');
+    const DWORD written = GetEnvironmentVariableW(pathEnvironmentVariable.data(), configured.data(), required);
+    if (written == 0u || written >= required)
+    {
+        return false;
+    }
+    configured.resize(written);
+
+    const std::wstring expected = FileSystemInternal::ToExtendedPath(configured);
+    const std::wstring actual   = FileSystemInternal::ToExtendedPath(destinationPath);
+    if (! OrdinalString::EqualsNoCase(expected, actual))
+    {
+        return false;
+    }
+
+    static_cast<void>(SetEnvironmentVariableW(pathEnvironmentVariable.data(), nullptr));
+    static_cast<void>(SetEnvironmentVariableW(firedEnvironmentVariable.data(), L"1"));
+    Debug::Perf::EmitCounter(counterName);
+    return true;
+}
+
+[[nodiscard]] bool ConsumeMatchingPathInjectionForSelfTest(const wchar_t* path,
+                                                            std::wstring_view pathEnvironmentVariable,
+                                                            std::wstring_view firedEnvironmentVariable,
+                                                            std::wstring_view counterName) noexcept
+{
+    return path != nullptr && path[0] != L'\0' &&
+           ShouldFailOwnedPublicationForSelfTest(path, pathEnvironmentVariable, firedEnvironmentVariable, counterName);
+}
+#endif
+
+using NtCreateFile_t = NTSTATUS(NTAPI*)(PHANDLE,
+                                        ACCESS_MASK,
+                                        POBJECT_ATTRIBUTES,
+                                        PIO_STATUS_BLOCK,
+                                        PLARGE_INTEGER,
+                                        ULONG,
+                                        ULONG,
+                                        ULONG,
+                                        ULONG,
+                                        PVOID,
+                                        ULONG);
+using RtlNtStatusToDosError_t = ULONG(NTAPI*)(NTSTATUS);
+
+[[nodiscard]] NtCreateFile_t GetNtCreateFile() noexcept
+{
+    static const NtCreateFile_t function = []() noexcept -> NtCreateFile_t
+    {
+        const HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll");
+        if (ntdll == nullptr)
+        {
+            return nullptr;
+        }
+#pragma warning(push)
+#pragma warning(disable : 4191) // C4191: GetProcAddress is the supported dynamic ntdll binding boundary.
+        return reinterpret_cast<NtCreateFile_t>(::GetProcAddress(ntdll, "NtCreateFile"));
+#pragma warning(pop)
+    }();
+    return function;
+}
+
+[[nodiscard]] RtlNtStatusToDosError_t GetRtlNtStatusToDosError() noexcept
+{
+    static const RtlNtStatusToDosError_t function = []() noexcept -> RtlNtStatusToDosError_t
+    {
+        const HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll");
+        if (ntdll == nullptr)
+        {
+            return nullptr;
+        }
+#pragma warning(push)
+#pragma warning(disable : 4191) // C4191: GetProcAddress is the supported dynamic ntdll binding boundary.
+        return reinterpret_cast<RtlNtStatusToDosError_t>(::GetProcAddress(ntdll, "RtlNtStatusToDosError"));
+#pragma warning(pop)
+    }();
+    return function;
+}
+
+[[nodiscard]] HRESULT CreateExclusiveDirectoryHandle(std::wstring_view stagePath, wil::unique_handle& directory) noexcept
+{
+    directory.reset();
+    const NtCreateFile_t ntCreateFile = GetNtCreateFile();
+    const RtlNtStatusToDosError_t statusToDosError = GetRtlNtStatusToDosError();
+    if (ntCreateFile == nullptr || statusToDosError == nullptr)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    const std::wstring extended = FileSystemInternal::ToExtendedPath(std::wstring(stagePath));
+    std::wstring ntPath;
+    constexpr std::wstring_view extendedUncPrefix = L"\\\\?\\UNC\\";
+    constexpr std::wstring_view extendedPrefix = L"\\\\?\\";
+    if (extended.starts_with(extendedUncPrefix))
+    {
+        ntPath.assign(L"\\??\\UNC\\");
+        ntPath.append(extended.substr(extendedUncPrefix.size()));
+    }
+    else if (extended.starts_with(extendedPrefix))
+    {
+        ntPath.assign(L"\\??\\");
+        ntPath.append(extended.substr(extendedPrefix.size()));
+    }
+    else
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+    }
+
+    const size_t pathBytes = ntPath.size() * sizeof(wchar_t);
+    if (pathBytes > static_cast<size_t>((std::numeric_limits<USHORT>::max)()))
+    {
+        return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
+    }
+
+    UNICODE_STRING name{};
+    name.Length = static_cast<USHORT>(pathBytes);
+    name.MaximumLength = name.Length;
+    name.Buffer = ntPath.data();
+    OBJECT_ATTRIBUTES attributes{};
+    InitializeObjectAttributes(&attributes, &name, OBJ_CASE_INSENSITIVE, nullptr, nullptr);
+
+    IO_STATUS_BLOCK ioStatus{};
+    HANDLE rawHandle = INVALID_HANDLE_VALUE;
+    const NTSTATUS status = ntCreateFile(&rawHandle,
+                                         DELETE | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
+                                         &attributes,
+                                         &ioStatus,
+                                         nullptr,
+                                         // TEMPORARY is a file-data caching hint and is rejected for directory
+                                         // creation by some file systems. The exclusive stage contract comes from
+                                         // FILE_CREATE, not from a directory attribute.
+                                         FILE_ATTRIBUTE_NORMAL,
+                                         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                         FILE_CREATE,
+                                         // FILE_CREATE already proves the final component was absent and returns
+                                         // the newly created object in the same kernel operation. OPEN_REPARSE_POINT
+                                         // is an open-existing option and is rejected by some file systems here.
+                                         FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+                                         nullptr,
+                                         0u);
+    if (status < 0)
+    {
+        const DWORD error = statusToDosError(status);
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+    }
+    if (rawHandle == nullptr || rawHandle == INVALID_HANDLE_VALUE)
+    {
+        return E_UNEXPECTED;
+    }
+    directory.reset(rawHandle);
+    return S_OK;
+}
+
 [[nodiscard]] std::string Utf8FromUtf16(std::wstring_view text) noexcept
 {
     return Common::Strings::Utf8FromUtf16ReplacingInvalid(text);
@@ -540,34 +737,72 @@ struct SymbolicLinkReparseDataBufferForProperties final
     return streamPath;
 }
 
-[[nodiscard]] FileSystemReparsePointPolicy ParseReparsePointPolicy(std::string_view policy) noexcept
+[[nodiscard]] bool TryParseReparsePointPolicy(std::string_view policy, FileSystemReparsePointPolicy& parsed) noexcept
 {
-    if (policy == "copyReparse")
+    if (policy == "skip" || policy == "followTargets")
     {
-        return FileSystemReparsePointPolicy::CopyReparse;
+        parsed = FileSystemReparsePointPolicy::Skip;
+        return true;
     }
-    if (policy == "followTargets")
+    if (policy == "preserve" || policy == "copyReparse")
     {
-        return FileSystemReparsePointPolicy::FollowTargets;
+        // `copyReparse` is the pre-P3.1 persisted spelling for Preserve.
+        parsed = FileSystemReparsePointPolicy::Preserve;
+        return true;
     }
-    if (policy == "skip")
-    {
-        return FileSystemReparsePointPolicy::Skip;
-    }
-
-    return FileSystemReparsePointPolicy::CopyReparse;
+    return false;
 }
 
 [[nodiscard]] const char* ReparsePointPolicyToString(FileSystemReparsePointPolicy policy) noexcept
 {
     switch (policy)
     {
-        case FileSystemReparsePointPolicy::CopyReparse: return "copyReparse";
-        case FileSystemReparsePointPolicy::FollowTargets: return "followTargets";
+        case FileSystemReparsePointPolicy::Preserve: return "preserve";
         case FileSystemReparsePointPolicy::Skip: return "skip";
     }
 
-    return "copyReparse";
+    return "preserve";
+}
+
+[[nodiscard]] HRESULT CanonicalizeReparsePointPolicyConfiguration(const Common::Json::ObjectDocument& source,
+                                                                   FileSystemReparsePointPolicy policy,
+                                                                   std::string& configurationJson) noexcept
+{
+    if (! source)
+    {
+        return E_INVALIDARG;
+    }
+
+    Common::Json::UniqueMutableDocument document(yyjson_mut_doc_new(nullptr));
+    if (! document)
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    yyjson_mut_val* root = yyjson_val_mut_copy(document.get(), source.root);
+    if (! root)
+    {
+        return E_OUTOFMEMORY;
+    }
+    yyjson_mut_doc_set_root(document.get(), root);
+
+    static_cast<void>(yyjson_mut_obj_remove_key(root, "reparsePointPolicy"));
+    if (! yyjson_mut_obj_add_strcpy(document.get(), root, "reparsePointPolicy", ReparsePointPolicyToString(policy)))
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    size_t length = 0;
+    yyjson_write_err error{};
+    Common::Json::UniqueMallocString text(
+        yyjson_mut_write_opts(document.get(), YYJSON_WRITE_NOFLAG, nullptr, &length, &error));
+    if (! text)
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    configurationJson.assign(text.get(), length);
+    return S_OK;
 }
 
 [[nodiscard]] FileSystemSearchBackendPreference ParseSearchBackendPreference(std::string_view preference) noexcept
@@ -849,6 +1084,87 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
 
     TrimAfterFirstNull(volumeName);
     return BuildOpenableVolumeGuidDevicePath(volumeName);
+}
+
+struct LocalCapabilityRouteInfo final
+{
+    std::string rootId;
+    bool remote = false;
+};
+
+[[nodiscard]] std::string EncodeLocalRootId(std::wstring rootIdentity) noexcept
+{
+    rootIdentity = OrdinalString::FoldCaseInvariant(rootIdentity);
+    std::string encoded;
+    if (! Common::Uri::TryPercentEncodeUtf8(rootIdentity, Common::Uri::SlashPolicy::Encode, encoded) || encoded.empty())
+    {
+        return {};
+    }
+    return std::format("local-volume:{}", encoded);
+}
+
+// Route facts are queried once per child name by Create Directory, Batch Rename, and Change
+// Case, often on the UI thread. A volume's identity and drive type are stable for the life of
+// a mount, so remember the last resolved volume briefly and pay one GetVolumePathNameW per
+// query instead of the volume-GUID and drive-type lookups as well.
+struct LocalVolumeRouteCache final
+{
+    LocalVolumeRouteCache()                                        = default;
+    LocalVolumeRouteCache(const LocalVolumeRouteCache&)            = delete;
+    LocalVolumeRouteCache(LocalVolumeRouteCache&&)                 = delete;
+    LocalVolumeRouteCache& operator=(const LocalVolumeRouteCache&) = delete;
+    LocalVolumeRouteCache& operator=(LocalVolumeRouteCache&&)      = delete;
+
+    std::mutex mutex;
+    std::wstring volumeRoot;
+    LocalCapabilityRouteInfo route;
+    ULONGLONG resolvedTick = 0u;
+};
+LocalVolumeRouteCache g_localVolumeRouteCache;
+constexpr ULONGLONG kLocalVolumeRouteCacheTtlMs = 2'000u;
+
+[[nodiscard]] LocalCapabilityRouteInfo BuildLocalCapabilityRouteInfo(std::wstring_view path) noexcept
+{
+    LocalCapabilityRouteInfo route{};
+    if (IsUncPath(path))
+    {
+        route.remote                    = true;
+        const std::wstring rootIdentity = ExtractDriveRoot(path);
+        route.rootId = rootIdentity.empty() ? std::string("local-provider-root") : EncodeLocalRootId(rootIdentity);
+        return route;
+    }
+
+    const std::wstring volumeRoot = ResolveLocalVolumeRootPath(path);
+    if (volumeRoot.empty())
+    {
+        // The provider-root query used by legacy capability inventory has no concrete volume.
+        // Real operation admission always queries its actual source/destination path.
+        route.rootId = "local-provider-root";
+        return route;
+    }
+
+    const ULONGLONG nowTick = GetTickCount64();
+    {
+        std::scoped_lock lock(g_localVolumeRouteCache.mutex);
+        if (g_localVolumeRouteCache.volumeRoot == volumeRoot && nowTick - g_localVolumeRouteCache.resolvedTick <= kLocalVolumeRouteCacheTtlMs)
+        {
+            return g_localVolumeRouteCache.route;
+        }
+    }
+
+    route.remote              = GetDriveTypeW(volumeRoot.c_str()) == DRIVE_REMOTE;
+    std::wstring rootIdentity = ResolveVolumeGuidDevicePath(volumeRoot);
+    if (rootIdentity.empty())
+    {
+        rootIdentity = volumeRoot;
+    }
+    route.rootId = EncodeLocalRootId(std::move(rootIdentity));
+
+    std::scoped_lock lock(g_localVolumeRouteCache.mutex);
+    g_localVolumeRouteCache.volumeRoot   = volumeRoot;
+    g_localVolumeRouteCache.route        = route;
+    g_localVolumeRouteCache.resolvedTick = nowTick;
+    return route;
 }
 
 [[nodiscard]] std::wstring ResolveSubstTargetPath(std::wstring_view volumeRoot) noexcept
@@ -1437,6 +1753,10 @@ void RunDebugNvmeFallbackStorageProbeSelfTest(unsigned int& passed, unsigned int
     DebugCheck(characteristics.preferredCopyMoveConcurrency == 8u, L"NVMe fallback storage probe should keep the deep-queue copy/move budget", passed, failed);
 }
 
+void RunDebugOperationControlSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
+void RunDebugSynchronousIoCancelWatchSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
+void RunDebugCreateDirectoryAdmissionSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
+
 extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemDebugSelfTests(unsigned int* passed, unsigned int* failed)
 {
     if (passed == nullptr || failed == nullptr)
@@ -1455,6 +1775,10 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemDebugS
     FileSystemInternal::RunDebugDirectorySizeErrorPolicySelfTest(*passed, *failed);
     FileSystemInternal::RunDebugSharedFileOpsSchedulerShutdownSelfTest(*passed, *failed);
     FileSystemInternal::RunDebugSearchServiceFallbackCandidateSelfTest(*passed, *failed);
+    FileSystemInternal::RunDebugObjectBindingSelfTest(*passed, *failed);
+    RunDebugOperationControlSelfTest(*passed, *failed);
+    RunDebugSynchronousIoCancelWatchSelfTest(*passed, *failed);
+    RunDebugCreateDirectoryAdmissionSelfTest(*passed, *failed);
 
     return *failed == 0u ? S_OK : E_FAIL;
 }
@@ -1489,8 +1813,13 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemDebugS
 class Win32FileReader final : public IFileReader
 {
 public:
-    Win32FileReader(wil::unique_handle file, uint64_t sizeBytes) noexcept : _file(std::move(file)), _sizeBytes(sizeBytes)
+    Win32FileReader(wil::unique_handle file, uint64_t sizeBytes, const FileSystemOptions* options) noexcept
+        : _file(std::move(file)), _sizeBytes(sizeBytes), _hasOperationOptions(options != nullptr)
     {
+        if (options != nullptr)
+        {
+            _operationOptions = *options;
+        }
     }
 
     Win32FileReader(const Win32FileReader&)            = delete;
@@ -1538,6 +1867,12 @@ public:
             return E_POINTER;
         }
 
+        const HRESULT controlHr = FileSystemCheckOperationControl(OperationOptions());
+        if (FAILED(controlHr))
+        {
+            return controlHr;
+        }
+
         *sizeBytes = _sizeBytes;
         return S_OK;
     }
@@ -1551,6 +1886,12 @@ public:
 
         *newPosition = 0;
 
+        const HRESULT controlHr = FileSystemCheckOperationControl(OperationOptions());
+        if (FAILED(controlHr))
+        {
+            return controlHr;
+        }
+
         if (! _file)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
@@ -1561,21 +1902,42 @@ public:
             return E_INVALIDARG;
         }
 
-        LARGE_INTEGER distance{};
-        distance.QuadPart = offset;
-
-        LARGE_INTEGER moved{};
-        if (SetFilePointerEx(_file.get(), distance, &moved, origin) == 0)
+        uint64_t base = 0u;
+        if (origin == FILE_CURRENT)
         {
-            return HRESULT_FROM_WIN32(GetLastError());
+            base = _position;
+        }
+        else if (origin == FILE_END)
+        {
+            base = _sizeBytes;
         }
 
-        if (moved.QuadPart < 0)
+        uint64_t target = 0u;
+        if (offset < 0)
         {
-            return HRESULT_FROM_WIN32(ERROR_NEGATIVE_SEEK);
+            const uint64_t magnitude = static_cast<uint64_t>(-(offset + 1)) + 1u;
+            if (magnitude > base)
+            {
+                return HRESULT_FROM_WIN32(ERROR_NEGATIVE_SEEK);
+            }
+            target = base - magnitude;
+        }
+        else
+        {
+            const uint64_t magnitude = static_cast<uint64_t>(offset);
+            if (magnitude > (std::numeric_limits<uint64_t>::max)() - base)
+            {
+                return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+            }
+            target = base + magnitude;
+        }
+        if (target > static_cast<uint64_t>((std::numeric_limits<__int64>::max)()))
+        {
+            return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
         }
 
-        *newPosition = static_cast<uint64_t>(moved.QuadPart);
+        _position    = target;
+        *newPosition = target;
         return S_OK;
     }
 
@@ -1587,6 +1949,12 @@ public:
         }
 
         *bytesRead = 0;
+
+        const HRESULT controlHr = FileSystemCheckOperationControl(OperationOptions());
+        if (FAILED(controlHr))
+        {
+            return controlHr;
+        }
 
         if (bytesToRead == 0)
         {
@@ -1603,12 +1971,76 @@ public:
             return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
         }
 
-        DWORD read = 0;
-        if (ReadFile(_file.get(), buffer, bytesToRead, &read, nullptr) == 0)
+        if (! _readEvent)
         {
-            return HRESULT_FROM_WIN32(GetLastError());
+            _readEvent.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+            if (! _readEvent)
+            {
+                const DWORD error = GetLastError();
+                return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_OUTOFMEMORY);
+            }
+        }
+        static_cast<void>(ResetEvent(_readEvent.get()));
+
+        // Only a reader that carries an operation control or a deadline polls between kernel
+        // waits; every other consumer (viewers, search, hashing) waits without a timer.
+        const FileSystemOptions* const control = OperationOptions();
+        const DWORD waitMs = control != nullptr && (control->operationControl != nullptr || control->deadlineTickCount64 != 0u) ? 25u : INFINITE;
+
+        OVERLAPPED overlapped{};
+        overlapped.Offset     = static_cast<DWORD>(_position & 0xFFFFFFFFu);
+        overlapped.OffsetHigh = static_cast<DWORD>(_position >> 32u);
+        overlapped.hEvent     = _readEvent.get();
+
+        const BOOL started = ReadFile(_file.get(), buffer, bytesToRead, nullptr, &overlapped);
+        if (started == FALSE)
+        {
+            const DWORD error = GetLastError();
+            if (error != ERROR_IO_PENDING)
+            {
+                return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_READ_FAULT);
+            }
         }
 
+        DWORD read = 0u;
+        for (;;)
+        {
+            const DWORD waitResult = WaitForSingleObject(_readEvent.get(), waitMs);
+            if (waitResult == WAIT_OBJECT_0)
+            {
+                if (GetOverlappedResult(_file.get(), &overlapped, &read, FALSE) == FALSE)
+                {
+                    const DWORD error = GetLastError();
+                    if (error == ERROR_HANDLE_EOF)
+                    {
+                        return S_OK;
+                    }
+                    return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_READ_FAULT);
+                }
+                break;
+            }
+
+            const HRESULT pendingControlHr = FileSystemCheckOperationControl(OperationOptions());
+            if (FAILED(pendingControlHr))
+            {
+                static_cast<void>(CancelIoEx(_file.get(), &overlapped));
+                DWORD ignoredBytes = 0u;
+                static_cast<void>(GetOverlappedResult(_file.get(), &overlapped, &ignoredBytes, TRUE));
+                return pendingControlHr;
+            }
+            if (waitResult == WAIT_TIMEOUT)
+            {
+                continue;
+            }
+
+            const HRESULT waitHr = waitResult == WAIT_FAILED ? HRESULT_FROM_WIN32(GetLastError()) : E_UNEXPECTED;
+            static_cast<void>(CancelIoEx(_file.get(), &overlapped));
+            DWORD ignoredBytes = 0u;
+            static_cast<void>(GetOverlappedResult(_file.get(), &overlapped, &ignoredBytes, TRUE));
+            return waitHr;
+        }
+
+        _position += static_cast<uint64_t>(read);
         *bytesRead = static_cast<unsigned long>(read);
         return S_OK;
     }
@@ -1616,25 +2048,1762 @@ public:
 private:
     ~Win32FileReader() = default;
 
+    [[nodiscard]] const FileSystemOptions* OperationOptions() const noexcept
+    {
+        return _hasOperationOptions ? &_operationOptions : nullptr;
+    }
+
     std::atomic_ulong _refCount{1};
     wil::unique_handle _file;
     uint64_t _sizeBytes = 0;
+    uint64_t _position  = 0;
+    wil::unique_event_nothrow _readEvent;
+    FileSystemOptions _operationOptions{};
+    bool _hasOperationOptions = false;
+};
+
+struct LocalObjectIdentityPayload final
+{
+    std::array<unsigned char, 8> namespaceTag{{'R', 'S', 'L', 'F', 'I', 'D', '2', 0}};
+    uint64_t volumeSerialNumber = 0;
+    FILE_ID_128 fileId{};
+};
+static_assert(sizeof(LocalObjectIdentityPayload) == 32u);
+
+constexpr std::array<unsigned char, 8> kPersistentFileIdNamespace{{'R', 'S', 'L', 'F', 'I', 'D', '2', 0}};
+constexpr std::array<unsigned char, 8> kRetainedHandleNamespace{{'R', 'S', 'L', 'H', 'N', 'D', '1', 0}};
+
+[[nodiscard]] bool IsRetainedHandleIdentity(const LocalObjectIdentityPayload& identity) noexcept
+{
+    return identity.namespaceTag == kRetainedHandleNamespace;
+}
+
+[[nodiscard]] HRESULT MakePersistentLocalObjectIdentity(const FILE_ID_INFO& fileIdInfo,
+                                                         LocalObjectIdentityPayload& identity) noexcept
+{
+    const bool emptyFileId = std::all_of(std::begin(fileIdInfo.FileId.Identifier),
+                                         std::end(fileIdInfo.FileId.Identifier),
+                                         [](BYTE value) noexcept { return value == 0u; });
+    if (emptyFileId)
+    {
+        identity = {};
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    identity.namespaceTag       = kPersistentFileIdNamespace;
+    identity.volumeSerialNumber = fileIdInfo.VolumeSerialNumber;
+    identity.fileId             = fileIdInfo.FileId;
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT MakeRetainedHandleIdentity(LocalObjectIdentityPayload& identity) noexcept
+{
+    GUID nonce{};
+    const HRESULT nonceHr = CoCreateGuid(&nonce);
+    if (FAILED(nonceHr))
+    {
+        identity = {};
+        return nonceHr;
+    }
+
+    identity = {};
+    identity.namespaceTag = kRetainedHandleNamespace;
+    static_assert(sizeof(nonce) == sizeof(identity.fileId));
+    std::memcpy(&identity.fileId, &nonce, sizeof(nonce));
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT QueryExactLocalObjectIdentity(HANDLE file, LocalObjectIdentityPayload& identity) noexcept
+{
+    identity = {};
+    if (file == nullptr || file == INVALID_HANDLE_VALUE)
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
+    }
+
+    FILE_ID_INFO fileIdInfo{};
+    if (GetFileInformationByHandleEx(file, FileIdInfo, &fileIdInfo, sizeof(fileIdInfo)) == FALSE)
+    {
+        const DWORD error = GetLastError();
+        if (error == ERROR_INVALID_PARAMETER || error == ERROR_INVALID_FUNCTION || error == ERROR_NOT_SUPPORTED)
+        {
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        }
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+    }
+
+    return MakePersistentLocalObjectIdentity(fileIdInfo, identity);
+}
+
+[[nodiscard]] HRESULT ResolveNewStageIdentity(HANDLE file,
+                                               const wchar_t* stagePath,
+                                               std::wstring_view objectKind,
+                                               const LocalObjectIdentityPayload& retainedIdentity,
+                                               LocalObjectIdentityPayload& identity) noexcept
+{
+#if !defined(ENABLE_TESTS)
+    static_cast<void>(stagePath);
+#endif
+    HRESULT identityHr = S_OK;
+#if defined(ENABLE_TESTS)
+    if (ConsumeMatchingPathInjectionForSelfTest(stagePath,
+                                                kStageIdentityUnsupportedPathEnvVar,
+                                                kStageIdentityUnsupportedFiredEnvVar,
+                                                L"FileOps.Local.StageIdentityUnsupportedInjected"))
+    {
+        identityHr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+    else
+#endif
+    {
+        identityHr = QueryExactLocalObjectIdentity(file, identity);
+    }
+    Debug::Perf::Emit(L"FileOps.Local.ExclusiveIdentityQuery", objectKind, 0u, 0u, 0u, identityHr);
+
+    if (SUCCEEDED(identityHr))
+    {
+        Debug::Perf::EmitCounter(L"fileops.local.stage_identity.persistent_file_id");
+        return S_OK;
+    }
+
+    // CREATE_NEW plus the retained handle is exact ownership authority even when a redirector
+    // cannot supply FileIdInfo. The nonce is process-local identity; it is never reconstructed
+    // from a 64-bit file index or by reopening the stage path.
+    identity = retainedIdentity;
+    Debug::Perf::EmitCounter(L"fileops.local.stage_identity.retained_handle");
+    return S_OK;
+}
+
+interface __declspec(uuid("c1884e97-02e5-4c89-99b0-a619e8f78625")) __declspec(novtable) ILocalBoundObjectControl : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE RenameExactTo(const wchar_t* destinationPath,
+                                                     BOOL replaceIfExists,
+                                                     FileSystemConditionalMutationResult* result) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE DeleteExact(FileSystemConditionalMutationResult* result) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE DuplicateExactHandle(HANDLE* duplicated) noexcept = 0;
+};
+
+constexpr size_t kBackupStreamHeaderBytes = offsetof(WIN32_STREAM_ID, cStreamName);
+constexpr DWORD kBackupMetadataMaxStreamNameBytes = 64u * 1024u;
+constexpr size_t kBackupMetadataIoBufferBytes = 64u * 1024u;
+constexpr uint32_t kMetadataBackupFeatures = FILESYSTEM_METADATA_MOTW | FILESYSTEM_METADATA_ALTERNATE_STREAMS |
+                                             FILESYSTEM_METADATA_EXTENDED_ATTRIBUTES;
+
+[[nodiscard]] HRESULT ReopenExactFile(HANDLE source,
+                                      DWORD desiredAccess,
+                                      wil::unique_handle& reopened,
+                                      DWORD additionalFlags = 0u) noexcept
+{
+    reopened.reset(ReOpenFile(source,
+                              desiredAccess,
+                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                              FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS | additionalFlags));
+    if (! reopened)
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+    }
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT BackupReadExact(HANDLE file,
+                                      void*& context,
+                                      void* buffer,
+                                      DWORD bytesToRead,
+                                      DWORD& bytesRead) noexcept
+{
+    bytesRead = 0u;
+    auto* output = static_cast<std::byte*>(buffer);
+    while (bytesRead < bytesToRead)
+    {
+        DWORD current = 0u;
+        if (BackupRead(file,
+                       reinterpret_cast<LPBYTE>(output + bytesRead),
+                       bytesToRead - bytesRead,
+                       &current,
+                       FALSE,
+                       FALSE,
+                       &context) == FALSE)
+        {
+            const DWORD error = GetLastError();
+            return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+        }
+        if (current == 0u)
+        {
+            break;
+        }
+        bytesRead += current;
+    }
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT BackupWriteExact(HANDLE file,
+                                       void*& context,
+                                       const void* buffer,
+                                       DWORD bytesToWrite) noexcept
+{
+    DWORD bytesWritten = 0u;
+    const auto* input = static_cast<const std::byte*>(buffer);
+    while (bytesWritten < bytesToWrite)
+    {
+        DWORD current = 0u;
+        if (BackupWrite(file,
+                        const_cast<LPBYTE>(reinterpret_cast<const BYTE*>(input + bytesWritten)),
+                        bytesToWrite - bytesWritten,
+                        &current,
+                        FALSE,
+                        FALSE,
+                        &context) == FALSE)
+        {
+            const DWORD error = GetLastError();
+            return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+        }
+        if (current == 0u)
+        {
+            return HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
+        }
+        bytesWritten += current;
+    }
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT SkipBackupPayload(HANDLE file, void*& context, uint64_t bytes) noexcept
+{
+    while (bytes != 0u)
+    {
+        const DWORD low = static_cast<DWORD>(bytes & 0xffffffffu);
+        const DWORD high = static_cast<DWORD>(bytes >> 32u);
+        DWORD lowSkipped = 0u;
+        DWORD highSkipped = 0u;
+        if (BackupSeek(file, low, high, &lowSkipped, &highSkipped, &context) == FALSE)
+        {
+            const DWORD error = GetLastError();
+            return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+        }
+        const uint64_t skipped = (static_cast<uint64_t>(highSkipped) << 32u) | lowSkipped;
+        if (skipped == 0u || skipped > bytes)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+        bytes -= skipped;
+    }
+    return S_OK;
+}
+
+[[nodiscard]] uint32_t BackupStreamMetadataFeature(const WIN32_STREAM_ID& stream,
+                                                   std::wstring_view streamName) noexcept
+{
+    if (stream.dwStreamId == BACKUP_EA_DATA)
+    {
+        return FILESYSTEM_METADATA_EXTENDED_ATTRIBUTES;
+    }
+    if (stream.dwStreamId != BACKUP_ALTERNATE_DATA)
+    {
+        return 0u;
+    }
+    return OrdinalString::EqualsNoCase(streamName, L":Zone.Identifier:$DATA")
+        ? FILESYSTEM_METADATA_MOTW
+        : FILESYSTEM_METADATA_ALTERNATE_STREAMS;
+}
+
+[[nodiscard]] HRESULT InspectBackupMetadataStreams(HANDLE exactFile, uint32_t& presentFeatures) noexcept
+{
+    presentFeatures &= ~kMetadataBackupFeatures;
+    wil::unique_handle source;
+    HRESULT hr = ReopenExactFile(exactFile, GENERIC_READ, source);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    void* readContext = nullptr;
+    const auto abortRead = wil::scope_exit([&]() noexcept
+    {
+        DWORD ignored = 0u;
+        static_cast<void>(BackupRead(source.get(), nullptr, 0u, &ignored, TRUE, FALSE, &readContext));
+    });
+    for (;;)
+    {
+        WIN32_STREAM_ID stream{};
+        DWORD headerBytes = 0u;
+        hr = BackupReadExact(source.get(), readContext, &stream, static_cast<DWORD>(kBackupStreamHeaderBytes), headerBytes);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        if (headerBytes == 0u)
+        {
+            return S_OK;
+        }
+        if (headerBytes != kBackupStreamHeaderBytes || stream.dwStreamNameSize > kBackupMetadataMaxStreamNameBytes ||
+            stream.dwStreamNameSize % sizeof(wchar_t) != 0u || stream.Size.QuadPart < 0)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        std::wstring name(static_cast<size_t>(stream.dwStreamNameSize / sizeof(wchar_t)), L'\0');
+        DWORD nameBytes = 0u;
+        if (stream.dwStreamNameSize != 0u)
+        {
+            hr = BackupReadExact(source.get(), readContext, name.data(), stream.dwStreamNameSize, nameBytes);
+            if (FAILED(hr) || nameBytes != stream.dwStreamNameSize)
+            {
+                return FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+        }
+        presentFeatures |= BackupStreamMetadataFeature(stream, name);
+        hr = SkipBackupPayload(source.get(), readContext, static_cast<uint64_t>(stream.Size.QuadPart));
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+    }
+}
+
+[[nodiscard]] HRESULT CopyBackupMetadataStreams(HANDLE exactSource,
+                                                HANDLE exactDestination,
+                                                FileSystemMetadataTransferResult& result) noexcept
+{
+    wil::unique_handle source;
+    wil::unique_handle destination;
+    HRESULT hr = ReopenExactFile(exactSource, GENERIC_READ, source);
+    if (SUCCEEDED(hr))
+    {
+        hr = ReopenExactFile(exactDestination, GENERIC_WRITE, destination);
+    }
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    void* readContext = nullptr;
+    void* writeContext = nullptr;
+    const auto abortContexts = wil::scope_exit([&]() noexcept
+    {
+        DWORD ignored = 0u;
+        static_cast<void>(BackupRead(source.get(), nullptr, 0u, &ignored, TRUE, FALSE, &readContext));
+        static_cast<void>(BackupWrite(destination.get(), nullptr, 0u, &ignored, TRUE, FALSE, &writeContext));
+    });
+    // This path runs under the already-deep host bridge call stack. Keep the
+    // bounded transfer buffer off the thread stack so Debug/selftest callers do
+    // not cross the Windows stack guard while preserving the same I/O quantum.
+    std::unique_ptr<std::byte[]> buffer(new (std::nothrow) std::byte[kBackupMetadataIoBufferBytes]);
+    if (! buffer)
+    {
+        return E_OUTOFMEMORY;
+    }
+    for (;;)
+    {
+        WIN32_STREAM_ID stream{};
+        DWORD headerBytes = 0u;
+        hr = BackupReadExact(source.get(), readContext, &stream, static_cast<DWORD>(kBackupStreamHeaderBytes), headerBytes);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        if (headerBytes == 0u)
+        {
+            return S_OK;
+        }
+        if (headerBytes != kBackupStreamHeaderBytes || stream.dwStreamNameSize > kBackupMetadataMaxStreamNameBytes ||
+            stream.dwStreamNameSize % sizeof(wchar_t) != 0u || stream.Size.QuadPart < 0)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        std::vector<std::byte> nameBytes(stream.dwStreamNameSize);
+        DWORD nameRead = 0u;
+        if (! nameBytes.empty())
+        {
+            hr = BackupReadExact(source.get(), readContext, nameBytes.data(), stream.dwStreamNameSize, nameRead);
+            if (FAILED(hr) || nameRead != stream.dwStreamNameSize)
+            {
+                return FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+        }
+        const std::wstring_view name(reinterpret_cast<const wchar_t*>(nameBytes.data()), nameBytes.size() / sizeof(wchar_t));
+        const uint32_t feature = BackupStreamMetadataFeature(stream, name);
+        const uint64_t payloadBytes = static_cast<uint64_t>(stream.Size.QuadPart);
+        if (feature == 0u)
+        {
+            hr = SkipBackupPayload(source.get(), readContext, payloadBytes);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+            continue;
+        }
+
+        result.attemptedFeatures |= feature;
+        hr = BackupWriteExact(destination.get(), writeContext, &stream, static_cast<DWORD>(kBackupStreamHeaderBytes));
+        if (SUCCEEDED(hr) && ! nameBytes.empty())
+        {
+            hr = BackupWriteExact(destination.get(), writeContext, nameBytes.data(), static_cast<DWORD>(nameBytes.size()));
+        }
+        uint64_t remaining = payloadBytes;
+        while (SUCCEEDED(hr) && remaining != 0u)
+        {
+            const DWORD chunk = static_cast<DWORD>(std::min<uint64_t>(remaining, kBackupMetadataIoBufferBytes));
+            DWORD bytesRead = 0u;
+            hr = BackupReadExact(source.get(), readContext, buffer.get(), chunk, bytesRead);
+            if (SUCCEEDED(hr) && bytesRead != chunk)
+            {
+                hr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+            if (SUCCEEDED(hr))
+            {
+                hr = BackupWriteExact(destination.get(), writeContext, buffer.get(), chunk);
+            }
+            remaining -= SUCCEEDED(hr) ? chunk : 0u;
+        }
+        if (FAILED(hr))
+        {
+            result.lostFeatures |= feature;
+            if (SUCCEEDED(result.firstFailure))
+            {
+                result.firstFailure = hr;
+            }
+            return S_OK;
+        }
+        result.preservedFeatures |= feature;
+    }
+}
+
+[[nodiscard]] HRESULT DeleteExactHandle(HANDLE file) noexcept
+{
+    if (file == nullptr || file == INVALID_HANDLE_VALUE)
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
+    }
+
+    FILE_DISPOSITION_INFO_EX disposition{};
+    disposition.Flags = FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS |
+                        FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE;
+    if (SetFileInformationByHandle(file, FileDispositionInfoEx, &disposition, sizeof(disposition)) != FALSE)
+    {
+        return S_OK;
+    }
+
+    DWORD error = GetLastError();
+    if (error == ERROR_INVALID_PARAMETER || error == ERROR_INVALID_FUNCTION || error == ERROR_NOT_SUPPORTED)
+    {
+        FILE_BASIC_INFO basic{};
+        if (GetFileInformationByHandleEx(file, FileBasicInfo, &basic, sizeof(basic)) != FALSE &&
+            (basic.FileAttributes & FILE_ATTRIBUTE_READONLY) != 0u)
+        {
+            basic.FileAttributes &= ~FILE_ATTRIBUTE_READONLY;
+            if (basic.FileAttributes == 0u)
+            {
+                basic.FileAttributes = FILE_ATTRIBUTE_NORMAL;
+            }
+            static_cast<void>(SetFileInformationByHandle(file, FileBasicInfo, &basic, sizeof(basic)));
+        }
+
+        FILE_DISPOSITION_INFO fallback{};
+        fallback.DeleteFile = TRUE;
+        if (SetFileInformationByHandle(file, FileDispositionInfo, &fallback, sizeof(fallback)) != FALSE)
+        {
+            return S_OK;
+        }
+        error = GetLastError();
+    }
+
+    FILE_STANDARD_INFO standard{};
+    if (GetFileInformationByHandleEx(file, FileStandardInfo, &standard, sizeof(standard)) != FALSE && standard.DeletePending != FALSE)
+    {
+        return S_OK;
+    }
+    return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+}
+
+class LocalBoundObject final : public IFileSystemBoundObject,
+                               public IFileSystemBoundMetadata,
+                               public IFileSystemBoundContentProof,
+                               public ILocalBoundObjectControl
+{
+public:
+    LocalBoundObject(wil::unique_handle file,
+                      LocalObjectIdentityPayload identity,
+                      FileSystemBoundObjectKind kind,
+                      uint64_t committedSizeBytes,
+                      FileSystemBindFlags grantedFlags,
+                      bool ownedStage,
+                      std::wstring path) noexcept
+        : _file(std::move(file)),
+          _identity(identity),
+          _kind(kind),
+          _committedSizeBytes(committedSizeBytes),
+          _grantedFlags(grantedFlags),
+          _ownedStage(ownedStage),
+          _path(std::move(path))
+    {
+    }
+
+    LocalBoundObject(const LocalBoundObject&)            = delete;
+    LocalBoundObject(LocalBoundObject&&)                 = delete;
+    LocalBoundObject& operator=(const LocalBoundObject&) = delete;
+    LocalBoundObject& operator=(LocalBoundObject&&)      = delete;
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) noexcept override
+    {
+        if (ppvObject == nullptr)
+        {
+            return E_POINTER;
+        }
+        *ppvObject = nullptr;
+        if (riid == __uuidof(IUnknown) || riid == __uuidof(IFileSystemBoundObject))
+        {
+            *ppvObject = static_cast<IFileSystemBoundObject*>(this);
+            AddRef();
+            return S_OK;
+        }
+        if (riid == __uuidof(IFileSystemBoundMetadata))
+        {
+            *ppvObject = static_cast<IFileSystemBoundMetadata*>(this);
+            AddRef();
+            return S_OK;
+        }
+        if (riid == __uuidof(IFileSystemBoundContentProof))
+        {
+            *ppvObject = static_cast<IFileSystemBoundContentProof*>(this);
+            AddRef();
+            return S_OK;
+        }
+        if (riid == __uuidof(ILocalBoundObjectControl))
+        {
+            *ppvObject = static_cast<ILocalBoundObjectControl*>(this);
+            AddRef();
+            return S_OK;
+        }
+        return E_NOINTERFACE;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() noexcept override
+    {
+        return _refCount.fetch_add(1u, std::memory_order_relaxed) + 1u;
+    }
+
+    ULONG STDMETHODCALLTYPE Release() noexcept override
+    {
+        const ULONG current = _refCount.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
+        if (current == 0u)
+        {
+            delete this;
+        }
+        return current;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetSnapshot(FileSystemBoundObjectSnapshot* snapshot) noexcept override
+    {
+        if (snapshot == nullptr)
+        {
+            return E_POINTER;
+        }
+        if (snapshot->sizeBytes != sizeof(FileSystemBoundObjectSnapshot))
+        {
+            return E_INVALIDARG;
+        }
+
+        uint64_t committedSizeBytes = _committedSizeBytes;
+        if (_kind == FILESYSTEM_BOUND_REGULAR_FILE && _file)
+        {
+            FILE_STANDARD_INFO standard{};
+            if (GetFileInformationByHandleEx(_file.get(), FileStandardInfo, &standard, sizeof(standard)) != FALSE && standard.EndOfFile.QuadPart >= 0)
+            {
+                committedSizeBytes = static_cast<uint64_t>(standard.EndOfFile.QuadPart);
+            }
+        }
+
+        snapshot->kind               = static_cast<uint32_t>(_kind);
+        snapshot->objectId           = &_identity;
+        snapshot->objectIdBytes      = sizeof(_identity);
+        snapshot->revisionId         = nullptr;
+        snapshot->revisionIdBytes    = 0u;
+        snapshot->committedSizeBytes = committedSizeBytes;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE IsSameObject(IFileSystemBoundObject* other, BOOL* same) noexcept override
+    {
+        if (same == nullptr)
+        {
+            return E_POINTER;
+        }
+        *same = FALSE;
+        if (other == nullptr)
+        {
+            return E_INVALIDARG;
+        }
+
+        FileSystemBoundObjectSnapshot otherSnapshot{};
+        otherSnapshot.sizeBytes = sizeof(otherSnapshot);
+        const HRESULT hr = other->GetSnapshot(&otherSnapshot);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        if (otherSnapshot.sizeBytes != sizeof(otherSnapshot) ||
+            otherSnapshot.objectIdBytes != sizeof(_identity) || otherSnapshot.objectId == nullptr ||
+            (otherSnapshot.revisionIdBytes != 0u && otherSnapshot.revisionId == nullptr))
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        *same = std::memcmp(otherSnapshot.objectId, &_identity, sizeof(_identity)) == 0 ? TRUE : FALSE;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE OpenReader(const FileSystemOptions* options, IFileReader** reader) noexcept override
+    {
+        if (reader == nullptr)
+        {
+            return E_POINTER;
+        }
+        *reader = nullptr;
+        if (! FileSystemOptionsHaveValidHeader(options))
+        {
+            return E_INVALIDARG;
+        }
+        if ((_grantedFlags & FILESYSTEM_BIND_READ_CONTENT) == 0u || _kind != FILESYSTEM_BOUND_REGULAR_FILE)
+        {
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        }
+
+        wil::unique_handle reopened;
+        const HRESULT reopenHr = ReopenExactFile(_file.get(), GENERIC_READ, reopened, FILE_FLAG_OVERLAPPED);
+        if (FAILED(reopenHr))
+        {
+            return reopenHr;
+        }
+
+        if (! IsRetainedHandleIdentity(_identity))
+        {
+            LocalObjectIdentityPayload reopenedIdentity{};
+            const HRESULT identityHr = QueryExactLocalObjectIdentity(reopened.get(), reopenedIdentity);
+            if (FAILED(identityHr))
+            {
+                return identityHr;
+            }
+            if (std::memcmp(&reopenedIdentity, &_identity, sizeof(_identity)) != 0)
+            {
+                return HRESULT_FROM_WIN32(ERROR_FILE_INVALID);
+            }
+        }
+
+        LARGE_INTEGER fileSize{};
+        if (GetFileSizeEx(reopened.get(), &fileSize) == FALSE || fileSize.QuadPart < 0)
+        {
+            const DWORD error = GetLastError();
+            return fileSize.QuadPart < 0 ? HRESULT_FROM_WIN32(ERROR_INVALID_DATA)
+                                         : HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+        }
+
+        auto* impl = new (std::nothrow) Win32FileReader(std::move(reopened), static_cast<uint64_t>(fileSize.QuadPart), options);
+        if (impl == nullptr)
+        {
+            return E_OUTOFMEMORY;
+        }
+        *reader = impl;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetContentProof(const FileSystemOptions* options,
+                                              FileSystemContentProof* proof) noexcept override
+    {
+        if (proof == nullptr)
+        {
+            return E_POINTER;
+        }
+        if (proof->sizeBytes != sizeof(FileSystemContentProof) || ! FileSystemOptionsHaveValidHeader(options))
+        {
+            return E_INVALIDARG;
+        }
+        *proof = {};
+        proof->sizeBytes = sizeof(FileSystemContentProof);
+        if ((_grantedFlags & FILESYSTEM_BIND_READ_CONTENT) == 0u || _kind != FILESYSTEM_BOUND_REGULAR_FILE)
+        {
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        }
+
+        wil::com_ptr<IFileReader> reader;
+        HRESULT hr = OpenReader(options, reader.put());
+        if (FAILED(hr) || ! reader)
+        {
+            return FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+        uint64_t sizeBytes = 0u;
+        hr = reader->GetSize(&sizeBytes);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        uint64_t position = 0u;
+        hr = reader->Seek(0, FILE_BEGIN, &position);
+        if (FAILED(hr) || position != 0u)
+        {
+            return FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        constexpr size_t kBufferBytes = 1024u * 1024u;
+        auto buffer = std::unique_ptr<std::byte[]>(new (std::nothrow) std::byte[kBufferBytes]);
+        if (! buffer)
+        {
+            return E_OUTOFMEMORY;
+        }
+        Common::Crypto::Blake3Hasher hasher;
+        uint64_t totalRead = 0u;
+        for (;;)
+        {
+            hr = FileSystemCheckOperationControl(options);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+            unsigned long bytesRead = 0u;
+            hr = reader->Read(buffer.get(), static_cast<unsigned long>(kBufferBytes), &bytesRead);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+            if (bytesRead > kBufferBytes || totalRead > std::numeric_limits<uint64_t>::max() - bytesRead)
+            {
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+            if (bytesRead == 0u)
+            {
+                break;
+            }
+            hasher.Update(std::span<const std::byte>(buffer.get(), bytesRead));
+            totalRead += bytesRead;
+        }
+        if (totalRead != sizeBytes)
+        {
+            return HRESULT_FROM_WIN32(ERROR_HANDLE_EOF);
+        }
+
+        const Common::Crypto::Blake3Digest digest = hasher.Finalize();
+        proof->algorithm = FILESYSTEM_CONTENT_PROOF_BLAKE3_256;
+        proof->contentSizeBytes = totalRead;
+        static_assert(sizeof(proof->digest) == digest.size());
+        std::memcpy(proof->digest, digest.data(), digest.size());
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetBasicInformation(FileSystemBasicInformation* info) noexcept override
+    {
+        if (info == nullptr)
+        {
+            return E_POINTER;
+        }
+        if (info->sizeBytes != sizeof(FileSystemBasicInformation))
+        {
+            return E_INVALIDARG;
+        }
+        if ((_grantedFlags & FILESYSTEM_BIND_READ_METADATA) == 0u)
+        {
+            return E_ACCESSDENIED;
+        }
+
+        FILE_BASIC_INFO basic{};
+        if (GetFileInformationByHandleEx(_file.get(), FileBasicInfo, &basic, sizeof(basic)) == FALSE)
+        {
+            const DWORD error = GetLastError();
+            return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+        }
+        info->creationTime   = basic.CreationTime.QuadPart;
+        info->lastAccessTime = basic.LastAccessTime.QuadPart;
+        info->lastWriteTime  = basic.LastWriteTime.QuadPart;
+        info->attributes     = basic.FileAttributes;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE SetBasicInformation(const FileSystemBasicInformation* info) noexcept override
+    {
+        if (info == nullptr)
+        {
+            return E_POINTER;
+        }
+        if (info->sizeBytes != sizeof(FileSystemBasicInformation))
+        {
+            return E_INVALIDARG;
+        }
+        if ((_grantedFlags & FILESYSTEM_BIND_PUBLICATION) == 0u || ! _file)
+        {
+            return E_ACCESSDENIED;
+        }
+
+        FILE_BASIC_INFO basic{};
+        basic.CreationTime.QuadPart   = info->creationTime;
+        basic.LastAccessTime.QuadPart = info->lastAccessTime;
+        basic.LastWriteTime.QuadPart  = info->lastWriteTime;
+        basic.FileAttributes          = info->attributes;
+        if (SetFileInformationByHandle(_file.get(), FileBasicInfo, &basic, sizeof(basic)) == FALSE)
+        {
+            const DWORD error = GetLastError();
+            return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+        }
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetMetadataSnapshot(const FileSystemOptions* options,
+                                                  FileSystemMetadataSnapshot* snapshot) noexcept override
+    {
+        if (snapshot == nullptr)
+        {
+            return E_POINTER;
+        }
+        if (snapshot->sizeBytes != sizeof(FileSystemMetadataSnapshot) || ! FileSystemOptionsHaveValidHeader(options))
+        {
+            return E_INVALIDARG;
+        }
+        if ((_grantedFlags & FILESYSTEM_BIND_READ_METADATA) == 0u || ! _file)
+        {
+            return E_ACCESSDENIED;
+        }
+        const HRESULT controlHr = FileSystemCheckOperationControl(options);
+        if (FAILED(controlHr))
+        {
+            return controlHr;
+        }
+
+        *snapshot = {};
+        snapshot->sizeBytes = sizeof(FileSystemMetadataSnapshot);
+        snapshot->supportedFeatures = FILESYSTEM_METADATA_BASIC_TIMES_ATTRIBUTES | FILESYSTEM_METADATA_MOTW |
+                                      FILESYSTEM_METADATA_ALTERNATE_STREAMS | FILESYSTEM_METADATA_EXTENDED_ATTRIBUTES |
+                                      FILESYSTEM_METADATA_SECURITY | FILESYSTEM_METADATA_SPARSE | FILESYSTEM_METADATA_COMPRESSION |
+                                      FILESYSTEM_METADATA_EFS | FILESYSTEM_METADATA_PLACEHOLDER;
+        snapshot->presentFeatures = FILESYSTEM_METADATA_BASIC_TIMES_ATTRIBUTES | FILESYSTEM_METADATA_SECURITY;
+        snapshot->logicalSizeBytes = _committedSizeBytes;
+        snapshot->allocatedSizeBytes = std::numeric_limits<uint64_t>::max();
+
+        FILE_ATTRIBUTE_TAG_INFO tagInfo{};
+        if (GetFileInformationByHandleEx(_file.get(), FileAttributeTagInfo, &tagInfo, sizeof(tagInfo)) == FALSE)
+        {
+            const DWORD error = GetLastError();
+            return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+        }
+        snapshot->fileAttributes = tagInfo.FileAttributes;
+        snapshot->reparseTag     = tagInfo.ReparseTag;
+        if ((tagInfo.FileAttributes & FILE_ATTRIBUTE_SPARSE_FILE) != 0u)
+        {
+            snapshot->presentFeatures |= FILESYSTEM_METADATA_SPARSE;
+        }
+        if ((tagInfo.FileAttributes & FILE_ATTRIBUTE_COMPRESSED) != 0u)
+        {
+            snapshot->presentFeatures |= FILESYSTEM_METADATA_COMPRESSION;
+        }
+        if ((tagInfo.FileAttributes & FILE_ATTRIBUTE_ENCRYPTED) != 0u)
+        {
+            snapshot->presentFeatures |= FILESYSTEM_METADATA_EFS;
+        }
+        constexpr DWORD kRecallAttributes = FILE_ATTRIBUTE_RECALL_ON_OPEN | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS;
+        if ((tagInfo.FileAttributes & kRecallAttributes) != 0u)
+        {
+            snapshot->presentFeatures |= FILESYSTEM_METADATA_PLACEHOLDER;
+        }
+#if defined(ENABLE_TESTS)
+        snapshot->presentFeatures |= ReadSelfTestMetadataMask(kMetadataForcePresentMaskEnvVar);
+#endif
+
+        FILE_STANDARD_INFO standard{};
+        if (GetFileInformationByHandleEx(_file.get(), FileStandardInfo, &standard, sizeof(standard)) != FALSE && standard.EndOfFile.QuadPart >= 0)
+        {
+            snapshot->logicalSizeBytes = static_cast<uint64_t>(standard.EndOfFile.QuadPart);
+        }
+        FILE_COMPRESSION_INFO compression{};
+        if (GetFileInformationByHandleEx(_file.get(), FileCompressionInfo, &compression, sizeof(compression)) != FALSE &&
+            compression.CompressedFileSize.QuadPart >= 0)
+        {
+            snapshot->allocatedSizeBytes = static_cast<uint64_t>(compression.CompressedFileSize.QuadPart);
+        }
+
+        uint32_t backupFeatures = snapshot->presentFeatures;
+        const HRESULT streamHr = InspectBackupMetadataStreams(_file.get(), backupFeatures);
+        if (FAILED(streamHr))
+        {
+            // An inspection failure is not "unsupported": reporting the backup classes as
+            // unsupported would let the host treat MOTW, ADS, and EA as absent and prove nothing.
+            Debug::Perf::Emit(L"fileops.local.metadata.inspect_failed", L"backup-streams", 0u, snapshot->presentFeatures, 0u, streamHr);
+            return streamHr;
+        }
+        snapshot->presentFeatures = backupFeatures;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE TransferMetadataTo(IFileSystemBoundObject* destination,
+                                                 FileSystemMetadataTransferPhase phase,
+                                                 const FileSystemOptions* options,
+                                                 FileSystemMetadataTransferResult* result) noexcept override
+    {
+        if (destination == nullptr || result == nullptr)
+        {
+            return E_POINTER;
+        }
+        if (result->sizeBytes != sizeof(FileSystemMetadataTransferResult) ||
+            (phase != FILESYSTEM_METADATA_TRANSFER_PREPARE_CONTENT && phase != FILESYSTEM_METADATA_TRANSFER_FINALIZE) ||
+            ! FileSystemOptionsHaveValidHeader(options))
+        {
+            return E_INVALIDARG;
+        }
+        if ((_grantedFlags & FILESYSTEM_BIND_READ_METADATA) == 0u || ! _file)
+        {
+            return E_ACCESSDENIED;
+        }
+        const HRESULT controlHr = FileSystemCheckOperationControl(options);
+        if (FAILED(controlHr))
+        {
+            return controlHr;
+        }
+
+        *result = {};
+        result->sizeBytes = sizeof(FileSystemMetadataTransferResult);
+        result->firstFailure = S_OK;
+        wil::com_ptr<ILocalBoundObjectControl> destinationControl;
+        const HRESULT queryHr = destination->QueryInterface(__uuidof(ILocalBoundObjectControl), destinationControl.put_void());
+        if (FAILED(queryHr) || ! destinationControl)
+        {
+            return FAILED(queryHr) ? queryHr : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        }
+        HANDLE duplicatedDestination = INVALID_HANDLE_VALUE;
+        HRESULT hr = destinationControl->DuplicateExactHandle(&duplicatedDestination);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        wil::unique_handle destinationHandle(duplicatedDestination);
+
+        FileSystemMetadataSnapshot sourceSnapshot{};
+        sourceSnapshot.sizeBytes = sizeof(sourceSnapshot);
+        hr = GetMetadataSnapshot(options, &sourceSnapshot);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        const auto recordFailure = [&](uint32_t feature, HRESULT failure) noexcept
+        {
+            result->attemptedFeatures |= feature;
+            result->lostFeatures |= feature;
+            if (SUCCEEDED(result->firstFailure))
+            {
+                result->firstFailure = failure;
+            }
+        };
+        const auto applyControl = [&](uint32_t feature, DWORD controlCode, void* input, DWORD inputBytes) noexcept
+        {
+            if ((sourceSnapshot.presentFeatures & feature) == 0u)
+            {
+                return;
+            }
+            result->attemptedFeatures |= feature;
+#if defined(ENABLE_TESTS)
+            if ((ReadSelfTestMetadataMask(kMetadataFailMaskEnvVar) & feature) != 0u)
+            {
+                recordFailure(feature, HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+                return;
+            }
+#endif
+            DWORD returned = 0u;
+            if (DeviceIoControl(destinationHandle.get(), controlCode, input, inputBytes, nullptr, 0u, &returned, nullptr) != FALSE)
+            {
+                result->preservedFeatures |= feature;
+                return;
+            }
+            const DWORD error = GetLastError();
+            recordFailure(feature, HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE));
+        };
+
+        if (phase == FILESYSTEM_METADATA_TRANSFER_PREPARE_CONTENT)
+        {
+            FILE_SET_SPARSE_BUFFER sparse{};
+            sparse.SetSparse = TRUE;
+            applyControl(FILESYSTEM_METADATA_SPARSE, FSCTL_SET_SPARSE, &sparse, sizeof(sparse));
+
+            // NTFS compression is deliberately never transferred: the destination inherits its
+            // parent folder's compression state, exactly as File Explorer and CopyFileExW behave.
+            // The snapshot still reports a compressed source; it is neither attempted nor lost.
+
+            ENCRYPTION_BUFFER encryption{};
+            encryption.EncryptionOperation = FILE_SET_ENCRYPTION;
+            applyControl(FILESYSTEM_METADATA_EFS, FSCTL_SET_ENCRYPTION, &encryption, sizeof(encryption));
+            return S_OK;
+        }
+
+        HRESULT backupHr = S_OK;
+#if defined(ENABLE_TESTS)
+        const uint32_t forcedBackupLoss = ReadSelfTestMetadataMask(kMetadataFailMaskEnvVar) &
+            sourceSnapshot.presentFeatures & kMetadataBackupFeatures;
+        if (forcedBackupLoss != 0u)
+        {
+            result->attemptedFeatures |= forcedBackupLoss;
+            result->lostFeatures |= forcedBackupLoss;
+            result->firstFailure = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        }
+        else
+#endif
+        {
+            backupHr = CopyBackupMetadataStreams(_file.get(), destinationHandle.get(), *result);
+        }
+        if (FAILED(backupHr))
+        {
+            const uint32_t presentBackup = sourceSnapshot.presentFeatures & kMetadataBackupFeatures;
+            result->attemptedFeatures |= presentBackup;
+            result->lostFeatures |= presentBackup;
+            if (SUCCEEDED(result->firstFailure))
+            {
+                result->firstFailure = backupHr;
+            }
+        }
+
+        // BackupWrite may update the archive/basic state while materializing named streams. Apply
+        // ordinary attributes and timestamps after it, while preserving provider-managed flags
+        // established during the pre-content phase.
+        FileSystemBasicInformation basic{};
+        basic.sizeBytes = sizeof(basic);
+        result->attemptedFeatures |= FILESYSTEM_METADATA_BASIC_TIMES_ATTRIBUTES;
+        hr = GetBasicInformation(&basic);
+        if (SUCCEEDED(hr))
+        {
+            FileSystemBasicInformation destinationBasic{};
+            destinationBasic.sizeBytes = sizeof(destinationBasic);
+            if (SUCCEEDED(destination->GetBasicInformation(&destinationBasic)))
+            {
+                constexpr DWORD kProviderManagedAttributes = FILE_ATTRIBUTE_COMPRESSED | FILE_ATTRIBUTE_ENCRYPTED |
+                                                             FILE_ATTRIBUTE_SPARSE_FILE | FILE_ATTRIBUTE_REPARSE_POINT |
+                                                             FILE_ATTRIBUTE_RECALL_ON_OPEN | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS;
+                basic.attributes = (basic.attributes & ~kProviderManagedAttributes) |
+                                   (destinationBasic.attributes & kProviderManagedAttributes);
+            }
+            hr = destination->SetBasicInformation(&basic);
+        }
+        if (SUCCEEDED(hr))
+        {
+            result->preservedFeatures |= FILESYSTEM_METADATA_BASIC_TIMES_ATTRIBUTES;
+        }
+        else
+        {
+            recordFailure(FILESYSTEM_METADATA_BASIC_TIMES_ATTRIBUTES, hr);
+        }
+
+        // Destination inheritance is the product contract for ACL/owner. Report a change (or an
+        // inability to compare) instead of silently claiming that security metadata was cloned.
+        result->attemptedFeatures |= FILESYSTEM_METADATA_SECURITY;
+        wil::unique_handle sourceSecurity;
+        wil::unique_handle destinationSecurity;
+        const HRESULT sourceSecurityHr = ReopenExactFile(_file.get(), READ_CONTROL, sourceSecurity);
+        const HRESULT destinationSecurityHr = ReopenExactFile(destinationHandle.get(), READ_CONTROL, destinationSecurity);
+        if (SUCCEEDED(sourceSecurityHr) && SUCCEEDED(destinationSecurityHr))
+        {
+            DWORD sourceBytes = 0u;
+            DWORD destinationBytes = 0u;
+            static_cast<void>(GetKernelObjectSecurity(sourceSecurity.get(),
+                                                      OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION |
+                                                          DACL_SECURITY_INFORMATION,
+                                                      nullptr,
+                                                      0u,
+                                                      &sourceBytes));
+            static_cast<void>(GetKernelObjectSecurity(destinationSecurity.get(),
+                                                      OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION |
+                                                          DACL_SECURITY_INFORMATION,
+                                                      nullptr,
+                                                      0u,
+                                                      &destinationBytes));
+            std::vector<std::byte> sourceDescriptor(sourceBytes);
+            std::vector<std::byte> destinationDescriptor(destinationBytes);
+            const bool sourceRead = sourceBytes != 0u &&
+                GetKernelObjectSecurity(sourceSecurity.get(),
+                                        OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+                                        reinterpret_cast<PSECURITY_DESCRIPTOR>(sourceDescriptor.data()),
+                                        sourceBytes,
+                                        &sourceBytes) != FALSE;
+            const bool destinationRead = destinationBytes != 0u &&
+                GetKernelObjectSecurity(destinationSecurity.get(),
+                                        OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+                                        reinterpret_cast<PSECURITY_DESCRIPTOR>(destinationDescriptor.data()),
+                                        destinationBytes,
+                                        &destinationBytes) != FALSE;
+            if (sourceRead && destinationRead && sourceDescriptor == destinationDescriptor)
+            {
+                result->preservedFeatures |= FILESYSTEM_METADATA_SECURITY;
+            }
+            else
+            {
+                result->changedFeatures |= FILESYSTEM_METADATA_SECURITY;
+            }
+        }
+        else
+        {
+            result->changedFeatures |= FILESYSTEM_METADATA_SECURITY;
+            if (SUCCEEDED(result->firstFailure))
+            {
+                result->firstFailure = FAILED(sourceSecurityHr) ? sourceSecurityHr : destinationSecurityHr;
+            }
+        }
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE PublishAs(const wchar_t* finalPath,
+                                        IFileSystemBoundObject* expectedDestination,
+                                        FileSystemFlags flags,
+                                        const FileSystemOptions* options,
+                                        FileSystemConditionalMutationResult* result,
+                                        IFileSystemBoundObject** published) noexcept override
+    {
+        return ConditionalRename(
+            finalPath, expectedDestination, flags, options, FILESYSTEM_BIND_PUBLICATION, true, result, published);
+    }
+
+    HRESULT STDMETHODCALLTYPE RenameIfUnchanged(const wchar_t* destinationPath,
+                                                IFileSystemBoundObject* expectedDestination,
+                                                FileSystemFlags flags,
+                                                const FileSystemOptions* options,
+                                                FileSystemConditionalMutationResult* result,
+                                                IFileSystemBoundObject** renamed) noexcept override
+    {
+        return ConditionalRename(
+            destinationPath, expectedDestination, flags, options, FILESYSTEM_BIND_RENAME, false, result, renamed);
+    }
+
+    HRESULT STDMETHODCALLTYPE DeleteIfUnchanged(FileSystemFlags flags,
+                                                const FileSystemOptions* options,
+                                                FileSystemConditionalMutationResult* result) noexcept override
+    {
+        const HRESULT resultHr = InitializeMutationResult(result);
+        if (FAILED(resultHr))
+        {
+            return resultHr;
+        }
+        if (! FileSystemOptionsHaveValidHeader(options))
+        {
+            return E_INVALIDARG;
+        }
+        constexpr uint32_t allowedFlags = FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR;
+        if ((static_cast<uint32_t>(flags) & ~allowedFlags) != 0u)
+        {
+            return E_INVALIDARG;
+        }
+        if ((_grantedFlags & FILESYSTEM_BIND_DELETE) == 0u || _ownedStage)
+        {
+            return E_ACCESSDENIED;
+        }
+
+        const HRESULT controlHr = FileSystemCheckOperationControl(options);
+        if (FAILED(controlHr))
+        {
+            return controlHr;
+        }
+
+        if (_kind != FILESYSTEM_BOUND_DIRECTORY && options != nullptr && options->operationControl != nullptr)
+        {
+            FileSystemDiscoveryProgress discovery{};
+            discovery.sizeBytes             = sizeof(discovery);
+            discovery.discoveredBytes       = _committedSizeBytes == std::numeric_limits<uint64_t>::max() ? 0u : _committedSizeBytes;
+            discovery.discoveredFiles       = 1u;
+            discovery.discoveredDirectories = 0u;
+            discovery.queuedItems           = 1u;
+            discovery.traversalClosed       = TRUE;
+            const HRESULT discoveryHr = options->operationControl->FileSystemReportDiscoveryProgress(
+                &discovery, options->operationControlCookie);
+            if (FAILED(discoveryHr))
+            {
+                return discoveryHr;
+            }
+        }
+
+        if (_kind == FILESYSTEM_BOUND_DIRECTORY &&
+            (static_cast<uint32_t>(flags) & static_cast<uint32_t>(FILESYSTEM_FLAG_RECURSIVE)) != 0u)
+        {
+            const HRESULT contentsHr = FileSystemInternal::DeleteBoundLocalDirectoryContents(_path.c_str(), flags, options);
+            if (FAILED(contentsHr))
+            {
+                // The recursive walk mutates descendants only. Because this retained exact root
+                // handle has not yet received a delete disposition, a failed/partial child walk is
+                // known root non-commit with the selected directory still present.
+                return contentsHr;
+            }
+        }
+
+        return DeleteExact(result);
+    }
+
+    HRESULT STDMETHODCALLTYPE AbortOwnedObject(const FileSystemOptions* options, FileSystemConditionalMutationResult* result) noexcept override
+    {
+        const HRESULT resultHr = InitializeMutationResult(result);
+        if (FAILED(resultHr))
+        {
+            return resultHr;
+        }
+        if (! FileSystemOptionsHaveValidHeader(options))
+        {
+            return E_INVALIDARG;
+        }
+        if (! _ownedStage)
+        {
+            return E_ACCESSDENIED;
+        }
+
+        const HRESULT controlHr = FileSystemCheckOperationControl(options);
+        if (FAILED(controlHr))
+        {
+            return controlHr;
+        }
+
+        return DeleteExact(result);
+    }
+
+    HRESULT STDMETHODCALLTYPE RenameExactTo(const wchar_t* destinationPath,
+                                             BOOL replaceIfExists,
+                                             FileSystemConditionalMutationResult* result) noexcept override
+    {
+        const HRESULT resultHr = InitializeMutationResult(result);
+        if (FAILED(resultHr))
+        {
+            return resultHr;
+        }
+        if (destinationPath == nullptr || destinationPath[0] == L'\0')
+        {
+            return E_INVALIDARG;
+        }
+        if (! _file)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
+        }
+
+        const std::wstring extendedDestination = FileSystemInternal::ToExtendedPath(destinationPath);
+        const size_t fileNameBytes              = extendedDestination.size() * sizeof(wchar_t);
+        if (fileNameBytes > (std::numeric_limits<DWORD>::max)())
+        {
+            return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
+        }
+        // FILE_RENAME_INFO includes one WCHAR of trailing storage. Allocate the complete header plus
+        // the non-NUL name so older kernels never read beyond a merely offsetof-sized buffer.
+        const size_t bufferBytes = sizeof(FILE_RENAME_INFO) + fileNameBytes;
+        auto buffer              = std::unique_ptr<std::byte[]>(new (std::nothrow) std::byte[bufferBytes]);
+        if (! buffer)
+        {
+            return E_OUTOFMEMORY;
+        }
+        std::memset(buffer.get(), 0, bufferBytes);
+        auto* renameInfo            = reinterpret_cast<FILE_RENAME_INFO*>(buffer.get());
+        renameInfo->Flags           = replaceIfExists != FALSE ? FILE_RENAME_FLAG_REPLACE_IF_EXISTS : 0u;
+        renameInfo->RootDirectory   = nullptr;
+        renameInfo->FileNameLength  = static_cast<DWORD>(fileNameBytes);
+        std::memcpy(renameInfo->FileName, extendedDestination.data(), fileNameBytes);
+
+        bool renamed = SetFileInformationByHandle(_file.get(), FileRenameInfoEx, renameInfo, static_cast<DWORD>(bufferBytes)) != FALSE;
+        DWORD error = renamed ? ERROR_SUCCESS : GetLastError();
+#if defined(ENABLE_TESTS)
+        if (renamed && ConsumeMatchingPathInjectionForSelfTest(destinationPath,
+                                                               kRenameCommittedFailurePathEnvVar,
+                                                               kRenameCommittedFailureFiredEnvVar,
+                                                               L"FileOps.Local.RenameCommittedFailureInjected"))
+        {
+            renamed = false;
+            error   = ERROR_IO_INCOMPLETE;
+        }
+#endif
+        if (! renamed)
+        {
+            if (error == ERROR_INVALID_PARAMETER || error == ERROR_INVALID_FUNCTION || error == ERROR_NOT_SUPPORTED)
+            {
+                renameInfo->ReplaceIfExists = replaceIfExists != FALSE ? static_cast<BOOLEAN>(TRUE) : static_cast<BOOLEAN>(FALSE);
+                if (SetFileInformationByHandle(_file.get(), FileRenameInfo, renameInfo, static_cast<DWORD>(bufferBytes)) != FALSE)
+                {
+                    renamed = true;
+                }
+                else
+                {
+                    error = GetLastError();
+                }
+            }
+        }
+
+        if (! renamed)
+        {
+            bool sameAtDestination = false;
+            const HRESULT reconcileHr = PathRefersToThisObject(extendedDestination, sameAtDestination);
+            if (SUCCEEDED(reconcileHr) && sameAtDestination)
+            {
+                _path                         = destinationPath;
+                result->mutationCommitted    = TRUE;
+                result->originalStillPresent = FALSE;
+                return S_OK;
+            }
+
+            bool sameAtOriginal = false;
+            const HRESULT originalHr = IsRetainedHandleIdentity(_identity)
+                ? HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)
+                : PathRefersToThisObject(FileSystemInternal::ToExtendedPath(_path), sameAtOriginal);
+            if (SUCCEEDED(originalHr) && sameAtOriginal)
+            {
+                return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+            }
+
+            result->outcomeKnown = FALSE;
+            Debug::Perf::EmitCounter(L"fileops.local.mutation.rename_reconcile_unknown");
+            return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+        }
+
+        _path                         = destinationPath;
+        result->mutationCommitted    = TRUE;
+        result->originalStillPresent = FALSE;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE DeleteExact(FileSystemConditionalMutationResult* result) noexcept override
+    {
+        const HRESULT resultHr = InitializeMutationResult(result);
+        if (FAILED(resultHr))
+        {
+            return resultHr;
+        }
+        if (! _file)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
+        }
+
+        HRESULT deleteHr = DeleteExactHandle(_file.get());
+#if defined(ENABLE_TESTS)
+        if (SUCCEEDED(deleteHr) && ConsumeMatchingPathInjectionForSelfTest(_path.c_str(),
+                                                                          kDeleteCommittedFailurePathEnvVar,
+                                                                          kDeleteCommittedFailureFiredEnvVar,
+                                                                          L"FileOps.Local.DeleteCommittedFailureInjected"))
+        {
+            deleteHr = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+        }
+#endif
+        if (FAILED(deleteHr))
+        {
+            if (deleteHr == HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY))
+            {
+                // The kernel rejected the exact directory disposition because entries remain.
+                // No delete disposition was accepted, so this is a proven non-commit even though
+                // an earlier recursive child walk may have changed directory membership.
+                return deleteHr;
+            }
+            result->outcomeKnown = FALSE;
+            Debug::Perf::EmitCounter(L"fileops.local.mutation.delete_outcome_unknown");
+            return deleteHr;
+        }
+
+        _file.reset();
+        _ownedStage = false;
+        result->mutationCommitted    = TRUE;
+        result->originalStillPresent = FALSE;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE DuplicateExactHandle(HANDLE* duplicated) noexcept override
+    {
+        if (duplicated == nullptr)
+        {
+            return E_POINTER;
+        }
+        *duplicated = INVALID_HANDLE_VALUE;
+        if (! _file)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
+        }
+
+        HANDLE result = INVALID_HANDLE_VALUE;
+        if (DuplicateHandle(GetCurrentProcess(),
+                            _file.get(),
+                            GetCurrentProcess(),
+                            &result,
+                            0u,
+                            FALSE,
+                            DUPLICATE_SAME_ACCESS) == FALSE)
+        {
+            const DWORD error = GetLastError();
+            return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_INVALID_HANDLE);
+        }
+        *duplicated = result;
+        return S_OK;
+    }
+
+private:
+    ~LocalBoundObject() = default;
+
+    [[nodiscard]] static HRESULT InitializeMutationResult(FileSystemConditionalMutationResult* result) noexcept
+    {
+        if (result == nullptr)
+        {
+            return E_POINTER;
+        }
+        if (result->sizeBytes != sizeof(FileSystemConditionalMutationResult))
+        {
+            return E_INVALIDARG;
+        }
+        result->mutationCommitted   = FALSE;
+        result->originalStillPresent = TRUE;
+        result->outcomeKnown        = TRUE;
+        return S_OK;
+    }
+
+    [[nodiscard]] HRESULT PathRefersToThisObject(const std::wstring& extendedPath, bool& same) const noexcept
+    {
+        same = false;
+        if (IsRetainedHandleIdentity(_identity))
+        {
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        }
+        wil::unique_handle current(CreateFileW(extendedPath.c_str(),
+                                                FILE_READ_ATTRIBUTES,
+                                                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                nullptr,
+                                                OPEN_EXISTING,
+                                                FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                                nullptr));
+        if (! current)
+        {
+            const DWORD error = GetLastError();
+            if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND || error == ERROR_NOT_FOUND)
+            {
+                return S_OK;
+            }
+            return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+        }
+
+        LocalObjectIdentityPayload currentIdentity{};
+        const HRESULT identityHr = QueryExactLocalObjectIdentity(current.get(), currentIdentity);
+        if (FAILED(identityHr))
+        {
+            return identityHr;
+        }
+        same = std::memcmp(&currentIdentity, &_identity, sizeof(_identity)) == 0;
+        return S_OK;
+    }
+
+    [[nodiscard]] static HRESULT MakeBackupPath(std::wstring_view finalPath, std::wstring& backupPath) noexcept
+    {
+        GUID guid{};
+        const HRESULT guidHr = CoCreateGuid(&guid);
+        if (FAILED(guidHr))
+        {
+            return guidHr;
+        }
+        std::array<wchar_t, 40u> guidText{};
+        if (StringFromGUID2(guid, guidText.data(), static_cast<int>(guidText.size())) <= 0)
+        {
+            return E_FAIL;
+        }
+        backupPath.assign(finalPath);
+        backupPath.append(L".rs_bak_");
+        backupPath.append(guidText.data());
+        return S_OK;
+    }
+
+    [[nodiscard]] HRESULT ClearTemporaryAttributes() noexcept
+    {
+        if (! _file || ! _ownedStage)
+        {
+            return S_OK;
+        }
+        FILE_BASIC_INFO basic{};
+        if (GetFileInformationByHandleEx(_file.get(), FileBasicInfo, &basic, sizeof(basic)) == FALSE)
+        {
+            const DWORD error = GetLastError();
+            return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+        }
+        basic.FileAttributes &= ~(FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_TEMPORARY);
+        if (basic.FileAttributes == 0u)
+        {
+            basic.FileAttributes = FILE_ATTRIBUTE_NORMAL;
+        }
+        if (SetFileInformationByHandle(_file.get(), FileBasicInfo, &basic, sizeof(basic)) == FALSE)
+        {
+            const DWORD error = GetLastError();
+            return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+        }
+        return S_OK;
+    }
+
+    [[nodiscard]] HRESULT ConditionalRename(const wchar_t* destinationPath,
+                                             IFileSystemBoundObject* expectedDestination,
+                                             FileSystemFlags flags,
+                                             const FileSystemOptions* options,
+                                             FileSystemBindFlags requiredGrant,
+                                             bool requireOwnedStage,
+                                             FileSystemConditionalMutationResult* result,
+                                             IFileSystemBoundObject** renamed) noexcept
+    {
+        if (renamed == nullptr)
+        {
+            return E_POINTER;
+        }
+        *renamed = nullptr;
+        const HRESULT resultHr = InitializeMutationResult(result);
+        if (FAILED(resultHr))
+        {
+            return resultHr;
+        }
+        if (destinationPath == nullptr || destinationPath[0] == L'\0')
+        {
+            return E_INVALIDARG;
+        }
+        if (! FileSystemOptionsHaveValidHeader(options))
+        {
+            return E_INVALIDARG;
+        }
+        if ((_grantedFlags & requiredGrant) == 0u || requireOwnedStage != _ownedStage || ! _file)
+        {
+            return E_ACCESSDENIED;
+        }
+
+        constexpr uint32_t allowedFlags = FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY |
+                                          FILESYSTEM_FLAG_ALLOW_REPLACE_LINK;
+        const uint32_t requestedFlags = static_cast<uint32_t>(flags);
+        if ((requestedFlags & ~allowedFlags) != 0u ||
+            ((requestedFlags & FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY) != 0u &&
+             (requestedFlags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0u) ||
+            ((requestedFlags & FILESYSTEM_FLAG_ALLOW_REPLACE_LINK) != 0u &&
+             (requestedFlags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0u) ||
+            (expectedDestination != nullptr && (requestedFlags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0u))
+        {
+            return E_INVALIDARG;
+        }
+        const HRESULT controlHr = FileSystemCheckOperationControl(options);
+        if (FAILED(controlHr))
+        {
+            return controlHr;
+        }
+#if defined(ENABLE_TESTS)
+        // Exercise the exact owned-stage publication boundary before any destination mutation.
+        if (requireOwnedStage &&
+            ShouldFailOwnedPublicationForSelfTest(
+                destinationPath, kStagedCopyPromoteFailPathEnvVar, kStagedCopyPromoteFailFiredEnvVar, L"FileOps.Copy.DebugStagedPromoteFailureInjected"))
+        {
+            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        }
+#endif
+
+        wil::com_ptr<ILocalBoundObjectControl> expectedControl;
+        bool destinationMovedToBackup = false;
+        bool expectedReadOnlyCleared = false;
+        FileSystemBasicInformation expectedInfo{};
+        expectedInfo.sizeBytes = sizeof(expectedInfo);
+        const auto restoreExpectedReadOnly = wil::scope_exit([&]() noexcept
+        {
+            if (expectedReadOnlyCleared && expectedDestination != nullptr)
+            {
+                static_cast<void>(expectedDestination->SetBasicInformation(&expectedInfo));
+            }
+        });
+        std::wstring backupPath;
+        if (expectedDestination != nullptr)
+        {
+            FileSystemBoundObjectSnapshot expectedSnapshot{};
+            expectedSnapshot.sizeBytes = sizeof(expectedSnapshot);
+            HRESULT hr = expectedDestination->GetSnapshot(&expectedSnapshot);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+            const bool expectedIsLink = expectedSnapshot.kind == FILESYSTEM_BOUND_LINK;
+            const bool replaceLinkGranted = (requestedFlags & FILESYSTEM_FLAG_ALLOW_REPLACE_LINK) != 0u;
+            if (expectedIsLink != replaceLinkGranted)
+            {
+                return HRESULT_FROM_WIN32(expectedIsLink ? ERROR_REPARSE_POINT_ENCOUNTERED : ERROR_INVALID_PARAMETER);
+            }
+            if (! expectedIsLink && expectedSnapshot.kind != static_cast<uint32_t>(_kind))
+            {
+                return HRESULT_FROM_WIN32(ERROR_DATATYPE_MISMATCH);
+            }
+            if (expectedSnapshot.objectId == nullptr || expectedSnapshot.objectIdBytes != sizeof(LocalObjectIdentityPayload))
+            {
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+
+            const std::wstring extendedDestination = FileSystemInternal::ToExtendedPath(destinationPath);
+            wil::unique_handle currentDestination(CreateFileW(extendedDestination.c_str(),
+                                                               FILE_READ_ATTRIBUTES,
+                                                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                               nullptr,
+                                                               OPEN_EXISTING,
+                                                               FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                                               nullptr));
+            if (! currentDestination)
+            {
+                const DWORD error = GetLastError();
+                return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_FILE_NOT_FOUND);
+            }
+            LocalObjectIdentityPayload currentIdentity{};
+            hr = QueryExactLocalObjectIdentity(currentDestination.get(), currentIdentity);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+            if (std::memcmp(expectedSnapshot.objectId, &currentIdentity, sizeof(currentIdentity)) != 0)
+            {
+                return HRESULT_FROM_WIN32(ERROR_FILE_INVALID);
+            }
+            hr = expectedDestination->GetBasicInformation(&expectedInfo);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+            if ((expectedInfo.attributes & FILE_ATTRIBUTE_READONLY) != 0u &&
+                (requestedFlags & FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY) == 0u)
+            {
+                return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+            }
+            if ((expectedInfo.attributes & FILE_ATTRIBUTE_READONLY) != 0u)
+            {
+                FileSystemBasicInformation writableInfo = expectedInfo;
+                writableInfo.attributes &= ~FILE_ATTRIBUTE_READONLY;
+                hr = expectedDestination->SetBasicInformation(&writableInfo);
+                if (FAILED(hr))
+                {
+                    return hr;
+                }
+                expectedReadOnlyCleared = true;
+            }
+            hr = expectedDestination->QueryInterface(__uuidof(ILocalBoundObjectControl), expectedControl.put_void());
+            if (FAILED(hr) || ! expectedControl)
+            {
+                return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+            }
+
+            constexpr unsigned int kMaxBackupAttempts = 32u;
+            for (unsigned int attempt = 0u; attempt < kMaxBackupAttempts; ++attempt)
+            {
+                hr = MakeBackupPath(destinationPath, backupPath);
+                if (FAILED(hr))
+                {
+                    return hr;
+                }
+                FileSystemConditionalMutationResult backupResult{};
+                backupResult.sizeBytes = sizeof(backupResult);
+                hr = expectedControl->RenameExactTo(backupPath.c_str(), FALSE, &backupResult);
+                if (SUCCEEDED(hr) && backupResult.outcomeKnown != FALSE && backupResult.mutationCommitted != FALSE)
+                {
+                    destinationMovedToBackup = true;
+                    break;
+                }
+                if (backupResult.outcomeKnown == FALSE)
+                {
+                    result->outcomeKnown = FALSE;
+                    return FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+                }
+                if (hr != HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) && hr != HRESULT_FROM_WIN32(ERROR_FILE_EXISTS))
+                {
+                    return FAILED(hr) ? hr : E_UNEXPECTED;
+                }
+            }
+            if (! destinationMovedToBackup)
+            {
+                return HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
+            }
+        }
+
+        const HRESULT attributesHr = ClearTemporaryAttributes();
+        if (FAILED(attributesHr))
+        {
+            if (destinationMovedToBackup)
+            {
+                FileSystemConditionalMutationResult rollbackResult{};
+                rollbackResult.sizeBytes = sizeof(rollbackResult);
+                const HRESULT rollbackHr = expectedControl->RenameExactTo(destinationPath, FALSE, &rollbackResult);
+                if (FAILED(rollbackHr) || rollbackResult.outcomeKnown == FALSE || rollbackResult.mutationCommitted == FALSE)
+                {
+                    result->outcomeKnown = FALSE;
+                    return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+                }
+            }
+            return attributesHr;
+        }
+
+        FileSystemConditionalMutationResult publishResult{};
+        publishResult.sizeBytes = sizeof(publishResult);
+        const HRESULT publishHr = RenameExactTo(destinationPath, FALSE, &publishResult);
+        if (publishResult.outcomeKnown == FALSE)
+        {
+            result->outcomeKnown = FALSE;
+            return FAILED(publishHr) ? publishHr : HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+        }
+        if (FAILED(publishHr) || publishResult.mutationCommitted == FALSE)
+        {
+            if (destinationMovedToBackup)
+            {
+                FileSystemConditionalMutationResult rollbackResult{};
+                rollbackResult.sizeBytes = sizeof(rollbackResult);
+                const HRESULT rollbackHr = expectedControl->RenameExactTo(destinationPath, FALSE, &rollbackResult);
+                if (FAILED(rollbackHr) || rollbackResult.outcomeKnown == FALSE || rollbackResult.mutationCommitted == FALSE)
+                {
+                    result->outcomeKnown = FALSE;
+                    return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+                }
+            }
+            return FAILED(publishHr) ? publishHr : E_UNEXPECTED;
+        }
+
+        _ownedStage = false;
+        result->mutationCommitted    = TRUE;
+        result->originalStillPresent = FALSE;
+        *renamed = static_cast<IFileSystemBoundObject*>(this);
+        AddRef();
+
+        if (destinationMovedToBackup)
+        {
+            FileSystemConditionalMutationResult cleanupResult{};
+            cleanupResult.sizeBytes = sizeof(cleanupResult);
+            const HRESULT cleanupHr = expectedControl->DeleteExact(&cleanupResult);
+            if (FAILED(cleanupHr) || cleanupResult.outcomeKnown == FALSE || cleanupResult.mutationCommitted == FALSE)
+            {
+                return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+            }
+            expectedReadOnlyCleared = false;
+        }
+#if defined(ENABLE_TESTS)
+        // Unlike a promotion failure, final-attributes failure occurs after the
+        // destination changed. Keep the committed receipt and published authority.
+        if (requireOwnedStage &&
+            ShouldFailOwnedPublicationForSelfTest(
+                destinationPath, kFinalAttributesFailPathEnvVar, kFinalAttributesFailFiredEnvVar, L"FileOps.Copy.DebugFinalAttributesFailureInjected"))
+        {
+            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        }
+#endif
+        return S_OK;
+    }
+
+    std::atomic_ulong _refCount{1u};
+    wil::unique_handle _file;
+    LocalObjectIdentityPayload _identity{};
+    FileSystemBoundObjectKind _kind = FILESYSTEM_BOUND_OTHER;
+    uint64_t _committedSizeBytes    = std::numeric_limits<uint64_t>::max();
+    FileSystemBindFlags _grantedFlags = FILESYSTEM_BIND_NO_FOLLOW;
+    bool _ownedStage = false;
+    std::wstring _path;
 };
 
 class Win32FileWriter final : public IFileWriter
 {
 public:
-    Win32FileWriter(wil::unique_handle file, std::wstring path) noexcept : _file(std::move(file)), _path(std::move(path))
+    Win32FileWriter(wil::unique_handle file, std::wstring path, const FileSystemOptions* options) noexcept
+        : _file(std::move(file)), _path(std::move(path)), _hasOperationOptions(options != nullptr)
     {
+        if (options != nullptr)
+        {
+            _operationOptions = *options;
+        }
     }
 
-    Win32FileWriter(wil::unique_handle file, std::wstring tempPath, std::wstring finalPath, bool allowReplaceReadOnly) noexcept
+    Win32FileWriter(wil::unique_handle file,
+                    std::wstring tempPath,
+                    std::wstring finalPath,
+                    bool allowReplaceReadOnly,
+                    const FileSystemOptions* options) noexcept
         : _file(std::move(file)),
           _path(std::move(tempPath)),
           _finalPath(std::move(finalPath)),
           _allowReplaceReadOnly(allowReplaceReadOnly),
-          _replaceOnCommit(true)
+          _replaceOnCommit(true),
+          _hasOperationOptions(options != nullptr)
     {
+        if (options != nullptr)
+        {
+            _operationOptions = *options;
+        }
     }
 
     Win32FileWriter(const Win32FileWriter&)            = delete;
@@ -1684,6 +3853,12 @@ public:
 
         *positionBytes = 0;
 
+        const HRESULT controlHr = FileSystemCheckOperationControl(OperationOptions());
+        if (FAILED(controlHr))
+        {
+            return controlHr;
+        }
+
         if (! _file)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
@@ -1714,6 +3889,12 @@ public:
 
         *bytesWritten = 0;
 
+        const HRESULT controlHr = FileSystemCheckOperationControl(OperationOptions());
+        if (FAILED(controlHr))
+        {
+            return controlHr;
+        }
+
         if (bytesToWrite == 0)
         {
             return S_OK;
@@ -1741,6 +3922,12 @@ public:
 
     HRESULT STDMETHODCALLTYPE Commit() noexcept override
     {
+        HRESULT controlHr = FileSystemCheckOperationControl(OperationOptions());
+        if (FAILED(controlHr))
+        {
+            return controlHr;
+        }
+
         if (! _file)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
@@ -1749,6 +3936,12 @@ public:
         if (FlushFileBuffers(_file.get()) == 0)
         {
             return HRESULT_FROM_WIN32(GetLastError());
+        }
+
+        controlHr = FileSystemCheckOperationControl(OperationOptions());
+        if (FAILED(controlHr))
+        {
+            return controlHr;
         }
 
         if (_replaceOnCommit)
@@ -1776,6 +3969,11 @@ private:
         }
     }
 
+    [[nodiscard]] const FileSystemOptions* OperationOptions() const noexcept
+    {
+        return _hasOperationOptions ? &_operationOptions : nullptr;
+    }
+
     std::atomic_ulong _refCount{1};
     wil::unique_handle _file;
     std::wstring _path;
@@ -1783,6 +3981,8 @@ private:
     bool _allowReplaceReadOnly = false;
     bool _replaceOnCommit      = false;
     bool _committed            = false;
+    FileSystemOptions _operationOptions{};
+    bool _hasOperationOptions = false;
 
     HRESULT PromoteTempIntoFinalPath() noexcept
     {
@@ -1800,6 +4000,337 @@ private:
         return S_OK;
     }
 };
+
+#ifdef _DEBUG
+
+class DebugOperationControl final : public IFileSystemOperationControl
+{
+public:
+    HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void*) noexcept override
+    {
+        if (abort == nullptr)
+        {
+            return E_POINTER;
+        }
+        *abort = abortRequested ? TRUE : FALSE;
+        ++abortChecks;
+        return abortStatus;
+    }
+
+    HRESULT STDMETHODCALLTYPE FileSystemGetDiscoveryMode(FileSystemDiscoveryMode* mode, void*) noexcept override
+    {
+        if (mode == nullptr)
+        {
+            return E_POINTER;
+        }
+        *mode = FILESYSTEM_DISCOVERY_AHEAD;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress*, void*) noexcept override
+    {
+        return S_OK;
+    }
+
+    bool abortRequested = false;
+    HRESULT abortStatus = S_OK;
+    unsigned int abortChecks = 0u;
+};
+
+void RunDebugOperationControlSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    FILE_ID_INFO emptyFileIdInfo{};
+    emptyFileIdInfo.VolumeSerialNumber = 42u;
+    LocalObjectIdentityPayload emptyIdentity{};
+    DebugCheck(MakePersistentLocalObjectIdentity(emptyFileIdInfo, emptyIdentity) == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
+               L"an all-zero FILE_ID_128 must not become persistent object identity",
+               passed,
+               failed);
+    FILE_ID_INFO validFileIdInfo{};
+    validFileIdInfo.VolumeSerialNumber = 42u;
+    validFileIdInfo.FileId.Identifier[0] = 1u;
+    LocalObjectIdentityPayload validIdentity{};
+    DebugCheck(SUCCEEDED(MakePersistentLocalObjectIdentity(validFileIdInfo, validIdentity)) &&
+                   ! IsRetainedHandleIdentity(validIdentity),
+               L"a nonzero FILE_ID_128 should remain persistent object identity",
+               passed,
+               failed);
+
+    DebugOperationControl control;
+    FileSystemOptions options{};
+    options.sizeBytes        = sizeof(options);
+    options.linkPolicy       = FILESYSTEM_LINK_PRESERVE;
+    options.operationControl = &control;
+
+    DebugCheck(FileSystemCheckOperationControl(&options) == S_OK,
+               L"operation-control checkpoint should accept a live non-aborted operation",
+               passed,
+               failed);
+    control.abortRequested = true;
+    DebugCheck(FileSystemCheckOperationControl(&options) == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+               L"operation-control checkpoint should map an abort request to ERROR_CANCELLED",
+               passed,
+               failed);
+    const uint64_t cleanupStartedAt = GetTickCount64();
+    const FileSystemOptions cleanupOptions = MakeOwnedStageCleanupOptions(&options);
+    DebugCheck(cleanupOptions.operationControl == nullptr && cleanupOptions.operationControlCookie == nullptr &&
+                   cleanupOptions.deadlineTickCount64 > cleanupStartedAt &&
+                   cleanupOptions.deadlineTickCount64 <= cleanupStartedAt + FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS &&
+                   FileSystemCheckOperationControl(&cleanupOptions) == S_OK,
+               L"owned-stage cleanup control should ignore primary cancellation under a fresh short deadline",
+               passed,
+               failed);
+    control.abortRequested = false;
+    options.deadlineTickCount64 = 1u;
+    DebugCheck(FileSystemCheckOperationControl(&options) == HRESULT_FROM_WIN32(ERROR_TIMEOUT),
+               L"operation-control checkpoint should keep deadline expiry distinct from cancellation",
+               passed,
+               failed);
+
+    wchar_t tempDirectory[MAX_PATH]{};
+    wchar_t tempPath[MAX_PATH]{};
+    const DWORD tempDirectoryLength = GetTempPathW(static_cast<DWORD>(std::size(tempDirectory)), tempDirectory);
+    if (! DebugCheck(tempDirectoryLength != 0u && tempDirectoryLength < std::size(tempDirectory) &&
+                        GetTempFileNameW(tempDirectory, L"rso", 0u, tempPath) != 0u,
+                    L"operation-control selftest should create a temporary file",
+                    passed,
+                    failed))
+    {
+        return;
+    }
+    const auto removeTemp = wil::scope_exit([&]() noexcept { static_cast<void>(DeleteFileW(tempPath)); });
+
+    wil::unique_handle seedHandle(CreateFileW(tempPath,
+                                              GENERIC_READ | GENERIC_WRITE,
+                                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                              nullptr,
+                                              OPEN_EXISTING,
+                                              FILE_ATTRIBUTE_TEMPORARY,
+                                              nullptr));
+    if (! DebugCheck(static_cast<bool>(seedHandle),
+                    L"operation-control selftest should open its temporary seed handle",
+                    passed,
+                    failed))
+    {
+        return;
+    }
+    constexpr std::array<std::byte, 4u> seed{};
+    DWORD wrote = 0u;
+    if (! DebugCheck(WriteFile(seedHandle.get(), seed.data(), static_cast<DWORD>(seed.size()), &wrote, nullptr) != FALSE &&
+                        wrote == seed.size(),
+                    L"operation-control selftest should seed the reader payload",
+                    passed,
+                    failed))
+    {
+        return;
+    }
+    wil::unique_handle readerHandle;
+    const HRESULT readerReopenHr = ReopenExactFile(seedHandle.get(), GENERIC_READ, readerHandle, FILE_FLAG_OVERLAPPED);
+    if (! DebugCheck(SUCCEEDED(readerReopenHr) && static_cast<bool>(readerHandle),
+                    L"operation-control selftest should reopen an overlapped reader handle",
+                    passed,
+                    failed))
+    {
+        return;
+    }
+
+    options.deadlineTickCount64 = 0u;
+    wil::com_ptr<IFileReader> reader;
+    reader.attach(new (std::nothrow) Win32FileReader(std::move(readerHandle), seed.size(), &options));
+    if (! DebugCheck(static_cast<bool>(reader), L"operation-control selftest should allocate its reader", passed, failed))
+    {
+        return;
+    }
+    control.abortRequested = true;
+    std::array<std::byte, 4u> readBuffer{};
+    unsigned long bytesRead = 0u;
+    DebugCheck(reader->Read(readBuffer.data(), static_cast<unsigned long>(readBuffer.size()), &bytesRead) ==
+                   HRESULT_FROM_WIN32(ERROR_CANCELLED) &&
+                   bytesRead == 0u,
+               L"an already-open reader should observe a later abort before reading bytes",
+               passed,
+               failed);
+
+    control.abortRequested = false;
+    options.deadlineTickCount64 = 1u;
+    wil::unique_handle writerHandle(CreateFileW(tempPath,
+                                                GENERIC_WRITE,
+                                                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                nullptr,
+                                                OPEN_EXISTING,
+                                                FILE_ATTRIBUTE_TEMPORARY,
+                                                nullptr));
+    wil::com_ptr<IFileWriter> writer;
+    if (writerHandle)
+    {
+        writer.attach(new (std::nothrow) Win32FileWriter(std::move(writerHandle), std::wstring{}, &options));
+    }
+    if (! DebugCheck(static_cast<bool>(writer), L"operation-control selftest should allocate its writer", passed, failed))
+    {
+        return;
+    }
+    unsigned long bytesWritten = 0u;
+    DebugCheck(writer->Write(seed.data(), static_cast<unsigned long>(seed.size()), &bytesWritten) ==
+                   HRESULT_FROM_WIN32(ERROR_TIMEOUT) &&
+                   bytesWritten == 0u,
+               L"an already-open writer should observe its captured deadline before writing bytes",
+               passed,
+               failed);
+    DebugCheck(writer->Commit() == HRESULT_FROM_WIN32(ERROR_TIMEOUT),
+               L"writer Commit should observe its captured deadline before flushing or publishing",
+               passed,
+               failed);
+
+    reader.reset();
+    writer.reset();
+    const std::wstring copyPath = std::wstring(tempPath) + L".copy";
+    const auto removeCopy = wil::scope_exit([&]() noexcept { static_cast<void>(DeleteFileW(copyPath.c_str())); });
+    control.abortRequested = true;
+    options.deadlineTickCount64 = 0u;
+    auto* fileSystem = new (std::nothrow) FileSystem();
+    if (! DebugCheck(fileSystem != nullptr,
+                    L"operation-control selftest should allocate a FileSystem instance",
+                    passed,
+                    failed))
+    {
+        return;
+    }
+    const HRESULT copyHr = fileSystem->CopyItem(tempPath,
+                                                copyPath.c_str(),
+                                                FILESYSTEM_FLAG_NONE,
+                                                &options,
+                                                nullptr,
+                                                nullptr);
+    fileSystem->Release();
+    DebugCheck(copyHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) && GetFileAttributesW(copyPath.c_str()) == INVALID_FILE_ATTRIBUTES,
+               L"callback-free Local Copy should honor operationControl before destination mutation",
+               passed,
+               failed);
+}
+
+// R0f-SMB quiet point: a worker blocked inside a synchronous Win32 read (an anonymous pipe with no
+// writer leaves the thread in the same pending-IRP state a dead SMB share does) returns with
+// ERROR_OPERATION_ABORTED within the watch's grace once the operation control reports cancel.
+void RunDebugSynchronousIoCancelWatchSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    class CancelControl final : public IFileSystemOperationControl
+    {
+    public:
+        CancelControl() noexcept = default;
+        CancelControl(const CancelControl&)            = delete;
+        CancelControl& operator=(const CancelControl&) = delete;
+        CancelControl(CancelControl&&)                 = delete;
+        CancelControl& operator=(CancelControl&&)      = delete;
+
+        HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void*) noexcept override
+        {
+            if (abort == nullptr)
+            {
+                return E_POINTER;
+            }
+            *abort = abortRequested.load(std::memory_order_acquire) ? TRUE : FALSE;
+            return S_OK;
+        }
+        HRESULT STDMETHODCALLTYPE FileSystemGetDiscoveryMode(FileSystemDiscoveryMode* mode, void*) noexcept override
+        {
+            if (mode == nullptr)
+            {
+                return E_POINTER;
+            }
+            *mode = FILESYSTEM_DISCOVERY_AHEAD;
+            return S_OK;
+        }
+        HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress*, void*) noexcept override
+        {
+            return S_OK;
+        }
+        std::atomic<bool> abortRequested{false};
+    };
+
+    HANDLE readEndRaw  = nullptr;
+    HANDLE writeEndRaw = nullptr;
+    if (! DebugCheck(CreatePipe(&readEndRaw, &writeEndRaw, nullptr, 0u) != FALSE, L"cancel watch self-test needs an anonymous pipe", passed, failed))
+    {
+        return;
+    }
+    wil::unique_handle readEnd(readEndRaw);
+    wil::unique_handle writeEnd(writeEndRaw);
+
+    CancelControl control;
+    FileSystemOptions options{};
+    options.sizeBytes        = sizeof(options);
+    options.linkPolicy       = FILESYSTEM_LINK_PRESERVE;
+    options.operationControl = &control;
+
+    std::atomic<bool> entered{false};
+    std::atomic<bool> registered{false};
+    std::atomic<HRESULT> blockedStatus{E_PENDING};
+    std::atomic<unsigned int> cancelIssued{0u};
+    std::thread reader([&]() noexcept
+    {
+        const Common::SynchronousIoCancelWatch::Scope scope(
+            [](void* context) noexcept { return FAILED(FileSystemCheckOperationControl(static_cast<const FileSystemOptions*>(context))); },
+            &options);
+        registered.store(scope.Registered(), std::memory_order_release);
+        entered.store(true, std::memory_order_release);
+        entered.notify_all();
+        std::byte buffer[16]{};
+        DWORD read    = 0u;
+        const BOOL ok = ReadFile(readEnd.get(), buffer, static_cast<DWORD>(sizeof(buffer)), &read, nullptr);
+        blockedStatus.store(ok != FALSE ? S_OK : HRESULT_FROM_WIN32(GetLastError()), std::memory_order_release);
+        cancelIssued.store(scope.CancelIssuedCount(), std::memory_order_release);
+    });
+    entered.wait(false, std::memory_order_acquire);
+    Sleep(100u); // let the read reach the kernel before cancel is requested
+    const ULONGLONG cancelRequestedTick = GetTickCount64();
+    control.abortRequested.store(true, std::memory_order_release);
+    const bool returned = WaitForSingleObject(reader.native_handle(), 5'000u) == WAIT_OBJECT_0;
+    const ULONGLONG elapsedMs = GetTickCount64() - cancelRequestedTick;
+    if (! returned)
+    {
+        // Release the wedged read so the self-test process can exit; the check below records the failure.
+        DWORD wrote = 0u;
+        static_cast<void>(WriteFile(writeEnd.get(), "x", 1u, &wrote, nullptr));
+    }
+    reader.join();
+
+    DebugCheck(registered.load(std::memory_order_acquire), L"the cancel watch should register a worker thread", passed, failed);
+    DebugCheck(returned, L"a blocked synchronous read must return after cancel is requested", passed, failed);
+    DebugCheck(blockedStatus.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED),
+               L"the canceled synchronous read must fail with ERROR_OPERATION_ABORTED",
+               passed,
+               failed);
+    DebugCheck(elapsedMs < 3'000u, L"the cancel watch must return a wedged call within its grace plus a few polls", passed, failed);
+    DebugCheck(cancelIssued.load(std::memory_order_acquire) >= 1u, L"the cancel watch must have issued CancelSynchronousIo", passed, failed);
+}
+
+void RunDebugCreateDirectoryAdmissionSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    auto* fileSystem = new (std::nothrow) FileSystem();
+    if (! DebugCheck(fileSystem != nullptr,
+                    L"Create Directory admission selftest should allocate a FileSystem instance",
+                    passed,
+                    failed))
+    {
+        return;
+    }
+    const auto releaseFileSystem = wil::scope_exit([&]() noexcept { fileSystem->Release(); });
+
+    DebugCheck(fileSystem->CreateDirectory(LR"(\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy1\RedSalamanderMustNotCreate)") ==
+                   HRESULT_FROM_WIN32(ERROR_INVALID_NAME),
+               L"direct Local CreateDirectory must reject GLOBALROOT before calling CreateDirectoryW",
+               passed,
+               failed);
+    DebugCheck(fileSystem->CreateDirectory(LR"(\\.\PhysicalDrive0\RedSalamanderMustNotCreate)") == HRESULT_FROM_WIN32(ERROR_INVALID_NAME),
+               L"direct Local CreateDirectory must reject Win32 device namespaces before calling CreateDirectoryW",
+               passed,
+               failed);
+    DebugCheck(fileSystem->CreateDirectory(LR"(\??\C:\RedSalamanderMustNotCreate)") == HRESULT_FROM_WIN32(ERROR_INVALID_NAME),
+               L"direct Local CreateDirectory must reject NT object-manager spelling before calling CreateDirectoryW",
+               passed,
+               failed);
+}
+#endif
 } // namespace
 
 HRESULT STDMETHODCALLTYPE FileSystem::QueryInterface(REFIID riid, void** ppvObject) noexcept
@@ -1812,6 +4343,27 @@ HRESULT STDMETHODCALLTYPE FileSystem::QueryInterface(REFIID riid, void** ppvObje
     if (riid == __uuidof(IUnknown) || riid == __uuidof(IFileSystem))
     {
         *ppvObject = static_cast<IFileSystem*>(this);
+        AddRef();
+        return S_OK;
+    }
+
+    if (riid == __uuidof(IFileSystemPathCapabilities2))
+    {
+        *ppvObject = static_cast<IFileSystemPathCapabilities2*>(static_cast<IFileSystem*>(this));
+        AddRef();
+        return S_OK;
+    }
+
+    if (riid == __uuidof(IFileSystemRouteCapabilities))
+    {
+        *ppvObject = static_cast<IFileSystemRouteCapabilities*>(static_cast<FileSystemRouteCapabilitiesBase*>(this));
+        AddRef();
+        return S_OK;
+    }
+
+    if (riid == __uuidof(IFileSystemObjectBinding))
+    {
+        *ppvObject = static_cast<IFileSystemObjectBinding*>(this);
         AddRef();
         return S_OK;
     }
@@ -1906,8 +4458,13 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateFileReader(const wchar_t* path, IFil
     }
 
     const std::wstring filePath = FileSystemInternal::ToExtendedPath(path);
-    wil::unique_handle file(CreateFileW(
-        filePath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    wil::unique_handle file(CreateFileW(filePath.c_str(),
+                                        GENERIC_READ,
+                                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                        nullptr,
+                                        OPEN_EXISTING,
+                                        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+                                        nullptr));
     if (! file)
     {
         const DWORD lastError = GetLastError();
@@ -1926,7 +4483,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateFileReader(const wchar_t* path, IFil
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
-    auto* impl = new (std::nothrow) Win32FileReader(std::move(file), static_cast<uint64_t>(fileSize.QuadPart));
+    auto* impl = new (std::nothrow) Win32FileReader(std::move(file), static_cast<uint64_t>(fileSize.QuadPart), nullptr);
     if (! impl)
     {
         return E_OUTOFMEMORY;
@@ -1935,6 +4492,292 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateFileReader(const wchar_t* path, IFil
     *reader = impl;
     return S_OK;
 }
+
+#if defined(ENABLE_TESTS)
+namespace
+{
+class LocalReaderCancellationTestControl final : public IFileSystemOperationControl
+{
+public:
+    LocalReaderCancellationTestControl() = default;
+    LocalReaderCancellationTestControl(const LocalReaderCancellationTestControl&) = delete;
+    LocalReaderCancellationTestControl(LocalReaderCancellationTestControl&&) = delete;
+    LocalReaderCancellationTestControl& operator=(const LocalReaderCancellationTestControl&) = delete;
+    LocalReaderCancellationTestControl& operator=(LocalReaderCancellationTestControl&&) = delete;
+
+    HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void*) noexcept override
+    {
+        if (abort == nullptr)
+        {
+            return E_POINTER;
+        }
+        *abort = abortRequested.load(std::memory_order_acquire) ? TRUE : FALSE;
+        abortChecks.fetch_add(1u, std::memory_order_relaxed);
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE FileSystemGetDiscoveryMode(FileSystemDiscoveryMode* mode, void*) noexcept override
+    {
+        if (mode == nullptr)
+        {
+            return E_POINTER;
+        }
+        *mode = FILESYSTEM_DISCOVERY_AHEAD;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress*, void*) noexcept override
+    {
+        return S_OK;
+    }
+
+    std::atomic_bool abortRequested{false};
+    std::atomic_uint abortChecks{0u};
+};
+
+[[nodiscard]] uint64_t LocalReaderTestElapsedUs(const std::chrono::steady_clock::time_point startedAt) noexcept
+{
+    return static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count());
+}
+} // namespace
+
+extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemTestLocalReaderCancellation(
+    const wchar_t* ordinaryPath,
+    uint64_t* cancelDurationUs,
+    uint64_t* ordinaryDurationUs,
+    uint64_t* ordinaryBytesRead,
+    unsigned int* abortCheckCount,
+    unsigned long* bytesReadAfterCancel,
+    HRESULT* blockedReadStatus,
+    BOOL* enteredPending,
+    BOOL* seekReplayMatched,
+    BOOL* cleanupComplete) noexcept
+{
+    if (ordinaryPath == nullptr || ordinaryPath[0] == L'\0' || cancelDurationUs == nullptr || ordinaryDurationUs == nullptr ||
+        ordinaryBytesRead == nullptr || abortCheckCount == nullptr || bytesReadAfterCancel == nullptr || blockedReadStatus == nullptr ||
+        enteredPending == nullptr || seekReplayMatched == nullptr || cleanupComplete == nullptr)
+    {
+        return E_POINTER;
+    }
+
+    *cancelDurationUs    = 0u;
+    *ordinaryDurationUs  = 0u;
+    *ordinaryBytesRead   = 0u;
+    *abortCheckCount     = 0u;
+    *bytesReadAfterCancel = 0u;
+    *blockedReadStatus   = E_PENDING;
+    *enteredPending      = FALSE;
+    *seekReplayMatched   = FALSE;
+    *cleanupComplete     = FALSE;
+
+    auto* fileSystem = new (std::nothrow) FileSystem();
+    if (fileSystem == nullptr)
+    {
+        return E_OUTOFMEMORY;
+    }
+    const auto releaseFileSystem = wil::scope_exit([&]() noexcept { fileSystem->Release(); });
+
+    const auto ordinaryStartedAt = std::chrono::steady_clock::now();
+    wil::com_ptr<IFileReader> legacyReader;
+    HRESULT hr = fileSystem->CreateFileReader(ordinaryPath, legacyReader.put());
+    if (FAILED(hr) || ! legacyReader)
+    {
+        return FAILED(hr) ? hr : E_UNEXPECTED;
+    }
+
+    constexpr FileSystemBindFlags bindFlags =
+        static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_CONTENT | FILESYSTEM_BIND_READ_METADATA);
+    wil::com_ptr<IFileSystemBoundObject> boundObject;
+    hr = fileSystem->BindObject(ordinaryPath, bindFlags, boundObject.put());
+    if (FAILED(hr) || ! boundObject)
+    {
+        return FAILED(hr) ? hr : E_UNEXPECTED;
+    }
+
+    LocalReaderCancellationTestControl ordinaryControl;
+    FileSystemOptions options{};
+    options.sizeBytes        = sizeof(options);
+    options.linkPolicy       = FILESYSTEM_LINK_PRESERVE;
+    options.operationControl = &ordinaryControl;
+    wil::com_ptr<IFileReader> boundReader;
+    hr = boundObject->OpenReader(&options, boundReader.put());
+    if (FAILED(hr) || ! boundReader)
+    {
+        return FAILED(hr) ? hr : E_UNEXPECTED;
+    }
+
+    uint64_t expectedSize = 0u;
+    hr = legacyReader->GetSize(&expectedSize);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    auto buffer = std::unique_ptr<std::byte[]>(new (std::nothrow) std::byte[1024u * 1024u]);
+    if (! buffer)
+    {
+        return E_OUTOFMEMORY;
+    }
+    const auto readWhole = [&](IFileReader& reader, uint64_t& total) noexcept -> HRESULT
+    {
+        total = 0u;
+        for (;;)
+        {
+            unsigned long read = 0u;
+            const HRESULT readHr = reader.Read(buffer.get(), 1024u * 1024u, &read);
+            if (FAILED(readHr))
+            {
+                return readHr;
+            }
+            if (read == 0u)
+            {
+                return S_OK;
+            }
+            total += read;
+            if (total > expectedSize)
+            {
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+        }
+    };
+
+    uint64_t legacyBytes = 0u;
+    uint64_t boundBytes  = 0u;
+    hr = readWhole(*legacyReader, legacyBytes);
+    if (SUCCEEDED(hr))
+    {
+        hr = readWhole(*boundReader, boundBytes);
+    }
+    if (FAILED(hr) || legacyBytes != expectedSize || boundBytes != expectedSize)
+    {
+        return FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+    *ordinaryBytesRead = legacyBytes + boundBytes;
+
+    constexpr __int64 replayOffset = 17;
+    uint64_t newPosition           = 0u;
+    std::array<std::byte, 4096u> legacyReplay{};
+    std::array<std::byte, 4096u> boundReplay{};
+    unsigned long legacyReplayBytes = 0u;
+    unsigned long boundReplayBytes  = 0u;
+    hr = legacyReader->Seek(replayOffset, FILE_BEGIN, &newPosition);
+    if (SUCCEEDED(hr))
+    {
+        hr = legacyReader->Read(legacyReplay.data(), static_cast<unsigned long>(legacyReplay.size()), &legacyReplayBytes);
+    }
+    if (SUCCEEDED(hr))
+    {
+        hr = boundReader->Seek(replayOffset, FILE_BEGIN, &newPosition);
+    }
+    if (SUCCEEDED(hr))
+    {
+        hr = boundReader->Read(boundReplay.data(), static_cast<unsigned long>(boundReplay.size()), &boundReplayBytes);
+    }
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    *seekReplayMatched = legacyReplayBytes == boundReplayBytes &&
+                                std::equal(legacyReplay.begin(), legacyReplay.begin() + legacyReplayBytes, boundReplay.begin())
+                            ? TRUE
+                            : FALSE;
+    *ordinaryDurationUs = LocalReaderTestElapsedUs(ordinaryStartedAt);
+
+    const std::wstring pipeName = std::format(L"\\\\.\\pipe\\RedSalamander.LocalReaderCancel.{}.{}.{}",
+                                              GetCurrentProcessId(),
+                                              GetCurrentThreadId(),
+                                              GetTickCount64());
+    wil::unique_handle serverPipe(CreateNamedPipeW(pipeName.c_str(),
+                                                   PIPE_ACCESS_OUTBOUND | FILE_FLAG_FIRST_PIPE_INSTANCE,
+                                                   PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
+                                                   1u,
+                                                   4096u,
+                                                   4096u,
+                                                   0u,
+                                                   nullptr));
+    if (! serverPipe)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+    wil::unique_handle clientPipe(CreateFileW(pipeName.c_str(),
+                                              GENERIC_READ,
+                                              0u,
+                                              nullptr,
+                                              OPEN_EXISTING,
+                                              FILE_FLAG_OVERLAPPED,
+                                              nullptr));
+    if (! clientPipe)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+    if (ConnectNamedPipe(serverPipe.get(), nullptr) == FALSE)
+    {
+        const DWORD connectError = GetLastError();
+        if (connectError != ERROR_PIPE_CONNECTED)
+        {
+            return HRESULT_FROM_WIN32(connectError);
+        }
+    }
+
+    LocalReaderCancellationTestControl blockedControl;
+    options.operationControl = &blockedControl;
+    wil::com_ptr<IFileReader> blockedReader;
+    blockedReader.attach(new (std::nothrow) Win32FileReader(std::move(clientPipe), 1u, &options));
+    if (! blockedReader)
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    std::atomic_bool readDone{false};
+    std::atomic_long readStatus{E_PENDING};
+    std::atomic_ulong readBytes{0u};
+    std::jthread readerThread([&]() noexcept
+    {
+        std::byte byte{};
+        unsigned long read = 0u;
+        const HRESULT readHr = blockedReader->Read(&byte, 1u, &read);
+        readBytes.store(read, std::memory_order_release);
+        readStatus.store(readHr, std::memory_order_release);
+        readDone.store(true, std::memory_order_release);
+    });
+
+    const auto pendingDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(250);
+    while (! readDone.load(std::memory_order_acquire) && blockedControl.abortChecks.load(std::memory_order_acquire) < 2u &&
+           std::chrono::steady_clock::now() < pendingDeadline)
+    {
+        Sleep(1u);
+    }
+    *enteredPending = ! readDone.load(std::memory_order_acquire) && blockedControl.abortChecks.load(std::memory_order_acquire) >= 2u ? TRUE : FALSE;
+
+    const auto cancelStartedAt = std::chrono::steady_clock::now();
+    blockedControl.abortRequested.store(true, std::memory_order_release);
+    const auto cancelDeadline = cancelStartedAt + std::chrono::milliseconds(500);
+    while (! readDone.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < cancelDeadline)
+    {
+        Sleep(1u);
+    }
+    if (! readDone.load(std::memory_order_acquire))
+    {
+        serverPipe.reset();
+        const auto cleanupDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+        while (! readDone.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < cleanupDeadline)
+        {
+            Sleep(1u);
+        }
+    }
+    else
+    {
+        serverPipe.reset();
+    }
+
+    *cancelDurationUs     = LocalReaderTestElapsedUs(cancelStartedAt);
+    *abortCheckCount      = blockedControl.abortChecks.load(std::memory_order_acquire);
+    *bytesReadAfterCancel = readBytes.load(std::memory_order_acquire);
+    *blockedReadStatus    = readStatus.load(std::memory_order_acquire);
+    *cleanupComplete      = readDone.load(std::memory_order_acquire) ? TRUE : FALSE;
+    return *cleanupComplete == TRUE ? S_OK : HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+}
+#endif
 
 HRESULT STDMETHODCALLTYPE FileSystem::CreateFileWriter(const wchar_t* path, FileSystemFlags flags, IFileWriter** writer) noexcept
 {
@@ -2001,7 +4844,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateFileWriter(const wchar_t* path, File
             return tempHr;
         }
 
-        auto* impl = new (std::nothrow) Win32FileWriter(std::move(file), tempPath, filePath, allowReplaceReadOnly);
+        auto* impl = new (std::nothrow) Win32FileWriter(std::move(file), tempPath, filePath, allowReplaceReadOnly, nullptr);
         if (! impl)
         {
             file.reset();
@@ -2020,7 +4863,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateFileWriter(const wchar_t* path, File
         return HRESULT_FROM_WIN32(lastError != 0 ? lastError : ERROR_GEN_FAILURE);
     }
 
-    auto* impl = new (std::nothrow) Win32FileWriter(std::move(file), filePath);
+    auto* impl = new (std::nothrow) Win32FileWriter(std::move(file), filePath, nullptr);
     if (! impl)
     {
         return E_OUTOFMEMORY;
@@ -2126,21 +4969,504 @@ HRESULT STDMETHODCALLTYPE FileSystem::SetFileBasicInformation(const wchar_t* pat
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE FileSystem::GetCapabilities(const char** jsonUtf8) noexcept
+HRESULT STDMETHODCALLTYPE FileSystem::GetPathCapabilities(const wchar_t* path,
+                                                           FileSystemOperation operation,
+                                                           const char** jsonUtf8) noexcept
 {
     if (jsonUtf8 == nullptr)
     {
         return E_POINTER;
     }
+    *jsonUtf8 = nullptr;
+    if (path == nullptr || path[0] == L'\0' || operation < FILESYSTEM_COPY || operation > FILESYSTEM_CREATE_DIRECTORY)
+    {
+        return E_INVALIDARG;
+    }
+
+    const LocalCapabilityRouteInfo route = BuildLocalCapabilityRouteInfo(path);
+    if (route.rootId.empty())
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
 
     std::lock_guard lock(_stateMutex);
+    UpdateCapabilitiesJson(route.rootId, route.remote); // requires _stateMutex
 
     if (_capabilitiesJson.empty())
     {
-        UpdateCapabilitiesJson(); // requires _stateMutex
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
-    *jsonUtf8 = _capabilitiesJson.empty() ? "{}" : _capabilitiesJson.c_str();
+    *jsonUtf8 = _capabilitiesJson.c_str();
+    return S_OK;
+}
+
+HRESULT FileSystem::BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                                    FileSystemOperation operation,
+                                                    FileSystemRouteDescriptor& descriptor) noexcept
+{
+    static_cast<void>(operation);
+    if (path == nullptr || path[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+    const std::wstring_view pathView(path);
+    if (pathView != L"/" && ! Common::Paths::IsSupportedLocalFileOperationPath(pathView))
+    {
+        // The Local provider owns its typed route envelope. Reject Win32 device,
+        // NT object-manager, GLOBALROOT, relative, and incomplete paths before
+        // child-name validation or provider joining can authorize a mutation.
+        // "/" remains the provider-root metadata query used before a pane has a
+        // concrete Local path; mutation admission always re-queries that path.
+        return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+    }
+
+    const LocalCapabilityRouteInfo route = BuildLocalCapabilityRouteInfo(path);
+    descriptor = {};
+    descriptor.providerId = kPluginId;
+    descriptor.pathProfileId = route.remote ? L"local-win32-smb" : L"local-win32";
+    descriptor.rootId = Common::Strings::Utf16FromUtf8StrictOrEmpty(route.rootId);
+    if (descriptor.rootId.empty())
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+
+    descriptor.availability = FILESYSTEM_ROUTE_AVAILABLE;
+    // R0f-SMB: UNC and mapped-remote paths are bounded like fixed volumes. Every worker that
+    // calls into this provider is registered with the synchronous-I/O cancel watch, so a call
+    // wedged on a dead share returns with ERROR_OPERATION_ABORTED once the task is canceled.
+    descriptor.cancellationRoute = FILESYSTEM_CANCELLATION_BOUNDED;
+    descriptor.namespaceKind = FILESYSTEM_NAMESPACE_REAL_CONTAINER;
+    descriptor.componentComparison = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE;
+    descriptor.caseOnlyRename = FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED;
+    descriptor.proofFlags = FILESYSTEM_ROUTE_PROOF_HOST_READBACK | FILESYSTEM_ROUTE_PROOF_PROVIDER_BLAKE3;
+    descriptor.copyOperation = true;
+    descriptor.moveOperation = true;
+    descriptor.nativeMoveOperation = true;
+    descriptor.deleteOperation = true;
+    descriptor.renameOperation = true;
+    descriptor.createDirectoryOperation = true;
+    descriptor.propertiesOperation = true;
+    descriptor.readOperation = true;
+    descriptor.writeOperation = true;
+    descriptor.recycleOperation = true;
+    descriptor.boundDelete = true;
+    descriptor.conditionalDelete = true;
+    descriptor.exclusiveStage = true;
+    descriptor.conditionalPublish = true;
+    descriptor.committedSize = true;
+    descriptor.preserveFileLink = true;
+    descriptor.preserveDirectoryLink = true;
+    descriptor.retargetInTree = false; // literal Preserve: the host never rewrites a link payload
+    descriptor.exactLinkRemoval = true;
+    descriptor.exportCopyAll = true;
+    descriptor.exportMoveAll = true;
+    descriptor.importCopyAll = true;
+    descriptor.importMoveAll = true;
+    descriptor.preferredSeparator = L'\\';
+    descriptor.acceptedSeparators = L"\\/";
+    descriptor.windowsChildNames = true;
+
+    std::lock_guard lock(_stateMutex);
+    descriptor.copyMoveMaxConcurrency = std::clamp(_copyMoveMaxConcurrency, 1u, kMaxCopyMoveMaxConcurrency);
+    descriptor.deleteMaxConcurrency = std::clamp(_deleteMaxConcurrency, 1u, kMaxDeleteMaxConcurrency);
+    descriptor.deleteRecycleBinMaxConcurrency = std::clamp(_deleteRecycleBinMaxConcurrency, 1u, kMaxDeleteRecycleBinMaxConcurrency);
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path,
+                                                  FileSystemBindFlags flags,
+                                                  IFileSystemBoundObject** bound) noexcept
+{
+    if (bound == nullptr)
+    {
+        return E_POINTER;
+    }
+    *bound = nullptr;
+    if (path == nullptr || path[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    constexpr uint32_t knownFlags = FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_CONTENT | FILESYSTEM_BIND_READ_METADATA |
+                                    FILESYSTEM_BIND_DELETE | FILESYSTEM_BIND_RENAME | FILESYSTEM_BIND_PUBLICATION;
+    const uint32_t requestedFlags = static_cast<uint32_t>(flags);
+    if ((requestedFlags & ~knownFlags) != 0u || (requestedFlags & FILESYSTEM_BIND_NO_FOLLOW) == 0u)
+    {
+        return E_INVALIDARG;
+    }
+    const std::wstring extendedPath = FileSystemInternal::ToExtendedPath(path);
+    DWORD desiredAccess = FILE_READ_ATTRIBUTES;
+    if ((requestedFlags & FILESYSTEM_BIND_READ_CONTENT) != 0u)
+    {
+        desiredAccess |= GENERIC_READ;
+    }
+    if ((requestedFlags & (FILESYSTEM_BIND_DELETE | FILESYSTEM_BIND_RENAME | FILESYSTEM_BIND_PUBLICATION)) != 0u)
+    {
+        desiredAccess |= DELETE;
+    }
+    if ((requestedFlags & FILESYSTEM_BIND_PUBLICATION) != 0u)
+    {
+        // Exact replacement may need to clear a retained destination's read-only attribute
+        // before moving it to the rollback sibling. The publication grant must therefore own
+        // that metadata write on the same no-follow handle.
+        desiredAccess |= FILE_WRITE_ATTRIBUTES;
+    }
+    const DWORD shareMode = (requestedFlags & FILESYSTEM_BIND_DELETE) != 0u
+        ? FILE_SHARE_READ
+        : FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+    wil::unique_handle file(CreateFileW(extendedPath.c_str(),
+                                        desiredAccess,
+                                        shareMode,
+                                        nullptr,
+                                        OPEN_EXISTING,
+                                        FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                        nullptr));
+    if (! file)
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_FILE_NOT_FOUND);
+    }
+
+    LocalObjectIdentityPayload identity{};
+    const HRESULT identityHr = QueryExactLocalObjectIdentity(file.get(), identity);
+    if (FAILED(identityHr))
+    {
+        return identityHr;
+    }
+
+    FILE_ATTRIBUTE_TAG_INFO attributes{};
+    if (GetFileInformationByHandleEx(file.get(), FileAttributeTagInfo, &attributes, sizeof(attributes)) == FALSE)
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+    }
+
+    FileSystemBoundObjectKind kind = FILESYSTEM_BOUND_OTHER;
+    if ((attributes.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u &&
+        IsReparseTagNameSurrogate(attributes.ReparseTag) != FALSE)
+    {
+        kind = FILESYSTEM_BOUND_LINK;
+    }
+    else if ((attributes.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u)
+    {
+        kind = FILESYSTEM_BOUND_DIRECTORY;
+    }
+    else
+    {
+        kind = FILESYSTEM_BOUND_REGULAR_FILE;
+    }
+
+    uint64_t committedSizeBytes = std::numeric_limits<uint64_t>::max();
+    if (kind == FILESYSTEM_BOUND_REGULAR_FILE)
+    {
+        FILE_STANDARD_INFO standard{};
+        if (GetFileInformationByHandleEx(file.get(), FileStandardInfo, &standard, sizeof(standard)) == FALSE)
+        {
+            const DWORD error = GetLastError();
+            return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+        }
+        if (standard.EndOfFile.QuadPart < 0)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+        committedSizeBytes = static_cast<uint64_t>(standard.EndOfFile.QuadPart);
+    }
+
+    auto* impl = new (std::nothrow) LocalBoundObject(
+        std::move(file), identity, kind, committedSizeBytes, flags, false, path);
+    if (impl == nullptr)
+    {
+        return E_OUTOFMEMORY;
+    }
+    *bound = impl;
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystem::CreateExclusiveWriter(const wchar_t* stagePath,
+                                                             const FileSystemOptions* options,
+                                                             IFileWriter** writer,
+                                                             IFileSystemBoundObject** ownedStage) noexcept
+{
+    if (writer == nullptr || ownedStage == nullptr)
+    {
+        return E_POINTER;
+    }
+    *writer     = nullptr;
+    *ownedStage = nullptr;
+    if (stagePath == nullptr || stagePath[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+    if (! FileSystemOptionsHaveValidHeader(options))
+    {
+        return E_INVALIDARG;
+    }
+
+    const HRESULT controlHr = FileSystemCheckOperationControl(options);
+    if (FAILED(controlHr))
+    {
+        return controlHr;
+    }
+
+    LocalObjectIdentityPayload retainedIdentity{};
+    const HRESULT retainedIdentityHr = MakeRetainedHandleIdentity(retainedIdentity);
+    if (FAILED(retainedIdentityHr))
+    {
+        return retainedIdentityHr;
+    }
+
+    const std::wstring extendedStage = FileSystemInternal::ToExtendedPath(stagePath);
+    wil::unique_handle file(CreateFileW(extendedStage.c_str(),
+                                        GENERIC_READ | GENERIC_WRITE | DELETE | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES,
+                                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                        nullptr,
+                                        CREATE_NEW,
+                                        FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_SEQUENTIAL_SCAN,
+                                        nullptr));
+    if (! file)
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+    }
+
+    LocalObjectIdentityPayload identity{};
+    const HRESULT identityHr = ResolveNewStageIdentity(file.get(), stagePath, L"file", retainedIdentity, identity);
+    if (FAILED(identityHr))
+    {
+        return identityHr;
+    }
+
+    HANDLE duplicated = INVALID_HANDLE_VALUE;
+    if (DuplicateHandle(GetCurrentProcess(),
+                        file.get(),
+                        GetCurrentProcess(),
+                        &duplicated,
+                        0u,
+                        FALSE,
+                        DUPLICATE_SAME_ACCESS) == FALSE)
+    {
+        const DWORD error = GetLastError();
+        const HRESULT cleanupHr = DeleteExactHandle(file.get());
+        return FAILED(cleanupHr) ? HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE)
+                                 : HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+    }
+    wil::unique_handle boundHandle(duplicated);
+
+    constexpr FileSystemBindFlags stageFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW |
+                                                                                FILESYSTEM_BIND_READ_CONTENT |
+                                                                                FILESYSTEM_BIND_READ_METADATA |
+                                                                                FILESYSTEM_BIND_DELETE |
+                                                                                FILESYSTEM_BIND_RENAME |
+                                                                                FILESYSTEM_BIND_PUBLICATION);
+    wil::com_ptr<IFileSystemBoundObject> stage;
+    stage.attach(new (std::nothrow) LocalBoundObject(std::move(boundHandle),
+                                                     identity,
+                                                     FILESYSTEM_BOUND_REGULAR_FILE,
+                                                     0u,
+                                                     stageFlags,
+                                                     true,
+                                                     stagePath));
+    if (! stage)
+    {
+        const HRESULT cleanupHr = DeleteExactHandle(file.get());
+        return FAILED(cleanupHr) ? HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) : E_OUTOFMEMORY;
+    }
+
+    auto* fileWriter = new (std::nothrow) Win32FileWriter(std::move(file), std::wstring{}, options);
+    if (fileWriter == nullptr)
+    {
+        FileSystemConditionalMutationResult abortResult{};
+        abortResult.sizeBytes = sizeof(abortResult);
+        const FileSystemOptions cleanupOptions = MakeOwnedStageCleanupOptions(options);
+        const HRESULT abortHr                  = stage->AbortOwnedObject(&cleanupOptions, &abortResult);
+        return abortResult.outcomeKnown == FALSE || FAILED(abortHr) || abortResult.mutationCommitted == FALSE ||
+                abortResult.originalStillPresent != FALSE
+            ? HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE)
+            : E_OUTOFMEMORY;
+    }
+
+    *writer     = fileWriter;
+    *ownedStage = stage.detach();
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystem::CreateExclusiveDirectory(const wchar_t* stagePath,
+                                                                 const FileSystemOptions* options,
+                                                                 IFileSystemBoundObject** ownedStage) noexcept
+{
+    if (ownedStage == nullptr)
+    {
+        return E_POINTER;
+    }
+    *ownedStage = nullptr;
+    if (stagePath == nullptr || stagePath[0] == L'\0' || ! FileSystemOptionsHaveValidHeader(options))
+    {
+        return E_INVALIDARG;
+    }
+    const HRESULT controlHr = FileSystemCheckOperationControl(options);
+    if (FAILED(controlHr))
+    {
+        return controlHr;
+    }
+
+    LocalObjectIdentityPayload retainedIdentity{};
+    const HRESULT retainedIdentityHr = MakeRetainedHandleIdentity(retainedIdentity);
+    if (FAILED(retainedIdentityHr))
+    {
+        return retainedIdentityHr;
+    }
+
+    wil::unique_handle directory;
+    HRESULT hr = CreateExclusiveDirectoryHandle(stagePath, directory);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    LocalObjectIdentityPayload identity{};
+    hr = ResolveNewStageIdentity(directory.get(), stagePath, L"directory", retainedIdentity, identity);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    constexpr FileSystemBindFlags stageFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW |
+                                                                                 FILESYSTEM_BIND_READ_METADATA |
+                                                                                 FILESYSTEM_BIND_DELETE |
+                                                                                 FILESYSTEM_BIND_RENAME |
+                                                                                 FILESYSTEM_BIND_PUBLICATION);
+    auto* stage = new (std::nothrow) LocalBoundObject(std::move(directory),
+                                                      identity,
+                                                      FILESYSTEM_BOUND_DIRECTORY,
+                                                      std::numeric_limits<uint64_t>::max(),
+                                                      stageFlags,
+                                                      true,
+                                                      stagePath);
+    if (stage == nullptr)
+    {
+        if (directory)
+        {
+            const HRESULT cleanupHr = DeleteExactHandle(directory.get());
+            if (FAILED(cleanupHr))
+            {
+                return HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+            }
+        }
+        return E_OUTOFMEMORY;
+    }
+    *ownedStage = stage;
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystem::ReadBoundLink(IFileSystemBoundObject* boundLink,
+                                                     const FileSystemLinkTransform* transform,
+                                                     const FileSystemOptions* options,
+                                                     FileSystemLinkInformation* information) noexcept
+{
+    if (boundLink == nullptr || transform == nullptr || information == nullptr)
+    {
+        return E_POINTER;
+    }
+    if (transform->sizeBytes != sizeof(FileSystemLinkTransform) || information->sizeBytes != sizeof(FileSystemLinkInformation) ||
+        ! FileSystemOptionsHaveValidHeader(options))
+    {
+        return E_INVALIDARG;
+    }
+    const HRESULT controlHr = FileSystemCheckOperationControl(options);
+    if (FAILED(controlHr))
+    {
+        return controlHr;
+    }
+
+    wil::com_ptr<ILocalBoundObjectControl> control;
+    const HRESULT queryHr = boundLink->QueryInterface(__uuidof(ILocalBoundObjectControl), control.put_void());
+    if (FAILED(queryHr) || ! control)
+    {
+        return FAILED(queryHr) ? queryHr : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    HANDLE duplicated = INVALID_HANDLE_VALUE;
+    const HRESULT duplicateHr = control->DuplicateExactHandle(&duplicated);
+    if (FAILED(duplicateHr))
+    {
+        return duplicateHr;
+    }
+    wil::unique_handle boundHandle(duplicated);
+    return FileSystemInternal::ReadBoundLocalLink(boundHandle.get(), *transform, *information);
+}
+
+HRESULT STDMETHODCALLTYPE FileSystem::CreateExclusiveLink(const wchar_t* stagePath,
+                                                           const FileSystemLinkInformation* information,
+                                                           const FileSystemOptions* options,
+                                                           IFileSystemBoundObject** ownedStage) noexcept
+{
+    if (ownedStage == nullptr)
+    {
+        return E_POINTER;
+    }
+    *ownedStage = nullptr;
+    if (stagePath == nullptr || stagePath[0] == L'\0' || information == nullptr)
+    {
+        return E_INVALIDARG;
+    }
+    if (information->sizeBytes != sizeof(FileSystemLinkInformation) || ! FileSystemOptionsHaveValidHeader(options))
+    {
+        return E_INVALIDARG;
+    }
+    const HRESULT controlHr = FileSystemCheckOperationControl(options);
+    if (FAILED(controlHr))
+    {
+        return controlHr;
+    }
+
+    LocalObjectIdentityPayload retainedIdentity{};
+    const HRESULT retainedIdentityHr = MakeRetainedHandleIdentity(retainedIdentity);
+    if (FAILED(retainedIdentityHr))
+    {
+        return retainedIdentityHr;
+    }
+
+    wil::unique_handle linkHandle;
+    const HRESULT createHr = FileSystemInternal::CreateExclusiveLocalLink(stagePath, *information, linkHandle);
+    if (FAILED(createHr))
+    {
+        return createHr;
+    }
+
+    LocalObjectIdentityPayload identity{};
+    const HRESULT identityHr = ResolveNewStageIdentity(linkHandle.get(), stagePath, L"link", retainedIdentity, identity);
+    if (FAILED(identityHr))
+    {
+        return identityHr;
+    }
+
+    constexpr FileSystemBindFlags stageFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW |
+                                                                                FILESYSTEM_BIND_READ_METADATA |
+                                                                                FILESYSTEM_BIND_DELETE |
+                                                                                FILESYSTEM_BIND_RENAME |
+                                                                                FILESYSTEM_BIND_PUBLICATION);
+    wil::com_ptr<IFileSystemBoundObject> stage;
+    stage.attach(new (std::nothrow) LocalBoundObject(std::move(linkHandle),
+                                                     identity,
+                                                     FILESYSTEM_BOUND_LINK,
+                                                     std::numeric_limits<uint64_t>::max(),
+                                                     stageFlags,
+                                                     true,
+                                                     stagePath));
+    if (! stage)
+    {
+        if (linkHandle)
+        {
+            const HRESULT cleanupHr = DeleteExactHandle(linkHandle.get());
+            if (FAILED(cleanupHr))
+            {
+                return HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+            }
+        }
+        return E_OUTOFMEMORY;
+    }
+    *ownedStage = stage.detach();
     return S_OK;
 }
 
@@ -2519,12 +5845,16 @@ HRESULT STDMETHODCALLTYPE FileSystem::SetConfiguration(const char* configuration
                 }
 
                 yyjson_val* reparsePolicyVal = yyjson_obj_get(root, "reparsePointPolicy");
-                if (reparsePolicyVal && yyjson_is_str(reparsePolicyVal))
+                if (reparsePolicyVal)
                 {
-                    const char* valueText = yyjson_get_str(reparsePolicyVal);
-                    if (valueText && valueText[0] != '\0')
+                    if (! yyjson_is_str(reparsePolicyVal))
                     {
-                        reparsePointPolicy = ParseReparsePointPolicy(valueText);
+                        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+                    }
+                    const char* valueText = yyjson_get_str(reparsePolicyVal);
+                    if (! valueText || valueText[0] == '\0' || ! TryParseReparsePointPolicy(valueText, reparsePointPolicy))
+                    {
+                        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
                     }
                 }
 
@@ -2570,17 +5900,28 @@ HRESULT STDMETHODCALLTYPE FileSystem::SetConfiguration(const char* configuration
     enumerationSoftMaxBufferMiB = std::clamp(enumerationSoftMaxBufferMiB, 1ul, maxBufferMiB);
     enumerationHardMaxBufferMiB = std::clamp(enumerationHardMaxBufferMiB, enumerationSoftMaxBufferMiB, maxBufferMiB);
 
-    std::string newConfigurationJson = parsed ? std::move(sourceConfiguration)
-                                              : BuildConfigurationJson(concurrencyMode,
-                                                                       copyMoveMaxConcurrency,
-                                                                       deleteMaxConcurrency,
-                                                                       deleteRecycleBinMaxConcurrency,
-                                                                       recycleBinBatchSize,
-                                                                       enumerationSoftMaxBufferMiB,
-                                                                       enumerationHardMaxBufferMiB,
-                                                                       reparsePointPolicy,
-                                                                       searchBackendPreference,
-                                                                       searchMaxDirectoryWalkers);
+    std::string newConfigurationJson;
+    if (parsed)
+    {
+        const HRESULT canonicalizeHr = CanonicalizeReparsePointPolicyConfiguration(parsed, reparsePointPolicy, newConfigurationJson);
+        if (FAILED(canonicalizeHr))
+        {
+            return canonicalizeHr;
+        }
+    }
+    else
+    {
+        newConfigurationJson = BuildConfigurationJson(concurrencyMode,
+                                                      copyMoveMaxConcurrency,
+                                                      deleteMaxConcurrency,
+                                                      deleteRecycleBinMaxConcurrency,
+                                                      recycleBinBatchSize,
+                                                      enumerationSoftMaxBufferMiB,
+                                                      enumerationHardMaxBufferMiB,
+                                                      reparsePointPolicy,
+                                                      searchBackendPreference,
+                                                      searchMaxDirectoryWalkers);
+    }
 
     std::lock_guard lock(_stateMutex);
 
@@ -2599,7 +5940,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::SetConfiguration(const char* configuration
 #endif
 
     _configurationJson = std::move(newConfigurationJson);
-    UpdateCapabilitiesJson();
+    _capabilitiesJson.clear();
     return S_OK;
 }
 
@@ -2633,12 +5974,31 @@ HRESULT STDMETHODCALLTYPE FileSystem::SomethingToSave(BOOL* pSomethingToSave) no
     return S_OK;
 }
 
-void FileSystem::UpdateCapabilitiesJson() noexcept
+void FileSystem::UpdateCapabilitiesJson(std::string_view rootId, bool remoteRoute) noexcept
 {
     // NOTE: Caller must hold _stateMutex.
     _capabilitiesJson = std::format(
-        R"json({{"version":1,"operations":{{"copy":true,"move":true,"delete":true,"rename":true,"properties":true,"read":true,"write":true}},"search":{{"version":1,"name":true,"content":true,"indexed":true,"serviceBacked":true,"supportsRegex":true,"supportsSnippets":true,"preferredBackend":"service"}},"concurrency":{{"copyMoveMax":{},"deleteMax":{},"deleteRecycleBinMax":{}}},"crossFileSystem":{{"export":{{"copy":["*"],"move":["*"]}},"import":{{"copy":["*"],"move":["*"]}}}},"pathIdentity":{{"version":1,"pathTextStableIdentity":true,"componentComparison":"ordinalIgnoreCase","normalization":"none","preferredSeparator":"\\","acceptedSeparators":["\\","/"],"casePreserving":true,"caseOnlyRename":"supported"}}}})json",
+        R"json({{
+  "version": 2,
+  "pathProfile": "{}",
+  "rootId": "{}",
+  "operations": {{"copy":true,"move":true,"nativeMove":true,"delete":true,"rename":true,"createDirectory":true,"properties":true,"read":true,"write":true,"recycle":true}},
+  "search": {{"version":1,"name":true,"content":true,"indexed":true,"serviceBacked":true,"supportsRegex":true,"supportsSnippets":true,"preferredBackend":"service"}},
+  "concurrency": {{"copyMoveMax":{},"deleteMax":{},"deleteRecycleBinMax":{}}},
+  "transfer": {{"export":{{"copy":["*"],"move":["*"]}},"import":{{"copy":["*"],"move":["*"]}}}},
+  "identity": {{"object":"win32FileId","revision":"none","boundDelete":true,"conditionalDelete":true}},
+  "publication": {{"exclusiveStage":true,"conditionalPublish":true,"committedSize":true}},
+  "links": {{"preserveFileLink":true,"preserveDirectoryLink":true,"retargetInTree":false,"exactLinkRemoval":true}},
+  "metadata": {{"motw":"preserved","alternateStreams":"preserved","extendedAttributes":"preserved","sparse":"preserved","efs":"preserved"}},
+  "verification": {{"hostReadback":true,"providerProof":"blake3-bound-object"}},
+  "cancellation": {{"abort":false,"deadline":false,"routeClass":"{}","providerWatchdogTimeoutMs":0}},
+  "names": {{"pathTextStableIdentity":true,"comparison":"ordinalIgnoreCase","normalization":"none","preferredSeparator":"\\","acceptedSeparators":["\\","/"],"casePreserving":true,"caseOnlyRename":"supported","maxComponentUtf16":255}},
+  "directories": {{"model":"native"}}
+}})json",
+        remoteRoute ? "local-win32-smb" : "local-win32",
+        rootId,
         std::clamp(_copyMoveMaxConcurrency, 1u, kMaxCopyMoveMaxConcurrency),
         std::clamp(_deleteMaxConcurrency, 1u, kMaxDeleteMaxConcurrency),
-        std::clamp(_deleteRecycleBinMaxConcurrency, 1u, kMaxDeleteRecycleBinMaxConcurrency));
+        std::clamp(_deleteRecycleBinMaxConcurrency, 1u, kMaxDeleteRecycleBinMaxConcurrency),
+        "bounded");
 }

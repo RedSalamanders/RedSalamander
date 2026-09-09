@@ -170,6 +170,7 @@ void NavigationView::EnsureD2DResources()
             _dwriteFluentIconsValid   = true;
             _breadcrumbSeparatorGlyph = FluentIcons::kChevronRightSmall;
             _historyChevronGlyph      = FluentIcons::kChevronDown;
+            _menuFallbackGlyph        = FluentIcons::kBulletedList;
         }
         else
         {
@@ -180,6 +181,7 @@ void NavigationView::EnsureD2DResources()
                 _dwriteFluentIconsValid   = false;
                 _breadcrumbSeparatorGlyph = FluentIcons::kFallbackChevronRight;
                 _historyChevronGlyph      = FluentIcons::kFallbackChevronDown;
+                _menuFallbackGlyph        = FluentIcons::kFallbackBulletedList;
             }
         }
 
@@ -619,7 +621,7 @@ void NavigationView::RenderDriveSection()
     }
     else
     {
-        // Fallback: Draw hamburger icon (3 horizontal lines)
+        // Fallback: draw the standard menu-list glyph through the same DirectWrite icon format as the breadcrumb chevrons.
         ID2D1SolidColorBrush* lineBrush = _textBrush.get();
         wil::com_ptr<ID2D1SolidColorBrush> fallbackBrush;
         if (! lineBrush && _d2dContext)
@@ -628,17 +630,15 @@ void NavigationView::RenderDriveSection()
             lineBrush = fallbackBrush.get();
         }
 
-        float centerX   = (static_cast<float>(_sectionDriveRect.left) + static_cast<float>(_sectionDriveRect.right)) / 2.0f;
-        float centerY   = (static_cast<float>(_sectionDriveRect.top) + static_cast<float>(_sectionDriveRect.bottom)) / 2.0f;
-        float lineWidth = 2.0f;
-
-        for (int i = -1; i <= 1; i++)
+        if (lineBrush && _separatorFormat)
         {
-            float y = centerY + static_cast<float>(i * 5);
-            if (lineBrush)
-            {
-                _d2dContext->DrawLine(D2D1::Point2F(centerX - 6.0f, y), D2D1::Point2F(centerX + 7.0f, y), lineBrush, lineWidth);
-            }
+            _d2dContext->DrawTextW(&_menuFallbackGlyph,
+                                   1u,
+                                   _separatorFormat.get(),
+                                   section1RectF,
+                                   lineBrush,
+                                   D2D1_DRAW_TEXT_OPTIONS_NO_SNAP,
+                                   DWRITE_MEASURING_MODE_NATURAL);
         }
     }
 

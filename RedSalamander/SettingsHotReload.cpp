@@ -108,15 +108,16 @@ std::atomic_bool g_debugSettingsReloadPostStampDelayActive{false};
            (g_state.lastRejectedStamp.has_value() && g_state.lastRejectedStamp.value() == stamp);
 }
 
-void PostSettingsFileChanged(HWND targetWindow) noexcept
+void PostSettingsFileChanged(HWND targetWindow, uint64_t sessionGeneration) noexcept
 {
     if (! targetWindow)
     {
         return;
     }
 
-    auto payload       = std::make_unique<SettingsHotReload::SettingsFileChangedPayload>();
-    payload->tickCount = GetTickCount64();
+    auto payload                   = std::make_unique<SettingsHotReload::SettingsFileChangedPayload>();
+    payload->tickCount             = GetTickCount64();
+    payload->sessionGeneration     = sessionGeneration;
     if (! PostMessagePayload(targetWindow, WndMsg::kSettingsFileChanged, 0, std::move(payload)))
     {
         const DWORD lastError = GetLastError();
@@ -155,7 +156,8 @@ void CompleteInternalSave(std::wstring_view appId,
         return;
     }
 
-    HWND deferredTarget = nullptr;
+    HWND deferredTarget                = nullptr;
+    uint64_t deferredSessionGeneration = 0u;
     {
         std::scoped_lock lock(g_state.mutex);
         if (token.sessionGeneration != g_state.sessionGeneration || g_state.internalSaveDepth == 0u ||
@@ -175,10 +177,11 @@ void CompleteInternalSave(std::wstring_view appId,
         {
             g_state.internalSaveNotificationDeferred = false;
             deferredTarget                           = g_state.targetWindow;
+            deferredSessionGeneration                = token.sessionGeneration;
         }
     }
 
-    PostSettingsFileChanged(deferredTarget);
+    PostSettingsFileChanged(deferredTarget, deferredSessionGeneration);
 }
 
 [[nodiscard]] bool DeferNotificationForInternalSaveLocked() noexcept
@@ -197,7 +200,8 @@ void WatchSettingsDirectoryThread(HWND targetWindow,
                                   HANDLE readyEventHandle,
                                   std::filesystem::path directoryPath,
                                   std::wstring appId,
-                                  std::optional<Common::Settings::SettingsFileStamp> initialStamp) noexcept
+                                  std::optional<Common::Settings::SettingsFileStamp> initialStamp,
+                                  uint64_t sessionGeneration) noexcept
 {
     if (! targetWindow || directoryPath.empty())
     {
@@ -267,20 +271,20 @@ void WatchSettingsDirectoryThread(HWND targetWindow,
                 {
                     if (! initialStamp.has_value() || initialStamp.value() != armedStamp)
                     {
-                        PostSettingsFileChanged(targetWindow);
+                        PostSettingsFileChanged(targetWindow, sessionGeneration);
                     }
                 }
                 else if (stampHr == S_FALSE)
                 {
                     if (initialStamp.has_value())
                     {
-                        PostSettingsFileChanged(targetWindow);
+                        PostSettingsFileChanged(targetWindow, sessionGeneration);
                     }
                 }
                 else
                 {
                     Debug::Warning(L"SettingsHotReload: catch-up stamp query failed (hr=0x{:08X})", static_cast<unsigned long>(stampHr));
-                    PostSettingsFileChanged(targetWindow);
+                    PostSettingsFileChanged(targetWindow, sessionGeneration);
                 }
                 catchUpPending = false;
             }
@@ -295,7 +299,7 @@ void WatchSettingsDirectoryThread(HWND targetWindow,
 
         if (waitResult == (WAIT_OBJECT_0 + 1))
         {
-            PostSettingsFileChanged(targetWindow);
+            PostSettingsFileChanged(targetWindow, sessionGeneration);
 
             if (! FindNextChangeNotification(changeNotification.get()))
             {
@@ -672,14 +676,48 @@ public:
         std::scoped_lock lock(_mutex);
         _debugSaveDelayMs = delayMs;
     }
+
+    bool ResetStampLineageForSelfTest(std::wstring_view appId)
+    {
+        if (appId.empty())
+        {
+            return false;
+        }
+
+        std::unique_lock submissionLock(_submissionMutex);
+        std::scoped_lock lock(_mutex);
+        if (! _requests.empty() || _saveInProgress)
+        {
+            return false;
+        }
+
+        _stampLineage.erase(std::wstring(appId));
+        return true;
+    }
 #endif
 
 private:
     struct StampLineage final
     {
-        std::optional<Common::Settings::SettingsFileStamp> source;
+        std::vector<std::optional<Common::Settings::SettingsFileStamp>> sources;
         std::optional<Common::Settings::SettingsFileStamp> committed;
     };
+
+    [[nodiscard]] static bool ContainsSourceStamp(
+        const StampLineage& lineage,
+        const std::optional<Common::Settings::SettingsFileStamp>& stamp) noexcept
+    {
+        return std::ranges::find(lineage.sources, stamp) != lineage.sources.end();
+    }
+
+    static void RememberSourceStamp(StampLineage& lineage,
+                                    const std::optional<Common::Settings::SettingsFileStamp>& stamp)
+    {
+        if (! ContainsSourceStamp(lineage, stamp))
+        {
+            lineage.sources.push_back(stamp);
+        }
+    }
 
     void AdvanceExpectedStampLocked(Request& request) noexcept
     {
@@ -689,7 +727,7 @@ private:
             return;
         }
         const auto& expected = request.settings.persistence.expectedFileStamp;
-        if (expected == lineage->second.source || expected == lineage->second.committed)
+        if (expected == lineage->second.committed || ContainsSourceStamp(lineage->second, expected))
         {
             request.settings.persistence.expectedFileStamp = lineage->second.committed;
         }
@@ -801,20 +839,39 @@ private:
                 std::scoped_lock lock(_mutex);
                 if (SUCCEEDED(saveHr))
                 {
+                    const std::optional<Common::Settings::SettingsFileStamp> committedStamp =
+                        current.settings.persistence.expectedFileStamp;
                     auto lineage = _stampLineage.find(current.appId);
                     if (lineage == _stampLineage.end())
                     {
-                        _stampLineage.emplace(current.appId,
-                                              StampLineage{.source = saveExpectedStamp,
-                                                           .committed = current.settings.persistence.expectedFileStamp});
+                        StampLineage initialLineage{};
+                        RememberSourceStamp(initialLineage, saveExpectedStamp);
+                        if (! current.asynchronous)
+                        {
+                            // Synchronous callers receive the new stamp and may retain that
+                            // snapshot independently from other settings owners.
+                            RememberSourceStamp(initialLineage, committedStamp);
+                        }
+                        initialLineage.committed = committedStamp;
+                        _stampLineage.emplace(current.appId, std::move(initialLineage));
                     }
                     else
                     {
-                        if (saveExpectedStamp != lineage->second.source && saveExpectedStamp != lineage->second.committed)
+                        const bool continuesInternalLineage =
+                            saveExpectedStamp == lineage->second.committed || ContainsSourceStamp(lineage->second, saveExpectedStamp);
+                        if (! continuesInternalLineage)
                         {
-                            lineage->second.source = saveExpectedStamp;
+                            // A request with an unknown stamp can succeed only after the file moved
+                            // to a new externally loaded branch. Forget the previous branch so its
+                            // stale snapshots cannot be rebased across that external replacement.
+                            lineage->second.sources.clear();
+                            RememberSourceStamp(lineage->second, saveExpectedStamp);
                         }
-                        lineage->second.committed = current.settings.persistence.expectedFileStamp;
+                        if (! current.asynchronous)
+                        {
+                            RememberSourceStamp(lineage->second, committedStamp);
+                        }
+                        lineage->second.committed = committedStamp;
                     }
                 }
                 _lastCompletedGeneration = current.generation;
@@ -981,6 +1038,24 @@ SettingsSaveDebugSnapshot DebugGetSettingsSaveSnapshotForSelfTest() noexcept
         return {};
     }
 }
+
+bool DebugResetSettingsSaveLineageForSelfTest(std::wstring_view appId) noexcept
+{
+    try
+    {
+        return GetSettingsSaveCoordinator().ResetStampLineageForSelfTest(appId);
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        // noexcept test boundary: leave the lineage unchanged and make the isolation failure visible.
+        Debug::Error(L"SettingsHotReload: failed to reset the settings-save self-test lineage for '{}'.", appId);
+        return false;
+    }
+}
 #endif
 
 HRESULT Start(HWND targetWindow, std::wstring_view appId) noexcept
@@ -1032,6 +1107,7 @@ HRESULT Start(HWND targetWindow, std::wstring_view appId) noexcept
         Debug::Warning(L"SettingsHotReload: initial file stamp query failed (hr=0x{:08X})", static_cast<unsigned long>(stampHr));
     }
 
+    uint64_t sessionGeneration = 0u;
     {
         std::scoped_lock lock(g_state.mutex);
         g_state.targetWindow      = targetWindow;
@@ -1043,6 +1119,7 @@ HRESULT Start(HWND targetWindow, std::wstring_view appId) noexcept
         g_state.lastAppliedStamp  = initialStamp;
         g_state.lastRejectedStamp.reset();
         ++g_state.sessionGeneration;
+        sessionGeneration = g_state.sessionGeneration;
         ++g_state.internalSaveEpoch;
         g_state.internalSaveDepth                = 0u;
         g_state.internalSaveNotificationDeferred = false;
@@ -1058,8 +1135,8 @@ HRESULT Start(HWND targetWindow, std::wstring_view appId) noexcept
     }
 
     g_state.watchThread = std::jthread(
-        [targetWindow, stopHandle, readyHandle, settingsDirectory, watchedAppId = std::wstring(appId), initialStamp](std::stop_token) noexcept
-        { WatchSettingsDirectoryThread(targetWindow, stopHandle, readyHandle, settingsDirectory, watchedAppId, initialStamp); });
+        [targetWindow, stopHandle, readyHandle, settingsDirectory, watchedAppId = std::wstring(appId), initialStamp, sessionGeneration](std::stop_token) noexcept
+        { WatchSettingsDirectoryThread(targetWindow, stopHandle, readyHandle, settingsDirectory, watchedAppId, initialStamp, sessionGeneration); });
 
     return S_OK;
 }
@@ -1237,7 +1314,8 @@ HRESULT ReplaceBlockedSettingsAndSchema(std::wstring_view appId,
         return E_INVALIDARG;
     }
 
-    const HRESULT backupHr = Common::Settings::BackupSettingsForExplicitReplacement(appId, backupPath);
+    const HRESULT backupHr =
+        Common::Settings::BackupSettingsForExplicitReplacement(appId, settings.persistence.expectedFileStamp, backupPath);
     if (backupHr != S_OK)
     {
         return backupHr;
@@ -1288,7 +1366,9 @@ bool FlushQueuedSettingsSaves(DWORD timeoutMs) noexcept
     }
 }
 
-ChangedSettingsLoadResult TryLoadChangedSettings() noexcept
+namespace
+{
+ChangedSettingsLoadResult TryLoadChangedSettingsImpl(std::optional<uint64_t> notificationSessionGeneration) noexcept
 {
     constexpr int kEpochRetryCount = 3;
     for (int observationAttempt = 0; observationAttempt < kEpochRetryCount; ++observationAttempt)
@@ -1299,6 +1379,12 @@ ChangedSettingsLoadResult TryLoadChangedSettings() noexcept
         uint64_t internalSaveEpoch = 0u;
         {
             std::scoped_lock lock(g_state.mutex);
+            if (notificationSessionGeneration.has_value() && notificationSessionGeneration.value() != g_state.sessionGeneration)
+            {
+                result.status = ChangedSettingsStatus::NoChange;
+                result.hr     = S_OK;
+                return result;
+            }
             appId             = g_state.appId;
             sessionGeneration = g_state.sessionGeneration;
             internalSaveEpoch = g_state.internalSaveEpoch;
@@ -1450,13 +1536,26 @@ ChangedSettingsLoadResult TryLoadChangedSettings() noexcept
         return result;
     }
 
-    HWND retryTarget = nullptr;
+    HWND retryTarget                = nullptr;
+    uint64_t retrySessionGeneration = 0u;
     {
         std::scoped_lock lock(g_state.mutex);
-        retryTarget = g_state.targetWindow;
+        retryTarget                = g_state.targetWindow;
+        retrySessionGeneration     = g_state.sessionGeneration;
     }
-    PostSettingsFileChanged(retryTarget);
+    PostSettingsFileChanged(retryTarget, retrySessionGeneration);
     return ChangedSettingsLoadResult{.status = ChangedSettingsStatus::NoChange, .hr = S_OK};
+}
+} // namespace
+
+ChangedSettingsLoadResult TryLoadChangedSettings() noexcept
+{
+    return TryLoadChangedSettingsImpl(std::nullopt);
+}
+
+ChangedSettingsLoadResult TryLoadChangedSettingsForNotification(const SettingsFileChangedPayload& notification) noexcept
+{
+    return TryLoadChangedSettingsImpl(notification.sessionGeneration);
 }
 
 void MarkAppliedStamp(const Common::Settings::SettingsFileStamp& stamp) noexcept
@@ -1521,7 +1620,6 @@ HRESULT PromptExternalReloadConflict(HWND targetWindow, std::wstring_view editor
     const std::wstring message = BuildExternalReloadConflictMessage(editorName);
 
     HostPromptRequest prompt{};
-    prompt.version       = 1;
     prompt.sizeBytes     = sizeof(prompt);
     prompt.scope         = HOST_ALERT_SCOPE_WINDOW;
     prompt.severity      = HOST_ALERT_WARNING;
@@ -1548,7 +1646,6 @@ HRESULT PromptStaleSaveConflict(HWND targetWindow, std::wstring_view editorName,
     const std::wstring message = BuildStaleSaveConflictMessage(editorName);
 
     HostPromptRequest prompt{};
-    prompt.version       = 1;
     prompt.sizeBytes     = sizeof(prompt);
     prompt.scope         = HOST_ALERT_SCOPE_WINDOW;
     prompt.severity      = HOST_ALERT_WARNING;
@@ -1601,7 +1698,6 @@ void ShowInvalidReloadAlert(const std::filesystem::path& settingsPath) noexcept
     const std::wstring message = FormatStringResource(nullptr, IDS_FMT_SETTINGS_RELOAD_FAILED_KEEP_CURRENT, settingsPath.wstring());
 
     HostAlertRequest request{};
-    request.version   = 1;
     request.sizeBytes = sizeof(request);
     request.scope     = HOST_ALERT_SCOPE_APPLICATION;
     request.modality  = HOST_ALERT_MODELESS;

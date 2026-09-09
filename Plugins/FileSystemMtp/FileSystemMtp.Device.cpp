@@ -57,7 +57,7 @@ struct ComInitialization
         ULONG_PTR contextToken = 0u;
         if (SUCCEEDED(CoGetContextToken(&contextToken)))
         {
-#ifdef _DEBUG
+#if defined(ENABLE_TESTS)
             if (! initializeIfNeeded)
             {
                 APTTYPE apartmentType{};
@@ -65,13 +65,14 @@ struct ComInitialization
                 const HRESULT apartmentHr = CoGetApartmentType(&apartmentType, &apartmentQualifier);
                 assert(SUCCEEDED(apartmentHr) && apartmentType == APTTYPE_MTA &&
                        "WPD backend calls must execute on the lifetime-MTA command worker.");
+                static_cast<void>(apartmentHr); // assert is compiled out by test-enabled Release builds.
             }
 #endif
             hr = S_OK;
             return;
         }
 
-#ifdef _DEBUG
+#if defined(ENABLE_TESTS)
         assert(initializeIfNeeded && "WPD backend calls must execute on the lifetime-MTA command worker.");
 #endif
         if (! initializeIfNeeded)
@@ -223,15 +224,33 @@ private:
     IStream* _stream             = nullptr;
 };
 
-std::wstring DeviceDisplayName(std::wstring_view friendlyName, std::wstring_view pnpId)
-{
-    const auto baseName = friendlyName.empty() ? L"MTP Device" : std::wstring(friendlyName);
-    return std::format(L"{} {}", baseName, MtpDeviceIdentitySuffix(pnpId));
-}
-
 std::wstring CaseFoldKey(std::wstring_view value)
 {
     return OrdinalString::FoldCaseInvariant(value);
+}
+
+// Device roots are plain friendly names (the identity is metadata on the root item). Two connected
+// devices with the same folded name get " (2)", " (3)", ... in PnP-id order so the roots stay
+// distinct for the session without leaking the identity into the path.
+void MakeDeviceDisplayNamesDistinct(std::vector<DeviceDescriptor>& devices)
+{
+    std::stable_sort(devices.begin(), devices.end(), [](const DeviceDescriptor& left, const DeviceDescriptor& right) {
+        return CaseFoldKey(left.pnpId) < CaseFoldKey(right.pnpId);
+    });
+
+    std::vector<std::wstring> takenKeys;
+    takenKeys.reserve(devices.size());
+    for (auto& device : devices)
+    {
+        std::wstring candidate = device.displayName;
+        unsigned int ordinal   = 2;
+        while (std::ranges::find(takenKeys, CaseFoldKey(candidate)) != takenKeys.end())
+        {
+            candidate = std::format(L"{} ({})", device.displayName, ordinal++);
+        }
+        takenKeys.push_back(CaseFoldKey(candidate));
+        device.displayName = std::move(candidate);
+    }
 }
 
 bool DesiredAccessIsCovered(DWORD cachedAccess, DWORD desiredAccess) noexcept
@@ -239,30 +258,9 @@ bool DesiredAccessIsCovered(DWORD cachedAccess, DWORD desiredAccess) noexcept
     return (cachedAccess & desiredAccess) == desiredAccess;
 }
 
-std::optional<std::wstring> ExtractDeviceHashToken(std::wstring_view value)
+[[nodiscard]] bool HasObjectIdentitySuffix(std::wstring_view value) noexcept
 {
-    constexpr std::wstring_view kPrefix = L"[devid:";
-    constexpr std::wstring_view kSuffix = L"]";
-
-    const size_t start = value.rfind(kPrefix);
-    if (start == std::wstring_view::npos)
-    {
-        return std::nullopt;
-    }
-
-    const size_t tokenStart = start + kPrefix.size();
-    const size_t tokenEnd   = value.find(kSuffix, tokenStart);
-    if (tokenEnd == std::wstring_view::npos || tokenEnd == tokenStart)
-    {
-        return std::nullopt;
-    }
-
-    std::wstring token(value.substr(tokenStart, tokenEnd - tokenStart));
-    for (auto& ch : token)
-    {
-        ch = static_cast<wchar_t>(::towupper(ch));
-    }
-    return token;
+    return value.ends_with(L"]") && (value.rfind(L" [puid:") != std::wstring_view::npos || value.rfind(L" [oid:") != std::wstring_view::npos);
 }
 
 HRESULT CreatePortableDeviceValues(wil::com_ptr<IPortableDeviceValues>& values)
@@ -359,7 +357,7 @@ HRESULT EnumerateDevices(std::vector<DeviceDescriptor>& devices)
         devices.push_back(DeviceDescriptor{
             .pnpId       = std::move(pnpId),
             .name        = friendlyName,
-            .displayName = DeviceDisplayName(friendlyName, rawId),
+            .displayName = MtpDeviceRootComponent(friendlyName),
         });
     }
 
@@ -1088,14 +1086,17 @@ struct SelfTestWpdOptions
     uint32_t readFileDelayMs = 0;
     bool sessionDeathOnce = false;
     bool changeFileSizeAfterFirstLookup = false;
+    bool replacePhotoAfterFirstLookup   = false; // R0c-OR2: another writer replaced the photo (new object id and PUID)
+    bool writable                       = false; // R0c-OR2: let the plugin reach the overwrite commit on this fixture
 };
 
 [[nodiscard]] DeviceDescriptor SelfTestDeviceDescriptor()
 {
+    constexpr std::wstring_view kPnpId = L"selftest-wpd-pnp-1";
     return DeviceDescriptor{
-        .pnpId       = L"selftest-wpd-pnp-1",
+        .pnpId       = std::wstring(kPnpId),
         .name        = L"Fake Phone",
-        .displayName = L"Fake Phone [devid:000000000000F00D]",
+        .displayName = L"Fake Phone",
     };
 }
 
@@ -1207,7 +1208,7 @@ public:
 
     MtpBackendInfo GetInfo() const noexcept override
     {
-        return {.readOnly = true, .supportsWrite = false, .liveWpd = false};
+        return {.readOnly = ! _options.writable, .supportsWrite = _options.writable, .liveWpd = false};
     }
 
     HRESULT EnumerateDevices(std::vector<DeviceDescriptor>& devices) noexcept override
@@ -1252,12 +1253,15 @@ public:
         {
             constexpr std::string_view original = "RedSalamander deterministic MTP fixture\r\n";
             constexpr std::string_view changed  = "RedSalamander refreshed MTP fixture payload\r\n";
-            const bool changedSize = _options.changeFileSizeAfterFirstLookup && _photoLookupCount++ != 0u;
+            const uint32_t lookupIndex = _photoLookupCount++;
+            const bool changedSize     = _options.changeFileSizeAfterFirstLookup && lookupIndex != 0u;
+            // R0c-OR2: after the first lookup the photo is a different object under the same name.
+            const bool replaced = _options.replacePhotoAfterFirstLookup && lookupIndex != 0u;
             items.push_back(SelfTestItem(L"photo001.txt",
-                                         L"selftest-photo-001",
+                                         replaced ? L"selftest-photo-002" : L"selftest-photo-001",
                                          FILE_ATTRIBUTE_READONLY,
                                          changedSize ? changed.size() : original.size(),
-                                         L"selftest-photo-001-puid"));
+                                         replaced ? L"selftest-photo-002-puid" : L"selftest-photo-001-puid"));
         }
         else
         {
@@ -1358,6 +1362,172 @@ HRESULT WritePortableDeviceStream(IStream* stream, DWORD optimalBufferSize, std:
     return S_OK;
 }
 
+[[nodiscard]] HRESULT RewindSourceFile(HANDLE sourceFile) noexcept
+{
+    if (sourceFile == nullptr || sourceFile == INVALID_HANDLE_VALUE)
+    {
+        return E_HANDLE;
+    }
+    LARGE_INTEGER start{};
+    return SetFilePointerEx(sourceFile, start, nullptr, FILE_BEGIN) != FALSE ? S_OK : HRESULT_FROM_WIN32(GetLastError());
+}
+
+HRESULT WritePortableDeviceStreamFromHandle(IStream* stream,
+                                            DWORD optimalBufferSize,
+                                            HANDLE sourceFile,
+                                            uint64_t expectedSizeBytes) noexcept
+{
+    if (stream == nullptr)
+    {
+        return E_POINTER;
+    }
+    RETURN_IF_FAILED(RewindSourceFile(sourceFile));
+
+    const DWORD chunkSize = std::clamp(
+        optimalBufferSize == 0u ? kWriteChunkDefault : optimalBufferSize, kWriteChunkMinimum, kWriteChunkMaximum);
+    std::vector<std::byte> buffer(chunkSize);
+    uint64_t transferred = 0u;
+    while (transferred < expectedSizeBytes)
+    {
+        const DWORD requested = static_cast<DWORD>((std::min)(
+            static_cast<uint64_t>(buffer.size()), expectedSizeBytes - transferred));
+        DWORD read = 0u;
+        if (ReadFile(sourceFile, buffer.data(), requested, &read, nullptr) == FALSE)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        if (read == 0u)
+        {
+            return HRESULT_FROM_WIN32(ERROR_HANDLE_EOF);
+        }
+
+        ULONG offset = 0u;
+        while (offset < read)
+        {
+            ULONG written = 0u;
+            const HRESULT writeHr = stream->Write(buffer.data() + offset, read - offset, &written);
+            if (FAILED(writeHr))
+            {
+                return writeHr;
+            }
+            if (written == 0u || written > read - offset)
+            {
+                return HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
+            }
+            offset += written;
+        }
+        transferred += read;
+    }
+
+    Debug::Perf::EmitValue(L"mtp.writer.memory_high_water_bytes", buffer.size(), S_OK);
+    return S_OK;
+}
+
+HRESULT ComparePortableDeviceStreamWithHandle(IStream* stream,
+                                              DWORD optimalBufferSize,
+                                              HANDLE sourceFile,
+                                              uint64_t expectedSizeBytes) noexcept
+{
+    if (stream == nullptr)
+    {
+        return E_POINTER;
+    }
+    RETURN_IF_FAILED(RewindSourceFile(sourceFile));
+
+    const DWORD chunkSize = std::clamp(
+        optimalBufferSize == 0u ? kReadChunkDefault : optimalBufferSize, kReadChunkMinimum, kReadChunkMaximum);
+    std::vector<std::byte> deviceBuffer(chunkSize);
+    std::vector<std::byte> sourceBuffer(chunkSize);
+    uint64_t compared = 0u;
+    for (;;)
+    {
+        ULONG deviceRead = 0u;
+        const HRESULT deviceHr = stream->Read(deviceBuffer.data(), static_cast<ULONG>(deviceBuffer.size()), &deviceRead);
+        if (FAILED(deviceHr))
+        {
+            return deviceHr;
+        }
+        if (deviceRead == 0u)
+        {
+            break;
+        }
+
+        DWORD sourceRead = 0u;
+        if (ReadFile(sourceFile, sourceBuffer.data(), deviceRead, &sourceRead, nullptr) == FALSE)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        if (sourceRead != deviceRead || ! std::equal(deviceBuffer.begin(), deviceBuffer.begin() + deviceRead, sourceBuffer.begin()))
+        {
+            return HRESULT_FROM_WIN32(ERROR_CRC);
+        }
+        compared += deviceRead;
+        if (compared > expectedSizeBytes)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CRC);
+        }
+    }
+    Debug::Perf::EmitValue(L"mtp.verify.memory_high_water_bytes", 2ull * chunkSize, S_OK);
+    return compared == expectedSizeBytes ? S_OK : HRESULT_FROM_WIN32(ERROR_CRC);
+}
+
+HRESULT CopyPortableDeviceStream(IStream* source,
+                                 DWORD sourceOptimalBufferSize,
+                                 IStream* destination,
+                                 DWORD destinationOptimalBufferSize,
+                                 uint64_t expectedSizeBytes) noexcept
+{
+    if (source == nullptr || destination == nullptr)
+    {
+        return E_POINTER;
+    }
+
+    const DWORD sourceChunk = std::clamp(
+        sourceOptimalBufferSize == 0u ? kReadChunkDefault : sourceOptimalBufferSize, kReadChunkMinimum, kReadChunkMaximum);
+    const DWORD destinationChunk = std::clamp(
+        destinationOptimalBufferSize == 0u ? kWriteChunkDefault : destinationOptimalBufferSize, kWriteChunkMinimum, kWriteChunkMaximum);
+    const DWORD chunkSize = (std::min)(sourceChunk, destinationChunk);
+    std::vector<std::byte> buffer(chunkSize);
+    uint64_t transferred = 0u;
+    for (;;)
+    {
+        ULONG bytesRead = 0u;
+        const HRESULT readHr = source->Read(buffer.data(), static_cast<ULONG>(buffer.size()), &bytesRead);
+        if (FAILED(readHr))
+        {
+            return readHr;
+        }
+        if (bytesRead == 0u)
+        {
+            break;
+        }
+
+        ULONG offset = 0u;
+        while (offset < bytesRead)
+        {
+            ULONG written = 0u;
+            const HRESULT writeHr = destination->Write(buffer.data() + offset, bytesRead - offset, &written);
+            if (FAILED(writeHr))
+            {
+                return writeHr;
+            }
+            if (written == 0u || written > bytesRead - offset)
+            {
+                return HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
+            }
+            offset += written;
+        }
+        transferred += bytesRead;
+        if (transferred > expectedSizeBytes)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CRC);
+        }
+    }
+
+    Debug::Perf::EmitValue(L"mtp.transfer.bridge_buffer_high_water_bytes", buffer.size(), S_OK);
+    return transferred == expectedSizeBytes ? S_OK : HRESULT_FROM_WIN32(ERROR_CRC);
+}
+
 HRESULT DeleteObjectById(const wil::com_ptr<IPortableDeviceContent>& content, std::wstring_view objectId, bool recursive)
 {
     wil::com_ptr<IPortableDevicePropVariantCollection> objectIds;
@@ -1433,6 +1603,20 @@ public:
         {
             RequestWpdCancel(*_cancelState);
         }
+    }
+
+    void SetConnectionDevice(std::wstring_view rootName, std::wstring_view pnpId) noexcept override
+    {
+        std::lock_guard lock(_connectionMutex);
+        _connectionRootName.assign(rootName);
+        _connectionPnpId.assign(pnpId);
+    }
+
+    void RefreshPathOccupancy(std::wstring_view path) noexcept override
+    {
+        // R0c-OR2: drop the cached leaf (and anything below it). The parent stays cached, so the
+        // next resolve enumerates the parent live and sees the current occupant, or none.
+        InvalidatePathCacheSubtree(path);
     }
 
     HRESULT EnumerateDirectory(std::wstring_view path, std::vector<MtpItem>& items) noexcept override
@@ -1632,6 +1816,45 @@ public:
         return UploadFileObjectCached(path, bytes);
     }
 
+    HRESULT WriteFileFromHandle(std::wstring_view path, HANDLE sourceFile, uint64_t sizeBytes, bool allowOverwrite) noexcept override
+    {
+        static_cast<void>(allowOverwrite);
+
+        const ComInitialization com;
+        if (! com.IsUsable())
+        {
+            return com.hr;
+        }
+        return UploadFileObjectFromHandleCached(path, sourceFile, sizeBytes);
+    }
+
+    HRESULT CompareFileWithHandle(std::wstring_view path, HANDLE sourceFile, uint64_t sizeBytes) noexcept override
+    {
+        const ComInitialization com;
+        if (! com.IsUsable())
+        {
+            return com.hr;
+        }
+
+        const std::wstring normalized = NormalizeMtpPath(path);
+        ResolvedObject resolved;
+        RETURN_IF_FAILED(ResolvePathCached(normalized, resolved, kReadAccess));
+        if ((resolved.item.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u)
+        {
+            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        }
+
+        ScopedActiveWpdContent activeContent(_cancelState.get(), resolved.content);
+        wil::com_ptr<IPortableDeviceResources> resources;
+        RETURN_IF_FAILED(resolved.content->Transfer(resources.put()));
+        wil::com_ptr<IStream> stream;
+        DWORD optimalBufferSize = 0u;
+        const std::wstring objectId(resolved.objectId);
+        RETURN_IF_FAILED(resources->GetStream(objectId.c_str(), WPD_RESOURCE_DEFAULT, STGM_READ, &optimalBufferSize, stream.put()));
+        ScopedActiveWpdStream activeStream(_cancelState.get(), stream);
+        return ComparePortableDeviceStreamWithHandle(stream.get(), optimalBufferSize, sourceFile, sizeBytes);
+    }
+
     HRESULT CreateDirectory(std::wstring_view path) noexcept override
     {
         const ComInitialization com;
@@ -1656,6 +1879,52 @@ public:
         if (resolved.root || resolved.deviceRoot)
         {
             return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        }
+
+        ScopedActiveWpdContent activeContent(_cancelState.get(), resolved.content);
+        if (! recursive && (resolved.item.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+        {
+            std::vector<std::wstring> children;
+            const HRESULT childrenHr = EnumerateObjectIds(resolved.content, resolved.objectId, children);
+            if (FAILED(childrenHr))
+            {
+                return FailAndMaybeInvalidateCaches(childrenHr, resolved.pnpId);
+            }
+            if (! children.empty())
+            {
+                return HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY);
+            }
+        }
+
+        const HRESULT deleteHr = DeleteObjectById(resolved.content, resolved.objectId, recursive);
+        if (SUCCEEDED(deleteHr))
+        {
+            InvalidatePathCacheSubtree(path);
+        }
+        return FAILED(deleteHr) ? FailAndMaybeInvalidateCaches(deleteHr, resolved.pnpId) : S_OK;
+    }
+
+    HRESULT DeleteItemByIdentity(std::wstring_view path, std::wstring_view expectedPersistentId, bool recursive) noexcept override
+    {
+        const ComInitialization com;
+        if (! com.IsUsable())
+        {
+            return com.hr;
+        }
+
+        // R0c-OR3: a destructive decision never trusts the path cache. Drop the leaf, resolve it live,
+        // and delete by the resolved object id only when the persistent id is the one the caller saw.
+        InvalidatePathCacheSubtree(path);
+        ResolvedObject resolved;
+        RETURN_IF_FAILED(ResolvePathCached(path, resolved, kWriteAccess));
+        if (resolved.root || resolved.deviceRoot)
+        {
+            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        }
+        if (expectedPersistentId.empty() || resolved.item.persistentId != expectedPersistentId)
+        {
+            Debug::Perf::EmitValue(L"mtp.overwrite.delete_identity_mismatch", 1u, HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
         }
 
         ScopedActiveWpdContent activeContent(_cancelState.get(), resolved.content);
@@ -1887,7 +2156,9 @@ private:
     HRESULT EnumerateDevicesForBackend(std::vector<DeviceDescriptor>& devices) noexcept
     {
         _deviceEnumerations.fetch_add(1u, std::memory_order_acq_rel);
-        return _operations->EnumerateDevices(devices);
+        RETURN_IF_FAILED(_operations->EnumerateDevices(devices));
+        MakeDeviceDisplayNamesDistinct(devices);
+        return S_OK;
     }
 
     HRESULT OpenDeviceSessionForBackend(std::wstring_view pnpId,
@@ -1916,13 +2187,48 @@ private:
         std::vector<MtpItem> items;
         RETURN_IF_FAILED(EnumerateObjectItemsForBackend(content, parentObjectId, items));
 
+        const MtpItem* exactMatch = nullptr;
         for (const auto& item : items)
         {
-            if (EqualsPathComponent(item.name, childName))
+            if (item.name == childName)
             {
-                child = item;
-                return S_OK;
+                if (exactMatch != nullptr)
+                {
+                    Debug::Perf::EmitValue(L"mtp.path.ambiguous_resolve_failures", 1u, HRESULT_FROM_WIN32(ERROR_DUP_NAME));
+                    return HRESULT_FROM_WIN32(ERROR_DUP_NAME);
+                }
+                exactMatch = &item;
             }
+        }
+        if (exactMatch != nullptr)
+        {
+            child = *exactMatch;
+            return S_OK;
+        }
+
+        if (HasObjectIdentitySuffix(childName))
+        {
+            return HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
+        }
+
+        const MtpItem* foldedMatch = nullptr;
+        for (const auto& item : items)
+        {
+            if (! EqualsPathComponent(item.name, childName))
+            {
+                continue;
+            }
+            if (foldedMatch != nullptr)
+            {
+                Debug::Perf::EmitValue(L"mtp.path.ambiguous_resolve_failures", 1u, HRESULT_FROM_WIN32(ERROR_DUP_NAME));
+                return HRESULT_FROM_WIN32(ERROR_DUP_NAME);
+            }
+            foldedMatch = &item;
+        }
+        if (foldedMatch != nullptr)
+        {
+            child = *foldedMatch;
+            return S_OK;
         }
 
         return HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
@@ -1940,27 +2246,44 @@ private:
         std::vector<DeviceDescriptor> devices;
         RETURN_IF_FAILED(EnumerateDevicesForBackend(devices));
 
-        const std::optional<std::wstring> requestedHash = ExtractDeviceHashToken(displayName);
-        for (const auto& device : devices)
+        // A connection profile names its root by friendly name and keeps the device identity as
+        // metadata; for that root the saved identity wins over the name, so a renamed or same-named
+        // device still opens the device the profile was saved for. Every other root resolves by name.
+        const DeviceDescriptor* matchedDevice = nullptr;
+        if (const ConnectionDevice connection = GetConnectionDevice();
+            ! connection.pnpId.empty() && OrdinalString::EqualsNoCase(displayName, connection.rootName))
         {
-            if (OrdinalString::EqualsNoCase(device.displayName, displayName))
+            for (const auto& device : devices)
             {
-                descriptor = device;
-                _deviceDescriptorByDisplayKey[requestedKey]                     = descriptor;
-                _deviceDescriptorByDisplayKey[CaseFoldKey(descriptor.displayName)] = descriptor;
-                return S_OK;
-            }
-            if (requestedHash.has_value())
-            {
-                const std::wstring deviceHash = FormatMtpIdentityHash(device.pnpId);
-                if (OrdinalString::EqualsNoCase(deviceHash, requestedHash.value()))
+                if (OrdinalString::EqualsNoCase(device.pnpId, connection.pnpId))
                 {
-                    descriptor = device;
-                    _deviceDescriptorByDisplayKey[requestedKey]                     = descriptor;
-                    _deviceDescriptorByDisplayKey[CaseFoldKey(descriptor.displayName)] = descriptor;
-                    return S_OK;
+                    matchedDevice = &device;
+                    break;
                 }
             }
+        }
+        if (matchedDevice == nullptr)
+        {
+            for (const auto& device : devices)
+            {
+                if (! OrdinalString::EqualsNoCase(device.displayName, displayName))
+                {
+                    continue;
+                }
+                if (matchedDevice != nullptr)
+                {
+                    Debug::Perf::EmitValue(L"mtp.path.ambiguous_resolve_failures", 1u, HRESULT_FROM_WIN32(ERROR_DUP_NAME));
+                    return HRESULT_FROM_WIN32(ERROR_DUP_NAME);
+                }
+                matchedDevice = &device;
+            }
+        }
+        if (matchedDevice != nullptr)
+        {
+            descriptor = *matchedDevice;
+            _deviceDescriptorByDisplayKey[requestedKey] = descriptor;
+            _deviceDescriptorByDisplayKey[CaseFoldKey(descriptor.displayName)] = descriptor;
+            return S_OK;
         }
 
         return HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
@@ -2352,6 +2675,10 @@ private:
     {
         ResolvedDestination destination;
         RETURN_IF_FAILED(ResolveDestinationPathCached(path, destination, kWriteAccess));
+        if (! destination.parent.content)
+        {
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED); // a session without content cannot upload
+        }
         ScopedActiveWpdContent activeContent(_cancelState.get(), destination.parent.content);
         RETURN_IF_FAILED(EnsureDestinationDoesNotExistCached(destination));
 
@@ -2396,6 +2723,57 @@ private:
         return S_OK;
     }
 
+    HRESULT UploadFileObjectFromHandleCached(std::wstring_view path, HANDLE sourceFile, uint64_t sizeBytes) noexcept
+    {
+        ResolvedDestination destination;
+        RETURN_IF_FAILED(ResolveDestinationPathCached(path, destination, kWriteAccess));
+        if (! destination.parent.content)
+        {
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED); // a session without content cannot upload
+        }
+        ScopedActiveWpdContent activeContent(_cancelState.get(), destination.parent.content);
+        RETURN_IF_FAILED(EnsureDestinationDoesNotExistCached(destination));
+
+        wil::com_ptr<IPortableDeviceValues> values;
+        RETURN_IF_FAILED(CreateObjectValues(destination.parent.objectId,
+                                            destination.leafName,
+                                            WPD_CONTENT_TYPE_GENERIC_FILE,
+                                            WPD_OBJECT_FORMAT_UNSPECIFIED,
+                                            sizeBytes,
+                                            true,
+                                            values));
+
+        wil::com_ptr<IStream> stream;
+        DWORD optimalBufferSize = 0u;
+        PWSTR rawCookie = nullptr;
+        auto freeCookie = wil::scope_exit([&rawCookie]() noexcept
+        {
+            if (rawCookie != nullptr)
+            {
+                CoTaskMemFree(rawCookie);
+            }
+        });
+        RETURN_IF_FAILED(destination.parent.content->CreateObjectWithPropertiesAndData(
+            values.get(), stream.put(), &optimalBufferSize, &rawCookie));
+        ScopedActiveWpdStream activeStream(_cancelState.get(), stream);
+
+        bool committed = false;
+        auto abortWrite = wil::scope_exit([&]() noexcept
+        {
+            if (! committed)
+            {
+                AbortPortableDeviceWriteStream(stream.get());
+            }
+        });
+        RETURN_IF_FAILED(WritePortableDeviceStreamFromHandle(stream.get(), optimalBufferSize, sourceFile, sizeBytes));
+        RETURN_IF_FAILED(stream->Commit(STGC_DEFAULT));
+        committed = true;
+
+        InvalidatePathCacheSubtree(destination.normalizedPath);
+        Debug::Perf::EmitValue(L"mtp.transfer.write_bytes", sizeBytes, S_OK);
+        return S_OK;
+    }
+
     HRESULT CreateFolderObjectCached(std::wstring_view path) noexcept
     {
         ResolvedDestination destination;
@@ -2426,18 +2804,63 @@ private:
 
     HRESULT CopyOrMoveFileByTransferCached(std::wstring_view sourcePath, const ResolvedObject& source, const ResolvedDestination& destination, bool move) noexcept
     {
-        std::vector<std::byte> bytes;
+        ScopedActiveWpdContent activeSource(_cancelState.get(), source.content);
+        ScopedActiveWpdContent activeDestination(_cancelState.get(), destination.parent.content);
+        RETURN_IF_FAILED(EnsureDestinationDoesNotExistCached(destination));
+
+        wil::com_ptr<IPortableDeviceResources> sourceResources;
+        RETURN_IF_FAILED(source.content->Transfer(sourceResources.put()));
+        wil::com_ptr<IStream> sourceStream;
+        DWORD sourceOptimalBufferSize = 0u;
+        const std::wstring sourceObjectId(source.objectId);
+        RETURN_IF_FAILED(sourceResources->GetStream(
+            sourceObjectId.c_str(), WPD_RESOURCE_DEFAULT, STGM_READ, &sourceOptimalBufferSize, sourceStream.put()));
+        ScopedActiveWpdStream activeSourceStream(_cancelState.get(), sourceStream);
+
+        wil::com_ptr<IPortableDeviceValues> values;
+        RETURN_IF_FAILED(CreateObjectValues(destination.parent.objectId,
+                                            destination.leafName,
+                                            WPD_CONTENT_TYPE_GENERIC_FILE,
+                                            WPD_OBJECT_FORMAT_UNSPECIFIED,
+                                            source.item.sizeBytes,
+                                            true,
+                                            values));
+
+        wil::com_ptr<IStream> destinationStream;
+        DWORD destinationOptimalBufferSize = 0u;
+        PWSTR rawCookie = nullptr;
+        auto freeCookie = wil::scope_exit([&rawCookie]() noexcept
         {
-            ScopedActiveWpdContent activeSource(_cancelState.get(), source.content);
-            RETURN_IF_FAILED(ReadPortableDeviceStream(source.content, source.objectId, source.item.sizeBytes, bytes));
-        }
-        RETURN_IF_FAILED(UploadFileObjectCached(destination.normalizedPath, bytes));
+            if (rawCookie != nullptr)
+            {
+                CoTaskMemFree(rawCookie);
+            }
+        });
+        RETURN_IF_FAILED(destination.parent.content->CreateObjectWithPropertiesAndData(
+            values.get(), destinationStream.put(), &destinationOptimalBufferSize, &rawCookie));
+        ScopedActiveWpdStream activeDestinationStream(_cancelState.get(), destinationStream);
+
+        bool committed = false;
+        auto abortWrite = wil::scope_exit([&]() noexcept
+        {
+            if (! committed)
+            {
+                AbortPortableDeviceWriteStream(destinationStream.get());
+            }
+        });
+        RETURN_IF_FAILED(CopyPortableDeviceStream(sourceStream.get(),
+                                                  sourceOptimalBufferSize,
+                                                  destinationStream.get(),
+                                                  destinationOptimalBufferSize,
+                                                  source.item.sizeBytes));
+        RETURN_IF_FAILED(destinationStream->Commit(STGC_DEFAULT));
+        committed = true;
+        InvalidatePathCacheSubtree(destination.normalizedPath);
 
         if (move)
         {
-            ScopedActiveWpdContent activeSource(_cancelState.get(), source.content);
             const HRESULT deleteHr = DeleteObjectById(source.content, source.objectId, false);
-            Debug::Perf::EmitValue(L"mtp.transfer.move_fallback_bytes", static_cast<uint64_t>(bytes.size()), deleteHr);
+            Debug::Perf::EmitValue(L"mtp.transfer.move_fallback_bytes", source.item.sizeBytes, deleteHr);
             if (SUCCEEDED(deleteHr))
             {
                 InvalidatePathCacheSubtree(sourcePath);
@@ -2449,14 +2872,29 @@ private:
         }
         else
         {
-            Debug::Perf::EmitValue(L"mtp.transfer.copy_bytes", static_cast<uint64_t>(bytes.size()), S_OK);
+            Debug::Perf::EmitValue(L"mtp.transfer.copy_bytes", source.item.sizeBytes, S_OK);
         }
 
         return S_OK;
     }
 
+    struct ConnectionDevice
+    {
+        std::wstring rootName;
+        std::wstring pnpId;
+    };
+
+    [[nodiscard]] ConnectionDevice GetConnectionDevice() const
+    {
+        std::lock_guard lock(_connectionMutex);
+        return ConnectionDevice{.rootName = _connectionRootName, .pnpId = _connectionPnpId};
+    }
+
     std::shared_ptr<WpdCancellationState> _cancelState = std::make_shared<WpdCancellationState>();
     std::unique_ptr<WpdDeviceOperations> _operations;
+    mutable std::mutex _connectionMutex;
+    std::wstring _connectionRootName;
+    std::wstring _connectionPnpId;
     std::unordered_map<std::wstring, DeviceDescriptor> _deviceDescriptorByDisplayKey;
     std::unordered_map<std::wstring, CachedWpdSession> _sessionsByPnpId;
     std::unordered_map<std::wstring, CachedResolvedPath> _pathCache;
@@ -2696,7 +3134,7 @@ std::unique_ptr<IMtpBackend> CreateWpdMtpBackend() noexcept
     return std::make_unique<WpdMtpBackend>(std::make_unique<LiveWpdDeviceOperations>());
 }
 
-#ifdef _DEBUG
+#if defined(ENABLE_TESTS)
 HRESULT CreateSelfTestWpdMtpBackend(std::string_view optionsJsonUtf8, std::unique_ptr<IMtpBackend>& backend) noexcept
 {
     backend.reset();
@@ -2747,6 +3185,22 @@ HRESULT CreateSelfTestWpdMtpBackend(std::string_view optionsJsonUtf8, std::uniqu
                     return E_INVALIDARG;
                 }
                 options.changeFileSizeAfterFirstLookup = yyjson_get_bool(value) != 0;
+            }
+            else if (std::string_view(keyText) == "replacePhotoAfterFirstLookup")
+            {
+                if (! yyjson_is_bool(value))
+                {
+                    return E_INVALIDARG;
+                }
+                options.replacePhotoAfterFirstLookup = yyjson_get_bool(value) != 0;
+            }
+            else if (std::string_view(keyText) == "writable")
+            {
+                if (! yyjson_is_bool(value))
+                {
+                    return E_INVALIDARG;
+                }
+                options.writable = yyjson_get_bool(value) != 0;
             }
             else
             {

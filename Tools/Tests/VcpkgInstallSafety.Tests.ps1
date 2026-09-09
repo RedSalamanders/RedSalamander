@@ -2,10 +2,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$testRunPlanScript = Join-Path $repoRoot 'Tools\TestRunPlan.ps1'
-$helperScript = Join-Path $repoRoot 'Tools\VcpkgInstallSafety.ps1'
-. $testRunPlanScript
-. $helperScript
+$testRunPlanModule = Join-Path $repoRoot 'Tools\Modules\Testing\TestRunPlan.psm1'
+$helperModule = Join-Path $repoRoot 'Tools\Modules\Build\VcpkgInstallSafety.psm1'
+Import-Module $testRunPlanModule -Force -ErrorAction Stop
+Import-Module $helperModule -Force -ErrorAction Stop
 
 function New-RSTemporaryVcpkgInstallSafetyRoot {
     return (New-RSTestSandboxScratchDirectory `
@@ -31,6 +31,37 @@ function Assert-ThrowsTerminatingError {
 }
 
 Describe 'Vcpkg install safety helper' {
+    It 'contains vcpkg execution and acquires selected platform dependency locks in stable order' {
+        $scriptPath = Join-Path $repoRoot 'vcpkg-install.ps1'
+        $tokens = $null
+        $parseErrors = $null
+        $scriptAst = [System.Management.Automation.Language.Parser]::ParseFile(
+            $scriptPath,
+            [ref]$tokens,
+            [ref]$parseErrors)
+        @($parseErrors).Count | Should Be 0
+        $source = Get-Content -LiteralPath $scriptPath -Raw
+
+        $source | Should Match "Import-Module .*ArtifactOperationLock\.psm1"
+        $source | Should Match "Import-Module .*SanitizedEnvironment\.psm1"
+        $source | Should Match "coordination = 'shared-dependency'"
+        $source | Should Match 'Sort-Object \{ if \(\$_ -eq ''x64''\) \{ 0 \} else \{ 1 \} \} -Unique'
+        $source | Should Match 'Invoke-RSProcess\s+`\r?\n\s+-FilePath \$vcpkgExePath'
+        $source | Should Not Match '& \$vcpkgExePath\s+install'
+        $source | Should Match '\[string\]\$VcpkgRoot\s*=\s*\$null'
+        $source | Should Match 'foreach \(\$requiredDirectory in @\(''ports'', ''versions''\)\)'
+        $source | Should Match '\$vcpkgArguments\.Add\("--vcpkg-root=\$vcpkgRootPath"\)'
+        $source | Should Match 'Assert-RSVcpkgManifestVersionConstraintsAvailable[\s\S]*?-RegistryRoot \$vcpkgRegistryRoot'
+        $source.IndexOf('Assert-RSVcpkgManifestVersionConstraintsAvailable') | Should BeLessThan $source.IndexOf('$sharedDependencyLocks =')
+        $source | Should Match '-Arguments \$vcpkgArguments\.ToArray\(\)'
+        $source | Should Match '\$installBaseRoot\s*=.*\.build\\vcpkg_installed'
+        $source | Should Match '\$platformScopeName\s*=\s*\(Get-RSVcpkgCoordinationPlatform -TripletName \$triplet\)\.ToLowerInvariant\(\)'
+        $source | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$installBaseRoot -Child \$platformScopeName'
+        $source | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$platformInstallRoot -Child \$triplet'
+        $source | Should Match 'Assert-RSNoResidualArtifactToolProcesses[\s\S]*?-Scope \$sharedDependencyScope'
+        $source | Should Match 'finally\s*\{[\s\S]*?Exit-RSArtifactOperationLock'
+    }
+
     It 'accepts vcpkg triplet leaf names' {
         Assert-RSVcpkgTripletLeafName -Triplet 'x64-windows' | Should Be 'x64-windows'
         Assert-RSVcpkgTripletLeafName -Triplet 'arm64-windows' | Should Be 'arm64-windows'
@@ -63,6 +94,110 @@ Describe 'Vcpkg install safety helper' {
         } finally {
             Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
         }
+    }
+
+    It 'accepts manifest version floors present in the selected registry' {
+        $root = New-RSTemporaryVcpkgInstallSafetyRoot
+        try {
+            $manifestPath = Join-Path $root 'vcpkg.json'
+            $registryRoot = Join-Path $root 'registry'
+            $versionDirectory = Join-Path $registryRoot 'versions\a-'
+            New-Item -ItemType Directory -Path $versionDirectory -Force | Out-Null
+            [System.IO.File]::WriteAllText($manifestPath, '{"dependencies":[{"name":"alpha","version>=":"1.2.3#2"}]}')
+            [System.IO.File]::WriteAllText(
+                (Join-Path $versionDirectory 'alpha.json'),
+                '{"versions":[{"version-semver":"1.2.3","port-version":2,"git-tree":"0123456789abcdef"}]}')
+
+            { Assert-RSVcpkgManifestVersionConstraintsAvailable -ManifestPath $manifestPath -RegistryRoot $registryRoot } |
+                Should Not Throw
+        } finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'rejects a manifest floor absent from the selected registry before install' {
+        $root = New-RSTemporaryVcpkgInstallSafetyRoot
+        try {
+            $manifestPath = Join-Path $root 'vcpkg.json'
+            $registryRoot = Join-Path $root 'registry'
+            $versionDirectory = Join-Path $registryRoot 'versions\a-'
+            New-Item -ItemType Directory -Path $versionDirectory -Force | Out-Null
+            [System.IO.File]::WriteAllText($manifestPath, '{"dependencies":[{"name":"alpha","version>=":"1.2.4"}]}')
+            [System.IO.File]::WriteAllText(
+                (Join-Path $versionDirectory 'alpha.json'),
+                '{"versions":[{"version-semver":"1.2.3","port-version":2,"git-tree":"0123456789abcdef"}]}')
+
+            $errorMessage = $null
+            try {
+                Assert-RSVcpkgManifestVersionConstraintsAvailable -ManifestPath $manifestPath -RegistryRoot $registryRoot
+            } catch {
+                $errorMessage = $_.Exception.Message
+            }
+
+            $errorMessage | Should Match 'Update vcpkg\.json builtin-baseline, dependency floors, and exact overrides together'
+            $errorMessage | Should Match 'alpha >= 1\.2\.4'
+        } finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'accepts an exact manifest override present in the selected registry' {
+        $root = New-RSTemporaryVcpkgInstallSafetyRoot
+        try {
+            $manifestPath = Join-Path $root 'vcpkg.json'
+            $registryRoot = Join-Path $root 'registry'
+            $versionDirectory = Join-Path $registryRoot 'versions\a-'
+            New-Item -ItemType Directory -Path $versionDirectory -Force | Out-Null
+            [System.IO.File]::WriteAllText(
+                $manifestPath,
+                '{"dependencies":[{"name":"alpha","version>=":"1.2.3"}],"overrides":[{"name":"alpha","version":"1.2.3"}]}')
+            [System.IO.File]::WriteAllText(
+                (Join-Path $versionDirectory 'alpha.json'),
+                '{"versions":[{"version":"1.2.5","port-version":0,"git-tree":"fedcba9876543210"},{"version":"1.2.3","port-version":0,"git-tree":"0123456789abcdef"}]}')
+
+            { Assert-RSVcpkgManifestVersionConstraintsAvailable -ManifestPath $manifestPath -RegistryRoot $registryRoot } |
+                Should Not Throw
+        } finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'rejects an exact manifest override absent from the selected registry' {
+        $root = New-RSTemporaryVcpkgInstallSafetyRoot
+        try {
+            $manifestPath = Join-Path $root 'vcpkg.json'
+            $registryRoot = Join-Path $root 'registry'
+            $versionDirectory = Join-Path $registryRoot 'versions\a-'
+            New-Item -ItemType Directory -Path $versionDirectory -Force | Out-Null
+            [System.IO.File]::WriteAllText(
+                $manifestPath,
+                '{"dependencies":[{"name":"alpha","version>=":"1.2.3"}],"overrides":[{"name":"alpha","version":"1.2.3"}]}')
+            [System.IO.File]::WriteAllText(
+                (Join-Path $versionDirectory 'alpha.json'),
+                '{"versions":[{"version":"1.2.5","port-version":0,"git-tree":"fedcba9876543210"}]}')
+
+            $errorMessage = $null
+            try {
+                Assert-RSVcpkgManifestVersionConstraintsAvailable -ManifestPath $manifestPath -RegistryRoot $registryRoot
+            } catch {
+                $errorMessage = $_.Exception.Message
+            }
+
+            $errorMessage | Should Match 'alpha override 1\.2\.3'
+        } finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'keeps the audited AWS SDK serializer dependency on one exact override' {
+        $manifest = Get-Content -LiteralPath (Join-Path $repoRoot 'vcpkg.json') -Raw | ConvertFrom-Json
+        $dependency = @($manifest.dependencies | Where-Object { $_.name -eq 'aws-sdk-cpp' })
+        $override = @($manifest.overrides | Where-Object { $_.name -eq 'aws-sdk-cpp' })
+
+        $dependency.Count | Should Be 1
+        $dependency[0].'version>=' | Should Be '1.11.840'
+        $override.Count | Should Be 1
+        $override[0].version | Should Be '1.11.840'
     }
 
     It 'merges a single source file while StrictMode is active' {

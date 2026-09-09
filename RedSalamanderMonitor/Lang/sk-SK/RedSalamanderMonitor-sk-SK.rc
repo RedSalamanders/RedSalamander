@@ -20,8 +20,8 @@ BEGIN
         MENUITEM "&Kopírovať\tCtrl+C",               IDM_EDIT_COPY
         MENUITEM SEPARATOR
         MENUITEM "&Nájsť...\tCtrl+F",            IDM_EDIT_FIND
-        MENUITEM "&Nájsť ďalší\tF3",              IDM_EDIT_FIND_NEXT
-        MENUITEM "&Nájsť predchádzajúci\tShift+F3",    IDM_EDIT_FIND_PREV
+        MENUITEM "N&ájsť ďalší\tF3",              IDM_EDIT_FIND_NEXT
+        MENUITEM "Ná&jsť predchádzajúci\tShift+F3",    IDM_EDIT_FIND_PREV
     END
     POPUP "&Zobrazenie"
     BEGIN
@@ -33,32 +33,31 @@ BEGIN
             MENUITEM "&Vysoký kontrast (systém)",     IDM_VIEW_THEME_HIGH_CONTRAST, GRAYED
             MENUITEM SEPARATOR
             MENUITEM "&Systém",                     IDM_VIEW_THEME_SYSTEM
-            MENUITEM "&Svetlý",                      IDM_VIEW_THEME_LIGHT
+            MENUITEM "S&vetlý",                      IDM_VIEW_THEME_LIGHT
             MENUITEM "&Tmavý",                       IDM_VIEW_THEME_DARK
             MENUITEM "&Dúha",                    IDM_VIEW_THEME_RAINBOW
-            MENUITEM "&Vysoký kontrast (aplikácia)",        IDM_VIEW_THEME_HIGH_CONTRAST_APP
+            MENUITEM "V&ysoký kontrast (aplikácia)",        IDM_VIEW_THEME_HIGH_CONTRAST_APP
         END
     END
-    POPUP "&Možnosť"
+    POPUP "&Možnosti"
     BEGIN
-        MENUITEM "&Vždy na vrchole",              IDM_OPTION_TOP
-        MENUITEM "&Automatické posúvanie\tEnd",           IDM_OPTION_AUTO_SCROLL
-        MENUITEM SEPARATOR
-        MENUITEM "&Zobraziť ID procesu/ID vlákna",  IDM_OPTION_ID
+        MENUITEM "&Automatické posúvanie\tEnd", IDM_OPTION_AUTO_SCROLL
+        MENUITEM "&Zobraziť ID procesu/ID vlákna", IDM_OPTION_ID
+        MENUITEM "Vždy na &vrchu", IDM_OPTION_TOP
         MENUITEM SEPARATOR
         POPUP "&Aktívny filter"
         BEGIN
-            MENUITEM "&Zobraziť text",              IDM_FILTER_TEXT, CHECKED
-            MENUITEM "&Zobraziť chyby",            IDM_FILTER_ERROR, CHECKED
-            MENUITEM "&Zobraziť upozornenia",          IDM_FILTER_WARNING, CHECKED
-            MENUITEM "&Zobraziť informácie",              IDM_FILTER_INFO, CHECKED
-            MENUITEM "&Zobraziť Perf",              IDM_FILTER_PERF, CHECKED
-            MENUITEM "&Zobraziť ladenie",             IDM_FILTER_DEBUG, CHECKED
+            MENUITEM "&Chyba", IDM_FILTER_ERROR, CHECKED
+            MENUITEM "&Upozornenie", IDM_FILTER_WARNING, CHECKED
+            MENUITEM "&Informácia", IDM_FILTER_INFO, CHECKED
+            MENUITEM "&Výkon", IDM_FILTER_PERF, CHECKED
+            MENUITEM "&Ladenie", IDM_FILTER_DEBUG, CHECKED
+            MENUITEM "&Trasovanie", IDM_FILTER_TEXT, CHECKED
             MENUITEM SEPARATOR
-            MENUITEM "Prednastavené: Len chyby",     IDM_FILTER_PRESET_ERRORS_ONLY
-            MENUITEM "Prednastavené: Chyby+Upozornenia", IDM_FILTER_PRESET_ERRORS_WARNINGS
-            MENUITEM "Prednastavené: chyby + výkon + ladenie", IDM_FILTER_PRESET_ERRORS_DEBUG
-            MENUITEM "Prednastavené: Všetky typy",       IDM_FILTER_PRESET_ALL
+            MENUITEM "Len &chyby", IDM_FILTER_PRESET_ERRORS_ONLY
+            MENUITEM "Chyby a &upozornenia", IDM_FILTER_PRESET_ERRORS_WARNINGS
+            MENUITEM "Chyby, výkon a &ladenie", IDM_FILTER_PRESET_ERRORS_DEBUG
+            MENUITEM "&Všetky typy správ", IDM_FILTER_PRESET_ALL
         END
     END
     POPUP "&Pomocník"
@@ -104,6 +103,7 @@ BEGIN
     IDS_NOT_RUNNING         "RedSalamander Bug Reporter (RedSalamanderMonitor.exe) nie je spustený. RedSalamander nebude schopný zvládnuť potenciálne havárie. Reštartujte RedSalamander."
     IDS_CAPTION_ERROR "Chyba"
     IDS_CAPTION_OPEN "Otvoriť"
+    IDS_CAPTION_SAVE "Uložiť"
     IDS_CAPTION_PRINT "Tlačiť"
     IDS_CAPTION_ETW_WARNING "Upozornenie pre poslucháča ETW"
     IDS_BTN_OK              "OK"
@@ -123,6 +123,10 @@ BEGIN
     IDS_MSG_ETW_ELEVATE_PROMPT "RedSalamander Monitor nemohol spustiť svoj ETW poslucháč s aktuálnymi privilégiami.\n\nReštartovať teraz ako správca?\n\n(Ak chcete pokračovať bez monitorovania ETW v reálnom čase, vyberte možnosť Nie. Ak sa chcete vyhnúť výzvam UAC, pridajte svojho používateľa do skupiny Users Log Users a odhláste sa/prihláste sa.)"
     IDS_MSG_OPEN_CANCEL_REQUESTED "Ruší sa otváranie súboru..."
     IDS_STATUS_OPEN_PROGRESS_FMT "Otváranie: {0:L} / {1:L} bajtov"
+    IDS_MSG_SAVE_FAILED "Súbor sa nepodarilo uložiť."
+    IDS_MSG_FILE_WORKER_START_FAILED "Operáciu so súborom na pozadí sa nepodarilo spustiť."
+    IDS_MSG_SAVE_CANCEL_REQUESTED "Ruší sa ukladanie súboru..."
+    IDS_STATUS_SAVE_PROGRESS_FMT "Ukladanie: {0:L} bajtov / {1:L} riadkov"
     IDS_FATAL_ERROR_CAPTION "Monitor RedSalamander – fatálna chyba"
     IDS_FATAL_EXCEPTION_FMT "Fatálna výnimka v RedSalamanderMonitor\n\nVýnimka: {0} (0x{1:08X})\n\nAplikácia sa teraz ukončí."
     IDS_FILE_FILTER_OPEN "Textové súbory (*.txt;*.log)\0*.txt;*.log\0Všetky súbory (*.*)\0*.*\0\0"

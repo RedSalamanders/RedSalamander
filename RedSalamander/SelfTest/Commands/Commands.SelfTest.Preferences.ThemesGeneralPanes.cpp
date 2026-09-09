@@ -124,6 +124,11 @@ namespace
         return false;
     }
 
+    if (! PrepareMainWindowForIsolatedUiCase(mainWindow, state, L"Preferences Themes retained-search round-trip validation"))
+    {
+        return false;
+    }
+
     if (const HWND existing = GetPreferencesDialogHandle(); existing && IsWindow(existing) != FALSE)
     {
         PostMessageW(existing, WM_CLOSE, 0, 0);
@@ -3476,6 +3481,9 @@ namespace
     };
 
     PreferencesDebugSnapshot snapshot{};
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryGeneral),
+                  L"Failed to select the Preferences General category before footer access-key validation.");
+    PumpPendingMessages();
     SelfTest::AppendSelfTestTrace(L"Preferences footer access-keys: waiting for settled General snapshot");
     state.Require(waitForSnapshot(
                       [](const PreferencesDebugSnapshot& value) noexcept
@@ -3981,12 +3989,15 @@ namespace
             return false;
         }
 
-        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPanes), L"Failed to select the Preferences Panes category for Panes theme-cycle validation.");
-        PumpPendingMessages();
-
-        state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
-        { return value.currentCategory == kPrefCategoryPanes && value.currentPageDxHostResizeFailureCount == 0u; },
-                                      outSnapshot),
+        state.Require(SelectPreferencesCategoryAndWaitForStableSurface(
+                          kPrefCategoryPanes,
+                          [](const PreferencesDebugSnapshot& value) noexcept
+        {
+            return value.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_PANES) && value.createdPaneWindowCount == 0u &&
+                   value.visiblePaneWindowCount == 0u && value.visibleCurrentPageChildWindowCount <= 1u &&
+                   value.currentPageRenderedDxHostCount <= 1u && value.currentPageDxHostResizeFailureCount == 0u;
+        },
+                          outSnapshot),
                       L"Preferences Panes page did not settle before theme-cycle validation.");
         return state.failure.empty();
     };
@@ -4207,12 +4218,15 @@ namespace
             return false;
         }
 
-        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPanes), L"Failed to select the Preferences Panes category for Panes live interaction test.");
-        PumpPendingMessages();
-
-        state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
-        { return value.currentCategory == kPrefCategoryPanes && value.currentPageDxHostResizeFailureCount == 0u; },
-                                      outSnapshot),
+        state.Require(SelectPreferencesCategoryAndWaitForStableSurface(
+                          kPrefCategoryPanes,
+                          [](const PreferencesDebugSnapshot& value) noexcept
+        {
+            return value.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_PANES) && value.createdPaneWindowCount == 0u &&
+                   value.visiblePaneWindowCount == 0u && value.visibleCurrentPageChildWindowCount <= 1u &&
+                   value.currentPageRenderedDxHostCount <= 1u && value.currentPageDxHostResizeFailureCount == 0u;
+        },
+                          outSnapshot),
                       L"Preferences Panes page did not settle to the active DX surface before live interaction validation.");
         return state.failure.empty();
     };
@@ -4451,6 +4465,7 @@ namespace
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences window did not close after invoking the shared shell Cancel action during the Panes live interaction test.");
     prefs = nullptr;
+    ReleaseThreadUiAutomationForSelfTest();
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
     prefs = waitForPreferencesWindow();
@@ -4553,13 +4568,12 @@ namespace
             return false;
         }
 
-        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPanes), L"Failed to select the Preferences Panes category for Panes tab-traversal validation.");
-        PumpPendingMessages();
-
-        state.Require(waitForSnapshot(
+        state.Require(SelectPreferencesCategoryAndWaitForStableSurface(
+                          kPrefCategoryPanes,
                           [](const PreferencesDebugSnapshot& value) noexcept
         {
-            return value.currentCategory == kPrefCategoryPanes && value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u &&
+            return value.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_PANES) && value.createdPaneWindowCount == 0u &&
+                   value.visiblePaneWindowCount == 0u &&
                    value.visibleCurrentPageChildWindowCount <= 1u && value.currentPageRenderedDxHostCount <= 1u &&
                    value.currentPageDxHostResizeFailureCount == 0u;
         },
@@ -4799,12 +4813,15 @@ namespace
             return false;
         }
 
-        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPanes), L"Failed to select the Preferences Panes category for Panes history-size validation.");
-        PumpPendingMessages();
-
-        state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
-        { return value.currentCategory == kPrefCategoryPanes && value.currentPageDxHostResizeFailureCount == 0u; },
-                                      outSnapshot),
+        state.Require(SelectPreferencesCategoryAndWaitForStableSurface(
+                          kPrefCategoryPanes,
+                          [](const PreferencesDebugSnapshot& value) noexcept
+        {
+            return value.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_PANES) && value.createdPaneWindowCount == 0u &&
+                   value.visiblePaneWindowCount == 0u && value.visibleCurrentPageChildWindowCount <= 1u &&
+                   value.currentPageRenderedDxHostCount <= 1u && value.currentPageDxHostResizeFailureCount == 0u;
+        },
+                          outSnapshot),
                       L"Preferences Panes page did not settle to the active DX surface before history-size validation.");
         return state.failure.empty();
     };
@@ -4912,6 +4929,7 @@ namespace
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after invoking the shared shell Cancel action during Panes history-size discard validation.");
     prefs = nullptr;
+    ReleaseThreadUiAutomationForSelfTest();
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
     prefs = waitForPreferencesWindow();
@@ -5027,12 +5045,15 @@ namespace
             return false;
         }
 
-        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPanes), L"Failed to select the Preferences Panes category for Panes combo/toggle validation.");
-        PumpPendingMessages();
-
-        state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
-        { return value.currentCategory == kPrefCategoryPanes && value.currentPageDxHostResizeFailureCount == 0u; },
-                                      outSnapshot),
+        state.Require(SelectPreferencesCategoryAndWaitForStableSurface(
+                          kPrefCategoryPanes,
+                          [](const PreferencesDebugSnapshot& value) noexcept
+        {
+            return value.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_PANES) && value.createdPaneWindowCount == 0u &&
+                   value.visiblePaneWindowCount == 0u && value.visibleCurrentPageChildWindowCount <= 1u &&
+                   value.currentPageRenderedDxHostCount <= 1u && value.currentPageDxHostResizeFailureCount == 0u;
+        },
+                          outSnapshot),
                       L"Preferences Panes page did not settle to the active DX surface before combo/toggle validation.");
         SelfTest::AppendSelfTestTrace(std::format(L"Preferences Panes combo/toggle: Panes page settled category={} resizeFailures={}",
                                                   static_cast<int>(outSnapshot.currentCategory),
@@ -5269,6 +5290,7 @@ namespace
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after invoking the shared shell Cancel action during Panes combo/toggle reopen validation.");
     prefs = nullptr;
+    ReleaseThreadUiAutomationForSelfTest();
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
     prefs = waitForPreferencesWindow();

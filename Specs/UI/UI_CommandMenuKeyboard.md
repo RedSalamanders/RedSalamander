@@ -70,6 +70,7 @@ App-owned DxUi transient overlays such as alert/help messages MUST be real input
 - Owned top-level modal overlays that draw a translucent scrim MUST compose that scrim over a captured owner/screen backdrop, or an equivalent live composition surface, before the first visible paint. Anchored window overlays should prefer an owner/anchor render capture before falling back to screen capture so another desktop surface cannot turn the modal backdrop black or leave it missing. They MUST NOT draw a semi-transparent scrim over an uninitialized or black top-level HWND surface.
 - Regression coverage for overlay input MUST deliver the close path's normal mouse messages and MUST prove no title-bar movement or extra activation message is needed.
 - Every popup/overlay destroy path MUST cancel pending timers, detach its `WindowHost`, clear `GWLP_USERDATA` on `WM_NCDESTROY`, and forget stale `HWND` values so no dead window can keep receiving routed menu or graphics messages.
+- Passive no-activate status overlays may consume a primary press/release only when the press begins on their visible surface. They MUST preserve focus and activation, route transparent gutters/corners through, cancel capture on outside release or `WM_CANCELMODE`, and clear every retained control/HWND view during owner-driven `WM_NCDESTROY`.
 
 ### Scope and focus
 
@@ -104,9 +105,41 @@ App-owned DxUi transient overlays such as alert/help messages MUST be real input
 - Broken links, missing targets, non-local `.url` targets, unsupported reparse tags, and unsupported file-system plugins keep the pane in place and show localized pane feedback.
 - The command records `shell.go_to_shortcut_target_us` in command selftests so shortcut resolution and navigation cost stay visible.
 
-### Command Shell
+### Terminal surfaces
 
-`cmd/pane/openCommandShell` opens a shell in the focused pane folder. If Windows Terminal is available through the `wt.exe` CLI alias or `Terminal.exe`, the command MUST launch Terminal with only a starting-directory argument (`-d <folder>`) so the user's default Terminal profile opens in that folder. If Terminal is not available, or if the Terminal launch fails, the command MUST fall back to the configured command processor (`ComSpec`, or `cmd.exe`). The `cmd.exe` fallback MUST keep the existing UNC handling by launching from the default local root and using `pushd <folder>` for UNC paths.
+`cmd/pane/openCommandShell` (`Alt+7`) is the Left/Right **Terminal Pane**
+command. It opens or reuses the built-in `builtin/terminal` plugin in the
+physical pane opposite the focused source pane.
+
+The generic shortcut resolves its source from focused/active-pane rules. The
+named Left and Right menu entries are different dispatch sites: each passes its
+menu owner pane explicitly, so opening **Left > Terminal Pane** still uses Left
+as the source even when keyboard focus is in Right (and vice versa).
+
+`cmd/terminal/openFloatingWindow` (`Ctrl+Alt+T`) is the Commands > Terminal >
+**Command Shell Window** command. It opens or reuses the singleton floating
+Terminal window at the focused pane folder. The two commands retain distinct
+stable IDs and never redirect one surface through the other.
+The floating opener must be enabled from a supported file pane before any
+terminal exists; terminal-child focus is not an enablement prerequisite.
+
+The Terminal session menu may offer **Command Shell Window** and re-enters this
+same canonical host command dispatcher. Selecting it MUST create or reuse the
+floating Terminal at the embedded Terminal's recorded source location; it must
+not fall through as an unhandled terminal-plugin action or use the folder hidden
+underneath the Terminal's host pane.
+
+Shortcut migration is versioned in `shortcuts.migrationVersion`. Version 1
+rewrites only a legacy default `Ctrl+Alt+T` + `cmd/pane/openCommandShell`
+binding to `cmd/terminal/openFloatingWindow`, then records the version. A user
+who later rebinds `Ctrl+Alt+T` to the embedded Terminal Pane keeps that choice
+on subsequent initialization.
+
+Windows local/UNC paths open the configured PowerShell/cmd profile;
+`\\wsl.localhost\Distro\...` and `\\wsl$\Distro\...` open that distribution
+through `wsl.exe --cd`. The legacy external Windows Terminal/cmd launch path is
+retained only as a selftest-injected compatibility seam and is not normal
+embedded-pane dispatch.
 
 ### Shell New Templates
 
@@ -121,20 +154,26 @@ App-owned DxUi transient overlays such as alert/help messages MUST be real input
 
 ### Clipboard File Commands
 
+Routine accepted-default Copy/Move commands start the common File Operations Preparing lifecycle
+without a generic OK/Cancel prompt. This applies to F5/F6 other-pane transfer, destination-picker
+transfer, clipboard paste, and internal drag/drop. An ingress that explicitly requests confirmation, a known Copy-only Move,
+permanent Delete, or an existing exact artifact/risk gate retains its owning decision surface. This
+contract does not add a separate **with options** command; that remains future work.
+
 `cmd/pane/clipboardCopy`, `cmd/pane/clipboardCut`, `cmd/pane/clipboardPaste`, and `cmd/pane/clipboardPasteShortcut` share the standard Windows file-drop clipboard contract for local built-in file-system paths.
 
 - Text edit controls keep ownership of ordinary text clipboard commands. When a navigation edit owns focus, `Ctrl+C`, `Ctrl+X`, and `Ctrl+V` MUST copy, cut, and paste text in that edit control before pane file commands are considered.
 - `cmd/pane/clipboardCopy` writes selected or focused local file-system items as `CF_HDROP` with Preferred DropEffect `DROPEFFECT_COPY`.
 - `cmd/pane/clipboardCut` writes selected or focused local file-system items as `CF_HDROP` with Preferred DropEffect `DROPEFFECT_MOVE`. It does not delete or move files immediately.
-- `cmd/pane/clipboardPaste` reads clipboard file-drop paths and the shell `Preferred DropEffect`. A `DROPEFFECT_MOVE` preference MUST move the source paths into the current local folder through the file-operation move path; `DROPEFFECT_COPY`, missing metadata, or unsupported metadata MUST copy through the file-operation copy path. The shared File Operations layer owns the copy/move confirmation prompt for delegated pane operations, so a Ctrl+X then Ctrl+V move MUST show exactly one OK/Cancel confirmation before execution. The source and destination panes must refresh through the normal file-operation/cache notification path after an accepted move.
+- `cmd/pane/clipboardPaste` reads clipboard file-drop paths and the shell `Preferred DropEffect`. A `DROPEFFECT_MOVE` preference MUST move the source paths into the current local folder through the file-operation move path; `DROPEFFECT_COPY`, missing metadata, or unsupported metadata MUST copy through the file-operation copy path. Routine Ctrl+X then Ctrl+V publishes one Move task without a generic confirmation. The worker must complete common preparation and its pre-consumption decision before the UI-owned exact-sequence consumer clears the cut list; mutation cannot begin until that one-shot consumption succeeds. The source and destination panes must refresh through the normal file-operation/cache notification path after an accepted move.
 - `cmd/pane/clipboardPasteShortcut` reads clipboard file-drop paths and creates `.lnk` shortcuts in the current local folder. Shortcut names MUST be unique in the destination folder, the pane MUST refresh after creation, and the last created shortcut SHOULD become the focused item when visible.
 - Copy-as-text commands (`cmd/pane/copyPathAndNameAsText`, `cmd/pane/copyNameAsText`, `cmd/pane/copyPathAsText`, and `cmd/pane/copyUncPathAndNameAsText`) write `CF_UNICODETEXT` for the selected items, or the focused item when nothing is selected. Clipboard writes MUST tolerate short-lived clipboard contention by retrying `OpenClipboard(...)` for a bounded period before showing localized pane feedback. The retry loop MUST NOT translate, dispatch, or remove arbitrary UI messages while waiting, because that can reenter command handlers while clipboard ownership state is incomplete.
 - Unsupported providers, empty selections, clipboard contents without file paths, and shortcut creation failures keep the pane in place and show localized pane feedback instead of falling through to a generic not-implemented command.
-- Command selftests MUST keep correctness and responsiveness visible with `clipboard.cut_us`, `clipboard.paste_shortcut_us`, and `clipboard.feedback_us` metrics. `cmd_pane_clipboardPaste_uses_preferred_move_effect` covers the real `cmd/pane/clipboardPaste` dispatch using `CF_HDROP` plus `Preferred DropEffect = DROPEFFECT_MOVE` so Ctrl+X then Ctrl+V moves instead of copying and requests only one move confirmation.
+- Command selftests MUST keep correctness and responsiveness visible with `clipboard.cut_us`, `clipboard.paste_shortcut_us`, and `clipboard.feedback_us` metrics. `cmd_pane_clipboardPaste_uses_preferred_move_effect` covers the real `cmd/pane/clipboardPaste` dispatch using `CF_HDROP` plus `Preferred DropEffect = DROPEFFECT_MOVE` so Ctrl+X then Ctrl+V moves instead of copying, invokes no generic confirmation, consumes the cut sequence after preparation, and does not admit a duplicate Move.
 
 ### Quick Search
 
-`cmd/pane/quickSearch` activates the target pane's integrated incremental search mode. It is not the persistent filter bar and it is separate from the command-line input commands.
+`cmd/pane/quickSearch` activates the target pane's integrated incremental search mode. It is not the persistent filter bar and is unrelated to Terminal insertion commands.
 
 - Invoking the command focuses the target pane's `FolderView`, enters search mode, clears any previous quick-search query, and shows the transient search indicator.
 - Printable typing appends to the query, including Space for filenames that contain spaces. Space remains text while Quick Search is active even though the same key is normally the FolderView selection/size shortcut. Matching is case-insensitive.
@@ -151,26 +190,38 @@ Pane view option commands target the focused pane, or the active pane when focus
 
 - `cmd/pane/viewOptions/toggleFileExtensions` toggles extension display in the target pane only. This is display-only: file operations, command-line insertion, clipboard actions, and plugin calls continue to use real item names and full paths.
 - `cmd/pane/viewOptions/toggleThumbnails` is a legacy command id that selects the exclusive Thumbnails display mode in the target pane. The pane switches away from Brief/Detailed/Extra Detailed, uses larger DPI-aware item visuals, schedules bounded asynchronous thumbnail work for visible items, uses shell thumbnails when available, and renders the normal file/folder icon as fallback without blocking navigation. Repeating the command leaves the pane in Thumbnails; selecting another display mode leaves thumbnail mode and cancels stale work.
-- `cmd/pane/viewOptions/togglePreviewPane` toggles preview mode for the active source pane and hosts the preview in the opposite pane. Opening preview shows compact themed DxUi Folder/Preview tabs at the top of the host pane, selects Preview, hides that pane's folder view while Preview is selected, and updates the embedded viewer preview when the source pane focus or selection changes. The tabs must behave as real pointer targets without stealing keyboard focus from the source pane. Preview tabs use attached, Visual Studio-like chrome: inactive tabs have no border, selected tabs blend into the pane below with square lower corners, the Folder tab tooltip displays the host pane path after the standard hover delay, and the Preview tab close glyph is visible when Preview is selected or hovered and closes preview mode. Preview resolves the configured viewer plugin for the focused item and uses it when the plugin supports embedded hosting; when saved viewer associations are missing or only resolve the default text viewer, preview uses the built-in embedded viewer defaults only when they produce a specific embedded-capable match. If no specific embedded preview is available, or if opening the selected embedded viewer fails, Preview falls back to a compact, scrollable focused file/folder Properties card view from the active file system before showing any localized unsupported fallback. The Properties card view uses DxUi cards, wraps long values, shows a vertical scrollbar only when needed, preserves the normalized Properties text for debug/copy parity, and adds restrained rainbow section-header accents in Rainbow theme while respecting high-contrast colors. If a focus change resolves to the same embedded viewer plugin already hosted by Preview, the host reuses that viewer instance and refreshes it with the new open context; a successful refresh MUST retain the already ownership-marked root and create zero new direct children. An added or replacement root rejects same-instance reuse, is hidden before `Close()`, and forces a fresh instance open. The host otherwise replaces the preview window only when resolution chooses a different plugin or refresh fails. During replacement, a hidden asynchronously retiring viewer child may coexist temporarily with the new child. The host MUST mark pre-open direct children with a per-attempt window property so destruction and numeric HWND reuse cannot alias old identity, require exactly one unmarked direct child after a replacement `Open()`, hide every new child before `Close()` when cardinality is zero or multiple, and bind the accepted root to its `ViewerInstance` with a separate ownership property. Layout, hide, and marker removal MUST validate both the expected preview parent and that instance property. Only the validated active child may be sized or shown, sibling z-order MUST remain unchanged, and every retiring child must remain own-style-hidden until its plug-in cleanup destroys it. Embedded preview viewers and default Properties preview scrolling MUST NOT take keyboard focus from the source pane. Embedded media preview, including audio-only ViewerVLC files and visualizer-capable player paths, MUST keep playback and media output inside the preview host and MUST NOT create unowned/top-level player or visualization windows; standalone viewer windows may keep normal visualizer behavior. Menu-bearing embedded viewers expose only Preview-appropriate actions from their right-click context menus; standalone-only commands such as Exit, Open, and internal other-file navigation are omitted, empty groups are trimmed, and viewer shortcut labels are not shown because shortcuts still belong to the source pane. Closing or replacing an embedded viewer persists changed plugin configuration, including ViewerVLC volume/mute state, and preview resolution/fallback choices are logged for monitor diagnostics. Switching back to Folder keeps preview mode open with the host folder view visible. Closing preview removes the tabs and restores the host pane. The preview area extends to the function bar, or to the bottom of the window when the function bar is hidden.
+- `cmd/pane/viewOptions/togglePreviewPane` toggles preview mode for the active source pane and hosts the preview in the opposite pane. Opening preview shows compact themed DxUi Folder/Preview tabs at the top of the host pane, selects Preview, hides that pane's folder view while Preview is selected, and updates the embedded viewer preview when the source pane current item or path changes. Selection-only changes update selection/status/command state but MUST NOT reload an unchanged current-item preview. The tabs must behave as real pointer targets without stealing keyboard focus from the source pane. Preview tabs use attached, Visual Studio-like chrome: inactive tabs have no border, selected tabs blend into the pane below with square lower corners, the Folder tab tooltip displays the host pane path after the standard hover delay, and the Preview tab close glyph is visible when Preview is selected or hovered and closes preview mode. Preview resolves the configured viewer plugin for the current item and uses it when the plugin supports embedded hosting; when saved viewer associations are missing or only resolve the default text viewer, preview uses the built-in embedded viewer defaults only when they produce a specific embedded-capable match. If no specific embedded preview is available, or if opening the selected embedded viewer fails, Preview falls back to a compact, scrollable current file/folder Properties card view from the active file system before showing any localized unsupported fallback. The Properties card view uses DxUi cards, wraps long values, shows a vertical scrollbar only when needed, preserves the normalized Properties text for debug/copy parity, and adds restrained rainbow section-header accents in Rainbow theme while respecting high-contrast colors. If a current-item change resolves to the same embedded viewer plugin already hosted by Preview, the host reuses that viewer instance and refreshes it with the new open context; a successful refresh MUST retain the already ownership-marked root and create zero new direct children. An added or replacement root rejects same-instance reuse, is hidden before `Close()`, and forces a fresh instance open. The host otherwise replaces the preview window only when resolution chooses a different plugin or refresh fails. During replacement, a hidden asynchronously retiring viewer child may coexist temporarily with the new child. The host MUST mark pre-open direct children with a per-attempt window property so destruction and numeric HWND reuse cannot alias old identity, require exactly one unmarked direct child after a replacement `Open()`, hide every new child before `Close()` when cardinality is zero or multiple, and bind the accepted root to its `ViewerInstance` with a separate ownership property. Layout, hide, and marker removal MUST validate both the expected preview parent and that instance property. Only the validated active child may be sized or shown, sibling z-order MUST remain unchanged, and every retiring child must remain own-style-hidden until its plug-in cleanup destroys it. Embedded preview viewers and default Properties preview scrolling MUST NOT take keyboard focus from the source pane. Embedded media preview, including audio-only ViewerVLC files and visualizer-capable player paths, MUST keep playback and media output inside the preview host and MUST NOT create unowned/top-level player or visualization windows; standalone viewer windows may keep normal visualizer behavior. Menu-bearing embedded viewers expose only Preview-appropriate actions from their right-click context menus; standalone-only commands such as Exit, Open, and internal other-file navigation are omitted, empty groups are trimmed, and viewer shortcut labels are not shown because shortcuts still belong to the source pane. Closing or replacing an embedded viewer persists changed plugin configuration, including ViewerVLC volume/mute state, and preview resolution/fallback choices are logged for monitor diagnostics. Switching back to Folder keeps preview mode open with the host folder view visible. Closing preview removes the tabs and restores the host pane. The preview area extends to the function bar, or to the bottom of the window when the function bar is hidden.
 - `cmd/pane/viewOptions/toggleFilterBar` toggles a persistent themed DxUi filter bar for the target pane. The bar is a compact inline version of the `cmd/pane/filter` workflow with an editable filter-history combo and a right-side Use Filter toggle; the combo placeholder/accessibility name supplies the Filter label, so no separate static Filter label is shown. Typing applies the filter live without automatically opening the history dropdown, Enter/history selection saves to `selectionMasks.filterHistory`, and turning the toggle off keeps the text while disabling filtering. It follows restored per-history filters and never replaces Quick Search.
 - `cmd/pane/viewOptions/toggleNavigationBar` toggles the target pane navigation/address bar. Left/right menu entries target their named pane; shortcut routing targets the active pane. Commands that focus the address bar MUST show the bar first, then focus the address edit.
 - `cmd/pane/viewOptions/toggleStatusBar` routes shortcut invocation to the active pane and shares the existing left/right `Show` menu status-bar implementation.
 - These visibility states are persisted per pane through `folders.items[].view.*` settings and MUST keep menu check marks synchronized with the current pane state.
 - Command selftests MUST keep correctness and responsiveness visible for setting round-trip, menu labels, active/explicit pane routing, focus fallback, restored filters, and pane-view-option toggle latency.
 
-### Command-Line Input
+### Embedded Terminal Insertion
 
-`cmd/pane/bringCurrentDirToCommandLine` and `cmd/pane/bringFilenameToCommandLine` open a pane-scoped command-line input that is separate from Quick Search and the navigation address edit.
-
-- The command-line input appears above the function bar and below the pane area, receives keyboard focus, and is associated with the pane that invoked it.
-- The command-line input is a `FolderWindow` DxUi host with a retained native-backend `TextField`; it must not create visible native `STATIC` / `EDIT` controls, install an edit subclass, or use `HFONT` / `WM_SETFONT` font propagation.
-- `cmd/pane/bringCurrentDirToCommandLine` appends the active local folder path using command-line quoting.
-- `cmd/pane/bringFilenameToCommandLine` appends the focused item display name when no explicit selection exists. When one or more items are selected, it appends full local item paths; if the focused item is part of the selection, that focused path is first and the rest stay in pane order.
-- Insertions happen at the current caret/selection and add a single separating space when adjacent text would otherwise touch.
-- Pressing `Enter` executes the current text through the system command processor with the pane's current local folder as working directory, then clears and hides the input after a successful launch.
-- Pressing `Escape` hides the input and restores folder-view focus without changing pane selection.
-- Unsupported providers, missing local folders, and empty item scope keep the pane in place and show localized pane feedback.
-- Command selftests MUST keep responsiveness visible with `commandline.focus_to_visible_us`, `commandline.insert_current_dir_us`, `commandline.insert_filename_us`, `commandline.launch_us`, and `commandline.feedback_us` when an error path is exercised.
+- `Ctrl+Enter` retains stable id `cmd/pane/bringFilenameToCommandLine`, now
+  labelled **Insert Focused Item in Terminal**. It acts on the focused item
+  only, opens or reuses the selected opposite-pane Terminal, inserts the
+  shell-quoted leaf only when the plugin has authenticated an idle PowerShell
+  prompt whose live cwd equals the item parent. Unknown, stale, cmd, WSL, busy,
+  or different-cwd state falls back to the full native path. It never sends
+  Enter and never infers cwd from terminal text.
+- `Ctrl+Shift+Enter` dispatches `cmd/pane/bringFullPathToTerminal`, acts on the
+  focused item only, always inserts the shell-quoted full native path, and never
+  sends Enter.
+- `Ctrl+Space` and its existing `Ctrl+Shift+Space` alias retain stable id
+  `cmd/pane/bringCurrentDirToCommandLine`, now labelled **Insert Current
+  Directory in Terminal**. They open or reuse the opposite-pane terminal and
+  insert the source pane's full current directory without sending Enter.
+- The former bottom pseudo command-line control and its `cmd.exe /C` execution
+  path have been removed; these stable command IDs have no fallback outside
+  `Terminal.dll`.
+- Folder Edit/F4 opens the focused directory in a Terminal tab in the opposite
+  pane. File Edit retains normal editor resolution.
+- Terminal insertion metrics are `terminal.insert_context_path_us`,
+  `terminal.insert_full_path_us`, and `terminal.insert_current_dir_us`;
+  lifecycle coverage must also prove reuse, authenticated follow, and a
+  synchronous quiet close.
 
 ### Reread Associations
 
@@ -254,7 +305,7 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/app/openRightDriveMenu`
 - `cmd/app/compare`
 - `cmd/app/fullScreen`
-- `cmd/app/openFileExplorerKnownFolder` *(planned, parameterized: knownFolderId)*
+- `cmd/app/openFileExplorerKnownFolder` *(registered parameterized family; current resource menus still dispatch pane-specific `WM_COMMAND` IDs)*
 - `cmd/app/preferences`
 - `cmd/app/showShortcuts`
 - `cmd/app/swapPanes`
@@ -267,8 +318,8 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/app/theme/selectPrev`
 - `cmd/app/theme/systemHighContrastIndicator`
 - `cmd/app/plugins/manage`
-- `cmd/app/plugins/toggleEnabled` *(planned, parameterized: pluginId)*
-- `cmd/app/plugins/configure` *(planned, parameterized: pluginId)*
+- `cmd/app/plugins/toggleEnabled` *(registered parameterized family; no generic menu dispatch is currently exposed)*
+- `cmd/app/plugins/configure` *(registered parameterized family; no generic menu dispatch is currently exposed)*
 
 **Pane commands (`cmd/pane/*`)**
 - `cmd/pane/historyBack`
@@ -278,10 +329,11 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/pane/setHotPath` *(parameterized: digit `1..9` and `0` for slot 10)*
 - `cmd/pane/goRootDirectory`
 - `cmd/pane/setPathFromOtherPane`
-- `cmd/pane/navigatePath` *(planned, parameterized: path)*
+- `cmd/pane/navigatePath` *(registered parameterized family; current navigation routes remain owned by NavigationView and pane-specific commands)*
 - `cmd/pane/selectFileSystemPlugin` *(parameterized: pluginId)*
 - `cmd/pane/bringCurrentDirToCommandLine`
 - `cmd/pane/bringFilenameToCommandLine`
+- `cmd/pane/bringFullPathToTerminal`
 - `cmd/pane/clipboardCut`
 - `cmd/pane/clipboardCopy`
 - `cmd/pane/clipboardPaste`
@@ -330,12 +382,14 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/pane/userMenu`
 - `cmd/pane/zoomPanel`
 - `cmd/pane/copyToOtherPane`
+- `cmd/pane/copyToOtherPaneWithOptions`
 - `cmd/pane/createDirectory`
 - `cmd/pane/delete`
 - `cmd/pane/display/brief`
 - `cmd/pane/display/detailed`
 - `cmd/pane/display/extraDetailed`
 - `cmd/pane/moveToOtherPane`
+- `cmd/pane/moveToOtherPaneWithOptions`
 - `cmd/pane/rename`
 - `cmd/pane/sort/none`
 - `cmd/pane/sort/attributes`
@@ -374,13 +428,14 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/pane/viewOptions/toggleNavigationBar`
 - `cmd/pane/viewOptions/toggleStatusBar`
 
-## Main Menu Bar (Target)
+## Main Menu Bar Contract
 
 ### Requirements (Normative)
 
 - The menu bar structure and static labels MUST be defined in `.rc` resources (`RedSalamander/RedSalamander.rc`) to support localization (see `Specs/Core/Core_Localization.md`).
 - Each menu item that triggers application behavior MUST map to a `cmd/*` command ID (shown in brackets below).
   - If the menu item is dynamic and requires a parameter (history path, hot path, plugin ID, theme ID), the menu item MUST still map to a stable `cmd/*` command ID; the parameter is carried in the menu item payload.
+- Dynamic popup roots MUST be discovered through a command marker owned by that popup, never by the position of an adjacent static command. In particular, **Files -> New** uses `IDM_PANE_NEW_TEMPLATE_BASE` and **Commands -> User Menu** uses `IDM_PANE_USER_MENU_BASE` as their resource-time empty markers before runtime population.
 - The displayed shortcut text (when present) MUST reflect the effective current bindings (default or user-customized).
 - Top-level menu order MUST be:
   - `Left`, `Files`, `Edit`, `Commands`, `Plugins`, `View`, `Right`, `Help`
@@ -390,7 +445,7 @@ This section is the single source of truth for the command ID catalog.
 
 - The default Commands self-test suite MUST prefer deterministic, local-only scenarios over environment-dependent integration.
 - Command registry coverage MUST validate canonical command IDs only; removed command IDs are not preserved as aliases.
-- Shortcut-default coverage MUST assert fixed high-value bindings directly, including the full `Insert` row for copy/paste/copy-as-text commands, the `Ctrl+F2..F6` sort bindings, `Ctrl+F` for Find Files and Directories, and `Ctrl+Alt+T` for Command Shell.
+- Shortcut-default coverage MUST assert fixed high-value bindings directly, including the full `Insert` row for copy/paste/copy-as-text commands, the `Ctrl+F2..F6` sort bindings, `Ctrl+F` for Find Files and Directories, `Ctrl+Shift+J` for Show File Operations, `Alt+7` for Terminal Pane, and `Ctrl+Alt+T` for Command Shell Window.
 - Menu-contract coverage MUST assert the `Edit` menu copy-text group order, labels, separator boundaries, and text-only icon policy.
 - Command behavior coverage for copy-text commands MUST run in a temp local folder with clipboard assertions and MUST stay separate from selection save/restore scenarios.
 - The global dispatch smoke test remains a smoke test: it verifies that commands do not wedge the UI or leak transient windows, but it is not a substitute for behavior assertions.
@@ -405,12 +460,12 @@ This section is the single source of truth for the command ID catalog.
 - **View**: UI/layout/theme preferences and view toggles.
 - **Help**: help menu (documentation, about, etc ...)
 
-### Menu structure (Target)
+### Current menu structure
 
 Notation:
 - `[cmd/...]` suffix links the menu entry to the command system.
 - `(shortcut)` shows the current default shortcut when one exists; `⊘` means none by default.
-- `[td]` suffix in the label means the command/menu entry is not implemented yet (TODO).
+- `[td]` suffix in the label means the command/menu entry is currently unavailable and dispatches only the localized not-implemented feedback contract.
 - `[dbg]` suffix in the label means the menu entry is debug-only.
 - `…` indicates a modal dialog or picker is expected.
 
@@ -422,7 +477,7 @@ Notation:
   - Forward (`Alt+Right`) *(History Forward)* `[cmd/pane/historyForward]`
   - Parent Directory (`Backspace`) `[cmd/pane/upOneDirectory]`
   - Root Directory (`Shift+Backspace`) `[cmd/pane/goRootDirectory]`
-  - Path from Other Panel (`Ctrl+.`) `[cmd/pane/setPathFromOtherPane]`
+  - Path from Other Pane (`Ctrl+.`) `[cmd/pane/setPathFromOtherPane]`
   - ---
   - Hot Paths… (`Shift+F9`) `[cmd/pane/hotPaths]`
   - *(Hot Paths section, dynamic — from settings; navigates to the stored slot path)*
@@ -436,6 +491,7 @@ Notation:
 - Extra Detailed (`Alt+4`) `[cmd/pane/display/extraDetailed]`
 - Thumbnails (`Alt+5`; radio display mode, targets Left pane) `[cmd/pane/viewOptions/toggleThumbnails]`
 - Preview Pane (`Alt+6`; checkable, source is Left pane, preview host is Right pane) `[cmd/pane/viewOptions/togglePreviewPane]`
+- Terminal Pane (`Alt+7`; checkable, source is Left pane, terminal host is the physical Right pane) `[cmd/pane/openCommandShell]`
 - ---
 - Sort By >
   - None (`Ctrl+F2`) `[cmd/pane/sort/none]`
@@ -452,20 +508,17 @@ Notation:
   - Filter Bar (`⊘`; checkable, targets Left pane) `[cmd/pane/viewOptions/toggleFilterBar]`
   - Navigation Bar (`⊘`; checkable, targets Left pane) `[cmd/pane/viewOptions/toggleNavigationBar]`
   - Status Bar (`⊘`; checkable, targets Left pane) `[cmd/pane/viewOptions/toggleStatusBar]`
+- Refresh (`Ctrl+F9`) *(invalidate directory cache + re-enumerate current folder)* `[cmd/pane/refresh]`
+- Filter… (`Ctrl+F12`) *(open pane filter dialog with the same editable history combo as the inline filter bar, no separate History button, and no automatic dropdown opening while typing; wildcard mask syntax shared with Select/Unselect; history shared with the inline filter bar; active filter shows a subtle background watermark; filter state restored when navigating to a path from history)* `[cmd/pane/filter]`
 - ---
 - Maximize/Restore Pane (`Ctrl+F11`) *(toggle: move splitter to edge; restore only if splitter wasn't dragged while maximized; state persisted in settings)* `[cmd/pane/zoomPanel]`
 - Swap Panes (`Ctrl+U`) *(swap Left/Right pane file system + current folder; view options stay with the pane; global history unaffected)* `[cmd/app/swapPanes]`
-- Path from Other Panel (`Ctrl+.`) `[cmd/pane/setPathFromOtherPane]`
-- Refresh (`Ctrl+F9`) *(invalidate directory cache + re-enumerate current folder)* `[cmd/pane/refresh]`
-- Filter… (`Ctrl+F12`) *(open pane filter dialog with the same editable history combo as the inline filter bar, no separate History button, and no automatic dropdown opening while typing; wildcard mask syntax shared with Select/Unselect; history shared with the inline filter bar; active filter shows a subtle background watermark; filter state restored when navigating to a path from history)* `[cmd/pane/filter]`
+- Path from Other Pane (`Ctrl+.`) `[cmd/pane/setPathFromOtherPane]`
 
 #### Files (targets Focused pane unless explicitly stated)
 
-- Rename… (`F2`) `[cmd/pane/rename]`
-- Batch Rename… (`⊘`) `[cmd/pane/batchRename]`
 - Open / Execute (`Enter`) `[cmd/pane/executeOpen]`
 - View (`F3`) `[cmd/pane/view]`
-- View Width… (`Ctrl+Shift+F3`) `[cmd/app/viewWidth]`
 - Alternate View (`Alt+F3`) `[cmd/pane/alternateView]`
 - View With >
   - *(Viewer list, dynamic)*
@@ -475,27 +528,36 @@ Notation:
 - Edit With >
   - *(Editor list, dynamic)*
     - `<Editor Name>` (`⊘`; parameterized: editorId) `[cmd/pane/editWith]`
-- Edit New File… (`Shift+F4`) `[cmd/pane/editNew]`
-- Copy… (`F5`) `[cmd/pane/copyToOtherPane]`
-- Move/Rename… (`F6`) `[cmd/pane/moveToOtherPane]`
-- Delete >
-  - Delete (`F8`) `[cmd/pane/delete]`
-  - Move to Recycle Bin (`Del`) `[cmd/pane/moveToRecycleBin]`
-- Permanent Delete (`Shift+F8` / `Shift+Del`) `[cmd/pane/permanentDelete]`
-- Properties (`Alt+Enter`) `[cmd/pane/openProperties]`
-- Context Menu (`Shift+F10`) `[cmd/pane/contextMenu]`
-- Context Menu (Current Directory) (`Alt+Shift+F10`) `[cmd/pane/contextMenuCurrentDirectory]`
-- Security… (`⊘`) `[cmd/pane/openSecurity]`
 - ---
-- Change Attributes… (`Ctrl+F8`) `[cmd/pane/changeAttributes]`
-- Change Case… (`Ctrl+F7`) `[cmd/pane/changeCase]`
-- Pack… (`Alt+F5`) `[cmd/pane/pack]`
-- Unpack… (`Alt+F6`) `[cmd/pane/unpack]`
 - New >
   - Folder… (`F7`) `[cmd/pane/createDirectory]`
+  - Edit New File… (`Shift+F4`) `[cmd/pane/editNew]`
   - ---
   - *(Shell “New” templates, dynamic)*
     - `<Template Name>` (`⊘`; parameterized: templateId) `[cmd/pane/newFromShellTemplate]`
+- ---
+- Rename… (`F2`) `[cmd/pane/rename]`
+- Batch Rename… (`⊘`) `[cmd/pane/batchRename]`
+- Change Case… (`Ctrl+F7`) `[cmd/pane/changeCase]`
+- Change Attributes… (`Ctrl+F8`) `[cmd/pane/changeAttributes]`
+- ---
+- Copy (`F5`) `[cmd/pane/copyToOtherPane]`
+- Copy with Options… (`Shift+F5`) `[cmd/pane/copyToOtherPaneWithOptions]`
+- Move/Rename (`F6`) `[cmd/pane/moveToOtherPane]`
+- Move/Rename with Options… (`Shift+F6`) `[cmd/pane/moveToOtherPaneWithOptions]`
+- ---
+- Pack… (`Alt+F5`) `[cmd/pane/pack]`
+- Unpack… (`Alt+F6`) `[cmd/pane/unpack]`
+- ---
+- Delete… (`F8`) `[cmd/pane/delete]`
+- Move to Recycle Bin (`Del`) `[cmd/pane/moveToRecycleBin]`
+- Delete Permanently… (`Shift+F8` / `Shift+Del`) `[cmd/pane/permanentDelete]`
+- ---
+- Properties (`Alt+Enter`) `[cmd/pane/openProperties]`
+- Security… (`⊘`) `[cmd/pane/openSecurity]`
+- Shell Context Menu >
+  - Selected Item… (`Shift+F10`) `[cmd/pane/contextMenu]`
+  - Current Folder… (`Alt+Shift+F10`) `[cmd/pane/contextMenuCurrentDirectory]`
 - ---
 - Exit (`Alt+F4`) `[cmd/app/exit]`
 
@@ -506,10 +568,11 @@ Notation:
 - Paste (`Ctrl+V` target; also `Shift+Insert` default binding) `[cmd/pane/clipboardPaste]`
 - Paste Shortcut (`⊘`) `[cmd/pane/clipboardPasteShortcut]`
 - ---
-- Copy Path + Name as Text (`Alt+Insert`) `[cmd/pane/copyPathAndNameAsText]`
-- Copy Name as Text (`Alt+Shift+Insert`) `[cmd/pane/copyNameAsText]`
-- Copy Path as Text (`Ctrl+Alt+Insert`) `[cmd/pane/copyPathAsText]`
-- Copy UNC Path + Name as Text (`Ctrl+Shift+Insert`) `[cmd/pane/copyUncPathAndNameAsText]`
+- Copy as Text >
+  - Path + Name (`Alt+Insert`) `[cmd/pane/copyPathAndNameAsText]`
+  - Name (`Alt+Shift+Insert`) `[cmd/pane/copyNameAsText]`
+  - Path (`Ctrl+Alt+Insert`) `[cmd/pane/copyPathAsText]`
+  - UNC Path + Name (`Ctrl+Shift+Insert`) `[cmd/pane/copyUncPathAndNameAsText]`
 - Note: this resolves mapped drives to their provider UNC path and local file-system paths to `\\<machine>\<drive>$\...` when available.
 - Note: `Name` means filename plus extension.
 - ---
@@ -518,12 +581,11 @@ Notation:
 - Invert Selection (`⊘`) `[cmd/pane/selection/invert]`
 - Select All (`Ctrl+A` target) `[cmd/pane/selection/selectAll]`
 - Unselect All (`Esc`) `[cmd/pane/selection/unselectAll]`
-- Restore Selection (`Ctrl+Shift+F6`) `[cmd/pane/selection/restore]`
 - Select Next (`Insert`) `[cmd/pane/selectNext]`
 - Select + Calculate Directory Size + Next (`Space`) `[cmd/pane/selectCalculateDirectorySizeNext]`
-- Advanced >
+- Advanced Selection >
   - Save Selection (`Ctrl+Shift+F5`) `[cmd/pane/selection/save]`
-  - Load Selection… (`Ctrl+Shift+F6`) `[cmd/pane/selection/restore]`
+  - Restore Selection… (`Ctrl+Shift+F6`) `[cmd/pane/selection/restore]`
   - ---
   - Select Same Extensions (`Ctrl+Shift+<key left of Backspace>`) `[cmd/pane/selection/selectSameExtension]`
   - Unselect Same Extensions (`Ctrl+Shift+<key right of 0>`) `[cmd/pane/selection/unselectSameExtension]`
@@ -538,29 +600,36 @@ Notation:
   - Go to Previous Selected Name (`Alt+Up`) `[cmd/pane/selection/goToPreviousSelectedName]`
   - Go to Next Selected Name (`Alt+Down`) `[cmd/pane/selection/goToNextSelectedName]`
 
+Selection commands operate on the concrete displayed set, not on a latent mask or sticky Select All mode. Filtering/hiding a selected identity removes it from selection, and later revealing it does not restore selection. Therefore Select All followed by filter and unfilter is no longer Select All. Save/Restore Selection is the explicit exception: Restore selects only saved identities displayed at the instant Restore runs; identities still excluded remain unselected until Restore is invoked again after they become visible.
+
 #### Commands (targets Focused pane unless explicitly stated)
 
-- Create Directory… (`F7`) `[cmd/pane/createDirectory]`
 - Change Directory… (`Shift+F7`) `[cmd/pane/changeDirectory]` *(opens NavigationView address edit; mounted: `<instanceContext>|/path`)*
+- Find Files and Directories… (`Alt+F7` / `Ctrl+F`) `[cmd/pane/find]`
+- Quick Search (`Shift+Space`) `[cmd/pane/quickSearch]`
+- ---
 - Compare Directories… (`Ctrl+F10`) `[cmd/app/compare]`
 - Calculate Occupied Space (`Alt+F10`) `[cmd/pane/viewSpace]`
-- Find Files and Directories… (`Alt+F7` / `Ctrl+F`) `[cmd/pane/find]`
 - Make File List… (`⊘`) `[cmd/pane/makeFileList]`
 - Go to Shortcut or Link Target (`⊘`) `[cmd/pane/goToShortcutOrLinkTarget]`
 - ---
-- List of Opened Files (`Alt+F11`) `[cmd/pane/listOpenedFiles]`
-- Show Folders History (`Alt+F12`) `[cmd/pane/showFoldersHistory]` *(opens NavigationView history dropdown)*
+- List Opened Files (`Alt+F11`) `[cmd/pane/listOpenedFiles]`
+- Show Folder History (`Alt+F12`) `[cmd/pane/showFoldersHistory]` *(opens NavigationView history dropdown)*
+- Open Active Pane Menu (`F10`) `[cmd/pane/menu]`
+- Command Palette… (`Ctrl+Shift+P`) `[cmd/app/commandPalette]`
 - ---
-- Connect Network Drive… (`F11`) `[cmd/pane/connect]` *(opens the Windows dialog; remote path is editable; when focused pane is File System browsing an UNC path (`\\\\...`), prefill remote name with the current path; otherwise open with no prefill; on success, if a new logical drive appears, navigate the focused pane to the new drive root)*
-- Disconnect… (`F12`) `[cmd/pane/disconnect]` *(opens the Windows dialog; before opening, cancel any pending enumeration and clear DirectoryInfoCache (stops folder watchers) for the focused pane; if focused pane is a mapped network drive, preselect it; if the focused pane drive is removed, navigate to the default file system root)*
-- Shared Directories… (`Ctrl+Shift+F9`) `[cmd/pane/shares]`
+- Connections >
+  - Connections Manager… (`⊘`) `[cmd/pane/connections]`
+  - Connect Network Drive… (`F11`) `[cmd/pane/connect]`
+  - Disconnect… (`F12`) `[cmd/pane/disconnect]`
+  - Shared Directories… (`Ctrl+Shift+F9`) `[cmd/pane/shares]`
 - ---
-- Command Shell (`Ctrl+Alt+T`) `[cmd/pane/openCommandShell]` *(opens Windows Terminal's default profile at focused pane path when available, otherwise falls back to `cmd.exe`; mounted: opens at mount backing folder)*
-- Quick Search (`Shift+Space`) `[cmd/pane/quickSearch]`
-- Bring Current Directory to Command Line (`Ctrl+Space`) `[cmd/pane/bringCurrentDirToCommandLine]`
-- Bring Filename to Command Line (`Ctrl+Enter`) `[cmd/pane/bringFilenameToCommandLine]`
-- Pane Menu (`F10`) `[cmd/pane/menu]`
-- Reread Associations (`⊘`) `[cmd/app/rereadAssociations]`
+- Terminal >
+  - Command Shell Window (`Ctrl+Alt+T`) `[cmd/terminal/openFloatingWindow]` *(opens the singleton floating Terminal window at the focused pane folder)*
+  - ---
+  - Insert Current Directory (`Ctrl+Space`, `Ctrl+Shift+Space`) `[cmd/pane/bringCurrentDirToCommandLine]`
+  - Insert Focused Item (`Ctrl+Enter`) `[cmd/pane/bringFilenameToCommandLine]`
+  - Insert Full Path (`Ctrl+Shift+Enter`) `[cmd/pane/bringFullPathToTerminal]`
 - ---
 - User Menu >
   - *(User menu items, dynamic)*
@@ -575,6 +644,9 @@ Notation:
     - Music (`⊘`) `[cmd/app/openFileExplorerKnownFolder]`
     - Videos (`⊘`) `[cmd/app/openFileExplorerKnownFolder]`
     - OneDrive (`⊘`) `[cmd/app/openFileExplorerKnownFolder]` *(disabled when not present)*
+- ---
+- Reread Associations (`⊘`) `[cmd/app/rereadAssociations]`
+- Preferences… (`⊘`) `[cmd/app/preferences]`
 
 #### Plugins
 
@@ -604,17 +676,21 @@ Notation:
   - Next Theme (`Shift+F12`) `[cmd/app/theme/selectNext]`
 - ---
 - Toggle Fullscreen (`Ctrl+Shift+F11`) `[cmd/app/fullScreen]`
+- View Width… (`Ctrl+Shift+F3`) `[cmd/app/viewWidth]`
+- ---
 - Window Menu (`Alt+Space`) `[cmd/pane/windowMenu]`
 - Switch Pane Focus (`Tab`) `[cmd/pane/switchPaneFocus]`
-- Show Function Bar (`⊘`; checkable) `[cmd/app/toggleFunctionBar]`
-- Show Menu (`⊘`; checkable) `[cmd/app/toggleMenuBar]`
 - ---
-- Preferences… (`⊘`) `[cmd/app/preferences]`
+- File Operations (`Ctrl+Shift+J`) `[cmd/app/showFileOperations]`
+- Failed Operations Pane (`⊘`; checkable) `[cmd/app/toggleFileOperationsFailedItems]`
+- Function Bar (`⊘`; checkable) `[cmd/app/toggleFunctionBar]`
+- Menu Bar (`⊘`; checkable) `[cmd/app/toggleMenuBar]`
 
 #### Right (pane menu: targets Right pane)
 
 Right menu is identical to Left menu, except:
 - Change Drive (`Alt+F2`) *(opens file-system drive menu; when pane is in a non-`file` plugin, the NavigationView menu also exposes a bottom “Change Drive” submenu)* `[cmd/app/openRightDriveMenu]`
+- Terminal Pane uses the Right pane as source and the physical Left pane as terminal host.
 - All `cmd/pane/*` entries target the Right pane.
 
 #### Help (right-justified)
@@ -674,6 +750,9 @@ Right menu is identical to Left menu, except:
 - `cmd/app/theme/selectNext` and `cmd/app/theme/selectPrev` MUST cycle through selectable themes in the same order shown by the Theme menu.
 - The cycle order MUST be: System, Light, Dark, Rainbow, High Contrast (App), theme files sorted by name/id, then user settings themes sorted by name/id.
 - Cycling MUST wrap at either end and MUST skip the High Contrast (System) read-only indicator.
+- Keyboard and Function Bar Previous/Next, View -> Theme Previous/Next, and a different direct View -> Theme or Function Bar choice MUST show the passive centered theme-cycle status overlay defined by `UI_ThemeCycleOverlay.md`.
+- The overlay MUST show the newly active theme in the center with exact previous/next ring neighbors at logical top-leading/bottom-trailing. Direct choices use neutral motion; Previous/Next use directional motion.
+- Selecting the active direct theme is a no-op and MUST NOT show or restart the overlay. Startup, Preferences, hot reload, programmatic/other-`WM_COMMAND` changes, and ordinary parameterized direct-theme shortcuts MUST NOT show it.
 
 #### External Action Macros
 
@@ -685,22 +764,43 @@ Settings-driven external viewer/editor/user-menu launch strings MUST support the
 | `{FullPath}` | Current item full path, including filename. |
 | `{PathAndFilename}` | Alias for `{FullPath}`. |
 | `{Filename}` | Current item filename only. |
-| `{SelectedPathsFile}` | Temporary file containing selected item paths, when supplied by the command. |
+| `{SelectedPathsFile}` | Private launch-readable UTF-16LE manifest containing selected item paths, created only when requested by the action. |
 | `{OppositePanePath}` | Opposite pane current path. |
 | `{ComputerName}` | Current computer name used for settings filters. |
 
 - Literal braces MUST be escaped as `{{` and `}}`.
 - Unknown macros, unclosed macros, and required macros with missing context MUST fail validation before any process is launched.
 - The launch-plan builder MUST be deterministic and testable without starting a process.
+- A selected-path manifest MUST contain the UTF-16LE BOM followed by one nonempty path and one exact CRLF terminator per record, in original selection order. It MUST NOT normalize or deduplicate records. Every record MUST be validated before directory/file creation; embedded NUL, CR, or LF returns `HRESULT_FROM_WIN32(ERROR_INVALID_DATA)`, produces localized launch-failure feedback with that precise HRESULT, and creates neither a manifest nor a process. An all-empty input is missing macro context rather than an empty manifest.
+- Selected paths MUST cross the launch-plan boundary as a non-owning span over the command's existing selection. The focused-item fallback owns at most one local path for the synchronous build. Serialization MUST use checked byte accounting and a bounded 64 KiB buffer to stream the BOM, each path, and each CRLF through `Common::HandleIo::WriteAll`; it MUST NOT copy the complete selection or construct a second aggregate payload.
+- Production manifests MUST be created beneath the validated, non-reparse `%LOCALAPPDATA%\RedSalamander\SelectedPaths` root. Names use the `selected-paths-<GUID>.txt` namespace and bounded exclusive `CREATE_NEW` retries, including long-path-safe I/O. A collision MUST preserve the existing object; exhausting the retry bound MUST fail without selecting or truncating a colliding path.
+- The move-only launch lease MUST retain both the created manifest's `FILE_ID_INFO` and the validated root's `FILE_ID_INFO`. The creation and root handles MUST be closed after the complete write/flush and before child launch; the application MUST NOT impose a persistent no-delete guard or undocumented child share mode.
+- Live cleanup MUST first reopen the recorded root no-follow, require the same root identity, then open the recorded candidate exactly once with `DELETE | FILE_READ_ATTRIBUTES`, `OPEN_EXISTING`, `FILE_FLAG_OPEN_REPARSE_POINT`, and `FILE_SHARE_READ | FILE_SHARE_WRITE`. It MUST reject directories, reparse points, and a different file identity, and may mark deletion only through that same verified handle. A missing, busy, inaccessible, replaced, moved-root, or otherwise uncertain object MUST survive; cleanup MUST NOT perform a pathname delete after an identity check.
+- Crash recovery MUST enumerate only the validated private manifest root. Production schedules at most one process-wide threadpool recovery callback after the first successful production-root resolution, outside the synchronous launch-plan work. A file becomes disposable only after 24 hours; each pass is bounded to 128 inspected entries, 16 deletions, and 20 ms, carries a case-insensitive continuation cursor, and the callback stops after at most 32 passes. Directories, reparse points, fresh entries, incompatible-share/live entries, out-of-root objects, and uncertain candidates MUST survive. Recovery MUST report content-free inspected/deleted/skipped/error/bound/pass metrics.
+- Ordinary argument macros MUST use `Common::Process::QuoteWindowsCommandLineArgument`. A macro whose surrounding quotes are already owned by the template uses the separately named FileActionLauncher content-only escape operation; that operation is not a complete-argument quoting contract.
 
 #### Viewer and Editor Commands
 
 - `cmd/pane/view` and `cmd/pane/edit` MUST target the focused item in the active pane and resolve the primary action from `fileActions.viewers.associations` or `fileActions.editors.associations`.
 - `cmd/pane/alternateView` and `cmd/pane/alternateEdit` MUST resolve the alternate action from `fileActions`. If no applicable alternate action exists, the command MUST show a localized pane alert instead of opening the primary action or doing nothing.
 - `cmd/pane/viewWith` and `cmd/pane/editWith` MUST populate their dynamic menus from applicable configured actions for the focused item. Parameterized forms (`cmd/pane/viewWith/<viewerId>` and `cmd/pane/editWith/<editorId>`) MUST launch the configured action whose ID matches case-insensitively.
-- External viewer/editor actions MUST use the macro contract above, including creating and later cleaning up `{SelectedPathsFile}` only when the launch string requests it.
+- External viewer/editor/user-menu actions MUST use the macro contract above, including creating `{SelectedPathsFile}` only when the launch string requests it. The launch plan owns exactly one move-only identity-bearing lease. Ownership transfers through launch and any deferred wait; pre-launch allocation/wait-registration/launch failures attempt exact-object cleanup immediately, waited completion and exit-query paths attempt it on return, and asynchronous, timeout, wait-failure, or successful-null-handle paths retain the lease until process completion or a hard ten-minute fallback. Shared `%TEMP%` filename patterns are not selected-path ownership and MUST NOT be scanned.
+- Deterministic Commands coverage is split across `file_action_selected_paths_creation_contract`, `file_action_selected_paths_record_contract`, `file_action_selected_paths_streaming_perf`, `file_action_selected_paths_child_parse`, `file_action_selected_paths_identity_cleanup`, `file_action_selected_paths_recovery_bounds`, `file_action_provider_record_rejected_in_command_route`, `user_menu_populates_and_dispatches_configured_actions`, `file_action_external_launch_plan_macros`, and `file_action_selected_paths_file_lifecycle`. The SearchService representative child MUST open and parse the complete manifest grammar, report `parsed:<count>`, and prove that a deliberate same-path replacement remains after lease cleanup; existence-only evidence is insufficient.
 - Disabled, filtered, missing, invalid-id, macro-validation, and process-launch failures MUST report precise localized feedback with enough context for the user to fix the action.
 - `cmd/pane/editNew` MUST create a new file in the active pane's current directory after validating the requested filename. Its Editor combo MUST be filtered from `editNewActionId` associations by extension/pattern/default row, current computer, action applicability, and executable availability; creating the file is allowed even when no applicable editor is available.
+
+#### Show File Operations (`cmd/app/showFileOperations`)
+
+- Invoking the command MUST show the existing File Operations popup without changing task,
+  conflict, consent, selection, focus-within-task, pause, or cancellation state.
+- Caption Close remains hide-only. The command is the explicit reachability path for a hidden popup,
+  including a task parked on an actionable decision.
+- Publishing a newly actionable conflict or consent decision MUST automatically show the popup
+  without submitting, focusing, or otherwise changing that decision. A user Close after publication
+  wins until another actionable decision is published or this command is invoked.
+- The command is in the View menu and command palette and has the application-scope default
+  shortcut `Ctrl+Shift+J`, so it remains available from Folder, Navigation, Preview, and Terminal
+  contexts subject to the edit-control safety rule.
 
 #### View Width (`cmd/app/viewWidth`)
 
@@ -729,6 +829,7 @@ Settings-driven external viewer/editor/user-menu launch strings MUST support the
 - It MUST apply attribute changes, timestamp changes, and stream removal per item, refresh the pane when anything changed, and show a localized operation report with processed items, changed attribute count, changed date/time count, removed stream count, failure count, and first failure HRESULT when failures occur.
 - When Include subdirectories is enabled, the command MUST run as a File Operations informational task. The task MUST show enumeration/apply status, including the current path and item counts, and MUST finish with the same localized summary shown by the pane feedback overlay.
 - Recursive Change Attributes MUST include each selected folder itself and its descendants. It MUST enumerate descendants through the active provider's directory API and MUST NOT follow child directories marked as reparse points, so mount points and other link-like folders are changed only as selected items and are not traversed.
+- Change Attributes MUST apply the shared File Operations artifact-touch authority. Non-recursive work obtains one exact-set receipt after option acceptance and revalidates each guarded selected object immediately before mutation. Recursive work completes its one-pass discovery, pauses before the first mutation for the UI-thread warning, retains the accepted receipt on the worker, and reopens/rebinds each guarded descendant no-follow immediately before changing it. Cancel or any replacement/identity mismatch stops the remaining work before another mutation.
 - Unsupported providers, empty selections, canceled dialogs, and no-op dialogs MUST report or return without falling through to the generic "not implemented" message.
 - Deterministic command selftests MUST cover selected-item scope, attribute set/clear/leave-unchanged cycling, date/time rows, Include subdirectories enablement, recursive date/time application with File Operations progress, alternate data stream removal, report contents, and archived `fileattrs.*` timing metrics.
 
@@ -782,6 +883,13 @@ Settings-driven external viewer/editor/user-menu launch strings MUST support the
   `Ctrl+Left/Right`, `Ctrl+Backspace/Delete`, `Ctrl+A/C/X/V/Z/Y`, `Ctrl+Insert`, `Shift+Insert`, and `Shift+Delete` MUST edit, select,
   copy, cut, paste, undo, or redo the proposed name instead of dispatching pane shortcuts.
 - The new name MUST be trimmed; empty input MUST be rejected (warning beep) and the dialog MUST remain open.
+- After the dialog returns, the central Inline F2 admission uses the active provider's typed child-name validation, joined path, and collision key. Provider-invalid or unsupported names fail before task publication; the command does not apply Windows filename rules to virtual providers.
+
+#### Create Directory (`cmd/pane/createDirectory`)
+
+- The initial suggestion enumerates the parent exactly once through `IFileSystem::ReadDirectoryInfo`, converts every existing child name through the active provider collision-key method (an existing child the provider cannot key is skipped, never a reason to refuse the command), validates and keys each default/suffixed candidate through the composite child-name contract, and selects the first provider-valid untaken key.
+- Final qualification uses the composite typed child-name result. Provider Invalid preserves its exact HRESULT; missing, unsupported, malformed, or changed facts fail before mutation. The command uses the provider-owned joined path and never guesses a separator or reapplies Win32 child-name validation after provider acceptance.
+- An automatic suffix Retry repeats provider validation/join/key qualification for the candidate. It never uses plugin short IDs or host case folding to decide whether a sibling name is taken.
 
 #### Batch Rename (`cmd/pane/batchRename`)
 
@@ -789,6 +897,9 @@ Settings-driven external viewer/editor/user-menu launch strings MUST support the
 - The command target is the focused pane when focus is inside a pane; otherwise it is the active pane.
 - The initial target set is selected items when there is a selection. If no item is selected, the focused item or current folder scope is used according to the Batch Rename window spec.
 - The command MUST remain preview-first: no rename may run until the Batch Rename preview has produced a valid plan and the user invokes `Rename`.
+- A cyclic mapping is not a valid plan: every cycle member shows `name_dependency_cycle`, `Rename`
+  stays disabled, and guidance requires an explicit temporary intermediate name followed by a second
+  acyclic pass. Batch Rename creates no recovery journal and exposes no Resume or Roll back command.
 - The command has no default keyboard shortcut in v1; users may assign one through the shortcut settings once the command is registered.
 
 #### Change Case (`cmd/pane/changeCase`)
@@ -817,8 +928,14 @@ Settings-driven external viewer/editor/user-menu launch strings MUST support the
   - MUST be available for any filesystem plugin.
   - When enabled, traversal MUST be **non-recursive** (iterative) to avoid stack overflow on deep directory hierarchies.
   - Traversal MUST use the active plugin’s directory enumeration semantics (it MUST work with non-Windows / plugin-specific paths).
- - Execution MUST be asynchronous (no long UI-thread stalls) and MAY surface progress as an informational task in the File Operations popup for long runs.
+  - Discovery MUST finish before the first rename. Each selected root is bound no-follow to obtain its typed file/directory kind. A failed read of a selected or discovered directory MUST return the exact provider failure and MUST NOT omit the subtree or begin mutation. A successful read with no information object is `E_UNEXPECTED`.
+ - Discovery MUST be asynchronous and MUST NOT stall the UI thread. A run that reaches the 700 ms reveal threshold uses registered asynchronous message payloads and one shared task-creation receipt. Reveal, progress, and discovery completion resolve to one informational task ID; posting failure, a stale token, or window teardown releases payload state without blocking the worker.
+ - Successful discovery emits immutable provider-qualified mappings into `RenamePlan(ChangeCase)`. The central File Operations task then owns Queue/Parallel admission, identity and namespace revalidation, artifact warning, conflicts, acyclic scheduling, conditional rename mutation, cancellation, typed terminal results, popup presentation, and completion refresh. Production Change Case MUST NOT call `FileSystemRenameBatch` or another command-private mutation executor.
+ - Cancellation MUST remain `ERROR_CANCELLED`. If a later rename batch fails, Change Case MUST return that exact first failure while preserving the observable effects of batches that already completed; it MUST NOT convert either outcome to success.
  - Case-only renames on case-insensitive file systems SHOULD be supported (use a temp rename where required).
+ - Planning validates every changed leaf through the active provider's typed child-name contract before the artifact guard or first rename. Duplicate targets combine the typed parent key with provider collision keys. Provider Invalid/Unsupported/malformed output returns exact failure with zero rename calls; no Windows name or separator rule is a fallback.
+ - Each scheduled step revalidates the provider joined path and collision key immediately before its central conditional-rename boundary. The full provider ID, not a short display ID, identifies the contract generation.
+ - Change Case MUST apply the shared File Operations artifact-touch authority after complete discovery and central worker qualification. The central task pauses once before the first rename for the UI-thread warning, retains the accepted receipt, revalidates it before execution, and reopens/rebinds each source no-follow at its mutation boundary. Cancel or any replacement/identity mismatch prevents that step and all dependent steps from mutating.
 
 #### Select / Unselect (Mask Dialog) (`cmd/pane/selection/selectDialog`, `cmd/pane/selection/unselectDialog`)
 
@@ -850,7 +967,7 @@ Settings-driven external viewer/editor/user-menu launch strings MUST support the
 
 ### Command/menu mapping status (Current implementation)
 
-- Main menu structure is implemented in `RedSalamander/RedSalamander.rc` and follows the target top-level layout.
+- Main menu structure is implemented in `RedSalamander/RedSalamander.rc` and follows the current top-level contract above.
 - Shortcut text in menus is dynamic (reflects the effective current bindings).
 
 **Menu items still using pane-specific `WM_COMMAND` IDs (not `CommandRegistry`-mapped yet):**
@@ -860,7 +977,7 @@ Settings-driven external viewer/editor/user-menu launch strings MUST support the
 - `Left/Right → Maximize/Restore Pane` (`IDM_LEFT_ZOOM_PANEL` / `IDM_RIGHT_ZOOM_PANEL`)
 - `Left/Right → Filter…` (`IDM_LEFT_FILTER` / `IDM_RIGHT_FILTER`)
 - `Left/Right → Refresh` (`IDM_LEFT_REFRESH` / `IDM_RIGHT_REFRESH`)
-- `Commands → Open File Explorer → Known folders` (`IDM_APP_OPEN_FILE_EXPLORER_*`) — labels are Shell-localized; planned to route to parameterized `cmd/app/openFileExplorerKnownFolder`.
+- `Commands → Open File Explorer → Known folders` (`IDM_APP_OPEN_FILE_EXPLORER_*`) — labels are Shell-localized and the resource-command route is the current implementation. Consolidation with the registered parameterized command family is an optional architecture decision, not an implied migration.
 - Debug-only overlay sample entries: `Left/Right → Overlay Sample [dbg] → *` and `FolderView context → Overlay Sample [dbg] → *`.
 
 **`cmd/*` commands whose non-zero `wmCommandId` does not appear in `RedSalamander/RedSalamander.rc` today (equivalent UI exists via pane-specific IDs or popups):**
@@ -868,9 +985,9 @@ Settings-driven external viewer/editor/user-menu launch strings MUST support the
 - `cmd/pane/sort/attributes` (`IDM_PANE_SORT_ATTRIBUTES`) — main menu uses `IDM_LEFT_SORT_ATTRIBUTES` / `IDM_RIGHT_SORT_ATTRIBUTES`.
 - `cmd/pane/userMenu` (`IDM_PANE_USER_MENU`) — the Commands menu exposes a `User Menu` popup root; items are dynamic.
 
-## Canonical Shortcut Map (Target)
+## Shortcut And Function Bar Contract
 
-This section documents the intended default bindings; the implementation may temporarily differ while shortcut customization is being built.
+`ShortcutDefaults.cpp` owns the mechanical current default-binding inventory. The rules below own stable user semantics, scope, and Function Bar presentation; documentation and implementation must be changed together when a default changes.
 
 ### Function Bar (Command Bar UI)
 
@@ -898,6 +1015,12 @@ The application window includes a bottom **Function Bar** to make the current sh
   - Clicking a zone invokes the binding for the current modifier set.
 
 All Function Bar bindings MUST be configurable in settings.
+Function Bar bindings use virtual-key identity only because keyboard and pointer
+dispatch do not carry one common scan-code identity. Preferences capture
+normalizes a Function Bar chord to `vk`; schema, settings loading, and import
+reject a persisted Function Bar `keyPosition`. Application, Folder View, and
+Terminal keyboard dispatch preserve the original scan code and extended bit and
+therefore support the documented physical number-row positions.
 
 ### Default Function Bar Bindings
 
@@ -945,7 +1068,7 @@ This means any key listed as a valid `vk` in `Specs/Core/Core_SettingsStore.md` 
 | X         | ⊘                                  | Clipboard Cut                    | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | V         | ⊘                                  | Clipboard Paste                  | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | L         | ⊘                                  | Focus Address Bar                | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
-| T         | ⊘                                  | ⊘                                | ⊘                        | ⊘                                  | ⊘                                 | Command Shell     | ⊘                     |
+| T         | ⊘                                  | ⊘                                | ⊘                        | ⊘                                  | ⊘                                 | Command Shell Window | ⊘                  |
 | D         | ⊘                                  | ⊘                                | Focus Address Bar        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | Up        | ⊘                                  | ⊘                                | Go to Previous Selected Name | ⊘                              | ⊘                                 | ⊘                 | ⊘                     |
 | Down      | ⊘                                  | ⊘                                | Go to Next Selected Name | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
@@ -958,8 +1081,8 @@ This means any key listed as a valid `vk` in `Specs/Core/Core_SettingsStore.md` 
 | 5         | ⊘                                  | ⊘                                | Display as Thumbnails    | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | 0..9      | ⊘                                  | Go to Hot Path (`Ctrl+<digit>`)  | ⊘                        | ⊘                                  | Set Hot Path (`Ctrl+Shift+<digit>`) | ⊘               | ⊘                     |
 | A..Z      | ⊘                                  | ⊘                                | ⊘                        | Go to Drive Root (`<drive>:\\`)    | ⊘                                 | ⊘                 | ⊘                     |
-| Enter     | Execute / Open                     | Bring Filename to Command Line   | Open Properties          | ⊘                                  | Bring Filename to Command Line    | ⊘                 | ⊘                     |
-| Space     | Select + Calc Dir Size + Next      | Bring Current Dir to Command Line | Window Menu              | Quick Search                       | Bring Current Dir to Command Line | ⊘                 | ⊘                     |
+| Enter     | Execute / Open                     | Insert Focused Item in Terminal  | Open Properties          | ⊘                                  | Insert Full Path in Terminal      | ⊘                 | ⊘                     |
+| Space     | Select + Calc Dir Size + Next      | Insert Current Dir in Terminal   | Window Menu              | Quick Search                       | Insert Current Dir in Terminal    | ⊘                 | ⊘                     |
 | Insert    | Select + Next                      | Clipboard Copy                   | Copy Path + Name as Text | Clipboard Paste                    | Copy UNC Path + Name as Text      | Copy Path as Text | Copy Name as Text     |
 | Delete    | Move to Recycle Bin                | ⊘                                | ⊘                        | Permanent Delete                    | Permanent Delete                    | ⊘                 | ⊘                     |
 
@@ -970,13 +1093,15 @@ Notes:
 ### Shortcut Customization UI (Preferences)
 
 - The main menu includes `View → Preferences...` (near the bottom, separated).
-- The settings dialog includes a `Shortcuts` tab with sections:
-  - Function Bar shortcuts (F1..F12)
-  - Folder view shortcuts (all supported keys)
+- The settings dialog includes a `Keyboard` page with Application, Function
+  Bar, Folder View, and Terminal scopes. Its rows come from `CommandRegistry`
+  metadata rather than a Preferences-local command list.
 - Settings are loaded at application startup; shortcut bindings are restored and applied before the first main window interaction.
-- If `settings.shortcuts` is absent, startup MUST initialize every canonical default binding for both Function Bar and FolderView scopes.
+- If `settings.shortcuts` is absent, startup MUST initialize every canonical
+  default binding for all four scopes.
 - If `settings.shortcuts` exists, startup MUST restore every missing canonical default chord unless that chord already has a non-empty binding. Existing custom bindings and `cmd/shortcut/unassigned` sentinels are user customizations and MUST NOT be overwritten.
-- Preferences → Keyboard `Remove` MUST erase custom bindings, but removing a canonical default binding MUST persist that chord as `cmd/shortcut/unassigned` so startup does not recreate it. Moving a canonical default command away from its default chord MUST likewise leave `cmd/shortcut/unassigned` on the vacated default chord when no other binding occupies it.
+- Preferences → Keyboard `Remove` MUST erase custom bindings, but removing a canonical default binding MUST persist that chord as `cmd/shortcut/unassigned` so startup does not recreate it. Moving a canonical default command away from its default chord MUST likewise leave `cmd/shortcut/unassigned` on the vacated default chord when no other binding occupies it. Terminal scope additionally exposes `cmd/shortcut/passthrough`, which yields the exact original key message to the Terminal child. `cmd/shortcut/unassigned` consumes the chord as a no-op in every scope.
+- Preferences and startup settings validation are scope-aware: `cmd/shortcut/passthrough` is rejected outside Terminal, and physical `keyPosition` is rejected in Function Bar. Startup recovers only an invalid `shortcuts` section; import rejects the invalid document with localized feedback.
 - In the Shortcuts window, clicking the `Key` column MUST sort by semantic key identity rather than the rendered chord text. Ascending order is: function keys (`F1`..`F24`, numeric order), digit keys (`0`..`9`), letter keys (`A`..`Z`), then other keys by localized key display text. Rows with the same base key MUST stay together and compare by displayed modifier phrase alphabetically (unmodified first), then by command text as a stable tie-breaker. Persisted `Key` sort state MUST use the same semantic order when the window is reopened.
 - Editing model (example):
 
@@ -1000,9 +1125,10 @@ Notes:
 **FolderView** (see `RedSalamander/FolderView.Interaction.cpp`)
 - Arrow keys / Home / End: move `Current item` without changing selection state (focused item may be selected or not).
 - `Page Up` / `Page Down`: horizontal paging by **visible columns** (layout is column-based)
-- `Shift+Arrow`: range selection from anchor (existing)
-- `Space`: select `Current item`, request folder subtree size computation (if folder), and advance to the next item
-- `Insert`: select `Current item` and advance to the next item (no folder subtree size computation)
+- `Shift+Arrow/Home/End/Page`: replace selection with the inclusive anchor-to-endpoint range and make the endpoint current. Preserve a valid anchor; otherwise capture and include the pre-move current item.
+- `Ctrl+Shift+Arrow/Home/End/Page`: add the inclusive anchor-to-endpoint range and make the endpoint current under the same anchor rule.
+- `Space`: toggle the captured `Current item`, recompute selected size from the post-toggle selected set, and advance to the next item without wrapping. Thus an unselected current item is selected, measured, and then left behind as current advances; an already-selected current item is deselected and removed from size work before the same advance.
+- `Insert`: toggle the captured `Current item` and advance to the next item without wrapping or requesting explicit folder-subtree size computation.
 - `Ctrl+A`: select all
 - `Ctrl+F`: open Find Files and Directories for the focused pane
 - `Ctrl+C`: copy `Selected items` to clipboard (or `Current item` when selection is empty)
@@ -1015,8 +1141,8 @@ Notes:
 - `F2`: rename `Current item`
 - `Tab` / `Shift+Tab`: move focus   between Pane `FolderView`s (no longer enters NavigationView)
 - `Alt+D` / `Ctrl+L`: focus NavigationView address edit
-- `Alt+Down`: go to next selected name
-- `Alt+Up`: go to previous selected name
+- `Alt+Down`: move current to the next selected displayed identity, wrapping within selection; preserve selection and set anchor to the destination
+- `Alt+Up`: move current to the previous selected displayed identity, wrapping within selection; preserve selection and set anchor to the destination
 - `Tab`: switch focus to the other pane’s `FolderView`.
   - `Shift+Tab`: same as `Tab` (two-pane toggle) unless later extended.
 
@@ -1082,17 +1208,19 @@ These keys target the **focused pane** as the source (unless stated otherwise):
 ### Space selection + folder size accumulation
 
 - **Space** (in `FolderView`):
-  - Toggle selection state of the `Current item`
-  - If the `Current item` is a folder, request folder subtree size computation for it.
-  - Move `Current item` to the next item (Down; wraps or clamps per current navigation rules).
+  - Capture the operated `Current item` before changing current-item position.
+  - Toggle selection state of that operated item. If it was unselected, select it; if it was selected, deselect it.
+  - Request selection-size recomputation from an immutable snapshot of the complete post-toggle selected set. A newly selected file contributes its known size directly. A newly selected folder starts or reuses asynchronous subtree-size computation. A deselected folder has pending work canceled and any later stale result discarded.
+  - Move `Current item` to the next displayed item when one exists. At the last item, keep it current; do not wrap. Advancing current MUST NOT implicitly select the destination item or otherwise change the remaining selection.
   - Update the pane status bar “selected bytes” to include:
     - File sizes directly.
     - Folder sizes computed by traversing all descendant folders (see below).
 - Moving `Current item` with Arrow/Home/End/Page keys MUST NOT clear existing selections.
  
 - **Insert** (in `FolderView`):
-  - Toggle selection state of the `Current item`
-  - Move `Current item` to the next item (Down; wraps or clamps per current navigation rules).
+  - Capture and toggle the operated `Current item` using the same selected/unselected transition as Space.
+  - Move `Current item` to the next displayed item when one exists; at the last item, keep it current and do not wrap.
+  - Do not request explicit folder-subtree size computation, and do not implicitly select the destination item.
 - Moving `Current item` with Arrow/Home/End/Page keys MUST NOT clear existing selections.
 - For responsiveness, **folder subtree size computation is triggered only by the Space workflow**. Other selection changes (mouse selection, Insert, `Ctrl`/`Shift` range selection) MUST update selection counts immediately but MUST NOT start folder subtree size computation.
 
@@ -1142,44 +1270,135 @@ These keys target the **focused pane** as the source (unless stated otherwise):
 - `Down` / `Right`: move to next match (wrap allowed)
 - Any “command/navigation” key (e.g., `Tab`, `Enter`, `Delete`, `F2`, `Home/End`, `Page Up/Down`) exits incremental search first, then performs the command
 
-## Implementation Plan (Proposed)
+## Terminal shortcut catalogue and command surfaces
 
-1. **Command catalog + resources**
-   - Add all planned `cmd/*` IDs to the command registry and ensure each has:
-     - Localized display name + description in `.rc` STRINGTABLE.
-     - A stable `WM_COMMAND` ID when it is invokable from the Win32 main menu.
-   - Keep the registry sorted; do not introduce new command namespaces outside `cmd/app/*` and `cmd/pane/*`.
+The Terminal scope has 46 factory binding rows backed by exactly 39
+Terminal-eligible command definitions. Three related definitions remain global
+Application commands and `F11` remains the existing Function Bar Connect
+command. Every definition provides a stable ID, localized title and
+description, executor, enabled-state query, scope eligibility, search keywords,
+and a Fluent Segoe UI Symbol visual ID. Missing glyphs use a text fallback only
+when the shared visual lookup has no supported symbol; consumers MUST NOT derive
+production icons from command-ID text.
 
-2. **Menu resource update (localization-first)**
-   - Replace the main `MENUEX` definition with the target top-level order (`Left, Files, Edit, Commands, Plugins, View, Right, Help`).
-   - Keep all static menu structure in `.rc`; runtime code only fills dynamic sections (history/hotpaths/themes/plugins/shell-driven lists).
-   - Ensure `Help` is right-justified.
+| Command | Stable command ID | Factory shortcut(s) |
+|---|---|---|
+| Exit RedSalamander | `cmd/app/exit` | `Alt+F4` |
+| Toggle Full Screen | `cmd/app/fullScreen` | `Alt+Enter` |
+| Connect | `cmd/pane/connect` | `F11` (Function Bar) |
+| Terminal Session Menu | `cmd/terminal/sessionMenu` | `Ctrl+Shift+Space` |
+| Settings | `cmd/app/preferences` | `Ctrl+,` (Application) |
+| Open Settings File | `cmd/app/openSettingsFile` | `Ctrl+Shift+,` (Application) |
+| Find Terminal Text | `cmd/terminal/find` | `Ctrl+Shift+F` |
+| RedSalamander Command Palette | `cmd/app/commandPalette` | `Ctrl+Shift+P` (Application) |
+| Show File Operations | `cmd/app/showFileOperations` | `Ctrl+Shift+J` (Application) |
+| Window System Menu | `cmd/app/systemMenu` | `Alt+Space` |
+| Command History Suggestions | `cmd/terminal/suggestions` | `Ctrl+Shift+.` |
+| New Terminal Tab / Other Pane | `cmd/terminal/tab/new` | `Ctrl+Shift+T` |
+| Open Floating Terminal / New Tab | `cmd/terminal/openFloatingWindow` | `Ctrl+Shift+N` |
+| Next Terminal Tab/Content | `cmd/terminal/tab/next` | `Ctrl+Tab` |
+| Previous Terminal Tab/Content | `cmd/terminal/tab/previous` | `Ctrl+Shift+Tab` |
+| Select Terminal Tab/Content 1 | `cmd/terminal/tab/select/1` | `Ctrl+Alt+1` |
+| Select Terminal Tab/Content 2 | `cmd/terminal/tab/select/2` | `Ctrl+Alt+2` |
+| Select Terminal Tab/Content 3 | `cmd/terminal/tab/select/3` | `Ctrl+Alt+3` |
+| Select Floating Terminal Tab 4 | `cmd/terminal/tab/select/4` | `Ctrl+Alt+4` |
+| Select Floating Terminal Tab 5 | `cmd/terminal/tab/select/5` | `Ctrl+Alt+5` |
+| Select Floating Terminal Tab 6 | `cmd/terminal/tab/select/6` | `Ctrl+Alt+6` |
+| Select Floating Terminal Tab 7 | `cmd/terminal/tab/select/7` | `Ctrl+Alt+7` |
+| Select Floating Terminal Tab 8 | `cmd/terminal/tab/select/8` | `Ctrl+Alt+8` |
+| Select Last Terminal Tab/Content | `cmd/terminal/tab/last` | `Ctrl+Alt+9` |
+| Close Terminal Tab | `cmd/terminal/close` | `Ctrl+Shift+W` |
+| Move Divider Left | `cmd/pane/resizeSplitter/left` | `Alt+Shift+Left` |
+| Move Divider Right | `cmd/pane/resizeSplitter/right` | `Alt+Shift+Right` |
+| Focus Left Pane | `cmd/pane/focus/left` | `Alt+Left` |
+| Focus Right Pane | `cmd/pane/focus/right` | `Alt+Right` |
+| Switch Pane Focus | `cmd/pane/switchPaneFocus` | `Ctrl+Alt+Left` |
+| Copy Terminal Selection | `cmd/terminal/copy` | `Ctrl+Shift+C`, `Ctrl+Insert` |
+| Copy Selection or Pass Through | `cmd/terminal/copySelectionOrPassthrough` | `Enter`, `Ctrl+C` |
 
-3. **Command routing + pane targeting**
-   - Route `WM_COMMAND` to a single command executor that resolves `cmd/pane/*` target pane based on:
-     - Explicit pane menu origin (Left/Right menus), else
-     - Focused pane, else active pane.
-   - Keep `WndProc` cases minimal and route to `On*` handlers (per AGENTS.md).
+`cmd/terminal/copySelectionOrPassthrough` is an `ITerminalActions` plugin action
+(`IsTerminalPluginActionId`). Palette and host execute query `GetActionState`
+(enabled iff a selection exists). Keyboard `RouteShortcut` copies when a
+selection exists (Handled even if clipboard publish fails, and the selection is
+kept) and otherwise passes the original key through; palette
+activation never writes Enter/ETX. An explicit pass-through binding is honored
+even while a selection exists because default copy/paste/select chords are not
+reimplemented in the Terminal WindowProc.
+| Paste in Terminal | `cmd/terminal/paste` | `Ctrl+Shift+V`, `Shift+Insert` |
+| Select All Terminal Text | `cmd/terminal/selectAll` | `Ctrl+Shift+A` |
+| Terminal Context Menu | `cmd/terminal/contextMenu` | `Menu`, `Shift+F10` |
+| Scroll One Line Down | `cmd/terminal/scroll/lineDown` | `Ctrl+Shift+Down` |
+| Scroll One Page Down | `cmd/terminal/scroll/pageDown` | `Ctrl+Shift+PageDown` |
+| Scroll One Line Up | `cmd/terminal/scroll/lineUp` | `Ctrl+Shift+Up` |
+| Scroll One Page Up | `cmd/terminal/scroll/pageUp` | `Ctrl+Shift+PageUp` |
+| Scroll to Top | `cmd/terminal/scroll/top` | `Ctrl+Shift+Home` |
+| Scroll to Bottom | `cmd/terminal/scroll/bottom` | `Ctrl+Shift+End` |
+| Increase Terminal Font | `cmd/terminal/font/increase` | `Ctrl+<number-row plus position>`, `Ctrl+Numpad+` |
+| Decrease Terminal Font | `cmd/terminal/font/decrease` | `Ctrl+<number-row minus position>`, `Ctrl+Numpad-` |
+| Reset Terminal Font | `cmd/terminal/font/reset` | `Ctrl+0`, `Ctrl+Numpad0` |
 
-4. **Dynamic menus (safe + RAII)**
-   - Implement dynamic menu rebuild for:
-     - Left/Right `Go to` (Hot Paths + History)
-     - `View With` / `Edit With`
-     - `New` templates
-     - Plugins list
-     - Theme list
-   - Use WIL RAII for all Win32 resources (HMENU, HBITMAP, HICON, etc.); no manual cleanup.
+`Ctrl++` and `Ctrl+-` are display names. Their main-keyboard identities are the
+physical number-row scan positions `0x0D` and `0x0C`, not the character or
+layout-dependent virtual key produced there. Import, export, conflict detection,
+Preferences, Helper, and runtime routing preserve this identity.
 
-5. **Shortcut system alignment**
-   - Ensure `.rc` accelerators and `ShortcutDefaults` match the canonical defaults in this spec.
-   - Enforce text-edit safety (no app-level shortcuts while an edit control is focused).
-   - Update Preferences → Shortcuts UI to expose all configurable bindings and detect conflicts.
+### Binding-centric Helper
 
-6. **Validation**
-   - Build with `/W4` and keep warnings at zero (except explicitly allowed infrastructure warnings).
-   - Manual smoke-check: menu structure, right-justification, dynamic menus, shortcut display text, and correct pane targeting.
+`F1` / Help -> Display Shortcuts opens the binding-centric Helper. It renders
+one accessible row per active binding, so aliases are separate rows with one
+keycap and conflict state each. The Terminal group therefore shows all 46
+Terminal factory rows; Application owns `Ctrl+,`, `Ctrl+Shift+,`, `Ctrl+Shift+J`,
+and `Ctrl+Shift+P`; Function Bar owns `F11`. Explicit Terminal pass-through rows
+remain visible as “Pass through to terminal”; the internal unassigned sentinel
+is not shown. Search matches localized command, chord, scope, description, and
+keywords. Activating a row invokes its command only when the row is actionable.
 
-## Open Questions (Resolved)
+### Command-centric global palette
+
+`Ctrl+Shift+P` opens the global RedSalamander Command Palette from Folder,
+Navigation, Preview, embedded Terminal, or floating Terminal context. It is not
+a Terminal-only palette. It shows one row per palette-visible canonical command
+eligible in the invocation context: Application/Function Bar/Folder View scopes
+outside Terminal and Application/Function Bar/Terminal scopes inside Terminal.
+Across those two projections every palette-visible canonical command must be
+reachable. The palette aggregates all effective aliases as shortcut chips and
+presents the Fluent icon, localized title, description, and enabled state.
+Search uses shared command-catalog metadata and contextual ranking; paint never
+rebuilds the catalogue. Enter/click invokes the selected enabled command,
+Escape/deactivation closes the palette, and focus returns to the exact prior
+HWND when still valid. Only one palette exists per application UI thread.
+
+Palette, Terminal context/session menus, keyboard dispatch, and numbered-tab
+selection share the typed command-state source declared by `CommandRegistry`.
+The resolver evaluates the exact invocation-origin HWND. For Terminal-backed
+state it captures the Terminal instance ID and session generation and
+revalidates both immediately before activation, so a replaced or exited
+Terminal cannot inherit an older row's authority. On identity or enabled
+mismatch the palette rebuilds rows (disabled rows show localized disabled
+text), stays open, and does not dispatch. Cover the sequence palette-open →
+new Terminal session (`sessionGeneration` bump) → Enter. Host-owned close, context,
+session, and tab commands remain host-state queries; plugin actions use
+`ITerminalActions`. Missing Preview/Terminal tabs and unavailable numbered tabs
+are disabled and direct dispatch returns not handled. A disabled palette row
+uses localized disabled text; Enter/click is inert, keeps the palette open, and
+does not disturb prior focus.
+
+Shortcut chips are derived from the effective chord map for the invocation
+context, not by concatenating configured scopes. Terminal context precedence is
+Terminal, Application, then Function Bar; folder context precedence is
+Application, Function Bar, then Folder View. Pass-through, unassigned, and
+different-command overrides suppress the shadowed chip; a same-command override
+emits one chip only. Suggestion-history identity uses one ordinal-ignore-case
+ordering relation for deduplication and ranking, independent of the active C
+locale, including accented Latin, Greek, and Cyrillic variants.
+
+The Helper and palette share `ShortcutCommandCatalog`, but their projections
+must remain distinct: Helper is key-binding centric; palette is command centric.
+The visual reference is:
+
+![Global RedSalamander Command Palette](../Assets/OperationChordforge_CommandPaletteMockup.svg)
+
+## Resolved behavior
 
 1. **Tab inside NavigationView**
    - `FolderView`: `Tab` / `Shift+Tab` switches focus between Left/Right panes.

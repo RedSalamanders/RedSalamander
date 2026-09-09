@@ -28,7 +28,7 @@ namespace
             continue;
         }
         const std::wstring normalizedActual = normalizeChordText(outState.keyboardSelectedChordText);
-        if (outState.currentCategory == kPrefCategoryKeyboard && outState.keyboardListRowCount == 1u && ! normalizedActual.empty() &&
+        if (outState.currentCategory == kPrefCategoryKeyboard && outState.keyboardListRowCount > 0u && ! normalizedActual.empty() &&
             normalizedActual.find(normalizedExpected) != std::wstring::npos)
         {
             return true;
@@ -175,6 +175,7 @@ namespace
     {
         PostMessageW(prefs, WM_CLOSE, 0, 0);
         state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(2000ms)), std::format(L"Preferences window did not close during {}.", context));
+        ReleaseThreadUiAutomationForSelfTest();
         return state.failure.empty();
     };
 
@@ -191,13 +192,16 @@ namespace
         state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), std::format(L"Failed to focus the Preferences category host during {}.", context));
         PumpPendingMessages();
 
-        state.Require(DebugSelectPreferencesCategory(kPrefCategoryHotPaths),
-                      std::format(L"Failed to select the Preferences Hot Paths category during {}.", context));
-        PumpPendingMessages();
-
         PreferencesDebugSnapshot snapshot{};
-        state.Require(DebugGetPreferencesDialogSnapshot(snapshot), std::format(L"Failed to capture Preferences snapshot during {}.", context));
-        state.Require(snapshot.currentCategory == kPrefCategoryHotPaths,
+        state.Require(SelectPreferencesCategoryAndWaitForStableSurface(
+                          kPrefCategoryHotPaths,
+                          [](const PreferencesDebugSnapshot& value) noexcept
+        {
+            return value.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS) &&
+                   value.pageDescription == LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS_DESC) &&
+                   value.visibleCurrentPageChildWindowCount == 1u && value.currentPageDxHostResizeFailureCount == 0u;
+        },
+                          snapshot),
                       std::format(L"Preferences navigation did not move to the Hot Paths category during {}.", context));
         state.Require(snapshot.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS),
                       std::format(L"Preferences page title did not switch to Hot Paths during {}.", context));
@@ -388,13 +392,14 @@ namespace
         state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Hot Paths live interaction test.");
         PumpPendingMessages();
 
-        state.Require(DebugSelectPreferencesCategory(kPrefCategoryHotPaths),
-                      L"Failed to select the Preferences Hot Paths category for Hot Paths live interaction test.");
-        PumpPendingMessages();
-
-        const bool pageReady = waitForSnapshot(
+        const bool pageReady = SelectPreferencesCategoryAndWaitForStableSurface(
+            kPrefCategoryHotPaths,
             [](const PreferencesDebugSnapshot& value) noexcept
-        { return value.currentCategory == kPrefCategoryHotPaths && value.currentPageDxHostResizeFailureCount == 0u; },
+        {
+            return value.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS) &&
+                   value.pageDescription == LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS_DESC) &&
+                   value.visibleCurrentPageChildWindowCount == 1u && value.currentPageDxHostResizeFailureCount == 0u;
+        },
             outSnapshot);
         state.Require(pageReady,
                       std::format(L"Preferences Hot Paths page did not settle to the active DX surface before live interaction validation; {}.",
@@ -550,6 +555,7 @@ namespace
         L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Hot Paths discard validation.");
     SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"hot_paths_live: closed after cancel");
     prefs = nullptr;
+    ReleaseThreadUiAutomationForSelfTest();
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
     prefs = waitForPreferencesWindow();
@@ -1413,17 +1419,15 @@ namespace
     state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Hot Paths round-trip test.");
     PumpPendingMessages();
 
-    state.Require(DebugSelectPreferencesCategory(kPrefCategoryHotPaths), L"Failed to select the Preferences Hot Paths category for Hot Paths round-trip test.");
-    PumpPendingMessages();
-
     PreferencesDebugSnapshot snapshot{};
-    state.Require(waitForSnapshot(
+    state.Require(SelectPreferencesCategoryAndWaitForStableSurface(
+                      kPrefCategoryHotPaths,
                       [](const PreferencesDebugSnapshot& value) noexcept
     {
-        return value.currentCategory == kPrefCategoryHotPaths && true /* Phase 8: removed field */
-               && true /* Phase 8: removed field */ && true           /* Phase 8: removed field */
-
-               && value.currentPageDxHostResizeFailureCount == 0u;
+        return value.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS) &&
+               value.pageDescription == LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS_DESC) && value.createdPaneWindowCount == 0u &&
+               value.visiblePaneWindowCount == 0u && value.visibleCurrentPageChildWindowCount == 1u &&
+               value.currentPageRenderedDxHostCount <= 1u && value.currentPageDxHostResizeFailureCount == 0u;
     },
                       snapshot),
                   L"Preferences Hot Paths page did not settle to the stabilized one-host DxUi surface before round-trip validation.");
@@ -1494,17 +1498,15 @@ namespace
         return false;
     }
 
-    state.Require(DebugSelectPreferencesCategory(kPrefCategoryHotPaths), L"Failed to reselect the Preferences Hot Paths category after leaving General.");
-    PumpPendingMessages();
-
     snapshot = {};
-    state.Require(waitForSnapshot(
+    state.Require(SelectPreferencesCategoryAndWaitForStableSurface(
+                      kPrefCategoryHotPaths,
                       [&](const PreferencesDebugSnapshot& value) noexcept
     {
-        return value.currentCategory == kPrefCategoryHotPaths && true /* Phase 8: removed field */
-               && true /* Phase 8: removed field */ && true           /* Phase 8: removed field */
-
-               && value.currentPageDxHostResizeFailureCount == 0u;
+        return value.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS) &&
+               value.pageDescription == LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS_DESC) && value.createdPaneWindowCount == 0u &&
+               value.visiblePaneWindowCount == 0u && value.visibleCurrentPageChildWindowCount == 1u &&
+               value.currentPageRenderedDxHostCount <= 1u && value.currentPageDxHostResizeFailureCount == 0u;
     },
                       snapshot),
                   L"Preferences Hot Paths page did not repaint and restore the stabilized one-host DxUi surface after returning from General.");
@@ -2596,24 +2598,14 @@ namespace
         }
 
         state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Keyboard tab-traversal validation.");
-
-        if (waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept {
-            return value.currentCategory == kPrefCategoryKeyboard && value.keyboardListRowCount > 0u && value.currentPageDxHostResizeFailureCount == 0u;
-        }, outSnapshot))
-        {
-            return true;
-        }
-
-        state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
-                      L"Failed to select the Preferences Keyboard category during tab-traversal validation.");
-        PumpPendingMessages();
+        state.Require(SelectPreferencesCategoryAndWaitForStableSurface(
+                          kPrefCategoryKeyboard,
+                          [](const PreferencesDebugSnapshot& value) noexcept
+        { return value.keyboardListRowCount > 0u && value.currentPageDxHostResizeFailureCount == 0u; },
+                          outSnapshot),
+                      L"Preferences Keyboard page did not settle before tab-traversal validation.");
         state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to restore focus to the Preferences category host after selecting Keyboard during tab-traversal validation.");
-
-        state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
-        { return value.currentCategory == kPrefCategoryKeyboard && value.keyboardListRowCount > 0u && value.currentPageDxHostResizeFailureCount == 0u; },
-                                      outSnapshot),
-                      L"Preferences Keyboard page did not settle before tab-traversal validation.");
         return state.failure.empty();
     };
 
@@ -2939,6 +2931,11 @@ namespace
         return false;
     }
 
+    if (! PrepareMainWindowForIsolatedUiCase(mainWindow, state, L"Preferences Keyboard live-search interaction validation"))
+    {
+        return false;
+    }
+
     if (const HWND existing = GetPreferencesDialogHandle(); existing && IsWindow(existing) != FALSE)
     {
         PostMessageW(existing, WM_CLOSE, 0, 0);
@@ -3002,7 +2999,8 @@ namespace
             const HWND activePage = DebugGetPreferencesActivePageHandle();
             if (activePage && IsWindow(activePage) != FALSE)
             {
-                const auto valueState = CollectVisibleDescendantValuePatternStateByName(activePage, UIA_EditControlTypeId, expectedName);
+                const auto valueState = CollectVisibleDescendantValuePatternStateByNameWithMessagePump(
+                    activePage, UIA_EditControlTypeId, expectedName, L"Preferences Keyboard live-search value poll");
                 if (valueState.has_value() && valueState->value == expectedValue)
                 {
                     return true;
@@ -3018,7 +3016,8 @@ namespace
             return false;
         }
 
-        const auto valueState = CollectVisibleDescendantValuePatternStateByName(activePage, UIA_EditControlTypeId, expectedName);
+        const auto valueState = CollectVisibleDescendantValuePatternStateByNameWithMessagePump(
+            activePage, UIA_EditControlTypeId, expectedName, L"Preferences Keyboard live-search final value poll");
         return valueState.has_value() && valueState->value == expectedValue;
     };
 
@@ -3104,6 +3103,10 @@ namespace
 
         state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(1000ms)),
                       L"Failed to focus the Preferences category host while navigating to the Keyboard page.");
+        // Let the category tree finish its focus-driven selection before applying
+        // the deterministic debug selection. Otherwise a queued focus transition
+        // can overwrite Keyboard with the preceding Editors row after reopen.
+        PumpPendingMessages();
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard), L"Failed to select the Preferences Keyboard category for live search validation.");
         PumpPendingMessages();
 
@@ -3984,6 +3987,7 @@ namespace
     constexpr std::wstring_view kCommandId            = L"cmd/pane/find";
     constexpr std::wstring_view kInitialShortcutText  = L"Ctrl+F9";
     constexpr std::wstring_view kImportedShortcutText = L"F24";
+    constexpr std::wstring_view kRestoredDefaultText  = L"Alt+F7";
 
     const std::filesystem::path importDir = suiteRoot / L"work" / (L"prefs_keyboard_import_" + NewGuidText());
     state.Require(SelfTest::EnsureDirectory(importDir), L"Failed to create Keyboard import interaction directory.");
@@ -4176,7 +4180,7 @@ namespace
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
     {
-        return value.currentCategory == kPrefCategoryKeyboard && value.keyboardSearchText == kCommandId && value.keyboardListRowCount == 1u &&
+        return value.currentCategory == kPrefCategoryKeyboard && value.keyboardSearchText == kCommandId && value.keyboardListRowCount == 2u &&
                value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u && value.currentPageDxHostResizeFailureCount == 0u &&
                ! value.keyboardCaptureActive;
     },
@@ -4190,6 +4194,9 @@ namespace
     state.Require(DebugSelectPreferencesKeyboardListRow(0u), L"Failed to reselect the filtered Keyboard DX row after invoking Import.");
     state.Require(waitForSelectionNameContaining(kImportedShortcutText, selectionState),
                   L"Preferences Keyboard visible DX Import action did not commit the imported shortcut onto the filtered row.");
+    state.Require(DebugSelectPreferencesKeyboardListRow(1u), L"Failed to select the restored factory alias after invoking Import.");
+    state.Require(waitForSelectionNameContaining(kRestoredDefaultText, selectionState),
+                  L"Preferences Keyboard visible DX Import action did not expose the restored factory shortcut as a separate binding row.");
     if (! state.failure.empty())
     {
         return false;
@@ -4257,7 +4264,7 @@ namespace
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
     {
-        return value.currentCategory == kPrefCategoryKeyboard && value.keyboardSearchText == kCommandId && value.keyboardListRowCount == 1u &&
+        return value.currentCategory == kPrefCategoryKeyboard && value.keyboardSearchText == kCommandId && value.keyboardListRowCount == 2u &&
                value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u && value.currentPageDxHostResizeFailureCount == 0u &&
                ! value.keyboardCaptureActive;
     },
@@ -4266,6 +4273,9 @@ namespace
     state.Require(DebugSelectPreferencesKeyboardListRow(0u), L"Failed to reselect the filtered Keyboard DX row after reopened Import.");
     state.Require(waitForSelectionNameContaining(kImportedShortcutText, selectionState),
                   L"Preferences Keyboard reopened visible DX Import action did not recommit the imported shortcut onto the filtered row.");
+    state.Require(DebugSelectPreferencesKeyboardListRow(1u), L"Failed to select the restored factory alias after reopened Import.");
+    state.Require(waitForSelectionNameContaining(kRestoredDefaultText, selectionState),
+                  L"Preferences Keyboard reopened visible DX Import action did not expose the restored factory shortcut as a separate binding row.");
 
     return state.failure.empty();
 }

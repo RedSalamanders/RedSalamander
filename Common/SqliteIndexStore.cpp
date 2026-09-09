@@ -244,7 +244,7 @@ constexpr wchar_t kEnumerateFailAfterEmittedRowsEnvVar[] = L"REDSALAMANDER_TEST_
     }
 
     std::error_code ec;
-    const uintmax_t size = std::filesystem::file_size(std::filesystem::path(path), ec);
+    const uintmax_t size = std::filesystem::file_size(std::filesystem::path(MakeWin32ExtendedPath(std::wstring(path))), ec);
     if (ec)
     {
         return 0u;
@@ -255,7 +255,7 @@ constexpr wchar_t kEnumerateFailAfterEmittedRowsEnvVar[] = L"REDSALAMANDER_TEST_
 
 [[nodiscard]] HRESULT EnsureParentDirectory(std::wstring_view databasePath)
 {
-    const std::filesystem::path path(databasePath);
+    const std::filesystem::path path(MakeWin32ExtendedPath(std::wstring(databasePath)));
     const std::filesystem::path parent = path.parent_path();
     if (parent.empty())
     {
@@ -1557,7 +1557,7 @@ struct NamePrefilter final
     }
 
     std::error_code existsEc;
-    const bool exists = std::filesystem::exists(std::filesystem::path(normalizedPath), existsEc);
+    const bool exists = std::filesystem::exists(std::filesystem::path(MakeWin32ExtendedPath(normalizedPath)), existsEc);
     if (existsEc)
     {
         return HRESULT_FROM_WIN32(static_cast<unsigned long>(existsEc.value()));
@@ -2278,7 +2278,7 @@ HRESULT InspectStore(std::wstring_view databasePath, StoreInfo& outInfo) noexcep
         }
 
         std::error_code existsEc;
-        const bool exists = std::filesystem::exists(std::filesystem::path(normalizedPath), existsEc);
+        const bool exists = std::filesystem::exists(std::filesystem::path(MakeWin32ExtendedPath(normalizedPath)), existsEc);
         if (existsEc)
         {
             return HRESULT_FROM_WIN32(static_cast<unsigned long>(existsEc.value()));

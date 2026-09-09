@@ -1,0 +1,687 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:red-salamander:schema:terminal-engine-candidate-set:v1",
+  "title": "RedSalamander closed TerminalEngine candidate set v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "version",
+    "frozenUtc",
+    "authorId",
+    "candidateUniverseSha256",
+    "candidateReviewSha256",
+    "candidateAssessmentSha256",
+    "nominationOutcomes",
+    "bootstrapInputSets",
+    "candidates"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "red-salamander-terminal-engine-candidate-set"
+    },
+    "version": {
+      "const": 1
+    },
+    "frozenUtc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+    },
+    "authorId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "candidateUniverseSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "candidateReviewSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "candidateAssessmentSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "nominationOutcomes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/nominationOutcome"
+      }
+    },
+    "bootstrapInputSets": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/bootstrapInputSet"
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/candidate"
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "gitObjectId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "pin": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seedCandidateId",
+        "pin",
+        "pinSha256",
+        "sourceArchiveSha256"
+      ],
+      "properties": {
+        "seedCandidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "pin": {
+          "$ref": "#/$defs/pin"
+        },
+        "pinSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sourceArchiveSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "nominationOutcome": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/admittedNomination"
+        },
+        {
+          "$ref": "#/$defs/rejectedNomination"
+        },
+        {
+          "$ref": "#/$defs/sourceRejectedSeed"
+        }
+      ]
+    },
+    "admittedNomination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seedCandidateId",
+        "pin",
+        "pinSha256",
+        "sourceArchiveSha256",
+        "outcome",
+        "nominationId",
+        "ledgerSha256"
+      ],
+      "properties": {
+        "seedCandidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "pin": {
+          "$ref": "#/$defs/pin"
+        },
+        "pinSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sourceArchiveSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "outcome": {
+          "const": "admitted"
+        },
+        "nominationId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "ledgerSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "rejectedNomination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seedCandidateId",
+        "pin",
+        "pinSha256",
+        "sourceArchiveSha256",
+        "outcome",
+        "nominationId",
+        "adaptationRejection"
+      ],
+      "properties": {
+        "seedCandidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "pin": {
+          "$ref": "#/$defs/pin"
+        },
+        "pinSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sourceArchiveSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "outcome": {
+          "const": "adaptation-rejected"
+        },
+        "nominationId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "adaptationRejection": {
+          "$ref": "#/$defs/adaptationRejection"
+        }
+      }
+    },
+    "sourceRejectedSeed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seedCandidateId",
+        "pin",
+        "pinSha256",
+        "sourceArchiveSha256",
+        "outcome",
+        "sourceRejection"
+      ],
+      "properties": {
+        "seedCandidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "pin": {
+          "$ref": "#/$defs/pin"
+        },
+        "pinSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sourceArchiveSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "outcome": {
+          "const": "source-rejected"
+        },
+        "sourceRejection": {
+          "$ref": "#/$defs/sourceRejection"
+        }
+      }
+    },
+    "adaptationRejection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "upstreamTree",
+        "patchRelativePath",
+        "patchSha256",
+        "patchSizeBytes",
+        "resultTree",
+        "changedMaintainedLines",
+        "changedMaintainedFiles",
+        "binaryFiles",
+        "logicalConcerns",
+        "concernMappingRelativePath",
+        "concernMappingSha256",
+        "newToolchainFamilies",
+        "newNonSystemRuntimeLeaves",
+        "adapterClass",
+        "initialAdapterDays",
+        "declaredInitialPatchDays",
+        "initialPatchDays",
+        "perUpgradeDays",
+        "annualSecurityResponseDays",
+        "releaseNoticeDays",
+        "patchTouchesParserDecoderAccounting",
+        "ownerDays",
+        "failureCodes",
+        "evidenceSha256",
+        "glueAuthorIds",
+        "approvals"
+      ],
+      "properties": {
+        "upstreamTree": {
+          "$ref": "#/$defs/gitObjectId"
+        },
+        "patchRelativePath": {
+          "type": "string",
+          "pattern": "^External/TerminalEngine/CandidatePatches/[a-z0-9][a-z0-9._-]{0,63}\\.patch$",
+          "maxLength": 256
+        },
+        "patchSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "patchSizeBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "resultTree": {
+          "$ref": "#/$defs/gitObjectId"
+        },
+        "changedMaintainedLines": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "changedMaintainedFiles": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "binaryFiles": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "logicalConcerns": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "abi-snapshot-identity",
+              "build-reproducibility-packaging",
+              "kitty-image-placement-model",
+              "parser-side-effect-bounds",
+              "renderer-ui",
+              "terminal-grid-history-model",
+              "teardown-concurrency",
+              "typed-resource-accounting-admission"
+            ]
+          }
+        },
+        "concernMappingRelativePath": {
+          "type": "string",
+          "pattern": "^External/TerminalEngine/CandidatePatches/[a-z0-9][a-z0-9._-]{0,63}\\.concerns\\.json$",
+          "maxLength": 256
+        },
+        "concernMappingSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "newToolchainFamilies": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "newNonSystemRuntimeLeaves": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "adapterClass": {
+          "enum": [
+            "same-language-or-existing-c-abi",
+            "new-cross-language-ffi"
+          ]
+        },
+        "initialAdapterDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "declaredInitialPatchDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "initialPatchDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "perUpgradeDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "annualSecurityResponseDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "releaseNoticeDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "patchTouchesParserDecoderAccounting": {
+          "type": "boolean"
+        },
+        "ownerDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "failureCodes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "binary-patch-forbidden",
+              "changed-files-cap",
+              "changed-lines-cap",
+              "logical-concerns-cap",
+              "new-toolchain-cap",
+              "owner-days-cap",
+              "runtime-leaf-cap"
+            ]
+          }
+        },
+        "evidenceSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "glueAuthorIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "approvals": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/adaptationApproval"
+          }
+        }
+      }
+    },
+    "adaptationApproval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approvalId",
+        "reviewerId",
+        "reviewerRole",
+        "evidenceSha256",
+        "decision",
+        "reviewedUtc"
+      ],
+      "properties": {
+        "approvalId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "reviewerId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "reviewerRole": {
+          "const": "independent-candidate-assessor"
+        },
+        "evidenceSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "decision": {
+          "const": "approved"
+        },
+        "reviewedUtc": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+        }
+      }
+    },
+    "sourceRejection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gateId",
+        "failureCode",
+        "candidateReviewSha256",
+        "blockerId",
+        "blockerSha256",
+        "sourceArchiveSha256"
+      ],
+      "properties": {
+        "gateId": {
+          "enum": [
+            "G6",
+            "G7",
+            "G9"
+          ]
+        },
+        "failureCode": {
+          "$ref": "#/$defs/identifier"
+        },
+        "candidateReviewSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "blockerId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "blockerSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sourceArchiveSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "bootstrapInputSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "inputs",
+        "sha256"
+      ],
+      "properties": {
+        "platform": {
+          "enum": [
+            "ARM64",
+            "x64"
+          ]
+        },
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/bootstrapInput"
+          }
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "bootstrapInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputId",
+        "inputKind",
+        "version",
+        "fileName",
+        "sha256",
+        "retrievalUrl",
+        "consumers"
+      ],
+      "properties": {
+        "inputId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "inputKind": {
+          "enum": [
+            "dependency-input",
+            "source-archive",
+            "toolchain-input"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "fileName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "retrievalUrl": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2048
+        },
+        "consumers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        }
+      }
+    },
+    "candidate": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/scoredCandidate"
+        },
+        {
+          "$ref": "#/$defs/controlCandidate"
+        }
+      ]
+    },
+    "scoredCandidate": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/collectCandidate"
+        },
+        {
+          "$ref": "#/$defs/sourceRejectedCandidate"
+        }
+      ]
+    },
+    "collectCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "pin",
+        "pinSha256",
+        "sourceArchiveSha256",
+        "scoredOrControl",
+        "disposition"
+      ],
+      "properties": {
+        "candidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "pin": {
+          "$ref": "#/$defs/pin"
+        },
+        "pinSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sourceArchiveSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "scoredOrControl": {
+          "const": "scored"
+        },
+        "disposition": {
+          "const": "collect"
+        }
+      }
+    },
+    "sourceRejectedCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "pin",
+        "pinSha256",
+        "sourceArchiveSha256",
+        "scoredOrControl",
+        "disposition",
+        "sourceRejection"
+      ],
+      "properties": {
+        "candidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "pin": {
+          "$ref": "#/$defs/pin"
+        },
+        "pinSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sourceArchiveSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "scoredOrControl": {
+          "const": "scored"
+        },
+        "disposition": {
+          "const": "source-rejected"
+        },
+        "sourceRejection": {
+          "$ref": "#/$defs/sourceRejection"
+        }
+      }
+    },
+    "controlCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "pin",
+        "pinSha256",
+        "scoredOrControl",
+        "constraintId"
+      ],
+      "properties": {
+        "candidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "pin": {
+          "$ref": "#/$defs/pin"
+        },
+        "pinSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "scoredOrControl": {
+          "const": "control"
+        },
+        "constraintId": {
+          "enum": [
+            "candidate-owned-control",
+            "new-parser-maintenance",
+            "web-runtime-second-stack"
+          ]
+        }
+      }
+    }
+  }
+}

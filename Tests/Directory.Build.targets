@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup>
+    <RSParentDirectoryBuildTargets>$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', '$(MSBuildThisFileDirectory)..\'))</RSParentDirectoryBuildTargets>
+  </PropertyGroup>
+  <Import Project="$(RSParentDirectoryBuildTargets)" Condition="'$(RSParentDirectoryBuildTargets)'!=''" />
+
+  <!--
+    Production Release builds intentionally omit every test-only hook. Keep the
+    solution buildable in that profile by treating Tests projects as no-output
+    utility nodes. Test-facing Release builds opt in once for the whole graph
+    with RSBuildEnableTests=true and retain their normal project types.
+  -->
+  <PropertyGroup Condition="'$(RSIsTestProject)'=='true' and '$(RSBuildEnableTests)'!='true' and '$(MSBuildProjectName)'!='PluginContractTests'">
+    <ConfigurationType>Utility</ConfigurationType>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RSIsTestProject)'=='true' and '$(RSBuildEnableTests)'!='true'">
+    <!--
+      A transition to Utility changes the target type. Retire that project's
+      prior executable/library outputs explicitly, including the non-shipping
+      PluginContractTests package host. Shared runtime history is protected by
+      the parent targets for every project, including the common CoreClean
+      path (which is independent of this CppClean dependency override).
+    -->
+    <CppCleanDependsOn>RSCleanDisabledTestOutputs</CppCleanDependsOn>
+  </PropertyGroup>
+
+  <Target Name="RSCleanDisabledTestOutputs"
+          Condition="'$(RSIsTestProject)'=='true' and '$(RSBuildEnableTests)'!='true'">
+    <ItemGroup>
+      <_RSDisabledTestOutput Include="$(OutDir)$(TargetName).exe" />
+      <_RSDisabledTestOutput Include="$(OutDir)$(TargetName).dll" />
+      <_RSDisabledTestOutput Include="$(OutDir)$(TargetName).lib" />
+      <_RSDisabledTestOutput Include="$(OutDir)$(TargetName).exp" />
+      <_RSDisabledTestOutput Include="$(OutDir)$(TargetName).pdb" />
+      <_RSDisabledTestOutput Include="$(OutDir)$(TargetName).ilk" />
+      <_RSDisabledTestOutput Include="$(OutDir)$(TargetName).iobj" />
+      <_RSDisabledTestOutput Include="$(OutDir)$(TargetName).ipdb" />
+    </ItemGroup>
+    <Delete Files="@(_RSDisabledTestOutput)" />
+  </Target>
+</Project>

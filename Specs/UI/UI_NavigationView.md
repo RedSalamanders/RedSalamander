@@ -16,6 +16,7 @@
 - `NavigationDxTextHost` child windows are edit-mode implementation details, not permanent hit-test surfaces. When address-bar or full-path edit mode is inactive, the corresponding DxUi edit child must be hidden; if a stale visible edit child receives `WM_NCHITTEST`, mouse activation, cursor, hover, or button messages after edit focus has escaped, it must retire itself and return `HTTRANSPARENT` or forward the pointer message to the owning `RedSalamander.NavigationView`. A stale edit child must never make menu/history/separator clicks wait for title-bar movement, pointer exit, or another unrelated owner-window message.
 - Hosts that embed NavigationView must not starve its child-window messages while coalescing their own posted work. Parent UI handlers may batch only messages that are actually consecutive at the thread-queue head; they must not use parent-HWND-filtered queue peeks that skip older NavigationView `WM_MOUSEMOVE`, `WM_LBUTTONDOWN`, `WM_MOUSELEAVE`, activation, or popup messages.
 - Paint, layout, path, and history refreshes MUST NOT resample global cursor state or preserve obsolete hover state through explicit teardown. Hover is cleared by delivered `WM_MOUSELEAVE`, edit/popup teardown, and other explicit state transitions; repaint only renders the current state. Reapplying an identical path or identical history list is a no-op and must not force a repaint or re-open a delayed input path. Path identity for this short-circuit is case-insensitive only for location semantics (edit-mode/popup continuity); when the reapplied path differs byte-wise in casing (e.g. after a case-only rename of the current location), the breadcrumb MUST rebuild so the displayed segment text shows the new casing.
+- Navigation commits publish Terminal source changes from the pane's typed provider state (`pluginShortId`, `instanceContext`, and provider path), never by reparsing NavigationView's formatted display/history path. Local absolute drive/UNC classes publish their matching Terminal kind; a plugin instance publishes `PluginBacked` only when its context has a validated absolute Windows backing directory. Every unsupported provider transition still advances and publishes a detached/unsupported generation so a live opposite-pane Terminal cannot retain or follow the prior location. Open Command Shell from that unsupported namespace must remain fail-closed with localized feedback and must not invent the default Windows root.
 - Delivered `WM_MOUSEMOVE`, `WM_LBUTTONDOWN`, `WM_LBUTTONDBLCLK`, and related pointer messages use the message `lParam` client point as authoritative. Production NavigationView input routing MUST NOT call `GetCursorPos()` or replace delivered message coordinates with the later live cursor. `GetCursorPos()` is permitted only in diagnostic logging and selftest/repro harness code that records evidence; it must not affect hover, click activation, stale classification, edit-mode entry, popup opening, popup dismissal, or repaint state. Stale activation/queue residue must be rejected by delivered-message metadata such as target HWND, message time/order, capture/menu ownership, edit-host lifecycle, and explicit layout/dropdown/teardown tokens. Stale double-clicks must not enter address-bar edit mode, and pointer feedback/activation must not open a menu later because the user moved the pointer over a title bar, screen edge, or unrelated owner-window region.
 
 ## Typography Contract
@@ -59,263 +60,15 @@ NavigationView participates in a host-wide “location” model with **two diffe
 **7z mount shorthand**:
 - Typing `7z:<zipPath>` (no `|` and `<zipPath>` does not start with `/` or `\`) is interpreted as mounting `<zipPath>` and navigating to `/`.
 
-## Recent Architectural Improvements (December 2025)
+## Current architecture summary
 
-### 1. Modern Windows Shell API Migration
-✅ **Replaced deprecated APIs** with Microsoft-recommended alternatives:
-- **Old**: `SHGetFolderPath` with `CSIDL_*` integer constants (deprecated)
-- **New**: `SHGetKnownFolderPath` with `KNOWNFOLDERID` GUIDs (modern)
-- **Memory Management**: `wil::unique_cotaskmem_string` RAII wrappers (automatic cleanup)
-- **Benefits**: Type safety, future-proof, no manual `CoTaskMemFree` calls
-
-**Affected Areas**:
-- Menu button icon detection (special folder matching)
-- Menu dropdown special folder paths (Desktop, Documents, Downloads, etc.)
-- Navigation command handling
-
-### 2. Plugin-Provided Navigation Menu + Drive Info
-✅ **Menu and disk info sourced from active plugins** (December 2025):
-- NavigationView queries `INavigationMenu` and `IDriveInfo` via `QueryInterface` on the active `IFileSystem`.
-- NavigationView registers a **non-COM** `INavigationMenuCallback` via `INavigationMenu::SetCallback(callback, cookie)` so the plugin can request navigation (e.g., from `ExecuteMenuCommand`), and clears it with `SetCallback(nullptr, nullptr)` when switching/unloading.
-- `SetCallback(nullptr, nullptr)` is the synchronous drain point for that registration: once it returns, the plugin must not deliver the previous callback again, and any queued work must self-drop as stale.
-- Menu entries are returned as raw items (`NavigationMenuItem`) with labels, optional icon paths, and optional commands.
-- Drive information is returned as structured data (`DriveInfo`: display name, volume label, file system, total/used/free bytes).
-- Path parameters passed to `IDriveInfo` are **plugin paths** (no `<shortId>:` prefix and no `<instanceContext>|` mount prefix; mount context is configured separately via `IFileSystemInitialize::Initialize` when applicable).
-- Sections are hidden when interfaces are missing or return no data.
-- Icon resolution uses `IconCache::QuerySysIconIndexForPath` against `iconPath`/`path`.
-- The menu/drive button MUST refresh its stock shell bitmap after Direct2D and `IconCache` initialization; the hamburger glyph is only a no-icon fallback, not the normal local-file-system presentation.
-- Tests or diagnostics that assert the stock shell bitmap must first drive the real paint/deferred-init path; before Direct2D and `IconCache` initialization, the hamburger glyph is an allowed startup placeholder.
-- DxUi popup entries SHOULD render the resolved stock shell bitmap icon when an `iconPath`/`path` can be resolved; glyph fallback is reserved for entries that do not resolve to a shell bitmap.
-- Reapplying the current file-system plugin to a pane is a NavigationView shell-model resync, not a pure no-op: it must refresh plugin-provided `INavigationMenu` / `IDriveInfo`, preserve the current canonical path and history, and keep menu and disk sections coherent.
-- FolderWindow path changes and FolderView path-change callbacks must update the NavigationView logical path even when the NavigationView child HWND is not currently available; HWND availability controls invalidation/paint only, not model ownership.
-
-**Files Added/Updated**:
-- `Common/PlugInterfaces/NavigationMenu.h`
-- `Common/PlugInterfaces/DriveInfo.h`
-- `RedSalamander/NavigationView.cpp` (menu + disk info rendering)
-- `Plugins/FileSystem/FileSystem.cpp` (default menu and disk info provider)
-
-### 3. DPI Awareness and Icon Quality Improvements
-✅ **Per-Monitor V2 DPI awareness** (December 2025):
-- **Application Manifest**: Added `exe.manifest` with `PerMonitorV2` DPI awareness
-- **WM_DPICHANGED Handling**: Now properly receives and processes DPI change messages
-- **Icon Size Management**: IconCache adjusted to extract optimal icon sizes for display DPI
-- **Menu Icons**: Fixed to use 96 DPI physical pixels for any remaining native-menu interop; NavigationView dropdowns themselves use DxUi popups, not GDI menus
-
-**Key Improvements**:
-- **Manifest Settings**: Enabled long path support, UTF-8 code page, segment heap
-- **Icon Extraction**: `IconCache::ExtractSystemIcon()` defaults to 16 DIP for FolderView
-- **WIC Pipeline**: Fixed `CreateMenuBitmapFromIcon()` to copy pixels from converter output
-- **Transparency Fix**: Menu icons now have perfect transparency without black borders
-- **Menu Icon Size**: Fixed `_menuIconSize` to NOT scale with DPI (always `GetSystemMetrics(SM_CXSMICON)`)
-
-**Technical Details**:
-- GDI menus (CreatePopupMenu, AppendMenu) are NOT DPI-aware
-- Menu item bitmaps must be physical pixels at 96 DPI regardless of window DPI
-- FolderView icons scale with DPI for crisp display at all scaling levels
-- WIC conversion uses GUID_WICPixelFormat32bppPBGRA for proper alpha channel
-- `NavigationView::OnDpiChanged` MUST be order-independent with respect to child resizing: it
-  re-runs the full section/breadcrumb layout (`OnSize`) after recreating DirectWrite formats, so a
-  host that resizes the child during its own `WM_DPICHANGED` handling (before the child's DPI state
-  updates) cannot leave stale-scale breadcrumb segments behind. Host windows that embed a
-  NavigationView (`FolderWindow` panes, Find Files, Batch Rename) MUST forward `WM_DPICHANGED` to
-  each embedded view explicitly; the system's `WM_DPICHANGED_AFTERPARENT` alone is not relied on.
-
-### 4. Section 1 Direct2D Migration for DPI Awareness
-✅ **Menu button migrated from GDI to Direct2D** (December 2025):
-- **Old Architecture**: GDI owner-draw button (HWND with WM_DRAWITEM)
-- **New Architecture**: Direct2D rendering matching Section 2 pipeline
-- **Rationale**: GDI controls cannot render DPI-aware icons properly at high DPI
-- **Benefits**: Crisp icon scaling at 125%, 150%, 175%, 200% DPI
-
-**Technical Changes**:
-- Removed `HWND _menuButton` member and CreateWindowExW button creation
-- Added `wil::com_ptr<ID2D1Bitmap1> _menuIconBitmapD2D` for DPI-aware icon storage
-- Removed `wil::unique_hicon _cachedMenuButtonIcon` (replaced by D2D bitmap)
-- Implemented `UpdateMenuIconBitmap()` to resolve a **system image list icon index** (special-folder prefix match or drive/path) and fetch a cached bitmap via `IconCache::GetIconBitmap(iconIndex, _d2dContext.get())`
-- Implemented `RenderDriveSection()` method for Direct2D rendering with hover/press states
-- Centralized all Shell icon queries in `IconCache` (`QuerySysIconIndexFor*`); NavigationView does not call `SHGetFileInfoW`
-
-**Rendering Pipeline**:
-1. Resolve system icon index for current path (special folder → drive root → current folder)
-2. Get cached `ID2D1Bitmap1` via `IconCache::GetIconBitmap(...)`
-3. Render with state-aware background colors (normal/hover/pressed)
-4. Hamburger icon fallback drawn with Direct2D primitives if no icon available
-5. Present with dirty region optimization (DXGI_PRESENT_PARAMETERS)
-
-**Icon Selection Logic** (from old OnDrawItem):
-```cpp
-// Priority: Special folder icon > Drive root icon > Hamburger fallback
-if (under special folder like Documents\foo\bar)
-    Use Documents icon
-else if (drive path like C:\foo\bar)
-    Use C:\ icon
-else
-    Draw hamburger icon (3 horizontal lines)
-```
-
-**State Management**:
-- `_menuButtonHovered`: Timer-based hover tracking (30 FPS polling)
-- `_menuButtonPressed`: Set while the drive dropdown session is active, cleared after the popup closes
-- Background colors: Normal RGB(250,250,250), Hover RGB(243,243,243), Pressed RGB(230,230,230)
-
-**Call Sites Updated**:
-- `OnPaint()`: Calls `RenderDriveSection()`, `RenderPathSection()`, `RenderHistorySection()`, `RenderDiskInfoSection()`
-- `OnLButtonDown()`: Section 1 hit testing with `PtInRect(&_sectionDriveRect)` → `ShowMenuDropdown()`
-- `OnTimer()`: Hover tracking calls `RenderDriveSection()` / `RenderHistorySection()` / `RenderDiskInfoSection()` on state change
-- `ShowMenuDropdown()`: Calls `RenderDriveSection()` for pressed/normal states
-- `SetPath()`: Calls `UpdateMenuIconBitmap()` to refresh icon
-- `OnDpiChanged()`: Regenerates icon at new DPI via `UpdateMenuIconBitmap()`
-- `EnsureD2DResources()`: Initializes icon bitmap when D2D context ready
-- `DiscardD2DResources()`: Clears `_menuIconBitmapD2D = nullptr`
-
-**Files Modified**:
-- `NavigationView.h`: Removed HWND, added D2D members and method declarations
-- `NavigationView.cpp`: Removed WM_DRAWITEM/OnDrawItem/button creation, added Direct2D rendering
-
-### 5. Flat Button Rendering & Enhanced UI
-✅ **Menu button now uses flat design**:
-- Removed 3D borders for modern appearance
-- Press state kept when menu is open
-- Current folder icon or hamburger icon fallback (now rendered with Direct2D)
-- Keyboard focus ring uses small rounded corners (see `Specs/UI/UI_VisualStyle.md`).
-
-✅ **Breadcrumb separator enhancements**:
-- Hover and pressed states for separators
-- Sibling + history dropdowns use the ModernCombo popup visuals (40 DIP rows, rounded highlight + accent bar), open below the NavigationView, and can expand to the remaining main-window height (themed scrollbar). In the sibling dropdown, the current folder stays marked with the accent bar while hover/keyboard selection moves independently.
-- History dropdown supports a per-item leading filter glyph when navigating to that entry would restore an active pane filter (from `folders.historyFilters`).
-- Navigation only commits on click/Enter; click-outside cancels (no navigation)
-- Full clickable zone highlighting in breadcrumb segments
-
-### 6. Interactive States and Animation System (December 2025)
-✅ **Comprehensive hover effects across all sections**:
-- **Section 1 (Menu Button)**: Message-driven hover with `_menuButtonHovered` state; menu-loop housekeeping may flush delivered separator-switch events while a popup owns pointer routing.
-  - **Implementation**: Delivered `WM_MOUSEMOVE` / `WM_MOUSELEAVE` update hover. Stale owner messages are rejected by target/client-point metadata and explicit lifecycle/teardown checks, not by live cursor polling.
-  - **Rationale**: Keeps immediate feedback tied to the routed child-window message and prevents delayed dropdown activation from stale queued coordinates.
-  - **Benefits**: Normal hover follows pointer messages; popup switching still works without an always-on timer.
-- **Section 2 (Breadcrumb Segments)**: Direct2D hover backgrounds from delivered pointer messages
-  - **Coordinate Transform**: Window coordinates converted to Section 2 local space before hit testing
-  - **Hover Cleanup**: Explicitly clears hover when cursor leaves Section 2 bounds to prevent stale highlights
-- **Section 2 (Separators)**: Delivered-message hover detection, with timer-based hover switching only while a sibling menu is already open
-  - **Increased Size**: Font 50% larger (36pt at 96 DPI), width 24→32px, rect 20x24→32x36
-  - **Text Alignment**: Uses full section height with `PARAGRAPH_ALIGNMENT_CENTER`, Y position at 0.0f
-- **Section 3 (History Button)**: Direct2D-rendered region with `_historyButtonHovered` updated from delivered pointer messages and active in edit mode.
-- **Section 4 (Disk Info)**: Direct2D-rendered region with `_diskInfoHovered` updated from delivered pointer messages and active in edit mode (disk text + progress bar).
-- **Popup menus** (Drive/Menu + Disk Info): DxUi context-menu popup windows with stock shell bitmap icons, right-aligned disk info values, and the shared popup material treatment
-- **Consistent Colors**: Hover/pressed colors come from `NavigationViewTheme` (e.g., `backgroundHover`, `backgroundPressed`)
-- **Refresh safety**: Non-pointer invalidations (path/history/status/layout repaint, owner redraw, theme repaint) must draw the current delivered-message hover state and must not poll `GetCursorPos()` during paint to replace it.
-
-✅ **Hover tracking system** (All sections):
-```cpp
-// Timer is toggled on-demand for menu-loop hover switching only.
-void UpdateHoverTimerState() noexcept {
-    const bool shouldRun = _inMenuLoop;
-    if (shouldRun && _hoverTimer == 0) {
-        _hoverTimer = SetTimer(_hWnd, HOVER_TIMER_ID, 1000 / HOVER_CHECK_FPS, nullptr);
-    } else if (!shouldRun && _hoverTimer != 0) {
-        KillTimer(_hWnd, HOVER_TIMER_ID);
-        _hoverTimer = 0;
-    }
-}
-
-// Start/stop points
-case WM_ENTERMENULOOP: _inMenuLoop = true; UpdateHoverTimerState(); break;
-case WM_EXITMENULOOP:  _inMenuLoop = false; UpdateHoverTimerState(); break;
-
-// OnTimer handler (menu-loop housekeeping only)
-void OnTimer(UINT_PTR timerId) {
-    if (timerId == HOVER_TIMER_ID) {
-        // No GetCursorPos() here. Popup/menu-loop hover-switch work is driven
-        // by delivered owner/popup pointer events routed through DxUi's shared
-        // input router, tagged with target/capture state.
-        FlushDeferredMenuSwitchesFromDeliveredEvents();
-    }
-}
-```
-**Why Timer Polling (Only During Menus)?**
-- The timer may flush deferred menu-loop bookkeeping after delivered pointer events, but it must not sample global cursor position.
-- Edit mode does not start the hover timer. The path section suppresses breadcrumb hover while the edit host is active, but the drive/menu, history, and disk-info button regions still react to real delivered mouse messages.
-- Outside menu sessions, hover is driven by `WM_MOUSEMOVE` / `WM_MOUSELEAVE` to avoid an always-on timer and avoid stale queued pointer activation.
-
-**Timer Configuration**:
-```cpp
-static constexpr UINT_PTR HOVER_TIMER_ID = 2;
-static constexpr UINT HOVER_CHECK_FPS = 30;
-UINT_PTR _hoverTimer = 0;
-```
-
-✅ **DxUi popup dropdowns**:
-- NavigationView dropdowns are composed as DxUi popup windows with shared menu materials, shell bitmap support, and app-rendered rows instead of Win32 owner-draw `HMENU` menus.
-- Sibling/history/drive/disk popups must open from the resolved NavigationView input branch without waiting for unrelated owner-window traffic.
-
-✅ **Coordinate space transformation for Section 2**:
-- **Problem**: Direct2D uses local coordinate space after `SetTransform`, Win32 mouse events use window coordinates
-- **Solution**: Transform window coordinates to Section 2 local space in `OnMouseMove` and `OnLButtonDown`:
-  ```cpp
-  float localX = static_cast<float>(pt.x - _sectionPathRect.left);
-  float localY = static_cast<float>(pt.y - _sectionPathRect.top);
-  ```
-- **Impact**: Fixes hover/click misalignment bug where highlights appeared offset from actual click area
-
-✅ **Smooth separator rotation animation**:
-- **Visual Effect**: Separator (›) rotates 90° clockwise when menu opens, reverses on close
-- **Duration**: 150ms per direction
-- **Frame Rate**: ~60 FPS via `Ui::AnimationDispatcher` (single shared 16ms `WM_TIMER`)
-- **Implementation**: Direct2D `Matrix3x2F::Rotation` transform around separator center
-- **State Tracking**: Per-separator angle vectors with linear interpolation
-
-✅ **Menu switching behavior**:
-- **User Experience**: Clicking different separator while a sibling dropdown is open closes the current popup and opens the new one
-- **Implementation**: `WM_CANCELMODE` to request popup closure, plus a deferred reopen message for the next separator
-- **Modal Handling**: Works with the popup session lifecycle used by the sibling dropdown path
-- **State Cleanup**: `WM_EXITMENULOOP` triggers reverse animation and state reset
-- **Implemented**: Hover-based menu switching during the popup session using timer polling + `WM_CANCELMODE` (no `SetWindowsHookEx`)
-- **Safety**: Hover tracking ignores the cursor while it is over popup content so normal menu navigation does not trigger accidental switches
-- **Isolation**: While the full-path popup window is open, `NavigationView` hover tracking is suspended; the full-path popup runs its own hover polling
-
-**Files Modified**:
-- `NavigationView.h` (line 166) - Added `bool _menuButtonHovered` member after `_menuButtonPressed`
-- `NavigationView.cpp` (lines 461-610) - Restructured `OnDrawItem` to if/else if chain for both buttons
-- `NavigationView.cpp` (lines 729-738) - Added manual Section 1 hover tracking in `OnMouseMove`
-- `NavigationView.cpp` (line 889) - Changed Section 3 cursor from `IDC_HAND` to `IDC_ARROW`
-- `NavigationView.cpp` (lines 1885-1897) - Removed `MF_DISABLED` from 8 disk info menu items
-- `NavigationView.cpp` (line 1086) - Increased separator font from `barHeight` to `barHeight * 1.5f`
-- `NavigationView.cpp` (line 1417) - Increased separator width from 24.0f to 32.0f
-- `NavigationView.cpp` (line 1440) - Fixed layout height to use full section height for vertical centering
-- `NavigationView.cpp` (line 1536) - Changed DrawTextLayout Y position from `y - metrics.height / 2` to 0.0f
-- `NavigationView.cpp` (`UpdateBreadcrumbLayout`, `RenderBreadcrumbs`, `OnLButtonDown`) - Ellipsis collapse + separator rendering/click handling
-
-**New Members**:
-```cpp
-bool _menuButtonHovered;                   // Section 1 manual hover state
-bool _diskInfoHovered;                     // Section 3 hover state (Note: using ODS_HOTLIGHT, not manual)
-int _menuOpenForSeparator;                 // Which separator's menu is open
-std::vector<float> _separatorRotationAngles;  // Current rotation (0-90°)
-std::vector<float> _separatorTargetAngles;    // Target rotation
-uint64_t _separatorAnimationSubscriptionId;   // AnimationDispatcher subscription ID
-uint64_t _separatorAnimationLastTickMs;       // Last dispatcher tick (ms)
-```
-
-**New Methods**:
-```cpp
-void OnTimer(UINT_PTR timerId);            // Menu-loop separator hover polling
-void OnEnterMenuLoop(bool isTrackPopupMenu);
-void OnExitMenuLoop(bool isShortcut);      // Menu cleanup + reverse animation
-void StartSeparatorAnimation(size_t, float);  // Begin rotation
-static bool SeparatorAnimationTickThunk(void*, uint64_t) noexcept;
-bool UpdateSeparatorAnimations(uint64_t nowTickMs) noexcept;
-void StopSeparatorAnimation() noexcept;
-```
-
-**Bug Fixes (December 2025)**:
-1. ✅ Section 1 hover not working → Manual tracking with `_menuButtonHovered`
-2. ✅ Section 3 hover not working + wrong cursor → BUTTON with manual hover + `IDC_ARROW`
-3. ✅ Section 3 menu shows disabled gray text → Removed `MF_DISABLED` from info items
-4. ✅ Menu switching during tracking → Timer polling + `WM_CANCELMODE` + deferred open (no mouse hook)
-5. ✅ Section 2 text vertically misaligned → Full height layout + `PARAGRAPH_ALIGNMENT_CENTER`
-6. ✅ Section 2 separators too small → 50% font increase + wider rects (32x36)
-
-## Architecture Decision: Hybrid Approach
+NavigationView uses one Win32 child window, Direct2D/DirectWrite rendering, a
+per-window DXGI swap chain/device context, and shared process-wide graphics
+devices. `IconCache` owns Shell icon lookup and conversion. DxUi owns retained
+text input and popup surfaces. The sections below define the current rendering,
+input, DPI, path, menu, focus, theme, and teardown contracts; removed migration
+chronology remains available from Git history and is not a second contract.
+## Rendering architecture
 
 ### Rendering Strategy
 
@@ -323,7 +76,7 @@ void StopSeparatorAnimation() noexcept;
 - ✅ **DPI-aware icon rendering** with ID2D1Bitmap1
 - ✅ **State-aware backgrounds** (normal/hover/pressed)
 - ✅ **Special folder detection** for intelligent icon selection
-- ✅ **Hamburger icon fallback** drawn with Direct2D primitives
+- ✅ **Hamburger/list icon fallback** drawn through DirectWrite with Segoe Fluent Icons (Unicode fallback)
 - ✅ **Manual hit testing** with PtInRect (no HWND needed)
 
 **Section 2 (Path Display)**: Direct2D/DirectWrite
@@ -354,7 +107,7 @@ void StopSeparatorAnimation() noexcept;
 - **Smooth Animations**: Fade between modes, hover effects
 - **Custom Text Layout**: Precise control over character positioning
 - **High-Quality Rendering**: ClearType, sub-pixel positioning
-- **Future-Proof**: Easy to add icons, badges, overlays
+- **Extensibility**: the retained rendering path can add icons, badges, or overlays without changing the window model
 
 ❌ **GDI Limitations for Path Display:**
 - Complex hit-testing for clickable segments
@@ -421,7 +174,7 @@ Drive/Menu              Path (Breadcrumb)     History      Disk Info
 
 ### Visual Design (Direct2D - December 2025)
 - **Type**: Direct2D rendering (no HWND, manual hit testing)
-- **Icon**: Context-aware (special folder/drive icon) or hamburger fallback (≡)
+- **Icon**: Context-aware (special folder/drive icon) or Segoe Fluent `BulletedList` fallback (Unicode `☰` fallback)
 - **Size**: 28×24 DIP button area within `_sectionDriveRect`
 - **Rendering**: Direct2D with `ID2D1Bitmap1` for DPI-aware icons
 - **States**: Normal, Hover, Pressed (via `_menuButtonHovered`, `_menuButtonPressed`)
@@ -450,7 +203,7 @@ Drive/Menu              Path (Breadcrumb)     History      Disk Info
 
 **Key methods (menu button path icon)**:
 - `UpdateMenuIconBitmap()`: resolves a **system image list icon index** for the current path (special-folder prefix match, else drive root, else current folder) using `IconCache` query helpers, then populates `_menuIconBitmapD2D` via `IconCache::GetIconBitmap(iconIndex, _d2dContext.get())`.
-- `RenderDriveSection()`: fills `_sectionDriveRect` using `NavigationViewTheme` colors and draws `_menuIconBitmapD2D` (or a hamburger fallback), then presents with a dirty rect.
+- `RenderDriveSection()`: fills `_sectionDriveRect` using `NavigationViewTheme` colors and draws `_menuIconBitmapD2D` (or the centered DirectWrite menu-list glyph), then presents with a dirty rect.
 
 **Per-section rendering**:
 - Painting is split into `RenderDriveSection()`, `RenderPathSection()`, `RenderHistorySection()`, and `RenderDiskInfoSection()`.
@@ -465,7 +218,7 @@ The menu button displays a contextual icon based on the current path
 **Priority Order:**
 1. **Special folder icon** if current path is under a known special folder root (Desktop, Documents, Downloads, Pictures, Music, Videos, OneDrive)
 2. **Drive root icon** if on a drive but not under a special folder (e.g., `C:\SomeFolder` shows hard drive icon)
-3. **Fallback hamburger icon** (≡) if neither condition is met
+3. **Fallback menu-list glyph** (`Segoe Fluent Icons` `BulletedList`, Unicode `☰` fallback) if neither condition is met
 
 **Path Matching with Separator Validation**:
 
@@ -530,6 +283,15 @@ _menuIconBitmapD2D = (iconIndex >= 0) ? IconCache::GetInstance().GetIconBitmap(i
 #### Plugin-Provided Sections (Dynamic)
 Menu content comes from the active file system plugin via `INavigationMenu`.
 NavigationView renders **raw menu entries** and does not enumerate WSL distributions or drives itself.
+The standard `file` plugin and app-side WSL adapters both consume
+`Common::Wsl::EnumerateDistributions`; that catalog is the sole owner of bounded registry reads,
+`docker-desktop*` / `rancher-desktop*` exclusions, case-insensitive ordering, GUID/base-path metadata,
+and WSL1/WSL2 classification. A consumer may derive `\\wsl.localhost\<name>` for display/navigation but
+must not maintain another `Lxss` registry reader or filter/sort policy.
+The synchronous catalog emits one `wsl.catalog.enumerate_us` row per call with retained-record and inspected-subkey
+counts. The focused `PluginContractTests.exe --registry-wsl-catalog` scenario uses a volatile per-user registry
+fixture and is the deterministic correctness/performance baseline for this menu-discovery stage; the expected
+direction is bounded latency and allocation independent of malformed value length or unbounded key enumeration.
 
 When the active plugin is `file`, NavigationView injects `Connections...` before `Go to >`, then places `Go to >` as the last named entry immediately above the first drive-root entry in the navigation menu. The `Go to >` submenu mirrors the pane `Go to` menu contract: `Back`, `Forward`, `Parent Directory`, `Root Directory`, `Path from Other Panel`, `Hot Paths...`, then dynamic Hot Path slots and folder history.
 
@@ -699,6 +461,11 @@ Clicking the `"..."` segment opens a lightweight popup window that displays the 
 
 **Popup dismissal**
 - Click outside, `Esc`, or focus loss closes the popup.
+- Escape focus restoration must occur after the owned popup's destruction returns.
+  A restore posted from `WM_NCDESTROY` can be consumed reentrantly before native
+  focus teardown finishes. Use the existing foreground-safe route immediately
+  after destruction and again through its queued restore after the input callback
+  unwinds; do not reactivate a different foreground owner or steal focus from edit mode.
 - Focus transfer into a top-level popup menu directly owned by the full-path popup is still inside the popup interaction. `WM_ACTIVATE/WA_INACTIVE` must not close the full-path popup when the activating HWND is the popup itself, one of its child windows, or a directly owned top-level menu window; normal unrelated activation still dismisses it.
 
 **Popup edit mode**
@@ -1942,76 +1709,39 @@ To determine if the current path is **under** a special folder (not just equal),
 - `IconCache` caches `ID2D1Bitmap1` by `(ID2D1Device*, iconIndex)` (LRU), so multiple views share the same converted bitmaps.
 - Menu item bitmaps are created from `iconIndex` via `IconCache::CreateMenuBitmapFromIconIndex(...)` (WIC pipeline; correct alpha; avoids manual `DestroyIcon`/`DeleteObject`).
 
-## Performance Considerations
+## Performance contract
 
-### Section 2 (Direct2D) Optimization
-- **Lazy Rendering**: Only redraw on path change, hover, or resize
-- **Cached Layouts**: Store `IDWriteTextLayout` for each segment
-- **Dirty Regions**: Use `Present1` with dirty rects for minimal updates
-- **Hit-Test Cache**: Pre-calculate segment bounds, update only on layout change
-- **Async Path Validation**: Don't block UI while checking network paths
+- Swap-chain initialization remains deferred until after first paint.
+- Repaint work is driven by delivered input, path/data changes, layout, or
+  explicit teardown; paint must not resample global cursor state.
+- Text layouts and icon bitmaps are cached at their documented ownership
+  boundaries, history is bounded by `folders.historyMax`, and remote validation
+  must not block the UI thread.
+- New responsiveness or memory claims require the scenario, instrumentation,
+  deterministic selftest, and archived evidence required by
+  `Specs/Testing/Testing_PerformanceValidation.md`.
+## Verification ownership
 
-### Sections 1, 3, and 4 Optimization
-- **Dirty-region redraws**: Repaint only the sections whose hover/pressed state or data changed
-- **Font caching**: Create text formats/layout helpers once, reuse throughout lifetime
-- **Popup reuse principles**: Keep dropdown item preparation cheap and rely on popup-session work only when the user opens a menu
+Current behavior is exercised by:
 
-### Overall Performance
-- **Target**: 60 FPS for smooth hover effects in breadcrumb mode
-- **Memory**: Direct2D resources only for Section 2 (~2-5 MB)
-- **Startup**: Lazy initialization of swap chain on first paint
-- **History Limit**: bounded by `folders.historyMax` (default `20`, clamped `1..50`) to prevent unbounded growth
+- `RedSalamander/SelfTest/Commands/Commands.SelfTest.Navigation.cpp` for
+  navigation routing and shell stability;
+- `RedSalamander/SelfTest/Commands/Commands.SelfTest.ViewCommands.cpp` for
+  breadcrumb, focus traversal, menus, history, edit suggestions, invalid paths,
+  pointer routing, and teardown;
+- `Tests/DxUiTests/DxUiTests.Menu.cpp` for popup and NavigationView input-source
+  contracts;
+- `Tools/Tests/TestHarnessSourceContracts.Tests.ps1` for harness and focus
+  restoration boundaries.
 
-## Testing Checklist
-
-- [ ] Renders correctly at 96, 120, 144, 192 DPI
-- [x] WM_DPICHANGED message received when scaling changes
-- [ ] Menu bitmap icons remain correct size (16x16) at all DPI settings
-- [x] FolderView icons scale appropriately with DPI
-- [x] Menu icons have perfect transparency without black borders
-- [x] Breadcrumb segments are clickable and navigate correctly
-- [x] Hover effects appear on breadcrumb segments
-- [ ] Single-click enters edit mode with text selected
-- [x] Enter accepts, Escape cancels edit mode
-- [ ] Invalid paths show error message
-- [ ] History dropdown shows recent paths (bounded by `folders.historyMax`)
-- [ ] Menu button shows drives with icons and space info
-- [x] Disk info updates when path changes
-- [x] Disk info menu shows detailed information
-- [ ] Long paths collapse with clickable `"..."` + full-path popup (breadcrumb mode)
-- [ ] Network paths handled gracefully (no UI freeze)
-- [ ] Light/Dark/Rainbow themes display correctly
-- [ ] High contrast mode displays correctly
-- [ ] Keyboard shortcuts (F4, Alt+D, Ctrl+L) work
-- [ ] Tab navigation cycles through sections
-- [x] Direct2D swap chain resizes correctly
-- [x] No memory leaks (check with Task Manager)
-- [x] Smooth 60 FPS hover animations
-
-## Future Enhancements
-
-### Visual Enhancements
-1. **Folder Icons**: Show small icon before each breadcrumb segment
-2. **Syntax Highlighting**: Different colors for drive, folders, current
-3. **Smooth Transitions**: Fade animation when switching paths
-4. **Progress Bar**: Visual disk usage bar in Section 3
-5. **Badges**: Show lock icon for read-only, cloud icon for OneDrive
-
-### Functional Enhancements
-1. **Auto-complete**: Suggest paths as user types in edit mode (implemented: cache-first autosuggest popup)
-2. **Recent Files**: Add to menu dropdown
-3. **Favorites/Bookmarks**: Star frequently used paths
-4. **Search Integration**: Quick search box (Ctrl+F)
-5. **Copy Path**: Context menu to copy path to clipboard
-6. **Network Locations**: Dedicated section in menu
-
-### Advanced Features
-1. **Path Animations**: Smooth scroll for long breadcrumb lists
-2. **Drag & Drop**: Drag files to breadcrumb segments
-3. **Context Menus**: Right-click segments for folder operations
-4. **Keyboard Navigation**: Arrow keys to move between segments
-5. **Touch Support**: Swipe gestures for touch screens
-
+DPI, keyboard, UIA, theme, network responsiveness, and resource-lifetime
+requirements remain binding even when a particular check is manual. A checklist
+in this document is not proof of coverage; enumerate current cases with
+`Tools/Get-TestInventory.ps1` and record durable performance evidence under
+`Specs/TestRuns/`.
+Optional visual and functional additions are not current NavigationView
+contracts. Their decision record is
+`Specs/Plans/WIP/Operation_Atlas_RemainingSpecificationDecisions_2026-08-04.md`.
 ## References
 
 - **Windows Explorer**: Address bar breadcrumb navigation model
@@ -2019,5 +1749,5 @@ To determine if the current path is **under** a special folder (not just equal),
 - **DirectWrite**: Advanced text layout and rendering
 - **Win32 API**: Window management and GDI rendering
 - **uxtheme.h**: Modern control theming (Sections 1 & 3)
-- **C++17 filesystem**: Path manipulation and validation
+- **C++23 / latest MSVC `std::filesystem`**: Path manipulation and validation
 - **FolderView**: Existing Direct2D/DXGI architecture patterns

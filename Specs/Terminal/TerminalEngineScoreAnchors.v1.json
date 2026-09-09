@@ -1,0 +1,170 @@
+{
+  "formatId": "red-salamander-terminal-engine-score-anchors",
+  "version": 1,
+  "frozenUtc": "2026-07-30T00:00:00Z",
+  "ratingRule": "For each criterion use the first matching anchor from rating 5 down to 0. Every conjunct in an anchor is required. Fractions and interpolation are forbidden. Unknown evidence disqualifies the candidate.",
+  "maintainedChangeRule": "Count logical maintained concerns, not patch files. ABI identity, public snapshot/exposure, resource accounting, protocol semantics, allocator instrumentation, build integration, and language bridge are separate concerns when they have different ownership or can regress independently. Combining changes into one diff never reduces the count.",
+  "criteria": [
+    {
+      "criterionId": "C1",
+      "weight": 18,
+      "name": "Embeddable API, ABI isolation, immutable snapshot fit",
+      "anchors": [
+        {"anchorId": "c1-r5", "rating": 5, "rule": "Versioned stable C ABI or fully source-vendored public boundary; at most 24 crossed functions and by-value types; complete fail-closed identity; explicit immutable snapshot transaction; no maintained private-type patch."},
+        {"anchorId": "c1-r4", "rating": 4, "rule": "Public C ABI or fully source-vendored boundary; at most 64 crossed elements; complete generated identity; documented borrowed lifetime; a thin owned-copy adapter and at most one logical maintained public-surface concern."},
+        {"anchorId": "c1-r3", "rating": 3, "rule": "Isolatable source or C boundary with at most 128 crossed elements; generated layout identity; consumer snapshot is practical but requires multiple maintained public-surface changes or conservative copying."},
+        {"anchorId": "c1-r2", "rating": 2, "rule": "Source boundary is buildable but crosses more than 128 elements or requires recurring internal adaptation; immutable extraction is demonstrated only through a broad adapter."},
+        {"anchorId": "c1-r1", "rating": 1, "rule": "Embeddable use is demonstrated but the boundary is undocumented, unstable, or tightly coupled and requires extensive maintained glue."},
+        {"anchorId": "c1-r0", "rating": 0, "rule": "No admissible embeddable consumer-owned snapshot boundary."}
+      ]
+    },
+    {
+      "criterionId": "C2",
+      "weight": 14,
+      "name": "VT, Unicode, input, selection, reflow correctness",
+      "anchors": [
+        {"anchorId": "c2-r5", "rating": 5, "rule": "All frozen conformance fixtures pass in every lane; upstream corpus has at least 1000 assertions; malformed and split variants pass; no compatibility exception."},
+        {"anchorId": "c2-r4", "rating": 4, "rule": "All frozen fixtures pass in every lane; upstream corpus has at least 250 assertions; at most two documented non-required compatibility differences."},
+        {"anchorId": "c2-r3", "rating": 3, "rule": "All mandatory frozen fixtures pass, but upstream coverage is below 250 assertions or the adapter owns bounded normalization for at most two required behaviors."},
+        {"anchorId": "c2-r2", "rating": 2, "rule": "At least 90 percent of frozen functional fixtures pass and every miss has a bounded single-parser patch."},
+        {"anchorId": "c2-r1", "rating": 1, "rule": "At least 70 percent of frozen functional fixtures pass without process termination."},
+        {"anchorId": "c2-r0", "rating": 0, "rule": "Below 70 percent, a required behavior is absent, or untrusted input terminates the process."}
+      ]
+    },
+    {
+      "criterionId": "C3",
+      "weight": 12,
+      "name": "Thread safety, borrowed-data clarity, pre-allocation controls",
+      "anchors": [
+        {"anchorId": "c3-r5", "rating": 5, "rule": "Every frozen limit has a typed pre-allocation reservation at the owning allocation site; all borrowed lifetimes and callback reentrancy are explicit; allocation-failure and eight-session tests pass without conservative cross-ledger charging."},
+        {"anchorId": "c3-r4", "rating": 4, "rule": "Every frozen limit is pre-bounded and tested; lifetimes are explicit; at most one documented conservative double-charge or one logical maintained resource-accounting concern remains."},
+        {"anchorId": "c3-r3", "rating": 3, "rule": "All hard limits are pre-bounded, but multiple conservative charges or logical maintained source concerns are required and measured capacity is reduced."},
+        {"anchorId": "c3-r2", "rating": 2, "rule": "Most allocations are pre-bounded but one non-adversarial transient class depends on a lower enclosing allocator cap."},
+        {"anchorId": "c3-r1", "rating": 1, "rule": "Only coarse allocator caps exist and borrowed or callback behavior requires substantial defensive serialization."},
+        {"anchorId": "c3-r0", "rating": 0, "rule": "Any mandatory allocation is unbounded before work, or lifetime and teardown safety cannot be proved."}
+      ]
+    },
+    {
+      "criterionId": "C4",
+      "weight": 10,
+      "name": "Reproducible x64 and ARM64 Windows build",
+      "anchors": [
+        {"anchorId": "c4-r5", "rating": 5, "rule": "Both architectures and x64 ASan build offline with the repository MSVC toolchain only; two independent clean build roots produce byte-identical raw artifacts; no extra bootstrap tool."},
+        {"anchorId": "c4-r4", "rating": 4, "rule": "Both architectures and x64 ASan build offline with one exact digest-verified additional toolchain; two independent clean build roots produce byte-identical raw artifacts; bootstrap has no floating input."},
+        {"anchorId": "c4-r3", "rating": 3, "rule": "Both architectures and x64 ASan build offline with two or more frozen tool families or a maintained build wrapper; two independent clean build roots produce byte-identical raw artifacts."},
+        {"anchorId": "c4-r2", "rating": 2, "rule": "Both architectures build, but offline orchestration needs substantial maintained extraction or platform patches."},
+        {"anchorId": "c4-r1", "rating": 1, "rule": "Only one required architecture or configuration has a reproducible build."},
+        {"anchorId": "c4-r0", "rating": 0, "rule": "No reproducible Windows build."}
+      ]
+    },
+    {
+      "criterionId": "C5",
+      "weight": 10,
+      "name": "Static Kitty completeness and safe accounting",
+      "anchors": [
+        {"anchorId": "c5-r5", "rating": 5, "rule": "Every required static Kitty fixture and quota boundary passes through an immutable public representation with pre-decode typed accounting and no maintained protocol patch."},
+        {"anchorId": "c5-r4", "rating": 4, "rule": "Every required fixture and boundary passes; representation is public; at most one logical maintained preallocation-or-exposure concern and one embedder PNG callback are required."},
+        {"anchorId": "c5-r3", "rating": 3, "rule": "Every required fixture passes, but multiple logical maintained public concerns or conservative copies are required."},
+        {"anchorId": "c5-r2", "rating": 2, "rule": "Required static state is representable but at least one required behavior needs substantial authoritative-parser work."},
+        {"anchorId": "c5-r1", "rating": 1, "rule": "Only basic direct images are available."},
+        {"anchorId": "c5-r0", "rating": 0, "rule": "Required static Kitty state or safe accounting is absent."}
+      ]
+    },
+    {
+      "criterionId": "C6",
+      "weight": 8,
+      "name": "Windows, Direct2D, DirectWrite, HWND, accessibility fit",
+      "anchors": [
+        {"anchorId": "c6-r5", "rating": 5, "rule": "Native C or C++ model has no UI ownership, exposes renderer-ready cells and images, uses the repository runtime, and needs no foreign event loop or runtime DLL."},
+        {"anchorId": "c6-r4", "rating": 4, "rule": "Model has no UI ownership and exposes renderer-ready state; one private runtime DLL or source-static foreign toolchain is isolated inside Terminal.dll."},
+        {"anchorId": "c6-r3", "rating": 3, "rule": "Consumer rendering is possible but requires substantial shaping, accessibility, or event-loop adaptation."},
+        {"anchorId": "c6-r2", "rating": 2, "rule": "Windows embedding works only after removing or bypassing candidate UI assumptions."},
+        {"anchorId": "c6-r1", "rating": 1, "rule": "A foreign control or UI stack can be hosted but conflicts with the target ownership model."},
+        {"anchorId": "c6-r0", "rating": 0, "rule": "Plugin-owned native rendering is not possible."}
+      ]
+    },
+    {
+      "criterionId": "C7",
+      "weight": 8,
+      "name": "Shell semantic effects and authenticated side-channel fit",
+      "anchors": [
+        {"anchorId": "c7-r5", "rating": 5, "rule": "Typed prompt/input/output semantics, pwd/title/hyperlink effects, and write-response ordering are exposed; the authenticated side channel composes without parsing terminal output."},
+        {"anchorId": "c7-r4", "rating": 4, "rule": "All required effects are exposed, but prompt-idle truth comes solely from the authenticated side channel."},
+        {"anchorId": "c7-r3", "rating": 3, "rule": "Required effects are implementable with bounded copied callbacks and the authenticated side channel; one optional semantic class is absent."},
+        {"anchorId": "c7-r2", "rating": 2, "rule": "Only title and pwd effects are exposed; other semantics depend entirely on the side channel."},
+        {"anchorId": "c7-r1", "rating": 1, "rule": "Effects are opaque and require broad integration work but no second VT parser."},
+        {"anchorId": "c7-r0", "rating": 0, "rule": "The contract requires trusting terminal output, changing shell policy, or adding a second parser."}
+      ]
+    },
+    {
+      "criterionId": "C8",
+      "weight": 7,
+      "name": "Three-year maintenance burden",
+      "anchors": [
+        {"anchorId": "c8-r5", "rating": 5, "rule": "Frozen ownerDays is 15 or less."},
+        {"anchorId": "c8-r4", "rating": 4, "rule": "Frozen ownerDays is 30 or less."},
+        {"anchorId": "c8-r3", "rating": 3, "rule": "Frozen ownerDays is 60 or less."},
+        {"anchorId": "c8-r2", "rating": 2, "rule": "Frozen ownerDays is 90 or less."},
+        {"anchorId": "c8-r1", "rating": 1, "rule": "Frozen ownerDays is 150 or less."},
+        {"anchorId": "c8-r0", "rating": 0, "rule": "Frozen ownerDays exceeds 150 or cannot be bounded."}
+      ]
+    },
+    {
+      "criterionId": "C9",
+      "weight": 6,
+      "name": "Startup, throughput, memory, and package size",
+      "anchors": [
+        {"anchorId": "c9-r5", "rating": 5, "rule": "All Release medians meet: create-destroy at most 1000 microseconds, parse at least 250 MiB/s, dirty snapshot at most 500 microseconds, eight-session retained CPU at most 64 MiB, added package at most 4 MiB."},
+        {"anchorId": "c9-r4", "rating": 4, "rule": "All Release medians meet: create-destroy at most 2500 microseconds, parse at least 125 MiB/s, dirty snapshot at most 1000 microseconds, eight-session retained CPU at most 96 MiB, added package at most 8 MiB."},
+        {"anchorId": "c9-r3", "rating": 3, "rule": "All Release medians meet: create-destroy at most 5000 microseconds, parse at least 64 MiB/s, dirty snapshot at most 2500 microseconds, eight-session retained CPU at most 160 MiB, added package at most 16 MiB."},
+        {"anchorId": "c9-r2", "rating": 2, "rule": "All Release medians meet: create-destroy at most 10000 microseconds, parse at least 32 MiB/s, dirty snapshot at most 5000 microseconds, eight-session retained CPU at most 256 MiB, added package at most 32 MiB."},
+        {"anchorId": "c9-r1", "rating": 1, "rule": "The candidate remains responsive and bounded but misses one or more rating-2 budgets."},
+        {"anchorId": "c9-r0", "rating": 0, "rule": "A measurement is missing, unbounded, or fails the responsiveness scenario."}
+      ]
+    },
+    {
+      "criterionId": "C10",
+      "weight": 4,
+      "name": "License, notices, provenance, dependency surface",
+      "anchors": [
+        {"anchorId": "c10-r5", "rating": 5, "rule": "Complete permissive closure, automated notices, verified provenance, and zero non-system runtime dependencies."},
+        {"anchorId": "c10-r4", "rating": 4, "rule": "Complete distributable closure, automated notices, verified provenance, and at most two non-system runtime dependencies."},
+        {"anchorId": "c10-r3", "rating": 3, "rule": "Complete distributable closure and at most five non-system runtime dependencies, with bounded manual notice work."},
+        {"anchorId": "c10-r2", "rating": 2, "rule": "Distributable closure has at most ten non-system runtime dependencies or recurring manual provenance work."},
+        {"anchorId": "c10-r1", "rating": 1, "rule": "Closure is distributable but unusually complex or copyleft obligations require significant recurring review."},
+        {"anchorId": "c10-r0", "rating": 0, "rule": "License, notice, or provenance closure is unresolved or incompatible."}
+      ]
+    },
+    {
+      "criterionId": "C11",
+      "weight": 3,
+      "name": "Testability, fuzzing, diagnostics, upstream corpus",
+      "anchors": [
+        {"anchorId": "c11-r5", "rating": 5, "rule": "Public deterministic fuzz seam, at least 1000 upstream assertions, Windows execution, allocation-failure injection, and bounded structured diagnostics."},
+        {"anchorId": "c11-r4", "rating": 4, "rule": "Deterministic fuzz seam, at least 250 upstream assertions, Windows execution, and actionable diagnostics."},
+        {"anchorId": "c11-r3", "rating": 3, "rule": "Deterministic parser seam and at least 100 upstream assertions; Windows harness supplies missing diagnostics."},
+        {"anchorId": "c11-r2", "rating": 2, "rule": "Deterministic unit seam exists but upstream corpus is below 100 assertions or lacks Windows coverage."},
+        {"anchorId": "c11-r1", "rating": 1, "rule": "Only integration-level black-box testing is practical."},
+        {"anchorId": "c11-r0", "rating": 0, "rule": "No deterministic test or fuzz seam."}
+      ]
+    }
+  ],
+  "ownerDayMethod": {
+    "formula": "ceil((initialAdapterDays + initialPatchDays + 9 * perUpgradeDays + 3 * annualSecurityResponseDays + releaseNoticeDays) * 1.20)",
+    "periodYears": 3,
+    "plannedUpgrades": 9,
+    "securityResponseEvents": 3,
+    "rounding": "ceiling-to-whole-owner-day",
+    "rules": [
+      "Include build, ABI, dependency, notice, conformance, performance, package, and rollback work.",
+      "Include every RedSalamander-maintained source patch and bridge.",
+      "Do not subtract expected upstream work or volunteer time.",
+      "Freeze the estimate before performance measurements."
+    ]
+  },
+  "tieMeasurementRules": {
+    "crossedAbiElements": "Count each callable function plus each enum, callback, and by-value public struct or union whose layout or numeric values cross Terminal.dll. Opaque handles and pointer-only incomplete types count once each. Generated aliases do not add duplicates.",
+    "nonSystemRuntimeDependencies": "Count distinct app-local runtime binary leaves in the recursively enumerated import/load closure. Windows system32 API-set forwarders do not count. Statically linked source dependencies do not count here and remain in license/provenance evidence.",
+    "addedReleasePackageBytes": "Sum exact compressed portable-package bytes newly attributable to the engine, adapter-private runtime, required notices, and licenses, measured against the same clean Release package recipe."
+  }
+}

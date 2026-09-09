@@ -1,5 +1,6 @@
 #define REDSAL_DEFINE_TRACE_PROVIDER
 #include "DxUiTestHelpers.h"
+#include "TestSupport/DirectedSelfTestInputWarning.h"
 #include "Ui/AnimationDispatcher.h"
 
 #include <optional>
@@ -34,6 +35,7 @@ int wmain(int argc, wchar_t** argv)
     std::optional<std::filesystem::path> galleryOutputDirectory;
     std::optional<std::filesystem::path> buttonAuditOutputPath;
     bool writeBaselines = false;
+    bool blockActivation = false;
     for (int argIndex = 1; argIndex < argc; ++argIndex)
     {
         const std::wstring_view arg                         = argv[argIndex] ? std::wstring_view(argv[argIndex]) : std::wstring_view{};
@@ -55,6 +57,11 @@ int wmain(int argc, wchar_t** argv)
         if (arg == L"--write-baselines")
         {
             writeBaselines = true;
+            continue;
+        }
+        if (arg == L"--no-activate")
+        {
+            blockActivation = true;
             continue;
         }
         if (arg.rfind(kPerfJsonlPrefix, 0) == 0)
@@ -112,7 +119,12 @@ int wmain(int argc, wchar_t** argv)
     SetDxUiWriteBaselines(writeBaselines);
     if (perfJsonlPath.has_value())
     {
-        Debug::Perf::ConfigureJsonlOutput(perfJsonlPath.value(), L"DxUiTests", L"Debug");
+#if defined(NDEBUG)
+        constexpr std::wstring_view kBuildFlavor = L"Release";
+#else
+        constexpr std::wstring_view kBuildFlavor = L"Debug";
+#endif
+        Debug::Perf::ConfigureJsonlOutput(perfJsonlPath.value(), L"DxUiTests", kBuildFlavor);
     }
     const auto perfCleanup = wil::scope_exit([&] { Debug::Perf::ClearJsonlOutput(); });
 
@@ -132,8 +144,38 @@ int wmain(int argc, wchar_t** argv)
         return _wcsicmp(wideName.c_str(), suiteFilter->c_str()) == 0;
     };
 
-    auto runSuite = [](const char* name, void (*fn)())
+    const auto suiteCanActivate = [](const char* name) noexcept
     {
+        return _stricmp(name, "Menu") == 0 || _stricmp(name, "NativeTextInput") == 0;
+    };
+    const bool selectedSuiteCanActivate = suiteFilter.has_value() &&
+                                          (_wcsicmp(suiteFilter->c_str(), L"Menu") == 0 ||
+                                           _wcsicmp(suiteFilter->c_str(), L"NativeTextInput") == 0);
+    if (blockActivation && (! suiteFilter.has_value() || selectedSuiteCanActivate))
+    {
+        std::wcerr << L"--no-activate cannot run a DxUi suite whose contract requires real focus.\n";
+        return 2;
+    }
+
+    RedSalamander::TestSupport::ScopedWindowActivationBlocker activationBlocker;
+    if (blockActivation && ! activationBlocker.Start())
+    {
+        std::wcerr << L"Failed to install the DxUi no-activation guard.\n";
+        return 2;
+    }
+
+    bool warningFailed = false;
+    auto runSuite = [&](const char* name, void (*fn)())
+    {
+        const bool needsInputWarning = suiteCanActivate(name);
+        const RedSalamander::TestSupport::DirectedSelfTestInputWarning inputWarning(nullptr, needsInputWarning);
+        if (needsInputWarning && ! inputWarning.IsVisible())
+        {
+            std::wcerr << L"Failed to display the foreground-input warning.\n";
+            warningFailed = true;
+            return;
+        }
+        SetDxUiTestWindowsCanActivate(needsInputWarning);
         std::cerr << "[START] " << name << '\n' << std::flush;
         fn();
         RedSalamander::Ui::AnimationDispatcher::GetInstance().Shutdown();
@@ -245,6 +287,11 @@ int wmain(int argc, wchar_t** argv)
     {
         runSuite("Accessibility", RunAccessibilityTests);
         ranAnySuite = true;
+    }
+
+    if (warningFailed)
+    {
+        return 2;
     }
 
     if (! ranAnySuite)

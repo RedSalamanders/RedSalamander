@@ -571,6 +571,40 @@ std::wstring SerializeClipboardMatrix(const ClipboardMatrix& matrix)
     return result;
 }
 
+LocalizationClipboardPasteTarget BuildLocalizationClipboardPasteTarget(std::span<const LocalizationReviewRow> rows,
+                                                                         std::span<const size_t> viewRows,
+                                                                         size_t selectedSessionRow,
+                                                                         std::span<const std::wstring> orderedCultures,
+                                                                         std::wstring_view selectedCulture)
+{
+    LocalizationClipboardPasteTarget target;
+    const auto selectedRow = std::find(viewRows.begin(), viewRows.end(), selectedSessionRow);
+    const auto selectedColumn = std::find_if(orderedCultures.begin(), orderedCultures.end(), [selectedCulture](const std::wstring& culture)
+    {
+        return EqualIgnoreCase(culture, selectedCulture);
+    });
+    if (selectedRow == viewRows.end() || selectedColumn == orderedCultures.end())
+    {
+        return target;
+    }
+
+    target.destinationRows.reserve(static_cast<size_t>(std::distance(selectedRow, viewRows.end())));
+    for (auto row = selectedRow; row != viewRows.end(); ++row)
+    {
+        if (*row >= rows.size())
+        {
+            target.destinationRows.clear();
+            return target;
+        }
+
+        const LocalizationReviewRow& sourceRow = rows[*row];
+        target.destinationRows.push_back({.ownerName = sourceRow.ownerName, .id = sourceRow.id});
+    }
+
+    target.destinationCultures.assign(selectedColumn, orderedCultures.end());
+    return target;
+}
+
 ThemeMassPreview PreviewThemeMassChange(const Themes::ThemePreviewModel& model, const ThemeMassRequest& request)
 {
     ThemeMassPreview preview{.request = request, .beforeTheme = model.GetTheme()};

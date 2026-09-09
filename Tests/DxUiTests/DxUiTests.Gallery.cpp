@@ -84,8 +84,7 @@ void ResizeClientArea(HWND hwnd, UINT widthPx, UINT heightPx);
                                                    bool highContrast,
                                                    bool rainbowMode)
 {
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                       = 4u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.dpi                           = USER_DEFAULT_SCREEN_DPI;
     viewerTheme.backgroundArgb                = backgroundArgb;
     viewerTheme.textArgb                      = textArgb;
@@ -838,6 +837,7 @@ struct GalleryScene
     std::unique_ptr<Panel> root;
     std::unique_ptr<GalleryTreeModel> treeModel;
     std::unique_ptr<GalleryGridModel> gridModel;
+    ExposedButton* selectorHoverButton = nullptr;
     ExposedButton* hoverButton         = nullptr;
     ExposedButton* pressedButton       = nullptr;
     Control* focusedControl            = nullptr;
@@ -938,6 +938,13 @@ void AddComboItems(ComboBox& combo)
     AddButtonTile(scene, flow, L"Button / Standard", L"Standard", ButtonVariant::Standard);
     AddButtonTile(scene, flow, L"Button / Primary", L"Primary", ButtonVariant::Standard, true);
     AddButtonTile(scene, flow, L"Button / DropDown", L"Options", ButtonVariant::DropDown);
+    AddButtonTile(scene, flow, L"Button / Selector", L"Parallel", ButtonVariant::Selector);
+    {
+        const Tile tile          = flow.Next(*scene.root, L"Button / Selector hover");
+        scene.selectorHoverButton = scene.root->AddChild<ExposedButton>(L"Parallel");
+        scene.selectorHoverButton->SetVariant(ButtonVariant::Selector);
+        scene.selectorHoverButton->SetBounds(CenterIn(tile.content, 132.0f, 32.0f));
+    }
     AddButtonTile(scene, flow, L"Button / Split", L"Run", ButtonVariant::Split);
     AddOpenButtonTile(scene, flow, L"Button / DropDown open", L"Options", ButtonVariant::DropDown, std::move(menuCaptures.buttonDropDown));
     AddOpenButtonTile(scene, flow, L"Button / Split open", L"Run", ButtonVariant::Split, std::move(menuCaptures.buttonSplit));
@@ -1250,6 +1257,10 @@ void ResizeClientArea(HWND hwnd, UINT widthPx, UINT heightPx)
     if (scene.hoverButton)
     {
         scene.hoverButton->OnHoverChanged(window.Host(), true);
+    }
+    if (scene.selectorHoverButton)
+    {
+        scene.selectorHoverButton->OnHoverChanged(window.Host(), true);
     }
     if (scene.pressedButton)
     {

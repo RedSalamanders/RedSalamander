@@ -83,7 +83,7 @@ Visible pane correctness is mandatory across all built-in file system plugins.
 - If no ancestor survives, the pane falls back to the plugin root.
 - When a mounted context resolves to a Windows backing path, local file-system rename or move retargets the mount and keeps the internal plugin path when possible.
 - When that backing item is deleted, the pane exits the mount and navigates to the nearest surviving local ancestor or the default local root.
-- Focus memory is preserved where possible so cross-pane updates feel stable instead of jumping to an unrelated item.
+- Each pane uses the bounded provider-aware current-item memory defined by `UI_FolderView.md`; cross-pane updates and later navigation restore current by logical provider/context/location identity without restoring selection.
 - A selected direct child that is renamed MUST remain selected when the refreshed enumeration exposes the rename target. This applies to chained rename hints and to hints that arrive after a watcher refresh has already removed the selected source from the visible model. Unrelated refreshes MUST NOT expire the chain by count; pending rename and recently-missing-selection state is time-bounded and MUST be cleared when the pane changes folder or file-system provider.
 - Off-screen folders may be marked dirty without eager re-enumeration.
 - Runtime filesystem-plugin rediscovery is a model replacement boundary: before releasing providers,
@@ -106,15 +106,44 @@ FolderWindow is responsible for routing user-action errors to the most relevant 
 ## Item Properties Dialog
 
 - `Alt+Enter` / Properties opens a themed DxUi dialog for the focused pane item when the active filesystem supports `IFileSystemIO::GetItemProperties`.
+- The window opens immediately in a localized loading state and performs the
+  provider query off the UI thread. Completion is generation/window-lifetime
+  checked before publication. If the provider fails, returns nothing, or returns
+  malformed JSON, the dialog shows the localized failure text with the provider
+  result and, for a Possible artifact name, still renders the host-owned
+  **File Operations** section below it from the same load's classification;
+  the failure never hides that explanation.
 - Property content is presented as card sections with the section name above, not inside, the card. Each regular section uses two-column rows (`key` / `value`) with a larger section title, so values are scannable without relying on a plain multiline text dump.
 - Compact sections such as Timestamps and Attributes are laid out side by side when the dialog is wide enough, and stack vertically on narrow widths.
+- When both General and Timestamps are present, Timestamps follows General even
+  if the provider returned a different section order. Common property keys are
+  normalized to the same localized host labels.
 - Long values, especially item names and paths, wrap within the value column and grow the containing row/card instead of clipping or drawing past the card edge.
 - The built-in local filesystem General section avoids duplicate rows for parent path, root, and extension; it shows name, full path, type, and file size when applicable.
 - Built-in local filesystem file sizes use the same compact units as the folder view and include the exact byte count in parentheses for sizes of 1 KB and larger.
+- Optional unavailable fields are omitted. The local provider exposes resolved
+  link metadata when available using Shortcut/Target, Internet Shortcut/URL/
+  Target, or Reparse Point/Kind/Target sections, and omits those sections when
+  resolution fails or the reparse type is unsupported.
+- A recognized generated artifact-name shape adds one host-owned **File Operations**
+  section. The existing worker performs exactly one fresh bounded shared-classifier
+  query for that Possible name; ordinary names perform none. The section labels the
+  classification and `name shape only` reason, current object state, and the
+  no-valid-operation-record/no-ownership-claim condition. Operation, task, time,
+  artifact kind, durable phase, intended destination/final name, publication,
+  source, cleanup, verification, and recovery are shown as unavailable when no
+  valid claim/result supplies them. Safe actions state that read/open/edit/preview/
+  copy/export remain available and that only RedSalamander-owned mutation warns.
+  It never scans history, exposes endpoint secrets or opaque authority, fabricates
+  a claim, or grants cleanup/recovery authority.
 - The dialog footer uses a compact Close button; Enter and Escape route to Close.
 - When named streams are present, the dialog includes a Streams card. It lists every named stream surfaced by the filesystem with stream name and size. The unnamed default data stream is not shown.
+- Each stream row has View when the host can open the stream in ViewerText.
 - If no named streams are present, the dialog omits the Streams section rather than showing an empty card.
-- If the active filesystem implements `IFileSystemItemStreams` and a stream row has `canRemove=true`, the row exposes an enabled Remove button. Remove deletes that stream via the filesystem interface, refreshes properties in place, and removes the row from the card.
+- If the active filesystem implements `IFileSystemItemStreams` and a stream row has `canRemove=true`, the row exposes an enabled Remove button. Remove deletes that stream via the filesystem interface and then re-reads the properties through the same off-thread worker as the initial load (fresh bounded classification for a Possible name, generation token, window-lifetime check), so the refreshed card reflects the object as it is after the removal; closing the dialog while that refresh is pending discards its result.
+- Removing a named stream from a Possible artifact is a content/metadata mutation:
+  it performs one exact-object, Cancel-default warning and revalidation before
+  deletion. Cancel preserves the stream and base object.
 - If stream deletion fails, the dialog keeps the row visible and shows an error message with the failing HRESULT.
 
 ## Shared Directories Dialog
@@ -161,12 +190,19 @@ FolderWindow is responsible for routing user-action errors to the most relevant 
 
 ## Active/Focused Pane
 
-- The "focused pane" is the pane that contains the current keyboard focus (either its `NavigationView` or its `FolderView`).
+- The "focused pane" is the pane that contains the current keyboard focus: its `FolderView`, `NavigationView`, filter/status chrome, preview tabs/content, or embedded Terminal child. A focused Terminal does not fall through to `_activePane`.
 - Keyboard accelerators that target "the active pane" apply to the focused pane.
+- Pointer-follow (`HandlePanePointerFocus`) calls `SetFocus` first and commits `_activePane` only after `GetFocus()` is in the target pane (or a child). A failed `SetFocus` MUST leave `_activePane` unchanged.
+- Pane content-tab changes (`SetPaneContentTab`, including mouse tab clicks) are tab-dependent after a successful change. Preview keeps or restores the source FolderView focus (`RefreshPreviewPane`). Folder and Terminal call `FocusPanePreferredTarget` for the host pane. After Terminal focus succeeds, `SetActivePane(host)` runs because Terminal `WM_SETFOCUS` does not post `kPaneFocusChanged`. Hiding a focused Terminal therefore cannot dump focus onto the preview parent. An unfocused pane's Folder/Terminal tab click still focuses that pane's preferred target. Tests that hide an opposite-pane Terminal to exercise pointer-follow must restore source-pane focus after the tab change.
+- `SwapPanes` MUST rebind an open embedded Terminal with the panes without destroying the ConPTY or child HWND. The Terminal child is parented to the FolderWindow frame for its lifetime and laid out over the host pane's preview content using the pane preview layout rects (FolderWindow client coordinates), not `GetClientRect` of a still-hidden preview host. SwapPanes MUST show and size the destination preview host, move the child over that host, and only then hide the source preview host; hiding a preview host that still overlaps the live child MUST NOT happen and MUST NOT close ConPTY. After swapping terminal records it MUST normalize exactly one of Folder, Preview, or Terminal selected per pane and set `previewTabsVisible` from `terminalOpen || previewAvailable`, then republish source location with the Open-time source pane instance id so follow/insert track the swapped screen-side folder.
 - When keyboard focus is outside both pane `FolderView` controls but still belongs to main-window chrome or a transient menu, `FolderWindow`'s active pane is the fallback pane for focus restoration.
 - Modeless external actions that call into `FolderWindow` to navigate/open in the active pane must commit the same-folder preparation or new target path before activating the main window or moving keyboard focus into the `FolderView`, so foreground/focus changes cannot visibly outrun the navigation work.
 - Any user navigation action inside a pane's `NavigationView` activates that pane before changing navigation state. This includes the drive/menu button, history and disk-info dropdowns, breadcrumb segment clicks, sibling menus, and menu-selected path changes. If the action originates from an unfocused pane, keyboard focus returns to that pane's `FolderView` rather than staying in the previously focused pane.
 - A first `Escape` from main-window chrome or transient menu focus MUST restore keyboard focus to the active pane's `FolderView` without changing that pane's selection. A subsequent `Escape` delivered while the `FolderView` already has focus uses normal `FolderView` behavior.
+- `Preferences -> Mouse -> Pane focus` exposes two independent settings. `mouse.focusFollowsPointer` moves keyboard focus to the pane under the pointer for every eligible pane-local mouse move. `mouse.focusFollowsPointerWhenTerminalOpen` enables the same behavior only while either pane is displaying its selected Terminal tab; an open terminal hidden behind the Folder or Preview tab MUST NOT enable it. The persisted property keeps its existing name for settings compatibility. The settings are additive: either can enable the behavior, and the always-on setting remains effective when both are true.
+- Pointer-follow focus is driven only by delivered pane-local `WM_MOUSEMOVE` messages while the main window is foreground; it MUST NOT poll the cursor or steal foreground focus. A move outside both pane subtrees, a move while any window owns mouse capture, or a move within the pane that already owns focus MUST NOT change focus.
+- An eligible move targets the pane containing the message HWND. When that pane's Terminal tab is selected, focus moves to its terminal child; otherwise it moves to the pane's normal preferred focus target. The Preview tab remains non-focus-stealing and is excluded from pointer-follow activation.
+- `pane.focus_follows_pointer.transition_us` measures only actual cross-pane focus transitions, not every mouse move or disabled-policy check. `value0` identifies the destination pane (`0` left, `1` right), `value1` records whether any Terminal tab was displayed, and `hr` records whether the target accepted focus. The deterministic Commands scenario performs alternating real transitions; the Debug `x64` p95 budget is `10 ms`. The baseline same-machine run is archived at `Specs/TestRuns/4cb089111a23/Commands/2026-08-09_131033` with nine successful transitions (p50 `2.447 ms`, p95/max `5.788 ms`). The selected-tab policy candidate is archived at `Specs/TestRuns/4cb089111a23/Commands/2026-08-11_092547` with nine successful transitions (p50 `1.138 ms`, p95/max `4.981 ms`, p95 `-13.9%` versus baseline); the real embedded-terminal regression that keeps an open terminal hidden behind the Folder tab is archived at `Specs/TestRuns/4cb089111a23/Commands/2026-08-11_092540`.
 
 ## Keyboard Management
 
@@ -220,13 +256,13 @@ Each pane optionally shows a status bar at the bottom. It is a distinct control 
   - Selected **folders** count
   - Total selected **bytes**:
     - File sizes are summed directly.
-    - Folder sizes are computed by traversing the folder subtree (all descendants) and asynchronously when explicitly requested (via the Insert selection workflow). The traversal MUST be implemented iteratively (explicit stack/queue; no call-stack recursion); while pending, the status bar shows a localized “calculating” indicator and the **current bytes computed so far**.
+    - Folder sizes are computed by traversing the folder subtree (all descendants) asynchronously when explicitly requested by the Space selection workflow. Space snapshots the complete post-toggle selected set: selecting an unselected current folder starts or reuses its size work before current advances, while deselecting a selected current folder cancels its pending contribution and rejects stale completion. Insert does not explicitly request folder-subtree size computation. The traversal MUST be implemented iteratively (explicit stack/queue; no call-stack recursion); while pending, the status bar shows a localized “calculating” indicator and the **current bytes computed so far**.
     - Until folder subtree bytes are available (never requested, or canceled), folder bytes show a localized **unknown** placeholder.
 - When exactly **one** item is selected, show item details instead:
   - Folder: `DIR • <size?> • YYYY-MM-DD HH:MM • <attrs>` (size may be unknown or pending)
   - File: `<size> • YYYY-MM-DD HH:MM • <attrs>`
 - When no items are selected, show the current focused item details using the same file/folder format. Use the localized `No selection` text only when the pane has no current focused item.
-- When there is no selection, keyboard or mouse focus changes inside the `FolderView` MUST refresh the status bar immediately so the displayed item details follow the current focused item.
+- FolderView current-item and selection notifications have separate ownership. Current-item changes refresh the status bar's current details and any open preview. Selection-only changes refresh selection counts/bytes, command state, and size-work cancellation/recomputation but MUST NOT reload an unchanged current-item preview or change current ownership. A same-location refresh that preserves selected identities but changes a selected folder's metadata MUST preserve the user's explicit Space-size intent by recomputing that surviving folder selection; it MUST NOT leave the selected-folder total canceled/unknown merely because refreshed metadata arrived while or after the request.
 - **Right part**: current sort indicator for that pane. This region is clickable and opens the pane’s **Sort by** menu.
   - The right part is **always visible** (fixed width) because it is a persistent clickable target.
   - When the pane is **unsorted**, the indicator shows a small placeholder glyph (localized via resources) rather than disappearing.
@@ -304,7 +340,7 @@ FolderWindow also integrates with the top-level **Plugins** menu:
 The pane-scoped file-system prompts for change-attributes, change-case, and selection-mask actions use owned DxUi prompt windows, not legacy Win32 dialog-template routes.
 
 - `Change Attributes...` MUST route through the owned prompt-window path in `RedSalamander/FolderWindow.FileSystem.Commands.cpp`. The prompt MUST expose tri-state attribute toggles, date/time rows, alternate-stream removal, and an Include subdirectories option that is enabled only when a folder is in scope. Recursive Change Attributes runs asynchronously as a File Operations informational task with enumeration/apply status.
-- `Change Case...` MUST route through the owned prompt-window path in `RedSalamander/FolderWindow.FileSystem.cpp`.
+- `Change Case...` MUST route through the owned prompt-window path in `RedSalamander/FolderWindow.FileSystem.cpp`. Closing the modal prompt MUST synchronously make the owner active and attempt to restore the invoking descendant, then queue `kPaneRestoreFolderFocus` so the main-window foreground guards can restore the active pane's FolderView after modal teardown has fully unwound. The queued restore MUST NOT steal focus when another process or unrelated app window owns the foreground.
 - The selection-mask commands (`Select by Mask...` / `Unselect by Mask...`) MUST route through the owned prompt-window path in `RedSalamander/FolderWindow.FileSystem.cpp`. The prompt's DxUi `TextField` MUST expose the localized adjacent mask label as its non-empty UI Automation Name across repeated open/close and live edit cycles.
 - These prompts MUST expose the shared DxUi host contract and MUST NOT reintroduce legacy `DialogBoxParamW`, owner-draw button/toggle, or extra visible combo/input-frame fallback surfaces for the active product path.
 - Validation anchors for this contract are `cmd_pane_changeAttributes_options_dialog_uses_dxui_not_win32_template`, `cmd_pane_changeAttributes_recurse_applies_datetime_with_progress`, `cmd_pane_changeCase_prompt_*`, `cmd_pane_changeCase_dialog`, `cmd_pane_selection_mask_dialogs`, `cmd_pane_selection_mask_prompt_live_dx_interaction`, and `cmd_pane_selection_mask_prompt_long_run_open_close_stays_stable`.

@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://red-salamander.invalid/schemas/validation-entry-fingerprints-v1.json",
+  "title": "RedSalamander validation entry fingerprints v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "canonicalization", "fingerprints_digest", "plan_digest", "coverage_plan_digest", "snapshot_id", "build_receipt_id", "artifact_epoch", "entries", "computation_ms"],
+  "properties": {
+    "schema": { "const": "red-salamander.validation-entry-fingerprints.v1" },
+    "canonicalization": { "const": "rs-canonical-json-v1" },
+    "fingerprints_digest": { "$ref": "#/definitions/digest" },
+    "plan_digest": { "$ref": "#/definitions/digest" },
+    "coverage_plan_digest": { "$ref": "#/definitions/digest" },
+    "snapshot_id": { "$ref": "#/definitions/digest" },
+    "build_receipt_id": { "$ref": "#/definitions/digest" },
+    "artifact_epoch": { "type": "integer", "minimum": 0 },
+    "entries": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "fingerprint", "component_digest_version", "component_digests", "computation_ms"],
+        "properties": {
+          "id": { "$ref": "#/definitions/id" },
+          "fingerprint": { "$ref": "#/definitions/digest" },
+          "component_digest_version": { "const": "validation-entry-components.v1" },
+          "component_digests": { "$ref": "#/definitions/componentDigests" },
+          "computation_ms": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "computation_ms": { "type": "integer", "minimum": 0 }
+  },
+  "definitions": {
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$" },
+    "componentDigests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["build_artifact", "logical_input", "shared_contract", "runner", "environment", "arguments", "coverage", "outcome_policy", "capability", "artifact_epoch", "source_input"],
+      "properties": {
+        "build_artifact": { "$ref": "#/definitions/digest" },
+        "logical_input": { "$ref": "#/definitions/digest" },
+        "shared_contract": { "$ref": "#/definitions/digest" },
+        "runner": { "$ref": "#/definitions/digest" },
+        "environment": { "$ref": "#/definitions/digest" },
+        "arguments": { "$ref": "#/definitions/digest" },
+        "coverage": { "$ref": "#/definitions/digest" },
+        "outcome_policy": { "$ref": "#/definitions/digest" },
+        "capability": { "$ref": "#/definitions/digest" },
+        "artifact_epoch": { "$ref": "#/definitions/digest" },
+        "source_input": { "$ref": "#/definitions/digest" }
+      }
+    }
+  }
+}

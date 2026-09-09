@@ -75,6 +75,9 @@ constexpr std::wstring_view kBuiltinLocalFileSystemId            = L"builtin/fil
 constexpr std::wstring_view kBuiltinDummyFileSystemId            = L"builtin/file-system-dummy";
 constexpr std::wstring_view kBuiltin7zFileSystemId               = L"builtin/file-system-7z";
 constexpr std::wstring_view kBuiltinFtpFileSystemId              = L"builtin/file-system-ftp";
+constexpr std::wstring_view kBuiltinSftpFileSystemId             = L"builtin/file-system-sftp";
+constexpr std::wstring_view kBuiltinScpFileSystemId              = L"builtin/file-system-scp";
+constexpr std::wstring_view kBuiltinImapFileSystemId             = L"builtin/file-system-imap";
 constexpr std::wstring_view kBuiltinGoogleDriveFileSystemId      = L"builtin/file-system-gdrive";
 constexpr std::wstring_view kBuiltinS3FileSystemId               = L"builtin/file-system-s3";
 constexpr std::wstring_view kBuiltinMtpFileSystemId              = L"builtin/file-system-mtp";
@@ -83,12 +86,19 @@ constexpr std::wstring_view kBuiltinOneDriveBusinessFileSystemId = L"builtin/fil
 constexpr std::wstring_view kBuiltinSharePointFileSystemId       = L"builtin/file-system-sharepoint";
 
 constexpr std::wstring_view kSelfTestEnvConnFtp              = L"REDSALAMANDER_SELFTEST_CONN_FTP";
+constexpr std::wstring_view kSelfTestEnvConnSftp             = L"REDSALAMANDER_SELFTEST_CONN_SFTP";
+constexpr std::wstring_view kSelfTestEnvConnScp              = L"REDSALAMANDER_SELFTEST_CONN_SCP";
+constexpr std::wstring_view kSelfTestEnvConnImap             = L"REDSALAMANDER_SELFTEST_CONN_IMAP";
 constexpr std::wstring_view kSelfTestEnvConnS3               = L"REDSALAMANDER_SELFTEST_CONN_S3";
 constexpr std::wstring_view kSelfTestEnvConnOneDrivePersonal = L"REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL";
 constexpr std::wstring_view kSelfTestEnvConnOneDriveBusiness = L"REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS";
 constexpr std::wstring_view kSelfTestEnvConnSharePoint       = L"REDSALAMANDER_SELFTEST_CONN_SHAREPOINT";
+constexpr std::wstring_view kSelfTestEnvSmbRoot              = L"REDSALAMANDER_SELFTEST_SMB_ROOT";
 
 constexpr std::wstring_view kSelfTestDefaultConnFtp              = L"FileOpsSelfTest FTP";
+constexpr std::wstring_view kSelfTestDefaultConnSftp             = L"FileOpsSelfTest SFTP";
+constexpr std::wstring_view kSelfTestDefaultConnScp              = L"FileOpsSelfTest SCP";
+constexpr std::wstring_view kSelfTestDefaultConnImap             = L"FileOpsSelfTest IMAP";
 constexpr std::wstring_view kSelfTestDefaultConnS3               = L"FileOpsSelfTest S3";
 constexpr std::wstring_view kSelfTestDefaultConnOneDrivePersonal = L"FileOpsSelfTest OneDrive Personal";
 constexpr std::wstring_view kSelfTestDefaultConnOneDriveBusiness = L"FileOpsSelfTest OneDrive Business";
@@ -108,6 +118,7 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"local_search_name_and_content_and_semantics",
     L"local_search_invalid_query_rejected",
     L"local_index_core_snapshot_reload",
+    L"local_index_fileops_artifacts_remain_visible",
     L"local_index_core_query_honors_cancel_check",
     L"local_index_core_refs_probe_and_query_if_available",
     L"local_index_core_journal_replay_rename_delete_create",
@@ -175,6 +186,7 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"search_service_discovers_fixed_local_roots_on_start",
     L"search_service_sqlite_startup_warms_overridden_roots",
     L"search_service_foreground_rejects_second_instance",
+    L"search_service_store_writer_ownership_is_resource_scoped",
     L"search_service_foreground_logs_request_status",
     L"search_service_status_and_query_roundtrip",
     L"search_service_query_reports_live_progress",
@@ -208,6 +220,8 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"local_search_sqlite_generation_probe_skips_steady_state_and_detects_bump",
     L"local_search_junction_alias_hydration_indexes_alias_only_descendant_once",
     L"sqlite_maintenance_busy_checkpoint_and_callback_skip_observability",
+    L"host_services_startup_selection",
+    L"host_services_startup_context",
     L"windows_hello_cache",
     L"oauth_refresh_token_storage",
     L"oauth_authmode_roundtrip",
@@ -297,6 +311,10 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"remote_file_sharepoint",
     L"remote_sharepoint_directory_size_callback_contract",
     L"remote_file_ftp",
+    L"remote_file_sftp",
+    L"remote_file_scp",
+    L"remote_file_imap",
+    L"remote_file_smb",
     L"remote_ftp_directory_size_callback_contract",
     L"remote_ftp_continue_on_error_partial",
     L"mtp_factory_single_mode_id_contract",
@@ -322,9 +340,15 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"mtp_backend_command_worker_is_reused",
     L"mtp_wpd_session_and_path_cache_reuse",
     L"mtp_wpd_cache_failure_reopens_session_and_refreshes_size",
+    L"mtp_wpd_overwrite_occupancy_is_live_on_stale_path_cache",
+    L"mtp_overwrite_refuses_occupant_replaced_before_delete",
+    L"mtp_overwrite_refuses_occupant_replaced_during_upload",
+    L"mtp_copy_overwrite_refuses_occupant_replaced_during_temp_copy",
+    L"mtp_atomic_writer_offers_conditional_replace_only",
     L"mtp_overwrite_journal_generation_and_absent_cache_are_constant_cost",
     L"mtp_property_fetch_is_batched",
     L"mtp_public_writer_stages_until_commit",
+    L"mtp_public_writer_and_reader_memory_is_bounded",
     L"mtp_overwrite_byte_verify_level_matches_capability",
     L"mtp_writer_overwrite_uses_temp_puid_swap",
     L"mtp_overwrite_temp_upload_failure_keeps_original_and_allows_retry",
@@ -332,9 +356,10 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"mtp_overwrite_delete_original_failure_keeps_original_and_allows_retry",
     L"mtp_overwrite_journal_write_failure_aborts_before_upload",
     L"mtp_overwrite_journal_recovers_rename_temp_failure",
-    L"mtp_overwrite_journal_replay_removes_temp_when_final_exists",
+    L"mtp_r0c_exact_recovery_identity",
+    L"mtp_overwrite_journal_destination_identity_mismatch_quarantines",
     L"mtp_overwrite_journal_replay_temp_cleanup_delete_failure_retries",
-    L"mtp_overwrite_journal_recovers_committed_temp_without_tempPuid",
+    L"mtp_overwrite_journal_without_temp_puid_quarantines_without_mutation",
     L"mtp_overwrite_journal_clears_completed_swap_without_temp",
     L"mtp_overwrite_never_duplicates_or_halfwrites",
     L"mtp_overwrite_journal_replay_rename_rejection_is_bounded",
@@ -521,15 +546,18 @@ void SecureClearAndFreeSecret(wil::unique_cotaskmem_string& secret) noexcept
     return hr == HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
 }
 
-[[nodiscard]] bool SkipIfHostConnectionUiUnavailable(SelfTest::CaseState& state, HRESULT hr, std::wstring_view context) noexcept
+[[nodiscard]] bool FailIfHostConnectionUiUnavailable(SelfTest::CaseState& state, HRESULT hr, std::wstring_view context) noexcept
 {
     if (! IsHostConnectionUiUnavailableHr(hr))
     {
         return false;
     }
 
-    state.Skip(std::format(
-        L"{} requires initialized host connection UI; host returned ERROR_INVALID_WINDOW_HANDLE (hr=0x{:08X}).", context, static_cast<unsigned long>(hr)));
+    // Selected host-dependent cases must have the application host, not an environment skip.
+    state.Require(false,
+                  std::format(L"{} requires initialized host connection UI; host returned ERROR_INVALID_WINDOW_HANDLE (hr=0x{:08X}).",
+                              context,
+                              static_cast<unsigned long>(hr)));
     return true;
 }
 
@@ -665,9 +693,9 @@ struct ResolvedRemoteProfile
         SecureClearAndFreeSecret(secret);
         if (IsHostConnectionUiUnavailableHr(hrSecret))
         {
-            return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
+            return {.status = SelfTest::SelfTestCaseResult::Status::failed,
                     .reason = std::format(
-                        L"{}: host connection UI unavailable for GetConnectionSecret. hr=0x{:08X}", protocolLabel, static_cast<unsigned long>(hrSecret))};
+                        L"{}: required test host unavailable for GetConnectionSecret. hr=0x{:08X}", protocolLabel, static_cast<unsigned long>(hrSecret))};
         }
 
         return {.status = SelfTest::SelfTestCaseResult::Status::failed,
@@ -1200,7 +1228,6 @@ public:
             return E_POINTER;
         }
 
-        result->version        = 1;
         result->sizeBytes      = sizeof(HostConnectionManagerResult);
         result->connectionName = nullptr;
 
@@ -1873,6 +1900,12 @@ public:
             AddRef();
             return S_OK;
         }
+        if (riid == __uuidof(IFileSystemPathCapabilities2))
+        {
+            *ppvObject = static_cast<IFileSystemPathCapabilities2*>(this);
+            AddRef();
+            return S_OK;
+        }
 
         if (riid == __uuidof(IFileSystemIO))
         {
@@ -2024,13 +2057,15 @@ public:
         return _base->RenameItems(items, count, flags, options, callback, cookie);
     }
 
-    HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
+                                                  FileSystemOperation operation,
+                                                  const char** jsonUtf8) noexcept override
     {
         if (! _base)
         {
             return E_POINTER;
         }
-        return _base->GetCapabilities(jsonUtf8);
+        return _base->GetPathCapabilities(path, operation, jsonUtf8);
     }
 
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
@@ -2452,6 +2487,12 @@ public:
             AddRef();
             return S_OK;
         }
+        if (riid == __uuidof(IFileSystemPathCapabilities2))
+        {
+            *ppvObject = static_cast<IFileSystemPathCapabilities2*>(this);
+            AddRef();
+            return S_OK;
+        }
 
         if (_base)
         {
@@ -2624,9 +2665,11 @@ public:
         return _base ? _base->RenameItems(items, count, flags, options, callback, cookie) : E_POINTER;
     }
 
-    HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
+                                                  FileSystemOperation operation,
+                                                  const char** jsonUtf8) noexcept override
     {
-        return _base ? _base->GetCapabilities(jsonUtf8) : E_POINTER;
+        return _base ? _base->GetPathCapabilities(path, operation, jsonUtf8) : E_POINTER;
     }
 
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
@@ -2693,6 +2736,12 @@ public:
         if (riid == __uuidof(IUnknown) || riid == __uuidof(IFileSystem))
         {
             *ppvObject = static_cast<IFileSystem*>(this);
+            AddRef();
+            return S_OK;
+        }
+        if (riid == __uuidof(IFileSystemPathCapabilities2))
+        {
+            *ppvObject = static_cast<IFileSystemPathCapabilities2*>(this);
             AddRef();
             return S_OK;
         }
@@ -2902,9 +2951,11 @@ public:
         return _base->RenameItems(mappedPairs.data(), count, flags, options, callback, cookie);
     }
 
-    HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
+                                                  FileSystemOperation operation,
+                                                  const char** jsonUtf8) noexcept override
     {
-        return _base ? _base->GetCapabilities(jsonUtf8) : E_POINTER;
+        return _base ? _base->GetPathCapabilities(path, operation, jsonUtf8) : E_POINTER;
     }
 
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
@@ -3033,6 +3084,12 @@ public:
         if (riid == __uuidof(IUnknown) || riid == __uuidof(IFileSystem))
         {
             *ppvObject = static_cast<IFileSystem*>(this);
+            AddRef();
+            return S_OK;
+        }
+        if (riid == __uuidof(IFileSystemPathCapabilities2))
+        {
+            *ppvObject = static_cast<IFileSystemPathCapabilities2*>(this);
             AddRef();
             return S_OK;
         }
@@ -3235,9 +3292,11 @@ public:
         return _base->RenameItems(mappedPairs.data(), count, flags, options, callback, cookie);
     }
 
-    HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
+                                                  FileSystemOperation operation,
+                                                  const char** jsonUtf8) noexcept override
     {
-        return _base ? _base->GetCapabilities(jsonUtf8) : E_POINTER;
+        return _base ? _base->GetPathCapabilities(path, operation, jsonUtf8) : E_POINTER;
     }
 
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
@@ -3308,6 +3367,12 @@ public:
         if (riid == __uuidof(IUnknown) || riid == __uuidof(IFileSystem))
         {
             *ppvObject = static_cast<IFileSystem*>(this);
+            AddRef();
+            return S_OK;
+        }
+        if (riid == __uuidof(IFileSystemPathCapabilities2))
+        {
+            *ppvObject = static_cast<IFileSystemPathCapabilities2*>(this);
             AddRef();
             return S_OK;
         }
@@ -3430,9 +3495,11 @@ public:
         return _base ? _base->RenameItems(items, count, flags, options, callback, cookie) : E_POINTER;
     }
 
-    HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
+                                                  FileSystemOperation operation,
+                                                  const char** jsonUtf8) noexcept override
     {
-        return _base ? _base->GetCapabilities(jsonUtf8) : E_POINTER;
+        return _base ? _base->GetPathCapabilities(path, operation, jsonUtf8) : E_POINTER;
     }
 
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
@@ -4219,7 +4286,7 @@ public:
                              nullptr,
                              nullptr,
                              captureOutput ? TRUE : FALSE,
-                             CREATE_SUSPENDED,
+                             CREATE_SUSPENDED | CREATE_NO_WINDOW,
                              nullptr,
                              nullptr,
                              &startupInfo,
@@ -4293,6 +4360,44 @@ public:
         _pipeName.clear();
         _protocolVersion = 0u;
         RestoreClientMissingPipeRetryOverride();
+    }
+
+    [[nodiscard]] bool KillWithJobAndWaitForExit(DWORD timeoutMs, std::wstring& outError) noexcept
+    {
+        outError.clear();
+        if (! _process || ! _job)
+        {
+            outError = L"Foreground search service process or JobObject is unavailable.";
+            return false;
+        }
+
+        // Closing the kill-on-close JobObject models an abrupt owner exit while keeping process cleanup RAII-owned.
+        _job.reset();
+        const DWORD waitResult = ::WaitForSingleObject(_process.get(), timeoutMs);
+        if (waitResult != WAIT_OBJECT_0)
+        {
+            outError = waitResult == WAIT_TIMEOUT ? L"Timed out waiting for the killed foreground search service process to exit."
+                                                  : std::format(L"WaitForSingleObject failed after closing the foreground service JobObject. error={}",
+                                                                ::GetLastError());
+            return false;
+        }
+
+        DWORD exitCode = STILL_ACTIVE;
+        if (::GetExitCodeProcess(_process.get(), &exitCode) == 0 || exitCode == STILL_ACTIVE)
+        {
+            outError = std::format(L"Foreground search service did not report a terminal exit code after JobObject close. error={}", ::GetLastError());
+            return false;
+        }
+
+        _thread.reset();
+        _process.reset();
+        _stdoutCaptureFile.reset();
+        DeleteCapturedOutputFile();
+        _capturedOutput.clear();
+        _pipeName.clear();
+        _protocolVersion = 0u;
+        RestoreClientMissingPipeRetryOverride();
+        return true;
     }
 
     [[nodiscard]] bool ShutdownAndWaitForExitAndCapture(DWORD timeoutMs, std::string& outOutput, std::wstring& outError) noexcept
@@ -4460,6 +4565,7 @@ private:
     {
         if (! WaitForPipeReady(outError))
         {
+            outError.append(TryCaptureExitedOutputForFailure());
             return false;
         }
 
@@ -4472,7 +4578,8 @@ private:
             DWORD exitCode = STILL_ACTIVE;
             if (HasExited(exitCode))
             {
-                outError = std::format(L"Service process exited before status readiness. exitCode={}", exitCode);
+                outError = std::format(
+                    L"Service process exited before status readiness. exitCode={}{}", exitCode, TryCaptureExitedOutputForFailure());
                 return false;
             }
 
@@ -4494,6 +4601,7 @@ private:
                                _pipeName,
                                lastPipeName,
                                static_cast<unsigned long>(lastHr));
+        outError.append(TryCaptureExitedOutputForFailure());
         return false;
     }
 
@@ -5418,6 +5526,7 @@ public:
                                                       const wchar_t* sourcePath,
                                                       const wchar_t* destinationPath,
                                                       HRESULT status,
+                                                      [[maybe_unused]] const FileSystemItemMutationResult* mutationResult,
                                                       [[maybe_unused]] FileSystemOptions* options,
                                                       [[maybe_unused]] void* cookie) noexcept override
     {
@@ -5453,6 +5562,7 @@ public:
                                               [[maybe_unused]] const wchar_t* destinationPath,
                                               [[maybe_unused]] HRESULT status,
                                               FileSystemIssueAction* action,
+                                              IFileSystemBoundObject** expectedDestination,
                                               [[maybe_unused]] FileSystemOptions* options,
                                               [[maybe_unused]] void* cookie) noexcept override
     {
@@ -5460,6 +5570,10 @@ public:
         if (action != nullptr)
         {
             *action = FileSystemIssueAction::Cancel;
+        }
+        if (expectedDestination != nullptr)
+        {
+            *expectedDestination = nullptr;
         }
         return E_UNEXPECTED;
     }
@@ -6187,6 +6301,25 @@ std::vector<std::wstring> CompareDirectoriesSelfTest::ListCases(const SelfTest::
         }
     }
     return names;
+}
+
+bool CompareDirectoriesSelfTest::RequiresHostServices(const SelfTest::SelfTestOptions& options) noexcept
+{
+    // Compare's Connection Manager and credential cases need the existing UI-thread
+    // host even when no prompt is permitted. Keep pure engine and UNC-only cases
+    // headless; this startup policy never grants access or weakens host validation.
+    for (const std::wstring_view name : kCompareCaseNames)
+    {
+        const bool needsHost = (name.starts_with(L"remote_") && name != L"remote_file_smb") || name == L"host_fallback_search_remote_ftp_name_only" ||
+                               name == L"host_services_startup_context" || name == L"windows_hello_cache" || name == L"oauth_refresh_token_storage" ||
+                               name == L"google_drive_cleared_client_id_requires_configuration" || name == L"google_drive_connection_requires_refresh_token" ||
+                               name == L"onedrive_personal_cleared_client_id_requires_configuration";
+        if (needsHost && SelfTest::CaseFilterMatches(options.caseFilter, name))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult* outResult) noexcept

@@ -42,6 +42,16 @@ struct StagedPromotionOptions
                                                      const std::wstring& finalPath,
                                                      const StagedPromotionOptions& options) noexcept;
 
+[[nodiscard]] HRESULT ReadBoundLocalLink(HANDLE boundHandle,
+                                         const FileSystemLinkTransform& transform,
+                                         FileSystemLinkInformation& information) noexcept;
+[[nodiscard]] HRESULT CreateExclusiveLocalLink(const wchar_t* stagePath,
+                                               const FileSystemLinkInformation& information,
+                                               wil::unique_handle& ownedHandle) noexcept;
+[[nodiscard]] HRESULT DeleteBoundLocalDirectoryContents(const wchar_t* path,
+                                                        FileSystemFlags flags,
+                                                        const FileSystemOptions* options) noexcept;
+
 // Module anchor for AcquireModuleReferenceFromAddress — keeps the DLL loaded
 // while background worker threads or threadpool callbacks are active.
 extern const int kFileSystemModuleAnchor;
@@ -56,5 +66,6 @@ void RunDebugReparseCopyErrorMappingSelfTest(unsigned int& passed, unsigned int&
 void RunDebugDirectorySizeErrorPolicySelfTest(unsigned int& passed, unsigned int& failed) noexcept;
 void RunDebugSharedFileOpsSchedulerShutdownSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
 void RunDebugSearchServiceFallbackCandidateSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
+void RunDebugObjectBindingSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
 #endif
 } // namespace FileSystemInternal

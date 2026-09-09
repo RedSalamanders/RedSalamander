@@ -31,6 +31,7 @@
 #include "DirectoryInfoCache.h"
 #include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
+#include "FileSystemRouteContract.h"
 #include "FluentIcons.h"
 #include "Helpers.h"
 #include "IconCache.h"
@@ -302,18 +303,6 @@ template <typename FileTimePoint> [[nodiscard]] std::optional<std::chrono::sys_s
     return target;
 }
 
-[[nodiscard]] bool IsNotFoundError(const std::error_code& ec) noexcept
-{
-    return ec == std::errc::no_such_file_or_directory || ec.value() == ERROR_FILE_NOT_FOUND || ec.value() == ERROR_PATH_NOT_FOUND;
-}
-
-[[nodiscard]] HRESULT ErrorCodeToHRESULT(const std::error_code& ec) noexcept
-{
-    return ec ? HRESULT_FROM_WIN32(static_cast<DWORD>(ec.value())) : E_FAIL;
-}
-
-[[nodiscard]] HRESULT RevalidateLocalRenamePlan(const FileSystemPathIdentity& pathIdentity, const BatchRename::Plan& plan) noexcept;
-
 void EmitBatchRenameExecuteCounters(const uint64_t rows, const uint64_t completed, const uint64_t failed) noexcept
 {
     if (! Debug::Perf::IsCaptureEnabled())
@@ -326,101 +315,6 @@ void EmitBatchRenameExecuteCounters(const uint64_t rows, const uint64_t complete
     Debug::Perf::EmitValue(L"batchrename.execute.failed", failed);
 }
 
-struct BatchRenameExecutionProgressPostContext final
-{
-    HWND hwnd           = nullptr;
-    uint64_t generation = 0u;
-};
-
-void PostBatchRenameExecutionProgress(void* context, const uint64_t completedItems, const uint64_t totalItems, [[maybe_unused]] bool forcePost) noexcept
-{
-    const auto* postContext = static_cast<const BatchRenameExecutionProgressPostContext*>(context);
-    if (! postContext || ! postContext->hwnd)
-    {
-        return;
-    }
-
-    auto payload = std::unique_ptr<BatchRenameTaskProgressPayload>(new (std::nothrow) BatchRenameTaskProgressPayload{});
-    if (! payload)
-    {
-        return;
-    }
-
-    payload->generation     = postContext->generation;
-    payload->totalItems     = totalItems;
-    payload->completedItems = completedItems;
-    static_cast<void>(PostMessagePayload(postContext->hwnd, WndMsg::kBatchRenameTaskUpdate, kBatchRenameTaskExecution, std::move(payload)));
-}
-
-// Runs the window-owned worker envelope: initialize MTA COM, keep the provider
-// alive until before CoUninitialize, call the window-free execution engine, and
-// post the completion payload back to the UI thread.
-void RunBatchRenameExecution(HWND hwnd,
-                             const uint64_t generation,
-                             std::atomic_bool& cancelRequested,
-                             wil::com_ptr<IFileSystem> fileSystem,
-                             const FileSystemPathIdentity pathIdentity,
-                             std::optional<BatchRename::Plan> localPlan,
-                             std::vector<BatchRenameExecutionOp> ops,
-                             std::unique_ptr<BatchRenameExecutionCompletedPayload> payload) noexcept
-{
-    const HRESULT coinitHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-    if (FAILED(coinitHr))
-    {
-        Debug::Error(L"BatchRename execution task: CoInitializeEx(COINIT_MULTITHREADED) failed: 0x{:08X}", static_cast<unsigned long>(coinitHr));
-        FAIL_FAST_IF_FAILED(coinitHr);
-    }
-    [[maybe_unused]] const wil::unique_couninitialize_call coUninit;
-
-    wil::com_ptr<IFileSystem> workerFileSystem = std::move(fileSystem);
-    const auto workerStartedAt = std::chrono::steady_clock::now();
-    if (localPlan.has_value())
-    {
-        const HRESULT revalidateHr = RevalidateLocalRenamePlan(pathIdentity, localPlan.value());
-        if (FAILED(revalidateHr))
-        {
-            payload->hr                  = revalidateHr;
-            payload->detail              = L"revalidate_failed";
-            payload->report.failedRows   = localPlan->stats.changedRows;
-            payload->report.firstFailure = revalidateHr;
-            Debug::Perf::Emit(L"batchrename.execute.us",
-                              L"revalidate_failed",
-                              Debug::Perf::ElapsedUs(workerStartedAt),
-                              static_cast<uint64_t>(localPlan->stats.changedRows),
-                              0u,
-                              revalidateHr);
-            EmitBatchRenameExecuteCounters(static_cast<uint64_t>(localPlan->stats.changedRows), 0u, static_cast<uint64_t>(localPlan->stats.changedRows));
-            static_cast<void>(PostMessagePayload(hwnd, WndMsg::kBatchRenameCompleted, kBatchRenameTaskExecution, std::move(payload)));
-            return;
-        }
-    }
-    BatchRenameExecutionProgressPostContext progressContext{.hwnd = hwnd, .generation = generation};
-    const BatchRenameExecutionResult result = RunBatchRenameExecutionEngine(cancelRequested,
-                                                                            *workerFileSystem.get(),
-                                                                            pathIdentity,
-                                                                            std::move(ops),
-                                                                            BatchRenameExecutionOptions{
-                                                                                .progressCallback = &PostBatchRenameExecutionProgress,
-                                                                                .progressContext  = &progressContext,
-                                                                            });
-    payload->hr                             = result.hr;
-    payload->detail                         = result.detail;
-    // The execution engine returns a fresh report that only tracks completed/failed counts; it does not
-    // know the plan-level totals. The caller pre-populated payload->report with totalRows/skippedRows
-    // before launching this worker, so preserve them across the engine-result assignment (otherwise the
-    // success-path summary, TSV export, and persisted stats would all report "0 of 0").
-    const size_t totalRows          = payload->report.totalRows;
-    const size_t skippedRows        = payload->report.skippedRows;
-    payload->report                 = result.report;
-    payload->report.totalRows       = totalRows;
-    payload->report.skippedRows     = skippedRows;
-    payload->successfulSourcePaths  = result.successfulSourcePaths;
-    payload->successfulTargetPaths  = result.successfulTargetPaths;
-    payload->executedDirectoryMoves = result.executedDirectoryMoves;
-
-    static_cast<void>(PostMessagePayload(hwnd, WndMsg::kBatchRenameCompleted, kBatchRenameTaskExecution, std::move(payload)));
-}
-
 [[nodiscard]] bool IsLocalFileSystemContext(const BatchRenamePaneContext& context) noexcept
 {
     return ::CompareStringOrdinal(context.pluginId.c_str(), -1, L"builtin/file-system", -1, TRUE) == CSTR_EQUAL;
@@ -428,33 +322,18 @@ void RunBatchRenameExecution(HWND hwnd,
 
 [[nodiscard]] std::optional<FileSystemPathIdentity> ResolveBatchRenamePathIdentity(const BatchRenamePaneContext& context) noexcept
 {
-    if (context.pluginId.empty() || IsLocalFileSystemContext(context))
-    {
-        return FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem();
-    }
-
-    if (! context.fileSystem)
+    if (context.pluginId.empty() || ! context.fileSystem || context.rootPluginPath.empty())
     {
         return std::nullopt;
     }
 
-    const char* capabilitiesJson = nullptr;
-    const HRESULT capabilitiesHr = context.fileSystem->GetCapabilities(&capabilitiesJson);
-    if (FAILED(capabilitiesHr) || capabilitiesJson == nullptr || capabilitiesJson[0] == '\0')
+    const FileSystemRouteContract::QueryResult route = FileSystemRouteContract::Query(
+        context.fileSystem.get(), context.rootPluginPath.native(), FILESYSTEM_RENAME, context.pluginId);
+    if (route.state != FileSystemRouteContract::QueryState::Available)
     {
         return std::nullopt;
     }
-
-    return TryParseFileSystemRenamePathIdentity(capabilitiesJson, context.pluginId);
-}
-
-[[nodiscard]] bool IsPlannedSourcePath(const FileSystemPathIdentity& pathIdentity,
-                                       const std::vector<std::filesystem::path>& plannedSources,
-                                       const std::filesystem::path& path) noexcept
-{
-    return std::ranges::any_of(plannedSources, [&pathIdentity, &path](const std::filesystem::path& source) noexcept {
-        return EquivalentPath(pathIdentity, source.native(), path.native());
-    });
+    return route.snapshot.pathIdentity;
 }
 
 void AddProviderPathIdentityFailure(BatchRename::Plan& plan) noexcept
@@ -472,134 +351,354 @@ void AddProviderPathIdentityFailure(BatchRename::Plan& plan) noexcept
     }
 }
 
-void ApplyLocalDestinationConflictValidation(const FileSystemPathIdentity& pathIdentity, BatchRename::Plan& plan) noexcept
+constexpr uint64_t kBatchRenameCollisionIndexMaxBytes = 64ull * 1024ull * 1024ull;
+
+class BatchRenameCollisionNameIndex final
+{
+public:
+    [[nodiscard]] HRESULT Insert(std::wstring key) noexcept
+    {
+        const auto [entry, inserted] = _keys.insert(std::move(key));
+        if (inserted)
+        {
+            // Account conservatively for the retained key, node links/hash payload and the
+            // current bucket array. The metric is a deterministic retained-memory charge rather
+            // than an implementation-specific allocator sample.
+            _entryBytes += static_cast<uint64_t>(entry->capacity() + 1u) * sizeof(wchar_t);
+            _entryBytes += sizeof(std::wstring) + (3u * sizeof(void*));
+        }
+        return RetainedBytes() <= kBatchRenameCollisionIndexMaxBytes ? S_OK : HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY);
+    }
+
+    [[nodiscard]] bool Contains(const std::wstring& key) const noexcept
+    {
+        return _keys.contains(key);
+    }
+
+    [[nodiscard]] uint64_t RetainedBytes() const noexcept
+    {
+        return _entryBytes + (static_cast<uint64_t>(_keys.bucket_count()) * sizeof(void*));
+    }
+
+    [[nodiscard]] size_t Size() const noexcept
+    {
+        return _keys.size();
+    }
+
+private:
+    std::unordered_set<std::wstring> _keys;
+    uint64_t _entryBytes = 0u;
+};
+
+[[nodiscard]] std::wstring MakeProviderNameLocationKey(const std::wstring_view parentKey, const std::wstring_view childKey)
+{
+    std::wstring key;
+    key.reserve(parentKey.size() + 1u + childKey.size());
+    key.append(parentKey);
+    key.push_back(L'\0');
+    key.append(childKey);
+    return key;
+}
+
+[[nodiscard]] HRESULT CollectProviderChildCollisionKeys(IFileSystem& fileSystem,
+                                                         IFileSystemRouteCapabilities& route,
+                                                         const std::wstring_view parentPath,
+                                                         BatchRenameCollisionNameIndex& childKeys,
+                                                         uint64_t& nameQueryCount,
+                                                         uint64_t& arenaFallbackCount) noexcept
+{
+    wil::com_ptr<IFilesInformation> info;
+    HRESULT hr = fileSystem.ReadDirectoryInfo(std::wstring(parentPath).c_str(), info.addressof());
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    if (! info)
+    {
+        // IFileSystem permits a successful null result for an empty directory.
+        return S_OK;
+    }
+
+    unsigned long entryCount = 0u;
+    RETURN_IF_FAILED(info->GetCount(&entryCount));
+    if (entryCount == 0u)
+    {
+        return S_OK;
+    }
+
+    FileInfo* buffer = nullptr;
+    RETURN_IF_FAILED(info->GetBuffer(&buffer));
+    if (buffer == nullptr)
+    {
+        return E_POINTER;
+    }
+
+    unsigned long bufferSize = 0u;
+    RETURN_IF_FAILED(info->GetBufferSize(&bufferSize));
+    Common::Plugins::PackedFileInfoCursor cursor(buffer, bufferSize, entryCount);
+    for (unsigned long entryIndex = 0u; entryIndex < entryCount; ++entryIndex)
+    {
+        const FileInfo* entry = nullptr;
+        RETURN_IF_FAILED(cursor.Next(&entry));
+        const size_t nameChars = static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t);
+        const std::wstring_view name(entry->FileName, nameChars);
+        if (! name.empty() && ! IsDotOrDotDotName(name))
+        {
+            ++nameQueryCount;
+            const FileSystemRouteContract::StringResult key =
+                FileSystemRouteContract::QueryChildNameCollisionKey(&route, parentPath, name, FILESYSTEM_RENAME);
+            arenaFallbackCount += key.usedArenaFallback ? 1u : 0u;
+            if (key.state != FileSystemRouteContract::QueryState::Available || FAILED(key.status) || key.value.empty())
+            {
+                // A child the provider cannot key cannot collide with a provider-valid target;
+                // execution still binds every destination, so skipping it stays fail-closed.
+                continue;
+            }
+            RETURN_IF_FAILED(childKeys.Insert(key.value));
+        }
+
+    }
+    return S_OK;
+}
+
+[[nodiscard]] std::wstring BatchRenameIssueForProviderNameFailure(const HRESULT failureStatus) noexcept
+{
+    // Shape rules (empty, dot, separator) are checked before the provider call; the provider
+    // distinguishes only the length bound and reserved device names from other invalid names.
+    if (failureStatus == HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE))
+    {
+        return L"name_too_long";
+    }
+    if (failureStatus == HRESULT_FROM_WIN32(ERROR_BAD_DEVICE))
+    {
+        return L"name_reserved_device";
+    }
+    return L"name_invalid_character";
+}
+
+void ApplyProviderDestinationValidation(const BatchRenamePaneContext& context,
+                                        IFileSystemRouteCapabilities& route,
+                                        const FileSystemPathIdentity& pathIdentity,
+                                        BatchRename::Plan& plan) noexcept
 {
     const auto startedAt = std::chrono::steady_clock::now();
+    uint64_t nameQueryCount = 0u;
+    uint64_t arenaFallbackCount = 0u;
+    uint64_t rejectedCount = 0u;
+    uint64_t canonicalKeyBytes = 0u;
 
-    std::vector<std::filesystem::path> plannedSources;
-    plannedSources.reserve(plan.rows.size());
-    for (const BatchRename::PreviewRow& row : plan.rows)
+    std::unordered_map<std::wstring, std::vector<size_t>> targetRowsByLocation;
+    targetRowsByLocation.reserve(plan.rows.size());
+    BatchRenameCollisionNameIndex plannedSourceLocations;
+
+    bool changed = false;
+    for (size_t rowIndex = 0u; rowIndex < plan.rows.size(); ++rowIndex)
     {
-        if (row.newName != row.originalName)
+        BatchRename::PreviewRow& row = plan.rows[rowIndex];
+        if (row.newName == row.originalName)
         {
-            plannedSources.push_back(row.sourcePath);
+            continue;
+        }
+
+        std::wstring parentPath;
+        if (! TryGetFileSystemParentPath(pathIdentity, row.sourcePath.native(), parentPath))
+        {
+            BatchRename::AddIssue(row, BatchRename::IssueSeverity::Error, kBatchRenameIssueProviderPathIdentityUnknown);
+            ++rejectedCount;
+            changed = true;
+            continue;
+        }
+        const std::optional<std::wstring> parentKey = TryMakePathKey(pathIdentity, parentPath);
+        if (! parentKey.has_value())
+        {
+            BatchRename::AddIssue(row, BatchRename::IssueSeverity::Error, kBatchRenameIssueProviderPathIdentityUnknown);
+            ++rejectedCount;
+            changed = true;
+            continue;
+        }
+
+        std::wstring sourceLeaf;
+        if (! TryGetFileSystemLeafName(pathIdentity, row.sourcePath.native(), sourceLeaf) || sourceLeaf.empty())
+        {
+            BatchRename::AddIssue(row, BatchRename::IssueSeverity::Error, kBatchRenameIssueProviderPathIdentityUnknown);
+            ++rejectedCount;
+            changed = true;
+            continue;
+        }
+
+        if (row.newName.empty() || IsDotOrDotDotName(row.newName) ||
+            row.newName.find_first_of(pathIdentity.acceptedSeparators) != std::wstring::npos)
+        {
+            BatchRename::AddIssue(row,
+                                  BatchRename::IssueSeverity::Error,
+                                  row.newName.empty() ? L"name_empty" : (IsDotOrDotDotName(row.newName) ? L"name_dot" : L"name_separator"));
+            ++rejectedCount;
+            changed = true;
+            continue;
+        }
+
+        // The existing source only needs its provider collision key; validation applies to the
+        // proposed name, so a legacy source name never blocks its own rename.
+        ++nameQueryCount;
+        const FileSystemRouteContract::StringResult sourceKey =
+            FileSystemRouteContract::QueryChildNameCollisionKey(&route, parentPath, sourceLeaf, FILESYSTEM_RENAME);
+        arenaFallbackCount += sourceKey.usedArenaFallback ? 1u : 0u;
+        ++nameQueryCount;
+        const FileSystemRouteContract::ChildNameContractResult targetContract = FileSystemRouteContract::QueryChildNameContract(
+            &route, parentPath, row.newName, FILESYSTEM_RENAME, context.pluginId);
+        arenaFallbackCount += targetContract.arenaFallbackCount;
+#ifdef ENABLE_TESTS
+        std::error_code injectedError;
+        if (! targetContract.joinedPath.empty() &&
+            TryInjectBatchRenameDestinationProbeFailure(pathIdentity, std::filesystem::path(targetContract.joinedPath), injectedError))
+        {
+            BatchRename::AddIssue(row, BatchRename::IssueSeverity::Error, L"name_destination_probe_failed");
+            ++rejectedCount;
+            changed = true;
+            continue;
+        }
+#endif
+        if (targetContract.state == FileSystemRouteContract::QueryState::Available &&
+            targetContract.nameStatus == FILESYSTEM_CHILD_NAME_INVALID)
+        {
+            BatchRename::AddIssue(row, BatchRename::IssueSeverity::Error, BatchRenameIssueForProviderNameFailure(targetContract.failureStatus));
+            ++rejectedCount;
+            changed = true;
+            continue;
+        }
+        if (sourceKey.state != FileSystemRouteContract::QueryState::Available || FAILED(sourceKey.status) || sourceKey.value.empty() ||
+            targetContract.state != FileSystemRouteContract::QueryState::Available || FAILED(targetContract.status) ||
+            targetContract.nameStatus != FILESYSTEM_CHILD_NAME_VALID || targetContract.joinedPath.empty() || targetContract.collisionKey.empty())
+        {
+            BatchRename::AddIssue(row, BatchRename::IssueSeverity::Error, L"name_destination_probe_failed");
+            ++rejectedCount;
+            changed = true;
+            continue;
+        }
+
+        row.providerParentKey = parentKey.value();
+        row.providerSourceCollisionKey = sourceKey.value;
+        row.providerJoinedPath = std::filesystem::path(targetContract.joinedPath);
+        row.providerCollisionKey = targetContract.collisionKey;
+        canonicalKeyBytes += static_cast<uint64_t>(row.providerParentKey.size() + row.providerSourceCollisionKey.size() +
+                                                   row.providerCollisionKey.size()) * sizeof(wchar_t);
+
+        std::wstring sourceLocation = MakeProviderNameLocationKey(row.providerParentKey, row.providerSourceCollisionKey);
+        if (FAILED(plannedSourceLocations.Insert(sourceLocation)))
+        {
+            BatchRename::AddIssue(row, BatchRename::IssueSeverity::Error, L"name_destination_probe_failed");
+            ++rejectedCount;
+            changed = true;
+            continue;
+        }
+        targetRowsByLocation[MakeProviderNameLocationKey(row.providerParentKey, row.providerCollisionKey)].push_back(rowIndex);
+    }
+
+    for (const auto& [location, rows] : targetRowsByLocation)
+    {
+        static_cast<void>(location);
+        if (rows.size() < 2u)
+        {
+            continue;
+        }
+        for (const size_t rowIndex : rows)
+        {
+            BatchRename::AddIssue(plan.rows[rowIndex], BatchRename::IssueSeverity::Error, L"name_duplicate");
+            ++rejectedCount;
+            changed = true;
         }
     }
 
     struct ParentListing final
     {
-        std::filesystem::path path;
-        std::optional<std::wstring> pathKey;
-        std::error_code error;
-        std::unordered_set<std::wstring> childKeys;
-        std::vector<std::wstring> childNames;
+        std::wstring path;
+        std::wstring key;
+        HRESULT status = E_PENDING;
+        BatchRenameCollisionNameIndex childKeys;
     };
-
-    std::vector<ParentListing> parentListings;
-    std::unordered_map<std::wstring, size_t> parentIndexByKey;
-    const auto findOrCollectParent = [&](const std::filesystem::path& parent) -> const ParentListing&
+    std::vector<ParentListing> listings;
+    std::unordered_map<std::wstring, size_t> listingByParentKey;
+    for (const BatchRename::PreviewRow& row : plan.rows)
     {
-        const std::optional<std::wstring> parentKey = TryMakePathKey(pathIdentity, parent.native());
-        if (parentKey.has_value())
+        if (row.providerParentKey.empty() || listingByParentKey.contains(row.providerParentKey))
         {
-            const auto found = parentIndexByKey.find(parentKey.value());
-            if (found != parentIndexByKey.end() && found->second < parentListings.size() &&
-                EquivalentPath(pathIdentity, parentListings[found->second].path.native(), parent.native()))
-            {
-                return parentListings[found->second];
-            }
+            continue;
         }
-
-        const auto existing = std::ranges::find_if(parentListings, [&](const ParentListing& listing) noexcept {
-            return EquivalentPath(pathIdentity, listing.path.native(), parent.native());
-        });
-        if (existing != parentListings.end())
+        std::wstring parentPath;
+        if (! TryGetFileSystemParentPath(pathIdentity, row.sourcePath.native(), parentPath))
         {
-            return *existing;
+            continue;
         }
+        ParentListing listing{.path = std::move(parentPath), .key = row.providerParentKey};
+        listing.status = CollectProviderChildCollisionKeys(*context.fileSystem,
+                                                           route,
+                                                           listing.path,
+                                                           listing.childKeys,
+                                                           nameQueryCount,
+                                                           arenaFallbackCount);
+        listingByParentKey.emplace(listing.key, listings.size());
+        listings.push_back(std::move(listing));
+    }
 
-        ParentListing listing{};
-        listing.path    = parent;
-        listing.pathKey = parentKey;
-        constexpr std::filesystem::directory_options options = std::filesystem::directory_options::skip_permission_denied;
-        std::filesystem::directory_iterator iterator(parent, options, listing.error);
-        if (! listing.error)
-        {
-            for (const std::filesystem::directory_iterator end; iterator != end; iterator.increment(listing.error))
-            {
-                if (listing.error)
-                {
-                    break;
-                }
-                std::wstring childName = iterator->path().filename().native();
-                if (const std::optional<std::wstring> childKey = TryMakeComponentKey(pathIdentity, childName); childKey.has_value())
-                {
-                    listing.childKeys.insert(childKey.value());
-                }
-                listing.childNames.push_back(std::move(childName));
-            }
-        }
-
-        parentListings.push_back(std::move(listing));
-        const size_t index = parentListings.size() - 1u;
-        if (parentListings[index].pathKey.has_value())
-        {
-            parentIndexByKey[parentListings[index].pathKey.value()] = index;
-        }
-        return parentListings[index];
-    };
-
-    bool changed = false;
     for (BatchRename::PreviewRow& row : plan.rows)
     {
-        if (row.newName == row.originalName || row.newName.empty())
+        if (row.providerParentKey.empty() || row.providerCollisionKey.empty())
         {
             continue;
         }
-
-        const std::filesystem::path destinationPath = JoinFolderAndLeaf(pathIdentity, row.sourcePath.parent_path(), row.newName);
-        if (EquivalentPath(pathIdentity, row.sourcePath.native(), destinationPath.native()))
-        {
-            continue;
-        }
-
-        std::error_code injectedError;
-#ifdef ENABLE_TESTS
-        if (TryInjectBatchRenameDestinationProbeFailure(pathIdentity, destinationPath, injectedError))
+        const auto listingIndex = listingByParentKey.find(row.providerParentKey);
+        if (listingIndex == listingByParentKey.end() || listingIndex->second >= listings.size() ||
+            FAILED(listings[listingIndex->second].status))
         {
             BatchRename::AddIssue(row, BatchRename::IssueSeverity::Error, L"name_destination_probe_failed");
+            ++rejectedCount;
             changed = true;
             continue;
         }
-#endif
-        const ParentListing& listing = findOrCollectParent(destinationPath.parent_path());
-        if (listing.error)
-        {
-            if (! IsNotFoundError(listing.error))
-            {
-                BatchRename::AddIssue(row, BatchRename::IssueSeverity::Error, L"name_destination_probe_failed");
-                changed = true;
-            }
-            continue;
-        }
-
-        const std::wstring destinationLeaf = destinationPath.filename().native();
-        bool destinationExists             = false;
-        if (const std::optional<std::wstring> destinationKey = TryMakeComponentKey(pathIdentity, destinationLeaf); destinationKey.has_value())
-        {
-            destinationExists = listing.childKeys.contains(destinationKey.value());
-        }
-        else
-        {
-            destinationExists = std::ranges::any_of(listing.childNames, [&](std::wstring_view childName) noexcept {
-                return EquivalentComponent(pathIdentity, childName, destinationLeaf);
-            });
-        }
-
-        if (destinationExists && ! IsPlannedSourcePath(pathIdentity, plannedSources, destinationPath))
+        const ParentListing& listing = listings[listingIndex->second];
+        if (listing.childKeys.Contains(row.providerCollisionKey) &&
+            ! plannedSourceLocations.Contains(MakeProviderNameLocationKey(row.providerParentKey, row.providerCollisionKey)))
         {
             BatchRename::AddIssue(row, BatchRename::IssueSeverity::Error, L"name_destination_exists");
+            ++rejectedCount;
             changed = true;
+        }
+    }
+
+    std::vector<BatchRenameExecutionOp> operations;
+    std::vector<size_t> rowIndices;
+    operations.reserve(plan.rows.size());
+    rowIndices.reserve(plan.rows.size());
+    for (size_t rowIndex = 0u; rowIndex < plan.rows.size(); ++rowIndex)
+    {
+        const BatchRename::PreviewRow& row = plan.rows[rowIndex];
+        if (row.newName == row.originalName || BatchRename::HasIssueSeverity(row, BatchRename::IssueSeverity::Error))
+        {
+            continue;
+        }
+        operations.push_back(BatchRenameExecutionOp{
+            .originalSource = row.sourcePath,
+            .finalLeaf = row.newName,
+            .providerFinalPath = row.providerJoinedPath,
+            .providerParentKey = row.providerParentKey,
+            .providerSourceCollisionKey = row.providerSourceCollisionKey,
+            .providerFinalCollisionKey = row.providerCollisionKey,
+            .depth = PathDepthKey(row.sourcePath),
+            .isDirectory = row.isDirectory,
+        });
+        rowIndices.push_back(rowIndex);
+    }
+    BatchRenameExecutionSchedule schedule{};
+    if (BuildBatchRenameExecutionSchedule(pathIdentity, operations, schedule) == HRESULT_FROM_WIN32(ERROR_CIRCULAR_DEPENDENCY))
+    {
+        for (const size_t operationIndex : schedule.cycleOperationIndices)
+        {
+            if (operationIndex < rowIndices.size())
+            {
+                BatchRename::AddIssue(plan.rows[rowIndices[operationIndex]], BatchRename::IssueSeverity::Error, L"name_dependency_cycle");
+                ++rejectedCount;
+                changed = true;
+            }
         }
     }
 
@@ -607,23 +706,24 @@ void ApplyLocalDestinationConflictValidation(const FileSystemPathIdentity& pathI
     {
         BatchRename::RecomputeStats(plan);
     }
-
     if (Debug::Perf::IsCaptureEnabled())
     {
-        Debug::Perf::Emit(L"batchrename.preview.destination_validation.us",
-                          L"cached-parent-listings",
+        uint64_t collisionIndexRetainedBytes = plannedSourceLocations.RetainedBytes();
+        for (const ParentListing& listing : listings)
+        {
+            collisionIndexRetainedBytes += listing.childKeys.RetainedBytes();
+        }
+        Debug::Perf::Emit(L"batchrename.preview.provider_name_validation.us",
+                          L"typed-provider",
                           Debug::Perf::ElapsedUs(startedAt),
-                          static_cast<uint64_t>(plan.rows.size()),
-                          static_cast<uint64_t>(parentListings.size()));
-        Debug::Perf::EmitValue(L"batchrename.preview.destination_directory_listings", static_cast<uint64_t>(parentListings.size()));
-    }
-}
-
-void ApplyContextualPreviewValidation(const BatchRenamePaneContext& context, const FileSystemPathIdentity& pathIdentity, BatchRename::Plan& plan) noexcept
-{
-    if (IsLocalFileSystemContext(context))
-    {
-        ApplyLocalDestinationConflictValidation(pathIdentity, plan);
+                          nameQueryCount,
+                          static_cast<uint64_t>(listings.size()));
+        Debug::Perf::EmitValue(L"batchrename.preview.provider_name_queries", nameQueryCount);
+        Debug::Perf::EmitValue(L"batchrename.preview.provider_name_arena_fallbacks", arenaFallbackCount);
+        Debug::Perf::EmitValue(L"batchrename.preview.provider_name_rejected", rejectedCount);
+        Debug::Perf::EmitValue(L"batchrename.preview.provider_name_key_bytes", canonicalKeyBytes);
+        Debug::Perf::EmitValue(L"batchrename.preview.destination_directory_listings", static_cast<uint64_t>(listings.size()));
+        Debug::Perf::EmitValue(L"batchrename.preview.collision_index_retained_bytes", collisionIndexRetainedBytes);
     }
 }
 
@@ -631,8 +731,18 @@ void ApplyContextualPreviewValidation(const BatchRenamePaneContext& context, con
                                                                const std::vector<BatchRename::Target>& targets,
                                                                const BatchRename::Rules& rules) noexcept
 {
-    const std::optional<FileSystemPathIdentity> pathIdentity = ResolveBatchRenamePathIdentity(context);
-    const FileSystemPathIdentity effectiveIdentity           = pathIdentity.value_or(FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem());
+    wil::com_ptr<IFileSystemRouteCapabilities> route;
+    const HRESULT routeInterfaceHr = context.fileSystem
+        ? context.fileSystem->QueryInterface(__uuidof(IFileSystemRouteCapabilities), route.put_void())
+        : E_POINTER;
+    const FileSystemRouteContract::QueryResult routeResult =
+        SUCCEEDED(routeInterfaceHr)
+            ? FileSystemRouteContract::Query(route.get(), context.rootPluginPath.native(), FILESYSTEM_RENAME, context.pluginId)
+            : FileSystemRouteContract::QueryResult{};
+    const std::optional<FileSystemPathIdentity> pathIdentity =
+        routeResult.state == FileSystemRouteContract::QueryState::Available ? routeResult.snapshot.pathIdentity : std::nullopt;
+    const FileSystemPathIdentity effectiveIdentity =
+        pathIdentity.value_or(FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem());
 
     BatchRename::Plan plan = BatchRename::BuildPlan(targets, rules, effectiveIdentity);
     if (! pathIdentity.has_value())
@@ -641,7 +751,7 @@ void ApplyContextualPreviewValidation(const BatchRenamePaneContext& context, con
         return plan;
     }
 
-    ApplyContextualPreviewValidation(context, effectiveIdentity, plan);
+    ApplyProviderDestinationValidation(context, *route, effectiveIdentity, plan);
     return plan;
 }
 
@@ -686,57 +796,6 @@ struct BatchRenamePreviewWork final
         static_cast<void>(PostMessagePayload(hwnd, WndMsg::kBatchRenameCompleted, kBatchRenameTaskPreview, std::move(payload)));
     }
 };
-
-[[nodiscard]] HRESULT RevalidateLocalRenamePlan(const FileSystemPathIdentity& pathIdentity, const BatchRename::Plan& plan) noexcept
-{
-    std::vector<std::filesystem::path> plannedSources;
-    plannedSources.reserve(plan.rows.size());
-    for (const BatchRename::PreviewRow& row : plan.rows)
-    {
-        if (row.newName != row.originalName)
-        {
-            plannedSources.push_back(row.sourcePath);
-        }
-    }
-
-    for (const BatchRename::PreviewRow& row : plan.rows)
-    {
-        if (row.newName == row.originalName)
-        {
-            continue;
-        }
-
-        std::error_code ec;
-        const std::filesystem::file_status sourceStatus = std::filesystem::symlink_status(row.sourcePath, ec);
-        if (ec)
-        {
-            return ErrorCodeToHRESULT(ec);
-        }
-        if (! std::filesystem::exists(sourceStatus))
-        {
-            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
-        }
-
-        const std::filesystem::path destinationPath = JoinFolderAndLeaf(pathIdentity, row.sourcePath.parent_path(), row.newName);
-        if (EquivalentPath(pathIdentity, row.sourcePath.native(), destinationPath.native()))
-        {
-            continue;
-        }
-
-        ec.clear();
-        const std::filesystem::file_status destinationStatus = std::filesystem::symlink_status(destinationPath, ec);
-        if (ec && ! IsNotFoundError(ec))
-        {
-            return ErrorCodeToHRESULT(ec);
-        }
-        if (! ec && std::filesystem::exists(destinationStatus) && ! IsPlannedSourcePath(pathIdentity, plannedSources, destinationPath))
-        {
-            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
-        }
-    }
-
-    return S_OK;
-}
 
 [[nodiscard]] BatchRename::Target RefreshTargetAfterRename(const BatchRename::Target& previous,
                                                            const std::filesystem::path& newPath,
@@ -1471,13 +1530,16 @@ struct BatchRenameCollectionWork final
         std::wstring_view fallback;
     };
 
-    static constexpr std::array<IssueText, 18> kIssueTexts = {{
+    static constexpr std::array<IssueText, 20> kIssueTexts = {{
         {L"name_empty", IDS_BATCH_RENAME_ISSUE_NAME_EMPTY, L"Name is empty"},
         {L"name_dot", IDS_BATCH_RENAME_ISSUE_NAME_DOT, L"Name is '.' or '..'"},
         {L"name_separator", IDS_BATCH_RENAME_ISSUE_NAME_SEPARATOR, L"Name contains a path separator"},
         {L"name_invalid_character", IDS_BATCH_RENAME_ISSUE_NAME_INVALID_CHARACTER, L"Name contains an invalid character"},
         {L"name_too_long", IDS_BATCH_RENAME_ISSUE_NAME_TOO_LONG, L"Name is too long"},
         {L"name_duplicate", IDS_BATCH_RENAME_ISSUE_NAME_DUPLICATE, L"Duplicate name in the same folder"},
+        {L"name_dependency_cycle", IDS_BATCH_RENAME_ISSUE_NAME_DEPENDENCY_CYCLE,
+         L"These names form a dependency cycle. Use a temporary intermediate name, then run a second acyclic pass."},
+        {L"source_duplicate", IDS_BATCH_RENAME_ISSUE_SOURCE_DUPLICATE, L"This source item appears more than once"},
         {L"name_unchanged", IDS_BATCH_RENAME_ISSUE_NAME_UNCHANGED, L"Name is unchanged"},
         {L"name_case_only", IDS_BATCH_RENAME_ISSUE_NAME_CASE_ONLY, L"Only letter case changes"},
         {L"name_edge_space_or_dot", IDS_BATCH_RENAME_ISSUE_NAME_EDGE_SPACE_OR_DOT, L"Name starts or ends with a space, or ends with a dot"},
@@ -1812,7 +1874,7 @@ void UpdateRecentBatchRenameValue(std::vector<std::wstring>& history, std::wstri
     return {};
 }
 
-[[nodiscard]] size_t CountVisibleChildWindows(HWND hwnd) noexcept
+[[maybe_unused]] [[nodiscard]] size_t CountVisibleChildWindows(HWND hwnd) noexcept
 {
     size_t count = 0u;
     EnumChildWindows(hwnd,
@@ -2164,7 +2226,7 @@ private:
     void OnPreviewRebuildTimer() noexcept;
     void RebuildPreview() noexcept;
     void OnPreviewCompleted(std::unique_ptr<BatchRenamePreviewCompletedPayload> payload) noexcept;
-    void SyncRuleControls() noexcept;
+    [[maybe_unused]] void SyncRuleControls() noexcept;
     void UpdateModeVisibility() noexcept;
     void SwitchMode(BatchRename::Mode mode);
     void SeedManualTextFromRulePreview();
@@ -2236,6 +2298,7 @@ private:
     bool _previewing                 = false;
     bool _collectionQueued           = false;
     HRESULT _lastExecutionTerminalHr = S_OK;
+    uint64_t _centralTaskId          = 0u;
     bool _deletePending              = false;
     bool _uiStatePersisted           = false;
 
@@ -3862,9 +3925,12 @@ HRESULT BatchRenameWindow::ExecuteRename() noexcept
         }
 
         BatchRenameExecutionOp op{};
-        op.currentSource  = row.sourcePath;
         op.originalSource = row.sourcePath;
         op.finalLeaf      = row.newName;
+        op.providerFinalPath = row.providerJoinedPath;
+        op.providerParentKey = row.providerParentKey;
+        op.providerSourceCollisionKey = row.providerSourceCollisionKey;
+        op.providerFinalCollisionKey = row.providerCollisionKey;
         op.depth          = PathDepthKey(row.sourcePath);
         op.isDirectory    = row.isDirectory;
         ops.push_back(std::move(op));
@@ -3884,15 +3950,14 @@ HRESULT BatchRenameWindow::ExecuteRename() noexcept
         {
             return lhs.depth > rhs.depth;
         }
-        return lhs.currentSource.native().size() > rhs.currentSource.native().size();
+        return lhs.originalSource.native().size() > rhs.originalSource.native().size();
     });
 
-    auto payload = std::unique_ptr<BatchRenameExecutionCompletedPayload>(new (std::nothrow) BatchRenameExecutionCompletedPayload{});
-    if (! payload)
+    if (! _context.onStartRename)
     {
         report.failedRows   = ops.size();
-        report.firstFailure = E_OUTOFMEMORY;
-        return finishSynchronous(E_OUTOFMEMORY, L"rename_failed", std::move(report));
+        report.firstFailure = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        return finishSynchronous(report.firstFailure, L"central_engine_unavailable", std::move(report));
     }
 
     if (_collectionCancelFlag)
@@ -3902,53 +3967,67 @@ HRESULT BatchRenameWindow::ExecuteRename() noexcept
     _cancelRequested.store(false, std::memory_order_release);
 
     const uint64_t generation = _taskGeneration.fetch_add(1u, std::memory_order_acq_rel) + 1u;
-    payload->generation       = generation;
-    payload->report           = std::move(report);
-
-    const HWND hwnd                           = _hWnd.get();
-    wil::com_ptr<IFileSystem> fileSystem      = _context.fileSystem;
-    const FileSystemPathIdentity pathIdentity = executionPathIdentity.value();
-    std::atomic_bool* const cancelFlag        = &_cancelRequested;
-    const size_t opsCount                     = ops.size();
-    const size_t skippedRows                  = plan.stats.unchangedRows;
-    const size_t totalRows                    = plan.rows.size();
+    const HWND hwnd          = _hWnd.get();
+    const size_t opsCount    = ops.size();
+    const size_t skippedRows = plan.stats.unchangedRows;
+    const size_t totalRows   = plan.rows.size();
 
     _executing = true;
     UpdateTaskUi();
 
-    try
+    BatchRenamePaneContext::CentralExecutionRequest request{};
+    request.operations    = std::move(ops);
+    request.pathIdentity  = executionPathIdentity;
+    request.totalRows     = totalRows;
+    request.unchangedRows = skippedRows;
+    request.onProgress = [hwnd, generation](const uint64_t completedItems, const uint64_t totalItems) noexcept
     {
-        std::optional<BatchRename::Plan> localPlan;
-        if (IsLocalFileSystemContext(_context))
+        auto progressPayload = std::unique_ptr<BatchRenameTaskProgressPayload>(new (std::nothrow) BatchRenameTaskProgressPayload{});
+        if (! progressPayload)
         {
-            localPlan = plan;
+            return;
         }
-        _taskWorker = std::jthread([hwnd,
-                                    generation,
-                                    cancelFlag,
-                                    fileSystem = std::move(fileSystem),
-                                    pathIdentity,
-                                    localPlan = std::move(localPlan),
-                                    ops     = std::move(ops),
-                                    payload = std::move(payload)]() mutable noexcept
-        {
-            RunBatchRenameExecution(
-                hwnd, generation, *cancelFlag, std::move(fileSystem), pathIdentity, std::move(localPlan), std::move(ops), std::move(payload));
-        });
-    }
-    catch (const std::system_error&)
+        progressPayload->generation     = generation;
+        progressPayload->totalItems     = totalItems;
+        progressPayload->completedItems = completedItems;
+        static_cast<void>(PostMessagePayload(
+            hwnd, WndMsg::kBatchRenameTaskUpdate, kBatchRenameTaskExecution, std::move(progressPayload)));
+    };
+    request.onCompleted = [hwnd, generation, totalRows, skippedRows](BatchRenameExecutionResult result) mutable noexcept
     {
-        // Thread creation is required for responsive execution; report a clean
-        // start failure without touching provider state.
+        auto completedPayload = std::unique_ptr<BatchRenameExecutionCompletedPayload>(new (std::nothrow) BatchRenameExecutionCompletedPayload{});
+        if (! completedPayload)
+        {
+            return;
+        }
+        completedPayload->generation = generation;
+        completedPayload->hr = result.hr;
+        completedPayload->detail = std::move(result.detail);
+        completedPayload->report = std::move(result.report);
+        completedPayload->report.totalRows = totalRows;
+        completedPayload->report.skippedRows += skippedRows;
+        completedPayload->successfulSourcePaths = std::move(result.successfulSourcePaths);
+        completedPayload->successfulTargetPaths = std::move(result.successfulTargetPaths);
+        completedPayload->executedDirectoryMoves = std::move(result.executedDirectoryMoves);
+        static_cast<void>(PostMessagePayload(
+            hwnd, WndMsg::kBatchRenameCompleted, kBatchRenameTaskExecution, std::move(completedPayload)));
+    };
+
+    uint64_t taskId = 0u;
+    const HRESULT startHr = _context.onStartRename(std::move(request), &taskId);
+    if (FAILED(startHr) || taskId == 0u)
+    {
         _executing = false;
         BatchRenameExecutionReport failureReport{};
         failureReport.totalRows    = totalRows;
         failureReport.skippedRows  = skippedRows;
         failureReport.failedRows   = opsCount;
-        failureReport.firstFailure = HRESULT_FROM_WIN32(ERROR_NO_SYSTEM_RESOURCES);
+        failureReport.firstFailure = FAILED(startHr) ? startHr : E_UNEXPECTED;
         UpdateTaskUi();
         return finishSynchronous(failureReport.firstFailure, L"rename_failed", std::move(failureReport));
     }
+
+    _centralTaskId = taskId;
 
     return S_OK;
 }
@@ -4051,6 +4130,7 @@ void BatchRenameWindow::OnExecutionCompleted(std::unique_ptr<BatchRenameExecutio
     }
 
     _executing               = false;
+    _centralTaskId           = 0u;
     _lastExecutionTerminalHr = payload->hr;
 
     const FileSystemPathIdentity pathIdentity =
@@ -4136,6 +4216,10 @@ void BatchRenameWindow::RequestTaskCancel() noexcept
     {
         _collectionCancelFlag->store(true, std::memory_order_release);
     }
+    if (_executing && _centralTaskId != 0u && _context.onCancelRename)
+    {
+        _context.onCancelRename(_centralTaskId);
+    }
     if (_cancelButton)
     {
         _cancelButton->SetEnabled(false);
@@ -4154,6 +4238,10 @@ void BatchRenameWindow::CancelAndJoinBackgroundTask() noexcept
         _collectionCancelFlag->store(true, std::memory_order_release);
         _collectionCancelFlag.reset();
     }
+    if (_executing && _centralTaskId != 0u && _context.onCancelRename)
+    {
+        _context.onCancelRename(_centralTaskId);
+    }
     if (_taskWorker.joinable())
     {
         _cancelRequested.store(true, std::memory_order_release);
@@ -4161,6 +4249,7 @@ void BatchRenameWindow::CancelAndJoinBackgroundTask() noexcept
     }
     _collecting       = false;
     _executing        = false;
+    _centralTaskId    = 0u;
     _collectionQueued = false;
 }
 
@@ -5590,5 +5679,63 @@ bool DebugRefreshBatchRenameTargetsAfterExecutionForTests(const FileSystemPathId
     refreshedRows       = result.refreshedRows;
     identityComparisons = result.identityComparisons;
     return refreshedRows == std::min(successfulSourcePaths.size(), successfulTargetPaths.size());
+}
+
+bool DebugMeasureBatchRenameCollisionNameIndexForTests(const size_t nameCount,
+                                                       const size_t componentLength,
+                                                       uint64_t& retainedBytes) noexcept
+{
+    retainedBytes = 0u;
+    if (nameCount == 0u || componentLength < 8u)
+    {
+        return false;
+    }
+
+    const FileSystemPathIdentity foldedIdentity = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem();
+    BatchRenameCollisionNameIndex foldedIndex;
+    std::wstring firstName;
+    for (size_t index = 0u; index < nameCount; ++index)
+    {
+        std::wstring name(componentLength, L'a');
+        const std::wstring suffix = std::to_wstring(index);
+        if (suffix.size() > name.size())
+        {
+            return false;
+        }
+        name.replace(name.size() - suffix.size(), suffix.size(), suffix);
+        if (index == 0u)
+        {
+            firstName = name;
+        }
+
+        const std::optional<std::wstring> key = TryMakeComponentKey(foldedIdentity, name);
+        if (! key.has_value() || FAILED(foldedIndex.Insert(key.value())))
+        {
+            return false;
+        }
+    }
+    retainedBytes = foldedIndex.RetainedBytes();
+
+    firstName.front() = L'A';
+    const std::optional<std::wstring> foldedProbe = TryMakeComponentKey(foldedIdentity, firstName);
+    if (! foldedProbe.has_value() || ! foldedIndex.Contains(foldedProbe.value()) || foldedIndex.Size() != nameCount)
+    {
+        return false;
+    }
+
+    FileSystemPathIdentity exactIdentity = foldedIdentity;
+    exactIdentity.componentComparison    = FileSystemPathComponentComparison::OrdinalCaseSensitive;
+    const std::optional<std::wstring> exactLower = TryMakeComponentKey(exactIdentity, L"name.txt");
+    const std::optional<std::wstring> exactUpper = TryMakeComponentKey(exactIdentity, L"NAME.txt");
+    BatchRenameCollisionNameIndex exactIndex;
+    return exactLower.has_value() && exactUpper.has_value() && SUCCEEDED(exactIndex.Insert(exactLower.value())) &&
+           SUCCEEDED(exactIndex.Insert(exactUpper.value())) && exactIndex.Size() == 2u;
+}
+
+BatchRename::Plan DebugBuildBatchRenamePlanForContextForTests(const BatchRenamePaneContext& context,
+                                                              const std::vector<BatchRename::Target>& targets,
+                                                              const BatchRename::Rules& rules) noexcept
+{
+    return BuildBatchRenamePlanForContext(context, targets, rules);
 }
 #endif

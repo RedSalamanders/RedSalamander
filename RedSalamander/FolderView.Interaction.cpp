@@ -51,6 +51,16 @@ void FolderView::OnMeasuredMouseHWheelMessage(int delta)
     RecordInputToPaintStartIfViewportOrFocusChanged(inputStartedAt, scrollBefore, horizontalBefore, focusedBefore);
 }
 
+void FolderView::OnMeasuredLButtonDownMessage(POINT pt, WPARAM keys)
+{
+    const auto inputStartedAt    = std::chrono::steady_clock::now();
+    const float scrollBefore     = _scrollOffset;
+    const float horizontalBefore = _horizontalOffset;
+    const size_t focusedBefore   = _focusedIndex;
+    OnLButtonDown(pt, keys);
+    RecordInputToPaintStartIfViewportOrFocusChanged(inputStartedAt, scrollBefore, horizontalBefore, focusedBefore);
+}
+
 void FolderView::OnMouseLeave()
 {
     if (_hoveredIndex != static_cast<size_t>(-1) && _hoveredIndex < _items.size())
@@ -183,16 +193,26 @@ void FolderView::OnContextMenuMessage(HWND hwnd, LPARAM lParam)
     SetFocus(hwnd);
 
     POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-    if (pt.x == -1 && pt.y == -1)
+    const bool keyboardInvocation = pt.x == -1 && pt.y == -1;
+    if (keyboardInvocation)
     {
-        RECT rc{};
-        GetClientRect(hwnd, &rc);
-        pt.x = (rc.left + rc.right) / 2;
-        pt.y = (rc.top + rc.bottom) / 2;
+        if (_focusedIndex < _items.size())
+        {
+            const RECT currentRect = ToPixelRect(OffsetRect(_items[_focusedIndex].bounds, -_horizontalOffset, -_scrollOffset), _dpi);
+            pt.x = currentRect.left;
+            pt.y = currentRect.bottom;
+        }
+        else
+        {
+            RECT rc{};
+            GetClientRect(hwnd, &rc);
+            pt.x = (rc.left + rc.right) / 2;
+            pt.y = (rc.top + rc.bottom) / 2;
+        }
         ClientToScreen(hwnd, &pt);
     }
 
-    OnContextMenu(pt);
+    OnContextMenu(pt, keyboardInvocation);
 }
 
 void FolderView::OnHScrollMessage(UINT scrollRequest)
@@ -267,6 +287,19 @@ void FolderView::OnCommandMessage(UINT commandId)
         return;
     }
 
+    if (commandId >= IDM_PANE_NEW_TEMPLATE_BASE && commandId <= IDM_PANE_NEW_TEMPLATE_LAST)
+    {
+        if (_hWnd)
+        {
+            SetFocus(_hWnd.get());
+            if (const HWND root = GetAncestor(_hWnd.get(), GA_ROOT))
+            {
+                PostMessageW(root, WM_COMMAND, MAKEWPARAM(commandId, 0), 0);
+            }
+        }
+        return;
+    }
+
     switch (commandId)
     {
         case CmdOpen: ActivateFocusedItem(); break;
@@ -299,6 +332,8 @@ void FolderView::OnCommandMessage(UINT commandId)
         case IDM_PANE_ALTERNATE_VIEW:
         case IDM_PANE_EDIT:
         case IDM_PANE_ALTERNATE_EDIT:
+        case IDM_PANE_CREATE_DIR:
+        case IDM_PANE_EDIT_NEW:
         {
             if (_hWnd)
             {
@@ -313,12 +348,24 @@ void FolderView::OnCommandMessage(UINT commandId)
         }
         case CmdDelete: CommandDelete(); break;
         case CmdRename: RenameFocusedItem(); break;
+        case CmdCut: static_cast<void>(CutSelectionToClipboard()); break;
         case CmdCopy: CopySelectionToClipboard(); break;
         case CmdPaste: PasteItemsFromClipboard(); break;
+        case CmdRefresh: ForceRefresh(); break;
         case CmdSelectAll: SelectAll(); break;
         case CmdUnselectAll: ClearSelection(); break;
         case CmdProperties: ShowProperties(); break;
         case CmdMove: MoveSelectedItems(); break;
+        case CmdArtifactInspect:
+            static_cast<void>(RequestViewFocusedItem(ViewFileRole::Primary, false, {}, true));
+            break;
+        case CmdArtifactReveal:
+            if (_focusedIndex < _items.size())
+            {
+                EnsureVisible(_focusedIndex);
+                InvalidateRect(_hWnd.get(), nullptr, FALSE);
+            }
+            break;
         case CmdOverlaySampleError:
             if (IsOverlaySampleEnabled())
             {
@@ -451,33 +498,22 @@ void FolderView::OnLButtonDown(POINT pt, WPARAM keys)
     }
 
     SetFocus(_hWnd.get());
-    SetCapture(_hWnd.get());
-    _drag.dragging         = true;
-    _drag.startPoint       = pt;
-    _drag.anchorIndex      = static_cast<size_t>(-1);
-    _drag.hasStartItemRect = false;
+    DisarmPotentialDrag();
 
     auto hit = HitTest(pt);
     if (hit)
     {
-        _drag.anchorIndex = *hit;
-        if (*hit < _items.size())
-        {
-            const D2D1_RECT_F bounds = OffsetRect(_items[*hit].bounds, -_horizontalOffset, -_scrollOffset);
-            _drag.startItemRect      = ToPixelRect(bounds, _dpi);
-            _drag.hasStartItemRect   = (_drag.startItemRect.right > _drag.startItemRect.left) && (_drag.startItemRect.bottom > _drag.startItemRect.top);
-        }
-
-        bool ctrl  = (keys & MK_CONTROL) != 0;
-        bool shift = (keys & MK_SHIFT) != 0;
+        const bool ctrl  = (keys & MK_CONTROL) != 0;
+        const bool shift = (keys & MK_SHIFT) != 0;
+        const size_t prePressCurrent = _focusedIndex;
 
         if (shift)
         {
             if (_anchorIndex == static_cast<size_t>(-1))
             {
-                _anchorIndex = *hit;
+                _anchorIndex = prePressCurrent < _items.size() ? prePressCurrent : *hit;
             }
-            RangeSelect(*hit);
+            RangeSelect(*hit, ctrl);
         }
         else if (ctrl)
         {
@@ -496,21 +532,36 @@ void FolderView::OnLButtonDown(POINT pt, WPARAM keys)
             }
             _anchorIndex = *hit;
         }
+
+        _drag.startPoint = pt;
+        _drag.pressedIndex = *hit;
+        _drag.sourcePaths = GetSelectedOrFocusedPaths();
+        _drag.sourceDisplayNames = GetSelectedOrFocusedDisplayNames();
+        const bool pressedBelongsToSource = *hit < _items.size() && std::ranges::any_of(_drag.sourceDisplayNames, [&](const std::wstring& name) noexcept
+        { return EquivalentProviderComponent(name, _items[*hit].displayName); });
+        if (pressedBelongsToSource)
+        {
+            _drag.potential = true;
+            SetCapture(_hWnd.get());
+        }
+        else
+        {
+            DisarmPotentialDrag();
+        }
     }
     else
     {
         ClearSelection();
-        _drag.dragging = false;
-        _focusedIndex  = static_cast<size_t>(-1);
-        _anchorIndex   = static_cast<size_t>(-1);
+        _anchorIndex = _focusedIndex < _items.size() ? _focusedIndex : static_cast<size_t>(-1);
     }
 }
 
-void FolderView::OnLButtonDblClk(POINT pt, WPARAM /*keys*/)
+void FolderView::OnLButtonDblClk(POINT pt, WPARAM keys)
 {
     ExitIncrementalSearch();
 
     SetFocus(_hWnd.get());
+    DisarmPotentialDrag();
 
     const std::optional<size_t> hit = HitTest(pt);
     if (! hit.has_value() || hit.value() >= _items.size())
@@ -522,6 +573,10 @@ void FolderView::OnLButtonDblClk(POINT pt, WPARAM /*keys*/)
         return;
     }
 
+    // The preceding WM_LBUTTONDOWN already applied plain/Ctrl/Shift selection semantics.
+    // WM_LBUTTONDBLCLK is the second press: retain that established selection and only
+    // re-establish the activation target so Ctrl double-click cannot toggle it twice.
+    static_cast<void>(keys);
     FocusItem(hit.value(), false);
     _anchorIndex = hit.value();
     ActivateFocusedItem();
@@ -529,10 +584,16 @@ void FolderView::OnLButtonDblClk(POINT pt, WPARAM /*keys*/)
 
 void FolderView::OnLButtonUp(POINT /*pt*/)
 {
-    ReleaseCapture();
-    _drag.dragging         = false;
-    _drag.anchorIndex      = static_cast<size_t>(-1);
-    _drag.hasStartItemRect = false;
+    DisarmPotentialDrag();
+}
+
+void FolderView::DisarmPotentialDrag() noexcept
+{
+    _drag = {};
+    if (_hWnd && GetCapture() == _hWnd.get())
+    {
+        ReleaseCapture();
+    }
 }
 
 void FolderView::OnMouseMove(POINT pt, WPARAM keys)
@@ -596,23 +657,26 @@ void FolderView::OnMouseMove(POINT pt, WPARAM keys)
         }
     }
 
-    if ((_drag.dragging) && (keys & MK_LBUTTON))
+    if (_drag.potential && (keys & MK_LBUTTON))
     {
-        if (_drag.hasStartItemRect && PtInRect(&_drag.startItemRect, pt) != FALSE)
-        {
-            // Don't start a drag until the mouse leaves the item where the click began.
-            return;
-        }
-
-        const int dx      = std::abs(pt.x - _drag.startPoint.x);
-        const int dy      = std::abs(pt.y - _drag.startPoint.y);
-        const int threshX = GetSystemMetrics(SM_CXDRAG);
-        const int threshY = GetSystemMetrics(SM_CYDRAG);
-        if (dx > threshX || dy > threshY)
+        const UINT dpi = static_cast<UINT>((std::max)(96.0f, _dpi));
+        const int width = (std::max)(1, GetSystemMetricsForDpi(SM_CXDRAG, dpi));
+        const int height = (std::max)(1, GetSystemMetricsForDpi(SM_CYDRAG, dpi));
+        const RECT thresholdRectangle{
+            _drag.startPoint.x - width / 2,
+            _drag.startPoint.y - height / 2,
+            _drag.startPoint.x + (width - width / 2),
+            _drag.startPoint.y + (height - height / 2),
+        };
+        if (PtInRect(&thresholdRectangle, pt) == FALSE)
         {
             BeginDragDrop();
-            _drag.dragging = false;
+            DisarmPotentialDrag();
         }
+    }
+    else if (_drag.potential && (keys & MK_LBUTTON) == 0)
+    {
+        DisarmPotentialDrag();
     }
 }
 
@@ -726,7 +790,10 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift, bool translatedSpa
     {
         switch (key)
         {
-            case VK_ESCAPE: ExitIncrementalSearch(); return;
+            case VK_ESCAPE:
+                DisarmPotentialDrag();
+                ExitIncrementalSearch();
+                return;
             case VK_BACK:
                 if (_items.empty())
                 {
@@ -769,6 +836,7 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift, bool translatedSpa
 
     if (key == VK_ESCAPE)
     {
+        DisarmPotentialDrag();
         ClearSelection();
         if (_focusedIndex != static_cast<size_t>(-1) && _focusedIndex < _items.size())
         {
@@ -799,15 +867,11 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift, bool translatedSpa
     {
         if (shift)
         {
-            if (_anchorIndex != invalidIndex)
+            if (_anchorIndex == invalidIndex || _anchorIndex >= _items.size())
             {
-                RangeSelect(index);
+                _anchorIndex = hasFocus ? _focusedIndex : index;
             }
-            else
-            {
-                SelectSingle(index);
-                _anchorIndex = index;
-            }
+            RangeSelect(index, ctrl);
             return;
         }
 
@@ -966,17 +1030,18 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift, bool translatedSpa
             ExitIncrementalSearch();
             if (hasFocus)
             {
-                ToggleSelection(_focusedIndex);
-
-                if (_focusedIndex + 1 < _items.size())
-                {
-                    FocusItem(_focusedIndex + 1, true);
-                    _anchorIndex = _focusedIndex;
-                }
+                const size_t operatedIndex = _focusedIndex;
+                ToggleSelection(operatedIndex);
 
                 if (_selectionSizeComputationRequestedCallback)
                 {
                     _selectionSizeComputationRequestedCallback();
+                }
+
+                if (operatedIndex + 1 < _items.size())
+                {
+                    FocusItem(operatedIndex + 1, true);
+                    _anchorIndex = _focusedIndex;
                 }
             }
             break;
@@ -984,10 +1049,11 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift, bool translatedSpa
             ExitIncrementalSearch();
             if (hasFocus)
             {
-                ToggleSelection(_focusedIndex);
-                if (_focusedIndex + 1 < _items.size())
+                const size_t operatedIndex = _focusedIndex;
+                ToggleSelection(operatedIndex);
+                if (operatedIndex + 1 < _items.size())
                 {
-                    FocusItem(_focusedIndex + 1, true);
+                    FocusItem(operatedIndex + 1, true);
                     _anchorIndex = _focusedIndex;
                 }
             }
@@ -1630,5 +1696,10 @@ bool FolderView::DebugGetIncrementalSearchSnapshot(IncrementalSearchDebugSnapsho
     }
 
     return true;
+}
+
+void FolderView::DebugExitIncrementalSearch() noexcept
+{
+    ExitIncrementalSearch();
 }
 #endif

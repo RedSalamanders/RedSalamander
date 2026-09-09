@@ -3,6 +3,7 @@
 #include <Windows.h>
 
 #include <algorithm>
+#include <format>
 #include <string_view>
 #include <tuple>
 
@@ -10,12 +11,26 @@
 
 namespace
 {
+constexpr uint32_t kCurrentShortcutMigrationVersion = 1u;
+
 void AddBinding(std::vector<Common::Settings::ShortcutBinding>& dest, uint32_t vk, uint32_t modifiers, std::wstring_view commandId)
 {
     Common::Settings::ShortcutBinding binding;
     binding.vk        = vk;
     binding.modifiers = modifiers;
     binding.commandId = std::wstring(commandId);
+    dest.push_back(std::move(binding));
+}
+
+void AddPositionBinding(std::vector<Common::Settings::ShortcutBinding>& dest,
+                        Common::Keyboard::KeyPosition keyPosition,
+                        uint32_t modifiers,
+                        std::wstring_view commandId)
+{
+    Common::Settings::ShortcutBinding binding;
+    binding.modifiers   = modifiers;
+    binding.commandId   = std::wstring(commandId);
+    binding.keyPosition = keyPosition;
     dest.push_back(std::move(binding));
 }
 
@@ -30,18 +45,17 @@ void MigrateDeprecatedShortcutCommandIds(std::vector<Common::Settings::ShortcutB
     }
 }
 
-[[nodiscard]] bool SameChord(const Common::Settings::ShortcutBinding& binding, uint32_t vk, uint32_t modifiers) noexcept
+[[nodiscard]] bool SameChord(const Common::Settings::ShortcutBinding& left, const Common::Settings::ShortcutBinding& right) noexcept
 {
-    return binding.vk == vk && (binding.modifiers & 0x7u) == (modifiers & 0x7u);
+    return left.vk == right.vk && left.keyPosition == right.keyPosition && (left.modifiers & 0x7u) == (right.modifiers & 0x7u);
 }
 
 [[nodiscard]] Common::Settings::ShortcutBinding* FindBindingByChord(std::vector<Common::Settings::ShortcutBinding>& bindings,
-                                                                    uint32_t vk,
-                                                                    uint32_t modifiers) noexcept
+                                                                    const Common::Settings::ShortcutBinding& candidate) noexcept
 {
     for (Common::Settings::ShortcutBinding& binding : bindings)
     {
-        if (SameChord(binding, vk, modifiers))
+        if (SameChord(binding, candidate))
         {
             return &binding;
         }
@@ -49,11 +63,21 @@ void MigrateDeprecatedShortcutCommandIds(std::vector<Common::Settings::ShortcutB
     return nullptr;
 }
 
+[[nodiscard]] Common::Settings::ShortcutBinding* FindBindingByChord(std::vector<Common::Settings::ShortcutBinding>& bindings,
+                                                                    uint32_t vk,
+                                                                    uint32_t modifiers) noexcept
+{
+    Common::Settings::ShortcutBinding candidate;
+    candidate.vk        = vk;
+    candidate.modifiers = modifiers;
+    return FindBindingByChord(bindings, candidate);
+}
+
 [[nodiscard]] bool IsDefaultBindingIn(const std::vector<Common::Settings::ShortcutBinding>& defaults, const Common::Settings::ShortcutBinding& binding) noexcept
 {
     for (const Common::Settings::ShortcutBinding& defaultBinding : defaults)
     {
-        if (SameChord(binding, defaultBinding.vk, defaultBinding.modifiers) && binding.commandId == defaultBinding.commandId)
+        if (SameChord(binding, defaultBinding) && binding.commandId == defaultBinding.commandId)
         {
             return true;
         }
@@ -65,7 +89,7 @@ void RestoreMissingDefaultBindings(std::vector<Common::Settings::ShortcutBinding
 {
     for (const Common::Settings::ShortcutBinding& defaultBinding : defaults)
     {
-        Common::Settings::ShortcutBinding* existing = FindBindingByChord(bindings, defaultBinding.vk, defaultBinding.modifiers);
+        Common::Settings::ShortcutBinding* existing = FindBindingByChord(bindings, defaultBinding);
         if (! existing)
         {
             bindings.push_back(defaultBinding);
@@ -79,46 +103,7 @@ void RestoreMissingDefaultBindings(std::vector<Common::Settings::ShortcutBinding
     }
 }
 
-using NormalizedBinding = std::tuple<uint32_t, uint32_t, std::wstring>;
-
-[[nodiscard]] uint32_t VkFromScanCode(uint32_t scanCode) noexcept
-{
-    if (scanCode == 0u || scanCode > 0xFFu)
-    {
-        return 0u;
-    }
-
-    const HKL layout = GetKeyboardLayout(0);
-    const UINT vk    = MapVirtualKeyExW(scanCode, MAPVK_VSC_TO_VK_EX, layout);
-    if (vk == 0u || vk > 0xFFu)
-    {
-        return 0u;
-    }
-
-    return static_cast<uint32_t>(vk);
-}
-
-[[nodiscard]] uint32_t DefaultSelectDialogVk() noexcept
-{
-    // Physical key left of Backspace (US: '=' / '+').
-    constexpr uint32_t kScanCode = 0x0Du;
-    if (const uint32_t vk = VkFromScanCode(kScanCode))
-    {
-        return vk;
-    }
-    return static_cast<uint32_t>(VK_OEM_PLUS);
-}
-
-[[nodiscard]] uint32_t DefaultUnselectDialogVk() noexcept
-{
-    // Physical key right of '0' (US: '-' / '_').
-    constexpr uint32_t kScanCode = 0x0Cu;
-    if (const uint32_t vk = VkFromScanCode(kScanCode))
-    {
-        return vk;
-    }
-    return static_cast<uint32_t>(VK_OEM_MINUS);
-}
+using NormalizedBinding = std::tuple<uint32_t, uint32_t, uint32_t, std::wstring>;
 
 [[nodiscard]] std::vector<NormalizedBinding> NormalizeBindings(const std::vector<Common::Settings::ShortcutBinding>& bindings)
 {
@@ -131,7 +116,7 @@ using NormalizedBinding = std::tuple<uint32_t, uint32_t, std::wstring>;
             continue;
         }
 
-        result.emplace_back(binding.vk, binding.modifiers & 0x7u, binding.commandId);
+        result.emplace_back(static_cast<uint32_t>(binding.keyPosition), binding.vk, binding.modifiers & 0x7u, binding.commandId);
     }
 
     std::sort(result.begin(), result.end());
@@ -161,6 +146,16 @@ using NormalizedBinding = std::tuple<uint32_t, uint32_t, std::wstring>;
 Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
 {
     Common::Settings::ShortcutsSettings shortcuts;
+    shortcuts.migrationVersion = kCurrentShortcutMigrationVersion;
+
+    // Application bindings are global and may be overridden by a context scope.
+    AddBinding(shortcuts.application, VK_OEM_COMMA, ShortcutManager::kModCtrl, L"cmd/app/preferences");
+    AddBinding(shortcuts.application, VK_OEM_COMMA, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/app/openSettingsFile");
+    AddBinding(shortcuts.application, static_cast<uint32_t>('P'), ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/app/commandPalette");
+    AddBinding(shortcuts.application,
+               static_cast<uint32_t>('J'),
+               ShortcutManager::kModCtrl | ShortcutManager::kModShift,
+               L"cmd/app/showFileOperations");
 
     // Function bar bindings (F1..F12).
     AddBinding(shortcuts.functionBar, VK_F1, 0, L"cmd/app/showShortcuts");
@@ -183,11 +178,13 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.functionBar, VK_F4, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/alternateEdit");
 
     AddBinding(shortcuts.functionBar, VK_F5, 0, L"cmd/pane/copyToOtherPane");
+    AddBinding(shortcuts.functionBar, VK_F5, ShortcutManager::kModShift, L"cmd/pane/copyToOtherPaneWithOptions");
     AddBinding(shortcuts.functionBar, VK_F5, ShortcutManager::kModCtrl, L"cmd/pane/sort/time");
     AddBinding(shortcuts.functionBar, VK_F5, ShortcutManager::kModAlt, L"cmd/pane/pack");
     AddBinding(shortcuts.functionBar, VK_F5, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/selection/save");
 
     AddBinding(shortcuts.functionBar, VK_F6, 0, L"cmd/pane/moveToOtherPane");
+    AddBinding(shortcuts.functionBar, VK_F6, ShortcutManager::kModShift, L"cmd/pane/moveToOtherPaneWithOptions");
     AddBinding(shortcuts.functionBar, VK_F6, ShortcutManager::kModCtrl, L"cmd/pane/sort/size");
     AddBinding(shortcuts.functionBar, VK_F6, ShortcutManager::kModAlt, L"cmd/pane/unpack");
     AddBinding(shortcuts.functionBar, VK_F6, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/selection/restore");
@@ -235,15 +232,26 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('4'), ShortcutManager::kModAlt, L"cmd/pane/display/extraDetailed");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('5'), ShortcutManager::kModAlt, L"cmd/pane/viewOptions/toggleThumbnails");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('6'), ShortcutManager::kModAlt, L"cmd/pane/viewOptions/togglePreviewPane");
+    AddBinding(shortcuts.folderView, static_cast<uint32_t>('7'), ShortcutManager::kModAlt, L"cmd/pane/openCommandShell");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('A'), ShortcutManager::kModCtrl, L"cmd/pane/selection/selectAll");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('F'), ShortcutManager::kModCtrl, L"cmd/pane/find");
     AddBinding(shortcuts.folderView, VK_ESCAPE, 0, L"cmd/pane/selection/unselectAll");
-    AddBinding(shortcuts.folderView, DefaultSelectDialogVk(), ShortcutManager::kModCtrl, L"cmd/pane/selection/selectDialog");
-    AddBinding(shortcuts.folderView, DefaultUnselectDialogVk(), ShortcutManager::kModCtrl, L"cmd/pane/selection/unselectDialog");
-    AddBinding(
-        shortcuts.folderView, DefaultSelectDialogVk(), ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/selection/selectSameExtension");
-    AddBinding(
-        shortcuts.folderView, DefaultUnselectDialogVk(), ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/selection/unselectSameExtension");
+    AddPositionBinding(shortcuts.folderView,
+                       Common::Keyboard::KeyPosition::NumberRowPlus,
+                       ShortcutManager::kModCtrl,
+                       L"cmd/pane/selection/selectDialog");
+    AddPositionBinding(shortcuts.folderView,
+                       Common::Keyboard::KeyPosition::NumberRowMinus,
+                       ShortcutManager::kModCtrl,
+                       L"cmd/pane/selection/unselectDialog");
+    AddPositionBinding(shortcuts.folderView,
+                       Common::Keyboard::KeyPosition::NumberRowPlus,
+                       ShortcutManager::kModCtrl | ShortcutManager::kModShift,
+                       L"cmd/pane/selection/selectSameExtension");
+    AddPositionBinding(shortcuts.folderView,
+                       Common::Keyboard::KeyPosition::NumberRowMinus,
+                       ShortcutManager::kModCtrl | ShortcutManager::kModShift,
+                       L"cmd/pane/selection/unselectSameExtension");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('C'), ShortcutManager::kModCtrl, L"cmd/pane/clipboardCopy");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('X'), ShortcutManager::kModCtrl, L"cmd/pane/clipboardCut");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('V'), ShortcutManager::kModCtrl, L"cmd/pane/clipboardPaste");
@@ -255,7 +263,10 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.folderView, VK_UP, ShortcutManager::kModAlt, L"cmd/pane/selection/goToPreviousSelectedName");
     AddBinding(shortcuts.folderView, VK_LEFT, ShortcutManager::kModAlt, L"cmd/pane/historyBack");
     AddBinding(shortcuts.folderView, VK_RIGHT, ShortcutManager::kModAlt, L"cmd/pane/historyForward");
-    AddBinding(shortcuts.folderView, static_cast<uint32_t>('T'), ShortcutManager::kModCtrl | ShortcutManager::kModAlt, L"cmd/pane/openCommandShell");
+    AddBinding(shortcuts.folderView,
+               static_cast<uint32_t>('T'),
+               ShortcutManager::kModCtrl | ShortcutManager::kModAlt,
+               L"cmd/terminal/openFloatingWindow");
     AddBinding(shortcuts.folderView, VK_OEM_2, ShortcutManager::kModAlt, L"cmd/app/about");
     AddBinding(shortcuts.folderView, VK_OEM_2, ShortcutManager::kModAlt | ShortcutManager::kModShift, L"cmd/app/about");
 
@@ -279,7 +290,7 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.folderView, VK_RETURN, 0, L"cmd/pane/executeOpen");
     AddBinding(shortcuts.folderView, VK_RETURN, ShortcutManager::kModCtrl, L"cmd/pane/bringFilenameToCommandLine");
     AddBinding(shortcuts.folderView, VK_RETURN, ShortcutManager::kModAlt, L"cmd/pane/openProperties");
-    AddBinding(shortcuts.folderView, VK_RETURN, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/bringFilenameToCommandLine");
+    AddBinding(shortcuts.folderView, VK_RETURN, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/bringFullPathToTerminal");
 
     AddBinding(shortcuts.folderView, VK_SPACE, 0, L"cmd/pane/selectCalculateDirectorySizeNext");
     AddBinding(shortcuts.folderView, VK_SPACE, ShortcutManager::kModCtrl, L"cmd/pane/bringCurrentDirToCommandLine");
@@ -299,15 +310,80 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.folderView, VK_DELETE, ShortcutManager::kModShift, L"cmd/pane/permanentDelete");
     AddBinding(shortcuts.folderView, VK_DELETE, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/permanentDelete");
 
+    AddBinding(shortcuts.folderView, static_cast<uint32_t>('T'), ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/openCommandShell");
+    AddBinding(shortcuts.folderView, VK_TAB, ShortcutManager::kModCtrl, L"cmd/pane/contentTab/next");
+    AddBinding(shortcuts.folderView, VK_TAB, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/contentTab/previous");
+    AddBinding(shortcuts.folderView, static_cast<uint32_t>('1'), ShortcutManager::kModCtrl | ShortcutManager::kModAlt, L"cmd/pane/contentTab/select/1");
+    AddBinding(shortcuts.folderView, static_cast<uint32_t>('2'), ShortcutManager::kModCtrl | ShortcutManager::kModAlt, L"cmd/pane/contentTab/select/2");
+    AddBinding(shortcuts.folderView, static_cast<uint32_t>('3'), ShortcutManager::kModCtrl | ShortcutManager::kModAlt, L"cmd/pane/contentTab/select/3");
+    AddBinding(shortcuts.folderView, static_cast<uint32_t>('9'), ShortcutManager::kModCtrl | ShortcutManager::kModAlt, L"cmd/pane/contentTab/last");
+
+    // Terminal scope contains the 46 P1 bindings from the reviewed Windows Terminal merge.
+    AddBinding(shortcuts.terminal, VK_F4, ShortcutManager::kModAlt, L"cmd/app/exit");
+    AddBinding(shortcuts.terminal, VK_RETURN, ShortcutManager::kModAlt, L"cmd/app/fullScreen");
+    AddBinding(shortcuts.terminal, VK_SPACE, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/sessionMenu");
+    AddBinding(shortcuts.terminal, static_cast<uint32_t>('F'), ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/find");
+    AddBinding(shortcuts.terminal, VK_SPACE, ShortcutManager::kModAlt, L"cmd/app/systemMenu");
+    AddBinding(shortcuts.terminal, VK_OEM_PERIOD, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/suggestions");
+    AddBinding(shortcuts.terminal, static_cast<uint32_t>('T'), ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/tab/new");
+    AddBinding(shortcuts.terminal, static_cast<uint32_t>('N'), ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/openFloatingWindow");
+    AddBinding(shortcuts.terminal, VK_TAB, ShortcutManager::kModCtrl, L"cmd/terminal/tab/next");
+    AddBinding(shortcuts.terminal, VK_TAB, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/tab/previous");
+    for (uint32_t tabIndex = 1u; tabIndex <= 8u; ++tabIndex)
+    {
+        AddBinding(shortcuts.terminal,
+                   static_cast<uint32_t>('0') + tabIndex,
+                   ShortcutManager::kModCtrl | ShortcutManager::kModAlt,
+                   std::format(L"cmd/terminal/tab/select/{}", tabIndex));
+    }
+    AddBinding(shortcuts.terminal, static_cast<uint32_t>('9'), ShortcutManager::kModCtrl | ShortcutManager::kModAlt, L"cmd/terminal/tab/last");
+    AddBinding(shortcuts.terminal, static_cast<uint32_t>('W'), ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/close");
+    AddBinding(shortcuts.terminal, VK_LEFT, ShortcutManager::kModAlt | ShortcutManager::kModShift, L"cmd/pane/resizeSplitter/left");
+    AddBinding(shortcuts.terminal, VK_RIGHT, ShortcutManager::kModAlt | ShortcutManager::kModShift, L"cmd/pane/resizeSplitter/right");
+    AddBinding(shortcuts.terminal, VK_LEFT, ShortcutManager::kModAlt, L"cmd/pane/focus/left");
+    AddBinding(shortcuts.terminal, VK_RIGHT, ShortcutManager::kModAlt, L"cmd/pane/focus/right");
+    AddBinding(shortcuts.terminal, VK_LEFT, ShortcutManager::kModCtrl | ShortcutManager::kModAlt, L"cmd/pane/switchPaneFocus");
+    AddBinding(shortcuts.terminal, static_cast<uint32_t>('C'), ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/copy");
+    AddBinding(shortcuts.terminal, VK_INSERT, ShortcutManager::kModCtrl, L"cmd/terminal/copy");
+    AddBinding(shortcuts.terminal, VK_RETURN, 0u, L"cmd/terminal/copySelectionOrPassthrough");
+    AddBinding(shortcuts.terminal, static_cast<uint32_t>('C'), ShortcutManager::kModCtrl, L"cmd/terminal/copySelectionOrPassthrough");
+    AddBinding(shortcuts.terminal, static_cast<uint32_t>('V'), ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/paste");
+    AddBinding(shortcuts.terminal, VK_INSERT, ShortcutManager::kModShift, L"cmd/terminal/paste");
+    AddBinding(shortcuts.terminal, static_cast<uint32_t>('A'), ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/selectAll");
+    AddBinding(shortcuts.terminal, VK_APPS, 0u, L"cmd/terminal/contextMenu");
+    AddBinding(shortcuts.terminal, VK_F10, ShortcutManager::kModShift, L"cmd/terminal/contextMenu");
+    AddBinding(shortcuts.terminal, VK_DOWN, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/scroll/lineDown");
+    AddBinding(shortcuts.terminal, VK_NEXT, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/scroll/pageDown");
+    AddBinding(shortcuts.terminal, VK_UP, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/scroll/lineUp");
+    AddBinding(shortcuts.terminal, VK_PRIOR, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/scroll/pageUp");
+    AddBinding(shortcuts.terminal, VK_HOME, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/scroll/top");
+    AddBinding(shortcuts.terminal, VK_END, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/scroll/bottom");
+    AddPositionBinding(shortcuts.terminal,
+                       Common::Keyboard::KeyPosition::NumberRowPlus,
+                       ShortcutManager::kModCtrl,
+                       L"cmd/terminal/font/increase");
+    AddPositionBinding(shortcuts.terminal,
+                       Common::Keyboard::KeyPosition::NumberRowMinus,
+                       ShortcutManager::kModCtrl,
+                       L"cmd/terminal/font/decrease");
+    AddBinding(shortcuts.terminal, VK_ADD, ShortcutManager::kModCtrl, L"cmd/terminal/font/increase");
+    AddBinding(shortcuts.terminal, VK_SUBTRACT, ShortcutManager::kModCtrl, L"cmd/terminal/font/decrease");
+    AddBinding(shortcuts.terminal, static_cast<uint32_t>('0'), ShortcutManager::kModCtrl, L"cmd/terminal/font/reset");
+    AddBinding(shortcuts.terminal, VK_NUMPAD0, ShortcutManager::kModCtrl, L"cmd/terminal/font/reset");
+
     return shortcuts;
 }
 
 bool ShortcutDefaults::AreShortcutsDefault(const Common::Settings::ShortcutsSettings& shortcuts)
 {
     const Common::Settings::ShortcutsSettings defaults = CreateDefaultShortcuts();
-    return NormalizeBindings(shortcuts.functionBar) == NormalizeBindings(defaults.functionBar) &&
+    return NormalizeBindings(shortcuts.application) == NormalizeBindings(defaults.application) &&
+           NormalizeBindings(shortcuts.functionBar) == NormalizeBindings(defaults.functionBar) &&
            NormalizeBindings(shortcuts.folderView) == NormalizeBindings(defaults.folderView) &&
-           shortcuts.functionBarCollapsed == defaults.functionBarCollapsed && shortcuts.folderViewCollapsed == defaults.folderViewCollapsed &&
+           NormalizeBindings(shortcuts.terminal) == NormalizeBindings(defaults.terminal) &&
+           shortcuts.applicationCollapsed == defaults.applicationCollapsed && shortcuts.functionBarCollapsed == defaults.functionBarCollapsed &&
+           shortcuts.folderViewCollapsed == defaults.folderViewCollapsed && shortcuts.terminalCollapsed == defaults.terminalCollapsed &&
+           shortcuts.migrationVersion == defaults.migrationVersion &&
            shortcuts.sortColumnId == defaults.sortColumnId && shortcuts.sortDescending == defaults.sortDescending &&
            GridLayoutEqual(shortcuts.gridLayout, defaults.gridLayout);
 }
@@ -324,6 +400,18 @@ bool ShortcutDefaults::IsDefaultFolderViewBinding(const Common::Settings::Shortc
     return IsDefaultBindingIn(defaults.folderView, binding);
 }
 
+bool ShortcutDefaults::IsDefaultApplicationBinding(const Common::Settings::ShortcutBinding& binding)
+{
+    const Common::Settings::ShortcutsSettings defaults = CreateDefaultShortcuts();
+    return IsDefaultBindingIn(defaults.application, binding);
+}
+
+bool ShortcutDefaults::IsDefaultTerminalBinding(const Common::Settings::ShortcutBinding& binding)
+{
+    const Common::Settings::ShortcutsSettings defaults = CreateDefaultShortcuts();
+    return IsDefaultBindingIn(defaults.terminal, binding);
+}
+
 void ShortcutDefaults::EnsureShortcutsInitialized(Common::Settings::Settings& settings)
 {
     if (! settings.shortcuts.has_value())
@@ -333,8 +421,10 @@ void ShortcutDefaults::EnsureShortcutsInitialized(Common::Settings::Settings& se
     }
 
     Common::Settings::ShortcutsSettings& shortcuts = settings.shortcuts.value();
+    MigrateDeprecatedShortcutCommandIds(shortcuts.application);
     MigrateDeprecatedShortcutCommandIds(shortcuts.functionBar);
     MigrateDeprecatedShortcutCommandIds(shortcuts.folderView);
+    MigrateDeprecatedShortcutCommandIds(shortcuts.terminal);
 
     Common::Settings::ShortcutBinding* ctrlF2 = FindBindingByChord(shortcuts.functionBar, VK_F2, ShortcutManager::kModCtrl);
     if (! ctrlF2)
@@ -346,7 +436,20 @@ void ShortcutDefaults::EnsureShortcutsInitialized(Common::Settings::Settings& se
         ctrlF2->commandId = L"cmd/pane/sort/none";
     }
 
+    if (shortcuts.migrationVersion < kCurrentShortcutMigrationVersion)
+    {
+        Common::Settings::ShortcutBinding* ctrlAltT =
+            FindBindingByChord(shortcuts.folderView, static_cast<uint32_t>('T'), ShortcutManager::kModCtrl | ShortcutManager::kModAlt);
+        if (ctrlAltT && ctrlAltT->commandId == L"cmd/pane/openCommandShell")
+        {
+            ctrlAltT->commandId = L"cmd/terminal/openFloatingWindow";
+        }
+        shortcuts.migrationVersion = kCurrentShortcutMigrationVersion;
+    }
+
     const Common::Settings::ShortcutsSettings defaults = CreateDefaultShortcuts();
+    RestoreMissingDefaultBindings(shortcuts.application, defaults.application);
     RestoreMissingDefaultBindings(shortcuts.functionBar, defaults.functionBar);
     RestoreMissingDefaultBindings(shortcuts.folderView, defaults.folderView);
+    RestoreMissingDefaultBindings(shortcuts.terminal, defaults.terminal);
 }

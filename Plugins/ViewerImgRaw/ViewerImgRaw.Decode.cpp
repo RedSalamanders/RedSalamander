@@ -1913,7 +1913,6 @@ void ViewerImgRaw::PollAsyncOpenTerminalFallback() noexcept
     if (_hostAlerts && _hWnd)
     {
         HostAlertRequest request{};
-        request.version      = 1;
         request.sizeBytes    = sizeof(request);
         request.scope        = HOST_ALERT_SCOPE_WINDOW;
         request.modality     = HOST_ALERT_MODELESS;
@@ -3042,21 +3041,29 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
     scheduler->currentHwnd.store(hwnd, std::memory_order_release);
     scheduler->currentRequestId.store(requestId, std::memory_order_release);
     scheduler->terminalFallbackPending.store(false, std::memory_order_release);
-    bool pendingReplaced = false;
     {
         std::scoped_lock lock(scheduler->mutex);
         scheduler->accepting = true;
-        pendingReplaced = scheduler->pending != nullptr;
-        scheduler->pending.reset();
+    }
+
+    const auto discardSupersededPending = [&]() noexcept
+    {
+        bool pendingReplaced = false;
+        {
+            std::scoped_lock lock(scheduler->mutex);
+            pendingReplaced = scheduler->pending != nullptr;
+            scheduler->pending.reset();
+            if (pendingReplaced)
+            {
+                ++scheduler->replacedPendingCount;
+            }
+        }
         if (pendingReplaced)
         {
-            ++scheduler->replacedPendingCount;
+            Debug::Perf::EmitCounter(L"viewer.imgraw.open.queue.replaced_count");
+            Debug::Perf::EmitValue(L"viewer.imgraw.open.queue.pending_count", 0u);
         }
-    }
-    if (pendingReplaced)
-    {
-        Debug::Perf::EmitCounter(L"viewer.imgraw.open.queue.replaced_count");
-    }
+    };
 
     EndLoadingUi();
 
@@ -3135,6 +3142,7 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
 
         if (! continueDecoding)
         {
+            discardSupersededPending();
             UpdateNeighborCache(requestId);
             return;
         }
@@ -3170,6 +3178,7 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
     auto request = std::unique_ptr<AsyncOpenRequest>(new (std::nothrow) AsyncOpenRequest{});
     if (! request)
     {
+        discardSupersededPending();
         failAsyncSubmission();
         return;
     }
@@ -3770,11 +3779,19 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
         }
     };
 
+    bool queuedAsPending = false;
+    bool pendingReplaced = false;
     {
         std::scoped_lock lock(scheduler->mutex);
         if (scheduler->workerActive)
         {
+            pendingReplaced = scheduler->pending != nullptr;
             scheduler->pending = std::move(request);
+            queuedAsPending = true;
+            if (pendingReplaced)
+            {
+                ++scheduler->replacedPendingCount;
+            }
         }
         else
         {
@@ -3782,7 +3799,11 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
         }
     }
 
-    if (! request)
+    if (pendingReplaced)
+    {
+        Debug::Perf::EmitCounter(L"viewer.imgraw.open.queue.replaced_count");
+    }
+    if (queuedAsPending)
     {
         Debug::Perf::EmitValue(L"viewer.imgraw.open.queue.pending_count", 1u);
         return;
@@ -4050,7 +4071,6 @@ void ViewerImgRaw::OnAsyncOpenComplete(std::unique_ptr<AsyncOpenResult> result) 
         {
             const std::wstring message = result->statusMessage.empty() ? LoadStringResource(g_hInstance, IDS_VIEWERRAW_STATUS_ERROR) : result->statusMessage;
             HostAlertRequest req{};
-            req.version      = 1;
             req.sizeBytes    = sizeof(req);
             req.scope        = HOST_ALERT_SCOPE_WINDOW;
             req.modality     = HOST_ALERT_MODELESS;

@@ -200,7 +200,6 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
     }
 
     HostAlertRequest request{};
-    request.version      = 1;
     request.sizeBytes    = sizeof(request);
     request.scope        = HOST_ALERT_SCOPE_WINDOW;
     request.modality     = HOST_ALERT_MODELESS;

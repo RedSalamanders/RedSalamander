@@ -14,6 +14,7 @@
     <ClCompile Include="FileSystemS3.S3.cpp" />
     <ClCompile Include="FileSystemS3.S3Table.cpp" />
     <ClCompile Include="FileSystemS3.Shared.cpp" />
+    <ClCompile Include="FileSystemS3.SelfTest.FakeS3.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="FileSystemS3.Internal.h" />

@@ -56,9 +56,11 @@
 #include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
 #include "FileMetadataFormatting.h"
+#include "FileOperationArtifactRegistry.h"
+#include "FileOperationConfirmation.h"
 #include "FolderView.h"
 #include "FolderViewEmptyStateLayout.h"
-#include "FolderViewVisualState.h"
+#include "PaneVisualState.h"
 #include "Helpers.h"
 #include "HostServices.h"
 #include "IconCache.h"
@@ -103,9 +105,9 @@ constexpr float kLabelHorizontalPaddingDip            = 12.0f;
 constexpr float kLabelVerticalPaddingDip              = 4.0f;
 constexpr float kFocusStrokeThicknessDip              = 2.0f;
 constexpr float kFocusStrokeThicknessUnfocusedDip     = 1.0f;
-constexpr float kFocusBorderOpacityUnfocused          = FolderViewVisualState::kFocusBorderOpacityUnfocused;
-constexpr float kUnfocusedPaneTextOpacity             = FolderViewVisualState::kUnfocusedPaneTextOpacity;
-constexpr float kUnfocusedPaneIconOpacity             = FolderViewVisualState::kUnfocusedPaneIconOpacity;
+constexpr float kFocusBorderOpacityUnfocused          = Common::PaneVisualState::kFocusBorderOpacityUnfocused;
+constexpr float kUnfocusedPaneTextOpacity             = Common::PaneVisualState::kUnfocusedPaneTextOpacity;
+constexpr float kUnfocusedPaneIconOpacity             = Common::PaneVisualState::kUnfocusedPaneIconOpacity;
 constexpr float kSelectionCornerRadiusDip             = 2.0f;
 constexpr float kIconTextGapDip                       = 12.0f;
 constexpr float kFolderViewListIconSizeDip            = 16.0f;
@@ -127,150 +129,6 @@ constexpr uint64_t kOverlayTimerRetryMs               = 120;
     return appTheme.compactMode ? kCompactRowSpacingDip : kRowSpacingDip;
 }
 
-bool ConfirmNonRevertableFileOperation(HWND owner,
-                                       [[maybe_unused]] IFileSystem* fileSystem,
-                                       FileSystemOperation operation,
-                                       const std::vector<std::filesystem::path>& sourcePaths,
-                                       const std::filesystem::path& destinationFolder) noexcept
-{
-    if (operation != FILESYSTEM_COPY && operation != FILESYSTEM_MOVE)
-    {
-        return true;
-    }
-
-    if (sourcePaths.empty())
-    {
-        return true;
-    }
-
-    // Avoid I/O in the confirmation prompt path (plugins may require network access to answer GetAttributes).
-    // Best-effort: treat item types as unknown.
-    unsigned long long fileCount    = 0;
-    unsigned long long folderCount  = 0;
-    unsigned long long unknownCount = static_cast<unsigned long long>(sourcePaths.size());
-    std::filesystem::path sampleFile;
-    bool hasSampleFile = false;
-
-    auto suffixFor = [](unsigned long long count) noexcept -> std::wstring_view { return count == 1ull ? std::wstring_view(L"") : std::wstring_view(L"s"); };
-
-    const unsigned long long itemCount = static_cast<unsigned long long>(sourcePaths.size());
-    std::wstring what;
-    if (unknownCount > 0)
-    {
-        const std::wstring_view itemSuffix = suffixFor(itemCount);
-        what                               = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_ITEM, itemCount, itemSuffix);
-    }
-    else if (fileCount > 0 && folderCount > 0)
-    {
-        const std::wstring_view fileSuffix   = suffixFor(fileCount);
-        const std::wstring_view folderSuffix = suffixFor(folderCount);
-        what = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_FILES_FOLDERS, fileCount, fileSuffix, folderCount, folderSuffix);
-    }
-    else if (fileCount > 0)
-    {
-        const std::wstring_view fileSuffix = suffixFor(fileCount);
-        what                               = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_FILE, fileCount, fileSuffix);
-    }
-    else
-    {
-        const std::wstring_view folderSuffix = suffixFor(folderCount);
-        what                                 = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_FOLDER, folderCount, folderSuffix);
-    }
-
-    auto ensureTrailingSeparator = [](std::wstring text) noexcept -> std::wstring
-    {
-        if (text.empty())
-        {
-            return text;
-        }
-
-        const wchar_t last = text.back();
-        if (last == L'\\' || last == L'/')
-        {
-            return text;
-        }
-
-        text.push_back(L'\\');
-        return text;
-    };
-
-    auto normalizeSlashes = [](std::wstring& text) noexcept
-    {
-        for (auto& ch : text)
-        {
-            if (ch == L'/')
-            {
-                ch = L'\\';
-            }
-        }
-    };
-
-    std::wstring fromText;
-    if (sourcePaths.size() == 1u)
-    {
-        fromText = sourcePaths.front().wstring();
-        if (unknownCount == 0 && folderCount == 1ull && fileCount == 0ull)
-        {
-            fromText = ensureTrailingSeparator(std::move(fromText));
-        }
-    }
-    else
-    {
-        std::filesystem::path commonParent = sourcePaths.front().parent_path();
-        bool multipleParents               = false;
-        for (size_t index = 1; index < sourcePaths.size(); ++index)
-        {
-            const std::filesystem::path parent = sourcePaths[index].parent_path();
-            if (CompareStringOrdinal(commonParent.c_str(), -1, parent.c_str(), -1, TRUE) != CSTR_EQUAL)
-            {
-                multipleParents = true;
-                break;
-            }
-        }
-
-        if (multipleParents)
-        {
-            fromText = LoadStringResource(nullptr, IDS_FILEOPS_LOCATION_MULTIPLE);
-        }
-        else if (unknownCount == 0 && fileCount > 0 && folderCount > 0 && hasSampleFile)
-        {
-            fromText = sampleFile.wstring();
-        }
-        else
-        {
-            fromText = ensureTrailingSeparator(commonParent.wstring());
-        }
-    }
-
-    std::wstring toText = ensureTrailingSeparator(destinationFolder.wstring());
-    normalizeSlashes(fromText);
-    normalizeSlashes(toText);
-
-    const UINT messageId = operation == FILESYSTEM_COPY ? static_cast<UINT>(IDS_FMT_FILEOPS_CONFIRM_COPY) : static_cast<UINT>(IDS_FMT_FILEOPS_CONFIRM_MOVE);
-    const std::wstring message = FormatStringResource(nullptr, messageId, what, fromText, toText);
-
-    const std::wstring caption = LoadStringResource(nullptr, IDS_CAPTION_CONFIRM);
-    HostPromptRequest prompt{};
-    prompt.version       = 1;
-    prompt.sizeBytes     = sizeof(prompt);
-    prompt.scope         = (owner && IsWindow(owner)) ? HOST_ALERT_SCOPE_WINDOW : HOST_ALERT_SCOPE_APPLICATION;
-    prompt.severity      = HOST_ALERT_INFO;
-    prompt.buttons       = HOST_PROMPT_BUTTONS_OK_CANCEL;
-    prompt.targetWindow  = (prompt.scope == HOST_ALERT_SCOPE_WINDOW) ? owner : nullptr;
-    prompt.title         = caption.c_str();
-    prompt.message       = message.c_str();
-    prompt.defaultResult = HOST_PROMPT_RESULT_OK;
-
-    HostPromptResult promptResult = HOST_PROMPT_RESULT_NONE;
-    const HRESULT hr              = HostShowPrompt(prompt, nullptr, &promptResult);
-    if (FAILED(hr))
-    {
-        return false;
-    }
-
-    return promptResult == HOST_PROMPT_RESULT_OK;
-}
-
 bool IsOverlaySampleEnabled() noexcept
 {
 #if defined(_DEBUG) || defined(DEBUG)
@@ -287,12 +145,16 @@ enum FolderCommands : UINT
     CmdViewSpace                        = IDM_FOLDERVIEW_CONTEXT_VIEW_SPACE,
     CmdDelete                           = IDM_FOLDERVIEW_CONTEXT_DELETE,
     CmdRename                           = IDM_FOLDERVIEW_CONTEXT_RENAME,
+    CmdCut                              = IDM_FOLDERVIEW_CONTEXT_CUT,
     CmdCopy                             = IDM_FOLDERVIEW_CONTEXT_COPY,
     CmdPaste                            = IDM_FOLDERVIEW_CONTEXT_PASTE,
+    CmdRefresh                          = IDM_FOLDERVIEW_CONTEXT_REFRESH,
     CmdSelectAll                        = IDM_FOLDERVIEW_CONTEXT_SELECT_ALL,
     CmdUnselectAll                      = IDM_FOLDERVIEW_CONTEXT_UNSELECT_ALL,
     CmdProperties                       = IDM_FOLDERVIEW_CONTEXT_PROPERTIES,
     CmdMove                             = IDM_FOLDERVIEW_CONTEXT_MOVE,
+    CmdArtifactInspect                  = IDM_FOLDERVIEW_CONTEXT_ARTIFACT_INSPECT,
+    CmdArtifactReveal                   = IDM_FOLDERVIEW_CONTEXT_ARTIFACT_REVEAL,
     CmdOverlaySampleError               = IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_ERROR,
     CmdOverlaySampleWarning             = IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_WARNING,
     CmdOverlaySampleInformation         = IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_INFORMATION,

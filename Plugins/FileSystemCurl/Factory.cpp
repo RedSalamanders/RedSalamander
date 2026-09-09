@@ -189,6 +189,28 @@ const PluginFactoryEntry kEntries[] = {
 };
 } // namespace
 
+#if defined(ENABLE_TESTS)
+namespace FileSystemCurlInternal
+{
+HRESULT CreateFtpSelfTestInstance(IFileSystem** result, IHost* host) noexcept
+{
+    if (result == nullptr)
+    {
+        return E_POINTER;
+    }
+
+    *result = nullptr;
+    void* raw = nullptr;
+    const HRESULT hr = CreateInstanceFtp(nullptr, host, &raw);
+    if (SUCCEEDED(hr))
+    {
+        *result = static_cast<IFileSystem*>(raw);
+    }
+    return hr;
+}
+} // namespace FileSystemCurlInternal
+#endif
+
 extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const PluginMetaData** metaData, unsigned int* count)
 {
     return FactoryEnumeratePlugins<IFileSystem>(kEntries, riid, metaData, count);

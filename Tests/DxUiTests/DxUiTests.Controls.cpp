@@ -134,6 +134,44 @@ void TestFocusRingPaintPathsHandleMissingDeviceContext()
     Require(true, "focus-ring paint paths tolerate a missing device context");
 }
 
+void TestChevronGlyphRenderingIsSharedAcrossComboBoxAndGrid()
+{
+    const std::filesystem::path repoRoot = FindRepoRootForDxUiTests();
+    const auto readSource = [](const std::filesystem::path& path, const char* context)
+    {
+        std::ifstream input(path);
+        Require(input.good(), context);
+        return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    };
+
+    const std::string header = readSource(repoRoot / L"Common" / L"DxUi" / L"DxUi.h", "DxUi header is readable for chevron glyph contract");
+    const std::string controls =
+        readSource(repoRoot / L"Common" / L"DxUi" / L"DxUi.Controls.cpp", "DxUi controls source is readable for chevron glyph contract");
+    const std::string combo =
+        readSource(repoRoot / L"Common" / L"DxUi" / L"DxUi.ComboBox.cpp", "DxUi ComboBox source is readable for chevron glyph contract");
+    const std::string grid = readSource(repoRoot / L"Common" / L"DxUi" / L"DxUi.Grid.cpp", "DxUi Grid source is readable for chevron glyph contract");
+
+    Require(header.find("enum class ChevronDirection") != std::string::npos && header.find("void DrawChevronGlyph(") != std::string::npos,
+            "DxUi publishes the canonical directional chevron glyph renderer");
+    Require(controls.find("ResolveDisclosureChevronVisualState(expandedProgress, collapsedDirection)") != std::string::npos &&
+                controls.find("DrawChevronGlyph(host, rect, visual.direction, color)") != std::string::npos,
+            "animated disclosure chevrons resolve crisp directional endpoints through the canonical glyph renderer");
+    Require(combo.find("DrawChevronGlyph(host, glyphRect, ChevronDirection::Down, style.glyph)") != std::string::npos,
+            "ComboBox dropdown affordances use the canonical Segoe Fluent chevron path");
+    Require(grid.find("DrawChevronGlyph(host, glyphRect, direction == SortDirection::Ascending") != std::string::npos,
+            "Grid sort indicators use the canonical directional glyph renderer");
+    Require(grid.find("DrawDisclosureChevron(host, glyphRect, collapsed ? 0.0f : 1.0f, color)") != std::string::npos,
+            "Grid group headers use the shared animated disclosure glyph renderer");
+
+    using namespace RedSalamander::DxUi;
+    WindowHost host;
+    for (const ChevronDirection direction : {ChevronDirection::Left, ChevronDirection::Up, ChevronDirection::Right, ChevronDirection::Down})
+    {
+        DrawChevronGlyph(host, D2D1::RectF(0.0f, 0.0f, 20.0f, 20.0f), direction, D2D1::ColorF(D2D1::ColorF::White));
+    }
+    Require(true, "directional chevron glyph rendering tolerates an unattached host");
+}
+
 void TestScrollPanelThumbGutterDragThroughWindowHost()
 {
     using namespace RedSalamander::DxUi;
@@ -769,6 +807,87 @@ void TestTabControlBodyDragReleaseOverCloseButtonDoesNotCloseTab()
     Require(closedCount == 0u, "TabControl does not close a tab after a body-started drag");
 }
 
+void TestTabControlReorderingPolicyPreservesStableHostIndices()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root  = std::make_unique<Panel>();
+    auto* tabs = root->AddChild<TabControl>();
+    tabs->SetBounds(D2D1::RectF(0.0f, 0.0f, 640.0f, 180.0f));
+    tabs->AddTab<Panel>(L"Folder");
+    tabs->AddTab<Panel>(L"Preview");
+    tabs->AddTab<Panel>(L"Terminal");
+    tabs->SetTabReorderingEnabled(false);
+    root->SetBounds(D2D1::RectF(0.0f, 0.0f, 640.0f, 180.0f));
+    host.SetRoot(std::move(root));
+
+    Require(! tabs->IsTabReorderingEnabled(), "fixed-index TabControl host disables pointer reordering");
+    const std::array expectedTitles{std::wstring_view(L"Folder"), std::wstring_view(L"Preview"), std::wstring_view(L"Terminal")};
+    const auto centerOf = [](const D2D1_RECT_F& rect) noexcept
+    {
+        return D2D1::Point2F((rect.left + rect.right) * 0.5f, (rect.top + rect.bottom) * 0.5f);
+    };
+
+    for (size_t fromIndex = 0u; fromIndex < tabs->GetTabCount(); ++fromIndex)
+    {
+        for (size_t toIndex = 0u; toIndex < tabs->GetTabCount(); ++toIndex)
+        {
+            if (fromIndex == toIndex)
+            {
+                continue;
+            }
+            const D2D1_POINT_2F fromPoint = centerOf(tabs->DebugGetTabRect(fromIndex));
+            const D2D1_POINT_2F toPoint   = centerOf(tabs->DebugGetTabRect(toIndex));
+            Require(tabs->OnMouseDown(host, fromPoint, false, 0u), "fixed-index TabControl handles drag-start selection");
+            Require(tabs->OnMouseMove(host, toPoint, 0u), "fixed-index TabControl handles cross-tab pointer movement");
+            static_cast<void>(tabs->OnMouseUp(host, toPoint, false, 0u));
+            Require(tabs->GetSelectedIndex() == fromIndex,
+                    "fixed-index TabControl pointer movement preserves the selected semantic page");
+            for (size_t index = 0u; index < expectedTitles.size(); ++index)
+            {
+                Require(tabs->GetTabTitle(index) == expectedTitles[index],
+                        "fixed-index TabControl preserves every semantic tab index across drag permutations");
+            }
+        }
+    }
+
+    tabs->SetTabVisible(1u, false);
+    Require(! tabs->IsTabVisible(1u) && tabs->GetTabTitle(2u) == L"Terminal",
+            "hidden fixed-index tab retains later semantic indices");
+    tabs->SetSelectedIndex(2u);
+    Require(tabs->GetSelectedIndex() == 2u && tabs->OnKeyDown(host, VK_LEFT, 0u) && tabs->GetSelectedIndex() == 0u,
+            "fixed-index TabControl keyboard navigation skips a hidden semantic tab");
+}
+
+void TestTabControlReorderingReportsStableMove()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root = std::make_unique<Panel>();
+    auto* tabs = root->AddChild<TabControl>();
+    tabs->SetBounds(D2D1::RectF(0.0f, 0.0f, 640.0f, 180.0f));
+    tabs->AddTab<Panel>(L"Alpha");
+    tabs->AddTab<Panel>(L"Bravo");
+    tabs->AddTab<Panel>(L"Charlie");
+    root->SetBounds(D2D1::RectF(0.0f, 0.0f, 640.0f, 180.0f));
+    host.SetRoot(std::move(root));
+
+    std::optional<std::pair<size_t, size_t>> move;
+    tabs->SetOnTabReordered([&](size_t fromIndex, size_t toIndex) noexcept { move = std::pair{fromIndex, toIndex}; });
+    const D2D1_RECT_F first = tabs->DebugGetTabRect(0u);
+    const D2D1_RECT_F second = tabs->DebugGetTabRect(1u);
+    const D2D1_POINT_2F from = D2D1::Point2F((first.left + first.right) * 0.5f, (first.top + first.bottom) * 0.5f);
+    const D2D1_POINT_2F to = D2D1::Point2F(second.left + 2.0f, (second.top + second.bottom) * 0.5f);
+    Require(tabs->OnMouseDown(host, from, false, 0u), "reorder-reporting TabControl accepts the drag start");
+    Require(tabs->OnMouseMove(host, to, 0u), "reorder-reporting TabControl accepts the drag move");
+    static_cast<void>(tabs->OnMouseUp(host, to, false, 0u));
+    Require(move == std::pair<size_t, size_t>{0u, 1u}, "TabControl reports the exact stable from/to move");
+    Require(tabs->GetTabTitle(0u) == L"Bravo" && tabs->GetTabTitle(1u) == L"Alpha",
+            "TabControl reorder notification matches the committed page order");
+}
+
 void TestToggleMouseActivationOnlyFiresToggledCallbackWithUpdatedState()
 {
     using namespace RedSalamander::DxUi;
@@ -1315,6 +1434,104 @@ void TestMnemonicTextIndexTreatsEscapedAmpersandAsLiteralDisplayText()
     Require(match.has_value() && match.value() == 5u, "mnemonic display helper counts escaped ampersands in display coordinates");
 }
 
+void TestThroughputGraphHonorsMotionRainbowAndHighContrastContracts()
+{
+    using namespace RedSalamander::DxUi;
+
+    auto progress = std::make_shared<ProgressBar>();
+    progress->SetSegmentedValues(80.0, 35.0, D2D1::ColorF(0.65f, 0.38f, 0.0f));
+    Require(progress->HasSegmentedValues(), "progress bar retains the hosted two-segment verification model");
+    progress->ClearSegmentedValues();
+    Require(! progress->HasSegmentedValues(), "progress bar clears the verification segment for ordinary progress");
+
+    const D2D1_COLOR_F normalizedStart = ThroughputGraphColorFromHue(0.0f, true);
+    const D2D1_COLOR_F normalizedEnd   = ThroughputGraphColorFromHue(360.0f, true);
+    Require(normalizedStart.r == normalizedEnd.r && normalizedStart.g == normalizedEnd.g && normalizedStart.b == normalizedEnd.b &&
+                normalizedStart.a == normalizedEnd.a,
+            "throughput graph exposes one normalized hue-to-color contract for graph and related stream UI");
+    Require(! ShouldRenderThroughputGraphBands(false, true, false, 1u),
+            "ordinary-theme throughput bands stay off for one admitted stream");
+    Require(ShouldRenderThroughputGraphBands(false, true, false, 2u),
+            "ordinary-theme throughput bands engage for concurrent admitted streams");
+    Require(ShouldRenderThroughputGraphBands(true, true, false, 1u),
+            "Rainbow throughput bands may color one admitted stream");
+    Require(! ShouldRenderThroughputGraphBands(true, true, true, 2u),
+            "High Contrast suppresses throughput hue bands");
+
+    WindowHost host;
+    ThemePalette palette{};
+    palette.reducedMotion = false;
+    palette.highContrast  = false;
+    host.SetTheme(palette);
+
+    auto root   = std::make_unique<Panel>();
+    auto* graph = root->AddChild<ThroughputGraph>();
+    graph->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 80.0f));
+    graph->SetRainbowMode(true);
+    graph->SetPerStreamBands(true);
+    host.SetRoot(std::move(root));
+
+    std::array<ThroughputGraphSample, 2u> samples{};
+    samples[0].value                  = 10.0;
+    samples[0].hueDegrees             = 20.0f;
+    samples[0].hueWeights[0]          = ThroughputGraphHueWeight{20.0f, 1.0, 0u};
+    samples[0].hueWeightCount         = 1u;
+    samples[1].value                  = 20.0;
+    samples[1].hueDegrees             = 220.0f;
+    samples[1].hueWeights[0]          = ThroughputGraphHueWeight{20.0f, 1.0, 0u};
+    samples[1].hueWeights[1]          = ThroughputGraphHueWeight{220.0f, 1.0, 1u};
+    samples[1].hueWeightCount         = 2u;
+    graph->SetSamples(samples);
+    constexpr std::array<double, 2u> verificationSamples{{0.0, 7.0}};
+    graph->SetSecondarySamples(verificationSamples);
+    graph->SetSecondarySeriesColor(D2D1::ColorF(0.65f, 0.38f, 0.0f));
+    graph->SetCurrentValueMarker(16.0, L"16 B/s");
+
+    ThroughputGraphDebugState state = graph->GetDebugState();
+    Require(state.sampleCount == 2u && state.hueBandCount == 3u, "throughput graph retains samples and per-stream hue bands");
+    Require(state.secondarySeriesVisible && state.secondarySeriesColorCustomized,
+            "throughput graph exposes the distinct themed verification-throughput series");
+    Require(state.transitionActive, "throughput graph eases a changed latest sample when motion is enabled");
+    Require(state.currentValueMarkerVisible && state.targetCurrentValue == 16.0,
+            "throughput graph retains the current effective-bandwidth marker");
+    static_cast<void>(graph->Tick(host, 100u));
+    static_cast<void>(graph->Tick(host, 180u));
+    state = graph->GetDebugState();
+    Require(state.displayedLatestValue > 0.0 && state.displayedLatestValue < state.targetLatestValue,
+            "throughput graph exposes an intermediate eased latest value");
+    Require(state.displayedCurrentValue > 0.0 && state.displayedCurrentValue < state.targetCurrentValue,
+            "throughput graph exposes an intermediate eased current-bandwidth marker");
+    static_cast<void>(graph->Tick(host, 300u));
+    state = graph->GetDebugState();
+    Require(! state.transitionActive && state.displayedLatestValue == state.targetLatestValue,
+            "throughput graph completes its bounded latest-value transition");
+    Require(state.displayedCurrentValue == state.targetCurrentValue,
+            "throughput graph completes its bounded current-bandwidth marker transition");
+
+    graph->Paint(host);
+    state = graph->GetDebugState();
+    Require(state.usesRainbowStroke && ! state.highContrast, "normal-contrast throughput graph enables its rainbow stroke contract");
+
+    palette.highContrast = true;
+    host.SetTheme(palette);
+    graph->Paint(host);
+    state = graph->GetDebugState();
+    Require(state.highContrast && ! state.usesRainbowStroke, "high contrast suppresses rainbow throughput strokes");
+
+    palette.highContrast  = false;
+    palette.reducedMotion = true;
+    host.SetTheme(palette);
+    samples[1].value = 40.0;
+    graph->SetSamples(samples);
+    graph->SetCurrentValueMarker(32.0, L"32 B/s");
+    graph->Paint(host);
+    state = graph->GetDebugState();
+    Require(state.reducedMotion && ! state.transitionActive && state.displayedLatestValue == state.targetLatestValue,
+            "reduced motion snaps throughput graph updates to the target value");
+    Require(state.displayedCurrentValue == state.targetCurrentValue,
+            "reduced motion snaps the current-bandwidth marker while keeping it visible");
+}
+
 } // namespace
 
 void RunControlTests()
@@ -1324,6 +1541,7 @@ void RunControlTests()
     TestToggleStateLabelsReserveTextLaneWithoutPrimaryLabel();
     TestToggleStateLabelsFollowCheckedState();
     TestFocusRingPaintPathsHandleMissingDeviceContext();
+    TestChevronGlyphRenderingIsSharedAcrossComboBoxAndGrid();
     TestScrollPanelThumbGutterDragThroughWindowHost();
     TestScrollPanelChildCallbacksCanClearChildrenSafely();
     TestScrollbarVisualStrengthOverloadReusesResolvedTargets();
@@ -1335,6 +1553,8 @@ void RunControlTests()
     TestTabControlCachesHeaderLayoutRectsAndWidths();
     TestTabControlHeaderCacheRecomputesRectsAfterLayoutInvalidations();
     TestTabControlBodyDragReleaseOverCloseButtonDoesNotCloseTab();
+    TestTabControlReorderingPolicyPreservesStableHostIndices();
+    TestTabControlReorderingReportsStableMove();
     TestToggleMouseActivationOnlyFiresToggledCallbackWithUpdatedState();
     TestToggleMouseActivationCanReplaceRootSafely();
     TestMenuBarActivationCanReplaceRootSafely();
@@ -1355,4 +1575,5 @@ void RunControlTests()
     TestToggleMetricsMatchPreferencesWidthBudget();
     TestMnemonicTextIndexFindsFirstCaseInsensitiveMatch();
     TestMnemonicTextIndexReturnsNoMatchWhenAbsent();
+    TestThroughputGraphHonorsMotionRainbowAndHighContrastContracts();
 }

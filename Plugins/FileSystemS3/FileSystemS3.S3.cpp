@@ -2,7 +2,6 @@
 #include "HandleIo.h"
 #include "PaginationGuard.h"
 
-#include <aws/core/utils/StringUtils.h>
 #include <aws/core/utils/memory/stl/AWSStringStream.h>
 #include <aws/s3-crt/model/AbortMultipartUploadRequest.h>
 #include <aws/s3-crt/model/BucketLocationConstraint.h>
@@ -13,6 +12,7 @@
 #include <aws/s3-crt/model/CreateMultipartUploadRequest.h>
 #include <aws/s3-crt/model/GetBucketLocationRequest.h>
 #include <aws/s3-crt/model/GetObjectRequest.h>
+#include <aws/s3-crt/model/HeadObjectRequest.h>
 #include <aws/s3-crt/model/ListBucketsRequest.h>
 #include <aws/s3-crt/model/ListObjectsV2Request.h>
 #include <aws/s3-crt/model/PutObjectRequest.h>
@@ -20,6 +20,8 @@
 #include <aws/s3-crt/model/UploadPartRequest.h>
 
 #include <algorithm>
+#include <array>
+#include <chrono>
 #include <limits>
 #include <unordered_set>
 
@@ -48,8 +50,14 @@ namespace FileSystemS3Internal
 {
 namespace
 {
-[[nodiscard]] HRESULT PutS3ObjectFromHandle(
-    FileSystemS3& fs, const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, HANDLE file, uint64_t sizeBytes) noexcept;
+[[nodiscard]] HRESULT PutS3ObjectFromHandle(FileSystemS3& fs,
+                                            const ResolvedAwsContext& ctx,
+                                            std::string_view bucket,
+                                            std::string_view key,
+                                            HANDLE file,
+                                            uint64_t sizeBytes,
+                                            bool destinationMustNotExist,
+                                            S3ObjectRevision* destinationRevision) noexcept;
 
 [[nodiscard]] std::string NormalizeBucketLocationRegion(const Aws::S3Crt::Model::BucketLocationConstraint value) noexcept
 {
@@ -105,6 +113,7 @@ namespace
     Aws::S3Crt::Model::GetBucketLocationRequest req;
     req.SetBucket(bucket);
 
+    ArmS3RequestControl(req);
     const auto outcome = client->GetBucketLocation(req);
     if (! outcome.IsSuccess())
     {
@@ -128,9 +137,11 @@ namespace
 
 [[nodiscard]] uint64_t ComputeMultipartPartSize(uint64_t sizeBytes) noexcept
 {
-    const uint64_t minPartSize = kMultipartMinPartSizeBytes;
-    const uint64_t maxParts    = 10'000ull;
-    const uint64_t roundedUp   = (sizeBytes == 0u) ? minPartSize : std::max<uint64_t>(minPartSize, (sizeBytes + maxParts - 1u) / maxParts);
+    const uint64_t minPartSize        = kMultipartMinPartSizeBytes;
+    const uint64_t maxParts           = 10'000ull;
+    const uint64_t quotient           = sizeBytes / maxParts;
+    const uint64_t roundedToPartCount = quotient + (sizeBytes % maxParts == 0u ? 0u : 1u);
+    const uint64_t roundedUp          = (sizeBytes == 0u) ? minPartSize : std::max<uint64_t>(minPartSize, roundedToPartCount);
     return roundedUp;
 }
 
@@ -141,14 +152,122 @@ namespace
            left.useVirtualAddressing == right.useVirtualAddressing && left.accessKeyId == right.accessKeyId && left.secretAccessKey == right.secretAccessKey;
 }
 
-[[nodiscard]] std::string UrlEncodeS3CopySource(std::string_view bucket, std::string_view key) noexcept
+[[nodiscard]] std::string BuildS3CopySource(std::string_view bucket, std::string_view key, std::string_view versionId) noexcept
 {
-    std::string raw(bucket);
-    raw.push_back('/');
-    raw.append(key);
+    std::string copySource(bucket);
+    copySource.push_back('/');
+    copySource.append(key);
+    if (! versionId.empty())
+    {
+        copySource.append("?versionId=");
+        copySource.append(versionId);
+    }
+    return copySource;
+}
 
-    const Aws::String encoded = Aws::Utils::StringUtils::URLEncode(Aws::String(raw.data(), raw.size()));
-    return std::string(encoded.c_str(), encoded.size());
+[[nodiscard]] bool AwsStringEquals(std::string_view expected, const Aws::String& actual) noexcept
+{
+    return expected.size() == actual.size() && std::equal(expected.begin(), expected.end(), actual.begin());
+}
+
+#if defined(ENABLE_TESTS)
+void RunCopySourceSerializationContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    const auto check = [&](bool condition, std::wstring_view message) noexcept
+    {
+        if (condition)
+        {
+            ++passed;
+            return;
+        }
+
+        ++failed;
+        Debug::Error(L"FileSystemS3 CopySource serialization selftest failed: {}", message);
+    };
+
+    struct CopySourceCase
+    {
+        std::string_view name;
+        std::string_view bucket;
+        std::string_view key;
+        std::string_view versionId;
+        std::string_view expectedHeader;
+    };
+
+    constexpr std::array cases{
+        CopySourceCase{"ordinary", "bucket", "ordinary.txt", {}, "bucket/ordinary.txt"},
+        CopySourceCase{"space", "bucket", "space name.txt", {}, "bucket/space%20name.txt"},
+        CopySourceCase{"percent", "bucket", "percent%name", {}, "bucket/percent%25name"},
+        CopySourceCase{"plus", "bucket", "plus+name", {}, "bucket/plus%2Bname"},
+        CopySourceCase{"slash", "bucket", "dir/child.txt", {}, "bucket/dir/child.txt"},
+        CopySourceCase{"unicode", "bucket", "snowman-\xE2\x98\x83.txt", {}, "bucket/snowman-%E2%98%83.txt"},
+        CopySourceCase{"versionId", "bucket", "versioned key", "v 1+%", "bucket/versioned%20key%3FversionId%3Dv%201%2B%25"},
+    };
+
+    for (const CopySourceCase& testCase : cases)
+    {
+        const std::string logical = BuildS3CopySource(testCase.bucket, testCase.key, testCase.versionId);
+        const std::wstring caseName = Utf16FromUtf8(testCase.name);
+
+        Aws::S3Crt::Model::CopyObjectRequest copyRequest;
+        copyRequest.SetCopySource(Aws::String(logical.data(), logical.size()));
+        const Aws::Http::HeaderValueCollection copyHeaders = copyRequest.GetRequestSpecificHeaders();
+        const auto copyHeader = copyHeaders.find("x-amz-copy-source");
+        check(copyHeader != copyHeaders.end() && AwsStringEquals(testCase.expectedHeader, copyHeader->second),
+              std::format(L"CopyObject should serialize the logical {} source exactly once", caseName));
+
+        Aws::S3Crt::Model::UploadPartCopyRequest partRequest;
+        partRequest.SetCopySource(Aws::String(logical.data(), logical.size()));
+        const Aws::Http::HeaderValueCollection partHeaders = partRequest.GetRequestSpecificHeaders();
+        const auto partHeader = partHeaders.find("x-amz-copy-source");
+        check(partHeader != partHeaders.end() && AwsStringEquals(testCase.expectedHeader, partHeader->second),
+              std::format(L"UploadPartCopy should serialize the logical {} source exactly once", caseName));
+    }
+}
+#endif
+
+[[nodiscard]] HRESULT ValidateS3RevisionResponse(const S3ObjectRevision& expected,
+                                                 const Aws::String& responseEtag,
+                                                 const Aws::String& responseVersionId) noexcept
+{
+    if ((! expected.etag.empty() && (responseEtag.empty() || ! AwsStringEquals(expected.etag, responseEtag))) ||
+        (! expected.versionId.empty() && (responseVersionId.empty() || ! AwsStringEquals(expected.versionId, responseVersionId))))
+    {
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+    }
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ValidateS3SourceRevisionStillExists(Aws::S3Crt::S3CrtClient& client,
+                                                          std::string_view bucket,
+                                                          std::string_view key,
+                                                          const S3ObjectRevision& revision) noexcept
+{
+    Aws::S3Crt::Model::HeadObjectRequest request;
+    request.SetBucket(Aws::String(bucket.data(), bucket.size()));
+    request.SetKey(Aws::String(key.data(), key.size()));
+    if (! revision.versionId.empty())
+    {
+        request.SetVersionId(Aws::String(revision.versionId.data(), revision.versionId.size()));
+    }
+    else if (! revision.etag.empty())
+    {
+        request.SetIfMatch(Aws::String(revision.etag.data(), revision.etag.size()));
+    }
+
+    ArmS3RequestControl(request);
+    const auto outcome = client.HeadObject(request);
+    if (! outcome.IsSuccess())
+    {
+        const HRESULT hr = HresultFromAwsError(outcome.GetError());
+        if (hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || hr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH))
+        {
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        }
+        return hr;
+    }
+
+    return ValidateS3RevisionResponse(revision, outcome.GetResult().GetETag(), outcome.GetResult().GetVersionId());
 }
 
 [[nodiscard]] HRESULT ListS3BucketsForConnection(FileSystemS3& fs, const ResolvedAwsContext& ctx, std::vector<FilesInformationS3::Entry>& out) noexcept
@@ -230,6 +349,7 @@ namespace
 
     const std::shared_ptr<Aws::S3Crt::S3CrtClient> client = GetS3Client(fs, ctx);
     Aws::S3Crt::Model::ListBucketsRequest req;
+    ArmS3RequestControl(req);
     const auto outcome = client->ListBuckets(req);
     if (! outcome.IsSuccess())
     {
@@ -340,12 +460,13 @@ namespace
     while (true)
     {
         const HRESULT pageBoundaryHr = firstPage ? pager.BeginFirstPage(GetTickCount64()) : pager.BeginContinuation(continuationToken, GetTickCount64());
-        firstPage = false;
+        firstPage                    = false;
         if (FAILED(pageBoundaryHr))
         {
             return pageBoundaryHr;
         }
 
+        ArmS3RequestControl(req);
         const auto outcome = client->ListObjectsV2(req);
         if (! outcome.IsSuccess())
         {
@@ -356,7 +477,7 @@ namespace
         }
 
         const auto& result = outcome.GetResult();
-        size_t pageBytes = 0u;
+        size_t pageBytes   = 0u;
 
         // Directories (common prefixes)
         for (const auto& cp : result.GetCommonPrefixes())
@@ -432,11 +553,11 @@ namespace
 
         const bool isTruncated       = result.GetIsTruncated();
         const Aws::String& nextToken = result.GetNextContinuationToken();
-        const HRESULT pageHr = pager.CompletePage(result.GetCommonPrefixes().size() + result.GetContents().size(),
-                                                  pageBytes,
-                                                  isTruncated,
-                                                  std::string_view(nextToken.c_str(), nextToken.size()),
-                                                  GetTickCount64());
+        const HRESULT pageHr         = pager.CompletePage(result.GetCommonPrefixes().size() + result.GetContents().size(),
+                                                          pageBytes,
+                                                          isTruncated,
+                                                          std::string_view(nextToken.c_str(), nextToken.size()),
+                                                          GetTickCount64());
         if (FAILED(pageHr))
         {
             return pageHr;
@@ -453,8 +574,13 @@ namespace
     return S_OK;
 }
 
-[[nodiscard]] HRESULT DownloadS3ObjectToTempFile(
-    FileSystemS3& fs, const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, wil::unique_hfile& outFile) noexcept
+[[nodiscard]] HRESULT DownloadS3ObjectToTempFile(FileSystemS3& fs,
+                                                 const ResolvedAwsContext& ctx,
+                                                 std::string_view bucket,
+                                                 std::string_view key,
+                                                 uint64_t expectedSizeBytes,
+                                                 const S3ObjectRevision& sourceRevision,
+                                                 wil::unique_hfile& outFile) noexcept
 {
     outFile.reset();
 
@@ -463,17 +589,26 @@ namespace
         return E_INVALIDARG;
     }
 
-    wil::unique_hfile file = CreateTemporaryDeleteOnCloseFile();
-    if (! file)
+    wil::unique_hfile file;
+    if (const HRESULT tempHr = Common::Files::CreateDeleteOnCloseTemporaryFile(kS3TemporaryFileOptions, file); FAILED(tempHr))
     {
-        return HRESULT_FROM_WIN32(GetLastError());
+        return tempHr;
     }
 
     const std::shared_ptr<Aws::S3Crt::S3CrtClient> client = GetS3Client(fs, ctx);
     Aws::S3Crt::Model::GetObjectRequest req;
     req.SetBucket(Aws::String(bucket.data(), bucket.size()));
     req.SetKey(Aws::String(key.data(), key.size()));
+    if (! sourceRevision.versionId.empty())
+    {
+        req.SetVersionId(Aws::String(sourceRevision.versionId.data(), sourceRevision.versionId.size()));
+    }
+    else if (! sourceRevision.etag.empty())
+    {
+        req.SetIfMatch(Aws::String(sourceRevision.etag.data(), sourceRevision.etag.size()));
+    }
 
+    ArmS3RequestControl(req);
     auto outcome = client->GetObject(req);
     if (! outcome.IsSuccess())
     {
@@ -483,10 +618,20 @@ namespace
         return HresultFromAwsError(err);
     }
 
-    auto result           = outcome.GetResultWithOwnership();
+    auto result              = outcome.GetResultWithOwnership();
+    const HRESULT revisionHr = ValidateS3RevisionResponse(sourceRevision, result.GetETag(), result.GetVersionId());
+    if (FAILED(revisionHr))
+    {
+        return revisionHr;
+    }
+    if (result.GetContentLength() < 0 || static_cast<uint64_t>(result.GetContentLength()) != expectedSizeBytes)
+    {
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+    }
     Aws::IOStream& stream = result.GetBody();
 
     std::array<char, 64 * 1024> buffer{};
+    uint64_t downloadedBytes = 0u;
     while (stream.good())
     {
         stream.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
@@ -501,11 +646,27 @@ namespace
             return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
         }
 
+        const uint64_t gotBytes = static_cast<uint64_t>(got);
+        if (gotBytes > expectedSizeBytes - (std::min)(downloadedBytes, expectedSizeBytes))
+        {
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        }
+
         const HRESULT writeHr = Common::HandleIo::WriteAll(file.get(), buffer.data(), static_cast<size_t>(got));
         if (FAILED(writeHr))
         {
             return writeHr;
         }
+        downloadedBytes += gotBytes;
+    }
+
+    if (stream.bad())
+    {
+        return HRESULT_FROM_WIN32(ERROR_READ_FAULT);
+    }
+    if (downloadedBytes != expectedSizeBytes)
+    {
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
     }
 
     const HRESULT seekHr = ResetFilePointerToStart(file.get());
@@ -573,7 +734,7 @@ protected:
             return traits_type::eof();
         }
 
-        DWORD read = 0;
+        DWORD read            = 0;
         const DWORD requested = static_cast<DWORD>((std::min)(static_cast<uint64_t>(_buffer.size()), _declaredBytes - _fetchedBytes));
         if (ReadFile(_file, _buffer.data(), requested, &read, nullptr) == 0)
         {
@@ -593,8 +754,8 @@ protected:
     }
 
 private:
-    HANDLE _file         = nullptr;
-    HRESULT _readErrorHr = S_OK;
+    HANDLE _file            = nullptr;
+    HRESULT _readErrorHr    = S_OK;
     uint64_t _declaredBytes = 0u;
     uint64_t _fetchedBytes  = 0u;
     std::array<char, 64 * 1024> _buffer{};
@@ -636,6 +797,7 @@ private:
                                      const S3MultipartUploadSession& session,
                                      std::string_view sourceBucket,
                                      std::string_view sourceKey,
+                                     const S3ObjectRevision& sourceRevision,
                                      uint64_t startOffset,
                                      uint64_t endInclusive,
                                      int partNumber,
@@ -650,11 +812,16 @@ private:
     req.SetKey(ToAwsString(session.key));
     req.SetUploadId(ToAwsString(session.uploadId));
     req.SetPartNumber(partNumber);
-    req.SetCopySource(ToAwsString(UrlEncodeS3CopySource(sourceBucket, sourceKey)));
+    req.SetCopySource(ToAwsString(BuildS3CopySource(sourceBucket, sourceKey, sourceRevision.versionId)));
+    if (! sourceRevision.etag.empty())
+    {
+        req.SetCopySourceIfMatch(ToAwsString(sourceRevision.etag));
+    }
 
     const std::string range = std::string("bytes=") + std::to_string(startOffset) + "-" + std::to_string(endInclusive);
     req.SetCopySourceRange(ToAwsString(range));
 
+    ArmS3RequestControl(req);
     const auto outcome = client->UploadPartCopy(req);
     if (! outcome.IsSuccess())
     {
@@ -670,14 +837,30 @@ private:
         return HresultFromAwsError(err);
     }
 
+    if (! sourceRevision.versionId.empty())
+    {
+        const Aws::String& returnedVersionId = outcome.GetResult().GetCopySourceVersionId();
+        if (returnedVersionId.empty() || ! AwsStringEquals(sourceRevision.versionId, returnedVersionId))
+        {
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        }
+    }
+
     const Aws::String& etag = outcome.GetResult().GetCopyPartResult().GetETag();
     outETag.assign(etag.c_str(), etag.size());
     return S_OK;
 }
 } // namespace
 
-[[nodiscard]] HRESULT PutS3ObjectFromMemory(
-    FileSystemS3& fs, const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, const void* data, size_t sizeBytes) noexcept
+[[nodiscard]] HRESULT PutS3ObjectFromMemory(FileSystemS3& fs,
+                                            const ResolvedAwsContext& ctx,
+                                            std::string_view bucket,
+                                            std::string_view key,
+                                            const void* data,
+                                            size_t sizeBytes,
+                                            bool destinationMustNotExist,
+                                            std::string_view ifMatchEtag,
+                                            S3ObjectRevision* destinationRevision) noexcept
 {
     if (bucket.empty() || key.empty())
     {
@@ -699,7 +882,17 @@ private:
     req.SetBucket(ToAwsString(bucket));
     req.SetKey(ToAwsString(key));
     req.SetContentLength(static_cast<long long>(sizeBytes));
+    if (destinationMustNotExist)
+    {
+        req.SetIfNoneMatch("*");
+    }
+    if (! ifMatchEtag.empty())
+    {
+        req.SetIfMatch(ToAwsString(ifMatchEtag)); // R3-1: replace only the occupant the user saw
+    }
 
+    // R3-2: S3 validates the CRC-64/NVME the client sends and returns the digest of the stored object.
+    req.SetChecksumAlgorithm(Aws::S3Crt::Model::ChecksumAlgorithm::CRC64NVME);
     auto body = Aws::MakeShared<Aws::StringStream>("rs3-put-memory");
     if (sizeBytes > 0)
     {
@@ -708,15 +901,28 @@ private:
     }
     req.SetBody(body);
 
+    ArmS3RequestControl(req);
     const auto outcome = client->PutObject(req);
     if (! outcome.IsSuccess())
     {
-        const auto& err            = outcome.GetError();
+        const auto& err  = outcome.GetError();
+        const HRESULT hr = HresultFromS3ConditionalPublicationError(err, destinationMustNotExist);
+        if (hr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS))
+        {
+            return hr;
+        }
         const std::wstring details = std::format(L"bucket='{}' key='{}'", Utf16FromUtf8(bucket), Utf16FromUtf8(key));
         LogAwsFailure(L"S3", L"PutObject", ctx, err, details);
-        return HresultFromAwsError(err);
+        return hr;
     }
 
+    if (destinationRevision != nullptr)
+    {
+        const auto& result = outcome.GetResult();
+        destinationRevision->etag.assign(result.GetETag().c_str(), result.GetETag().size());
+        destinationRevision->versionId.assign(result.GetVersionId().c_str(), result.GetVersionId().size());
+        destinationRevision->crc64NvmeBase64.assign(result.GetChecksumCRC64NVME().c_str(), result.GetChecksumCRC64NVME().size());
+    }
     return S_OK;
 }
 
@@ -735,7 +941,11 @@ private:
     Aws::S3Crt::Model::CreateMultipartUploadRequest req;
     req.SetBucket(ToAwsString(bucket));
     req.SetKey(ToAwsString(key));
+    // R3-2: full-object CRC-64/NVME; CompleteMultipartUpload returns the digest of the assembled object.
+    req.SetChecksumAlgorithm(Aws::S3Crt::Model::ChecksumAlgorithm::CRC64NVME);
+    req.SetChecksumType(Aws::S3Crt::Model::ChecksumType::FULL_OBJECT);
 
+    ArmS3RequestControl(req);
     const auto outcome = client->CreateMultipartUpload(req);
     if (! outcome.IsSuccess())
     {
@@ -781,11 +991,13 @@ private:
     req.SetPartNumber(partNumber);
     req.SetContentLength(static_cast<long long>(sizeBytes));
 
+    req.SetChecksumAlgorithm(Aws::S3Crt::Model::ChecksumAlgorithm::CRC64NVME); // R3-2
     auto body = Aws::MakeShared<Aws::StringStream>("rs3-upload-part");
     body->write(static_cast<const char*>(data), static_cast<std::streamsize>(sizeBytes));
     body->seekg(0, std::ios::beg);
     req.SetBody(body);
 
+    ArmS3RequestControl(req);
     const auto outcome = client->UploadPart(req);
     if (! outcome.IsSuccess())
     {
@@ -806,8 +1018,15 @@ private:
 
 [[nodiscard]] HRESULT CompleteS3MultipartUpload(FileSystemS3& fs,
                                                 const S3MultipartUploadSession& session,
-                                                const std::vector<S3MultipartUploadedPart>& parts) noexcept
+                                                const std::vector<S3MultipartUploadedPart>& parts,
+                                                bool destinationMustNotExist,
+                                                S3ObjectRevision* destinationRevision,
+                                                std::string_view ifMatchEtag) noexcept
 {
+    if (destinationRevision != nullptr)
+    {
+        *destinationRevision = {};
+    }
     if (session.uploadId.empty() || parts.empty())
     {
         return E_INVALIDARG;
@@ -829,15 +1048,38 @@ private:
     req.SetKey(ToAwsString(session.key));
     req.SetUploadId(ToAwsString(session.uploadId));
     req.SetMultipartUpload(std::move(completed));
+    req.SetChecksumType(Aws::S3Crt::Model::ChecksumType::FULL_OBJECT); // R3-2
+    if (destinationMustNotExist)
+    {
+        req.SetIfNoneMatch("*");
+    }
+    if (! ifMatchEtag.empty())
+    {
+        req.SetIfMatch(ToAwsString(ifMatchEtag)); // R3-1: replace only the occupant the user saw
+    }
 
+    ArmS3RequestControl(req);
     const auto outcome = client->CompleteMultipartUpload(req);
     if (! outcome.IsSuccess())
     {
-        const auto& err = outcome.GetError();
+        const auto& err  = outcome.GetError();
+        const HRESULT hr = HresultFromS3ConditionalPublicationError(err, destinationMustNotExist);
+        if (hr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS))
+        {
+            return hr;
+        }
         const std::wstring details =
             std::format(L"bucket='{}' key='{}' uploadId='{}'", Utf16FromUtf8(session.bucket), Utf16FromUtf8(session.key), Utf16FromUtf8(session.uploadId));
         LogAwsFailure(L"S3", L"CompleteMultipartUpload", session.ctx, err, details);
-        return HresultFromAwsError(err);
+        return hr;
+    }
+
+    if (destinationRevision != nullptr)
+    {
+        const auto& result = outcome.GetResult();
+        destinationRevision->etag.assign(result.GetETag().c_str(), result.GetETag().size());
+        destinationRevision->versionId.assign(result.GetVersionId().c_str(), result.GetVersionId().size());
+        destinationRevision->crc64NvmeBase64.assign(result.GetChecksumCRC64NVME().c_str(), result.GetChecksumCRC64NVME().size());
     }
 
     return S_OK;
@@ -857,6 +1099,7 @@ private:
     req.SetKey(ToAwsString(session.key));
     req.SetUploadId(ToAwsString(session.uploadId));
 
+    ArmS3RequestControl(req);
     const auto outcome = client->AbortMultipartUpload(req);
     if (! outcome.IsSuccess())
     {
@@ -876,15 +1119,25 @@ private:
                                              std::string_view sourceKey,
                                              std::string_view destinationBucket,
                                              std::string_view destinationKey,
-                                             uint64_t sourceSizeBytes) noexcept
+                                             uint64_t sourceSizeBytes,
+                                             const S3ObjectRevision& sourceRevision,
+                                             bool destinationMustNotExist,
+                                             uint64_t* sourceIdentityProbeCount,
+                                             uint64_t* sourceIdentityProbeUs,
+                                             uint64_t* sourceConditionalReadCount,
+                                             S3ObjectRevision* destinationRevision) noexcept
 {
+    if (destinationRevision != nullptr)
+    {
+        *destinationRevision = {};
+    }
     if (sourceBucket.empty() || sourceKey.empty() || destinationBucket.empty() || destinationKey.empty())
     {
         return E_INVALIDARG;
     }
 
     const auto client            = GetS3Client(fs, destinationCtx);
-    const std::string copySource = UrlEncodeS3CopySource(sourceBucket, sourceKey);
+    const std::string copySource = BuildS3CopySource(sourceBucket, sourceKey, sourceRevision.versionId);
 
     if (sourceSizeBytes < kMultipartMinPartSizeBytes)
     {
@@ -892,18 +1145,69 @@ private:
         req.SetBucket(ToAwsString(destinationBucket));
         req.SetKey(ToAwsString(destinationKey));
         req.SetCopySource(ToAwsString(copySource));
+        if (! sourceRevision.etag.empty())
+        {
+            req.SetCopySourceIfMatch(ToAwsString(sourceRevision.etag));
+        }
+        if (destinationMustNotExist)
+        {
+            req.SetIfNoneMatch("*");
+        }
 
+        if (sourceConditionalReadCount != nullptr && sourceRevision.HasIdentity())
+        {
+            ++*sourceConditionalReadCount;
+        }
+        ArmS3RequestControl(req);
         const auto outcome = client->CopyObject(req);
         if (! outcome.IsSuccess())
         {
-            const auto& err            = outcome.GetError();
+            const auto& err = outcome.GetError();
+            HRESULT hr      = err.GetResponseCode() == Aws::Http::HttpResponseCode::PRECONDITION_FAILED
+                                  ? HresultFromAwsError(err)
+                                  : HresultFromS3ConditionalPublicationError(err, destinationMustNotExist);
+            if (hr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && destinationMustNotExist && sourceRevision.HasIdentity())
+            {
+                const auto probeStartedAt = std::chrono::steady_clock::now();
+                const HRESULT sourceHr    = ValidateS3SourceRevisionStillExists(*client, sourceBucket, sourceKey, sourceRevision);
+                if (sourceIdentityProbeCount != nullptr)
+                {
+                    ++*sourceIdentityProbeCount;
+                }
+                if (sourceIdentityProbeUs != nullptr)
+                {
+                    *sourceIdentityProbeUs += Debug::Perf::ElapsedUs(probeStartedAt);
+                }
+                hr = SUCCEEDED(sourceHr) ? HRESULT_FROM_WIN32(ERROR_FILE_EXISTS) : sourceHr;
+            }
+            if (hr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS))
+            {
+                return hr;
+            }
             const std::wstring details = std::format(L"src='{}:{}' dst='{}:{}'",
                                                      Utf16FromUtf8(sourceBucket),
                                                      Utf16FromUtf8(sourceKey),
                                                      Utf16FromUtf8(destinationBucket),
                                                      Utf16FromUtf8(destinationKey));
             LogAwsFailure(L"S3", L"CopyObject", destinationCtx, err, details);
-            return HresultFromAwsError(err);
+            return hr;
+        }
+
+        if (! sourceRevision.versionId.empty())
+        {
+            const Aws::String& returnedVersionId = outcome.GetResult().GetCopySourceVersionId();
+            if (returnedVersionId.empty() || ! AwsStringEquals(sourceRevision.versionId, returnedVersionId))
+            {
+                return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+            }
+        }
+
+        if (destinationRevision != nullptr)
+        {
+            const auto& result  = outcome.GetResult();
+            const auto& details = result.GetCopyObjectResultDetails();
+            destinationRevision->etag.assign(details.GetETag().c_str(), details.GetETag().size());
+            destinationRevision->versionId.assign(result.GetVersionId().c_str(), result.GetVersionId().size());
         }
 
         return S_OK;
@@ -937,7 +1241,11 @@ private:
         const uint64_t endInclusive = offset + partBytes - 1u;
 
         std::string etag;
-        hr = UploadPartCopy(fs, session, sourceBucket, sourceKey, offset, endInclusive, static_cast<int>(partIndex), etag);
+        if (sourceConditionalReadCount != nullptr && sourceRevision.HasIdentity())
+        {
+            ++*sourceConditionalReadCount;
+        }
+        hr = UploadPartCopy(fs, session, sourceBucket, sourceKey, sourceRevision, offset, endInclusive, static_cast<int>(partIndex), etag);
         if (FAILED(hr))
         {
             return hr;
@@ -949,7 +1257,7 @@ private:
         parts.push_back(std::move(uploaded));
     }
 
-    hr = CompleteS3MultipartUpload(fs, session, parts);
+    hr = CompleteS3MultipartUpload(fs, session, parts, destinationMustNotExist, destinationRevision);
     if (FAILED(hr))
     {
         return hr;
@@ -959,9 +1267,19 @@ private:
     return S_OK;
 }
 
-[[nodiscard]] HRESULT UploadS3ObjectFromFile(
-    FileSystemS3& fs, const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, HANDLE file, uint64_t sizeBytes) noexcept
+[[nodiscard]] HRESULT UploadS3ObjectFromFile(FileSystemS3& fs,
+                                             const ResolvedAwsContext& ctx,
+                                             std::string_view bucket,
+                                             std::string_view key,
+                                             HANDLE file,
+                                             uint64_t sizeBytes,
+                                             bool destinationMustNotExist,
+                                             S3ObjectRevision* destinationRevision) noexcept
 {
+    if (destinationRevision != nullptr)
+    {
+        *destinationRevision = {};
+    }
     if (bucket.empty() || key.empty())
     {
         return E_INVALIDARG;
@@ -1044,7 +1362,7 @@ private:
             ++partNumber;
         }
 
-        hr = CompleteS3MultipartUpload(fs, session, parts);
+        hr = CompleteS3MultipartUpload(fs, session, parts, destinationMustNotExist, destinationRevision);
         if (FAILED(hr))
         {
             return hr;
@@ -1054,23 +1372,34 @@ private:
         return S_OK;
     }
 
-    return PutS3ObjectFromHandle(fs, ctx, bucket, key, file, sizeBytes);
+    return PutS3ObjectFromHandle(fs, ctx, bucket, key, file, sizeBytes, destinationMustNotExist, destinationRevision);
 }
 
 namespace
 {
-[[nodiscard]] HRESULT PutS3ObjectFromHandle(
-    FileSystemS3& fs, const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, HANDLE file, uint64_t sizeBytes) noexcept
+[[nodiscard]] HRESULT PutS3ObjectFromHandle(FileSystemS3& fs,
+                                            const ResolvedAwsContext& ctx,
+                                            std::string_view bucket,
+                                            std::string_view key,
+                                            HANDLE file,
+                                            uint64_t sizeBytes,
+                                            bool destinationMustNotExist,
+                                            S3ObjectRevision* destinationRevision) noexcept
 {
     const std::shared_ptr<Aws::S3Crt::S3CrtClient> client = GetS3Client(fs, ctx);
     Aws::S3Crt::Model::PutObjectRequest req;
     req.SetBucket(Aws::String(bucket.data(), bucket.size()));
     req.SetKey(Aws::String(key.data(), key.size()));
     req.SetContentLength(static_cast<long long>(sizeBytes));
+    if (destinationMustNotExist)
+    {
+        req.SetIfNoneMatch("*");
+    }
 
     auto body = Aws::MakeShared<HandleReadIStream>("rs3-put", file, sizeBytes);
     req.SetBody(body);
 
+    ArmS3RequestControl(req);
     const auto outcome = client->PutObject(req);
 
     const HRESULT readHr = ValidateS3UploadReadResult(sizeBytes, body->GetConsumedBytes(), body->GetReadError());
@@ -1081,10 +1410,23 @@ namespace
 
     if (! outcome.IsSuccess())
     {
-        const auto& err            = outcome.GetError();
+        const auto& err  = outcome.GetError();
+        const HRESULT hr = HresultFromS3ConditionalPublicationError(err, destinationMustNotExist);
+        if (hr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS))
+        {
+            return hr;
+        }
         const std::wstring details = std::format(L"bucket='{}' key='{}'", Utf16FromUtf8(bucket), Utf16FromUtf8(key));
         LogAwsFailure(L"S3", L"PutObject", ctx, err, details);
-        return HresultFromAwsError(err);
+        return hr;
+    }
+
+    if (destinationRevision != nullptr)
+    {
+        const auto& result = outcome.GetResult();
+        destinationRevision->etag.assign(result.GetETag().c_str(), result.GetETag().size());
+        destinationRevision->versionId.assign(result.GetVersionId().c_str(), result.GetVersionId().size());
+        destinationRevision->crc64NvmeBase64.assign(result.GetChecksumCRC64NVME().c_str(), result.GetChecksumCRC64NVME().size());
     }
 
     return S_OK;

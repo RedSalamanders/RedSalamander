@@ -1,0 +1,578 @@
+name: Ghostty Runtime Native Qualification
+
+"on":
+  workflow_dispatch:
+    inputs:
+      candidate_commit:
+        description: Exact reviewed lowercase Ghostty candidate commit
+        required: true
+        type: string
+      candidate_lock_sha256:
+        description: SHA-256 of the reviewed candidate lock file bytes
+        required: true
+        type: string
+      candidate_patch_sha256:
+        description: SHA-256 of the reviewed normalized candidate overlay
+        required: true
+        type: string
+      qualify_product:
+        description: Continue into admitted-product Debug, Commands, Release, and portable qualification
+        required: true
+        default: false
+        type: boolean
+      build_number:
+        description: Positive build number used when qualify_product is enabled
+        required: true
+        default: "1"
+        type: string
+permissions:
+  contents: read
+
+concurrency:
+  group: ghostty-native-${{ github.ref }}-${{ inputs.candidate_commit }}
+  cancel-in-progress: false
+
+jobs:
+  qualify-arm64:
+    name: Native ARM64 lib-vt qualification
+    runs-on: windows-11-vs2026-arm
+    timeout-minutes: 120
+    env:
+      RS_CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+      RS_CANDIDATE_LOCK_SHA256: ${{ inputs.candidate_lock_sha256 }}
+      RS_CANDIDATE_PATCH_SHA256: ${{ inputs.candidate_patch_sha256 }}
+      RS_TEST_SEED: '0x97d35bc7'
+
+    steps:
+      - name: Enable long Git paths before checkout
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config --global core.longpaths true
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to enable Git long-path support.' }
+
+      - name: Checkout exact branch commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require a native ARM64 host and Python
+        id: host
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $osArchitecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+          $processArchitecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()
+          if ($osArchitecture -cne 'Arm64' -or $processArchitecture -cne 'Arm64') {
+            throw "Native ARM64 qualification requires Arm64 OS/process; found $osArchitecture/$processArchitecture."
+          }
+          $pythonArchitecture = (& python -c "import platform; print(platform.machine().upper())").Trim()
+          if ($LASTEXITCODE -ne 0 -or $pythonArchitecture -cnotin @('ARM64', 'AARCH64')) {
+            throw "Native ARM64 Python is required; found '$pythonArchitecture'."
+          }
+          $pythonVersion = (& python -c "import platform; print(platform.python_version())").Trim()
+          "os_architecture=$osArchitecture" >> $env:GITHUB_OUTPUT
+          "process_architecture=$processArchitecture" >> $env:GITHUB_OUTPUT
+          "python_architecture=ARM64" >> $env:GITHUB_OUTPUT
+          "python_version=$pythonVersion" >> $env:GITHUB_OUTPUT
+
+      - name: Materialize and authenticate reviewed candidate inputs
+        shell: pwsh
+        env:
+          RS_CANDIDATE_LOCK_B64: ${{ secrets.RS_GHOSTTY_CANDIDATE_LOCK_B64 }}
+          RS_CANDIDATE_PATCH_B64: ${{ secrets.RS_GHOSTTY_CANDIDATE_PATCH_B64 }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($entry in @(
+              @{ Name = 'candidate commit'; Value = $env:RS_CANDIDATE_COMMIT; Pattern = '^[0-9a-f]{40}$' },
+              @{ Name = 'candidate lock SHA-256'; Value = $env:RS_CANDIDATE_LOCK_SHA256; Pattern = '^[0-9a-f]{64}$' },
+              @{ Name = 'candidate patch SHA-256'; Value = $env:RS_CANDIDATE_PATCH_SHA256; Pattern = '^[0-9a-f]{64}$' })) {
+            if ([string]$entry.Value -cnotmatch [string]$entry.Pattern) {
+              throw "Invalid $($entry.Name) input."
+            }
+          }
+          if ([string]::IsNullOrWhiteSpace($env:RS_CANDIDATE_LOCK_B64) -or
+              [string]::IsNullOrWhiteSpace($env:RS_CANDIDATE_PATCH_B64)) {
+            throw 'The reviewed candidate lock and patch secrets are required.'
+          }
+
+          $candidateRoot = Join-Path $env:GITHUB_WORKSPACE ".build\TerminalEngineUpgrade\$env:RS_CANDIDATE_COMMIT"
+          [void][IO.Directory]::CreateDirectory($candidateRoot)
+          $lockPath = Join-Path $candidateRoot 'candidate-runtime-lock.v1.json'
+          $patchPath = Join-Path $candidateRoot 'Ghostty-WindowsPrivateRuntime.patch'
+          [IO.File]::WriteAllBytes($lockPath, [Convert]::FromBase64String($env:RS_CANDIDATE_LOCK_B64))
+          [IO.File]::WriteAllBytes($patchPath, [Convert]::FromBase64String($env:RS_CANDIDATE_PATCH_B64))
+
+          $actualLockSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $lockPath).Hash.ToLowerInvariant()
+          $actualPatchSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $patchPath).Hash.ToLowerInvariant()
+          if ($actualLockSha256 -cne $env:RS_CANDIDATE_LOCK_SHA256) {
+            throw "Candidate lock SHA-256 mismatch: $actualLockSha256"
+          }
+          if ($actualPatchSha256 -cne $env:RS_CANDIDATE_PATCH_SHA256) {
+            throw "Candidate patch SHA-256 mismatch: $actualPatchSha256"
+          }
+
+          $lock = Get-Content -LiteralPath $lockPath -Raw | ConvertFrom-Json -Depth 100
+          $expectedOverlayPath = ".build/TerminalEngineUpgrade/$env:RS_CANDIDATE_COMMIT/Ghostty-WindowsPrivateRuntime.patch"
+          if ([string]$lock.upstream.commit -cne $env:RS_CANDIDATE_COMMIT -or
+              [string]$lock.overlay.path -cne $expectedOverlayPath -or
+              [string]$lock.overlay.normalizedTextSha256 -cne $env:RS_CANDIDATE_PATCH_SHA256) {
+            throw 'Candidate lock identity does not bind the requested commit and overlay.'
+          }
+
+      - name: Build exact candidate natively
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $candidateRoot = Join-Path $env:GITHUB_WORKSPACE ".build\TerminalEngineUpgrade\$env:RS_CANDIDATE_COMMIT"
+          $lockPath = Join-Path $candidateRoot 'candidate-runtime-lock.v1.json'
+          $outputRoot = Join-Path $candidateRoot 'candidate-native-arm64'
+          $result = & .\Tools\Build-GhosttyTerminalRuntime.ps1 `
+            -Platform ARM64 `
+            -CandidateLockPath $lockPath `
+            -CandidateOutputRoot $outputRoot `
+            -Force `
+            -PassThru
+          if ($result.machine -cne 'ARM64' -or [int]$result.exportCount -le 0) {
+            throw 'The native candidate build returned an invalid identity.'
+          }
+
+      - name: Run upstream native ARM64 lib-vt targets
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $candidateRoot = Join-Path $env:GITHUB_WORKSPACE ".build\TerminalEngineUpgrade\$env:RS_CANDIDATE_COMMIT"
+          $lockPath = Join-Path $candidateRoot 'candidate-runtime-lock.v1.json'
+          $patchPath = Join-Path $candidateRoot 'Ghostty-WindowsPrivateRuntime.patch'
+          $lock = Get-Content -LiteralPath $lockPath -Raw | ConvertFrom-Json -Depth 100
+          $sourceRoot = Join-Path $env:GITHUB_WORKSPACE ".build\TerminalEngineUpgrade\Sources\ghostty-$env:RS_CANDIDATE_COMMIT"
+          $hostToolchain = @($lock.toolchain.archives | Where-Object { $_.hostPlatform -ceq 'x64' })[0]
+          $zig = Join-Path (Join-Path $env:GITHUB_WORKSPACE '.build\TerminalEngineUpgrade\Toolchains') `
+            ([string]$hostToolchain.executableRelativePath).Replace('/', '\')
+          if (-not [IO.File]::Exists($zig)) {
+            throw "Pinned Zig executable is missing: $zig"
+          }
+
+          $pythonPackages = Join-Path $env:RUNNER_TEMP 'ghostty-python-packages'
+          & python -m pip install --disable-pip-version-check --no-warn-script-location --target $pythonPackages jsonschema==4.26.0
+          if ($LASTEXITCODE -ne 0) { throw 'Installing the pinned jsonschema test dependency failed.' }
+          $hostTools = Join-Path $env:RUNNER_TEMP 'ghostty-host-tools'
+          [void][IO.Directory]::CreateDirectory($hostTools)
+          $pythonPath = (Get-Command python -ErrorAction Stop).Source
+          [IO.File]::WriteAllText(
+            (Join-Path $hostTools 'python3.cmd'),
+            "@`"$pythonPath`" %*`r`n",
+            [Text.UTF8Encoding]::new($false))
+          $env:PATH = "$hostTools;$env:PATH"
+          $env:PYTHONPATH = $pythonPackages
+
+          $patchApplied = $false
+          $buildModified = $false
+          $buildPath = Join-Path $sourceRoot 'build.zig'
+          $buildOriginal = $null
+          $temporaryRunnerPath = Join-Path $sourceRoot '.red-salamander-native-test-runner.zig'
+          $crashRoot = Join-Path $env:RUNNER_TEMP 'ghostty-native-crash'
+          [void][IO.Directory]::CreateDirectory($crashRoot)
+          $localDumpKey = 'HKCU:\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps\test.exe'
+          $werConfigured = $false
+          $windowsUnmaterializablePaths = @(
+            'test/fuzz-libghostty/corpus/parser-cmin/id_000123,time_0,execs_0,orig_id_000940,src_000935,time_9023,execs_524829,op_quick,pos_55,val_+13,+cov',
+            'test/fuzz-libghostty/corpus/parser-cmin/id_000213,time_0,execs_0,orig_id_001278,src_001266,time_20982,execs_1128131,op_quick,pos_31,val_+2,+cov'
+          )
+          $expectedSourceStatus = @($windowsUnmaterializablePaths | ForEach-Object { " D $_" })
+          $sourceStatusBefore = @(& git -C $sourceRoot status --porcelain=v1 --untracked-files=normal)
+          $sourceStatusDifference = @(Compare-Object `
+              -ReferenceObject $expectedSourceStatus `
+              -DifferenceObject $sourceStatusBefore `
+              -CaseSensitive)
+          if ($LASTEXITCODE -ne 0 -or $sourceStatusDifference.Count -ne 0) {
+            throw "Native qualification source differs from the builder's exact Windows allowlist: $($sourceStatusBefore -join '; ')"
+          }
+          try {
+            [void](New-Item -Path $localDumpKey -Force)
+            [void](New-ItemProperty `
+                -Path $localDumpKey `
+                -Name DumpFolder `
+                -PropertyType ExpandString `
+                -Value $crashRoot `
+                -Force)
+            [void](New-ItemProperty `
+                -Path $localDumpKey `
+                -Name DumpType `
+                -PropertyType DWord `
+                -Value 2 `
+                -Force)
+            $werConfigured = $true
+
+            & git -C $sourceRoot apply --check $patchPath
+            if ($LASTEXITCODE -ne 0) { throw 'Candidate overlay preflight failed.' }
+            & git -C $sourceRoot apply $patchPath
+            if ($LASTEXITCODE -ne 0) { throw 'Candidate overlay application failed.' }
+            $patchApplied = $true
+
+            # Use the byte-identical pinned default runner in simple mode so
+            # native evidence is human-readable and independent of server-mode
+            # transport. This changes neither tests nor candidate code.
+            $standardRunnerPath = Join-Path (Split-Path -Parent $zig) 'lib\compiler\test_runner.zig'
+            if (-not [IO.File]::Exists($standardRunnerPath)) {
+              throw "Pinned Zig default test runner is missing: $standardRunnerPath"
+            }
+            $runnerSha256 = (Get-FileHash -LiteralPath $standardRunnerPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            [IO.File]::Copy($standardRunnerPath, $temporaryRunnerPath, $false)
+            $buildOriginal = [IO.File]::ReadAllText($buildPath)
+            $newline = if ($buildOriginal.Contains("`r`n")) { "`r`n" } else { "`n" }
+            $updatedBuild = $buildOriginal
+            foreach ($moduleName in @('mod.vt', 'mod.vt_c')) {
+              $needle = "            .root_module = $moduleName,$newline            .filters = test_filters,$newline"
+              $replacement = $needle +
+                "            .test_runner = .{$newline" +
+                "                .path = b.path(`".red-salamander-native-test-runner.zig`"),$newline" +
+                "                .mode = .simple,$newline" +
+                "            },$newline"
+              if ([regex]::Matches($updatedBuild, [regex]::Escape($needle)).Count -cne 1) {
+                throw "Expected one $moduleName native test harness insertion point."
+              }
+              $updatedBuild = $updatedBuild.Replace($needle, $replacement)
+            }
+            $cAbiNeedle =
+              "        const mod_vt_c_test = b.addTest(.{$newline" +
+              "            .root_module = mod.vt_c,$newline"
+            $cAbiReplacement =
+              "        // The private Windows runtime strips the shared vt_c module.$newline" +
+              "        // Clone it only for tests so native Debug diagnostics and unwind data remain available.$newline" +
+              "        const red_salamander_vt_c_test_root = b.allocator.create(std.Build.Module) catch @panic(`"OOM`");$newline" +
+              "        red_salamander_vt_c_test_root.init(b, .{ .existing = mod.vt_c });$newline" +
+              "        red_salamander_vt_c_test_root.strip = false;$newline" +
+              "        red_salamander_vt_c_test_root.omit_frame_pointer = false;$newline" +
+              "        red_salamander_vt_c_test_root.unwind_tables = .sync;$newline" +
+              "        const mod_vt_c_test = b.addTest(.{$newline" +
+              "            .root_module = red_salamander_vt_c_test_root,$newline"
+            if ([regex]::Matches($updatedBuild, [regex]::Escape($cAbiNeedle)).Count -cne 1) {
+              throw 'Expected one native C-ABI diagnostic module insertion point.'
+            }
+            $updatedBuild = $updatedBuild.Replace($cAbiNeedle, $cAbiReplacement)
+            [IO.File]::WriteAllText($buildPath, $updatedBuild, [Text.UTF8Encoding]::new($false))
+            $buildModified = $true
+            "RS_NATIVE_TEST_RUNNER_MODE=simple" | Out-File -LiteralPath $env:GITHUB_ENV -Encoding utf8 -Append
+            "RS_NATIVE_TEST_RUNNER_SOURCE_SHA256=$runnerSha256" | Out-File -LiteralPath $env:GITHUB_ENV -Encoding utf8 -Append
+
+            $nativeExitCode = 0
+            $nativeOutput = @()
+            $codeFiveRetryUsed = $false
+            $codeFiveRetryExecutableSha256 = ''
+            $codeFiveRetryStatus = 'not-needed'
+            Push-Location -LiteralPath $sourceRoot
+            try {
+              # Serialize the unchanged upstream tests and filters through the
+              # temporary diagnostic harness prepared above.
+              & $zig build --color off --seed $env:RS_TEST_SEED -j1 test-lib-vt test-lib-vt-build test-lib-vt-schema `
+                -Dtarget=aarch64-windows-msvc `
+                -Doptimize=Debug `
+                -Dsimd=false 2>&1 | Tee-Object -Variable nativeOutput | Write-Host
+              $nativeExitCode = $LASTEXITCODE
+            }
+            finally {
+              Pop-Location
+            }
+            if ($nativeExitCode -ne 0) {
+              $nativeText = @($nativeOutput | ForEach-Object { [string]$_ })
+              [IO.File]::WriteAllLines(
+                (Join-Path $crashRoot 'initial-output.txt'),
+                $nativeText,
+                [Text.UTF8Encoding]::new($false))
+              $codeFiveLines = @($nativeText | Where-Object {
+                  $_ -cmatch '^error: process exited with error code 5$'
+                })
+              $failedCommandLines = @($nativeText | Where-Object {
+                  $_ -cmatch '^failed command: "(.+[\\/]test\.exe)"$'
+                })
+              $zeroFailureSummaries = @($nativeText | Where-Object {
+                  $_ -cmatch '^[0-9]+ passed; [0-9]+ skipped; 0 failed\.$'
+                })
+              $schemaSummaries = @($nativeText | Where-Object {
+                  $_ -cmatch '^validated aarch64-windows ABI manifest \(153 types\)$'
+                })
+              $singleFailureBuildSummaries = @($nativeText | Where-Object {
+                  $_ -cmatch '^Build Summary: [0-9]+/[0-9]+ steps succeeded \(1 failed\)$'
+                })
+              $reportedTestFailures = @($nativeText | Where-Object {
+                  $_ -cmatch 'FAIL \('
+                })
+
+              if ($nativeExitCode -eq 1 -and
+                  $codeFiveLines.Count -eq 1 -and
+                  $failedCommandLines.Count -eq 1 -and
+                  $zeroFailureSummaries.Count -eq 1 -and
+                  $schemaSummaries.Count -eq 1 -and
+                  $singleFailureBuildSummaries.Count -eq 1 -and
+                  $reportedTestFailures.Count -eq 0) {
+                $failedCommandMatch = [regex]::Match(
+                  $failedCommandLines[0],
+                  '^failed command: "(.+[\\/]test\.exe)"$',
+                  [Text.RegularExpressions.RegexOptions]::CultureInvariant)
+                $failedTestPath = [IO.Path]::GetFullPath(
+                  (Join-Path $sourceRoot $failedCommandMatch.Groups[1].Value))
+                $allowedCacheRoot = [IO.Path]::GetFullPath(
+                  (Join-Path $sourceRoot '.zig-cache')) + [IO.Path]::DirectorySeparatorChar
+                if (-not $failedTestPath.StartsWith(
+                    $allowedCacheRoot,
+                    [StringComparison]::OrdinalIgnoreCase) -or
+                    -not [IO.File]::Exists($failedTestPath)) {
+                  throw "Native code-5 retry path escaped the candidate cache: $failedTestPath"
+                }
+
+                # Zig truncates a Windows NTSTATUS to an unsigned byte when it
+                # reports a child exit, so code 5 can represent 0xC0000005.
+                # Retry the exact image once only to capture the full signed
+                # process result and crash evidence, never as a rebuild.
+                Start-Sleep -Seconds 2
+                $codeFiveRetryExecutableSha256 =
+                  (Get-FileHash -LiteralPath $failedTestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+                Copy-Item -LiteralPath $failedTestPath -Destination (Join-Path $crashRoot 'test.exe') -Force
+                $failedTestObject = Join-Path (Split-Path -Parent $failedTestPath) 'test_zcu.obj'
+                if ([IO.File]::Exists($failedTestObject)) {
+                  Copy-Item -LiteralPath $failedTestObject -Destination (Join-Path $crashRoot 'test_zcu.obj') -Force
+                }
+                $failedTestPdb = [IO.Path]::ChangeExtension($failedTestPath, '.pdb')
+                if ([IO.File]::Exists($failedTestPdb)) {
+                  Copy-Item -LiteralPath $failedTestPdb -Destination (Join-Path $crashRoot 'test.pdb') -Force
+                }
+                $retryOutput = @()
+                Push-Location -LiteralPath $sourceRoot
+                try {
+                  & $failedTestPath "--seed=$env:RS_TEST_SEED" 2>&1 |
+                    Tee-Object -Variable retryOutput | Write-Host
+                  $retryExitCode = $LASTEXITCODE
+                }
+                finally {
+                  Pop-Location
+                }
+                $retryText = @($retryOutput | ForEach-Object { [string]$_ })
+                [IO.File]::WriteAllLines(
+                  (Join-Path $crashRoot 'retry-output.txt'),
+                  $retryText,
+                  [Text.UTF8Encoding]::new($false))
+                $retrySummaries = @($retryText | Where-Object {
+                    $_ -cmatch '^(All [0-9]+ tests passed\.|[0-9]+ passed; [0-9]+ skipped; 0 failed\.)$'
+                  })
+                $retryFailures = @($retryText | Where-Object { $_ -cmatch 'FAIL \(' })
+                if ($retryExitCode -ne 0 -or $retrySummaries.Count -ne 1 -or $retryFailures.Count -ne 0) {
+                  $dumpDeadline = (Get-Date).AddSeconds(20)
+                  do {
+                    $dumpFiles = @(Get-ChildItem -LiteralPath $crashRoot -Filter '*.dmp' -File -ErrorAction SilentlyContinue)
+                    if ($dumpFiles.Count -gt 0) { break }
+                    Start-Sleep -Seconds 1
+                  } while ((Get-Date) -lt $dumpDeadline)
+                  $applicationErrors = @(Get-WinEvent -FilterHashtable @{
+                      LogName = 'Application'
+                      Id = 1000
+                      StartTime = (Get-Date).AddHours(-2)
+                    } -ErrorAction SilentlyContinue | Where-Object {
+                      $_.Message -match '(?i)(^|[\\/])test\.exe'
+                    } | Select-Object -First 8)
+                  $applicationErrorRecords = @($applicationErrors | ForEach-Object {
+                      [ordered]@{
+                        provider = $_.ProviderName
+                        eventId = $_.Id
+                        timeCreatedUtc = $_.TimeCreated.ToUniversalTime().ToString('o')
+                        message = $_.Message
+                      }
+                    })
+                  $crashFiles = @(Get-ChildItem -LiteralPath $crashRoot -File | Sort-Object Name | ForEach-Object {
+                      [ordered]@{
+                        name = $_.Name
+                        sizeBytes = $_.Length
+                        sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                      }
+                    })
+                  $crashRecord = [ordered]@{
+                    formatId = 'red-salamander-ghostty-native-crash'
+                    schemaVersion = 1
+                    generatedUtc = (Get-Date -AsUTC).ToString('o')
+                    sourceCommit = $env:GITHUB_SHA
+                    workflowRunId = [string]$env:GITHUB_RUN_ID
+                    candidateCommit = $env:RS_CANDIDATE_COMMIT
+                    testSeed = $env:RS_TEST_SEED
+                    failedTestPath = $failedCommandMatch.Groups[1].Value.Replace('\', '/')
+                    failedTestSha256 = $codeFiveRetryExecutableSha256
+                    initialExitCode = $nativeExitCode
+                    retryExitCode = $retryExitCode
+                    retrySummaryCount = $retrySummaries.Count
+                    retryFailureCount = $retryFailures.Count
+                    applicationErrors = $applicationErrorRecords
+                    files = $crashFiles
+                  }
+                  [IO.File]::WriteAllText(
+                    (Join-Path $crashRoot 'crash-record.json'),
+                    ($crashRecord | ConvertTo-Json -Depth 20),
+                    [Text.UTF8Encoding]::new($false))
+                  throw "Native code-5 retry failed with exit $retryExitCode, summaries $($retrySummaries.Count), failures $($retryFailures.Count)."
+                }
+                throw 'Native tests reported code 5 on the initial launch. Retry passed only as diagnostic evidence; qualification requires a clean first execution.'
+              }
+            }
+            if ($nativeExitCode -ne 0) {
+              $applicationErrors = @(Get-WinEvent -FilterHashtable @{
+                  LogName = 'Application'
+                  Id = 1000
+                  StartTime = (Get-Date).AddHours(-2)
+                } -ErrorAction SilentlyContinue | Where-Object {
+                  $_.Message -match '(?i)(^|[\\/])test\.exe'
+                } | Select-Object -First 8)
+              foreach ($applicationError in $applicationErrors) {
+                $diagnostic = [ordered]@{
+                  provider = $applicationError.ProviderName
+                  eventId = $applicationError.Id
+                  timeCreatedUtc = $applicationError.TimeCreated.ToUniversalTime().ToString('o')
+                  message = $applicationError.Message
+                }
+                Write-Host ('Native test Application Error: ' + ($diagnostic | ConvertTo-Json -Compress))
+              }
+              throw "Native upstream lib-vt targets failed with exit $nativeExitCode. Application Error records: $($applicationErrors.Count)."
+            }
+            "RS_NATIVE_CODE_FIVE_RETRY_USED=$($codeFiveRetryUsed.ToString().ToLowerInvariant())" |
+              Out-File -LiteralPath $env:GITHUB_ENV -Encoding utf8 -Append
+            "RS_NATIVE_CODE_FIVE_RETRY_EXECUTABLE_SHA256=$codeFiveRetryExecutableSha256" |
+              Out-File -LiteralPath $env:GITHUB_ENV -Encoding utf8 -Append
+            "RS_NATIVE_CODE_FIVE_RETRY_STATUS=$codeFiveRetryStatus" |
+              Out-File -LiteralPath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+          finally {
+            if ($werConfigured -and (Test-Path -LiteralPath $localDumpKey)) {
+              Remove-Item -LiteralPath $localDumpKey -Recurse -Force
+            }
+            if ($buildModified) {
+              [IO.File]::WriteAllText($buildPath, $buildOriginal, [Text.UTF8Encoding]::new($false))
+            }
+            if ([IO.File]::Exists($temporaryRunnerPath)) {
+              Remove-Item -LiteralPath $temporaryRunnerPath -Force
+            }
+            if ($patchApplied) {
+              & git -C $sourceRoot apply --reverse $patchPath
+              if ($LASTEXITCODE -ne 0) { throw 'Candidate overlay cleanup failed.' }
+            }
+            $sourceStatus = @(& git -C $sourceRoot status --porcelain=v1 --untracked-files=normal)
+            $sourceStatusDifference = @(Compare-Object `
+                -ReferenceObject $expectedSourceStatus `
+                -DifferenceObject $sourceStatus `
+                -CaseSensitive)
+            if ($LASTEXITCODE -ne 0 -or $sourceStatusDifference.Count -ne 0) {
+              throw "Native qualification left candidate-source changes beyond the exact Windows allowlist: $($sourceStatus -join '; ')"
+            }
+          }
+
+      - name: Upload native crash evidence
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ghostty-native-arm64-crash-${{ github.run_id }}
+          path: ${{ runner.temp }}/ghostty-native-crash
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish canonical native qualification evidence
+        shell: pwsh
+        env:
+          RS_HOST_OS_ARCHITECTURE: ${{ steps.host.outputs.os_architecture }}
+          RS_HOST_PROCESS_ARCHITECTURE: ${{ steps.host.outputs.process_architecture }}
+          RS_HOST_PYTHON_ARCHITECTURE: ${{ steps.host.outputs.python_architecture }}
+          RS_HOST_PYTHON_VERSION: ${{ steps.host.outputs.python_version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $candidateRoot = Join-Path $env:GITHUB_WORKSPACE ".build\TerminalEngineUpgrade\$env:RS_CANDIDATE_COMMIT"
+          $lockPath = Join-Path $candidateRoot 'candidate-runtime-lock.v1.json'
+          $identityPath = Join-Path $candidateRoot 'candidate-native-arm64\terminal-runtime-identity.json'
+          $reportPath = Join-Path $candidateRoot 'native-arm64-qualification.json'
+          $schemaPath = Join-Path $env:GITHUB_WORKSPACE 'Specs\Terminal\GhosttyRuntimeNativeQualification.schema.json'
+          Import-Module .\Tools\TerminalEngine\GhosttyRuntimeLifecycle.psm1 -Force -ErrorAction Stop
+          Import-Module .\Tools\Modules\Testing\ValidationFingerprint.psm1 -Force -ErrorAction Stop
+          $lock = Read-RSGhosttyRuntimeLock `
+            -LiteralPath $lockPath `
+            -SchemaPath .\Specs\Terminal\GhosttyRuntimeLock.schema.json `
+            -RepoRoot $env:GITHUB_WORKSPACE
+          $identity = Get-Content -LiteralPath $identityPath -Raw | ConvertFrom-Json -Depth 100
+          $report = [ordered]@{
+            formatId = 'red-salamander-ghostty-native-qualification'
+            schemaVersion = 1
+            generatedUtc = (Get-Date -AsUTC).ToString('o', [Globalization.CultureInfo]::InvariantCulture)
+            sourceCommit = $env:GITHUB_SHA
+            workflowRunId = [string]$env:GITHUB_RUN_ID
+            workflowRunAttempt = [int]$env:GITHUB_RUN_ATTEMPT
+            testSeed = $env:RS_TEST_SEED
+            candidate = [ordered]@{
+              commit = [string]$lock.upstream.commit
+              tree = [string]$lock.upstream.tree
+              lockFileSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $lockPath).Hash.ToLowerInvariant()
+              lockCanonicalDigest = Get-RSGhosttyRuntimeLockDigest -Lock $lock
+              overlaySha256 = [string]$lock.overlay.normalizedTextSha256
+            }
+            host = [ordered]@{
+              osArchitecture = $env:RS_HOST_OS_ARCHITECTURE
+              processArchitecture = $env:RS_HOST_PROCESS_ARCHITECTURE
+              pythonArchitecture = $env:RS_HOST_PYTHON_ARCHITECTURE
+              pythonVersion = $env:RS_HOST_PYTHON_VERSION
+              osVersion = [Environment]::OSVersion.VersionString
+            }
+            testHarness = [ordered]@{
+              runnerMode = $env:RS_NATIVE_TEST_RUNNER_MODE
+              runnerSource = 'pinned-zig-default-test-runner'
+              runnerSourceSha256 = $env:RS_NATIVE_TEST_RUNNER_SOURCE_SHA256
+              transportOnlyOverride = $true
+              cAbiDiagnosticModuleClone = $true
+              cAbiStrip = $false
+              cAbiOmitFramePointer = $false
+              cAbiUnwindTables = 'sync'
+              codeFiveRetryUsed = $env:RS_NATIVE_CODE_FIVE_RETRY_USED -ceq 'true'
+              codeFiveRetryExecutableSha256 = if (
+                [string]::IsNullOrEmpty($env:RS_NATIVE_CODE_FIVE_RETRY_EXECUTABLE_SHA256)) {
+                $null
+              } else {
+                $env:RS_NATIVE_CODE_FIVE_RETRY_EXECUTABLE_SHA256
+              }
+              codeFiveRetryStatus = $env:RS_NATIVE_CODE_FIVE_RETRY_STATUS
+            }
+            runtime = [ordered]@{
+              identitySha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $identityPath).Hash.ToLowerInvariant()
+              dllSha256 = [string]$identity.dllSha256
+              dllNormalizedSha256 = [string]$identity.dllNormalizedSha256
+              dllSizeBytes = [long]$identity.dllSizeBytes
+              machine = [string]$identity.machine
+              exportCount = [int]$identity.exportCount
+              exportSetSha256 = [string]$identity.exportSetSha256
+              importModules = [string[]]@($identity.importModules)
+              dependencyIds = [string[]]@($identity.dependencies.id)
+              noticeIds = [string[]]@($lock.notices.id)
+            }
+            tests = @(
+              [ordered]@{ target = 'test-lib-vt'; status = 'passed' }
+              [ordered]@{ target = 'test-lib-vt-build'; status = 'passed' }
+              [ordered]@{ target = 'test-lib-vt-schema'; status = 'passed' }
+            )
+          }
+          Write-RSAtomicCanonicalJsonFile `
+            -LiteralPath $reportPath `
+            -InputObject $report `
+            -SchemaPath $schemaPath `
+            -AllowedRoot $candidateRoot
+          Get-Content -LiteralPath $reportPath -Raw
+
+      - name: Upload native qualification evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ghostty-native-arm64-${{ env.RS_CANDIDATE_COMMIT }}
+          path: |
+            .build/TerminalEngineUpgrade/${{ env.RS_CANDIDATE_COMMIT }}/native-arm64-qualification.json
+            .build/TerminalEngineUpgrade/${{ env.RS_CANDIDATE_COMMIT }}/candidate-native-arm64/terminal-runtime-identity.json
+          if-no-files-found: error
+          retention-days: 30
+
+  qualify-product:
+    name: Continue with admitted-product qualification
+    if: ${{ inputs.qualify_product }}
+    needs: qualify-arm64
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ghostty-runtime-product-qualification.yml
+    with:
+      build_number: ${{ inputs.build_number }}

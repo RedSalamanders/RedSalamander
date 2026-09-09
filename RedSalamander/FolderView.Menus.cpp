@@ -2,6 +2,7 @@
 
 #include "FluentIcons.h"
 #include "LocalizationManager.h"
+#include "RedSalamander.h"
 #include "ShortcutManager.h"
 
 namespace
@@ -81,6 +82,33 @@ bool MenuContainsCommandIdRecursive(HMENU menu, UINT commandId) noexcept
     }
 
     return false;
+}
+
+HMENU FindSubMenuContainingCommandId(HMENU menu, UINT commandId) noexcept
+{
+    if (! menu)
+    {
+        return nullptr;
+    }
+
+    const int count = GetMenuItemCount(menu);
+    for (int pos = 0; pos < count; ++pos)
+    {
+        HMENU subMenu = GetSubMenu(menu, pos);
+        if (! subMenu)
+        {
+            continue;
+        }
+        if (FindMenuItemPosById(subMenu, commandId) >= 0)
+        {
+            return subMenu;
+        }
+        if (HMENU nested = FindSubMenuContainingCommandId(subMenu, commandId))
+        {
+            return nested;
+        }
+    }
+    return nullptr;
 }
 
 [[nodiscard]] std::wstring StripMenuMnemonicMarkers(std::wstring_view text)
@@ -237,18 +265,97 @@ void RemoveOverlaySampleSubmenu(HMENU menu, UINT sampleErrorCommandId) noexcept
         case CmdViewSpace: return L"cmd/pane/viewSpace";
         case CmdDelete: return L"cmd/pane/delete";
         case CmdRename: return L"cmd/pane/rename";
+        case CmdCut: return L"cmd/pane/clipboardCut";
         case CmdCopy: return L"cmd/pane/clipboardCopy";
         case CmdPaste: return L"cmd/pane/clipboardPaste";
+        case CmdRefresh: return L"cmd/pane/refresh";
+        case IDM_PANE_CREATE_DIR: return L"cmd/pane/createDirectory";
+        case IDM_PANE_EDIT_NEW: return L"cmd/pane/editNew";
         case CmdProperties: return L"cmd/pane/openProperties";
     }
 
     return std::nullopt;
 }
+
+[[nodiscard]] bool IsItemTargetContextCommand(const UINT commandId) noexcept
+{
+    switch (commandId)
+    {
+        case CmdOpen:
+        case CmdOpenWith:
+        case CmdDelete:
+        case CmdMove:
+        case CmdRename:
+        case CmdCut:
+        case CmdCopy:
+        case CmdArtifactInspect:
+        case CmdArtifactReveal:
+        case CmdProperties: return true;
+        default: return false;
+    }
+}
+
+void AppendArtifactContextMenu(HMENU menu,
+                               const std::shared_ptr<const FileOperationArtifacts::Projection>& projection) noexcept
+{
+    if (! menu || ! projection || projection->classification == FileOperationArtifacts::Classification::Ordinary)
+    {
+        return;
+    }
+
+    wil::unique_hmenu artifactMenu(CreatePopupMenu());
+    if (! artifactMenu)
+    {
+        return;
+    }
+    const auto appendCommand = [&](const UINT commandId, const UINT stringId) noexcept
+    {
+        const std::wstring text = LoadStringResource(nullptr, stringId);
+        return ! text.empty() && AppendMenuW(artifactMenu.get(), MF_STRING, commandId, text.c_str()) != FALSE;
+    };
+    if (projection->capabilities.inspect)
+    {
+        static_cast<void>(appendCommand(CmdArtifactInspect, IDS_FILEOPS_ARTIFACT_ACTION_INSPECT));
+    }
+    if (projection->capabilities.reveal)
+    {
+        static_cast<void>(appendCommand(CmdArtifactReveal, IDS_FILEOPS_ARTIFACT_ACTION_REVEAL));
+    }
+    if (GetMenuItemCount(artifactMenu.get()) <= 0)
+    {
+        return;
+    }
+
+    const std::wstring title = LoadStringResource(nullptr, IDS_FILEOPS_ARTIFACT_MENU_TITLE);
+    const int propertiesPos  = FindMenuItemPosById(menu, IDM_FOLDERVIEW_CONTEXT_PROPERTIES);
+    if (title.empty() || propertiesPos < 0 ||
+        InsertMenuW(menu,
+                    static_cast<UINT>(propertiesPos),
+                    MF_BYPOSITION | MF_POPUP,
+                    reinterpret_cast<UINT_PTR>(artifactMenu.get()),
+                    title.c_str()) == FALSE)
+    {
+        return;
+    }
+    if (InsertMenuW(menu, static_cast<UINT>(propertiesPos + 1), MF_BYPOSITION | MF_SEPARATOR, 0u, nullptr) == FALSE)
+    {
+        static_cast<void>(RemoveMenu(menu, static_cast<UINT>(propertiesPos), MF_BYPOSITION));
+        return;
+    }
+    static_cast<void>(artifactMenu.release());
+}
+
+[[nodiscard]] bool IsSelectionAwareContextCommand(const UINT commandId) noexcept
+{
+    return commandId == CmdDelete || commandId == CmdMove || commandId == CmdCut || commandId == CmdCopy;
+}
+
 [[nodiscard]] std::wstring GetIconGlyphForCommand(UINT commandId) noexcept
 {
     switch (commandId)
     {
         case IDM_FOLDERVIEW_CONTEXT_OPEN: return std::wstring(1, FluentIcons::kOpenFile);
+        case IDM_FOLDERVIEW_CONTEXT_CUT: return std::wstring(1, FluentIcons::kCut);
         case IDM_FOLDERVIEW_CONTEXT_COPY: return std::wstring(1, FluentIcons::kCopy);
         case IDM_FOLDERVIEW_CONTEXT_PASTE: return std::wstring(1, FluentIcons::kPaste);
         case IDM_FOLDERVIEW_CONTEXT_DELETE: return std::wstring(1, FluentIcons::kDelete);
@@ -332,12 +439,39 @@ void RemoveOverlaySampleSubmenu(HMENU menu, UINT sampleErrorCommandId) noexcept
 
 } // namespace
 
-void FolderView::OnContextMenu(POINT screenPt)
+void FolderView::OnContextMenu(POINT screenPt, const bool keyboardInvocation)
 {
     if (! _hWnd)
         return;
 
-    HMENU rootMenu = Localization::LoadMenuResource(GetModuleHandleW(nullptr), IDR_FOLDERVIEW_CONTEXT);
+    bool allowItemTarget = keyboardInvocation && _focusedIndex < _items.size();
+    if (! keyboardInvocation)
+    {
+        const POINT clientPt = ScreenToClientPoint(screenPt);
+        const std::optional<size_t> hit = HitTest(clientPt);
+        if (hit.has_value())
+        {
+            allowItemTarget = true;
+            if (hit.value() < _items.size() && ! _items[hit.value()].selected)
+            {
+                SelectSingle(hit.value());
+            }
+            else
+            {
+                FocusItem(hit.value(), false);
+            }
+            _anchorIndex = hit.value();
+        }
+        else
+        {
+            ClearSelection();
+            _anchorIndex = _focusedIndex < _items.size() ? _focusedIndex : static_cast<size_t>(-1);
+            DisarmPotentialDrag();
+        }
+    }
+
+    HMENU rootMenu = Localization::LoadMenuResource(
+        GetModuleHandleW(nullptr), allowItemTarget ? IDR_FOLDERVIEW_ITEM_CONTEXT : IDR_FOLDERVIEW_BACKGROUND_CONTEXT);
     if (! rootMenu)
         return;
 
@@ -347,24 +481,21 @@ void FolderView::OnContextMenu(POINT screenPt)
     if (! menu)
         return;
 
-    auto clientPt = ScreenToClientPoint(screenPt);
-    auto hit      = HitTest(clientPt);
-    if (hit)
+    if (! allowItemTarget)
     {
-        if (*hit < _items.size() && ! _items[*hit].selected)
+        if (HMENU newMenu = FindSubMenuContainingCommandId(menu, IDM_PANE_CREATE_DIR))
         {
-            SelectSingle(*hit);
+            PopulateShellNewTemplateMenuForFolderView(newMenu, _hWnd.get());
         }
-        else
-        {
-            FocusItem(*hit, false);
-        }
-        _anchorIndex = *hit;
     }
 
-    const std::vector<std::wstring> targetSnapshot = GetSelectedOrFocusedDisplayNames();
+    const std::vector<std::wstring> selectionTargetSnapshot =
+        allowItemTarget ? GetSelectedOrFocusedDisplayNames() : std::vector<std::wstring>{};
+    const std::optional<std::wstring> currentTargetSnapshot =
+        allowItemTarget && _focusedIndex < _items.size() ? std::optional<std::wstring>{_items[_focusedIndex].displayName} : std::nullopt;
 
-    UpdateContextMenuState(menu);
+    UpdateContextMenuState(menu, allowItemTarget);
+    AppendArtifactContextMenu(menu, allowItemTarget ? GetFocusedArtifactProjection() : nullptr);
     if (! IsOverlaySampleEnabled())
     {
         RemoveOverlaySampleSubmenu(menu, CmdOverlaySampleError);
@@ -381,28 +512,36 @@ void FolderView::OnContextMenu(POINT screenPt)
     if (result.has_value())
     {
         const UINT commandId = static_cast<UINT>(result.value());
-        const bool targetBoundCommand = commandId == CmdDelete || commandId == CmdMove || commandId == CmdRename || commandId == CmdCopy;
-        const auto snapshotStillMatches = [&]() noexcept
+        const bool itemTargetCommand = IsItemTargetContextCommand(commandId);
+        const auto selectionSnapshotStillMatches = [&]() noexcept
         {
             const std::vector<std::wstring> currentTargets = GetSelectedOrFocusedDisplayNames();
-            if (currentTargets.size() != targetSnapshot.size())
+            if (currentTargets.size() != selectionTargetSnapshot.size())
             {
                 return false;
             }
-            return std::ranges::all_of(targetSnapshot, [&](const std::wstring& expected) noexcept
-            {
-                return std::ranges::any_of(currentTargets, [&](const std::wstring& current) noexcept
-                { return OrdinalString::EqualsNoCase(expected, current); });
-            });
+            return std::is_permutation(selectionTargetSnapshot.begin(),
+                                       selectionTargetSnapshot.end(),
+                                       currentTargets.begin(),
+                                       currentTargets.end(),
+                                       [this](const std::wstring& expected, const std::wstring& current) noexcept
+                                       { return EquivalentProviderComponent(expected, current); });
         };
-        if (! targetBoundCommand || snapshotStillMatches())
+        const auto currentSnapshotStillMatches = [&]() noexcept
+        {
+            return currentTargetSnapshot.has_value() && _focusedIndex < _items.size() &&
+                EquivalentProviderComponent(currentTargetSnapshot.value(), _items[_focusedIndex].displayName);
+        };
+        const bool targetStillMatches = ! itemTargetCommand ||
+            (allowItemTarget && (IsSelectionAwareContextCommand(commandId) ? selectionSnapshotStillMatches() : currentSnapshotStillMatches()));
+        if (targetStillMatches)
         {
             PostMessageW(_hWnd.get(), WM_COMMAND, MAKEWPARAM(static_cast<WORD>(commandId), 0), 0);
         }
     }
 }
 
-void FolderView::UpdateContextMenuState(HMENU menu) const
+void FolderView::UpdateContextMenuState(HMENU menu, const bool allowItemTarget) const
 {
     if (! menu)
     {
@@ -413,8 +552,8 @@ void FolderView::UpdateContextMenuState(HMENU menu) const
     const bool hasFocus        = _focusedIndex != invalidIndex && _focusedIndex < _items.size();
     const size_t selectedCount = static_cast<size_t>(std::count_if(_items.begin(), _items.end(), [](const FolderItem& item) { return item.selected; }));
 
-    size_t effectiveCount = selectedCount;
-    if (effectiveCount == 0 && hasFocus)
+    size_t effectiveCount = allowItemTarget ? selectedCount : 0u;
+    if (allowItemTarget && effectiveCount == 0 && hasFocus)
     {
         effectiveCount = 1;
     }
@@ -424,7 +563,7 @@ void FolderView::UpdateContextMenuState(HMENU menu) const
 
     auto setEnabled = [&](UINT command, bool enabled) { EnableMenuItem(menu, command, MF_BYCOMMAND | (enabled ? MF_ENABLED : static_cast<UINT>(MF_GRAYED))); };
 
-    setEnabled(CmdOpen, hasFocus);
+    setEnabled(CmdOpen, allowItemTarget && hasFocus);
     setEnabled(CmdOpenWith, singleTarget && hasFocus);
     bool canViewSpace = false;
     if (_currentFolder.has_value())
@@ -435,14 +574,9 @@ void FolderView::UpdateContextMenuState(HMENU menu) const
     setEnabled(CmdDelete, hasTarget);
     setEnabled(CmdMove, hasTarget);
     setEnabled(CmdRename, singleTarget && hasFocus);
+    setEnabled(CmdCut, hasTarget && SupportsFileDropCut());
     setEnabled(CmdCopy, hasTarget);
     setEnabled(CmdProperties, singleTarget && hasFocus);
 
-    bool canPaste = false;
-    if (OpenClipboard(_hWnd.get()))
-    {
-        canPaste = GetClipboardData(CF_HDROP) != nullptr;
-        CloseClipboard();
-    }
-    setEnabled(CmdPaste, canPaste);
+    setEnabled(CmdPaste, CanPasteItemsFromClipboard());
 }

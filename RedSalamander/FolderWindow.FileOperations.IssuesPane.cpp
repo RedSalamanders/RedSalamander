@@ -62,6 +62,7 @@ int DipsToPixels(int dip, UINT dpi) noexcept
         case FILESYSTEM_MOVE: return IDS_CMD_MOVE;
         case FILESYSTEM_DELETE: return IDS_CMD_DELETE;
         case FILESYSTEM_RENAME: return IDS_CMD_RENAME;
+        case FILESYSTEM_CREATE_DIRECTORY: return IDS_FILEOPS_ISSUES_OPERATION_UNKNOWN;
         default: return IDS_FILEOPS_ISSUES_OPERATION_UNKNOWN;
     }
 }

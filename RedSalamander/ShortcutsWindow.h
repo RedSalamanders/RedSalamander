@@ -64,8 +64,10 @@ struct ShortcutsWindowDebugSnapshot
     uint32_t selectedRowTextArgb              = 0u;
     bool selectedRowUsesRainbow               = false;
     bool selectedRowCommandCellHasIcon        = false;
+    bool applicationCollapsed                 = false;
     bool functionBarCollapsed                 = false;
     bool folderViewCollapsed                  = false;
+    bool terminalCollapsed                    = false;
     std::wstring searchText;
     std::wstring selectedRowName;
     std::wstring selectedRowKeyText;
@@ -75,6 +77,8 @@ struct ShortcutsWindowDebugSnapshot
     std::wstring firstDisplayColumnId;
     std::wstring secondDisplayColumnId;
     std::wstring tooltipText;
+    std::vector<std::wstring> rowCommandIds;
+    std::vector<uint64_t> rowGroupStableIds;
     std::vector<std::wstring> rowKeyTexts;
     std::vector<std::wstring> displayColumnIds;
     std::vector<float> displayColumnWidthsDip;

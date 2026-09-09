@@ -72,6 +72,74 @@ Prefer:
 
 If the existing suites do not exercise the scenario, add a focused case instead of relying on manual repro.
 
+Commands cases run behind the same per-case isolation boundary in normal,
+repeat, and shuffled order. A fixture that mutates runtime managers, deferred
+plugin unload state, retained overlays, menu mode, focus, or pane state must
+restore and verify that state before returning; an isolated exact-case retry is
+not evidence that the broad process is clean. Retained-window metrics and
+teardown assertions must obtain HWNDs from process-owned debug hooks or another
+process-scoped lookup, never from class-only `FindWindowW(...)` evidence that
+can resolve a different running app instance.
+
+Broad command-dispatch smoke cases must leave whole-runtime settings/plugin
+reload commands and provider/OS lifecycle commands that prepare before user
+confirmation to dedicated deterministic cases. After any dispatched command can
+mutate navigation or presentation state, restore the fixture's in-memory settings
+snapshot, re-establish both pane providers and paths, and reapply each pane's live
+display mode, sort key/direction, and visibility options. Then prove both
+current-folder enumerations have settled before the next dispatch. Restoring the
+settings object alone does not reapply already-mutated FolderView state, and
+matching path text alone is not quiescence evidence.
+Navigation-shell stability cases that first change provider, path, or focus must
+pump messages and require a bounded multi-sample quiet baseline before capturing
+refresh, path, focus, or selection counters.
+When an owned pane modal closes, validate the real FolderView focus after the
+modal loop unwinds. Product teardown should combine a synchronous best-effort
+restore with the owning window's queued, foreground-safe focus restore; record
+Win32 focus, active/foreground owners, and the foreground process on failure.
+For asynchronous file/lease cleanup, poll to a bounded quiet point and retry
+transient filesystem observation errors. Report the terminal path, existence,
+error, and observation count so an observer race is not classified as retained
+work.
+For bidirectional tab-traversal coverage, explicitly re-establish and verify the
+boundary control before testing the opposite-direction wrap, and include logical
+plus native focus identities in failures. For UI redraw-churn coverage, prove
+settling and render-to-invalidation attribution first; hard-bound the invalidation
+source instead of using a smaller fixed render cap that rejects attributable work
+under broad-process load.
+
+For a same-process UIA close/reopen scenario, wait for the old HWND to close,
+release thread-held UIA clients, pump teardown, and reacquire the current window,
+page, host, and provider on every bounded mutation attempt. Treat Value, Toggle,
+and Selection operations as idempotent state-setting: success requires observing
+the requested state, not only a successful provider call. Preferences category
+selection must remain stable for repeated samples and reassert the target when
+queued initialization restores an earlier page; take render/invalidation baselines
+only after any subsequent focus transition also settles.
+
+When a failure reproduces only in broad Commands order, run the failed case with
+its immediate predecessor cluster in one process and repeat that cluster after the
+repair. Then run canonical Commands once. A standalone exact-case pass does not
+prove process cleanliness, and increasing the timeout does not repair stale UIA
+identity or lifecycle state.
+
+### Operation Startrail planning scenarios
+
+Changes to affected-set planning, evidence lookup, or resume must measure
+`validation.plan.warm_explain_ms`, `validation.plan.cold_snapshot_ms`, and the controlled
+`validation.plan.fileops_resume_avoided_ms` comparison. Emit component timings for
+snapshot acquisition, hashing, plan construction, evidence verification, serialization,
+and runner launch. Archive same-machine evidence under
+`Specs/TestRuns/<MachineHash>/Validation/<RunId>/`; treat cross-machine comparisons as
+directional and never use estimated savings as a trust decision.
+
+Report Git discovery, content hashing, canonicalization, impact matching, schema
+validation, evidence lookup, receipt-closure binding, and entry fingerprints separately.
+If Commands remains a monolithic executable, archive
+`validation.plan.fileops_resume_avoided_ms` as blocked with zero Full avoidance; a focused
+family process is not an independently reusable payload. Use an existing same-machine
+Validation archive as baseline only when the fixture/profile still match.
+
 ### 4. Archive the evidence
 
 After the run:

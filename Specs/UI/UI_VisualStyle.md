@@ -10,7 +10,6 @@ This document defines shared visual tokens and patterns used across RedSalamande
   - `FolderView` item **focus** border.
   - `ColorTextView` (Monitor) text **selection** highlight rectangles.
   - `NavigationView` keyboard **focus** ring rectangles.
-  - Future **marquee selection** rectangles (if implemented).
 - **Implementation guidance**:
   - Direct2D: use `FillRoundedRectangle` / `DrawRoundedRectangle` with `radiusX = radiusY = 2.0f`.
   - Clamp per-rectangle radius to avoid artifacts on very small rects (do not exceed `min(width, height) / 2`).
@@ -59,6 +58,8 @@ NavigationView reflects the **focused pane** (not only whether NavigationView it
   - The chevron direction is the splitter movement direction needed to create the target maximized state, not a label for the pane side.
   - Maximized split: either click target maximizes/focuses the hidden pane instead of restoring the current pane, and both chevrons point in the direction the splitter will move to switch sides.
   - Chevron color matches the grip-dot color exactly and chevron size stays close to the grip scale, not the menu text scale.
+  - Chevrons render as DPI-sized Segoe Fluent small-chevron glyphs through the cached DirectWrite
+    `D2DHdcPaint` bridge, with Unicode chevrons as the font fallback; private line geometry and GDI text are not used.
   - Both targets use the same subtle hover backplate and hand cursor.
 - **Hit target**: the non-arrow splitter region remains draggable; the arrow segments are click targets.
 

@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:red-salamander:schema:terminal-engine-collection-wrapper-result:v1",
+  "title": "RedSalamander candidate-wrapper collection result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "version",
+    "status",
+    "failure"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "red-salamander-terminal-engine-wrapper-result"
+    },
+    "version": {
+      "const": 1
+    },
+    "status": {
+      "enum": [
+        "failed",
+        "pass"
+      ]
+    },
+    "failure": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/configureFailure"
+        },
+        {
+          "$ref": "#/$defs/buildFailure"
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "pass"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "failure": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "failed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "failure": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "configureFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "code"
+      ],
+      "properties": {
+        "phase": {
+          "const": "configure"
+        },
+        "code": {
+          "const": "configure-process-failed"
+        }
+      }
+    },
+    "buildFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "code"
+      ],
+      "properties": {
+        "phase": {
+          "const": "build"
+        },
+        "code": {
+          "const": "build-process-failed"
+        }
+      }
+    }
+  }
+}

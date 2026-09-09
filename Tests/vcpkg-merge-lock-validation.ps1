@@ -8,7 +8,7 @@
 
 .NOTES
     Author: GuineaPig (Tester)
-    Related: .squad\decisions\inbox\guineapig-vcpkg-merge-lock.md
+    Related: Specs\Reviews\Squad-Decisions-Archive.md (vcpkg merge lock decision)
 #>
 
 [CmdletBinding()]
@@ -35,7 +35,7 @@ try {
         throw "Initial clean install failed"
     }
 
-    $lockFile = ".build\vcpkg_installed\x64-windows\include\wil\com.h"
+    $lockFile = ".build\vcpkg_installed\x64\x64-windows\include\wil\com.h"
     if (-not (Test-Path $lockFile)) {
         throw "Expected WIL header not found: $lockFile"
     }
@@ -85,7 +85,7 @@ try {
         throw "All-platform install failed"
     }
 
-    $arm64File = ".build\vcpkg_installed\arm64-windows\include\wil\com.h"
+    $arm64File = ".build\vcpkg_installed\arm64\arm64-windows\include\wil\com.h"
     if (-not (Test-Path $arm64File)) {
         Write-Host "  ⚠ SKIP: ARM64 triplet not built (expected on x64-only systems)" -ForegroundColor Yellow
     } else {
@@ -124,8 +124,8 @@ try {
     # Test 3: No Leftover Temporary Directories
     Write-Host "[Test 3] Cleanup of temporary merge directories..." -ForegroundColor Yellow
 
-    $tmpPattern = ".build\vcpkg_installed\*.__merge_tmp"
-    $tmpDirs = Get-ChildItem -Path ".build\vcpkg_installed" -Filter "*.__merge_tmp" -Directory -ErrorAction SilentlyContinue
+    $tmpPattern = ".build\vcpkg_installed\*\*.__merge_tmp"
+    $tmpDirs = Get-ChildItem -Path ".build\vcpkg_installed\*" -Filter "*.__merge_tmp" -Directory -ErrorAction SilentlyContinue
 
     if ($tmpDirs.Count -gt 0) {
         Write-Host "  ❌ FAIL: Found leftover temporary directories:" -ForegroundColor Red

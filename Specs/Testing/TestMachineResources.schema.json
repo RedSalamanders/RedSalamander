@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://red-salamander.invalid/schemas/test-machine-resources.v1.json",
+  "title": "RedSalamander per-machine test resources",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "resources"],
+  "properties": {
+    "schema": {
+      "const": "red-salamander.test-machine-resources.v1"
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/connectionProfile" },
+          { "$ref": "#/$defs/smbShare" },
+          { "$ref": "#/$defs/mtpDevice" },
+          { "$ref": "#/$defs/localTestRoot" }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "resourceBase": {
+      "type": "object",
+      "required": ["id", "kind", "enabled"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "kind": { "type": "string" },
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "connectionProfile": {
+      "allOf": [
+        { "$ref": "#/$defs/resourceBase" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "enabled", "profile"],
+          "properties": {
+            "id": {
+              "enum": [
+                "connection.ftp.primary",
+                "connection.sftp.primary",
+                "connection.scp.primary",
+                "connection.imap.primary",
+                "connection.s3.primary",
+                "connection.s3.alternate",
+                "connection.onedrive.personal",
+                "connection.onedrive.business",
+                "connection.sharepoint.primary"
+              ]
+            },
+            "kind": { "const": "connection-profile" },
+            "enabled": { "type": "boolean" },
+            "profile": { "type": "string", "minLength": 1, "maxLength": 1024 }
+          }
+        }
+      ]
+    },
+    "smbShare": {
+      "allOf": [
+        { "$ref": "#/$defs/resourceBase" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "enabled", "root"],
+          "properties": {
+            "id": { "const": "path.smb.primary" },
+            "kind": { "const": "smb-share" },
+            "enabled": { "type": "boolean" },
+            "root": { "type": "string", "minLength": 1, "maxLength": 1024 }
+          }
+        }
+      ]
+    },
+    "mtpDevice": {
+      "allOf": [
+        { "$ref": "#/$defs/resourceBase" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "enabled", "device", "scratch"],
+          "properties": {
+            "id": { "const": "device.mtp.primary" },
+            "kind": { "const": "mtp-device" },
+            "enabled": { "type": "boolean" },
+            "device": { "type": "string", "minLength": 1, "maxLength": 1024 },
+            "profile": { "type": "string", "minLength": 1, "maxLength": 1024 },
+            "root": { "type": "string", "minLength": 1, "maxLength": 1024 },
+            "scratch": { "type": "string", "minLength": 1, "maxLength": 1024 }
+          }
+        }
+      ]
+    },
+    "localTestRoot": {
+      "allOf": [
+        { "$ref": "#/$defs/resourceBase" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "enabled", "root"],
+          "properties": {
+            "id": { "const": "path.local.alternate" },
+            "kind": { "const": "local-test-root" },
+            "enabled": { "type": "boolean" },
+            "root": {
+              "type": "string",
+              "pattern": "^[A-Za-z]:\\\\RedSalamander\\.Perf$"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

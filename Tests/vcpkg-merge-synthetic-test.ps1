@@ -18,7 +18,7 @@
           touched by a merge into a different triplet.
 
 .NOTES
-    The helper is dot-sourced from Tools\VcpkgInstallSafety.ps1; this script
+    The helper is imported from Tools\Modules\Build\VcpkgInstallSafety.psm1; this script
     must not redefine Merge-RSVcpkgTripletSafe.
 #>
 
@@ -30,7 +30,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-. (Join-Path $repoRoot 'Tools\VcpkgInstallSafety.ps1')
+Import-Module (Join-Path $repoRoot 'Tools\Modules\Build\VcpkgInstallSafety.psm1') -Force -ErrorAction Stop
 
 function New-TestFile {
     param([string]$Path, [string]$Content)

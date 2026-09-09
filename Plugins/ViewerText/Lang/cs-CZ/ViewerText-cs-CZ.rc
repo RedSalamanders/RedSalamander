@@ -10,13 +10,13 @@ BEGIN
     BEGIN
         MENUITEM "&Otevřít...\tCtrl+O", IDM_VIEWER_FILE_OPEN
         MENUITEM "&Uložit jako...\tCtrl+S", IDM_VIEWER_FILE_SAVE_AS
-        MENUITEM "&Obnovit\tF5", IDM_VIEWER_FILE_REFRESH
+        MENUITEM "O&bnovit\tF5", IDM_VIEWER_FILE_REFRESH
         POPUP "&Jiné soubory"
         BEGIN
-            MENUITEM "&Další\tSpace, Ctrl+Down", IDM_VIEWER_OTHER_NEXT
-            MENUITEM "&Předchozí\tBackspace, Ctrl+Up", IDM_VIEWER_OTHER_PREVIOUS
+            MENUITEM "&Předchozí soubor\tBackspace, Ctrl+Up", IDM_VIEWER_OTHER_PREVIOUS
+            MENUITEM "&Další soubor\tSpace, Ctrl+Down", IDM_VIEWER_OTHER_NEXT
             MENUITEM "&Za prvé\tCtrl+Home", IDM_VIEWER_OTHER_FIRST
-            MENUITEM "&Poslední\tCtrl+End", IDM_VIEWER_OTHER_LAST
+            MENUITEM "P&oslední\tCtrl+End", IDM_VIEWER_OTHER_LAST
         END
         MENUITEM SEPARATOR
         MENUITEM "&Konec\tEsc", IDM_VIEWER_FILE_EXIT
@@ -24,35 +24,61 @@ BEGIN
     POPUP "&Hledat"
     BEGIN
         MENUITEM "&Najít...\tCtrl+F", IDM_VIEWER_SEARCH_FIND
-        MENUITEM "&Najít další\tF3", IDM_VIEWER_SEARCH_FIND_NEXT
-        MENUITEM "&Najít předchozí\tShift+F3", IDM_VIEWER_SEARCH_FIND_PREVIOUS
+        MENUITEM "Najít &další\tF3", IDM_VIEWER_SEARCH_FIND_NEXT
+        MENUITEM "Najít &předchozí\tShift+F3", IDM_VIEWER_SEARCH_FIND_PREVIOUS
     END
     POPUP "&Zobrazení"
     BEGIN
         MENUITEM "&Text", IDM_VIEWER_VIEW_TEXT
-        MENUITEM "&Rozdíl / Vedle sebe", IDM_VIEWER_VIEW_DIFF_SIDE_BY_SIDE
-        MENUITEM "&Rozdíl / Inline", IDM_VIEWER_VIEW_DIFF_INLINE
-        MENUITEM "&Rozdíl / Zobrazit nezměněný text", IDM_VIEWER_VIEW_DIFF_SHOW_UNCHANGED
-        MENUITEM "&Rozdíl / Další díl\tF7", IDM_VIEWER_VIEW_DIFF_NEXT_HUNK
-        MENUITEM "&Rozdíl / Předchozí kus\tShift+F7", IDM_VIEWER_VIEW_DIFF_PREVIOUS_HUNK
         MENUITEM "&Hex", IDM_VIEWER_VIEW_HEX
-        POPUP "&Hexadecimální bajtové barvy"
+        POPUP "Hexadecimální &barvy bajtů"
         BEGIN
             MENUITEM "&Přední okusování (zdůrazněno 00/FF)", IDM_VIEWER_VIEW_HEX_BYTE_COLORS_LEADING_NIBBLE
             MENUITEM "&Vypnuto", IDM_VIEWER_VIEW_HEX_BYTE_COLORS_OFF
         END
         MENUITEM SEPARATOR
-        MENUITEM "&Přejít na začátek\tHome", IDM_VIEWER_VIEW_GOTO_TOP
-        MENUITEM "&Přejděte ke spodní části\tEnd", IDM_VIEWER_VIEW_GOTO_BOTTOM
-        MENUITEM "&Přejít na offset...\tCtrl+G", IDM_VIEWER_VIEW_GOTO_OFFSET
-        MENUITEM "&Čísla řádků", IDM_VIEWER_VIEW_LINE_NUMBERS
-        MENUITEM "&Zabalit", IDM_VIEWER_VIEW_WRAP
+        MENUITEM "Vedle &sebe", IDM_VIEWER_VIEW_DIFF_SIDE_BY_SIDE
+        MENUITEM "&Inline", IDM_VIEWER_VIEW_DIFF_INLINE
+        MENUITEM "Zobrazit &nezměněný text", IDM_VIEWER_VIEW_DIFF_SHOW_UNCHANGED
+        MENUITEM "&Další rozdíl\tF7", IDM_VIEWER_VIEW_DIFF_NEXT_HUNK
+        MENUITEM "&Předchozí rozdíl\tShift+F7", IDM_VIEWER_VIEW_DIFF_PREVIOUS_HUNK
+        MENUITEM SEPARATOR
+        MENUITEM "Čísla &řádků", IDM_VIEWER_VIEW_LINE_NUMBERS
+        MENUITEM "&Zalomit", IDM_VIEWER_VIEW_WRAP
+        MENUITEM SEPARATOR
+        MENUITEM "Přejít na &začátek\tHome", IDM_VIEWER_VIEW_GOTO_TOP
+        MENUITEM "Přejít na &konec\tEnd", IDM_VIEWER_VIEW_GOTO_BOTTOM
+        MENUITEM "Přejít na &offset...\tCtrl+G", IDM_VIEWER_VIEW_GOTO_OFFSET
     END
     POPUP "&Kódování"
     BEGIN
-        MENUITEM "&Další Kódování\tF8", IDM_VIEWER_ENCODING_NEXT
+        MENUITEM "&Další kódování\tF8", IDM_VIEWER_ENCODING_NEXT
         MENUITEM "&Předchozí kódování\tShift+F8", IDM_VIEWER_ENCODING_PREVIOUS
         MENUITEM SEPARATOR
+        MENUITEM "UTF-&8", IDM_VIEWER_ENCODING_DISPLAY_UTF8
+        MENUITEM "UTF-8 s &BOM", IDM_VIEWER_ENCODING_DISPLAY_UTF8_BOM
+        MENUITEM "UTF-16 &LE", IDM_VIEWER_ENCODING_DISPLAY_UTF16LE_BOM
+        MENUITEM "UTF-16 B&E", IDM_VIEWER_ENCODING_DISPLAY_UTF16BE_BOM
+        MENUITEM "&Windows-1252", 1252
+        MENUITEM "Systémové &ANSI", IDM_VIEWER_ENCODING_DISPLAY_ANSI
+        MENUITEM SEPARATOR
+        MENUITEM "&Další kódování...", IDM_VIEWER_ENCODING_MORE
+        MENUITEM SEPARATOR
+        POPUP "&Kódování pro uložení"
+        BEGIN
+            MENUITEM "Zachovat &původní kódování", IDM_VIEWER_ENCODING_SAVE_KEEP_ORIGINAL
+            MENUITEM "UTF-&8", IDM_VIEWER_ENCODING_SAVE_UTF8
+            MENUITEM "UTF-8 s &BOM", IDM_VIEWER_ENCODING_SAVE_UTF8_BOM
+            MENUITEM "UTF-16 &LE", IDM_VIEWER_ENCODING_SAVE_UTF16LE_BOM
+            MENUITEM "UTF-16 B&E", IDM_VIEWER_ENCODING_SAVE_UTF16BE_BOM
+        END
+    END
+END
+
+IDR_VIEWERTEXT_ENCODING_CATALOG MENU
+BEGIN
+    POPUP "&Kódování"
+    BEGIN
         MENUITEM "&ANSI", IDM_VIEWER_ENCODING_DISPLAY_ANSI
         MENUITEM "UTF-&7", IDM_VIEWER_ENCODING_DISPLAY_UTF7
         MENUITEM "UTF-&8", IDM_VIEWER_ENCODING_DISPLAY_UTF8
@@ -297,14 +323,19 @@ BEGIN
                 END
             END
         END
-        MENUITEM SEPARATOR
-        MENUITEM "&Zachovat původní kódování", IDM_VIEWER_ENCODING_SAVE_KEEP_ORIGINAL
-        MENUITEM "&Převést na Uložit UTF-8 kusovník", IDM_VIEWER_ENCODING_SAVE_UTF8_BOM
-        MENUITEM "&Převést na Uložit UTF-8", IDM_VIEWER_ENCODING_SAVE_UTF8
-        MENUITEM "&Převést na Uložit ANSI", IDM_VIEWER_ENCODING_SAVE_ANSI
-        MENUITEM "&Převést na Uložit UTF-16 BE BOM", IDM_VIEWER_ENCODING_SAVE_UTF16BE_BOM
-        MENUITEM "&Převést na Uložit UTF-16 LE BOM", IDM_VIEWER_ENCODING_SAVE_UTF16LE_BOM
     END
+END
+
+IDD_VIEWERTEXT_ENCODING_PICKER DIALOGEX 0, 0, 312, 250
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Další kódování"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "&Hledat podle názvu nebo kódové stránky:", -1, 8, 8, 296, 10
+    EDITTEXT        IDC_VIEWERTEXT_ENCODING_FILTER, 8, 21, 296, 14, ES_AUTOHSCROLL
+    LISTBOX         IDC_VIEWERTEXT_ENCODING_LIST, 8, 41, 296, 181, LBS_NOTIFY | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    DEFPUSHBUTTON   "&OK", IDOK, 198, 230, 50, 14
+    PUSHBUTTON      "&Zrušit", IDCANCEL, 254, 230, 50, 14
 END
 
 STRINGTABLE

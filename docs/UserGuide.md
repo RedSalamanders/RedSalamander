@@ -78,14 +78,17 @@ Useful pane commands:
 
 Folder views support common file-manager interactions:
 
-- Single and multi-selection.
-- Keyboard navigation.
+- A persistent **current item** for keyboard navigation and commands, independent from the zero-or-more selected items.
+- Arrow keys move the current item without changing selection. Clicking empty background or pressing `Esc` clears selection but keeps the current item.
+- Single and multi-selection for batch commands.
 - Enter to open or execute.
 - `Backspace` to go to the parent folder.
 - Context menu for file-system-specific actions.
 - Folder refresh.
 - Display modes for compact or detailed work.
 - Optional hidden/system item visibility.
+
+An actual empty folder shows a separate **Go to parent** action. It is not a file or selected/current item; `Enter`, double-click, and `Backspace` invoke it. A filter that matches no items shows an empty filtered result without this action.
 
 ### Disk Space and Drive Actions
 
@@ -144,7 +147,8 @@ When a workflow is not visible in the first screen, check these command surfaces
 - The **Commands** menu for search, compare, occupied space, make file list, opened-files list, shared directories, connections, shell/command-line helpers, and File Explorer shortcuts.
 - The **Plugins** menu for plugin management and plugin-provided commands.
 - The **View** menu for theme, fullscreen, File Operations Failed Items, menu/function bar toggles, and Preferences.
-- `F1` / **Help -> Display Shortcuts** for the shortcut list that matches the current command set.
+- `F1` / **Help -> Display Shortcuts** for the binding-centric shortcut list: aliases appear as separate key rows.
+- `Ctrl+Shift+P` for the global, command-centric RedSalamander Command Palette: one searchable icon-and-text row per command with its current shortcut chips. It works from panes, navigation, previews, and Terminals.
 
 See [Main Window & Panes](MainWindow.md) for the full menu-by-menu map, and [Keyboard Shortcuts](KeyboardShortcuts.md) for the consolidated default-binding reference.
 
@@ -168,6 +172,8 @@ The navigation bar accepts local paths, UNC paths, file URIs, plugin-prefixed pa
 - `Shift+Space`: start Quick Search in the current pane. Type to highlight every matching name, move to the best prefix match first, use arrows to move through matches, `Esc` to clear, or `Enter` to accept the focused item.
 - `Ctrl+1` through `Ctrl+0`: go to Hot Path slots 1 through 10.
 - `Ctrl+Shift+1` through `Ctrl+Shift+0`: assign the current folder to a Hot Path slot.
+
+Back/Forward and other folder navigation remember the current item for each location and restore it when that item is still displayed. Navigation does not restore selection; use **Save Selection** and **Restore Selection** when selection should be brought back explicitly.
 
 ### Path Forms
 
@@ -277,6 +283,10 @@ The **Edit** menu provides selection commands for batch work:
 - Calculate directory size and continue to next item.
 - Hide selected or unselected names.
 
+`Space` toggles the current item in or out of selection, updates directory-size work from the selected items that remain, and advances current to the next item without wrapping. `Insert` performs the same toggle-and-advance without starting directory-size work. A second `Space` on an already-selected folder deselects it and removes it from size work.
+
+**Save Selection** records the selected displayed items, or the current item when selection is empty. **Restore Selection** replaces selection with saved items that are visible at that moment. Items hidden by a filter are not selected automatically when the filter is later cleared; invoke Restore again to select saved items that have become visible.
+
 ### Path, Shell, and Clipboard Helpers
 
 The file and command menus include several everyday workflow helpers:
@@ -284,9 +294,10 @@ The file and command menus include several everyday workflow helpers:
 - **Copy Path and File Name**, **Copy Path**, **Copy Name**, and **Copy UNC Path and Name** copy text forms of the current selection.
 - **Cut** and **Paste Shortcut** use standard Windows clipboard formats for local file-system selections.
 - **Open File Explorer -> Current Folder** opens the active folder in Windows File Explorer when it has a local backing path.
-- **Command Shell** opens a shell in the current location when possible.
-- **Bring Current Directory to Command Line** (`Ctrl+Space`) opens the command-line input and appends the active local folder path with command-line quoting.
-- **Bring Filename to Command Line** (`Ctrl+Enter`) opens the command-line input and appends the focused item name, or selected full local paths when files are selected. Press `Enter` in the input to run the command in that pane's current folder, or `Esc` to close it.
+- **Command Shell** (`Ctrl+Alt+T` or `Alt+7`) opens or reuses the embedded Terminal in the opposite pane at the active folder.
+- **Insert Current Directory in Terminal** (`Ctrl+Space` or `Ctrl+Shift+Space`) inserts the active folder's full path without sending Enter.
+- **Insert Focused Item in Terminal** (`Ctrl+Enter`) inserts the focused item's leaf only when the plugin has authenticated that the idle PowerShell cwd is the same parent; otherwise it inserts the full path. **Insert Full Path in Terminal** (`Ctrl+Shift+Enter`) always inserts the full path. Neither command sends Enter.
+- The former bottom command-line input and its `cmd.exe /C` execution route have been removed. Use the embedded Terminal or a configured User Menu action for commands.
 - **User Menu** (`F9`) opens configured external commands for the focused pane. Entries are managed in Preferences, can be filtered by file extension and computer name, and use the same path/selection macros as viewer and editor actions.
 - **Reread Associations** reloads the settings-backed viewer, editor, User Menu, plugin, and extension association data without moving the current pane folders. It rebuilds the dynamic action menus, clears icon association caches, refreshes both panes, and keeps the previous valid settings when the settings file cannot be reloaded.
 - **Make File List** opens an options dialog for the current selection, focused item, or current folder. It can recurse into folders, write JSON/CSV/text, choose which fields are included, use text macros such as `{fullPath}` and `{size}`, and save the result to the clipboard or a UTF-8 file. The last selected options are remembered.
@@ -298,7 +309,32 @@ The file and command menus include several everyday workflow helpers:
 
 Use **Calculate Occupied Space** (`Alt+F10`) to open ViewerSpace, a treemap-style folder usage viewer.
 
-Pressing `Space` on a folder selects it, calculates its size, and moves to the next item.
+Pressing `Space` on a folder toggles its selection, updates occupied-size calculation from the post-toggle selected set, and moves current to the next item without wrapping. Deselecting a folder with `Space` cancels its size work.
+
+## Terminal Workflows
+
+RedSalamander can keep one embedded Terminal session in each physical pane and
+one independent floating Terminal window with any number of tabs. Use
+`Ctrl+Alt+T` to open or reuse the embedded Terminal opposite the active folder.
+Use `Ctrl+Shift+N` to open/focus the floating window and add a fresh tab at the
+invoking trusted path. The floating window remembers its size and position,
+ordered tabs, active tab, profile, and path; it restores fresh shells after a
+clean restart rather than serializing live process state.
+
+Inside a Terminal:
+
+- `Ctrl+Shift+F` searches the current terminal text without sending input to the shell.
+- `Ctrl+Shift+.` searches trusted current-session and PowerShell history. Choosing a result inserts it but never executes it.
+- `Ctrl+Shift+T` adds a floating tab or opens/reuses the other-pane Terminal, depending on context.
+- `Ctrl+Tab`, `Ctrl+Shift+Tab`, and `Ctrl+Alt+1` … `Ctrl+Alt+9` navigate content/tabs; `Ctrl+Shift+W` closes the selected session.
+- `Enter` and `Ctrl+C` copy and clear an active selection; with no selection they pass through normally to the terminal application.
+- `Ctrl++`, `Ctrl+-`, and `Ctrl+0` adjust session-local font size. The main-keyboard plus/minus bindings follow physical key positions, so they remain stable across keyboard layouts.
+
+Typing `exit` closes exactly that embedded session or floating tab after final
+output is drained. The floating window closes when its last tab exits. All
+Terminal commands and aliases can be reviewed and customized under
+**Preferences -> Keyboard -> Terminal**. See [Keyboard Shortcuts](KeyboardShortcuts.md)
+for the full default table.
 
 ## Find Files and Directories
 
@@ -382,7 +418,7 @@ Preferences pages cover:
 - **Viewers**: viewer Actions and Associations for View, Alternate View, and View With.
 - **Editors**: editor Actions and Associations for Edit, Alternate Edit, Edit New, and Edit With.
 - **User Menu**: external command actions shown by `F9` and Commands -> User Menu.
-- **Keyboard**: shortcut bindings.
+- **Keyboard**: Application, Function Bar, Folder View, and Terminal shortcut bindings, including explicit Terminal pass-through and no-action choices.
 - **Themes**: built-in, file-based, and user themes.
 - **Plugins**: plugin enablement, diagnostics, and plugin configuration.
 - **File Operations**: pre-calculation, speed, bridge buffer, and task defaults.
@@ -393,6 +429,8 @@ Preferences pages cover:
 ## Themes
 
 Themes can be switched quickly from **View -> Theme** or managed in **Preferences -> Themes**.
+
+Use `Shift+F11` for the previous theme and `Shift+F12` for the next theme. Keyboard cycling, View-menu choices, and theme commands clicked on the Function Bar show a centered, non-blocking popup: the active theme is large in the middle, with the previous theme at the top-leading corner and the next theme at the bottom-trailing corner. Repeating the shortcut updates the same popup and restarts its brief readable delay. Click anywhere on the visible popup to dismiss it; it never takes keyboard focus. Selecting the already active theme is a no-op.
 
 Built-in choices:
 

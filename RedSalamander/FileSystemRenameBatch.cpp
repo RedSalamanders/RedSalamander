@@ -2,15 +2,8 @@
 
 #include <cstdint>
 #include <limits>
-#include <string_view>
-
 namespace
 {
-[[nodiscard]] bool ContainsPathSeparator(std::wstring_view text) noexcept
-{
-    return text.find(L'\\') != std::wstring_view::npos || text.find(L'/') != std::wstring_view::npos;
-}
-
 [[nodiscard]] bool IsUnsupportedBulkRename(HRESULT hr) noexcept
 {
     return hr == E_NOTIMPL || hr == HRESULT_FROM_WIN32(ERROR_CALL_NOT_IMPLEMENTED) || hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
@@ -34,16 +27,23 @@ namespace
             }
         }
 
-        const FileSystemRenameBatch::RenameOp& op   = ops[index];
-        const std::filesystem::path destinationPath = op.sourcePath.parent_path() / op.newLeaf;
-        const HRESULT hr                            = fileSystem.RenameItem(op.sourcePath.c_str(), destinationPath.c_str(), flags, options, callback, cookie);
+        const FileSystemRenameBatch::RenameOp& op = ops[index];
+        const HRESULT hr = fileSystem.RenameItem(
+            op.sourcePath.c_str(), op.providerDestinationPath.c_str(), flags, options, callback, cookie);
         if (callback)
         {
             // Report each attempted rename (including the failing one) so hosts that track
             // per-item outcomes see exactly which items reached the filesystem; otherwise a
             // partial fallback run would be indistinguishable from a total failure.
             static_cast<void>(callback->FileSystemItemCompleted(
-                FILESYSTEM_RENAME, static_cast<unsigned long>(index), op.sourcePath.c_str(), destinationPath.c_str(), hr, nullptr, cookie));
+                FILESYSTEM_RENAME,
+                static_cast<unsigned long>(index),
+                op.sourcePath.c_str(),
+                op.providerDestinationPath.c_str(),
+                hr,
+                nullptr,
+                nullptr,
+                cookie));
         }
         if (FAILED(hr))
         {
@@ -105,14 +105,9 @@ HRESULT Execute(IFileSystem& fileSystem,
         const std::wstring& source   = op.sourcePath.native();
         const std::wstring_view name = op.newLeaf;
 
-        if (source.empty() || name.empty())
+        if (source.empty() || name.empty() || op.providerDestinationPath.empty())
         {
             return E_INVALIDARG;
-        }
-
-        if (ContainsPathSeparator(name))
-        {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
         }
 
         const size_t sourceLen = source.size();

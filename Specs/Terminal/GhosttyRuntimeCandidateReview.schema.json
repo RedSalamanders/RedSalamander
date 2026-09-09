@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://red-salamander.local/schemas/ghostty-runtime-candidate-review-v1.json",
+  "title": "RedSalamander Ghostty runtime candidate review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "generatedUtc", "source", "ancestry", "pathFilter", "inventory", "abi", "security"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "generatedUtc": { "type": "string", "format": "date-time", "maxLength": 40 },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "baseCommit", "candidateCommit", "tree", "version", "archive", "officialVerification"],
+      "properties": {
+        "repository": { "const": "https://github.com/ghostty-org/ghostty.git" },
+        "baseCommit": { "$ref": "#/$defs/sha1" },
+        "candidateCommit": { "$ref": "#/$defs/sha1" },
+        "tree": { "$ref": "#/$defs/sha1" },
+        "version": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "archive": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "url", "sha256", "repeatSha256"],
+          "properties": {
+            "path": { "$ref": "#/$defs/relativePath" },
+            "url": { "type": "string", "pattern": "^https://github\\.com/ghostty-org/ghostty/archive/[0-9a-f]{40}\\.tar\\.gz$", "maxLength": 256 },
+            "sha256": { "$ref": "#/$defs/sha256" },
+            "repeatSha256": { "$ref": "#/$defs/sha256" }
+          }
+        },
+        "officialVerification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["verified", "reason", "commitUrl", "authorDate", "committerDate"],
+          "properties": {
+            "verified": { "type": "boolean" },
+            "reason": { "type": "string", "minLength": 1, "maxLength": 80 },
+            "commitUrl": { "type": "string", "pattern": "^https://github\\.com/ghostty-org/ghostty/commit/[0-9a-f]{40}$", "maxLength": 256 },
+            "authorDate": { "type": "string", "format": "date-time", "maxLength": 40 },
+            "committerDate": { "type": "string", "format": "date-time", "maxLength": 40 }
+          }
+        }
+      }
+    },
+    "ancestry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["isDescendant", "aheadCount", "behindCount"],
+      "properties": {
+        "isDescendant": { "const": true },
+        "aheadCount": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "behindCount": { "const": 0 }
+      }
+    },
+    "pathFilter": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/relativePath" }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fileCount", "insertions", "deletions", "categoryCounts", "entries"],
+      "properties": {
+        "fileCount": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "insertions": { "type": "integer", "minimum": 0, "maximum": 10000000 },
+        "deletions": { "type": "integer", "minimum": 0, "maximum": 10000000 },
+        "categoryCounts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["category", "count"],
+            "properties": {
+              "category": { "$ref": "#/$defs/category" },
+              "count": { "type": "integer", "minimum": 1, "maximum": 10000 }
+            }
+          }
+        },
+        "entries": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "status", "category", "insertions", "deletions"],
+            "properties": {
+              "path": { "$ref": "#/$defs/relativePath" },
+              "status": { "type": "string", "pattern": "^[A-Z][0-9]{0,3}$", "maxLength": 4 },
+              "category": { "$ref": "#/$defs/category" },
+              "insertions": { "type": "integer", "minimum": 0, "maximum": 10000000 },
+              "deletions": { "type": "integer", "minimum": 0, "maximum": 10000000 }
+            }
+          }
+        }
+      }
+    },
+    "abi": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["headerChanges", "declarations", "enumValues", "loaderRequiredExports"],
+      "properties": {
+        "headerChanges": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/$defs/relativePath" } },
+        "declarations": { "$ref": "#/$defs/symbolDelta" },
+        "enumValues": { "$ref": "#/$defs/enumDelta" },
+        "loaderRequiredExports": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["count", "entries"],
+          "properties": {
+            "count": { "type": "integer", "minimum": 1, "maximum": 1000 },
+            "entries": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1000,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "baseDeclared", "candidateDeclared", "replacement"],
+                "properties": {
+                  "name": { "$ref": "#/$defs/symbol" },
+                  "baseDeclared": { "type": "boolean" },
+                  "candidateDeclared": { "type": "boolean" },
+                  "replacement": { "type": ["string", "null"], "pattern": "^ghostty_[a-z0-9_]+$", "maxLength": 160 }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claimPolicy", "reviewedCommitCount", "categoryCounts", "commits", "findings"],
+      "properties": {
+        "claimPolicy": { "const": "primary-source-review-without-independent-vulnerability-labels" },
+        "reviewedCommitCount": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "categoryCounts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["category", "commitCount"],
+            "properties": {
+              "category": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 80 },
+              "commitCount": { "type": "integer", "minimum": 0, "maximum": 10000 }
+            }
+          }
+        },
+        "commits": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["commit", "date", "subject", "url", "categories", "paths"],
+            "properties": {
+              "commit": { "$ref": "#/$defs/sha1" },
+              "date": { "type": "string", "format": "date-time", "maxLength": 40 },
+              "subject": { "type": "string", "minLength": 1, "maxLength": 512 },
+              "url": { "type": "string", "pattern": "^https://github\\.com/ghostty-org/ghostty/commit/[0-9a-f]{40}$", "maxLength": 256 },
+              "categories": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 80 } },
+              "paths": { "type": "array", "maxItems": 1000, "uniqueItems": true, "items": { "$ref": "#/$defs/relativePath" } }
+            }
+          }
+        },
+        "findings": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "commits", "upstreamPaths", "productPaths", "disposition", "summary"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 80 },
+              "commits": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "$ref": "#/$defs/sha1" } },
+              "upstreamPaths": { "type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": { "$ref": "#/$defs/relativePath" } },
+              "productPaths": { "type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": { "$ref": "#/$defs/relativePath" } },
+              "disposition": { "enum": ["adapter-change-required", "overlay-review-required", "regression-coverage-required", "upstream-hardening-reviewed"] },
+              "summary": { "type": "string", "minLength": 1, "maxLength": 1024 }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha1": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "relativePath": { "type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\r\\n]+$", "maxLength": 1024 },
+    "category": { "enum": ["public-abi", "parser-state", "clipboard-security", "kitty-graphics", "allocation-memory", "snapshot-serialization", "build-toolchain", "licenses", "tests", "irrelevant-to-lib-vt"] },
+    "symbol": { "type": "string", "pattern": "^ghostty_[a-z0-9_]+$", "maxLength": 160 },
+    "symbolRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "signature"],
+      "properties": {
+        "name": { "$ref": "#/$defs/symbol" },
+        "signature": { "type": "string", "minLength": 1, "maxLength": 4096 }
+      }
+    },
+    "changedSymbolRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "before", "after"],
+      "properties": {
+        "name": { "$ref": "#/$defs/symbol" },
+        "before": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "after": { "type": "string", "minLength": 1, "maxLength": 4096 }
+      }
+    },
+    "symbolDelta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseCount", "candidateCount", "added", "removed", "changed"],
+      "properties": {
+        "baseCount": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "candidateCount": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "added": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/symbolRecord" } },
+        "removed": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/symbolRecord" } },
+        "changed": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/changedSymbolRecord" } }
+      }
+    },
+    "enumRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^GHOSTTY_[A-Z0-9_]+$", "maxLength": 200 },
+        "value": { "type": "string", "minLength": 1, "maxLength": 256 }
+      }
+    },
+    "changedEnumRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "before", "after"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^GHOSTTY_[A-Z0-9_]+$", "maxLength": 200 },
+        "before": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "after": { "type": "string", "minLength": 1, "maxLength": 256 }
+      }
+    },
+    "enumDelta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseCount", "candidateCount", "added", "removed", "changed"],
+      "properties": {
+        "baseCount": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "candidateCount": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "added": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/enumRecord" } },
+        "removed": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/enumRecord" } },
+        "changed": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/changedEnumRecord" } }
+      }
+    }
+  }
+}

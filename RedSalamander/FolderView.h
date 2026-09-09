@@ -16,6 +16,7 @@
 
 #include <filesystem>
 #include <functional>
+#include <list>
 #include <memory>
 #include <mutex>
 
@@ -24,6 +25,7 @@
 
 #include <deque>
 #include <optional>
+#include <span>
 #include <stop_token>
 #include <string>
 #include <string_view>
@@ -33,6 +35,7 @@
 #include <vector>
 
 #include "MaskSyntax.h"
+#include "FileSystemPathIdentity.h"
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027
@@ -64,6 +67,10 @@ namespace RedSalamander::Ui
 {
 class AlertOverlay;
 }
+namespace FileOperationArtifacts
+{
+struct Projection;
+}
 
 // Theme structures and Helpers are defined in AppTheme.h
 
@@ -94,6 +101,30 @@ struct FolderViewRenamePromptDebugSnapshot
 class FolderView
 {
 public:
+    enum class CurrentResolutionReason : uint8_t
+    {
+        Empty = 0,
+        ExplicitHostTarget,
+        SurvivingIdentity,
+        GenericSuccessor,
+        GenericPredecessor,
+        NavigationMemoryRestore,
+        HostRemovalIntent,
+        FirstItem,
+        // Reserved to preserve numeric values already emitted in archived performance evidence.
+        LegacySelectedFallback,
+        LegacyIndexFallback,
+        Unresolved,
+    };
+
+    enum class FocusMemoryNoCacheReason : uint8_t
+    {
+        None = 0,
+        LocationIdentity,
+        ItemIdentity,
+        OversizedEntry,
+    };
+
     FolderView();
     ~FolderView();
 
@@ -119,6 +150,19 @@ public:
     // folder is enumerated, the requested item becomes the focused/active item (and is scrolled into view).
     void RememberFocusedItemForFolder(const std::filesystem::path& folder, std::wstring_view itemDisplayName) noexcept;
 
+    enum class RemovalDisposition : uint8_t
+    {
+        Retained,
+        Removed,
+    };
+
+    // Captures the focused source and current ordering for a host-owned removal operation. Completion
+    // commits the intent only when that exact source is explicitly Removed; retained and missing
+    // per-source outcomes remain survivors and cannot move focus.
+    [[nodiscard]] uint64_t BeginRemovalFocusTracking(const std::vector<std::filesystem::path>& removedPaths,
+                                                     const FileSystemPathIdentity& pathIdentity);
+    void CompleteRemovalFocusTracking(uint64_t token, std::span<const RemovalDisposition> sourceDispositions) noexcept;
+
     // Prepares the view for an external command by clearing selection and focusing the specified item.
     // Returns true if the item was found and focused, false otherwise.
     bool PrepareForExternalCommand(std::wstring_view focusItemDisplayName) noexcept;
@@ -126,6 +170,8 @@ public:
     // Queues a FolderView command (e.g. IDM_FOLDERVIEW_CONTEXT_*) to execute after the next successful
     // enumeration of `targetFolder`. The command is canceled if the view navigates to a different folder.
     void QueueCommandAfterNextEnumeration(UINT commandId, const std::filesystem::path& targetFolder, std::wstring_view expectedFocusDisplayName) noexcept;
+    void SelectDisplayNamesAfterNextEnumeration(const std::filesystem::path& targetFolder,
+                                                std::vector<std::wstring> displayNames) noexcept;
 
     [[maybe_unused]] HWND GetHWND() const
     {
@@ -145,11 +191,7 @@ public:
     void OnDpiChanged(float newDpi);
     void SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem);
     const PluginMetaData* GetFileSystemMetadata() const;
-    void SetFileSystemContext(std::wstring_view pluginId, std::wstring_view instanceContext)
-    {
-        _fileSystemPluginId.assign(pluginId);
-        _fileSystemInstanceContext.assign(instanceContext);
-    }
+    void SetFileSystemContext(std::wstring_view pluginId, std::wstring_view instanceContext);
     [[nodiscard]] std::wstring_view GetFileSystemPluginId() const noexcept
     {
         return _fileSystemPluginId;
@@ -178,9 +220,11 @@ public:
     std::vector<std::filesystem::path> GetSelectedPaths() const;
     std::vector<std::filesystem::path> GetSelectedDirectoryPaths() const;
     [[nodiscard]] std::optional<std::filesystem::path> GetFocusedPath() const;
+    [[nodiscard]] std::shared_ptr<const FileOperationArtifacts::Projection> GetFocusedArtifactProjection() const noexcept;
     std::vector<std::filesystem::path> GetSelectedOrFocusedPaths() const;
     std::vector<std::wstring> GetSelectedOrFocusedDisplayNames() const;
     [[nodiscard]] bool CutSelectionToClipboard();
+    [[nodiscard]] bool CutPathsToClipboard(const std::vector<std::filesystem::path>& paths);
     [[nodiscard]] bool PasteShortcutFromClipboard();
     void ActivateIncrementalSearch();
 
@@ -193,15 +237,37 @@ public:
 
     struct FileOperationRequest
     {
+        enum class Origin : uint8_t
+        {
+            PaneCommand,
+            ClipboardPaste,
+            InternalDrop,
+            ExternalDrop,
+            InlineF2,
+            PackCleanup,
+            UnpackCleanup,
+        };
+
         FileSystemOperation operation = static_cast<FileSystemOperation>(0);
+        Origin origin = Origin::PaneCommand;
         std::vector<std::filesystem::path> sourcePaths;
         bool sourceContextSpecified = false;
         std::wstring sourcePluginId;
         std::wstring sourceInstanceContext;
         std::optional<std::filesystem::path> destinationFolder;
+        // Present only for one-step Inline F2. The leaf has already passed the inline editor;
+        // the host still validates it while constructing RenamePlan.
+        std::optional<std::wstring> renameLeafName;
         FileSystemFlags flags = static_cast<FileSystemFlags>(0);
+        // Clipboard Move captures the exact Windows sequence and supplies a worker-release barrier.
+        // The host publishes the task and creates its gated worker before invoking this callback.
+        std::optional<uint32_t> moveClipboardSequence;
+        std::function<HRESULT()> preWorkerReleaseBarrier;
         // Invoked on the UI thread after the queued host operation reaches a verified terminal result.
         std::function<void(HRESULT)> completionCallback;
+        // The Pack/Unpack prompt captured the one archive-delete choice. Other origins must leave
+        // this false and use the central destructive confirmation surface.
+        bool archiveDeleteAfterConfirmed = false;
     };
 
     using FileOperationRequestCallback = std::function<HRESULT(FileOperationRequest request)>;
@@ -288,12 +354,53 @@ public:
     [[nodiscard]] size_t DebugGetBitmapIconCount() const noexcept;
     [[nodiscard]] bool DebugIsItemSelectedByDisplayName(std::wstring_view displayName) const noexcept;
     [[nodiscard]] size_t DebugGetSelectedItemCount() const noexcept;
+    struct DebugFocusSelectionStateSnapshot
+    {
+        size_t itemCount = 0u;
+        size_t currentIndex = static_cast<size_t>(-1);
+        std::wstring currentDisplayName;
+        size_t focusedFlagCount = 0u;
+        size_t selectedCount = 0u;
+        uint32_t selectedFileCount = 0u;
+        uint32_t selectedFolderCount = 0u;
+        uint64_t selectedFileBytes = 0u;
+        uint64_t selectionDigest = 0u;
+        size_t anchorIndex = static_cast<size_t>(-1);
+        CurrentResolutionReason resolutionReason = CurrentResolutionReason::Unresolved;
+        uint64_t focusOwnershipEpoch = 0u;
+        bool emptyParentActionActive = false;
+        size_t potentialDragSourceCount = 0u;
+        uint64_t potentialDragSourceDigest = 0u;
+        size_t focusMemoryEntryCount = 0u;
+        size_t focusMemoryPayloadBytes = 0u;
+        uint64_t focusMemoryEvictionCount = 0u;
+        uint64_t focusMemoryHitCount = 0u;
+        uint64_t focusMemoryMissCount = 0u;
+        uint64_t focusMemoryNoCacheCount = 0u;
+        uint64_t focusMemoryLocationIdentityNoCacheCount = 0u;
+        uint64_t focusMemoryItemIdentityNoCacheCount = 0u;
+        uint64_t focusMemoryOversizedEntryNoCacheCount = 0u;
+        FocusMemoryNoCacheReason focusMemoryLastNoCacheReason = FocusMemoryNoCacheReason::None;
+    };
+    [[nodiscard]] DebugFocusSelectionStateSnapshot DebugGetFocusSelectionStateSnapshot() const noexcept;
+    void DebugClearFocusMemoryForSelfTest() noexcept;
+    [[nodiscard]] bool DebugRememberFocusMemoryEntryForSelfTest(const std::filesystem::path& folder, std::wstring_view itemDisplayName) noexcept;
+    [[nodiscard]] std::wstring DebugLookupFocusMemoryEntryForSelfTest(const std::filesystem::path& folder) noexcept;
     [[nodiscard]] bool DebugWarmRenderingForSelfTest() noexcept;
     [[nodiscard]] bool DebugSetHoveredItemByDisplayName(std::wstring_view displayName) noexcept;
     [[nodiscard]] std::optional<POINT> DebugGetItemCenterClientPointForSelfTest(std::wstring_view displayName) const noexcept;
+    [[nodiscard]] std::optional<POINT> DebugGetEmptyBackgroundClientPointForSelfTest() const noexcept;
     void DebugSetHoveredIndexForSelfTest(size_t index) noexcept
     {
         _hoveredIndex = index;
+    }
+    void DebugClearSelectionAnchorForSelfTest() noexcept
+    {
+        _anchorIndex = static_cast<size_t>(-1);
+    }
+    void DebugSendKeyForSelfTest(WPARAM key, bool ctrl, bool shift)
+    {
+        OnKeyDown(key, ctrl, shift, false);
     }
     void DebugSetCurrentFolderWithoutEnumerationForSelfTest(std::filesystem::path folder)
     {
@@ -301,12 +408,27 @@ public:
     }
     [[nodiscard]] std::vector<std::filesystem::path> DebugGetDragSourcePathsForSelfTest() const
     {
-        return GetSelectedOrFocusedPaths();
+        return _drag.potential ? _drag.sourcePaths : std::vector<std::filesystem::path>{};
+    }
+    void DebugSetSuppressOleDragDropForSelfTest(bool suppress) noexcept
+    {
+        _debugSuppressOleDragDrop = suppress;
+        _debugLastDragStartPaths.clear();
+        _debugDragStartCount = 0u;
+    }
+    [[nodiscard]] std::vector<std::filesystem::path> DebugGetLastDragStartPathsForSelfTest() const
+    {
+        return _debugLastDragStartPaths;
+    }
+    [[nodiscard]] uint64_t DebugGetDragStartCountForSelfTest() const noexcept
+    {
+        return _debugDragStartCount;
     }
     void DebugResetDrawItemTransientBrushCreateCount() noexcept;
     [[nodiscard]] bool DebugIsEmptyFolderStateActive() const noexcept;
     [[nodiscard]] std::wstring_view DebugGetEmptyStateMessage() const noexcept;
     [[nodiscard]] std::wstring_view DebugGetEmptyFolderFunMessage() const noexcept;
+    [[nodiscard]] static std::wstring DebugValidateRemovalFocusContractsForSelfTest();
 
     struct DebugColumnLayoutEntry
     {
@@ -620,6 +742,7 @@ public:
         std::filesystem::path focusedPath;
         std::vector<std::filesystem::path> selectionPaths;
         std::vector<std::filesystem::path> displayedFilePaths;
+        bool forceInternal = false;
     };
 
     using ViewFileRequestCallback = std::function<bool(const ViewFileRequest& request)>;
@@ -645,7 +768,13 @@ public:
         std::optional<SelectedItemDetails> singleItem;
     };
 
-    using SelectionChangedCallback = std::function<void(const SelectionStats& stats)>;
+    enum class SelectionChangeKind : uint8_t
+    {
+        Membership,
+        ItemMetadata,
+    };
+
+    using SelectionChangedCallback = std::function<void(const SelectionStats& stats, SelectionChangeKind kind)>;
     void SetSelectionChangedCallback(SelectionChangedCallback callback)
     {
         _selectionChangedCallback = std::move(callback);
@@ -689,6 +818,7 @@ public:
     };
 
     [[nodiscard]] bool DebugGetIncrementalSearchSnapshot(IncrementalSearchDebugSnapshot& out) const noexcept;
+    void DebugExitIncrementalSearch() noexcept;
 #endif
 
     using SelectionSizeComputationRequestedCallback = std::function<void()>;
@@ -768,7 +898,10 @@ private:
     class DropTarget;
     struct EnumerationPayload;
 
-    [[nodiscard]] bool RequestViewFocusedItem(ViewFileRole role, bool activateFallback, std::wstring_view actionId = {});
+    [[nodiscard]] bool RequestViewFocusedItem(ViewFileRole role,
+                                              bool activateFallback,
+                                              std::wstring_view actionId = {},
+                                              bool forceInternal = false);
 
 #pragma warning(push)
 // (C4625) copy constructor was implicitly defined as deleted / (C4626) assignment operator was implicitly defined as deleted
@@ -880,6 +1013,10 @@ private:
         wil::com_ptr<IDWriteTextLayout> metadataLayout;
         DWRITE_TEXT_METRICS metadataMetrics{};
 
+        // Null for ordinary entries. Artifact rows retain the shared semantic projection so every
+        // FolderView mode (including Compare panes) renders the same classification.
+        std::shared_ptr<const FileOperationArtifacts::Projection> artifactProjection;
+
         // Get extension from displayName (zero-copy)
         [[nodiscard]] std::wstring_view GetExtension() const noexcept
         {
@@ -894,11 +1031,11 @@ private:
 
     struct DragContext
     {
-        bool dragging = false;
+        bool potential = false;
         POINT startPoint{};
-        size_t anchorIndex    = static_cast<size_t>(-1);
-        bool hasStartItemRect = false;
-        RECT startItemRect{};
+        size_t pressedIndex = static_cast<size_t>(-1);
+        std::vector<std::filesystem::path> sourcePaths;
+        std::vector<std::wstring> sourceDisplayNames;
     };
 
     struct IncrementalSearchState
@@ -980,11 +1117,64 @@ private:
     const PluginMetaData* _fileSystemMetadata{};
     std::wstring _fileSystemPluginId;
     std::wstring _fileSystemInstanceContext;
+    std::optional<FileSystemPathIdentity> _fileSystemPathIdentity;
+    uint64_t _fileSystemLiveInstanceEpoch = 0u;
+    std::wstring _displayedLocationKey;
     bool _localShellBackedFileSystem = false;
     DirectoryInfoCache::Pin _directoryCachePin;
 
-    std::wstring _focusMemoryRootKey;
-    std::unordered_map<std::wstring, std::wstring> _focusMemory;
+    using FocusMemoryRecencyList = std::list<const std::wstring*>;
+    struct FocusMemoryEntry final
+    {
+        std::wstring itemIdentityKey;
+        size_t payloadBytes = 0u;
+        FocusMemoryRecencyList::iterator recencyIterator;
+    };
+
+    static constexpr size_t kFocusMemoryMaxEntries = 512u;
+    static constexpr size_t kFocusMemoryMaxPayloadBytes = 512u * 1024u;
+    std::unordered_map<std::wstring, FocusMemoryEntry> _focusMemory;
+    FocusMemoryRecencyList _focusMemoryRecency;
+    size_t _focusMemoryPayloadBytes = 0u;
+    uint64_t _focusMemoryEvictionCount = 0u;
+    uint64_t _focusMemoryHitCount = 0u;
+    uint64_t _focusMemoryMissCount = 0u;
+    uint64_t _focusMemoryNoCacheCount = 0u;
+    uint64_t _focusMemoryLocationIdentityNoCacheCount = 0u;
+    uint64_t _focusMemoryItemIdentityNoCacheCount = 0u;
+    uint64_t _focusMemoryOversizedEntryNoCacheCount = 0u;
+    FocusMemoryNoCacheReason _focusMemoryLastNoCacheReason = FocusMemoryNoCacheReason::None;
+
+    struct PendingRemovalFocus final
+    {
+        struct Source final
+        {
+            size_t sourceIndex = 0u;
+            std::wstring displayName;
+            bool provenRemoved = false;
+        };
+
+        uint64_t token = 0u;
+        std::filesystem::path folderPath;
+        FileSystemPathIdentity pathIdentity{};
+        std::vector<Source> sources;
+        size_t focusedSourceIndex = 0u;
+        std::wstring removedFocusDisplayName;
+        uint64_t folderPathGeneration = 0u;
+        uint64_t focusOwnershipEpoch = 0u;
+        uint64_t sortEpoch = 0u;
+        uint64_t providerEpoch = 0u;
+        uint64_t commitEnumerationGeneration = 0u;
+        uint64_t commitSequence = 0u;
+        std::chrono::steady_clock::time_point expiresAt{};
+        bool committed = false;
+    };
+    std::vector<PendingRemovalFocus> _pendingRemovalFocus;
+    uint64_t _nextRemovalFocusToken = 1u;
+    uint64_t _nextRemovalFocusCommitSequence = 1u;
+    uint64_t _removalFocusOwnershipEpoch = 0u;
+    uint64_t _removalFocusSortEpoch = 0u;
+    uint64_t _removalFocusProviderEpoch = 0u;
 
     bool _pasteShortcutInFlight = false;
     uint64_t _nextPasteShortcutRequestId = 1u;
@@ -996,9 +1186,68 @@ private:
     wil::com_ptr<IFilesInformation> _itemsArenaBuffer; // Keeps arena alive for zero-copy string_views
     std::filesystem::path _itemsFolder;                // Folder path for computing full paths
 
+    struct PendingNavigationDisplayedModel final
+    {
+        std::optional<std::filesystem::path> displayedFolder;
+        std::wstring displayedLocationKey;
+        std::vector<FolderItem> items;
+        wil::com_ptr<IFilesInformation> itemsArenaBuffer;
+        std::filesystem::path itemsFolder;
+        SelectionStats selectionStats{};
+        size_t focusedIndex = static_cast<size_t>(-1);
+        size_t hoveredIndex = static_cast<size_t>(-1);
+        size_t anchorIndex = static_cast<size_t>(-1);
+        CurrentResolutionReason resolutionReason = CurrentResolutionReason::Unresolved;
+        float scrollOffset = 0.0f;
+        float horizontalOffset = 0.0f;
+    };
+    std::optional<PendingNavigationDisplayedModel> _pendingNavigationDisplayedModel;
+
     size_t _focusedIndex = static_cast<size_t>(-1);
     size_t _hoveredIndex = static_cast<size_t>(-1);
     size_t _anchorIndex  = static_cast<size_t>(-1);
+    CurrentResolutionReason _lastCurrentResolutionReason = CurrentResolutionReason::Unresolved;
+
+    struct CurrentRepairProbe final
+    {
+        std::wstring displayName;
+        uint16_t extensionOffset = 0u;
+        bool isDirectory = false;
+        uint64_t sizeBytes = 0u;
+        int64_t lastWriteTime = 0;
+        DWORD fileAttributes = 0u;
+        size_t unsortedOrder = 0u;
+        std::optional<std::wstring> sortNoneSuccessor;
+        std::optional<std::wstring> sortNonePredecessor;
+        std::vector<std::wstring> excludedIdentities;
+        bool hostRemovalRepair = false;
+    };
+
+    struct CurrentResolutionInput final
+    {
+        bool sameLogicalLocation = false;
+        std::optional<std::wstring> explicitHostTarget;
+        std::optional<std::wstring> survivingIdentity;
+        std::optional<CurrentRepairProbe> genericRepairProbe;
+        std::optional<std::wstring> navigationMemoryRestore;
+        std::optional<std::wstring> previousCurrentIdentity;
+        std::optional<std::wstring> previousAnchorIdentity;
+        SelectionStats previousSelectionStats{};
+        bool selectionMembershipChanged = false;
+    };
+
+    struct CurrentResolutionResult final
+    {
+        size_t index = static_cast<size_t>(-1);
+        CurrentResolutionReason reason = CurrentResolutionReason::Unresolved;
+    };
+
+    struct PendingExplicitCurrentTarget final
+    {
+        std::wstring locationKey;
+        std::wstring displayName;
+    };
+    std::optional<PendingExplicitCurrentTarget> _pendingExplicitCurrentTarget;
     int _columns         = 1;
     int _rowsPerColumn   = 0;
     std::vector<FolderViewColumnLayout::Column> _columnLayout;
@@ -1106,6 +1355,8 @@ private:
     wil::com_ptr<ID2D1SolidColorBrush> _selectedItemTextBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _focusedBackgroundBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _focusBrush;
+    wil::com_ptr<ID2D1SolidColorBrush> _artifactWarningFillBrush;
+    wil::com_ptr<ID2D1SolidColorBrush> _artifactWarningTextBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _incrementalSearchHighlightBrush;
     wil::com_ptr<ID2D1Bitmap> _placeholderFolderIcon; // Folder placeholder (48×48) with Fluent Design
     wil::com_ptr<ID2D1Bitmap> _placeholderFileIcon;   // File placeholder (48×48) with Fluent Design
@@ -1304,6 +1555,7 @@ private:
     void OnMouseWheelMessage(UINT keyState, int delta);
     void OnMeasuredMouseWheelMessage(UINT keyState, int delta);
     void OnMeasuredMouseHWheelMessage(int delta);
+    void OnMeasuredLButtonDownMessage(POINT pt, WPARAM keys);
     void OnLButtonDown(POINT pt, WPARAM keys);
     void OnLButtonDblClk(POINT pt, WPARAM keys);
     void OnLButtonUp(POINT pt);
@@ -1321,7 +1573,7 @@ private:
     void OnHScrollMessage(UINT scrollRequest);
     void OnMeasuredHScrollMessage(UINT scrollRequest);
     void OnCommandMessage(UINT commandId);
-    void OnContextMenu(POINT screenPt);
+    void OnContextMenu(POINT screenPt, bool keyboardInvocation);
 
     void EnsureDeviceIndependentResources();
     void EnsureDeviceResources();
@@ -1372,9 +1624,20 @@ private:
     void EnsureEnumerationThread();
     void EnumerationWorker(std::stop_token stopToken);
     void DrainPendingEnumerationPayloadMessages() noexcept;
-    std::unique_ptr<EnumerationPayload> ExecuteEnumeration(const std::filesystem::path& folder, uint64_t generation, std::stop_token stopToken);
+    std::unique_ptr<EnumerationPayload> ExecuteEnumeration(const std::filesystem::path& folder,
+                                                           uint64_t generation,
+                                                           std::stop_token stopToken,
+                                                           wil::com_ptr<IFileSystem> fileSystem,
+                                                           std::wstring pluginId,
+                                                           std::wstring instanceContext);
     void ApplyCurrentSort();
-    void ApplyCurrentSort(std::wstring_view focusedPath, size_t fallbackFocusIndex);
+    void ApplyCurrentSort(CurrentResolutionInput resolutionInput);
+    [[nodiscard]] CurrentResolutionResult ResolveCurrentAfterSort(const CurrentResolutionInput& input) const noexcept;
+    [[nodiscard]] bool ItemOrdersBeforeForCurrentSort(const FolderItem& left, const FolderItem& right) const noexcept;
+    [[nodiscard]] std::optional<size_t> FindItemByProviderIdentity(std::wstring_view displayName) const noexcept;
+    [[nodiscard]] bool EquivalentProviderComponent(std::wstring_view left, std::wstring_view right) const noexcept;
+    [[nodiscard]] std::wstring BuildLogicalLocationKey(const std::filesystem::path& folder) const noexcept;
+    void RefreshFileSystemPathIdentity() noexcept;
     void LayoutItems();
     void UpdateScrollMetrics();
     void Render(const RECT& invalidRect);
@@ -1392,11 +1655,12 @@ private:
 
     void SelectSingle(size_t index);
     void ToggleSelection(size_t index);
-    void RangeSelect(size_t index);
+    void RangeSelect(size_t index, bool additive = false);
+    void DisarmPotentialDrag() noexcept;
     void ClearSelection();
     void SelectAll();
     void RecomputeSelectionStats() noexcept;
-    void NotifySelectionChanged() const noexcept;
+    void NotifySelectionChanged(SelectionChangeKind kind = SelectionChangeKind::Membership) const noexcept;
     void NotifyFocusedItemChanged() const noexcept;
     void NotifyIncrementalSearchChanged() const noexcept;
     void FocusItem(size_t index, bool ensureVisible);
@@ -1416,6 +1680,8 @@ private:
     void DeleteSelectedItems();
     void CopySelectionToClipboard();
     void PasteItemsFromClipboard();
+    [[nodiscard]] bool SupportsFileDropCut() const noexcept;
+    [[nodiscard]] bool CanPasteItemsFromClipboard() const noexcept;
     void RenameFocusedItem();
     void ShowProperties();
     void MoveSelectedItems();
@@ -1446,7 +1712,7 @@ private:
     void ScheduleIdleLayoutCreation();
     void ProcessIdleLayoutBatch();
     void UpdateEstimatedMetrics();
-    void UpdateContextMenuState(HMENU menu) const;
+    void UpdateContextMenuState(HMENU menu, bool allowItemTarget = true) const;
     DWORD ResolveDropEffect(DWORD keyState, DWORD allowedEffects) const;
     bool HasFileDrop(IDataObject* dataObject) const;
     HRESULT PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD allowedEffects, POINT clientPoint, DWORD* performedEffect);
@@ -1490,8 +1756,18 @@ private:
     POINT ScreenToClientPoint(POINT screenPt) const;
     void EnsureVisible(size_t index);
     void ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> payload);
+    [[nodiscard]] std::optional<std::vector<std::wstring>> ResolvePendingRemovalFocusForEnumeration(
+        uint64_t generation,
+        const std::filesystem::path& currentFolder,
+        const std::vector<FolderItem>& items);
     void RememberFocusedItemForDisplayedFolder() noexcept;
-    void EnsureFocusMemoryRootForFolder(const std::filesystem::path& folder) noexcept;
+    [[nodiscard]] std::optional<std::wstring> TryBuildFocusMemoryLocationKey(const std::filesystem::path& folder) const noexcept;
+    [[nodiscard]] std::optional<std::wstring> TryBuildFocusMemoryItemIdentityKey(std::wstring_view itemDisplayName) const noexcept;
+    [[nodiscard]] bool RecordFocusMemoryEntry(const std::filesystem::path& folder, std::wstring_view itemDisplayName) noexcept;
+    void TouchFocusMemoryEntry(FocusMemoryEntry& entry) noexcept;
+    void EvictFocusMemoryEntry(FocusMemoryRecencyList::iterator recencyIterator) noexcept;
+    void ClearFocusMemory() noexcept;
+    void RecordFocusMemoryNoCache(FocusMemoryNoCacheReason reason) noexcept;
     [[nodiscard]] std::wstring GetRememberedFocusedItemPathForFolder(const std::filesystem::path& folder) noexcept;
     void StopEnumerationThread() noexcept;
     [[nodiscard]] std::filesystem::path GetItemFullPath(const FolderItem& item) const;
@@ -1510,6 +1786,9 @@ private:
     std::condition_variable _enumerationCv;
     std::optional<std::filesystem::path> _pendingEnumerationPath;
     uint64_t _pendingEnumerationGeneration = 0;
+    wil::com_ptr<IFileSystem> _pendingEnumerationFileSystem;
+    std::wstring _pendingEnumerationPluginId;
+    std::wstring _pendingEnumerationInstanceContext;
     std::atomic<uint64_t> _enumerationGeneration{0};
     ULONGLONG _lastDirectoryCacheRefreshTick = 0;
     uint64_t _pendingRefreshDebounceDelayMs   = 0u;
@@ -1534,6 +1813,9 @@ private:
     uint64_t _debugDeviceLossDiscardedResourcesCount   = 0;
     std::atomic<uint64_t> _debugDrawItemTransientBrushCreateCount{0};
     bool _debugDrawItemActive = false;
+    bool _debugSuppressOleDragDrop = false;
+    uint64_t _debugDragStartCount = 0u;
+    std::vector<std::filesystem::path> _debugLastDragStartPaths;
     std::optional<DebugRenderFailure> _debugNextRenderFailure;
     RECT _debugLastRenderInvalidRectPx                 = {};
     bool _debugLastRenderWasFullClient                 = false;
@@ -1548,6 +1830,14 @@ private:
         std::wstring expectedFocusDisplayName;
     };
     std::optional<PendingExternalCommand> _pendingExternalCommandAfterEnumeration;
+
+    struct PendingExternalSelection final
+    {
+        uint64_t generation = 0;
+        std::filesystem::path targetFolder;
+        std::vector<std::wstring> displayNames;
+    };
+    std::optional<PendingExternalSelection> _pendingExternalSelectionAfterEnumeration;
 
     struct PendingRefreshSelectionRename final
     {

@@ -2,7 +2,7 @@
 
 **Author:** Ripley (Lead / Reviewer)
 **Date:** 2026-04-04
-**Last Updated:** 2026-06-27
+**Last Updated:** 2026-07-21
 **Status:** Authoritative design and behavior contract for `DxUi`; rollout closure and archived validation history live in `Specs/Plans/Done/UI_DxUiWinUIDesignAlignmentPlan.md`
 **Scope:** Design system tokens, control specifications, retained-host behavior, and verification requirements
 **Inspiration:** WinUI 3 / Windows 11 Fluent Design System
@@ -52,39 +52,35 @@ WinUI defines three tiers. DxUI currently uses `2 DIP` uniformly — this should
 
 ### 2.2 Typography (Type Ramp)
 
-DxUI's `FontRole` enum should be expanded to match the WinUI type ramp. On the Windows 11 baseline supported by RedSalamander, the runtime typography contract is:
+DxUi's implemented `FontRole` enum and shared typography helper define the
+runtime type ramp. On the Windows 11 baseline supported by RedSalamander:
 
 - `Segoe UI Variable Small` for 11-12 DIP caption/header-scale text
 - `Segoe UI Variable Text` for 13-31 DIP body, subtitle, title, and standard control text
 - `Segoe UI Variable Display` for 32+ DIP large-display text
 
-All app-owned visible text surfaces should route through the shared typography helper instead of hardcoding `Segoe UI`, `CreateFontW`, `CreateFontIndirectW`, or `DEFAULT_GUI_FONT`.
+All app-owned visible text surfaces MUST route through the shared typography
+helper instead of hardcoding `Segoe UI`, `CreateFontW`,
+`CreateFontIndirectW`, or `DEFAULT_GUI_FONT`.
 
-Current implementation status on 2026-04-26:
+Current implementation contract:
 
-- the shared helper in `Common/DxUi/DxUi.Typography.h` now drives DxUi text roles and app-owned DirectWrite measurement/rendering without exposing native `HFONT` creation or HFONT-derived measurement APIs,
-- `RedSalamander/Preferences.Dialog.cpp`, `RedSalamander/ConnectionManagerDialog.cpp`, and `RedSalamander/ManagePluginsDialog.cpp` no longer consume the legacy `ThemedControls` visible owner-draw button/toggle, modern combo, list, or list-header rendering APIs; `RedSalamander/ThemedControls.h/.cpp` are deleted, `RedSalamander/Win32UiHelpers.h/.cpp` are deleted, and the surviving pure color/DPI helpers live in `RedSalamander/UiMetrics.h/.cpp`,
-- `RedSalamander/ConnectionManagerDialog.cpp` and `RedSalamander/ManagePluginsDialog.cpp` no longer carry app-owned dialog font propagation or broad `STATIC` DxUi host windows; their DxUi host/frame scaffolding uses explicit custom host window classes,
-- `Common/DxUi/DxUi.Grid.cpp` treats checkbox double-clicks as two checkbox clicks, so pointer-double-click detection cannot turn a rapid checkbox toggle sequence into a no-op or row activation,
-- `Common/DxUi/DxUi.Grid.cpp` and `Common/DxUi/DxUi.Tree.cpp` clamp interactive text rows to the shared 20 DIP Segoe UI Variable Body line-height minimum so compact density cannot collapse hit-test cadence below readable body text metrics,
-- `Common/DxUi/DxUi.Accessibility.cpp` now honors explicit control-level accessible-name overrides, and hosts must use that path for visible text inputs that have no durable header/label; `RedSalamander/ShortcutsWindow.cpp` uses it for the Shortcuts search field so the empty search box keeps a non-empty UI Automation name,
-- the focused `cmd_preferences_dialog_plugins_`, `cmd_connection_manager_window_`, and `cmd_plugin_configuration_dialog_` families are archived green on 2026-04-23 after that retirement,
-- `Plugins/ViewerText/ViewerText.cpp` no longer keeps a visible GDI/HFONT root-shell fallback; its active shell contract is now guarded by focused `ViewerPETests` coverage and the `viewer_text_diff_perf` perf scenario archives from 2026-04-22,
-- `RedSalamander/NavigationViewInternal.h` no longer carries a shared-font visible layout seam, and the refreshed NavigationView command selftests now validate the DxUi edit-host snapshot contract rather than searching for descendant native `Edit` children,
-- `RedSalamander/FunctionBar.cpp` no longer creates/selects `HFONT` or uses GDI text measurement for visible Function Bar text/chrome; it measures through `DxUi.Typography` / DirectWrite and paints text/chrome through a Direct2D target bound only to the paint DC, with focused command selftests guarding against blank child strips after chrome toggles,
-- `RedSalamander/FolderWindow.FileSystem.Navigation.cpp` renders the pane command-line input through a `FolderWindow` DxUi host with a native-backend `TextField`; the previous visible native `STATIC` / `EDIT` pair, edit subclass, `DEFAULT_GUI_FONT`, and `WM_SETFONT` path are retired, and the command selftest snapshot guards `usesDxUiHost`, `usesNativeTextInput`, and `visibleNativeChildControlCount == 0`,
-- the stale former `ThemedControls::CenterEditTextVertically()` hook used only by the inactive Compare Directories legacy edit fallback is retired, and the full `cmd_compare_directories_options_` family stays green on the DxUi edit-host contract,
-- `RedSalamander/CompareDirectoriesWindow.cpp`, `RedSalamander/CompareDirectoriesWindow.Menu.cpp`, `RedSalamander/CompareDirectoriesWindow.Progress.cpp`, and `RedSalamander/CompareDirectoriesWindow.Options.cpp` now render Compare banner title/progress text and options body/footer typography through DxUi/DirectWrite instead of `Win32Ui::MeasureTextWidth(...)`, a local GDI `DrawTextW`/`GetDC` bridge, or native font propagation; the debug snapshots guard `usesDxUiBannerText == true`, `visibleDxBannerTextHostCount >= 1`, `visibleLegacyBannerTextCount == 0`, `hasNativeUiFontState == false`, `visibleNativeBodyControlCount == 0`, and `usesDxUiTypographyMetrics == true`, and no `CompareDirectoriesWindow*` source matches `HFONT` or `WM_SETFONT`,
-- `RedSalamander/Preferences.General.*`, `RedSalamander/Preferences.Panes.*`, and `RedSalamander/Preferences.Viewers.*` now receive a `PreferencesTypographyContext` for page layout and measure General/Panes toggle labels, combo state labels, wrapped card descriptions, Viewers hint text, and viewer combo option widths through DxUi/DirectWrite rather than `Win32Ui::MeasureTextWidth(...)` or `PrefsUi::MeasureStaticTextHeight(...)`; command selftest snapshots guard `generalUsesDxUiTypographyContext == true`, `generalUsesDxUiTypographyMetrics == true`, `panesUsesDxUiTypographyContext == true`, `panesUsesDxUiTypographyMetrics == true`, `viewersUsesDxUiTypographyContext == true`, and `viewersUsesDxUiTypographyMetrics == true`,
-- all Preferences page layout signatures now receive `PreferencesTypographyContext`; Preferences shell dialog font propagation is retired, and the former Preferences HDC paint/bitmap audit seams are now behind the shared Direct2D-on-HDC bridge rather than native font state,
-- `Common/DxUi/DxUi.Typography.h` owns HFONT-free DirectWrite measurement (`MeasureSingleLineTextMetrics`, `MeasureSingleLineTextWidthPx`, and `MeasureWrappedTextHeightPx`) and no longer exposes measurement helpers that derive DirectWrite formats from caller-owned `HFONT` or helper APIs that create native fonts,
-- `Common/DxUi` now routes `TextField` and editable `ComboBox` input through the host-HWND native text-input backend. The former hidden `DxUiTextInputBridgeWindow`, bridge WndProc, bridge window messages, bridge audit allowlist rows, private `HFONT`, `WM_SETFONT`, `DebugGetNonVisibleTextServiceBridgeFont(...)`, and durable `LOGFONT` contract are retired.
-- `RedSalamander/Ui/AlertOverlay.h` uses the shared raw `DxUi::DrawButtonChrome` helper for retained-D2D footer-button chrome and the close-affordance hover backplate while preserving the existing AlertOverlay-specific appearance. This is the expected pattern for non-`WindowHost` retained surfaces that cannot host a full `DxUi::Button` but still need standardized button-chrome behavior.
-- `Plugins/ViewerWeb/ViewerWeb.cpp` renders its status message with Direct2D/DirectWrite instead of creating an app-owned `HFONT` or using GDI `DrawTextW`,
-- `Plugins/ViewerPE/ViewerPE.cpp` and `Plugins/ViewerImgRaw/ViewerImgRaw.cpp` no longer keep unused native `_uiFont` handles,
-- `RedSalamander/FolderWindow.FileSystem.cpp` no longer carries the dead fenced change-case and selection-mask dialog implementations or their unused hook helpers; the live route for those commands is the owned DxUi prompt-window path, with fresh focused archives on 2026-04-22,
-- remaining visible-typography exceptions are tracked in `Specs/UI/UI_VisibleTypographyAudit.md`,
-- the strict active-menu source audit is clean for `NONCLIENTMETRICS`, `lfMenuFont`, `GetTextExtentPoint32W`, `GetTextMetricsW`, and `CreateMenuFontForDpi`, and the broad remaining-Win32-UI audit has zero unallowlisted findings as of `Specs/TestRuns/4cb089111a23/Audit/2026-04-26_012857_remaining_win32_ui_dependency_post_closeout_recheck/`. Former app-owned HDC paint seams in Compare, Connection Manager, FolderWindow splitter, NavigationView, Preferences, and themed input frames now use the shared `D2DHdcPaint::Session` bridge, and the last Compare Options legacy `STATIC` fallback was replaced by a custom Dx host. The former broad ShortcutsWindow grouped-collapse / reorder / persisted-layout / search-state failures were tracked separately and closed in `Specs/Plans/Done/DxUI_MigrationRoadmap.md` as DxUi behavior follow-on work rather than visible typography or GDI blockers.
+- `Common/DxUi/DxUi.Typography.h` owns role-to-family/size/weight mapping,
+  cached DirectWrite formats and HFONT-free measurement.
+- Preferences, `ConnectionManagerWindow`, Manage Plugins, Compare Directories,
+  NavigationView, Function Bar and viewer chrome use their documented
+  DxUi/DirectWrite or bounded native-input paths; no retired `ThemedControls`
+  surface is a fallback contract.
+- Grid checkbox double-clicks behave as two checkbox clicks; Grid and Tree
+  interactive text rows retain the shared 20 DIP minimum.
+- Visible text inputs without a durable header/label MUST set an explicit UIA
+  accessible name. TextField and editable ComboBox input use the host-HWND
+  native text-input backend.
+- Non-`WindowHost` retained surfaces that need standard button chrome use the
+  raw `DxUi::DrawButtonChrome` helper rather than recreating its semantics.
+- Remaining visible native, comctl and typography exceptions are owned by the
+  three current visible-surface audit specs. Direct2D-on-HDC bridge use does not
+  authorize app-owned GDI text rendering.
 - DxUi owns shared Direct2D/DXGI device-loss classification through
   `IsDeviceLossHResult(...)`. All DxUi and app retained-rendering hosts that
   recover from `EndDraw`/`Present` failures must use that predicate so
@@ -94,28 +90,25 @@ Current implementation status on 2026-04-26:
   helper `CreateD3D11DeviceWithWarpFallback(...)`; WindowHost and retained app
   renderers must not duplicate the D3D11 creation fallback dance.
 
-| Token / FontRole | Size (epx) | Line Height (epx) | Weight | DxUI FontRole |
-|------------------|------------|-------------------|--------|---------------|
-| `Caption` | 12 | 16 | Regular (400) | `Small` |
-| `Body` | 14 | 20 | Regular (400) | `Body` |
-| `BodyStrong` | 14 | 20 | Semibold (600) | `BodyStrong` *(new)* |
-| `BodyLarge` | 18 | 24 | Regular (400) | `BodyLarge` *(new)* |
-| `ListItem` | 12 | 16 | Regular (400) | `ListItem` |
-| `Subtitle` | 20 | 28 | Semibold (600) | `Subtitle` *(new)* |
-| `Title` | 28 | 36 | Semibold (600) | `Title` |
-| `TitleLarge` | 40 | 52 | Semibold (600) | `TitleLarge` *(new)* |
-| `Display` | 68 | 92 | Semibold (600) | `Display` *(new)* |
+| `FontRole` | Family class | Size (DIP) | Weight |
+|---|---|---:|---|
+| `Small` (caption semantic) | Segoe UI Variable Small | 11 | Regular (400) |
+| `ListItem` | Segoe UI Variable Small | 12 | Regular (400) |
+| `Header` (deprecated compatibility role) | Segoe UI Variable Small | 12 | Semibold (600) |
+| `Body` | Segoe UI Variable Text | 13 | Regular (400) |
+| `BodyStrong` | Segoe UI Variable Text | 14 | Semibold (600) |
+| `BodyLarge` | Segoe UI Variable Text | 18 | Regular (400) |
+| `Subtitle` | Segoe UI Variable Text | 20 | Semibold (600) |
+| `Title` | Segoe UI Variable Text | 24 | Semibold (600) |
+| `TitleLarge` | Segoe UI Variable Display | 40 | Semibold (600) |
+| `Display` | Segoe UI Variable Display | 68 | Semibold (600) |
+| `Icon` | Segoe Fluent Icons | 12 | Regular (400) |
+| `HeroIcon` | Segoe Fluent Icons | 64 | Regular (400) |
+| `Monospace` | Consolas | 12 | Regular (400) |
 
-**Supplementary roles (keep):**
-- `Icon` — `Segoe Fluent Icons`, 16 DIP (was 15 DIP — align to WinUI 16x16 icon grid). Verify `IconCache` glyph metrics are updated.
-- `HeroIcon` — `Segoe Fluent Icons`, 24+ DIP
-- `Emoji` — `Segoe UI Emoji`
-- `Monospace` — `Consolas` for the current shared fallback path (a future switch to Cascadia Mono must still go through the shared helper)
-
-**FontRole migration from current enum:**
-- `Header` (current) → **`Subtitle`** (20/28 Semibold). Existing controls using `Header` should migrate to `Subtitle`. The `Header` enum value is deprecated but retained as an alias during the transition.
-- `Small` → `Caption` (rename for WinUI alignment)
-- `Body`, `Title`, `Icon`, `HeroIcon`, `Monospace` — unchanged
+`Header` remains a 12 DIP compatibility role; it is not an alias for
+`Subtitle`. New section-heading code SHOULD use `Subtitle`. Emoji-specific text
+uses the shared `Segoe UI Emoji` helper rather than a `FontRole` enum value.
 
 **Typography rules:**
 - Minimum text: 14px Semibold or 12px Regular (legibility in all languages)
@@ -130,28 +123,20 @@ Current implementation status on 2026-04-26:
 
 #### 2.3.1 Semantic Color Palette
 
-The existing `ThemePalette` struct maps well to WinUI concepts. Proposed additions/renames for Fluent alignment:
+`ThemePalette` implements the following Fluent-aligned semantic roles:
 
-| Semantic Role | Light Value | Dark Value | Current ThemePalette Field | Action |
-|---------------|------------|------------|---------------------------|--------|
-| **Window Background** | `#FFFFFF` | `#191A1C` | `windowBackground` | Keep |
-| **Surface Background** | `#F3F3F3` | `#2D2D30` | `surfaceBackground` | Keep |
-| **Card Background** | `#FFFFFF` | `#2D2D30` | — | **Add** `cardBackground` |
-| **Smoke (Modal Overlay)** | `#000000` @ 30% | `#000000` @ 30% | — | **Add** `smokeOverlay` |
-| **Text Primary** | `#141414` | `#EBEBF2` | `text` | Keep |
-| **Text Secondary** | `#5D5D5D` | `#9A9AA8` | `subduedText` | Keep |
-| **Text Disabled** | `#A0A0A0` | `#5D5D68` | `disabledText` | Keep |
-| **Accent** | `#0078D4` | `#60CDFF` | `accent` | Keep (user-customizable) |
-| **Accent Hover** | `#006CBD` | `#73D6FF` | — | **Add** `accentHover` |
-| **Accent Pressed** | `#005A9E` | `#4CC2FF` | — | **Add** `accentPressed` |
-| **Accent Disabled** | `#0078D4` @ 40% | `#60CDFF` @ 40% | — | **Derive** from accent |
-| **Selection Fill** | `#0078D4` | `#2196F3` | `selectionFill` | Keep |
-| **Selection Text** | `#FFFFFF` | `#FFFFFF` | `selectionText` | Keep |
-| **Border (Subtle)** | `#E5E5E5` | `#3A3A3F` | `border` | Update values |
-| **Border (Default)** | `#CDCDCD` | `#4A4A52` | — | **Add** `borderDefault` |
-| **Border (Strong)** | `#ADADAD` | `#6A6A75` | — | **Add** `borderStrong` |
-| **Focus Stroke Outer** | `#000000` | `#FFFFFF` | — | **Add** `focusStrokeOuter` |
-| **Focus Stroke Inner** | `#FFFFFF` | `#000000` | — | **Add** `focusStrokeInner` |
+| Semantic role | `ThemePalette` field | Contract |
+|---|---|---|
+| Window, surface, and card backgrounds | `windowBackground`, `surfaceBackground`, `cardBackground` | Use the resolved palette values; do not hardcode per-control substitutes. |
+| Modal smoke | `smokeOverlay` | Use the resolved light/dark/high-contrast palette. |
+| Primary, secondary, and disabled text | `text`, `subduedText`, `disabledText` | Preserve readable contrast and disabled-state distinction. |
+| Accent | `accent` | User/theme customizable base color. |
+| Accent hover and pressed | `accentHover`, `accentPressed` | Derived from `accent` and the base-theme polarity by `RefreshAccentVariants(...)`. |
+| Selection | `selectionFill`, `selectionText`, `selectionInactiveFill` | Preserve active/inactive state and readable text. |
+| Borders | `border`, `borderDefault`, `borderStrong` | Use strength by semantic hierarchy, not local literals. |
+| Focus | `focusStroke`, `focusStrokeOuter`, `focusStrokeInner` | Two-stroke focus remains visible across themes; system colors win in high contrast. |
+
+`Common/DxUi/DxUi.h` and `DxUi.Theme.cpp` own the exact default numeric values and derivation. Duplicating those mutable constants in this prose is forbidden.
 
 #### 2.3.2 Accent Color Principles
 
@@ -173,7 +158,7 @@ When the accent color is user-customizable, hover/pressed/disabled variants must
 
 Use the Oklab color space for perceptually uniform lightness shifts. After derivation, verify that all accent variants meet 4.5:1 contrast against their backgrounds.
 
-**Implementation:** `DxUi.Theme.cpp` should implement a `DeriveAccentVariants(D2D1_COLOR_F baseAccent, bool dark)` function that produces hover, pressed, and disabled variants. The `dark` argument is the polarity of the palette's base theme, not the application's current global dark-mode flag; a light-base custom theme remains on the light pressed-accent derivation even when the surrounding app mode is dark.
+**Implementation:** `DxUi.Theme.cpp` implements `RefreshAccentVariants(...)` using the palette's base-theme polarity, not the application's surrounding global mode. A light-base custom theme therefore remains on the light pressed-accent derivation even when the surrounding app mode is dark.
 
 #### 2.3.4 High Contrast
 
@@ -181,26 +166,9 @@ Use the Oklab color space for perceptually uniform lightness shifts. After deriv
 - `ThemePalette::highContrast` flag gates this; all per-control visual style resolvers must respect it.
 - Focus indicators: always visible, 2px minimum stroke width.
 
-#### 2.3.5 Theme JSON5 Migration
+#### 2.3.5 Theme JSON5 compatibility
 
-Six custom themes exist in `Specs/Themes/` (Ugly, SolarFlare, RetroTerminal, PaperAndInk, NeonTokyo, ForestMist). These need migration for new palette fields:
-
-**Required new keys in each theme JSON5:**
-- `cardBackground`, `smokeOverlay`
-- `accentHover`, `accentPressed` (or omit to auto-derive from `accent`)
-- `borderDefault`, `borderStrong`
-- `focusStrokeOuter`, `focusStrokeInner`
-
-**Auto-derivation rules:** If a theme JSON5 omits a new key, the theme loader should derive it:
-- `cardBackground` → same as `surfaceBackground`
-- `smokeOverlay` → `#000000` @ 30% (fixed)
-- `accentHover` / `accentPressed` → derived from `accent` per §2.3.3
-- `borderDefault` → interpolate between `border` and `borderStrong` (50%)
-- `borderStrong` → darken `border` by 20% (light) or lighten by 20% (dark)
-- `focusStrokeOuter` → `#000000` (light) / `#FFFFFF` (dark)
-- `focusStrokeInner` → inverse of outer
-
-**Files:** `DxUi.Theme.cpp` (loader + derivation), `Specs/Themes/*.json5` (add explicit values where auto-derivation doesn't match the theme's aesthetic intent).
+Theme JSON5 files own application semantic keys, while `DxUi.Theme.cpp` projects those values into the complete `ThemePalette`. Missing DxUi-only derived roles use the default palette and accent-derivation rules; existing themes are not required to duplicate every internal palette member. Explicit theme values may override a role only through the supported application-theme schema and must retain dark/light, rainbow, and high-contrast behavior.
 
 ### 2.4 Elevation & Layering
 
@@ -241,6 +209,9 @@ DxUI adopts a hybrid material model:
 - That popup surface MUST remain self-contained: backdrop snapshot blur (optional by material) + base fill + glaze + contour + shadow. It may use popup-window alpha to reveal underlying content through the composition host, but it does not rely on DWM backdrop tinting to define the material.
 - `Mica`, `Mica Alt`, and `Acrylic` popup treatments MUST be visibly distinct in the DxUI paint path, not only via palette-token tint changes.
 - Acrylic-family popup treatments SHOULD bias toward a stronger backdrop blur with restrained tint/glaze so the user primarily perceives blurred background content, not an opaque colored slab.
+- Small passive status popups MUST keep the popup HWND's DWM system backdrop disabled and reuse `DxUi::CaptureTransientSurfaceBackdrop(...)`, `TransientSurfaceBackdrop`, and `PaintTransientSurface(...)` when their policy matches. The helpers own bounded app-backdrop capture/cache, rounded clipping and blur, overlay fill, contour, inner rim, optional shadow, pressed feedback, material opacity, and High Contrast override; the consumer owns capture timing, placement, transforms, content, and input. A capture failure falls back to the themed fill without exposing the rectangular HWND.
+- High Contrast transient surfaces MUST be opaque, square, shadowless, and backdrop-free. Solid, Mica, Mica Alt, and Acrylic ordinary captures MUST remain visibly distinct.
+- `WindowHost::ResetInteractionState()` MUST notify an installed captured control through `OnCaptureLost(...)` before releasing Win32 capture, so cancellation cannot leave retained controls visually pressed or dragging.
 
 | Material | Description | Usage | DxUI Priority |
 |----------|------------|-------|---------------|
@@ -326,15 +297,9 @@ Native text-input sessions MUST capture the focused text control's effective `Fl
 
 For single-line `TextField` and editable `ComboBox` content, the shared DirectWrite text helpers MUST use the effective reading direction for visible text layout, caret geometry, pointer hit-testing, selection painting, native TSF `GetTextExt` / `GetACPFromPoint` geometry against the editable text viewport, UIA `RangeFromPoint` mapping through the native hit-test path, simple LTR same-visual-line UIA selected-range bounding rectangles from native caret geometry, and single-line mixed-BiDi UIA selected-range bounding rectangles from retained DirectWrite `HitTestTextRange` geometry clipped to the editable text viewport. Multiline LTR `TextField` selected ranges that cross logical newlines and whose per-line caret endpoints stay on one visual line return one screen-space UIA rectangle tuple per logical line segment. Wrapped multiline LTR `TextField` selected ranges on a single logical line, or newline-delimited ranges containing wrapped logical-line segments, return one screen-space UIA rectangle tuple per DirectWrite visual line. Multiline mixed-BiDi `TextField` selected ranges use the retained DirectWrite `HitTestTextRange` geometry when available instead of falling back to the full text viewport. Retained text, selection ranges, text-store ACP indexes, and clipboard text remain in logical UTF-16 order; DirectWrite visual hit-test results are only the bridge between visual points/rectangles and logical indexes. Host-HWND pointer clicks on mixed-script text must account for the actual pixel-rounded click point and map leading, middle, and trailing visual spans to the same logical caret index that DirectWrite `HitTestPoint` reports for that point.
 
-Current single-line keyboard navigation remains retained logical-order behavior: Home / Ctrl+Home move to logical start, End / Ctrl+End move to logical end, Shift+Home / Shift+End extend logical selections, Left / Right step to previous / next logical text element, and Backspace / Delete mutate the previous / next logical text element at script boundaries. Visual-order Left / Right and exact mixed-script Home / End semantics remain future work.
+Current single-line keyboard navigation remains retained logical-order behavior: Home / Ctrl+Home move to logical start, End / Ctrl+End move to logical end, Shift+Home / Shift+End extend logical selections, Left / Right step to previous / next logical text element, and Backspace / Delete mutate the previous / next logical text element at script boundaries. Visual-order Left / Right and exact mixed-script Home / End semantics are outside the current contract and are routed to the Atlas decision queue.
 
-**Future follow-ups outside the current contract:**
-- broader `Grid` column-order mirroring where the application needs it
-- multiline and wrapped BiDi text geometry in `TextField`
-- visual-order keyboard navigation for mixed-script text, including exact Home/End and Left/Right semantics
-- remaining precise per-glyph/per-range UIA bounding rectangles outside the verified simple LTR same-visual-line, single-line `TextField` / editable `ComboBox` mixed-BiDi DirectWrite ranges, multiline `TextField` mixed-BiDi DirectWrite ranges, newline-delimited multiline caret-geometry ranges, and wrapped multiline visual-line ranges; remaining multiline/wrapped TSF extent edge cases, IME candidate placement breadth, and archived same-machine comparison for mixed BiDi text
-
-Current controls should continue using relative positioning terms in their layout code so broader BiDi work stays incremental rather than invasive.
+Unimplemented broader BiDi, Grid mirroring, editable-cell, TSF/UIA geometry, and visual-order keyboard choices are not current requirements. They are recorded in `Specs/Plans/WIP/Operation_Atlas_RemainingSpecificationDecisions_2026-08-04.md`. Current controls must continue using relative positioning terms so any accepted extension can remain incremental.
 
 ### 2.9 Per-Monitor DPI Handling
 
@@ -397,10 +362,12 @@ This double-ring ensures visibility on any background. Replace current single-st
 | **Standard** | Neutral fill, border | Exists (secondary style) |
 | **Accent** | Accent fill, white text | Exists (primary style) |
 | **DropDown** | Standard + chevron glyph, opens flyout | **New** — add `SetFlyout()` |
+| **Selector** | Current value + quiet chevron; whole surface opens choices | Shared `ButtonVariant::Selector` |
 | **Split** | Left action + right dropdown, divider line | **New** — compound control |
 | **Toggle** | On/off state with checked appearance | Exists (Toggle inherits Button) |
 | **Hyperlink** | Text-only, accent color, underline on hover | **New** — minimal, add style enum |
 | **Icon** | Icon-only, no text, square aspect | **New** — add icon-only layout mode |
+| **Disclosure** | Card/group-integrated expand/collapse chevron without fill or border | Shared `ButtonVariant::Disclosure` |
 | **Repeat** | Fires continuously while held | **New** — add repeat timer mode |
 
 #### Shared Button Chrome Contract
@@ -408,6 +375,19 @@ This double-ring ensures visibility on any background. Replace current single-st
 - `DxUi::Button` and custom Direct2D hosts that need button chrome MUST share the same layout metrics and visual-state resolver rather than repainting private button styles.
 - Custom D2D surfaces SHOULD use `DxUi::ComputeButtonChromeLayout(...)` and `DxUi::DrawButtonChrome(...)` (or host real `DxUi::Button` controls where practical) so standard, drop-down, split, hover, pressed, focus, and primary states remain consistent.
 - Drop-down buttons use a 20 DIP chevron slot with no divider; split buttons use a 32 DIP drop-down segment with a divider line. Menu-only actions MUST use `ButtonVariant::DropDown`, not `ButtonVariant::Split`.
+- Current-value choices that are intentionally lighter than a full combo box use `ButtonVariant::Selector`. The selector uses one whole-surface flyout action, a 24 DIP quiet-chevron lane balanced by an equal leading lane, flat borderless rest chrome, 6 DIP corners, and no divider or separate primary action. The chevron is a glyph within that one click target, never a nested button. The shared 140 ms button hover transition introduces the hot fill/border and gradually emphasizes the chevron; reduced-motion mode snaps directly to the target state. Its visible text MUST be the current value rather than a generic command label.
+- Disclosure buttons call `SetDisclosureExpanded(...)`, optionally set a left or right collapsed
+  direction with `SetDisclosureCollapsedDirection(...)`, and paint through the shared
+  `DrawDisclosureChevron(...)` glyph path. Leading-edge disclosures collapse right, trailing-edge
+  disclosures collapse left, expanded points down, and state changes take the shortest 90-degree path
+  with `PointToPoint` easing. Both endpoints use their native directional glyph without a transform so
+  the resting icon stays crisp; reduced motion snaps to the target. Trees and
+  app-owned cards/groups MUST reuse this renderer instead of hand-drawn stroke chevrons. Card/group-integrated
+  targets use `ButtonVariant::Disclosure`, which keeps the interactive and keyboard-focus target but omits
+  standard button fill/border chrome.
+- Fixed-direction chevrons call `DrawChevronGlyph(...)`. ComboBox dropdown affordances and Grid
+  ascending/descending sort indicators MUST use this Segoe Fluent/Unicode glyph path rather than
+  private line or triangle geometry.
 
 ### 3.2 Menu System
 
@@ -784,7 +764,7 @@ Extract from Grid/Tree/ScrollPanel and make standalone.
 
 | Property | Value |
 |----------|-------|
-| Track height | 2 DIP (rest), 4 DIP (indeterminate) |
+| Track height | 2 DIP (rest), 4 DIP (indeterminate); a host may request an explicit full-lane height when matching an established surface geometry |
 | Track fill | `border` @ 40% |
 | Progress fill | `accent` |
 | Corner radius | 4 DIP (bar element) |
@@ -844,6 +824,9 @@ Align the existing 3-variant ComboBox to WinUI spec:
 | Dropdown max visible items | 8 (then scrollbar) |
 | Dropdown shadow | Medium (flyout level) |
 
+The field dropdown affordance uses `DrawChevronGlyph(..., ChevronDirection::Down, ...)`, including
+compact mode; it is a Segoe Fluent glyph with the shared Unicode fallback, not a hand-drawn V.
+
 #### Visual States
 
 | State | Field Fill | Field Border | Bottom Border | Chevron | Text |
@@ -896,6 +879,13 @@ Compact geometry rule:
 | Border | 1px `border` |
 | Text | `tooltipText` |
 
+Tooltips are supplemental. A text button MUST suppress a tooltip that exactly repeats its visible
+label; icon-only and glyph-only controls may use the tooltip to provide the missing action name.
+`Control::SetTooltipText(...)` is the shared retained-control path so noninteractive status regions,
+including compact badges, can expose explanatory hover text without pretending to be buttons. The
+same explanation SHOULD be published as accessibility HelpText when the visible compact content is
+otherwise ambiguous.
+
 ### 3.14 Tab Control
 
 Required for connection manager and viewer tabs (see `DxUI_MigrationRoadmap.md`). Spec to be defined in a separate document. Key requirements:
@@ -914,7 +904,7 @@ The existing `Tree` control is already feature-complete (model/delegate, icons, 
 | Item height | 32 DIP (standard), 24 DIP (compact) |
 | Indent per level | 16 DIP |
 | Expand/collapse icon | Segoe Fluent Icons chevron, 12 DIP, rotates 90° on expand |
-| Expand animation | 200ms, `PointToPoint` easing (rotate + content reveal) |
+| Expand animation | 240ms chevron rotation + 320ms content reveal, `PointToPoint` easing |
 | Icon size | 16×16 DIP |
 | Icon-to-text gap | 8 DIP |
 | Selection backplate | Full row width, 4 DIP corner radius, `selectionFill` |
@@ -943,6 +933,9 @@ The existing `Grid` control is the application's primary data display. Define Wi
 Checkbox cells must toggle on every accepted left-button down, including the second down in a pointer double-click sequence. A double-click on a checkbox cell must not activate the row or leave the checkbox in the one-click state.
 
 Header clicks MUST update the grid's sort spec and sort-glyph transition together. When a user clicks a different sortable column, the old column may fade out, but the clicked column must immediately own the sort-glyph space and repaint via the normal animation tick without requiring pointer movement.
+
+Grid sort indicators use `DrawChevronGlyph(...)`; group headers use `DrawDisclosureChevron(...)` so
+their static and animated directions share the same Segoe Fluent/Unicode renderer as ComboBox and Tree.
 
 Grid hosts MAY set an effective row height when their row cadence must match an external surface instead of using density-scaled base metrics. Find Files uses this for compact one-line results so its rows match FolderView brief rows exactly while keeping taller snippet rows density-scaled. Grid hosts MAY also set per-grid cell text role and icon slot size; dense file/list rows use `ListItem` text and 16 DIP icons.
 
@@ -973,6 +966,11 @@ Implemented for tracking-hover scenarios such as grid/tree-style metadata hover 
 | Hide delay | 100ms after pointer leaves the tracking region |
 | Background | `tooltipBackground` |
 | Multi-line support | Yes — content can include label/value pairs |
+
+Tracking and supplemental tooltip show/hide deadlines MUST be based on the current shared
+`AnimationDispatcher` clock. A host's last delivered animation tick MUST NOT be reused after its
+subscription becomes idle because the dispatcher can start a new clock epoch; reusing that stale
+tick can make a newly scheduled delay expire on the first callback.
 
 ---
 
@@ -1042,7 +1040,7 @@ All overlay surfaces (context menus, flyouts, tooltips, combo dropdowns, teachin
 
 **Tab navigation:**
 - `WindowHost::HandleTabNavigation()` traverses controls via `FindAdjacentFocusable()`.
-- Tab order follows the visual tree (depth-first, top-to-bottom). A future `TabIndex` property may override this.
+- Tab order follows the visual tree (depth-first, top-to-bottom). There is no `TabIndex` override in the current control model.
 - `Shift+Tab` reverses direction.
 - If a focus-change callback scrolls or lays out a retained DxUi host, the
   intended focused control must remain the host's retained focus target when
@@ -1065,6 +1063,7 @@ All overlay surfaces (context menus, flyouts, tooltips, combo dropdowns, teachin
 - When a modal dialog is shown (with smoke overlay), focus is trapped: `Tab` cycles within the dialog only.
 - `Escape` dismisses the dialog and returns focus to the element that opened it.
 - Initial focus: first focusable control in the dialog, or the primary button if marked.
+- An owned modal whose close path returns focus to app chrome MUST treat the synchronous `SetFocus` during owner re-enable as best effort. When the owning surface has a foreground-safe deferred focus message, the prompt MUST queue that message before returning so teardown or nested-loop unwind cannot leave the app active with no keyboard target; the deferred handler MUST refuse to steal focus from another foreground window or process.
 
 **Focus ring rendering (centralized):**
 - The double-stroke focus ring (§3.1) is rendered by `Control::PaintFocusRing()` in the base class, not per-control.
@@ -1114,14 +1113,18 @@ Several controls define both default and compact heights (Button: 32/24, Menu it
 - Callback dispatch must also order unavoidable local state work before the callback when no post-callback access is required. In particular, `MenuBar` publishes its selected/hovered state and invalidation before invoking the copied open-item callback. `NativeMenuBarHost` captures the `MenuBar` lifetime before refresh, focus changes, host dispatch, or `ContextMenu::Show(...)`, and must return without touching the host when that token expires. Tree pointer/context/delegate paths capture the item ID before dispatch and re-resolve its current visible index afterward; a pre-callback visible index is never stable identity.
 - Text mutation helpers are complete state transitions before notification: update text/selection/caret and layout caches, synchronize an active native/TSF session, refresh the accessibility snapshot, request invalidation, finish edit metrics, then invoke a copied callback as the terminal operation. If a callback destroys the control, callers stop immediately; masked callback snapshots are securely cleared. Cancelling an active IME composition through window/app deactivation restores the retained pre-composition text and selection before TSF/session teardown, matching `WM_IME_ENDCOMPOSITION` cancellation semantics.
 - Masked text keeps source UTF-16 identity separate from displayed mask identity. A retained text-element boundary map converts source caret/range indices to exact or concealed display-dot indices and converts display hit-test indices back to source boundaries. Paint, horizontal/multiline caret visibility, pointer selection, TSF caret/range geometry, and UIA point/range geometry must all use that mapping. Text, mask policy, reveal state, or layout invalidation retires the map; exact masks remain one dot per user-visible text element, including surrogate pairs and ZWJ sequences.
-- `WindowHost::Detach()`, root replacement, native text-input deactivation, and TSF teardown must clear native text-input state and disconnect raw host/control pointers before retained controls are destroyed. `WindowHost::Detach()` also drains registered posted payloads while its attached HWND is still known, because window owners may detach before `WM_NCDESTROY`. Password/secret text cleanup is owned by `TextField` destruction and native text-input cache teardown; callers must not walk retained child pointers or call a public secure-clear API during dialog teardown. TextField-owned single-line layout-cache invalidation must pass the secure-clear path because `PasswordRevealState::Visible` and `PasswordRevealMode::Visible` can place plaintext in the retained DirectWrite layout cache.
+- `WindowHost::Detach()`, root replacement, native text-input deactivation, and TSF teardown must clear native text-input state and disconnect raw host/control pointers before retained controls are destroyed. `WindowHost::Detach()` also drains registered posted payloads while its attached HWND is still known, because window owners may detach before `WM_NCDESTROY`. The global process-exit host sweep is a quiet-point teardown: before releasing capture, deactivating TSF, traversing the retained tree, or invoking any control/app callback, it must clear focus, hover, capture, button, pending-pointer, and callback observers, expire the native text-control lifetime, and abandon active IME composition. TSF must then disconnect its text store without testing membership in the abandoned tree; process-exit teardown must not restore IME state or emit focus/hover/capture callbacks. Ordinary detach and root replacement retain their interactive notification behavior. Password/secret text cleanup is owned by `TextField` destruction and native text-input cache teardown; callers must not walk retained child pointers or call a public secure-clear API during dialog teardown. TextField-owned single-line layout-cache invalidation must pass the secure-clear path because `PasswordRevealState::Visible` and `PasswordRevealMode::Visible` can place plaintext in the retained DirectWrite layout cache.
 - UI Automation provider reads must use UI-thread-built immutable snapshots or bounded UI-thread dispatch. Provider/RPC threads must not walk live retained `Control`/`Panel` trees or caller-owned Tree/Grid models. `WindowHostAccessibilityTarget::ResolveHost()` may return a live host only on the owning window thread; UIA mutation paths must marshal to that thread before touching retained controls. Snapshot publication and teardown are the lifetime boundary, and selftests that create UIA worker threads must join them before the owning window can be destroyed.
 - Tree-item UI Automation providers use `TreeItemData::id`, never a visible row index, as retained identity and in the provider runtime ID. Every property, sibling navigation, focus, selection, and expand/collapse operation re-resolves the current visible index from that stable ID. When the item is no longer visible, the retained provider returns `UIA_E_ELEMENTNOTAVAILABLE`; it must never read or mutate the item that later occupies the former row.
-- A `WindowHost` that has returned a raw UI Automation provider MUST retire UI Automation's HWND provider map with `UiaReturnRawElementProvider(hwnd, 0, 0, nullptr)` during `WM_DESTROY`, before final non-client teardown. Explicit pre-destroy detach remains supported: unregister MUST publish the empty snapshot, clear/remove the live accessibility target under its mutex, release that mutex, and repeat the provider-map retirement as a fallback. These boundaries prevent provider/event-map retention and stale accessibility state when Win32 later recycles the HWND; the notification must not run while the accessibility target mutex is held.
+- A registered `WindowHost` accessibility target retains exactly one root provider after the first successful `WM_GETOBJECT`; later `WM_GETOBJECT` requests for that target return the same provider identity, and retained child-fragment providers return that same root from `get_FragmentRoot`. Creating an unrelated root provider per request or per child fragments provider is forbidden because UI Automation can retain those identities across a host close/reopen sequence.
+- A `WindowHost` that has returned a raw UI Automation provider MUST retire both retained provider identity and UI Automation's HWND provider map. Explicit pre-destroy unregister MUST publish the empty snapshot and clear the live host under its mutex, detach the retained root provider, remove the target property, then release the mutex before calling `UiaDisconnectProvider(...)`; pending dispatch cancellation and HWND-map clearing follow that disconnect. `WM_DESTROY` MUST also call `UiaReturnRawElementProvider(hwnd, 0, 0, nullptr)` before final non-client teardown, and explicit detach repeats that map retirement as a fallback. No UI Automation disconnect or provider-map notification may run while the accessibility target mutex is held. These boundaries prevent stale Value/Toggle/Selection providers and event-map state from surviving Win32 HWND recycling.
 - Cross-thread UI Automation dispatch that waits for the host window thread must own the request/output storage on the heap, hold provider COM references for late completion, and use a one-way `Pending` / `Taken` / `Abandoned` state transition. Timeout abandons a pending mutation so it cannot execute later; a request already taken by the UI thread executes exactly once. Detach or window destruction cancels and signals pending requests with `ERROR_CANCELLED`.
 - Direct single-control roots expose one semantic UIA content element, not a duplicate root-child pair, only for controls that are eligible direct semantic roots. Label-only roots remain root-with-label-child trees rather than being collapsed into the root provider. UIA pattern eligibility, provider factories, and runtime-id construction must stay centralized so `QueryInterface`, `GetPatternProvider`, runtime IDs, and provider lifetime rules cannot drift.
 - Pointer input events carry delivered Win32 message metadata only: message, flags, target/root/capture HWNDs, delivered client/screen points, message time, and wheel delta. Do not reintroduce a single-value pointer source enum, synthetic input generations, live cursor polling, or unused `MSG` adapter APIs.
 - `TabControl` close buttons are press/release commands: a tab can close only when the primary-button press began on that same tab's close button and the release still hits that same close button. Body-started tab drags or reorders that end over a close button must not request or perform a tab close.
+- `TabControl` visibility is independent of stable model index. A hidden tab retains its page and index but contributes no header width, gap, hit target, close target, focus ring, or keyboard-navigation stop; its page is hidden. Hiding the selected tab chooses another visible tab without invoking a user-selection callback, and callers may then select the intended stable index explicitly.
+- `TabControl` pointer reordering is an explicit host policy and defaults on for generic consumers. Hosts whose callbacks assign semantic meaning to fixed indices must call `SetTabReorderingEnabled(false)` before interaction; pointer drag permutations then preserve page/index identity while visibility and keyboard navigation continue to operate on the stable indices. The Folder/Preview/Terminal pane strip uses this fixed-index policy.
+- UIA text units normalize unsupported units to the next larger supported boundary: Format to Word, Paragraph and Page to Document. Character, Word, Line, and Document are the supported boundaries. The same normalization governs enclosing-unit expansion, whole-range movement, and endpoint movement; Paragraph must never be narrowed to Line.
 - Device-loss recovery must invalidate after resource discard in every render path and force the first present after recreation to be full-client rather than dirty-rect-only. Static hosts must repaint without relying on an unrelated mouse, resize, focus, or theme event.
 
 ---
@@ -1191,6 +1194,7 @@ UI Automation must report correct control types and patterns for every new contr
 | ToggleSwitch | `Button` | Toggle | Name, ToggleState |
 | Dialog | `Window` | Window | Name, IsModal |
 | Tooltip | `ToolTip` | — | Name |
+| Passive status/live overlay | `StatusBar` | Optional non-focusing root Invoke | Stable root/child IDs, full names, no keyboard focus, most-recent notification |
 
 ### Theme Validation Checklist
 

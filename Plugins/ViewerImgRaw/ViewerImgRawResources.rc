@@ -11,23 +11,22 @@ BEGIN
     POPUP "&File"
     BEGIN
         MENUITEM "&Refresh\tF5", IDM_VIEWERRAW_FILE_REFRESH
-        MENUITEM SEPARATOR
         MENUITEM "&Export...\tCtrl+S", IDM_VIEWERRAW_FILE_EXPORT
+        POPUP "Other &Files"
+        BEGIN
+            MENUITEM "&Previous\tLeft, PgUp, Backspace", IDM_VIEWERRAW_OTHER_PREVIOUS
+            MENUITEM "&Next\tRight, PgDn, Space", IDM_VIEWERRAW_OTHER_NEXT
+            MENUITEM "&First\tHome", IDM_VIEWERRAW_OTHER_FIRST
+            MENUITEM "&Last\tEnd", IDM_VIEWERRAW_OTHER_LAST
+        END
         MENUITEM SEPARATOR
         MENUITEM "E&xit\tEsc", IDM_VIEWERRAW_FILE_EXIT
-    END
-    POPUP "&Other Files"
-    BEGIN
-        MENUITEM "&Next\tRight, PgDn, Space", IDM_VIEWERRAW_OTHER_NEXT
-        MENUITEM "&Previous\tLeft, PgUp, Backspace", IDM_VIEWERRAW_OTHER_PREVIOUS
-        MENUITEM "&First\tHome", IDM_VIEWERRAW_OTHER_FIRST
-        MENUITEM "&Last\tEnd", IDM_VIEWERRAW_OTHER_LAST
     END
     POPUP "&View"
     BEGIN
         MENUITEM "&Fit to Window\tCtrl+F, Double Click", IDM_VIEWERRAW_VIEW_FIT
         MENUITEM "&Actual Size (100%)\t1, Ctrl+Double Click", IDM_VIEWERRAW_VIEW_ACTUAL_SIZE
-        MENUITEM "Toggle Fit/100%\tF", IDM_VIEWERRAW_VIEW_TOGGLE_FIT_100
+        MENUITEM "&Toggle Fit/100%\tF", IDM_VIEWERRAW_VIEW_TOGGLE_FIT_100
         MENUITEM SEPARATOR
         MENUITEM "Zoom &In\t+", IDM_VIEWERRAW_VIEW_ZOOM_IN
         MENUITEM "Zoom &Out\t-", IDM_VIEWERRAW_VIEW_ZOOM_OUT
@@ -36,7 +35,7 @@ BEGIN
         POPUP "&Transform"
         BEGIN
             MENUITEM "Rotate &Clockwise\tR", IDM_VIEWERRAW_VIEW_ROTATE_CW
-            MENUITEM "Rotate &Counterclockwise\tCtrl+R, Shift+R", IDM_VIEWERRAW_VIEW_ROTATE_CCW
+            MENUITEM "Rotate C&ounterclockwise\tCtrl+R, Shift+R", IDM_VIEWERRAW_VIEW_ROTATE_CCW
             MENUITEM SEPARATOR
             MENUITEM "Flip &Horizontal\tH", IDM_VIEWERRAW_VIEW_FLIP_HORIZONTAL
             MENUITEM "Flip &Vertical\tV", IDM_VIEWERRAW_VIEW_FLIP_VERTICAL
@@ -45,12 +44,12 @@ BEGIN
         END
         POPUP "&Adjust"
         BEGIN
-            MENUITEM "Brightness +\tCtrl+Alt+Up", IDM_VIEWERRAW_VIEW_BRIGHTNESS_INCREASE
-            MENUITEM "Brightness -\tCtrl+Alt+Down", IDM_VIEWERRAW_VIEW_BRIGHTNESS_DECREASE
-            MENUITEM "Contrast +\tCtrl+Alt+Right", IDM_VIEWERRAW_VIEW_CONTRAST_INCREASE
-            MENUITEM "Contrast -\tCtrl+Alt+Left", IDM_VIEWERRAW_VIEW_CONTRAST_DECREASE
-            MENUITEM "Gamma +\tCtrl+Alt+PgUp", IDM_VIEWERRAW_VIEW_GAMMA_INCREASE
-            MENUITEM "Gamma -\tCtrl+Alt+PgDn", IDM_VIEWERRAW_VIEW_GAMMA_DECREASE
+            MENUITEM "&Increase Brightness\tCtrl+Alt+Up", IDM_VIEWERRAW_VIEW_BRIGHTNESS_INCREASE
+            MENUITEM "&Decrease Brightness\tCtrl+Alt+Down", IDM_VIEWERRAW_VIEW_BRIGHTNESS_DECREASE
+            MENUITEM "Increase &Contrast\tCtrl+Alt+Right", IDM_VIEWERRAW_VIEW_CONTRAST_INCREASE
+            MENUITEM "Decrease C&ontrast\tCtrl+Alt+Left", IDM_VIEWERRAW_VIEW_CONTRAST_DECREASE
+            MENUITEM "Increase Ga&mma\tCtrl+Alt+PgUp", IDM_VIEWERRAW_VIEW_GAMMA_INCREASE
+            MENUITEM "Decrease G&amma\tCtrl+Alt+PgDn", IDM_VIEWERRAW_VIEW_GAMMA_DECREASE
             MENUITEM SEPARATOR
             MENUITEM "&Grayscale\tG", IDM_VIEWERRAW_VIEW_TOGGLE_GRAYSCALE
             MENUITEM "&Negative\tN", IDM_VIEWERRAW_VIEW_TOGGLE_NEGATIVE

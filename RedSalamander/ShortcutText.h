@@ -4,6 +4,8 @@
 #include <string>
 #include <string_view>
 
+#include "Keyboard.h"
+
 namespace ShortcutText
 {
 [[nodiscard]] std::wstring VkToDisplayText(uint32_t vk) noexcept;
@@ -11,4 +13,6 @@ namespace ShortcutText
 [[nodiscard]] std::wstring GetCommandDisplayName(std::wstring_view commandId) noexcept;
 
 [[nodiscard]] std::wstring FormatChordText(uint32_t vk, uint32_t modifiers) noexcept;
+
+[[nodiscard]] std::wstring FormatChordText(Common::Keyboard::KeyPosition keyPosition, uint32_t vk, uint32_t modifiers) noexcept;
 } // namespace ShortcutText

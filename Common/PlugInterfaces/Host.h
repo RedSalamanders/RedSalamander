@@ -16,6 +16,7 @@ interface IFileSystem;
 #pragma warning(disable : 4820) // padding in data structure
 
 // ABI evolution policy for host/plugin interfaces in this file:
+// - The current supported boundary is source-tree/release lockstep. Retained IIDs and sizeBytes do not support mixed-release binaries.
 // - A same-GUID COM interface has a fixed vtable layout. Do not insert, remove, reorder, or change existing virtual slots.
 // - Append-only same-GUID changes are allowed only when old-plugin/new-host compatibility is explicitly covered by a test fixture.
 // - If compatibility is not proven, define a new interface IID/name (for example IHostConnections2) and expose it via QueryInterface.
@@ -57,9 +58,7 @@ enum HostAlertSeverity : uint32_t
 
 struct HostAlertRequest
 {
-    // ABI versioning.
-    uint32_t version;   // 1
-    uint32_t sizeBytes; // sizeof(HostAlertRequest)
+    uint32_t sizeBytes; // Caller-provided byte size; unknown tail fields are ignored.
 
     HostAlertScope scope;
     HostAlertModality modality;
@@ -104,11 +103,56 @@ enum HostPromptResult : uint32_t
     HOST_PROMPT_RESULT_NO     = 7, // IDNO
 };
 
+// Optional semantic presentation for prompts whose affirmative action is a
+// file operation. The host keeps the standard result/button ABI while using an
+// operation-specific icon, palette, title fallback, and affirmative label.
+enum HostPromptPresentation : uint32_t
+{
+    HOST_PROMPT_PRESENTATION_DEFAULT = 0,
+    HOST_PROMPT_PRESENTATION_COPY    = 1,
+    HOST_PROMPT_PRESENTATION_MOVE    = 2,
+    HOST_PROMPT_PRESENTATION_DELETE  = 3,
+    HOST_PROMPT_PRESENTATION_ARTIFACT_TOUCH = 4,
+};
+
+enum HostFileOperationLinkPolicy : uint32_t
+{
+    HOST_FILE_OPERATION_LINK_PRESERVE = 0,
+    HOST_FILE_OPERATION_LINK_SKIP     = 1,
+};
+
+enum HostFileOperationExecutionMode : uint32_t
+{
+    HOST_FILE_OPERATION_EXECUTION_QUEUE    = 0,
+    HOST_FILE_OPERATION_EXECUTION_PARALLEL = 1,
+};
+
+enum HostFileOperationVerificationAvailability : uint32_t
+{
+    HOST_FILE_OPERATION_VERIFICATION_SUPPORTED = 0,
+    HOST_FILE_OPERATION_VERIFICATION_UNSUPPORTED = 1,
+    HOST_FILE_OPERATION_VERIFICATION_CHECK_DURING_OPERATION = 2,
+    HOST_FILE_OPERATION_VERIFICATION_NOT_APPLICABLE = 3,
+};
+
+// Optional, operation-specific confirmation state. The caller owns this
+// structure for the synchronous ShowPrompt call. The host writes accepted
+// values back only when the affirmative prompt action is chosen.
+struct HostFileOperationPromptOptions
+{
+    uint32_t sizeBytes;
+    HostFileOperationLinkPolicy linkPolicy;
+    uint32_t verifyAfterCopy;
+    HostFileOperationExecutionMode executionMode;
+    uint32_t clipboardMoveConsumesCutList;
+    uint64_t bandwidthLimitBytesPerSecond; // 0 means unlimited.
+    HostFileOperationVerificationAvailability verificationAvailability;
+    uint32_t reserved[5];
+};
+
 struct HostPromptRequest
 {
-    // ABI versioning.
-    uint32_t version;   // 1
-    uint32_t sizeBytes; // sizeof(HostPromptRequest)
+    uint32_t sizeBytes; // Caller-provided byte size; unknown tail fields are ignored.
 
     HostAlertScope scope;
     HostAlertSeverity severity;
@@ -125,7 +169,15 @@ struct HostPromptRequest
     // Use HOST_PROMPT_RESULT_NONE to indicate no preference.
     HostPromptResult defaultResult;
 
-    uint32_t reserved[8];
+    // Optional visual/action treatment. Unknown values fall back to DEFAULT.
+    HostPromptPresentation presentation;
+
+    // Optional in/out state for COPY and MOVE confirmation. The pointer and
+    // pointed-to storage remain caller-owned and valid for this synchronous
+    // call, including synchronous cross-thread dispatch to the host UI.
+    HostFileOperationPromptOptions* fileOperationOptions;
+
+    uint32_t reserved[5];
 };
 
 // UUID: {afb5a715-1110-41f3-b7bb-133d6ca735fd}
@@ -143,8 +195,7 @@ enum HostConnectionSecretKind : uint32_t
 
 struct HostConnectionManagerRequest
 {
-    uint32_t version;   // 1
-    uint32_t sizeBytes; // sizeof(HostConnectionManagerRequest)
+    uint32_t sizeBytes; // Caller-provided byte size; unknown tail fields are ignored.
 
     // Optional filter: only show connections whose ConnectionProfile.pluginId matches this value.
     // nullptr/empty means "all connections".
@@ -158,8 +209,7 @@ struct HostConnectionManagerRequest
 
 struct HostConnectionManagerResult
 {
-    uint32_t version;   // 1
-    uint32_t sizeBytes; // sizeof(HostConnectionManagerResult)
+    uint32_t sizeBytes; // Caller-provided byte size; unknown tail fields are ignored.
 
     // On S_OK, the host allocates a NUL-terminated UTF-16 string with CoTaskMemAlloc and stores it here.
     // Callers must free it with CoTaskMemFree().
@@ -249,8 +299,7 @@ enum HostPaneExecuteFlags : uint32_t
 
 struct HostPaneExecuteRequest
 {
-    uint32_t version;   // 1
-    uint32_t sizeBytes; // sizeof(HostPaneExecuteRequest)
+    uint32_t sizeBytes; // Caller-provided byte size; unknown tail fields are ignored.
 
     HostPaneExecuteFlags flags;
 
@@ -276,8 +325,7 @@ interface __declspec(uuid("2f1a61a6-6e8c-4c1e-ae33-0f2cfb42e3b9")) __declspec(no
 
 struct HostViewerOpenRequest
 {
-    uint32_t version;   // 1
-    uint32_t sizeBytes; // sizeof(HostViewerOpenRequest)
+    uint32_t sizeBytes; // Caller-provided byte size; unknown tail fields are ignored.
 
     // Stable viewer plugin identifier (for example: "builtin/viewer-text").
     const wchar_t* pluginId;

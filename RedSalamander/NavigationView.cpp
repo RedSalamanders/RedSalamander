@@ -1544,6 +1544,7 @@ bool NavigationView::DebugGetSnapshot(NavigationViewDebugSnapshot& out) const no
     out.showMenuSection                   = _showMenuSection;
     out.showDiskInfoSection               = _showDiskInfoSection;
     out.menuIconBitmapLoaded              = _menuIconBitmapD2D != nullptr;
+    out.menuFallbackGlyph                 = _menuFallbackGlyph;
     out.historyCount                      = _pathHistory.size();
     out.historyDropdownOpenCount          = _debugHistoryDropdownOpenCount;
     out.menuRegionRect                    = _sectionDriveRect;

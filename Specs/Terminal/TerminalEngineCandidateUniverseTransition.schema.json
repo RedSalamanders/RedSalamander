@@ -1,0 +1,577 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:red-salamander:schema:terminal-engine-candidate-universe-transition:v2",
+  "title": "RedSalamander TerminalEngine candidate-universe round transition v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "version",
+    "frozenUtc",
+    "authorId",
+    "baseUniverse",
+    "roundCloseout",
+    "policy",
+    "governanceSchemas",
+    "conformanceCorrections",
+    "frozenInputs",
+    "proposalSha256",
+    "approvals"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "red-salamander-terminal-engine-candidate-universe-transition"
+    },
+    "version": {
+      "const": 2
+    },
+    "frozenUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "authorId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "baseUniverse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relativePath", "sha256", "version"],
+      "properties": {
+        "relativePath": {
+          "const": "Specs/Terminal/TerminalEngineCandidateUniverse.v1.json"
+        },
+        "sha256": {
+          "const": "eef3e91e61694e30a123d9f53d1aee124112f6af3177db1c315c50ac3d22b3af"
+        },
+        "version": {
+          "const": 1
+        }
+      }
+    },
+    "roundCloseout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "priorRound",
+        "status",
+        "failureCodes",
+        "reuseAllowed",
+        "reuseForbidden"
+      ],
+      "properties": {
+        "priorRound": {
+          "const": 1
+        },
+        "status": {
+          "const": "invalid-no-selection"
+        },
+        "failureCodes": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "candidate-set-not-frozen",
+              "performance-before-nomination-close"
+            ]
+          }
+        },
+        "reuseAllowed": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "prefixItems": [
+            {
+              "const": "Byte-identical frozen protocols, controls, pins, source archives, source-review facts, and generated fixtures may be reused only after their recorded SHA-256 values are reverified."
+            },
+            {
+              "const": "Exact prior patch bytes may be used as starting inputs, but every round-2 result tree, metric ledger, owner estimate, and approval is regenerated."
+            }
+          ],
+          "items": false
+        },
+        "reuseForbidden": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "prefixItems": [
+            {
+              "const": "No round-1 functional, security, performance, package, native-lane, score, approval, or decision record is round-2 evidence."
+            },
+            {
+              "const": "No provisional result may change a cap, score anchor, gate, weight, threshold, pin, source decision, control, fixture expectation, or normalization rule."
+            }
+          ],
+          "items": false
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policyChange",
+        "hardCaps",
+        "nominationOverrides",
+        "preMeasurementRules"
+      ],
+      "properties": {
+        "policyChange": {
+          "const": "No adaptation cap, score anchor, weight, threshold, pin, source decision, or control changes. Round 2 changes nomination identities, restarts the invalid ordering, and binds candidate-neutral positive-PNG, C7 proof, and normalized-package measurement corrections that enforce existing G7, C7, and C9 requirements."
+        },
+        "hardCaps": {
+          "$ref": "#/$defs/hardCaps"
+        },
+        "nominationOverrides": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/nominationOverride"
+          }
+        },
+        "preMeasurementRules": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "prefixItems": [
+            {
+              "const": "Freeze and independently approve every allowed seed outcome, exact patch, result tree, concern map, owner ledger, candidate assessment, and candidate set before any round-2 native or performance collection."
+            },
+            {
+              "const": "Candidate-specific adapter, provider, driver, build, generated, test, documentation, and packaging code counts in that candidate regardless of repository location; moving code cannot improve a rating or evade a cap."
+            },
+            {
+              "const": "A changed candidate result tree, provider semantics, frozen protocol, or scoring input after collection starts requires a new universe version and a complete rerun; round 2 has no repair-after-result exception."
+            },
+            {
+              "const": "Logical concerns remain independently regressible behaviors and may not be merged, renamed, or omitted to gain admission or a score."
+            },
+            {
+              "const": "A candidate must pass every fixture and native lane; no assertion-count inflation, fixture exception, expected-state lookup, unsupported action, normalized-artifact substitute, or candidate-supplied evidence claim is accepted."
+            },
+            {
+              "const": "The explicit no-winner outcome remains valid; no cap or rating is raised merely to force a selection."
+            }
+          ],
+          "items": false
+        }
+      }
+    },
+    "governanceSchemas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseUniverse", "transition"],
+      "properties": {
+        "baseUniverse": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["relativePath", "sha256"],
+          "properties": {
+            "relativePath": {
+              "const": "Specs/Terminal/TerminalEngineCandidateUniverse.schema.json"
+            },
+            "sha256": {
+              "$ref": "#/$defs/nonzeroSha256"
+            }
+          }
+        },
+        "transition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["relativePath", "sha256"],
+          "properties": {
+            "relativePath": {
+              "const": "Specs/Terminal/TerminalEngineCandidateUniverseTransition.schema.json"
+            },
+            "sha256": {
+              "$ref": "#/$defs/nonzeroSha256"
+            }
+          }
+        }
+      }
+    },
+    "conformanceCorrections": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/conformanceCorrection"
+      }
+    },
+    "frozenInputs": {
+      "type": "array",
+      "minItems": 14,
+      "maxItems": 14,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/frozenInput"
+      }
+    },
+    "proposalSha256": {
+      "$ref": "#/$defs/nonzeroSha256"
+    },
+    "approvals": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/approval"
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "nonzeroSha256": {
+      "type": "string",
+      "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "nonemptyString": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "hardCaps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ownerDays",
+        "changedMaintainedLines",
+        "changedMaintainedFiles",
+        "logicalConcerns",
+        "newToolchainFamilies",
+        "newNonSystemRuntimeLeaves",
+        "binaryPatchAllowed"
+      ],
+      "properties": {
+        "ownerDays": {
+          "const": 60
+        },
+        "changedMaintainedLines": {
+          "const": 2500
+        },
+        "changedMaintainedFiles": {
+          "const": 24
+        },
+        "logicalConcerns": {
+          "const": 5
+        },
+        "newToolchainFamilies": {
+          "const": 1
+        },
+        "newNonSystemRuntimeLeaves": {
+          "const": 0
+        },
+        "binaryPatchAllowed": {
+          "const": false
+        }
+      }
+    },
+    "nominationOverride": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["seedCandidateId", "priorNominationId", "nominationId"],
+          "properties": {
+            "seedCandidateId": {"const": "contour"},
+            "priorNominationId": {"const": "contour-rs"},
+            "nominationId": {"const": "contour-rs-v2"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["seedCandidateId", "priorNominationId", "nominationId"],
+          "properties": {
+            "seedCandidateId": {"const": "ghostty-upstream"},
+            "priorNominationId": {"const": "ghostty-rs-v2"},
+            "nominationId": {"const": "ghostty-rs-v3"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["seedCandidateId", "priorNominationId", "nominationId"],
+          "properties": {
+            "seedCandidateId": {"const": "wezterm"},
+            "priorNominationId": {"const": "wezterm-rs"},
+            "nominationId": {"const": "wezterm-rs-v2"}
+          }
+        }
+      ]
+    },
+    "frozenInput": {
+      "oneOf": [
+        {"$ref": "#/$defs/inputBaseUniverse"},
+        {"$ref": "#/$defs/inputFixtureCorpus"},
+        {"$ref": "#/$defs/inputMeasurementProtocol"},
+        {"$ref": "#/$defs/inputRequirements"},
+        {"$ref": "#/$defs/inputScoreAnchors"},
+        {"$ref": "#/$defs/inputGeneratedFixtures"},
+        {"$ref": "#/$defs/inputFixtureGenerator"},
+        {"$ref": "#/$defs/inputAdapterHeader"},
+        {"$ref": "#/$defs/inputLayoutHeader"},
+        {"$ref": "#/$defs/inputC7Contract"},
+        {"$ref": "#/$defs/inputC7Schema"},
+        {"$ref": "#/$defs/inputC7Module"},
+        {"$ref": "#/$defs/inputC7Documentation"},
+        {"$ref": "#/$defs/inputC7Test"}
+      ]
+    },
+    "inputBaseUniverse": {
+      "$ref": "#/$defs/exactInput",
+      "unevaluatedProperties": false,
+      "properties": {
+        "relativePath": {"const": "Specs/Terminal/TerminalEngineCandidateUniverse.v1.json"},
+        "sha256": {"const": "eef3e91e61694e30a123d9f53d1aee124112f6af3177db1c315c50ac3d22b3af"}
+      }
+    },
+    "inputFixtureCorpus": {
+      "$ref": "#/$defs/exactInput",
+      "unevaluatedProperties": false,
+      "properties": {
+        "relativePath": {"const": "Specs/Terminal/TerminalEngineFixtureCorpus.v1.json"},
+        "sha256": {"const": "afb197f83966016cb3733d9aa4407dd74042a7f31178dac1aa5b3b02e1372109"}
+      }
+    },
+    "inputMeasurementProtocol": {
+      "$ref": "#/$defs/exactInput",
+      "unevaluatedProperties": false,
+      "properties": {
+        "relativePath": {"const": "Specs/Terminal/TerminalEngineMeasurementProtocol.v1.json"},
+        "sha256": {"const": "cad0d34dd20fe466e3d04be16aa5ff0b033de6207f1a0575dee4a9ced3a56627"}
+      }
+    },
+    "inputRequirements": {
+      "$ref": "#/$defs/exactInput",
+      "unevaluatedProperties": false,
+      "properties": {
+        "relativePath": {"const": "Specs/Terminal/TerminalEngineRequirements.v1.json"},
+        "sha256": {"const": "8c4119c6d4429af73d12178f58440609b6e5379ccc2c6bfaa5d9b18788e66366"}
+      }
+    },
+    "inputScoreAnchors": {
+      "$ref": "#/$defs/exactInput",
+      "unevaluatedProperties": false,
+      "properties": {
+        "relativePath": {"const": "Specs/Terminal/TerminalEngineScoreAnchors.v1.json"},
+        "sha256": {"const": "5dd79066be00e5de4106625263c9ba6c5588a08c169b7693aff230ac512e3007"}
+      }
+    },
+    "inputGeneratedFixtures": {
+      "$ref": "#/$defs/exactInput",
+      "unevaluatedProperties": false,
+      "properties": {
+        "relativePath": {"const": "Tools/TerminalEngine/Generated/TerminalEngineFixtures.v1.h"},
+        "sha256": {"const": "cd113174f188eef71acbaaebf38a178d76d3662e802136223ecef77404d5e141"}
+      }
+    },
+    "inputFixtureGenerator": {
+      "$ref": "#/$defs/exactInput",
+      "unevaluatedProperties": false,
+      "properties": {
+        "relativePath": {"const": "Tools/TerminalEngine/Generate-TerminalEngineFixtures.ps1"},
+        "sha256": {"const": "ede50e5c8fdd1bc3f076c6fa401676932bacdf948dc0c89c58a0085eb8136d1d"}
+      }
+    },
+    "inputAdapterHeader": {
+      "$ref": "#/$defs/exactInput",
+      "unevaluatedProperties": false,
+      "properties": {
+        "relativePath": {"const": "Tools/TerminalEngine/TerminalEngineGate0Adapter.h"},
+        "sha256": {"const": "5aed4f300a5a4aea090f50bbed743bd34824f18a9d2acc64d698a9b8561981bc"}
+      }
+    },
+    "inputLayoutHeader": {
+      "$ref": "#/$defs/exactInput",
+      "unevaluatedProperties": false,
+      "properties": {
+        "relativePath": {"const": "Tools/TerminalEngine/TerminalEngineGate0Layout.h"},
+        "sha256": {"const": "63cf4fb35db3ca55870b2e5604a9c4b9cb672a3212d132e35465976ce5d1aff6"}
+      }
+    },
+    "inputC7Contract": {
+      "$ref": "#/$defs/exactInput",
+      "unevaluatedProperties": false,
+      "properties": {
+        "relativePath": {"const": "Specs/Terminal/TerminalEngineC7ProofContract.v1.json"},
+        "sha256": {"const": "7d1ab5a6c1c2510ae6ded86c37d26ef0b051b3e92f460784fe49e1e7264bbab1"}
+      }
+    },
+    "inputC7Schema": {
+      "$ref": "#/$defs/exactInput",
+      "unevaluatedProperties": false,
+      "properties": {
+        "relativePath": {"const": "Specs/Terminal/TerminalEngineC7Proof.schema.json"},
+        "sha256": {"const": "a7de70e6ce6f45a1f6995af5643f32b16080714bb0b5121e6a5a1f44a9b83f9d"}
+      }
+    },
+    "inputC7Module": {
+      "$ref": "#/$defs/exactInput",
+      "unevaluatedProperties": false,
+      "properties": {
+        "relativePath": {"const": "Tools/TerminalEngine/TerminalEngineC7Proof.psm1"},
+        "sha256": {"const": "141f4a3a45f18ee9b177a22e6b2d0b82a396795e7343f14b27d1cc7cc3447ea8"}
+      }
+    },
+    "inputC7Documentation": {
+      "$ref": "#/$defs/exactInput",
+      "unevaluatedProperties": false,
+      "properties": {
+        "relativePath": {"const": "Tools/TerminalEngine/TerminalEngineC7ProofContract.md"},
+        "sha256": {"const": "9d18fdae4d8e68b023ae8fb69eb590220e76d7284f346275b678feee2aabb56e"}
+      }
+    },
+    "inputC7Test": {
+      "$ref": "#/$defs/exactInput",
+      "unevaluatedProperties": false,
+      "properties": {
+        "relativePath": {"const": "Tools/Tests/TerminalEngineC7Proof.Tests.ps1"},
+        "sha256": {"const": "2ee109d55be1e3635d9a41e8c793a2273f70d8eb2609492fc03c648df9a9c321"}
+      }
+    },
+    "exactInput": {
+      "type": "object",
+      "required": ["relativePath", "sha256"]
+    },
+    "conformanceCorrection": {
+      "oneOf": [
+        {"$ref": "#/$defs/correctionC7"},
+        {"$ref": "#/$defs/correctionPng"},
+        {"$ref": "#/$defs/correctionPackage"}
+      ]
+    },
+    "correctionC7": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "correctionId",
+        "requirement",
+        "priorState",
+        "currentState",
+        "scoringImpact"
+      ],
+      "properties": {
+        "correctionId": {
+          "const": "c7-proof-origin-closure"
+        },
+        "requirement": {
+          "const": "C7 rating 5 requires provider-origin authentication, real adapter session/action/state execution in every lane, replay and boundary rejection, and a content-free proof bound to the actual adapter identity."
+        },
+        "priorState": {
+          "const": "The invalid round-1 path had zero dedicated provider-origin C7 adapter schedules and no score.c7-proof contract or reusable proof identity."
+        },
+        "currentState": {
+          "const": "The correction runs 3 independent adapter schedules, the existing ordering row, 31 authentication/composition cases, and 3 boundary cases. Frozen identities are contract raw 7d1ab5a6c1c2510ae6ded86c37d26ef0b051b3e92f460784fe49e1e7264bbab1, contract JCS 586cdfdaa591ef4a37dcd35fffc7aaedb998089b7a867168bdf2666fb488494f, schema raw a7de70e6ce6f45a1f6995af5643f32b16080714bb0b5121e6a5a1f44a9b83f9d, proof module raw 141f4a3a45f18ee9b177a22e6b2d0b82a396795e7343f14b27d1cc7cc3447ea8, contract documentation raw 9d18fdae4d8e68b023ae8fb69eb590220e76d7284f346275b678feee2aabb56e, and focused test raw 2ee109d55be1e3635d9a41e8c793a2273f70d8eb2609492fc03c648df9a9c321."
+        },
+        "scoringImpact": {
+          "const": "Enforces an existing frozen requirement without changing a score anchor, weight, threshold, or candidate-specific expectation; all earlier result evidence is non-reusable."
+        }
+      }
+    },
+    "correctionPng": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "correctionId",
+        "requirement",
+        "priorState",
+        "currentState",
+        "scoringImpact"
+      ],
+      "properties": {
+        "correctionId": {
+          "const": "positive-kitty-png-execution"
+        },
+        "requirement": {
+          "const": "Existing G7 requires the positive kitty-direct-png fixture under every declared split schedule, a real bounded decoder callback, exact RGBA bytes, and an immutable owned snapshot after live deletion."
+        },
+        "priorState": {
+          "const": "The invalid round-1 runner executed 28 fixtures and 41 rows and omitted the positive PNG fixture/action. Prior identities were fixture manifest 7ad1e12c16d518e6825260183dfb76da9942110eabe3f5329a8fc82e56a1d349, corpus raw 6d980b6b8ce9098a19dbdb616815786dfa14c1586f3b8449812fc92ce2b7bda1, generator raw d62fb30943a69d88ce416827bdb015d3b184d061182efbc8ce8ac73960015974, generated header raw 62c0123326163a53f57613ad8beda598c47c4cbaedd82f747a9a7af767674db9, and result raw a3e1a9b9be50bb3f8dd083ef3ff51bd72443db18f6e162bef181adf51130aa11; none is reusable."
+        },
+        "currentState": {
+          "const": "The correction executes 29 fixtures and 43 rows. Current identities are fixture manifest af7277b42f6e74d147bb5df5781b4e4df03bddfcd28738330dd2403da22b9b44, corpus raw afb197f83966016cb3733d9aa4407dd74042a7f31178dac1aa5b3b02e1372109, generator raw ede50e5c8fdd1bc3f076c6fa401676932bacdf948dc0c89c58a0085eb8136d1d, generated header raw cd113174f188eef71acbaaebf38a178d76d3662e802136223ecef77404d5e141, and 43-row proof raw 697c1fe381eecb7873d20eeca603d12a41223cc8a97270ba4d0bb1abc3ba0be0. The added 116-byte input has SHA-256 a90a604995b9f736500e5354d9ced001674c4a26aad8b1353ceba3792986cf39 and expected-state SHA-256 64a4f66c4337d318dc879bda36c59a7f5db30d0f103d8f370444eae9407171d9."
+        },
+        "scoringImpact": {
+          "const": "Enforces an existing frozen requirement without changing a score anchor, weight, threshold, or candidate-specific expectation; all earlier result evidence is non-reusable."
+        }
+      }
+    },
+    "correctionPackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "correctionId",
+        "requirement",
+        "priorState",
+        "currentState",
+        "scoringImpact"
+      ],
+      "properties": {
+        "correctionId": {
+          "const": "portable-package-measurement"
+        },
+        "requirement": {
+          "const": "C9 package contribution and the package-size tie-break use one provider-owned deterministic normalized ZIP recipe with fixed entry order, timestamp, attributes, compression, byte-identical double construction, and empty-ZIP overhead subtraction."
+        },
+        "priorState": {
+          "const": "The post-provisional snapshot before this correction had measurement-protocol raw SHA-256 e45dc29c837b7d5608013a4f0b39b522e4e99d0c24834342274f775dbe436206 and did not close the portablePackageRecipe; no earlier raw DLL-plus-notice size, package metric, performance result, or score is reusable."
+        },
+        "currentState": {
+          "const": "The corrected measurement protocol has raw SHA-256 cad0d34dd20fe466e3d04be16aa5ff0b033de6207f1a0575dee4a9ced3a56627 and freezes recipe terminal-engine-contribution-zip-v1."
+        },
+        "scoringImpact": {
+          "const": "Enforces an existing frozen requirement without changing a score anchor, weight, threshold, or candidate-specific expectation; all earlier result evidence is non-reusable."
+        }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approvalId",
+        "reviewerId",
+        "reviewerRole",
+        "proposalSha256",
+        "decision",
+        "reviewedUtc"
+      ],
+      "properties": {
+        "approvalId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "reviewerId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "reviewerRole": {
+          "const": "independent-universe-reviewer"
+        },
+        "proposalSha256": {
+          "$ref": "#/$defs/nonzeroSha256"
+        },
+        "decision": {
+          "const": "approved"
+        },
+        "reviewedUtc": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

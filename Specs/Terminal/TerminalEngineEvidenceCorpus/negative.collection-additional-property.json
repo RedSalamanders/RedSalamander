@@ -1,0 +1,61 @@
+{
+  "formatId": "red-salamander-terminal-engine-evidence",
+  "schemaVersion": 1,
+  "recordKind": "collection",
+  "runId": "2026-07-30_140000",
+  "createdUtc": "2026-07-30T14:00:00Z",
+  "repositoryCommit": "1111111111111111111111111111111111111111",
+  "repositoryClean": true,
+  "machineHash": "0123456789ab",
+  "schemaSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "harness": {
+    "version": "1.0.0",
+    "sourceSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "frozen": {
+    "requirementsSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "scoreAnchorsSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "fixtureCorpusSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "measurementProtocolSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "candidateUniverseSha256": "abababababababababababababababababababababababababababababababab",
+    "candidateSetSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "candidateReviewSha256": "1010101010101010101010101010101010101010101010101010101010101010",
+    "candidateAssessmentSha256": "1212121212121212121212121212121212121212121212121212121212121212"
+  },
+  "platform": "x64",
+  "configuration": "Release",
+  "nativeAttestation": {
+    "processMachine": "UNKNOWN",
+    "nativeMachine": "AMD64",
+    "windowsBuild": "10.0.26200.0",
+    "isNative": true,
+    "minimumSupportedBuild": "22000.2600",
+    "minimumOsProof": "pe-import-audit",
+    "minimumOsEvidenceSha256": "1212121212121212121212121212121212121212121212121212121212121212"
+  },
+  "toolchain": {
+    "compilerId": "msvc",
+    "version": "19.50.10000",
+    "identitySha256": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "collectionPolicy": {
+    "bootstrap": true,
+    "clean": true,
+    "offline": true,
+    "bootstrapInputSetSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "networkIsolation": "runner-enforced"
+  },
+  "candidates": [
+    {
+      "candidateId": "web-runtime-control",
+      "pin": "control-v1",
+      "pinSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+      "outcome": "constraint-control",
+      "controlFailure": {
+        "constraintId": "web-runtime-second-stack",
+        "evidenceSha256": "8888888888888888888888888888888888888888888888888888888888888888"
+      }
+    }
+  ],
+  "unexpected": "must be rejected"
+}

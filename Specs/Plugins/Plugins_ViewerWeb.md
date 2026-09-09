@@ -108,10 +108,10 @@ Layout:
 - Raw HTML and generated `json`, `jsonl`, and `markdown` pages are delivered to WebView2 through in-memory `WebResourceRequested` responses on private viewer URLs, so rendered documents do not rely on `NavigateToString()` or a temp `.html` file.
 
 Menu (DxUi-hosted from the hidden native menu model):
-- File: Save As, Refresh, Exit, Other Files navigation (Next/Previous/First/Last)
+- File: Save As, Refresh, Other Files navigation (Previous/Next/First/Last), separator, Exit
 - Search: Find, Find Next, Find Previous
-- View: Zoom In/Out/Reset, Toggle DevTools
-- Tools: Copy URL, Open in Browser, JSON Expand/Collapse, Toggle Markdown Source
+- View: Zoom In/Out/Reset
+- Tools: Copy URL, Open in Browser, Toggle DevTools, JSON Expand/Collapse, Toggle Markdown Source
 
 The window detaches its live native `HMENU` after opening and renders the visible top menu bar through the shared `RedSalamander.DxNativeMenuBar` host. `Alt`, `F10`, and menu mnemonics continue to route through that DxUi menu bar.
 

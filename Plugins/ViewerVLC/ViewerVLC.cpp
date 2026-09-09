@@ -2643,7 +2643,7 @@ void ViewerVLC::OnSize(UINT width, UINT height) noexcept
 
 HRESULT STDMETHODCALLTYPE ViewerVLC::Open(const ViewerOpenContext* context) noexcept
 {
-    if (! context || ! context->focusedPath || context->focusedPath[0] == L'\0')
+    if (! context || context->sizeBytes < sizeof(ViewerOpenContext) || ! context->focusedPath || context->focusedPath[0] == L'\0')
     {
         Debug::Error(L"ViewerVLC: Open called with an invalid context (focusedPath missing).");
         return E_INVALIDARG;
@@ -2786,7 +2786,7 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::Close() noexcept
 
 HRESULT STDMETHODCALLTYPE ViewerVLC::SetTheme(const ViewerTheme* theme) noexcept
 {
-    if (! theme || theme->version < 2u || theme->version > 4u)
+    if (! theme || theme->sizeBytes < sizeof(ViewerTheme))
     {
         return E_INVALIDARG;
     }
@@ -6102,7 +6102,6 @@ void ViewerVLC::TakeSnapshot() noexcept
     const std::wstring message = FormatStringResource(g_hInstance, IDS_VIEWERVLC_SNAPSHOT_FAILED_FMT, rc);
 
     HostAlertRequest request{};
-    request.version      = 1;
     request.sizeBytes    = sizeof(request);
     request.scope        = HOST_ALERT_SCOPE_WINDOW;
     request.modality     = HOST_ALERT_MODELESS;

@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://red-salamander.invalid/schemas/workspace-snapshot-v1.json",
+  "title": "RedSalamander workspace snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "canonicalization", "snapshot_id", "repo_identity", "git_head", "base", "files", "acquisition_before", "acquisition_after", "acquisition_attempts", "git_discovery_ms", "content_hashing_ms", "canonicalization_ms", "computation_ms", "created_utc"],
+  "properties": {
+    "schema": { "const": "red-salamander.workspace-snapshot.v1" },
+    "canonicalization": { "const": "rs-canonical-json-v1" },
+    "snapshot_id": { "$ref": "#/definitions/digest" },
+    "repo_identity": { "$ref": "#/definitions/digest" },
+    "git_head": { "anyOf": [{ "$ref": "#/definitions/gitObject" }, { "type": "null" }] },
+    "base": { "anyOf": [{ "$ref": "#/definitions/gitObject" }, { "type": "null" }] },
+    "files": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "status", "base_sha256", "base_mode", "index_sha256", "index_mode", "worktree_sha256", "worktree_size_bytes", "old_path"],
+        "properties": {
+          "path": { "$ref": "#/definitions/relativePath" },
+          "status": { "enum": ["added", "modified", "deleted", "renamed", "untracked", "type-changed"] },
+          "base_sha256": { "anyOf": [{ "$ref": "#/definitions/digest" }, { "type": "null" }] },
+          "base_mode": { "anyOf": [{ "$ref": "#/definitions/gitMode" }, { "type": "null" }] },
+          "index_sha256": { "anyOf": [{ "$ref": "#/definitions/digest" }, { "type": "null" }] },
+          "index_mode": { "anyOf": [{ "$ref": "#/definitions/gitMode" }, { "type": "null" }] },
+          "worktree_sha256": { "anyOf": [{ "$ref": "#/definitions/digest" }, { "type": "null" }] },
+          "worktree_size_bytes": { "type": ["integer", "null"], "minimum": 0 },
+          "old_path": { "anyOf": [{ "$ref": "#/definitions/relativePath" }, { "type": "null" }] }
+        }
+      }
+    },
+    "acquisition_before": { "$ref": "#/definitions/digest" },
+    "acquisition_after": { "$ref": "#/definitions/digest" },
+    "acquisition_attempts": { "type": "integer", "minimum": 1, "maximum": 10 },
+    "git_discovery_ms": { "type": "integer", "minimum": 0 },
+    "content_hashing_ms": { "type": "integer", "minimum": 0 },
+    "canonicalization_ms": { "type": "integer", "minimum": 0 },
+    "computation_ms": { "type": "integer", "minimum": 0 },
+    "created_utc": { "type": "string", "format": "date-time", "maxLength": 64 }
+  },
+  "definitions": {
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "gitObject": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+    "gitMode": { "type": "string", "pattern": "^[0-7]{6}$" },
+    "relativePath": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//)(?!.*\\\\)[^\\u0000-\\u001f]+$" }
+  }
+}

@@ -57,9 +57,9 @@ Folder-view chords apply while focus is inside a folder pane. See [Navigation an
 | Chord | Action |
 |-------|--------|
 | `Ctrl+A` | Select all |
-| `Esc` | Unselect all |
-| `Insert` | Select current item and move to next |
-| `Space` | Select, calculate directory size, and move to next |
+| `Esc` | Clear selection and keep the current item |
+| `Insert` | Toggle current item and move next, without wrapping or size work |
+| `Space` | Toggle current item, update selected-folder size work, and move next without wrapping |
 | `Shift+Space` | Quick Search in the current pane |
 | `Ctrl+=` | Select... (select-by-pattern dialog) |
 | `Ctrl+-` | Unselect... (unselect-by-pattern dialog) |
@@ -146,16 +146,64 @@ See [Find Files and Directories](FindFiles.md) and [Compare Directories](Compare
 | `Ctrl+F12` | Filter the current folder |
 | `Shift+Space` | Quick Search in the current pane |
 
-## Command line, shell and miscellaneous
+## Terminal, shell and miscellaneous
+
+These application bindings keep their global meaning while a Terminal owns
+focus:
 
 | Chord | Action |
-|-------|--------|
-| `Ctrl+Enter` | Bring filename to the command line |
-| `Ctrl+Space` | Bring current directory to the command line |
-| `Ctrl+Shift+Space` | Bring current directory to the command line |
-| `Ctrl+Shift+Enter` | Bring filename to the command line |
-| `Alt+Space` | Window menu |
-| `Ctrl+Alt+T` | Open command shell |
+|---|---|
+| `F11` | Connect (RedSalamander function; not Terminal fullscreen) |
+| `Ctrl+,` | Open global Preferences |
+| `Ctrl+Shift+,` | Open the active application settings file in the default editor |
+| `Ctrl+Shift+P` | Open the global RedSalamander Command Palette |
+| `Alt+Enter` | Toggle full screen |
+| `Alt+F4` | Exit RedSalamander |
+| `Alt+Space` | Window system menu |
+
+The following factory bindings apply when an embedded or floating Terminal owns
+input. You can change every command from **Preferences -> Keyboard ->
+Terminal**, including choosing **Pass through to terminal** or **No action**.
+
+| Chord | Terminal action |
+|---|---|
+| `Ctrl+Shift+Space` | Terminal session menu |
+| `Ctrl+Shift+F` | Find terminal text |
+| `Ctrl+Shift+.` | Search command-history suggestions; insert without executing |
+| `Ctrl+Shift+T` | New floating tab, or open/reuse Terminal in the other pane |
+| `Ctrl+Shift+N` | Open/focus the one floating Terminal window and add a tab |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous Terminal tab or embedded content |
+| `Ctrl+Alt+1` … `Ctrl+Alt+8` | Select content/tab 1 … 8 |
+| `Ctrl+Alt+9` | Select the last content/tab |
+| `Ctrl+Shift+W` | Close the selected Terminal tab/session |
+| `Alt+Shift+Left` / `Alt+Shift+Right` | Move the pane divider |
+| `Alt+Left` / `Alt+Right` | Focus the left / right pane |
+| `Ctrl+Alt+Left` | Switch pane focus |
+| `Ctrl+Shift+C` / `Ctrl+Insert` | Copy Terminal selection |
+| `Enter` / `Ctrl+C` | Copy and clear a selection; otherwise pass through unchanged |
+| `Ctrl+Shift+V` / `Shift+Insert` | Paste in Terminal |
+| `Ctrl+Shift+A` | Select all Terminal text |
+| `Menu` / `Shift+F10` | Terminal context menu |
+| `Ctrl+Shift+Down` / `Ctrl+Shift+Up` | Scroll one line down / up |
+| `Ctrl+Shift+PageDown` / `Ctrl+Shift+PageUp` | Scroll one page down / up |
+| `Ctrl+Shift+End` / `Ctrl+Shift+Home` | Scroll to bottom / top |
+| `Ctrl++` / `Ctrl+Numpad+` | Increase Terminal font size |
+| `Ctrl+-` / `Ctrl+Numpad-` | Decrease Terminal font size |
+| `Ctrl+0` / `Ctrl+Numpad0` | Reset Terminal font size |
+
+Main-keyboard `Ctrl++` and `Ctrl+-` follow the physical number-row key
+positions beside Backspace and `0`, not the `+`, `=`, or `-` character produced
+by the current keyboard layout.
+
+Terminal insertion and general shell commands remain available from folder
+context:
+
+| Chord | Action |
+|---|---|
+| `Ctrl+Enter` | Insert focused item in Terminal |
+| `Ctrl+Space` / `Ctrl+Shift+Space` | Insert current directory in Terminal |
+| `Ctrl+Shift+Enter` | Insert focused item's full path in Terminal |
+| `Ctrl+Alt+T` | Open or reuse the embedded Terminal |
 | `F9` | User Menu |
 | `Ctrl+Shift+F9` | Shared directories |
 | `Alt+F11` | List of opened files |

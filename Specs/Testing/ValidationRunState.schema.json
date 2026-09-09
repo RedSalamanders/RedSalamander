@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://red-salamander.invalid/schemas/validation-run-state-v1.json",
+  "title": "RedSalamander validation run state v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "canonicalization", "run_id", "campaign_id", "campaign_sequence", "parent_run_id", "requested_suite", "validation_mode", "snapshot_id", "build_receipt_id", "artifact_epoch", "mutation_state", "decision_digest", "plan_digest", "coverage_plan_digest", "status", "entries"],
+  "properties": {
+    "schema": { "const": "red-salamander.validation-run-state.v1" },
+    "canonicalization": { "const": "rs-canonical-json-v1" },
+    "run_id": { "$ref": "#/definitions/runId" },
+    "campaign_id": { "$ref": "#/definitions/runId" },
+    "campaign_sequence": { "type": "integer", "minimum": 1 },
+    "parent_run_id": { "anyOf": [{ "$ref": "#/definitions/runId" }, { "type": "null" }] },
+    "requested_suite": { "enum": ["CI", "Full"] },
+    "validation_mode": { "enum": ["Fresh", "Resume", "Affected"] },
+    "snapshot_id": { "$ref": "#/definitions/digest" },
+    "build_receipt_id": { "$ref": "#/definitions/digest" },
+    "artifact_epoch": { "type": "integer", "minimum": 0 },
+    "mutation_state": { "enum": ["stable", "mutating", "interrupted"] },
+    "decision_digest": { "$ref": "#/definitions/digest" },
+    "plan_digest": { "$ref": "#/definitions/digest" },
+    "coverage_plan_digest": { "$ref": "#/definitions/digest" },
+    "status": { "enum": ["running", "passed", "failed", "interrupted", "invalidated"] },
+    "entries": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/definitions/entry" } }
+  },
+  "definitions": {
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$" },
+    "reasonCode": { "enum": ["NO_PRIOR_EVIDENCE", "PREVIOUS_NOT_GREEN", "CORRUPT_EVIDENCE", "SCHEMA_MISMATCH", "SOURCE_INPUT_CHANGED", "BUILD_ARTIFACT_CHANGED", "LOGICAL_INPUT_CHANGED", "SHARED_CONTRACT_CHANGED", "RUNNER_CHANGED", "ENVIRONMENT_CHANGED", "ARGUMENTS_CHANGED", "COVERAGE_CHANGED", "OUTCOME_POLICY_CHANGED", "CAPABILITY_CHANGED", "DYNAMIC_SKIP_NOT_REUSABLE", "ARTIFACT_EPOCH_CHANGED", "ARTIFACT_MUTATOR_REQUIRES_REATTESTATION", "ORIGIN_NOT_PROMOTED", "POST_SNAPSHOT_MISSING", "PORTABLE_ATTESTATION_REJECTED", "NON_CACHEABLE", "SOURCE_CHANGED_DURING_RUN", "FORCED", "REUSED_EXACT", "REUSED_INDEPENDENT_LOGICAL_ARTIFACT", "MONOLITHIC_LOGICAL_CANDIDATE_NOT_FULL"] },
+    "runId": { "type": "string", "maxLength": 128, "pattern": "^[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{32}$" },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "ordinal", "decision", "status", "reason_codes", "expected_fingerprint", "origin_run_id", "origin_evidence_digest", "promotion_digest"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "ordinal": { "type": "integer", "minimum": 0 },
+        "decision": { "enum": ["execute", "reuse", "blocked"] },
+        "status": { "enum": ["pending", "running", "provisional-passed", "promoted", "failed", "interrupted", "invalidated", "reused"] },
+        "reason_codes": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/definitions/reasonCode" } },
+        "expected_fingerprint": { "$ref": "#/definitions/digest" },
+        "origin_run_id": { "anyOf": [{ "$ref": "#/definitions/runId" }, { "type": "null" }] },
+        "origin_evidence_digest": { "anyOf": [{ "$ref": "#/definitions/digest" }, { "type": "null" }] },
+        "promotion_digest": { "anyOf": [{ "$ref": "#/definitions/digest" }, { "type": "null" }] }
+      }
+    }
+  }
+}

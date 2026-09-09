@@ -152,10 +152,10 @@ private:
             case WM_COMMAND:
                 if (LOWORD(wParam) == IDM_REDCONFIGURE_EXIT)
                 {
-                    ::DestroyWindow(hwnd);
-                    return 0;
+                    return ::SendMessageW(hwnd, WM_CLOSE, 0, 0);
                 }
                 break;
+            case WM_CLOSE: ::DestroyWindow(hwnd); return 0;
             case WM_DESTROY: ::PostQuitMessage(0); return 0;
             case WM_NCDESTROY:
                 window->_dxHost.Detach();

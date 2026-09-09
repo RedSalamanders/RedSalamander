@@ -14,6 +14,8 @@
 namespace CompareDirectoriesSelfTest
 {
 std::vector<std::wstring> ListCases(const SelfTest::SelfTestOptions& options = {}) noexcept;
+// Reuses case selection; this does not inspect profiles, retrieve secrets, or do I/O.
+[[nodiscard]] bool RequiresHostServices(const SelfTest::SelfTestOptions& options = {}) noexcept;
 [[nodiscard]] bool Run(const SelfTest::SelfTestOptions& options = {}, SelfTest::SelfTestSuiteResult* outResult = nullptr) noexcept;
 } // namespace CompareDirectoriesSelfTest
 

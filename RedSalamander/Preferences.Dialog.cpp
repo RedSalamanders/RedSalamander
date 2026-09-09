@@ -62,6 +62,7 @@
 #include "Helpers.h"
 #include "HostServices.h"
 #include "SettingsHotReload.h"
+#include "SettingsFileLauncher.h"
 #include "SettingsSave.h"
 #include "ShortcutDefaults.h"
 #include "ShortcutManager.h"
@@ -618,42 +619,6 @@ protected:
     return hwnd && GetPropW(hwnd, kPrefsDxDiagnosticsProp) != nullptr;
 }
 
-[[nodiscard]] PreferencesEmptyStateSpec GetCurrentPreferencesSharedEmptyState(const PreferencesDialogState& state) noexcept
-{
-    switch (state.currentCategory)
-    {
-        case PrefCategory::Editors:
-            return PreferencesEmptyStateSpec{
-                .iconGlyph         = FluentIcons::kOpenFile,
-                .fallbackIconGlyph = FluentIcons::kFallbackChevronRight,
-                .title             = LoadStringResource(nullptr, IDS_PREFS_EDITORS_EMPTY_TITLE),
-                .body              = LoadStringResource(nullptr, IDS_PREFS_EDITORS_EMPTY_BODY),
-                .caption           = LoadStringResource(nullptr, IDS_PREFS_EDITORS_EMPTY_CAPTION),
-            };
-        case PrefCategory::Mouse:
-            return PreferencesEmptyStateSpec{
-                .iconGlyph         = FluentIcons::kPreview,
-                .fallbackIconGlyph = FluentIcons::kFallbackChevronRight,
-                .title             = LoadStringResource(nullptr, IDS_PREFS_MOUSE_EMPTY_TITLE),
-                .body              = LoadStringResource(nullptr, IDS_PREFS_MOUSE_EMPTY_BODY),
-                .caption           = LoadStringResource(nullptr, IDS_PREFS_MOUSE_EMPTY_CAPTION),
-            };
-        case PrefCategory::General:
-        case PrefCategory::Panes:
-        case PrefCategory::Viewers:
-        case PrefCategory::Keyboard:
-        case PrefCategory::UserMenu:
-        case PrefCategory::Themes:
-        case PrefCategory::Plugins:
-        case PrefCategory::Monitor:
-        case PrefCategory::Advanced:
-        case PrefCategory::CompareDirectories:
-        case PrefCategory::HotPaths:
-        case PrefCategory::FileOperations: return {};
-        default: return {};
-    }
-}
-
 [[nodiscard]] std::wstring GetEmptyStateIconText(const WindowHost* host, const PreferencesEmptyStateSpec& spec) noexcept
 {
     const bool useFluentIcon = host && host->HasFluentIconFont() && spec.iconGlyph != L'\0';
@@ -1000,11 +965,9 @@ void DestroyInactivePreferencesPageState(PreferencesDialogState& state, const Pr
     int scrollDelta = 0;
     if (linesPerNotch == WHEEL_PAGESCROLL)
     {
-        SCROLLINFO si{};
-        si.cbSize = sizeof(si);
-        si.fMask  = SIF_PAGE;
-        GetScrollInfo(host, SB_VERT, &si);
-        scrollDelta = steps * static_cast<int>(si.nPage);
+        RECT client{};
+        GetClientRect(host, &client);
+        scrollDelta = steps * std::max(1l, client.bottom - client.top);
     }
     else
     {
@@ -1702,7 +1665,6 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
     }
 
     HostAlertRequest request{};
-    request.version      = 1;
     request.sizeBytes    = sizeof(request);
     request.scope        = HOST_ALERT_SCOPE_WINDOW;
     request.modality     = HOST_ALERT_MODELESS;
@@ -1740,6 +1702,16 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
     if (settings.ui.has_value())
     {
         return settings.ui.value();
+    }
+    return kDefaults;
+}
+
+[[nodiscard]] const Common::Settings::MouseSettings& GetMouseSettingsOrDefault(const Common::Settings::Settings& settings) noexcept
+{
+    static const Common::Settings::MouseSettings kDefaults{};
+    if (settings.mouse.has_value())
+    {
+        return settings.mouse.value();
     }
     return kDefaults;
 }
@@ -1786,7 +1758,7 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
 [[nodiscard]] bool AreEquivalentShortcutBindings(const std::vector<Common::Settings::ShortcutBinding>& a,
                                                  const std::vector<Common::Settings::ShortcutBinding>& b) noexcept
 {
-    using Key = std::tuple<uint32_t, uint32_t, std::wstring>;
+    using Key = std::tuple<uint32_t, uint32_t, uint32_t, std::wstring>;
 
     auto normalize = [](const std::vector<Common::Settings::ShortcutBinding>& bindings)
     {
@@ -1798,7 +1770,7 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
             {
                 continue;
             }
-            keys.emplace_back(binding.vk, binding.modifiers & 0x7u, binding.commandId);
+            keys.emplace_back(static_cast<uint32_t>(binding.keyPosition), binding.vk, binding.modifiers & 0x7u, binding.commandId);
         }
 
         std::sort(keys.begin(), keys.end());
@@ -1819,15 +1791,20 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
 
     if (a.has_value() && b.has_value())
     {
-        return AreEquivalentShortcutBindings(a.value().functionBar, b.value().functionBar) &&
-               AreEquivalentShortcutBindings(a.value().folderView, b.value().folderView);
+        return AreEquivalentShortcutBindings(a.value().application, b.value().application) &&
+               AreEquivalentShortcutBindings(a.value().functionBar, b.value().functionBar) &&
+               AreEquivalentShortcutBindings(a.value().folderView, b.value().folderView) &&
+               AreEquivalentShortcutBindings(a.value().terminal, b.value().terminal);
     }
 
     const Common::Settings::ShortcutsSettings defaults = ShortcutDefaults::CreateDefaultShortcuts();
     const Common::Settings::ShortcutsSettings& aValue  = a.has_value() ? a.value() : defaults;
     const Common::Settings::ShortcutsSettings& bValue  = b.has_value() ? b.value() : defaults;
 
-    return AreEquivalentShortcutBindings(aValue.functionBar, bValue.functionBar) && AreEquivalentShortcutBindings(aValue.folderView, bValue.folderView);
+    return AreEquivalentShortcutBindings(aValue.application, bValue.application) &&
+           AreEquivalentShortcutBindings(aValue.functionBar, bValue.functionBar) &&
+           AreEquivalentShortcutBindings(aValue.folderView, bValue.folderView) &&
+           AreEquivalentShortcutBindings(aValue.terminal, bValue.terminal);
 }
 
 [[nodiscard]] bool AreEquivalentThemeDefinition(const Common::Settings::ThemeDefinition& a, const Common::Settings::ThemeDefinition& b) noexcept
@@ -2040,6 +2017,14 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
             return true;
         }
     }
+    {
+        const auto& baselineMouse = GetMouseSettingsOrDefault(state.baselineSettings);
+        const auto& workingMouse  = GetMouseSettingsOrDefault(state.workingSettings);
+        if (baselineMouse != workingMouse)
+        {
+            return true;
+        }
+    }
     if (! AreEquivalentShortcuts(state.baselineSettings.shortcuts, state.workingSettings.shortcuts))
     {
         return true;
@@ -2070,8 +2055,7 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
         const auto& baselineFileOperations = GetFileOperationsSettingsOrDefault(state.baselineSettings);
         const auto& workingFileOperations  = GetFileOperationsSettingsOrDefault(state.workingSettings);
         if (baselineFileOperations.autoDismissSuccess != workingFileOperations.autoDismissSuccess ||
-            baselineFileOperations.preCalcEnabled != workingFileOperations.preCalcEnabled ||
-            baselineFileOperations.preCalcMaxWorkers != workingFileOperations.preCalcMaxWorkers ||
+            baselineFileOperations.verifyAfterCopy != workingFileOperations.verifyAfterCopy ||
             baselineFileOperations.defaultBandwidthLimitBytesPerSecond != workingFileOperations.defaultBandwidthLimitBytesPerSecond ||
             baselineFileOperations.crossFsBridgeBufferSizeKB != workingFileOperations.crossFsBridgeBufferSizeKB ||
             baselineFileOperations.maxDiagnosticsLogFiles != workingFileOperations.maxDiagnosticsLogFiles ||
@@ -2374,6 +2358,14 @@ struct PreferencesSaveResult final
             merged.ui = workingUi;
         }
     }
+    {
+        const auto& baselineMouse = GetMouseSettingsOrDefault(state.baselineSettings);
+        const auto& workingMouse  = GetMouseSettingsOrDefault(state.workingSettings);
+        if (baselineMouse != workingMouse)
+        {
+            merged.mouse = state.workingSettings.mouse;
+        }
+    }
 
     if (! AreEquivalentShortcuts(state.baselineSettings.shortcuts, state.workingSettings.shortcuts))
     {
@@ -2429,8 +2421,7 @@ struct PreferencesSaveResult final
         const auto& baselineFileOperations = GetFileOperationsSettingsOrDefault(state.baselineSettings);
         const auto& workingFileOperations  = GetFileOperationsSettingsOrDefault(state.workingSettings);
         if (baselineFileOperations.autoDismissSuccess != workingFileOperations.autoDismissSuccess ||
-            baselineFileOperations.preCalcEnabled != workingFileOperations.preCalcEnabled ||
-            baselineFileOperations.preCalcMaxWorkers != workingFileOperations.preCalcMaxWorkers ||
+            baselineFileOperations.verifyAfterCopy != workingFileOperations.verifyAfterCopy ||
             baselineFileOperations.defaultBandwidthLimitBytesPerSecond != workingFileOperations.defaultBandwidthLimitBytesPerSecond ||
             baselineFileOperations.crossFsBridgeBufferSizeKB != workingFileOperations.crossFsBridgeBufferSizeKB ||
             baselineFileOperations.maxDiagnosticsLogFiles != workingFileOperations.maxDiagnosticsLogFiles ||
@@ -2548,7 +2539,6 @@ void ResetAllPreferencesToDefaults(HWND dlg, PreferencesDialogState& state) noex
 #endif
 
     HostPromptRequest request{};
-    request.version       = 1u;
     request.sizeBytes     = sizeof(request);
     request.scope         = HOST_ALERT_SCOPE_WINDOW;
     request.severity      = HOST_ALERT_WARNING;
@@ -2777,7 +2767,6 @@ void CommitAndApply(HWND dlg, PreferencesDialogState& state) noexcept
     const std::wstring message = LoadStringResource(nullptr, IDS_PREFS_CONFIRM_SAVE_CHANGES);
 
     HostPromptRequest request{};
-    request.version       = 1u;
     request.sizeBytes     = sizeof(request);
     request.scope         = HOST_ALERT_SCOPE_WINDOW;
     request.severity      = HOST_ALERT_WARNING;
@@ -3081,15 +3070,6 @@ void UpdatePageHostScrollInfo(HWND host, PreferencesDialogState& state) noexcept
         // already defers painting.  Synchronous paint here added 500ms+ per switch.
         RedrawWindow(host, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME);
     }
-
-    SCROLLINFO si{};
-    si.cbSize = sizeof(si);
-    si.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
-    si.nMin   = 0;
-    si.nMax   = (contentHeight > 0) ? (contentHeight - 1) : 0;
-    si.nPage  = static_cast<UINT>(clientHeight);
-    si.nPos   = state.pageScrollY;
-    SetScrollInfo(host, SB_VERT, &si, TRUE);
 
     SyncPageHostDxContentRoot(host, state, contentHeight);
 }
@@ -3682,12 +3662,10 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     const bool showHotPaths             = state.currentCategory == PrefCategory::HotPaths;
     const bool showMonitor              = state.currentCategory == PrefCategory::Monitor;
     const bool showAdvanced             = state.currentCategory == PrefCategory::Advanced;
-    const bool notePageSkipsHostTabStop = showMouse;
-
     if (host)
     {
         const LONG_PTR style        = GetWindowLongPtrW(host, GWL_STYLE);
-        const LONG_PTR desiredStyle = notePageSkipsHostTabStop ? (style & ~static_cast<LONG_PTR>(WS_TABSTOP)) : (style | static_cast<LONG_PTR>(WS_TABSTOP));
+        const LONG_PTR desiredStyle = style | static_cast<LONG_PTR>(WS_TABSTOP);
         if (desiredStyle != style)
         {
             SetWindowLongPtrW(host, GWL_STYLE, desiredStyle);
@@ -3766,17 +3744,6 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     if (showMouse)
     {
         static_cast<PreferencesDialogHost&>(state)._mousePane.LayoutPage(host, state, x, y, width, margin, gapY, sectionY, pageTypography);
-        const PreferencesEmptyStateSpec spec = GetCurrentPreferencesSharedEmptyState(state);
-        if (! spec.title.empty() || ! spec.body.empty() || ! spec.caption.empty())
-        {
-            const int cardHeight = PrefsUi::ShowSharedPageEmptyState(host, state, spec, x, y, width, pageTypography);
-            if (cardHeight > 0)
-            {
-                RECT card{x, y, x + width, y + cardHeight};
-                PrefsUi::TryPushCard(state.pageSettingCards, card);
-                state.pageHostDirectContentBottomPx = (std::max)(state.pageHostDirectContentBottomPx, static_cast<int>(card.bottom));
-            }
-        }
         FinalizePreferencesPageHostLayout(host, state, margin, width);
         return;
     }
@@ -4737,38 +4704,26 @@ LRESULT CALLBACK PreferencesPageHostWindowProc(HWND hwnd, UINT msg, WPARAM wp, L
                 break;
             }
 
-            SCROLLINFO si{};
-            si.cbSize = sizeof(si);
-            si.fMask  = SIF_ALL;
-            if (! GetScrollInfo(hwnd, SB_VERT, &si))
-            {
-                break;
-            }
-
             int newPos            = state->pageScrollY;
             const UINT dpi        = GetDpiForWindow(hwnd);
             const int lineStep    = std::max(1, UiMetrics::ScaleDip(dpi, 24));
             const UINT scrollCode = LOWORD(wp);
+            RECT client{};
+            GetClientRect(hwnd, &client);
+            const int pageStep = std::max(1l, client.bottom - client.top);
 
             switch (scrollCode)
             {
                 case SB_LINEUP: newPos -= lineStep; break;
                 case SB_LINEDOWN: newPos += lineStep; break;
-                case SB_PAGEUP: newPos -= static_cast<int>(si.nPage); break;
-                case SB_PAGEDOWN: newPos += static_cast<int>(si.nPage); break;
+                case SB_PAGEUP: newPos -= pageStep; break;
+                case SB_PAGEDOWN: newPos += pageStep; break;
                 case SB_TOP: newPos = 0; break;
                 case SB_BOTTOM: newPos = state->pageScrollMaxY; break;
                 case SB_THUMBPOSITION:
                 case SB_THUMBTRACK:
-                {
-                    newPos                   = si.nTrackPos;
-                    const int packedTrackPos = static_cast<int>(HIWORD(wp));
-                    if (packedTrackPos != 0 && newPos == si.nPos)
-                    {
-                        newPos = packedTrackPos;
-                    }
+                    newPos = static_cast<int>(HIWORD(wp));
                     break;
-                }
                 case SB_ENDSCROLL: PrefsPageHost::FlushPendingScroll(hwnd, *state); return 0;
                 default: break;
             }
@@ -5052,26 +5007,6 @@ INT_PTR OnCtlColorListBox(PreferencesDialogState* state, HDC hdc, HWND listBox)
     return reinterpret_cast<INT_PTR>(useInputBrush ? state->inputBrush.get() : state->backgroundBrush.get());
 }
 
-[[nodiscard]] DWORD ShellExecuteResultToWin32Error(const INT_PTR result) noexcept
-{
-    switch (result)
-    {
-        case 0: return ERROR_GEN_FAILURE;
-        case SE_ERR_FNF: return ERROR_FILE_NOT_FOUND;
-        case SE_ERR_PNF: return ERROR_PATH_NOT_FOUND;
-        case SE_ERR_ACCESSDENIED: return ERROR_ACCESS_DENIED;
-        case SE_ERR_OOM: return ERROR_NOT_ENOUGH_MEMORY;
-        case SE_ERR_DLLNOTFOUND: return ERROR_MOD_NOT_FOUND;
-        case SE_ERR_SHARE: return ERROR_SHARING_VIOLATION;
-        case SE_ERR_ASSOCINCOMPLETE: return ERROR_NO_ASSOCIATION;
-        case SE_ERR_DDETIMEOUT: return ERROR_TIMEOUT;
-        case SE_ERR_DDEFAIL: return ERROR_GEN_FAILURE;
-        case SE_ERR_DDEBUSY: return ERROR_BUSY;
-        case SE_ERR_NOASSOC: return ERROR_NO_ASSOCIATION;
-        default: return ERROR_GEN_FAILURE;
-    }
-}
-
 enum class PreferencesSettingsFileTarget : uint8_t
 {
     Main,
@@ -5108,57 +5043,22 @@ enum class PreferencesSettingsFileTarget : uint8_t
         return HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
     }
 
-    const std::filesystem::path parent = outPath.parent_path();
-    if (parent.empty())
-    {
-        return HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
-    }
-
-    std::error_code createError;
-    std::filesystem::create_directories(parent, createError);
-    if (createError)
-    {
-        const DWORD errorCode = createError.value() > 0 ? static_cast<DWORD>(createError.value()) : static_cast<DWORD>(ERROR_CANNOT_MAKE);
-        return HRESULT_FROM_WIN32(errorCode);
-    }
-
-    std::error_code existsError;
-    const bool exists = std::filesystem::exists(outPath, existsError);
-    if (existsError)
-    {
-        const DWORD errorCode = existsError.value() > 0 ? static_cast<DWORD>(existsError.value()) : static_cast<DWORD>(ERROR_FILE_NOT_FOUND);
-        return HRESULT_FROM_WIN32(errorCode);
-    }
-    if (! exists)
-    {
-        Common::Settings::Settings settingsToCreate = GetPreferencesSettingsFileSourceSettings(state, target);
-        if (target == PreferencesSettingsFileTarget::Main)
-        {
-            settingsToCreate.monitor.reset();
-        }
-
-        const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(appId, settingsToCreate);
-        if (FAILED(saveHr))
-        {
-            return saveHr;
-        }
-    }
-
 #ifdef ENABLE_TESTS
+    // The capture hook validates command routing and target selection without
+    // materializing files or entering the settings-save coordinator. File
+    // creation is optional for this UI command and is covered by settings-store
+    // tests; keeping capture side-effect free also prevents shell launch.
     if (TryCapturePreferencesSettingsFileOpenForTest(outPath, S_OK))
     {
         return S_OK;
     }
 #endif
-
-    const HINSTANCE result   = ShellExecuteW(owner, L"open", outPath.c_str(), nullptr, parent.c_str(), SW_SHOWNORMAL);
-    const INT_PTR resultCode = reinterpret_cast<INT_PTR>(result);
-    if (resultCode > 32)
+    Common::Settings::Settings settingsToCreate = GetPreferencesSettingsFileSourceSettings(state, target);
+    if (target == PreferencesSettingsFileTarget::Main)
     {
-        return S_OK;
+        settingsToCreate.monitor.reset();
     }
-
-    return HRESULT_FROM_WIN32(ShellExecuteResultToWin32Error(resultCode));
+    return SettingsFileLauncher::Open(owner, appId, settingsToCreate, outPath);
 }
 
 void ShowPreferencesSettingsFileOpenFailure(HWND dlg, const std::filesystem::path& path, const HRESULT hr) noexcept
@@ -5291,6 +5191,10 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
             if (g_preferencesDialog.get() == dlg)
             {
                 const HWND restoreOwner = (state && state->owner && IsWindow(state->owner) != FALSE) ? state->owner : nullptr;
+                if (state && state->settings)
+                {
+                    WindowPlacementPersistence::Save(*state->settings, kPreferencesWindowId, dlg);
+                }
                 if (restoreOwner)
                 {
                     static_cast<void>(PostMessageW(restoreOwner, WndMsg::kPaneRestoreFolderFocus, 0, 0));
@@ -5471,7 +5375,6 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 
                 if (state->settings)
                 {
-                    WindowPlacementPersistence::Save(*state->settings, kPreferencesWindowId, dlg);
                     state->settings->monitor.reset();
 
                     const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(state->appId, *state->settings);
@@ -5653,22 +5556,8 @@ void RefreshPreferencesDialogTheme(HWND dlg, PreferencesDialogState& state) noex
 
     g_preferencesDialog.reset(dlg);
     static_cast<void>(statePtr.release());
-    const int showCmd = WindowPlacementPersistence::Restore(settings, kPreferencesWindowId, dlg);
-    if (showCmd != SW_MAXIMIZE && state->restoreMinSizePx.cx > 0 && state->restoreMinSizePx.cy > 0)
-    {
-        RECT restored{};
-        if (GetWindowRect(dlg, &restored))
-        {
-            const int restoredWidth  = std::max(0l, restored.right - restored.left);
-            const int restoredHeight = std::max(0l, restored.bottom - restored.top);
-            const int clampedWidth   = std::max(restoredWidth, static_cast<int>(state->minTrackSizePx.cx));
-            const int clampedHeight  = std::max(restoredHeight, static_cast<int>(state->restoreMinSizePx.cy));
-            if (clampedWidth != restoredWidth || clampedHeight != restoredHeight)
-            {
-                SetWindowPos(dlg, nullptr, restored.left, restored.top, clampedWidth, clampedHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-            }
-        }
-    }
+    const SIZE restoreMinimumSize{state->minTrackSizePx.cx, state->restoreMinSizePx.cy};
+    const int showCmd = WindowPlacementPersistence::Restore(settings, kPreferencesWindowId, dlg, restoreMinimumSize);
     static_cast<void>(ShowWindow(dlg, showCmd));
     static_cast<void>(SetForegroundWindow(dlg));
     return true;
@@ -5782,6 +5671,7 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
     }
     out.pluginItemSelected         = state->pluginsSelectedPlugin.has_value();
     out.pluginsDetailsActive       = state->pluginsDetailsActive;
+    out.dirty                      = state->dirty;
     out.currentCategory            = state->currentCategory;
     out.visibleChildWindowCount    = CountVisibleChildWindows(dlg);
     out.visibleLegacyTreeViewCount = CountVisibleChildWindowsByClass(dlg, L"SysTreeView32");
@@ -5856,6 +5746,7 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
         out.shellOkButtonBoundsPx     = controlBoundsToPx(hostState._okButtonControl);
         out.shellCancelButtonBoundsPx = controlBoundsToPx(hostState._cancelButtonControl);
         out.shellApplyButtonBoundsPx  = controlBoundsToPx(hostState._applyButtonControl);
+        out.shellApplyButtonEnabled   = hostState._applyButtonControl && hostState._applyButtonControl->IsEnabled();
 
         const auto rectInsideHost = [&](const RECT& rect) noexcept
         {
@@ -6961,6 +6852,28 @@ bool PreferencesDialog::DebugGetKeyboardVisibleRowChordByCommandId(std::wstring_
     return hostState._keyboardPane.DebugGetVisibleRowChordByCommandId(commandId, outChordText);
 }
 
+bool PreferencesDialog::DebugGetKeyboardVisibleRowPresentationByCommandId(
+    std::wstring_view commandId,
+    std::wstring& outScopeText,
+    std::wstring& outTooltipText) noexcept
+{
+    outScopeText.clear();
+    outTooltipText.clear();
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+    auto* state = GetState(dlg);
+    if (! state || ! state->categoryTreeUsesDxUi)
+    {
+        return false;
+    }
+    const auto& hostState = static_cast<const PreferencesDialogHost&>(*state);
+    return hostState._keyboardPane.DebugGetVisibleRowPresentationByCommandId(
+        commandId, outScopeText, outTooltipText);
+}
+
 bool PreferencesDialog::DebugGetKeyboardListRowClientRect(const size_t rowIndex, RECT& outRect) noexcept
 {
     const HWND dlg = GetHandle();
@@ -7343,6 +7256,22 @@ bool PreferencesDialog::DebugSetKeyboardFunctionBarScope() noexcept
     return hostState._keyboardPane.DebugSetFunctionBarScope();
 }
 
+bool PreferencesDialog::DebugSetKeyboardTerminalScope() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._keyboardPane.DebugSetTerminalScope();
+}
+
 bool PreferencesDialog::DebugFocusViewersSearchField() noexcept
 {
     const HWND dlg = GetHandle();
@@ -7503,6 +7432,42 @@ bool PreferencesDialog::DebugSelectGeneralWindowBackdrop(std::wstring_view displ
 
     auto& hostState = static_cast<PreferencesDialogHost&>(*state);
     return hostState._generalPane.DebugSelectWindowBackdropByText(displayText);
+}
+
+bool PreferencesDialog::DebugSetMouseFocusFollowsPointerSettings(bool always, bool whenTerminalOpen) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._mousePane.DebugSetFocusFollowsPointerSettings(always, whenTerminalOpen);
+}
+
+bool PreferencesDialog::DebugGetMouseFocusFollowsPointerSettings(Common::Settings::MouseSettings& outSettings) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._mousePane.DebugGetFocusFollowsPointerSettings(outSettings);
 }
 
 bool PreferencesDialog::DebugFocusPanesLeftDisplayToggle() noexcept
@@ -7773,7 +7738,7 @@ bool PreferencesDialog::DebugSelectFileOperationsBandwidthPreset(std::wstring_vi
     return selected;
 }
 
-bool PreferencesDialog::DebugFocusFileOperationsPreCalcEnabledToggle() noexcept
+bool PreferencesDialog::DebugFocusFileOperationsVerifyAfterCopyToggle() noexcept
 {
     const HWND dlg = GetHandle();
     if (! dlg)
@@ -7788,10 +7753,10 @@ bool PreferencesDialog::DebugFocusFileOperationsPreCalcEnabledToggle() noexcept
     }
 
     auto& hostState = static_cast<PreferencesDialogHost&>(*state);
-    return hostState._fileOperationsPane.DebugFocusPreCalcEnabledToggle();
+    return hostState._fileOperationsPane.DebugFocusVerifyAfterCopyToggle();
 }
 
-bool PreferencesDialog::DebugGetFileOperationsPreCalcEnabledToggleChecked(bool& outChecked) noexcept
+bool PreferencesDialog::DebugGetFileOperationsVerifyAfterCopyToggleChecked(bool& outChecked) noexcept
 {
     const HWND dlg = GetHandle();
     if (! dlg)
@@ -7806,7 +7771,7 @@ bool PreferencesDialog::DebugGetFileOperationsPreCalcEnabledToggleChecked(bool& 
     }
 
     auto& hostState = static_cast<PreferencesDialogHost&>(*state);
-    return hostState._fileOperationsPane.DebugGetPreCalcEnabledToggleChecked(outChecked);
+    return hostState._fileOperationsPane.DebugGetVerifyAfterCopyToggleChecked(outChecked);
 }
 
 bool PreferencesDialog::DebugSelectCompareDirectoriesContentWorkers(std::wstring_view displayText) noexcept

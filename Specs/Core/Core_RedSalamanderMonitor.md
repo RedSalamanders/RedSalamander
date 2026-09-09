@@ -1,4 +1,4 @@
-# RedSalamanderMonitor Overview and Improvement Plan
+# RedSalamanderMonitor Contract
 
 ## Architecture: Append-Only Log Viewer
 
@@ -15,6 +15,16 @@
 
 - The main menu and all static UI strings are defined in `.rc` resources (`RedSalamanderMonitor/RedSalamanderMonitor.rc`) for localization.
 - Runtime code may only populate truly dynamic menu content (e.g., themes discovered from `Themes\\*.theme.json5` and custom themes from settings); see `Specs/Core/Core_Localization.md`.
+- The top-level order is File, Edit, View, Options, Help. View owns Toolbar,
+  Line Numbers, and Theme. Options is ordered Auto Scroll, Show Process/Thread
+  IDs, Always on Top, separator, Active Filter.
+- Active Filter uses the six message-type labels Error, Warning, Information,
+  Performance, Debug, and Trace, followed by the four presets Errors only,
+  Errors and warnings, Errors/performance/debug, and All message types. The
+  existing stable `IDM_FILTER_*` IDs and bit meanings remain unchanged; the
+  `IDM_FILTER_TEXT` presentation label is Trace.
+- Every actionable static sibling has one access key unique within its
+  separator-delimited group in each supported satellite.
 
 ### Two-Mode Rendering Architecture
 
@@ -26,7 +36,7 @@
   - Prevents blank areas on large/high-DPI displays
 - Direct rendering without complex virtualization or caching
 - Synchronous layout updates for immediate visibility
-- Target: <0.5ms append latency, zero dropped frames at 10k logs/sec
+- Current latency and frame budgets are the instrumented gates in the performance contract below; unarchived point estimates are not acceptance evidence
 
 **Mode 2: SCROLL-BACK (Cold Path - occasional use)**
 - Full virtualization with slice-based rendering when user scrolls up
@@ -137,9 +147,10 @@ When filtering is active, the VisibleLine architecture provides:
 - Single main window with menu and toolbar: New/Open/Save As, Copy, toggle toolbar, toggle line numbers, show/hide IDs, auto-scroll, always-on-top; debug builds can start a random message generator.
 - Display surface is `ColorTextView` rendered with Direct2D/DirectWrite on a D3D11/DXGI swap chain; per-monitor DPI aware; supports line numbers, colored metadata prefixes, keyword colorization for Error/Warning/Debug, and optional auto-scroll.
 - Input pipeline normalizes CR/LF, appends text to the document, caches prefixes per line, and updates gutter width; selection and clipboard copy are supported (Ctrl+C, Ctrl+A); find bar via Ctrl+F with F3 navigation; mouse wheel scroll with Shift for horizontal.
-- File open is cancellable worker I/O with strict UTF-8/UTF-16LE validation and configured byte/line budgets;
-  save is strict transactional UTF-8+BOM output. Registry-backed email configuration and the about dialog remain,
-  and device-loss/DPI-change handling recreates swap-chain targets.
+- File open is cancellable worker I/O with strict streaming UTF-8/UTF-16LE validation, encoded/decoded-byte and
+  line budgets, and move-publication of one decoded immutable record snapshot. Save As captures one exact start
+  snapshot by sharing immutable record blocks, then converts/writes strict transactional UTF-8+BOM output on an owned worker. Registry-backed email configuration
+  and the about dialog remain, and device-loss/DPI-change handling recreates swap-chain targets.
 
 ### Bounded pipeline and lifetime contract
 
@@ -149,11 +160,16 @@ When filtering is active, the VisibleLine architecture provides:
 - Queue overflow and retained-history eviction are oldest-first. The status strip includes the cumulative dropped
   count. `monitor.etw.queue_high_water_mark`, `monitor.etw.dropped_count`,
   `monitor.document.retained_text_bytes`, and `monitor.document.retained_lines` make the bound observable.
-- `Document` owns lines in a `std::deque`, tracks UTF-16 payload bytes, and applies the line and byte ceilings in one
-  eviction operation. Eviction must shift/clamp selection, caret, scrolling, display rows, width/layout generations,
+- `Document` owns lines in a `std::deque`; each logical line owns one reader-independent immutable
+  `MonitorTextBlock` from `MonitorTextSnapshot.h`. Replacing or extending text publishes a new block, while ordinary
+  ETW append moves a newly built block into the deque. The document tracks UTF-16 payload bytes and applies the line
+  and byte ceilings in one eviction operation. Eviction drops only document ownership; an in-flight Save As snapshot
+  keeps its shared blocks valid. Eviction must shift/clamp selection, caret, scrolling, display rows, width/layout generations,
   visible-line mappings, and search offsets together.
-- Search indexes only appended ranges while query/case/filter policy is stable, shifts/removes matches after oldest
-  eviction, and stores no more than `maxSearchMatches`. Query, case, filter, or full-text replacement may rebuild.
+- Search indexes only appended ranges while query/case/filter policy is stable, tracks an explicit line/offset scan
+  frontier, shifts matches and the frontier after oldest eviction, and stores no more than `maxSearchMatches`. When
+  capacity reopens, it resumes at the oldest retained unscanned position before scanning the new tail. Query, case,
+  filter, Show IDs, or full-text replacement may rebuild. Matches remain ordered for F3 navigation.
   `monitor.search.match_update_us` and `monitor.search.match_rebuild_us` distinguish the paths.
 - `Document::GetVisibleLine`, `GetSourceLine`, `VisibleLines`, `GetDisplayText*`, and display-text batches return
   locked snapshots by value. No public API may return a line/container/string reference whose internal lock has
@@ -170,9 +186,35 @@ When filtering is active, the VisibleLine architecture provides:
   opening or emptying the clipboard, keeps WIL ownership through every failure, and calls `release()` only after
   successful `SetClipboardData`. Do not reintroduce per-Win32-call forwarding wrappers solely for fault injection.
 - File open keeps the picker on the UI thread, then uses one owned `std::jthread` to read 64 KiB chunks. It rejects
-  the byte budget from `GetFileSizeEx` before allocation, polls cancellation during read and line validation,
-  reports progress, accepts UTF-8 (optional BOM) and UTF-16LE BOM strictly, rejects UTF-16BE/malformed text, and
-  enforces the line budget. Only the current generation may publish text on the UI thread.
+  the encoded-byte budget from `GetFileSizeEx` before allocation, incrementally budgets retained UTF-16 bytes and
+  lines before growth, carries partial UTF-8 scalars, UTF-16 code units, and surrogate pairs across chunks, and polls
+  cancellation during both I/O and CPU decode. It accepts UTF-8 (optional BOM) and UTF-16LE BOM strictly and rejects
+  UTF-16BE, overlong/truncated UTF-8, odd UTF-16, and unpaired surrogates. The worker publishes one
+  `MonitorTextSnapshot`; `Document::SetTextSnapshot` moves those immutable block handles into the document without
+  rebuilding a second whole-text payload. Only the current generation may publish on the UI thread.
+- Reader record finalization is delimiter-aware. Each LF publishes exactly one record, including an empty record
+  represented by a consecutive or trailing LF. EOF publishes only a nonempty unterminated record and never invents
+  a record after a terminal LF. Empty and BOM-only input therefore contain zero records. CR is normalized away.
+  Export writes one UTF-8 BOM followed by every record and exactly one LF terminator per record, so
+  read/export/read is byte- and record-idempotent for canonical output and an exact line budget does not pay for a
+  synthetic terminal record.
+- File-open cancellation calls `request_stop` plus `CancelSynchronousIo`; close waits at most two seconds and may
+  detach only the worker-owned path/limits/decoder payload after that wait. Progress and completion use the registered
+  posted-payload helper, and `WM_NCDESTROY` drains/closes the registry so a late detached completion cannot target a
+  reused HWND.
+- Show IDs changes the display coordinate space. It therefore resets selection and caret to zero and rebuilds search
+  matches/frontier; preserving stale display offsets across the toggle is forbidden.
+- Open and Save worker admission is transactional. Their Monitor-local `noexcept` start helpers catch only
+  `std::system_error` from thread construction, log once, map it to an HRESULT, roll back active/shared state, post no
+  completion, and allow a later retry. `std::bad_alloc` remains fatal. The command path shows the one localized
+  background-file-operation launch failure and leaves the live document and destination unchanged.
+- Save As captures the complete document under its shared lock by copying immutable ownership handles, releases the
+  lock before I/O, and starts an owned cancellable worker. All record blocks are immutable immediately, so the
+  maximum mutable active tail and the text bytes copied by capture are both exactly zero. Capture allocates only the
+  descriptor deque (currently 16 bytes per logical record). The captured snapshot is the exact export boundary:
+  later append, retention, clear, or replacement is excluded and cannot invalidate it. Progress
+  and completion use registered posted payloads. Close requests stop, cancels synchronous I/O, waits at most two
+  seconds, and may detach only the worker-owned snapshot/state after the payload registry makes late posts harmless.
 - Clear and full text replacement invalidate pending layout/width generations. Clear also resets caret, selection,
   mouse-selection, search, pending-scroll, and layout state so stale interaction state cannot survive an empty view.
 
@@ -197,89 +239,25 @@ When filtering is active, the VisibleLine architecture provides:
   real pending work.
 - **Monitor ETW latency drill**: `RedSalamanderMonitor.exe --chrome-selftest --perf --monitor-etw-burst-mode=latency --monitor-etw-burst-count=60 --monitor-etw-burst-size=260` is the focused append-to-visible perf gate. It preserves the default chrome selftest path and adds `monitorEtwBurstLatency.metricPresence` plus p50/p95/p99/max `metricSummary` rows to `results.json`.
 - **Monitor scheduling gate**: frame scheduling must preserve append order, avoid self-posting when no paint/append work is pending, and keep AUTO_SCROLL vs SCROLL_BACK behavior explicit. Any scheduling optimization requires same-machine `append_to_visible`, `batch_drain`, and frame metric evidence before being called an improvement. If the latency drill keeps `monitor.etw.batch_drain_us` p95 at or below `8,333us`, p99 at or below `16,667us`, and `monitor.frame.append_to_visible_us` p95 at or below `50,000us`, scheduling changes are a measured no-op and should not be promoted.
+- **Retained-state I/O metrics**: `monitor.file_open.total_us` records worker read/decode time and carries encoded
+  bytes plus decoded line count; `monitor.file_open.peak_retained_text_bytes` records peak decoded payload;
+  `monitor.file_open.publish_us` records UI move-publication. `monitor.file_open.cancel_us` and
+  `monitor.file_open.close_us` cover cancellation request and bounded shutdown. Save separates
+  `monitor.file_save.snapshot_us`, `snapshot_lock_us`, `ui_return_us`, `total_us`, `throughput_bytes_per_sec`,
+  `cancel_us`, and `close_us`. Capture also reports `retained_text_bytes`, `retained_line_count`,
+  `shared_block_count`, `shared_block_bytes`, `copied_text_bytes`, `active_tail_copied_bytes`, and
+  `peak_additional_snapshot_bytes`.
+- **Immutable-snapshot Release gate**: the test-enabled Chrome drill runs 512, 4,096, and 16,384 retained records
+  five times each and compares the legacy full-string copy with immutable capture. Candidate
+  `copied_text_bytes` and `active_tail_copied_bytes` MUST remain zero and additional snapshot bytes MUST remain at
+  or below `record_count * sizeof(MonitorTextBlock)`. On machine `4cb089111a23`, the 16,384-record/8,060,928-byte
+  p95 snapshot-lock regression threshold is 1,500 us; the accepted 2026-08-17 result was 1,008 us versus 3,395 us
+  for the faithful legacy deep-copy comparator. Evidence is
+  `Specs/TestRuns/4cb089111a23/Monitor/2026-08-17_144304/`.
 
-## Known Issues and Fixes Applied
-
-### Blank Lines Bug (FIXED)
-**Root Cause**: Y positioning used logical line numbers instead of display row offsets, causing misalignment when lines contained embedded newlines.
-
-**Symptoms**: 
-- Text rendering at wrong Y coordinates after ~1000 lines
-- Line numbers display but text content missing (blank white lines)
-- Issue appeared at document boundaries where multi-line content accumulated
-
-**Fix Applied**:
-- All Y position calculations now use `displayRowForVisible()` or `displayRowForSource()`
-- Updated: text layout rendering, slice bitmap positioning, tail layout, fallback layout
-- Display row offset maintained incrementally during append
-
-**Validation**: Tested with 5000+ messages including multi-line content, scrolling throughout document
-
-### Filter Display Synchronization Bug (FIXED)
-**Root Cause**: When filter mask changed, `visibleLines` vector was not rebuilt, causing stale computed view with incorrect display row mappings.
-
-**Symptoms**:
-- Line numbers not synchronized with displayed content after filter change
-- Empty lines appearing when toggling filters
-- Lines disappearing during scrolling with active filters
-- Incorrect Y positioning of text after filter changes
-- Crash when accessing empty visibleLines vector
-
-**Fix Applied** (VisibleLine Architecture Migration):
-
-1. **VisibleLine Infrastructure** (Phase 1):
-   - Introduced `VisibleLine` struct with sourceIndex and displayRowStart fields
-   - Implemented `rebuildVisibleLines()` for full O(n) reconstruction
-   - Added core mapping methods: `displayRowForVisible()`, `displayRowForSource()`, `visibleIndexFromDisplayRow()`
-   - Migrated from sentinel-based array to clean index pattern
-
-2. **Complete API Migration** (Phases 2-3):
-   - Replaced all obsolete method calls throughout codebase
-   - `getLineAll()` → `getSourceLine()` (15 locations)
-   - `lineFromDisplayRowAll()` → `visibleIndexFromDisplayRow()` (7 locations)
-   - `displayRowForLine()` → `displayRowForSource()` (9 locations)
-   - Removed obsolete methods and sentinel-based code
-
-3. **Incremental visibleLines Maintenance** (Phase 3f):
-   - `appendInfoLine()`: Incremental update when single line added (O(1))
-   - `appendText()`: Full rebuild after bulk append
-   - `setText()`: Clear and rebuild when replacing all text
-   - `clear()`: Clear visibleLines when document cleared
-   - `setFilterMask()`: Full rebuild via `rebuildVisibleLines()`
-
-4. **Deadlock Fixes** (Phase 3e):
-   - Split `isLineVisible()` into public (with lock) and `isLineVisibleUnsafe()` (no lock)
-   - Use unsafe version within `appendInfoLine()` to avoid lock acquisition while holding unique_lock
-   - Pattern: Methods ending in `Unsafe()` assume caller holds lock
-
-5. **Bounds Checking** (Phase 3d):
-   - Added empty visibleLines checks at all access points
-   - Prevents crash when visibleLines not yet populated
-
-**Synchronization Flow**:
-```text
-User toggles filter → SetFilterMask(newMask)
-  ├─> Document::setFilterMask(newMask)
-  │    ├─> _filterMask = newMask
-  │    ├─> rebuildVisibleLines() [O(n) full rebuild]
-  │    │    ├─> visibleLines.clear()
-  │    │    ├─> Iterate all source lines
-  │    │    └─> For visible: visibleLines.push_back({srcIdx, displayRow})
-  │    └─> markAllDirtyUnsafe()
-  ├─> _contentHeight = totalDisplayRows() * lineHeight
-  ├─> ClampScroll() [prevent out-of-bounds]
-  ├─> UpdateScrollBars() [update ranges]
-  └─> Full invalidation + redraw
-```
-
-**Validation Requirements**:
-- Toggle filters repeatedly while scrolled at various positions
-- Verify no empty lines appear
-- Verify line numbers stay synchronized with visible content
-- Verify smooth scrolling without content disappearing
-- Verify scrollbar ranges update immediately
-- Test rapid filter changes (stress test)
-- Test all filter combinations (single type, multiple types, all types)
+Historical blank-line and filter-synchronization fixes are represented by the
+current display-row/filter invariants and regression tests. The closed bug diary
+is available from Git history and is not part of the current contract.
 
 ## Public API Reference
 
@@ -321,8 +299,10 @@ void SetTheme(const Theme& theme);                // Set color theme
 
 **File Operations:**
 ```cpp
-bool LoadFromFile(const std::wstring& path);      // Load text file (BOM detection)
-bool SaveToFile(const std::wstring& path);        // Save visible content
+MonitorFileReadResult ReadMonitorTextFile(path, stopToken, limits, progress);
+void ColorTextView::SetTextSnapshot(MonitorTextSnapshot&& snapshot);
+MonitorTextSnapshot ColorTextView::CaptureTextSnapshot() const;
+MonitorFileExportResult WriteMonitorTextSnapshot(path, snapshot, stopToken, progress);
 ```
 
 - Monitor text export MUST encode every line with strict UTF-16-to-UTF-8 conversion and fail the entire save if
@@ -330,8 +310,16 @@ bool SaveToFile(const std::wstring& path);        // Save visible content
 - Save writes MUST use `Common::Files::LocalFileTransaction`: write a UTF-8 BOM and the complete document to a
   unique sibling, verify/flush it, then atomically replace the requested local target. Conversion, write, flush,
   verification, or promotion failure MUST preserve the previous target and clean up the temporary sibling.
+- The UI captures exactly one start snapshot and releases the document lock before worker conversion/I/O. A save
+  already in progress is cancelled instead of silently starting a second exporter. Later ingestion is not included
+  in the captured snapshot.
+- Canonical export is a UTF-8 BOM plus exactly one LF-terminated encoding of each logical record. Empty/BOM-only
+  input has zero records; terminal LF never synthesizes another empty record at EOF; consecutive LFs remain real
+  blank records.
 - `MonitorTest --document-model-selftest` is the focused regression guard for malformed-input preservation,
-  successful UTF-8+BOM output, and abandoned-temporary cleanup.
+  successful UTF-8+BOM output, the empty/unterminated/terminated/CRLF/blank/trailing-blank/Unicode/budget matrix,
+  exact start-snapshot behavior across append/retention/clear/replacement, cancellation/fault target preservation,
+  zero-copy practical-large capture, and abandoned-temporary cleanup.
 
 ### Document Class Methods
 
@@ -357,247 +345,35 @@ void SetFilterMask(uint32_t mask);                // Update filter mask
 bool IsLineVisible(size_t sourceIndex) const;     // Check if source line is visible
 ```
 
-## Performance Metrics
+## Performance evidence contract
 
-### Measured Performance (Development Build)
+The authoritative current metrics, deterministic latency and scrollback drills,
+and promotion thresholds are listed under Existing performance/architecture
+traits above. Static development-build estimates and historical target/actual
+tables are not acceptance evidence. Any new performance claim follows
+`Specs/Testing/Testing_PerformanceValidation.md` and cites an archived
+`Specs/TestRuns/` comparison.
 
-**Append Latency:**
-- AUTO-SCROLL mode: <0.5ms per line (synchronous layout + render)
-- Batch append (100 lines): ~15ms total (~0.15ms per line)
+## Filtering, selection, and export contract
 
-**Throughput:**
-- Sustained rate: 10,000 logs/second without frame drops
-- Peak burst: 50,000 logs/second (short duration)
-- ETW batch processing: 100-500 messages per batch
+- The type filter is a six-bit mask: Text `0x01`, Error `0x02`, Warning
+  `0x04`, Info `0x08`, Perf `0x10`, and Debug `0x20`; `0x3F` shows all
+  types. Filter changes rebuild the visible-line mapping, clamp scroll state,
+  invalidate affected layouts, and keep source line numbers in the gutter.
+- Selection remains in source-document coordinates. Copying while a type filter
+  is active includes only visible selected text and uses the shared Unicode
+  clipboard publication helper.
+- File export writes the complete captured start snapshot through the strict asynchronous transactional contract in
+  Public API Reference; it is not a clipboard-format selector. Ingestion after capture remains in the live document
+  and is intentionally absent from that export.
+- Optional clipboard formats, richer content/metadata filters, and alternative
+  storage/rendering optimizations are not current behavior. Decisions are owned
+  by
+  `Specs/Plans/WIP/Operation_Atlas_RemainingSpecificationDecisions_2026-08-04.md`.
+- Bounded ETW intake and retained line/text/search ceilings are current. Disk
+  spill is not part of the contract.
 
-**Memory Usage:**
-- Base overhead: ~5MB (ColorTextView + resources)
-- Per-line overhead: ~150 bytes (Line struct + cached strings)
-- Default retained ceiling: 100K lines and 64 MiB of UTF-16 payload, whichever is reached first
-- Default queued-event ceiling: 4,096; default stored-search-match ceiling: 100,000
-- Icon cache: ~2MB (cached D2D bitmaps for prefixes)
-
-**Rendering Performance:**
-- AUTO-SCROLL: 60fps sustained during continuous append
-- SCROLL-BACK: 60fps smooth scrolling with slice caching
-- Fallback rendering: 30-45fps (acceptable for cold path)
-
-**Layout Cache Efficiency:**
-- Slice cache hit rate: >95% during scroll-back navigation
-- Layout creation: ~5ms per 256-line slice (amortized via caching)
-- Dirty region optimization: 70% reduction in redraw area
-
-### Performance Targets vs. Actuals
-
-| Metric | Target | Actual | Status |
-|--------|--------|--------|--------|
-| Append latency (AUTO-SCROLL) | <0.5ms | <0.5ms | ✅ Met |
-| Throughput (sustained) | 10K logs/sec | 10K+ logs/sec | ✅ Met |
-| Frame rate (AUTO-SCROLL) | 60fps | 60fps | ✅ Met |
-| Frame rate (SCROLL-BACK) | 60fps | 60fps | ✅ Met |
-| Memory (100K lines) | <50MB | ~20MB | ✅ Better |
-| Slice cache hit rate | >90% | >95% | ✅ Better |
-
-### Optimization Opportunities
-
-**Future Improvements:**
-1. **Adaptive tail layout size**: Dynamically adjust based on append rate
-2. **GPU-accelerated text rendering**: Direct2D1.2 color glyph rendering
-3. **Compressed line storage**: Reduce memory for inactive slices
-4. **Incremental layout**: Update only changed regions instead of full slice
-5. **Background layout creation**: Prefetch slices on worker thread
-
-## Decisions and improvement plan
-### Selection and copy
-- Support copy modes: payload-only, payload+metadata prefix, CSV, and JSON; keep Ctrl+C for current selection and add menu/toolbar split-button for mode choice.
-- Quick actions: copy current line, copy visible region, and copy filtered result set; expose hotkeys and context menu entries.
-- Allow pause-on-select to freeze intake/auto-scroll while selecting; resume restores live tail.
-- Stretch goals: block (column) selection for timestamps/PIDs and multi-range copy (spec stays optional but keep state machine ready).
-- Selection highlight uses small rounded corners to match the rest of the UI (see `Specs/UI/UI_VisualStyle.md`).
-
-### Filtering and navigation
-
-**Filtering System (IMPLEMENTED)**:
-
-RedSalamanderMonitor implements a high-performance type-based filtering system using bit masks and a **VisibleLine Index Pattern** for efficient filtered line access:
-
-**Type-Based Filtering**:
-- 6-bit filter mask controls visibility by `InfoParam::Type`:
-  - Bit 0: Text messages (0x01)
-  - Bit 1: Error messages (0x02) 
-  - Bit 2: Warning messages (0x04)
-  - Bit 3: Info messages (0x08)
-  - Bit 4: Perf messages (0x10)
-  - Bit 5: Debug messages (0x20)
-- Default mask: `0x3F` (all types visible)
-- Example masks:
-  - Errors only: `0x02`
-  - Errors + Warnings: `0x06`
-  - Errors + Warnings + Info: `0x0E`
-  - Errors + Perf + Debug: `0x32`
-  - All types: `0x3F`
-
-**Architecture - VisibleLine Index Pattern**:
-- **No sentinel values** - clean separation between visible and source line spaces
-- `visibleLines` vector contains only visible lines (no filtered entries)
-- Each VisibleLine maps sourceIndex → displayRowStart
-- Display rows are densely packed (0, 1, 2...) for visible lines only
-- Source line numbers always shown in gutter (sourceIndex + 1)
-- Efficient O(1) visible access, O(log n) source lookup
-
-**Key Data Structures**:
-```cpp
-// Document class (ColorTextView::Document):
-struct VisibleLine {
-    size_t sourceIndex;      // Index into source lines vector
-    UINT32 displayRowStart;  // First display row for this visible line
-};
-
-uint32_t _filterMask;                // 6-bit visibility mask
-std::vector<Line> _lines;            // Source lines (all lines, unfiltered)
-std::vector<VisibleLine> _visibleLines; // Computed view (visible lines only)
-```
-
-**Filter Operations**:
-```cpp
-// ColorTextView API:
-void SetFilterMask(uint32_t mask);     // Change filter, triggers full display sync
-size_t GetVisibleLineCount() const;    // Returns count of visible lines
-size_t GetTotalLineCount() const;      // Returns total lines (unfiltered)
-
-// Document API:
-void setFilterMask(uint32_t mask);                   // Sets mask, invalidates caches
-bool isLineVisible(size_t allLineIndex) const;       // Check visibility (with lock)
-bool isLineVisibleUnsafe(size_t allLineIndex) const; // Check visibility (no lock)
-const Line& getLine(size_t visibleIndex) const;      // Access by visible index
-const Line& getLineAll(size_t allLineIndex) const;   // Access by ALL index
-```
-
-**Display Synchronization Flow**:
-When filter mask changes via `SetFilterMask()`:
-1. `Document::setFilterMask(mask)` updates mask
-2. Invalidates display offsets (`_displayOffsetsValid = false`)
-3. Invalidates visible index (`_visibleIndexValid = false`)
-4. Marks all caches dirty (`CacheInvalidationReason::FilterChanged`)
-5. Recalculates `_contentHeight` from `totalDisplayRows()`
-6. Clamps scroll position to new valid range (`ClampScroll()`)
-7. Updates scrollbar ranges (`UpdateScrollBars()`)
-8. Invalidates all layouts (`_sliceBitmap`, `_tailLayoutValid`, `_fallbackValid`)
-9. Forces full redraw (`RequestFullRedraw()`)
-
-**VisibleLine Rebuild** (in `rebuildVisibleLines()`):
-```cpp
-// Rebuild visibleLines from scratch based on current filter mask:
-visibleLines.clear();
-UINT32 displayRow = 0;
-
-for (size_t srcIdx = 0; srcIdx < lines.size(); ++srcIdx) {
-    if (isLineVisibleUnsafe(srcIdx)) {
-        visibleLines.push_back({srcIdx, displayRow});
-        displayRow += lines[srcIdx].newlineCount + 1u; // Multi-line support
-    }
-}
-// Result: visibleLines contains only visible entries with display row offsets
-```
-
-**Binary Search for Display Row** (in `visibleIndexFromDisplayRow()`):
-```cpp
-// Binary search on visibleLines vector:
-auto it = std::lower_bound(
-    visibleLines.begin(), visibleLines.end(),
-    displayRow,
-    [](const VisibleLine& vl, UINT32 row) { return vl.displayRowStart < row; }
-);
-
-if (it != visibleLines.begin()) --it; // Find line containing displayRow
-return static_cast<size_t>(it - visibleLines.begin());
-```
-
-**Y Position Calculation** (in `displayRowForSource()`):
-```cpp
-// Binary search visibleLines to find source line:
-auto it = std::lower_bound(
-    visibleLines.begin(), visibleLines.end(),
-    sourceIndex,
-    [](const VisibleLine& vl, size_t src) { return vl.sourceIndex < src; }
-);
-
-if (it != visibleLines.end() && it->sourceIndex == sourceIndex)
-    return it->displayRowStart; // Found exact match
-
-// Filtered line - return display row of next visible line (or total rows if none)
-return (it != visibleLines.end()) ? it->displayRowStart : totalDisplayRows();
-```
-
-**Text Layout Building with Filtering**:
-When filtering is active, layout workers iterate visible lines directly:
-```cpp
-// In StartLayoutWorker(), RebuildTailLayout(), CreateFallbackLayoutIfNeeded():
-const size_t visCount = _document.visibleLineCount();
-for (size_t visIdx = firstVisIdx; visIdx <= lastVisIdx && visIdx < visCount; ++visIdx) {
-    const auto& line = _document.getVisibleLine(visIdx);
-    text += _document.buildDisplayText(line);
-    if (visIdx < lastVisIdx) text += L'\n';
-}
-// No need to check isLineVisible() - visibleLines already filtered
-```
-
-**Line Number Rendering**:
-```cpp
-// In DrawLineNumbers():
-const auto [startVisIdx, endVisIdx] = GetVisibleLineRange(); // Returns visible indices
-for (size_t visIdx = startVisIdx; visIdx <= endVisIdx; ++visIdx) {
-    const auto& vl = _document.visibleLines[visIdx];
-    const UINT32 displayRow = vl.displayRowStart;
-    const float yBase = displayRow * lineHeight;
-    const UINT32 lineNumber = static_cast<UINT32>(vl.sourceIndex + 1); // Show source line number
-    // Render lineNumber at yBase...
-}
-// Directly iterate visible lines - no filtering checks needed
-```
-
-**Performance Characteristics**:
-- **O(1) visibility check**: Bit mask test on metadata type (isLineVisibleUnsafe)
-- **O(1) visible line access**: Direct visibleLines[visIdx] access
-- **O(1) display row by visible index**: visibleLines[visIdx].displayRowStart
-- **O(log n) display row by source index**: Binary search visibleLines for sourceIndex
-- **O(log n) display row to visible index**: Binary search visibleLines by displayRowStart
-- **O(n) filter change**: Full rebuild of visibleLines vector
-- **O(1) incremental append**: Single visibleLines.push_back() if line visible
-
-**Invariants Maintained**:
-1. **Character positions always reference source lines** (unfiltered document)
-2. **Display rows are dense** (0, 1, 2... with no gaps for visible lines only)
-3. **Line numbers show source positions** (sourceIndex + 1, not visible index)
-4. **visibleLines sorted by sourceIndex** (ascending order, always consistent)
-5. **visibleLines.size() matches visible line count** (no filtered entries)
-6. **Content height reflects visible lines only** (totalDisplayRows * lineHeight)
-7. **Scroll position clamped to valid range** (prevents scrolling beyond visible content)
-
-**Content Filters (NOT YET IMPLEMENTED)**:
-- Content filters: include/exclude tokens and regex with case toggle; default to highlight-in-place (do not drop) so context remains; optional "hide non-matching" view.
-- Metadata filters: PID, TID, and time-window based on prefix timestamp; allow saving named presets per producer.
-- Navigation: next/previous match works even while paused; show filter badges and counts; keep pause/resume intake from UI.
-
-### Performance and throughput
-- **AUTO-SCROLL mode optimizations**: 
-  - Dynamic tail layout (viewport-sized, min 100 lines)
-  - Synchronous updates with batched ETW intake
-  - Direct rendering with display row mapping
-  - No virtualization overhead 
-  - → <0.5ms append latency achieved
-- **SCROLL-BACK mode optimizations**: 
-  - Full slice virtualization (256-line blocks)
-  - Async workers with layout caching
-  - Bitmap caching (when within 16384px texture limit)
-  - Display row offset mapping for correct positioning
-  - → Acceptable latency for historical review
-- Replace content scanning in `AddLine` with severity-driven coloring from metadata; avoid per-append keyword rescans.
-- Batch intake is implemented with a settings-backed producer cap, coalesced UI drain, and line/byte retained-history
-  ceilings. Disk spill is not part of the current contract.
-- Instrument append→layout→paint durations with metrics: target zero blank lines (ACHIEVED), zero dropped frames at 10k logs/sec in AUTO-SCROLL mode.
-
-### Communication (ETW/TraceLogging Only)
+## Communication (ETW/TraceLogging only)
 - Uses TraceLogging provider to emit structured events for every debug message (type, pid, tid, filetime, payload).
 - `RedSalamander.exe` Debug and ASan Debug builds emit Info/Perf/Debug ETW diagnostics and write JSONL perf capture to the default path by default; Release builds require `--etw` for ETW and use `--perf` for the default JSONL path or `--perf=PATH` for a custom path.
 - Normal Debug and Release builds of `RedSalamanderMonitor` do not emit their own Info/Perf/debug-style ETW diagnostics unless launched with `--etw`. Error and warning diagnostics remain eligible for ETW visibility.
@@ -608,36 +384,28 @@ for (size_t visIdx = startVisIdx; visIdx <= endVisIdx; ++visIdx) {
 - No window discovery dependency - applications emit ETW events regardless of consumer presence.
 - Monitor surfaces ETW statistics in UI/status bar, logging write failures when they occur.
 - Default Debug / ASan Debug builds of `RedSalamanderMonitor` MUST NOT enable `ENABLE_TESTS` automatically. Monitor-specific test hooks are opt-in only, otherwise the monitor can surface its own test/perf ETW chatter and pollute the default live display.
-- Monitor chrome selftest coverage requires a test-enabled `RedSalamanderMonitor` build and must verify that `monitor.frame.total_us`, `monitor.frame.present_us`, `monitor.frame.append_to_visible_us`, `monitor.frame.tail_layout_us`, `monitor.frame.mode`, and `monitor.etw.batch_drain_us` are present. The opt-in ETW latency burst mode must additionally verify `monitor.etw.selftest_burst_drain_us`, `monitor.etw.queue_depth`, and `monitor.etw.batch_repost_count`, and must include quantile summaries for append-to-visible, batch-drain, total-frame, and present timings. The opt-in scrollback mode must additionally verify `monitor.frame.scrollback_slice_us` without making that cold-path metric mandatory for the default chrome selftest. Test-enabled Debug and Release builds are produced with `RSBuildEnableTests=true`; Release `ClCompile` definitions must include `$(RSBuildTestDefinitions)` so the opt-in defines `ENABLE_TESTS` without enabling Monitor self diagnostics by default. Helper functions used only by these opt-in drills must also stay behind `ENABLE_TESTS` so normal builds do not carry unreferenced selftest code or warning noise.
+- Monitor chrome selftest coverage requires a test-enabled `RedSalamanderMonitor` build and must verify that `monitor.frame.total_us`, `monitor.frame.present_us`, `monitor.frame.append_to_visible_us`, `monitor.frame.tail_layout_us`, `monitor.frame.mode`, and `monitor.etw.batch_drain_us` are present. Its retained-state I/O drill must also verify every open/save metric listed under Existing performance/architecture traits, run the three-size/five-repeat immutable-snapshot matrix, compare exact canonical output bytes, and inject both open and Save thread-start failures through the production admission helpers. Failure must leave no active flag, shared worker state, joinable thread, posted completion, or destination mutation, and the immediate retry must start successfully. The drill creates and removes its own deterministic streaming-open/export fixtures and fails if cleanup leaves any file behind. The opt-in ETW latency burst mode must additionally verify `monitor.etw.selftest_burst_drain_us`, `monitor.etw.queue_depth`, and `monitor.etw.batch_repost_count`, and must include quantile summaries for append-to-visible, batch-drain, total-frame, and present timings. The opt-in scrollback mode must additionally verify `monitor.frame.scrollback_slice_us` without making that cold-path metric mandatory for the default chrome selftest. Test-enabled Debug and Release builds are produced with `RSBuildEnableTests=true`; Release `ClCompile` definitions must include `$(RSBuildTestDefinitions)` so the opt-in defines `ENABLE_TESTS` without enabling Monitor self diagnostics by default. Helper functions used only by these opt-in drills must also stay behind `ENABLE_TESTS` so normal builds do not carry unreferenced selftest code or warning noise.
 - `MonitorTest.exe --document-model-selftest` is the focused non-UI Track 6 guard. It covers retained line/byte
-  eviction, strict/budgeted/cancelled file reads, Unicode clipboard storage construction, and ETW consumer shutdown
-  through both the normal join path and a deterministic short-timeout lifetime-owned fallback.
+  eviction, decoded expansion limits, split UTF-8/UTF-16 boundaries, malformed/truncated input, mid-decode
+  cancellation, move-publication, exact start-snapshot export, cancellation/fault target preservation, Unicode
+  clipboard storage construction, and ETW consumer shutdown through both the normal join path and a deterministic
+  short-timeout lifetime-owned fallback.
 - Invalid/dirty rectangle visualization MUST be opt-in only. Default Debug builds must not paint invalid rectangles in color; rebuilding with `RS_MONITOR_SHOW_INVALID_RECTS` enables that visual diagnostic. All brushes, palette state, and paint overlays for this diagnostic must stay behind the `RS_MONITOR_INVALID_RECT_VISUALIZATION_ENABLED` contract.
 
-### UX and robustness
-- Cache toolbar PNG per-DPI bucket; show status indicators for transport mode, active filters, pause state, and drop counts.
-- Clipboard failures report to status bar/toast; large-copy operations warn on truncation.
-- Stress the system regularly with scripted scenarios (below) and capture metrics for regressions.
-- Handle multi-line log messages correctly with display row offset mapping system.
+## Verification ownership
 
-### Stress tests (automation outline)
-- High-rate append: 200k messages over 30s (mixed severities, mixed lengths, including multi-line content), verify drop counts, layout latency, and scroll smoothness.
-- Multi-line content: Generate logs with embedded newlines, verify correct Y positioning throughout document (no blank lines).
-- Large viewport testing: Test on high-DPI displays with large windows to verify dynamic tail window sizing.
-- **Filter stress testing**:
-  - **Rapid filter toggling**: Toggle filter buttons 100 times while streaming 10k messages/sec, verify no empty lines or sync issues
-  - **Filter with scroll position**: Apply filters at various scroll positions (top, middle, bottom), verify scroll position clamps correctly
-  - **Heavy filtering**: Filter to show only 1% of messages (e.g., errors only), verify dense display with no gaps
-  - **Filter during batch append**: Toggle filters while processing large ETW batches, verify content height syncs
-  - **All filter combinations**: Test all 64 possible 6-bit filter masks (0x00 through 0x3F), verify correct visibility
-  - **Line number synchronization**: Verify line numbers match actual document positions throughout filtering changes
-  - **Selection persistence**: Maintain selection across filter changes (if selection includes filtered lines)
-- Filter-under-load: enable regex include/exclude and severity filters while appending 50k lines; ensure navigation and copy respect filters.
-- Selection/copy under churn: pause, select large ranges, copy in all formats; resume and ensure caret/selection stability.
-- Device/DPI resilience: change DPI mid-scroll and simulate device-loss during present; verify recovery without crashes.
-- History cap: run until ring buffer eviction occurs; validate drop indicators and retained-length invariants.
-- Texture limit testing: Generate enough content to exceed 16384px slice dimensions, verify fallback to direct rendering.
-
+- `MonitorTest.exe --document-model-selftest` owns document batching/filtering,
+  retention eviction, exact canonical and cancellable file reads, immutable-snapshot lifetime/scaling, transactional export,
+  Unicode clipboard construction, and ETW shutdown lifetime.
+- `RedSalamanderMonitor.exe --chrome-selftest` owns live window chrome, filter
+  status, bounded queue/search-frontier/Show IDs behavior, transactional worker admission, retained-state I/O metric presence, payload-safe bounded
+  open close, fixture cleanup, queue drain, and required frame metrics.
+- `--monitor-etw-burst-mode=latency` and `--monitor-scrollback-selftest` own the
+  focused hot-tail and cold-scrollback metric gates.
+- DPI/device-loss, high-rate mixed multi-line input, filter changes, selection,
+  and texture-limit fallback remain correctness requirements. New performance
+  claims require the scenario and archived evidence contract above; a historical
+  unchecked stress outline is not proof.
 ## Implementation Details
 
 ### Constants
@@ -691,4 +459,3 @@ static constexpr UINT32 kMaxD3D11TextureDimension = 16384;  // D3D11 texture lim
 - `WM_APP_ETW_BATCH`: ETW event batch processing from EtwListener worker thread
 - `WM_PAINT`: Two-mode rendering based on current state
 - `WM_VSCROLL`/`WM_MOUSEWHEEL`: Mode transitions on scroll
-

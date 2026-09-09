@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:red-salamander:schema:terminal-engine-concern-mapping:v1",
+  "title": "RedSalamander TerminalEngine candidate patch concern mapping v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "version",
+    "candidateId",
+    "upstreamTree",
+    "resultTree",
+    "patchSha256",
+    "pathConcerns",
+    "mappingSha256"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "red-salamander-terminal-engine-concern-mapping"
+    },
+    "version": {
+      "const": 1
+    },
+    "candidateId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "upstreamTree": {
+      "$ref": "#/$defs/gitObjectId"
+    },
+    "resultTree": {
+      "$ref": "#/$defs/gitObjectId"
+    },
+    "patchSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "pathConcerns": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100000,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/pathConcern"
+      }
+    },
+    "mappingSha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "gitObjectId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "pathConcern": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "concerns"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^\\\\/](?:[^\\\\]*[^\\\\/])?$"
+        },
+        "concerns": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "abi-snapshot-identity",
+              "build-reproducibility-packaging",
+              "kitty-image-placement-model",
+              "parser-side-effect-bounds",
+              "renderer-ui",
+              "terminal-grid-history-model",
+              "teardown-concurrency",
+              "typed-resource-accounting-admission"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

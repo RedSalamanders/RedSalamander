@@ -1,0 +1,585 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:red-salamander:schema:terminal-engine-collection-descriptor:v1",
+  "title": "RedSalamander candidate-owned declarative TerminalEngine collection descriptor v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "version",
+    "candidateId",
+    "headerPackages",
+    "legal",
+    "build"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "red-salamander-terminal-engine-collection-descriptor"
+    },
+    "version": {
+      "const": 1
+    },
+    "candidateId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "headerPackages": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/headerPackage"
+      }
+    },
+    "legal": {
+      "$ref": "#/$defs/legal"
+    },
+    "build": {
+      "$ref": "#/$defs/build"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "safeLeaf": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^[A-Za-z0-9._+-]+(?:/[A-Za-z0-9._+-]+)*$"
+    },
+    "archivePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^[A-Za-z0-9._+ -]+(?:/[A-Za-z0-9._+ -]+)*$"
+    },
+    "decimalSize": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "headerPackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputId",
+        "packageKind",
+        "includeRelativePath"
+      ],
+      "properties": {
+        "inputId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "packageKind": {
+          "const": "nuget-header-package"
+        },
+        "includeRelativePath": {
+          "$ref": "#/$defs/relativePath"
+        }
+      }
+    },
+    "legal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "closureId",
+        "outputRelativePath",
+        "dependencies"
+      ],
+      "properties": {
+        "closureId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "outputRelativePath": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "dependencies": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/legalDependency"
+          }
+        }
+      }
+    },
+    "legalDependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dependencyId",
+        "spdx",
+        "inputs"
+      ],
+      "properties": {
+        "dependencyId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "spdx": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9.()+ -]{0,127}$"
+        },
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/legalInput"
+          }
+        }
+      }
+    },
+    "legalInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputId",
+        "kind",
+        "destinationLeaf",
+        "sha256",
+        "sizeBytes",
+        "source"
+      ],
+      "properties": {
+        "inputId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "kind": {
+          "enum": [
+            "license",
+            "notice"
+          ]
+        },
+        "destinationLeaf": {
+          "$ref": "#/$defs/safeLeaf"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sizeBytes": {
+          "$ref": "#/$defs/decimalSize"
+        },
+        "source": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/candidateSource"
+            },
+            {
+              "$ref": "#/$defs/frozenInputMember"
+            },
+            {
+              "$ref": "#/$defs/frozenInputWhole"
+            }
+          ]
+        }
+      }
+    },
+    "candidateSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceKind",
+        "origin",
+        "sourceRelativePath"
+      ],
+      "properties": {
+        "sourceKind": {
+          "const": "candidate-source"
+        },
+        "origin": {
+          "enum": [
+            "candidate-patch",
+            "upstream"
+          ]
+        },
+        "sourceRelativePath": {
+          "$ref": "#/$defs/relativePath"
+        }
+      }
+    },
+    "frozenInputMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceKind",
+        "sourceInputId",
+        "archivePath"
+      ],
+      "properties": {
+        "sourceKind": {
+          "const": "frozen-input-member"
+        },
+        "sourceInputId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "archivePath": {
+          "$ref": "#/$defs/archivePath"
+        }
+      }
+    },
+    "frozenInputWhole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceKind",
+        "sourceInputId"
+      ],
+      "properties": {
+        "sourceKind": {
+          "const": "frozen-input-whole"
+        },
+        "sourceInputId": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
+    },
+    "build": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/genericCmakeBuild"
+        },
+        {
+          "$ref": "#/$defs/genericZigBuild"
+        },
+        {
+          "$ref": "#/$defs/genericCargoBuild"
+        },
+        {
+          "$ref": "#/$defs/candidateWrapperBuild"
+        }
+      ]
+    },
+    "safeBuildName": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$"
+    },
+    "pathBindings": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/pathBinding"
+      }
+    },
+    "pathBinding": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/frozenInputPathBinding"
+        },
+        {
+          "$ref": "#/$defs/headerRootPathBinding"
+        },
+        {
+          "$ref": "#/$defs/providerPathBinding"
+        }
+      ]
+    },
+    "bindingKey": {
+      "type": "string",
+      "pattern": "^RS_GATE0_[A-Z][A-Z0-9_]{0,63}$"
+    },
+    "frozenInputPathBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bindingKey",
+        "valueKind",
+        "inputId"
+      ],
+      "properties": {
+        "bindingKey": {
+          "$ref": "#/$defs/bindingKey"
+        },
+        "valueKind": {
+          "const": "frozen-input-file"
+        },
+        "inputId": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
+    },
+    "headerRootPathBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bindingKey",
+        "valueKind",
+        "inputId"
+      ],
+      "properties": {
+        "bindingKey": {
+          "$ref": "#/$defs/bindingKey"
+        },
+        "valueKind": {
+          "const": "header-package-root"
+        },
+        "inputId": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
+    },
+    "providerPathBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bindingKey",
+        "valueKind",
+        "providerPath"
+      ],
+      "properties": {
+        "bindingKey": {
+          "$ref": "#/$defs/bindingKey"
+        },
+        "valueKind": {
+          "const": "provider-path"
+        },
+        "providerPath": {
+          "enum": [
+            "adapter-header",
+            "build-receipt",
+            "layout-header",
+            "notice-output",
+            "source-dependencies"
+          ]
+        }
+      }
+    },
+    "genericCmakeBuild": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "buildTargets",
+        "pathBindings",
+        "adapter",
+        "staticLibraries",
+        "privateRuntimeLibraries"
+      ],
+      "properties": {
+        "kind": {
+          "const": "provider-generic-cmake-msvc-v1"
+        },
+        "buildTargets": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/safeBuildName"
+          }
+        },
+        "pathBindings": {
+          "$ref": "#/$defs/pathBindings"
+        },
+        "adapter": {
+          "$ref": "#/$defs/cmakeAdapterArtifact"
+        },
+        "staticLibraries": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/staticLibrary"
+          }
+        },
+        "privateRuntimeLibraries": {
+          "$ref": "#/$defs/privateRuntimeLibraries"
+        }
+      }
+    },
+    "genericZigBuild": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "buildSteps",
+        "pathBindings",
+        "adapter",
+        "privateRuntimeLibraries"
+      ],
+      "properties": {
+        "kind": {
+          "const": "provider-generic-zig-msvc-v1"
+        },
+        "buildSteps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/safeBuildName"
+          }
+        },
+        "pathBindings": {
+          "$ref": "#/$defs/pathBindings"
+        },
+        "adapter": {
+          "$ref": "#/$defs/runtimeAdapterArtifact"
+        },
+        "privateRuntimeLibraries": {
+          "$ref": "#/$defs/privateRuntimeLibraries"
+        }
+      }
+    },
+    "genericCargoBuild": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "package",
+        "features",
+        "pathBindings",
+        "adapter",
+        "privateRuntimeLibraries"
+      ],
+      "properties": {
+        "kind": {
+          "const": "provider-generic-cargo-msvc-v1"
+        },
+        "package": {
+          "$ref": "#/$defs/safeBuildName"
+        },
+        "features": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/safeBuildName"
+          }
+        },
+        "pathBindings": {
+          "$ref": "#/$defs/pathBindings"
+        },
+        "adapter": {
+          "$ref": "#/$defs/runtimeAdapterArtifact"
+        },
+        "privateRuntimeLibraries": {
+          "$ref": "#/$defs/privateRuntimeLibraries"
+        }
+      }
+    },
+    "candidateWrapperBuild": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "driverRelativePath",
+        "pathBindings",
+        "adapter",
+        "privateRuntimeLibraries"
+      ],
+      "properties": {
+        "kind": {
+          "const": "candidate-wrapper-v1"
+        },
+        "driverRelativePath": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/relativePath"
+            },
+            {
+              "pattern": "\\.ps1$"
+            }
+          ]
+        },
+        "pathBindings": {
+          "$ref": "#/$defs/pathBindings"
+        },
+        "adapter": {
+          "$ref": "#/$defs/runtimeAdapterArtifact"
+        },
+        "privateRuntimeLibraries": {
+          "$ref": "#/$defs/privateRuntimeLibraries"
+        }
+      }
+    },
+    "cmakeAdapterArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dllLeaf",
+        "projectLeaf"
+      ],
+      "properties": {
+        "dllLeaf": {
+          "$ref": "#/$defs/safeLeaf"
+        },
+        "projectLeaf": {
+          "$ref": "#/$defs/safeLeaf"
+        }
+      }
+    },
+    "runtimeAdapterArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dllLeaf"
+      ],
+      "properties": {
+        "dllLeaf": {
+          "$ref": "#/$defs/safeLeaf"
+        }
+      }
+    },
+    "staticLibrary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "libraryId",
+        "sourceInputId",
+        "projectLeaf",
+        "libraryLeaf"
+      ],
+      "properties": {
+        "libraryId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "sourceInputId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "projectLeaf": {
+          "$ref": "#/$defs/safeLeaf"
+        },
+        "libraryLeaf": {
+          "$ref": "#/$defs/safeLeaf"
+        }
+      }
+    },
+    "privateRuntimeLibraries": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/privateRuntimeLibrary"
+      }
+    },
+    "privateRuntimeLibrary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fileName",
+        "relativeBuildPath"
+      ],
+      "properties": {
+        "fileName": {
+          "$ref": "#/$defs/safeLeaf"
+        },
+        "relativeBuildPath": {
+          "$ref": "#/$defs/relativePath"
+        }
+      }
+    }
+  }
+}

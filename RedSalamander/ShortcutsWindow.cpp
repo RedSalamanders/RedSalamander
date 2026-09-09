@@ -11,10 +11,12 @@
 #include <vector>
 
 #include "CommandRegistry.h"
+#include "CommandVisuals.h"
 #include "DxUiThemePalette.h"
 #include "Helpers.h"
 #include "SettingsHotReload.h"
 #include "ShortcutManager.h"
+#include "ShortcutCommandCatalog.h"
 #include "ShortcutText.h"
 #include "WindowMaximizeBehavior.h"
 #include "WindowPlacementPersistence.h"
@@ -50,6 +52,8 @@ constexpr wchar_t kClassName[]         = L"RedSalamander.ShortcutsWindow";
 
 constexpr uint64_t kGroupStableIdFunctionBar = 1u;
 constexpr uint64_t kGroupStableIdFolderView  = 2u;
+constexpr uint64_t kGroupStableIdApplication = 3u;
+constexpr uint64_t kGroupStableIdTerminal    = 4u;
 
 [[nodiscard]] int CompareNoCase(std::wstring_view left, std::wstring_view right) noexcept
 {
@@ -191,44 +195,6 @@ constexpr uint64_t kGroupStableIdFolderView  = 2u;
     return description;
 }
 
-[[nodiscard]] std::wstring FormatChordText(uint32_t vk, uint32_t modifiers) noexcept
-{
-    std::vector<std::wstring> parts;
-    parts.reserve(4u);
-
-    if ((modifiers & ShortcutManager::kModCtrl) != 0)
-    {
-        parts.push_back(LoadEmbeddedStringResource(nullptr, IDS_MOD_CTRL));
-    }
-    if ((modifiers & ShortcutManager::kModAlt) != 0)
-    {
-        parts.push_back(LoadStringResource(nullptr, IDS_MOD_ALT));
-    }
-    if ((modifiers & ShortcutManager::kModShift) != 0)
-    {
-        parts.push_back(LoadStringResource(nullptr, IDS_MOD_SHIFT));
-    }
-
-    parts.push_back(ShortcutText::VkToDisplayText(vk));
-
-    std::wstring result;
-    for (const std::wstring& part : parts)
-    {
-        if (part.empty())
-        {
-            continue;
-        }
-
-        if (! result.empty())
-        {
-            result.append(L" + ");
-        }
-        result.append(part);
-    }
-
-    return result;
-}
-
 [[nodiscard]] bool IsConflictChord(uint32_t chordKey, const std::vector<uint32_t>& conflicts) noexcept
 {
     return std::binary_search(conflicts.begin(), conflicts.end(), chordKey);
@@ -250,9 +216,12 @@ struct ShortcutRow final
     uint64_t stableId  = 0u;
     uint32_t vk        = 0u;
     uint32_t modifiers = 0u;
+    Common::Keyboard::KeyPosition keyPosition = Common::Keyboard::KeyPosition::None;
     std::wstring commandId;
     std::wstring commandText;
+    std::wstring iconText;
     std::wstring keyText;
+    std::wstring searchText;
     std::wstring tooltipText;
     uint64_t groupStableId = 0u;
     bool hasConflict       = false;
@@ -317,33 +286,36 @@ struct ShortcutKeySortKey final
 
 [[nodiscard]] ShortcutKeySortKey MakeShortcutKeySortKey(const ShortcutRow& row)
 {
+    const uint32_t displayVk = row.keyPosition == Common::Keyboard::KeyPosition::None
+                                   ? row.vk
+                                   : Common::Keyboard::VirtualKeyForPosition(row.keyPosition, GetKeyboardLayout(0));
     ShortcutKeySortKey key{
         .modifierText = FormatModifierSortText(row.modifiers),
     };
 
-    if (row.vk >= VK_F1 && row.vk <= VK_F24)
+    if (displayVk >= VK_F1 && displayVk <= VK_F24)
     {
         key.group   = ShortcutKeySortGroup::Function;
-        key.ordinal = row.vk - VK_F1 + 1u;
+        key.ordinal = displayVk - VK_F1 + 1u;
         return key;
     }
 
-    if (row.vk >= static_cast<uint32_t>(L'0') && row.vk <= static_cast<uint32_t>(L'9'))
+    if (displayVk >= static_cast<uint32_t>(L'0') && displayVk <= static_cast<uint32_t>(L'9'))
     {
         key.group   = ShortcutKeySortGroup::Number;
-        key.ordinal = row.vk - static_cast<uint32_t>(L'0');
+        key.ordinal = displayVk - static_cast<uint32_t>(L'0');
         return key;
     }
 
-    if (row.vk >= static_cast<uint32_t>(L'A') && row.vk <= static_cast<uint32_t>(L'Z'))
+    if (displayVk >= static_cast<uint32_t>(L'A') && displayVk <= static_cast<uint32_t>(L'Z'))
     {
         key.group   = ShortcutKeySortGroup::Letter;
-        key.ordinal = row.vk - static_cast<uint32_t>(L'A');
+        key.ordinal = displayVk - static_cast<uint32_t>(L'A');
         return key;
     }
 
     key.group    = ShortcutKeySortGroup::Other;
-    key.baseText = ShortcutText::VkToDisplayText(row.vk);
+    key.baseText = row.keyText;
     return key;
 }
 
@@ -420,8 +392,9 @@ public:
         const ShortcutRow& row = _rows[rowIndex];
         if (columnIndex == 0u)
         {
-            outCell.kind        = row.hasConflict ? RedSalamander::DxUi::GridCellKind::IconText : RedSalamander::DxUi::GridCellKind::Text;
-            outCell.iconText    = row.hasConflict ? GetConflictMark() : std::wstring{};
+            outCell.kind        = row.hasConflict || ! row.iconText.empty() ? RedSalamander::DxUi::GridCellKind::IconText
+                                                                            : RedSalamander::DxUi::GridCellKind::Text;
+            outCell.iconText    = row.hasConflict ? GetConflictMark() : row.iconText;
             outCell.text        = row.commandText;
             outCell.multiline   = true;
             outCell.tooltipText = row.tooltipText;
@@ -612,6 +585,8 @@ private:
 
         appendGroup(kGroupStableIdFunctionBar, LoadStringResource(nullptr, IDS_SHORTCUTS_GROUP_FUNCTION_BAR));
         appendGroup(kGroupStableIdFolderView, LoadStringResource(nullptr, IDS_SHORTCUTS_GROUP_FOLDER_VIEW));
+        appendGroup(kGroupStableIdApplication, LoadStringResource(nullptr, IDS_SHORTCUTS_GROUP_APPLICATION));
+        appendGroup(kGroupStableIdTerminal, LoadStringResource(nullptr, IDS_SHORTCUTS_GROUP_TERMINAL));
     }
 
 private:
@@ -733,7 +708,7 @@ public:
         }
 
         const ShortcutRow* const row = _gridModel->GetRow(rowIndex);
-        if (! row || row->commandId.empty())
+        if (! row || row->commandId.empty() || ShortcutIds::IsPseudoCommandId(row->commandId))
         {
             return;
         }
@@ -891,8 +866,10 @@ void ShortcutsWindow::UpdateData(const Common::Settings::ShortcutsSettings& shor
     _shortcutManager = &shortcutManager;
     if (_gridModel)
     {
+        static_cast<void>(_gridModel->SetGroupCollapsed(kGroupStableIdApplication, _shortcuts.applicationCollapsed));
         static_cast<void>(_gridModel->SetGroupCollapsed(kGroupStableIdFunctionBar, _shortcuts.functionBarCollapsed));
         static_cast<void>(_gridModel->SetGroupCollapsed(kGroupStableIdFolderView, _shortcuts.folderViewCollapsed));
+        static_cast<void>(_gridModel->SetGroupCollapsed(kGroupStableIdTerminal, _shortcuts.terminalCollapsed));
     }
     RebuildRows();
 }
@@ -1061,10 +1038,14 @@ void ShortcutsWindow::PersistSettingsForClose(HWND hwnd) noexcept
     }
 
     Common::Settings::ShortcutsSettings settings = _settings->shortcuts.value_or(_shortcuts);
+    settings.application                         = _shortcuts.application;
     settings.functionBar                         = _shortcuts.functionBar;
     settings.folderView                          = _shortcuts.folderView;
+    settings.terminal                            = _shortcuts.terminal;
+    settings.applicationCollapsed                = _gridModel && _gridModel->IsGroupCollapsed(kGroupStableIdApplication);
     settings.functionBarCollapsed                = _gridModel && _gridModel->IsGroupCollapsed(kGroupStableIdFunctionBar);
     settings.folderViewCollapsed                 = _gridModel && _gridModel->IsGroupCollapsed(kGroupStableIdFolderView);
+    settings.terminalCollapsed                   = _gridModel && _gridModel->IsGroupCollapsed(kGroupStableIdTerminal);
     settings.sortColumnId.clear();
     settings.sortDescending = false;
     if (_grid && _gridModel)
@@ -1176,8 +1157,10 @@ void ShortcutsWindow::BuildUi()
 
     _gridModelStorage = std::make_unique<ShortcutsGridModel>();
     _gridModel        = _gridModelStorage.get();
+    static_cast<void>(_gridModel->SetGroupCollapsed(kGroupStableIdApplication, _shortcuts.applicationCollapsed));
     static_cast<void>(_gridModel->SetGroupCollapsed(kGroupStableIdFunctionBar, _shortcuts.functionBarCollapsed));
     static_cast<void>(_gridModel->SetGroupCollapsed(kGroupStableIdFolderView, _shortcuts.folderViewCollapsed));
+    static_cast<void>(_gridModel->SetGroupCollapsed(kGroupStableIdTerminal, _shortcuts.terminalCollapsed));
     _grid->SetModel(_gridModel);
     if (_settings && _settings->shortcuts.has_value())
     {
@@ -1260,7 +1243,22 @@ void ShortcutsWindow::RebuildRows() noexcept
 
     const std::optional<uint64_t> previousSelectedRowId = _selectedRowId;
     std::vector<ShortcutRow> rows;
-    rows.reserve(_shortcuts.functionBar.size() + _shortcuts.folderView.size());
+    rows.reserve(_shortcuts.application.size() + _shortcuts.functionBar.size() + _shortcuts.folderView.size() + _shortcuts.terminal.size());
+
+    const std::vector<ShortcutCommandCatalogEntry> folderCatalog =
+        BuildShortcutCommandCatalog(_shortcuts, ShortcutCommandContext::Folder);
+    const std::vector<ShortcutCommandCatalogEntry> terminalCatalog =
+        BuildShortcutCommandCatalog(_shortcuts, ShortcutCommandContext::Terminal);
+    std::unordered_map<std::wstring, const ShortcutCommandCatalogEntry*> catalogByCommand;
+    const auto indexCatalog = [&](const std::vector<ShortcutCommandCatalogEntry>& catalog)
+    {
+        for (const ShortcutCommandCatalogEntry& entry : catalog)
+        {
+            catalogByCommand.insert_or_assign(std::wstring(CanonicalizeCommandId(entry.commandId)), &entry);
+        }
+    };
+    indexCatalog(folderCatalog);
+    indexCatalog(terminalCatalog);
 
     const auto addScope =
         [&](const std::vector<Common::Settings::ShortcutBinding>& bindings, const std::vector<uint32_t>& conflicts, uint64_t groupStableId) noexcept
@@ -1280,13 +1278,20 @@ void ShortcutsWindow::RebuildRows() noexcept
             row.stableId      = MakeShortcutStableRowId(groupStableId, bindingIndex);
             row.vk            = binding.vk;
             row.modifiers     = binding.modifiers;
+            row.keyPosition   = binding.keyPosition;
             row.groupStableId = groupStableId;
             row.commandId     = binding.commandId;
-            row.hasConflict   = IsConflictChord(ShortcutManager::MakeChordKey(binding.vk, binding.modifiers), conflicts);
-            row.keyText       = FormatChordText(binding.vk, binding.modifiers);
+            row.hasConflict   = IsConflictChord(ShortcutManager::MakeChordKey(binding), conflicts);
+            row.keyText       = ShortcutText::FormatChordText(binding.keyPosition, binding.vk, binding.modifiers);
 
-            const std::wstring displayName = GetCommandDisplayName(binding.commandId);
-            const std::wstring description = GetCommandDescription(binding.commandId);
+            const bool isPassThrough = ShortcutIds::IsPassThroughCommandId(binding.commandId);
+            const auto catalogEntry = catalogByCommand.find(std::wstring(CanonicalizeCommandId(binding.commandId)));
+            const std::wstring displayName = isPassThrough
+                ? LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_PASS_THROUGH)
+                : catalogEntry != catalogByCommand.end() ? catalogEntry->second->displayName : GetCommandDisplayName(binding.commandId);
+            const std::wstring description = isPassThrough
+                ? LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_PASS_THROUGH_DESC)
+                : catalogEntry != catalogByCommand.end() ? catalogEntry->second->description : GetCommandDescription(binding.commandId);
             row.commandText                = displayName;
             if (! description.empty())
             {
@@ -1299,8 +1304,17 @@ void ShortcutsWindow::RebuildRows() noexcept
                 row.tooltipText.append(L"\n");
                 row.tooltipText.append(description);
             }
+            row.searchText = catalogEntry != catalogByCommand.end() ? catalogEntry->second->searchText : binding.commandId;
+            if (catalogEntry != catalogByCommand.end())
+            {
+                row.iconText = ResolveCommandVisualText(catalogEntry->second->visualId, _dxHost.HasFluentIconFont());
+            }
+            else if (isPassThrough)
+            {
+                row.iconText = ResolveCommandVisualText(CommandVisualId::TerminalMenu, _dxHost.HasFluentIconFont());
+            }
 
-            const uint32_t chordKey = ShortcutManager::MakeChordKey(binding.vk, binding.modifiers);
+            const uint32_t chordKey = ShortcutManager::MakeChordKey(binding);
             rows.push_back(std::move(row));
             chordToRows[chordKey].push_back(rows.size() - 1u);
         }
@@ -1339,7 +1353,8 @@ void ShortcutsWindow::RebuildRows() noexcept
         for (size_t rowIndex = scopeStart; rowIndex < rows.size(); ++rowIndex)
         {
             const ShortcutRow& row = rows[rowIndex];
-            if (ContainsNoCase(row.commandText, query) || ContainsNoCase(row.keyText, query) || ContainsNoCase(row.tooltipText, query))
+            if (ContainsNoCase(row.commandText, query) || ContainsNoCase(row.keyText, query) || ContainsNoCase(row.tooltipText, query) ||
+                ContainsNoCase(row.searchText, query))
             {
                 filtered.push_back(row);
             }
@@ -1351,6 +1366,8 @@ void ShortcutsWindow::RebuildRows() noexcept
 
     addScope(_shortcuts.functionBar, _shortcutManager->GetFunctionBarConflicts(), kGroupStableIdFunctionBar);
     addScope(_shortcuts.folderView, _shortcutManager->GetFolderViewConflicts(), kGroupStableIdFolderView);
+    addScope(_shortcuts.application, _shortcutManager->GetApplicationConflicts(), kGroupStableIdApplication);
+    addScope(_shortcuts.terminal, _shortcutManager->GetTerminalConflicts(), kGroupStableIdTerminal);
 
     _gridModel->SetRows(std::move(rows));
     if (_grid)
@@ -1433,16 +1450,23 @@ bool ShortcutsWindow::DebugGetSnapshot(ShortcutsWindowDebugSnapshot& out) const 
     out.themeRainbow            = _theme.menu.rainbowMode;
     out.rowCount                = _gridModel ? _gridModel->GetRowCount() : 0u;
     out.groupCount              = _gridModel ? _gridModel->GetGroupCount() : 0u;
+    out.applicationCollapsed    = _gridModel && _gridModel->IsGroupCollapsed(kGroupStableIdApplication);
     out.functionBarCollapsed    = _gridModel && _gridModel->IsGroupCollapsed(kGroupStableIdFunctionBar);
     out.folderViewCollapsed     = _gridModel && _gridModel->IsGroupCollapsed(kGroupStableIdFolderView);
-    out.collapsedGroupCount     = static_cast<size_t>(out.functionBarCollapsed) + static_cast<size_t>(out.folderViewCollapsed);
+    out.terminalCollapsed       = _gridModel && _gridModel->IsGroupCollapsed(kGroupStableIdTerminal);
+    out.collapsedGroupCount     = static_cast<size_t>(out.applicationCollapsed) + static_cast<size_t>(out.functionBarCollapsed) +
+                              static_cast<size_t>(out.folderViewCollapsed) + static_cast<size_t>(out.terminalCollapsed);
     if (_gridModel)
     {
+        out.rowCommandIds.reserve(_gridModel->GetRowCount());
+        out.rowGroupStableIds.reserve(_gridModel->GetRowCount());
         out.rowKeyTexts.reserve(_gridModel->GetRowCount());
         for (size_t rowIndex = 0u; rowIndex < _gridModel->GetRowCount(); ++rowIndex)
         {
             if (const ShortcutRow* const row = _gridModel->GetRow(rowIndex))
             {
+                out.rowCommandIds.push_back(row->commandId);
+                out.rowGroupStableIds.push_back(row->groupStableId);
                 out.rowKeyTexts.push_back(row->keyText);
             }
         }
@@ -1703,6 +1727,7 @@ bool ShortcutsWindow::DebugSetGroupCollapsed(const size_t groupIndex, const bool
     _dxHost.Invalidate();
     return true;
 }
+
 #endif
 
 } // namespace
@@ -1816,4 +1841,5 @@ bool DebugSetShortcutsWindowGroupCollapsed(const size_t groupIndex, const bool c
 {
     return g_shortcutsWindow && g_shortcutsWindow->DebugSetGroupCollapsed(groupIndex, collapsed);
 }
+
 #endif

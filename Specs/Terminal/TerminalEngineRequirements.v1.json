@@ -1,0 +1,247 @@
+{
+  "formatId": "red-salamander-terminal-engine-requirements",
+  "version": 1,
+  "frozenUtc": "2026-07-30T00:00:00Z",
+  "productBoundary": {
+    "pluginId": "builtin/terminal",
+    "pluginBinary": "Plugins/Terminal/Terminal.dll",
+    "allowedLinkage": [
+      "private-dynamic",
+      "source-static"
+    ],
+    "hostOwnsTerminalImplementation": false,
+    "viewerInterfaceAllowed": false,
+    "rendererOwner": "plugin",
+    "rendererApis": [
+      "Direct2D",
+      "DirectWrite"
+    ],
+    "snapshotOwner": "consumer"
+  },
+  "selection": {
+    "eligibleThreshold": "80.00",
+    "inclusiveCohortDelta": "5.00",
+    "tieBreakOrder": [
+      "ownerDays",
+      "crossedAbiElements",
+      "nonSystemRuntimeDependencies",
+      "addedReleasePackageBytes"
+    ],
+    "reviewerApprovalCount": 2
+  },
+  "sourceReviewPolicy": {
+    "allowedOutcome": "source-rejected",
+    "requiredIndependentApprovals": 2,
+    "eligibleGates": [
+      "G6",
+      "G7",
+      "G9"
+    ],
+    "rules": [
+      "A source rejection is lane-invariant and is not an early-failure gate sequence. It claims no pass for any unexecuted gate.",
+      "The candidate review, blocker, exact candidate pin and pin digest, source archive digest, relative source file and its SHA-256, inclusive line range, and exact raw line-range SHA-256 are frozen before collection.",
+      "Source file SHA-256 covers the exact archive-member bytes. The inclusive line-range preimage starts immediately after the lineStart-minus-one LF byte and ends immediately after lineEnd's LF byte, or at EOF when that line has no LF; byte 0x0A is the only line delimiter and no decoding, newline conversion, or Unicode normalization is allowed.",
+      "Only a direct contradiction of an eligible mandatory requirement in the exact pinned bytes may reject a candidate. Missing adapter, build, native, or measurement evidence is incomplete evidence, not a source rejection.",
+      "Two independent reviewers who did not author candidate glue approve the exact blocker digest before collection. A disputed or unapproved blocker makes the comparison incomplete.",
+      "A patched alternative is a new exact candidate whose patch, ABI, dependency, owner-day, and bootstrap identities are frozen before every candidate and control restarts all three lanes."
+    ]
+  },
+  "standardsCorrections": [
+    {
+      "correctionId": "kitty-wire-formats",
+      "source": "https://sw.kovidgoyal.net/kitty/graphics-protocol/",
+      "requirement": "Kitty wire formats are RGB, RGBA, and PNG. Grayscale content is supported when carried in a protocol-defined wire format; gray and gray-alpha are not separate Kitty wire format numbers.",
+      "effectOnSelection": "No candidate is credited or rejected for a nonexistent gray wire-format number. Zlib, cropping, deletion, generations, placements, and all three z layers remain mandatory."
+    }
+  ],
+  "resourceLimits": {
+    "sessionSlots": "32",
+    "terminalCpuBytesPerSession": "67108864",
+    "terminalCpuBytesPerProcess": "536870912",
+    "kittyCpuBytesPerSession": "67108864",
+    "kittyCpuBytesPerProcess": "268435456",
+    "kittyGpuBytesPerProcess": "268435456",
+    "kittyPixelsPerImage": "16000000",
+    "kittyEncodedBytesPerApc": "1048576",
+    "kittyAccumulatedCompressedBytesPerImage": "67108864",
+    "kittyConversionGenerationsPerSession": "1",
+    "genericEscapeBodyBytes": "65536",
+    "osc8RecordBytes": "16384",
+    "osc8UriBytes": "8192",
+    "osc8ParameterBytes": "1024",
+    "titleStatusBytes": "4096",
+    "cwdPathEffectBytes": "131072",
+    "osc52EncodedBytes": "1048576",
+    "osc52DecodedBytes": "786432",
+    "integrationFrameBytes": "2097152",
+    "integrationCommandBytes": "1048576",
+    "integrationCwdBytes": "131072",
+    "pendingEffectDescriptors": "256",
+    "pendingEffectBytes": "2097152"
+  },
+  "accountingRules": [
+    "Count original encoded untrusted bytes incrementally before decode, normalization, sanitization, base64 decode, or copy.",
+    "Use checked arithmetic for every length, dimension, stride, pixel, and aggregate calculation.",
+    "Classify a named protocol before growth; its named limit replaces the generic body limit and nested limits remain conjunctive.",
+    "On overflow, enter a bounded discard-until-final or discard-until-terminator state without materializing the remaining body.",
+    "Reserve every physically distinct encoded, decoded, conversion, stored, snapshot, and upload allocation before allocation or expensive work.",
+    "Reservation failure is atomic and keeps the terminal usable.",
+    "A post-allocation eviction or line-count-only limit is not a pre-allocation byte cap."
+  ],
+  "gates": [
+    {
+      "gateId": "G1",
+      "requirement": "Windows 11 build 22000 compatibility; native x64 and ARM64 artifacts; x64 ASan-Debug-compatible consumer boundary; no unsupported operating-system or runtime prerequisite.",
+      "failureCodes": [
+        "asan-consumer-boundary-failed",
+        "native-arm64-evidence-missing",
+        "native-smoke-failed",
+        "native-x64-evidence-missing",
+        "unsupported-os-runtime",
+        "windows-artifact-build-failed",
+        "wrong-architecture-artifact"
+      ]
+    },
+    {
+      "gateId": "G2",
+      "requirement": "Legally distributable licenses and notices plus a complete source, tool, dependency, and runtime lock with verified digests.",
+      "failureCodes": [
+        "dependency-closure-incomplete",
+        "digest-lock-incomplete",
+        "license-incompatible",
+        "notice-closure-incomplete",
+        "source-provenance-unresolved"
+      ]
+    },
+    {
+      "gateId": "G3",
+      "requirement": "After explicit bootstrap, two independent clean normal MSBuild-orchestrated builds are offline, use only frozen tools and inputs, and produce byte-identical raw artifacts for both architectures. A normalized or structural PE identity is diagnostic only and cannot substitute for exact raw identity.",
+      "failureCodes": [
+        "ambient-cache-required",
+        "developer-global-tool-required",
+        "offline-build-failed",
+        "offline-isolation-unproved",
+        "reproducibility-verification-failed",
+        "unfrozen-bootstrap-input"
+      ]
+    },
+    {
+      "gateId": "G4",
+      "requirement": "An isolatable C or C++ ABI, or a fully source-vendored boundary, with exact compiler and runtime rules. Dynamic ABI identity is fail-closed and covers build, public headers, layouts, enums, calling convention, capabilities, and architecture.",
+      "failureCodes": [
+        "abi-fingerprint-incomplete",
+        "abi-not-isolatable",
+        "calling-convention-unproved",
+        "compiler-runtime-rules-unfrozen",
+        "private-unstable-types-required"
+      ]
+    },
+    {
+      "gateId": "G5",
+      "requirement": "Exactly one authoritative parser and state machine handles every PTY VT, OSC, APC, and Kitty byte. An authenticated shell side channel is allowed but is not a VT parser.",
+      "failureCodes": [
+        "kitty-second-parser-required",
+        "multiple-authoritative-state-machines",
+        "osc-second-parser-required",
+        "vt-second-parser-required"
+      ]
+    },
+    {
+      "gateId": "G6",
+      "sourceReviewEligible": true,
+      "requirement": "Correct resize and reflow, primary and alternate screens, byte-bounded scrollback, selection, hyperlinks, title, palette, keyboard, mouse, focus, bracketed paste, synchronized output, Unicode grapheme and wide-cell state, and renderer-owned immutable cell extraction.",
+      "failureCodes": [
+        "byte-bounded-scrollback-missing",
+        "cell-extraction-incomplete",
+        "input-protocol-incomplete",
+        "resize-reflow-incomplete",
+        "screen-state-incomplete",
+        "unicode-cell-state-incomplete"
+      ]
+    },
+    {
+      "gateId": "G7",
+      "sourceReviewEligible": true,
+      "requirement": "Engine-owned static Kitty direct and chunked RGB, RGBA, and PNG state; zlib; placements; cropping; deletion; image and placement generations; and below-background, below-text, and above-text layers. All image limits and reservations occur before unbounded growth, decompression, decode, or conversion.",
+      "failureCodes": [
+        "kitty-cropping-missing",
+        "kitty-deletion-missing",
+        "kitty-generation-missing",
+        "kitty-png-missing",
+        "kitty-preallocation-missing",
+        "kitty-rgb-rgba-missing",
+        "kitty-three-layers-missing",
+        "kitty-zlib-missing"
+      ]
+    },
+    {
+      "gateId": "G8",
+      "requirement": "A documented serialized snapshot and update sequence leaks no borrowed pointer across mutation, has one producer per session, retries after failed publication, and reaches a deterministic callback-free unload quiet point.",
+      "failureCodes": [
+        "borrowed-pointer-escaped",
+        "callback-after-release",
+        "dirty-retry-lost",
+        "multiple-snapshot-producers",
+        "snapshot-sequence-undocumented",
+        "teardown-quiet-point-unproved"
+      ]
+    },
+    {
+      "gateId": "G9",
+      "sourceReviewEligible": true,
+      "requirement": "The exact frozen encoded, decoded, dimension, pixel, scrollback, terminal CPU, Kitty CPU/GPU, session/process, conversion, and pending-effect limits are enforceable before allocation or expensive work with checked arithmetic and atomic failure.",
+      "failureCodes": [
+        "allocation-failure-nonatomic",
+        "dimension-pixel-preflight-missing",
+        "encoded-body-preallocation-missing",
+        "pending-effect-preallocation-missing",
+        "process-session-ledger-missing",
+        "scrollback-byte-preallocation-missing",
+        "transient-reservation-missing"
+      ]
+    },
+    {
+      "gateId": "G10",
+      "requirement": "Deterministic malformed and split UTF-8, VT, and image fixtures plus a fuzz seam demonstrate that untrusted PTY data cannot terminate the application.",
+      "failureCodes": [
+        "deterministic-malformed-fixtures-missing",
+        "fuzz-seam-missing",
+        "split-input-fixtures-missing",
+        "untrusted-input-terminated-process"
+      ]
+    },
+    {
+      "gateId": "G11",
+      "requirement": "The terminal child HWND and Direct2D/DirectWrite renderer remain builtin/terminal plugin-owned and consume a consumer-owned immutable cell, image, placement, and effect snapshot.",
+      "failureCodes": [
+        "candidate-owned-control-required",
+        "candidate-owned-renderer-required",
+        "consumer-snapshot-boundary-missing",
+        "host-terminal-implementation-required",
+        "second-ui-stack-required"
+      ]
+    },
+    {
+      "gateId": "G12",
+      "requirement": "The frozen session, profile, pane-follow, path-insertion, folder-edit, command-history, shell-selection, shutdown, settings, and dependency-lifecycle contracts remain implementable without changing shell policy or trusting terminal output.",
+      "failureCodes": [
+        "authenticated-idle-contract-impossible",
+        "dependency-lifecycle-contract-impossible",
+        "pane-tab-contract-impossible",
+        "path-translation-contract-impossible",
+        "profile-contract-impossible",
+        "settings-contract-impossible",
+        "shell-policy-modification-required"
+      ]
+    }
+  ],
+  "unsupportedByDefault": [
+    "kitty-animation",
+    "kitty-file-medium",
+    "kitty-glyph-protocol",
+    "kitty-shared-memory-medium",
+    "kitty-temporary-file-medium",
+    "osc52-read",
+    "sixel"
+  ]
+}

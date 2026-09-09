@@ -86,9 +86,6 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup>
-    <RSDefaultEnableTests Condition="'$(RSBuildEnableTests)'!='true'">false</RSDefaultEnableTests>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <GenerateManifest>false</GenerateManifest>
   </PropertyGroup>
@@ -203,7 +200,9 @@
     <ClInclude Include="EtwListener.h" />
     <ClInclude Include="Framework.h" />
     <ClInclude Include="InvalidRectVisualization.h" />
-    <ClInclude Include="MonitorFileReader.h" />
+      <ClInclude Include="MonitorFileReader.h" />
+      <ClInclude Include="MonitorFileExporter.h" />
+      <ClInclude Include="MonitorTextSnapshot.h" />
     <ClInclude Include="MonitorDiagnostics.h" />
     <ClInclude Include="RedSalamanderMonitor.h" />
     <ClInclude Include="resource.h" />
@@ -215,6 +214,7 @@
     <ClCompile Include="Document.cpp" />
     <ClCompile Include="EtwListener.cpp" />
     <ClCompile Include="MonitorFileReader.cpp" />
+    <ClCompile Include="MonitorFileExporter.cpp" />
     <ClCompile Include="RedSalamanderMonitor.cpp" />
   </ItemGroup>
   <ItemGroup>

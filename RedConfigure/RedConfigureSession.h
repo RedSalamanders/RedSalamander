@@ -56,6 +56,12 @@ struct LocalizationReviewRow
     std::vector<LocalizationTargetCell> targets;
 };
 
+struct LocalizationReviewRowIdentity
+{
+    std::wstring ownerName;
+    std::wstring id;
+};
+
 struct LocalizationExportPreview
 {
     std::wstring ownerName;
@@ -159,7 +165,9 @@ public:
     [[nodiscard]] bool IsThemeDirty() const noexcept;
     [[nodiscard]] Workflow::BatchApprovalResult ApplyLocalizationBatch(const Workflow::LocalizationBatchPreview& preview);
     [[nodiscard]] Workflow::BatchApprovalResult ApplyThemeMassChange(const Workflow::ThemeMassPreview& preview);
-    [[nodiscard]] bool ApplyClipboardMatrix(size_t startRow, size_t startCultureIndex, std::wstring_view clipboardText);
+    [[nodiscard]] bool ApplyClipboardMatrix(std::span<const LocalizationReviewRowIdentity> destinationRows,
+                                            std::span<const std::wstring> destinationCultures,
+                                            std::wstring_view clipboardText);
     [[nodiscard]] bool Undo();
     [[nodiscard]] bool Redo();
     [[nodiscard]] bool CanUndo() const noexcept;

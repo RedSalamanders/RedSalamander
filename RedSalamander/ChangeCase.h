@@ -1,9 +1,11 @@
 #pragma once
 
 #include "framework.h"
+#include "BatchRenameExecutionEngine.h"
 
 #include <cstdint>
 #include <filesystem>
+#include <span>
 #include <stop_token>
 #include <string>
 #include <string_view>
@@ -37,6 +39,12 @@ struct Options
 
 [[nodiscard]] std::wstring TransformLeafName(std::wstring_view leafName, const Options& options) noexcept;
 
+#ifdef ENABLE_TESTS
+[[nodiscard]] HRESULT DebugClassifyDirectoryReadResult(HRESULT readHr,
+                                                       bool hasInformation,
+                                                       bool provenDirectory) noexcept;
+#endif
+
 struct ProgressUpdate final
 {
     enum class Phase : uint8_t
@@ -57,15 +65,44 @@ struct ProgressUpdate final
 
 using ProgressCallback = void (*)(const ProgressUpdate& update, void* cookie) noexcept;
 
+// Performs provider discovery and namespace validation only. It never mutates. The returned
+// operations are immutable admission input for the central RenamePlan executor.
+[[nodiscard]] HRESULT BuildRenameOperations(IFileSystem& fileSystem,
+                                            std::wstring_view pluginId,
+                                            const std::vector<std::filesystem::path>& inputPaths,
+                                            const Options& options,
+                                            std::vector<BatchRenameExecutionOp>& operationsOut,
+                                            std::stop_token stopToken = {},
+                                            ProgressCallback progress = nullptr,
+                                            void* progressCookie = nullptr) noexcept;
+
+#ifdef ENABLE_TESTS
+struct MutationGuardCallbacks final
+{
+    // Called once after iterative discovery/planning and before the first rename. The span contains
+    // exactly the source paths that the operation plans to mutate.
+    HRESULT (*prepare)(std::span<const std::filesystem::path> paths, void* cookie) noexcept = nullptr;
+
+    // Called immediately before every provider rename batch. A failure prevents that batch and all
+    // later batches from mutating.
+    HRESULT (*revalidate)(std::span<const std::filesystem::path> paths, void* cookie) noexcept = nullptr;
+    void* cookie = nullptr;
+};
+
+// Test/compatibility adapter for direct engine characterization. Production command dispatch
+// submits BuildRenameOperations() output to the central RenamePlan executor.
 // Applies the requested case transformation to the given paths.
 // Notes:
 // - includeSubdirs uses IFileSystem::ReadDirectoryInfo (non-recursive traversal).
 // - Renames are batched via IFileSystem::RenameItems.
 // - stopToken allows cooperative cancellation.
-[[nodiscard]] HRESULT ApplyToPaths(IFileSystem& fileSystem,
-                                   const std::vector<std::filesystem::path>& inputPaths,
-                                   const Options& options,
-                                   std::stop_token stopToken = {},
-                                   ProgressCallback progress = nullptr,
-                                   void* progressCookie      = nullptr) noexcept;
+[[nodiscard]] HRESULT DebugApplyToPathsForTests(IFileSystem& fileSystem,
+                                                std::wstring_view pluginId,
+                                                const std::vector<std::filesystem::path>& inputPaths,
+                                                const Options& options,
+                                                std::stop_token stopToken = {},
+                                                ProgressCallback progress = nullptr,
+                                                void* progressCookie      = nullptr,
+                                                const MutationGuardCallbacks* mutationGuard = nullptr) noexcept;
+#endif
 } // namespace ChangeCase

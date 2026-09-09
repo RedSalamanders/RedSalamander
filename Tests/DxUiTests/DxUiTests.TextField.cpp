@@ -158,8 +158,7 @@ void TestTextFieldUsesViewerDerivedInputChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;

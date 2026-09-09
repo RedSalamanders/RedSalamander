@@ -1,0 +1,73 @@
+> [!IMPORTANT]
+> **Historical snapshot — not a live work queue.** The original audit date/commit is bounded by this file's scope metadata (or its paired `*-Audit.md`). Routing was reconciled on 2026-07-17 at repository commit `f4e0c8c3bed8`; the completed disposition ledger is `Specs/Plans/Done/Operation_Observatory_WholeRepositoryCodeAuditAndRemediationPlan_2026-07-15.md`, while live work is indexed by `Specs/Plans/WIP/README.md`.
+
+
+# Command system - verified findings (compact)
+
+- **[data-loss/CONFIRMED]** `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp:11702` - Unpack silently overwrites existing destination files (overwrite hardcoded true in production path)
+- **[data-loss/CONFIRMED]** `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp:11702` - Unpack-to-folder silently overwrites existing destination files (overwrite never reset by the prompt)
+- **[data-loss/CONFIRMED]** `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp:8826` - Pack 'delete sources after' can delete the just-created archive when the archive path lies inside a selected folder
+- **[data-loss/CONFIRMED]** `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp:11702` - Unpack silently overwrites existing destination files with no confirmation (overwrite hard-coded true)
+- **[data-loss/CONFIRMED]** `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp:2893` - makeFileList silently overwrites an existing output file (CREATE_ALWAYS, no confirmation)
+- **[data-loss/CONFIRMED]** `RedSalamander/Preferences.Dialog.cpp:2486` - Monitor-settings save failure discards already-applied main settings on close (partial apply -> data loss)
+- **[data-loss/CONFIRMED]** `RedSalamander/Preferences.Keyboard.cpp:2697` - ResetShortcutsToDefaults replaces the entire user keymap with no confirmation
+- **[data-loss/CONFIRMED]** `RedSalamander/BatchRenameEngine.cpp:644` - Trailing-space (and edge-space/dot) target names are only a non-blocking warning, so batch rename can create un-addressable files via extended \\?\ paths
+- **[data-loss/CONFIRMED]** `RedSalamander/ConnectionManagerWindow.cpp:3696` - Modal facade ignores the modeless single-instance, allowing two concurrent Connection Managers to clobber each other's saves
+- **[data-loss/CONFIRMED]** `RedSalamander/CompareDirectoriesWindow.cpp:871` - Destructive pane commands (Delete/Permanent Delete/Rename) are enabled while a compare run is still scanning and auto-rewriting the selection
+- **[data-loss/PLAUSIBLE]** `RedSalamander/FolderWindow.FileOperations.cpp:1161` - Same-folder self-copy/self-move guard uses _currentFolder, not the folder the selected items actually belong to
+- **[data-loss/PLAUSIBLE]** `RedSalamander/FolderView.Selection.cpp:531` - HideSelectedNames leaves files selected after they vanish from view; a follow-up Delete/Attr/Copy acts on now-invisible files
+- **[wrong-target-or-pane/CONFIRMED]** `RedSalamander/FolderWindow.FileOperations.cpp:1149` - Copy/Move to other pane writes into the other pane's REQUESTED (not yet enumerated) folder, with no enumerated/accessible check
+- **[wrong-target-or-pane/CONFIRMED]** `RedSalamander/FolderView.FileOps.cpp:931` - Inline rename accepts path separators and "..", silently relocating the item outside the displayed folder
+- **[wrong-target-or-pane/CONFIRMED]** `RedSalamander/FolderView.FileOps.cpp:725` - Clipboard Paste has no destination-FS guard; pasting local files into a virtual pane hands local Win32 paths to a virtual filesystem's CopyItems/MoveItems
+- **[wrong-target-or-pane/CONFIRMED]** `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp:12965` - ChangeCase captures the selection AFTER the modal dialog, diverging from sibling commands (TOCTOU on selection)
+- **[wrong-target-or-pane/CONFIRMED]** `RedSalamander/FolderWindow.FileSystem.Navigation.Part.cpp:150` - cmd.exe /K pushd path is quoted with argv-style rules but interpreted by cmd, allowing %VAR% expansion of the working-directory string
+- **[wrong-target-or-pane/CONFIRMED]** `RedSalamander/FolderWindow.Viewers.cpp:1248` - Edit/AlternateEdit launches external editor on a focused DIRECTORY (View rejects directories, Edit does not)
+- **[wrong-target-or-pane/CONFIRMED]** `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp:12541` - CommandSelectionRestore restores by name into any pane/folder with no check against the captured source folder or plugin
+- **[wrong-target-or-pane/CONFIRMED]** `RedSalamander/FindFilesWindow.cpp:4085` - Find results context-menu acts on a positional row index captured before the modal menu pump, so a result removal during the pump retargets delete/move to the wrong file
+- **[wrong-target-or-pane/PLAUSIBLE]** `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp:10395` - Shell-New template lookup by collapsed id selects the wrong template when two registry extensions normalize to the same id
+- **[wrong-target-or-pane/PLAUSIBLE]** `RedSalamander/RedSalamander.cpp:6114` - Hot-path suffix parse only inspects the first character, silently mapping malformed suffixes to slot 0..9
+- **[wrong-target-or-pane/PLAUSIBLE]** `RedSalamander/FindFilesWindow.cpp:3416` - Selected-results file operations snapshot _results positionally while a background completion can mutate the list, and copy/move-to-other-pane resolves the destination pane live so the shown destination can diverge from the actual target
+- **[state-corruption/CONFIRMED]** `RedSalamander/Preferences.Dialog.cpp:5135` - OK with a live theme preview but no net change leaks the un-committed preview to disk
+- **[state-corruption/CONFIRMED]** `RedSalamander/CompareDirectoriesWindow.cpp:1028` - Banner Rescan/Cancel button and IDM_COMPARE_RESCAN are not disabled during an in-progress copy/move sync operation
+- **[reentrancy-race/CONFIRMED]** `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp:12904` - Non-recursive ChangeAttributes runs even while a recursive ChangeAttributes worker is in flight on the same pane
+- **[reentrancy-race/PLAUSIBLE]** `RedSalamander/Preferences.Dialog.cpp:2710` - CommitAndApply has no reentrancy guard; nested message pump during save/snapshot allows double-commit
+- **[dispatch-gap/CONFIRMED]** `RedSalamander/RedSalamander.cpp:6527` - Parameterized command families with wmCommandId=0 have no handler in the shortcut dispatcher and silently show "not implemented"
+- **[dispatch-gap/CONFIRMED]** `RedSalamander/RedSalamander.cpp:6527` - Bare canonical parameterized command ids and several wmCommandId==0 commands have no string-dispatch handler (fall through to 'not implemented')
+- **[dispatch-gap/CONFIRMED]** `RedSalamander/RedSalamander.cpp:6535` - Keyboard-bindable commands navigatePath/openFileExplorerKnownFolder/selectFileSystemPlugin/plugins.configure/plugins.toggleEnabled have no shortcut dispatch handler
+- **[dispatch-gap/CONFIRMED]** `RedSalamander/RedSalamander.cpp:6527` - cmd/app/openFileExplorerKnownFolder/<folder> is a registered, assignable command with no dispatch handler (silent no-op / 'not implemented')
+- **[dispatch-gap/CONFIRMED]** `RedSalamander/RedSalamander.cpp:6535` - Bare canonical app commands (theme/select, plugins/configure, openFileExplorerKnownFolder) reach the shortcut dispatcher with no handler and surface a 'not implemented' alert
+- **[dispatch-gap/CONFIRMED]** `RedSalamander/RedSalamander.cpp:6527` - cmd/pane/selectFileSystemPlugin/<id> has no dispatch handler; a saved shortcut silently shows "not implemented"
+- **[dispatch-gap/CONFIRMED]** `RedSalamander/RedSalamander.cpp:6527` - cmd/app/plugins/configure/<id> and cmd/app/plugins/toggleEnabled/<id> have no dispatch handler; bound shortcuts show "not implemented"
+- **[dispatch-gap/PLAUSIBLE]** `RedSalamander/RedSalamander.cpp:6527` - Parameterized navigatePath shortcut silently shows "not implemented" instead of navigating
+- **[incorrect-behavior/CONFIRMED]** `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp:8826` - Pack/unpack delete-after-source runs a recursive permanent delete synchronously on the UI thread
+- **[incorrect-behavior/CONFIRMED]** `RedSalamander/FolderViewInternal.h:841` - Rename does not normalize/forbid trailing dot, silently dropping the typed extension
+- **[incorrect-behavior/CONFIRMED]** `RedSalamander/FolderView.FileOps.cpp:676` - Clipboard Copy lacks the builtin/local-FS guard that Cut enforces, placing virtual (archive/cloud) paths into a CF_HDROP
+- **[incorrect-behavior/CONFIRMED]** `RedSalamander/FolderView.FileOps.cpp:798` - Move-paste does not clear the cut clipboard; stale DROPEFFECT_MOVE CF_HDROP can re-move/operate on deleted sources on a second paste
+- **[incorrect-behavior/CONFIRMED]** `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp:585` - New-from-template silently drops the template extension when the typed name already contains a dot
+- **[incorrect-behavior/CONFIRMED]** `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp:12948` - ChangeCase has no local/read-only filesystem guard, unlike pack/unpack/changeAttributes
+- **[incorrect-behavior/CONFIRMED]** `RedSalamander/FolderWindow.Viewers.cpp:1206` - External edit/view launches the raw virtual-FS path with no local materialization on non-local file systems
+- **[incorrect-behavior/CONFIRMED]** `RedSalamander/FolderWindow.FileSystem.cpp:226` - Copy-UNC-as-text resolves UNC via synchronous WNetGetUniversalNameW on the UI thread (can hang on an unreachable mapped-drive server)
+- **[incorrect-behavior/CONFIRMED]** `RedSalamander/RedSalamander.cpp:6276` - 'toggleThumbnails' never toggles off - second invocation is a no-op instead of restoring the previous display mode
+- **[incorrect-behavior/CONFIRMED]** `RedSalamander/Preferences.Keyboard.cpp:2610` - SwapCapturedShortcut leaves a stale same-chord unassigned placeholder, producing two bindings on one chord after a swap
+- **[incorrect-behavior/CONFIRMED]** `RedSalamander/BatchRenameWindow.cpp:3916` - After a partial/failed batch, _targets is rewritten to the renamed paths; re-clicking Rename re-applies the rule to already-renamed items
+- **[incorrect-behavior/CONFIRMED]** `RedSalamander/ConnectionManagerWindow.cpp:1954` - Connect/Close persists profiles with an unvalidated, out-of-range TCP port
+- **[incorrect-behavior/PLAUSIBLE]** `RedSalamander/CompareDirectoriesWindow.cpp:1325` - goDriveRoot shortcut suffix is parsed but DRIVE_UNKNOWN / non-existent letters silently navigate or no-op without scope handling consistency
+- **[contract/CONFIRMED]** `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp:409` - Hardcoded English ShellNew template display name ("<ext> File" / "File") used as menu label and dialog caption
+- **[contract/CONFIRMED]** `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp:11290` - Hardcoded English clipboard-confirmation fallback string in CopySelectionText
+- **[contract/PLAUSIBLE]** `RedSalamander/FolderWindow.FileOperations.cpp:1195` - Wrong/misleading error string when file-operation engine is unavailable for copy/move to other pane
+- **[contract/PLAUSIBLE]** `RedSalamander/FolderWindow.cpp:622` - Shell context menu for current directory omits IContextMenu2/IContextMenu3 message forwarding, breaking owner-draw submenus (New / Send To / Open With)
+- **[robustness/CONFIRMED]** `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp:10385` - Shell-New registry enumeration runs synchronously on the UI thread during command and menu build
+- **[robustness/CONFIRMED]** `RedSalamander/RedSalamander.cpp:6519` - cmd/pane/hotPaths handler omits the g_hFolderWindow init guard that every sibling handler has
+- **[robustness/CONFIRMED]** `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp:11384` - makeFileList collects entries synchronously on the UI thread (recursive whole-folder walk can hang the UI)
+- **[robustness/CONFIRMED]** `RedSalamander/RedSalamander.cpp:8185` - theme/select/<name> persists an unvalidated, possibly non-existent theme id into settings
+- **[robustness/CONFIRMED]** `RedSalamander/Preferences.Keyboard.cpp:3173` - ImportShortcuts overwrites the entire working keymap with an unvalidated file and no confirmation
+- **[robustness/CONFIRMED]** `RedSalamander/BatchRenameEngine.cpp:587` - COM0/LPT0 are flagged as reserved device names and hard-blocked, though they are not reserved on Windows
+- **[robustness/CONFIRMED]** `RedSalamander/RedSalamander.cpp:8185` - cmd/app/theme/select/<name> writes an unvalidated theme id into persisted settings
+- **[robustness/PLAUSIBLE]** `RedSalamander/RedSalamander.cpp:6114` - hotPath/setHotPath suffix parser inspects only the first character, so multi-digit/garbage slot suffixes are misrouted to slot 1 or silently dropped
+- **[robustness/PLAUSIBLE]** `RedSalamander/CommandRegistry.cpp:224` - kCommands lacks a compile-time uniqueness assertion for wmCommandId (only sorted-id and prefix-mapping are statically enforced)
+- **[robustness/PLAUSIBLE]** `RedSalamander/RedSalamander.cpp:3885` - Dynamic history id range (50 items) is exactly adjacent to hot-path base with zero gap
+- **[robustness/PLAUSIBLE]** `RedSalamander/FolderWindow.FileOperations.cpp:1046` - CommandDelete falls into a self-re-posting fallback when _fileOperations is null (no EnsureFileOperations guard)
+- **[robustness/PLAUSIBLE]** `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp:12133` - listOpenedFiles focus acts on a stale snapshot row (TOCTOU between dialog populate and Enter)
+- **[robustness/PLAUSIBLE]** `RedSalamander/Preferences.Keyboard.cpp:3060` - Import accepts a vk:0 binding (no 'vk' validation lower bound), producing a dead/odd binding on chord 0
+- **[robustness/PLAUSIBLE]** `RedSalamander/RedSalamander.cpp:10566` - Disabled/greyed file-system plugin can be activated and silently re-enabled via posted WM_COMMAND (grey is the only guard)
+- **[robustness/PLAUSIBLE]** `RedSalamander/RedSalamander.cpp:6544` - OnFunctionBarInvoke (main window) routes through DispatchShortcutCommand without the cmd/app scoping or unassigned guard applied by the keydown paths

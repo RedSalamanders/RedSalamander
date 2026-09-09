@@ -1,159 +1,105 @@
-# Specs/Plans/WIP - Index & Ranked Queues
+# Active Work Index
 
-Last WIP triage update: **2026-07-17** after Observatory and the independent last-four-days review closed, with
-Astrolabe and Rosetta Lantern retained as the unique routed owners.
+Priority review: 2026-09-08 against `3dcf7ab1`, including the uncommitted I18 proposal. The recommendations below reconcile the indexed work against current code and archived evidence; individual plans still require their own drift check before execution.
 
-This README is the routing index for unfinished plans. It is not the source of truth for task details:
-open the named plan before executing any item.
+This directory is non-normative. It routes unfinished work and decisions; current behavior remains owned by the classified contracts in `Specs/<Domain>/`, repository policy, public ABI headers, and machine-consumed schemas/manifests. On conflict, open the named plan, recheck its drift range, and reconcile against current authority before changing anything.
 
-## Rules
+## Status meanings
 
-- One owner per requirement. When a plan says `ROUTED to <owner>`, execute the owner, not the routed
-  copy.
-- Do not execute archived ledgers in `../Done/` as parallel WIP queues. They are reference evidence.
-- The `HOLD-*` rows below are not available as normal next picks. Three are coordination-sensitive
-  FolderView/DxUi ownership rows, and one is human-managed scratch state.
-- Completed WIP plans must move to `Specs/Plans/Done/`, and durable behavior must be merged into the
-  authoritative spec under `Specs/<Domain>/` before closeout.
+- `ACTIVE`: executable unfinished work with one owner.
+- `DRAFT`: optional incomplete activation detail inside a plan; grants no edit authority.
+- `HOLD`: preserved work that is blocked, coordination-sensitive, or subordinate to another active owner; do not pick it independently.
+- `DECISION`: unresolved product/architecture choices; it authorizes review, not implementation.
+- `RETIRED`: retired plans live in `../Done/` as frozen history; do not keep them in this index.
 
-## Current Audit Refresh
+`Notes_Scratch.md` is an explicit human-managed note, not a plan. It is left
+untouched and excluded from this index and from specification authority unless
+the user directly names that file in a future instruction.
 
-`CodeReview_Last4Days_IndependentFindingsAndRemediation_2026-07-16.md` is complete, merged to `master` in
-`177600a8d`, and archived under `Specs/Plans/Done/`. Its session-end, queued-payload, theme-grammar/contrast, and
-inline-theme preservation defects are closed. RedConfigure/gate/settings/Vite rows were reconciled to completed
-Observatory tracks. Only the work it explicitly routed remains live: source-contract architecture in Astrolabe and
-Czech/Japanese/Slovak linguistic review in Rosetta Lantern.
+## Machine-readable inventory
 
-`Operation_Observatory_WholeRepositoryCodeAuditAndRemediationPlan_2026-07-15.md` is complete and archived under
-`Specs/Plans/Done/`. It remains the 2026-07-15 whole-repository finding/disposition ledger, not a live queue.
-Lighthouse is also complete and archived under `Specs/Plans/Done/`;
-Track 0 is complete by bounded convergence: CI is green, Full's Track 0 paths and sandbox audit are green, six
-unrelated Full failures cleared in the one focused batch, and the two reproducible unrelated cases are routed to
-Tracks 9 and 6. Track 1 is complete: releases now require the exact requested artifact matrix, every action is pinned,
-dependency/ownership guards are active, and six mismatched Squad workflows are removed. Observatory then closed
-Track 2 with UIDVALIDITY-qualified identity, UIDPLUS-only single-message expunge, rollback, fake-mailbox
-coverage, and archived Release perf evidence. Track 3 is also complete with typed Graph/upload URL boundaries,
-redacted diagnostics, secure transient storage, continuation/redirect rejection, focused Debug/Release proof, and
-archived request-count evidence. Track 4 is complete through the archived IronLedger owner with bounded drop data,
-stable destination/provider identity, honest asynchronous MOVE reporting, focused runtime/source-contract proof,
-and authoritative FolderView/File Operations contracts. Track 5 is complete with Pack overlap/cancellable deletion,
-the Common local-file transaction, strict Monitor export, explicit Unpack conflict policy, and responsive Make File
-List save/cancel/progress behavior. Track 6 code now has bounded queue/history/search, safe clipboard publication,
-snapshot Document reads, owned layout-worker COM state, cancellable budgeted file open, complete Clear reset, and a
-per-session ETW callback/handle ownership model. Track 6 is complete with deterministic shutdown proof, a green
-same-machine latency archive, 139/139 source contracts, and authoritative Monitor/shared-helper contracts.
-Track 7 is complete with conflict-aware unique-sibling settings publication, a real cross-process CAS proof,
-save-blocked recovery when backup fails, strict numeric/Unicode serialization, explicit Preferences partial-success
-behavior, a clean Debug rebuild, 140/140 source contracts, and authoritative SettingsStore/Preferences contracts.
-Track 8 is complete: canonical connection IDs, collision-safe no-guess credential migration, purpose/secret-kind
-scoped authorization, and lock/session clearing have focused build/runtime/schema/localization/source-contract proof.
-Track 9 is complete with reentrancy-safe menu/tree dispatch, stable Tree/UIA identity, text-range conformance, and
-focused DxUi proof. Track 10 is complete with shared bounded pagination, Graph upload acknowledgements, race-safe
-Microsoft merge semantics, commit-aware cleanup, bounded Google transport/token refresh, reversible Google identity,
-archived request/resource evidence, and a clean Debug x64 recovery rebuild. Track 11 is complete with exact S3
-transfer proof, callback-result preservation, bounded recursive delete, commit-aware cleanup debt, retryable
-multipart reconciliation, explicit AWS lifetime/unload state, and repeated Debug/ASan runtime-refresh proof.
-Track 12 is complete with transactional configuration across all shipped providers, legacy secret scrubbing,
-shared Curl/Google process-runtime ownership, and cancellable/generation-gated/bounded 7z indexing.
-Track 13 is complete with fail-before-change local writer semantics, bounded path expansion, atomic Dummy
-copy/move preflight, descendant read-only delete policy, and retained reversible Google identity proof.
-Track 14 is complete with serialized one-shot final settings persistence, stale edit-suggestion rejection,
-cached/viewport-bounded large-menu painting, capped sibling enumeration, focused Commands coverage, and archived
-same-machine performance evidence.
-Track 15 is complete with one declarative runtime-dependency manifest, fail-closed MSBuild/package validation,
-fresh-extraction app/all-plugin smoke, separately pinned vcpkg tool identity, reconciled ARM64/critical PR gates,
-and a scheduled/high-risk ASan lane with a seeded detector-health proof.
-Track 16 is complete with composition-root ownership, independent production translation units, and compiled
-RedConfigure page presenters with typed theme origin. Track 18 closed audit-governance drift and generated Vite
-state; Track 19 closed typed/localized RedConfigure preview, validation, duplicate, locale, Undo, and performance
-contracts. Track 17's independent source-contract disposition/selftest-boundary work is now owned only by
-`Operation_Astrolabe_TestContractArchitectureMigration_2026-07-17.md`.
+<!-- spec-ia:wip-index:start -->
+| Status | Rank | File | Ownership / next action |
+|---|---:|---|---|
+| ACTIVE | I0 | [Google Drive plugin](FileSystem_GoogleDrivePluginPlan.md) | Reconcile historical read-only/stub milestones with current writable-provider authority and the retired I14 plan's C0 evidence (`../Done/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md`) before choosing remaining OAuth/remote-validation work; do not duplicate delivered mutations. |
+| ACTIVE | I1 | [FolderView thumbnail enrichment](FolderView_ThumbnailBackgroundEnrichmentFollowup_2026-07-04.md) | Bounded cold-cache background enrichment with performance/lifetime proof. |
+| ACTIVE | I2 | [FolderView WarpDrive remaining closeout](Operation_FolderView_WarpDrive_RemainingCloseout_2026-08-25.md) | Task 10 Step 4 (verify or waive Full-as-Task-10-gate) and Task 11 closeout only. Master archive: `../Done/Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md`. |
+| ACTIVE | I3 | [File Operations stress validation](FileOperations_RemainingStressValidation_2026-08-04.md) | Deterministic validation/evidence for five already-defined behavior areas. |
+| ACTIVE | I4 | [Operation Astrolabe](Operation_Astrolabe_TestContractArchitectureMigration_2026-07-17.md) | Replace behavioral source-shape tests with runtime boundaries while retaining legitimate structural guards. |
+| ACTIVE | I5 | [Performance measurement contract](Operation_PerfMeasurementContract_2026-07-06.md) | Reconcile delivered measurement tooling and stale test-root instructions; prioritize the explicit budget/sample-quality enforcement needed by I2/I15 and subsequent performance claims. |
+| ACTIVE | I6 | [Rosetta Lantern](Operation_RosettaLantern_RedConfigureSatelliteLocalizationReview_2026-07-17.md) | Human-reviewed Czech, Japanese, and Slovak RedConfigure localization. |
+| ACTIVE | I7 | [HRESULT/status formatting](Core_HResultStatusFormattingCleanup_2026-06-19.md) | Bounded shared-formatting/localization cleanup; coordinate with FolderView owners. |
+| ACTIVE | I8 | [Win32 inventory](Win32_Inventory.md) | Four bounded RAII/lifetime/DPI audits only. |
+| ACTIVE | I9 | [CI format autocommit race](CI_FormatAutocommitRace_2026-08-25.md) | Sole implementation owner for fork, stale-head, staging, and concurrency hardening; receives Cinderstar package 12 / A8-CI-01. Archive: `../Done/CI_FormatAutocommitRace_2026-08-04.md`. |
+| ACTIVE | I10 | [Tools inventory, simplification, and governance](Tooling_ToolsInventoryAndGovernance_2026-08-13.md) | Reconcile the September 8 Fresh Full against the original Commands failures, then complete exact Done-path admission, focused governance validation, and closeout. Existing implementation is a closeout candidate; no completion is claimed by this index update. |
+| ACTIVE | I15 | [Terminal Ghostty upgrade review remediation](Terminal_GhosttyUpgradeReviewRemediation_2026-08-28.md) | Reconcile the new Debug Full; reconstruct Product/candidate fixtures and generate the corrected paired 200-sample test-enabled Release corpus. Releasing occupied build output alone does not satisfy this evidence obligation; preserve the admitted pin. |
+| ACTIVE | I18 | [Confirmation preferences and accurate Copy/Move outcomes](UI_ConfirmationPreferencesAndOperationOutcomes_2026-09-08.md) | Recommended next engineering owner: C0 characterization, then extract the necessary C5 metadata-outcome/consent foundations before broad Confirmation-page work. Reconcile the plan's current C0-C6 sequence first. Implementation not started; deferred confirmation capabilities remain owned here. |
+| ACTIVE | I19 | [DxUi shared-library adoption and release](DxUi_SharedLibraryAdoptionAndReleasePlan_2026-09-09.md) | Plan prepared; implementation not started. C0 owns consumer/source-drift inventory and retained baselines, then qualified dependency updates for RedXe and staged RedSalamander adoption. Measure static-library costs before any DLL decision; preserve existing AV and UI owners. |
+| HOLD | H0 | [Operation Tailwind](Operation_Tailwind_FolderViewWarpDrivePreMergeReviewRemediation_2026-06-30.md) | Reconcile stale rows; TW-9/TW-10 have a live shared accessibility defect, while TW-15's mechanism is absent at the reviewed HEAD. Existing I2/I1 routing stays bounded; an uncovered repair needs a named active owner before execution. Do not resume retired batons in Done. |
+| HOLD | H1 | [Operation Parallax](Operation_Parallax_DeferredArchitectureSecurityAndSimplificationDecisionReview_2026-07-14.md) | Deferred evidence refresh; accepted work must move to a separate active plan. |
+| HOLD | H3 | [File Operations later features](Operation_FileOperations_LaterFeatures_2026-09-05.md) | Six deferred features: history, review-later conflicts, link retargeting, Shell Copy/Move, Microsoft Drive same-endpoint Copy, and qualified MTP native Move. Also routes every remaining File Operations audit follow-up to its active owner or an explicit HOLD row. |
+| DECISION | D0 | [Atlas remaining decisions](Operation_Atlas_RemainingSpecificationDecisions_2026-08-04.md) | Remaining product and architecture questions removed from normative prose because repository evidence cannot choose them safely; the plugin-binary boundary is resolved as current source-tree lockstep. |
+| DECISION | D1 | [WhimFiles remaining decisions](Product_WhimFilesRemainingDecisions_2026-08-25.md) | Unresolved gap routing only; promote one approved slice at a time. Competitive analysis archive: `../Done/Product_WhimFilesGapAnalysisAndImprovementPlan_2026-07-08.md`. |
+<!-- spec-ia:wip-index:end -->
 
-The unfinished CI auto-format fork/race hardening remains a separate live owner in
-`../../../plans/012-format-autocommit-race.md`. Observatory deliberately coordinated but did not absorb that
-P3 workflow-only task; use the legacy plan as its implementation detail until it is executed and closed.
+## Recommended priority and rationale
 
-## Best Next Pick
+**Next bounded action: I10 closeout qualification using mapped current evidence and exact Done-path admission. Next substantial product work: I18 C0, followed by the necessary metadata-outcome foundations.** I12 is completed; I15 fixture reconstruction remains a separate evidence program.
 
-If the current goal is remediation or stabilization, take **I2 FIR-1 / FG-A1** next: add destination-side bridge
-`GetSize` fault injection once and share that seam with Floodgate. The four-day delta review is complete; do not
-reopen its closed payload/settings/theme rows. Astrolabe is lower-urgency test architecture and should run as a
-dedicated slice. Rosetta Lantern can begin its exact inventory/report work, but translation completion depends on
-competent target-language reviewers.
-Do not reopen the closed Track 5 output, Track 6 Monitor work, or Track 7 settings coordination.
-IronLedger, Lighthouse, Firebreak, Causeway, Farsight, and the
-test-suite stabilization plan are completed references; do not reopen their routed rows.
+Order remaining slices by user impact, exposure, evidence confidence, effort, and dependencies. The `I`/`H`/`D` identifiers above remain stable routing keys, not this execution order. Size estimates include focused validation: S = hours, M = about a day, L = multiple days; they are estimates, not completion promises. Independent qualification and reviewer coordination may proceed alongside implementation. HOLD/DECISION rows below recommend promotion or review, not implicit implementation authority.
 
-If the current goal is product work instead of remediation, start with **N1 Google Drive Phase 2**:
-interactive OAuth PKCE sign-in plus read-stream/download support.
+| Order | Owner / next slice | Why this position | Size / change risk |
+|---:|---|---|---|
+| 1 | **I10 closeout qualification** | Its implementation is delivered; map the original failure witnesses to current green Full evidence, qualify exact Done-path admission, and close the plan. This is a small bounded step before I18 changes product behavior. | S / low-medium |
+| 2 | **I18: C0, then the necessary C5 foundations** | Accurate Copy/Move outcomes improve trust in the application's core workflow. Characterize producers and routes, then prioritize typed metadata results, visible receipts, sensitive-loss decisions and direct-final eligibility. Reconcile dependencies before moving this work ahead of the broad settings, ingress, and Find/exit changes; do not blindly execute C1-C4 first. | L overall / high |
+| 3 | **H0 TW-9/TW-10: promote one bounded accessibility repair** | Offscreen selected rows can expose SelectionItem but reject selection/container queries. This is a concrete user-facing inconsistency with a shared cause. Use an existing owner only if its scope fits; otherwise name a new active owner. | S / low-medium |
+| 4 | **I15: restore fixtures and produce corrected paired evidence** | Delivered VT fixes still need the new Product/candidate corpus. Reconstruct both runtime/build identities, validate equal controls and the required p95 ceiling, then reconcile closeout. A historical passing pair is not the missing corrected pair. | M / medium |
+| 5 | **I2 + the required I5 slice: qualify FolderView performance** | Run the explicit current-source Debug/test-enabled Release matrix with matching enforced budgets. A budget consumer exists, but ordinary Full does not enable it. Reconcile I5's delivered tooling and add only missing enforcement needed for the claim; avoid a second broad measurement rewrite. | M-L / medium |
+| 6 | **I3 and H3's separately owned qualification residuals** | Map I3's five stress outcomes to current cases before adding tests. Preserve H3's human interaction and live-provider gaps with named validation owners; prioritize relevant observations alongside I18. Green automation does not establish skipped environment or human coverage. | M-L / low for validation-only work |
+| 7 | **I9: CI autocommit hardening** | Useful bounded publication hardening; an ordinary non-force push limits the overwrite consequence but does not solve stale-head, fork, or staging behavior. Include all four operator scenarios as well as local policy tests. This work has its own validation impact. | M / medium |
+| 8 | **I0: reconcile delivered mutations, then initial sign-in** | Existing writable-provider work should not be repeated. First-time authentication is the meaningful feature gap and could make the provider usable without a pre-existing refresh token. Strong alternative when provider adoption is the product priority. | L / medium |
+| 9 | **I1: cold-cache background thumbnail enrichment** | Visible product value for formats still left with generic icons, but shell-provider work requires bounded latency, resource accounting and teardown proof. Retain its separate ownership from WarpDrive closeout. | L / high |
+| 10 | **I6: refresh translation inventory and obtain human review** | Partial Czech/Japanese/Slovak localization remains real product work. The original string inventory is stale; resource parity cannot prove language quality. Reviewer coordination can start while higher-ranked engineering proceeds. | M plus review availability / low |
+| 11 | **I4: one justified runtime-test migration batch** | Improve the tests around a demonstrated high-churn or costly boundary. Do not make replacement of the historical source-test inventory a prerequisite for unrelated work. | M per batch / medium |
+| 12 | **I7: an actionable error surface, coordinated with I18** | Removing formatting aliases alone has little user value. Prioritize demonstrated unclear errors and shared result wording when those surfaces are touched. | S-M / low-medium |
+| 13 | **I8: reconcile CHK-1, then evidence-led audits** | CHK-1's owning-window cleanup landed. Remaining COM/UIA/DPI rows are investigations rather than established defects; prioritize a concrete finding over regex counts. | S reconciliation, M audit / scope-dependent |
+| 14 | **D0 + D1: refresh routing, then select a product slice** | D1 retains stale I11/terminal routing. Reconcile delivered behavior before selecting a feature; large architecture choices need representative evidence and an explicit decision. | S review, feature-dependent implementation |
+| 15 | **H1 + H3 deferred features/architecture/security candidates** | Preserve deliberate deferrals and revisit on new evidence or a product decision. H3's qualification work is separately ranked above; its six later features and bounded-batches/IMAP question do not become implementation work through this ranking. | Review first / scope-dependent |
 
-## Improvement / Remediation Queue
+## Evidence and corrections behind the ranking
 
-Ranked by impact, urgency, dependency value, and whether the work is already owned elsewhere.
+- **I12 completed on September 8.** The terminal command gate and ConPTY attachment are repaired; nine test-enabled Release cases and all three live entry points passed. The existing native input warning is reused, enlarged and centered. A stale enumeration in repeated Find fixtures was fixed; the predecessor-inclusive replay passed 138/0/0. [Final Fresh Full](../../TestRuns/4cb089111a23/Commands/2026-09-08_200340_i12_final_full/README.md) recorded **2,116 passed / 0 failed / 52 declared skips**, all 35 entries promoted. [The completed record](../Done/Operation_ReviewFollowup_FOTerminalFocus_2026-08-19.md) retains the failure history and bounded ownership.
+- **Closeout is small tooling work, not documentation alone.** The [September 8 Fresh Full archive](../../TestRuns/4cb089111a23/FileOps/2026-09-08_104319_br4_br5_br7_keyboard_fresh_full/README.md) records the aggregate verdict, case results and original source identity. It ran on `892f9235` plus the tested worktree; the reviewed application-source changes match `3dcf7ab1`. Map each plan's required witnesses rather than relying on commit ancestry or aggregate counts. [Plan lifecycle policy](../../README.md#plan-lifecycle) also requires exact Done-path admission and a positive/negative test. The archive's separately qualified post-gate metadata change is the closeout precedent; do not relabel it as part of the original Full.
+- **Historical success and current receipt reuse are different claims.** Later changes do not erase evidence for the tested implementation, but that receipt cannot qualify changed inputs. `Get-RSWorkspaceSnapshotOnce` in [ValidationFingerprint.psm1](../../../Tools/Modules/Testing/ValidationFingerprint.psm1) binds Git/source identities; Tools and workflow changes are included. [The impact manifest](../../../Tools/validation-impact.json) gives workflow changes build/tooling obligations and explicit Fresh review. I9 is independently schedulable, not exempt from invalidation or validation.
+- **I18 strengthens a documented policy.** [Current Local Copy behavior](../../FileSystem/FileSystem_FileOperations.md#verification-and-metadata), `CopyFileWithRetainedFinalObject` in [FileSystem.FileOps.cpp](../../../Plugins/FileSystem/FileSystem.FileOps.cpp), and the direct-final fixtures in [Fairstream selftests](../../../RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Fairstream.cpp) attempt preservation and deliberately permit recorded non-EFS losses. They do not show unconditional loss on every Copy. I18 adds stronger typed reporting and sensitive-loss consent; compression/ACL inheritance and ordinary best-effort attributes must remain distinct from ADS/EA data, MOTW, and EFS protection. Its defaults remain proposed product changes until implementation and authoritative updates land.
+- **Debug Full does not replace either Release evidence program.** `CheckFolderViewPerfBudgets` in [ViewCommands](../../../RedSalamander/SelfTest/Commands/Commands.SelfTest.ViewCommands.cpp) can pass without a budget path or matching hard entries unless budgets are required. The cited Full did not request them. I2's ordinary waiver consolidates duplicate Full/perf gates; any substitute still needs explicit scope and evidence. I15 separately requires newly generated Product/candidate samples with distinct identities/receipts and matching controls under [Terminal VT admission](../../Testing/Testing_PerformanceValidation.md#terminal-vt-upgrade-admission). Recheck current output ownership before building; the review did not verify a live Release blocker.
+- **Tailwind needs reconciliation, not a blanket dismissal or an old open-row count.** `AccessibilityProvider::GetPatternProvider` accepts visible-or-selected grid rows, while `get_IsSelected` and `get_SelectionContainer` still use visible-only qualification in [DxUi.Accessibility.cpp](../../../Common/DxUi/DxUi.Accessibility.cpp). TW-15's wrong-pane call is absent from the reviewed Plugins deferred handler in [Preferences.Dialog.cpp](../../../RedSalamander/Preferences.Dialog.cpp). TW-11 retains supporting hover-state code but has no fresh runtime reproduction from this review. Assign confirmed remaining repairs without resuming retired batons.
+- **H3's credential note is neither proved disclosure nor URL-user-info-only.** [Curl configuration handling](../../../Plugins/FileSystemCurl/FileSystemCurl.Shared.cpp) still accepts legacy `defaultPassword` and `sshKeyPassphrase`, then strips both from returned configuration. Normal host persistence consumes the sanitized return. Keep legacy-load/save and documentation reconciliation bounded; do not claim a live secret was found or a complete migration was proved.
+- **Structural validation is not semantic freshness or complete qualification.** H3 retains human interaction, unavailable provider environments, bounded-batches/IMAP and Curl fixture-bound residuals. I3 needs outcome-level mapping. I5 retains obsolete sandbox instructions; execution follows the current [performance contract](../../Testing/Testing_PerformanceValidation.md), using owned `X:\RedSalamander.Perf` roots. I6's inventory and D1's owner/terminal descriptions need refresh. A clean spec inventory does not resolve these discrepancies or replace observed behavior.
 
-| Rank | File | Why this rank | Next action / routing |
-|------|------|---------------|-----------------------|
-| I2 | `Operation_FileOperations_FaultInjectionRatchet_2026-07-05.md` | Enables RED-able coverage for bridge and cloud data-safety gaps; useful before several FileOps fixes. | **FIR-1 / FG-A1**: destination-side bridge `GetSize` fault injection through the bridge IO decorator. |
-| I3 | `Operation_Floodgate_CloudParityPerfProofFollowups_2026-06-18.md` | Cloud parity/perf proof queue; overlaps the coverage seam needed by FIR. | **FG-A1**: destination-side `GetSize` fault-injection hook. Coordinate with I2 so only one seam is built. |
-| I5 | `Operation_RosettaLantern_RedConfigureSatelliteLocalizationReview_2026-07-17.md` | Unique owner for F4-LOC-01; resource plumbing is complete, but ordinary RedConfigure UI text remains English in Czech, Japanese, and Slovak satellites. | Refresh the exact source-identical inventory and neutral-token allowlist, then obtain target-language translation/review before claiming completion. |
-| I6 | `Operation_PerfMeasurementContract_2026-07-06.md` | Raises the quality bar for every perf-sensitive plan; not a runtime bug, but it prevents weak closeouts. | **Task 1**: install the Perf Measurement Record template in authoritative specs and add representative records. |
-| I7 | `UI_FileOperationsPopupUxRefinementPlan_2026-07-07.md` | User-requested progress-popup clarity work; A-tier, queued-task Start now, footer bulk pause/resume, B4 completed grouping, and both review-remediation passes are implemented, but workflow/accessibility polish keeps the plan in WIP. | Continue remaining backlog: B1 reorder, B4 completed-group animation, B5 keyboard/UIA, C5 Keep Both engine support, C7 shared DxUi graph closeout. |
-| I8 | `Operation_Astrolabe_TestContractArchitectureMigration_2026-07-17.md` | Independently owns reviewed source-contract dispositions, behavioral companions, residual suite splitting, and optional selftest compilation boundaries; not a release blocker. | Replace the regex-shape heuristic with one explicit reviewed disposition per live source-contract case before deleting or splitting anything. |
-| I8A | `../../../plans/012-format-autocommit-race.md` | Separate P3 CI workflow owner retained from the historical root-plan set; Observatory Track 1 explicitly did not absorb it. | Add fork/event, stale-head, and concurrency guards, then verify the workflow on GitHub before closing the legacy plan. |
-| I9 | `FileSystem_CrossFsBridgeImplementationAndPerformanceRedesign_2026-07-07.md` | Design-level performance rethink for the cross-FS bridge; valuable after the immediate Causeway fixes. | Use as a dedicated design/perf slice; start with R-1 depth-N pump only with perf evidence. |
-| I10 | `Win32_Inventory.md` | Narrow RAII/lifetime/DPI audit with bounded fixes. | **CHK-1**: replace `DestroyWindow(_hWnd.get())` on `wil::unique_hwnd` owners with reset/transfer-safe close. |
-| I11 | `Operation_Tailwind_FolderViewWarpDrivePreMergeReviewRemediation_2026-06-30.md` | Residual branch self-review ledger; many items are done or routed, so it is not the best primary queue. | Reconcile freshness first; execute only remaining non-routed items after WarpDrive/DxUi owners confirm no overlap. |
-| I12 | `Core_HResultStatusFormattingCleanup_2026-06-19.md` | Low-risk cleanup and localization consistency, but low urgency. | **WI-1**: inline `FormatHResult` and `FormatStatusText`; coordinate with hot FolderView files. |
-| HOLD-I13 | `Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md` | Active/coordination-sensitive closeout plan. | Do not pick unless the WarpDrive owner hands it off. |
-| HOLD-I14 | `FolderView_WarpDrive_ContinuationBaton_2026-06-29.md` | Resume state for WarpDrive closeout and suite proof. | Do not pick unless the WarpDrive owner hands it off. |
-| HOLD-I15 | `DxUi_Uia_ContinuationBaton_2026-06-29.md` | Active/coordination-sensitive UIA snapshot and commit-split baton. | Coordinate before touching DxUi/UIA snapshot coalescing or related routed Tailwind/Granite items. |
-| HOLD-I16 | `Notes_Scratch.md` | Human-managed scratch file, not an executable agent queue. | Keep out; owner can delete or reconcile manually. |
+Initial priority-review scope: all indexed plans, targeted implementation paths and archived results; that review did not mutate application source or run a new Full. The subsequent owner-authorized I12 continuation repaired terminal entry points, reused the native test warning, qualified the changes, and moved I12 to Done. HOLD/DECISION rows and I18 remain unimplemented by this continuation.
 
-## Deferred Decision Review Queue
+## Dependency and conflict rules
 
-These operations preserve previously rejected or policy-sensitive scenarios for an explicit maintainer decision.
-They are not implementation queues; approved work must be routed to a separate executable WIP owner.
+- `I2` owns FolderView WarpDrive remaining closeout (Task 10 Step 4 + Task 11). `H0` is evidence/routing only. Thumbnail enrichment remains the distinct `I1` feature owner. The 2026-06-28 WarpDrive master and both continuation batons are frozen in `../Done/`; do not resume them.
+- `I4` owns the test-contract migration; other plans may add tests but must not create a second repository-wide replacement queue.
+- `D0`, `D1`, `H1`, and `H3` cannot change production behavior until promoted into a named active owner. The retired I14 core plan and its H2 execution record are frozen in `../Done/`; current product behavior still changes only with implementation, tests, and authoritative-spec updates.
+- The completed File Operations product/architecture program is frozen in `../Done/Operation_FileOperations_GlobalBehaviorDecisionReview_2026-08-16.md`; durable behavior is owned by the normative domain specs. New work must use an existing bounded owner or receive a new active plan rather than reopening that archive.
+- `I9` is the only live owner for the CI format autocommit work. The 2026-08-04 write-up is `Specs/Plans/Done/CI_FormatAutocommitRace_2026-08-04.md`. Historical root `plans/012-format-autocommit-race.md` is `Specs/Plans/Done/AdvisorPlan_012-format-autocommit-race_2026-06-11.md`. Root `plans/` was deleted in that archive; do not recreate `plans/` as a work queue.
+- Completed I12 records the bounded Terminal/FileOps follow-up in `../Done/Operation_ReviewFollowup_FOTerminalFocus_2026-08-19.md`; new lifecycle work follows its authoritative domain contracts and requires a current active owner.
+- The retired I14 core plan is `../Done/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md`, moved on 2026-09-07 by product-owner decision together with its execution record `../Done/Operation_FileOperations_ReliabilityFirst_ExecutionRecord_2026-09-05.md`. Its delivered reliable-core behavior (responsive Preparing/shutdown, proof-gated Retry, literal Preserve, one hosted popup, identity-pinned Permanent Delete) is owned by the authoritative File Operations and provider specs. Its outstanding owner items (the human observation pass, the C0 environment items, the bounded-batches product question, the C11 Curl fixture bound) need a new active owner before any resumption; do not edit the frozen records. Work touching completion, reaper, shutdown, command quiet point, or removal-focus preserves the normative contracts qualified by completed I12 and uses a current active owner; `I3` retains its five stress-evidence rows. H3's six deferred features remain separate; its audit routing table retains these outstanding owner items without reopening frozen plans.
+- `I15` owns the accepted post-admission Ghostty VT remediation only. It must coordinate active tooling changes with I10, reuse I5 performance infrastructure, and must not delete the retained generic TerminalEngine compatibility/history surface or change the admitted runtime pin.
+- I16 closed on 2026-09-08 after Fresh Full passed all 35 entries; its record is `../Done/FileOperations_BeelineResidualsAndProviderRoutes_2026-09-08.md`. BR-1/BR-2 descriptions, BR-3 through BR-8 repairs/qualification, and authoritative-spec updates are complete. H3 retains the six deferred features and separately routed audit work; I3 keeps its existing stress-evidence boundary; I12 is completed.
+- `I18` owns the proposed Confirmation settings and Copy/Move metadata-outcome changes. It changes the routine start-confirmation policy only with implementation, tests, and authoritative-spec updates; current safety and identity contracts remain in force meanwhile. Archive write-back/update, NTFS compression/encryption commands, and other unsupported example rows are deferred within I18, not implicit provider-feature work. Preserve the lifecycle contracts qualified by completed I12 and I16's Keyboard/placeholder/popup regression guards.
+- The retired I17 implementation record is `../Done/UI_FileOperationsPopupParallelProgressPendingPrompt_2026-08-28.md`. Its delivered mutation-truth, interlock, popup-progress, and human-decision-card behavior remains owned by authoritative File Operations/UI specs. The retired I14 plan's C6 recorded that merged gate (Fresh Full gate #21 on `03d851fa`, 2026-09-07) qualifying both scopes; nothing resumes the archive.
+- The retired I14 plan's C0 mapped the original FOS-01–FOS-12 corrections to current code and adversarial evidence, and C1–C5 delivered the named core gaps. Accepted implementation must retain the existing authority, publication, source-retention, and provider containment guarantees. A product decision is needed for a changed guarantee or new feature, not repeated activation paperwork.
 
-| Rank | File | Why it is retained | Next action / routing |
-| --- | --- | --- | --- |
-| D1 | `Operation_Parallax_DeferredArchitectureSecurityAndSimplificationDecisionReview_2026-07-14.md` | Preserves twelve Lighthouse rejection/policy scenarios with explanations, evidence requirements, reopen triggers, and decision options. | Review PAR-1 through PAR-12 when the relevant security, product, or architecture policy is ready for decision. Record one outcome per scenario and route approved implementation separately. |
+## Lifecycle rules
 
-## New Feature Queue
+Every active plan must name priority/status, planned-at commit and drift command, ownership boundary, remaining outcomes, authoritative specs, implementation/tests, verification, done criteria, and STOP conditions. Completed work moves to `../Done/` only after durable behavior is merged into current specs. Retired plans also move to `../Done/` as frozen history; do not keep RETIRED tombstones in this directory. Obsolete unreferenced scratch content may be removed after its unique items are explicitly routed or rejected.
 
-Ranked by concrete implementation readiness and product value. These are user-visible additions or
-feature-roadmap plans, not primarily bug-fix/remediation queues.
+Validate exact index coverage with:
 
-| Rank | File | Why this rank | Next action / routing |
-| --- | --- | --- | --- |
-| N1 | `FileSystem_GoogleDrivePluginPlan.md` | Concrete new filesystem plugin; enumeration landed, but no in-product first sign-in or file reads yet. | **Phase 2**: interactive OAuth PKCE sign-in plus read-stream/download support, using Microsoft Drive as the local model where applicable. |
-| N2 | `FolderView_ThumbnailBackgroundEnrichmentFollowup_2026-07-04.md` | User-visible completion of the cached-only thumbnail decision; restores richer cold-cache thumbnails without blocking first paint. | Implement bounded background enrichment for local-shell-backed files with generation checks, metrics, and perf evidence. |
-| N3 | `Terminal_EmbeddedConPtyLibGhosttyVt_IntegrationPlan_2026-07-13.md` | Implementation-ready embedded terminal architecture with explicit ConPTY, VT, lifecycle, security, accessibility, and perf gates. Large scope makes it less suitable than N1/N2 for the immediate next slice. | Start only as a dedicated branch from its Phase 0 capability ledger and dependency/license gates; do not mix it with FolderView or DxUi hold work. |
-| N4 | `Product_WhimFilesGapAnalysisAndImprovementPlan_2026-07-08.md` | Product roadmap/gap analysis, not an implementation-ready slice. | Convert the highest-value gaps into separate executable plans before coding. Start with G1 live multi-dimensional filtering or G2 undo if product direction is approved. |
-
-## Archived Reference Ledgers
-
-These were consolidated or completed and should stay in `Specs/Plans/Done/` unless fresh evidence
-reopens a specific item:
-
-- `Operation_Observatory_WholeRepositoryCodeAuditAndRemediationPlan_2026-07-15.md`
-- `CodeReview_Last4Days_IndependentFindingsAndRemediation_2026-07-16.md`
-- `Operation_Crosscut_CompareDirectoriesRemediation_Handoff_2026-06-22.md`
-- `UI_BatchRenameWindowPlan_2026-06-10.md`
-- `Operation_Granite_FiveDayMasterBranchAndWorktreeReviewRemediation_2026-07-02.md`
-- `Operation_Granite_ContinuationBaton_2026-07-05.md`
-- `Operation_Bedrock_ThreeDayDiffReviewRemediation_2026-07-06.md`
-- `Operation_Evergreen_ThreeDayDiffReviewRemediation_2026-07-05.md`
-- `Operation_Clearwater_TwoDayMasterReviewRemediation_2026-06-28.md`
-- `Operation_Causeway_CrossFsBridgeSecurityAndPerformanceRemediation_2026-07-07.md`
-- `CodeReview_Last3Days_IndependentFindings_2026-07-11.md`
-- `CodeReview_Last3Days_Remediation_2026-07-11.md`
-- `UI_FileOperationsPopupCodeReviewRemediation_2026-07-10.md`
-- `UI_FileOperationsPopupReviewFindings_2026-07-09.md`
-- `Operation_Keystone_ThreeDayReviewRemediation_2026-06-20.md`
-- `Operation_Farsight_ViewerPluginsRemediation_ExportSafetyDecodeReliabilityWebSecurityAndTextGeometry_2026-06-16.md`
-- `Operation_ThreeDayReview_FolderView_CONTINUATION_2026-07-11.md`
-- `Operation_TestSuiteStabilization_FlakeConvergence_2026-07-04.md`
-- `Operation_Firebreak_ConsolidatedReviewRemediation_2026-07-06.md`
-- `Theme_ExpressivePaletteAndReferencesPlan_2026-07-13.md`
-- `RedConfigure_LocalizationThemeManagerPlan.md`
-- `Operation_CommandsSelfTestInputIsolation_2026-06-24.md`
+```powershell
+.\Tools\Get-SpecInventory.ps1 -FailOnFindings
+```

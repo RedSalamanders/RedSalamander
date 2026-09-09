@@ -1,0 +1,247 @@
+{
+  "formatId": "red-salamander-terminal-engine-evidence",
+  "schemaVersion": 1,
+  "recordKind": "finalization",
+  "runId": "2026-07-30_130000",
+  "createdUtc": "2026-07-30T13:00:00Z",
+  "repositoryCommit": "1111111111111111111111111111111111111111",
+  "repositoryClean": true,
+  "machineHash": "0123456789ab",
+  "schemaSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "harness": {
+    "version": "1.0.0",
+    "sourceSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "frozen": {
+    "requirementsSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "scoreAnchorsSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "fixtureCorpusSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "measurementProtocolSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "candidateUniverseSha256": "abababababababababababababababababababababababababababababababab",
+    "candidateSetSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "candidateReviewSha256": "1010101010101010101010101010101010101010101010101010101010101010",
+    "candidateAssessmentSha256": "1212121212121212121212121212121212121212121212121212121212121212"
+  },
+  "inputManifests": [
+    {
+      "platform": "ARM64",
+      "configuration": "Release",
+      "manifestSha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "platform": "x64",
+      "configuration": "ASan Debug",
+      "manifestSha256": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "platform": "x64",
+      "configuration": "Release",
+      "manifestSha256": "3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  ],
+  "candidateResults": [
+    {
+      "candidateId": "ghostty-rs",
+      "outcome": "scored-complete",
+      "eligibility": "eligible",
+      "criteria": [
+        {
+          "criterionId": "C1",
+          "weight": 18,
+          "rating": 5,
+          "matchedAnchorId": "c1.rating5",
+          "contribution": "18.00",
+          "evidenceRefs": [
+            {
+              "inputManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+              "evidenceKind": "gate",
+              "evidenceId": "g1"
+            }
+          ]
+        },
+        {
+          "criterionId": "C2",
+          "weight": 14,
+          "rating": 5,
+          "matchedAnchorId": "c2.rating5",
+          "contribution": "14.00",
+          "evidenceRefs": [
+            {
+              "inputManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+              "evidenceKind": "gate",
+              "evidenceId": "g2"
+            }
+          ]
+        },
+        {
+          "criterionId": "C3",
+          "weight": 12,
+          "rating": 5,
+          "matchedAnchorId": "c3.rating5",
+          "contribution": "12.00",
+          "evidenceRefs": [
+            {
+              "inputManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+              "evidenceKind": "gate",
+              "evidenceId": "g3"
+            }
+          ]
+        },
+        {
+          "criterionId": "C4",
+          "weight": 10,
+          "rating": 5,
+          "matchedAnchorId": "c4.rating5",
+          "contribution": "10.00",
+          "evidenceRefs": [
+            {
+              "inputManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+              "evidenceKind": "gate",
+              "evidenceId": "g4"
+            }
+          ]
+        },
+        {
+          "criterionId": "C5",
+          "weight": 10,
+          "rating": 5,
+          "matchedAnchorId": "c5.rating5",
+          "contribution": "10.00",
+          "evidenceRefs": [
+            {
+              "inputManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+              "evidenceKind": "gate",
+              "evidenceId": "g5"
+            }
+          ]
+        },
+        {
+          "criterionId": "C6",
+          "weight": 8,
+          "rating": 5,
+          "matchedAnchorId": "c6.rating5",
+          "contribution": "8.00",
+          "evidenceRefs": [
+            {
+              "inputManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+              "evidenceKind": "gate",
+              "evidenceId": "g6"
+            }
+          ]
+        },
+        {
+          "criterionId": "C7",
+          "weight": 8,
+          "rating": 5,
+          "matchedAnchorId": "c7.rating5",
+          "contribution": "8.00",
+          "evidenceRefs": [
+            {
+              "inputManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+              "evidenceKind": "gate",
+              "evidenceId": "g7"
+            }
+          ]
+        },
+        {
+          "criterionId": "C8",
+          "weight": 7,
+          "rating": 5,
+          "matchedAnchorId": "c8.rating5",
+          "contribution": "7.00",
+          "evidenceRefs": [
+            {
+              "inputManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+              "evidenceKind": "gate",
+              "evidenceId": "g8"
+            }
+          ]
+        },
+        {
+          "criterionId": "C9",
+          "weight": 6,
+          "rating": 5,
+          "matchedAnchorId": "c9.rating5",
+          "contribution": "6.00",
+          "evidenceRefs": [
+            {
+              "inputManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+              "evidenceKind": "gate",
+              "evidenceId": "g9"
+            }
+          ]
+        },
+        {
+          "criterionId": "C10",
+          "weight": 4,
+          "rating": 5,
+          "matchedAnchorId": "c10.rating5",
+          "contribution": "4.00",
+          "evidenceRefs": [
+            {
+              "inputManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+              "evidenceKind": "gate",
+              "evidenceId": "g10"
+            }
+          ]
+        },
+        {
+          "criterionId": "C11",
+          "weight": 3,
+          "rating": 5,
+          "matchedAnchorId": "c11.rating5",
+          "contribution": "3.00",
+          "evidenceRefs": [
+            {
+              "inputManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+              "evidenceKind": "gate",
+              "evidenceId": "g11"
+            }
+          ]
+        }
+      ],
+      "total": "100.00",
+      "tieTuple": {
+        "ownerDays": "365",
+        "crossedAbiElements": "12",
+        "nonSystemRuntimeDependencies": "2",
+        "addedReleasePackageBytes": "1727488"
+      }
+    }
+  ],
+  "controlResults": [
+    {
+      "candidateId": "web-runtime-control",
+      "outcome": "constraint-control",
+      "constraintId": "web-runtime-second-stack",
+      "failureReferences": [
+        {
+          "platform": "ARM64",
+          "configuration": "Release",
+          "inputManifestSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "evidenceSha256": "4444444444444444444444444444444444444444444444444444444444444444"
+        },
+        {
+          "platform": "x64",
+          "configuration": "ASan Debug",
+          "inputManifestSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+          "evidenceSha256": "5555555555555555555555555555555555555555555555555555555555555555"
+        },
+        {
+          "platform": "x64",
+          "configuration": "Release",
+          "inputManifestSha256": "3333333333333333333333333333333333333333333333333333333333333333",
+          "evidenceSha256": "6666666666666666666666666666666666666666666666666666666666666666"
+        }
+      ]
+    }
+  ],
+  "selection": {
+    "status": "winner",
+    "rawLeaderScore": "100.00",
+    "cohort": [
+      "ghostty-rs"
+    ],
+    "winnerCandidateId": "ghostty-rs"
+  }
+}

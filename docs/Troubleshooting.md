@@ -59,6 +59,25 @@ RedSalamander writes no log files; diagnostics are emitted as ETW (Event Tracing
 
 In Release builds only **Error** and **Warning** events are emitted by default; Info/Perf/Debug events require launching with `--etw` (see the switch table above). If the Monitor cannot start a session (`ERROR_ACCESS_DENIED`), run `.\\init-etw-trace.ps1` once and sign out/in. See [Monitor](Monitor.md) for the full walkthrough and [Diagnostics: ETW, Debug Logging & Perf](dev/Diagnostics.md) for details.
 
+### Capturing a dump from a hung process
+
+When RedSalamander is still running but unresponsive, capture a full dump from a
+PowerShell window running as the same user (or elevated if process access is denied):
+
+```powershell
+$targetProcess = Get-Process RedSalamander -ErrorAction Stop | Select-Object -First 1
+$targetPid = $targetProcess.Id
+$dumpDirectory = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'RedSalamander\Crashes'
+New-Item -ItemType Directory -Path $dumpDirectory -Force | Out-Null
+$dumpPath = Join-Path $dumpDirectory "manual-hang-$targetPid.dmp"
+& "$env:SystemRoot\System32\rundll32.exe" "$env:SystemRoot\System32\comsvcs.dll,MiniDump" $targetPid $dumpPath full
+Write-Output $dumpPath
+```
+
+There must be no whitespace between `comsvcs.dll,` and `MiniDump`. PowerShell's
+automatic `$PID` variable is read-only, so use a distinct name such as `$targetPid`.
+The command returns after writing the dump to the printed `$dumpPath` location.
+
 ## ViewerWeb (HTML/PDF/Markdown/JSON) does not open
 
 - Ensure **WebView2 Runtime** is installed.
@@ -96,9 +115,13 @@ What to do:
 
 ## Comparing file-operations self-test runs
 
-Selftests write their raw artifacts under `%LOCALAPPDATA%\\RedSalamander\\SelfTest\\last_run\\`.
+Selftests write raw artifacts only under
+`X:\RedSalamander.Perf\runs\<runId>\artifacts\selftest\last_run\`, where `X:` is
+the selected fixed local drive. The canonical runner prints the exact root and run id.
 
-In Debug builds from a repo checkout, the selftest harness automatically archives the meaningful artifacts under `Specs\\TestRuns\\<ComputerHashName>\\...` after each run. If repo auto-detection fails, the trace includes `ArchiveToRepo: repo root not found; skipping.` — re-run from a repo checkout, set `REDSALAMANDER_REPO_ROOT` to the repo root, or manually copy from `%LOCALAPPDATA%\\RedSalamander\\SelfTest\\last_run\\` into `Specs\\TestRuns\\...`.
+The harness does not write into `Specs\TestRuns`. When durable checked-in evidence is
+required, review the completed run and explicitly promote only the meaningful artifacts
+from `X:\RedSalamander.Perf`; ordinary diagnostic runs remain machine-local.
 
 Then use `Tools\CompareTestRuns.ps1` to diff two archived runs and spot regressions:
 

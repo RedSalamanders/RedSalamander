@@ -12,10 +12,13 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cstddef>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <format>
 #include <iostream>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -28,6 +31,7 @@
 #pragma warning(pop)
 
 #include "PluginConfiguration.h"
+#include "PathUtils.h"
 #include "SettingsStore.h"
 #include "SettingsSchemaParser.h"
 #include "TestSupport/ChildProcess.h"
@@ -538,20 +542,95 @@ void TestPluginConfigurationModelAndCodec(bool& success)
 [[nodiscard]] bool WriteTestBytes(const std::filesystem::path& path, std::string_view bytes) noexcept
 {
     std::error_code ec;
-    std::filesystem::create_directories(path.parent_path(), ec);
+    std::filesystem::create_directories(
+        std::filesystem::path(Common::Paths::ToExtendedWin32Path(path.parent_path().native())), ec);
     if (ec)
     {
         return false;
     }
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
-    output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
-    return output.good();
+    if (bytes.size() > static_cast<size_t>((std::numeric_limits<DWORD>::max)()))
+    {
+        return false;
+    }
+
+    const std::wstring extendedPath = Common::Paths::ToExtendedWin32Path(path.native());
+    wil::unique_hfile output(CreateFileW(extendedPath.c_str(),
+                                        GENERIC_WRITE,
+                                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                        nullptr,
+                                        CREATE_ALWAYS,
+                                        FILE_ATTRIBUTE_NORMAL,
+                                        nullptr));
+    if (! output)
+    {
+        return false;
+    }
+    DWORD written = 0u;
+    return bytes.empty() ||
+           (WriteFile(output.get(), bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) != FALSE &&
+            written == static_cast<DWORD>(bytes.size()));
+}
+
+[[maybe_unused]] [[nodiscard]] bool ReplacePathWithPosixRename(const std::filesystem::path& source, const std::filesystem::path& target) noexcept
+{
+    const std::wstring extendedSource = Common::Paths::ToExtendedWin32Path(source.native());
+    wil::unique_hfile sourceFile(CreateFileW(extendedSource.c_str(),
+                                            DELETE,
+                                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                            nullptr,
+                                            OPEN_EXISTING,
+                                            FILE_ATTRIBUTE_NORMAL,
+                                            nullptr));
+    if (! sourceFile)
+    {
+        return false;
+    }
+
+    const std::wstring targetNative = Common::Paths::ToExtendedWin32Path(target.native());
+    const size_t targetBytes = targetNative.size() * sizeof(wchar_t);
+    if (targetBytes > (std::numeric_limits<DWORD>::max)())
+    {
+        return false;
+    }
+
+    std::vector<std::byte> storage(offsetof(FILE_RENAME_INFO, FileName) + targetBytes + sizeof(wchar_t));
+    auto* rename = reinterpret_cast<FILE_RENAME_INFO*>(storage.data());
+    rename->Flags = FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
+    rename->RootDirectory = nullptr;
+    rename->FileNameLength = static_cast<DWORD>(targetBytes);
+    std::memcpy(rename->FileName, targetNative.data(), targetBytes);
+    return SetFileInformationByHandle(sourceFile.get(), FileRenameInfoEx, rename, static_cast<DWORD>(storage.size())) != FALSE;
 }
 
 [[nodiscard]] std::string ReadTestBytes(const std::filesystem::path& path)
 {
-    std::ifstream input(path, std::ios::binary);
-    return std::string((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    const std::wstring extendedPath = Common::Paths::ToExtendedWin32Path(path.native());
+    wil::unique_hfile input(CreateFileW(extendedPath.c_str(),
+                                       GENERIC_READ,
+                                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                       nullptr,
+                                       OPEN_EXISTING,
+                                       FILE_ATTRIBUTE_NORMAL,
+                                       nullptr));
+    if (! input)
+    {
+        return {};
+    }
+
+    LARGE_INTEGER size{};
+    if (! GetFileSizeEx(input.get(), &size) || size.QuadPart < 0 || static_cast<uint64_t>(size.QuadPart) > (std::numeric_limits<DWORD>::max)())
+    {
+        return {};
+    }
+
+    std::string bytes(static_cast<size_t>(size.QuadPart), '\0');
+    DWORD read = 0u;
+    if (! bytes.empty() &&
+        (! ReadFile(input.get(), bytes.data(), static_cast<DWORD>(bytes.size()), &read, nullptr) || static_cast<size_t>(read) != bytes.size()))
+    {
+        return {};
+    }
+    return bytes;
 }
 
 void CleanupSettingsTestArtifacts(std::wstring_view appId) noexcept
@@ -563,17 +642,23 @@ void CleanupSettingsTestArtifacts(std::wstring_view appId) noexcept
     }
 
     std::error_code ec;
-    static_cast<void>(std::filesystem::remove(settingsPath, ec));
+    static_cast<void>(std::filesystem::remove(
+        std::filesystem::path(Common::Paths::ToExtendedWin32Path(settingsPath.native())), ec));
     ec.clear();
-    static_cast<void>(std::filesystem::remove(Common::Settings::GetSettingsSchemaPath(appId), ec));
+    const std::filesystem::path schemaPath = Common::Settings::GetSettingsSchemaPath(appId);
+    static_cast<void>(std::filesystem::remove(
+        std::filesystem::path(Common::Paths::ToExtendedWin32Path(schemaPath.native())), ec));
     std::filesystem::path lockPath = settingsPath;
     lockPath += L".lock";
     ec.clear();
-    static_cast<void>(std::filesystem::remove(lockPath, ec));
+    static_cast<void>(std::filesystem::remove(
+        std::filesystem::path(Common::Paths::ToExtendedWin32Path(lockPath.native())), ec));
 
     const std::wstring backupPrefix = settingsPath.filename().wstring() + L".bad.";
     ec.clear();
-    for (std::filesystem::directory_iterator it(settingsPath.parent_path(), ec), end; ! ec && it != end; it.increment(ec))
+    const std::filesystem::path extendedParent(
+        Common::Paths::ToExtendedWin32Path(settingsPath.parent_path().native()));
+    for (std::filesystem::directory_iterator it(extendedParent, ec), end; ! ec && it != end; it.increment(ec))
     {
         const std::wstring fileName = it->path().filename().wstring();
         if (fileName.starts_with(backupPrefix))
@@ -584,18 +669,36 @@ void CleanupSettingsTestArtifacts(std::wstring_view appId) noexcept
     }
 }
 
+[[nodiscard]] bool HasSettingsBackupArtifact(std::wstring_view appId) noexcept
+{
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
+    const std::wstring backupPrefix          = settingsPath.filename().wstring() + L".bad.";
+    std::error_code ec;
+    const std::filesystem::path extendedParent(
+        Common::Paths::ToExtendedWin32Path(settingsPath.parent_path().native()));
+    for (std::filesystem::directory_iterator it(extendedParent, ec), end; ! ec && it != end; it.increment(ec))
+    {
+        if (it->path().filename().wstring().starts_with(backupPrefix))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 [[nodiscard]] bool WaitForTestPath(const std::filesystem::path& path, std::chrono::milliseconds timeout) noexcept
 {
+    const std::wstring extendedPath = Common::Paths::ToExtendedWin32Path(path.native());
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline)
     {
-        if (GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES)
+        if (GetFileAttributesW(extendedPath.c_str()) != INVALID_FILE_ATTRIBUTES)
         {
             return true;
         }
         Sleep(10u);
     }
-    return GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
+    return GetFileAttributesW(extendedPath.c_str()) != INVALID_FILE_ATTRIBUTES;
 }
 
 [[nodiscard]] int RunSettingsStoreCasChild(int argc, wchar_t** argv) noexcept
@@ -623,6 +726,32 @@ void CleanupSettingsTestArtifacts(std::wstring_view appId) noexcept
     return Common::Settings::SaveSettings(argv[2], staleWriter) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) ? 0 : 6;
 }
 
+[[nodiscard]] int RunSettingsStoreBackupCasChild(int argc, wchar_t** argv) noexcept
+{
+    if (argc != 5 || ! argv[2] || ! argv[3] || ! argv[4])
+    {
+        return 2;
+    }
+
+    Common::Settings::SettingsFileStamp diagnosedStamp{};
+    if (Common::Settings::TryGetSettingsFileStamp(argv[2], diagnosedStamp) != S_OK)
+    {
+        return 3;
+    }
+    if (! WriteTestBytes(argv[3], "ready"))
+    {
+        return 4;
+    }
+    if (! WaitForTestPath(argv[4], std::chrono::seconds(10)))
+    {
+        return 5;
+    }
+
+    std::filesystem::path backupPath;
+    const HRESULT backupHr = Common::Settings::BackupSettingsForExplicitReplacement(argv[2], diagnosedStamp, backupPath);
+    return backupHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && backupPath.empty() ? 0 : 6;
+}
+
 void TestSettingsStoreConflictAndPrimitiveGuards(bool& success)
 {
     const std::wstring appId = std::format(L"RedSalamanderSettingsStoreGuards-{}-{}", GetCurrentProcessId(), GetTickCount64());
@@ -633,6 +762,21 @@ void TestSettingsStoreConflictAndPrimitiveGuards(bool& success)
     Common::Settings::Settings seed{};
     seed.theme.currentThemeId = L"builtin/light";
     Check(Common::Settings::SaveSettings(appId, seed) == S_OK, L"settings CAS: baseline save succeeds", success);
+
+    const std::wstring extendedSettingsPath = Common::Paths::ToExtendedWin32Path(settingsPath.native());
+    wil::unique_hfile compatibleReader(CreateFileW(extendedSettingsPath.c_str(),
+                                                   GENERIC_READ,
+                                                   FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                                   nullptr,
+                                                   OPEN_EXISTING,
+                                                   FILE_ATTRIBUTE_NORMAL,
+                                                   nullptr));
+    Common::Settings::Settings sharedLoad{};
+    Check(compatibleReader && Common::Settings::TryLoadSettingsNoRecovery(appId, sharedLoad) == S_OK &&
+              sharedLoad.theme.currentThemeId == L"builtin/light",
+          L"settings read sharing: an ordinary reader without FILE_SHARE_DELETE does not block a valid load",
+          success);
+    compatibleReader.reset();
 
     Common::Settings::Settings firstWriter{};
     Common::Settings::Settings staleWriter{};
@@ -658,7 +802,7 @@ void TestSettingsStoreConflictAndPrimitiveGuards(bool& success)
     Common::Settings::Settings invalidUnicode{};
     invalidUnicode.theme.currentThemeId.assign(1u, static_cast<wchar_t>(0xD800u));
     Check(Common::Settings::SaveSettings(appId, invalidUnicode) == HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION) &&
-              GetFileAttributesW(settingsPath.c_str()) == INVALID_FILE_ATTRIBUTES,
+              GetFileAttributesW(Common::Paths::ToExtendedWin32Path(settingsPath.native()).c_str()) == INVALID_FILE_ATTRIBUTES,
           L"settings serialization: malformed UTF-16 aborts without publishing an empty substitute",
           success);
 
@@ -680,9 +824,34 @@ void TestSettingsStoreConflictAndPrimitiveGuards(bool& success)
           L"settings uint32: values above UINT32_MAX are rejected instead of truncated",
           success);
 
+    wil::unique_hfile oversized(CreateFileW(extendedSettingsPath.c_str(),
+                                            GENERIC_WRITE,
+                                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                            nullptr,
+                                            CREATE_ALWAYS,
+                                            FILE_ATTRIBUTE_NORMAL,
+                                            nullptr));
+    LARGE_INTEGER oversizedLength{};
+    oversizedLength.QuadPart = (16ll * 1024ll * 1024ll) + 1ll;
+    Check(oversized && SetFilePointerEx(oversized.get(), oversizedLength, nullptr, FILE_BEGIN) != FALSE &&
+              SetEndOfFile(oversized.get()) != FALSE,
+          L"settings recovery tri-state: oversized existing source is created without allocating payload memory",
+          success);
+    oversized.reset();
+    Common::Settings::Settings oversizedRecovered{};
+    Common::Settings::SettingsLoadRecoveryInfo oversizedRecovery{};
+    const HRESULT oversizedRecoveryHr = Common::Settings::LoadSettingsWithRecoveryInfo(appId, oversizedRecovered, &oversizedRecovery);
+    Check(oversizedRecoveryHr == S_FALSE && oversizedRecovery.reason == Common::Settings::SettingsLoadRecoveryReason::ReadFailed &&
+              oversizedRecovered.persistence.savePermission == Common::Settings::SettingsSavePermission::ExplicitReplacementRequired,
+          L"settings recovery tri-state: present but unstamped read failure stays save-blocked",
+          success);
+    Check(Common::Settings::SaveSettings(appId, oversizedRecovered) == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH),
+          L"settings recovery tri-state: ordinary save cannot overwrite a present unstampable source",
+          success);
+
     constexpr std::string_view kInvalidFixture = "{ invalid json";
     Check(WriteTestBytes(settingsPath, kInvalidFixture), L"settings recovery: invalid fixture is written", success);
-    wil::unique_hfile replacementBlocker(CreateFileW(settingsPath.c_str(),
+    wil::unique_hfile replacementBlocker(CreateFileW(extendedSettingsPath.c_str(),
                                                      GENERIC_READ,
                                                      FILE_SHARE_READ | FILE_SHARE_WRITE,
                                                      nullptr,
@@ -702,6 +871,272 @@ void TestSettingsStoreConflictAndPrimitiveGuards(bool& success)
           L"settings recovery: automatic save cannot destroy the only recovery artifact",
           success);
 }
+
+void TestFloatingTerminalSettingsPersistence(bool& success)
+{
+    constexpr std::wstring_view appId = L"SettingsSchemaTests.FloatingTerminal";
+    CleanupSettingsTestArtifacts(appId);
+    const auto cleanup = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
+
+    Common::Settings::Settings source{};
+    Common::Settings::FloatingTerminalWindowSettings floating{};
+    floating.placement.state = Common::Settings::WindowState::Maximized;
+    floating.placement.bounds = {.x = 120, .y = 80, .width = 1280, .height = 720};
+    floating.placement.dpi = 144u;
+    floating.placement.monitorDeviceName = L"\\\\.\\DISPLAY2";
+    floating.wasOpenAtCleanShutdown = true;
+    floating.activeTabId = L"tab-b";
+    floating.tabs.push_back(Common::Settings::FloatingTerminalTabSettings{
+        .tabId = L"tab-a", .profileId = L"builtin/terminal", .providerId = L"builtin/file-system", .canonicalPath = L"C:\\Work"});
+    floating.tabs.push_back(Common::Settings::FloatingTerminalTabSettings{
+        .tabId = L"tab-b", .profileId = L"builtin/terminal", .providerId = L"builtin/file-system", .canonicalPath = L"C:\\Work"});
+    source.terminal = Common::Settings::TerminalSettings{.floatingWindow = std::move(floating)};
+
+    Check(Common::Settings::SaveSettings(appId, source) == S_OK,
+          L"floating terminal settings: placement and duplicate-path tabs save",
+          success);
+    Common::Settings::Settings loaded{};
+    const HRESULT loadHr = Common::Settings::TryLoadSettingsNoRecovery(appId, loaded);
+    const bool roundTrips = loadHr == S_OK && loaded.terminal.has_value() && loaded.terminal->floatingWindow.has_value() &&
+        loaded.terminal->floatingWindow->placement.state == Common::Settings::WindowState::Maximized &&
+        loaded.terminal->floatingWindow->placement.bounds.width == 1280 &&
+        loaded.terminal->floatingWindow->placement.dpi == 144u &&
+        loaded.terminal->floatingWindow->placement.monitorDeviceName == L"\\\\.\\DISPLAY2" &&
+        loaded.terminal->floatingWindow->wasOpenAtCleanShutdown && loaded.terminal->floatingWindow->activeTabId == L"tab-b" &&
+        loaded.terminal->floatingWindow->tabs.size() == 2u &&
+        loaded.terminal->floatingWindow->tabs[0].tabId == L"tab-a" && loaded.terminal->floatingWindow->tabs[1].tabId == L"tab-b" &&
+        loaded.terminal->floatingWindow->tabs[0].canonicalPath == loaded.terminal->floatingWindow->tabs[1].canonicalPath;
+    Check(roundTrips,
+          L"floating terminal settings: placement, monitor, active tab, order, profile, provider, and duplicate paths round-trip",
+          success);
+
+    if (roundTrips)
+    {
+        loaded.terminal->floatingWindow->tabs.erase(loaded.terminal->floatingWindow->tabs.begin());
+        Check(Common::Settings::SaveSettings(appId, loaded) == S_OK,
+              L"floating terminal settings: removing one tab persists without a closed-session ledger",
+              success);
+        Common::Settings::Settings afterRemoval{};
+        Check(Common::Settings::TryLoadSettingsNoRecovery(appId, afterRemoval) == S_OK && afterRemoval.terminal.has_value() &&
+                  afterRemoval.terminal->floatingWindow.has_value() && afterRemoval.terminal->floatingWindow->tabs.size() == 1u &&
+                  afterRemoval.terminal->floatingWindow->tabs.front().tabId == L"tab-b",
+              L"floating terminal settings: only the ordered live-tab record remains",
+              success);
+    }
+
+    CleanupSettingsTestArtifacts(appId);
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
+    constexpr std::string_view invalidFixture = R"json({
+  "schemaVersion": 16,
+  "terminal": {
+    "floatingWindow": {
+      "placement": { "state": "normal", "bounds": { "x": 1, "y": 2, "width": 800, "height": 600 } },
+      "wasOpenAtCleanShutdown": false,
+      "activeTabId": "duplicate",
+      "tabs": [
+        { "tabId": "duplicate", "profileId": "builtin/terminal", "providerId": "builtin/file-system", "canonicalPath": "C:\\\\One" },
+        { "tabId": "duplicate", "profileId": "builtin/terminal", "providerId": "builtin/file-system", "canonicalPath": "C:\\\\Two" }
+      ]
+    }
+  }
+})json";
+    Check(WriteTestBytes(settingsPath, invalidFixture), L"floating terminal settings: duplicate-ID recovery fixture is written", success);
+    Common::Settings::Settings recovered{};
+    Common::Settings::SettingsLoadRecoveryInfo recovery{};
+    const HRESULT recoveryHr = Common::Settings::LoadSettingsWithRecoveryInfo(appId, recovered, &recovery);
+    const bool terminalPreservedOpaque = std::ranges::any_of(recovered.persistence.opaqueTopLevelMembers, [](const auto& member) noexcept
+    { return member.first == "terminal"; });
+    Check(recoveryHr == S_FALSE && ! recovered.terminal.has_value() && recovery.reason == Common::Settings::SettingsLoadRecoveryReason::TerminalInvalid &&
+              terminalPreservedOpaque,
+          L"floating terminal settings: malformed tab identity recovers the optional section and preserves it opaquely",
+          success);
+}
+
+#ifdef ENABLE_TESTS
+void TestSettingsStoreRecoveryBackupCas(bool& success)
+{
+    const std::wstring appId = std::format(L"RedSalamanderSettingsRecoveryCas-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    CleanupSettingsTestArtifacts(appId);
+    const auto cleanup = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
+
+    constexpr std::string_view kInvalidFixture = "{ invalid json";
+    constexpr std::string_view kNewerValidFixture = R"json({
+  "schemaVersion": 16,
+  "theme": { "currentThemeId": "builtin/dark" }
+})json";
+    Check(WriteTestBytes(settingsPath, kInvalidFixture), L"settings recovery CAS: invalid source fixture is written", success);
+
+    wil::unique_event_nothrow backupEntered;
+    backupEntered.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    wil::unique_event_nothrow releaseBackup;
+    releaseBackup.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    Check(backupEntered && releaseBackup, L"settings recovery CAS: deterministic barrier events are created", success);
+    if (! backupEntered || ! releaseBackup)
+    {
+        return;
+    }
+
+    HRESULT recoveryHr = E_PENDING;
+    Common::Settings::Settings recovered{};
+    Common::Settings::SettingsLoadRecoveryInfo recovery{};
+    std::jthread recoveryThread;
+    const auto releaseAndClearHook = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(SetEvent(releaseBackup.get()));
+        Common::Settings::DebugSetSettingsRecoveryBackupStallForTest(nullptr, nullptr);
+    });
+    Common::Settings::DebugSetSettingsRecoveryBackupStallForTest(backupEntered.get(), releaseBackup.get());
+    recoveryThread = std::jthread([&]() noexcept { recoveryHr = Common::Settings::LoadSettingsWithRecoveryInfo(appId, recovered, &recovery); });
+
+    const DWORD enteredWait = WaitForSingleObject(backupEntered.get(), 10000u);
+    Check(enteredWait == WAIT_OBJECT_0, L"settings recovery CAS: recovery pauses after reading the invalid revision", success);
+    if (enteredWait == WAIT_OBJECT_0)
+    {
+        std::filesystem::path newerPath = settingsPath;
+        newerPath += L".newer";
+        Check(WriteTestBytes(newerPath, kNewerValidFixture) && ReplacePathWithPosixRename(newerPath, settingsPath),
+              L"settings recovery CAS: a newer valid revision is published before backup",
+              success);
+    }
+    static_cast<void>(SetEvent(releaseBackup.get()));
+    recoveryThread.join();
+
+    if (recoveryHr != S_OK || recovered.theme.currentThemeId != L"builtin/dark" || ReadTestBytes(settingsPath) != kNewerValidFixture ||
+        recovery.backedUp || ! recovery.backupPath.empty())
+    {
+        std::wcerr << std::format(L"[  DETAIL  ] replacement recovery hr=0x{:08X}, theme='{}', canonicalBytes={}, backedUp={}, backup='{}'\n",
+                                  static_cast<unsigned long>(recoveryHr),
+                                  recovered.theme.currentThemeId,
+                                  ReadTestBytes(settingsPath).size(),
+                                  recovery.backedUp,
+                                  recovery.backupPath.c_str());
+    }
+    Check(recoveryHr == S_OK && recovered.theme.currentThemeId == L"builtin/dark",
+          L"settings recovery CAS: stale recovery reloads the newer valid revision",
+          success);
+    Check(ReadTestBytes(settingsPath) == kNewerValidFixture,
+          L"settings recovery CAS: the newer valid revision remains canonical",
+          success);
+    Check(! recovery.backedUp && recovery.backupPath.empty(),
+          L"settings recovery CAS: stale recovery does not back up the newer revision",
+          success);
+
+    CleanupSettingsTestArtifacts(appId);
+    Check(WriteTestBytes(settingsPath, kInvalidFixture), L"settings recovery identity: diagnosed source fixture is written", success);
+    static_cast<void>(ResetEvent(backupEntered.get()));
+    static_cast<void>(ResetEvent(releaseBackup.get()));
+    recoveryHr = E_PENDING;
+    recovered  = Common::Settings::Settings{};
+    recovery   = Common::Settings::SettingsLoadRecoveryInfo{};
+    recoveryThread = std::jthread([&]() noexcept { recoveryHr = Common::Settings::LoadSettingsWithRecoveryInfo(appId, recovered, &recovery); });
+
+    const DWORD identityEnteredWait = WaitForSingleObject(backupEntered.get(), 10000u);
+    Check(identityEnteredWait == WAIT_OBJECT_0,
+          L"settings recovery identity: recovery retains the diagnosed handle before quarantine",
+          success);
+    std::filesystem::path replacementPath = settingsPath;
+    replacementPath += L".replacement";
+    if (identityEnteredWait == WAIT_OBJECT_0)
+    {
+        Check(WriteTestBytes(replacementPath, kNewerValidFixture) &&
+                  ReplacePathWithPosixRename(replacementPath, settingsPath),
+              L"settings recovery identity: a different file identity replaces the canonical path",
+              success);
+    }
+    static_cast<void>(SetEvent(releaseBackup.get()));
+    recoveryThread.join();
+
+    if (recoveryHr != S_OK || recovered.theme.currentThemeId != L"builtin/dark" || ReadTestBytes(settingsPath) != kNewerValidFixture)
+    {
+        std::wcerr << std::format(L"[  DETAIL  ] identity recovery hr=0x{:08X}, theme='{}', canonicalBytes={}, backedUp={}, backup='{}'\n",
+                                  static_cast<unsigned long>(recoveryHr),
+                                  recovered.theme.currentThemeId,
+                                  ReadTestBytes(settingsPath).size(),
+                                  recovery.backedUp,
+                                  recovery.backupPath.c_str());
+    }
+    Check(recoveryHr == S_OK && recovered.theme.currentThemeId == L"builtin/dark" &&
+              ReadTestBytes(settingsPath) == kNewerValidFixture,
+          L"settings recovery identity: the replacement remains canonical and is reloaded",
+          success);
+    Check(HasSettingsBackupArtifact(appId),
+          L"settings recovery identity: the exact diagnosed file is preserved as a backup",
+          success);
+
+    CleanupSettingsTestArtifacts(appId);
+    Check(WriteTestBytes(settingsPath, kInvalidFixture), L"settings recovery CAS: deletion fixture is written", success);
+    static_cast<void>(ResetEvent(backupEntered.get()));
+    static_cast<void>(ResetEvent(releaseBackup.get()));
+    recoveryHr = E_PENDING;
+    recovered  = Common::Settings::Settings{};
+    recovery   = Common::Settings::SettingsLoadRecoveryInfo{};
+    recoveryThread = std::jthread([&]() noexcept { recoveryHr = Common::Settings::LoadSettingsWithRecoveryInfo(appId, recovered, &recovery); });
+
+    const DWORD deletionEnteredWait = WaitForSingleObject(backupEntered.get(), 10000u);
+    Check(deletionEnteredWait == WAIT_OBJECT_0, L"settings recovery CAS: deletion recovery pauses after reading the source", success);
+    if (deletionEnteredWait == WAIT_OBJECT_0)
+    {
+        std::error_code deleteError;
+        const bool deleted = std::filesystem::remove(
+            std::filesystem::path(Common::Paths::ToExtendedWin32Path(settingsPath.native())), deleteError);
+        Check(deleted && ! deleteError, L"settings recovery CAS: diagnosed source is deleted before backup", success);
+    }
+    static_cast<void>(SetEvent(releaseBackup.get()));
+    recoveryThread.join();
+
+    Check(recoveryHr == S_FALSE && recovery.reason == Common::Settings::SettingsLoadRecoveryReason::SettingsFileMissing,
+          L"settings recovery CAS: deleted source is re-resolved as missing",
+          success);
+    Check(! recovered.persistence.expectedFileStamp.has_value() &&
+              recovered.persistence.savePermission == Common::Settings::SettingsSavePermission::Automatic,
+          L"settings recovery CAS: defaults after deletion expect a missing canonical target",
+          success);
+    Check(GetFileAttributesW(Common::Paths::ToExtendedWin32Path(settingsPath.native()).c_str()) == INVALID_FILE_ATTRIBUTES &&
+              ! recovery.backedUp && recovery.backupPath.empty(),
+          L"settings recovery CAS: deleted source is not recreated or backed up",
+          success);
+
+    CleanupSettingsTestArtifacts(appId);
+    constexpr std::string_view kCollisionFixture = "{ invalid collision fixture";
+    Check(WriteTestBytes(settingsPath, kCollisionFixture), L"settings recovery CAS: backup-name collision source is written", success);
+    Common::Settings::SettingsFileStamp collisionStamp{};
+    Check(Common::Settings::TryGetSettingsFileStamp(appId, collisionStamp) == S_OK,
+          L"settings recovery CAS: backup-name collision source stamp is captured",
+          success);
+    const std::filesystem::path occupiedBackupPath =
+        settingsPath.parent_path() / std::format(L"{}.bad.20000101T000000Z", settingsPath.filename().wstring());
+    Check(WriteTestBytes(occupiedBackupPath, "occupied"), L"settings recovery CAS: base backup name is occupied", success);
+    Common::Settings::DebugUseFixedSettingsBackupTimestampForTest(true);
+    const auto restoreTimestamp = wil::scope_exit([]() noexcept { Common::Settings::DebugUseFixedSettingsBackupTimestampForTest(false); });
+    std::filesystem::path collisionBackupPath;
+    const HRESULT collisionBackupHr =
+        Common::Settings::BackupSettingsForExplicitReplacement(appId, collisionStamp, collisionBackupPath);
+    std::filesystem::path expectedCollisionBackupPath = occupiedBackupPath;
+    expectedCollisionBackupPath += L".1";
+    if (collisionBackupHr != S_OK || collisionBackupPath != expectedCollisionBackupPath ||
+        ReadTestBytes(occupiedBackupPath) != "occupied" || ReadTestBytes(collisionBackupPath) != kCollisionFixture)
+    {
+        std::wcerr << std::format(L"[  DETAIL  ] collision hr=0x{:08X}, backup='{}', expected='{}', occupiedBytes={}, backupBytes={}\n",
+                                  static_cast<unsigned long>(collisionBackupHr),
+                                  collisionBackupPath.c_str(),
+                                  expectedCollisionBackupPath.c_str(),
+                                  ReadTestBytes(occupiedBackupPath).size(),
+                                  ReadTestBytes(collisionBackupPath).size());
+        std::wcerr << std::format(L"[  DETAIL  ] collision sourceStampBytes={}, canonicalBytes={}, canonicalAttributes=0x{:08X}, backupAttributes=0x{:08X}\n",
+                                  collisionStamp.fileSize,
+                                  ReadTestBytes(settingsPath).size(),
+                                  GetFileAttributesW(Common::Paths::ToExtendedWin32Path(settingsPath.native()).c_str()),
+                                  GetFileAttributesW(Common::Paths::ToExtendedWin32Path(collisionBackupPath.native()).c_str()));
+    }
+    Check(collisionBackupHr == S_OK && collisionBackupPath == expectedCollisionBackupPath,
+          L"settings recovery CAS: an occupied backup name selects a unique sibling",
+          success);
+    Check(ReadTestBytes(occupiedBackupPath) == "occupied" && ReadTestBytes(collisionBackupPath) == kCollisionFixture,
+          L"settings recovery CAS: collision handling preserves both the existing backup and diagnosed source",
+          success);
+}
+#endif
 
 void TestConnectionProfileIdentityGuards(bool& success)
 {
@@ -821,9 +1256,11 @@ void TestSettingsStoreCrossProcessCas(const std::filesystem::path& executablePat
     const auto cleanupMarkers = wil::scope_exit([&]() noexcept
     {
         std::error_code ec;
-        static_cast<void>(std::filesystem::remove(readyPath, ec));
+        static_cast<void>(std::filesystem::remove(
+            std::filesystem::path(Common::Paths::ToExtendedWin32Path(readyPath.native())), ec));
         ec.clear();
-        static_cast<void>(std::filesystem::remove(goPath, ec));
+        static_cast<void>(std::filesystem::remove(
+            std::filesystem::path(Common::Paths::ToExtendedWin32Path(goPath.native())), ec));
     });
 
     std::optional<RedSalamander::TestSupport::ChildProcessResult> childResult;
@@ -857,6 +1294,62 @@ void TestSettingsStoreCrossProcessCas(const std::filesystem::path& executablePat
           success);
 }
 
+void TestSettingsStoreCrossProcessBackupCas(const std::filesystem::path& executablePath, bool& success)
+{
+    const std::wstring appId = std::format(L"RedSalamanderSettingsBackupCrossProcess-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    CleanupSettingsTestArtifacts(appId);
+    const auto cleanup = wil::scope_exit([&]() noexcept { CleanupSettingsTestArtifacts(appId); });
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
+    constexpr std::string_view kDiagnosedFixture = "{ invalid diagnosed revision";
+    constexpr std::string_view kWinningFixture = R"json({
+  "schemaVersion": 16,
+  "theme": { "currentThemeId": "builtin/dark" }
+})json";
+    Check(WriteTestBytes(settingsPath, kDiagnosedFixture), L"settings cross-process backup CAS: diagnosed source is written", success);
+
+    std::filesystem::path readyPath = settingsPath;
+    readyPath += L".backup-child-ready";
+    std::filesystem::path goPath = settingsPath;
+    goPath += L".backup-child-go";
+    const auto cleanupMarkers = wil::scope_exit([&]() noexcept
+    {
+        std::error_code ec;
+        static_cast<void>(std::filesystem::remove(
+            std::filesystem::path(Common::Paths::ToExtendedWin32Path(readyPath.native())), ec));
+        ec.clear();
+        static_cast<void>(std::filesystem::remove(
+            std::filesystem::path(Common::Paths::ToExtendedWin32Path(goPath.native())), ec));
+    });
+
+    std::optional<RedSalamander::TestSupport::ChildProcessResult> childResult;
+    std::jthread child([&]() noexcept
+    {
+        childResult = RedSalamander::TestSupport::RunChildProcess({
+            .executablePath = executablePath,
+            .arguments      = {L"--settings-store-backup-cas-child", appId, readyPath.wstring(), goPath.wstring()},
+            .timeout        = std::chrono::seconds(15),
+        });
+    });
+
+    const bool childDiagnosed = WaitForTestPath(readyPath, std::chrono::seconds(10));
+    Check(childDiagnosed, L"settings cross-process backup CAS: child captures the diagnosed revision", success);
+    if (childDiagnosed)
+    {
+        Check(WriteTestBytes(settingsPath, kWinningFixture),
+              L"settings cross-process backup CAS: parent publishes a newer valid revision",
+              success);
+        Check(WriteTestBytes(goPath, "go"), L"settings cross-process backup CAS: child is released after publication", success);
+    }
+    child.join();
+
+    Check(childResult.has_value() && childResult->Completed() && childResult->exitCode == 0u,
+          L"settings cross-process backup CAS: stale child observes ERROR_REVISION_MISMATCH",
+          success);
+    Check(ReadTestBytes(settingsPath) == kWinningFixture && ! HasSettingsBackupArtifact(appId),
+          L"settings cross-process backup CAS: winning revision remains canonical and is never backed up",
+          success);
+}
+
 } // namespace
 
 int wmain(int argc, wchar_t** argv)
@@ -864,6 +1357,10 @@ int wmain(int argc, wchar_t** argv)
     if (argc >= 2 && argv[1] && std::wstring_view(argv[1]) == L"--settings-store-cas-child")
     {
         return RunSettingsStoreCasChild(argc, argv);
+    }
+    if (argc >= 2 && argv[1] && std::wstring_view(argv[1]) == L"--settings-store-backup-cas-child")
+    {
+        return RunSettingsStoreBackupCasChild(argc, argv);
     }
 
     bool success = true;
@@ -883,6 +1380,10 @@ int wmain(int argc, wchar_t** argv)
     TestNonAscii(success);
     TestPluginConfigurationModelAndCodec(success);
     TestSettingsStoreConflictAndPrimitiveGuards(success);
+    TestFloatingTerminalSettingsPersistence(success);
+#ifdef ENABLE_TESTS
+    TestSettingsStoreRecoveryBackupCas(success);
+#endif
     TestConnectionProfileIdentityGuards(success);
 
     std::array<wchar_t, 32768> executablePath{};
@@ -892,7 +1393,9 @@ int wmain(int argc, wchar_t** argv)
           success);
     if (executableLength > 0u && executableLength < executablePath.size())
     {
-        TestSettingsStoreCrossProcessCas(std::filesystem::path(std::wstring(executablePath.data(), executableLength)), success);
+        const std::filesystem::path currentExecutable(std::wstring(executablePath.data(), executableLength));
+        TestSettingsStoreCrossProcessCas(currentExecutable, success);
+        TestSettingsStoreCrossProcessBackupCas(currentExecutable, success);
     }
 
     // Step 2: real-schema characterization (requires the schema file).

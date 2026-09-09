@@ -12,6 +12,7 @@
 #include "FileSystemDummy.h"
 #include "FileSystemDummyResources.h"
 #include "Helpers.h"
+#include "ContentDigest.h"
 #include "PlugInterfaces/Host.h"
 
 #pragma warning(push)
@@ -645,15 +646,24 @@ private:
     uint64_t _positionBytes                 = 0;
 };
 
-class DummyFileWriter final : public IFileWriter
+class DummyFileWriter final : public IFileWriter, public IFileWriterCommitSizeProof, public IFileWriterExpectedReplacement, public IFileWriterContentProof
 {
 public:
-    DummyFileWriter(FileSystemDummy& owner, std::filesystem::path normalizedPath, FileSystemFlags flags, unsigned long chunkLatencyMilliseconds) noexcept
+    DummyFileWriter(FileSystemDummy& owner,
+                    std::filesystem::path normalizedPath,
+                    FileSystemFlags flags,
+                    unsigned long chunkLatencyMilliseconds,
+                    bool occupantKnown,
+                    uint64_t occupantSizeBytes,
+                    __int64 occupantLastWriteTime) noexcept
         : _refCount(1),
           _owner(&owner),
           _path(std::move(normalizedPath)),
           _flags(flags),
-          _chunkLatencyMilliseconds(chunkLatencyMilliseconds)
+          _chunkLatencyMilliseconds(chunkLatencyMilliseconds),
+          _occupantKnown(occupantKnown),
+          _occupantSizeBytes(occupantSizeBytes),
+          _occupantLastWriteTime(occupantLastWriteTime)
     {
         _owner->AddRef();
     }
@@ -673,6 +683,24 @@ public:
         if (riid == __uuidof(IUnknown) || riid == __uuidof(IFileWriter))
         {
             *ppvObject = static_cast<IFileWriter*>(this);
+            AddRef();
+            return S_OK;
+        }
+        if (riid == __uuidof(IFileWriterCommitSizeProof))
+        {
+            *ppvObject = static_cast<IFileWriterCommitSizeProof*>(this);
+            AddRef();
+            return S_OK;
+        }
+        if (riid == __uuidof(IFileWriterExpectedReplacement))
+        {
+            *ppvObject = static_cast<IFileWriterExpectedReplacement*>(this);
+            AddRef();
+            return S_OK;
+        }
+        if (riid == __uuidof(IFileWriterContentProof))
+        {
+            *ppvObject = static_cast<IFileWriterContentProof*>(this);
             AddRef();
             return S_OK;
         }
@@ -772,13 +800,93 @@ public:
             return E_OUTOFMEMORY;
         }
 
-        const HRESULT hr = _owner->CommitFileWriter(_path, _flags, buffer);
+        const HRESULT hr =
+            _owner->CommitFileWriter(_path, _flags, buffer, _replaceConditional, _occupantSizeBytes, _occupantLastWriteTime, &_committedSha256);
         if (FAILED(hr))
         {
+            _committedSha256.clear();
             return hr;
         }
 
         _committed = true;
+        return S_OK;
+    }
+
+    // R3-2: the store's SHA-256 of the committed content.
+    HRESULT STDMETHODCALLTYPE GetContentProofAlgorithms(uint32_t* algorithmMask) noexcept override
+    {
+        if (algorithmMask == nullptr)
+        {
+            return E_POINTER;
+        }
+        *algorithmMask = 1u << FILESYSTEM_CONTENT_PROOF_SHA256_256;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetCommittedContentProof(FileSystemContentProof* proof) noexcept override
+    {
+        if (proof == nullptr)
+        {
+            return E_POINTER;
+        }
+        if (! _committed)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+        }
+        if (_committedSha256.size() != 32u)
+        {
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        }
+        uint64_t committedBytes = 0u;
+        RETURN_IF_FAILED(GetCommittedSize(&committedBytes));
+        *proof                  = {};
+        proof->sizeBytes        = sizeof(*proof);
+        proof->algorithm        = FILESYSTEM_CONTENT_PROOF_SHA256_256;
+        proof->contentSizeBytes = committedBytes;
+        std::memcpy(proof->digest, _committedSha256.data(), _committedSha256.size());
+        return S_OK;
+    }
+
+    // R3-1: the occupant the host showed the user; Commit replaces only the object the writer saw.
+    HRESULT STDMETHODCALLTYPE SetExpectedReplacement(const FileSystemBasicInformation* expected) noexcept override
+    {
+        if (expected == nullptr || expected->sizeBytes < sizeof(FileSystemBasicInformation))
+        {
+            return E_INVALIDARG;
+        }
+        if ((static_cast<uint32_t>(_flags) & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0u || _committed)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+        }
+        if (! _occupantKnown)
+        {
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        }
+        if (expected->lastWriteTime == 0 || _occupantLastWriteTime == 0)
+        {
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED); // R0-RC3: no token, no conditional replacement
+        }
+        if (expected->lastWriteTime != _occupantLastWriteTime)
+        {
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        }
+        _replaceConditional = true;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetCommittedSize(uint64_t* sizeBytes) noexcept override
+    {
+        if (sizeBytes == nullptr)
+        {
+            return E_POINTER;
+        }
+
+        *sizeBytes = 0u;
+        if (! _committed || ! _buffer)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+        }
+
+        *sizeBytes = static_cast<uint64_t>(_buffer->size());
         return S_OK;
     }
 
@@ -810,6 +918,11 @@ private:
     unsigned long _chunkLatencyMilliseconds = 0;
     bool _committed                         = false;
     std::shared_ptr<std::vector<std::byte>> _buffer;
+    bool _occupantKnown            = false; // R3-1: an object occupied the name when the writer opened
+    uint64_t _occupantSizeBytes    = 0;
+    __int64 _occupantLastWriteTime = 0;
+    bool _replaceConditional       = false; // R3-1: the host granted a replacement of that occupant
+    std::vector<std::byte> _committedSha256; // R3-2: the store's digest of the committed content
 };
 
 std::string Utf8FromUtf16(std::wstring_view text) noexcept
@@ -2412,7 +2525,7 @@ HRESULT ReportItemCompleted(OperationContext& context, unsigned long itemIndex, 
     UpdateEffectiveBandwidthLimit(context);
 
     HRESULT hr = context.callback->FileSystemItemCompleted(
-        context.type, itemIndex, context.itemSource, context.itemDestination, status, context.options, context.callbackCookie);
+        context.type, itemIndex, context.itemSource, context.itemDestination, status, nullptr, context.options, context.callbackCookie);
     hr = NormalizeCancellation(hr);
     if (FAILED(hr))
     {
@@ -2947,6 +3060,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configur
     unsigned long streamChunkLatencyMilliseconds = 0;
     std::wstring virtualSpeedLimitText           = L"0";
     uint64_t virtualSpeedLimitBytesPerSecond     = 0;
+    bool writerProof                             = true; // R3-2: the route proves published content through its writer
 
     if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
     {
@@ -3010,6 +3124,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configur
                     }
                 }
 
+                if (yyjson_val* writerProofVal = yyjson_obj_get(root, "writerProof"); writerProofVal && yyjson_is_bool(writerProofVal))
+                {
+                    writerProof = yyjson_get_bool(writerProofVal); // self-test knob: Copy-only Move coverage needs a proof-less route
+                }
+
                 yyjson_val* virtualSpeedVal = yyjson_obj_get(root, "virtualSpeedLimit");
                 if (virtualSpeedVal && yyjson_is_str(virtualSpeedVal))
                 {
@@ -3053,6 +3172,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configur
         _maxDepth                       = maxDepth;
         _seed                           = seed;
         _latencyMilliseconds            = latencyMilliseconds;
+        _writerProof                    = writerProof;
         _streamChunkLatencyMilliseconds = streamChunkLatencyMilliseconds;
         _virtualSpeedLimitText          = std::move(virtualSpeedLimitText);
         _virtualSpeedLimitBytesPerSecond.store(virtualSpeedLimitBytesPerSecond, std::memory_order_release);
@@ -3239,9 +3359,30 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::QueryInterface(REFIID riid, void** pp
         return S_OK;
     }
 
+    if (riid == __uuidof(IFileSystemPathCapabilities2))
+    {
+        *ppvObject = static_cast<IFileSystemPathCapabilities2*>(static_cast<IFileSystem*>(this));
+        AddRef();
+        return S_OK;
+    }
+
+    if (riid == __uuidof(IFileSystemRouteCapabilities))
+    {
+        *ppvObject = static_cast<IFileSystemRouteCapabilities*>(static_cast<FileSystemRouteCapabilitiesBase*>(this));
+        AddRef();
+        return S_OK;
+    }
+
     if (riid == __uuidof(IFileSystemIO))
     {
         *ppvObject = static_cast<IFileSystemIO*>(this);
+        AddRef();
+        return S_OK;
+    }
+
+    if (riid == __uuidof(IFileSystemAtomicWriter))
+    {
+        *ppvObject = static_cast<IFileSystemAtomicWriter*>(this);
         AddRef();
         return S_OK;
     }
@@ -4569,11 +4710,22 @@ HRESULT FileSystemDummy::DeleteNode(DummyNode& target, FileSystemFlags flags)
 
 HRESULT FileSystemDummy::CommitFileWriter(const std::filesystem::path& normalizedPath,
                                           FileSystemFlags flags,
-                                          const std::shared_ptr<std::vector<std::byte>>& buffer) noexcept
+                                          const std::shared_ptr<std::vector<std::byte>>& buffer,
+                                          bool requireOccupant,
+                                          uint64_t occupantSizeBytes,
+                                          __int64 occupantLastWriteTime,
+                                          std::vector<std::byte>* committedSha256) noexcept
 {
     if (buffer == nullptr)
     {
         return E_POINTER;
+    }
+    if (committedSha256 != nullptr)
+    {
+        // R3-2: the store's own digest of the content it commits (reported only after success).
+        committedSha256->clear();
+        static_cast<void>(Common::Crypto::ComputeContentDigest(
+            Common::Crypto::ContentDigestAlgorithm::Sha256, std::span<const std::byte>(buffer->data(), buffer->size()), *committedSha256));
     }
 
     const std::filesystem::path parentPath = normalizedPath.parent_path();
@@ -4599,6 +4751,10 @@ HRESULT FileSystemDummy::CommitFileWriter(const std::filesystem::path& normalize
         EnsureChildrenGenerated(*parent);
 
         DummyNode* existing = FindChild(parent, name);
+        if (requireOccupant && existing == nullptr)
+        {
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH); // R3-1: the occupant vanished
+        }
         if (existing != nullptr)
         {
             if (! HasFlag(flags, FILESYSTEM_FLAG_ALLOW_OVERWRITE))
@@ -4611,6 +4767,10 @@ HRESULT FileSystemDummy::CommitFileWriter(const std::filesystem::path& normalize
                 return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
             }
 
+            if (requireOccupant && (existing->sizeBytes != occupantSizeBytes || existing->lastWriteTime != occupantLastWriteTime))
+            {
+                return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH); // R3-1: not the occupant the user saw
+            }
             ExtractChild(parent, existing);
         }
 
@@ -5093,6 +5253,9 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CreateFileWriter(const wchar_t* path,
         return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
     }
 
+    bool occupantKnown            = false;
+    uint64_t occupantSizeBytes    = 0;
+    __int64 occupantLastWriteTime = 0;
     {
         std::scoped_lock lock(_mutex);
 
@@ -5122,6 +5285,9 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CreateFileWriter(const wchar_t* path,
             {
                 return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
             }
+            occupantKnown         = true; // R3-1
+            occupantSizeBytes     = existing->sizeBytes;
+            occupantLastWriteTime = existing->lastWriteTime;
         }
     }
 
@@ -5131,13 +5297,51 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CreateFileWriter(const wchar_t* path,
         streamChunkLatencyMilliseconds = _streamChunkLatencyMilliseconds;
     }
 
-    auto* created = new (std::nothrow) DummyFileWriter(*this, normalized, flags, streamChunkLatencyMilliseconds);
+    auto* created = new (std::nothrow) DummyFileWriter(*this, normalized, flags, streamChunkLatencyMilliseconds, occupantKnown, occupantSizeBytes, occupantLastWriteTime);
     if (! created)
     {
         return E_OUTOFMEMORY;
     }
 
     *writer = created;
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystemDummy::SupportsAtomicWriterCommit(const wchar_t* path,
+                                                                       FileSystemFlags flags,
+                                                                       BOOL* supported) noexcept
+{
+    if (supported == nullptr)
+    {
+        return E_POINTER;
+    }
+    *supported = FALSE;
+    if (path == nullptr || path[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    constexpr uint32_t knownFlags = FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY |
+                                    FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR;
+    const uint32_t requestedFlags = static_cast<uint32_t>(flags);
+    if ((requestedFlags & ~knownFlags) != 0u ||
+        ((requestedFlags & FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY) != 0u &&
+         (requestedFlags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0u))
+    {
+        return E_INVALIDARG;
+    }
+
+    std::filesystem::path normalized;
+    const HRESULT normalizeHr = NormalizePath(path, normalized);
+    if (FAILED(normalizeHr) || normalized.filename().empty())
+    {
+        return FAILED(normalizeHr) ? normalizeHr : HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+    }
+
+    // DummyFileWriter buffers privately. CommitFileWriter performs the existence/read-only check
+    // and replaces or inserts one complete node while holding the provider mutex, so readers never
+    // observe partial content and no temp pathname is involved.
+    *supported = TRUE;
     return S_OK;
 }
 
@@ -5255,14 +5459,63 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetFileBasicInformation(const wchar_t
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemDummy::GetCapabilities(const char** jsonUtf8) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemDummy::GetPathCapabilities(const wchar_t* path,
+                                                                FileSystemOperation operation,
+                                                                const char** jsonUtf8) noexcept
 {
     if (jsonUtf8 == nullptr)
     {
         return E_POINTER;
     }
+    *jsonUtf8 = nullptr;
+    if (path == nullptr || path[0] == L'\0' || operation < FILESYSTEM_COPY || operation > FILESYSTEM_CREATE_DIRECTORY)
+    {
+        return E_INVALIDARG;
+    }
 
     *jsonUtf8 = kCapabilitiesJson;
+    return S_OK;
+}
+
+HRESULT FileSystemDummy::BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                                         FileSystemOperation operation,
+                                                         FileSystemRouteDescriptor& descriptor) noexcept
+{
+    static_cast<void>(operation);
+    if (path == nullptr || path[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    descriptor = {};
+    descriptor.providerId = kPluginId;
+    descriptor.pathProfileId = L"dummy-local";
+    descriptor.rootId = L"dummy-root";
+    descriptor.availability = FILESYSTEM_ROUTE_AVAILABLE;
+    descriptor.cancellationRoute = FILESYSTEM_CANCELLATION_BOUNDED;
+    // R3-2: SHA-256 of the committed content; the "writerProof":false configuration removes the claim
+    // so self-tests can cover Copy-only Move into a destination without content proof.
+    descriptor.proofFlags = _writerProof ? FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST : FILESYSTEM_ROUTE_PROOF_NONE;
+    descriptor.namespaceKind = FILESYSTEM_NAMESPACE_REAL_CONTAINER;
+    descriptor.componentComparison = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE;
+    descriptor.caseOnlyRename = FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED;
+    descriptor.copyMoveMaxConcurrency = 4u;
+    descriptor.deleteMaxConcurrency = 8u;
+    descriptor.deleteRecycleBinMaxConcurrency = 2u;
+    descriptor.copyOperation = true;
+    descriptor.moveOperation = true;
+    descriptor.nativeMoveOperation = true;
+    descriptor.createDirectoryOperation = true;
+    descriptor.propertiesOperation = true;
+    descriptor.readOperation = true;
+    descriptor.writeOperation = true;
+    descriptor.exportCopyAll = true;
+    descriptor.exportMoveAll = true;
+    descriptor.importCopyAll = true;
+    descriptor.importMoveAll = true;
+    descriptor.preferredSeparator = L'\\';
+    descriptor.acceptedSeparators = L"\\/";
+    descriptor.forbiddenChildCharacters = L":*?\"<>|";
     return S_OK;
 }
 
@@ -5710,8 +5963,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetDirectorySize(
         {
             ++scannedEntries;
 
-            // Directory size scanning enumerates directory entries; honor the configured latency per entry to keep
-            // pre-calculation behavior consistent with other dummy filesystem operations.
+            // Directory size scanning enumerates directory entries; honor configured latency per entry
+            // so this legacy size-query API has the same deterministic timing as other dummy operations.
             SimulateLatency(1);
 
             if (child.isDirectory)
@@ -5939,7 +6192,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItem(const wchar_t* sourcePath,
         return E_INVALIDARG;
     }
 
-    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    if (! FileSystemOptionsHaveValidHeader(options))
     {
         return E_INVALIDARG;
     }
@@ -6076,7 +6329,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItem(const wchar_t* sourcePath,
         return E_INVALIDARG;
     }
 
-    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    if (! FileSystemOptionsHaveValidHeader(options) ||
+        (options != nullptr && options->moveMode != FILESYSTEM_MOVE_DEFAULT && options->moveMode != FILESYSTEM_MOVE_NATIVE_ONLY))
     {
         return E_INVALIDARG;
     }
@@ -6233,7 +6487,7 @@ FileSystemDummy::DeleteItem(const wchar_t* path, FileSystemFlags flags, const Fi
         return E_INVALIDARG;
     }
 
-    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    if (! FileSystemOptionsHaveValidHeader(options))
     {
         return E_INVALIDARG;
     }
@@ -6345,7 +6599,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItem(const wchar_t* sourcePath,
         return E_INVALIDARG;
     }
 
-    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    if (! FileSystemOptionsHaveValidHeader(options))
     {
         return E_INVALIDARG;
     }
@@ -6493,7 +6747,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItems(const wchar_t* const* sourc
         return E_INVALIDARG;
     }
 
-    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    if (! FileSystemOptionsHaveValidHeader(options))
     {
         return E_INVALIDARG;
     }
@@ -6767,6 +7021,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItems(const wchar_t* const* sourc
                                                      IFileSystemCallback* callback,
                                                      void* cookie) noexcept
 {
+    if (! FileSystemOptionsHaveValidHeader(options) ||
+        (options != nullptr && options->moveMode != FILESYSTEM_MOVE_DEFAULT && options->moveMode != FILESYSTEM_MOVE_NATIVE_ONLY))
+    {
+        return E_INVALIDARG;
+    }
+
     if (! sourcePaths && count > 0)
     {
         return E_POINTER;
@@ -6783,11 +7043,6 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItems(const wchar_t* const* sourc
     }
 
     if (destinationFolder[0] == L'\0')
-    {
-        return E_INVALIDARG;
-    }
-
-    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
     {
         return E_INVALIDARG;
     }
@@ -7118,7 +7373,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::DeleteItems(const wchar_t* const* pat
         return S_OK;
     }
 
-    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    if (! FileSystemOptionsHaveValidHeader(options))
     {
         return E_INVALIDARG;
     }
@@ -7273,7 +7528,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItems(const FileSystemRenamePai
         return S_OK;
     }
 
-    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    if (! FileSystemOptionsHaveValidHeader(options))
     {
         return E_INVALIDARG;
     }

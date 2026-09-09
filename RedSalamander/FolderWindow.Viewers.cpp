@@ -1,4 +1,5 @@
 #include "FolderWindowInternal.h"
+#include "TerminalHostSupport.h"
 
 #include <algorithm>
 #include <array>
@@ -501,8 +502,7 @@ void FolderWindow::HideAndClearPreviewEmbeddedHwnd(PaneState& host, ViewerInstan
 
 ViewerTheme FolderWindow::BuildViewerTheme() const noexcept
 {
-    ViewerTheme theme{};
-    theme.version                       = 4;
+    ViewerTheme theme{.sizeBytes = sizeof(ViewerTheme)};
     theme.dpi                           = static_cast<unsigned int>(_dpi);
     theme.backgroundArgb                = ArgbFromColorF(_theme.folderView.backgroundColor);
     theme.textArgb                      = ArgbFromColorF(_theme.folderView.textNormal);
@@ -529,6 +529,11 @@ ViewerTheme FolderWindow::BuildViewerTheme() const noexcept
     return theme;
 }
 
+TerminalTheme FolderWindow::BuildTerminalTheme() const noexcept
+{
+    return TerminalHostSupport::BuildTerminalTheme(_theme, static_cast<uint32_t>(_dpi));
+}
+
 void FolderWindow::ApplyViewerTheme() noexcept
 {
     const ViewerTheme theme = BuildViewerTheme();
@@ -541,10 +546,22 @@ void FolderWindow::ApplyViewerTheme() noexcept
 
         static_cast<void>(instance->viewer->SetTheme(&theme));
     }
+
+    const TerminalTheme terminalTheme = BuildTerminalTheme();
+    if (_leftPane.terminal)
+    {
+        static_cast<void>(_leftPane.terminal->SetTheme(&terminalTheme));
+    }
+    if (_rightPane.terminal)
+    {
+        static_cast<void>(_rightPane.terminal->SetTheme(&terminalTheme));
+    }
 }
 
 void FolderWindow::ShutdownViewers() noexcept
 {
+    CloseTerminalPane(Pane::Left);
+    CloseTerminalPane(Pane::Right);
     if (_leftPane.previewViewerInstance)
     {
         HideAndClearPreviewEmbeddedHwnd(_leftPane, *_leftPane.previewViewerInstance);
@@ -680,7 +697,7 @@ void FolderWindow::UpdateViewerInstanceContext(
         ownerWindow = _hWnd.get();
     }
 
-    instance.openContext                       = {};
+    instance.openContext                       = {.sizeBytes = sizeof(ViewerOpenContext)};
     instance.openContext.ownerWindow           = ownerWindow;
     instance.openContext.fileSystem            = instance.fileSystem.get();
     instance.openContext.fileSystemName        = instance.fileSystemName.empty() ? nullptr : instance.fileSystemName.c_str();
@@ -988,7 +1005,7 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
     const std::wstring focusedPathText = hostState.previewedPath.wstring();
     const wchar_t* otherFilePointer    = focusedPathText.c_str();
 
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.ownerWindow           = hostState.hPreviewContent.get();
     context.fileSystem            = sourceState.fileSystem.get();
     context.fileSystemName        = fileSystemName.empty() ? nullptr : fileSystemName.c_str();
@@ -1255,7 +1272,7 @@ bool FolderWindow::TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRe
         FileActionLauncher::MacroContext macroContext{};
         macroContext.itemPath         = request.focusedPath;
         macroContext.currentDirectory = request.focusedPath.parent_path();
-        macroContext.selectedPaths    = request.selectionPaths;
+        macroContext.selectedPaths    = std::span<const std::filesystem::path>(request.selectionPaths);
         if (oppositeState.currentPath.has_value())
         {
             macroContext.oppositePanePath = oppositeState.currentPath.value();
@@ -1279,7 +1296,7 @@ bool FolderWindow::TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRe
         options.captureProcessHandle = true;
 
         FileActionLauncher::LaunchResult launchResult{};
-        const HRESULT launchHr = FileActionLauncher::LaunchExternalPlan(plan, options, &launchResult);
+        const HRESULT launchHr = FileActionLauncher::LaunchExternalPlan(std::move(plan), options, &launchResult);
         if (FAILED(launchHr))
         {
             RecordFileActionLaunchFailure(true, action.id, request.focusedPath, launchHr);
@@ -1297,7 +1314,11 @@ bool FolderWindow::TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRe
     };
 
     const Common::Settings::FileActionDefinition* configuredAction = nullptr;
-    if (! request.actionId.empty())
+    if (request.forceInternal)
+    {
+        pluginIdStorage.assign(kFallbackViewerId);
+    }
+    else if (! request.actionId.empty())
     {
         configuredAction =
             FileActionResolver::FindApplicableActionById(_settings->fileActions.viewers.actions, request.actionId, request.focusedPath, computerName);
@@ -1457,7 +1478,7 @@ bool FolderWindow::TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRe
 
     const HWND ownerWindow = ResolveFileActionOwnerWindow(request.ownerWindow, _hWnd.get());
 
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.ownerWindow            = ownerWindow;
     context.fileSystem             = state.fileSystem.get();
     context.fileSystemName         = fileSystemName.empty() ? nullptr : fileSystemName.c_str();
@@ -1545,7 +1566,7 @@ bool FolderWindow::TryEditFileWithEditor(Pane pane,
     FileActionLauncher::MacroContext macroContext{};
     macroContext.itemPath         = filePath;
     macroContext.currentDirectory = filePath.parent_path();
-    macroContext.selectedPaths    = effectiveSelectedPaths;
+    macroContext.selectedPaths    = std::span<const std::filesystem::path>(effectiveSelectedPaths);
     if (oppositeState.currentPath.has_value())
     {
         macroContext.oppositePanePath = oppositeState.currentPath.value();
@@ -1569,7 +1590,7 @@ bool FolderWindow::TryEditFileWithEditor(Pane pane,
     options.captureProcessHandle = true;
 
     FileActionLauncher::LaunchResult launchResult{};
-    const HRESULT launchHr = FileActionLauncher::LaunchExternalPlan(plan, options, &launchResult);
+    const HRESULT launchHr = FileActionLauncher::LaunchExternalPlan(std::move(plan), options, &launchResult);
     if (FAILED(launchHr))
     {
         RecordFileActionLaunchFailure(false, action->id, filePath, launchHr);
@@ -1804,7 +1825,7 @@ void FolderWindow::CommandUserMenu(Pane pane, std::wstring_view actionId)
     {
         macroContext.currentDirectory = itemPath.parent_path();
     }
-    macroContext.selectedPaths = std::move(selectedPaths);
+    macroContext.selectedPaths = std::span<const std::filesystem::path>(selectedPaths);
 
     PaneState& oppositeState = pane == Pane::Left ? _rightPane : _leftPane;
     if (oppositeState.currentPath.has_value())
@@ -1840,7 +1861,7 @@ void FolderWindow::CommandUserMenu(Pane pane, std::wstring_view actionId)
         options.ownerWindow = _hWnd.get();
     }
 
-    const HRESULT launchHr = FileActionLauncher::LaunchExternalPlan(plan, options);
+    const HRESULT launchHr = FileActionLauncher::LaunchExternalPlan(std::move(plan), options);
     if (FAILED(launchHr))
     {
         perf.SetHr(launchHr);
@@ -1903,7 +1924,7 @@ bool FolderWindow::TryViewSpaceWithViewer(Pane pane, const std::filesystem::path
     }
 
     const std::wstring focusedPath = folderPath.wstring();
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.ownerWindow           = ownerWindow;
     context.fileSystem            = state.fileSystem.get();
     context.fileSystemName        = fileSystemName.empty() ? nullptr : fileSystemName.c_str();

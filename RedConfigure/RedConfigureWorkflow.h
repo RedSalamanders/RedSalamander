@@ -150,6 +150,12 @@ struct ClipboardMatrix
     std::vector<std::vector<std::wstring>> rows;
 };
 
+struct LocalizationClipboardPasteTarget
+{
+    std::vector<LocalizationReviewRowIdentity> destinationRows;
+    std::vector<std::wstring> destinationCultures;
+};
+
 enum class ThemeRecipe : uint8_t
 {
     DarkVariant,
@@ -241,6 +247,11 @@ struct ThemeTokenMetadata
                                                                                  std::wstring_view cultureName);
 [[nodiscard]] ClipboardMatrix ParseClipboardMatrix(std::wstring_view text);
 [[nodiscard]] std::wstring SerializeClipboardMatrix(const ClipboardMatrix& matrix);
+[[nodiscard]] LocalizationClipboardPasteTarget BuildLocalizationClipboardPasteTarget(std::span<const LocalizationReviewRow> rows,
+                                                                                       std::span<const size_t> viewRows,
+                                                                                       size_t selectedSessionRow,
+                                                                                       std::span<const std::wstring> orderedCultures,
+                                                                                       std::wstring_view selectedCulture);
 [[nodiscard]] ThemeMassPreview PreviewThemeMassChange(const Themes::ThemePreviewModel& model, const ThemeMassRequest& request);
 [[nodiscard]] BatchApprovalResult ApplyThemeMassChange(Themes::ThemePreviewModel& model, const ThemeMassPreview& preview);
 [[nodiscard]] std::optional<DuplicateThemeCandidate> BuildDuplicateThemeCandidate(std::wstring_view sourceId,

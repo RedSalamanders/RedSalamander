@@ -573,65 +573,14 @@ void DrawSortGlyph(WindowHost& host, const D2D1_RECT_F& rect, SortDirection dire
         return;
     }
 
-    auto* dc = host.GetDeviceContext();
-    if (! dc)
-    {
-        return;
-    }
-
-    const float centerX = rect.right - 10.0f;
-    const float centerY = (rect.top + rect.bottom) * 0.5f;
-    D2D1_POINT_2F p1{};
-    D2D1_POINT_2F p2{};
-    D2D1_POINT_2F p3{};
-
-    if (direction == SortDirection::Ascending)
-    {
-        p1 = D2D1::Point2F(centerX, centerY - 4.0f);
-        p2 = D2D1::Point2F(centerX - 4.0f, centerY + 2.0f);
-        p3 = D2D1::Point2F(centerX + 4.0f, centerY + 2.0f);
-    }
-    else
-    {
-        p1 = D2D1::Point2F(centerX, centerY + 4.0f);
-        p2 = D2D1::Point2F(centerX - 4.0f, centerY - 2.0f);
-        p3 = D2D1::Point2F(centerX + 4.0f, centerY - 2.0f);
-    }
-
-    dc->DrawLine(p1, p2, host.GetSolidBrush(color), 1.2f);
-    dc->DrawLine(p1, p3, host.GetSolidBrush(color), 1.2f);
-    dc->DrawLine(p2, p3, host.GetSolidBrush(color), 1.2f);
+    const D2D1_RECT_F glyphRect = D2D1::RectF(rect.right - 20.0f, rect.top, rect.right, rect.bottom);
+    DrawChevronGlyph(host, glyphRect, direction == SortDirection::Ascending ? ChevronDirection::Up : ChevronDirection::Down, color);
 }
 
 void DrawGroupDisclosureGlyph(WindowHost& host, const D2D1_RECT_F& rect, bool collapsed, const D2D1_COLOR_F& color)
 {
-    auto* dc = host.GetDeviceContext();
-    if (! dc)
-    {
-        return;
-    }
-
-    const float centerX = rect.left + 14.0f;
-    const float centerY = (rect.top + rect.bottom) * 0.5f;
-    D2D1_POINT_2F p1{};
-    D2D1_POINT_2F p2{};
-    D2D1_POINT_2F p3{};
-
-    if (collapsed)
-    {
-        p1 = D2D1::Point2F(centerX - 3.0f, centerY - 5.0f);
-        p2 = D2D1::Point2F(centerX + 3.0f, centerY);
-        p3 = D2D1::Point2F(centerX - 3.0f, centerY + 5.0f);
-    }
-    else
-    {
-        p1 = D2D1::Point2F(centerX - 5.0f, centerY - 3.0f);
-        p2 = D2D1::Point2F(centerX, centerY + 3.0f);
-        p3 = D2D1::Point2F(centerX + 5.0f, centerY - 3.0f);
-    }
-
-    dc->DrawLine(p1, p2, host.GetSolidBrush(color), 1.5f);
-    dc->DrawLine(p2, p3, host.GetSolidBrush(color), 1.5f);
+    const D2D1_RECT_F glyphRect = D2D1::RectF(rect.left + 4.0f, rect.top, rect.left + 24.0f, rect.bottom);
+    DrawDisclosureChevron(host, glyphRect, collapsed ? 0.0f : 1.0f, color);
 }
 } // namespace
 

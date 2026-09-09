@@ -431,18 +431,21 @@ void TestSetActionExtensions(Common::Settings::FileActionDefinition& action, std
     using namespace std::chrono_literals;
 
     FolderWindow::PreviewPaneDebugSnapshot preview{};
-    if (! g_folderWindow.DebugGetPreviewPaneSnapshot(preview) || ! preview.active)
+    if (! g_folderWindow.DebugGetPreviewPaneSnapshot(preview))
     {
         return true;
     }
 
-    g_folderWindow.TogglePreviewPane(preview.sourcePane);
+    if (preview.active)
+    {
+        g_folderWindow.TogglePreviewPane(preview.sourcePane);
+    }
 
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline)
     {
         PumpPendingMessages();
-        if (g_folderWindow.DebugGetPreviewPaneSnapshot(preview) && ! preview.active)
+        if (g_folderWindow.DebugGetPreviewPaneSnapshot(preview) && ! preview.active && preview.previewDirectChildCount == 0u)
         {
             return true;
         }
@@ -450,7 +453,7 @@ void TestSetActionExtensions(Common::Settings::FileActionDefinition& action, std
         std::this_thread::sleep_for(10ms);
     }
 
-    return g_folderWindow.DebugGetPreviewPaneSnapshot(preview) && ! preview.active;
+    return g_folderWindow.DebugGetPreviewPaneSnapshot(preview) && ! preview.active && preview.previewDirectChildCount == 0u;
 }
 
 [[nodiscard]] Common::Settings::EditorAssociationRule TestEditorAssociation(std::wstring extension,
@@ -808,7 +811,7 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
     };
     settings.search = search;
 
-    const Common::Settings::Settings prepared = SettingsSave::PrepareForSave(settings);
+    Common::Settings::Settings prepared = SettingsSave::PrepareForSave(settings);
     state.Require(prepared.search.has_value(), L"Search settings should survive canonical save preparation when non-default.");
 
     const HRESULT saveHr = Common::Settings::SaveSettings(kTestAppId, prepared);
@@ -875,7 +878,6 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
                containsControl(value.lastContentPattern);
     };
 
-    Common::Settings::Settings dirtySettings{};
     Common::Settings::SearchDialogSettings dirtySearch{};
     dirtySearch.recentRoots           = {appendHiddenControl(L"C:\\dirty-root"),
                                          std::wstring(1, static_cast<wchar_t>(0x7F)),
@@ -886,9 +888,9 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
     dirtySearch.lastRoot              = appendHiddenControl(L"C:\\dirty-root");
     dirtySearch.lastNamePattern       = appendHiddenControl(L"*");
     dirtySearch.lastContentPattern    = appendHiddenControl(L"needle");
-    dirtySettings.search              = dirtySearch;
+    prepared.search                   = dirtySearch;
 
-    const HRESULT dirtySaveHr = Common::Settings::SaveSettings(kTestAppId, dirtySettings);
+    const HRESULT dirtySaveHr = Common::Settings::SaveSettings(kTestAppId, prepared);
     state.Require(SUCCEEDED(dirtySaveHr), L"Failed to save dirty search settings for sanitization test.");
     if (FAILED(dirtySaveHr))
     {
@@ -1484,6 +1486,41 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
                   L"The low-level writer must provide defense in depth for the future-schema save block.");
     state.Require(ReadSettingsTestBytes(settingsPath) == before, L"Every blocked save path must leave future-schema source bytes unchanged.");
     state.Require(FindSettingsBackupArtifact(kTestAppId).empty(), L"Blocked automatic saves must not create a replacement backup.");
+
+    constexpr std::string_view kConcurrentFutureSettings =
+        "{\r\n  \"schemaVersion\": 18,\r\n  \"futureData\": { \"keepNewer\": true, \"revision\": 2 }\r\n}\r\n";
+    state.Require(SelfTest::WriteTextFile(settingsPath, kConcurrentFutureSettings),
+                  L"Failed to publish the newer future-schema revision before explicit replacement.");
+    std::filesystem::path staleBackupPath;
+    const HRESULT staleReplaceHr = SettingsHotReload::ReplaceBlockedSettingsAndSchema(kTestAppId, loaded, staleBackupPath);
+    state.Require(staleReplaceHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH),
+                  L"A stale explicit-replacement confirmation must reject a newer settings revision.");
+    state.Require(staleBackupPath.empty() && FindSettingsBackupArtifact(kTestAppId).empty(),
+                  L"A stale explicit-replacement confirmation must not create a backup from the newer revision.");
+    state.Require(ReadSettingsTestBytes(settingsPath) == kConcurrentFutureSettings,
+                  L"A stale explicit-replacement confirmation must leave the newer revision canonical.");
+
+    CleanupSettingsArtifacts(kTestAppId);
+    state.Require(SelfTest::WriteTextFile(settingsPath, kFutureSettings), L"Failed to restore the future-schema fixture for explicit replacement.");
+    loaded   = Common::Settings::Settings{};
+    recovery = Common::Settings::SettingsLoadRecoveryInfo{};
+    state.Require(Common::Settings::LoadSettingsWithRecoveryInfo(kTestAppId, loaded, &recovery) == S_FALSE &&
+                      loaded.persistence.savePermission == Common::Settings::SettingsSavePermission::ExplicitReplacementRequired,
+                  L"Failed to reload the restored future-schema fixture for explicit replacement.");
+
+    state.Require(DeleteFileW(settingsPath.c_str()) != FALSE, L"Failed to delete the presented future-schema revision before explicit replacement.");
+    std::filesystem::path deletedSourceBackupPath;
+    const HRESULT deletedSourceReplaceHr =
+        SettingsHotReload::ReplaceBlockedSettingsAndSchema(kTestAppId, loaded, deletedSourceBackupPath);
+    state.Require(deletedSourceReplaceHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) && deletedSourceBackupPath.empty(),
+                  L"Explicit replacement must reject a presented revision that was already removed.");
+
+    state.Require(SelfTest::WriteTextFile(settingsPath, kFutureSettings), L"Failed to restore the deleted future-schema fixture for explicit replacement.");
+    loaded   = Common::Settings::Settings{};
+    recovery = Common::Settings::SettingsLoadRecoveryInfo{};
+    state.Require(Common::Settings::LoadSettingsWithRecoveryInfo(kTestAppId, loaded, &recovery) == S_FALSE &&
+                      loaded.persistence.savePermission == Common::Settings::SettingsSavePermission::ExplicitReplacementRequired,
+                  L"Failed to reload the deleted future-schema fixture for explicit replacement.");
 
     std::filesystem::path explicitBackupPath;
     const HRESULT replaceHr = SettingsHotReload::ReplaceBlockedSettingsAndSchema(kTestAppId, loaded, explicitBackupPath);
@@ -2699,6 +2736,26 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
                        L"--pc {ComputerName} --literal {{FullPath}}";
     action.workingDirectory = L"{Path}";
 
+    FileActionLauncher::ExternalActionPathReferences pathReferences{};
+    const HRESULT pathReferencesHr = FileActionLauncher::GetExternalActionPathReferences(action, pathReferences);
+    state.Require(SUCCEEDED(pathReferencesHr), L"Valid external-action macros should produce a touch-scope description.");
+    state.Require(pathReferences.itemPath && pathReferences.currentDirectory && pathReferences.oppositePanePath && pathReferences.selectedPathsFile,
+                  L"External-action touch scope should include every referenced provider-path macro family.");
+
+    Common::Settings::FileActionDefinition nonPathAction{};
+    nonPathAction.executablePath = L"C:\\Tools\\Viewer.exe";
+    nonPathAction.arguments      = L"--pc {ComputerName}";
+    pathReferences               = {};
+    const HRESULT nonPathReferencesHr = FileActionLauncher::GetExternalActionPathReferences(nonPathAction, pathReferences);
+    state.Require(SUCCEEDED(nonPathReferencesHr) && ! pathReferences.itemPath && ! pathReferences.currentDirectory &&
+                      ! pathReferences.oppositePanePath && ! pathReferences.selectedPathsFile,
+                  L"Non-path external-action macros should not add unrelated objects to an artifact receipt.");
+
+    Common::Settings::FileActionDefinition invalidPathAction = nonPathAction;
+    invalidPathAction.arguments                              = L"{FullPath";
+    const HRESULT invalidPathReferencesHr = FileActionLauncher::GetExternalActionPathReferences(invalidPathAction, pathReferences);
+    state.Require(FAILED(invalidPathReferencesHr), L"Malformed macro syntax must fail before artifact consent or launch-plan side effects.");
+
     FileActionLauncher::MacroContext context{};
     context.itemPath          = std::filesystem::path(L"C:\\Data Set\\alpha beta.txt");
     context.oppositePanePath  = std::filesystem::path(L"D:\\Reference Pane");
@@ -2770,7 +2827,7 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     missingSelectionFile.arguments                              = L"{SelectedPathsFile}";
     FileActionLauncher::MacroContext missingContext             = context;
     missingContext.selectedPathsFile.clear();
-    missingContext.selectedPaths.clear();
+    missingContext.selectedPaths = {};
     missingContext.itemPath.clear();
     const HRESULT missingHr = FileActionLauncher::BuildExternalLaunchPlan(missingSelectionFile, missingContext, plan);
     state.Require(FAILED(missingHr), L"Selected-paths macro should fail when no selected paths file, selected path, or focused path is supplied.");
@@ -2852,6 +2909,773 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     return L"cmd.exe";
 }
 
+[[nodiscard]] std::wstring ResolveSiblingExecutablePath(std::wstring_view fileName) noexcept
+{
+    std::array<wchar_t, 32'768> modulePath{};
+    const DWORD length = GetModuleFileNameW(nullptr, modulePath.data(), static_cast<DWORD>(modulePath.size()));
+    if (length == 0u || length >= modulePath.size())
+    {
+        return {};
+    }
+
+    return (std::filesystem::path(std::wstring_view(modulePath.data(), length)).parent_path() / fileName).wstring();
+}
+
+#if defined(ENABLE_TESTS)
+[[nodiscard]] Common::Settings::FileActionDefinition MakeSelectedPathsManifestTestAction()
+{
+    Common::Settings::FileActionDefinition action{};
+    action.kind             = Common::Settings::FileActionKind::ExternalProgram;
+    action.executablePath   = ResolveSiblingExecutablePath(L"RedSalamanderSearchService.exe");
+    action.arguments        = L"{SelectedPathsFile}";
+    action.workingDirectory = L"{Path}";
+    return action;
+}
+
+[[nodiscard]] std::string BuildExpectedSelectedPathsManifestBytes(const std::vector<std::filesystem::path>& paths)
+{
+    std::string bytes;
+    bytes.push_back(static_cast<char>(0xFFu));
+    bytes.push_back(static_cast<char>(0xFEu));
+    for (const std::filesystem::path& path : paths)
+    {
+        if (path.empty())
+        {
+            continue;
+        }
+        for (const wchar_t character : path.native())
+        {
+            const uint16_t codeUnit = static_cast<uint16_t>(character);
+            bytes.push_back(static_cast<char>(codeUnit & 0xFFu));
+            bytes.push_back(static_cast<char>((codeUnit >> 8u) & 0xFFu));
+        }
+        bytes.append("\r\0\n\0", 4u);
+    }
+    return bytes;
+}
+
+[[nodiscard]] bool TestFileActionSelectedPathsCreationContract(CaseState& state) noexcept
+{
+    const SelfTest::TestSandbox sandbox =
+        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"file_action_selected_paths_creation_contract");
+    state.Require(sandbox.IsValid(), L"Selected-path creation contract requires a TestSandbox root.");
+    if (! sandbox.IsValid())
+    {
+        return false;
+    }
+    const auto cleanup = wil::scope_exit([&] noexcept { static_cast<void>(SelfTest::RemoveAll(sandbox.root)); });
+
+    const std::filesystem::path manifestRoot = sandbox.root / L"private-manifests";
+    state.Require(SelfTest::EnsureDirectory(manifestRoot), L"Selected-path creation contract could not create its private root.");
+
+    FileActionLauncher::Testing::SelectedPathsFileObservation observation{};
+    FileActionLauncher::Testing::SelectedPathsFileOptions testOptions{};
+    testOptions.rootOverride             = manifestRoot;
+    testOptions.injectedCreateCollisions = 1u;
+    testOptions.maximumCreateAttempts    = 3u;
+    testOptions.observation              = &observation;
+
+    const std::array selectedPaths{sandbox.root / L"selected.txt"};
+    FileActionLauncher::MacroContext context{};
+    context.itemPath                 = sandbox.root / L"focused.txt";
+    context.currentDirectory         = sandbox.root;
+    context.selectedPaths            = selectedPaths;
+    context.selectedPathsFileOptions = &testOptions;
+
+    FileActionLauncher::LaunchPlan plan{};
+    const HRESULT collisionHr = FileActionLauncher::BuildExternalLaunchPlan(MakeSelectedPathsManifestTestAction(), context, plan);
+    const std::string collidedBytes = observation.collidedPath.empty() ? std::string{} : ReadSettingsTestBytes(observation.collidedPath);
+    const bool collisionSurvived = collidedBytes == "selected-path collision sentinel";
+    state.Require(SUCCEEDED(collisionHr) && plan.selectedPathsFileLease.HasValue() && ! observation.collidedPath.empty() &&
+                      plan.selectedPathsFileLease.Path() != observation.collidedPath && collisionSurvived && observation.createAttempts == 2u,
+                  std::format(L"Exclusive selected-path creation must preserve an injected collision and retry once "
+                              L"(hr=0x{:08X}, attempts={}, samePath={}, collisionSurvived={}).",
+                              static_cast<unsigned>(collisionHr),
+                              observation.createAttempts,
+                              plan.selectedPathsFileLease.HasValue() && plan.selectedPathsFileLease.Path() == observation.collidedPath,
+                              collisionSurvived));
+    plan = {};
+
+    observation                         = {};
+    testOptions.injectedCreateCollisions = testOptions.maximumCreateAttempts;
+    FileActionLauncher::LaunchPlan exhaustedPlan{};
+    const HRESULT exhaustedHr = FileActionLauncher::BuildExternalLaunchPlan(MakeSelectedPathsManifestTestAction(), context, exhaustedPlan);
+    state.Require(exhaustedHr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS) && ! exhaustedPlan.selectedPathsFileLease.HasValue() &&
+                      observation.createAttempts == testOptions.maximumCreateAttempts,
+                  L"Selected-path exclusive creation must stop after the configured collision-attempt bound without truncating a candidate.");
+    exhaustedPlan = {};
+
+    std::filesystem::path longRoot = sandbox.root / L"long-root";
+    while (longRoot.native().size() < 300u)
+    {
+        longRoot /= L"selected-path-long-root-segment";
+    }
+    const HRESULT ensureLongRootHr = EnsureExtendedDirectoryForPreviewPropertiesTest(longRoot);
+    std::wstring extendedLongRoot;
+    const HRESULT extendLongRootHr = BuildExtendedPathForPreviewPropertiesTest(longRoot, extendedLongRoot);
+    state.Require(SUCCEEDED(ensureLongRootHr) && SUCCEEDED(extendLongRootHr), L"Selected-path creation contract could not create its long private root.");
+    observation                          = {};
+    testOptions.rootOverride             = std::filesystem::path(extendedLongRoot);
+    testOptions.injectedCreateCollisions = 0u;
+    FileActionLauncher::LaunchPlan longPlan{};
+    const HRESULT longHr = FileActionLauncher::BuildExternalLaunchPlan(MakeSelectedPathsManifestTestAction(), context, longPlan);
+    state.Require(SUCCEEDED(longHr) && longPlan.selectedPathsFileLease.HasValue(),
+                  std::format(L"Selected-path exclusive creation must support an extended private root (hr=0x{:08X}).", static_cast<unsigned>(longHr)));
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFileActionSelectedPathsRecordContract(CaseState& state) noexcept
+{
+    const SelfTest::TestSandbox sandbox =
+        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"file_action_selected_paths_record_contract");
+    state.Require(sandbox.IsValid(), L"Selected-path record contract requires a TestSandbox root.");
+    if (! sandbox.IsValid())
+    {
+        return false;
+    }
+    const auto cleanup = wil::scope_exit([&] noexcept { static_cast<void>(SelfTest::RemoveAll(sandbox.root)); });
+    const std::filesystem::path manifestRoot = sandbox.root / L"private-manifests";
+    state.Require(SelfTest::EnsureDirectory(manifestRoot), L"Selected-path record contract could not create its private root.");
+
+    FileActionLauncher::Testing::SelectedPathsFileObservation observation{};
+    FileActionLauncher::Testing::SelectedPathsFileOptions testOptions{};
+    testOptions.rootOverride = manifestRoot;
+    testOptions.observation  = &observation;
+
+    std::filesystem::path longSelectedPath = sandbox.root / L"long-selected-path";
+    while (longSelectedPath.native().size() < 600u)
+    {
+        longSelectedPath /= L"record-segment";
+    }
+    const std::vector<std::filesystem::path> selectedPaths{sandbox.root / L"first path.txt",
+                                                           {},
+                                                           sandbox.root / L"Unicode-測試-U0001F642.txt",
+                                                           longSelectedPath,
+                                                           sandbox.root / L"first path.txt"};
+    FileActionLauncher::MacroContext context{};
+    context.itemPath                 = sandbox.root / L"focused.txt";
+    context.currentDirectory         = sandbox.root;
+    context.selectedPaths            = selectedPaths;
+    context.selectedPathsFileOptions = &testOptions;
+
+    FileActionLauncher::LaunchPlan validPlan{};
+    const HRESULT validHr = FileActionLauncher::BuildExternalLaunchPlan(MakeSelectedPathsManifestTestAction(), context, validPlan);
+    const std::string actualBytes = validPlan.selectedPathsFileLease.HasValue() ? ReadSettingsTestBytes(validPlan.selectedPathsFileLease.Path()) : std::string{};
+    const std::string expectedBytes = BuildExpectedSelectedPathsManifestBytes(selectedPaths);
+    state.Require(SUCCEEDED(validHr) && actualBytes == expectedBytes,
+                  L"Selected-path manifest bytes must be exact UTF-16LE BOM plus ordered, duplicate-preserving CRLF records, including long paths.");
+    validPlan = {};
+
+    const std::vector<std::filesystem::path> singleSelectedPath{sandbox.root / L"single Unicode-測試.txt"};
+    context.selectedPaths = singleSelectedPath;
+    FileActionLauncher::LaunchPlan singlePlan{};
+    const HRESULT singleHr = FileActionLauncher::BuildExternalLaunchPlan(MakeSelectedPathsManifestTestAction(), context, singlePlan);
+    const std::string singleBytes =
+        singlePlan.selectedPathsFileLease.HasValue() ? ReadSettingsTestBytes(singlePlan.selectedPathsFileLease.Path()) : std::string{};
+    state.Require(SUCCEEDED(singleHr) && singleBytes == BuildExpectedSelectedPathsManifestBytes(singleSelectedPath),
+                  L"A single selected path must use the same exact BOM and CRLF-terminated record grammar.");
+    singlePlan = {};
+    context.selectedPaths = selectedPaths;
+
+    const auto requireRejected = [&](std::filesystem::path invalidPath, std::wstring_view label) noexcept
+    {
+        observation = {};
+        const std::array invalidSelectedPaths{std::move(invalidPath)};
+        context.selectedPaths = invalidSelectedPaths;
+        FileActionLauncher::LaunchPlan invalidPlan{};
+        const HRESULT invalidHr = FileActionLauncher::BuildExternalLaunchPlan(MakeSelectedPathsManifestTestAction(), context, invalidPlan);
+        context.selectedPaths = selectedPaths;
+        state.Require(invalidHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && ! invalidPlan.selectedPathsFileLease.HasValue() &&
+                          observation.createAttempts == 0u,
+                      std::format(L"Selected-path manifest must reject {} before creating a file (hr=0x{:08X}, attempts={}).",
+                                  label,
+                                  static_cast<unsigned>(invalidHr),
+                                  observation.createAttempts));
+    };
+
+    std::wstring embeddedNul = (sandbox.root / L"nul").native();
+    embeddedNul.push_back(L'\0');
+    embeddedNul.append(L"tail.txt");
+    requireRejected(std::filesystem::path(embeddedNul), L"embedded NUL");
+    requireRejected(std::filesystem::path((sandbox.root / L"line").native() + L"\nfeed.txt"), L"embedded LF");
+    requireRejected(std::filesystem::path((sandbox.root / L"carriage").native() + L"\rreturn.txt"), L"embedded CR");
+
+    observation = {};
+    const std::array<std::filesystem::path, 2u> emptySelectedPaths{};
+    context.selectedPaths = emptySelectedPaths;
+    FileActionLauncher::LaunchPlan emptyPlan{};
+    const HRESULT emptyHr = FileActionLauncher::BuildExternalLaunchPlan(MakeSelectedPathsManifestTestAction(), context, emptyPlan);
+    state.Require(emptyHr == HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS) && ! emptyPlan.selectedPathsFileLease.HasValue() && observation.createAttempts == 0u,
+                  L"An all-empty selected-path list must fail before creating a manifest.");
+
+    return state.failure.empty();
+}
+
+struct LegacySelectedPathsReferenceObservation final
+{
+    uint64_t buildUs = 0u;
+    uint64_t writeUs = 0u;
+    uint64_t pathBytes = 0u;
+    uint64_t writeCallCount = 0u;
+    uint64_t peakAdditionalBytes = 0u;
+    uint64_t selectionCopyBytes = 0u;
+    uint64_t aggregatePayloadBytes = 0u;
+    bool usedAggregatePayload = false;
+};
+
+// Test-only Release reference for the reviewed implementation's extra vector copy,
+// aggregate UTF-16 payload, and two-write shape. The sandboxed CREATE_NEW file avoids
+// reproducing the reviewed GetTempFileNameW/CREATE_ALWAYS ownership defect.
+[[nodiscard]] HRESULT RunLegacySelectedPathsAggregateReference(std::span<const std::filesystem::path> selectedPaths,
+                                                                const std::filesystem::path& sandboxRoot,
+                                                                LegacySelectedPathsReferenceObservation& observation) noexcept
+{
+    observation = {};
+    const auto buildStartedAt = std::chrono::steady_clock::now();
+
+    const std::vector<std::filesystem::path> copiedPaths(selectedPaths.begin(), selectedPaths.end());
+    std::wstring aggregatePayload;
+    for (const std::filesystem::path& selectedPath : copiedPaths)
+    {
+        if (selectedPath.empty())
+        {
+            continue;
+        }
+
+        const uint64_t pathBytes = static_cast<uint64_t>(selectedPath.native().size()) * sizeof(wchar_t);
+        observation.pathBytes += pathBytes;
+        aggregatePayload.append(selectedPath.native());
+        aggregatePayload.append(L"\r\n");
+    }
+    if (aggregatePayload.empty())
+    {
+        return HRESULT_FROM_WIN32(ERROR_BAD_ARGUMENTS);
+    }
+
+    observation.selectionCopyBytes = observation.pathBytes * 2u; // Read plus write traffic for the redundant owning copy.
+    observation.aggregatePayloadBytes = static_cast<uint64_t>(aggregatePayload.size()) * sizeof(wchar_t);
+    observation.peakAdditionalBytes = static_cast<uint64_t>(aggregatePayload.capacity()) * sizeof(wchar_t);
+    observation.usedAggregatePayload = true;
+
+    const std::filesystem::path referencePath = sandboxRoot / L"legacy-selected-paths-reference.bin";
+    wil::unique_hfile referenceFile(CreateFileW(referencePath.c_str(),
+                                                GENERIC_WRITE,
+                                                0u,
+                                                nullptr,
+                                                CREATE_NEW,
+                                                FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE,
+                                                nullptr));
+    if (! referenceFile)
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_OPEN_FAILED : error);
+    }
+
+    const auto writeStartedAt = std::chrono::steady_clock::now();
+    constexpr std::array<std::byte, 2u> kUtf16LeBom{{std::byte{0xFFu}, std::byte{0xFEu}}};
+    HRESULT hr = Common::HandleIo::WriteAll(referenceFile.get(), kUtf16LeBom.data(), kUtf16LeBom.size());
+    if (SUCCEEDED(hr))
+    {
+        ++observation.writeCallCount;
+        hr = Common::HandleIo::WriteAll(
+            referenceFile.get(), aggregatePayload.data(), static_cast<size_t>(observation.aggregatePayloadBytes));
+        if (SUCCEEDED(hr))
+        {
+            ++observation.writeCallCount;
+        }
+    }
+    observation.writeUs = Debug::Perf::ElapsedUs(writeStartedAt);
+    observation.buildUs = Debug::Perf::ElapsedUs(buildStartedAt);
+
+    Debug::Perf::EmitDurationUs(L"fileaction.selected_paths_file.reference_write_us",
+                                observation.writeUs,
+                                observation.writeCallCount,
+                                observation.aggregatePayloadBytes,
+                                hr);
+    Debug::Perf::EmitDurationUs(L"fileaction.selected_paths_file.reference_build_us",
+                                observation.buildUs,
+                                static_cast<uint64_t>(copiedPaths.size()),
+                                observation.pathBytes,
+                                hr);
+    Debug::Perf::EmitValue(L"fileaction.selected_paths_file.reference_write_calls", observation.writeCallCount);
+    Debug::Perf::EmitValue(L"fileaction.selected_paths_file.reference_peak_additional_bytes", observation.peakAdditionalBytes);
+    Debug::Perf::EmitValue(L"fileaction.selected_paths_file.reference_selection_copy_bytes", observation.selectionCopyBytes);
+    Debug::Perf::EmitValue(L"fileaction.selected_paths_file.reference_aggregate_payload_bytes", observation.aggregatePayloadBytes);
+    return hr;
+}
+
+[[nodiscard]] bool TestFileActionSelectedPathsStreamingPerf(CaseState& state) noexcept
+{
+    const SelfTest::TestSandbox sandbox =
+        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"file_action_selected_paths_streaming_perf");
+    state.Require(sandbox.IsValid(), L"Selected-path streaming scenario requires a TestSandbox root.");
+    if (! sandbox.IsValid())
+    {
+        return false;
+    }
+    const auto cleanup = wil::scope_exit([&] noexcept { static_cast<void>(SelfTest::RemoveAll(sandbox.root)); });
+    const std::filesystem::path manifestRoot = sandbox.root / L"private-manifests";
+    state.Require(SelfTest::EnsureDirectory(manifestRoot), L"Selected-path streaming scenario could not create its private root.");
+
+    constexpr size_t kRecordCount = 10'000u;
+    std::vector<std::filesystem::path> selectedPaths;
+    selectedPaths.reserve(kRecordCount);
+    uint64_t expectedPathBytes = 0u;
+    for (size_t index = 0u; index < kRecordCount; ++index)
+    {
+        std::filesystem::path path = sandbox.root / std::format(L"selected-item-{:05}-Unicode-測試.txt", index);
+        const uint64_t pathBytes   = static_cast<uint64_t>(path.native().size()) * sizeof(wchar_t);
+        expectedPathBytes += pathBytes;
+        selectedPaths.push_back(std::move(path));
+    }
+
+    FileActionLauncher::MacroContext context{};
+    context.itemPath         = sandbox.root / L"focused.txt";
+    context.currentDirectory = sandbox.root;
+    context.selectedPaths    = selectedPaths;
+
+    FileActionLauncher::Testing::SelectedPathsFileObservation observation{};
+    FileActionLauncher::Testing::SelectedPathsFileOptions testOptions{};
+    testOptions.rootOverride = manifestRoot;
+    testOptions.observation  = &observation;
+    context.selectedPathsFileOptions = &testOptions;
+
+    FileActionLauncher::LaunchPlan plan{};
+    const auto startedAt = std::chrono::steady_clock::now();
+    const HRESULT buildHr = FileActionLauncher::BuildExternalLaunchPlan(MakeSelectedPathsManifestTestAction(), context, plan);
+    const uint64_t buildUs = Debug::Perf::ElapsedUs(startedAt);
+    Debug::Perf::EmitDurationUs(L"fileaction.selected_paths_file.scenario_us", buildUs, observation.recordCount, observation.pathBytes, buildHr);
+
+    LegacySelectedPathsReferenceObservation legacyReference{};
+    const HRESULT legacyReferenceHr = RunLegacySelectedPathsAggregateReference(selectedPaths, sandbox.root, legacyReference);
+
+    const std::wstring artifact = std::format(L"{{\n"
+                                               L"  \"scenario\": \"fileaction/selected-paths-10000\",\n"
+                                               L"  \"comparison_order\": \"candidate_then_legacy_release_reference\",\n"
+                                               L"  \"record_count\": {},\n"
+                                               L"  \"build_us\": {},\n"
+                                               L"  \"path_bytes\": {},\n"
+                                               L"  \"write_calls\": {},\n"
+                                               L"  \"peak_additional_bytes\": {},\n"
+                                               L"  \"selection_copy_bytes\": {},\n"
+                                               L"  \"aggregate_payload\": {},\n"
+                                               L"  \"result_hr\": {},\n"
+                                               L"  \"legacy_release_reference\": {{\n"
+                                               L"    \"build_us\": {},\n"
+                                               L"    \"write_us\": {},\n"
+                                               L"    \"path_bytes\": {},\n"
+                                               L"    \"write_calls\": {},\n"
+                                               L"    \"peak_additional_bytes\": {},\n"
+                                               L"    \"selection_copy_bytes\": {},\n"
+                                               L"    \"aggregate_payload_bytes\": {},\n"
+                                               L"    \"aggregate_payload\": {},\n"
+                                               L"    \"result_hr\": {}\n"
+                                               L"  }}\n"
+                                               L"}}\n",
+                                               observation.recordCount,
+                                               buildUs,
+                                               observation.pathBytes,
+                                               observation.writeCallCount,
+                                               observation.peakAdditionalBytes,
+                                               observation.selectionCopyBytes,
+                                               observation.usedAggregatePayload ? L"true" : L"false",
+                                               static_cast<uint32_t>(buildHr),
+                                               legacyReference.buildUs,
+                                               legacyReference.writeUs,
+                                               legacyReference.pathBytes,
+                                               legacyReference.writeCallCount,
+                                               legacyReference.peakAdditionalBytes,
+                                               legacyReference.selectionCopyBytes,
+                                               legacyReference.aggregatePayloadBytes,
+                                               legacyReference.usedAggregatePayload ? L"true" : L"false",
+                                               static_cast<uint32_t>(legacyReferenceHr));
+    const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"file_action_selected_paths_manifest_metrics.json");
+    state.Require(! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, artifact) && SelfTest::PathExists(artifactPath),
+                  L"Selected-path streaming scenario must write its deterministic performance artifact.");
+
+    constexpr uint64_t kMaximumWriteBufferBytes = 64u * 1024u;
+    const uint64_t expectedTotalBytes = 2u + expectedPathBytes + (kRecordCount * 2u * sizeof(wchar_t));
+    const uint64_t expectedWriteCalls = (expectedTotalBytes + kMaximumWriteBufferBytes - 1u) / kMaximumWriteBufferBytes;
+    state.Require(SUCCEEDED(buildHr) && plan.selectedPathsFileLease.HasValue() && observation.recordCount == kRecordCount &&
+                      observation.pathBytes == expectedPathBytes && observation.writeCallCount == expectedWriteCalls &&
+                      observation.peakAdditionalBytes == kMaximumWriteBufferBytes && observation.selectionCopyBytes == 0u &&
+                      ! observation.usedAggregatePayload,
+                  std::format(L"The 10,000-record selected-path path must stream without a selection copy or aggregate payload "
+                              L"(hr=0x{:08X}, records={}, pathBytes={}, writes={}, peak={}, copyBytes={}, aggregate={}).",
+                              static_cast<unsigned>(buildHr),
+                              observation.recordCount,
+                              observation.pathBytes,
+                              observation.writeCallCount,
+                              observation.peakAdditionalBytes,
+                              observation.selectionCopyBytes,
+                              observation.usedAggregatePayload));
+    state.Require(SUCCEEDED(legacyReferenceHr) && legacyReference.pathBytes == expectedPathBytes && legacyReference.writeCallCount == 2u &&
+                      legacyReference.peakAdditionalBytes >= expectedPathBytes && legacyReference.selectionCopyBytes == expectedPathBytes * 2u &&
+                      legacyReference.aggregatePayloadBytes == expectedPathBytes + (kRecordCount * 2u * sizeof(wchar_t)) &&
+                      legacyReference.usedAggregatePayload,
+                  std::format(L"The Release comparison reference must preserve the reviewed copy-plus-aggregate/two-write shape "
+                              L"without recreating its unsafe pathname reservation "
+                              L"(hr=0x{:08X}, pathBytes={}, writes={}, peak={}, copyBytes={}, aggregateBytes={}, aggregate={}).",
+                              static_cast<unsigned>(legacyReferenceHr),
+                              legacyReference.pathBytes,
+                              legacyReference.writeCallCount,
+                              legacyReference.peakAdditionalBytes,
+                              legacyReference.selectionCopyBytes,
+                              legacyReference.aggregatePayloadBytes,
+                              legacyReference.usedAggregatePayload));
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFileActionSelectedPathsChildParsesRecords(CaseState& state) noexcept
+{
+    const SelfTest::TestSandbox sandbox =
+        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"file_action_selected_paths_child_parse");
+    state.Require(sandbox.IsValid(), L"Selected-path child parse requires a TestSandbox root.");
+    if (! sandbox.IsValid())
+    {
+        return false;
+    }
+    const auto cleanup = wil::scope_exit([&] noexcept { static_cast<void>(SelfTest::RemoveAll(sandbox.root)); });
+    const std::filesystem::path manifestRoot = sandbox.root / L"private-manifests";
+    const std::filesystem::path marker       = sandbox.root / L"child-marker.txt";
+    state.Require(SelfTest::EnsureDirectory(manifestRoot), L"Selected-path child parse could not create its private root.");
+
+    Common::Settings::FileActionDefinition action = MakeSelectedPathsManifestTestAction();
+    action.arguments = L"--test-support-child-probe=file-action-lease \"{SelectedPathsFile}\" \"{FullPath}\" 0 0";
+
+    FileActionLauncher::Testing::SelectedPathsFileObservation observation{};
+    FileActionLauncher::Testing::SelectedPathsFileOptions testOptions{};
+    testOptions.rootOverride = manifestRoot;
+    testOptions.observation  = &observation;
+    const std::array selectedPaths{sandbox.root / L"first selected.txt", sandbox.root / L"Unicode-測試-U0001F642.txt"};
+    FileActionLauncher::MacroContext context{};
+    context.itemPath                 = marker;
+    context.currentDirectory         = sandbox.root;
+    context.selectedPaths            = selectedPaths;
+    context.selectedPathsFileOptions = &testOptions;
+
+    FileActionLauncher::LaunchPlan plan{};
+    const HRESULT buildHr = FileActionLauncher::BuildExternalLaunchPlan(action, context, plan);
+    FileActionLauncher::LaunchOptions launchOptions{};
+    launchOptions.showCommand   = SW_HIDE;
+    launchOptions.waitForExit   = true;
+    launchOptions.waitTimeoutMs = static_cast<DWORD>(SelfTest::Scale(std::chrono::milliseconds{5000}).count());
+    FileActionLauncher::LaunchResult result{};
+    const HRESULT launchHr = SUCCEEDED(buildHr) ? FileActionLauncher::LaunchExternalPlan(std::move(plan), launchOptions, &result) : buildHr;
+
+    std::ifstream markerInput(marker);
+    std::string markerText;
+    std::getline(markerInput, markerText);
+    state.Require(SUCCEEDED(buildHr) && SUCCEEDED(launchHr) && result.exitCodeAvailable && result.exitCode == 0u && markerText == "parsed:2",
+                  std::format(L"The representative external child must parse the exact selected-path record stream "
+                              L"(build=0x{:08X}, launch=0x{:08X}, exit={}, marker='{}').",
+                              static_cast<unsigned>(buildHr),
+                              static_cast<unsigned>(launchHr),
+                              result.exitCode,
+                               Common::Strings::Utf16FromUtf8StrictOrEmpty(markerText)));
+
+    const std::filesystem::path replacementMarker = sandbox.root / L"child-replacement-marker.txt";
+    Common::Settings::FileActionDefinition replacementAction = MakeSelectedPathsManifestTestAction();
+    replacementAction.arguments = L"--test-support-child-probe=file-action-lease \"{SelectedPathsFile}\" \"{FullPath}\" 0 0 replace";
+    context.itemPath = replacementMarker;
+    FileActionLauncher::LaunchPlan replacementPlan{};
+    const HRESULT replacementBuildHr = FileActionLauncher::BuildExternalLaunchPlan(replacementAction, context, replacementPlan);
+    const std::filesystem::path replacementManifest =
+        replacementPlan.selectedPathsFileLease.HasValue() ? replacementPlan.selectedPathsFileLease.Path() : std::filesystem::path{};
+    FileActionLauncher::LaunchResult replacementResult{};
+    const HRESULT replacementLaunchHr = SUCCEEDED(replacementBuildHr)
+                                            ? FileActionLauncher::LaunchExternalPlan(std::move(replacementPlan), launchOptions, &replacementResult)
+                                            : replacementBuildHr;
+    const std::string replacementBytes = replacementManifest.empty() ? std::string{} : ReadSettingsTestBytes(replacementManifest);
+    std::ifstream replacementMarkerInput(replacementMarker);
+    std::string replacementMarkerText;
+    std::getline(replacementMarkerInput, replacementMarkerText);
+    state.Require(SUCCEEDED(replacementBuildHr) && SUCCEEDED(replacementLaunchHr) && replacementResult.exitCodeAvailable &&
+                      replacementResult.exitCode == 0u && replacementMarkerText == "parsed:2" &&
+                      replacementBytes == "child replacement sentinel",
+                  std::format(L"The real child must parse, replace the manifest, and leave the different-identity replacement intact "
+                              L"(build=0x{:08X}, launch=0x{:08X}, exit={}, marker='{}', replacementBytes={}).",
+                              static_cast<unsigned>(replacementBuildHr),
+                              static_cast<unsigned>(replacementLaunchHr),
+                              replacementResult.exitCode,
+                              Common::Strings::Utf16FromUtf8StrictOrEmpty(replacementMarkerText),
+                              replacementBytes.size()));
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFileActionSelectedPathsIdentityCleanup(CaseState& state) noexcept
+{
+    const SelfTest::TestSandbox sandbox =
+        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"file_action_selected_paths_identity_cleanup");
+    state.Require(sandbox.IsValid(), L"Selected-path identity cleanup requires a TestSandbox root.");
+    if (! sandbox.IsValid())
+    {
+        return false;
+    }
+    const auto cleanup = wil::scope_exit([&] noexcept { static_cast<void>(SelfTest::RemoveAll(sandbox.root)); });
+
+    const std::filesystem::path manifestRoot = sandbox.root / L"private-manifests";
+    state.Require(SelfTest::EnsureDirectory(manifestRoot), L"Selected-path identity cleanup could not create its private root.");
+    FileActionLauncher::Testing::SelectedPathsFileOptions testOptions{};
+    testOptions.rootOverride = manifestRoot;
+    const std::array selectedPaths{sandbox.root / L"selected.txt"};
+    FileActionLauncher::MacroContext context{};
+    context.itemPath                 = sandbox.root / L"focused.txt";
+    context.currentDirectory         = sandbox.root;
+    context.selectedPaths            = selectedPaths;
+    context.selectedPathsFileOptions = &testOptions;
+
+    const auto buildLease = [&](FileActionLauncher::LaunchPlan& plan) noexcept
+    {
+        return FileActionLauncher::BuildExternalLaunchPlan(MakeSelectedPathsManifestTestAction(), context, plan);
+    };
+
+    FileActionLauncher::LaunchPlan exactPlan{};
+    const HRESULT exactBuildHr = buildLease(exactPlan);
+    const std::filesystem::path exactPath = exactPlan.selectedPathsFileLease.HasValue() ? exactPlan.selectedPathsFileLease.Path() : std::filesystem::path{};
+    exactPlan.selectedPathsFileLease.Reset();
+    std::error_code ec;
+    state.Require(SUCCEEDED(exactBuildHr) && ! exactPath.empty() && ! std::filesystem::exists(exactPath, ec) && ! ec,
+                  L"Identity cleanup must delete the exact live manifest through its verified handle.");
+
+    FileActionLauncher::LaunchPlan replacementPlan{};
+    const HRESULT replacementBuildHr = buildLease(replacementPlan);
+    const std::filesystem::path replacementPath =
+        replacementPlan.selectedPathsFileLease.HasValue() ? replacementPlan.selectedPathsFileLease.Path() : std::filesystem::path{};
+    const bool removedOriginal = ! replacementPath.empty() && DeleteFileW(replacementPath.c_str()) != FALSE;
+    wil::unique_hfile replacement(CreateFileW(replacementPath.c_str(),
+                                              GENERIC_WRITE,
+                                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                              nullptr,
+                                              CREATE_NEW,
+                                              FILE_ATTRIBUTE_NORMAL,
+                                              nullptr));
+    constexpr std::string_view kReplacementPayload{"same-path replacement sentinel"};
+    const HRESULT replacementWriteHr = replacement
+                                           ? Common::HandleIo::WriteAll(replacement.get(), kReplacementPayload.data(), kReplacementPayload.size())
+                                           : HRESULT_FROM_WIN32(GetLastError());
+    replacement.reset();
+    replacementPlan.selectedPathsFileLease.Reset();
+    const std::string replacementBytes = replacementPath.empty() ? std::string{} : ReadSettingsTestBytes(replacementPath);
+    state.Require(SUCCEEDED(replacementBuildHr) && removedOriginal && SUCCEEDED(replacementWriteHr) && replacementBytes == kReplacementPayload,
+                  L"A same-path different-identity replacement must survive lease cleanup.");
+
+    FileActionLauncher::LaunchPlan rootReplacementPlan{};
+    const HRESULT rootReplacementBuildHr = buildLease(rootReplacementPlan);
+    const std::filesystem::path originalRootPath =
+        rootReplacementPlan.selectedPathsFileLease.HasValue() ? rootReplacementPlan.selectedPathsFileLease.Path() : std::filesystem::path{};
+    const std::filesystem::path movedRoot = sandbox.root / L"moved-original-root";
+    const bool movedOriginalRoot = SUCCEEDED(rootReplacementBuildHr) &&
+                                   MoveFileExW(manifestRoot.c_str(), movedRoot.c_str(), MOVEFILE_WRITE_THROUGH) != FALSE;
+    const bool createdReplacementRoot = movedOriginalRoot && SelfTest::EnsureDirectory(manifestRoot);
+    const std::filesystem::path replacementRootPath = manifestRoot / originalRootPath.filename();
+    const bool wroteRootReplacement = createdReplacementRoot && SelfTest::WriteTextFile(replacementRootPath, "root replacement sentinel");
+    rootReplacementPlan.selectedPathsFileLease.Reset();
+    state.Require(movedOriginalRoot && createdReplacementRoot && wroteRootReplacement &&
+                      SelfTest::PathExists(movedRoot / originalRootPath.filename()) &&
+                      ReadSettingsTestBytes(replacementRootPath) == "root replacement sentinel",
+                  L"Cleanup must preserve both an original manifest moved with its root and a same-path replacement under a different root identity.");
+
+    FileActionLauncher::LaunchPlan reparsePlan{};
+    const HRESULT reparseBuildHr = buildLease(reparsePlan);
+    const std::filesystem::path reparsePath = reparsePlan.selectedPathsFileLease.HasValue() ? reparsePlan.selectedPathsFileLease.Path() : std::filesystem::path{};
+    const std::filesystem::path reparseTarget = sandbox.root / L"reparse-target.txt";
+    const bool wroteReparseTarget = SelfTest::WriteTextFile(reparseTarget, "reparse target sentinel");
+    const bool removedReparseOriginal = ! reparsePath.empty() && DeleteFileW(reparsePath.c_str()) != FALSE;
+    const bool createdReparse = wroteReparseTarget && removedReparseOriginal &&
+                                CreateSymbolicLinkW(reparsePath.c_str(),
+                                                    reparseTarget.c_str(),
+                                                    SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE) != FALSE;
+    reparsePlan.selectedPathsFileLease.Reset();
+    const DWORD reparseAttributes = GetFileAttributesW(reparsePath.c_str());
+    state.Require(SUCCEEDED(reparseBuildHr) && createdReparse && reparseAttributes != INVALID_FILE_ATTRIBUTES &&
+                      (reparseAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u &&
+                      ReadSettingsTestBytes(reparseTarget) == "reparse target sentinel",
+                  L"A same-path reparse replacement and its target must survive no-follow identity cleanup.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFileActionSelectedPathsRecoveryBounds(CaseState& state) noexcept
+{
+    const SelfTest::TestSandbox sandbox =
+        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"file_action_selected_paths_recovery_bounds");
+    state.Require(sandbox.IsValid(), L"Selected-path recovery bounds require a TestSandbox root.");
+    if (! sandbox.IsValid())
+    {
+        return false;
+    }
+    const auto cleanup = wil::scope_exit([&] noexcept { static_cast<void>(SelfTest::RemoveAll(sandbox.root)); });
+    const auto startedAt = std::chrono::steady_clock::now();
+
+    const std::filesystem::path privateRoot = sandbox.root / L"private-manifests";
+    state.Require(SelfTest::EnsureDirectory(privateRoot), L"Selected-path recovery could not create its private root.");
+    const auto oldTime = std::filesystem::file_time_type::clock::now() - std::chrono::hours{48};
+    const auto makeOldFile = [&](const std::filesystem::path& path, std::string_view payload) noexcept
+    {
+        if (! SelfTest::WriteTextFile(path, payload))
+        {
+            return false;
+        }
+        std::error_code timeError;
+        std::filesystem::last_write_time(path, oldTime, timeError);
+        return ! timeError;
+    };
+
+    std::vector<std::filesystem::path> oldRegularFiles;
+    for (size_t index = 0u; index < 6u; ++index)
+    {
+        const std::filesystem::path path = privateRoot / std::format(L"selected-paths-old-{:02}.txt", index);
+        state.Require(makeOldFile(path, "old manifest"), L"Selected-path recovery could not create an old regular manifest.");
+        oldRegularFiles.push_back(path);
+    }
+
+    std::vector<std::filesystem::path> freshFiles;
+    for (size_t index = 0u; index < 4u; ++index)
+    {
+        const std::filesystem::path path = privateRoot / std::format(L"selected-paths-fresh-{:02}.txt", index);
+        state.Require(SelfTest::WriteTextFile(path, "fresh manifest"), L"Selected-path recovery could not create a fresh manifest.");
+        freshFiles.push_back(path);
+    }
+
+    const std::filesystem::path lockedPath = privateRoot / L"selected-paths-locked.txt";
+    state.Require(makeOldFile(lockedPath, "locked manifest"), L"Selected-path recovery could not create its locked fixture.");
+    wil::unique_hfile lockedFile(CreateFileW(lockedPath.c_str(),
+                                             GENERIC_READ,
+                                             FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                             nullptr,
+                                             OPEN_EXISTING,
+                                             FILE_ATTRIBUTE_NORMAL,
+                                             nullptr));
+    state.Require(static_cast<bool>(lockedFile), L"Selected-path recovery could not hold its no-delete-share live fixture.");
+
+    const std::filesystem::path directoryPath = privateRoot / L"selected-paths-directory.txt";
+    state.Require(SelfTest::EnsureDirectory(directoryPath), L"Selected-path recovery could not create its directory fixture.");
+
+    const std::filesystem::path reparseTarget = sandbox.root / L"recovery-reparse-target.txt";
+    const std::filesystem::path reparsePath = privateRoot / L"selected-paths-reparse.txt";
+    state.Require(SelfTest::WriteTextFile(reparseTarget, "recovery target") &&
+                      CreateSymbolicLinkW(reparsePath.c_str(), reparseTarget.c_str(), SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE) != FALSE,
+                  L"Selected-path recovery could not create its no-follow reparse fixture.");
+
+    const std::filesystem::path sharedTempShape = sandbox.root / L"rsa0001.tmp";
+    const std::filesystem::path outOfRoot = sandbox.root / L"selected-paths-outside.txt";
+    state.Require(makeOldFile(sharedTempShape, "shared-temp shape") && makeOldFile(outOfRoot, "outside private root"),
+                  L"Selected-path recovery could not create its out-of-root fixtures.");
+
+    std::wstring cursor;
+    FileActionLauncher::Testing::SelectedPathsRecoveryObservation timeBound{};
+    const HRESULT timeBoundHr = FileActionLauncher::Testing::RunSelectedPathsRecoveryPassForTest(
+        privateRoot, 60ull * 60ull * 1000ull, 128u, 128u, 0u, cursor, timeBound);
+    state.Require(timeBoundHr == S_OK && timeBound.deleted == 0u && timeBound.inspected == 0u && timeBound.stoppedByTimeBound,
+                  L"A zero-duration recovery pass must stop before inspecting or deleting an entry.");
+
+    cursor = L"selected-paths-missing-cursor.txt";
+    FileActionLauncher::Testing::SelectedPathsRecoveryObservation missingCursor{};
+    const HRESULT missingCursorHr = FileActionLauncher::Testing::RunSelectedPathsRecoveryPassForTest(
+        privateRoot, 60ull * 60ull * 1000ull, 3u, 1u, 1000u, cursor, missingCursor);
+    state.Require(missingCursorHr == S_OK && missingCursor.resetMissingCursor && cursor.empty(),
+                  L"Recovery must reset a vanished continuation anchor instead of stalling permanently.");
+
+    uint64_t totalInspected = 0u;
+    uint64_t totalDeleted   = 0u;
+    uint64_t totalSkipped   = 0u;
+    uint64_t totalErrors    = 0u;
+    uint64_t boundHits      = 0u;
+    size_t passes           = 0u;
+    bool sawEntryBound      = false;
+    bool sawDeleteBound     = false;
+    HRESULT recoveryHr      = S_OK;
+    cursor.clear();
+    for (; passes < 32u; ++passes)
+    {
+        FileActionLauncher::Testing::SelectedPathsRecoveryObservation current{};
+        recoveryHr = FileActionLauncher::Testing::RunSelectedPathsRecoveryPassForTest(
+            privateRoot, 60ull * 60ull * 1000ull, 3u, 1u, 1000u, cursor, current);
+        totalInspected += current.inspected;
+        totalDeleted += current.deleted;
+        totalSkipped += current.skipped;
+        totalErrors += current.errors;
+        sawEntryBound = sawEntryBound || current.stoppedByEntryBound;
+        sawDeleteBound = sawDeleteBound || current.stoppedByDeleteBound;
+        const bool hitBound = current.stoppedByEntryBound || current.stoppedByDeleteBound || current.stoppedByTimeBound;
+        boundHits += hitBound ? 1u : 0u;
+        state.Require(current.inspected <= 3u && current.deleted <= 1u,
+                      L"Every recovery pass must obey its explicit entry and delete bounds.");
+        if (FAILED(recoveryHr) || ! hitBound)
+        {
+            ++passes;
+            break;
+        }
+    }
+
+    lockedFile.reset();
+    bool allOldRegularDeleted = true;
+    std::error_code ec;
+    for (const std::filesystem::path& path : oldRegularFiles)
+    {
+        allOldRegularDeleted = allOldRegularDeleted && ! std::filesystem::exists(path, ec) && ! ec;
+        ec.clear();
+    }
+    bool allFreshPreserved = true;
+    for (const std::filesystem::path& path : freshFiles)
+    {
+        allFreshPreserved = allFreshPreserved && std::filesystem::exists(path, ec) && ! ec;
+        ec.clear();
+    }
+    const DWORD reparseAttributes = GetFileAttributesW(reparsePath.c_str());
+    state.Require(SUCCEEDED(recoveryHr) && passes < 32u && cursor.empty() && totalDeleted == oldRegularFiles.size() && totalErrors == 0u &&
+                      sawEntryBound && sawDeleteBound && allOldRegularDeleted && allFreshPreserved &&
+                      std::filesystem::exists(lockedPath, ec) && std::filesystem::is_directory(directoryPath, ec) &&
+                      reparseAttributes != INVALID_FILE_ATTRIBUTES && (reparseAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u &&
+                      ReadSettingsTestBytes(reparseTarget) == "recovery target" &&
+                      ReadSettingsTestBytes(sharedTempShape) == "shared-temp shape" && ReadSettingsTestBytes(outOfRoot) == "outside private root",
+                  std::format(L"Bounded private-root recovery must converge without touching fresh/live/directory/reparse/out-of-root entries "
+                              L"(hr=0x{:08X}, passes={}, inspected={}, deleted={}, skipped={}, errors={}, bounds={}).",
+                              static_cast<unsigned>(recoveryHr),
+                              passes,
+                              totalInspected,
+                              totalDeleted,
+                              totalSkipped,
+                              totalErrors,
+                              boundHits));
+
+    const uint64_t elapsedUs = Debug::Perf::ElapsedUs(startedAt);
+    Debug::Perf::EmitDurationUs(L"fileaction.selected_paths_recovery.selftest_us", elapsedUs, totalInspected, totalDeleted, recoveryHr);
+    Debug::Perf::EmitValue(L"fileaction.selected_paths_recovery.selftest_passes", static_cast<uint64_t>(passes));
+    Debug::Perf::EmitValue(L"fileaction.selected_paths_recovery.selftest_skipped", totalSkipped);
+    Debug::Perf::EmitValue(L"fileaction.selected_paths_recovery.selftest_errors", totalErrors);
+    Debug::Perf::EmitValue(L"fileaction.selected_paths_recovery.selftest_bound_hits", boundHits);
+    const std::wstring artifact = std::format(L"{{\n"
+                                               L"  \"scenario\": \"fileaction/selected-paths-recovery-bounds\",\n"
+                                               L"  \"passes\": {},\n"
+                                               L"  \"inspected\": {},\n"
+                                               L"  \"deleted\": {},\n"
+                                               L"  \"skipped\": {},\n"
+                                               L"  \"errors\": {},\n"
+                                               L"  \"bound_hits\": {},\n"
+                                               L"  \"elapsed_us\": {},\n"
+                                               L"  \"result_hr\": {}\n"
+                                               L"}}\n",
+                                               passes,
+                                               totalInspected,
+                                               totalDeleted,
+                                               totalSkipped,
+                                               totalErrors,
+                                               boundHits,
+                                               elapsedUs,
+                                               static_cast<uint32_t>(recoveryHr));
+    const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"file_action_selected_paths_recovery_metrics.json");
+    state.Require(! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, artifact) && SelfTest::PathExists(artifactPath),
+                  L"Selected-path recovery scenario must write its deterministic content-free performance artifact.");
+
+    return state.failure.empty();
+}
+#endif
+
 [[nodiscard]] bool TestFileActionExternalLaunchStartsProcess(CaseState& state) noexcept
 {
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
@@ -2895,7 +3719,7 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     options.waitTimeoutMs = static_cast<DWORD>(SelfTest::Scale(std::chrono::milliseconds{5000}).count());
 
     FileActionLauncher::LaunchResult result{};
-    const HRESULT launchHr = FileActionLauncher::LaunchExternalPlan(plan, options, &result);
+    const HRESULT launchHr = FileActionLauncher::LaunchExternalPlan(std::move(plan), options, &result);
     state.Require(SUCCEEDED(launchHr),
                   std::format(L"External launch action should start and wait successfully (hr=0x{:08X}).", static_cast<unsigned>(launchHr)));
     state.Require(result.exitCodeAvailable && result.exitCode == 0u, L"External launch action should expose a zero process exit code.");
@@ -2912,19 +3736,25 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
 
 [[nodiscard]] bool TestFileActionSelectedPathsFileLifecycle(CaseState& state) noexcept
 {
-    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
-    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
-    if (suiteRoot.empty())
+    const SelfTest::TestSandbox sandbox =
+        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"file_action_selected_paths_file_lifecycle");
+    state.Require(sandbox.IsValid(), L"Selected-path lifecycle requires a TestSandbox root.");
+    if (! sandbox.IsValid())
     {
         return false;
     }
+    const auto cleanup = wil::scope_exit([&] noexcept { static_cast<void>(SelfTest::RemoveAll(sandbox.root)); });
 
-    const std::filesystem::path root       = suiteRoot / L"work" / (L"file_action_selected_paths_" + NewGuidText());
+    const std::filesystem::path root       = sandbox.root;
     const std::filesystem::path firstFile  = root / L"one selected.txt";
     const std::filesystem::path secondFile = root / L"two selected.txt";
-    const std::filesystem::path marker     = root / L"selected-paths-marker.txt";
+    const std::filesystem::path marker = root / L"selected paths marker.tmp";
+    const auto markerCleanup = wil::scope_exit([&] noexcept
+    {
+        std::error_code markerError;
+        static_cast<void>(std::filesystem::remove(marker, markerError));
+    });
     std::error_code ec;
-    std::filesystem::remove_all(root, ec);
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create selected-paths action test folder.");
     state.Require(SelfTest::WriteTextFile(firstFile, "one"), L"Failed to create first selected-paths fixture.");
     state.Require(SelfTest::WriteTextFile(secondFile, "two"), L"Failed to create second selected-paths fixture.");
@@ -2935,14 +3765,15 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
 
     Common::Settings::FileActionDefinition action{};
     action.kind             = Common::Settings::FileActionKind::ExternalProgram;
-    action.executablePath   = ResolveCommandProcessorPath();
-    action.arguments        = L"/C if exist \"{SelectedPathsFile}\" echo selected-paths>selected-paths-marker.txt";
+    action.executablePath   = ResolveSiblingExecutablePath(L"RedSalamanderSearchService.exe");
+    action.arguments        = L"--test-support-child-probe=file-action-lease \"{SelectedPathsFile}\" \"{FullPath}\" 0 0";
     action.workingDirectory = L"{Path}";
 
+    const std::array selectedPaths{firstFile, secondFile};
     FileActionLauncher::MacroContext context{};
-    context.itemPath         = firstFile;
+    context.itemPath         = marker;
     context.currentDirectory = root;
-    context.selectedPaths    = {firstFile, secondFile};
+    context.selectedPaths    = selectedPaths;
     context.oppositePanePath = root;
     context.computerName     = L"BUILD-BOX";
 
@@ -2950,13 +3781,13 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     const HRESULT buildHr = FileActionLauncher::BuildExternalLaunchPlan(action, context, plan);
     state.Require(SUCCEEDED(buildHr),
                   std::format(L"Selected-paths external action should build a temporary list file (hr=0x{:08X}).", static_cast<unsigned>(buildHr)));
-    state.Require(plan.cleanupFilesAfterExit.size() == 1u, L"Selected-paths external action should schedule one temporary file for cleanup.");
-    if (FAILED(buildHr) || plan.cleanupFilesAfterExit.size() != 1u)
+    state.Require(plan.selectedPathsFileLease.HasValue(), L"Selected-paths external action should own one temporary file lease.");
+    if (FAILED(buildHr) || ! plan.selectedPathsFileLease.HasValue())
     {
         return false;
     }
 
-    const std::filesystem::path selectedPathsFile = plan.cleanupFilesAfterExit.front();
+    const std::filesystem::path selectedPathsFile = plan.selectedPathsFileLease.Path();
     state.Require(std::filesystem::exists(selectedPathsFile, ec), L"Selected paths file should exist after launch-plan build.");
     ec.clear();
 
@@ -2982,12 +3813,19 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     options.waitTimeoutMs = static_cast<DWORD>(SelfTest::Scale(std::chrono::milliseconds{5000}).count());
 
     FileActionLauncher::LaunchResult result{};
-    const HRESULT launchHr = FileActionLauncher::LaunchExternalPlan(plan, options, &result);
+    const HRESULT launchHr = FileActionLauncher::LaunchExternalPlan(std::move(plan), options, &result);
     state.Require(SUCCEEDED(launchHr),
                   std::format(L"Selected-paths external action should launch and wait successfully (hr=0x{:08X}).", static_cast<unsigned>(launchHr)));
-    state.Require(result.exitCodeAvailable && result.exitCode == 0u, L"Selected-paths external action should expose a zero process exit code.");
+    state.Require(result.exitCodeAvailable && result.exitCode == 0u,
+                  std::format(L"Selected-paths external action should expose a zero process exit code (available={}, code={}).",
+                              result.exitCodeAvailable,
+                              result.exitCode));
     state.Require(std::filesystem::exists(marker, ec), L"Selected-paths external action should receive a valid selected-paths file path.");
     ec.clear();
+    std::ifstream markerInput(marker);
+    std::string markerText;
+    std::getline(markerInput, markerText);
+    state.Require(markerText == "parsed:2", L"Selected-paths child should parse both exact manifest records before process exit.");
     state.Require(! std::filesystem::exists(selectedPathsFile, ec), L"Selected paths file should be deleted after the waited process exits.");
     ec.clear();
 
@@ -2996,7 +3834,157 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     FileActionLauncher::LaunchPlan noMacroPlan{};
     const HRESULT noMacroHr = FileActionLauncher::BuildExternalLaunchPlan(noMacroAction, context, noMacroPlan);
     state.Require(SUCCEEDED(noMacroHr), L"External action without {SelectedPathsFile} should still build.");
-    state.Require(noMacroPlan.cleanupFilesAfterExit.empty(), L"External action without {SelectedPathsFile} should not create cleanup files.");
+    state.Require(! noMacroPlan.selectedPathsFileLease.HasValue(), L"External action without {SelectedPathsFile} should not create a cleanup lease.");
+
+#if defined(ENABLE_TESTS)
+    struct RemovalWaitResult final
+    {
+        bool removed     = false;
+        bool stillExists = true;
+        std::error_code finalError;
+        size_t observationCount = 0u;
+    };
+
+    const auto waitUntilRemoved = [&](const std::filesystem::path& path) noexcept
+    {
+        RemovalWaitResult waitResult{};
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds{5000});
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            waitResult.finalError.clear();
+            waitResult.stillExists = std::filesystem::exists(path, waitResult.finalError);
+            ++waitResult.observationCount;
+            if (! waitResult.finalError && ! waitResult.stillExists)
+            {
+                waitResult.removed = true;
+                return waitResult;
+            }
+
+            std::this_thread::sleep_for(SelfTest::Scale(std::chrono::milliseconds{10}));
+        }
+
+        waitResult.finalError.clear();
+        waitResult.stillExists = std::filesystem::exists(path, waitResult.finalError);
+        ++waitResult.observationCount;
+        waitResult.removed = ! waitResult.finalError && ! waitResult.stillExists;
+        return waitResult;
+    };
+
+    const auto exerciseFault = [&](FileActionLauncher::Testing::ExternalLaunchFault fault,
+                                   bool waitForExit,
+                                   HRESULT expectedHr,
+                                   bool deferred) noexcept
+    {
+        FileActionLauncher::LaunchPlan faultPlan{};
+        const HRESULT faultBuildHr = FileActionLauncher::BuildExternalLaunchPlan(action, context, faultPlan);
+        state.Require(SUCCEEDED(faultBuildHr) && faultPlan.selectedPathsFileLease.HasValue(),
+                      L"Faulted selected-path launch should first acquire one lease.");
+        if (FAILED(faultBuildHr) || ! faultPlan.selectedPathsFileLease.HasValue())
+        {
+            return;
+        }
+
+        const std::filesystem::path leasePath = faultPlan.selectedPathsFileLease.Path();
+        FileActionLauncher::LaunchOptions faultOptions{};
+        faultOptions.showCommand                    = SW_HIDE;
+        faultOptions.waitForExit                    = waitForExit;
+        faultOptions.waitTimeoutMs                  = static_cast<DWORD>(SelfTest::Scale(std::chrono::milliseconds{5000}).count());
+        faultOptions.selectedPathsMaximumRetentionMs = static_cast<DWORD>(SelfTest::Scale(std::chrono::milliseconds{250}).count());
+        FileActionLauncher::Testing::SetNextExternalLaunchFault(fault);
+        const HRESULT faultHr = FileActionLauncher::LaunchExternalPlan(std::move(faultPlan), faultOptions);
+        state.Require(faultHr == expectedHr,
+                      std::format(L"Faulted selected-path launch returned 0x{:08X}, expected 0x{:08X}.",
+                                  static_cast<unsigned>(faultHr),
+                                  static_cast<unsigned>(expectedHr)));
+        if (deferred)
+        {
+            const RemovalWaitResult removal = waitUntilRemoved(leasePath);
+            state.Require(removal.removed,
+                          std::format(L"Deferred selected-path cleanup should reach its bounded process/timeout quiet point "
+                                      L"(fault={}, path='{}', stillExists={}, finalError={}, observations={}).",
+                                      static_cast<unsigned>(fault),
+                                      leasePath.wstring(),
+                                      removal.stillExists ? L"yes" : L"no",
+                                      removal.finalError.value(),
+                                      removal.observationCount));
+        }
+        else
+        {
+            std::error_code removedError;
+            state.Require(! std::filesystem::exists(leasePath, removedError) && ! removedError,
+                          L"Prelaunch or waited failure should release the selected-path lease immediately.");
+        }
+    };
+
+    exerciseFault(FileActionLauncher::Testing::ExternalLaunchFault::DeferredCleanupAllocation, false, E_OUTOFMEMORY, false);
+    exerciseFault(FileActionLauncher::Testing::ExternalLaunchFault::DeferredCleanupWaitCreation,
+                  false,
+                  HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY),
+                  false);
+    exerciseFault(FileActionLauncher::Testing::ExternalLaunchFault::ShellExecute,
+                  false,
+                  HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND),
+                  false);
+    exerciseFault(FileActionLauncher::Testing::ExternalLaunchFault::NullProcessHandle, false, S_OK, true);
+    exerciseFault(FileActionLauncher::Testing::ExternalLaunchFault::WaitFailure,
+                  true,
+                  HRESULT_FROM_WIN32(ERROR_GEN_FAILURE),
+                  true);
+    exerciseFault(FileActionLauncher::Testing::ExternalLaunchFault::ExitCodeQuery,
+                  true,
+                  HRESULT_FROM_WIN32(ERROR_GEN_FAILURE),
+                  false);
+
+    Common::Settings::FileActionDefinition timeoutAction = action;
+    timeoutAction.arguments = L"--test-support-child-probe=file-action-lease \"{SelectedPathsFile}\" \"{FullPath}\" 750 0";
+    FileActionLauncher::LaunchPlan timeoutPlan{};
+    const HRESULT timeoutBuildHr = FileActionLauncher::BuildExternalLaunchPlan(timeoutAction, context, timeoutPlan);
+    state.Require(SUCCEEDED(timeoutBuildHr) && timeoutPlan.selectedPathsFileLease.HasValue(),
+                  L"Timeout selected-path launch should acquire one lease.");
+    if (SUCCEEDED(timeoutBuildHr) && timeoutPlan.selectedPathsFileLease.HasValue())
+    {
+        const std::filesystem::path timeoutLeasePath = timeoutPlan.selectedPathsFileLease.Path();
+        FileActionLauncher::LaunchOptions timeoutOptions{};
+        timeoutOptions.showCommand                     = SW_HIDE;
+        timeoutOptions.waitForExit                     = true;
+        timeoutOptions.waitTimeoutMs                   = 1u;
+        timeoutOptions.selectedPathsMaximumRetentionMs = static_cast<DWORD>(SelfTest::Scale(std::chrono::milliseconds{3000}).count());
+        const HRESULT timeoutHr = FileActionLauncher::LaunchExternalPlan(std::move(timeoutPlan), timeoutOptions);
+        state.Require(timeoutHr == HRESULT_FROM_WIN32(ERROR_TIMEOUT), L"Wait timeout should be surfaced while cleanup ownership is retained.");
+        const RemovalWaitResult timeoutRemoval = waitUntilRemoved(timeoutLeasePath);
+        state.Require(timeoutRemoval.removed,
+                      std::format(L"Timed-out selected-path launch should clean after exit or bounded retention "
+                                  L"(path='{}', stillExists={}, finalError={}, observations={}).",
+                                  timeoutLeasePath.wstring(),
+                                  timeoutRemoval.stillExists ? L"yes" : L"no",
+                                  timeoutRemoval.finalError.value(),
+                                  timeoutRemoval.observationCount));
+    }
+
+    Common::Settings::FileActionDefinition nonzeroAction = action;
+    nonzeroAction.arguments = L"--test-support-child-probe=file-action-lease \"{SelectedPathsFile}\" \"{FullPath}\" 0 7";
+    FileActionLauncher::LaunchPlan nonzeroPlan{};
+    const HRESULT nonzeroBuildHr = FileActionLauncher::BuildExternalLaunchPlan(nonzeroAction, context, nonzeroPlan);
+    if (SUCCEEDED(nonzeroBuildHr) && nonzeroPlan.selectedPathsFileLease.HasValue())
+    {
+        const std::filesystem::path nonzeroLeasePath = nonzeroPlan.selectedPathsFileLease.Path();
+        FileActionLauncher::LaunchOptions nonzeroOptions{};
+        nonzeroOptions.showCommand   = SW_HIDE;
+        nonzeroOptions.waitForExit   = true;
+        nonzeroOptions.waitTimeoutMs = static_cast<DWORD>(SelfTest::Scale(std::chrono::milliseconds{5000}).count());
+        FileActionLauncher::LaunchResult nonzeroResult{};
+        const HRESULT nonzeroHr = FileActionLauncher::LaunchExternalPlan(std::move(nonzeroPlan), nonzeroOptions, &nonzeroResult);
+        std::error_code nonzeroError;
+        state.Require(nonzeroHr == S_OK && nonzeroResult.exitCodeAvailable && nonzeroResult.exitCode == 7u &&
+                          ! std::filesystem::exists(nonzeroLeasePath, nonzeroError) && ! nonzeroError,
+                      L"Nonzero child exit should still release the selected-path lease after reporting the exit code.");
+    }
+    else
+    {
+        state.Require(false, L"Nonzero-exit selected-path launch should acquire one lease.");
+    }
+
+#endif
 
     return state.failure.empty();
 }
@@ -3063,6 +4051,19 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     return nullptr;
 }
 
+[[nodiscard]] Common::Settings::ShortcutBinding* FindTestShortcutBinding(
+    std::vector<Common::Settings::ShortcutBinding>& bindings, Common::Keyboard::KeyPosition keyPosition, uint32_t modifiers) noexcept
+{
+    for (Common::Settings::ShortcutBinding& binding : bindings)
+    {
+        if (binding.keyPosition == keyPosition && (binding.modifiers & 0x7u) == (modifiers & 0x7u))
+        {
+            return &binding;
+        }
+    }
+    return nullptr;
+}
+
 void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& bindings, uint32_t vk, uint32_t modifiers) noexcept
 {
     bindings.erase(std::remove_if(bindings.begin(),
@@ -3108,6 +4109,8 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
     RemoveTestShortcutBinding(shortcuts.functionBar, VK_F12, ShortcutManager::kModCtrl);
     RemoveTestShortcutBinding(shortcuts.folderView, VK_RETURN, 0u);
     RemoveTestShortcutBinding(shortcuts.folderView, static_cast<uint32_t>('1'), ShortcutManager::kModCtrl);
+    RemoveTestShortcutBinding(shortcuts.application, static_cast<uint32_t>('P'), ShortcutManager::kModCtrl | ShortcutManager::kModShift);
+    RemoveTestShortcutBinding(shortcuts.terminal, static_cast<uint32_t>('F'), ShortcutManager::kModCtrl | ShortcutManager::kModShift);
 
     Common::Settings::ShortcutBinding* unassignedFunction = FindTestShortcutBinding(shortcuts.functionBar, VK_F5, 0u);
     state.Require(unassignedFunction != nullptr, L"Shortcut default fixture should include plain F5 before marking it unassigned.");
@@ -3148,6 +4151,15 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
     state.Require(hotPathCommand.has_value() && hotPathCommand.value() == std::wstring_view{L"cmd/pane/hotPath/1"},
                   L"Missing Ctrl+1 should be restored to cmd/pane/hotPath/1.");
 
+    const auto paletteCommand = manager.FindApplicationCommand(static_cast<uint32_t>('P'), ShortcutManager::kModCtrl | ShortcutManager::kModShift);
+    state.Require(paletteCommand.has_value() && paletteCommand.value() == std::wstring_view{L"cmd/app/commandPalette"},
+                  L"Missing global Ctrl+Shift+P should be restored to cmd/app/commandPalette.");
+
+    const auto terminalFindCommand = manager.FindTerminalCommand(
+        static_cast<uint32_t>('F'), ShortcutManager::kModCtrl | ShortcutManager::kModShift, 0u, false);
+    state.Require(terminalFindCommand.has_value() && terminalFindCommand.value() == std::wstring_view{L"cmd/terminal/find"},
+                  L"Missing terminal Ctrl+Shift+F should be restored to cmd/terminal/find.");
+
     const auto f5Command = manager.FindFunctionBarCommand(VK_F5, 0u);
     state.Require(f5Command.has_value() && f5Command.value() == kUnassignedCommandId,
                   L"Plain F5 marked unassigned should remain an explicit no-op instead of restoring its default command.");
@@ -3158,6 +4170,216 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
 
     const auto sentinelShortcut = manager.TryGetShortcutForCommand(kUnassignedCommandId);
     state.Require(! sentinelShortcut.has_value(), L"The internal unassigned sentinel should not be exposed as a reverse shortcut for a command.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestTerminalShortcutDefaultsAndPhysicalPositions(CaseState& state) noexcept
+{
+    Common::Settings::ShortcutsSettings defaults = ShortcutDefaults::CreateDefaultShortcuts();
+    state.Require(ShortcutDefaults::kWindowsTerminalReviewCoverage.p1Mapped == 48u &&
+                      ShortcutDefaults::kWindowsTerminalReviewCoverage.deferredPassThrough == 12u &&
+                      ShortcutDefaults::kWindowsTerminalReviewCoverage.notApplicable == 8u &&
+                      ShortcutDefaults::kWindowsTerminalReviewCoverage.Total() == 68u,
+                  L"The upstream Windows Terminal review must retain its exact 48 + 12 + 8 = 68 partition.");
+    state.Require(defaults.application.size() == 4u, L"Application scope should contain exactly the four reviewed global defaults.");
+    state.Require(defaults.terminal.size() == 46u, L"Terminal scope should contain exactly the 46 reviewed defaults.");
+    Common::Settings::ShortcutBinding* physicalPlus =
+        FindTestShortcutBinding(defaults.terminal, Common::Keyboard::KeyPosition::NumberRowPlus, ShortcutManager::kModCtrl);
+    state.Require(physicalPlus != nullptr && physicalPlus->vk == 0u,
+                  L"The terminal Ctrl+number-row-plus default must persist a physical position instead of a layout character.");
+
+    ShortcutManager manager;
+    manager.Load(defaults);
+    state.Require(manager.GetApplicationConflicts().empty(), L"Default application shortcuts have conflicts.");
+    state.Require(manager.GetTerminalConflicts().empty(), L"Default terminal shortcuts have conflicts.");
+
+    std::unordered_set<std::wstring_view> terminalCommandIds;
+    for (const Common::Settings::ShortcutBinding& terminalBinding : defaults.terminal)
+    {
+        const std::wstring_view commandId = CanonicalizeCommandId(terminalBinding.commandId);
+        const CommandInfo* const command  = FindCommandInfo(commandId);
+        state.Require(command != nullptr, std::format(L"Terminal default {} is missing its command definition.", commandId));
+        if (! command)
+        {
+            continue;
+        }
+        state.Require(IsCommandShortcutEligible(*command, CommandShortcutScope::Terminal),
+                      std::format(L"Terminal default {} is not Terminal-scope eligible.", commandId));
+        state.Require(command->executorOwner != CommandExecutorOwner::LegacyHost,
+                      std::format(L"Terminal command {} is missing typed executor ownership.", commandId));
+        state.Require(command->dispatchPath != CommandDispatchPath::Legacy,
+                      std::format(L"Terminal command {} is missing a typed dispatch path.", commandId));
+        state.Require(command->visualId != CommandVisualId::None, std::format(L"Terminal command {} is missing a visual ID.", commandId));
+        state.Require(command->paletteVisible, std::format(L"Terminal command {} should be visible in the global command palette.", commandId));
+        state.Require(! command->searchKeywords.empty(), std::format(L"Terminal command {} is missing search keywords.", commandId));
+        terminalCommandIds.emplace(commandId);
+    }
+    state.Require(terminalCommandIds.size() == 39u, L"The 46 Terminal defaults should resolve to exactly 39 Terminal-scope-eligible command definitions.");
+
+    for (const std::wstring_view commandId : {L"cmd/terminal/close", L"cmd/terminal/contextMenu", L"cmd/terminal/sessionMenu"})
+    {
+        const CommandInfo* const command = FindCommandInfo(commandId);
+        state.Require(command != nullptr && command->executorOwner == CommandExecutorOwner::TerminalHost &&
+                          command->dispatchPath == CommandDispatchPath::StableCommandId &&
+                          command->stateSource == CommandStateSource::ApplicationHost,
+                      std::format(L"{} must use host-owned dispatch and state instead of the Terminal action ABI.", commandId));
+    }
+    if (const CommandInfo* const copy = FindCommandInfo(L"cmd/terminal/copy"))
+    {
+        state.Require(copy->executorOwner == CommandExecutorOwner::TerminalPlugin &&
+                          copy->dispatchPath == CommandDispatchPath::TerminalActions &&
+                          copy->stateSource == CommandStateSource::TerminalActions,
+                      L"Terminal Copy must retain plugin-owned action dispatch and state.");
+    }
+    else
+    {
+        state.Require(false, L"Terminal Copy is missing from the command registry.");
+    }
+
+    for (const Common::Settings::ShortcutBinding& applicationBinding : defaults.application)
+    {
+        const CommandInfo* const command = FindCommandInfo(applicationBinding.commandId);
+        state.Require(command != nullptr, std::format(L"Application default {} is missing its command definition.", applicationBinding.commandId));
+        if (command)
+        {
+            state.Require(IsCommandShortcutEligible(*command, CommandShortcutScope::Application),
+                          std::format(L"Application default {} is not Application-scope eligible.", applicationBinding.commandId));
+        }
+    }
+
+    const auto plus = manager.FindTerminalCommand(
+        static_cast<uint32_t>('Q'), ShortcutManager::kModCtrl, Common::Keyboard::kNumberRowPlusScanCode, false);
+    state.Require(plus.has_value() && plus.value() == std::wstring_view{L"cmd/terminal/font/increase"},
+                  L"Ctrl+number-row-plus should resolve by scan-code position, independently of its layout character.");
+
+    const auto minus = manager.FindTerminalCommand(
+        static_cast<uint32_t>('W'), ShortcutManager::kModCtrl, Common::Keyboard::kNumberRowMinusScanCode, false);
+    state.Require(minus.has_value() && minus.value() == std::wstring_view{L"cmd/terminal/font/decrease"},
+                  L"Ctrl+number-row-minus should resolve by scan-code position, independently of its layout character.");
+
+    state.Require(! manager.FindTerminalCommand(VK_OEM_PLUS, ShortcutManager::kModCtrl, Common::Keyboard::kNumberRowPlusScanCode, true).has_value(),
+                  L"An extended key with the number-row scan code must not match a physical number-row shortcut.");
+
+    const auto folderPlus = manager.FindFolderViewCommand(
+        static_cast<uint32_t>('Q'), ShortcutManager::kModCtrl, Common::Keyboard::kNumberRowPlusScanCode, false);
+    state.Require(folderPlus.has_value() && folderPlus.value() == std::wstring_view{L"cmd/pane/selection/selectDialog"},
+                  L"Folder-view Ctrl+number-row-plus should use the same physical-key identity.");
+
+    const auto numpadPlus = manager.FindTerminalCommand(VK_ADD, ShortcutManager::kModCtrl, 0u, true);
+    state.Require(numpadPlus.has_value() && numpadPlus.value() == std::wstring_view{L"cmd/terminal/font/increase"},
+                  L"Ctrl+NumpadPlus should remain an explicit virtual-key alias.");
+
+    state.Require(! manager.FindTerminalCommand(VK_F11, 0u, 0u, false).has_value(), L"Plain F11 must not be claimed by terminal fullscreen.");
+    const auto connect = manager.FindFunctionBarCommand(VK_F11, 0u);
+    state.Require(connect.has_value() && connect.value() == std::wstring_view{L"cmd/pane/connect"},
+                  L"Plain F11 must remain the Salamander Connect command.");
+
+    const auto globalPalette = manager.FindApplicationCommand(
+        static_cast<uint32_t>('P'), ShortcutManager::kModCtrl | ShortcutManager::kModShift);
+    state.Require(globalPalette.has_value() && globalPalette.value() == std::wstring_view{L"cmd/app/commandPalette"},
+                  L"Ctrl+Shift+P must remain the global RedSalamander Command Palette.");
+
+    Common::Settings::ShortcutsSettings physicalApplication = defaults;
+    physicalApplication.application.push_back(Common::Settings::ShortcutBinding{
+        .modifiers = ShortcutManager::kModCtrl,
+        .commandId = L"cmd/app/commandPalette",
+        .keyPosition = Common::Keyboard::KeyPosition::NumberRowPlus,
+    });
+    ShortcutManager physicalApplicationManager;
+    physicalApplicationManager.Load(physicalApplication);
+    const auto physicalApplicationCommand = physicalApplicationManager.FindApplicationCommand(
+        static_cast<uint32_t>('Q'), ShortcutManager::kModCtrl, Common::Keyboard::kNumberRowPlusScanCode, false);
+    state.Require(physicalApplicationCommand.has_value() && physicalApplicationCommand.value() == L"cmd/app/commandPalette" &&
+                      ! physicalApplicationManager.FindApplicationCommand(static_cast<uint32_t>('Q'), ShortcutManager::kModCtrl).has_value(),
+                  L"Application physical shortcuts must dispatch from scan-code identity and not from the current layout character alone.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestTerminalShortcutPassThroughRoundTrip(CaseState& state) noexcept
+{
+    constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestTerminalShortcutPassThroughRoundTrip";
+    CleanupSettingsArtifacts(kTestAppId);
+    const auto cleanup = wil::scope_exit([&] { CleanupSettingsArtifacts(kTestAppId); });
+
+    Common::Settings::Settings settings{};
+    settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
+    Common::Settings::ShortcutBinding binding{};
+    binding.vk        = static_cast<uint32_t>('P');
+    binding.modifiers = ShortcutManager::kModCtrl | ShortcutManager::kModShift;
+    binding.commandId = ShortcutIds::kPassThroughCommandId;
+    settings.shortcuts->terminal.push_back(std::move(binding));
+
+    const HRESULT saveHr = Common::Settings::SaveSettings(kTestAppId, SettingsSave::PrepareForSave(settings));
+    state.Require(SUCCEEDED(saveHr), L"Failed to save terminal pass-through shortcut settings.");
+    if (FAILED(saveHr))
+    {
+        return false;
+    }
+
+    Common::Settings::Settings loaded{};
+    const HRESULT loadHr = Common::Settings::TryLoadSettingsNoRecovery(kTestAppId, loaded);
+    state.Require(loadHr == S_OK, L"Failed to load terminal pass-through shortcut settings.");
+    if (FAILED(loadHr))
+    {
+        return false;
+    }
+
+    ShortcutDefaults::EnsureShortcutsInitialized(loaded);
+    state.Require(loaded.shortcuts.has_value(), L"Loaded terminal pass-through shortcut block is missing.");
+    if (! loaded.shortcuts.has_value())
+    {
+        return false;
+    }
+    state.Require(loaded.shortcuts->migrationVersion == 1u,
+                  L"Shortcut migration version should survive a customized shortcut save/load round trip.");
+
+    ShortcutManager manager;
+    manager.Load(loaded.shortcuts.value());
+    const auto terminalCommand = manager.FindTerminalCommand(
+        static_cast<uint32_t>('P'), ShortcutManager::kModCtrl | ShortcutManager::kModShift, 0u, false);
+    state.Require(terminalCommand.has_value() && terminalCommand.value() == ShortcutIds::kPassThroughCommandId,
+                  L"Terminal Ctrl+Shift+P pass-through should survive save, load, and default merging.");
+    const auto globalCommand = manager.FindApplicationCommand(
+        static_cast<uint32_t>('P'), ShortcutManager::kModCtrl | ShortcutManager::kModShift);
+    state.Require(globalCommand.has_value() && globalCommand.value() == std::wstring_view{L"cmd/app/commandPalette"},
+                  L"A terminal pass-through override must not remove the global palette binding from application scope.");
+    state.Require(! manager.TryGetShortcutForCommand(ShortcutIds::kPassThroughCommandId).has_value(),
+                  L"The pass-through pseudo-command must not appear in reverse command lookup.");
+
+    for (const std::string_view invalidScope : {"application", "functionBar", "folderView"})
+    {
+        const std::wstring invalidScopeWide = Common::Strings::Utf16FromUtf8StrictOrEmpty(invalidScope);
+        const std::wstring invalidAppId = std::format(L"RedSalamanderSelfTestPassThroughScope_{}", invalidScopeWide);
+        CleanupSettingsArtifacts(invalidAppId);
+        const auto invalidCleanup = wil::scope_exit([&] { CleanupSettingsArtifacts(invalidAppId); });
+        const std::filesystem::path invalidPath = Common::Settings::GetSettingsPath(invalidAppId);
+        const std::string invalidJson = std::format(
+            R"json({{"schemaVersion":16,"shortcuts":{{"{}":[{{"vk":"F24","commandId":"cmd/shortcut/passthrough"}}]}}}})json",
+            invalidScope);
+        state.Require(SelfTest::WriteTextFile(invalidPath, invalidJson), L"Failed to write an invalid non-Terminal pass-through fixture.");
+        Common::Settings::Settings invalidLoaded{};
+        const HRESULT invalidHr = Common::Settings::TryLoadSettingsNoRecovery(invalidAppId, invalidLoaded);
+        state.Require(invalidHr == S_OK && ! invalidLoaded.shortcuts.has_value(),
+                      std::format(L"{} pass-through must recover only the invalid shortcuts section.", invalidScopeWide));
+    }
+
+    constexpr std::string_view kInvalidFunctionPhysicalImport =
+        R"json({"shortcuts":{"functionBar":[{"keyPosition":"numberRowPlus","commandId":"cmd/pane/connect"}]}})json";
+    constexpr std::string_view kInvalidApplicationPassThroughImport =
+        R"json({"shortcuts":{"application":[{"vk":"F24","commandId":"cmd/shortcut/passthrough"}]}})json";
+    constexpr std::string_view kValidTerminalPassThroughImport =
+        R"json({"shortcuts":{"terminal":[{"vk":"F24","commandId":"cmd/shortcut/passthrough"}]}})json";
+    Common::Settings::ShortcutsSettings imported{};
+    std::wstring importError;
+    state.Require(! DebugParsePreferencesShortcutImport(kInvalidFunctionPhysicalImport, imported, importError) && ! importError.empty(),
+                  L"Preferences import must reject a physical Function Bar shortcut.");
+    state.Require(! DebugParsePreferencesShortcutImport(kInvalidApplicationPassThroughImport, imported, importError) && ! importError.empty(),
+                  L"Preferences import must reject pass-through outside Terminal scope.");
+    state.Require(DebugParsePreferencesShortcutImport(kValidTerminalPassThroughImport, imported, importError) &&
+                      imported.terminal.size() == 1u && imported.terminal.front().commandId == ShortcutIds::kPassThroughCommandId,
+                  L"Preferences import must preserve a valid Terminal pass-through shortcut.");
 
     return state.failure.empty();
 }
@@ -3250,6 +4472,8 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
     auto& shortcuts                = settings.shortcuts.value();
     shortcuts.functionBarCollapsed = true;
     shortcuts.folderViewCollapsed  = true;
+    shortcuts.applicationCollapsed = true;
+    shortcuts.terminalCollapsed    = true;
     shortcuts.sortColumnId         = L"key";
     shortcuts.sortDescending       = true;
     shortcuts.gridLayout           = {
@@ -3283,6 +4507,8 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
     const Common::Settings::ShortcutsSettings& actual = loaded.shortcuts.value();
     state.Require(actual.functionBarCollapsed, L"functionBarCollapsed did not round-trip.");
     state.Require(actual.folderViewCollapsed, L"folderViewCollapsed did not round-trip.");
+    state.Require(actual.applicationCollapsed, L"applicationCollapsed did not round-trip.");
+    state.Require(actual.terminalCollapsed, L"terminalCollapsed did not round-trip.");
     state.Require(actual.sortColumnId == shortcuts.sortColumnId, L"sortColumnId did not round-trip.");
     state.Require(actual.sortDescending == shortcuts.sortDescending, L"sortDescending did not round-trip.");
     state.Require(actual.gridLayout.size() == shortcuts.gridLayout.size(), L"gridLayout entry count did not round-trip.");
@@ -3301,9 +4527,9 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
     return state.failure.empty();
 }
 
-[[nodiscard]] bool TestSettingsStoreFileOperationsPreCalcRoundTrip(CaseState& state) noexcept
+[[nodiscard]] bool TestSettingsStoreFileOperationsRoundTrip(CaseState& state) noexcept
 {
-    constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestFileOpsPreCalcRoundTrip";
+    constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestFileOpsRoundTrip";
     CleanupSettingsArtifacts(kTestAppId);
     const auto cleanup = wil::scope_exit([&] { CleanupSettingsArtifacts(kTestAppId); });
 
@@ -3322,10 +4548,8 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
                   [](const FileOperationsSettings& value) noexcept { return value.popupFooterOnly; }},
         FieldCase{L"popupCompactDensity", [](FileOperationsSettings& value) noexcept { value.popupCompactDensity = true; },
                   [](const FileOperationsSettings& value) noexcept { return value.popupCompactDensity; }},
-        FieldCase{L"preCalcEnabled", [](FileOperationsSettings& value) noexcept { value.preCalcEnabled = false; },
-                  [](const FileOperationsSettings& value) noexcept { return ! value.preCalcEnabled; }},
-        FieldCase{L"preCalcMaxWorkers", [](FileOperationsSettings& value) noexcept { value.preCalcMaxWorkers = 8u; },
-                  [](const FileOperationsSettings& value) noexcept { return value.preCalcMaxWorkers == 8u; }},
+        FieldCase{L"verifyAfterCopy", [](FileOperationsSettings& value) noexcept { value.verifyAfterCopy = true; },
+                  [](const FileOperationsSettings& value) noexcept { return value.verifyAfterCopy; }},
         FieldCase{L"crossFsBridgeBufferSizeKB", [](FileOperationsSettings& value) noexcept { value.crossFsBridgeBufferSizeKB = 8192u; },
                   [](const FileOperationsSettings& value) noexcept { return value.crossFsBridgeBufferSizeKB == 8192u; }},
         FieldCase{L"defaultBandwidthLimitBytesPerSecond",
@@ -3479,6 +4703,73 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
     const Common::Settings::Settings preparedExplicit = SettingsSave::PrepareForSave(explicitDefaults);
     state.Require(! preparedExplicit.ui.has_value(), L"Explicit default UI settings should be omitted by canonical save.");
 
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestSettingsStoreMouseFocusFollowsPointerRoundTrip(CaseState& state) noexcept
+{
+    Common::Settings::Settings defaultSettings{};
+    defaultSettings.mouse = Common::Settings::MouseSettings{};
+    const Common::Settings::Settings preparedDefaults = SettingsSave::PrepareForSave(defaultSettings);
+    state.Require(! preparedDefaults.mouse.has_value(), L"Canonical save path should omit default mouse focus settings.");
+
+    struct ModeCase
+    {
+        std::wstring_view appId;
+        Common::Settings::MouseSettings mouse;
+    };
+    constexpr std::array<ModeCase, 3> kModeCases{{
+        {L"RedSalamanderSelfTestMouseFocusAlways", {.focusFollowsPointer = true}},
+        {L"RedSalamanderSelfTestMouseFocusTerminalOpenOnly", {.focusFollowsPointerWhenTerminalOpen = true}},
+        {L"RedSalamanderSelfTestMouseFocusBoth", {.focusFollowsPointer = true, .focusFollowsPointerWhenTerminalOpen = true}},
+    }};
+
+    for (const ModeCase& modeCase : kModeCases)
+    {
+        CleanupSettingsArtifacts(modeCase.appId);
+        Common::Settings::Settings settings{};
+        settings.mouse = modeCase.mouse;
+        const Common::Settings::Settings prepared = SettingsSave::PrepareForSave(settings);
+        state.Require(prepared.mouse.has_value(), L"Non-default mouse focus settings should survive canonical save preparation.");
+        if (! prepared.mouse.has_value())
+        {
+            continue;
+        }
+
+        const HRESULT saveHr = Common::Settings::SaveSettings(modeCase.appId, prepared);
+        state.Require(SUCCEEDED(saveHr), std::format(L"Failed to save mouse focus mode for '{}'.", modeCase.appId));
+        if (FAILED(saveHr))
+        {
+            CleanupSettingsArtifacts(modeCase.appId);
+            continue;
+        }
+
+        Common::Settings::Settings loaded{};
+        const HRESULT loadHr = Common::Settings::TryLoadSettingsNoRecovery(modeCase.appId, loaded);
+        state.Require(loadHr == S_OK, std::format(L"Failed to load mouse focus mode for '{}'.", modeCase.appId));
+        state.Require(loaded.mouse.has_value() && loaded.mouse.value() == modeCase.mouse,
+                      std::format(L"Mouse focus settings did not round-trip for '{}'.", modeCase.appId));
+        CleanupSettingsArtifacts(modeCase.appId);
+    }
+
+    constexpr Common::Settings::MouseSettings disabled{};
+    constexpr Common::Settings::MouseSettings always{.focusFollowsPointer = true};
+    constexpr Common::Settings::MouseSettings terminalDisplayedOnly{.focusFollowsPointerWhenTerminalOpen = true};
+    constexpr Common::Settings::MouseSettings both{
+        .focusFollowsPointer = true,
+        .focusFollowsPointerWhenTerminalOpen = true,
+    };
+    state.Require(! Common::Settings::ShouldPaneFocusFollowPointer(disabled, false) &&
+                      ! Common::Settings::ShouldPaneFocusFollowPointer(disabled, true),
+                  L"Disabled mouse focus settings must never follow the pointer.");
+    state.Require(Common::Settings::ShouldPaneFocusFollowPointer(always, false) &&
+                      Common::Settings::ShouldPaneFocusFollowPointer(always, true),
+                  L"Always mouse focus setting must not depend on terminal state.");
+    state.Require(! Common::Settings::ShouldPaneFocusFollowPointer(terminalDisplayedOnly, false) &&
+                      Common::Settings::ShouldPaneFocusFollowPointer(terminalDisplayedOnly, true),
+                  L"Terminal mouse focus setting must follow the pointer exactly while a Terminal tab is displayed.");
+    state.Require(Common::Settings::ShouldPaneFocusFollowPointer(both, false) && Common::Settings::ShouldPaneFocusFollowPointer(both, true),
+                  L"Enabling both independent mouse focus settings must preserve the always-on behavior.");
     return state.failure.empty();
 }
 
@@ -3678,8 +4969,10 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
     return state.failure.empty();
 }
 
-constexpr wchar_t kSettingsSaveTeardownChildEnv[] = L"REDSALAMANDER_SETTINGS_SAVE_TEARDOWN_CHILD";
+constexpr wchar_t kSettingsSaveTeardownChildEnv[]     = L"REDSALAMANDER_SETTINGS_SAVE_TEARDOWN_CHILD";
 constexpr wchar_t kSettingsSaveTeardownChildRootEnv[] = L"REDSALAMANDER_SELFTEST_ROOT";
+constexpr wchar_t kSettingsSaveTeardownTestRootEnv[]  = L"REDSALAMANDER_TEST_ROOT";
+constexpr wchar_t kSettingsSaveTeardownTestRunIdEnv[] = L"REDSALAMANDER_TEST_RUN_ID";
 
 enum class SettingsSaveChildMode : uint8_t
 {
@@ -3886,7 +5179,7 @@ enum class SettingsSaveChildMode : uint8_t
     return state.failure.empty();
 }
 
-[[nodiscard]] bool RequireSettingsSaveChild(CaseState& state, std::wstring_view childMode, std::wstring_view sandboxName) noexcept
+[[nodiscard]] bool RequireSettingsSaveChild(CaseState& state, std::wstring_view childMode) noexcept
 {
     std::array<wchar_t, 32768> modulePath{};
     const DWORD modulePathLength =
@@ -3928,25 +5221,41 @@ enum class SettingsSaveChildMode : uint8_t
         return false;
     }
 
-    const SelfTest::TestSandbox sandbox =
-        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, sandboxName);
-    state.Require(sandbox.IsValid(), L"Could not acquire an isolated test root for the settings-save child process.");
-    if (! sandbox.IsValid())
+    const DWORD previousTestRootLength = GetEnvironmentVariableW(kSettingsSaveTeardownTestRootEnv, nullptr, 0u);
+    std::wstring previousTestRootValue;
+    if (previousTestRootLength > 0u)
+    {
+        previousTestRootValue.resize(previousTestRootLength);
+        const DWORD copied = GetEnvironmentVariableW(kSettingsSaveTeardownTestRootEnv, previousTestRootValue.data(), previousTestRootLength);
+        if (copied == 0u || copied >= previousTestRootLength)
+        {
+            previousTestRootValue.clear();
+        }
+        else
+        {
+            previousTestRootValue.resize(copied);
+        }
+    }
+    const bool hadPreviousTestRootValue = ! previousTestRootValue.empty();
+
+    const std::filesystem::path childSelfTestRoot = hadPreviousTestRootValue ? std::filesystem::path(previousTestRootValue)
+                                                                            : std::filesystem::path{};
+    state.Require(! childSelfTestRoot.empty(), L"Could not resolve the exact test root for the settings-save child process.");
+    if (childSelfTestRoot.empty())
     {
         return false;
     }
-    const std::filesystem::path childSelfTestRoot =
-        sandbox.root / std::format(L"child-{}-{}", GetCurrentProcessId(), GetTickCount64());
-    state.Require(SelfTest::EnsureDirectory(childSelfTestRoot),
-                  L"Could not create the isolated settings-save teardown child test root.");
+    const std::wstring childTestRunId = std::format(L"ss-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    const std::filesystem::path childRunRoot = childSelfTestRoot / L"runs" / childTestRunId;
+    state.Require(SelfTest::EnsureDirectory(childRunRoot),
+                  L"Could not create the isolated settings-save teardown child run root.");
     if (! state.failure.empty())
     {
         return false;
     }
     const auto cleanupChildRoot = wil::scope_exit([&]() noexcept
     {
-        std::error_code ec;
-        std::filesystem::remove_all(childSelfTestRoot, ec);
+        static_cast<void>(SelfTest::RemoveAll(childRunRoot));
     });
 
     const DWORD previousRootLength = GetEnvironmentVariableW(kSettingsSaveTeardownChildRootEnv, nullptr, 0u);
@@ -3972,11 +5281,49 @@ enum class SettingsSaveChildMode : uint8_t
                                                    hadPreviousRootValue ? previousRootValue.c_str() : nullptr));
     });
     state.Require(SetEnvironmentVariableW(kSettingsSaveTeardownChildRootEnv, childSelfTestRoot.c_str()) != FALSE,
-                  L"Failed to isolate the settings-save teardown child self-test root.");
+                   L"Failed to isolate the settings-save teardown child self-test root.");
     if (! state.failure.empty())
     {
         return false;
     }
+
+    const auto restoreTestRootEnvironment = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(SetEnvironmentVariableW(kSettingsSaveTeardownTestRootEnv,
+                                                   hadPreviousTestRootValue ? previousTestRootValue.c_str() : nullptr));
+    });
+    state.Require(SetEnvironmentVariableW(kSettingsSaveTeardownTestRootEnv, childSelfTestRoot.c_str()) != FALSE,
+                  L"Failed to isolate the settings-save teardown child unified test root.");
+
+    const DWORD previousTestRunIdLength = GetEnvironmentVariableW(kSettingsSaveTeardownTestRunIdEnv, nullptr, 0u);
+    std::wstring previousTestRunIdValue;
+    if (previousTestRunIdLength > 0u)
+    {
+        previousTestRunIdValue.resize(previousTestRunIdLength);
+        const DWORD copied = GetEnvironmentVariableW(kSettingsSaveTeardownTestRunIdEnv, previousTestRunIdValue.data(), previousTestRunIdLength);
+        if (copied == 0u || copied >= previousTestRunIdLength)
+        {
+            previousTestRunIdValue.clear();
+        }
+        else
+        {
+            previousTestRunIdValue.resize(copied);
+        }
+    }
+    const bool hadPreviousTestRunIdValue = ! previousTestRunIdValue.empty();
+    const auto restoreTestRunIdEnvironment = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(SetEnvironmentVariableW(kSettingsSaveTeardownTestRunIdEnv,
+                                                   hadPreviousTestRunIdValue ? previousTestRunIdValue.c_str() : nullptr));
+    });
+    state.Require(SetEnvironmentVariableW(kSettingsSaveTeardownTestRunIdEnv, childTestRunId.c_str()) != FALSE,
+                  L"Failed to isolate the settings-save teardown child unified test run.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    const std::filesystem::path childSelfTestArtifactRoot =
+        childSelfTestRoot / L"runs" / childTestRunId / L"artifacts" / L"selftest";
 
     const std::wstring executable(modulePath.data(), modulePathLength);
     std::wstring commandLine = std::format(
@@ -4034,7 +5381,7 @@ enum class SettingsSaveChildMode : uint8_t
     if (childMode == L"sessionend" && exitCode == 0u)
     {
         const std::filesystem::path sourceMetricSummary =
-            childSelfTestRoot / L"last_run" / L"perf" / L"session_end_settings_real_metrics.json";
+            childSelfTestArtifactRoot / L"last_run" / L"perf" / L"session_end_settings_real_metrics.json";
         const std::filesystem::path destinationMetricSummary = SelfTest::GetPerfArtifactPath(L"session_end_settings_real_metrics.json");
         std::error_code copyError;
         const bool copiedSummary = ! destinationMetricSummary.empty() &&
@@ -4046,7 +5393,8 @@ enum class SettingsSaveChildMode : uint8_t
                       std::format(L"Failed to preserve the real session-end metric artifact from the child process. error={}",
                                   copyError.value()));
 
-        const std::filesystem::path sourceMetricRows = childSelfTestRoot / L"last_run" / L"perf" / L"perf_metrics.jsonl";
+        const std::filesystem::path sourceMetricRows =
+            childSelfTestArtifactRoot / L"last_run" / L"perf" / L"perf_metrics.jsonl";
         const std::string childMetricRows             = ReadAuditTextFile(sourceMetricRows);
         state.Require(childMetricRows.find("\"metric\":\"App.Shutdown.SessionEndSettingsSave\"") != std::string::npos,
                       L"The real session-end child process did not record App.Shutdown.SessionEndSettingsSave.");
@@ -4134,7 +5482,32 @@ enum class SettingsSaveChildMode : uint8_t
     state.Require(loaded.theme.currentThemeId == synchronousFinal.theme.currentThemeId,
                   L"A queued older snapshot must not overwrite a later synchronous settings save.");
 
-    Common::Settings::Settings shutdownFinal = synchronousFinal;
+    Common::Settings::Settings asynchronousAfterSync = synchronousFinal;
+    asynchronousAfterSync.theme.currentThemeId       = L"builtin/light";
+    state.Require(SUCCEEDED(SettingsHotReload::QueueSettingsSave(kTestAppId, asynchronousAfterSync, L"", L"serialized-after-sync")),
+                  L"Failed to queue an asynchronous snapshot based on the last synchronous commit.");
+    state.Require(SettingsHotReload::FlushQueuedSettingsSaves(static_cast<DWORD>(SelfTest::Scale(5000ms).count())),
+                  L"The post-synchronous asynchronous settings snapshot did not flush within the bounded deadline.");
+    synchronousFinal.theme.currentThemeId = L"builtin/rainbow";
+    state.Require(SUCCEEDED(SettingsHotReload::SaveSettingsAndSchema(kTestAppId, synchronousFinal)),
+                  L"A caller stamp returned by a synchronous save must remain valid after a serialized asynchronous save.");
+    loaded = {};
+    state.Require(SUCCEEDED(Common::Settings::TryLoadSettingsNoRecovery(kTestAppId, loaded)),
+                  L"Failed to load the sync-async-sync serialized settings result.");
+    state.Require(loaded.theme.currentThemeId == synchronousFinal.theme.currentThemeId,
+                  L"The final synchronous snapshot must win after a serialized asynchronous save.");
+
+    Common::Settings::Settings retainedOriginalSource = second;
+    retainedOriginalSource.theme.currentThemeId       = L"builtin/highContrast";
+    state.Require(SUCCEEDED(SettingsHotReload::SaveSettingsAndSchema(kTestAppId, retainedOriginalSource)),
+                  L"An independently retained snapshot from the validated internal source lineage must remain serializable.");
+    loaded = {};
+    state.Require(SUCCEEDED(Common::Settings::TryLoadSettingsNoRecovery(kTestAppId, loaded)),
+                  L"Failed to load the retained-source serialized settings result.");
+    state.Require(loaded.theme.currentThemeId == retainedOriginalSource.theme.currentThemeId,
+                  L"The retained-source synchronous snapshot must win after serialization.");
+
+    Common::Settings::Settings shutdownFinal = retainedOriginalSource;
     shutdownFinal.theme.currentThemeId       = L"builtin/highContrast";
     state.Require(SUCCEEDED(SettingsHotReload::QueueSettingsSave(kTestAppId, shutdownFinal, L"", L"serialized-shutdown-flush")),
                   L"Failed to queue the shutdown-flush settings snapshot.");
@@ -4178,11 +5551,11 @@ enum class SettingsSaveChildMode : uint8_t
                   L"Settings-save flush should complete the latest queued generation.");
     state.Require(completed.lastSaveThreadId != 0 && completed.lastSaveThreadId != uiThreadId,
                   L"Asynchronous and serialized settings persistence should execute off the UI thread.");
-    state.Require(RequireSettingsSaveChild(state, L"ordering", L"settings_save_final_ordering"),
+    state.Require(RequireSettingsSaveChild(state, L"ordering"),
                   L"Settings-save process finalization ordering was not deterministic.");
-    state.Require(RequireSettingsSaveChild(state, L"teardown", L"settings_save_bounded_process_teardown"),
+    state.Require(RequireSettingsSaveChild(state, L"teardown"),
                   L"Settings-save process teardown was not bounded while storage remained stalled.");
-    state.Require(RequireSettingsSaveChild(state, L"sessionend", L"settings_save_real_session_end"),
+    state.Require(RequireSettingsSaveChild(state, L"sessionend"),
                   L"Real WM_ENDSESSION did not fence and serialize the final settings snapshot.");
     return state.failure.empty();
 }
@@ -4327,6 +5700,79 @@ enum class SettingsSaveChildMode : uint8_t
     state.Require(WaitForAtomicAtLeast(windowState.changeCount, beforeExternalSave + 1u, SelfTest::Scale(std::chrono::milliseconds{4000})),
                   L"Watcher did not self-arm and observe the external settings write after a transient arm failure.");
 
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestSettingsHotReloadRejectsStaleSessionNotification(HWND mainWindow, CaseState& state) noexcept
+{
+    constexpr std::wstring_view kFirstAppId  = L"RedSalamanderSelfTestHotReloadStaleSessionA";
+    constexpr std::wstring_view kSecondAppId = L"RedSalamanderSelfTestHotReloadStaleSessionB";
+    CleanupSettingsArtifacts(kFirstAppId);
+    CleanupSettingsArtifacts(kSecondAppId);
+    const auto cleanup = wil::scope_exit([&]
+    {
+        SettingsHotReload::Stop();
+        CleanupSettingsArtifacts(kFirstAppId);
+        CleanupSettingsArtifacts(kSecondAppId);
+        RestoreMainSettingsHotReload(mainWindow, state);
+    });
+
+    SettingsHotReloadTestWindowState windowState{};
+    HWND hwnd = CreateSettingsHotReloadTestWindow(windowState);
+    state.Require(hwnd != nullptr && IsWindow(hwnd) != FALSE, L"Failed to create the stale-session hot-reload test window.");
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+    const auto destroyWindow = wil::scope_exit([&]
+    {
+        if (hwnd && IsWindow(hwnd))
+        {
+            DestroyWindow(hwnd);
+        }
+    });
+
+    Common::Settings::Settings first{};
+    first.theme.currentThemeId = L"builtin/light";
+    state.Require(SUCCEEDED(Common::Settings::SaveSettings(kFirstAppId, first)), L"Failed to seed the first stale-session settings file.");
+    state.Require(SUCCEEDED(SettingsHotReload::Start(hwnd, kFirstAppId)), L"Failed to start the first stale-session settings watcher.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const uint32_t beforeFirstSave = windowState.changeCount.load(std::memory_order_acquire);
+    first.theme.currentThemeId     = L"builtin/dark";
+    state.Require(SUCCEEDED(Common::Settings::SaveSettings(kFirstAppId, first)), L"Failed to change the first stale-session settings file.");
+    state.Require(WaitForAtomicAtLeast(windowState.changeCount, beforeFirstSave + 1u, SelfTest::Scale(std::chrono::milliseconds{4000})),
+                  L"The first stale-session watcher did not post a settings notification.");
+    const uint64_t staleSessionGeneration = windowState.lastSessionGeneration.load(std::memory_order_acquire);
+    state.Require(staleSessionGeneration != 0u, L"The first settings notification did not carry its watcher session generation.");
+
+    Common::Settings::Settings second{};
+    second.theme.currentThemeId = L"builtin/light";
+    state.Require(SUCCEEDED(Common::Settings::SaveSettings(kSecondAppId, second)), L"Failed to seed the second stale-session settings file.");
+    state.Require(SUCCEEDED(SettingsHotReload::Start(hwnd, kSecondAppId)), L"Failed to start the second stale-session settings watcher.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    second.theme.currentThemeId = L"builtin/rainbow";
+    state.Require(SUCCEEDED(Common::Settings::SaveSettings(kSecondAppId, second)), L"Failed to change the second stale-session settings file.");
+
+    const SettingsHotReload::SettingsFileChangedPayload staleNotification{.tickCount         = GetTickCount64(),
+                                                                           .sessionGeneration = staleSessionGeneration};
+    const SettingsHotReload::ChangedSettingsLoadResult staleResult =
+        SettingsHotReload::TryLoadChangedSettingsForNotification(staleNotification);
+    state.Require(staleResult.status == SettingsHotReload::ChangedSettingsStatus::NoChange,
+                  L"A stale watcher notification must not load settings from the replacement watcher session.");
+
+    const SettingsHotReload::ChangedSettingsLoadResult currentResult = SettingsHotReload::TryLoadChangedSettings();
+    state.Require(currentResult.status == SettingsHotReload::ChangedSettingsStatus::Loaded,
+                  L"Rejecting a stale watcher notification must leave the current session change available.");
+    state.Require(currentResult.settings.theme.currentThemeId == second.theme.currentThemeId,
+                  L"The current watcher session did not load its own external settings change after stale-notification rejection.");
     return state.failure.empty();
 }
 
@@ -4543,6 +5989,19 @@ void SendMouseClickToResolvedPointWindow(HWND hwnd, LPARAM hostPoint) noexcept
     SendMessageW(targetWindow, WM_MOUSEMOVE, 0, point);
     SendMessageW(targetWindow, WM_LBUTTONDOWN, MK_LBUTTON, point);
     SendMessageW(targetWindow, WM_LBUTTONUP, 0, point);
+    PumpPendingMessages();
+}
+
+void SendMouseClickToDirectWindow(HWND hwnd, LPARAM point) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return;
+    }
+
+    SendMessageW(hwnd, WM_MOUSEMOVE, 0, point);
+    SendMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, point);
+    SendMessageW(hwnd, WM_LBUTTONUP, 0, point);
     PumpPendingMessages();
 }
 
@@ -6934,24 +8393,31 @@ template <typename Action> [[nodiscard]] bool RunUiaActionWithMessagePump(std::w
         BlockingProbe& operator=(BlockingProbe&&)              = delete;
 
         std::atomic<bool> entered = false;
+        std::atomic<bool> cancellationObserved = false;
         std::atomic<bool> exited  = false;
     };
 
-    constexpr uint32_t kBlockedOperationBudgetMs = 1000u;
+    constexpr uint32_t kBlockedOperationBudgetMs = 4000u;
     const UiaDeadlineBudget deadlineBudget       = MakeUiaDeadlineBudget(kBlockedOperationBudgetMs);
     const auto cancellationReserve               = deadlineBudget.total - deadlineBudget.operation;
-    const auto blockingDuration                  = deadlineBudget.operation + (cancellationReserve / 2);
+    const auto cancellationDelay                 = cancellationReserve / 2;
     auto probe                                   = std::make_shared<BlockingProbe>();
     const auto started                           = std::chrono::steady_clock::now();
     const bool result = RunUiaActionWithMessagePump(L"blocking-provider lifetime proof",
                                                      L"deterministic blocked UIA operation",
                                                      kBlockedOperationBudgetMs,
-                                                     [probe, blockingDuration]() noexcept
+                                                     [probe, cancellationDelay](const std::stop_token stopToken) noexcept
     {
         probe->entered.store(true, std::memory_order_release);
-        // Ignore stop requests beyond the computed operation deadline, as an unhealthy provider can. Deriving the delay from
-        // the same scaled budget keeps this proof valid when shuffle triage increases the self-test timeout multiplier.
-        std::this_thread::sleep_for(blockingDuration);
+        // A fixed sleep can finish before a heavily scheduled harness observes the operation deadline. Keep the synthetic
+        // provider blocked until the deadline path requests cancellation, then occupy part of the reserved cancellation budget
+        // so WaitForBoundedUiaWorker must join the retiring operation before reporting the timeout.
+        while (! stopToken.stop_requested())
+        {
+            std::this_thread::sleep_for(1ms);
+        }
+        probe->cancellationObserved.store(true, std::memory_order_release);
+        std::this_thread::sleep_for(cancellationDelay);
         probe->exited.store(true, std::memory_order_release);
         return true;
     });
@@ -6959,8 +8425,10 @@ template <typename Action> [[nodiscard]] bool RunUiaActionWithMessagePump(std::w
 
     state.Require(probe->entered.load(std::memory_order_acquire), L"Bounded UIA dispatch should start the deterministic blocked operation.");
     state.Require(! result, L"Bounded UIA dispatch should report the blocked operation as timed out.");
+    state.Require(probe->cancellationObserved.load(std::memory_order_acquire),
+                  L"Bounded UIA dispatch should request cancellation after the operation deadline.");
     state.Require(probe->exited.load(std::memory_order_acquire),
-                  L"Bounded UIA dispatch should join an operation that ignores stop requests before returning the failed result.");
+                  L"Bounded UIA dispatch should join the cancelled operation before returning the failed result.");
     state.Require(elapsed < deadlineBudget.total,
                   std::format(L"Bounded UIA dispatch should return the failed result within its declared {} ms budget; elapsed={} ms.",
                               deadlineBudget.total.count(),
@@ -7069,6 +8537,68 @@ template <typename Action> [[nodiscard]] bool RunUiaActionWithMessagePump(std::w
     });
 
     return WaitForBoundedUiaWorker(worker, sharedState->lifetime, 3000u, L"ValuePattern named read", label) ? sharedState->result : std::nullopt;
+}
+
+[[nodiscard]] std::optional<UiaTogglePatternState> CollectVisibleDescendantTogglePatternStateWithMessagePump(HWND hwnd,
+                                                                                                               std::wstring_view label) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return std::nullopt;
+    }
+
+    struct SharedState
+    {
+        SharedState()                              = default;
+        SharedState(const SharedState&)            = delete;
+        SharedState& operator=(const SharedState&) = delete;
+        SharedState(SharedState&&)                 = delete;
+        SharedState& operator=(SharedState&&)      = delete;
+
+        std::optional<UiaTogglePatternState> result;
+        UiaOperationLifetime lifetime;
+    };
+
+    auto sharedState = std::make_shared<SharedState>();
+    std::jthread worker([sharedState, hwnd](const std::stop_token stopToken) noexcept
+    {
+        ExecuteBoundedUiaWorker(sharedState, stopToken, 3000u, [&]() noexcept
+        { sharedState->result = CollectVisibleDescendantTogglePatternState(hwnd); });
+    });
+
+    return WaitForBoundedUiaWorker(worker, sharedState->lifetime, 3000u, L"TogglePattern read", label) ? sharedState->result : std::nullopt;
+}
+
+[[nodiscard]] std::optional<UiaTogglePatternState> CollectVisibleDescendantTogglePatternStateByNameWithMessagePump(HWND hwnd,
+                                                                                                                     std::wstring_view expectedName,
+                                                                                                                     std::wstring_view label) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return std::nullopt;
+    }
+
+    struct SharedState
+    {
+        SharedState()                              = default;
+        SharedState(const SharedState&)            = delete;
+        SharedState& operator=(const SharedState&) = delete;
+        SharedState(SharedState&&)                 = delete;
+        SharedState& operator=(SharedState&&)      = delete;
+
+        std::optional<UiaTogglePatternState> result;
+        UiaOperationLifetime lifetime;
+    };
+
+    auto sharedState            = std::make_shared<SharedState>();
+    const std::wstring nameCopy = std::wstring(expectedName);
+    std::jthread worker([sharedState, hwnd, nameCopy](const std::stop_token stopToken) noexcept
+    {
+        ExecuteBoundedUiaWorker(sharedState, stopToken, 3000u, [&]() noexcept
+        { sharedState->result = CollectVisibleDescendantTogglePatternStateByName(hwnd, nameCopy); });
+    });
+
+    return WaitForBoundedUiaWorker(worker, sharedState->lifetime, 3000u, L"TogglePattern named read", label) ? sharedState->result : std::nullopt;
 }
 
 template <typename Predicate>
@@ -7416,7 +8946,7 @@ BOOL CALLBACK EnumTopLevelWindowsProc(HWND hwnd, LPARAM lParam) noexcept
 
     DWORD pid = 0;
     GetWindowThreadProcessId(hwnd, &pid);
-    if (pid != ctx->processId)
+    if (pid != ctx->processId || DirectedSelfTestInputWarning::IsWarningWindow(hwnd))
     {
         return TRUE;
     }
@@ -7656,6 +9186,54 @@ void AutoCloseTransientUi(std::stop_token stopToken, DWORD uiThreadId, DWORD pro
     return WaitForNoNonBaselineWindows(processId, baseline, baselineWindow, timeout);
 }
 
+void FocusFolderViewPane(FolderWindow::Pane pane) noexcept;
+[[nodiscard]] bool WaitForFolderViewPaneFocus(FolderWindow::Pane pane,
+                                              HWND expectedFolderView,
+                                              std::chrono::milliseconds timeout) noexcept;
+
+void ClearPaneIncrementalSearchForSelfTest(FolderWindow::Pane pane) noexcept
+{
+    // A previous directed-input case can leave a queued activation or character
+    // behind the state visible to the next fixture. Drain first, then clear again
+    // after dispatch so the shared FolderView is genuinely quiescent.
+    for (size_t attempt = 0u; attempt < 2u; ++attempt)
+    {
+        PumpPendingMessages();
+        g_folderWindow.DebugExitIncrementalSearch(pane);
+    }
+}
+
+void ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane pane) noexcept
+{
+    constexpr size_t kMaximumEscapeAttempts = 4u;
+    for (size_t attempt = 0u; attempt < kMaximumEscapeAttempts; ++attempt)
+    {
+        NavigationViewDebugSnapshot snapshot{};
+        if (! g_folderWindow.DebugGetNavigationViewSnapshot(pane, snapshot))
+        {
+            return;
+        }
+
+        const bool transientStateActive = snapshot.editMode || snapshot.historyDropdownVisible || snapshot.editSuggestPopupVisible ||
+                                          snapshot.fullPathPopupVisible || snapshot.currentEditValidationPopupVisible ||
+                                          snapshot.dropdownKind != NavigationViewDebugDropdownKind::None;
+        if (! transientStateActive)
+        {
+            return;
+        }
+
+        const HWND navigationView = g_folderWindow.DebugGetNavigationViewHwnd(pane);
+        if (! navigationView || IsWindow(navigationView) == FALSE)
+        {
+            return;
+        }
+
+        static_cast<void>(SendMessageW(navigationView, WM_KEYDOWN, VK_ESCAPE, 0));
+        static_cast<void>(SendMessageW(navigationView, WM_KEYUP, VK_ESCAPE, 0));
+        PumpPendingMessages();
+    }
+}
+
 [[nodiscard]] bool PrepareMainWindowForIsolatedUiCase(HWND mainWindow, CaseState& state, std::wstring_view context) noexcept
 {
     if (! mainWindow || IsWindow(mainWindow) == FALSE)
@@ -7666,11 +9244,23 @@ void AutoCloseTransientUi(std::stop_token stopToken, DWORD uiThreadId, DWORD pro
 
     state.Require(CloseNonMainTopLevelWindowsForSelfTest(GetCurrentProcessId(), mainWindow, SelfTest::Scale(std::chrono::milliseconds(3000))),
                   std::format(L"Inherited top-level windows did not close before {}.", context));
+    // Do not let UI Automation cache providers for a window destroyed by the
+    // previous case. HWND reuse in a broad shared process can otherwise expose
+    // stale names/values from the retired provider to the next fixture.
+    ReleaseThreadUiAutomationForSelfTest();
+    PumpPendingMessages();
     state.Require(IsWindowEnabled(mainWindow) != FALSE, std::format(L"Main window remained disabled before {}.", context));
+    const DWORD uiThreadId = GetWindowThreadProcessId(mainWindow, nullptr);
+    state.Require(uiThreadId != 0u &&
+                      EnsureUiNotInMenuMode(uiThreadId, mainWindow, SelfTest::Scale(std::chrono::milliseconds(2000))),
+                  std::format(L"Inherited native menu mode did not close before {}.", context));
     if (! state.failure.empty())
     {
         return false;
     }
+
+    DebugSetMainMenuBarHoverSuppressionCursorOverride(std::nullopt);
+    DebugHideThemeCycleOverlay();
 
     const HWND rootWindow = GetAncestor(mainWindow, GA_ROOT);
     const HWND inputWindow = rootWindow && IsWindow(rootWindow) != FALSE ? rootWindow : mainWindow;
@@ -7679,7 +9269,54 @@ void AutoCloseTransientUi(std::stop_token stopToken, DWORD uiThreadId, DWORD pro
     static_cast<void>(SetActiveWindow(inputWindow));
     static_cast<void>(SetForegroundWindow(inputWindow));
     PumpPendingMessages();
-    return true;
+
+    // Terminal and preview surfaces share the pane content host. Close terminal
+    // children first so the preview-retirement wait counts only viewer roots.
+    g_folderWindow.DebugCloseTerminalPane(FolderWindow::Pane::Left);
+    g_folderWindow.DebugCloseTerminalPane(FolderWindow::Pane::Right);
+    PumpPendingMessages();
+    state.Require(CloseActivePreviewPaneForSelfTest(SelfTest::Scale(std::chrono::milliseconds(3000))),
+                  std::format(L"Inherited preview pane did not close before {}.", context));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    g_folderWindow.SetZoomState(std::nullopt, std::nullopt);
+    g_folderWindow.SetSplitRatio(0.5f);
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Right);
+    g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
+    g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Right);
+    ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane::Left);
+    ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane::Right);
+    ClearPaneIncrementalSearchForSelfTest(FolderWindow::Pane::Left);
+    ClearPaneIncrementalSearchForSelfTest(FolderWindow::Pane::Right);
+    const HWND leftFolderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(WaitForFolderViewPaneFocus(
+                      FolderWindow::Pane::Left, leftFolderView, SelfTest::Scale(std::chrono::milliseconds(1500))),
+                  std::format(L"Main folder view did not regain stable focus before {}.", context));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    // Directed input and teardown completions from the previous case may be
+    // delivered after the first focus handoff. Give that queue a bounded quiet
+    // point, then clear any transient navigation/search state they created and
+    // prove focus again before the next case begins.
+    for (size_t settleAttempt = 0u; settleAttempt < 3u; ++settleAttempt)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds{20});
+        PumpPendingMessages();
+    }
+    ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane::Left);
+    ClearPaneNavigationTransientStateForSelfTest(FolderWindow::Pane::Right);
+    ClearPaneIncrementalSearchForSelfTest(FolderWindow::Pane::Left);
+    ClearPaneIncrementalSearchForSelfTest(FolderWindow::Pane::Right);
+    state.Require(WaitForFolderViewPaneFocus(
+                      FolderWindow::Pane::Left, leftFolderView, SelfTest::Scale(std::chrono::milliseconds(1000))),
+                  std::format(L"Main folder view focus was not stable after input settling before {}.", context));
+    return state.failure.empty();
 }
 
 void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
@@ -7694,22 +9331,35 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
         return;
     }
 
-    const HWND rootWindow = GetAncestor(view, GA_ROOT);
-    if (rootWindow && IsWindow(rootWindow) != FALSE && IsWindowEnabled(rootWindow) != FALSE)
-    {
-        ShowWindow(rootWindow, SW_SHOWNORMAL);
-        static_cast<void>(BringWindowToTop(rootWindow));
-        static_cast<void>(SetActiveWindow(rootWindow));
-        static_cast<void>(SetForegroundWindow(rootWindow));
-    }
-
     const auto deadline  = std::chrono::steady_clock::now() + SelfTest::Scale(250ms);
     size_t stableSamples = 0u;
     while (std::chrono::steady_clock::now() < deadline)
     {
+        const HWND rootWindow         = GetAncestor(view, GA_ROOT);
+        const HWND foregroundWindow   = GetForegroundWindow();
+        const DWORD currentThreadId   = GetCurrentThreadId();
+        const DWORD foregroundThreadId = foregroundWindow ? GetWindowThreadProcessId(foregroundWindow, nullptr) : 0u;
+        const bool attachedForegroundThread = foregroundThreadId != 0u && foregroundThreadId != currentThreadId &&
+                                                AttachThreadInput(foregroundThreadId, currentThreadId, TRUE) != FALSE;
+        const auto detachForegroundThread = wil::scope_exit([&]() noexcept
+        {
+            if (attachedForegroundThread)
+            {
+                static_cast<void>(AttachThreadInput(foregroundThreadId, currentThreadId, FALSE));
+            }
+        });
+
+        if (rootWindow && IsWindow(rootWindow) != FALSE && IsWindowEnabled(rootWindow) != FALSE)
+        {
+            ShowWindow(rootWindow, SW_SHOWNORMAL);
+            static_cast<void>(BringWindowToTop(rootWindow));
+            static_cast<void>(SetActiveWindow(rootWindow));
+            static_cast<void>(SetForegroundWindow(rootWindow));
+        }
+
         if (GetFocus() != view)
         {
-            SetFocus(view);
+            static_cast<void>(SetFocus(view));
         }
 
         PumpPendingMessages();
@@ -7729,7 +9379,7 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
         std::this_thread::sleep_for(10ms);
     }
 
-    SetFocus(view);
+    static_cast<void>(SetFocus(view));
     PumpPendingMessages();
 }
 
@@ -8031,6 +9681,42 @@ template <typename Predicate>
         outSnapshot->backendStatusText = GetFindFilesWindowHandle() ? L"[window present]" : L"[no window]";
     }
     return false;
+}
+
+[[nodiscard]] bool SelectPublishedFindResult(const std::wstring& fullPath,
+                                             std::chrono::milliseconds timeout,
+                                             FindFilesDebugSnapshot* outSnapshot = nullptr) noexcept
+{
+    FindFilesDebugSnapshot snapshot{};
+    const auto containsPath = [&](const FindFilesDebugSnapshot& value) noexcept
+    {
+        return std::find_if(value.fullPaths.begin(), value.fullPaths.end(), [&](const std::wstring& candidate) noexcept {
+                   return OrdinalString::EqualsNoCase(std::wstring_view(candidate), std::wstring_view(fullPath));
+               }) != value.fullPaths.end();
+    };
+
+    if (! WaitForFindSnapshot(containsPath, timeout, &snapshot) || ! DebugSelectFindFilesWindowResult(fullPath))
+    {
+        if (outSnapshot)
+        {
+            *outSnapshot = std::move(snapshot);
+        }
+        return false;
+    }
+
+    const bool selected = WaitForFindSnapshot(
+        [&](const FindFilesDebugSnapshot& value) noexcept
+    {
+        return value.selectedResultCount == 1u &&
+               OrdinalString::EqualsNoCase(std::wstring_view(value.selectedResultFullPath), std::wstring_view(fullPath));
+    },
+        timeout,
+        &snapshot);
+    if (outSnapshot)
+    {
+        *outSnapshot = std::move(snapshot);
+    }
+    return selected;
 }
 
 [[nodiscard]] bool WaitForFindWindowUnavailable(std::chrono::milliseconds timeout) noexcept
@@ -8355,6 +10041,97 @@ struct CreatedFileSystemInstance final
     state.Require(help.find(L"--diagnostics-etw") == std::wstring_view::npos, L"RedSalamander --help should not keep the retired diagnostics ETW switch.");
     state.Require(help.find(L"--perf-jsonl") == std::wstring_view::npos, L"RedSalamander --help should not keep the retired perf JSONL switch.");
     state.Require(help.find(L"Release") != std::wstring_view::npos, L"RedSalamander --help should explain the Release diagnostics activation contract.");
+
+    return state.failure.empty();
+}
+
+enum class CommandSurfaceClassification : uint8_t
+{
+    ClassicMenu,
+    ContextualDynamic,
+    ShortcutFunctionBar,
+    PaletteOnly,
+    InternalParameterized,
+};
+
+struct CommandSurfaceCoverageEntry final
+{
+    std::wstring_view commandId;
+    CommandSurfaceClassification classification = CommandSurfaceClassification::InternalParameterized;
+};
+
+constexpr auto kCommandSurfaceCoverage = std::to_array<CommandSurfaceCoverageEntry>({
+#define RS_COMMAND_SURFACE(commandId, classification) CommandSurfaceCoverageEntry{commandId, CommandSurfaceClassification::classification},
+#include "CommandSurfaceCoverage.inc"
+#undef RS_COMMAND_SURFACE
+});
+
+[[nodiscard]] bool TestCommandSurfaceCoverageContract(HWND mainWindow, CaseState& state) noexcept
+{
+    const std::span<const CommandInfo> commands = GetAllCommands();
+    state.Require(kCommandSurfaceCoverage.size() == commands.size(),
+                  std::format(L"Command-surface ledger has {} rows for {} canonical commands.", kCommandSurfaceCoverage.size(), commands.size()));
+
+    std::unordered_set<std::wstring_view> ledgerIds;
+    std::array<size_t, 5> classificationCounts{};
+    for (const CommandSurfaceCoverageEntry& entry : kCommandSurfaceCoverage)
+    {
+        state.Require(! entry.commandId.empty(), L"Command-surface ledger rows must name a canonical command.");
+        state.Require(ledgerIds.insert(entry.commandId).second, std::format(L"Command-surface ledger duplicates {}.", entry.commandId));
+        state.Require(FindCommandInfo(entry.commandId) != nullptr,
+                      std::format(L"Command-surface ledger names unregistered command {}.", entry.commandId));
+        ++classificationCounts[static_cast<size_t>(entry.classification)];
+    }
+
+    for (const CommandInfo& command : commands)
+    {
+        state.Require(ledgerIds.contains(command.id), std::format(L"Canonical command {} is unclassified in CommandSurfaceCoverage.inc.", command.id));
+    }
+    for (size_t index = 0u; index < classificationCounts.size(); ++index)
+    {
+        state.Require(classificationCounts[index] > 0u, std::format(L"Command-surface classification {} has no reviewed entries.", index));
+    }
+
+    constexpr uint8_t kFolderPaletteScopeMask = static_cast<uint8_t>(CommandShortcutScopeMask(CommandShortcutScope::Application) |
+                                                                      CommandShortcutScopeMask(CommandShortcutScope::FunctionBar) |
+                                                                      CommandShortcutScopeMask(CommandShortcutScope::FolderView));
+    constexpr uint8_t kTerminalPaletteScopeMask = static_cast<uint8_t>(CommandShortcutScopeMask(CommandShortcutScope::Application) |
+                                                                        CommandShortcutScopeMask(CommandShortcutScope::FunctionBar) |
+                                                                        CommandShortcutScopeMask(CommandShortcutScope::Terminal));
+    for (const CommandInfo& command : commands)
+    {
+        state.Require(! command.paletteVisible || (command.shortcutScopeMask & (kFolderPaletteScopeMask | kTerminalPaletteScopeMask)) != 0u,
+                      std::format(L"Palette-visible command {} is unreachable from both command-palette contexts.", command.id));
+    }
+
+    const Common::Settings::ShortcutsSettings shortcuts = g_settings.shortcuts.value_or(Common::Settings::ShortcutsSettings{});
+    const AppTheme theme                           = ResolveAppTheme(ThemeMode::Dark, L"command-surface-coverage-selftest");
+    const auto requirePaletteContextCoverage = [&](bool terminalContext, uint8_t eligibleScopeMask, std::wstring_view contextName) noexcept
+    {
+        const size_t expectedRowCount = static_cast<size_t>(std::ranges::count_if(commands, [eligibleScopeMask](const CommandInfo& command) noexcept {
+            return command.paletteVisible && (command.shortcutScopeMask & eligibleScopeMask) != 0u;
+        }));
+        ShowCommandPaletteWindow(mainWindow, shortcuts, terminalContext, theme);
+        PumpPendingMessages();
+        CommandPaletteDebugSnapshot snapshot{};
+        state.Require(DebugGetCommandPaletteSnapshot(snapshot),
+                      std::format(L"{} Command Palette should expose its unfiltered coverage snapshot.", contextName));
+        state.Require(snapshot.rowCount == expectedRowCount,
+                      std::format(L"{} Command Palette exposes {} rows for {} context-eligible, palette-visible canonical commands.",
+                                  contextName,
+                                  snapshot.rowCount,
+                                  expectedRowCount));
+        if (const HWND palette = GetCommandPaletteWindowHandle(); palette != nullptr && IsWindow(palette) != FALSE)
+        {
+            SendMessageW(palette, WM_CLOSE, 0u, 0);
+            PumpPendingMessages();
+        }
+        state.Require(GetCommandPaletteWindowHandle() == nullptr,
+                      std::format(L"Command-surface coverage test should close the transient {} Command Palette.", contextName));
+    };
+
+    requirePaletteContextCoverage(false, kFolderPaletteScopeMask, L"Folder");
+    requirePaletteContextCoverage(true, kTerminalPaletteScopeMask, L"Terminal");
 
     return state.failure.empty();
 }
@@ -8747,7 +10524,7 @@ struct CreatedFileSystemInstance final
     using PopupLabelExpectation                                            = std::pair<std::wstring_view, std::wstring_view>;
     constexpr std::array<PopupLabelExpectation, 2> kImplementedPopupLabels = {
         PopupLabelExpectation{std::wstring_view{L"View &With"}, std::wstring_view{L"cmd/pane/viewWith popup"}},
-        PopupLabelExpectation{std::wstring_view{L"Edit &With"}, std::wstring_view{L"cmd/pane/editWith popup"}},
+        PopupLabelExpectation{std::wstring_view{L"Ed&it With"}, std::wstring_view{L"cmd/pane/editWith popup"}},
     };
 
     for (const auto& [textFragment, label] : kImplementedPopupLabels)
@@ -8877,10 +10654,11 @@ struct CreatedFileSystemInstance final
                                     UINT pathFromOtherPaneId,
                                     UINT briefId,
                                     UINT detailedId,
-                                    UINT extraDetailedId,
-                                    UINT thumbnailsId,
-                                    UINT previewPaneId,
-                                    UINT sortAnchorId,
+                                     UINT extraDetailedId,
+                                     UINT thumbnailsId,
+                                     UINT previewPaneId,
+                                     UINT terminalPaneId,
+                                     UINT sortAnchorId,
                                     UINT hiddenFilesId,
                                     UINT systemFilesId,
                                     UINT fileExtensionsId,
@@ -8903,6 +10681,7 @@ struct CreatedFileSystemInstance final
         const int extraDetailedPos         = FindMenuItemPosById(paneMenu, extraDetailedId);
         const int thumbnailsPos            = FindMenuItemPosById(paneMenu, thumbnailsId);
         const int previewPanePos           = FindMenuItemPosById(paneMenu, previewPaneId);
+        const int terminalPanePos          = FindMenuItemPosById(paneMenu, terminalPaneId);
         const int zoomPos                  = FindMenuItemPosById(paneMenu, zoomId);
         const int swapPos                  = FindMenuItemPosById(paneMenu, IDM_APP_SWAP_PANES);
         const int pathFromOtherPanePos     = FindMenuItemPosById(paneMenu, pathFromOtherPaneId);
@@ -8938,11 +10717,11 @@ struct CreatedFileSystemInstance final
                       std::format(L"{} menu should not keep Filter Bar, Navigation Bar, or Status Bar at top level.", paneName));
 
         state.Require(changeDrivePos < briefPos && briefPos < detailedPos && detailedPos < extraDetailedPos && extraDetailedPos < thumbnailsPos &&
-                          thumbnailsPos < previewPanePos,
-                      std::format(L"{} menu display block should be Brief, Detailed, Extra Detailed, Thumbnails, Preview Pane.", paneName));
-        state.Require(previewPanePos < zoomPos && zoomPos < swapPos && swapPos < pathFromOtherPanePos && pathFromOtherPanePos < refreshPos &&
-                          refreshPos < filterPos,
-                      std::format(L"{} menu action block should be Maximize, Swap, Path from Other Pane, Refresh, Filter.", paneName));
+                          thumbnailsPos < previewPanePos && previewPanePos < terminalPanePos,
+                      std::format(L"{} menu display block should be Brief, Detailed, Extra Detailed, Thumbnails, Preview Pane, Terminal Pane.", paneName));
+        state.Require(terminalPanePos < refreshPos && refreshPos < filterPos && filterPos < zoomPos && zoomPos < swapPos &&
+                          swapPos < pathFromOtherPanePos,
+                      std::format(L"{} menu action blocks should be Refresh, Filter, then Maximize, Swap, Path from Other Pane.", paneName));
         state.Require(hiddenFilesPos < systemFilesPos && systemFilesPos < fileExtensionsPos,
                       std::format(L"{} Show submenu should start Hidden Files, System Files, File Extensions.", paneName));
         state.Require(IsMenuSeparatorAt(showMenu, fileExtensionsPos + 1),
@@ -8959,9 +10738,10 @@ struct CreatedFileSystemInstance final
                          IDM_LEFT_DISPLAY_BRIEF,
                          IDM_LEFT_DISPLAY_DETAILED,
                          IDM_LEFT_DISPLAY_EXTRA_DETAILED,
-                         IDM_LEFT_DISPLAY_THUMBNAILS,
-                         IDM_LEFT_PREVIEW_PANE,
-                         IDM_LEFT_SORT_NAME,
+                          IDM_LEFT_DISPLAY_THUMBNAILS,
+                          IDM_LEFT_PREVIEW_PANE,
+                          IDM_LEFT_TERMINAL_PANE,
+                          IDM_LEFT_SORT_NAME,
                          IDM_LEFT_SHOW_HIDDEN_FILES,
                          IDM_LEFT_SHOW_SYSTEM_FILES,
                          IDM_LEFT_SHOW_FILE_EXTENSIONS,
@@ -8979,9 +10759,10 @@ struct CreatedFileSystemInstance final
                          IDM_RIGHT_DISPLAY_BRIEF,
                          IDM_RIGHT_DISPLAY_DETAILED,
                          IDM_RIGHT_DISPLAY_EXTRA_DETAILED,
-                         IDM_RIGHT_DISPLAY_THUMBNAILS,
-                         IDM_RIGHT_PREVIEW_PANE,
-                         IDM_RIGHT_SORT_NAME,
+                          IDM_RIGHT_DISPLAY_THUMBNAILS,
+                          IDM_RIGHT_PREVIEW_PANE,
+                          IDM_RIGHT_TERMINAL_PANE,
+                          IDM_RIGHT_SORT_NAME,
                          IDM_RIGHT_SHOW_HIDDEN_FILES,
                          IDM_RIGHT_SHOW_SYSTEM_FILES,
                          IDM_RIGHT_SHOW_FILE_EXTENSIONS,
@@ -8992,6 +10773,187 @@ struct CreatedFileSystemInstance final
                          IDM_RIGHT_NAVIGATION_BAR,
                          IDM_RIGHT_STATUSBAR);
 
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestMainMenuInformationArchitecture(CaseState& state) noexcept
+{
+    const HMENU mainMenu = DebugGetMainMenuModelHandle();
+    state.Require(mainMenu != nullptr, L"Main menu handle not available.");
+    if (! mainMenu)
+    {
+        return false;
+    }
+
+    const HMENU filesMenu    = FindMenuContainingCommandId(mainMenu, IDM_PANE_EXECUTE_OPEN);
+    const HMENU editMenu     = FindMenuContainingCommandId(mainMenu, IDM_PANE_CLIPBOARD_CUT);
+    const HMENU commandsMenu = FindMenuContainingCommandId(mainMenu, IDM_PANE_CHANGE_DIRECTORY);
+    const HMENU viewMenu     = FindMenuContainingCommandId(mainMenu, IDM_APP_FULL_SCREEN);
+    const HMENU helpMenu     = FindMenuContainingCommandId(mainMenu, IDM_APP_SHOW_SHORTCUTS);
+    state.Require(filesMenu && editMenu && commandsMenu && viewMenu && helpMenu,
+                  L"Files, Edit, Commands, View, and Help menus should all be present.");
+    if (! filesMenu || ! editMenu || ! commandsMenu || ! viewMenu || ! helpMenu)
+    {
+        return false;
+    }
+
+    const auto requireDirectOrder = [&](HMENU menu, std::span<const UINT> commandIds, std::wstring_view label) noexcept
+    {
+        int previousPos = -1;
+        for (const UINT commandId : commandIds)
+        {
+            const int pos = FindMenuItemPosById(menu, commandId);
+            state.Require(pos >= 0, std::format(L"{} should directly contain command {}.", label, commandId));
+            state.Require(pos > previousPos,
+                          std::format(L"{} command {} should follow the preceding command; positions {} then {}.", label, commandId, previousPos, pos));
+            previousPos = pos;
+        }
+    };
+
+    constexpr std::array<UINT, 20> kFilesOrder = {{
+        IDM_PANE_EXECUTE_OPEN,
+        IDM_PANE_VIEW,
+        IDM_PANE_ALTERNATE_VIEW,
+        IDM_PANE_EDIT,
+        IDM_PANE_ALTERNATE_EDIT,
+        IDM_PANE_RENAME,
+        IDM_PANE_BATCH_RENAME,
+        IDM_PANE_CHANGE_CASE,
+        IDM_PANE_CHANGE_ATTRIBUTES,
+        IDM_PANE_COPY_TO_OTHER,
+        IDM_PANE_COPY_TO_OTHER_WITH_OPTIONS,
+        IDM_PANE_MOVE_TO_OTHER,
+        IDM_PANE_MOVE_TO_OTHER_WITH_OPTIONS,
+        IDM_PANE_PACK,
+        IDM_PANE_UNPACK,
+        IDM_PANE_DELETE,
+        IDM_PANE_MOVE_TO_RECYCLE_BIN,
+        IDM_PANE_PERMANENT_DELETE,
+        IDM_PANE_OPEN_PROPERTIES,
+        IDM_EXIT,
+    }};
+    requireDirectOrder(filesMenu, kFilesOrder, L"Files menu");
+    const auto fileMenuText = [&](UINT commandId) noexcept
+    {
+        return GetMenuItemTextByPosition(filesMenu, FindMenuItemPosById(filesMenu, commandId));
+    };
+    const std::wstring routineCopyText    = fileMenuText(IDM_PANE_COPY_TO_OTHER);
+    const std::wstring optionsCopyText    = fileMenuText(IDM_PANE_COPY_TO_OTHER_WITH_OPTIONS);
+    const std::wstring routineMoveText    = fileMenuText(IDM_PANE_MOVE_TO_OTHER);
+    const std::wstring optionsMoveText    = fileMenuText(IDM_PANE_MOVE_TO_OTHER_WITH_OPTIONS);
+    state.Require(! routineCopyText.empty() && routineCopyText.find(L"...") == std::wstring::npos,
+                  std::format(L"Routine Copy menu label should not imply a dialog; got '{}'.", routineCopyText));
+    state.Require(! routineMoveText.empty() && routineMoveText.find(L"...") == std::wstring::npos,
+                  std::format(L"Routine Move menu label should not imply a dialog; got '{}'.", routineMoveText));
+    state.Require(optionsCopyText.find(L"...") != std::wstring::npos,
+                  std::format(L"Copy with Options menu label should advertise a dialog; got '{}'.", optionsCopyText));
+    state.Require(optionsMoveText.find(L"...") != std::wstring::npos,
+                  std::format(L"Move with Options menu label should advertise a dialog; got '{}'.", optionsMoveText));
+    state.Require(FindSubMenuByTextFragment(filesMenu, L"&New") != nullptr, L"Files menu should keep the New submenu.");
+    state.Require(FindSubMenuByTextFragment(filesMenu, L"Shell &Context Menu") != nullptr,
+                  L"Files menu should keep the Shell Context Menu submenu.");
+
+    constexpr std::array<UINT, 11> kEditOrder = {{
+        IDM_PANE_CLIPBOARD_CUT,
+        IDM_PANE_CLIPBOARD_COPY,
+        IDM_PANE_CLIPBOARD_PASTE,
+        IDM_PANE_CLIPBOARD_PASTE_SHORTCUT,
+        IDM_PANE_SELECTION_SELECT_DIALOG,
+        IDM_PANE_SELECTION_UNSELECT_DIALOG,
+        IDM_PANE_SELECTION_INVERT,
+        IDM_PANE_SELECTION_SELECT_ALL,
+        IDM_PANE_SELECTION_UNSELECT_ALL,
+        IDM_PANE_SELECT_NEXT,
+        IDM_PANE_SELECT_CALC_DIR_SIZE_NEXT,
+    }};
+    requireDirectOrder(editMenu, kEditOrder, L"Edit menu");
+    state.Require(FindSubMenuByTextFragment(editMenu, L"Copy as &Text") != nullptr, L"Edit menu should contain Copy as Text.");
+    state.Require(FindSubMenuByTextFragment(editMenu, L"A&dvanced Selection") != nullptr,
+                  L"Edit menu should contain Advanced Selection.");
+
+    constexpr std::array<UINT, 11> kCommandsOrder = {{
+        IDM_PANE_CHANGE_DIRECTORY,
+        IDM_PANE_FIND,
+        IDM_PANE_QUICK_SEARCH,
+        IDM_APP_COMPARE,
+        IDM_PANE_VIEW_SPACE,
+        IDM_PANE_MAKE_FILE_LIST,
+        IDM_PANE_GO_TO_SHORTCUT_OR_LINK_TARGET,
+        IDM_PANE_LIST_OPENED_FILES,
+        IDM_PANE_SHOW_FOLDERS_HISTORY,
+        IDM_PANE_MENU,
+        IDM_APP_COMMAND_PALETTE,
+    }};
+    requireDirectOrder(commandsMenu, kCommandsOrder, L"Commands menu");
+    const HMENU connectionsMenu = FindSubMenuByTextFragment(commandsMenu, L"&Connections");
+    const HMENU terminalMenu    = FindSubMenuByTextFragment(commandsMenu, L"&Terminal");
+    state.Require(connectionsMenu != nullptr && MenuContainsCommandId(connectionsMenu, IDM_PANE_CONNECTION_MANAGER),
+                  L"Commands should group connection actions under Connections.");
+    state.Require(terminalMenu != nullptr && MenuContainsCommandId(terminalMenu, IDM_TERMINAL_OPEN_FLOATING_WINDOW) &&
+                      MenuContainsCommandId(terminalMenu, IDM_PANE_BRING_FULL_PATH_TO_TERMINAL),
+                  L"Commands should group popup terminal and terminal-insertion actions under Terminal.");
+    state.Require(FindMenuItemPosById(commandsMenu, IDM_APP_REREAD_ASSOCIATIONS) < FindMenuItemPosById(commandsMenu, IDM_FILE_PREFERENCES),
+                  L"Commands should end with Reread Associations followed by Preferences.");
+
+    constexpr std::array<UINT, 8> kViewOrder = {{
+        IDM_APP_FULL_SCREEN,
+        IDM_APP_VIEW_WIDTH,
+        IDM_VIEW_WINDOW_MENU,
+        IDM_VIEW_SWITCH_PANE_FOCUS,
+        IDM_VIEW_FILE_OPERATIONS,
+        IDM_VIEW_FILEOPS_FAILED_ITEMS,
+        IDM_VIEW_FUNCTIONBAR,
+        IDM_VIEW_MENUBAR,
+    }};
+    state.Require(FindSubMenuByTextFragment(viewMenu, L"&Theme") != nullptr, L"View menu should begin with Theme.");
+    requireDirectOrder(viewMenu, kViewOrder, L"View menu");
+
+    const int shortcutsPos = FindMenuItemPosById(helpMenu, IDM_APP_SHOW_SHORTCUTS);
+    const int helpPos      = FindMenuItemPosById(helpMenu, IDM_APP_EXTERNAL_HELP);
+    const int aboutPos     = FindMenuItemPosById(helpMenu, IDM_ABOUT);
+    state.Require(shortcutsPos == 0 && helpPos == 1 && IsMenuSeparatorAt(helpMenu, 2) && aboutPos == 3,
+                  L"Help should be Shortcuts, External Help, separator, About.");
+
+    using CommandBinding = std::pair<std::wstring_view, UINT>;
+    constexpr std::array<CommandBinding, 9> kBindings = {{
+        {L"cmd/pane/changeCase", IDM_PANE_CHANGE_CASE},
+        {L"cmd/pane/changeAttributes", IDM_PANE_CHANGE_ATTRIBUTES},
+        {L"cmd/app/commandPalette", IDM_APP_COMMAND_PALETTE},
+        {L"cmd/pane/connections", IDM_PANE_CONNECTION_MANAGER},
+        {L"cmd/terminal/openFloatingWindow", IDM_TERMINAL_OPEN_FLOATING_WINDOW},
+        {L"cmd/pane/bringFullPathToTerminal", IDM_PANE_BRING_FULL_PATH_TO_TERMINAL},
+        {L"cmd/app/viewWidth", IDM_APP_VIEW_WIDTH},
+        {L"cmd/app/showFileOperations", IDM_VIEW_FILE_OPERATIONS},
+        {L"cmd/app/toggleFileOperationsFailedItems", IDM_VIEW_FILEOPS_FAILED_ITEMS},
+    }};
+    for (const auto& [commandId, menuId] : kBindings)
+    {
+        const CommandInfo* command = FindCommandInfo(commandId);
+        state.Require(command != nullptr && command->wmCommandId == menuId,
+                      std::format(L"{} should map to WM_COMMAND {}.", commandId, menuId));
+    }
+
+    ShortcutManager shortcutManager;
+    shortcutManager.Load(ShortcutDefaults::CreateDefaultShortcuts());
+    const auto requireShortcut = [&](std::wstring_view commandId, uint32_t vk, uint32_t modifiers, std::wstring_view label) noexcept
+    {
+        const std::optional<ShortcutManager::ShortcutChord> shortcut = shortcutManager.TryGetShortcutForCommand(commandId);
+        state.Require(shortcut.has_value() && shortcut->vk == vk && shortcut->modifiers == modifiers,
+                      std::format(L"{} should have its documented default shortcut.", label));
+    };
+    requireShortcut(L"cmd/pane/changeCase", VK_F7, ShortcutManager::kModCtrl, L"Change Case");
+    requireShortcut(L"cmd/pane/changeAttributes", VK_F8, ShortcutManager::kModCtrl, L"Change Attributes");
+    requireShortcut(L"cmd/app/commandPalette", static_cast<uint32_t>('P'), ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"Command Palette");
+    requireShortcut(L"cmd/app/showFileOperations",
+                    static_cast<uint32_t>('J'),
+                    ShortcutManager::kModCtrl | ShortcutManager::kModShift,
+                    L"Show File Operations");
+    requireShortcut(L"cmd/terminal/openFloatingWindow",
+                    static_cast<uint32_t>('T'),
+                    ShortcutManager::kModCtrl | ShortcutManager::kModAlt,
+                    L"Command Shell Window");
+
+    static_cast<void>(TestPaneViewOptionsLiveInLeftRightMenus(state));
     return state.failure.empty();
 }
 
@@ -9039,6 +11001,68 @@ void RequireFolderViewBinding(CaseState& state,
     }
 }
 
+[[nodiscard]] bool OpenClipboardForSelfTest(HWND ownerWindow, std::chrono::milliseconds timeout) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    do
+    {
+        if (OpenClipboard(ownerWindow) != 0)
+        {
+            return true;
+        }
+
+        PumpPendingMessages();
+        std::this_thread::sleep_for(10ms);
+    } while (std::chrono::steady_clock::now() < deadline);
+
+    return false;
+}
+
+[[nodiscard]] bool SkipIfCommandsSelfTestClipboardUnavailable(CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (OpenClipboardForSelfTest(nullptr, SelfTest::Scale(250ms)))
+    {
+        static_cast<void>(CloseClipboard());
+        return false;
+    }
+
+    if (OpenClipboard(nullptr) != FALSE)
+    {
+        static_cast<void>(CloseClipboard());
+        return false;
+    }
+    const DWORD error = GetLastError();
+    return state.Skip(std::format(L"OS clipboard unavailable for Commands selftest (OpenClipboard error={}, openWindow=0x{:X}, owner=0x{:X}).",
+                                  error,
+                                  reinterpret_cast<UINT_PTR>(GetOpenClipboardWindow()),
+                                  reinterpret_cast<UINT_PTR>(GetClipboardOwner())));
+}
+
+[[nodiscard]] bool SkipIfExternalProcessOwnsForeground(CaseState& state, HWND mainWindow, std::wstring_view context) noexcept
+{
+    const HWND foregroundWindow = GetForegroundWindow();
+    if (! foregroundWindow || foregroundWindow == mainWindow)
+    {
+        return false;
+    }
+
+    DWORD foregroundProcessId = 0u;
+    static_cast<void>(GetWindowThreadProcessId(foregroundWindow, &foregroundProcessId));
+    if (foregroundProcessId == GetCurrentProcessId())
+    {
+        return false;
+    }
+
+    return state.Skip(std::format(L"{} requires foreground ownership; another process retained the desktop foreground (foreground=0x{:X}, pid={}).",
+                                  context,
+                                  reinterpret_cast<UINT_PTR>(foregroundWindow),
+                                  foregroundProcessId));
+}
+
 [[nodiscard]] std::wstring ReadClipboardUnicodeText(HWND ownerWindow) noexcept
 {
     using namespace std::chrono_literals;
@@ -9050,22 +11074,7 @@ void RequireFolderViewBinding(CaseState& state,
     };
 
     std::wstring clipText;
-    bool opened = false;
-    for (uint32_t attempt = 0; attempt < 20u; ++attempt)
-    {
-        if (OpenClipboard(ownerWindow) != 0)
-        {
-            opened = true;
-            break;
-        }
-
-        if (GetOpenClipboardWindow() == nullptr)
-        {
-            std::this_thread::sleep_for(5ms);
-        }
-        std::this_thread::sleep_for(10ms);
-    }
-    if (! opened)
+    if (! OpenClipboardForSelfTest(ownerWindow, SelfTest::Scale(3000ms)))
     {
         return readFallback();
     }
@@ -9094,22 +11103,7 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
 
     RedSalamander::DxUi::DebugClearClipboardFallbackText();
 
-    bool opened = false;
-    for (uint32_t attempt = 0; attempt < 20u; ++attempt)
-    {
-        if (OpenClipboard(ownerWindow) != 0)
-        {
-            opened = true;
-            break;
-        }
-
-        if (GetOpenClipboardWindow() == nullptr)
-        {
-            std::this_thread::sleep_for(5ms);
-        }
-        std::this_thread::sleep_for(10ms);
-    }
-    if (! opened)
+    if (! OpenClipboardForSelfTest(ownerWindow, SelfTest::Scale(3000ms)))
     {
         return;
     }
@@ -9146,11 +11140,17 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     ShortcutManager manager;
     manager.Load(ShortcutDefaults::CreateDefaultShortcuts());
 
+    state.Require(manager.GetApplicationConflicts().empty(), L"Default application shortcuts have conflicts.");
     state.Require(manager.GetFunctionBarConflicts().empty(), L"Default function bar shortcuts have conflicts.");
     state.Require(manager.GetFolderViewConflicts().empty(), L"Default folder view shortcuts have conflicts.");
 
+    const std::optional<std::wstring_view> showFileOperations = manager.FindApplicationCommand(
+        static_cast<uint32_t>('J'), ShortcutManager::kModCtrl | ShortcutManager::kModShift);
+    state.Require(showFileOperations.has_value() && showFileOperations.value() == std::wstring_view{L"cmd/app/showFileOperations"},
+                  L"Ctrl+Shift+J should show the File Operations window from application scope.");
+
     using ShortcutBindingExpectation                                          = std::tuple<uint32_t, uint32_t, std::wstring_view, std::wstring_view>;
-    constexpr std::array<ShortcutBindingExpectation, 14> kFunctionBarBindings = {
+    constexpr std::array<ShortcutBindingExpectation, 16> kFunctionBarBindings = {
         ShortcutBindingExpectation{VK_F3, 0u, std::wstring_view{L"cmd/pane/view"}, std::wstring_view{L"F3 default shortcut"}},
         ShortcutBindingExpectation{VK_F2, ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/sort/none"}, std::wstring_view{L"Ctrl+F2 default shortcut"}},
         ShortcutBindingExpectation{VK_F3, ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/sort/name"}, std::wstring_view{L"Ctrl+F3 default shortcut"}},
@@ -9166,6 +11166,14 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
                                    std::wstring_view{L"Ctrl+Shift+F4 default shortcut"}},
         ShortcutBindingExpectation{VK_F5, ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/sort/time"}, std::wstring_view{L"Ctrl+F5 default shortcut"}},
         ShortcutBindingExpectation{VK_F6, ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/sort/size"}, std::wstring_view{L"Ctrl+F6 default shortcut"}},
+        ShortcutBindingExpectation{VK_F5,
+                                   ShortcutManager::kModShift,
+                                   std::wstring_view{L"cmd/pane/copyToOtherPaneWithOptions"},
+                                   std::wstring_view{L"Shift+F5 default shortcut"}},
+        ShortcutBindingExpectation{VK_F6,
+                                   ShortcutManager::kModShift,
+                                   std::wstring_view{L"cmd/pane/moveToOtherPaneWithOptions"},
+                                   std::wstring_view{L"Shift+F6 default shortcut"}},
         ShortcutBindingExpectation{VK_F12, ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/filter"}, std::wstring_view{L"Ctrl+F12 default shortcut"}},
         ShortcutBindingExpectation{
             VK_F11, ShortcutManager::kModShift, std::wstring_view{L"cmd/app/theme/selectPrev"}, std::wstring_view{L"Shift+F11 default shortcut"}},
@@ -9190,15 +11198,19 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     state.Require(! manager.FindFunctionBarCommand(VK_F2, ShortcutManager::kModCtrl | ShortcutManager::kModShift).has_value(),
                   L"Ctrl+Shift+F2 should not have a default shortcut binding.");
 
-    constexpr std::array<ShortcutBindingExpectation, 21> kFolderViewBindings = {
+    constexpr std::array<ShortcutBindingExpectation, 22> kFolderViewBindings = {
         ShortcutBindingExpectation{
             static_cast<uint32_t>('U'), ShortcutManager::kModCtrl, std::wstring_view{L"cmd/app/swapPanes"}, std::wstring_view{L"Ctrl+U default shortcut"}},
         ShortcutBindingExpectation{
             static_cast<uint32_t>('F'), ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/find"}, std::wstring_view{L"Ctrl+F default shortcut"}},
         ShortcutBindingExpectation{static_cast<uint32_t>('T'),
                                    ShortcutManager::kModCtrl | ShortcutManager::kModAlt,
-                                   std::wstring_view{L"cmd/pane/openCommandShell"},
+                                   std::wstring_view{L"cmd/terminal/openFloatingWindow"},
                                    std::wstring_view{L"Ctrl+Alt+T default shortcut"}},
+        ShortcutBindingExpectation{static_cast<uint32_t>('7'),
+                                   ShortcutManager::kModAlt,
+                                   std::wstring_view{L"cmd/pane/openCommandShell"},
+                                   std::wstring_view{L"Alt+7 default shortcut"}},
         ShortcutBindingExpectation{static_cast<uint32_t>('5'),
                                    ShortcutManager::kModAlt,
                                    std::wstring_view{L"cmd/pane/viewOptions/toggleThumbnails"},
@@ -9248,7 +11260,9 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     {
         const bool permanentDeleteDuplicate = commandId == std::wstring_view{L"cmd/pane/permanentDelete"};
         const bool findAlternateBinding     = commandId == std::wstring_view{L"cmd/pane/find"};
-        RequireFolderViewBinding(state, manager, vk, modifiers, commandId, label, ! permanentDeleteDuplicate && ! findAlternateBinding);
+        const bool commandShellAlternateBinding = commandId == std::wstring_view{L"cmd/pane/openCommandShell"};
+        RequireFolderViewBinding(
+            state, manager, vk, modifiers, commandId, label, ! permanentDeleteDuplicate && ! findAlternateBinding && ! commandShellAlternateBinding);
     }
 
     state.Require(! manager.TryGetShortcutForCommand(L"cmd/pane/permanentDeleteWithValidation").has_value(),
@@ -9266,6 +11280,11 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     legacyFolderViewBinding.modifiers = ShortcutManager::kModShift;
     legacyFolderViewBinding.commandId = L"cmd/pane/permanentDeleteWithValidation";
     legacySettings.shortcuts->folderView.push_back(std::move(legacyFolderViewBinding));
+    Common::Settings::ShortcutBinding legacyTerminalWindowBinding{};
+    legacyTerminalWindowBinding.vk        = static_cast<uint32_t>('T');
+    legacyTerminalWindowBinding.modifiers = ShortcutManager::kModCtrl | ShortcutManager::kModAlt;
+    legacyTerminalWindowBinding.commandId = L"cmd/pane/openCommandShell";
+    legacySettings.shortcuts->folderView.push_back(std::move(legacyTerminalWindowBinding));
     ShortcutDefaults::EnsureShortcutsInitialized(legacySettings);
     ShortcutManager legacyManager;
     legacyManager.Load(legacySettings.shortcuts.value());
@@ -9286,8 +11305,35 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
                              legacyManager,
                              static_cast<uint32_t>('T'),
                              ShortcutManager::kModCtrl | ShortcutManager::kModAlt,
-                             std::wstring_view{L"cmd/pane/openCommandShell"},
-                             std::wstring_view{L"legacy Ctrl+Alt+T added shortcut"});
+                             std::wstring_view{L"cmd/terminal/openFloatingWindow"},
+                             std::wstring_view{L"legacy Ctrl+Alt+T floating-terminal migration"},
+                             false);
+    state.Require(legacySettings.shortcuts->migrationVersion == 1u,
+                  L"Legacy Ctrl+Alt+T migration should persist its one-shot version.");
+    Common::Settings::ShortcutBinding* migratedCtrlAltT = nullptr;
+    for (Common::Settings::ShortcutBinding& binding : legacySettings.shortcuts->folderView)
+    {
+        if (binding.vk == static_cast<uint32_t>('T') &&
+            binding.modifiers == (ShortcutManager::kModCtrl | ShortcutManager::kModAlt))
+        {
+            migratedCtrlAltT = &binding;
+            break;
+        }
+    }
+    state.Require(migratedCtrlAltT != nullptr, L"Migrated Ctrl+Alt+T binding should remain addressable.");
+    if (migratedCtrlAltT != nullptr)
+    {
+        migratedCtrlAltT->commandId = L"cmd/pane/openCommandShell";
+        ShortcutDefaults::EnsureShortcutsInitialized(legacySettings);
+        const auto reboundCtrlAltT = std::ranges::find_if(legacySettings.shortcuts->folderView, [](const Common::Settings::ShortcutBinding& binding) noexcept
+        {
+            return binding.vk == static_cast<uint32_t>('T') &&
+                   binding.modifiers == (ShortcutManager::kModCtrl | ShortcutManager::kModAlt);
+        });
+        state.Require(reboundCtrlAltT != legacySettings.shortcuts->folderView.end() &&
+                          reboundCtrlAltT->commandId == L"cmd/pane/openCommandShell",
+                      L"A post-migration Ctrl+Alt+T user rebind must survive later shortcut initialization.");
+    }
     RequireFolderViewBinding(state,
                              legacyManager,
                              static_cast<uint32_t>('F'),
@@ -9300,7 +11346,9 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     state.Require(selectDialogChordOpt.has_value(), L"Select dialog default shortcut missing.");
     if (selectDialogChordOpt.has_value())
     {
-        state.Require(selectDialogChordOpt->vk != 0u, L"Select dialog default vk must not be 0.");
+        state.Require(selectDialogChordOpt->vk == 0u, L"Select dialog should not retain a layout-dependent virtual key.");
+        state.Require(selectDialogChordOpt->keyPosition == Common::Keyboard::KeyPosition::NumberRowPlus,
+                      L"Select dialog should use the physical number-row-plus position.");
         state.Require(selectDialogChordOpt->modifiers == ShortcutManager::kModCtrl, L"Select dialog default shortcut expected Ctrl+<key>.");
     }
 
@@ -9308,20 +11356,24 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     state.Require(unselectDialogChordOpt.has_value(), L"Unselect dialog default shortcut missing.");
     if (unselectDialogChordOpt.has_value())
     {
-        state.Require(unselectDialogChordOpt->vk != 0u, L"Unselect dialog default vk must not be 0.");
+        state.Require(unselectDialogChordOpt->vk == 0u, L"Unselect dialog should not retain a layout-dependent virtual key.");
+        state.Require(unselectDialogChordOpt->keyPosition == Common::Keyboard::KeyPosition::NumberRowMinus,
+                      L"Unselect dialog should use the physical number-row-minus position.");
         state.Require(unselectDialogChordOpt->modifiers == ShortcutManager::kModCtrl, L"Unselect dialog default shortcut expected Ctrl+<key>.");
     }
 
     if (selectDialogChordOpt.has_value() && unselectDialogChordOpt.has_value())
     {
-        state.Require(selectDialogChordOpt->vk != unselectDialogChordOpt->vk, L"Select and Unselect dialog vks must be distinct.");
+        state.Require(selectDialogChordOpt->keyPosition != unselectDialogChordOpt->keyPosition,
+                      L"Select and Unselect dialog physical positions must be distinct.");
     }
 
     const auto selectSameExtChordOpt = manager.TryGetShortcutForCommand(L"cmd/pane/selection/selectSameExtension");
     state.Require(selectSameExtChordOpt.has_value(), L"Select same extension default shortcut missing.");
     if (selectSameExtChordOpt.has_value() && selectDialogChordOpt.has_value())
     {
-        state.Require(selectSameExtChordOpt->vk == selectDialogChordOpt->vk, L"Select same extension expected same vk as Select dialog.");
+        state.Require(selectSameExtChordOpt->keyPosition == selectDialogChordOpt->keyPosition,
+                      L"Select same extension expected the same physical position as Select dialog.");
         state.Require(selectSameExtChordOpt->modifiers == (ShortcutManager::kModCtrl | ShortcutManager::kModShift),
                       L"Select same extension default shortcut expected Ctrl+Shift+<key>.");
     }
@@ -9330,7 +11382,8 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     state.Require(unselectSameExtChordOpt.has_value(), L"Unselect same extension default shortcut missing.");
     if (unselectSameExtChordOpt.has_value() && unselectDialogChordOpt.has_value())
     {
-        state.Require(unselectSameExtChordOpt->vk == unselectDialogChordOpt->vk, L"Unselect same extension expected same vk as Unselect dialog.");
+        state.Require(unselectSameExtChordOpt->keyPosition == unselectDialogChordOpt->keyPosition,
+                      L"Unselect same extension expected the same physical position as Unselect dialog.");
         state.Require(unselectSameExtChordOpt->modifiers == (ShortcutManager::kModCtrl | ShortcutManager::kModShift),
                       L"Unselect same extension default shortcut expected Ctrl+Shift+<key>.");
     }
@@ -11592,6 +13645,11 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
+    if (! PrepareMainWindowForIsolatedUiCase(mainWindow, state, L"configured embedded-preview focus validation"))
+    {
+        return false;
+    }
+
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
     state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
     if (suiteRoot.empty())
@@ -11706,8 +13764,43 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
     Trace(L"Configured preview: focusing left FolderView HWND.");
     FocusFolderViewPane(FolderWindow::Pane::Left);
-    Trace(L"Configured preview: left FolderView focus returned; toggling preview.");
     const HWND expectedFocus = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, expectedFocus, SelfTest::Scale(1000ms)),
+                  std::format(L"Configured preview focus precondition failed; focusHwnd=0x{:X}, focusedFolderView=0x{:X}, expectedFolderView=0x{:X}, "
+                              L"foregroundHwnd=0x{:X}.",
+                              reinterpret_cast<uintptr_t>(GetFocus()),
+                              reinterpret_cast<uintptr_t>(g_folderWindow.GetFocusedFolderViewHwnd()),
+                              reinterpret_cast<uintptr_t>(expectedFocus),
+                              reinterpret_cast<uintptr_t>(GetForegroundWindow())));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    const auto requireSourcePaneFocusAfterPreview = [&](std::wstring_view transition, HWND previewHwnd) noexcept
+    {
+        const HWND focusWindow      = GetFocus();
+        const HWND rootWindow       = GetAncestor(expectedFocus, GA_ROOT);
+        const HWND foregroundWindow = GetForegroundWindow();
+        if (! focusWindow && foregroundWindow != rootWindow)
+        {
+            Trace(std::format(L"Configured preview: app externally deactivated after {}; restoring source-pane focus (foreground=0x{:X}).",
+                              transition,
+                              reinterpret_cast<uintptr_t>(foregroundWindow)));
+            static_cast<void>(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, expectedFocus, SelfTest::Scale(1000ms)));
+        }
+
+        state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus,
+                      std::format(L"Configured preview should keep keyboard focus in the source pane after {}; focusHwnd=0x{:X}, "
+                                  L"focusedFolderView=0x{:X}, expectedFolderView=0x{:X}, foregroundHwnd=0x{:X}, rootHwnd=0x{:X}, previewHwnd=0x{:X}.",
+                                  transition,
+                                  reinterpret_cast<uintptr_t>(GetFocus()),
+                                  reinterpret_cast<uintptr_t>(g_folderWindow.GetFocusedFolderViewHwnd()),
+                                  reinterpret_cast<uintptr_t>(expectedFocus),
+                                  reinterpret_cast<uintptr_t>(GetForegroundWindow()),
+                                  reinterpret_cast<uintptr_t>(rootWindow),
+                                  reinterpret_cast<uintptr_t>(previewHwnd)));
+    };
+    Trace(L"Configured preview: left FolderView focus returned; toggling preview.");
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/viewOptions/togglePreviewPane"),
                   L"Preview pane toggle should dispatch for configured embedded viewer test.");
     Trace(L"Configured preview: preview toggle returned; waiting for ViewerImgRaw snapshot.");
@@ -11718,7 +13811,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     {
         PumpPendingMessages();
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
-            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-imgraw") && g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
+            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-imgraw"))
         {
             break;
         }
@@ -11731,8 +13824,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(snapshot.previewViewerPluginId == L"builtin/viewer-imgraw",
                   L"Preview should use the configured embedded viewer plugin instead of forcing ViewerText.");
     state.Require(snapshot.previewedPath.filename() == L"image-preview.bmp", L"Configured preview should load the focused file.");
-    state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus,
-                  L"Configured embedded preview should not take keyboard focus from the source pane.");
+    requireSourcePaneFocusAfterPreview(L"the initial image publication", snapshot.previewEmbeddedViewerHwnd);
 
     const uintptr_t firstImagePreviewInstanceId = snapshot.previewViewerInstanceId;
     const HWND firstImagePreviewHwnd            = snapshot.previewEmbeddedViewerHwnd;
@@ -11750,7 +13842,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         PumpPendingMessages();
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
             OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-imgraw") &&
-            snapshot.previewedPath.filename() == L"image-preview-next.bmp" && g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
+            snapshot.previewedPath.filename() == L"image-preview-next.bmp")
         {
             break;
         }
@@ -11765,8 +13857,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Switching between image files that resolve to ViewerImgRaw should reuse the embedded image preview instance.");
     state.Require(snapshot.previewEmbeddedViewerHwnd == firstImagePreviewHwnd,
                   L"Switching between image files that resolve to ViewerImgRaw should keep the embedded image preview HWND hot.");
-    state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus,
-                  L"Refreshing image preview for a second image should keep keyboard focus in the source pane.");
+
+    requireSourcePaneFocusAfterPreview(L"the second image publication", snapshot.previewEmbeddedViewerHwnd);
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"media-preview.mp4"),
                   L"Failed to focus configured media preview item.");
@@ -11778,7 +13870,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     {
         PumpPendingMessages();
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
-            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-vlc") && g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
+            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-vlc"))
         {
             break;
         }
@@ -11791,7 +13883,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(snapshot.previewViewerPluginId == L"builtin/viewer-vlc",
                   L"Preview should use the configured media viewer plugin instead of forcing ViewerText.");
     state.Require(snapshot.previewedPath.filename() == L"media-preview.mp4", L"Configured media preview should load the focused file.");
-    state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus, L"Configured media preview should not take keyboard focus from the source pane.");
+    requireSourcePaneFocusAfterPreview(L"the initial media publication", snapshot.previewEmbeddedViewerHwnd);
 
     const uintptr_t firstVlcPreviewInstanceId = snapshot.previewViewerInstanceId;
     state.Require(firstVlcPreviewInstanceId != 0, L"Configured media preview should expose a stable embedded viewer instance id.");
@@ -11850,7 +13942,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         PumpPendingMessages();
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
             OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-vlc") &&
-            snapshot.previewedPath.filename() == L"media-preview-next.mp4" && g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
+            snapshot.previewedPath.filename() == L"media-preview-next.mp4")
         {
             break;
         }
@@ -11865,8 +13957,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Switching between media files that resolve to VLC should reuse the embedded VLC preview instance.");
     state.Require(snapshot.previewEmbeddedViewerHwnd == firstVlcPreviewHwnd,
                   L"Switching between media files that resolve to VLC should keep the embedded VLC preview HWND hot.");
-    state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus,
-                  L"Refreshing VLC preview for a second media file should keep keyboard focus in the source pane.");
+    requireSourcePaneFocusAfterPreview(L"the second media publication", snapshot.previewEmbeddedViewerHwnd);
     state.Require(std::chrono::steady_clock::now() - samePluginSwitchStarted < SelfTest::Scale(900ms),
                   L"Refreshing VLC preview for another media file should not block on slow media-player teardown.");
 
@@ -11897,8 +13988,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     {
         PumpPendingMessages();
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
-            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-vlc") && snapshot.previewedPath.filename() == L"audio-preview.m4a" &&
-            g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
+            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-vlc") && snapshot.previewedPath.filename() == L"audio-preview.m4a")
         {
             break;
         }
@@ -11914,8 +14004,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Switching from video to audio that resolves to VLC should reuse the embedded VLC preview instance.");
     state.Require(snapshot.previewEmbeddedViewerHwnd == firstVlcPreviewHwnd,
                   L"Switching from video to audio that resolves to VLC should keep the embedded VLC preview HWND hot.");
-    state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus,
-                  L"Refreshing VLC preview for an audio file should keep keyboard focus in the source pane.");
+    requireSourcePaneFocusAfterPreview(L"the audio publication", snapshot.previewEmbeddedViewerHwnd);
     state.Require(std::chrono::steady_clock::now() - audioSwitchStarted < SelfTest::Scale(900ms),
                   L"Refreshing VLC preview from video to audio should not block on slow media-player teardown.");
 
@@ -11976,8 +14065,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     {
         PumpPendingMessages();
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
-            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-imgraw") &&
-            snapshot.previewedPath.filename() == L"image-preview.bmp" && g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
+            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-imgraw") && snapshot.previewedPath.filename() == L"image-preview.bmp")
         {
             break;
         }
@@ -12000,6 +14088,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Cross-plugin preview should clear WS_VISIBLE on every retiring root while keeping the active root style-visible.");
     state.Require(snapshot.previewEmbeddedViewerHwnd != nullptr && IsWindowVisible(snapshot.previewEmbeddedViewerHwnd) != FALSE,
                   L"Cross-plugin preview should keep the tracked active image viewer visible.");
+    requireSourcePaneFocusAfterPreview(L"the cross-plugin image publication", snapshot.previewEmbeddedViewerHwnd);
     state.Require(std::chrono::steady_clock::now() - crossPluginSwitchStarted < SelfTest::Scale(900ms),
                   L"Switching away from VLC preview should not block on slow media-player teardown.");
 
@@ -12308,6 +14397,11 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
+    if (! PrepareMainWindowForIsolatedUiCase(mainWindow, state, L"preview embedded-child cardinality validation"))
+    {
+        return false;
+    }
+
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
     state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
     if (suiteRoot.empty())
@@ -12449,68 +14543,94 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 {
     constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestHotReloadMissingDirectory";
     SettingsHotReload::Stop();
-    CleanupSettingsArtifacts(kTestAppId);
-    const auto cleanup = wil::scope_exit([&]
+    const auto restoreMainWatcher = wil::scope_exit([&]
     {
         SettingsHotReload::Stop();
         RestoreMainSettingsHotReload(mainWindow, state);
-        CleanupSettingsArtifacts(kTestAppId);
     });
 
-    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kTestAppId);
-    const std::filesystem::path settingsDirectory = settingsPath.parent_path();
-    state.Require(! settingsDirectory.empty(), L"Missing-directory hot-reload test could not resolve the settings directory.");
-    if (settingsDirectory.empty())
+    try
     {
-        return false;
-    }
-
-    std::error_code removeError;
-    std::filesystem::remove_all(settingsDirectory, removeError);
-    state.Require(! removeError, L"Failed to remove the isolated self-test settings directory.");
-    state.Require(! std::filesystem::exists(settingsDirectory), L"Self-test settings directory should be absent before watcher startup.");
-
-    SettingsHotReloadTestWindowState windowState{};
-    HWND hwnd = CreateSettingsHotReloadTestWindow(windowState);
-    state.Require(hwnd != nullptr && IsWindow(hwnd) != FALSE, L"Failed to create missing-directory hot-reload self-test window.");
-    if (! hwnd || IsWindow(hwnd) == FALSE)
-    {
-        return false;
-    }
-    const auto destroyWindow = wil::scope_exit([&]
-    {
-        if (hwnd && IsWindow(hwnd))
+        const std::filesystem::path isolatedRoot = SelfTest::SelfTestRoot();
+        const std::wstring isolatedRunId =
+            std::format(L"settings-hot-reload-missing-{}-{}", GetCurrentProcessId(), GetTickCount64());
+        RedSalamander::TestSupport::ScopedEnvironmentVariable isolatedRootEnvironment(
+            RedSalamander::TestSupport::kTestRootEnvironmentVariable, std::wstring_view(isolatedRoot.native()));
+        RedSalamander::TestSupport::ScopedEnvironmentVariable isolatedRunEnvironment(
+            RedSalamander::TestSupport::kTestRunIdEnvironmentVariable, std::wstring_view(isolatedRunId));
+        const std::filesystem::path isolatedRunRoot = isolatedRoot / L"runs" / isolatedRunId;
+        const auto cleanupIsolatedRun = wil::scope_exit([&]() noexcept
         {
-            DestroyWindow(hwnd);
-        }
-    });
+            SettingsHotReload::Stop();
+            static_cast<void>(SelfTest::RemoveAll(isolatedRunRoot));
+        });
 
-    const auto startBegin = std::chrono::steady_clock::now();
-    const HRESULT startHr = SettingsHotReload::Start(hwnd, kTestAppId);
-    const auto elapsed    = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startBegin);
-    state.Require(SUCCEEDED(startHr), L"SettingsHotReload::Start should tolerate a missing settings directory.");
-    state.Require(elapsed < std::chrono::milliseconds{200}, L"SettingsHotReload::Start blocked while creating a missing settings directory.");
-    if (FAILED(startHr))
+        CleanupSettingsArtifacts(kTestAppId);
+        const std::filesystem::path settingsPath      = Common::Settings::GetSettingsPath(kTestAppId);
+        const std::filesystem::path settingsDirectory = settingsPath.parent_path();
+        state.Require(! settingsDirectory.empty(), L"Missing-directory hot-reload test could not resolve the settings directory.");
+        if (settingsDirectory.empty())
+        {
+            return false;
+        }
+
+        std::error_code removeError;
+        std::filesystem::remove_all(settingsDirectory, removeError);
+        state.Require(! removeError, L"Failed to remove the isolated self-test settings directory.");
+        state.Require(! std::filesystem::exists(settingsDirectory), L"Self-test settings directory should be absent before watcher startup.");
+
+        SettingsHotReloadTestWindowState windowState{};
+        HWND hwnd = CreateSettingsHotReloadTestWindow(windowState);
+        state.Require(hwnd != nullptr && IsWindow(hwnd) != FALSE, L"Failed to create missing-directory hot-reload self-test window.");
+        if (! hwnd || IsWindow(hwnd) == FALSE)
+        {
+            return false;
+        }
+        const auto destroyWindow = wil::scope_exit([&]
+        {
+            if (hwnd && IsWindow(hwnd))
+            {
+                DestroyWindow(hwnd);
+            }
+        });
+
+        const auto startBegin = std::chrono::steady_clock::now();
+        const HRESULT startHr = SettingsHotReload::Start(hwnd, kTestAppId);
+        const auto elapsed    = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startBegin);
+        state.Require(SUCCEEDED(startHr), L"SettingsHotReload::Start should tolerate a missing settings directory.");
+        state.Require(elapsed < std::chrono::milliseconds{200}, L"SettingsHotReload::Start blocked while creating a missing settings directory.");
+        if (FAILED(startHr))
+        {
+            return false;
+        }
+
+        const auto directoryDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds{3000});
+        while (! std::filesystem::exists(settingsDirectory) && std::chrono::steady_clock::now() < directoryDeadline)
+        {
+            std::this_thread::sleep_for(SelfTest::Scale(std::chrono::milliseconds{25}));
+        }
+        state.Require(std::filesystem::is_directory(settingsDirectory), L"Watcher did not create the missing settings directory while retrying.");
+
+        Common::Settings::Settings external{};
+        external.theme.currentThemeId     = L"builtin/dark";
+        const uint32_t beforeExternalSave = windowState.changeCount.load(std::memory_order_acquire);
+        const HRESULT externalSaveHr      = Common::Settings::SaveSettings(kTestAppId, external);
+        state.Require(SUCCEEDED(externalSaveHr), L"Failed to save settings after missing-directory watcher startup.");
+        state.Require(WaitForAtomicAtLeast(windowState.changeCount, beforeExternalSave + 1u, SelfTest::Scale(std::chrono::milliseconds{4000})),
+                      L"Watcher did not observe a settings write after creating the missing directory.");
+
+        return state.failure.empty();
+    }
+    catch (const std::bad_alloc&)
     {
+        std::terminate();
+    }
+    catch (const std::system_error& error)
+    {
+        // noexcept self-test boundary: environment isolation setup failed, so leave the shared settings tree untouched.
+        state.Require(false, std::format(L"Could not isolate the missing-directory hot-reload settings run. error={}", error.code().value()));
         return false;
     }
-
-    const auto directoryDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds{3000});
-    while (! std::filesystem::exists(settingsDirectory) && std::chrono::steady_clock::now() < directoryDeadline)
-    {
-        std::this_thread::sleep_for(SelfTest::Scale(std::chrono::milliseconds{25}));
-    }
-    state.Require(std::filesystem::is_directory(settingsDirectory), L"Watcher did not create the missing settings directory while retrying.");
-
-    Common::Settings::Settings external{};
-    external.theme.currentThemeId     = L"builtin/dark";
-    const uint32_t beforeExternalSave = windowState.changeCount.load(std::memory_order_acquire);
-    const HRESULT externalSaveHr      = Common::Settings::SaveSettings(kTestAppId, external);
-    state.Require(SUCCEEDED(externalSaveHr), L"Failed to save settings after missing-directory watcher startup.");
-    state.Require(WaitForAtomicAtLeast(windowState.changeCount, beforeExternalSave + 1u, SelfTest::Scale(std::chrono::milliseconds{4000})),
-                  L"Watcher did not observe a settings write after creating the missing directory.");
-
-    return state.failure.empty();
 }
 
 [[nodiscard]] bool TestPaneViewOptionsPreviewRejectsInvalidEmbeddedChildSetOnReuse(
@@ -14589,7 +16709,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     FocusFolderViewPane(FolderWindow::Pane::Left);
 
     const HMENU mainMenu     = DebugGetMainMenuModelHandle();
-    const HMENU editWithMenu = FindSubMenuByTextFragment(mainMenu, L"Edit &With");
+    const HMENU editWithMenu = FindSubMenuByTextFragment(mainMenu, L"Ed&it With");
     state.Require(editWithMenu != nullptr, L"Edit With menu should exist in the main menu model.");
     if (! editWithMenu)
     {
@@ -14674,8 +16794,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     markerAction.displayName      = L"Marker User Menu";
     markerAction.enabled          = true;
     markerAction.kind             = Common::Settings::FileActionKind::ExternalProgram;
-    markerAction.executablePath   = ResolveCommandProcessorPath();
-    markerAction.arguments        = L"/C if exist \"{SelectedPathsFile}\" echo user-menu>user-menu-marker.txt";
+    markerAction.executablePath   = ResolveSiblingExecutablePath(L"RedSalamanderSearchService.exe");
+    markerAction.arguments = L"--test-support-child-probe=file-action-lease \"{SelectedPathsFile}\" \"user-menu-marker.txt\" 0 0";
     markerAction.workingDirectory = L"{Path}";
     TestSetActionExtensions(markerAction, {L".usermenu"});
     g_settings.userMenu.actions.push_back(std::move(markerAction));
@@ -14771,9 +16891,107 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(launchCommandId, 0), 0);
 
     std::string markerText;
-    state.Require(WaitForTextFileFirstLine(markerPath, "user-menu", SelfTest::Scale(5000ms), markerText),
-                  std::format(L"User Menu action should receive selected-paths and path macros; marker first line was '{}'.",
+    state.Require(WaitForTextFileFirstLine(markerPath, "parsed:1", SelfTest::Scale(5000ms), markerText),
+                  std::format(L"User Menu action should launch a child that parses its selected-path manifest; marker first line was '{}'.",
                               std::wstring(markerText.begin(), markerText.end())));
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFileActionProviderRecordRejectedInCommandRoute(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / (L"file_action_invalid_provider_record_" + NewGuidText());
+    const std::filesystem::path focused = root / L"focused.badrecord";
+    const std::filesystem::path childMarker = root / L"invalid-provider-child-marker.txt";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create invalid provider-record command-route folder.");
+    state.Require(SelfTest::WriteTextFile(focused, "provider record"), L"Failed to create invalid provider-record focused item.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const Common::Settings::ViewerFileActionsSettings viewersBefore = g_settings.fileActions.viewers;
+    const auto restoreState                                         = wil::scope_exit([&]
+    {
+        g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
+        g_settings.fileActions.viewers = viewersBefore;
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+    });
+
+    g_settings.fileActions.viewers = Common::Settings::ViewerFileActionsSettings{};
+    Common::Settings::FileActionDefinition action{};
+    action.id               = L"invalid-provider-record";
+    action.displayName      = L"Invalid Provider Record Viewer";
+    action.enabled          = true;
+    action.kind             = Common::Settings::FileActionKind::ExternalProgram;
+    action.executablePath   = ResolveSiblingExecutablePath(L"RedSalamanderSearchService.exe");
+    action.arguments = L"--test-support-child-probe=file-action-lease \"{SelectedPathsFile}\" \"invalid-provider-child-marker.txt\" 0 0";
+    action.workingDirectory = L"{Path}";
+    TestSetActionExtensions(action, {L".badrecord"});
+    g_settings.fileActions.viewers.actions.push_back(std::move(action));
+    g_settings.fileActions.viewers.associations.push_back(TestViewerAssociation(L".badrecord", L"invalid-provider-record"));
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for invalid provider-record command-route test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for invalid provider-record command-route test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"focused.badrecord"}, SelfTest::Scale(3000ms)),
+                  L"Pane contents not ready for invalid provider-record command-route test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    std::wstring invalidProviderPath = (root / L"provider-record").native();
+    invalidProviderPath.append(L"\r\ninjected-record.txt");
+    std::vector<std::filesystem::path> selectedPaths{std::filesystem::path(invalidProviderPath)};
+    std::vector<std::filesystem::path> displayedPaths{focused};
+
+    g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
+    const bool launched = g_folderWindow.TryLaunchResolvedFileAction(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left),
+                                                                      g_folderWindow.GetFileSystemInstanceContext(FolderWindow::Pane::Left),
+                                                                      focused,
+                                                                      std::move(selectedPaths),
+                                                                      std::move(displayedPaths),
+                                                                      IDM_PANE_VIEW,
+                                                                      mainWindow);
+    PumpPendingMessages();
+
+    FolderView::AlertOverlayDebugSnapshot alert{};
+    state.Require(! launched, L"A provider-supplied CRLF record must be rejected by the real file-action command route.");
+    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, alert) && alert.visible,
+                  L"Rejected provider records must surface the localized file-action failure overlay.");
+    state.Require(alert.severity == FolderView::OverlaySeverity::Warning,
+                  L"Rejected provider records must use the file-action launch-failure severity.");
+    const std::wstring expectedError = std::format(L"0x{:08X}", static_cast<uint32_t>(HRESULT_FROM_WIN32(ERROR_INVALID_DATA)));
+    state.Require(alert.message.find(expectedError) != std::wstring::npos,
+                  L"The localized command-route failure must preserve the precise invalid-record HRESULT.");
+    state.Require(! std::filesystem::exists(childMarker, ec) && ! ec,
+                  L"Rejected provider records must not launch the representative child process.");
 
     return state.failure.empty();
 }
@@ -15220,6 +17438,26 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     SelfTest::RunCase(options, suite, L"file_action_external_launch_starts_process", [](CaseState& state) noexcept {
         return TestFileActionExternalLaunchStartsProcess(state);
     });
+#if defined(ENABLE_TESTS)
+    SelfTest::RunCase(options, suite, L"file_action_selected_paths_creation_contract", [](CaseState& state) noexcept {
+        return TestFileActionSelectedPathsCreationContract(state);
+    });
+    SelfTest::RunCase(options, suite, L"file_action_selected_paths_record_contract", [](CaseState& state) noexcept {
+        return TestFileActionSelectedPathsRecordContract(state);
+    });
+    SelfTest::RunCase(options, suite, L"file_action_selected_paths_streaming_perf", [](CaseState& state) noexcept {
+        return TestFileActionSelectedPathsStreamingPerf(state);
+    });
+    SelfTest::RunCase(options, suite, L"file_action_selected_paths_child_parse", [](CaseState& state) noexcept {
+        return TestFileActionSelectedPathsChildParsesRecords(state);
+    });
+    SelfTest::RunCase(options, suite, L"file_action_selected_paths_identity_cleanup", [](CaseState& state) noexcept {
+        return TestFileActionSelectedPathsIdentityCleanup(state);
+    });
+    SelfTest::RunCase(options, suite, L"file_action_selected_paths_recovery_bounds", [](CaseState& state) noexcept {
+        return TestFileActionSelectedPathsRecoveryBounds(state);
+    });
+#endif
     SelfTest::RunCase(options, suite, L"file_action_selected_paths_file_lifecycle", [](CaseState& state) noexcept {
         return TestFileActionSelectedPathsFileLifecycle(state);
     });
@@ -15228,8 +17466,8 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     SelfTest::RunCase(options, suite, L"settings_shortcuts_view_state_roundtrip", [](CaseState& state) noexcept {
         return TestSettingsStoreShortcutsViewStateRoundTrip(state);
     });
-    SelfTest::RunCase(options, suite, L"settings_file_operations_precalc_roundtrip", [](CaseState& state) noexcept {
-        return TestSettingsStoreFileOperationsPreCalcRoundTrip(state);
+    SelfTest::RunCase(options, suite, L"settings_file_operations_roundtrip", [](CaseState& state) noexcept {
+        return TestSettingsStoreFileOperationsRoundTrip(state);
     });
     SelfTest::RunCase(options, suite, L"settings_uia_blocked_operation_deadline_is_bounded", [](CaseState& state) noexcept {
         return TestUiaActionDeadlineCancelsBlockedOperation(state);
@@ -15238,11 +17476,17 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
         options, suite, L"settings_ui_customization_roundtrip", [](CaseState& state) noexcept { return TestSettingsStoreUiCustomizationRoundTrip(state); });
     SelfTest::RunCase(
         options, suite, L"settings_ui_compact_mode_defaults_true", [](CaseState& state) noexcept { return TestSettingsStoreUiDefaultsUseCompactMode(state); });
+    SelfTest::RunCase(options, suite, L"settings_mouse_focus_follows_pointer_roundtrip", [](CaseState& state) noexcept {
+        return TestSettingsStoreMouseFocusFollowsPointerRoundTrip(state);
+    });
     SelfTest::RunCase(options, suite, L"settings_shortcuts_invalid_section_rejected", [](CaseState& state) noexcept {
         return TestSettingsStoreRejectsMalformedShortcutSection(state);
     });
     SelfTest::RunCase(options, suite, L"settings_shortcuts_unassigned_sentinel_roundtrip", [](CaseState& state) noexcept {
         return TestSettingsStoreShortcutUnassignedSentinelRoundTrip(state);
+    });
+    SelfTest::RunCase(options, suite, L"terminal_shortcut_passthrough_roundtrip", [](CaseState& state) noexcept {
+        return TestTerminalShortcutPassThroughRoundTrip(state);
     });
     SelfTest::RunCase(options, suite, L"settings_hot_reload_self_save_suppression", [=](CaseState& state) noexcept {
         return TestSettingsHotReloadSelfSaveSuppression(mainWindow, state);
@@ -15255,6 +17499,9 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     });
     SelfTest::RunCase(options, suite, L"settings_hot_reload_transient_arm_failure_is_async", [=](CaseState& state) noexcept {
         return TestSettingsHotReloadTransientArmFailureIsAsync(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"settings_hot_reload_stale_notification_cannot_cross_session", [=](CaseState& state) noexcept {
+        return TestSettingsHotReloadRejectsStaleSessionNotification(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"settings_hot_reload_creates_missing_directory", [=](CaseState& state) noexcept {
         return TestSettingsHotReloadCreatesMissingDirectory(mainWindow, state);
@@ -15271,7 +17518,16 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
         return TestRedSalamanderHelpListsDiagnosticsOptions(state);
     });
     SelfTest::RunCase(options, suite, L"registry_integrity", [](CaseState& state) noexcept { return TestRegistryIntegrity(state); });
+    SelfTest::RunCase(options, suite, L"command_surface_coverage_contract", [=](CaseState& state) noexcept {
+        return TestCommandSurfaceCoverageContract(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"main_menu_information_architecture", [](CaseState& state) noexcept {
+        return TestMainMenuInformationArchitecture(state);
+    });
     SelfTest::RunCase(options, suite, L"shortcut_defaults_mapping", [](CaseState& state) noexcept { return TestShortcutDefaultsMapping(state); });
+    SelfTest::RunCase(options, suite, L"terminal_shortcut_defaults_and_physical_positions", [](CaseState& state) noexcept {
+        return TestTerminalShortcutDefaultsAndPhysicalPositions(state);
+    });
     SelfTest::RunCase(options, suite, L"shortcut_defaults_restore_missing_f3_view", [](CaseState& state) noexcept {
         return TestShortcutDefaultsRestoreMissingF3View(state);
     });
@@ -15420,6 +17676,9 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     });
     SelfTest::RunCase(options, suite, L"user_menu_populates_and_dispatches_configured_actions", [=](CaseState& state) noexcept {
         return TestUserMenuPopulatesAndDispatchesConfiguredActions(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"file_action_provider_record_rejected_in_command_route", [=](CaseState& state) noexcept {
+        return TestFileActionProviderRecordRejectedInCommandRoute(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"user_menu_parameterized_command_reports_unavailable", [=](CaseState& state) noexcept {
         return TestUserMenuParameterizedCommandReportsUnavailable(mainWindow, state);

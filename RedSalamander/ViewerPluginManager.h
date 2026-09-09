@@ -18,6 +18,7 @@
 #pragma warning(pop)
 
 #include "PlugInterfaces/Informations.h"
+#include "PlugInterfaces/Terminal.h"
 #include "PlugInterfaces/Viewer.h"
 #include "PluginModuleLifecycle.h"
 
@@ -32,6 +33,7 @@ public:
     enum class PluginType : uint8_t
     {
         Viewer,
+        Terminal,
     };
 
     enum class PluginOrigin : uint8_t
@@ -51,6 +53,7 @@ public:
         ~PluginEntry()                             = default;
 
         PluginOrigin origin = PluginOrigin::Embedded;
+        PluginType type     = PluginType::Viewer;
         std::filesystem::path path;
 
         // When non-empty, this DLL exposes multiple logical plugins and this is the
@@ -83,6 +86,7 @@ public:
     const std::vector<PluginEntry>& GetPlugins() const noexcept;
 
     HRESULT CreateViewerInstance(std::wstring_view pluginId, Common::Settings::Settings& settings, wil::com_ptr<IViewer>& outViewer) noexcept;
+    HRESULT CreateTerminalInstance(std::wstring_view pluginId, Common::Settings::Settings& settings, wil::com_ptr<ITerminal>& outTerminal) noexcept;
 
     HRESULT DisablePlugin(std::wstring_view pluginId, Common::Settings::Settings& settings) noexcept;
     HRESULT EnablePlugin(std::wstring_view pluginId, Common::Settings::Settings& settings) noexcept;

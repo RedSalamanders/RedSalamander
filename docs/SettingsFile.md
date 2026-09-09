@@ -57,6 +57,43 @@ Notes:
 
 ## Common advanced edits
 
+### Configure Terminal shortcuts
+
+Prefer **Preferences -> Keyboard -> Terminal**: it enumerates all 39
+Terminal-context command definitions and their aliases from the live command
+registry. Manual bindings live in `shortcuts.terminal`; global bindings such as
+Preferences, Open Settings File, and the RedSalamander Command Palette live in
+`shortcuts.application` only.
+
+Each entry uses either `vk` or `keyPosition`, never both. The physical
+`numberRowPlus` and `numberRowMinus` tokens keep main-keyboard zoom stable across
+layouts:
+
+```json
+{
+  "shortcuts": {
+    "application": [
+      { "vk": "P", "ctrl": true, "shift": true, "commandId": "cmd/app/commandPalette" }
+    ],
+    "terminal": [
+      { "vk": "F", "ctrl": true, "shift": true, "commandId": "cmd/terminal/find" },
+      { "vk": "VK_BE", "ctrl": true, "shift": true, "commandId": "cmd/terminal/suggestions" },
+      { "keyPosition": "numberRowPlus", "ctrl": true, "commandId": "cmd/terminal/font/increase" },
+      { "keyPosition": "numberRowMinus", "ctrl": true, "commandId": "cmd/terminal/font/decrease" },
+      { "vk": "P", "ctrl": true, "shift": true, "commandId": "cmd/shortcut/passthrough" }
+    ]
+  }
+}
+```
+
+`cmd/shortcut/passthrough` is valid only in Terminal scope and forwards the
+original chord to the terminal application. `cmd/shortcut/unassigned` consumes
+the chord as **No action**. Omitting a canonical default does not remove it;
+startup restores missing defaults, so use the unassigned sentinel when you
+intentionally remove one. See [Keyboard Shortcuts](KeyboardShortcuts.md) for the
+complete factory binding table. Import/export from Preferences is safer than
+hand-editing command IDs.
+
 ### Disable archive auto-mount
 
 This stops archive/container extensions from opening as virtual file systems automatically:
@@ -245,6 +282,7 @@ If you also want to reset the dialog window position, remove `windows.FindFilesW
 The settings file has additional top-level sections beyond the ones above. Several are documented in detail on their own pages; edit them there in the app rather than by hand where possible:
 
 - `shortcuts` - keyboard shortcut bindings. See [Keyboard Shortcuts](KeyboardShortcuts.md).
+- `terminal.floatingWindow` - singleton floating Terminal placement plus the ordered current tab IDs, profiles, providers, and trusted paths. Closed tabs are removed; no process, screen, or history state is stored. Normally let the app maintain this section.
 - `connections` - saved Connection Manager profiles (non-secret fields only). See [Connections](Connections.md).
 - `compareDirectories` - Compare Directories command options. See [Compare Directories](CompareDirectories.md).
 - `hotPaths` - the 10 hot-path bookmark slots (`Ctrl+1` .. `Ctrl+0`). See [Navigation & Path Syntax](NavigationAndPaths.md).
@@ -252,10 +290,24 @@ The settings file has additional top-level sections beyond the ones above. Sever
 - `monitor` - RedSalamanderMonitor window preferences. See [Monitor](Monitor.md).
 - `mainMenu` - menu-bar and function-bar visibility (`menuBarVisible`, `functionBarVisible`). See the **View** menu in [Main Window](MainWindow.md).
 - `ui.language` - application language override. See [Localization](dev/Localization.md).
+- `mouse` - the two independent pointer-driven pane-focus settings from `Preferences -> Mouse`.
 
 The `theme.themes[]` entries and standalone `Themes\*.theme.json5` files require `formatVersion: 2`. They store reusable authored values under `palette` and map semantic application keys under `colors`; values may be literals, references, supported transforms, system sources, or allowlisted stable runtime sources. Missing-version/version-1 themes are rejected, and exports are never flattened to legacy direct colors. Prefer Preferences for selection/import/export and RedConfigure for dependency-aware authoring. See [Themes](Themes.md) for examples and the function overview.
 
 A few sections have no dedicated page. Brief guidance for editing them by hand:
+
+### mouse
+
+The Mouse Preferences page normally edits these values. Each boolean is independent: the first enables focus-following all the time, while the second can enable it only while either pane has an open terminal.
+
+```json
+{
+  "mouse": {
+    "focusFollowsPointer": false,
+    "focusFollowsPointerWhenTerminalOpen": true
+  }
+}
+```
 
 ### startup
 

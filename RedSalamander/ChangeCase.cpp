@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <iterator>
 #include <optional>
 #include <span>
 #include <string>
@@ -12,7 +13,11 @@
 
 #include <wil/com.h>
 
+#ifdef ENABLE_TESTS
 #include "FileSystemRenameBatch.h"
+#endif
+#include "FileSystemRouteContract.h"
+#include "FolderWindow.FileOperationsInternal.h"
 #include "PlugInterfaces/FileSystem.h"
 
 namespace
@@ -68,7 +73,7 @@ namespace
     return out;
 }
 
-[[nodiscard]] size_t PathDepthKey(const std::filesystem::path& p) noexcept
+[[nodiscard]] size_t ChangeCasePathDepthKey(const std::filesystem::path& p) noexcept
 {
     size_t depth             = 0;
     const std::wstring& text = p.native();
@@ -82,54 +87,35 @@ namespace
     return depth;
 }
 
+[[nodiscard]] HRESULT ClassifyDirectoryReadResult(const HRESULT readHr,
+                                                  const bool hasInformation,
+                                                  const bool /*provenDirectory*/) noexcept
+{
+    if (FAILED(readHr))
+    {
+        return readHr;
+    }
+    return hasInformation ? S_OK : E_UNEXPECTED;
+}
+
 [[nodiscard]] bool IsDotOrDotDot(std::wstring_view name) noexcept
 {
     return name == L"." || name == L"..";
-}
-
-[[nodiscard]] wchar_t GuessPreferredSeparator(std::wstring_view folder) noexcept
-{
-    const bool hasForward = folder.find(L'/') != std::wstring_view::npos;
-    const bool hasBack    = folder.find(L'\\') != std::wstring_view::npos;
-    if (hasForward && ! hasBack)
-    {
-        return L'/';
-    }
-    return L'\\';
-}
-
-[[nodiscard]] std::filesystem::path JoinFolderAndLeaf(const std::filesystem::path& folder, std::wstring_view leaf) noexcept
-{
-    if (folder.empty())
-    {
-        return std::filesystem::path(std::wstring(leaf));
-    }
-
-    const std::wstring_view folderText(folder.native());
-    std::wstring result(folderText);
-
-    const wchar_t sep = GuessPreferredSeparator(folderText);
-    if (! result.empty())
-    {
-        const wchar_t last = result.back();
-        if (last != L'\\' && last != L'/')
-        {
-            result.push_back(sep);
-        }
-    }
-
-    if (! leaf.empty())
-    {
-        result.append(leaf);
-    }
-
-    return std::filesystem::path(std::move(result));
 }
 
 } // namespace
 
 namespace ChangeCase
 {
+#ifdef ENABLE_TESTS
+HRESULT DebugClassifyDirectoryReadResult(const HRESULT readHr,
+                                         const bool hasInformation,
+                                         const bool provenDirectory) noexcept
+{
+    return ClassifyDirectoryReadResult(readHr, hasInformation, provenDirectory);
+}
+#endif
+
 std::wstring TransformLeafName(std::wstring_view leafName, const Options& options) noexcept
 {
     const std::filesystem::path leafPath{std::wstring(leafName)};
@@ -192,17 +178,57 @@ std::wstring TransformLeafName(std::wstring_view leafName, const Options& option
     return std::wstring(leafName);
 }
 
-HRESULT ApplyToPaths(IFileSystem& fileSystem,
-                     const std::vector<std::filesystem::path>& inputPaths,
-                     const Options& options,
-                     std::stop_token stopToken,
-                     ProgressCallback progress,
-                     void* progressCookie) noexcept
+[[nodiscard]] HRESULT BuildOrApplyToPaths(IFileSystem& fileSystem,
+                                          const std::wstring_view pluginId,
+                                          const std::vector<std::filesystem::path>& inputPaths,
+                                          const Options& options,
+                                          std::vector<BatchRenameExecutionOp>* const operationsOut,
+                                          std::stop_token stopToken,
+                                          ProgressCallback progress,
+                                          void* progressCookie,
+#ifdef ENABLE_TESTS
+                                          const MutationGuardCallbacks* const mutationGuard) noexcept
+#else
+                                          const void*) noexcept
+#endif
 {
     if (inputPaths.empty())
     {
         return S_OK;
     }
+    if (pluginId.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    const auto firstPath = std::ranges::find_if(inputPaths, [](const std::filesystem::path& path) noexcept { return ! path.empty(); });
+    if (firstPath == inputPaths.end())
+    {
+        return E_INVALIDARG;
+    }
+    wil::com_ptr<IFileSystemRouteCapabilities> route;
+    const HRESULT routeInterfaceHr = fileSystem.QueryInterface(__uuidof(IFileSystemRouteCapabilities), route.put_void());
+    if (FAILED(routeInterfaceHr) || ! route)
+    {
+        return FAILED(routeInterfaceHr) ? routeInterfaceHr : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+    const FileSystemRouteContract::QueryResult routeResult =
+        FileSystemRouteContract::Query(route.get(), firstPath->native(), FILESYSTEM_RENAME, pluginId);
+    if (routeResult.state != FileSystemRouteContract::QueryState::Available || ! routeResult.snapshot.renameOperation ||
+        ! routeResult.snapshot.pathIdentity.has_value())
+    {
+        return FAILED(routeResult.status) ? routeResult.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+    const FileSystemPathIdentity pathIdentity = routeResult.snapshot.pathIdentity.value();
+    const auto childNameFailure = [](const FileSystemRouteContract::ChildNameContractResult& contract) noexcept
+    {
+        if (contract.state == FileSystemRouteContract::QueryState::Available && contract.nameStatus == FILESYSTEM_CHILD_NAME_INVALID &&
+            FAILED(contract.failureStatus))
+        {
+            return contract.failureStatus;
+        }
+        return FAILED(contract.status) ? contract.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    };
 
     ProgressUpdate progressUpdate{};
 
@@ -212,37 +238,59 @@ HRESULT ApplyToPaths(IFileSystem& fileSystem,
     std::unordered_set<std::wstring> seen;
     seen.reserve(inputPaths.size() * 2u);
 
-    const auto addPath = [&](const std::filesystem::path& p)
+    const auto addPath = [&](const std::filesystem::path& p) noexcept -> HRESULT
     {
         if (p.empty())
         {
-            return;
+            return S_FALSE;
         }
 
-        const std::wstring key = p.native();
-        if (key.empty())
+        const std::optional<std::wstring> key = TryMakePathKey(pathIdentity, p.native());
+        if (! key.has_value())
         {
-            return;
+            return E_INVALIDARG;
         }
 
-        if (seen.insert(key).second)
+        if (seen.insert(key.value()).second)
         {
             paths.push_back(p);
         }
+        return S_OK;
     };
 
     for (const auto& p : inputPaths)
     {
-        addPath(p);
+        const HRESULT addHr = addPath(p);
+        if (FAILED(addHr))
+        {
+            return addHr;
+        }
     }
 
     if (options.includeSubdirs)
     {
-        std::vector<std::filesystem::path> pending;
+        struct PendingDirectory final
+        {
+            std::filesystem::path path;
+            bool provenDirectory = false;
+        };
+
+        std::vector<PendingDirectory> pending;
         pending.reserve(inputPaths.size());
         for (const auto& root : inputPaths)
         {
-            pending.push_back(root);
+            constexpr FileSystemBindFlags selectedRootBindFlags = static_cast<FileSystemBindFlags>(
+                FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_RENAME);
+            FileOperations::ObjectBindingResult selectedRoot = FileOperations::BindObjectAuthority(
+                &fileSystem, root.native(), routeResult.snapshot.pathProfileId, selectedRootBindFlags);
+            if (selectedRoot.state != FileOperations::ObjectBindingState::Bound)
+            {
+                return FAILED(selectedRoot.status) ? selectedRoot.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+            }
+            if (selectedRoot.authority.kind == FILESYSTEM_BOUND_DIRECTORY)
+            {
+                pending.push_back(PendingDirectory{.path = root, .provenDirectory = true});
+            }
         }
 
         while (! pending.empty())
@@ -252,8 +300,9 @@ HRESULT ApplyToPaths(IFileSystem& fileSystem,
                 return HRESULT_FROM_WIN32(ERROR_CANCELLED);
             }
 
-            std::filesystem::path directory = std::move(pending.back());
+            PendingDirectory candidate = std::move(pending.back());
             pending.pop_back();
+            std::filesystem::path& directory = candidate.path;
 
             progressUpdate.phase       = ProgressUpdate::Phase::Enumerating;
             progressUpdate.currentPath = directory;
@@ -264,9 +313,11 @@ HRESULT ApplyToPaths(IFileSystem& fileSystem,
 
             wil::com_ptr<IFilesInformation> info;
             const HRESULT readHr = fileSystem.ReadDirectoryInfo(directory.c_str(), info.addressof());
-            if (FAILED(readHr) || ! info)
+            const HRESULT readDisposition =
+                ClassifyDirectoryReadResult(readHr, static_cast<bool>(info), candidate.provenDirectory);
+            if (FAILED(readDisposition))
             {
-                continue;
+                return readDisposition;
             }
 
             FileInfo* buffer = nullptr;
@@ -308,21 +359,30 @@ HRESULT ApplyToPaths(IFileSystem& fileSystem,
                 std::wstring_view name(entry->FileName, nameChars);
                 if (! name.empty() && ! IsDotOrDotDot(name))
                 {
-                    const std::filesystem::path child = JoinFolderAndLeaf(directory, name);
-                    if (! child.empty())
+                    // Existing children only need the provider join; validation applies to the
+                    // proposed target names below, so a legacy name never blocks discovery.
+                    const FileSystemRouteContract::StringResult childJoined =
+                        FileSystemRouteContract::QueryJoinedPath(route.get(), directory.native(), name, FILESYSTEM_RENAME);
+                    if (childJoined.state != FileSystemRouteContract::QueryState::Available || childJoined.value.empty())
                     {
-                        const std::wstring key = child.native();
-                        if (! key.empty() && seen.insert(key).second)
-                        {
-                            paths.push_back(child);
+                        return FAILED(childJoined.status) ? childJoined.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+                    }
+                    const std::filesystem::path child(childJoined.value);
+                    const std::optional<std::wstring> key = TryMakePathKey(pathIdentity, child.native());
+                    if (! key.has_value())
+                    {
+                        return E_INVALIDARG;
+                    }
+                    if (seen.insert(key.value()).second)
+                    {
+                        paths.push_back(child);
 
-                            const DWORD attrs         = entry->FileAttributes;
-                            const bool isDir          = (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                            const bool isReparsePoint = (attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
-                            if (isDir && ! isReparsePoint)
-                            {
-                                pending.push_back(child);
-                            }
+                        const DWORD attrs         = entry->FileAttributes;
+                        const bool isDir          = (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0;
+                        const bool isReparsePoint = (attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+                        if (isDir && ! isReparsePoint)
+                        {
+                            pending.push_back(PendingDirectory{.path = child, .provenDirectory = true});
                         }
                     }
                 }
@@ -357,8 +417,8 @@ HRESULT ApplyToPaths(IFileSystem& fileSystem,
         std::ranges::sort(paths,
                           [](const std::filesystem::path& a, const std::filesystem::path& b) noexcept
         {
-            const size_t depthA = PathDepthKey(a);
-            const size_t depthB = PathDepthKey(b);
+            const size_t depthA = ChangeCasePathDepthKey(a);
+            const size_t depthB = ChangeCasePathDepthKey(b);
             if (depthA != depthB)
             {
                 return depthA > depthB;
@@ -367,29 +427,108 @@ HRESULT ApplyToPaths(IFileSystem& fileSystem,
         });
     }
 
-    std::vector<FileSystemRenameBatch::RenameOp> renames;
+    std::vector<BatchRenameExecutionOp> renames;
     renames.reserve(paths.size());
+    std::unordered_set<std::wstring> targetLocations;
+    targetLocations.reserve(paths.size());
 
     for (const auto& path : paths)
     {
-        const std::filesystem::path leaf = path.filename();
-        const std::wstring oldLeaf       = leaf.wstring();
-        if (oldLeaf.empty())
+        std::wstring parentPath;
+        std::wstring oldLeaf;
+        if (! TryGetFileSystemParentPath(pathIdentity, path.native(), parentPath) ||
+            ! TryGetFileSystemLeafName(pathIdentity, path.native(), oldLeaf))
         {
-            continue;
+            return E_INVALIDARG;
         }
 
         const std::wstring newLeaf = TransformLeafName(oldLeaf, options);
+        const std::optional<std::wstring> parentKey = TryMakePathKey(pathIdentity, parentPath);
+        if (! parentKey.has_value())
+        {
+            return E_INVALIDARG;
+        }
+        const FileSystemRouteContract::StringResult sourceCollisionKey =
+            FileSystemRouteContract::QueryChildNameCollisionKey(route.get(), parentPath, oldLeaf, FILESYSTEM_RENAME);
+        if (sourceCollisionKey.state != FileSystemRouteContract::QueryState::Available ||
+            FAILED(sourceCollisionKey.status) || sourceCollisionKey.value.empty())
+        {
+            return FAILED(sourceCollisionKey.status) ? sourceCollisionKey.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        }
+
+        std::wstring targetCollisionKey;
+        std::optional<FileSystemRouteContract::ChildNameContractResult> nameContract;
         if (newLeaf == oldLeaf)
+        {
+            targetCollisionKey = sourceCollisionKey.value;
+        }
+        else
+        {
+            nameContract = FileSystemRouteContract::QueryChildNameContract(
+                route.get(), parentPath, newLeaf, FILESYSTEM_RENAME, pluginId);
+            if (nameContract->state != FileSystemRouteContract::QueryState::Available ||
+                nameContract->nameStatus != FILESYSTEM_CHILD_NAME_VALID || nameContract->joinedPath.empty() ||
+                nameContract->collisionKey.empty())
+            {
+                return childNameFailure(nameContract.value());
+            }
+            targetCollisionKey = nameContract->collisionKey;
+        }
+
+        std::wstring targetLocation;
+        targetLocation.reserve(parentKey->size() + 1u + targetCollisionKey.size());
+        targetLocation.append(parentKey.value());
+        targetLocation.push_back(L'\0');
+        targetLocation.append(targetCollisionKey);
+        if (! targetLocations.insert(std::move(targetLocation)).second)
+        {
+            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        }
+        if (! nameContract.has_value())
         {
             continue;
         }
 
-        FileSystemRenameBatch::RenameOp op{};
-        op.sourcePath = path;
-        op.newLeaf    = std::move(newLeaf);
-        op.depth      = PathDepthKey(path);
+        BatchRenameExecutionOp op{};
+        op.originalSource = path;
+        op.finalLeaf    = std::move(newLeaf);
+        op.providerFinalPath = std::filesystem::path(nameContract->joinedPath);
+        op.providerParentKey = parentKey.value();
+        op.providerSourceCollisionKey = sourceCollisionKey.value;
+        op.providerFinalCollisionKey = nameContract->collisionKey;
+        op.depth      = ChangeCasePathDepthKey(path);
         renames.push_back(std::move(op));
+    }
+
+    progressUpdate.plannedRenames = static_cast<uint64_t>(renames.size());
+    if (operationsOut != nullptr)
+    {
+        *operationsOut = std::move(renames);
+        if (progress)
+        {
+            progress(progressUpdate, progressCookie);
+        }
+        return S_OK;
+    }
+
+#ifndef ENABLE_TESTS
+    // Production callers always request immutable operations and return above. Direct provider
+    // mutation remains compiled only into self-test builds while E5 retires the old authority.
+    return E_UNEXPECTED;
+#else
+    if (mutationGuard != nullptr && mutationGuard->prepare != nullptr && ! renames.empty())
+    {
+        std::vector<std::filesystem::path> mutationPaths;
+        mutationPaths.reserve(renames.size());
+        std::ranges::transform(renames, std::back_inserter(mutationPaths), [](const BatchRenameExecutionOp& op)
+        {
+            return op.originalSource;
+        });
+        const HRESULT guardHr = mutationGuard->prepare(mutationPaths, mutationGuard->cookie);
+        if (guardHr != S_OK)
+        {
+            return guardHr == S_FALSE ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : guardHr;
+        }
     }
 
     progressUpdate.phase = ProgressUpdate::Phase::Renaming;
@@ -428,14 +567,74 @@ HRESULT ApplyToPaths(IFileSystem& fileSystem,
 
             const size_t batchEnd = std::min(end, batchStart + kBatchSize);
 
-            progressUpdate.currentPath = renames[batchStart].sourcePath;
+            if (mutationGuard != nullptr && mutationGuard->revalidate != nullptr)
+            {
+                std::vector<std::filesystem::path> mutationPaths;
+                mutationPaths.reserve(batchEnd - batchStart);
+                std::ranges::transform(
+                    std::span<const BatchRenameExecutionOp>(renames.data() + batchStart, batchEnd - batchStart),
+                    std::back_inserter(mutationPaths),
+                    [](const BatchRenameExecutionOp& op)
+                    {
+                        return op.originalSource;
+                    });
+                const HRESULT guardHr = mutationGuard->revalidate(mutationPaths, mutationGuard->cookie);
+                if (guardHr != S_OK)
+                {
+                    return guardHr == S_FALSE ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : guardHr;
+                }
+            }
+
+            for (size_t operationIndex = batchStart; operationIndex < batchEnd; ++operationIndex)
+            {
+                const BatchRenameExecutionOp& operation = renames[operationIndex];
+                std::wstring providerParentPath;
+                if (! TryGetFileSystemParentPath(pathIdentity, operation.originalSource.native(), providerParentPath))
+                {
+                    return E_INVALIDARG;
+                }
+                const FileSystemRouteContract::ChildNameContractResult current = FileSystemRouteContract::QueryChildNameContract(
+                    route.get(), providerParentPath, operation.finalLeaf, FILESYSTEM_RENAME, pluginId);
+                if (current.state != FileSystemRouteContract::QueryState::Available ||
+                    current.nameStatus != FILESYSTEM_CHILD_NAME_VALID || current.joinedPath != operation.providerFinalPath.native() ||
+                    current.collisionKey != operation.providerFinalCollisionKey)
+                {
+                    if (current.state == FileSystemRouteContract::QueryState::Available &&
+                        current.nameStatus == FILESYSTEM_CHILD_NAME_INVALID && FAILED(current.failureStatus))
+                    {
+                        return current.failureStatus;
+                    }
+                    return FAILED(current.status) ? current.status : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+                }
+            }
+
+            progressUpdate.currentPath = renames[batchStart].originalSource;
             if (progress)
             {
                 progress(progressUpdate, progressCookie);
             }
 
-            const HRESULT hr = FileSystemRenameBatch::Execute(
-                fileSystem, std::span<const FileSystemRenameBatch::RenameOp>(renames.data() + batchStart, batchEnd - batchStart), flags);
+            std::vector<FileSystemRenameBatch::RenameOp> legacyBatch;
+            legacyBatch.reserve(batchEnd - batchStart);
+            for (size_t operationIndex = batchStart; operationIndex < batchEnd; ++operationIndex)
+            {
+                const BatchRenameExecutionOp& operation = renames[operationIndex];
+                std::wstring providerParentPath;
+                if (! TryGetFileSystemParentPath(pathIdentity, operation.originalSource.native(), providerParentPath))
+                {
+                    return E_INVALIDARG;
+                }
+                legacyBatch.emplace_back(FileSystemRenameBatch::RenameOp{
+                    .sourcePath = operation.originalSource,
+                    .newLeaf = operation.finalLeaf,
+                    .providerDestinationPath = operation.providerFinalPath,
+                    .providerParentPath = std::move(providerParentPath),
+                    .providerParentKey = operation.providerParentKey,
+                    .providerCollisionKey = operation.providerFinalCollisionKey,
+                    .depth = operation.depth,
+                });
+            }
+            const HRESULT hr = FileSystemRenameBatch::Execute(fileSystem, legacyBatch, flags);
             if (FAILED(hr))
             {
                 return hr;
@@ -443,7 +642,7 @@ HRESULT ApplyToPaths(IFileSystem& fileSystem,
 
             completed += static_cast<uint64_t>(batchEnd - batchStart);
             progressUpdate.completedRenames = completed;
-            progressUpdate.currentPath      = renames[batchEnd - 1u].sourcePath;
+            progressUpdate.currentPath      = renames[batchEnd - 1u].originalSource;
             if (progress)
             {
                 progress(progressUpdate, progressCookie);
@@ -454,5 +653,35 @@ HRESULT ApplyToPaths(IFileSystem& fileSystem,
     }
 
     return S_OK;
+#endif
 }
+
+HRESULT BuildRenameOperations(IFileSystem& fileSystem,
+                              const std::wstring_view pluginId,
+                              const std::vector<std::filesystem::path>& inputPaths,
+                              const Options& options,
+                              std::vector<BatchRenameExecutionOp>& operationsOut,
+                              std::stop_token stopToken,
+                              ProgressCallback progress,
+                              void* progressCookie) noexcept
+{
+    operationsOut.clear();
+    return BuildOrApplyToPaths(
+        fileSystem, pluginId, inputPaths, options, &operationsOut, stopToken, progress, progressCookie, nullptr);
+}
+
+#ifdef ENABLE_TESTS
+HRESULT DebugApplyToPathsForTests(IFileSystem& fileSystem,
+                                  const std::wstring_view pluginId,
+                                  const std::vector<std::filesystem::path>& inputPaths,
+                                  const Options& options,
+                                  std::stop_token stopToken,
+                                  ProgressCallback progress,
+                                  void* progressCookie,
+                                  const MutationGuardCallbacks* const mutationGuard) noexcept
+{
+    return BuildOrApplyToPaths(
+        fileSystem, pluginId, inputPaths, options, nullptr, stopToken, progress, progressCookie, mutationGuard);
+}
+#endif
 } // namespace ChangeCase

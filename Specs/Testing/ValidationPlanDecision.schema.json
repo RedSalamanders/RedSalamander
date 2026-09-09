@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://red-salamander.invalid/schemas/validation-plan-decision-v1.json",
+  "title": "RedSalamander validation plan decision v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "canonicalization", "decision_digest", "planner_mode", "snapshot_id", "plan_digest", "changed_paths", "matched_impact_rules", "advisory_build_action", "entries", "estimated_fresh_duration_ms", "estimated_executed_duration_ms", "estimated_avoided_duration_ms"],
+  "properties": {
+    "schema": { "const": "red-salamander.validation-plan-decision.v1" },
+    "canonicalization": { "const": "rs-canonical-json-v1" },
+    "decision_digest": { "$ref": "#/definitions/digest" },
+    "planner_mode": { "enum": ["shadow", "enforced"] },
+    "snapshot_id": { "$ref": "#/definitions/digest" },
+    "plan_digest": { "$ref": "#/definitions/digest" },
+    "changed_paths": { "$ref": "#/definitions/pathSet" },
+    "matched_impact_rules": { "$ref": "#/definitions/idSet" },
+    "advisory_build_action": { "enum": ["none", "targeted", "full", "blocked"] },
+    "entries": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/definitions/decision" } },
+    "estimated_fresh_duration_ms": { "type": "integer", "minimum": 0 },
+    "estimated_executed_duration_ms": { "type": "integer", "minimum": 0 },
+    "estimated_avoided_duration_ms": { "type": "integer", "minimum": 0 }
+  },
+  "definitions": {
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$" },
+    "reasonCode": { "enum": ["NO_PRIOR_EVIDENCE", "PREVIOUS_NOT_GREEN", "CORRUPT_EVIDENCE", "SCHEMA_MISMATCH", "SOURCE_INPUT_CHANGED", "BUILD_ARTIFACT_CHANGED", "LOGICAL_INPUT_CHANGED", "SHARED_CONTRACT_CHANGED", "RUNNER_CHANGED", "ENVIRONMENT_CHANGED", "ARGUMENTS_CHANGED", "COVERAGE_CHANGED", "OUTCOME_POLICY_CHANGED", "CAPABILITY_CHANGED", "DYNAMIC_SKIP_NOT_REUSABLE", "ARTIFACT_EPOCH_CHANGED", "ARTIFACT_MUTATOR_REQUIRES_REATTESTATION", "ORIGIN_NOT_PROMOTED", "POST_SNAPSHOT_MISSING", "PORTABLE_ATTESTATION_REJECTED", "NON_CACHEABLE", "SOURCE_CHANGED_DURING_RUN", "FORCED", "REUSED_EXACT", "REUSED_INDEPENDENT_LOGICAL_ARTIFACT", "MONOLITHIC_LOGICAL_CANDIDATE_NOT_FULL"] },
+    "idSet": { "type": "array", "maxItems": 4096, "uniqueItems": true, "items": { "$ref": "#/definitions/id" } },
+    "pathSet": { "type": "array", "maxItems": 100000, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//)(?!.*\\\\)[^\\u0000-\\u001f]+$" } },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "ordinal", "affected", "matched_impact_tags", "decision", "reason_codes", "expected_fingerprint", "origin_run_id", "origin_evidence_digest"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "ordinal": { "type": "integer", "minimum": 0 },
+        "affected": { "type": "boolean" },
+        "matched_impact_tags": { "$ref": "#/definitions/idSet" },
+        "decision": { "enum": ["EXECUTE", "REUSE", "BLOCKED", "MONOLITHIC_LOGICAL_CANDIDATE"] },
+        "reason_codes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/definitions/reasonCode" } },
+        "expected_fingerprint": { "$ref": "#/definitions/digest" },
+        "origin_run_id": { "type": ["string", "null"], "maxLength": 128 },
+        "origin_evidence_digest": { "anyOf": [{ "$ref": "#/definitions/digest" }, { "type": "null" }] },
+        "origin_promotion_digest": { "anyOf": [{ "$ref": "#/definitions/digest" }, { "type": "null" }] },
+        "estimated_duration_ms": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

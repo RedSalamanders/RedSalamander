@@ -11,6 +11,7 @@ Migration record: `Specs/Plans/Done/UI_ConnectionManagerSingleCanvasPlan.md`.
 - The live implementation is `RedSalamander/ConnectionManagerWindow.{h,cpp}`. `ConnectionManagerDialog.h` and `ConnectionManagerDialog.cpp` are retired and must not be reintroduced.
 - `ShowConnectionManagerWindow(...)` is the normal application entry point. It is modeless, single-instance, and posts `WndMsg::kConnectionManagerConnect` to the owner with a copied connection-name payload and the requested target pane after Connect validates and saves.
 - `ShowConnectionManagerDialog(...)` is a synchronous facade over the same single-canvas window for host-service callers that require the existing `S_OK` / `S_FALSE` result contract.
+- The synchronous façade remains a top-level unowned window. It normalizes a valid requested owner to its root; a null, destroyed, or otherwise invalid requested owner falls back to the initialized host-window root. The façade disables that valid root for the modal interval and restores it on every exit path.
 - The top-level window class MUST register `CS_DBLCLKS` so native double-click gestures reach DxUi text fields. Text fields in the real Connection Manager window must support bridge-backed character input, word selection on double-click, and masked secret editing without exposing secret text through clipboard copy/cut.
 - The Connection Manager window and connection credential prompts MUST apply the persisted `ui.windowBackdrop` setting through the shared window chrome/backdrop helper path with tool-window target semantics. High contrast or unsupported OS state MUST resolve to no system backdrop, and activation handling MUST keep title-bar active/inactive state correct without changing the persisted backdrop policy.
 - Profile names are trimmed before save and must be non-empty, unique case-insensitively, and not reserved for Quick Connect. A saved name must resolve to exactly one persisted profile.
@@ -213,7 +214,8 @@ The Connection Manager is exposed to plugins via a host service queried from `IH
 
 ### Behavioral contract
 
-- Threading: plugins may call from any thread; host marshals UI work internally. If the host window/owner state is unavailable, connection APIs that require host-owned UI/settings/secret state MUST return `HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE)` instead of executing UI-thread bodies on the caller thread.
+- Threading: plugins may call from any thread; host marshals UI work internally. Blocking `ShowConnectionManager(...)` marshaling keeps caller-owned storage alive across the synchronous UI-thread dispatch and does not transfer it to the asynchronous posted-payload registry. If the host window/owner state is unavailable, connection APIs that require host-owned UI/settings/secret state MUST return `HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE)` instead of executing UI-thread bodies on the caller thread.
+- `ShowConnectionManager(...)` validates the current full result capacity before writing any result byte. Undersized results return `E_INVALIDARG` unchanged; exact-size and oversized records are accepted, with unknown tail bytes preserved. The minimum remains the current record size until the separately owned ABI-generation decision records a supported historical prefix.
 - Lifetime: host copies all strings before returning.
 - Security:
   - secrets are never embedded in URIs and are only returned via host APIs,

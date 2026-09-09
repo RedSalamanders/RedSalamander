@@ -15,6 +15,7 @@
   <ItemGroup>
     <ClInclude Include="..\..\Common\SqliteIndexStore.h" />
     <ClInclude Include="..\..\Common\SearchTextHelpers.h" />
+    <ClInclude Include="..\..\Common\FileOperationTraversalPolicy.h" />
     <ClInclude Include="FileSystem.h" />
     <ClInclude Include="FileSystem.Internal.h" />
   </ItemGroup>

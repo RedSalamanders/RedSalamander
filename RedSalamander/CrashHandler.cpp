@@ -504,7 +504,6 @@ void ShowPreviousCrashUiIfPresent(HWND ownerWindow) noexcept
         dumpPath.empty() ? LoadStringResource(nullptr, IDS_CRASH_DETECTED_MESSAGE) : FormatStringResource(nullptr, IDS_CRASH_DETECTED_MESSAGE_FMT, dumpPath);
 
     HostPromptRequest prompt{};
-    prompt.version       = 1;
     prompt.sizeBytes     = sizeof(prompt);
     prompt.scope         = (ownerWindow && IsWindow(ownerWindow)) ? HOST_ALERT_SCOPE_WINDOW : HOST_ALERT_SCOPE_APPLICATION;
     prompt.severity      = HOST_ALERT_ERROR;

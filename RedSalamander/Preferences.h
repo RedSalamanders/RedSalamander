@@ -179,8 +179,7 @@ enum class PreferencesCompareDirectoriesDebugFocusTarget : uint8_t
 enum class PreferencesFileOperationsDebugFocusTarget : uint8_t
 {
     None = 0u,
-    PreCalcEnabledToggle,
-    PreCalcWorkersCombo,
+    VerifyAfterCopyToggle,
     BandwidthPresetCombo,
     CustomBandwidthEdit,
     AutoDismissSuccessToggle,
@@ -438,6 +437,8 @@ struct PreferencesDebugSnapshot
     RECT shellOkButtonBoundsPx{};
     RECT shellCancelButtonBoundsPx{};
     RECT shellApplyButtonBoundsPx{};
+    bool dirty                             = false;
+    bool shellApplyButtonEnabled           = false;
     bool shellFooterButtonsInsideHost      = false;
     bool shellFooterButtonsInsideClip      = false;
     bool shellOkButtonInteriorSampled      = false;
@@ -526,6 +527,10 @@ struct PreferencesDebugSnapshot
 [[nodiscard]] bool DebugSelectPreferencesKeyboardListRow(size_t rowIndex) noexcept;
 [[nodiscard]] bool DebugFindPreferencesKeyboardListRowByCommandId(std::wstring_view commandId, size_t& outRowIndex) noexcept;
 [[nodiscard]] bool DebugGetPreferencesKeyboardVisibleRowChordByCommandId(std::wstring_view commandId, std::wstring& outChordText) noexcept;
+[[nodiscard]] bool DebugGetPreferencesKeyboardVisibleRowPresentationByCommandId(
+    std::wstring_view commandId,
+    std::wstring& outScopeText,
+    std::wstring& outTooltipText) noexcept;
 [[nodiscard]] bool DebugGetPreferencesKeyboardListRowClientRect(size_t rowIndex, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugGetPreferencesKeyboardListHeaderClientRect(size_t columnIndex, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugHitTestPreferencesKeyboardListClientPoint(
@@ -548,6 +553,7 @@ struct PreferencesDebugSnapshot
 [[nodiscard]] bool DebugSelectPreferencesEditorsDefaultEditNewAction(std::wstring_view actionId) noexcept;
 [[nodiscard]] bool DebugSetPreferencesKeyboardSearchText(std::wstring_view text) noexcept;
 [[nodiscard]] bool DebugSetPreferencesKeyboardFunctionBarScope() noexcept;
+[[nodiscard]] bool DebugSetPreferencesKeyboardTerminalScope() noexcept;
 [[nodiscard]] bool DebugCapturePreferencesKeyboardShortcut(uint32_t vk, uint32_t modifiers = 0) noexcept;
 [[nodiscard]] bool DebugGetPreferencesKeyboardSnapshot(PreferencesKeyboardDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugFocusPreferencesViewersSearchField() noexcept;
@@ -558,6 +564,8 @@ struct PreferencesDebugSnapshot
 [[nodiscard]] bool DebugSelectPreferencesGeneralLanguage(std::wstring_view displayText) noexcept;
 [[nodiscard]] bool DebugSelectPreferencesGeneralReducedMotion(std::wstring_view displayText) noexcept;
 [[nodiscard]] bool DebugSelectPreferencesGeneralWindowBackdrop(std::wstring_view displayText) noexcept;
+[[nodiscard]] bool DebugSetPreferencesMouseFocusFollowsPointerSettings(bool always, bool whenTerminalOpen) noexcept;
+[[nodiscard]] bool DebugGetPreferencesMouseFocusFollowsPointerSettings(Common::Settings::MouseSettings& outSettings) noexcept;
 [[nodiscard]] bool DebugFocusPreferencesPanesLeftDisplayToggle() noexcept;
 [[nodiscard]] bool DebugSelectPreferencesPanesLeftDisplay(std::wstring_view displayText) noexcept;
 [[nodiscard]] bool DebugFocusPreferencesPanesLeftStatusBarToggle() noexcept;
@@ -573,8 +581,8 @@ struct PreferencesDebugSnapshot
 void DebugSetPreferencesSettingsFileOpenCapture(bool capture) noexcept;
 void DebugClearPreferencesLastSettingsFileOpen() noexcept;
 [[nodiscard]] bool DebugGetPreferencesLastSettingsFileOpen(std::filesystem::path& outPath, HRESULT& outHr) noexcept;
-[[nodiscard]] bool DebugFocusPreferencesFileOperationsPreCalcEnabledToggle() noexcept;
-[[nodiscard]] bool DebugGetPreferencesFileOperationsPreCalcEnabledToggleChecked(bool& outChecked) noexcept;
+[[nodiscard]] bool DebugFocusPreferencesFileOperationsVerifyAfterCopyToggle() noexcept;
+[[nodiscard]] bool DebugGetPreferencesFileOperationsVerifyAfterCopyToggleChecked(bool& outChecked) noexcept;
 [[nodiscard]] bool DebugSelectPreferencesFileOperationsBandwidthPreset(std::wstring_view displayText) noexcept;
 [[nodiscard]] bool DebugSelectPreferencesCompareDirectoriesContentWorkers(std::wstring_view displayText) noexcept;
 [[nodiscard]] bool DebugSetPreferencesFileOperationsBridgeBufferText(std::wstring_view text) noexcept;
@@ -586,6 +594,9 @@ void DebugClearPreferencesLastSettingsFileOpen() noexcept;
 [[nodiscard]] bool DebugFocusPreferencesThemesSearchField() noexcept;
 [[nodiscard]] bool DebugSetPreferencesKeyboardNextBrowsePath(std::wstring_view path) noexcept;
 [[nodiscard]] bool DebugCancelPreferencesKeyboardNextBrowse() noexcept;
+[[nodiscard]] bool DebugParsePreferencesShortcutImport(std::string_view jsonText,
+                                                        Common::Settings::ShortcutsSettings& shortcuts,
+                                                        std::wstring& error) noexcept;
 [[nodiscard]] bool DebugSetPreferencesPluginsSearchText(std::wstring_view text) noexcept;
 [[nodiscard]] bool DebugSetPreferencesThemesSearchText(std::wstring_view text) noexcept;
 [[nodiscard]] bool DebugSetPreferencesThemesNextBrowsePath(std::wstring_view path) noexcept;

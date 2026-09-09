@@ -15,9 +15,6 @@
     <RootNamespace>DxUiTests</RootNamespace>
     
   </PropertyGroup>
-  <PropertyGroup>
-    <RSBuildEnableTests Condition="'$(Configuration)'=='Release'">true</RSBuildEnableTests>
-  </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration"><ConfigurationType>Application</ConfigurationType><UseDebugLibraries>true</UseDebugLibraries></PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="Configuration"><ConfigurationType>Application</ConfigurationType><UseDebugLibraries>true</UseDebugLibraries></PropertyGroup>

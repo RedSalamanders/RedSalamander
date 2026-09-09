@@ -12,10 +12,10 @@ BEGIN
         MENUITEM "&Obnovit\tF5", IDM_VIEWERWEB_FILE_REFRESH
         POPUP "&Jiné soubory"
         BEGIN
-            MENUITEM "&Další\tSpace, Ctrl+Down", IDM_VIEWERWEB_OTHER_NEXT
-            MENUITEM "&Předchozí\tBackspace, Ctrl+Up", IDM_VIEWERWEB_OTHER_PREVIOUS
+            MENUITEM "&Předchozí soubor\tBackspace, Ctrl+Up", IDM_VIEWERWEB_OTHER_PREVIOUS
+            MENUITEM "&Další soubor\tSpace, Ctrl+Down", IDM_VIEWERWEB_OTHER_NEXT
             MENUITEM "&Za prvé\tCtrl+Home", IDM_VIEWERWEB_OTHER_FIRST
-            MENUITEM "&Poslední\tCtrl+End", IDM_VIEWERWEB_OTHER_LAST
+            MENUITEM "P&oslední\tCtrl+End", IDM_VIEWERWEB_OTHER_LAST
         END
         MENUITEM SEPARATOR
         MENUITEM "&Konec\tEsc", IDM_VIEWERWEB_FILE_EXIT
@@ -23,21 +23,20 @@ BEGIN
     POPUP "&Hledat"
     BEGIN
         MENUITEM "&Najít...\tCtrl+F", IDM_VIEWERWEB_SEARCH_FIND
-        MENUITEM "&Najít další\tF3", IDM_VIEWERWEB_SEARCH_FIND_NEXT
-        MENUITEM "&Najít předchozí\tShift+F3", IDM_VIEWERWEB_SEARCH_FIND_PREVIOUS
+        MENUITEM "N&ajít další\tF3", IDM_VIEWERWEB_SEARCH_FIND_NEXT
+        MENUITEM "Na&jít předchozí\tShift+F3", IDM_VIEWERWEB_SEARCH_FIND_PREVIOUS
     END
     POPUP "&Zobrazení"
     BEGIN
         MENUITEM "&Přiblížit\tCtrl++", IDM_VIEWERWEB_VIEW_ZOOM_IN
         MENUITEM "&Oddálit\tCtrl+-", IDM_VIEWERWEB_VIEW_ZOOM_OUT
         MENUITEM "&Resetování zoomu\tCtrl+0", IDM_VIEWERWEB_VIEW_ZOOM_RESET
-        MENUITEM SEPARATOR
-        MENUITEM "&Přepnout DevTools\tF12", IDM_VIEWERWEB_VIEW_DEVTOOLS
     END
     POPUP "&Nástroje"
     BEGIN
         MENUITEM "&Kopírovat URL\tCtrl+L", IDM_VIEWERWEB_TOOLS_COPY_URL
         MENUITEM "&Otevřít v prohlížeči\tCtrl+Enter", IDM_VIEWERWEB_TOOLS_OPEN_EXTERNAL
+        MENUITEM "Přepnout &DevTools\tF12", IDM_VIEWERWEB_VIEW_DEVTOOLS
         MENUITEM SEPARATOR
         MENUITEM "&Rozbalit vše (JSON/JSONL)", IDM_VIEWERWEB_TOOLS_JSON_EXPAND_ALL
         MENUITEM "&Sbalit vše (JSON/JSONL)", IDM_VIEWERWEB_TOOLS_JSON_COLLAPSE_ALL

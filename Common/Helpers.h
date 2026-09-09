@@ -11,6 +11,7 @@
 #include <concepts>
 #include <cstdint>
 #include <cstring>
+#include <cstdio>
 #include <cwctype>
 #include <exception>
 #include <filesystem>
@@ -398,7 +399,7 @@ template<typename CharT>
 }
 } // namespace Common::Paths
 
-#if defined(_DEBUG)
+#if defined(ENABLE_TESTS)
 namespace Common::DebugSelfTest
 {
 struct Check final
@@ -415,6 +416,15 @@ struct Check final
 
         ++failed;
         Debug::Error(L"{} debug selftest failed: {}", component, message);
+        // Plugin contract tests execute this code inside a loaded DLL and cannot observe the
+        // provider's debugger stream. Mirror only failures to stderr so the harness preserves the
+        // exact failed contract instead of reporting an opaque aggregate count.
+        std::fwprintf(stderr,
+                      L"[%.*ls] debug selftest failed: %ls\n",
+                      static_cast<int>((std::min)(component.size(), static_cast<size_t>((std::numeric_limits<int>::max)()))),
+                      component.data(),
+                      message != nullptr ? message : L"(no message)");
+        std::fflush(stderr);
         return false;
     }
 };

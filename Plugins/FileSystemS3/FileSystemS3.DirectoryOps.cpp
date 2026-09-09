@@ -103,6 +103,20 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CreateDirectory(const wchar_t* path) noe
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
+#if defined(ENABLE_TESTS)
+    bool debugHandled = false;
+    const HRESULT debugHr = FsS3::TryCreateDebugDirectoryMarker(path, debugHandled);
+    if (debugHandled)
+    {
+        if (SUCCEEDED(debugHr))
+        {
+            NotifySyntheticPathCreated(path);
+            RememberWritableDirectoryValidation(path);
+        }
+        return debugHr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS) ? HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) : debugHr;
+    }
+#endif
+
     unsigned long attrs  = 0;
     const HRESULT hrAttr = GetAttributes(path, &attrs);
     if (SUCCEEDED(hrAttr))
@@ -116,7 +130,53 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CreateDirectory(const wchar_t* path) noe
 
     if (IsNotFoundStatus(hrAttr))
     {
-        // S3 has no intrinsic directories; creating is a no-op.
+        Settings settings;
+        {
+            std::lock_guard lock(_stateMutex);
+            settings = _settings;
+        }
+
+        FsS3::ResolvedAwsContext rootContext{};
+        std::wstring canonical;
+        HRESULT hr = FsS3::ResolveAwsContext(_mode, settings, path, _hostConnections.get(), true, rootContext, canonical);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        FsS3::S3Location location{};
+        hr = FsS3::ParseS3LocationForDirectory(canonical, location);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        if (location.isRoot || location.bucket.empty() || location.keyOrPrefix.empty())
+        {
+            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        }
+
+        const std::wstring bucketWide = FsS3::Utf16FromUtf8(location.bucket);
+        if (bucketWide.empty())
+        {
+            return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
+        }
+        FsS3::ResolvedAwsContext bucketContext{};
+        hr = FsS3::ResolveS3ContextForBucket(*this, rootContext, bucketWide, bucketContext);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        hr = FsS3::PutS3ObjectFromMemory(*this, bucketContext, location.bucket, location.keyOrPrefix, nullptr, 0u, true);
+        if (hr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS))
+        {
+            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        }
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
         NotifySyntheticPathCreated(path);
         RememberWritableDirectoryValidation(path);
         return S_OK;
@@ -354,6 +414,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
             return result->status;
         }
 
+        FsS3::ArmS3RequestControl(req);
         const auto outcome = client->ListObjectsV2(req);
         if (! outcome.IsSuccess())
         {

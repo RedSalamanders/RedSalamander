@@ -26,7 +26,9 @@
     <ClInclude Include="FolderView.h" />
     <ClInclude Include="FolderViewEmptyStateLayout.h" />
     <ClInclude Include="FolderViewIncrementalSearch.h" />
-    <ClInclude Include="FolderViewVisualState.h" />
+    <ClInclude Include="..\Common\PaneVisualState.h" />
+    <ClInclude Include="..\Common\FileOperationTraversalPolicy.h" />
+    <ClInclude Include="FileOperationConfirmation.h" />
     <ClInclude Include="FolderViewInternal.h" />
     <ClInclude Include="FolderViewSortPolicy.h" />
     <ClInclude Include="FolderViewThumbnailGeometry.h" />
@@ -47,6 +49,7 @@
     <ClInclude Include="IconCache.h" />
     <ClInclude Include="Ui\\AlertOverlay.h" />
     <ClInclude Include="Ui\\AlertOverlayWindow.h" />
+    <ClInclude Include="Ui\\ThemeCycleOverlayWindow.h" />
     <ClInclude Include="Ui\\AnimationDispatcher.h" />
     <ClInclude Include="NavigationView.h" />
     <ClInclude Include="NavigationViewInternal.h" />
@@ -78,10 +81,14 @@
       <ClInclude Include="FileSystemRenameBatch.h" />
       <ClInclude Include="BatchRenameEngine.h" />
       <ClInclude Include="BatchRenameExecutionEngine.h" />
+      <ClInclude Include="FileOperationArtifactRegistry.h" />
+      <ClInclude Include="FileOperationMoveBreadcrumb.h" />
+      <ClInclude Include="FileOperationDurableStore.h" />
       <ClInclude Include="BatchRenameMenus.h" />
       <ClInclude Include="BatchRenameWindow.h" />
       <ClInclude Include="SelfTest\Commands\Commands.SelfTest.h" />
     <ClInclude Include="CommandRegistry.h" />
+    <ClInclude Include="CommandRuntimeState.h" />
     <ClInclude Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.h" />
     <ClInclude Include="CompareDirectoriesEngine.h" />
     <ClInclude Include="FindFilesWindow.h" />
@@ -105,6 +112,7 @@
     <ClInclude Include="WindowMaximizeBehavior.h" />
     <ClInclude Include="FluentIcons.h" />
     <ClInclude Include="CommandDispatch.Debug.h" />
+    <ClInclude Include="CommandDispatch.h" />
     <ClInclude Include="NavigationLocation.h" />
     <ClInclude Include="SettingsSave.h" />
     <ClInclude Include="SettingsHotReload.h" />
@@ -112,6 +120,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\Common\FileSystemPathIdentity.cpp" />
+    <ClCompile Include="..\Common\FileSystemRouteContract.cpp" />
     <ClCompile Include="..\Common\SearchTextHelpers.cpp" />
     <ClCompile Include="..\Common\SqliteIndexStore.cpp" />
     <ClCompile Include="AppTheme.cpp" />
@@ -121,6 +130,8 @@
       <ClCompile Include="FileSystemRenameBatch.cpp" />
       <ClCompile Include="BatchRenameEngine.cpp" />
       <ClCompile Include="BatchRenameExecutionEngine.cpp" />
+      <ClCompile Include="FileOperationArtifactRegistry.cpp" />
+      <ClCompile Include="FileOperationMoveBreadcrumb.cpp" />
       <ClCompile Include="BatchRenameMenus.cpp" />
       <ClCompile Include="BatchRenameWindow.cpp" />
       <ClCompile Include="SelfTest\Commands\Commands.SelfTest.cpp" />
@@ -129,6 +140,7 @@
     <ClCompile Include="FolderView.DragDrop.cpp" />
     <ClCompile Include="FolderView.Enumeration.cpp" />
     <ClCompile Include="FolderView.ErrorOverlay.cpp" />
+    <ClCompile Include="FileOperationConfirmation.cpp" />
     <ClCompile Include="FolderView.FileOps.cpp" />
     <ClCompile Include="FolderView.Icons.cpp" />
     <ClCompile Include="FolderView.Interaction.cpp" />
@@ -159,6 +171,7 @@
     <ClCompile Include="WindowsHello.cpp" />
     <ClCompile Include="HostServices.cpp" />
     <ClCompile Include="Ui\\AlertOverlayWindow.cpp" />
+    <ClCompile Include="Ui\\ThemeCycleOverlayWindow.cpp" />
     <ClCompile Include="SplashScreen.cpp" />
     <ClCompile Include="StartupMetrics.cpp" />
     <ClCompile Include="IconCache.cpp" />
@@ -259,6 +272,7 @@
     <None Include="SelfTest\Commands\Commands.SelfTest.Search.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.ShellCommands.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.Settings.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.ThemeOverlay.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.Shortcuts.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp" />
     <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp" />

@@ -1,5 +1,6 @@
 #include "FolderViewInternal.h"
 
+#include "FileSystemRouteContract.h"
 #include "FluentIcons.h"
 #include "NavigationLocation.h"
 #ifdef ENABLE_TESTS
@@ -251,6 +252,7 @@ HWND FolderView::Create(HWND parent, int x, int y, int width, int height)
 
 void FolderView::Destroy()
 {
+    DisarmPotentialDrag();
     CancelPendingEnumeration();
     StopEnumerationThread();
 
@@ -258,10 +260,13 @@ void FolderView::Destroy()
     _items.clear();
     _itemsArenaBuffer.reset();
     _itemsFolder.clear();
+    _pendingNavigationDisplayedModel.reset();
+    _displayedLocationKey.clear();
+    _pendingExplicitCurrentTarget.reset();
     _currentFolder.reset();
     _displayedFolder.reset();
-    _focusMemory.clear();
-    _focusMemoryRootKey.clear();
+    ClearFocusMemory();
+    _pendingRemovalFocus.clear();
 
     _fileSystem.reset(); // release before plugin DLL can unload
 
@@ -283,24 +288,45 @@ void FolderView::Destroy()
 
 void FolderView::SetFolderPath(const std::optional<std::filesystem::path>& folderPath)
 {
+    DisarmPotentialDrag();
     if (! folderPath)
     {
+        const bool hadCurrent = _focusedIndex < _items.size();
+        const bool hadSelection = _selectionStats.selectedFiles != 0u || _selectionStats.selectedFolders != 0u ||
+            _selectionStats.singleItem.has_value();
         ++_folderPathGeneration;
         ExitIncrementalSearch();
         DismissAlertOverlay();
         _hiddenNames.store(std::shared_ptr<const HiddenNamesFilter>{}, std::memory_order_release);
         _pendingExternalCommandAfterEnumeration.reset();
+        _pendingExternalSelectionAfterEnumeration.reset();
         _pendingRefreshSelectionRenames.clear();
         _recentlyMissingRefreshSelections.clear();
+        _pendingRemovalFocus.clear();
         ClearErrorOverlay(ErrorOverlayKind::Enumeration);
         _directoryCachePin = DirectoryInfoCache::Pin{};
         _pendingRefreshToPaintMetric.reset();
         _pendingRefreshDebounceDelayMs = 0u;
         _currentFolder.reset();
         _displayedFolder.reset();
+        _displayedLocationKey.clear();
         _items.clear();
         _itemsArenaBuffer.reset();
         _itemsFolder.clear();
+        _pendingNavigationDisplayedModel.reset();
+        _pendingExplicitCurrentTarget.reset();
+        _focusedIndex = static_cast<size_t>(-1);
+        _anchorIndex = static_cast<size_t>(-1);
+        _hoveredIndex = static_cast<size_t>(-1);
+        _selectionStats = {};
+        if (hadSelection)
+        {
+            NotifySelectionChanged();
+        }
+        if (hadCurrent)
+        {
+            NotifyFocusedItemChanged();
+        }
         InvalidateRect(_hWnd.get(), nullptr, FALSE);
         return;
     }
@@ -314,6 +340,7 @@ void FolderView::SetFolderPath(const std::optional<std::filesystem::path>& folde
         _pendingRefreshDebounceDelayMs = 0u;
         _pendingRefreshSelectionRenames.clear();
         _recentlyMissingRefreshSelections.clear();
+        _pendingRemovalFocus.clear();
 
         const auto hiddenNames = _hiddenNames.load(std::memory_order_acquire);
         if (hiddenNames && ! hiddenNames->names.empty())
@@ -589,6 +616,12 @@ void FolderView::OnDpiChanged(float newDpi)
 
 void FolderView::SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem)
 {
+    DisarmPotentialDrag();
+    const bool hadCurrent = _focusedIndex < _items.size();
+    const bool hadSelection = _selectionStats.selectedFiles != 0u || _selectionStats.selectedFolders != 0u ||
+        _selectionStats.singleItem.has_value();
+    ++_fileSystemLiveInstanceEpoch;
+    ++_removalFocusProviderEpoch;
     CancelPendingEnumeration();
     StopEnumerationThread();
     DrainPendingEnumerationPayloadMessages();
@@ -597,19 +630,24 @@ void FolderView::SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem)
     _items.clear();
     _itemsArenaBuffer.reset();
     _itemsFolder.clear();
+    _pendingNavigationDisplayedModel.reset();
+    _displayedLocationKey.clear();
+    _pendingExplicitCurrentTarget.reset();
     _pendingRefreshSelectionRenames.clear();
     _recentlyMissingRefreshSelections.clear();
+    _pendingRemovalFocus.clear();
     _columnLayout.clear();
     _columnCounts.clear();
     _columnPrefixSums.clear();
     _focusedIndex      = static_cast<size_t>(-1);
     _anchorIndex       = static_cast<size_t>(-1);
     _hoveredIndex      = static_cast<size_t>(-1);
+    _selectionStats    = {};
     _itemMetricsCached = false;
     _fileSystem        = fileSystem;
+    _fileSystemPathIdentity.reset();
+    RefreshFileSystemPathIdentity();
     _displayedFolder.reset();
-    _focusMemory.clear();
-    _focusMemoryRootKey.clear();
     _fileSystemMetadata = nullptr;
     _localShellBackedFileSystem = false;
     if (_fileSystem)
@@ -667,6 +705,47 @@ void FolderView::SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem)
     {
         InvalidateRect(_hWnd.get(), nullptr, FALSE);
     }
+    if (hadSelection)
+    {
+        NotifySelectionChanged();
+    }
+    if (hadCurrent)
+    {
+        NotifyFocusedItemChanged();
+    }
+}
+
+void FolderView::SetFileSystemContext(std::wstring_view pluginId, std::wstring_view instanceContext)
+{
+    if (_fileSystemPluginId == pluginId && _fileSystemInstanceContext == instanceContext)
+    {
+        return;
+    }
+
+    ++_removalFocusProviderEpoch;
+    _pendingRemovalFocus.clear();
+    _pendingExplicitCurrentTarget.reset();
+    _fileSystemPluginId.assign(pluginId);
+    _fileSystemInstanceContext.assign(instanceContext);
+    RefreshFileSystemPathIdentity();
+}
+
+void FolderView::RefreshFileSystemPathIdentity() noexcept
+{
+    _fileSystemPathIdentity.reset();
+    if (! _fileSystem)
+    {
+        return;
+    }
+
+    const FileSystemRouteContract::QueryResult route =
+        FileSystemRouteContract::Query(_fileSystem.get(), L"/", FILESYSTEM_RENAME, _fileSystemPluginId);
+    if (route.state != FileSystemRouteContract::QueryState::Available || ! route.snapshot.pathIdentity.has_value())
+    {
+        return;
+    }
+
+    _fileSystemPathIdentity = route.snapshot.pathIdentity;
 }
 
 const PluginMetaData* FolderView::GetFileSystemMetadata() const
@@ -754,10 +833,12 @@ LRESULT FolderView::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         case WM_PAINT: OnPaint(); return 0;
         case WM_MOUSEWHEEL: OnMeasuredMouseWheelMessage(LOWORD(wParam), GET_WHEEL_DELTA_WPARAM(wParam)); return 0;
         case WM_MOUSEHWHEEL: OnMeasuredMouseHWheelMessage(GET_WHEEL_DELTA_WPARAM(wParam)); return 0;
-        case WM_LBUTTONDOWN: OnLButtonDown({GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)}, wParam); return 0;
+        case WM_LBUTTONDOWN: OnMeasuredLButtonDownMessage({GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)}, wParam); return 0;
         case WM_LBUTTONDBLCLK: OnLButtonDblClk({GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)}, wParam); return 0;
         case WM_LBUTTONUP: OnLButtonUp({GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)}); return 0;
         case WM_MOUSEMOVE: OnMouseMove({GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)}, wParam); return 0;
+        case WM_CANCELMODE:
+        case WM_CAPTURECHANGED: DisarmPotentialDrag(); return 0;
         case WM_MOUSELEAVE: OnMouseLeave(); return 0;
         case WM_TIMER: OnTimerMessage(static_cast<UINT_PTR>(wParam)); return 0;
         case WM_KEYDOWN: OnMeasuredKeyDownMessage(wParam, lParam); return 0;
@@ -1394,10 +1475,15 @@ void FolderView::SetSort(SortBy sortBy, SortDirection direction)
 
     _sortBy        = sortBy;
     _sortDirection = direction;
+    ++_removalFocusSortEpoch;
     ApplyCurrentSort();
 
     LayoutItems();
     UpdateScrollMetrics();
+    if (_focusedIndex < _items.size())
+    {
+        EnsureVisible(_focusedIndex);
+    }
     QueueIconLoading();
     if (_thumbnailsVisible)
     {

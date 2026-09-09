@@ -30,6 +30,7 @@
 #include "Helpers.h"
 #include "SettingsHotReload.h"
 #include "SettingsStore.h"
+#include "ThroughputParsing.h"
 #include "Ui/AlertOverlayWindow.h"
 #include "WindowMessages.h"
 #include "WindowsHello.h"
@@ -41,9 +42,9 @@ namespace
 std::atomic<FolderWindow*> g_hostFolderWindow{nullptr};
 std::atomic<std::atomic<HWND>*> g_hostFolderWindowHwnd{nullptr};
 std::atomic<Common::Settings::Settings*> g_hostSettings{nullptr};
+std::atomic_bool g_hostPromptShutdown{false};
 
-template<typename T>
-[[nodiscard]] T& RequireHostDependency(const std::atomic<T*>& dependency) noexcept
+template <typename T> [[nodiscard]] T& RequireHostDependency(const std::atomic<T*>& dependency) noexcept
 {
     T* value = dependency.load(std::memory_order_acquire);
     if (! value)
@@ -71,6 +72,11 @@ template<typename T>
 
 namespace
 {
+constexpr uint32_t kPromptOptionLinks     = 0xF001u;
+constexpr uint32_t kPromptOptionVerify    = 0xF002u;
+constexpr uint32_t kPromptOptionExecution = 0xF003u;
+constexpr uint32_t kPromptOptionBandwidth = 0xF004u;
+
 struct PendingAlert
 {
     HostAlertRequest request{};
@@ -90,6 +96,7 @@ struct PendingPrompt
     HostPromptRequest request{};
     void* cookie             = nullptr;
     HostPromptResult* result = nullptr;
+    HRESULT dispatchResult   = E_PENDING;
     std::wstring title;
     std::wstring message;
 };
@@ -98,8 +105,120 @@ struct PendingConnectionManager
 {
     HostConnectionManagerRequest request{};
     HostConnectionManagerResult* result = nullptr;
+    HRESULT dispatchResult              = E_PENDING;
     std::wstring filterPluginId;
 };
+
+enum class SynchronousHostPayloadKind : uint8_t
+{
+    Prompt,
+    ConnectionManager,
+};
+
+struct SynchronousHostPayloadEntry final
+{
+    void* payload                   = nullptr;
+    UINT message                    = 0;
+    SynchronousHostPayloadKind kind = SynchronousHostPayloadKind::Prompt;
+};
+
+struct SynchronousHostPayloadRegistry final
+{
+    SynchronousHostPayloadRegistry()                                                 = default;
+    SynchronousHostPayloadRegistry(const SynchronousHostPayloadRegistry&)            = delete;
+    SynchronousHostPayloadRegistry(SynchronousHostPayloadRegistry&&)                 = delete;
+    SynchronousHostPayloadRegistry& operator=(const SynchronousHostPayloadRegistry&) = delete;
+    SynchronousHostPayloadRegistry& operator=(SynchronousHostPayloadRegistry&&)      = delete;
+
+    std::mutex mutex;
+    std::unordered_map<LPARAM, SynchronousHostPayloadEntry> entriesByToken;
+    uintptr_t nextToken     = 1u;
+    LPARAM lastRetiredToken = 0;
+};
+
+[[nodiscard]] SynchronousHostPayloadRegistry& GetSynchronousHostPayloadRegistry() noexcept
+{
+    // Unlike PostMessagePayload, entries are non-owning and exist only while the sending thread
+    // is inside SendMessageW. Plugin shutdown reaches a quiet point before process teardown.
+    static SynchronousHostPayloadRegistry registry;
+    return registry;
+}
+
+[[nodiscard]] LPARAM RegisterSynchronousHostPayload(void* payload, UINT message, SynchronousHostPayloadKind kind) noexcept
+{
+    if (! payload)
+    {
+        return 0;
+    }
+
+    auto& registry = GetSynchronousHostPayloadRegistry();
+    std::scoped_lock lock(registry.mutex);
+    const size_t maxAttempts = registry.entriesByToken.size() + 1u;
+    for (size_t attempt = 0; attempt < maxAttempts; ++attempt)
+    {
+        const LPARAM token = static_cast<LPARAM>(registry.nextToken);
+        ++registry.nextToken;
+        if (registry.nextToken == 0)
+        {
+            registry.nextToken = 1u;
+        }
+        if (token != 0 && ! registry.entriesByToken.contains(token))
+        {
+            registry.entriesByToken.emplace(token, SynchronousHostPayloadEntry{.payload = payload, .message = message, .kind = kind});
+            return token;
+        }
+    }
+    return 0;
+}
+
+void UnregisterSynchronousHostPayload(LPARAM token) noexcept
+{
+    if (token == 0)
+    {
+        return;
+    }
+
+    auto& registry = GetSynchronousHostPayloadRegistry();
+    std::scoped_lock lock(registry.mutex);
+    if (registry.entriesByToken.erase(token) != 0u)
+    {
+        registry.lastRetiredToken = token;
+    }
+}
+
+template <typename T> [[nodiscard]] T* GetSynchronousHostPayload(LPARAM token, UINT message, SynchronousHostPayloadKind kind) noexcept
+{
+    if (token == 0)
+    {
+        return nullptr;
+    }
+
+    auto& registry = GetSynchronousHostPayloadRegistry();
+    std::scoped_lock lock(registry.mutex);
+    const auto it = registry.entriesByToken.find(token);
+    if (it == registry.entriesByToken.end() || it->second.message != message || it->second.kind != kind)
+    {
+        return nullptr;
+    }
+    return static_cast<T*>(it->second.payload);
+}
+
+template <typename T> [[nodiscard]] HRESULT SendSynchronousHostPayload(HWND window, UINT message, SynchronousHostPayloadKind kind, T& payload) noexcept
+{
+    const LPARAM token = RegisterSynchronousHostPayload(&payload, message, kind);
+    if (token == 0)
+    {
+        return E_OUTOFMEMORY;
+    }
+    const auto unregister = wil::scope_exit([token]() noexcept { UnregisterSynchronousHostPayload(token); });
+
+    static_cast<void>(SendMessageW(window, message, 0, token));
+    if (payload.dispatchResult == E_PENDING)
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
+    }
+    return payload.dispatchResult;
+}
 
 struct PendingConnectionSecret
 {
@@ -491,7 +610,7 @@ public:
             return E_POINTER;
         }
 
-        if (request->version != 1 || request->sizeBytes < sizeof(HostAlertRequest))
+        if (request->sizeBytes < sizeof(HostAlertRequest))
         {
             return E_INVALIDARG;
         }
@@ -566,7 +685,7 @@ public:
             return E_POINTER;
         }
 
-        if (request->version != 1 || request->sizeBytes < sizeof(HostPromptRequest))
+        if (request->sizeBytes < sizeof(HostPromptRequest))
         {
             return E_INVALIDARG;
         }
@@ -574,6 +693,25 @@ public:
         if (! request->message || request->message[0] == L'\0')
         {
             return E_INVALIDARG;
+        }
+
+        if (request->fileOperationOptions)
+        {
+            const HostFileOperationPromptOptions& options = *request->fileOperationOptions;
+            const bool validPresentation = request->presentation == HOST_PROMPT_PRESENTATION_COPY || request->presentation == HOST_PROMPT_PRESENTATION_MOVE;
+            const bool validLinkPolicy = options.linkPolicy == HOST_FILE_OPERATION_LINK_PRESERVE || options.linkPolicy == HOST_FILE_OPERATION_LINK_SKIP;
+            const bool validExecution = options.executionMode == HOST_FILE_OPERATION_EXECUTION_QUEUE ||
+                                        options.executionMode == HOST_FILE_OPERATION_EXECUTION_PARALLEL;
+            const bool validVerificationAvailability =
+                options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_SUPPORTED ||
+                options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_UNSUPPORTED ||
+                options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_CHECK_DURING_OPERATION ||
+                options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_NOT_APPLICABLE;
+            if (options.sizeBytes < sizeof(HostFileOperationPromptOptions) || ! validPresentation || ! validLinkPolicy || ! validExecution ||
+                ! validVerificationAvailability || options.verifyAfterCopy > 1u || options.clipboardMoveConsumesCutList > 1u)
+            {
+                return E_INVALIDARG;
+            }
         }
 
         const HWND hostWindow = GetInitializedHostWindow();
@@ -597,15 +735,7 @@ public:
             data->request.title   = data->title.empty() ? nullptr : data->title.c_str();
             data->request.message = data->message.c_str();
 
-            auto* raw               = data.release();
-            const LRESULT msgResult = SendMessageW(hostWindow, WndMsg::kHostShowPrompt, 0, reinterpret_cast<LPARAM>(raw));
-            if (msgResult != 0)
-            {
-                // Failure; WndProc returns HRESULT in msgResult.
-                return static_cast<HRESULT>(msgResult);
-            }
-
-            return S_OK;
+            return SendSynchronousHostPayload(hostWindow, WndMsg::kHostShowPrompt, SynchronousHostPayloadKind::Prompt, *data);
         }
 
         return ShowPromptOnUiThread(*request, cookie, result);
@@ -618,12 +748,17 @@ public:
             return E_POINTER;
         }
 
-        if (request->version != 1 || request->sizeBytes < sizeof(HostConnectionManagerRequest))
+        if (request->sizeBytes < sizeof(HostConnectionManagerRequest))
         {
             return E_INVALIDARG;
         }
 
-        result->version        = 1;
+        const uint32_t resultCapacity = result->sizeBytes;
+        if (resultCapacity < sizeof(HostConnectionManagerResult))
+        {
+            return E_INVALIDARG;
+        }
+
         result->sizeBytes      = sizeof(HostConnectionManagerResult);
         result->connectionName = nullptr;
 
@@ -644,13 +779,7 @@ public:
             }
             data->request.filterPluginId = data->filterPluginId.empty() ? nullptr : data->filterPluginId.c_str();
 
-            auto* raw               = data.release();
-            const LRESULT msgResult = SendMessageW(hostWindow, WndMsg::kHostShowConnectionManager, 0, reinterpret_cast<LPARAM>(raw));
-            if (msgResult != 0)
-            {
-                return static_cast<HRESULT>(msgResult);
-            }
-            return result->connectionName ? S_OK : S_FALSE;
+            return SendSynchronousHostPayload(hostWindow, WndMsg::kHostShowConnectionManager, SynchronousHostPayloadKind::ConnectionManager, *data);
         }
 
         return ShowConnectionManagerOnUiThread(*request, result);
@@ -910,7 +1039,7 @@ public:
             return E_POINTER;
         }
 
-        if (request->version != 1 || request->sizeBytes < sizeof(HostPaneExecuteRequest))
+        if (request->sizeBytes < sizeof(HostPaneExecuteRequest))
         {
             return E_INVALIDARG;
         }
@@ -976,7 +1105,7 @@ public:
             return E_POINTER;
         }
 
-        if (request->version != 1 || request->sizeBytes < sizeof(HostViewerOpenRequest))
+        if (request->sizeBytes < sizeof(HostViewerOpenRequest))
         {
             return E_INVALIDARG;
         }
@@ -1050,7 +1179,7 @@ public:
             return static_cast<HRESULT>(msgResult);
         }
 
-        ViewerOpenContext context{};
+        ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
         context.ownerWindow           = request->ownerWindow;
         context.fileSystem            = request->fileSystem;
         context.fileSystemName        = request->fileSystemName;
@@ -1096,29 +1225,30 @@ public:
 
         if (message == WndMsg::kHostShowPrompt)
         {
-            auto data = TakeMessagePayload<PendingPrompt>(lParam);
+            auto* data = GetSynchronousHostPayload<PendingPrompt>(lParam, WndMsg::kHostShowPrompt, SynchronousHostPayloadKind::Prompt);
             if (! data || ! data->result)
             {
                 result = static_cast<LRESULT>(E_POINTER);
                 return true;
             }
 
-            const HRESULT hr = ShowPromptOnUiThread(data->request, data->cookie, data->result);
-            result           = static_cast<LRESULT>(hr);
+            data->dispatchResult = ShowPromptOnUiThread(data->request, data->cookie, data->result);
+            result               = static_cast<LRESULT>(data->dispatchResult);
             return true;
         }
 
         if (message == WndMsg::kHostShowConnectionManager)
         {
-            auto data = TakeMessagePayload<PendingConnectionManager>(lParam);
+            auto* data =
+                GetSynchronousHostPayload<PendingConnectionManager>(lParam, WndMsg::kHostShowConnectionManager, SynchronousHostPayloadKind::ConnectionManager);
             if (! data || ! data->result)
             {
                 result = static_cast<LRESULT>(E_POINTER);
                 return true;
             }
 
-            const HRESULT hr = ShowConnectionManagerOnUiThread(data->request, data->result);
-            result           = static_cast<LRESULT>(FAILED(hr) ? hr : 0);
+            data->dispatchResult = ShowConnectionManagerOnUiThread(data->request, data->result);
+            result               = static_cast<LRESULT>(data->dispatchResult);
             return true;
         }
 
@@ -1257,7 +1387,7 @@ public:
                 return true;
             }
 
-            ViewerOpenContext context{};
+            ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
             context.ownerWindow           = data->ownerWindow;
             context.fileSystem            = data->fileSystem.get();
             context.fileSystemName        = data->fileSystemName.empty() ? nullptr : data->fileSystemName.c_str();
@@ -1419,16 +1549,24 @@ private:
             return E_POINTER;
         }
 
-        HWND hostWindow = nullptr;
-
-        result->version        = 1;
-        result->sizeBytes      = sizeof(HostConnectionManagerResult);
-        result->connectionName = nullptr;
+        const HWND hostWindow = GetInitializedHostWindow();
+        if (! hostWindow || ! IsCurrentThreadWindowThread(hostWindow))
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
+        }
 
         HWND owner = request.ownerWindow;
         if (! owner || ! IsWindow(owner))
         {
-            owner = hostWindow;
+            owner = GetAncestor(hostWindow, GA_ROOT);
+        }
+        else
+        {
+            owner = GetAncestor(owner, GA_ROOT);
+        }
+        if (! owner || ! IsWindow(owner))
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
         }
 
         std::wstring selectedName;
@@ -1971,9 +2109,128 @@ private:
 
         RedSalamander::Ui::AlertModel model{};
         model.severity = ToUiAlertSeverity(request.severity);
+
+        std::wstring operationLabel;
+        switch (request.presentation)
+        {
+            case HOST_PROMPT_PRESENTATION_COPY:
+                model.presentation = RedSalamander::Ui::AlertPresentation::Copy;
+                operationLabel     = LoadStringResource(nullptr, IDS_FILEOP_OPERATION_COPY);
+                break;
+            case HOST_PROMPT_PRESENTATION_MOVE:
+                model.presentation = RedSalamander::Ui::AlertPresentation::Move;
+                operationLabel     = LoadStringResource(nullptr, IDS_FILEOP_OPERATION_MOVE);
+                break;
+            case HOST_PROMPT_PRESENTATION_DELETE:
+                model.presentation = RedSalamander::Ui::AlertPresentation::Delete;
+                operationLabel     = LoadStringResource(nullptr, IDS_FILEOP_OPERATION_DELETE);
+                break;
+            case HOST_PROMPT_PRESENTATION_ARTIFACT_TOUCH:
+                model.presentation = RedSalamander::Ui::AlertPresentation::Severity;
+                operationLabel     = LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_BTN_CONTINUE);
+                break;
+            case HOST_PROMPT_PRESENTATION_DEFAULT:
+            default: model.presentation = RedSalamander::Ui::AlertPresentation::Severity; break;
+        }
+
+        if (caption.empty() && ! operationLabel.empty())
+        {
+            caption = operationLabel;
+        }
+
         model.title    = std::move(caption);
         model.message  = std::move(text);
         model.closable = true;
+
+        if (request.fileOperationOptions)
+        {
+            const HostFileOperationPromptOptions& options = *request.fileOperationOptions;
+            auto addOption = [&model](uint32_t id,
+                                      std::wstring label,
+                                      std::vector<RedSalamander::Ui::AlertOptionChoice> choices,
+                                      uint64_t selectedValue)
+            {
+                RedSalamander::Ui::AlertOption option{};
+                option.id      = id;
+                option.label   = std::move(label);
+                option.choices = std::move(choices);
+                for (size_t index = 0; index < option.choices.size(); ++index)
+                {
+                    if (option.choices[index].value == selectedValue)
+                    {
+                        option.selectedIndex = index;
+                        break;
+                    }
+                }
+                model.options.emplace_back(std::move(option));
+            };
+
+            if (request.presentation != HOST_PROMPT_PRESENTATION_MOVE)
+            {
+                // Preserve/Skip is a Copy option; a Move relocates every link object as stored.
+                addOption(kPromptOptionLinks,
+                          LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_LINKS),
+                          {{HOST_FILE_OPERATION_LINK_PRESERVE, LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_LINKS_PRESERVE)},
+                           {HOST_FILE_OPERATION_LINK_SKIP, LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_LINKS_SKIP)}},
+                          options.linkPolicy);
+            }
+            std::wstring verifyLabel = LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_VERIFY);
+            std::vector<RedSalamander::Ui::AlertOptionChoice> verifyChoices{
+                {0u, LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF)},
+                {1u, LoadStringResource(nullptr, IDS_PREFS_COMMON_ON)},
+            };
+            uint64_t selectedVerify = options.verifyAfterCopy;
+            if (options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_UNSUPPORTED)
+            {
+                verifyLabel = LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_VERIFY_UNSUPPORTED);
+                verifyChoices.resize(1u);
+                selectedVerify = 0u;
+            }
+            else if (options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_NOT_APPLICABLE)
+            {
+                verifyLabel = LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_VERIFY_NOT_APPLICABLE);
+                verifyChoices.resize(1u);
+                selectedVerify = 0u;
+            }
+            else if (options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_CHECK_DURING_OPERATION)
+            {
+                verifyLabel = LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_VERIFY_RUNTIME_CHECK);
+            }
+            addOption(kPromptOptionVerify, std::move(verifyLabel), std::move(verifyChoices), selectedVerify);
+            addOption(kPromptOptionExecution,
+                      LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_START),
+                      {{HOST_FILE_OPERATION_EXECUTION_QUEUE, LoadStringResource(nullptr, IDS_FILEOPS_BTN_MODE_QUEUE)},
+                       {HOST_FILE_OPERATION_EXECUTION_PARALLEL, LoadStringResource(nullptr, IDS_FILEOPS_BTN_MODE_PARALLEL)}},
+                      options.executionMode);
+
+            std::vector<RedSalamander::Ui::AlertOptionChoice> bandwidthChoices{
+                {0u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_UNLIMITED)},
+                {1ull << 20u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_1_MIB)},
+                {5ull << 20u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_5_MIB)},
+                {10ull << 20u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_10_MIB)},
+                {50ull << 20u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_50_MIB)},
+                {100ull << 20u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_100_MIB)},
+                {500ull << 20u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_500_MIB)},
+                {1ull << 30u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_1_GIB)},
+            };
+            const bool hasCurrentBandwidth = std::ranges::any_of(
+                bandwidthChoices, [&options](const auto& choice) noexcept { return choice.value == options.bandwidthLimitBytesPerSecond; });
+            if (! hasCurrentBandwidth)
+            {
+                bandwidthChoices.push_back(
+                    {options.bandwidthLimitBytesPerSecond, Common::Parsing::FormatBinaryThroughputText(options.bandwidthLimitBytesPerSecond)});
+            }
+            addOption(kPromptOptionBandwidth,
+                      LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_BANDWIDTH),
+                      std::move(bandwidthChoices),
+                      options.bandwidthLimitBytesPerSecond);
+
+            if (options.clipboardMoveConsumesCutList != 0u)
+            {
+                model.message.append(L"\n\n");
+                model.message.append(LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_CLIPBOARD_MOVE_WARNING));
+            }
+        }
 
         const std::wstring labelOk     = LoadStringResource(nullptr, IDS_BTN_OK);
         const std::wstring labelCancel = LoadStringResource(nullptr, IDS_BTN_CANCEL);
@@ -1991,9 +2248,11 @@ private:
 
         switch (request.buttons)
         {
-            case HOST_PROMPT_BUTTONS_OK: addButton(static_cast<uint32_t>(IDOK), labelOk, HOST_PROMPT_RESULT_OK); break;
+            case HOST_PROMPT_BUTTONS_OK:
+                addButton(static_cast<uint32_t>(IDOK), operationLabel.empty() ? labelOk : operationLabel, HOST_PROMPT_RESULT_OK);
+                break;
             case HOST_PROMPT_BUTTONS_OK_CANCEL:
-                addButton(static_cast<uint32_t>(IDOK), labelOk, HOST_PROMPT_RESULT_OK);
+                addButton(static_cast<uint32_t>(IDOK), operationLabel.empty() ? labelOk : operationLabel, HOST_PROMPT_RESULT_OK);
                 addButton(static_cast<uint32_t>(IDCANCEL), labelCancel, HOST_PROMPT_RESULT_CANCEL);
                 break;
             case HOST_PROMPT_BUTTONS_YES_NO:
@@ -2068,7 +2327,7 @@ private:
             return hrShow;
         }
 
-        while (! state.completed && overlayWindow.IsVisible())
+        while (! state.completed && overlayWindow.IsVisible() && ! g_hostPromptShutdown.load(std::memory_order_acquire))
         {
             MSG msg{};
             bool sawMessage = false;
@@ -2084,6 +2343,14 @@ private:
 
                 TranslateMessage(&msg);
                 DispatchMessageW(&msg);
+                // A dispatched shutdown/close message can hide this prompt and queue owner teardown.
+                // Return to the prompt caller before draining another queued message so the caller's
+                // stack and any state it owns remain alive through that teardown boundary.
+                if (state.completed || ! overlayWindow.IsVisible() || g_hostPromptShutdown.load(std::memory_order_acquire))
+                {
+                    state.completed = true;
+                    break;
+                }
             }
 
             if (state.completed)
@@ -2100,6 +2367,28 @@ private:
             {
                 WaitMessage();
             }
+        }
+
+        if (request.fileOperationOptions && (state.chosen == HOST_PROMPT_RESULT_OK || state.chosen == HOST_PROMPT_RESULT_YES))
+        {
+            HostFileOperationPromptOptions accepted = *request.fileOperationOptions;
+            if (const auto value = overlayWindow.GetOptionValue(kPromptOptionLinks); value.has_value())
+            {
+                accepted.linkPolicy = static_cast<HostFileOperationLinkPolicy>(value.value());
+            }
+            if (const auto value = overlayWindow.GetOptionValue(kPromptOptionVerify); value.has_value())
+            {
+                accepted.verifyAfterCopy = value.value() != 0u ? 1u : 0u;
+            }
+            if (const auto value = overlayWindow.GetOptionValue(kPromptOptionExecution); value.has_value())
+            {
+                accepted.executionMode = static_cast<HostFileOperationExecutionMode>(value.value());
+            }
+            if (const auto value = overlayWindow.GetOptionValue(kPromptOptionBandwidth); value.has_value())
+            {
+                accepted.bandwidthLimitBytesPerSecond = value.value();
+            }
+            *request.fileOperationOptions = accepted;
         }
 
         *result = state.chosen;
@@ -2527,9 +2816,7 @@ HostServices& GetHostServicesImpl() noexcept
     return instance;
 }
 
-void ConfigureHostServices(FolderWindow& folderWindow,
-                           std::atomic<HWND>& folderWindowHwnd,
-                           Common::Settings::Settings& settings) noexcept
+void ConfigureHostServices(FolderWindow& folderWindow, std::atomic<HWND>& folderWindowHwnd, Common::Settings::Settings& settings) noexcept
 {
     g_hostFolderWindow.store(&folderWindow, std::memory_order_release);
     g_hostFolderWindowHwnd.store(&folderWindowHwnd, std::memory_order_release);
@@ -2544,6 +2831,21 @@ IHost* GetHostServices() noexcept
 void HostClearConnectionSessionState() noexcept
 {
     GetHostServicesImpl().ClearConnectionSessionState();
+}
+
+void HostBeginPromptShutdown() noexcept
+{
+    g_hostPromptShutdown.store(true, std::memory_order_release);
+}
+
+void HostResetPromptShutdown() noexcept
+{
+    g_hostPromptShutdown.store(false, std::memory_order_release);
+}
+
+bool HostIsPromptShutdown() noexcept
+{
+    return g_hostPromptShutdown.load(std::memory_order_acquire);
 }
 
 HRESULT HostShowAlert(const HostAlertRequest& request, void* cookie) noexcept
@@ -2575,6 +2877,10 @@ namespace
 {
 std::atomic<int> g_testPromptResultOverride{static_cast<int>(HOST_PROMPT_RESULT_NONE)};
 std::atomic<uint64_t> g_testPromptRequestCount{0u};
+std::mutex g_testPromptSnapshotMutex;
+HostPromptDebugSnapshot g_testPromptSnapshot{};
+bool g_hasTestPromptSnapshot = false;
+std::optional<HostFileOperationPromptOptions> g_testPromptFileOperationOptionsOverride;
 } // namespace
 #endif
 
@@ -2584,13 +2890,46 @@ HRESULT HostShowPrompt(const HostPromptRequest& request, void* cookie, HostPromp
     {
         return E_POINTER;
     }
+    if (g_hostPromptShutdown.load(std::memory_order_acquire))
+    {
+        *result = EscapePromptResultForButtons(request.buttons);
+        return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
+    }
 
 #ifdef ENABLE_TESTS
+    const auto applyFileOperationOptionsOverride = [&request]() noexcept
+    {
+        if (! request.fileOperationOptions)
+        {
+            return;
+        }
+        std::scoped_lock lock(g_testPromptSnapshotMutex);
+        if (g_testPromptFileOperationOptionsOverride.has_value())
+        {
+            *request.fileOperationOptions = g_testPromptFileOperationOptionsOverride.value();
+        }
+    };
+    {
+        std::scoped_lock lock(g_testPromptSnapshotMutex);
+        g_testPromptSnapshot.severity          = request.severity;
+        g_testPromptSnapshot.buttons           = request.buttons;
+        g_testPromptSnapshot.defaultResult     = request.defaultResult;
+        g_testPromptSnapshot.presentation      = request.presentation;
+        g_testPromptSnapshot.title             = request.title ? request.title : L"";
+        g_testPromptSnapshot.message           = request.message ? request.message : L"";
+        g_testPromptSnapshot.hasFileOperationOptions = request.fileOperationOptions != nullptr;
+        g_testPromptSnapshot.fileOperationOptions = request.fileOperationOptions ? *request.fileOperationOptions : HostFileOperationPromptOptions{};
+        g_hasTestPromptSnapshot                = true;
+    }
     g_testPromptRequestCount.fetch_add(1u, std::memory_order_acq_rel);
     const auto testPromptResultOverride = static_cast<HostPromptResult>(g_testPromptResultOverride.load(std::memory_order_acquire));
     if (testPromptResultOverride != HOST_PROMPT_RESULT_NONE && PromptButtonsSupportResult(request.buttons, testPromptResultOverride))
     {
         *result = testPromptResultOverride;
+        if (*result == HOST_PROMPT_RESULT_OK || *result == HOST_PROMPT_RESULT_YES)
+        {
+            applyFileOperationOptionsOverride();
+        }
         return S_OK;
     }
 
@@ -2601,6 +2940,10 @@ HRESULT HostShowPrompt(const HostPromptRequest& request, void* cookie, HostPromp
         if (*result == HOST_PROMPT_RESULT_NONE)
         {
             *result = accept;
+        }
+        if (*result == HOST_PROMPT_RESULT_OK || *result == HOST_PROMPT_RESULT_YES)
+        {
+            applyFileOperationOptionsOverride();
         }
         return S_OK;
     }
@@ -2647,14 +2990,55 @@ void HostClearTestPromptResultOverride() noexcept
     g_testPromptResultOverride.store(static_cast<int>(HOST_PROMPT_RESULT_NONE), std::memory_order_release);
 }
 
+void HostSetTestPromptFileOperationOptionsOverride(const HostFileOperationPromptOptions& options) noexcept
+{
+    std::scoped_lock lock(g_testPromptSnapshotMutex);
+    g_testPromptFileOperationOptionsOverride = options;
+}
+
+void HostClearTestPromptFileOperationOptionsOverride() noexcept
+{
+    std::scoped_lock lock(g_testPromptSnapshotMutex);
+    g_testPromptFileOperationOptionsOverride.reset();
+}
+
 void HostResetTestPromptRequestCount() noexcept
 {
     g_testPromptRequestCount.store(0u, std::memory_order_release);
+    std::scoped_lock lock(g_testPromptSnapshotMutex);
+    g_testPromptSnapshot    = {};
+    g_hasTestPromptSnapshot = false;
 }
 
 uint64_t HostGetTestPromptRequestCount() noexcept
 {
     return g_testPromptRequestCount.load(std::memory_order_acquire);
+}
+
+bool HostGetTestLastPromptDebugSnapshot(HostPromptDebugSnapshot& out) noexcept
+{
+    std::scoped_lock lock(g_testPromptSnapshotMutex);
+    if (! g_hasTestPromptSnapshot)
+    {
+        return false;
+    }
+
+    out = g_testPromptSnapshot;
+    return true;
+}
+
+size_t HostGetTestSynchronousPayloadRegistrationCount() noexcept
+{
+    auto& registry = GetSynchronousHostPayloadRegistry();
+    std::scoped_lock lock(registry.mutex);
+    return registry.entriesByToken.size();
+}
+
+LPARAM HostGetTestLastRetiredSynchronousPayloadToken() noexcept
+{
+    auto& registry = GetSynchronousHostPayloadRegistry();
+    std::scoped_lock lock(registry.mutex);
+    return registry.lastRetiredToken;
 }
 #endif
 

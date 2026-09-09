@@ -32,9 +32,6 @@
     <ProjectGuid>{3AABC853-D682-4A8F-8A26-C08C2F28B42B}</ProjectGuid>
     <RootNamespace>RedConfigureTests</RootNamespace>
   </PropertyGroup>
-  <PropertyGroup>
-    <RSBuildEnableTests Condition="'$(Configuration)'=='Release'">true</RSBuildEnableTests>
-  </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>

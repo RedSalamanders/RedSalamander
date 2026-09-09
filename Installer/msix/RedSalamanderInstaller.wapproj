@@ -35,9 +35,10 @@
     <UapAppxPackageBuildMode>SideLoadOnly</UapAppxPackageBuildMode>
     <PackageCertificateThumbprint>9A50A699AD909A67786A38496058CBAA359EFBCF</PackageCertificateThumbprint>
     <PackageCertificateKeyFile>RedSalamanderInstaller_TemporaryKey.pfx</PackageCertificateKeyFile>
+    <RSAppxManifestPath Condition="'$(RSAppxManifestPath)'==''">$(MSBuildThisFileDirectory)Package.appxmanifest</RSAppxManifestPath>
   </PropertyGroup>
   <ItemGroup>
-    <AppxManifest Include="Package.appxmanifest">
+    <AppxManifest Include="$(RSAppxManifestPath)">
       <SubType>Designer</SubType>
     </AppxManifest>
   </ItemGroup>

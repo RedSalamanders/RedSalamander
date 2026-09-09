@@ -24,12 +24,19 @@
 
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
+#include "FileSystemRouteProviderBase.h"
 #include "PlugInterfaces/Informations.h"
 #include "PackedFileInfoBuffer.h"
 #include "PlugInterfaces/NavigationMenu.h"
 
 struct IHost;
+struct IHostAlerts;
 struct IHostConnections;
+
+namespace FileSystemCurlInternal
+{
+struct CurlPublicationResult;
+}
 
 enum class FileSystemCurlProtocol
 {
@@ -81,7 +88,9 @@ private:
 };
 
 class FileSystemCurl final : public IFileSystem,
+                             public FileSystemRouteCapabilitiesBase,
                              public IFileSystemIO,
+                             public IFileSystemAtomicWriter,
                              public IFileSystemDirectoryOperations,
                              public IFileSystemDirectoryWatch,
                              public IInformations,
@@ -178,7 +187,9 @@ public:
                                           IFileSystemCallback* callback    = nullptr,
                                           void* cookie                     = nullptr) noexcept override;
 
-    HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
+                                                  FileSystemOperation operation,
+                                                  const char** jsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
                                                FileSystemOperation operationType,
                                                FileSystemTransferEndpoint endpoint,
@@ -189,6 +200,9 @@ public:
     HRESULT STDMETHODCALLTYPE GetAttributes(const wchar_t* path, unsigned long* fileAttributes) noexcept override;
     HRESULT STDMETHODCALLTYPE CreateFileReader(const wchar_t* path, IFileReader** reader) noexcept override;
     HRESULT STDMETHODCALLTYPE CreateFileWriter(const wchar_t* path, FileSystemFlags flags, IFileWriter** writer) noexcept override;
+    // IFileSystemAtomicWriter (R0f-Curl): the temp-file writer's Commit stages the upload as a
+    // unique sibling and renames it onto the requested path in one server-side step.
+    HRESULT STDMETHODCALLTYPE SupportsAtomicWriterCommit(const wchar_t* path, FileSystemFlags flags, BOOL* supported) noexcept override;
     HRESULT STDMETHODCALLTYPE GetFileBasicInformation(const wchar_t* path, FileSystemBasicInformation* info) noexcept override;
     HRESULT STDMETHODCALLTYPE SetFileBasicInformation(const wchar_t* path, const FileSystemBasicInformation* info) noexcept override;
     HRESULT STDMETHODCALLTYPE GetItemProperties(const wchar_t* path, const char** jsonUtf8) noexcept override;
@@ -203,6 +217,11 @@ public:
 
     HRESULT STDMETHODCALLTYPE WatchDirectory(const wchar_t* path, IFileSystemDirectoryWatchCallback* callback, void* cookie) noexcept override;
     HRESULT STDMETHODCALLTYPE UnwatchDirectory(const wchar_t* path) noexcept override;
+
+protected:
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                           FileSystemOperation operation,
+                                           FileSystemRouteDescriptor& descriptor) noexcept override;
 
 private:
     ~FileSystemCurl();
@@ -219,142 +238,6 @@ private:
 
     static constexpr wchar_t kPluginAuthor[]  = L"RedSalamander";
     static constexpr wchar_t kPluginVersion[] = VERSINFO_PLUGIN_VERSION;
-
-    static constexpr char kCapabilitiesJsonFtp[] = R"json(
-{
-  "version": 1,
-  "operations": {
-    "copy": true,
-    "move": true,
-    "delete": true,
-    "rename": true,
-    "properties": true,
-    "read": true,
-    "write": true
-  },
-  "concurrency": {
-    "copyMoveMax": 1,
-    "deleteMax": 1,
-    "deleteRecycleBinMax": 1
-  },
-  "crossFileSystem": {
-    "export": { "copy": ["*"], "move": ["*"] },
-    "import": { "copy": ["*"], "move": ["*"] }
-  },
-  "pathIdentity": {
-    "version": 1,
-    "pathTextStableIdentity": true,
-    "componentComparison": "ordinalCaseSensitive",
-    "normalization": "none",
-    "preferredSeparator": "/",
-    "acceptedSeparators": ["/"],
-    "casePreserving": true,
-    "caseOnlyRename": "supported"
-  }
-}
-)json";
-
-    static constexpr char kCapabilitiesJsonSftp[] = R"json(
-{
-  "version": 1,
-  "operations": {
-    "copy": true,
-    "move": true,
-    "delete": true,
-    "rename": true,
-    "properties": true,
-    "read": true,
-    "write": true
-  },
-  "concurrency": {
-    "copyMoveMax": 1,
-    "deleteMax": 1,
-    "deleteRecycleBinMax": 1
-  },
-  "crossFileSystem": {
-    "export": { "copy": ["*"], "move": ["*"] },
-    "import": { "copy": ["*"], "move": ["*"] }
-  },
-  "pathIdentity": {
-    "version": 1,
-    "pathTextStableIdentity": true,
-    "componentComparison": "ordinalCaseSensitive",
-    "normalization": "none",
-    "preferredSeparator": "/",
-    "acceptedSeparators": ["/"],
-    "casePreserving": true,
-    "caseOnlyRename": "supported"
-  }
-}
-)json";
-
-    static constexpr char kCapabilitiesJsonScp[] = R"json(
-{
-  "version": 1,
-  "operations": {
-    "copy": true,
-    "move": true,
-    "delete": true,
-    "rename": true,
-    "properties": true,
-    "read": true,
-    "write": true
-  },
-  "concurrency": {
-    "copyMoveMax": 1,
-    "deleteMax": 1,
-    "deleteRecycleBinMax": 1
-  },
-  "crossFileSystem": {
-    "export": { "copy": ["*"], "move": ["*"] },
-    "import": { "copy": ["*"], "move": ["*"] }
-  },
-  "pathIdentity": {
-    "version": 1,
-    "pathTextStableIdentity": true,
-    "componentComparison": "ordinalCaseSensitive",
-    "normalization": "none",
-    "preferredSeparator": "/",
-    "acceptedSeparators": ["/"],
-    "casePreserving": true,
-    "caseOnlyRename": "supported"
-  }
-}
-)json";
-
-    static constexpr char kCapabilitiesJsonImap[] = R"json(
-{
-  "version": 1,
-  "operations": {
-    "copy": false,
-    "move": false,
-    "delete": true,
-    "rename": false,
-    "properties": true,
-    "read": true,
-    "write": false
-  },
-  "concurrency": {
-    "copyMoveMax": 1,
-    "deleteMax": 1,
-    "deleteRecycleBinMax": 1
-  },
-  "crossFileSystem": {
-    "export": { "copy": ["*"], "move": ["*"] },
-    "import": { "copy": [], "move": [] }
-  },
-  "pathIdentity": {
-    "version": 1,
-    "pathTextStableIdentity": true,
-    "componentComparison": "ordinalCaseSensitive",
-    "normalization": "none",
-    "preferredSeparator": "/",
-    "acceptedSeparators": ["/"],
-    "casePreserving": true,
-    "caseOnlyRename": "notApplicable"
-  }
-}
-)json";
 
     static constexpr char kSchemaJsonFtp[] = R"json(
 {
@@ -742,6 +625,7 @@ public:
     void NotifySyntheticPathDeleted(std::wstring_view fullPath) noexcept;
     void NotifySyntheticPathMoved(std::wstring_view sourcePath, std::wstring_view destinationPath) noexcept;
     void NotifySyntheticFolderChanged(std::wstring_view folderPath) noexcept;
+    void ObserveCurlCleanupDebt(const FileSystemCurlInternal::CurlPublicationResult& result) const noexcept;
 
 private:
     struct MenuEntry
@@ -761,6 +645,7 @@ private:
     std::string _configurationJson;
     std::string _capabilitiesJson;
     Settings _settings;
+    wil::com_ptr<IHostAlerts> _hostAlerts;
     wil::com_ptr<IHostConnections> _hostConnections;
 
     // NavigationMenu state.

@@ -929,7 +929,7 @@ void RebuildViewerPluginOptions(PreferencesDialogState& state)
     state.viewersPluginOptions.reserve(plugins.size());
     for (const ViewerPluginManager::PluginEntry& plugin : plugins)
     {
-        if (! plugin.id.empty())
+        if (plugin.type == ViewerPluginManager::PluginType::Viewer && ! plugin.id.empty())
         {
             state.viewersPluginOptions.push_back(ViewerPluginOption{.id = plugin.id, .displayName = ViewerPluginDisplayName(plugin)});
         }

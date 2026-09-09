@@ -1,6 +1,20 @@
 name: Publish to Winget
 
 on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Validated three-part version to publish."
+        required: true
+        type: string
+      submit:
+        description: "Submit after validation and install testing."
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      WINGET_TOKEN:
+        required: true
   release:
     types: [published]
   workflow_dispatch:
@@ -15,30 +29,43 @@ on:
         type: boolean
         default: false
 
+concurrency:
+  group: winget-RedSalamanders.RedSalamander-${{ github.event_name == 'release' && github.event.release.tag_name || format('v{0}', inputs.version || github.event.inputs.version) }}
+  cancel-in-progress: false
+
 jobs:
   publish-winget:
     runs-on: windows-latest
     permissions:
       contents: read
+    env:
+      WINGET_MANIFEST_ROOT: .build\AppPackages\winget-manifest
 
     steps:
       - name: Get version
         id: version
         shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_VERSION: ${{ inputs.version || github.event.inputs.version }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           $ErrorActionPreference = "Stop"
 
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            $rawVersion = "${{ github.event.inputs.version }}".Trim()
-            $version = $rawVersion -replace '^[vV]', ''
+          if ($env:EVENT_NAME -in "workflow_dispatch", "workflow_call") {
+            $rawVersion = $env:REQUESTED_VERSION.Trim()
+            $version = $rawVersion
             $tag = "v$version"
           } else {
-            $tag = "${{ github.event.release.tag_name }}".Trim()
-            $version = $tag -replace '^[vV]', ''
+            $rawVersion = $env:RELEASE_TAG.Trim()
+            $tag = $rawVersion
+            $version = $tag -replace '^v', ''
           }
 
-          if ($version -notmatch '^\d+\.\d+\.\d+$') {
-            throw "Version must be a three-part version, optionally prefixed with 'v' for manual runs. Received: '$version'"
+          if ($rawVersion.Length -gt 64 -or
+              $version -notmatch '^\d+\.\d+\.\d+$' -or
+              ($env:EVENT_NAME -eq 'release' -and $rawVersion -notmatch '^v\d+\.\d+\.\d+$')) {
+            throw "Version must be a three-part version; release tags must use the lowercase 'v' prefix. Received: '$rawVersion'"
           }
 
           "version=$version" >> $env:GITHUB_OUTPUT
@@ -47,9 +74,19 @@ jobs:
           Write-Host "Tag: $tag"
 
       - name: Checkout release tag
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.version.outputs.tag }}
+          persist-credentials: false
+
+      - name: Checkout publication automation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .winget-automation
+          sparse-checkout: Tools/Modules/Packaging/WingetPrPublication.psm1
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
 
       - name: Download portable release assets
         id: portable
@@ -78,7 +115,7 @@ jobs:
               throw "Expected portable asset '$assetName' was not found on release '$tag'. Available assets:`n$available"
             }
 
-            $outFile = if ($assetName -like "*ARM64*") { "RedSalamander-ARM64.zip" } else { "RedSalamander-x64.zip" }
+            $outFile = $assetName
             Write-Host "Downloading $assetName from $($asset.browser_download_url)"
             Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $outFile
             Get-ChildItem $outFile | ForEach-Object { Write-Host "Downloaded $($_.Name) - $($_.Length) bytes" }
@@ -88,18 +125,35 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
+          $version = "${{ steps.version.outputs.version }}"
           .\Installer\winget\generate-manifest.ps1 `
-            -Version "${{ steps.version.outputs.version }}" `
-            -ZipPath "RedSalamander-x64.zip" `
-            -Arm64ZipPath "RedSalamander-ARM64.zip" `
-            -OutputDir "winget-manifest"
-          Get-ChildItem winget-manifest | ForEach-Object { Write-Host "Generated $($_.Name)" }
+            -Version $version `
+            -ZipPath "RedSalamander-$version-x64-Portable.zip" `
+            -Arm64ZipPath "RedSalamander-$version-ARM64-Portable.zip" `
+            -OutputDir $env:WINGET_MANIFEST_ROOT
+          Get-ChildItem $env:WINGET_MANIFEST_ROOT | ForEach-Object { Write-Host "Generated $($_.Name)" }
 
       - name: Install winget-create
+        id: wingetcreate
         shell: pwsh
         run: |
-          Write-Host "Installing winget-create..."
-          winget install --exact --id Microsoft.WingetCreate --silent --accept-source-agreements --accept-package-agreements
+          $ErrorActionPreference = "Stop"
+          $expectedVersion = "1.12.8.0"
+          Write-Host "Installing reviewed winget-create $expectedVersion..."
+          winget install --exact --id Microsoft.WingetCreate --version $expectedVersion --silent --disable-interactivity --accept-source-agreements --accept-package-agreements
+          if ($LASTEXITCODE -ne 0) {
+            throw "winget-create $expectedVersion install failed with exit code $LASTEXITCODE."
+          }
+
+          $command = Get-Command wingetcreate.exe -CommandType Application -ErrorAction Stop
+          $resolvedPath = $command.Source
+          $resolvedVersion = (& $resolvedPath --version).Trim() -replace '^[vV]', ''
+          if ($resolvedVersion -ne $expectedVersion) {
+            throw "Resolved winget-create version '$resolvedVersion' does not match reviewed version '$expectedVersion'."
+          }
+          "path=$resolvedPath" >> $env:GITHUB_OUTPUT
+          "version=$resolvedVersion" >> $env:GITHUB_OUTPUT
+          Write-Host "Verified winget-create $resolvedVersion at $resolvedPath"
 
       - name: Validate Winget manifest
         shell: pwsh
@@ -145,7 +199,7 @@ jobs:
           $oldNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
           try {
             $PSNativeCommandUseErrorActionPreference = $false
-            $validationOutput = @(& winget validate --manifest "winget-manifest" 2>&1 | ForEach-Object { $_.ToString() })
+            $validationOutput = @(& winget validate --manifest $env:WINGET_MANIFEST_ROOT 2>&1 | ForEach-Object { $_.ToString() })
             $validationExitCode = $LASTEXITCODE
           } finally {
             $PSNativeCommandUseErrorActionPreference = $oldNativeErrorPreference
@@ -174,7 +228,7 @@ jobs:
           }
 
           winget install `
-            --manifest "winget-manifest" `
+            --manifest $env:WINGET_MANIFEST_ROOT `
             --accept-package-agreements `
             --accept-source-agreements `
             --disable-interactivity `
@@ -211,63 +265,92 @@ jobs:
         if: ${{ github.event_name == 'release' || inputs.submit }}
         shell: pwsh
         env:
-          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          WINGETCREATE_PATH: ${{ steps.wingetcreate.outputs.path }}
+          PACKAGE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          PUBLICATION_MODULE: ${{ github.workspace }}\.winget-automation\Tools\Modules\Packaging\WingetPrPublication.psm1
         run: |
           $ErrorActionPreference = "Stop"
 
-          if (-not $env:WINGET_TOKEN) {
+          if (-not $env:WINGET_CREATE_GITHUB_TOKEN) {
             throw "WINGET_TOKEN secret is not set. Please add it to repository secrets."
           }
+          if (-not (Test-Path -LiteralPath $env:WINGETCREATE_PATH -PathType Leaf)) {
+            throw "The verified winget-create executable is no longer present."
+          }
+          if (-not (Test-Path -LiteralPath $env:PUBLICATION_MODULE -PathType Leaf)) {
+            throw "The reviewed Winget publication module is not available."
+          }
 
-          $version = "${{ steps.version.outputs.version }}"
-          $tag = "${{ steps.version.outputs.tag }}"
+          Import-Module $env:PUBLICATION_MODULE -Force
+          $version = $env:PACKAGE_VERSION
+          $tag = $env:RELEASE_TAG
           $pullRequestTitle = "Update: RedSalamanders.RedSalamander to $version"
           $headers = @{
             Accept = "application/vnd.github+json"
-            Authorization = "Bearer $env:WINGET_TOKEN"
+            Authorization = "Bearer $env:WINGET_CREATE_GITHUB_TOKEN"
             "X-GitHub-Api-Version" = "2022-11-28"
           }
 
-          $duplicateQuery = [uri]::EscapeDataString("repo:microsoft/winget-pkgs is:pr is:open in:title RedSalamander $version")
-          $duplicateSearch = Invoke-RestMethod `
-            -Headers $headers `
-            -Uri "https://api.github.com/search/issues?q=$duplicateQuery&per_page=10"
-          if ($duplicateSearch.total_count -gt 0) {
-            $duplicateUrls = ($duplicateSearch.items | ForEach-Object { "  $($_.html_url)" }) -join "`n"
-            throw "An open Winget pull request already appears to submit RedSalamander ${version}:`n$duplicateUrls"
+          $tokenUser = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/user"
+          $expectedAuthor = [string]$tokenUser.login
+          if ($expectedAuthor -notmatch '^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$') {
+            throw "The Winget token owner could not be resolved to a valid GitHub login."
+          }
+          $expectedHeadRepository = "$expectedAuthor/winget-pkgs"
+
+          $identity = New-RSWingetPublicationIdentity `
+            -PackageIdentifier "RedSalamanders.RedSalamander" `
+            -Version $version `
+            -ManifestRoot (Join-Path $env:GITHUB_WORKSPACE $env:WINGET_MANIFEST_ROOT) `
+            -PullRequestTitle $pullRequestTitle
+
+          $listPullRequests = {
+            param([int]$Page, [int]$PageSize)
+            Invoke-RestMethod `
+              -Headers $headers `
+              -Uri "https://api.github.com/repos/microsoft/winget-pkgs/pulls?state=all&sort=updated&direction=desc&per_page=$PageSize&page=$Page"
+          }.GetNewClosure()
+          $listPullRequestFiles = {
+            param([int]$Number, [int]$Page, [int]$PageSize)
+            Invoke-RestMethod `
+              -Headers $headers `
+              -Uri "https://api.github.com/repos/microsoft/winget-pkgs/pulls/$Number/files?per_page=$PageSize&page=$Page"
+          }.GetNewClosure()
+          $getFileSha256 = {
+            param([string]$RepositoryFullName, [string]$Path, [string]$Ref)
+            if ($RepositoryFullName -notmatch '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' -or $Ref -notmatch '^[0-9a-fA-F]{40}$') {
+              throw "The Winget pull request returned an invalid head repository or commit."
+            }
+            $encodedPath = (($Path -split '/') | ForEach-Object { [uri]::EscapeDataString($_) }) -join '/'
+            $encodedRef = [uri]::EscapeDataString($Ref)
+            $content = Invoke-RestMethod `
+              -Headers $headers `
+              -Uri "https://api.github.com/repos/$RepositoryFullName/contents/$encodedPath?ref=$encodedRef"
+            $bytes = [Convert]::FromBase64String(([string]$content.content -replace '\s', ''))
+            return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+          }.GetNewClosure()
+          $patchPullRequest = {
+            param([int]$Number, [string]$Title, [string]$Body)
+            $payload = @{ title = $Title; body = $Body } | ConvertTo-Json
+            Invoke-RestMethod `
+              -Method Patch `
+              -Headers $headers `
+              -ContentType "application/json" `
+              -Body $payload `
+              -Uri "https://api.github.com/repos/microsoft/winget-pkgs/pulls/$Number"
+          }.GetNewClosure()
+          $repository = @{
+            ListPullRequests = $listPullRequests
+            ListPullRequestFiles = $listPullRequestFiles
+            GetFileSha256 = $getFileSha256
+            PatchPullRequest = $patchPullRequest
           }
 
-          Write-Host "Submitting portable package version $version to winget..."
-          $oldNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
-          try {
-            $PSNativeCommandUseErrorActionPreference = $false
-            $submitOutput = @(& wingetcreate submit `
-                --prtitle $pullRequestTitle `
-                --token $env:WINGET_TOKEN `
-                --no-open `
-                "winget-manifest" 2>&1 | ForEach-Object { $_.ToString() })
-            $submitExitCode = $LASTEXITCODE
-          } finally {
-            $PSNativeCommandUseErrorActionPreference = $oldNativeErrorPreference
-          }
-
-          $submitOutput | ForEach-Object { Write-Host $_ }
-          if ($submitExitCode -ne 0) {
-            throw "wingetcreate submit failed with exit code $submitExitCode."
-          }
-
-          $pullRequestMatch = [regex]::Match(
-            ($submitOutput -join "`n"),
-            'https://github\.com/microsoft/winget-pkgs/pull/(?<number>\d+)')
-          if (-not $pullRequestMatch.Success) {
-            throw "wingetcreate submit succeeded, but its output did not contain the created pull request URL."
-          }
-
-          $pullRequestNumber = [int]$pullRequestMatch.Groups['number'].Value
-          $releaseUrl = "https://github.com/${{ github.repository }}/releases/tag/$tag"
+          $releaseUrl = "https://github.com/$($env:SOURCE_REPOSITORY)/releases/tag/$tag"
           $pullRequestBody = @"
-          <!-- Generated by the RedSalamander Winget release workflow. -->
-
           ## 📖 Description
 
           Updates ``RedSalamanders.RedSalamander`` to version ``$version``.
@@ -283,8 +366,8 @@ jobs:
 
           The release workflow completed these checks on a clean GitHub-hosted Windows runner before submission:
 
-          - ``winget validate --manifest winget-manifest``
-          - ``winget install --manifest winget-manifest`` for the generated portable package
+          - ``winget validate --manifest .build\AppPackages\winget-manifest``
+          - ``winget install --manifest .build\AppPackages\winget-manifest`` for the generated portable package
           - ``winget list --exact --id RedSalamanders.RedSalamander`` after installation
           - Cleanup with ``winget uninstall --exact --id RedSalamanders.RedSalamander --purge``
 
@@ -296,30 +379,41 @@ jobs:
 
           - [x] Checked that there aren't other open [pull requests](https://github.com/microsoft/winget-pkgs/pulls) for the same manifest update/change
           - [x] This PR only modifies one (1) manifest
-          - [x] Validated the manifest with ``winget validate --manifest winget-manifest`` ([validation guide](https://github.com/microsoft/winget-pkgs/blob/master/doc/ValidationFailureGuide.md))
-          - [x] Tested the manifest with ``winget install --manifest winget-manifest``
+          - [x] Validated the manifest with ``winget validate --manifest .build\AppPackages\winget-manifest`` ([validation guide](https://github.com/microsoft/winget-pkgs/blob/master/doc/ValidationFailureGuide.md))
+          - [x] Tested the manifest with ``winget install --manifest .build\AppPackages\winget-manifest``
           - [x] Manifest conforms to the [1.12 schema](https://github.com/microsoft/winget-pkgs/tree/master/doc/manifest/schema/1.12.0)
           "@
-
-          $updatePayload = @{
-            title = $pullRequestTitle
-            body = $pullRequestBody
-          } | ConvertTo-Json
-          $pullRequest = Invoke-RestMethod `
-            -Method Patch `
-            -Headers $headers `
-            -ContentType "application/json" `
-            -Body $updatePayload `
-            -Uri "https://api.github.com/repos/microsoft/winget-pkgs/pulls/$pullRequestNumber"
-
-          if ($pullRequest.title -ne $pullRequestTitle -or
-              [string]::IsNullOrWhiteSpace($pullRequest.html_url) -or
-              $pullRequest.body -notmatch [regex]::Escape("## 🧪 Automated validation")) {
-            throw "The Winget pull request was created, but its title/body update could not be verified."
+          $submit = {
+            param([string]$InitialTitle)
+            $oldNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
+            try {
+              $PSNativeCommandUseErrorActionPreference = $false
+              $output = @(& $env:WINGETCREATE_PATH submit `
+                  --prtitle $InitialTitle `
+                  --no-open `
+                  $env:WINGET_MANIFEST_ROOT 2>&1 | ForEach-Object { $_.ToString() })
+              $exitCode = $LASTEXITCODE
+            } finally {
+              $PSNativeCommandUseErrorActionPreference = $oldNativeErrorPreference
+            }
+            return [pscustomobject]@{ ExitCode = $exitCode; Output = $output }
           }
+          $wait = {
+            param([int]$Attempt)
+            Start-Sleep -Seconds ([Math]::Min($Attempt, 5))
+          }
+          $publication = Invoke-RSWingetPublication `
+            -Identity $identity `
+            -ExpectedAuthor $expectedAuthor `
+            -ExpectedHeadRepository $expectedHeadRepository `
+            -PullRequestBody $pullRequestBody `
+            -Repository $repository `
+            -Submit $submit `
+            -Wait $wait `
+            -MaximumVisibilityAttempts 6
 
-          "pull_request_url=$($pullRequest.html_url)" >> $env:GITHUB_OUTPUT
-          Write-Host "Winget pull request: $($pullRequest.html_url)" -ForegroundColor Green
+          "pull_request_url=$($publication.Url)" >> $env:GITHUB_OUTPUT
+          Write-Host "Winget pull request: $($publication.Url)" -ForegroundColor Green
 
       - name: Summary
         if: success()
@@ -328,7 +422,6 @@ jobs:
           $version = "${{ steps.version.outputs.version }}"
           if ("${{ github.event_name }}" -eq "release" -or "${{ inputs.submit }}" -eq "true") {
             Write-Host "Successfully submitted RedSalamander $version portable ZIP to winget." -ForegroundColor Green
-            Write-Host "Pull request: ${{ steps.winget_submission.outputs.pull_request_url }}"
             Write-Host "The winget community repository maintainers will review the PR."
           } else {
             Write-Host "Validated and install-tested RedSalamander $version winget manifest. Submission was skipped for this manual run." -ForegroundColor Green

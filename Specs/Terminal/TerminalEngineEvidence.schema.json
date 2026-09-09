@@ -1,0 +1,1921 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:red-salamander:schema:terminal-engine-evidence:v1",
+  "title": "RedSalamander TerminalEngine evidence manifest v1",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/collection"
+    },
+    {
+      "$ref": "#/$defs/finalization"
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "boundedString": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "uint64Decimal": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]|1844674407370955161[0-4]|18446744073709551615)$"
+    },
+    "score": {
+      "type": "string",
+      "pattern": "^(?:(?:0|[1-9][0-9]?)\\.[0-9]{2}|100\\.00)$"
+    },
+    "harness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "sourceSha256"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "sourceSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "frozen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requirementsSha256",
+        "scoreAnchorsSha256",
+        "fixtureCorpusSha256",
+        "measurementProtocolSha256",
+        "candidateUniverseSha256",
+        "candidateSetSha256",
+        "candidateReviewSha256",
+        "candidateAssessmentSha256"
+      ],
+      "properties": {
+        "requirementsSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "scoreAnchorsSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "fixtureCorpusSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "measurementProtocolSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "candidateUniverseSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "candidateSetSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "candidateReviewSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "candidateAssessmentSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "nativeAttestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "processMachine",
+        "nativeMachine",
+        "windowsBuild",
+        "isNative",
+        "minimumSupportedBuild",
+        "minimumOsProof",
+        "minimumOsEvidenceSha256"
+      ],
+      "properties": {
+        "processMachine": {
+          "enum": [
+            "UNKNOWN",
+            "AMD64",
+            "ARM64"
+          ]
+        },
+        "nativeMachine": {
+          "enum": [
+            "AMD64",
+            "ARM64"
+          ]
+        },
+        "windowsBuild": {
+          "type": "string",
+          "pattern": "^10\\.0\\.[0-9]{5}\\.[0-9]+$"
+        },
+        "isNative": {
+          "type": "boolean"
+        },
+        "minimumSupportedBuild": {
+          "const": "22000.2600"
+        },
+        "minimumOsProof": {
+          "enum": [
+            "native-smoke",
+            "pe-import-audit"
+          ]
+        },
+        "minimumOsEvidenceSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "compilerId",
+        "version",
+        "identitySha256"
+      ],
+      "properties": {
+        "compilerId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/boundedString"
+        },
+        "identitySha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "collectionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bootstrap",
+        "clean",
+        "offline",
+        "bootstrapInputSetSha256",
+        "networkIsolation"
+      ],
+      "properties": {
+        "bootstrap": {
+          "const": true
+        },
+        "clean": {
+          "const": true
+        },
+        "offline": {
+          "const": true
+        },
+        "bootstrapInputSetSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "networkIsolation": {
+          "const": "runner-enforced"
+        }
+      }
+    },
+    "gatePass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gateId",
+        "status",
+        "resultCategory",
+        "evidenceSha256"
+      ],
+      "properties": {
+        "gateId": {
+          "enum": [
+            "G1",
+            "G2",
+            "G3",
+            "G4",
+            "G5",
+            "G6",
+            "G7",
+            "G8",
+            "G9",
+            "G10",
+            "G11",
+            "G12"
+          ]
+        },
+        "status": {
+          "const": "pass"
+        },
+        "resultCategory": {
+          "const": "passed"
+        },
+        "evidenceSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "gateFail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gateId",
+        "status",
+        "resultCategory",
+        "evidenceSha256"
+      ],
+      "properties": {
+        "gateId": {
+          "enum": [
+            "G1",
+            "G2",
+            "G3",
+            "G4",
+            "G5",
+            "G6",
+            "G7",
+            "G8",
+            "G9",
+            "G10",
+            "G11",
+            "G12"
+          ]
+        },
+        "status": {
+          "const": "fail"
+        },
+        "resultCategory": {
+          "const": "mandatory-failure"
+        },
+        "evidenceSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "gateNotRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gateId",
+        "status",
+        "resultCategory",
+        "evidenceSha256"
+      ],
+      "properties": {
+        "gateId": {
+          "enum": [
+            "G1",
+            "G2",
+            "G3",
+            "G4",
+            "G5",
+            "G6",
+            "G7",
+            "G8",
+            "G9",
+            "G10",
+            "G11",
+            "G12"
+          ]
+        },
+        "status": {
+          "const": "not-run"
+        },
+        "resultCategory": {
+          "type": "string",
+          "pattern": "^failed-G(?:[1-9]|1[0-2])$"
+        },
+        "evidenceSha256": {
+          "type": "null"
+        }
+      }
+    },
+    "gateAny": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/gatePass"
+        },
+        {
+          "$ref": "#/$defs/gateFail"
+        },
+        {
+          "$ref": "#/$defs/gateNotRun"
+        }
+      ]
+    },
+    "gateSequence": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateAny"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G1"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateAny"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G2"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateAny"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G3"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateAny"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G4"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateAny"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G5"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateAny"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G6"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateAny"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G7"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateAny"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G8"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateAny"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G9"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateAny"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G10"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateAny"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G11"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gateAny"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G12"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "items": false
+    },
+    "completeGateSequence": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gatePass"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G1"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gatePass"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G2"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gatePass"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G3"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gatePass"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G4"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gatePass"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G5"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gatePass"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G6"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gatePass"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G7"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gatePass"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G8"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gatePass"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G9"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gatePass"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G10"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gatePass"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G11"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/gatePass"
+            },
+            {
+              "properties": {
+                "gateId": {
+                  "const": "G12"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "items": false
+    },
+    "evidenceObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidenceId",
+        "sha256",
+        "sizeBytes",
+        "resultCategory"
+      ],
+      "properties": {
+        "evidenceId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sizeBytes": {
+          "$ref": "#/$defs/uint64Decimal"
+        },
+        "resultCategory": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
+    },
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metricId",
+        "unit",
+        "warmupCount",
+        "samples"
+      ],
+      "properties": {
+        "metricId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "unit": {
+          "enum": [
+            "microseconds",
+            "bytes",
+            "count"
+          ]
+        },
+        "warmupCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "samples": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100000,
+          "items": {
+            "$ref": "#/$defs/uint64Decimal"
+          }
+        }
+      }
+    },
+    "completeCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "pin",
+        "pinSha256",
+        "outcome",
+        "gates",
+        "evidenceObjects",
+        "measurements"
+      ],
+      "properties": {
+        "candidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "pin": {
+          "$ref": "#/$defs/boundedString"
+        },
+        "pinSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "outcome": {
+          "const": "complete"
+        },
+        "gates": {
+          "$ref": "#/$defs/completeGateSequence"
+        },
+        "evidenceObjects": {
+          "type": "array",
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/evidenceObject"
+          }
+        },
+        "measurements": {
+          "type": "array",
+          "maxItems": 1024,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/measurement"
+          }
+        }
+      }
+    },
+    "earlyFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "firstFailedGate",
+        "failureCode",
+        "reproducerSha256",
+        "reproducerSizeBytes"
+      ],
+      "properties": {
+        "firstFailedGate": {
+          "enum": [
+            "G1",
+            "G2",
+            "G3",
+            "G4",
+            "G5",
+            "G6",
+            "G7",
+            "G8",
+            "G9",
+            "G10",
+            "G11",
+            "G12"
+          ]
+        },
+        "failureCode": {
+          "$ref": "#/$defs/identifier"
+        },
+        "reproducerSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "reproducerSizeBytes": {
+          "$ref": "#/$defs/uint64Decimal"
+        }
+      }
+    },
+    "earlyFailureCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "pin",
+        "pinSha256",
+        "outcome",
+        "gates",
+        "earlyFailure"
+      ],
+      "properties": {
+        "candidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "pin": {
+          "$ref": "#/$defs/boundedString"
+        },
+        "pinSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "outcome": {
+          "const": "early-failure"
+        },
+        "gates": {
+          "$ref": "#/$defs/gateSequence"
+        },
+        "earlyFailure": {
+          "$ref": "#/$defs/earlyFailure"
+        }
+      }
+    },
+    "sourceRejection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gateId",
+        "failureCode",
+        "candidateReviewSha256",
+        "blockerId",
+        "blockerSha256",
+        "sourceArchiveSha256"
+      ],
+      "properties": {
+        "gateId": {
+          "enum": [
+            "G6",
+            "G7",
+            "G9"
+          ]
+        },
+        "failureCode": {
+          "$ref": "#/$defs/identifier"
+        },
+        "candidateReviewSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "blockerId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "blockerSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sourceArchiveSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "sourceRejectedCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "pin",
+        "pinSha256",
+        "outcome",
+        "sourceRejection"
+      ],
+      "properties": {
+        "candidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "pin": {
+          "$ref": "#/$defs/boundedString"
+        },
+        "pinSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "outcome": {
+          "const": "source-rejected"
+        },
+        "sourceRejection": {
+          "$ref": "#/$defs/sourceRejection"
+        }
+      }
+    },
+    "controlFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "constraintId",
+        "evidenceSha256"
+      ],
+      "properties": {
+        "constraintId": {
+          "enum": [
+            "candidate-owned-control",
+            "web-runtime-second-stack",
+            "new-parser-maintenance"
+          ]
+        },
+        "evidenceSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "constraintControlCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "pin",
+        "pinSha256",
+        "outcome",
+        "controlFailure"
+      ],
+      "properties": {
+        "candidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "pin": {
+          "$ref": "#/$defs/boundedString"
+        },
+        "pinSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "outcome": {
+          "const": "constraint-control"
+        },
+        "controlFailure": {
+          "$ref": "#/$defs/controlFailure"
+        }
+      }
+    },
+    "collectionCandidate": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/completeCandidate"
+        },
+        {
+          "$ref": "#/$defs/earlyFailureCandidate"
+        },
+        {
+          "$ref": "#/$defs/sourceRejectedCandidate"
+        },
+        {
+          "$ref": "#/$defs/constraintControlCandidate"
+        }
+      ]
+    },
+    "collection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formatId",
+        "schemaVersion",
+        "recordKind",
+        "runId",
+        "createdUtc",
+        "repositoryCommit",
+        "repositoryClean",
+        "machineHash",
+        "schemaSha256",
+        "harness",
+        "frozen",
+        "platform",
+        "configuration",
+        "nativeAttestation",
+        "toolchain",
+        "collectionPolicy",
+        "candidates"
+      ],
+      "properties": {
+        "formatId": {
+          "const": "red-salamander-terminal-engine-evidence"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "recordKind": {
+          "const": "collection"
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{6}$"
+        },
+        "createdUtc": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,7})?Z$"
+        },
+        "repositoryCommit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "repositoryClean": {
+          "const": true
+        },
+        "machineHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{12}$"
+        },
+        "schemaSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "harness": {
+          "$ref": "#/$defs/harness"
+        },
+        "frozen": {
+          "$ref": "#/$defs/frozen"
+        },
+        "platform": {
+          "enum": [
+            "x64",
+            "ARM64"
+          ]
+        },
+        "configuration": {
+          "enum": [
+            "Release",
+            "ASan Debug"
+          ]
+        },
+        "nativeAttestation": {
+          "$ref": "#/$defs/nativeAttestation"
+        },
+        "toolchain": {
+          "$ref": "#/$defs/toolchain"
+        },
+        "collectionPolicy": {
+          "$ref": "#/$defs/collectionPolicy"
+        },
+        "candidates": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/collectionCandidate"
+          }
+        }
+      }
+    },
+    "inputManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "configuration",
+        "manifestSha256"
+      ],
+      "properties": {
+        "platform": {
+          "enum": [
+            "x64",
+            "ARM64"
+          ]
+        },
+        "configuration": {
+          "enum": [
+            "Release",
+            "ASan Debug"
+          ]
+        },
+        "manifestSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "laneFailureReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputManifestSha256",
+        "firstFailedGate",
+        "failureCode"
+      ],
+      "properties": {
+        "inputManifestSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "firstFailedGate": {
+          "enum": [
+            "G1",
+            "G2",
+            "G3",
+            "G4",
+            "G5",
+            "G6",
+            "G7",
+            "G8",
+            "G9",
+            "G10",
+            "G11",
+            "G12"
+          ]
+        },
+        "failureCode": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
+    },
+    "sourceFailureReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputManifestSha256",
+        "gateId",
+        "failureCode",
+        "candidateReviewSha256",
+        "blockerId",
+        "blockerSha256",
+        "sourceArchiveSha256"
+      ],
+      "properties": {
+        "inputManifestSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "gateId": {
+          "enum": [
+            "G6",
+            "G7",
+            "G9"
+          ]
+        },
+        "failureCode": {
+          "$ref": "#/$defs/identifier"
+        },
+        "candidateReviewSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "blockerId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "blockerSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sourceArchiveSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "failureReference": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/laneFailureReference"
+        },
+        {
+          "$ref": "#/$defs/sourceFailureReference"
+        }
+      ]
+    },
+    "evidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputManifestSha256",
+        "evidenceKind",
+        "evidenceId"
+      ],
+      "properties": {
+        "inputManifestSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "evidenceKind": {
+          "enum": [
+            "gate",
+            "object",
+            "metric"
+          ]
+        },
+        "evidenceId": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
+    },
+    "criterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "criterionId",
+        "weight",
+        "rating",
+        "matchedAnchorId",
+        "contribution",
+        "evidenceRefs"
+      ],
+      "properties": {
+        "criterionId": {
+          "enum": [
+            "C1",
+            "C2",
+            "C3",
+            "C4",
+            "C5",
+            "C6",
+            "C7",
+            "C8",
+            "C9",
+            "C10",
+            "C11"
+          ]
+        },
+        "weight": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 18
+        },
+        "rating": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "matchedAnchorId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "contribution": {
+          "$ref": "#/$defs/score"
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/evidenceReference"
+          }
+        }
+      }
+    },
+    "criteriaSequence": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/criterion"
+            },
+            {
+              "properties": {
+                "criterionId": {
+                  "const": "C1"
+                },
+                "weight": {
+                  "const": 18
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/criterion"
+            },
+            {
+              "properties": {
+                "criterionId": {
+                  "const": "C2"
+                },
+                "weight": {
+                  "const": 14
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/criterion"
+            },
+            {
+              "properties": {
+                "criterionId": {
+                  "const": "C3"
+                },
+                "weight": {
+                  "const": 12
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/criterion"
+            },
+            {
+              "properties": {
+                "criterionId": {
+                  "const": "C4"
+                },
+                "weight": {
+                  "const": 10
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/criterion"
+            },
+            {
+              "properties": {
+                "criterionId": {
+                  "const": "C5"
+                },
+                "weight": {
+                  "const": 10
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/criterion"
+            },
+            {
+              "properties": {
+                "criterionId": {
+                  "const": "C6"
+                },
+                "weight": {
+                  "const": 8
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/criterion"
+            },
+            {
+              "properties": {
+                "criterionId": {
+                  "const": "C7"
+                },
+                "weight": {
+                  "const": 8
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/criterion"
+            },
+            {
+              "properties": {
+                "criterionId": {
+                  "const": "C8"
+                },
+                "weight": {
+                  "const": 7
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/criterion"
+            },
+            {
+              "properties": {
+                "criterionId": {
+                  "const": "C9"
+                },
+                "weight": {
+                  "const": 6
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/criterion"
+            },
+            {
+              "properties": {
+                "criterionId": {
+                  "const": "C10"
+                },
+                "weight": {
+                  "const": 4
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/criterion"
+            },
+            {
+              "properties": {
+                "criterionId": {
+                  "const": "C11"
+                },
+                "weight": {
+                  "const": 3
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "items": false
+    },
+    "tieTuple": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ownerDays",
+        "crossedAbiElements",
+        "nonSystemRuntimeDependencies",
+        "addedReleasePackageBytes"
+      ],
+      "properties": {
+        "ownerDays": {
+          "$ref": "#/$defs/uint64Decimal"
+        },
+        "crossedAbiElements": {
+          "$ref": "#/$defs/uint64Decimal"
+        },
+        "nonSystemRuntimeDependencies": {
+          "$ref": "#/$defs/uint64Decimal"
+        },
+        "addedReleasePackageBytes": {
+          "$ref": "#/$defs/uint64Decimal"
+        }
+      }
+    },
+    "scoredCandidateResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "outcome",
+        "eligibility",
+        "criteria",
+        "total",
+        "tieTuple"
+      ],
+      "properties": {
+        "candidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "outcome": {
+          "const": "scored-complete"
+        },
+        "eligibility": {
+          "enum": [
+            "eligible",
+            "below-threshold"
+          ]
+        },
+        "criteria": {
+          "$ref": "#/$defs/criteriaSequence"
+        },
+        "total": {
+          "$ref": "#/$defs/score"
+        },
+        "tieTuple": {
+          "$ref": "#/$defs/tieTuple"
+        }
+      }
+    },
+    "mandatoryFailedCandidateResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "outcome",
+        "eligibility",
+        "failureReferences"
+      ],
+      "properties": {
+        "candidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "outcome": {
+          "const": "mandatory-failed"
+        },
+        "eligibility": {
+          "const": "mandatory-failed"
+        },
+        "failureReferences": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/failureReference"
+          }
+        }
+      }
+    },
+    "candidateResult": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/scoredCandidateResult"
+        },
+        {
+          "$ref": "#/$defs/mandatoryFailedCandidateResult"
+        }
+      ]
+    },
+    "controlFailureReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "configuration",
+        "inputManifestSha256",
+        "evidenceSha256"
+      ],
+      "properties": {
+        "platform": {
+          "enum": [
+            "x64",
+            "ARM64"
+          ]
+        },
+        "configuration": {
+          "enum": [
+            "Release",
+            "ASan Debug"
+          ]
+        },
+        "inputManifestSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "evidenceSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "controlResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "outcome",
+        "constraintId",
+        "failureReferences"
+      ],
+      "properties": {
+        "candidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "outcome": {
+          "const": "constraint-control"
+        },
+        "constraintId": {
+          "enum": [
+            "candidate-owned-control",
+            "web-runtime-second-stack",
+            "new-parser-maintenance"
+          ]
+        },
+        "failureReferences": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/controlFailureReference"
+                },
+                {
+                  "properties": {
+                    "platform": {
+                      "const": "ARM64"
+                    },
+                    "configuration": {
+                      "const": "Release"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/controlFailureReference"
+                },
+                {
+                  "properties": {
+                    "platform": {
+                      "const": "x64"
+                    },
+                    "configuration": {
+                      "const": "ASan Debug"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/controlFailureReference"
+                },
+                {
+                  "properties": {
+                    "platform": {
+                      "const": "x64"
+                    },
+                    "configuration": {
+                      "const": "Release"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "items": false
+        }
+      }
+    },
+    "selectionNoScoredCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "rawLeaderScore",
+        "cohort",
+        "winnerCandidateId"
+      ],
+      "properties": {
+        "status": {
+          "const": "no-scored-candidate"
+        },
+        "rawLeaderScore": {
+          "type": "null"
+        },
+        "cohort": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "winnerCandidateId": {
+          "type": "null"
+        }
+      }
+    },
+    "selectionBelowThreshold": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "rawLeaderScore",
+        "cohort",
+        "winnerCandidateId"
+      ],
+      "properties": {
+        "status": {
+          "const": "below-threshold"
+        },
+        "rawLeaderScore": {
+          "$ref": "#/$defs/score"
+        },
+        "cohort": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "winnerCandidateId": {
+          "type": "null"
+        }
+      }
+    },
+    "selectionWinner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "rawLeaderScore",
+        "cohort",
+        "winnerCandidateId"
+      ],
+      "properties": {
+        "status": {
+          "const": "winner"
+        },
+        "rawLeaderScore": {
+          "$ref": "#/$defs/score"
+        },
+        "cohort": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "winnerCandidateId": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
+    },
+    "selectionTied": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "rawLeaderScore",
+        "cohort",
+        "winnerCandidateId"
+      ],
+      "properties": {
+        "status": {
+          "const": "tied-first-no-winner"
+        },
+        "rawLeaderScore": {
+          "$ref": "#/$defs/score"
+        },
+        "cohort": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "winnerCandidateId": {
+          "type": "null"
+        }
+      }
+    },
+    "selection": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/selectionNoScoredCandidate"
+        },
+        {
+          "$ref": "#/$defs/selectionBelowThreshold"
+        },
+        {
+          "$ref": "#/$defs/selectionWinner"
+        },
+        {
+          "$ref": "#/$defs/selectionTied"
+        }
+      ]
+    },
+    "finalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formatId",
+        "schemaVersion",
+        "recordKind",
+        "runId",
+        "createdUtc",
+        "repositoryCommit",
+        "repositoryClean",
+        "machineHash",
+        "schemaSha256",
+        "harness",
+        "frozen",
+        "inputManifests",
+        "candidateResults",
+        "controlResults",
+        "selection"
+      ],
+      "properties": {
+        "formatId": {
+          "const": "red-salamander-terminal-engine-evidence"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "recordKind": {
+          "const": "finalization"
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{6}$"
+        },
+        "createdUtc": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,7})?Z$"
+        },
+        "repositoryCommit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "repositoryClean": {
+          "const": true
+        },
+        "machineHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{12}$"
+        },
+        "schemaSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "harness": {
+          "$ref": "#/$defs/harness"
+        },
+        "frozen": {
+          "$ref": "#/$defs/frozen"
+        },
+        "inputManifests": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/inputManifest"
+                },
+                {
+                  "properties": {
+                    "platform": {
+                      "const": "ARM64"
+                    },
+                    "configuration": {
+                      "const": "Release"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/inputManifest"
+                },
+                {
+                  "properties": {
+                    "platform": {
+                      "const": "x64"
+                    },
+                    "configuration": {
+                      "const": "ASan Debug"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/inputManifest"
+                },
+                {
+                  "properties": {
+                    "platform": {
+                      "const": "x64"
+                    },
+                    "configuration": {
+                      "const": "Release"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "items": false
+        },
+        "candidateResults": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/candidateResult"
+          }
+        },
+        "controlResults": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/controlResult"
+          }
+        },
+        "selection": {
+          "$ref": "#/$defs/selection"
+        }
+      }
+    }
+  }
+}

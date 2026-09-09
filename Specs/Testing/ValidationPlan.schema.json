@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://red-salamander.invalid/schemas/validation-plan-v1.json",
+  "title": "RedSalamander validation plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "canonicalization", "plan_digest", "coverage_plan_digest", "requested_suite", "validation_mode", "coverage_scope", "entries"],
+  "properties": {
+    "schema": { "const": "red-salamander.validation-plan.v1" },
+    "canonicalization": { "const": "rs-canonical-json-v1" },
+    "plan_digest": { "$ref": "#/definitions/digest" },
+    "coverage_plan_digest": { "$ref": "#/definitions/digest" },
+    "requested_suite": { "enum": ["All", "Compare", "Commands", "FileOps", "CI", "Full"] },
+    "validation_mode": { "enum": ["Fresh", "Resume", "Affected"] },
+    "coverage_scope": { "enum": ["complete", "filtered", "family", "capability-reduced"] },
+    "entries": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/definitions/entry" } }
+  },
+  "definitions": {
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$" },
+    "idSet": { "type": "array", "maxItems": 4096, "uniqueItems": true, "items": { "$ref": "#/definitions/id" } },
+    "stringArray": { "type": "array", "maxItems": 4096, "items": { "type": "string", "maxLength": 4096 } },
+    "stringSet": { "type": "array", "maxItems": 4096, "uniqueItems": true, "items": { "type": "string", "maxLength": 4096 } },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "display_name", "kind", "path", "arguments", "working_directory", "result_contract_id", "impact_tags", "input_sets", "artifact_ids", "artifact_read_ids", "artifact_write_ids", "produces_artifact_ids", "invalidates_receipt_scopes", "cache_policy", "environment_inputs", "coverage_contract", "outcome_contract", "order_contract", "resource_classes", "estimated_duration_key", "requires_interactive_desktop"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "display_name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "kind": { "enum": ["SelfTest", "Executable", "CppUnitTest", "Pester", "PowerShellScript"] },
+        "path": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "arguments": { "$ref": "#/definitions/stringArray" },
+        "working_directory": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "result_contract_id": { "$ref": "#/definitions/id" },
+        "impact_tags": { "$ref": "#/definitions/idSet" },
+        "input_sets": { "$ref": "#/definitions/idSet" },
+        "artifact_ids": { "$ref": "#/definitions/idSet" },
+        "artifact_read_ids": { "$ref": "#/definitions/idSet" },
+        "artifact_write_ids": { "$ref": "#/definitions/idSet" },
+        "produces_artifact_ids": { "$ref": "#/definitions/idSet" },
+        "invalidates_receipt_scopes": { "$ref": "#/definitions/idSet" },
+        "cache_policy": { "enum": ["Never", "ExactArtifact", "LogicalSameCampaign", "SessionBound"] },
+        "environment_inputs": { "$ref": "#/definitions/idSet" },
+        "coverage_contract": { "$ref": "#/definitions/coverage" },
+        "outcome_contract": { "$ref": "#/definitions/outcome" },
+        "order_contract": { "enum": ["isolated", "family-process", "broad-same-process"] },
+        "resource_classes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["interactive-desktop", "performance-exclusive", "cpu-heavy", "network", "device", "artifact-read-only", "artifact-mutating", "stateful"] } },
+        "estimated_duration_key": { "$ref": "#/definitions/id" },
+        "requires_interactive_desktop": { "type": "boolean" }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["suite", "family", "exact_cases", "repeat", "order_identity"],
+      "properties": {
+        "suite": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "family": { "type": ["string", "null"], "maxLength": 128 },
+        "exact_cases": { "$ref": "#/definitions/stringSet" },
+        "repeat": { "type": "integer", "minimum": 1 },
+        "order_identity": { "type": "string", "minLength": 1, "maxLength": 256 }
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pass_required_cases", "static_skip_cases", "capability_bound_skip_cases", "forbidden_skip_classes"],
+      "properties": {
+        "pass_required_cases": { "$ref": "#/definitions/stringSet" },
+        "static_skip_cases": { "$ref": "#/definitions/stringSet" },
+        "capability_bound_skip_cases": { "$ref": "#/definitions/stringSet" },
+        "forbidden_skip_classes": { "$ref": "#/definitions/idSet" }
+      }
+    }
+  }
+}

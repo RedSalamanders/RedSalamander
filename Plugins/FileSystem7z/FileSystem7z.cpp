@@ -249,6 +249,20 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::QueryInterface(REFIID riid, void** ppvOb
         return S_OK;
     }
 
+    if (riid == __uuidof(IFileSystemPathCapabilities2))
+    {
+        *ppvObject = static_cast<IFileSystemPathCapabilities2*>(static_cast<IFileSystem*>(this));
+        AddRef();
+        return S_OK;
+    }
+
+    if (riid == __uuidof(IFileSystemRouteCapabilities))
+    {
+        *ppvObject = static_cast<IFileSystemRouteCapabilities*>(static_cast<FileSystemRouteCapabilitiesBase*>(this));
+        AddRef();
+        return S_OK;
+    }
+
     if (riid == __uuidof(IFileSystemCancellableDirectoryEnumeration))
     {
         *ppvObject = static_cast<IFileSystemCancellableDirectoryEnumeration*>(this);
@@ -1567,14 +1581,46 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::RenameItems(const FileSystemRenamePair* 
     return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
 }
 
-HRESULT STDMETHODCALLTYPE FileSystem7z::GetCapabilities(const char** jsonUtf8) noexcept
+HRESULT STDMETHODCALLTYPE FileSystem7z::GetPathCapabilities(const wchar_t* path,
+                                                             FileSystemOperation operation,
+                                                             const char** jsonUtf8) noexcept
 {
     if (jsonUtf8 == nullptr)
     {
         return E_POINTER;
     }
+    *jsonUtf8 = nullptr;
+    if (path == nullptr || path[0] == L'\0' || operation < FILESYSTEM_COPY || operation > FILESYSTEM_CREATE_DIRECTORY)
+    {
+        return E_INVALIDARG;
+    }
 
     *jsonUtf8 = kCapabilitiesJson;
+    return S_OK;
+}
+
+HRESULT FileSystem7z::BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                                      FileSystemOperation operation,
+                                                      FileSystemRouteDescriptor& descriptor) noexcept
+{
+    static_cast<void>(operation);
+    if (path == nullptr || path[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    descriptor = {};
+    descriptor.providerId = kPluginId;
+    descriptor.pathProfileId = L"7z-archive";
+    descriptor.rootId = L"archive-root";
+    descriptor.availability = FILESYSTEM_ROUTE_AVAILABLE;
+    descriptor.cancellationRoute = FILESYSTEM_CANCELLATION_BOUNDED;
+    descriptor.namespaceKind = FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER;
+    descriptor.componentComparison = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
+    descriptor.caseOnlyRename = FILESYSTEM_ROUTE_CASE_ONLY_NOT_APPLICABLE;
+    descriptor.propertiesOperation = true;
+    descriptor.readOperation = true;
+    descriptor.exportCopyAll = true;
     return S_OK;
 }
 

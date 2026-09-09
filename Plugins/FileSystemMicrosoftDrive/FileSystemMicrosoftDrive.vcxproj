@@ -143,11 +143,15 @@
     <ClCompile Include="Factory.cpp" />
     <ClCompile Include="FilesInformationMicrosoftDrive.cpp" />
     <ClCompile Include="FileSystemMicrosoftDrive.cpp" />
+    <ClCompile Include="FileSystemMicrosoftDrive.SelfTest.FakeGraph.cpp" />
     <ClInclude Include="FileSystemMicrosoftDrive.h" />
     <ClInclude Include="FileSystemMicrosoftDriveResources.h" />
     <ResourceCompile Include="FileSystemMicrosoftDriveResources.rc" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\Common\Common\Common.vcxproj">
+      <Project>{87fb9a11-83cc-44d8-9fec-9aa9d72667ef}</Project>
+    </ProjectReference>
     <ProjectReference Include="Lang\ja-JP\FileSystemMicrosoftDrive-ja-JP.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
       <Project>{9e99fbba-0d15-58ad-bbe4-40b4876359ac}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>

@@ -11,14 +11,14 @@ current in-product case list.
 
 | Category | Canonical execution kind | Inventory authority |
 |----------|--------------------------|---------------------|
-| In-product self-tests | `SelfTest` | Runner-native case listing plus `Tools\TestRunPlan.ps1` |
+| In-product self-tests | `SelfTest` | Runner-native case listing plus `Tools\Modules\Testing\TestRunPlan.psm1` |
 | Native component/plugin tests | `Executable` | `Tests\*.vcxproj` reconciled with CI/Full run plans |
 | Performance tests | `CppUnitTest` | `PerformanceTests2.vcxproj` plus CI/Full run plans |
 | Tooling tests | `Pester` / `PowerShellScript` | CI/Full run plans plus source-derived manifest |
 
 Related specifications:
 - `Specs/Testing/Testing_SelfTests.md` — result contract
-- `Specs/Testing/Testing_TestCoverage.md` — per-case inventory
+- `Specs/Testing/Testing_TestCoverage.md` — coverage policy and risk map
 - `Specs/Testing/Testing_PerformanceValidation.md` — perf validation
 
 ## Quick Start
@@ -28,8 +28,11 @@ Related specifications:
 .\Tools\Run-AllTests.ps1 -Suite CI             # Build Debug + run the GitHub Actions PR gate locally
 .\Tools\Run-AllTests.ps1 -Suite Full           # Build Debug + run self-tests, native tests, PerformanceTests2, and local script tests
 .\Tools\Run-AllTests.ps1 -Suite Commands       # Single suite
+.\Tools\Run-AllTests.ps1 -Suite Commands -CommandsFamily file-operations # One governed family process; not Full evidence
 .\Tools\Run-AllTests.ps1 -SkipBuild -FailFast  # Fast iteration
 .\Tools\Run-AllTests.ps1 -TimeoutMultiplier 3  # Slow machines
+.\Tools\Run-AllTests.ps1 -Suite Full -ValidationMode Resume -ResumeFrom <run-id> # Exact promoted reuse only
+.\Tools\Run-AllTests.ps1 -Suite Full -ValidationMode Affected -ImpactBase origin/master # NOT_EVALUATED iteration
 .\Tools\Get-TestInventory.ps1 -Format Json     # Source-derived inventory manifest
 .\.build\x64\Debug\RedSalamander.exe --selftest-list-cases  # Runner-native self-test case inventory
 .\build.ps1 -ProjectName FileSystemCurlTests
@@ -129,6 +132,9 @@ Organised into 12 families spanning phases 5–16.
 
 Tests the DirectX UI framework: controls, text input, rendering, theming, and accessibility.
 Run HWND focus-sensitive suites such as `NativeTextInput` serially when collecting closeout evidence; they create real test windows and can legitimately affect process/global Win32 focus. Real Win32 focus/caret/foreground assertions must use `TryFocusDxUiTestWindow` or `TryActivateDxUiTestWindow`, and must emit an explicit `SKIPPED:` reason when the current desktop session cannot provide the required capability.
+The unified runner passes `--no-activate` to every focus-independent DxUi
+suite. Menu and NativeTextInput are the only DxUi suites permitted to activate;
+Accessibility remains serialized for UI Automation but is still no-activate.
 
 | Family | File |
 |--------|------|
@@ -181,6 +187,10 @@ CppUnitTest DLL for performance baselines.
 120-second child timeout. Its nested six-cycle shell-combo churn case uses a
 dedicated 600-second parent timeout so valid long-run coverage is not killed
 before the per-child viewer checks can finish and report their own results.
+Both viewer harnesses expose `--group=noninteractive` and
+`--group=interactive`. The noninteractive groups install the shared test-only
+activation blocker; only combo/keyboard/prompt ViewerPE cases and ViewerSqlite
+tab traversal run in the interactive group.
 
 ## 7. File-System Plugin Tests
 
@@ -225,7 +235,11 @@ Fast targeted guards include `--diagnostics-gate-selftest`, `--scrollbar-model-s
 
 ## 11. Tooling Script Tests
 
-**Run locally/full:** `Invoke-Pester .\Tools\Tests`
+**Run locally/current:** `Invoke-Pester .\Tools\TerminalEngine\CurrentToolingProfile.Tests.ps1`
+
+This is the same dynamically discovered current profile used by CI and Full.
+It deliberately excludes the SHA-256-sealed Gate0/Round4 Terminal cohort; see
+`Tools/TerminalEngine/README.md` for explicit archival reproduction commands.
 
 **Run in artifact-only CI jobs:** `.\Tools\Run-AllTests.ps1 -Suite CI -SkipBuild`
 
@@ -252,6 +266,7 @@ runners do not execute the ARM64 artifacts.
 | `RunAllTestsPlan.Tests.ps1` | CI/Full runner test-plan enumeration, unified test-sandbox root selection, Pester compatibility, dead-PID stale run cleanup, disk-audit evidence, classifier proof, quarantine planning, and aggregate reporting |
 | `SanitizedEnvironment.Tests.ps1` | Child process environment normalization |
 | `ShowPerfRuns.Tests.ps1` | Perf-run report parsing and filtering |
+| `SpecInformationArchitecture.Tests.ps1` | Specification authority classification, exact WIP indexing, protected Done history, Markdown link/anchor parsing, normative-plan leakage, consistency-ledger completeness, and retired tombstone contracts |
 | `TestHarnessSourceContracts.Tests.ps1` | Source guards for self-test CLI/error handling, artifact serialization, case listing, input isolation, TestSandbox routing, contained child processes, plugin/viewer contracts, Microsoft Drive credential-bound URL validation/redacted diagnostics, and high-risk regression invariants |
 | `TestInventory.Tests.ps1` | Source/run-plan test inventory, project/run-plan set equality, execution-kind coverage, live source-contract classification/replacement queue, FileOperations phase-order integrity, and no checked-in current-total ownership |
 | `TestRunArchive.Tests.ps1` | TestRun archive size, machine-profile, curated-evidence, and empty-path policy guards |
@@ -308,6 +323,7 @@ Tests remain declared even when prerequisites are absent. Missing preconditions 
 | `--commands-selftest` | Commands suite only |
 | `--compare-selftest` | Compare Directories suite only |
 | `--fileops-selftest` | File Operations suite only |
+| `--selftest-no-activate` | Explicitly require the no-activation guard for Compare Directories or File Operations; these focused suite launches also default to the guard |
 | `--selftest-fail-fast` | Abort after first failure |
 | `--selftest-case=NAME` | Run a specific case (prefix match with trailing `_`) |
 | `--selftest-repeat=N` | Run each matched case N times in-process; Commands/Compare use `RunCase`, FileOperations expands phase-state runs, and result rows include `repeat_index` |
@@ -350,16 +366,16 @@ test oracle.
 ### Artifacts
 
 When launched through `Tools\Run-AllTests.ps1`, artifacts are written under
-`REDSALAMANDER_TEST_ROOT\runs\<runId>\artifacts\selftest\last_run\`; by default
-the runner sets `REDSALAMANDER_TEST_ROOT` to `.build\TestSandbox`, sets
-`REDSALAMANDER_TEST_RUN_ID`, ignores/clears inherited `REDSALAMANDER_SELFTEST_ROOT`, and
-native self-tests resolve this path directly.
-Before child tests launch, the runner applies `Tools\Clean-TestSandbox.ps1` to remove known legacy
-self-test and temp roots. Running that script directly is dry-run by default; pass `-Apply` only when
-you intend to delete the listed targets. Locked or access-denied legacy targets are reported as
-warning-backed failed cleanup rows and must not prevent the requested suite from starting.
+`X:\RedSalamander.Perf\runs\<runId>\artifacts\selftest\last_run\`. `X:` defaults
+to the repository drive and may be any fixed local drive selected with `-TestRoot` or
+`REDSALAMANDER_TEST_ROOT`; the directory name is exact. First initialization requires
+`-AllowExternalTestRoot`, later use requires the ownership marker, and arbitrary roots,
+descendants, UNC paths, `.build\TestSandbox`, and historical `RSPerf` names are rejected.
+The runner redirects `TEMP`/`TMP` into the current run and restores caller environment
+values. Normal runs never perform legacy cleanup outside the selected root;
+`Tools\Clean-TestSandbox.ps1` remains a separate dry-run-by-default migration tool.
 Tooling Pester tests that create scratch files or synthetic run trees use
-`Tools\TestRunPlan.ps1` `New-RSTestSandboxScratchDirectory(...)` and write under
+`Tools\Modules\Testing\TestRunPlan.psm1` `New-RSTestSandboxScratchDirectory(...)` and write under
 `REDSALAMANDER_TEST_ROOT\runs\<runId>\scratch\tools-pester\<case>\` instead of
 the process temp directory.
 
@@ -375,6 +391,6 @@ the process temp directory.
 | Document | Purpose |
 |----------|---------|
 | [Testing_SelfTests.md](../Specs/Testing/Testing_SelfTests.md) | Result contract for self-test suites |
-| [Testing_TestCoverage.md](../Specs/Testing/Testing_TestCoverage.md) | Per-suite test case listing |
+| [Testing_TestCoverage.md](../Specs/Testing/Testing_TestCoverage.md) | Coverage policy, required risk domains, and inventory authority |
 | [Testing_PerformanceValidation.md](../Specs/Testing/Testing_PerformanceValidation.md) | Performance validation requirements |
 | [Testing_SelfTestRemoteCredentials.md](../Specs/Testing/Testing_SelfTestRemoteCredentials.md) | Remote storage credential setup |

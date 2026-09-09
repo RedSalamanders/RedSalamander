@@ -8,15 +8,15 @@ IDR_VIEWERPE_MENU MENU
 BEGIN
     POPUP "&Súbor"
     BEGIN
-        MENUITEM "&Exportovať ako text...\tCtrl+S", IDM_VIEWERPE_FILE_EXPORT_TEXT
-        MENUITEM "&Exportovať ako Markdown...\tCtrl+Shift+S", IDM_VIEWERPE_FILE_EXPORT_MARKDOWN
+        MENUITEM "Exportovať ako &text...\tCtrl+S", IDM_VIEWERPE_FILE_EXPORT_TEXT
+        MENUITEM "Exportovať ako &Markdown...\tCtrl+Shift+S", IDM_VIEWERPE_FILE_EXPORT_MARKDOWN
         MENUITEM "&Obnoviť\tF5", IDM_VIEWERPE_FILE_REFRESH
         POPUP "&Iné súbory"
         BEGIN
-            MENUITEM "&Ďalej\tSpace, Ctrl+Down", IDM_VIEWERPE_OTHER_NEXT
             MENUITEM "&Predchádzajúce\tBackspace, Ctrl+Up", IDM_VIEWERPE_OTHER_PREVIOUS
-            MENUITEM "&Po prvé\tCtrl+Home", IDM_VIEWERPE_OTHER_FIRST
-            MENUITEM "&Posledný\tCtrl+End", IDM_VIEWERPE_OTHER_LAST
+            MENUITEM "Ď&alej\tSpace, Ctrl+Down", IDM_VIEWERPE_OTHER_NEXT
+            MENUITEM "P&rvý\tCtrl+Home", IDM_VIEWERPE_OTHER_FIRST
+            MENUITEM "P&osledný\tCtrl+End", IDM_VIEWERPE_OTHER_LAST
         END
         MENUITEM SEPARATOR
         MENUITEM "&Koniec\tEsc", IDM_VIEWERPE_FILE_EXIT
@@ -24,7 +24,7 @@ BEGIN
     POPUP "&Zobrazenie"
     BEGIN
         MENUITEM "&Prejsť na začiatok\tHome", IDM_VIEWERPE_VIEW_GOTO_TOP
-        MENUITEM "&Prejdite nadol\tEnd", IDM_VIEWERPE_VIEW_GOTO_BOTTOM
+        MENUITEM "P&rejdite nadol\tEnd", IDM_VIEWERPE_VIEW_GOTO_BOTTOM
     END
 END
 

@@ -98,37 +98,43 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$BuildProjectSelectionScript = Join-Path -Path $PSScriptRoot -ChildPath "Tools\BuildProjectSelection.ps1"
-$MSBuildInvocationScript = Join-Path -Path $PSScriptRoot -ChildPath "Tools\MSBuildInvocation.ps1"
-$ProcessStreamingScript = Join-Path -Path $PSScriptRoot -ChildPath "Tools\ProcessStreaming.ps1"
-$SanitizedEnvironmentScript = Join-Path -Path $PSScriptRoot -ChildPath "Tools\SanitizedEnvironment.ps1"
-$ArtifactOperationLockScript = Join-Path -Path $PSScriptRoot -ChildPath "Tools\ArtifactOperationLock.ps1"
-if (-not (Test-Path $BuildProjectSelectionScript)) {
-    Write-Error "Build project selection helper not found: $BuildProjectSelectionScript"
+$BuildProjectSelectionModule = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Modules\Build\BuildProjectSelection.psm1"
+$BuildEvidenceModule = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Modules\Build\BuildEvidence.psm1"
+$MSBuildInvocationModule = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Modules\Build\MSBuildInvocation.psm1"
+$ProcessStreamingModule = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Modules\Build\ProcessStreaming.psm1"
+$SanitizedEnvironmentModule = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Modules\Build\SanitizedEnvironment.psm1"
+$ArtifactOperationLockModule = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Modules\Build\ArtifactOperationLock.psm1"
+if (-not (Test-Path $BuildProjectSelectionModule)) {
+    Write-Error "Build project selection helper not found: $BuildProjectSelectionModule"
     exit 1
 }
-if (-not (Test-Path $MSBuildInvocationScript)) {
-    Write-Error "MSBuild invocation helper not found: $MSBuildInvocationScript"
+if (-not (Test-Path $BuildEvidenceModule)) {
+    Write-Error "Build evidence helper not found: $BuildEvidenceModule"
     exit 1
 }
-if (-not (Test-Path $ProcessStreamingScript)) {
-    Write-Error "Process streaming helper not found: $ProcessStreamingScript"
+if (-not (Test-Path $MSBuildInvocationModule)) {
+    Write-Error "MSBuild invocation helper not found: $MSBuildInvocationModule"
     exit 1
 }
-if (-not (Test-Path $SanitizedEnvironmentScript)) {
-    Write-Error "Sanitized environment helper not found: $SanitizedEnvironmentScript"
+if (-not (Test-Path $ProcessStreamingModule)) {
+    Write-Error "Process streaming helper not found: $ProcessStreamingModule"
     exit 1
 }
-if (-not (Test-Path $ArtifactOperationLockScript)) {
-    Write-Error "Artifact operation lock helper not found: $ArtifactOperationLockScript"
+if (-not (Test-Path $SanitizedEnvironmentModule)) {
+    Write-Error "Sanitized environment helper not found: $SanitizedEnvironmentModule"
+    exit 1
+}
+if (-not (Test-Path $ArtifactOperationLockModule)) {
+    Write-Error "Artifact operation lock helper not found: $ArtifactOperationLockModule"
     exit 1
 }
 
-. $BuildProjectSelectionScript
-. $MSBuildInvocationScript
-. $SanitizedEnvironmentScript
-. $ProcessStreamingScript
-. $ArtifactOperationLockScript
+Import-Module $BuildProjectSelectionModule -Force -ErrorAction Stop
+Import-Module $BuildEvidenceModule -Force -ErrorAction Stop
+Import-Module $MSBuildInvocationModule -Force -ErrorAction Stop
+Import-Module $SanitizedEnvironmentModule -Force -ErrorAction Stop
+Import-Module $ProcessStreamingModule -Force -ErrorAction Stop
+Import-Module $ArtifactOperationLockModule -Force -ErrorAction Stop
 
 function Test-InteractiveTerminal {
     try {
@@ -171,7 +177,8 @@ function New-ProcessLogPath {
     [void](New-Item -ItemType Directory -Path $logDir -Force)
 
     $timestamp = Get-Date -Format "yyyyMMdd_HHmmss_fff"
-    return Join-Path $logDir "$safePrefix-$timestamp.log"
+    $uniqueSuffix = [Guid]::NewGuid().ToString('N').Substring(0, 8)
+    return Join-Path $logDir "$safePrefix-$timestamp-pid$PID-$uniqueSuffix.log"
 }
 
 $script:UseInteractiveTerminal = Test-InteractiveTerminal
@@ -232,7 +239,7 @@ if ($GenerateWingetManifest -and $Configuration -ne "Release") {
 
 # Script constants
 $SolutionFile = Join-Path -Path $PSScriptRoot -ChildPath "RedSalamander.sln"
-$VersioningScript = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Versioning.ps1"
+$VersioningModule = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Modules\Build\Versioning.psm1"
 
 Write-BuildBanner
 
@@ -242,12 +249,12 @@ if (-not (Test-Path $SolutionFile)) {
     exit 1
 }
 
-if (-not (Test-Path $VersioningScript)) {
-    Write-Error "Version helper script not found: $VersioningScript"
+if (-not (Test-Path $VersioningModule)) {
+    Write-Error "Version helper module not found: $VersioningModule"
     exit 1
 }
 
-. $VersioningScript
+Import-Module $VersioningModule -Force -ErrorAction Stop
 
 $SolutionFullPath = (Resolve-Path $SolutionFile).Path
 $SolutionDir = (Split-Path -Parent $SolutionFullPath)
@@ -255,26 +262,31 @@ $SolutionDirWithSlash = $SolutionDir.TrimEnd('\') + '\'
 $artifactOperationLock = $null
 $stopwatch = [System.Diagnostics.Stopwatch]::new()
 $contaminationRepairAuthorized = $false
+$script:sharedDependencyRepairAuthorized = $false
 try {
     $operationTarget = if ($ProjectName) { $ProjectName } else { 'solution' }
+    $artifactOperationScope = @{
+        kind = 'build'
+        target = $operationTarget
+        configuration = $Configuration
+        platform = $Platform
+    }
     $artifactOperationLock = Enter-RSArtifactOperationLock `
         -RepoRoot $SolutionDir `
         -Operation "build $operationTarget $Configuration|$Platform" `
-        -Scope @{
-            kind = 'build'
-            target = $operationTarget
-            configuration = $Configuration
-            platform = $Platform
-        }
+        -Scope $artifactOperationScope
 
     if ($artifactOperationLock.WasAbandoned) {
         [void](Set-RSArtifactOperationContaminated `
                 -RepoRoot $SolutionDir `
                 -Reason "The previous build/test owner exited without clearing the exclusive artifact-operation lock." `
-                -AbandonedOwner $artifactOperationLock.AbandonedOwner)
+                -AbandonedOwner $artifactOperationLock.AbandonedOwner `
+                -Scope $artifactOperationScope)
     }
 
-    $contamination = Read-RSArtifactOperationContamination -RepoRoot $SolutionDir
+    $contamination = Read-RSArtifactOperationContamination `
+        -RepoRoot $SolutionDir `
+        -Scope $artifactOperationScope
     if ($null -ne $contamination) {
         $contaminationRepairAuthorized = Test-RSArtifactOperationRepairAllowed `
             -Contamination $contamination `
@@ -283,7 +295,9 @@ try {
             -Configuration $Configuration `
             -Platform $Platform
         if (-not $contaminationRepairAuthorized) {
-            $markerPath = Get-RSArtifactContaminationMarkerPath -RepoRoot $SolutionDir
+            $markerPath = Get-RSArtifactContaminationMarkerPath `
+                -RepoRoot $SolutionDir `
+                -Scope $artifactOperationScope
             $scopeText = if ($null -ne $contamination.PSObject.Properties['abandoned_operation'] -and
                 -not [string]::IsNullOrWhiteSpace([string]$contamination.abandoned_operation)) {
                 " Previous operation: '$($contamination.abandoned_operation)'."
@@ -294,27 +308,43 @@ try {
         }
     }
 
-    Assert-RSNoResidualArtifactToolProcesses -RepoRoot $SolutionDir
+    Assert-RSNoResidualArtifactToolProcesses `
+        -RepoRoot $SolutionDir `
+        -Scope $artifactOperationScope
 
-$versionState = Use-RSVersionStateLock -RepoRoot $SolutionDir -ScriptBlock {
-    $context = Get-RSVersionContext -RepoRoot $SolutionDir -Configuration $Configuration -Platform $Platform -BuildNumber $BuildNumber -OfficialRelease:$OfficialRelease
-    $statePath = Save-RSVersionContext -RepoRoot $SolutionDir -VersionContext $context
-
-    [pscustomobject]@{
-        Context = $context
-        StatePath = $statePath
-    }
-}
-$versionContext = $versionState.Context
-$versionStatePath = $versionState.StatePath
+$versionContext = Resolve-RSVersionContext `
+    -RepoRoot $SolutionDir `
+    -Configuration $Configuration `
+    -Platform $Platform `
+    -BuildNumber $BuildNumber `
+    -OfficialRelease:$OfficialRelease
+$versionStatePath = Get-RSVersionStatePath -RepoRoot $SolutionDir
 
 # Function to find MSBuild
 function Find-MSBuild {
     Write-Host "Locating MSBuild..." -ForegroundColor Yellow
 
-    # In GitHub Actions, prefer MSBuild from PATH. The workflow can install a newer VS toolchain and
-    # prepend its MSBuild directory to PATH. This avoids accidentally picking the preinstalled VS 2022 instance.
+    # In GitHub Actions, consume the exact workflow-selected path first so the cache-key
+    # identity probe and the build receipt cannot resolve different MSBuild executables.
     if ($env:GITHUB_ACTIONS -and ($env:GITHUB_ACTIONS -eq "true")) {
+        if (-not [string]::IsNullOrWhiteSpace($env:MSBUILD_EXE_PATH)) {
+            $selectedPath = [IO.Path]::GetFullPath($env:MSBUILD_EXE_PATH)
+            if (-not (Test-Path -LiteralPath $selectedPath -PathType Leaf)) {
+                throw "Workflow-selected MSBuild does not exist: $selectedPath"
+            }
+            $selectedVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($selectedPath)
+            if ($selectedVersion.FileMajorPart -lt 18 -or
+                $selectedPath -notmatch '\\Microsoft Visual Studio\\') {
+                throw "Workflow-selected MSBuild is not a Visual Studio 2026 executable: $selectedPath"
+            }
+            return @{
+                Path = $selectedPath
+                Version = "MSBuild $($selectedVersion.FileMajorPart) (workflow-selected)"
+                Method = "MSBUILD_EXE_PATH"
+            }
+        }
+
+        # Compatibility fallback for callers that only prepend the selected directory.
         $msbuildInPath = Get-Command msbuild.exe -ErrorAction SilentlyContinue
         if ($msbuildInPath -and $msbuildInPath.Source -and (Test-Path $msbuildInPath.Source)) {
             $candidatePath = $msbuildInPath.Source
@@ -551,6 +581,9 @@ function Invoke-MSBuild {
         [string]$WorkingDirectory = $PSScriptRoot
     )
 
+    $sharedDependencyScope = $artifactOperationScope.Clone()
+    $sharedDependencyScope['coordination'] = 'shared-dependency'
+    $sharedDependencyLock = $null
     $effectiveArguments = @($Arguments)
     $hasNodeReuseSetting = $effectiveArguments | Where-Object {
         $_ -match '^(?i)/(nr|noder[e]?use):'
@@ -562,35 +595,73 @@ function Invoke-MSBuild {
         $effectiveArguments += "/nr:false"
     }
 
-    $logPath = New-ProcessLogPath -Prefix 'msbuild'
-    $script:LastProcessLogPath = $logPath
-    $invocationPlan = Get-RSMSBuildInvocationPlan -UseInteractiveTerminal $script:UseInteractiveTerminal -LogPath $logPath
-    if ($invocationPlan.UseDirectConsole) {
-        # Preserve MSBuild's native color and message ordering in interactive terminals while still writing a file log.
-        $exitCode = Invoke-RSProcess `
-            -FilePath $MSBuildPath `
-            -Arguments @($effectiveArguments + @($invocationPlan.AdditionalArguments)) `
-            -WorkingDirectory $WorkingDirectory
-    }
-    else {
-        $exitCode = Invoke-RSStreamingProcess `
-            -FilePath $MSBuildPath `
-            -Arguments $effectiveArguments `
-            -WorkingDirectory $WorkingDirectory `
-            -LogPath $logPath `
-            -OutputLineCallback {
-            param(
-                [string]$Line,
-                [bool]$IsError
-            )
+    try {
+        $sharedDependencyLock = Enter-RSArtifactOperationLock `
+            -RepoRoot $SolutionDir `
+            -Operation "MSBuild shared dependency phase $Configuration|$Platform" `
+            -Scope $sharedDependencyScope
+        if ($sharedDependencyLock.WasAbandoned) {
+            [void](Set-RSArtifactOperationContaminated `
+                    -RepoRoot $SolutionDir `
+                    -Reason 'The previous MSBuild owner exited while it could have been writing shared vcpkg dependencies.' `
+                    -AbandonedOwner $sharedDependencyLock.AbandonedOwner `
+                    -Scope $sharedDependencyScope)
+        }
 
-                Write-RSMSBuildStreamingLine -Line $Line -IsError $IsError
+        $sharedDependencyContamination = Read-RSArtifactOperationContamination `
+            -RepoRoot $SolutionDir `
+            -Scope $sharedDependencyScope
+        if ($null -ne $sharedDependencyContamination) {
+            $script:sharedDependencyRepairAuthorized = Test-RSArtifactOperationRepairAllowed `
+                -Contamination $sharedDependencyContamination `
+                -Rebuild:$Rebuild `
+                -ProjectName $ProjectName `
+                -Configuration $Configuration `
+                -Platform $Platform
+            if (-not $script:sharedDependencyRepairAuthorized) {
+                $markerPath = Get-RSArtifactContaminationMarkerPath `
+                    -RepoRoot $SolutionDir `
+                    -Scope $sharedDependencyScope
+                throw "Shared vcpkg dependencies may be incomplete after an interrupted MSBuild operation. Run a full-solution build.ps1 -Rebuild for platform $Platform. Marker: $markerPath"
             }
+        }
+        Assert-RSNoResidualArtifactToolProcesses `
+            -RepoRoot $SolutionDir `
+            -Scope $sharedDependencyScope
+
+        $logPath = New-ProcessLogPath -Prefix 'msbuild'
+        $script:LastProcessLogPath = $logPath
+        $invocationPlan = Get-RSMSBuildInvocationPlan -UseInteractiveTerminal $script:UseInteractiveTerminal -LogPath $logPath
+        if ($invocationPlan.UseDirectConsole) {
+            # Preserve MSBuild's native color and message ordering in interactive terminals while still writing a file log.
+            $exitCode = Invoke-RSProcess `
+                -FilePath $MSBuildPath `
+                -Arguments @($effectiveArguments + @($invocationPlan.AdditionalArguments)) `
+                -WorkingDirectory $WorkingDirectory
+        }
+        else {
+            $exitCode = Invoke-RSStreamingProcess `
+                -FilePath $MSBuildPath `
+                -Arguments $effectiveArguments `
+                -WorkingDirectory $WorkingDirectory `
+                -LogPath $logPath `
+                -OutputLineCallback {
+                param(
+                    [string]$Line,
+                    [bool]$IsError
+                )
+
+                    Write-RSMSBuildStreamingLine -Line $Line -IsError $IsError
+                }
+        }
+        Write-Host "Captured log: $logPath" -ForegroundColor DarkGray
+        Write-RSMSBuildDiagnosticSummary -LogPath $logPath
+        $global:LASTEXITCODE = $exitCode
+        return $exitCode
     }
-    Write-Host "Captured log: $logPath" -ForegroundColor DarkGray
-    Write-RSMSBuildDiagnosticSummary -LogPath $logPath
-    $global:LASTEXITCODE = $exitCode
-    return $exitCode
+    finally {
+        Exit-RSArtifactOperationLock -Lock $sharedDependencyLock
+    }
 }
 
 # Find MSBuild
@@ -663,6 +734,83 @@ if ($ProjectName) {
     $projectCleanTarget = $buildSelection.CleanTarget
 }
 
+$buildOutputDir = Join-Path -Path $SolutionDir -ChildPath (".build\{0}\{1}" -f $Platform, $Configuration)
+$artifactManifestDir = Join-Path -Path $SolutionDir -ChildPath (".build\BuildArtifactManifests\{0}" -f ([Guid]::NewGuid().ToString('N')))
+$buildReceiptSchema = Join-Path -Path $SolutionDir -ChildPath 'Specs\Build\BuildReceipt.schema.json'
+$toolchainIdentitySchema = Join-Path -Path $SolutionDir -ChildPath 'Specs\Build\ToolchainIdentity.schema.json'
+$receiptTarget = if ($ProjectName) { $ProjectName.ToLowerInvariant() } else { 'solution' }
+$receiptProjectSelection = if ($resolvedProjectPath) {
+    @([IO.Path]::GetRelativePath($SolutionDir, $resolvedProjectPath).Replace('\', '/'))
+} else {
+    @([IO.Path]::GetRelativePath($SolutionDir, $SolutionFullPath).Replace('\', '/'))
+}
+$receiptBuildArguments = @(
+    "build-number=$($versionContext.BuildNumber)",
+    "official-release=$([bool]$OfficialRelease)",
+    "monitor-diagnostics=$([bool]$MonitorDiagnostics)"
+)
+$requestedCompilerDebugInformation = [Environment]::GetEnvironmentVariable('RSBuildCompilerDebugInformation', 'Process')
+if ([string]::IsNullOrWhiteSpace($requestedCompilerDebugInformation)) {
+    $effectiveCompilerDebugInformation = 'ProgramDatabase'
+} elseif ($requestedCompilerDebugInformation -ieq 'Embedded') {
+    $effectiveCompilerDebugInformation = 'Embedded'
+} elseif ($requestedCompilerDebugInformation -ieq 'ProgramDatabase') {
+    $effectiveCompilerDebugInformation = 'ProgramDatabase'
+} else {
+    throw "RSBuildCompilerDebugInformation must be 'Embedded' or 'ProgramDatabase' when specified."
+}
+$receiptBuildArguments += "compiler-debug-information=$($effectiveCompilerDebugInformation.ToLowerInvariant())"
+$requestedTestsEnabled = [Environment]::GetEnvironmentVariable('RSBuildEnableTests', 'Process')
+if ([string]::IsNullOrWhiteSpace($requestedTestsEnabled)) {
+    $effectiveTestsEnabled = ($Configuration -ne 'Release')
+} elseif ($requestedTestsEnabled -ieq 'true') {
+    $effectiveTestsEnabled = $true
+} elseif ($requestedTestsEnabled -ieq 'false') {
+    $effectiveTestsEnabled = $false
+} else {
+    throw "RSBuildEnableTests must be 'true' or 'false' when specified."
+}
+$receiptTestsEnabled = $effectiveTestsEnabled
+$receiptBuildArguments += "tests-enabled=$($effectiveTestsEnabled.ToString().ToLowerInvariant())"
+Write-Host 'Computing build evidence identity...' -ForegroundColor Gray
+$buildSourceSnapshotBefore = Get-RSBuildSourceSnapshot -RepoRoot $SolutionDir
+$buildIdentity = Get-RSBuildIdentityBundle -RepoRoot $SolutionDir -MSBuildPath $msbuildPath `
+    -Platform $Platform -Configuration $Configuration
+$toolchainIdentityPath = Join-Path $buildOutputDir 'toolchain-identity.json'
+$priorReceipt = $null
+try {
+    $priorReceipt = Read-RSBuildReceipt -BuildOutputDir $buildOutputDir -SchemaPath $buildReceiptSchema
+} catch {
+    Write-Warning "Existing build receipt is invalid and will not be trusted: $($_.Exception.Message)"
+}
+$receiptCompatible = Test-RSBuildReceiptCompatible `
+    -Receipt $priorReceipt `
+    -SourceSnapshot $buildSourceSnapshotBefore `
+    -Identity $buildIdentity `
+    -Platform $Platform `
+    -Configuration $Configuration `
+    -Target $receiptTarget `
+    -RepoRoot $SolutionDir `
+    -ProjectSelection $receiptProjectSelection `
+    -BuildArguments $receiptBuildArguments `
+    -TestsEnabled $receiptTestsEnabled `
+    -OfficialRelease ([bool]$OfficialRelease)
+if (-not $receiptCompatible -and -not $Rebuild) {
+    Write-Host 'No compatible build receipt exists; first attestation requires Rebuild.' -ForegroundColor Yellow
+    $Rebuild = $true
+    if ($ProjectName) {
+        $buildSelection = Get-RSBuildSelection `
+            -SolutionPath $SolutionFullPath `
+            -SolutionDir $SolutionDir `
+            -ProjectName $ProjectName `
+            -Rebuild
+        $resolvedProjectPath = $buildSelection.ResolvedProjectPath
+        $buildInput = $buildSelection.BuildInput
+        $buildProjectDirectly = $buildSelection.BuildProjectDirectly
+        $projectCleanTarget = $buildSelection.CleanTarget
+    }
+}
+
 $msbuildTarget = if ($ProjectName) {
     $buildSelection.MSBuildTarget
 } elseif ($Rebuild) {
@@ -684,6 +832,9 @@ $buildParams = @(
 
 $buildParams += "/p:SolutionDir=$SolutionDirWithSlash"
 $buildParams += "/p:RSVersionBuildNumber=$($versionContext.BuildNumber)"
+$buildParams += "/p:RSBuildEnableTests=$($effectiveTestsEnabled.ToString().ToLowerInvariant())"
+$buildParams += "/p:RSBuildCompilerDebugInformation=$effectiveCompilerDebugInformation"
+$buildParams += "/p:RSBuildArtifactManifestRoot=$($artifactManifestDir.TrimEnd('\'))\"
 if ($OfficialRelease) {
     $buildParams += "/p:RSVersionOfficialRelease=true"
 }
@@ -710,6 +861,7 @@ if ($Clean) {
     }
     $cleanParams += "/p:SolutionDir=$SolutionDirWithSlash"
     $cleanParams += "/p:RSVersionBuildNumber=$($versionContext.BuildNumber)"
+    $cleanParams += "/p:RSBuildEnableTests=$($effectiveTestsEnabled.ToString().ToLowerInvariant())"
     if ($OfficialRelease) {
         $cleanParams += "/p:RSVersionOfficialRelease=true"
     }
@@ -722,21 +874,7 @@ if ($Clean) {
 Write-Host "Starting build..." -ForegroundColor Yellow
 $stopwatch.Restart()
 
-function Test-BuildOutputSelfTestCommandLine {
-    param(
-        [AllowNull()]
-        [AllowEmptyString()]
-        [string]$CommandLine
-    )
-
-    if ([string]::IsNullOrWhiteSpace($CommandLine)) {
-        return $false
-    }
-
-    return $CommandLine -match '(?i)(?:^|[\s"])--[a-z0-9-]*selftest[a-z0-9-]*(?:=[^\s"]*)?(?=$|[\s"])'
-}
-
-function Stop-BuildOutputProcess {
+function Assert-BuildOutputProcessNotRunning {
     param(
         [Parameter(Mandatory = $true)]
         [string]$ProcessName,
@@ -750,16 +888,17 @@ function Stop-BuildOutputProcess {
         $expectedFullPath = [System.IO.Path]::GetFullPath($ExpectedExePath)
     }
     catch {
-        return
+        throw "Build canceled because target-output process safety could not be verified: invalid expected executable path '$ExpectedExePath'. No process was terminated. $($_.Exception.Message)"
     }
 
     $escapedName = $ProcessName.Replace("'", "''")
     $processes = @()
     try {
-        $processes = Get-CimInstance Win32_Process -Filter "Name='$escapedName'" -ErrorAction SilentlyContinue
+        $processes = Get-CimInstance Win32_Process -Filter "Name='$escapedName'" -ErrorAction Stop
     }
     catch {
-        return
+        throw ("Build canceled because target-output process safety could not be verified for '$expectedFullPath': " +
+               "unable to enumerate '$ProcessName' process metadata. No process was terminated. $($_.Exception.Message)")
     }
 
     $matchingProcesses = @()
@@ -788,27 +927,26 @@ function Stop-BuildOutputProcess {
         }
     }
 
-    $protectedProcesses = @($matchingProcesses | Where-Object {
-        [string]::IsNullOrWhiteSpace($_.CommandLine) -or (Test-BuildOutputSelfTestCommandLine -CommandLine $_.CommandLine)
-    })
-    if ($protectedProcesses.Count -gt 0) {
-        $diagnostics = @($protectedProcesses | ForEach-Object {
+    if ($matchingProcesses.Count -gt 0) {
+        $diagnostics = @($matchingProcesses | ForEach-Object {
             $commandLine = if ([string]::IsNullOrWhiteSpace($_.CommandLine)) { '<unavailable>' } else { $_.CommandLine }
             "  PID=$($_.ProcessId); Path='$($_.ExecutablePath)'; CommandLine='$commandLine'"
         })
-        throw ("Build canceled because an active self-test may be using a target output. " +
-               "Wait for the self-test to finish before rebuilding.`n" +
+        throw ("Build canceled because an independently launched process is using an exact target output. " +
+               "It was not terminated because it is not proven to belong to this operation; close it and retry.`n" +
                ($diagnostics -join "`n"))
-    }
-
-    foreach ($proc in $matchingProcesses) {
-        Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
     }
 }
 
-    $buildOutputDir = Join-Path -Path $SolutionDir -ChildPath (".build\\{0}\\{1}" -f $Platform, $Configuration)
-    Stop-BuildOutputProcess -ProcessName "RedSalamander.exe" -ExpectedExePath (Join-Path -Path $buildOutputDir -ChildPath "RedSalamander.exe")
-    Stop-BuildOutputProcess -ProcessName "RedSalamanderMonitor.exe" -ExpectedExePath (Join-Path -Path $buildOutputDir -ChildPath "RedSalamanderMonitor.exe")
+    Assert-BuildOutputProcessNotRunning -ProcessName "RedSalamander.exe" -ExpectedExePath (Join-Path -Path $buildOutputDir -ChildPath "RedSalamander.exe")
+    Assert-BuildOutputProcessNotRunning -ProcessName "RedSalamanderMonitor.exe" -ExpectedExePath (Join-Path -Path $buildOutputDir -ChildPath "RedSalamanderMonitor.exe")
+
+    $buildStartedUtc = [datetime]::UtcNow
+    Suspend-RSBuildReceipt -BuildOutputDir $buildOutputDir
+    $toolchainIdentityPath = Publish-RSBuildToolchainIdentity `
+        -BuildOutputDir $buildOutputDir `
+        -IdentityRecord $buildIdentity.ToolchainIdentityRecord `
+        -SchemaPath $toolchainIdentitySchema
 
     # Execute clean if requested
     if ($Clean) {
@@ -835,78 +973,66 @@ function Stop-BuildOutputProcess {
     }
     
     $stopwatch.Stop()
-    Write-Host ""
-    Write-Host "========================================" -ForegroundColor Green
-    Write-Host "Build completed successfully!" -ForegroundColor Green
-    Write-Host "Configuration: $Configuration | Platform: $Platform" -ForegroundColor Green
-    Write-Host "Build time: $($stopwatch.Elapsed.ToString('mm\:ss'))" -ForegroundColor Green
-    Write-Host "========================================" -ForegroundColor Green
-    
-    # Show output paths
-    if ($ProjectName) {
-        $isLanguageResourceProject = $false
-        if ($resolvedProjectPath) {
-            $normalizedProjectPath = $resolvedProjectPath.Replace('/', '\')
-            $isLanguageResourceProject = $normalizedProjectPath -match '\\Lang\\[^\\]+\\[^\\]+\.vcxproj$'
-        }
-
-        if ($isLanguageResourceProject) {
-            $languageOutput = ".build\\$Platform\\$Configuration\\Lang\\$ProjectName.dll"
-            if (-not (Test-Path $languageOutput)) {
-                Write-Host ""
-                Write-Host "========================================" -ForegroundColor Red
-                Write-Host "Language Resource Output Validation Failed!" -ForegroundColor Red
-                Write-Host "Expected: $languageOutput" -ForegroundColor Red
-                Write-Host "========================================" -ForegroundColor Red
-                exit 1
-            }
-
-            $fileSize = (Get-Item $languageOutput).Length
-            $fileSizeMB = [math]::Round($fileSize / 1MB, 2)
-            Write-Host "Output: $languageOutput ($fileSizeMB MB)" -ForegroundColor Cyan
-            Write-Host "Language resource output validated in Lang folder." -ForegroundColor Cyan
-        }
-
-        # Show specific project output
-        $outputCandidates = if ($isLanguageResourceProject) {
-            @()
-        } elseif ($resolvedProjectPath -and $resolvedProjectPath -like '*\Plugins\*') {
-            @(
-                ".build\\$Platform\\$Configuration\\Plugins\\$ProjectName.exe",
-                ".build\\$Platform\\$Configuration\\Plugins\\$ProjectName.dll",
-                ".build\\$Platform\\$Configuration\\$ProjectName.exe",
-                ".build\\$Platform\\$Configuration\\$ProjectName.dll"
-            )
-        } else {
-            @(
-                ".build\\$Platform\\$Configuration\\$ProjectName.exe",
-                ".build\\$Platform\\$Configuration\\$ProjectName.dll",
-                ".build\\$Platform\\$Configuration\\Plugins\\$ProjectName.exe",
-                ".build\\$Platform\\$Configuration\\Plugins\\$ProjectName.dll"
-            )
-        }
-
-        foreach ($candidate in $outputCandidates) {
-            if (Test-Path $candidate) {
-                $fileSize = (Get-Item $candidate).Length
-                $fileSizeMB = [math]::Round($fileSize / 1MB, 2)
-                Write-Host "Output: $candidate ($fileSizeMB MB)" -ForegroundColor Cyan
-                break
-            }
-        }
+    $buildSourceSnapshotAfter = Get-RSBuildSourceSnapshot -RepoRoot $SolutionDir
+    if ($buildSourceSnapshotAfter.SnapshotId -ne $buildSourceSnapshotBefore.SnapshotId) {
+        throw 'Repository source changed while the build was running; no success receipt was published.'
+    }
+    $buildArtifacts = @(Get-RSBuildArtifactRecords `
+            -RepoRoot $SolutionDir `
+            -BuildOutputDir $buildOutputDir `
+            -ArtifactManifestDir $artifactManifestDir `
+            -Configuration $Configuration `
+            -Platform $Platform `
+            -ProjectName $(if ($ProjectName) { $ProjectName } else { '' }) `
+            -ResolvedProjectPath $(if ($resolvedProjectPath) { $resolvedProjectPath } else { '' }))
+    $buildArtifacts += New-RSBuildArtifactRecord `
+        -RepoRoot $SolutionDir `
+        -LiteralPath $toolchainIdentityPath
+    $buildArtifacts = @($buildArtifacts | Sort-Object relative_path)
+    $receiptTestsEnabled = Test-RSBuildArtifactManifestTestsEnabled -ArtifactManifestDir $artifactManifestDir
+    $summaryArtifacts = if ($ProjectName) {
+        @($buildArtifacts | Where-Object {
+                [IO.Path]::GetFileNameWithoutExtension($_.relative_path) -eq $ProjectName
+            })
     } else {
-        # Show output paths for main executables
-        $mainProjects = @("RedLauncher", "RedSalamander", "RedSalamanderMonitor")
-        foreach ($project in $mainProjects) {
-            $outputPath = ".build\\$Platform\\$Configuration\\$project.exe"
-            if (Test-Path $outputPath) {
-                $fileSize = (Get-Item $outputPath).Length
-                $fileSizeMB = [math]::Round($fileSize / 1MB, 2)
-                Write-Host "Output: $outputPath ($fileSizeMB MB)" -ForegroundColor Cyan
+        @($buildArtifacts | Where-Object role -eq 'launchable')
+    }
+    $packageArtifacts = @()
+
+    $packagingLock = $null
+    $stagedMsixManifest = $null
+    $packageEvidenceBefore = @{}
+    $appPackagesEvidenceRoot = Join-Path -Path $SolutionDir -ChildPath '.build\AppPackages'
+    if ($Msix -or $Msi -or $Zip -or $GenerateWingetManifest) {
+        if (Test-Path -LiteralPath $appPackagesEvidenceRoot -PathType Container) {
+            foreach ($file in @(Get-ChildItem -LiteralPath $appPackagesEvidenceRoot -File -Recurse)) {
+                $packageEvidenceBefore[$file.FullName] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             }
         }
     }
+    if ($Msix -or $Msi -or $Zip -or $GenerateWingetManifest) {
+        $packagingScope = $artifactOperationScope.Clone()
+        $packagingScope['coordination'] = 'packaging'
+        $packagingLock = Enter-RSArtifactOperationLock `
+            -RepoRoot $SolutionDir `
+            -Operation "packaging $packageMode winget=$GenerateWingetManifest" `
+            -Scope $packagingScope
+        if ($packagingLock.WasAbandoned) {
+            [void](Set-RSArtifactOperationContaminated `
+                    -RepoRoot $SolutionDir `
+                    -Reason 'The previous packaging owner exited while mutating shared installer inputs or AppPackages outputs.' `
+                    -AbandonedOwner $packagingLock.AbandonedOwner `
+                    -Scope $packagingScope)
+        }
+        if (Test-RSArtifactOperationContaminated -RepoRoot $SolutionDir -Scope $packagingScope) {
+            $markerPath = Get-RSArtifactContaminationMarkerPath `
+                -RepoRoot $SolutionDir `
+                -Scope $packagingScope
+            throw "Shared packaging state may be incomplete after an interrupted operation. Review and remove the marker only after restoring Installer inputs and .build\AppPackages. Marker: $markerPath"
+        }
+    }
 
+    try {
     if ($Msix) {
         $msixAssetsScript = Join-Path -Path $SolutionDir -ChildPath "Installer\msix\GenerateAssets.ps1"
         if (-not (Test-Path $msixAssetsScript)) {
@@ -917,7 +1043,7 @@ function Stop-BuildOutputProcess {
         Write-Host ""
         Write-Host "Generating MSIX assets..." -ForegroundColor Yellow
         try {
-            & $msixAssetsScript
+            & $msixAssetsScript -Configuration $Configuration -Platform $Platform
         }
         catch {
             Write-Error "MSIX assets generation failed: $_"
@@ -937,7 +1063,10 @@ function Stop-BuildOutputProcess {
         }
 
         try {
-            & $msixVersionScript -Version $versionContext.PackagingVersion -Platform $Platform
+            $stagedMsixManifest = & $msixVersionScript `
+                -Version $versionContext.PackagingVersion `
+                -Platform $Platform `
+                -Configuration $Configuration
         }
         catch {
             Write-Error "MSIX manifest version update failed: $_"
@@ -964,6 +1093,7 @@ function Stop-BuildOutputProcess {
             "/p:Platform=$Platform"
             "/p:TargetPlatformVersion=$targetPlatformVersion"
             "/p:SolutionDir=$SolutionDirWithSlash"
+            "/p:RSAppxManifestPath=$stagedMsixManifest"
             "/p:AppxPackageSigningEnabled=false"
             "/p:GenerateAppInstallerFile=false"
             "/p:AppxBundle=Never"
@@ -986,23 +1116,6 @@ function Stop-BuildOutputProcess {
 
         $msixStopwatch.Stop()
         Write-Host "MSIX packaging completed successfully! ($($msixStopwatch.Elapsed.ToString('mm\:ss')))" -ForegroundColor Green
-
-        $appPackagesDir = Join-Path -Path $SolutionDir -ChildPath ".build\\AppPackages"
-        if (Test-Path $appPackagesDir) {
-            $msixFiles = Get-ChildItem -Path $appPackagesDir -Filter *.msix -Recurse -ErrorAction SilentlyContinue |
-                Sort-Object -Property LastWriteTime -Descending |
-                Select-Object -First 5
-
-            foreach ($msixFile in $msixFiles) {
-                $relativePath = if ($msixFile.FullName.StartsWith($SolutionDirWithSlash, [System.StringComparison]::OrdinalIgnoreCase)) {
-                    $msixFile.FullName.Substring($SolutionDirWithSlash.Length)
-                } else {
-                    $msixFile.FullName
-                }
-                $fileSizeMB = [math]::Round($msixFile.Length / 1MB, 2)
-                Write-Host "Output: $relativePath ($fileSizeMB MB)" -ForegroundColor Cyan
-            }
-        }
     }
 
     if ($Msi) {
@@ -1069,23 +1182,6 @@ function Stop-BuildOutputProcess {
 
         $msiSymbolsStopwatch.Stop()
         Write-Host "MSI symbols packaging completed successfully! ($($msiSymbolsStopwatch.Elapsed.ToString('mm\:ss')))" -ForegroundColor Green
-
-        $appPackagesDir = Join-Path -Path $SolutionDir -ChildPath ".build\\AppPackages"
-        if (Test-Path $appPackagesDir) {
-            $msiFiles = Get-ChildItem -Path $appPackagesDir -Filter *.msi -Recurse -ErrorAction SilentlyContinue |
-                Sort-Object -Property LastWriteTime -Descending |
-                Select-Object -First 5
-
-            foreach ($msiFile in $msiFiles) {
-                $relativePath = if ($msiFile.FullName.StartsWith($SolutionDirWithSlash, [System.StringComparison]::OrdinalIgnoreCase)) {
-                    $msiFile.FullName.Substring($SolutionDirWithSlash.Length)
-                } else {
-                    $msiFile.FullName
-                }
-                $fileSizeMB = [math]::Round($msiFile.Length / 1MB, 2)
-                Write-Host "Output: $relativePath ($fileSizeMB MB)" -ForegroundColor Cyan
-            }
-        }
     }
 
     if ($Zip) {
@@ -1115,23 +1211,6 @@ function Stop-BuildOutputProcess {
 
         $zipStopwatch.Stop()
         Write-Host "ZIP packaging completed successfully! ($($zipStopwatch.Elapsed.ToString('mm\:ss')))" -ForegroundColor Green
-
-        $appPackagesDir = Join-Path -Path $SolutionDir -ChildPath ".build\\AppPackages"
-        if (Test-Path $appPackagesDir) {
-            $zipFiles = Get-ChildItem -Path $appPackagesDir -Filter *.zip -Recurse -ErrorAction SilentlyContinue |
-                Sort-Object -Property LastWriteTime -Descending |
-                Select-Object -First 5
-
-            foreach ($zipFile in $zipFiles) {
-                $relativePath = if ($zipFile.FullName.StartsWith($SolutionDirWithSlash, [System.StringComparison]::OrdinalIgnoreCase)) {
-                    $zipFile.FullName.Substring($SolutionDirWithSlash.Length)
-                } else {
-                    $zipFile.FullName
-                }
-                $fileSizeMB = [math]::Round($zipFile.Length / 1MB, 2)
-                Write-Host "Output: $relativePath ($fileSizeMB MB)" -ForegroundColor Cyan
-            }
-        }
     }
 
     if ($GenerateWingetManifest) {
@@ -1145,18 +1224,16 @@ function Stop-BuildOutputProcess {
         Write-Host "Generating winget manifest..." -ForegroundColor Yellow
 
         $appPackagesDir = Join-Path -Path $SolutionDir -ChildPath ".build\\AppPackages"
-        $ZipPath = Get-ChildItem -Path $appPackagesDir -Filter "RedSalamander-*-x64-Portable.zip" -Recurse -ErrorAction SilentlyContinue |
-            Sort-Object -Property LastWriteTime -Descending |
-            Select-Object -First 1 -ExpandProperty FullName
-        $Arm64ZipPath = Get-ChildItem -Path $appPackagesDir -Filter "RedSalamander-*-ARM64-Portable.zip" -Recurse -ErrorAction SilentlyContinue |
-            Sort-Object -Property LastWriteTime -Descending |
-            Select-Object -First 1 -ExpandProperty FullName
+        $packageVersion = $versionContext.PackagingVersion
+        $ZipPath = Join-Path $appPackagesDir "RedSalamander-$packageVersion-x64-Portable.zip"
+        $Arm64ZipPath = Join-Path $appPackagesDir "RedSalamander-$packageVersion-ARM64-Portable.zip"
 
         try {
-            $wingetParams = @{}
-            $wingetParams['BuildNumber'] = $versionContext.BuildNumber
-            if ($ZipPath) { $wingetParams['ZipPath'] = $ZipPath }
-            if ($Arm64ZipPath) { $wingetParams['Arm64ZipPath'] = $Arm64ZipPath }
+            $wingetParams = @{
+                BuildNumber = $versionContext.BuildNumber
+                ZipPath = $ZipPath
+                Arm64ZipPath = $Arm64ZipPath
+            }
             
             & $wingetScript @wingetParams
         }
@@ -1169,9 +1246,80 @@ function Stop-BuildOutputProcess {
             exit 1
         }
     }
+    }
+    finally {
+        if (-not [string]::IsNullOrWhiteSpace($stagedMsixManifest)) {
+            $stagedMsixManifestDirectory = Resolve-RSGuardedRepositoryPath `
+                -RepoRoot $SolutionDir -GuardedRelativeRoot '.build\AppPackages' `
+                -Path (Split-Path $stagedMsixManifest -Parent)
+            if (Test-Path -LiteralPath $stagedMsixManifestDirectory -PathType Container) {
+                Remove-Item -LiteralPath $stagedMsixManifestDirectory -Recurse -Force
+            }
+        }
+        Exit-RSArtifactOperationLock -Lock $packagingLock
+    }
     
     if ($contaminationRepairAuthorized) {
-        Clear-RSArtifactOperationContaminated -RepoRoot $SolutionDir
+        Clear-RSArtifactOperationContaminated `
+            -RepoRoot $SolutionDir `
+            -Scope $artifactOperationScope
+    }
+    if ($script:sharedDependencyRepairAuthorized) {
+        $sharedDependencyScope = $artifactOperationScope.Clone()
+        $sharedDependencyScope['coordination'] = 'shared-dependency'
+        Clear-RSArtifactOperationContaminated `
+            -RepoRoot $SolutionDir `
+            -Scope $sharedDependencyScope
+    }
+
+    if ($Msix -or $Msi -or $Zip -or $GenerateWingetManifest) {
+        if (-not (Test-Path -LiteralPath $appPackagesEvidenceRoot -PathType Container)) {
+            throw "Requested packaging produced no AppPackages directory: $appPackagesEvidenceRoot"
+        }
+        foreach ($file in @(Get-ChildItem -LiteralPath $appPackagesEvidenceRoot -File -Recurse | Sort-Object FullName)) {
+            $currentDigest = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            if (-not $packageEvidenceBefore.ContainsKey($file.FullName) -or $packageEvidenceBefore[$file.FullName] -ne $currentDigest) {
+                $packageArtifact = New-RSBuildArtifactRecord -RepoRoot $SolutionDir -LiteralPath $file.FullName
+                $packageArtifacts += $packageArtifact
+                $summaryArtifacts += $packageArtifact
+            }
+        }
+    }
+
+    $operationDuration = [datetime]::UtcNow - $buildStartedUtc
+    $buildSourceSnapshotFinal = Get-RSBuildSourceSnapshot -RepoRoot $SolutionDir
+    if ($buildSourceSnapshotFinal.SnapshotId -ne $buildSourceSnapshotBefore.SnapshotId) {
+        throw 'Repository source changed while the selected build/package operation was running; no success receipt was published.'
+    }
+    $receiptArtifacts = @(@($buildArtifacts) + @($packageArtifacts) | Sort-Object relative_path)
+    $buildReceipt = New-RSBuildReceipt `
+        -SourceSnapshot $buildSourceSnapshotFinal `
+        -Identity $buildIdentity `
+        -Platform $Platform `
+        -Configuration $Configuration `
+        -Target $receiptTarget `
+        -ProjectSelection $receiptProjectSelection `
+        -BuildArguments $receiptBuildArguments `
+        -TestsEnabled $receiptTestsEnabled `
+        -OfficialRelease ([bool]$OfficialRelease) `
+        -StartedUtc $buildStartedUtc `
+        -EndedUtc ([datetime]::UtcNow) `
+        -Duration $operationDuration `
+        -Outputs $receiptArtifacts
+    $buildReceipt = Publish-RSBuildReceipt `
+        -BuildOutputDir $buildOutputDir `
+        -Receipt $buildReceipt `
+        -SchemaPath $buildReceiptSchema
+    Write-Host "Build artifacts attested: $($buildReceipt.receipt_id)" -ForegroundColor Gray
+
+    Write-Host ''
+    foreach ($line in @(ConvertTo-RSBuildSummaryLines `
+            -Configuration $Configuration `
+            -Platform $Platform `
+            -Duration $operationDuration `
+            -Artifacts @($summaryArtifacts))) {
+        $color = if ($line -like '& *' -or $line -like 'Output: *') { 'Cyan' } else { 'Green' }
+        Write-Host $line -ForegroundColor $color
     }
 
     exit 0

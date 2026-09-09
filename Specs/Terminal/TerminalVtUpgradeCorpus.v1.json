@@ -1,0 +1,61 @@
+{
+  "formatId": "red-salamander-terminal-vt-upgrade-corpus",
+  "version": 1,
+  "generatorVersion": "1.1.0",
+  "purpose": "Measurement-only same-machine current-pin versus isolated-candidate VT upgrade comparison; never terminal user data.",
+  "configuration": "test-enabled Release x64",
+  "geometry": {
+    "initialColumns": 120,
+    "initialRows": 40,
+    "intermediateColumns": 96,
+    "intermediateRows": 32,
+    "cellWidthPixels": 8,
+    "cellHeightPixels": 16
+  },
+  "sampling": {
+    "warmupCount": 5,
+    "sampleCount": 200,
+    "percentileRule": "nearest-rank",
+    "candidateMaximumP95Ratio": "1.10"
+  },
+  "steps": [
+    {"id": "reset-delete", "kind": "vt-write", "contract": "RIS followed by Kitty delete-all"},
+    {"id": "printable-wide", "kind": "vt-write", "contract": "ASCII, Japanese wide-cell UTF-8, emoji, and a second double-width code point"},
+    {"id": "sgr-hyperlink", "kind": "vt-write", "contract": "bold 16-color, truecolor, reset, and OSC 8 open/text/close"},
+    {"id": "screen-state", "kind": "vt-write", "contract": "cursor positioning, erase-line, scroll-region, scroll up/down, alternate-screen enter/exit"},
+    {"id": "osc52-below", "kind": "vt-write", "decodedBytes": 262143, "fillByteHex": "78", "encoding": "RFC 4648 base64 without whitespace", "terminator": "BEL"},
+    {"id": "osc52-at", "kind": "vt-write", "decodedBytes": 262144, "fillByteHex": "78", "encoding": "RFC 4648 base64 without whitespace", "terminator": "BEL"},
+    {"id": "osc52-above", "kind": "vt-write", "decodedBytes": 262145, "fillByteHex": "78", "encoding": "RFC 4648 base64 without whitespace", "terminator": "BEL"},
+    {"id": "resize-intermediate", "kind": "resize", "columns": 96, "rows": 32, "cellWidthPixels": 8, "cellHeightPixels": 16},
+    {"id": "kitty-partial", "kind": "vt-write", "contract": "RGBA 1x1 image 77, direct transmit-and-display, m=1, base64 fragment /wAA"},
+    {"id": "kitty-pending-snapshot", "kind": "snapshot", "contract": "placement count remains zero before completion"},
+    {"id": "kitty-completion", "kind": "vt-write", "contract": "image 77, m=0, base64 fragment /w==; exactly one placement then completes conversion and upload"},
+    {"id": "dcs-high-byte", "kind": "vt-write", "payloadHex": "1b507180feff1b5c", "contract": "DCS bytes above 0x7F remain byte-observable for the named candidate delta"},
+    {"id": "pty-responses", "kind": "vt-write", "contract": "DSR status, cursor-position, and primary-device-attributes queries produce deterministic PTY output"},
+    {"id": "resize-final", "kind": "resize", "columns": 120, "rows": 40, "cellWidthPixels": 8, "cellHeightPixels": 16},
+    {"id": "semantic-snapshot", "kind": "snapshot", "repeatCount": 200, "contract": "dimensions, cursor, grapheme UTF-8, width, hyperlink, selection, semantic style/colors, and Kitty placement/image pixels"},
+    {"id": "hosted-render", "kind": "render", "repeatCount": 200, "contract": "hidden HWND, Direct2D structured steady-state render after Kitty conversion/upload warmup"}
+  ],
+  "digests": {
+    "corpus": "SHA-256 of the length-delimited canonical ordered VT-write and action stream",
+    "ptyOutput": "SHA-256 of the exact Ghostty write-PTY callback byte stream",
+    "snapshot": "SHA-256 of semantic snapshot-v1 bytes; excludes monotonic generation identifiers, addresses, allocation sizes, capacity, and other engine storage details",
+    "withoutExpectedDeltas": "Untimed PTY-output and semantic-snapshot control digests from the same corpus with the declared DCS high-byte step omitted; current-pin and candidate values must be byte-exact"
+  },
+  "measurements": [
+    {"metric": "terminal.vt_upgrade.vt_write_us", "unit": "microseconds", "samples": 200},
+    {"metric": "terminal.vt_upgrade.snapshot_us", "unit": "microseconds", "samples": 200},
+    {"metric": "terminal.vt_upgrade.hosted_render_us", "unit": "microseconds", "samples": 200},
+    {"metric": "kitty-accounting", "unit": "bytes-and-counts", "contract": "queue, active source/conversion, ready/resident/high-water, cache, pinned, upload, placement count and bytes"},
+    {"metric": "process-retained-memory", "unit": "bytes", "contract": "maximum observed private bytes and process peak working set"}
+  ],
+  "expectedDeltas": [
+    {"id": "dcs-high-byte-preservation", "allowedOnlyWhen": "candidate behavior differs because the reviewed upstream DCS high-byte correction is present; every other PTY and snapshot digest remains exact"}
+  ],
+  "safety": {
+    "osc52Policy": "deny",
+    "network": "none",
+    "userData": "none",
+    "archiveContent": "digests, counters, metadata, and bounded raw timing samples only"
+  }
+}

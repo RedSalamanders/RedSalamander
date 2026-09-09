@@ -134,12 +134,14 @@ struct FileOperationsTheme
     D2D1::ColorF progressBackground = D2D1::ColorF(230.0f / 255.0f, 230.0f / 255.0f, 230.0f / 255.0f);
     D2D1::ColorF progressTotal      = D2D1::ColorF(0.0f, 0.47f, 0.84f);
     D2D1::ColorF progressItem       = D2D1::ColorF(0.0f, 0.47f, 0.84f);
+    D2D1::ColorF progressVerify     = D2D1::ColorF(0.65f, 0.38f, 0.0f);
     D2D1::ColorF successText        = D2D1::ColorF(0.10f, 0.55f, 0.22f);
 
     D2D1::ColorF graphBackground = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.20f);
     D2D1::ColorF graphGrid       = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.20f);
     D2D1::ColorF graphLimit      = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.60f);
     D2D1::ColorF graphLine       = D2D1::ColorF(0.0f, 0.47f, 0.84f);
+    D2D1::ColorF graphVerify     = D2D1::ColorF(0.65f, 0.38f, 0.0f);
 
     D2D1::ColorF scrollbarTrack = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.08f);
     D2D1::ColorF scrollbarThumb = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.22f);
@@ -195,6 +197,7 @@ bool IsSystemDarkModeEnabled() noexcept;
 
 D2D1::ColorF ColorFromCOLORREF(COLORREF color, float alpha = 1.0f) noexcept;
 COLORREF ColorToCOLORREF(const D2D1::ColorF& color) noexcept;
+uint32_t ColorToArgb(const D2D1::ColorF& color) noexcept;
 
 D2D1::ColorF GetSystemAccentColor() noexcept;
 D2D1::ColorF ColorFromHSV(float hueDegrees, float saturation, float value, float alpha = 1.0f) noexcept;

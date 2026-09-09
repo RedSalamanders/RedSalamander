@@ -145,7 +145,6 @@ void OfferPluginDisableIfPreviousCrashDetected(Common::Settings::Settings& setti
     const std::wstring message = FormatStringResource(nullptr, messageId, pluginList);
 
     HostPromptRequest prompt{};
-    prompt.version       = 1;
     prompt.sizeBytes     = sizeof(prompt);
     prompt.scope         = HOST_ALERT_SCOPE_APPLICATION;
     prompt.severity      = HOST_ALERT_WARNING;

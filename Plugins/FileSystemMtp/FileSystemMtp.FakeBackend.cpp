@@ -54,6 +54,42 @@ struct FakeMtpReaderStats
     std::atomic_uint64_t lastReadBytes{0};
 };
 
+[[nodiscard]] HRESULT ReadFakeSourceHandle(HANDLE sourceFile, const uint64_t sizeBytes, std::vector<std::byte>& bytes) noexcept
+{
+    bytes.clear();
+    if (sourceFile == nullptr || sourceFile == INVALID_HANDLE_VALUE)
+    {
+        return E_HANDLE;
+    }
+    if (sizeBytes > static_cast<uint64_t>((std::numeric_limits<size_t>::max)()))
+    {
+        return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    }
+
+    LARGE_INTEGER start{};
+    if (SetFilePointerEx(sourceFile, start, nullptr, FILE_BEGIN) == FALSE)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+    bytes.resize(static_cast<size_t>(sizeBytes));
+    size_t offset = 0u;
+    while (offset < bytes.size())
+    {
+        const DWORD requested = static_cast<DWORD>((std::min)(bytes.size() - offset, size_t{1024u * 1024u}));
+        DWORD read = 0u;
+        if (ReadFile(sourceFile, bytes.data() + offset, requested, &read, nullptr) == FALSE)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        if (read == 0u)
+        {
+            return HRESULT_FROM_WIN32(ERROR_HANDLE_EOF);
+        }
+        offset += read;
+    }
+    return S_OK;
+}
+
 [[nodiscard]] bool IsDirectory(const FakeNode& node) noexcept
 {
     return (node.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
@@ -219,10 +255,34 @@ public:
         _cancelUnblocksDelay                = ReadBoolOption(optionsJsonUtf8, "cancelUnblocksDelay", false);
         _moveFallbackDeleteSourceFails      = ReadBoolOption(optionsJsonUtf8, "moveFallbackDeleteSourceFails", false);
         _omitPersistentIdForCreatedFiles    = ReadBoolOption(optionsJsonUtf8, "omitPersistentIdForCreatedFiles", false);
+        // C9: a device that names existing objects but not the objects it creates; only overwrite temp
+        // siblings come back without a persistent id, so the destination resolve before the upload succeeds.
+        _omitPersistentIdForOverwriteTemps  = ReadBoolOption(optionsJsonUtf8, "omitPersistentIdForOverwriteTemps", false);
+        std::wstring omitPersistentIdForPropertiesPath = ReadStringOptionWide(optionsJsonUtf8, "omitPersistentIdForPropertiesPath");
+        if (! omitPersistentIdForPropertiesPath.empty())
+        {
+            _omitPersistentIdForPropertiesPath = NormalizeMtpPath(omitPersistentIdForPropertiesPath);
+        }
         std::wstring deleteItemFailOncePath = ReadStringOptionWide(optionsJsonUtf8, "deleteItemFailOncePath");
         if (! deleteItemFailOncePath.empty())
         {
             _deleteItemFailOncePath = NormalizeMtpPath(deleteItemFailOncePath);
+        }
+        // R0c-OR3 fixture: once, right after the properties of this path are read (the point where an
+        // overwrite commit records the destination identity), replace the object at that path with a
+        // different one (new persistent id, new content) as a concurrent writer would.
+        std::wstring replaceDestinationAfterPropertiesRead = ReadStringOptionWide(optionsJsonUtf8, "replaceDestinationAfterPropertiesRead");
+        if (! replaceDestinationAfterPropertiesRead.empty())
+        {
+            _replaceDestinationAfterPropertiesReadPath = NormalizeMtpPath(replaceDestinationAfterPropertiesRead);
+        }
+        // C9 fixture: once, while the overwrite temp sibling of this path is being written or copied
+        // (the upload window between the replace decision and the delete), replace the object at
+        // this path with a different one as a concurrent writer would.
+        std::wstring replaceDestinationDuringOverwriteUpload = ReadStringOptionWide(optionsJsonUtf8, "replaceDestinationDuringOverwriteUpload");
+        if (! replaceDestinationDuringOverwriteUpload.empty())
+        {
+            _replaceDestinationDuringOverwriteUploadPath = NormalizeMtpPath(replaceDestinationDuringOverwriteUpload);
         }
         std::wstring renameItemFailOnceDestinationPath = ReadStringOptionWide(optionsJsonUtf8, "renameItemFailOnceDestinationPath");
         if (! renameItemFailOnceDestinationPath.empty())
@@ -236,6 +296,7 @@ public:
         }
         _writeFileFailOncePathContains           = ReadStringOptionWide(optionsJsonUtf8, "writeFileFailOncePathContains");
         _copyItemFailOnceDestinationPathContains = ReadStringOptionWide(optionsJsonUtf8, "copyItemFailOnceDestinationPathContains");
+        const uint32_t r0cSiblingCount            = ReadUInt32Option(optionsJsonUtf8, "r0cSiblingCount", 0u, 4'096u);
         std::wstring disconnectEnumerateOncePath = ReadStringOptionWide(optionsJsonUtf8, "disconnectEnumerateOncePath");
         if (! disconnectEnumerateOncePath.empty())
         {
@@ -243,20 +304,20 @@ public:
         }
         const __int64 now = NowFileTime64();
         AddDirectory(L"/", L"root", now);
-        AddDirectory(L"/Fake Phone [devpuid:fake-device]", L"dev-fake-phone", now);
-        AddDirectory(L"/Fake Phone [devpuid:fake-device]/Internal Storage", L"storage-internal", now);
-        AddDirectory(L"/Fake Phone [devpuid:fake-device]/Internal Storage/DCIM", L"folder-dcim", now);
-        AddDirectory(L"/Fake Phone [devpuid:fake-device]/Internal Storage/DCIM/Camera", L"folder-camera", now);
+        AddDirectory(L"/Fake Phone", L"dev-fake-phone", now);
+        AddDirectory(L"/Fake Phone/Internal Storage", L"storage-internal", now);
+        AddDirectory(L"/Fake Phone/Internal Storage/DCIM", L"folder-dcim", now);
+        AddDirectory(L"/Fake Phone/Internal Storage/DCIM/Camera", L"folder-camera", now);
 
         const char sample[] = "RedSalamander deterministic MTP fixture\r\n";
         std::vector<std::byte> bytes(sizeof(sample) - 1u);
         std::memcpy(bytes.data(), sample, bytes.size());
-        AddFile(L"/Fake Phone [devpuid:fake-device]/Internal Storage/DCIM/Camera/photo001.txt", L"file-photo001", bytes, now);
+        AddFile(L"/Fake Phone/Internal Storage/DCIM/Camera/photo001.txt", L"file-photo001", bytes, now);
 
         const char duplicate[] = "duplicate fixture\r\n";
         std::vector<std::byte> duplicateBytes(sizeof(duplicate) - 1u);
         std::memcpy(duplicateBytes.data(), duplicate, duplicateBytes.size());
-        AddFile(L"/Fake Phone [devpuid:fake-device]/Internal Storage/DCIM/Camera/name [puid:literal].txt", L"file-literal-suffix", duplicateBytes, now);
+        AddFile(L"/Fake Phone/Internal Storage/DCIM/Camera/name [puid:literal].txt", L"file-literal-suffix", duplicateBytes, now);
 
         const auto duplicatePathLeaf = [](std::wstring_view persistentId)
         {
@@ -268,7 +329,7 @@ public:
         const char duplicateOne[] = "duplicate sibling one\r\n";
         std::vector<std::byte> duplicateOneBytes(sizeof(duplicateOne) - 1u);
         std::memcpy(duplicateOneBytes.data(), duplicateOne, duplicateOneBytes.size());
-        AddFile(L"/Fake Phone [devpuid:fake-device]/Internal Storage/DCIM/Camera/" + duplicatePathLeaf(L"file-duplicate-one"),
+        AddFile(L"/Fake Phone/Internal Storage/DCIM/Camera/" + duplicatePathLeaf(L"file-duplicate-one"),
                 L"file-duplicate-one",
                 duplicateOneBytes,
                 now,
@@ -277,7 +338,7 @@ public:
         const char duplicateTwo[] = "duplicate sibling two\r\n";
         std::vector<std::byte> duplicateTwoBytes(sizeof(duplicateTwo) - 1u);
         std::memcpy(duplicateTwoBytes.data(), duplicateTwo, duplicateTwoBytes.size());
-        AddFile(L"/Fake Phone [devpuid:fake-device]/Internal Storage/DCIM/Camera/" + duplicatePathLeaf(L"file-duplicate-two"),
+        AddFile(L"/Fake Phone/Internal Storage/DCIM/Camera/" + duplicatePathLeaf(L"file-duplicate-two"),
                 L"file-duplicate-two",
                 duplicateTwoBytes,
                 now,
@@ -286,10 +347,28 @@ public:
         const char special[] = "special name fixture\r\n";
         std::vector<std::byte> specialBytes(sizeof(special) - 1u);
         std::memcpy(specialBytes.data(), special, specialBytes.size());
-        AddFile(L"/Fake Phone [devpuid:fake-device]/Internal Storage/DCIM/Camera/percent %.txt", L"file-percent", specialBytes, now);
-        AddFile(L"/Fake Phone [devpuid:fake-device]/Internal Storage/DCIM/Camera/bracket ].txt", L"file-bracket", specialBytes, now);
-        AddFile(L"/Fake Phone [devpuid:fake-device]/Internal Storage/DCIM/Camera/trailing-space .txt", L"file-trailing-space", specialBytes, now);
-        AddFile(L"/Fake Phone [devpuid:fake-device]/Internal Storage/DCIM/Camera/caf\u00E9.txt", L"file-nonascii", specialBytes, now);
+        AddFile(L"/Fake Phone/Internal Storage/DCIM/Camera/percent %.txt", L"file-percent", specialBytes, now);
+        AddFile(L"/Fake Phone/Internal Storage/DCIM/Camera/bracket ].txt", L"file-bracket", specialBytes, now);
+        AddFile(L"/Fake Phone/Internal Storage/DCIM/Camera/trailing-space .txt", L"file-trailing-space", specialBytes, now);
+        AddFile(L"/Fake Phone/Internal Storage/DCIM/Camera/caf\u00E9.txt", L"file-nonascii", specialBytes, now);
+
+        if (r0cSiblingCount != 0u)
+        {
+            const std::vector<std::byte> r0cBytes{std::byte{'R'}, std::byte{'0'}, std::byte{'c'}};
+            for (uint32_t index = 0u; index < r0cSiblingCount; ++index)
+            {
+                const std::wstring persistentId = index == 0u   ? L"CasePuid"
+                                                  : index == 1u ? L"casepuid"
+                                                  : index == 2u ? L"puid/with %] caf\u00E9"
+                                                                : std::format(L"r0c-puid-{:04}", index);
+                const std::wstring exposedLeaf = std::wstring(L"r0c-collision.txt") + MtpPersistentObjectIdentitySuffix(persistentId);
+                AddFile(L"/Fake Phone/Internal Storage/DCIM/Camera/" + exposedLeaf,
+                        persistentId,
+                        r0cBytes,
+                        now,
+                        L"r0c-collision.txt");
+            }
+        }
     }
 
     FakeMtpBackend(const FakeMtpBackend&)            = delete;
@@ -487,6 +566,7 @@ public:
         static_cast<void>(_writeFileCalls.fetch_add(1u, std::memory_order_acq_rel));
         std::lock_guard lock(_mutex);
         const std::wstring normalized = NormalizeMtpPath(path);
+        MaybeReplaceDestinationDuringOverwriteUploadLocked(normalized);
         if (! _writeFileFailOncePathContains.empty() && ! _writeFileFailOnceConsumed && normalized.find(_writeFileFailOncePathContains) != std::wstring::npos)
         {
             _writeFileFailOnceConsumed = true;
@@ -519,7 +599,9 @@ public:
         else
         {
             node.creationTime = now;
-            node.persistentId = _omitPersistentIdForCreatedFiles ? std::wstring() : L"puid-" + std::to_wstring(_nextObjectId);
+            const bool omitPersistentId = _omitPersistentIdForCreatedFiles ||
+                                          (_omitPersistentIdForOverwriteTemps && LeafName(normalized).find(L".rs-mtp-overwrite-") != std::wstring::npos);
+            node.persistentId = omitPersistentId ? std::wstring() : L"puid-" + std::to_wstring(_nextObjectId);
             node.objectId     = L"oid-" + std::to_wstring(_nextObjectId);
             node.displayName  = LeafName(normalized);
             ++_nextObjectId;
@@ -533,6 +615,33 @@ public:
         node.content.assign(bytes.begin(), bytes.end());
         _nodes[normalized] = std::move(node);
         return S_OK;
+    }
+
+    HRESULT WriteFileFromHandle(std::wstring_view path, HANDLE sourceFile, uint64_t sizeBytes, bool allowOverwrite) noexcept override
+    {
+        std::vector<std::byte> bytes;
+        const HRESULT readHr = ReadFakeSourceHandle(sourceFile, sizeBytes, bytes);
+        return FAILED(readHr) ? readHr : WriteFile(path, bytes, allowOverwrite);
+    }
+
+    HRESULT CompareFileWithHandle(std::wstring_view path, HANDLE sourceFile, uint64_t sizeBytes) noexcept override
+    {
+        const FakeMtpActiveCallScope activeCall(*this);
+        static_cast<void>(_readerStats->readFileCalls.fetch_add(1u, std::memory_order_acq_rel));
+        std::vector<std::byte> expected;
+        RETURN_IF_FAILED(ReadFakeSourceHandle(sourceFile, sizeBytes, expected));
+        std::lock_guard lock(_mutex);
+        const FakeNode* node = FindNodeLocked(path);
+        if (node == nullptr)
+        {
+            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        }
+        if (IsDirectory(*node))
+        {
+            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        }
+        _readerStats->lastReadBytes.store(static_cast<uint64_t>(node->content.size()), std::memory_order_release);
+        return node->content == expected ? S_OK : HRESULT_FROM_WIN32(ERROR_CRC);
     }
 
     HRESULT CreateDirectory(std::wstring_view path) noexcept override
@@ -561,32 +670,26 @@ public:
     {
         const FakeMtpActiveCallScope activeCall(*this);
         std::lock_guard lock(_mutex);
+        return DeleteItemLocked(path, recursive);
+    }
+
+    HRESULT DeleteItemByIdentity(std::wstring_view path, std::wstring_view expectedPersistentId, bool recursive) noexcept override
+    {
+        const FakeMtpActiveCallScope activeCall(*this);
+        std::lock_guard lock(_mutex);
         const std::wstring normalized = NormalizeMtpPath(path);
         const auto it                 = _nodes.find(normalized);
         if (it == _nodes.end())
         {
-            if (HasAmbiguousDisplayNameLocked(normalized))
-            {
-                Debug::Perf::EmitValue(L"mtp.path.ambiguous_resolve_failures", 1u, HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND));
-            }
             return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
         }
-        if (normalized == L"/")
+        if (expectedPersistentId.empty() || it->second.persistentId != expectedPersistentId)
         {
-            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
         }
-        if (! _deleteItemFailOncePath.empty() && ! _deleteItemFailOnceConsumed && normalized == _deleteItemFailOncePath)
-        {
-            _deleteItemFailOnceConsumed = true;
-            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
-        }
-        if (IsDirectory(it->second) && ! recursive && HasChildrenLocked(normalized))
-        {
-            return HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY);
-        }
-
-        EraseTreeLocked(normalized);
-        return S_OK;
+        // The identity comparison and deletion are one fixture transaction. Keeping this atomic is
+        // essential because the fake backend is the executable proof for the production contract.
+        return DeleteItemLocked(normalized, recursive);
     }
 
     HRESULT RenameItem(std::wstring_view sourcePath, std::wstring_view destinationPath, bool allowOverwrite) noexcept override
@@ -692,9 +795,21 @@ public:
         {
             return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
         }
+        // R0c-OR3 fixture switch: report the current object, then let a "concurrent writer" replace it.
+        auto replaceAfterRead = wil::scope_exit([&]() noexcept
+        {
+            if (_replaceDestinationAfterPropertiesReadPath.empty() || _replaceDestinationAfterPropertiesReadConsumed ||
+                normalized != _replaceDestinationAfterPropertiesReadPath)
+            {
+                return;
+            }
+            _replaceDestinationAfterPropertiesReadConsumed = true;
+            ReplaceOccupantAsConcurrentWriterLocked(normalized);
+        });
 
         const std::string nameUtf8 = Utf8FromUtf16(LeafName(normalized));
-        const std::string puidUtf8 = Utf8FromUtf16(node->persistentId);
+        const std::wstring_view puid = normalized == _omitPersistentIdForPropertiesPath ? std::wstring_view{} : std::wstring_view(node->persistentId);
+        const std::string puidUtf8   = Utf8FromUtf16(puid);
         const auto [backendThreadIdsObserved, backendThreadIdsOverflow] = BackendThreadStats();
         jsonUtf8                   = std::format(
             R"json({{"version":1,"backend":"fake","name":"{}","persistentId":"{}","streamable":{},"sizeBytes":{},"instrumentation":{{"activeBackendCalls":{},"maxConcurrentBackendCalls":{},"backendThreadIdsObserved":{},"backendThreadIdsOverflow":{},"operationDelayMs":{},"cancelRequests":{},"writeFileCalls":{},"readFileCalls":{},"lastReadBytes":{},"fileSizeCalls":{},"copyItemCalls":{},"lastCopyBytes":{},"lastMoveFallbackBytes":{},"propertyBatchCalls":{},"propertyPerItemCalls":{}}}}})json",
@@ -851,6 +966,36 @@ private:
         return matches > 1u;
     }
 
+    HRESULT DeleteItemLocked(std::wstring_view path, bool recursive)
+    {
+        const std::wstring normalized = NormalizeMtpPath(path);
+        const auto it                 = _nodes.find(normalized);
+        if (it == _nodes.end())
+        {
+            if (HasAmbiguousDisplayNameLocked(normalized))
+            {
+                Debug::Perf::EmitValue(L"mtp.path.ambiguous_resolve_failures", 1u, HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND));
+            }
+            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        }
+        if (normalized == L"/")
+        {
+            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        }
+        if (! _deleteItemFailOncePath.empty() && ! _deleteItemFailOnceConsumed && normalized == _deleteItemFailOncePath)
+        {
+            _deleteItemFailOnceConsumed = true;
+            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        }
+        if (IsDirectory(it->second) && ! recursive && HasChildrenLocked(normalized))
+        {
+            return HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY);
+        }
+
+        EraseTreeLocked(normalized);
+        return S_OK;
+    }
+
     void EraseTreeLocked(std::wstring_view path)
     {
         const std::wstring normalized = NormalizeMtpPath(path);
@@ -868,6 +1013,7 @@ private:
 
         const std::wstring source = NormalizeMtpPath(sourcePath);
         const std::wstring dest   = NormalizeMtpPath(destinationPath);
+        MaybeReplaceDestinationDuringOverwriteUploadLocked(dest);
         const auto sourceIt       = _nodes.find(source);
         if (sourceIt == _nodes.end())
         {
@@ -991,12 +1137,52 @@ private:
     bool _cancelUnblocksDelay             = false;
     bool _moveFallbackDeleteSourceFails   = false;
     bool _omitPersistentIdForCreatedFiles = false;
+    bool _omitPersistentIdForOverwriteTemps = false;
+    std::wstring _omitPersistentIdForPropertiesPath;
     std::wstring _writeFileFailOncePathContains;
     bool _writeFileFailOnceConsumed = false;
     std::wstring _copyItemFailOnceDestinationPathContains;
     bool _copyItemFailOnceConsumed = false;
     std::wstring _deleteItemFailOncePath;
     bool _deleteItemFailOnceConsumed = false;
+    // A "concurrent writer" replaces the object at `normalized` with a different one (new persistent
+    // id, new content). Shared by the R0c-OR3 after-read fixture and the C9 during-upload fixture.
+    void ReplaceOccupantAsConcurrentWriterLocked(const std::wstring& normalized) noexcept
+    {
+        const auto replaced = _nodes.find(normalized);
+        if (replaced == _nodes.end())
+        {
+            return;
+        }
+        replaced->second.persistentId += L"-replaced";
+        replaced->second.objectId = L"object-" + std::to_wstring(++_nextObjectId);
+        const std::string_view replacement("replaced occupant");
+        replaced->second.content.assign(reinterpret_cast<const std::byte*>(replacement.data()),
+                                        reinterpret_cast<const std::byte*>(replacement.data()) + replacement.size());
+        replaced->second.sizeBytes = replaced->second.content.size();
+    }
+
+    // C9 fixture: `uploadPath` is the overwrite temp sibling being written or copied; replace the
+    // configured destination once while that upload is in flight.
+    void MaybeReplaceDestinationDuringOverwriteUploadLocked(const std::wstring& uploadPath) noexcept
+    {
+        if (_replaceDestinationDuringOverwriteUploadPath.empty() || _replaceDestinationDuringOverwriteUploadConsumed)
+        {
+            return;
+        }
+        if (ParentPath(uploadPath) != ParentPath(_replaceDestinationDuringOverwriteUploadPath) ||
+            LeafName(uploadPath).find(L".rs-mtp-overwrite-") == std::wstring::npos)
+        {
+            return;
+        }
+        _replaceDestinationDuringOverwriteUploadConsumed = true;
+        ReplaceOccupantAsConcurrentWriterLocked(_replaceDestinationDuringOverwriteUploadPath);
+    }
+
+    std::wstring _replaceDestinationAfterPropertiesReadPath;
+    bool _replaceDestinationAfterPropertiesReadConsumed = false;
+    std::wstring _replaceDestinationDuringOverwriteUploadPath;
+    bool _replaceDestinationDuringOverwriteUploadConsumed = false;
     std::wstring _renameItemFailOnceDestinationPath;
     bool _renameItemFailOnceConsumed = false;
     std::wstring _renameItemFailDestinationPath;

@@ -104,6 +104,7 @@ Passing evidence must show:
 When implemented:
 
 - update `Specs/UI/UI_FolderView.md` with the final enrichment behavior and metrics;
+- WarpDrive remaining closeout is `Specs/Plans/WIP/Operation_FolderView_WarpDrive_RemainingCloseout_2026-08-25.md` (I2); this file remains the enrichment owner;
 - update or retire the TW-2/TW-3/TW-4 rows in the Tailwind plan;
 - keep the Granite GR-D1 decision row marked as signed off;
 - archive test/perf evidence under `Specs/TestRuns/`;

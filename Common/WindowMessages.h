@@ -29,6 +29,26 @@ inline constexpr UINT kFolderViewPasteShortcutComplete = WM_APP + 0x30A;
 
 inline constexpr UINT kEditSuggestResults = WM_APP + 0x350;
 
+// DxUi accessibility dispatch. Provider creation is also used by production
+// notification delivery when the caller is not the window-owning thread.
+inline constexpr UINT kDxUiAccessibilityAction         = WM_APP + 0x06A;
+inline constexpr UINT kDxUiAccessibilityCreateProvider = WM_APP + 0x06B;
+inline constexpr UINT kDxUiWindowHostProcessExitDetach = WM_APP + 0x06C;
+
+// Embedded Terminal plugin. These messages are process-global even though the
+// receiver lives in Terminal.dll, so they belong in the central registry.
+inline constexpr UINT kTerminalOutputReady   = WM_APP + 0x365;
+inline constexpr UINT kTerminalSessionExited = WM_APP + 0x366;
+inline constexpr UINT kTerminalClipboardWrite = WM_APP + 0x367;
+inline constexpr UINT kTerminalKittyReady = WM_APP + 0x368;
+inline constexpr UINT kTerminalCommandSurfaceReady = WM_APP + 0x369;
+// Payload-less cross-thread completion: wParam is TRUE only when the
+// authenticated shell accepted a pending Suggestions insertion response.
+inline constexpr UINT kTerminalSuggestionInsertionComplete = WM_APP + 0x36A;
+
+inline constexpr UINT kFloatingTerminalCloseEmpty     = WM_APP + 0x188;
+inline constexpr UINT kFloatingTerminalRestoreNextTab = WM_APP + 0x189;
+
 inline constexpr UINT kNavigationMenuRequestPath           = WM_APP + 0x380;
 inline constexpr UINT kNavigationMenuShowSiblingsDropdown  = WM_APP + 0x381;
 inline constexpr UINT kNavigationMenuShowFullPath          = WM_APP + 0x382;
@@ -45,12 +65,17 @@ inline constexpr UINT kPaneSelectionSizeComputed = WM_APP + 0x401;
 inline constexpr UINT kPaneSelectionSizeProgress = WM_APP + 0x402;
 inline constexpr UINT kPaneRestoreFolderFocus    = WM_APP + 0x403;
 
-inline constexpr UINT kFileOperationCompleted = WM_APP + 0x450;
+inline constexpr UINT kFileOperationCompleted           = WM_APP + 0x450;
+inline constexpr UINT kFileOperationPresentationChanged = WM_APP + 0x455;
+inline constexpr UINT kFileOperationBatchRenameArtifactPrompt = WM_APP + 0x457;
+inline constexpr UINT kFileOperationClipboardMoveReady  = WM_APP + 0x459;
 #ifdef ENABLE_TESTS
 inline constexpr UINT kFileOpsPopupSelfTestInvoke       = WM_APP + 0x451;
 inline constexpr UINT kFileOpsPopupSelfTestSnapshot     = WM_APP + 0x452;
 inline constexpr UINT kFileOpsPopupCaptionGlyphSnapshot = WM_APP + 0x453;
 inline constexpr UINT kFileOpsPopupLayoutSnapshot       = WM_APP + 0x454;
+inline constexpr UINT kFileOpsPopupTaskbarUpdate        = WM_APP + 0x456;
+inline constexpr UINT kFileOperationShutdownForSelfTest = WM_APP + 0x458;
 #endif
 
 inline constexpr UINT kFunctionBarInvoke = WM_APP + 0x460;
@@ -123,6 +148,7 @@ inline constexpr UINT kPluginConfigurationDialogApplyTheme  = WM_APP + 0x536;
 inline constexpr UINT kConnectionCredentialPromptApplyTheme = WM_APP + 0x537;
 inline constexpr UINT kDxUiContextMenuRootHoverChanged      = WM_APP + 0x539;
 inline constexpr UINT kPreferencesRestoreCategoryTreeFocus  = WM_APP + 0x53A;
+inline constexpr UINT kThemeCycleOverlayFallbackDeadline    = WM_APP + 0x53B;
 
 // Item Properties
 inline constexpr UINT kItemPropertiesLoadComplete               = WM_APP + 0x540;
@@ -140,6 +166,8 @@ inline constexpr UINT kBatchRenameWindowDebug = WM_APP + 0x546;
 // Make File List (background)
 inline constexpr UINT kMakeFileListTaskUpdate = WM_APP + 0x547;
 inline constexpr UINT kMakeFileListCompleted  = WM_APP + 0x548;
+
+// File-operation artifact recovery (background)
 
 // Splash screen
 inline constexpr UINT kSplashScreenSetText  = WM_APP + 0x6F0;
@@ -501,8 +529,12 @@ inline constexpr UINT kViewerPeDebugReloadWithAsyncFault = WM_APP + 0x634;
 
 struct ViewerNativeMenuModelDebugSnapshot
 {
+    UINT queryCommandId       = 0u;
     bool hasHiddenMenuModel   = false;
     size_t ownerDrawItemCount = 0u;
+    bool queryCommandPresent  = false;
+    bool queryCommandEnabled  = false;
+    bool queryCommandChecked  = false;
 };
 
 inline constexpr UINT kViewerDebugGetNativeMenuModelSnapshot = WM_APP + 0x612;

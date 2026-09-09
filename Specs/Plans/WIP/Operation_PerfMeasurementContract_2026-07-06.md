@@ -1,5 +1,8 @@
 # Perf Measurement Contract Implementation Plan
 
+> **FILE OPERATIONS CONTRACT (2026-08-21).** File Operations evidence includes topology and selected strategy, discovery bounds, verification bytes reread, source checksum-only bytes, digest algorithm/CPU, verification outcome, and link kind/policy/action, as owned by `Specs/Testing/Testing_PerformanceValidation.md`.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
 > checkbox (`- [ ]`) syntax for tracking.
@@ -124,7 +127,7 @@ point to the durable `Specs/TestRuns/` archive or state the exact blocker.
 - Modify: `Specs/TestRuns/README.md` for archive folder and `perf-analysis.md` conventions.
 - Modify: `Specs/Plans/WIP/Operation_TestSuiteStabilization_FlakeConvergence_2026-07-04.md` for
   the concrete timing/perf records that plan must carry.
-- Modify: `Tools/TestRunPlan.ps1` for pure summary-schema and metadata helpers.
+- Modify: `Tools/Modules/Testing/TestRunSummary.psm1` for pure summary-schema and metadata helpers.
 - Modify: `Tools/Run-AllTests.ps1` for runtime collection and aggregate-summary emission.
 - Test: `Tools/Tests/RunAllTestsPlan.Tests.ps1` for runner summary metadata and archive path rules.
 - Test: `Tools/Tests/ShowPerfRuns.Tests.ps1` for analyzer quality-gate behavior.
@@ -221,6 +224,14 @@ Minimum artifact set:
 
 If the archive path cannot be created, the plan or closeout must say exactly why and who owns the
 follow-up. Unarchived terminal output is not durable evidence.
+
+Archive acceptance is coordinated with Cinderstar package 16 and the durable rules in
+`Specs/TestRuns/README.md`: run `Tools\Test-TestRunArchive.ps1 -RunPath <run-folder>` before force-adding generated
+evidence, retain the no-argument changed-set gate for ordinary iteration, and run
+`Tools\Test-TestRunArchive.ps1 -Inventory` at closeout. The inventory boundary is the archive-contract introduction
+commit `8b9e36191835cc71b5ee0dfeea4dddd5d942dd5a`; older untouched evidence remains grandfathered, while any later add
+or modification is governed. Raw metric compaction must remain digest-bound and retain claim-bearing ordering; a gate
+failure cannot be reported as green evidence.
 
 ### 6. Baseline and candidate
 
@@ -463,10 +474,10 @@ Under the timing/perf phase, add four concrete Perf Measurement Records:
 - Subsystem: FileOperations selftest.
 - Change type: stabilization
 - User-visible risk protected: teardown and cancel must remain bounded without turning a loaded runner into a false watchdog failure.
-- Metric keys: `FileOps.*cancel*`, `FileOps.*watchdog*`, `FileOps.*teardown*`, or the exact existing FileOps timing keys emitted by `Phase5_PreCalcCancelLatencyLocal`, `Phase5_CancelQueuedTask`, `Phase14_PopupHostLifetimeGuard`, `Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker`, or `Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker`.
+- Metric keys: `FileOps.*cancel*`, `FileOps.*watchdog*`, `FileOps.*teardown*`, or the exact existing FileOps timing keys emitted by `Phase5_DiscoveryCancelLatencyLocal`, `Phase5_CancelQueuedTask`, `Phase14_PopupHostLifetimeGuard`, `Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker`, or `Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker`.
 - Metric units and sample grain: microseconds or milliseconds per operation phase; one row per cancel/watchdog/teardown phase.
 - Existing instrumentation reused or new instrumentation added: reuse current FileOps pre-calc/cancel metrics when they cover the touched path; add a named phase metric for uncovered teardown waits.
-- Deterministic validation: `.\Tools\Run-AllTests.ps1 -Suite FileOps -Configuration Release -CaseFilter Phase5_PreCalcCancelLatencyLocal,Phase5_CancelQueuedTask,Phase14_PopupHostLifetimeGuard,Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker,Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker -TimeoutMultiplier 8`
+- Deterministic validation: `.\Tools\Run-AllTests.ps1 -Suite FileOps -Configuration Release -CaseFilter Phase5_DiscoveryCancelLatencyLocal,Phase5_CancelQueuedTask,Phase14_PopupHostLifetimeGuard,Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker,Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker -TimeoutMultiplier 8`
 - Build flavor: test-enabled Release for final evidence; Debug allowed only for diagnostic reproduction.
 - Baseline run: [blocked] capture before wait-scaling or watchdog-policy change.
 - Candidate run: [blocked] capture after wait-scaling or watchdog-policy change.
@@ -515,7 +526,7 @@ Expected: PASS for the Perf Measurement Record field guard.
 ### Task 2: Add Runner Perf Metadata To Aggregate Summaries
 
 **Files:**
-- Modify: `Tools/TestRunPlan.ps1`
+- Modify: `Tools/Modules/Testing/TestRunSummary.psm1`
 - Modify: `Tools/Run-AllTests.ps1`
 - Test: `Tools/Tests/RunAllTestsPlan.Tests.ps1`
 - Document: `Specs/Testing/Testing_SelfTests.md`
@@ -572,7 +583,7 @@ Expected: FAIL because `New-RSTestRunSummary` does not yet accept or serialize `
 
 - [ ] **Step 3: Implement `PerfMetadata` summary support**
 
-Add an optional `-PerfMetadata` parameter to `New-RSTestRunSummary` in `Tools/TestRunPlan.ps1` and
+Add an optional `-PerfMetadata` parameter to `New-RSTestRunSummary` in `Tools/Modules/Testing/TestRunSummary.psm1` and
 serialize this object when supplied:
 
 ```powershell
@@ -603,7 +614,7 @@ Expected: PASS with the new summary metadata test.
 ### Task 3: Preserve And Point To Archived Perf Evidence
 
 **Files:**
-- Modify: `Tools/TestRunPlan.ps1`
+- Modify: `Tools/Modules/Testing/TestRunSummary.psm1`
 - Modify: `Tools/Run-AllTests.ps1`
 - Modify: `Specs/TestRuns/README.md`
 - Test: `Tools/Tests/RunAllTestsPlan.Tests.ps1`
@@ -636,7 +647,7 @@ Expected: FAIL because `Get-RSPerfArchiveDestination` does not exist.
 
 - [ ] **Step 3: Implement the pure archive destination helper**
 
-Add `Get-RSPerfArchiveDestination` to `Tools/TestRunPlan.ps1` using `Join-Path`, not string
+Add `Get-RSPerfArchiveDestination` to `Tools/Modules/Testing/TestRunSummary.psm1` using `Join-Path`, not string
 concatenation, and keep the return value as a fully resolved path.
 
 - [ ] **Step 4: Preserve partial artifacts on timeout/crash**
@@ -706,7 +717,7 @@ Expected: PASS.
 ### Task 5: Emit Environment Matrix Metadata
 
 **Files:**
-- Modify: `Tools/TestRunPlan.ps1`
+- Modify: `Tools/Modules/Testing/TestRunSummary.psm1`
 - Modify: `Tools/Run-AllTests.ps1`
 - Modify: native selftest artifact writers only if PowerShell cannot observe a required field
 - Test: `Tools/Tests/RunAllTestsPlan.Tests.ps1`
@@ -748,7 +759,7 @@ Expected: FAIL because `New-RSPerfEnvironmentMatrix` does not exist.
 
 - [ ] **Step 3: Implement the matrix helper**
 
-Add `New-RSPerfEnvironmentMatrix` in `Tools/TestRunPlan.ps1`. Use PowerShell-observable values for
+Add `New-RSPerfEnvironmentMatrix` in `Tools/Modules/Testing/TestRunSummary.psm1`. Use PowerShell-observable values for
 OS version, remote-session status, timeout multiplier, and environment flags. Use explicit
 `$null`/`'unknown'` values for fields that require native DxGI/DPI capture until the native harness
 emits them.

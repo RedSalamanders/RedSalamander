@@ -200,6 +200,13 @@ private:
             ids.insert(task->GetId());
         }
     }
+
+    std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> completedTasks;
+    fileOps->CollectCompletedTasks(completedTasks);
+    for (const auto& task : completedTasks)
+    {
+        ids.insert(task.taskId);
+    }
     return ids;
 }
 
@@ -222,38 +229,78 @@ private:
 {
     using namespace std::chrono_literals;
 
-    const std::optional<uint64_t> taskId = ResolveNewFileOperationsTaskIdForSelfTest(fileOps, existingTaskIds, SelfTest::Scale(5000ms));
-    state.Require(taskId.has_value(), std::format(L"{} should create a queued File Operations task.", context));
-    if (! taskId.has_value() || ! fileOps)
+    if (! fileOps)
     {
+        state.Require(false, std::format(L"{} should create a queued File Operations task.", context));
         return false;
     }
 
-    auto* task = fileOps->FindTask(taskId.value());
-    state.Require(task != nullptr, std::format(L"{} queued task should remain visible for validation.", context));
-    if (! task)
+    const auto validate = [&](FileSystemOperation operation,
+                              const std::filesystem::path& destination,
+                              FileSystemFlags operationFlags,
+                              HRESULT result) noexcept
     {
-        return false;
+        state.Require(operation == expectedOperation,
+                      std::format(L"{} should queue operation {} but queued {}.",
+                                  context,
+                                  static_cast<unsigned>(expectedOperation),
+                                  static_cast<unsigned>(operation)));
+        state.Require(destination == expectedDestination,
+                      std::format(L"{} should target destination '{}', got '{}'.",
+                                  context,
+                                  DescribePathForShellCommandTest(expectedDestination),
+                                  DescribePathForShellCommandTest(destination)));
+
+        const uint32_t flags = static_cast<uint32_t>(operationFlags);
+        const uint32_t destructiveMask = static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_OVERWRITE) |
+                                         static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY) |
+                                         static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_REPLACE_LINK) |
+                                         static_cast<uint32_t>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+        state.Require((flags & static_cast<uint32_t>(FILESYSTEM_FLAG_RECURSIVE)) != 0u,
+                      std::format(L"{} should preserve recursive operation coverage.", context));
+        state.Require((flags & destructiveMask) == 0u,
+                      std::format(L"{} should not grant overwrite, replace-readonly, replace-link, or continue-on-error flags by default (flags=0x{:X}).",
+                                  context,
+                                  flags));
+        state.Require(SUCCEEDED(result),
+                      std::format(L"{} queued task should not complete with failure 0x{:08X}.", context, static_cast<unsigned long>(result)));
+    };
+
+    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+
+        std::vector<FolderWindow::FileOperationState::Task*> tasks;
+        fileOps->CollectTasks(tasks);
+        for (auto* task : tasks)
+        {
+            if (task && ! existingTaskIds.contains(task->GetId()))
+            {
+                validate(task->GetOperation(), task->GetDestinationFolder(), task->_flags, S_OK);
+                return state.failure.empty();
+            }
+        }
+
+        std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> completedTasks;
+        fileOps->CollectCompletedTasks(completedTasks);
+        for (const auto& task : completedTasks)
+        {
+            if (existingTaskIds.contains(task.taskId))
+            {
+                continue;
+            }
+
+            validate(task.operation, task.destinationFolder, task.flags, task.resultHr);
+            fileOps->DismissCompletedTask(task.taskId);
+            return state.failure.empty();
+        }
+
+        std::this_thread::sleep_for(20ms);
     }
 
-    state.Require(
-        task->GetOperation() == expectedOperation,
-        std::format(
-            L"{} should queue operation {} but queued {}.", context, static_cast<unsigned>(expectedOperation), static_cast<unsigned>(task->GetOperation())));
-    state.Require(task->GetDestinationFolder() == expectedDestination,
-                  std::format(L"{} should target destination '{}', got '{}'.",
-                              context,
-                              DescribePathForShellCommandTest(expectedDestination),
-                              DescribePathForShellCommandTest(task->GetDestinationFolder())));
-
-    const uint32_t flags           = static_cast<uint32_t>(task->_flags);
-    const uint32_t destructiveMask = static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_OVERWRITE) | static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY) |
-                                     static_cast<uint32_t>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
-    state.Require((flags & static_cast<uint32_t>(FILESYSTEM_FLAG_RECURSIVE)) != 0u, std::format(L"{} should preserve recursive operation coverage.", context));
-    state.Require((flags & destructiveMask) == 0u,
-                  std::format(L"{} should not grant overwrite, replace-readonly, or continue-on-error flags by default (flags=0x{:X}).", context, flags));
-
-    return state.failure.empty();
+    state.Require(false, std::format(L"{} should create a queued File Operations task.", context));
+    return false;
 }
 
 [[nodiscard]] bool TestPaneOpenSecurityRoutesFocusedItem(HWND mainWindow, CaseState& state) noexcept
@@ -713,6 +760,118 @@ private:
     return state.failure.empty();
 }
 
+[[nodiscard]] std::wstring BuildShellPathForShellCommandTest(const std::filesystem::path& path);
+
+[[nodiscard]] bool TestPaneChangeAttributesRecursiveArtifactGuard(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(mainWindow && IsWindow(mainWindow) != FALSE && ! suiteRoot.empty(),
+                  L"Recursive Change Attributes artifact-guard prerequisites are unavailable.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / (L"change_attributes_artifact_" + NewGuidText());
+    const std::filesystem::path folder = root / L"folder";
+    const std::filesystem::path artifact = folder / L"payload.rs_ren_0123456789abcdef0123456789abcdef";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(folder), L"Failed to create recursive Change Attributes artifact folder.");
+    state.Require(SelfTest::WriteTextFile(artifact, "artifact"), L"Failed to create recursive Change Attributes artifact fixture.");
+    const std::wstring artifactShellPath = BuildShellPathForShellCommandTest(artifact);
+    state.Require(SetFileAttributesW(artifactShellPath.c_str(), FILE_ATTRIBUTE_ARCHIVE) != FALSE,
+                  L"Failed to initialize recursive Change Attributes artifact attributes.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate builtin file-system for recursive artifact guard test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
+                  L"Failed to set pane path for recursive artifact guard test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"folder"}, SelfTest::Scale(3000ms)),
+                  L"Pane contents not ready for recursive artifact guard test.");
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
+        FolderWindow::Pane::Left, [](const std::wstring_view name) noexcept { return name == L"folder"; }, true);
+
+    FolderWindow::ChangeAttributesOptions options{};
+    options.hidden = FolderWindow::AttributeChangeState::Set;
+    options.includeSubdirectories = true;
+    g_folderWindow.DebugSetNextChangeAttributesOptions(options);
+    const auto clearDebugOptions = wil::scope_exit([&] { g_folderWindow.DebugSetNextChangeAttributesOptions(std::nullopt); });
+
+    HostResetTestPromptRequestCount();
+    HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_CANCEL);
+    const auto clearPrompt = wil::scope_exit([] { HostClearTestPromptResultOverride(); });
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CHANGE_ATTRIBUTES, 0), 0);
+
+    std::optional<FolderWindow::ChangeAttributesReport> report;
+    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(7000ms);
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        report = g_folderWindow.DebugGetLastChangeAttributesReport();
+        if (report.has_value())
+        {
+            break;
+        }
+        Sleep(static_cast<DWORD>(SelfTest::Scale(20ms).count()));
+    }
+
+    const DWORD artifactAttributes = GetFileAttributesW(artifactShellPath.c_str());
+    state.Require(report.has_value(), L"Recursive Change Attributes artifact Cancel did not complete its worker.");
+    state.Require(HostGetTestPromptRequestCount() == 1u,
+                  std::format(L"Recursive Change Attributes artifact warning count was {}.", HostGetTestPromptRequestCount()));
+    state.Require(report.has_value() && report->itemsProcessed == 0u,
+                  L"Recursive Change Attributes processed an item after artifact warning Cancel.");
+    state.Require(artifactAttributes != INVALID_FILE_ATTRIBUTES && (artifactAttributes & FILE_ATTRIBUTE_HIDDEN) == 0u,
+                  L"Recursive Change Attributes mutated a nested artifact after warning Cancel.");
+
+    HostResetTestPromptRequestCount();
+    HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CHANGE_ATTRIBUTES, 0), 0);
+
+    const auto acceptedDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(7000ms);
+    while (std::chrono::steady_clock::now() < acceptedDeadline)
+    {
+        PumpPendingMessages();
+        report = g_folderWindow.DebugGetLastChangeAttributesReport();
+        if (report.has_value() && report->itemsProcessed != 0u)
+        {
+            break;
+        }
+        Sleep(static_cast<DWORD>(SelfTest::Scale(20ms).count()));
+    }
+
+    const DWORD acceptedArtifactAttributes = GetFileAttributesW(artifactShellPath.c_str());
+    state.Require(HostGetTestPromptRequestCount() == 1u,
+                  std::format(L"Recursive Change Attributes accepted artifact warning count was {}.", HostGetTestPromptRequestCount()));
+    state.Require(report.has_value() && report->itemsProcessed != 0u && report->failures == 0u,
+                  L"Recursive Change Attributes did not complete after accepting the exact artifact receipt.");
+    state.Require(acceptedArtifactAttributes != INVALID_FILE_ATTRIBUTES &&
+                      (acceptedArtifactAttributes & FILE_ATTRIBUTE_HIDDEN) != 0u,
+                  L"Recursive Change Attributes did not mutate the accepted exact artifact object.");
+    return state.failure.empty();
+}
+
 [[nodiscard]] std::string BuildFileUrlShortcutPayloadForShellCommandTest(const std::filesystem::path& target)
 {
     std::wstring url = L"file:///";
@@ -954,7 +1113,8 @@ struct MountPointReparseDataBufferForShellCommandTest final
     return LR"(\??\)" + target;
 }
 
-[[nodiscard]] HRESULT CreateJunctionForShellCommandTest(const std::filesystem::path& junctionPath, const std::filesystem::path& targetPath) noexcept
+[[nodiscard]] HRESULT CreateDirectoryJunctionForCommandsSelfTest(const std::filesystem::path& junctionPath,
+                                                                 const std::filesystem::path& targetPath) noexcept
 {
     if (! SelfTest::EnsureDirectory(junctionPath))
     {
@@ -1476,7 +1636,7 @@ struct MountPointReparseDataBufferForShellCommandTest final
     state.Require(SelfTest::EnsureDirectory(linksRoot), L"Failed to create junction links root.");
     state.Require(SelfTest::EnsureDirectory(targetRoot), L"Failed to create junction target folder.");
     state.Require(SelfTest::WriteTextFile(targetRoot / L"inside.txt", "inside"), L"Failed to create junction target child file.");
-    const HRESULT createJunctionHr = CreateJunctionForShellCommandTest(junctionPath, targetRoot);
+    const HRESULT createJunctionHr = CreateDirectoryJunctionForCommandsSelfTest(junctionPath, targetRoot);
     state.Require(SUCCEEDED(createJunctionHr), std::format(L"Failed to create junction fixture: 0x{0:08X}.", static_cast<unsigned long>(createJunctionHr)));
     if (! state.failure.empty())
     {
@@ -1544,7 +1704,7 @@ struct MountPointReparseDataBufferForShellCommandTest final
     state.Require(SelfTest::EnsureDirectory(sourceRoot), L"Failed to create execute-open junction source root.");
     state.Require(SelfTest::EnsureDirectory(targetRoot), L"Failed to create execute-open junction target folder.");
     state.Require(SelfTest::WriteTextFile(targetRoot / L"inside.txt", "inside"), L"Failed to create execute-open junction target child file.");
-    const HRESULT createJunctionHr = CreateJunctionForShellCommandTest(junctionPath, targetRoot);
+    const HRESULT createJunctionHr = CreateDirectoryJunctionForCommandsSelfTest(junctionPath, targetRoot);
     state.Require(SUCCEEDED(createJunctionHr),
                   std::format(L"Failed to create execute-open junction fixture: 0x{0:08X}.", static_cast<unsigned long>(createJunctionHr)));
     if (! state.failure.empty())
@@ -1620,7 +1780,7 @@ struct MountPointReparseDataBufferForShellCommandTest final
                   L"Failed to create item-properties .url fixture.");
     const HRESULT createLinkHr = CreateShellLinkForShellCommandTest(linkFile, targetFile);
     state.Require(SUCCEEDED(createLinkHr), std::format(L"Failed to create item-properties .lnk fixture: 0x{0:08X}.", static_cast<unsigned long>(createLinkHr)));
-    const HRESULT createJunctionHr = CreateJunctionForShellCommandTest(junctionPath, targetRoot);
+    const HRESULT createJunctionHr = CreateDirectoryJunctionForCommandsSelfTest(junctionPath, targetRoot);
     state.Require(SUCCEEDED(createJunctionHr),
                   std::format(L"Failed to create item-properties junction fixture: 0x{0:08X}.", static_cast<unsigned long>(createJunctionHr)));
     if (! state.failure.empty())
@@ -2535,13 +2695,30 @@ struct ClipboardDropEffectReadStatus
     }
 
     HostResetTestPromptRequestCount();
-    HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
-    const auto clearPromptOverride = wil::scope_exit([]() noexcept { HostClearTestPromptResultOverride(); });
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE, 0), 0);
-    static_cast<void>(WaitForHostPromptRequestCountAtLeast(1u, SelfTest::Scale(1000ms)));
-    state.Require(HostGetTestPromptRequestCount() == 1u,
-                  std::format(L"Paste after Ctrl+X should show exactly one move confirmation prompt; saw {}.", HostGetTestPromptRequestCount()));
+    state.Require(HostGetTestPromptRequestCount() == 0u,
+                  std::format(L"Routine Paste after Ctrl+X must not show a generic Move confirmation prompt; saw {}.", HostGetTestPromptRequestCount()));
+
+    std::vector<std::filesystem::path> clipboardAfterPreparation;
+    const ULONGLONG preparationClipboardDeadlineTick =
+        GetTickCount64() + static_cast<ULONGLONG>(SelfTest::Scale(1000ms).count());
+    do
+    {
+        PumpPendingMessages();
+        clipboardAfterPreparation = ReadClipboardDropPathsForShellCommandTest(mainWindow);
+        if (clipboardAfterPreparation.empty())
+        {
+            break;
+        }
+        Sleep(static_cast<DWORD>(SelfTest::Scale(10ms).count()));
+    } while (GetTickCount64() < preparationClipboardDeadlineTick);
+    state.Require(clipboardAfterPreparation.empty(),
+                  L"Accepted clipboard Move must clear the matching cut list after common preparation and before mutation.");
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE, 0), 0);
+    PumpPendingMessages();
+    state.Require(HostGetTestPromptRequestCount() == 0u,
+                  L"A duplicate Paste after consumption must not submit a second Move or show a generic prompt.");
 
     const bool refreshed = WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"beta.txt"}, SelfTest::Scale(3000ms));
     state.Require(refreshed,
@@ -2571,7 +2748,7 @@ struct ClipboardDropEffectReadStatus
         }
         std::this_thread::sleep_for(SelfTest::Scale(10ms));
     } while (std::chrono::steady_clock::now() < clipboardDeadline);
-    state.Require(remainingClipboardPaths.empty(), L"Verified MOVE completion should invalidate the stale cut clipboard payload.");
+    state.Require(remainingClipboardPaths.empty(), L"Completed MOVE must not restore the cut clipboard payload consumed at admission.");
 
     HostResetTestPromptRequestCount();
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE, 0), 0);
@@ -2666,8 +2843,6 @@ struct ClipboardDropEffectReadStatus
     state.Require(SetClipboardDropPathsForShellCommandTest(mainWindow, {source}, DROPEFFECT_COPY), L"Failed to seed stale-overlay clipboard CF_HDROP source.");
 
     HostResetTestPromptRequestCount();
-    HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
-    const auto clearPromptOverride = wil::scope_exit([]() noexcept { HostClearTestPromptResultOverride(); });
 
     const HWND leftView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
     state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(1000ms)),
@@ -2678,9 +2853,9 @@ struct ClipboardDropEffectReadStatus
     }
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE, 0), 0);
-    static_cast<void>(WaitForHostPromptRequestCountAtLeast(1u, SelfTest::Scale(1000ms)));
-    state.Require(HostGetTestPromptRequestCount() == 1u,
-                  std::format(L"Paste after a path-cleared stale overlay should show one confirmation prompt; saw {}.", HostGetTestPromptRequestCount()));
+    state.Require(HostGetTestPromptRequestCount() == 0u,
+                  std::format(L"Routine Paste after a path-cleared stale overlay must not show a generic confirmation prompt; saw {}.",
+                              HostGetTestPromptRequestCount()));
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt"}, SelfTest::Scale(3000ms)),
                   std::format(L"Paste after a path-cleared stale overlay should refresh the destination; destEntries='{}'.",
                               DescribeDirectoryEntriesForShellCommandTest(destRoot)));
@@ -2804,15 +2979,13 @@ struct ClipboardDropEffectReadStatus
     }
 
     HostResetTestPromptRequestCount();
-    HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
-    const auto clearPromptOverride = wil::scope_exit([]() noexcept { HostClearTestPromptResultOverride(); });
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE, 0), 0);
-    static_cast<void>(WaitForHostPromptRequestCountAtLeast(1u, SelfTest::Scale(1000ms)));
 
     state.Require(
-        HostGetTestPromptRequestCount() == 1u,
-        std::format(L"Pane Paste should bypass an unfocused navigation edit session and show one move prompt; saw {}.", HostGetTestPromptRequestCount()));
+        HostGetTestPromptRequestCount() == 0u,
+        std::format(L"Pane Paste should bypass an unfocused navigation edit session without a generic Move prompt; saw {}.",
+                    HostGetTestPromptRequestCount()));
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt"}, SelfTest::Scale(3000ms)),
                   std::format(L"Pane Paste should refresh destination after bypassing stale navigation edit; destEntries='{}'.",
                               DescribeDirectoryEntriesForShellCommandTest(destRoot)));
@@ -2897,8 +3070,6 @@ struct ClipboardDropEffectReadStatus
     const auto existingTaskIds = CollectFileOperationTaskIdsForShellCommandTest(fileOps);
 
     HostResetTestPromptRequestCount();
-    HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
-    const auto clearPromptOverride = wil::scope_exit([]() noexcept { HostClearTestPromptResultOverride(); });
 
     const HWND leftView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
     state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(1000ms)),
@@ -2909,10 +3080,10 @@ struct ClipboardDropEffectReadStatus
     }
 
     SendMessageW(leftView, WM_COMMAND, MAKEWPARAM(IDM_FOLDERVIEW_CONTEXT_PASTE, 0), 0);
-    static_cast<void>(WaitForHostPromptRequestCountAtLeast(1u, SelfTest::Scale(1000ms)));
 
-    state.Require(HostGetTestPromptRequestCount() == 1u,
-                  std::format(L"Clipboard paste queue route should show one File Operations confirmation prompt; saw {}.", HostGetTestPromptRequestCount()));
+    state.Require(HostGetTestPromptRequestCount() == 0u,
+                  std::format(L"Routine clipboard paste queue route must not show a generic File Operations confirmation prompt; saw {}.",
+                              HostGetTestPromptRequestCount()));
     return RequireQueuedShellFileOperationTask(state, fileOps, existingTaskIds, FILESYSTEM_COPY, destRoot, L"Clipboard paste");
 }
 
@@ -2991,8 +3162,6 @@ struct ClipboardDropEffectReadStatus
     FolderView::DebugSetNextMoveSelectedItemsDestinationForSelfTest(destRoot);
 
     HostResetTestPromptRequestCount();
-    HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
-    const auto clearPromptOverride = wil::scope_exit([]() noexcept { HostClearTestPromptResultOverride(); });
 
     const HWND leftView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
     state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(1000ms)),
@@ -3003,10 +3172,10 @@ struct ClipboardDropEffectReadStatus
     }
 
     SendMessageW(leftView, WM_COMMAND, MAKEWPARAM(IDM_FOLDERVIEW_CONTEXT_MOVE, 0), 0);
-    static_cast<void>(WaitForHostPromptRequestCountAtLeast(1u, SelfTest::Scale(1000ms)));
 
-    state.Require(HostGetTestPromptRequestCount() == 1u,
-                  std::format(L"Folder-picker move queue route should show one File Operations confirmation prompt; saw {}.", HostGetTestPromptRequestCount()));
+    state.Require(HostGetTestPromptRequestCount() == 0u,
+                  std::format(L"Routine folder-picker Move should not show a second generic File Operations confirmation prompt; saw {}.",
+                              HostGetTestPromptRequestCount()));
     return RequireQueuedShellFileOperationTask(state, fileOps, existingTaskIds, FILESYSTEM_MOVE, destRoot, L"Folder-picker move");
 }
 
@@ -3274,22 +3443,38 @@ struct ClipboardDropEffectReadStatus
 
     const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
     const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring rightPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
+    const std::optional<std::filesystem::path> rightPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
     const auto restorePane = wil::scope_exit([&]
     {
+        g_folderWindow.DebugSetFileOperationRequestCallbackEnabled(FolderWindow::Pane::Left, true);
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, rightPluginBefore));
         if (leftPathBefore.has_value())
         {
             g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+        if (rightPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightPathBefore.value());
         }
     });
 
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to activate local provider for drop-integrity guards.");
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, L"builtin/file-system")),
+                  L"Failed to activate the local source provider for drop-integrity guards.");
+    g_folderWindow.DebugSetFileOperationRequestCallbackEnabled(FolderWindow::Pane::Left, true);
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, destRoot);
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, sourceRoot);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, destRoot, SelfTest::Scale(3000ms)),
                   L"Failed to enumerate drop-integrity destination.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Right, sourceRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to enumerate drop-integrity source pane.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"Archive", L"Work"}, SelfTest::Scale(3000ms)),
                   L"Drop-integrity destination items were not ready.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Right, {L"alpha.txt", L"beta.txt", L"delta.txt", L"gamma.txt"}, SelfTest::Scale(3000ms)),
+                  L"Drop-integrity source items were not ready.");
 
     FolderView* folderView = GetFolderViewForShellCommandTest(FolderWindow::Pane::Left);
     auto* fileOps          = g_folderWindow.DebugGetFileOperationState();
@@ -3298,6 +3483,11 @@ struct ClipboardDropEffectReadStatus
     {
         return false;
     }
+
+    const bool autoDismissSuccessBefore = fileOps->GetAutoDismissSuccess();
+    fileOps->SetAutoDismissSuccess(false);
+    const auto restoreAutoDismiss = wil::scope_exit([fileOps, autoDismissSuccessBefore]() noexcept
+    { fileOps->SetAutoDismissSuccess(autoDismissSuccessBefore); });
 
     const std::optional<POINT> archivePoint = folderView->DebugGetItemCenterClientPointForSelfTest(L"Archive");
     state.Require(archivePoint.has_value(), L"Could not resolve Archive client point for hovered drop.");
@@ -3720,7 +3910,10 @@ struct ClipboardDropEffectReadStatus
         return false;
     }
 
-    const std::filesystem::path root       = suiteRoot / L"work" / (L"clipboard_paste_shortcut_concurrent_" + NewGuidText());
+    // This case validates serialization, not ShellLink long-path behavior. Keep the fixture
+    // basename short enough that the unified run-id prefix cannot push IShellLinkW::SetPath
+    // past its legacy path ceiling before the concurrency hook is reached.
+    const std::filesystem::path root       = suiteRoot / L"work" / (L"shortcut_concurrent_" + NewGuidText());
     const std::filesystem::path sourceRoot = root / L"sources";
     const std::filesystem::path destRoot   = root / L"dest";
     const std::filesystem::path alphaPath  = sourceRoot / L"alpha.txt";
@@ -3780,12 +3973,22 @@ struct ClipboardDropEffectReadStatus
         static_cast<void>(::SetEnvironmentVariableW(kFailCompletionPostEnv, nullptr));
     });
 
-    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE_SHORTCUT, 0), 0);
+    auto* leftFolderView = reinterpret_cast<FolderView*>(GetWindowLongPtrW(leftView, GWLP_USERDATA));
+    state.Require(leftFolderView != nullptr, L"Concurrent Paste Shortcut test could not resolve the left FolderView instance.");
+    if (! leftFolderView)
+    {
+        return false;
+    }
+
+    // Command routing is covered by TestPaneClipboardPasteShortcutCreatesLinks. Drive the
+    // FolderView seam directly here so an empty destination cannot redirect focus while this
+    // case is proving request serialization and collision-safe link naming.
+    state.Require(leftFolderView->PasteShortcutFromClipboard(), L"Failed to submit the first concurrent Paste Shortcut request.");
     PumpPendingMessages();
     state.Require(WaitForShellCommandLatencyConsume(SelfTestLatency::Point::PasteShortcutAfterSlotProbe, 1u, SelfTest::Scale(2000ms)),
                   L"First Paste Shortcut worker should stop after probing the initial shortcut slot.");
 
-    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE_SHORTCUT, 0), 0);
+    state.Require(leftFolderView->PasteShortcutFromClipboard(), L"Failed to queue the second concurrent Paste Shortcut request.");
     PumpPendingMessages();
 
     state.Require(WaitForPathExistsForShellCommandTest(alphaLink, SelfTest::Scale(5000ms)),
@@ -4235,6 +4438,8 @@ void RunShellCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOpti
     { return TestPaneChangeAttributesAppliesAttributesRemovesStreamsAndReports(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_changeAttributes_recurse_applies_datetime_with_progress", [=](CaseState& state) noexcept
     { return TestPaneChangeAttributesRecursesAndAppliesDateTimeWithProgress(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_changeAttributes_recursive_artifact_guard", [=](CaseState& state) noexcept
+    { return TestPaneChangeAttributesRecursiveArtifactGuard(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_goToShortcutOrLinkTarget_url_navigates_to_local_target", [=](CaseState& state) noexcept
     { return TestPaneGoToShortcutOrLinkTargetUrlNavigatesToLocalTarget(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_goToShortcutOrLinkTarget_lnk_navigates_to_file_target", [=](CaseState& state) noexcept
@@ -4256,19 +4461,31 @@ void RunShellCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOpti
     SelfTest::RunCase(options, suite, L"cmd_pane_newFromShellTemplate_menu_and_missing_template_feedback", [=](CaseState& state) noexcept
     { return TestPaneNewFromShellTemplateMenuAndMissingTemplateFeedback(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardCut_sets_move_drop_effect", [=](CaseState& state) noexcept
-    { return TestPaneClipboardCutSetsMoveDropEffect(mainWindow, state); });
+    {
+        return SkipIfCommandsSelfTestClipboardUnavailable(state) || TestPaneClipboardCutSetsMoveDropEffect(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPaste_uses_preferred_move_effect", [=](CaseState& state) noexcept
-    { return TestPaneClipboardPasteUsesPreferredMoveEffect(mainWindow, state); });
+    {
+        return SkipIfCommandsSelfTestClipboardUnavailable(state) || TestPaneClipboardPasteUsesPreferredMoveEffect(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPaste_path_change_clears_stale_overlay", [=](CaseState& state) noexcept
-    { return TestPaneClipboardPasteIgnoresStaleOverlayAfterPathChange(mainWindow, state); });
+    {
+        return SkipIfCommandsSelfTestClipboardUnavailable(state) || TestPaneClipboardPasteIgnoresStaleOverlayAfterPathChange(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPaste_ignores_unfocused_navigation_edit", [=](CaseState& state) noexcept
-    { return TestPaneClipboardPasteIgnoresUnfocusedNavigationEdit(mainWindow, state); });
+    {
+        return SkipIfCommandsSelfTestClipboardUnavailable(state) || TestPaneClipboardPasteIgnoresUnfocusedNavigationEdit(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"Commands_FileOpsClipboardPasteUsesHostQueue", [=](CaseState& state) noexcept
-    { return TestFileOpsClipboardPasteUsesHostQueue(mainWindow, state); });
+    {
+        return SkipIfCommandsSelfTestClipboardUnavailable(state) || TestFileOpsClipboardPasteUsesHostQueue(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"Commands_FileOpsFolderPickerMoveUsesHostQueue", [=](CaseState& state) noexcept
     { return TestFileOpsFolderPickerMoveUsesHostQueue(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"Commands_FileOpsMissingCallbackRejectsDirectFallback", [=](CaseState& state) noexcept
-    { return TestFileOpsMissingCallbackRejectsDirectFallback(mainWindow, state); });
+    {
+        return SkipIfCommandsSelfTestClipboardUnavailable(state) || TestFileOpsMissingCallbackRejectsDirectFallback(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"Commands_FileOpsDragDropMissingCallbackRejectsDirectFallback", [=](CaseState& state) noexcept
     { return TestFileOpsDragDropMissingCallbackRejectsDirectFallback(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"folderView_drop_integrity_guards", [=](CaseState& state) noexcept
@@ -4278,15 +4495,27 @@ void RunShellCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOpti
     SelfTest::RunCase(options, suite, L"folderView_pointer_targets_and_stale_hover_are_safe", [=](CaseState& state) noexcept
     { return TestFolderViewPointerTargetsAndStaleHoverAreSafe(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_creates_unique_links", [=](CaseState& state) noexcept
-    { return TestPaneClipboardPasteShortcutCreatesLinks(mainWindow, state); });
+    {
+        return SkipIfCommandsSelfTestClipboardUnavailable(state) || TestPaneClipboardPasteShortcutCreatesLinks(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_concurrent_invocations_create_distinct_links", [=](CaseState& state) noexcept
-    { return TestPaneClipboardPasteShortcutConcurrentInvocationsCreateDistinctLinks(mainWindow, state); });
+    {
+        return SkipIfCommandsSelfTestClipboardUnavailable(state) || TestPaneClipboardPasteShortcutConcurrentInvocationsCreateDistinctLinks(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_returns_before_worker_complete", [=](CaseState& state) noexcept
-    { return TestPaneClipboardPasteShortcutReturnsBeforeWorkerComplete(mainWindow, state); });
+    {
+        return SkipIfCommandsSelfTestClipboardUnavailable(state) || TestPaneClipboardPasteShortcutReturnsBeforeWorkerComplete(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_close_does_not_wait_for_worker", [=](CaseState& state) noexcept
-    { return TestPaneClipboardPasteShortcutCloseDoesNotWaitForWorker(mainWindow, state); });
+    {
+        return SkipIfCommandsSelfTestClipboardUnavailable(state) || TestPaneClipboardPasteShortcutCloseDoesNotWaitForWorker(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_failure_after_navigate_shows_alert", [=](CaseState& state) noexcept
-    { return TestPaneClipboardPasteShortcutFailureAfterNavigateShowsAlert(mainWindow, state); });
+    {
+        return SkipIfCommandsSelfTestClipboardUnavailable(state) || TestPaneClipboardPasteShortcutFailureAfterNavigateShowsAlert(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_rejects_missing_clipboard_paths", [=](CaseState& state) noexcept
-    { return TestPaneClipboardPasteShortcutRejectsMissingClipboardPaths(mainWindow, state); });
+    {
+        return SkipIfCommandsSelfTestClipboardUnavailable(state) || TestPaneClipboardPasteShortcutRejectsMissingClipboardPaths(mainWindow, state);
+    });
 }

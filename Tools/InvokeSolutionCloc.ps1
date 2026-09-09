@@ -1,161 +1,65 @@
 <#
 .SYNOPSIS
-    Runs cloc against directories that are part of RedSalamander.sln.
+    Runs raw cloc reporting for the directories represented by a Visual Studio solution.
 
 .DESCRIPTION
-    This script parses the solution file and invokes cloc only for project directories and
-    non-root shared source directories referenced by solution items. That keeps cloc from
-    scanning unrelated folders such as Docs, vcpkg_installed, build outputs, and other
-    repo content that is not part of the solution codebase.
+    Preserves the supported InvokeSolutionCloc.ps1 path used for hand-run solution
+    reports. The command forwards to Measure-SourceLines.ps1 in Solution scope so
+    solution parsing and minimal-directory discovery have one maintained
+    implementation while this established command line remains available.
 
 .PARAMETER SolutionPath
-    Path to the solution file. Defaults to ..\RedSalamander.sln relative to this script.
+    Solution to measure. Defaults to RedSalamander.sln at the repository root.
 
 .PARAMETER ClocPath
-    cloc executable name or full path. Defaults to 'cloc'.
+    cloc executable name or full path. Defaults to cloc.
 
 .PARAMETER ClocArgs
-    Extra arguments passed through to cloc.
+    Additional arguments passed directly to cloc. Unbound trailing arguments are
+    collected here, preserving calls such as InvokeSolutionCloc.ps1 --by-file --xml.
+
+.OUTPUTS
+    Raw text emitted by cloc. The wrapper defines no stable pipeline object schema.
+
+.NOTES
+    Prerequisites: Git, a readable Visual Studio solution, and cloc (installable
+    with winget install AlDanial.Cloc). Side effects: launches cloc as a read-only
+    child process and does not write repository files. Primary consumers:
+    developers running ad hoc solution-scoped line reports by hand. Resolution,
+    parsing, and cloc failures produce a nonzero exit; cloc's exit status is
+    preserved by the canonical command.
 
 .EXAMPLE
     .\Tools\InvokeSolutionCloc.ps1
 
+    Prints the standard raw cloc summary for RedSalamander.sln directories.
+
 .EXAMPLE
     .\Tools\InvokeSolutionCloc.ps1 --by-file --xml
+
+    Passes raw report-format arguments through to cloc.
 #>
 
+[CmdletBinding(PositionalBinding = $false)]
 param(
-    [Parameter(Mandatory = $false)]
     [string]$SolutionPath = (Join-Path $PSScriptRoot '..\RedSalamander.sln'),
 
-    [Parameter(Mandatory = $false)]
     [string]$ClocPath = 'cloc',
 
     [Parameter(ValueFromRemainingArguments = $true)]
-    [string[]]$ClocArgs
+    [string[]]$ClocArgs = @()
 )
 
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Resolve-ExistingPath([string]$PathText) {
-    $resolved = Resolve-Path -LiteralPath $PathText -ErrorAction Stop
-    return $resolved.Path
-}
+$canonicalCommand = Join-Path $PSScriptRoot 'Measure-SourceLines.ps1'
+& $canonicalCommand `
+    -Scope Solution `
+    -SolutionPath $SolutionPath `
+    -ClocPath $ClocPath `
+    -ClocArgs $ClocArgs
 
-function Normalize-RelativePath([string]$PathText) {
-    $combined = Join-Path $script:SolutionRoot $PathText
-    $fullPath = [System.IO.Path]::GetFullPath($combined)
-    $relative = [System.IO.Path]::GetRelativePath($script:RepoRoot, $fullPath)
-    return $relative.Replace('/', '\').TrimEnd('\')
-}
-
-function Add-RelativeDirectory([System.Collections.Generic.HashSet[string]]$Set, [string]$RelativePath) {
-    if ([string]::IsNullOrWhiteSpace($RelativePath)) {
-        return
-    }
-
-    $trimmed = $RelativePath.Trim().TrimEnd('\')
-    if ([string]::IsNullOrWhiteSpace($trimmed) -or $trimmed -eq '.') {
-        return
-    }
-
-    if ($trimmed.StartsWith('..', [System.StringComparison]::Ordinal)) {
-        return
-    }
-
-    [void]$Set.Add($trimmed)
-}
-
-function Test-IsSameOrDescendant([string]$Candidate, [string]$Ancestor) {
-    if ($Candidate.Equals($Ancestor, [System.StringComparison]::OrdinalIgnoreCase)) {
-        return $true
-    }
-
-    return $Candidate.StartsWith($Ancestor + '\', [System.StringComparison]::OrdinalIgnoreCase)
-}
-
-function Get-SolutionDirectories {
-    $paths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    $lines = Get-Content -LiteralPath $script:ResolvedSolutionPath -ErrorAction Stop
-    $insideSolutionItems = $false
-
-    foreach ($line in $lines) {
-        if ($line -match '^Project\("[^"]+"\)\s*=\s*"[^"]+",\s*"(?<projectPath>[^"]+)",\s*"\{[^"]+\}"$') {
-            $projectPath = $Matches.projectPath
-            if (-not [string]::IsNullOrWhiteSpace([System.IO.Path]::GetExtension($projectPath))) {
-                $projectDirectory = Split-Path -Path $projectPath -Parent
-                Add-RelativeDirectory -Set $paths -RelativePath (Normalize-RelativePath $projectDirectory)
-            }
-        }
-
-        if ($line -match '^\s*ProjectSection\(SolutionItems\)\s*=\s*preProject\s*$') {
-            $insideSolutionItems = $true
-            continue
-        }
-
-        if ($insideSolutionItems -and $line -match '^\s*EndProjectSection\s*$') {
-            $insideSolutionItems = $false
-            continue
-        }
-
-        if (-not $insideSolutionItems) {
-            continue
-        }
-
-        if ($line -match '^\s*(?<itemPath>[^=]+?)\s*=\s*.+$') {
-            $itemPath = $Matches.itemPath.Trim()
-            $itemDirectory = Split-Path -Path $itemPath -Parent
-            if (-not [string]::IsNullOrWhiteSpace($itemDirectory) -and $itemDirectory -ne '.') {
-                Add-RelativeDirectory -Set $paths -RelativePath (Normalize-RelativePath $itemDirectory)
-            }
-        }
-    }
-
-    $sortedPaths = @($paths) | Sort-Object -Property @{ Expression = { $_.Length } }, @{ Expression = { $_ } }
-    $filteredPaths = [System.Collections.Generic.List[string]]::new()
-
-    foreach ($candidate in $sortedPaths) {
-        $hasAncestor = $false
-        foreach ($existing in $filteredPaths) {
-            if (Test-IsSameOrDescendant -Candidate $candidate -Ancestor $existing) {
-                $hasAncestor = $true
-                break
-            }
-        }
-
-        if (-not $hasAncestor) {
-            [void]$filteredPaths.Add($candidate)
-        }
-    }
-
-    return $filteredPaths
-}
-
-$script:ResolvedSolutionPath = Resolve-ExistingPath $SolutionPath
-$script:SolutionRoot = Split-Path -Path $script:ResolvedSolutionPath -Parent
-$script:RepoRoot = $script:SolutionRoot
-
-$clocCommand = Get-Command -Name $ClocPath -ErrorAction SilentlyContinue
-if ($null -eq $clocCommand) {
-    throw "Unable to find cloc executable '$ClocPath'. Install cloc or pass -ClocPath with the full executable path."
-}
-
-$solutionDirectories = Get-SolutionDirectories
-if ($solutionDirectories.Count -eq 0) {
-    throw "No solution-backed directories were found in $script:ResolvedSolutionPath."
-}
-
-$clocTargets = @()
-foreach ($relativeDirectory in $solutionDirectories) {
-    $clocTargets += (Join-Path $script:RepoRoot $relativeDirectory)
-}
-
-Write-Host 'Running cloc on solution-backed directories:' -ForegroundColor Cyan
-foreach ($target in $solutionDirectories) {
-    Write-Host "  $target"
-}
-
-& $clocCommand.Source @ClocArgs @clocTargets
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }

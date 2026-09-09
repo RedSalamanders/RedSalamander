@@ -2,6 +2,38 @@
 // Included from Commands.SelfTest.cpp — NOT compiled standalone.
 // Navigation test family: deferred pane-navigation and NavigationView shell test functions.
 
+[[nodiscard]] bool TestWindowsCommandLineArgumentQuoting(CaseState& state) noexcept
+{
+    constexpr std::array<std::wstring_view, 8> kArguments = {{
+        L"",
+        L"plain",
+        L"space name",
+        L"trailing\\",
+        L"embedded\"quote",
+        L"slashes\\\\\"quote\\",
+        L"-$;&()",
+        L"non-BMP \U0001F642",
+    }};
+
+    for (const std::wstring_view expected : kArguments)
+    {
+        const std::wstring commandLine = std::wstring(L"recorder.exe ") + Common::Process::QuoteWindowsCommandLineArgument(expected);
+        int argc = 0;
+        wil::unique_hlocal_ptr<wchar_t*> argv(CommandLineToArgvW(commandLine.c_str(), &argc));
+        state.Require(argv != nullptr && argc == 2, L"Canonical Windows argument quoting did not produce exactly two argv tokens.");
+        if (! argv || argc != 2)
+        {
+            return false;
+        }
+        state.Require(std::wstring_view(argv.get()[1]) == expected, L"Canonical Windows argument quoting failed exact token round-trip.");
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 [[nodiscard]] bool TestNavigationLocationEditInputExpandsEnvironmentVariables(CaseState& state) noexcept
 {
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
@@ -761,6 +793,8 @@ void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
     FocusFolderViewPane(FolderWindow::Pane::Left);
     const HWND folderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
     state.Require(folderView != nullptr && IsWindow(folderView) != FALSE, L"Folder view handle unavailable for select-all shell-stability validation.");
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(3000ms)),
+                  L"Folder view focus did not settle before select-all shell-stability validation.");
     if (! state.failure.empty())
     {
         return false;
@@ -803,15 +837,66 @@ void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
     const size_t baselineItemCount = g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left);
 
     NavigationViewDebugSnapshot baselineSnapshot{};
-    state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
-                                                [&](const NavigationViewDebugSnapshot& value) noexcept
+    const auto waitForStableBaseline = [&]() noexcept
     {
-        return value.focusTarget == NavigationViewDebugFocusTarget::None && ! value.editMode && ! value.historyDropdownVisible &&
-               ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&
-               value.currentPathText == root.wstring();
-    },
-                                                SelfTest::Scale(3000ms),
-                                                &baselineSnapshot),
+        size_t stableSamples = 0u;
+        const auto deadline  = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+
+            const std::optional<std::filesystem::path> currentPath = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+            const bool expectedPath = currentPath.has_value() && OrdinalString::EqualsNoCasePath(currentPath.value(), root);
+            if (! expectedPath)
+            {
+                g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+                stableSamples = 0u;
+                std::this_thread::sleep_for(20ms);
+                continue;
+            }
+
+            if (g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount)
+            {
+                if (g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) != L"a.txt")
+                {
+                    static_cast<void>(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"a.txt"));
+                }
+                if (g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) != 1u ||
+                    ! g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"a.txt"))
+                {
+                    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
+                        FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"a.txt"; }, true);
+                }
+            }
+
+            NavigationViewDebugSnapshot snapshot{};
+            const bool ready = g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, snapshot) &&
+                               snapshot.focusTarget == NavigationViewDebugFocusTarget::None && ! snapshot.editMode &&
+                               ! snapshot.historyDropdownVisible && ! snapshot.editSuggestPopupVisible && ! snapshot.fullPathPopupVisible &&
+                               ! snapshot.fullPathPopupEditMode && snapshot.visibleChildWindowCount == 0u && snapshot.currentPathText == root.wstring() &&
+                               g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == L"a.txt" &&
+                               g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
+                               g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 1u;
+            if (ready)
+            {
+                baselineSnapshot = snapshot;
+                ++stableSamples;
+                if (stableSamples >= 10u)
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                stableSamples = 0u;
+            }
+
+            std::this_thread::sleep_for(20ms);
+        }
+
+        return false;
+    };
+    state.Require(waitForStableBaseline(),
                   L"Failed to capture the baseline navigation-view state before select-all shell-stability validation.");
     if (! state.failure.empty())
     {
@@ -827,7 +912,6 @@ void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
             return value.focusTarget == NavigationViewDebugFocusTarget::None && ! value.editMode && ! value.historyDropdownVisible &&
                    ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&
                    value.currentPathText == root.wstring() && value.historyCount == baselineSnapshot.historyCount &&
-                   g_folderWindow.GetFocusedFolderViewHwnd() == folderView &&
                    g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == L"a.txt" &&
                    g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
                    g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == expectedSelectedCount;
@@ -861,10 +945,36 @@ void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
                 expectedSelectedCount,
                 g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left),
                 g_folderWindow.GetFocusedFolderViewHwnd() == folderView ? L"yes" : L"no"));
+
+        if (! shellStable || ! state.failure.empty())
+        {
+            return false;
+        }
+
+        if (g_folderWindow.GetFocusedFolderViewHwnd() != folderView)
+        {
+            const HWND rootWindow       = GetAncestor(mainWindow, GA_ROOT);
+            const HWND activeWindow     = GetActiveWindow();
+            const HWND foregroundWindow = GetForegroundWindow();
+            if (rootWindow && (foregroundWindow != rootWindow || (activeWindow && activeWindow != rootWindow)))
+            {
+                static_cast<void>(state.Skip(std::format(L"{} focus retention requires foreground ownership; another process retained the desktop foreground.",
+                                                         context)));
+                return false;
+            }
+
+            state.Require(false, std::format(L"{} should retain folder-view focus while the RedSalamander window owns the foreground.", context));
+            return false;
+        }
+
+        return true;
     };
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_SELECTION_SELECT_ALL, 0), 0);
-    requireStableNavigationShell(3u, L"Select All");
+    if (! requireStableNavigationShell(3u, L"Select All"))
+    {
+        return state.skipped.empty() ? false : state.failure.empty();
+    }
     state.Require(g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"a.txt"),
                   L"Select All should keep a.txt selected while keeping the navigation shell quiet.");
     state.Require(g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"b.log"),
@@ -877,7 +987,10 @@ void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
     }
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_SELECTION_UNSELECT_ALL, 0), 0);
-    requireStableNavigationShell(0u, L"Unselect All");
+    if (! requireStableNavigationShell(0u, L"Unselect All"))
+    {
+        return state.skipped.empty() ? false : state.failure.empty();
+    }
     state.Require(! g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"a.txt"),
                   L"Unselect All should clear a.txt while keeping the navigation shell quiet.");
     state.Require(! g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"b.log"),
@@ -968,35 +1081,119 @@ void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
     FocusFolderViewPane(FolderWindow::Pane::Left);
     const HWND folderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
     state.Require(folderView != nullptr && IsWindow(folderView) != FALSE, L"Folder view handle unavailable for select-next shell-stability validation.");
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(3000ms)),
+                  L"Folder view focus did not settle before select-next shell-stability validation.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    const uint64_t baselineRefreshCount = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
-    const size_t baselineItemCount      = g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left);
+    const auto waitForRefreshCountQuiet = [](FolderWindow::Pane pane, std::chrono::milliseconds timeout) noexcept
+    {
+        uint64_t lastRefreshCount = g_folderWindow.DebugGetForceRefreshCount(pane);
+        auto quietSince           = std::chrono::steady_clock::now();
+        const auto deadline       = quietSince + timeout;
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            const uint64_t currentRefreshCount = g_folderWindow.DebugGetForceRefreshCount(pane);
+            const auto now                     = std::chrono::steady_clock::now();
+            if (currentRefreshCount != lastRefreshCount)
+            {
+                lastRefreshCount = currentRefreshCount;
+                quietSince       = now;
+            }
+            else if (now - quietSince >= SelfTest::Scale(200ms))
+            {
+                return true;
+            }
+
+            std::this_thread::sleep_for(10ms);
+        }
+
+        return false;
+    };
+    state.Require(waitForRefreshCountQuiet(FolderWindow::Pane::Left, SelfTest::Scale(3000ms)),
+                  L"Pending pane refreshes did not settle before select-next shell-stability baseline capture.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const size_t baselineItemCount = g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left);
 
     NavigationViewDebugSnapshot baselineSnapshot{};
-    state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
-                                                [&](const NavigationViewDebugSnapshot& value) noexcept
+    const auto waitForStableBaseline = [&]() noexcept
     {
-        return value.focusTarget == NavigationViewDebugFocusTarget::None && ! value.editMode && ! value.historyDropdownVisible &&
-               ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&
-               value.currentPathText == root.wstring();
-    },
-                                                SelfTest::Scale(3000ms),
-                                                &baselineSnapshot),
+        size_t stableSamples = 0u;
+        const auto deadline  = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+
+            const std::optional<std::filesystem::path> currentPath = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+            if (! currentPath.has_value() || ! OrdinalString::EqualsNoCasePath(currentPath.value(), root))
+            {
+                g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+                stableSamples = 0u;
+                std::this_thread::sleep_for(20ms);
+                continue;
+            }
+
+            if (g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount)
+            {
+                if (g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) != L"a.txt")
+                {
+                    static_cast<void>(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"a.txt"));
+                }
+                if (g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) != 0u)
+                {
+                    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
+                        FolderWindow::Pane::Left, [](std::wstring_view) noexcept { return false; }, true);
+                }
+            }
+
+            NavigationViewDebugSnapshot snapshot{};
+            const bool ready = g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, snapshot) &&
+                               snapshot.focusTarget == NavigationViewDebugFocusTarget::None && ! snapshot.editMode &&
+                               ! snapshot.historyDropdownVisible && ! snapshot.editSuggestPopupVisible && ! snapshot.fullPathPopupVisible &&
+                               ! snapshot.fullPathPopupEditMode && snapshot.visibleChildWindowCount == 0u && snapshot.currentPathText == root.wstring() &&
+                               g_folderWindow.GetFocusedFolderViewHwnd() == folderView &&
+                               g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == L"a.txt" &&
+                               g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
+                               g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 0u;
+            if (ready)
+            {
+                baselineSnapshot = snapshot;
+                ++stableSamples;
+                if (stableSamples >= 10u)
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                stableSamples = 0u;
+            }
+
+            std::this_thread::sleep_for(20ms);
+        }
+
+        return false;
+    };
+    state.Require(waitForStableBaseline(),
                   L"Failed to capture the baseline navigation-view state before select-next shell-stability validation.");
     if (! state.failure.empty())
     {
         return false;
     }
 
+    const uint64_t baselineRefreshCount = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
+
     const auto requireStableNavigationShell = [&](std::wstring_view expectedFocus, size_t expectedSelectedCount, std::wstring_view context) noexcept
     {
         NavigationViewDebugSnapshot snapshot{};
-        state.Require(
-            WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+        const bool stable = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
                                           [&](const NavigationViewDebugSnapshot& value) noexcept
         {
             return value.focusTarget == NavigationViewDebugFocusTarget::None && ! value.editMode && ! value.historyDropdownVisible &&
@@ -1009,10 +1206,22 @@ void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
                    g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == expectedSelectedCount;
         },
                                           SelfTest::Scale(3000ms),
-                                          &snapshot),
+                                          &snapshot);
+        const std::optional<std::filesystem::path> panePath = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+        const std::optional<std::filesystem::path> providerPath = g_folderWindow.GetCurrentPluginPath(FolderWindow::Pane::Left);
+        FolderView::IncrementalSearchDebugSnapshot incrementalSearch{};
+        const bool incrementalSearchReadable = g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, incrementalSearch);
+        const HWND liveFolderViewHwnd = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+        FolderView* liveFolderView = liveFolderViewHwnd && IsWindow(liveFolderViewHwnd) != FALSE
+                                         ? reinterpret_cast<FolderView*>(GetWindowLongPtrW(liveFolderViewHwnd, GWLP_USERDATA))
+                                         : nullptr;
+        state.Require(
+            stable,
             std::format(
                 L"Navigation shell did not stay quiet during {}; focusTarget={}, editMode={}, historyVisible={}, suggestVisible={}, "
-                L"popupVisible={}, childWindows={}, currentPath='{}', historyCount={}, refreshCount={}, itemCount={}, selectedCount={}, focusedItem='{}'.",
+                L"popupVisible={}, childWindows={}, currentPath='{}', panePath='{}', providerPath='{}', providerId='{}', "
+                L"incrementalReadable={}, incrementalActive={}, incrementalQuery='{}', activePane={}, focusedPane={}, enumerationSettled={}, "
+                L"historyCount={}, refreshCount={}, itemCount={}, selectedCount={}, focusedItem='{}'.",
                 context,
                 static_cast<unsigned>(snapshot.focusTarget),
                 snapshot.editMode ? L"yes" : L"no",
@@ -1021,6 +1230,15 @@ void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
                 snapshot.fullPathPopupVisible ? L"yes" : L"no",
                 snapshot.visibleChildWindowCount,
                 snapshot.currentPathText,
+                panePath.has_value() ? panePath->wstring() : std::wstring{},
+                providerPath.has_value() ? providerPath->wstring() : std::wstring{},
+                g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left),
+                incrementalSearchReadable ? L"yes" : L"no",
+                incrementalSearch.active ? L"yes" : L"no",
+                incrementalSearch.query,
+                g_folderWindow.GetActivePane() == FolderWindow::Pane::Left ? L"left" : L"right",
+                g_folderWindow.GetFocusedPane() == FolderWindow::Pane::Left ? L"left" : L"right",
+                liveFolderView && liveFolderView->IsCurrentFolderEnumerated() ? L"yes" : L"no",
                 snapshot.historyCount,
                 g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left),
                 g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
@@ -1074,6 +1292,8 @@ void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create select-calc-dir-size-next shell-stability root.");
+    state.Require(SelfTest::EnsureDirectory(root / L"size_folder"), L"Failed to create size_folder.");
+    state.Require(SelfTest::WriteTextFile(root / L"size_folder" / L"payload.bin", "1234567"), L"Failed to create size_folder payload.");
     state.Require(SelfTest::WriteTextFile(root / L"a.txt", "a"), L"Failed to create a.txt.");
     state.Require(SelfTest::WriteTextFile(root / L"b.log", "b"), L"Failed to create b.log.");
     state.Require(SelfTest::WriteTextFile(root / L"c.txt", "c"), L"Failed to create c.txt.");
@@ -1118,7 +1338,7 @@ void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
                   L"Failed to set pane path for select-calc-dir-size-next shell-stability test.");
     state.Require(WaitForAtomicAtLeast(enumCount, 1u, SelfTest::Scale(3000ms)),
                   L"Enumeration did not complete for select-calc-dir-size-next shell-stability test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.txt", L"b.log", L"c.txt"}, SelfTest::Scale(3000ms)),
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"size_folder", L"a.txt", L"b.log", L"c.txt"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for select-calc-dir-size-next shell-stability test.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"a.txt"),
                   L"Failed to focus a.txt before select-calc-dir-size-next shell-stability validation.");
@@ -1217,6 +1437,74 @@ void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
                   L"Select Calculate Directory Size Next should select b.log on the second step while keeping the navigation shell quiet.");
     state.Require(! g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"c.txt"),
                   L"Select Calculate Directory Size Next should not select c.txt on the second step while keeping the navigation shell quiet.");
+
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [](std::wstring_view) noexcept { return false; }, true);
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"size_folder"),
+                  L"Failed to focus size_folder before the directory-size Space step.");
+    const FolderWindow::DebugSelectionSizeSnapshot folderSizeBefore =
+        g_folderWindow.DebugGetSelectionSizeSnapshot(FolderWindow::Pane::Left);
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_SELECT_CALC_DIR_SIZE_NEXT, 0), 0);
+    requireStableNavigationShell(L"a.txt", 1u, L"Select Calculate Directory Size Next folder step");
+    state.Require(g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"size_folder") &&
+                      ! g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"a.txt"),
+                  L"Space did not keep the operated folder selected while advancing current to a.txt.");
+
+    FolderWindow::DebugSelectionSizeSnapshot computedFolderSize{};
+    const auto sizeDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+    while (std::chrono::steady_clock::now() < sizeDeadline)
+    {
+        PumpPendingMessages();
+        computedFolderSize = g_folderWindow.DebugGetSelectionSizeSnapshot(FolderWindow::Pane::Left);
+        if (! computedFolderSize.folderBytesPending && computedFolderSize.folderBytesValid)
+        {
+            break;
+        }
+        std::this_thread::sleep_for(10ms);
+    }
+    state.Require(computedFolderSize.requestCount >= folderSizeBefore.requestCount + 1u &&
+                      computedFolderSize.lastRequestedSelectedPaths.size() == 1u &&
+                      computedFolderSize.lastRequestedSelectedPaths.front().filename() == L"size_folder" &&
+                      computedFolderSize.lastRequestedFolderPaths.size() == 1u &&
+                      computedFolderSize.lastRequestedFolderPaths.front().filename() == L"size_folder" &&
+                      computedFolderSize.folderBytesValid && computedFolderSize.folderBytes == 7u,
+                  std::format(L"Space did not compute the selected folder subtree from the immutable post-toggle folder snapshot: "
+                              L"requests {} -> {}, selectedPaths={}, folderPaths={}, pending={}, valid={}, bytes={}, status=0x{:08X}.",
+                              folderSizeBefore.requestCount,
+                              computedFolderSize.requestCount,
+                              computedFolderSize.lastRequestedSelectedPaths.size(),
+                              computedFolderSize.lastRequestedFolderPaths.size(),
+                              computedFolderSize.folderBytesPending ? 1 : 0,
+                              computedFolderSize.folderBytesValid ? 1 : 0,
+                              computedFolderSize.folderBytes,
+                              static_cast<unsigned>(computedFolderSize.lastCompletionStatus)));
+
+    const uint64_t completedFolderGeneration = computedFolderSize.generation;
+    const std::optional<POINT> selectedFolderPoint =
+        g_folderWindow.DebugGetPaneItemCenterClientPointForSelfTest(FolderWindow::Pane::Left, L"size_folder");
+    state.Require(selectedFolderPoint.has_value(), L"Failed to locate selected size_folder before the deselection Space step.");
+    if (selectedFolderPoint.has_value())
+    {
+        SendMessageW(folderView, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(selectedFolderPoint->x, selectedFolderPoint->y));
+        SendMessageW(folderView, WM_LBUTTONUP, 0, MAKELPARAM(selectedFolderPoint->x, selectedFolderPoint->y));
+    }
+    state.Require(g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == L"size_folder" &&
+                      g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"size_folder"),
+                  L"Plain click did not make the selected folder current while preserving its selection.");
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_SELECT_CALC_DIR_SIZE_NEXT, 0), 0);
+    requireStableNavigationShell(L"a.txt", 0u, L"Select Calculate Directory Size Next folder deselection step");
+    FolderWindow::DebugSelectionSizeSnapshot canceledFolderSize =
+        g_folderWindow.DebugGetSelectionSizeSnapshot(FolderWindow::Pane::Left);
+    state.Require(canceledFolderSize.generation > completedFolderGeneration && ! canceledFolderSize.folderBytesPending &&
+                      ! canceledFolderSize.folderBytesValid && canceledFolderSize.folderBytes == 0u &&
+                      canceledFolderSize.lastRequestedSelectedPaths.empty(),
+                  L"A second Space did not deselect the folder and cancel/exclude its size contribution.");
+    state.Require(g_folderWindow.DebugPostSelectionSizeCompletionForSelfTest(
+                      FolderWindow::Pane::Left, completedFolderGeneration, 999u, S_OK),
+                  L"Failed to post a stale folder-size completion probe.");
+    PumpPendingMessages();
+    canceledFolderSize = g_folderWindow.DebugGetSelectionSizeSnapshot(FolderWindow::Pane::Left);
+    state.Require(! canceledFolderSize.folderBytesValid && canceledFolderSize.folderBytes == 0u,
+                  L"A stale completion from the deselected folder re-entered the selected-size total.");
 
     return state.failure.empty();
 }
@@ -3316,6 +3604,10 @@ struct OwnedMenuSessionEscapeResult
                               std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left)),
                               std::wstring(g_folderWindow.GetFileSystemPluginShortId(FolderWindow::Pane::Left))));
     state.Require(baselineSnapshot.showMenuSection, L"Navigation view should expose the menu region before drive-menu shell-stability validation.");
+    state.Require(baselineSnapshot.menuFallbackGlyph == FluentIcons::kBulletedList ||
+                      baselineSnapshot.menuFallbackGlyph == FluentIcons::kFallbackBulletedList,
+                  std::format(L"Navigation menu fallback should use the Segoe Fluent or Unicode list glyph; saw U+{:04X}.",
+                              static_cast<unsigned int>(baselineSnapshot.menuFallbackGlyph)));
     if (! state.failure.empty())
     {
         return false;
@@ -4440,69 +4732,7 @@ struct OwnedMenuSessionEscapeResult
 
 [[nodiscard]] bool SetClipboardUnicodeText(HWND ownerWindow, std::wstring_view text) noexcept
 {
-    using namespace std::chrono_literals;
-
-    bool opened = false;
-    for (uint32_t attempt = 0; attempt < 20u; ++attempt)
-    {
-        if (OpenClipboard(ownerWindow) != 0)
-        {
-            opened = true;
-            break;
-        }
-
-        if (GetOpenClipboardWindow() == nullptr)
-        {
-            std::this_thread::sleep_for(5ms);
-        }
-        std::this_thread::sleep_for(10ms);
-    }
-    if (! opened)
-    {
-        return false;
-    }
-
-    const auto closeClipboard = wil::scope_exit([&] { CloseClipboard(); });
-    if (EmptyClipboard() == 0)
-    {
-        return false;
-    }
-
-    const size_t byteCount = (text.size() + 1u) * sizeof(wchar_t);
-    HGLOBAL clipboardData  = GlobalAlloc(GMEM_MOVEABLE, byteCount);
-    if (! clipboardData)
-    {
-        return false;
-    }
-
-    bool transferred           = false;
-    const auto releaseOnReturn = wil::scope_exit([&]
-    {
-        if (! transferred)
-        {
-            GlobalFree(clipboardData);
-        }
-    });
-
-    void* const locked = GlobalLock(clipboardData);
-    if (! locked)
-    {
-        return false;
-    }
-
-    auto* const lockedText = static_cast<wchar_t*>(locked);
-    std::copy_n(text.data(), text.size(), lockedText);
-    lockedText[text.size()] = L'\0';
-    GlobalUnlock(clipboardData);
-
-    if (SetClipboardData(CF_UNICODETEXT, clipboardData) == nullptr)
-    {
-        return false;
-    }
-
-    transferred = true;
-    static_cast<void>(RedSalamander::DxUi::DebugSetClipboardFallbackText(text));
-    return true;
+    return RedSalamander::DxUi::DebugWriteClipboardUnicodeText(ownerWindow, text);
 }
 
 [[nodiscard]] std::wstring ReadWindowText(HWND hwnd) noexcept
@@ -5099,12 +5329,6 @@ struct OwnedMenuSessionEscapeResult
         }
 
         state.Require(paneItemsReady, std::format(L"Pane contents did not settle during {}.", context));
-        state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"normal.txt"),
-                      std::format(L"normal.txt should remain visible during {}.", context));
-        state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"hidden.txt") == expectHiddenVisible,
-                      std::format(L"hidden.txt visibility mismatch during {}.", context));
-        state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"system.txt") == expectSystemVisible,
-                      std::format(L"system.txt visibility mismatch during {}.", context));
         if (! state.failure.empty())
         {
             return;
@@ -5138,6 +5362,19 @@ struct OwnedMenuSessionEscapeResult
                                   g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
                                   g_folderWindow.DebugIsNameFilterActive(FolderWindow::Pane::Left) ? L"yes" : L"no",
                                   g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left)));
+        if (! state.failure.empty())
+        {
+            return;
+        }
+
+        // WaitForPaneItems proves inclusion, not removal. Assert visibility only after the
+        // exact-count navigation-shell barrier has observed the refreshed item list.
+        state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"normal.txt"),
+                      std::format(L"normal.txt should remain visible during {}.", context));
+        state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"hidden.txt") == expectHiddenVisible,
+                      std::format(L"hidden.txt visibility mismatch during {}.", context));
+        state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"system.txt") == expectSystemVisible,
+                      std::format(L"system.txt visibility mismatch during {}.", context));
     };
 
     FocusFolderViewPane(FolderWindow::Pane::Left);
@@ -5462,6 +5699,152 @@ struct OwnedMenuSessionEscapeResult
                               g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"rename-new.txt") ? L"yes" : L"no",
                               g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"deleted.txt") ? L"yes" : L"no",
                               g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"rename-old.txt") ? L"yes" : L"no"));
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestDeleteRehomesCurrentItemToNextOrPrevious(CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for delete-focus test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / (L"delete_focus_" + NewGuidText());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root / L"a_folder"), L"Failed to create a_folder for delete-focus test.");
+    state.Require(SelfTest::EnsureDirectory(root / L"b_folder"), L"Failed to create b_folder for delete-focus test.");
+    state.Require(SelfTest::EnsureDirectory(root / L"c_folder"), L"Failed to create c_folder for delete-focus test.");
+    state.Require(SelfTest::WriteTextFile(root / L"d.txt", "d"), L"Failed to create d.txt for delete-focus test.");
+    state.Require(SelfTest::WriteTextFile(root / L"e.txt", "e"), L"Failed to create e.txt for delete-focus test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    const auto cleanupRoot = wil::scope_exit([&] noexcept
+    {
+        std::error_code cleanupError;
+        std::filesystem::remove_all(root, cleanupError);
+    });
+
+    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const FolderView::SortBy sortBefore                   = g_folderWindow.GetSortBy(FolderWindow::Pane::Left);
+    const FolderView::SortDirection directionBefore       = g_folderWindow.GetSortDirection(FolderWindow::Pane::Left);
+    const auto restorePane                                = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        g_folderWindow.SetSort(FolderWindow::Pane::Left, sortBefore, directionBefore);
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+    });
+
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for delete-focus test.");
+    g_folderWindow.SetSort(FolderWindow::Pane::Left, FolderView::SortBy::Name, FolderView::SortDirection::Ascending);
+
+    std::atomic<uint32_t> enumerationCount{0u};
+    g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
+                                                       [&](const std::filesystem::path& folder) noexcept
+    {
+        if (OrdinalString::EqualsNoCasePath(folder, root))
+        {
+            enumerationCount.fetch_add(1u, std::memory_order_release);
+        }
+    });
+    const auto clearEnumerationCallback = wil::scope_exit([&]
+    { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
+
+    std::atomic<uint32_t> completedDeletes{0u};
+    std::atomic<HRESULT> lastDeleteResult{E_PENDING};
+    const uint64_t completionToken = g_folderWindow.AddFileOperationCompletedCallback(
+        [&](const FolderWindow::FileOperationCompletedEvent& event) noexcept
+    {
+        if (event.operation != FILESYSTEM_DELETE || event.sourcePaths.empty() ||
+            ! OrdinalString::EqualsNoCasePath(event.sourcePaths.front().parent_path(), root))
+        {
+            return;
+        }
+        lastDeleteResult.store(event.hr, std::memory_order_release);
+        completedDeletes.fetch_add(1u, std::memory_order_release);
+    });
+    const auto removeCompletionCallback = wil::scope_exit([&] noexcept
+    { g_folderWindow.RemoveFileOperationCompletedCallback(completionToken); });
+
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
+                  L"Failed to set pane path for delete-focus test.");
+    state.Require(WaitForAtomicAtLeast(enumerationCount, 1u, SelfTest::Scale(3000ms)),
+                  L"Initial delete-focus enumeration did not complete.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left,
+                                   {L"a_folder", L"b_folder", L"c_folder", L"d.txt", L"e.txt"},
+                                   SelfTest::Scale(3000ms)),
+                  L"Delete-focus fixture items did not load.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const auto waitForRemovalFocus = [&](uint32_t expectedCompletionCount,
+                                         const std::filesystem::path& removedPath,
+                                         size_t expectedItemCount,
+                                         std::wstring_view expectedFocus) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(8000ms);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            std::error_code existsError;
+            const bool removed = ! std::filesystem::exists(removedPath, existsError) && ! existsError;
+            if (completedDeletes.load(std::memory_order_acquire) >= expectedCompletionCount &&
+                SUCCEEDED(lastDeleteResult.load(std::memory_order_acquire)) && removed &&
+                g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == expectedItemCount &&
+                g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == expectedFocus &&
+                g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 0u)
+            {
+                return true;
+            }
+            Sleep(10u);
+        }
+        return false;
+    };
+
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"b_folder"),
+                  L"Failed to focus the middle folder before delete-focus test.");
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+    g_folderWindow.CommandDelete(FolderWindow::Pane::Left);
+    state.Require(waitForRemovalFocus(1u, root / L"b_folder", 4u, L"c_folder"),
+                  std::format(L"Deleting the middle folder should focus the next item; completions={}, hr=0x{:08X}, items={}, focus='{}', selected={}.",
+                              completedDeletes.load(std::memory_order_acquire),
+                              static_cast<unsigned long>(lastDeleteResult.load(std::memory_order_acquire)),
+                              g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
+                              g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left),
+                              g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"e.txt"),
+                  L"Failed to focus the last file before delete-focus fallback test.");
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+    g_folderWindow.CommandDelete(FolderWindow::Pane::Left);
+    state.Require(waitForRemovalFocus(2u, root / L"e.txt", 3u, L"d.txt"),
+                  std::format(L"Deleting the last file should focus the previous item; completions={}, hr=0x{:08X}, items={}, focus='{}', selected={}.",
+                              completedDeletes.load(std::memory_order_acquire),
+                              static_cast<unsigned long>(lastDeleteResult.load(std::memory_order_acquire)),
+                              g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
+                              g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left),
+                              g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left)));
 
     return state.failure.empty();
 }
@@ -6412,6 +6795,25 @@ struct OwnedMenuSessionEscapeResult
     const HWND navigationViewHwnd = g_folderWindow.DebugGetNavigationViewHwnd(FolderWindow::Pane::Left);
     const HWND focusedFolderView  = g_folderWindow.GetFocusedFolderViewHwnd();
     const HWND focusedWindow      = GetFocus();
+    const bool panePathStable     = restoredPath.has_value() && OrdinalString::EqualsNoCasePath(restoredPath.value(), root);
+    const bool shellStateRestoredExceptFocus =
+        snapshotAvailable && snapshot.focusTarget == NavigationViewDebugFocusTarget::None && ! snapshot.editMode && ! snapshot.historyDropdownVisible &&
+        ! snapshot.editSuggestPopupVisible && ! snapshot.fullPathPopupVisible && ! snapshot.fullPathPopupEditMode && snapshot.visibleChildWindowCount == 0u &&
+        snapshot.currentPathText == root.wstring() && panePathStable && snapshot.historyCount == baselineSnapshot.historyCount &&
+        g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == L"b.log" &&
+        g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
+        g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
+        g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == baselineSelectedCount;
+    if (! shellRestored && shellStateRestoredExceptFocus && state.failure.empty())
+    {
+        const HWND rootWindow       = GetAncestor(mainWindow, GA_ROOT);
+        const HWND activeWindow     = GetActiveWindow();
+        const HWND foregroundWindow = GetForegroundWindow();
+        if (rootWindow && (foregroundWindow != rootWindow || (activeWindow && activeWindow != rootWindow)))
+        {
+            return state.Skip(L"Hot Paths close focus restoration requires foreground ownership; another process retained the desktop foreground.");
+        }
+    }
     state.Require(shellRestored,
                   std::format(L"Navigation shell did not restore cleanly after Hot Paths close; snapshotAvailable={}, navigationBarVisible={}, "
                               L"navigationViewHwnd=0x{:X}, navigationViewWindow={}, focusTarget={}, editMode={}, historyVisible={}, "
@@ -7349,6 +7751,11 @@ struct OwnedMenuSessionEscapeResult
         return false;
     }
 
+    if (! PrepareMainWindowForIsolatedUiCase(mainWindow, state, L"Item Properties navigation-shell stability validation"))
+    {
+        return false;
+    }
+
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
     state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
     if (suiteRoot.empty())
@@ -8015,10 +8422,20 @@ struct OwnedMenuSessionEscapeResult
             Sleep(20);
         }
 
+        const HWND win32Focus       = GetFocus();
+        const HWND activeWindow     = GetActiveWindow();
+        const HWND foregroundWindow = GetForegroundWindow();
+        DWORD foregroundProcessId   = 0u;
+        if (foregroundWindow)
+        {
+            static_cast<void>(GetWindowThreadProcessId(foregroundWindow, &foregroundProcessId));
+        }
+
         state.Require(shellRestored,
                       std::format(L"Navigation shell did not restore cleanly after {}; focusTarget={}, editMode={}, historyVisible={}, suggestVisible={}, "
                                   L"popupVisible={}, childWindows={}, currentPath='{}', panePath='{}', historyCount={}, refreshCount={}, itemCount={}, "
-                                  L"selectedCount={}, expectedSelectedCount={}, focusedItem='{}', focusedFolderView=0x{:X}, expectedFolderView=0x{:X}.",
+                                  L"selectedCount={}, expectedSelectedCount={}, focusedItem='{}', focusedFolderView=0x{:X}, expectedFolderView=0x{:X}, "
+                                  L"win32Focus=0x{:X}, active=0x{:X}, foreground=0x{:X}, foregroundPid={}, mainWindow=0x{:X}.",
                                   context,
                                   static_cast<unsigned>(snapshot.focusTarget),
                                   snapshot.editMode ? L"yes" : L"no",
@@ -8035,7 +8452,12 @@ struct OwnedMenuSessionEscapeResult
                                   baselineSelectedCount,
                                   g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left),
                                   static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(g_folderWindow.GetFocusedFolderViewHwnd())),
-                                  static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(folderView))));
+                                  static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(folderView)),
+                                  static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(win32Focus)),
+                                  static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(activeWindow)),
+                                  static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(foregroundWindow)),
+                                  foregroundProcessId,
+                                  static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(mainWindow))));
     };
 
     struct RenameShellCycleResult final
@@ -8222,7 +8644,6 @@ struct OwnedMenuSessionEscapeResult
     confirmOptions.target                 = ChangeCase::ChangeTarget::WholeFilename;
     confirmOptions.style                  = ChangeCase::CaseStyle::Upper;
     const std::wstring confirmedName      = ChangeCase::TransformLeafName(originalName, confirmOptions);
-    const std::filesystem::path confirmed = root / confirmedName;
     const uint64_t baselineRefreshCount   = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
     const size_t baselineItemCount        = g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left);
     const size_t baselineSelectedCount    = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
@@ -8326,10 +8747,20 @@ struct OwnedMenuSessionEscapeResult
             Sleep(20);
         }
 
+        const HWND win32Focus       = GetFocus();
+        const HWND activeWindow     = GetActiveWindow();
+        const HWND foregroundWindow = GetForegroundWindow();
+        DWORD foregroundProcessId   = 0u;
+        if (foregroundWindow)
+        {
+            static_cast<void>(GetWindowThreadProcessId(foregroundWindow, &foregroundProcessId));
+        }
+
         state.Require(shellRestored,
                       std::format(L"Navigation shell did not restore cleanly after {}; focusTarget={}, editMode={}, historyVisible={}, suggestVisible={}, "
                                   L"popupVisible={}, childWindows={}, currentPath='{}', panePath='{}', historyCount={}, refreshCount={}, itemCount={}, "
-                                  L"selectedCount={}, expectedSelectedCount={}, focusedItem='{}', focusedFolderView=0x{:X}, expectedFolderView=0x{:X}.",
+                                  L"selectedCount={}, expectedSelectedCount={}, focusedItem='{}', focusedFolderView=0x{:X}, expectedFolderView=0x{:X}, "
+                                  L"win32Focus=0x{:X}, active=0x{:X}, foreground=0x{:X}, foregroundPid={}, mainWindow=0x{:X}.",
                                   context,
                                   static_cast<unsigned>(snapshot.focusTarget),
                                   snapshot.editMode ? L"yes" : L"no",
@@ -8346,7 +8777,12 @@ struct OwnedMenuSessionEscapeResult
                                   baselineSelectedCount,
                                   g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left),
                                   static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(g_folderWindow.GetFocusedFolderViewHwnd())),
-                                  static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(folderView))));
+                                  static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(folderView)),
+                                  static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(win32Focus)),
+                                  static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(activeWindow)),
+                                  static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(foregroundWindow)),
+                                  foregroundProcessId,
+                                  static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(mainWindow))));
     };
 
     struct ChangeCaseShellCycleResult final
@@ -8446,12 +8882,16 @@ struct OwnedMenuSessionEscapeResult
         return false;
     }
 
+    // The rename is admitted from the change-case worker after the prompt closes, and NTFS resolves
+    // the changed-case name case-insensitively, so exists() cannot observe it. Wait for the exact
+    // spelling of the single directory entry instead.
+    std::wstring confirmedLeafName;
     const auto renameDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
     while (std::chrono::steady_clock::now() < renameDeadline)
     {
         PumpPendingMessages();
-        ec.clear();
-        if (std::filesystem::exists(confirmed, ec))
+        confirmedLeafName.clear();
+        if (readSingleLeafName(confirmedLeafName) && confirmedLeafName == confirmedName)
         {
             break;
         }
@@ -8459,7 +8899,6 @@ struct OwnedMenuSessionEscapeResult
         Sleep(20);
     }
 
-    std::wstring confirmedLeafName;
     state.Require(readSingleLeafName(confirmedLeafName), L"Change-case confirm should leave exactly one file in the test directory.");
     state.Require(confirmedLeafName == confirmedName,
                   std::format(L"Change-case confirm should rename the file to '{}'; saw '{}'.", confirmedName, confirmedLeafName));
@@ -9175,6 +9614,11 @@ struct OwnedMenuSessionEscapeResult
         return false;
     }
 
+    if (! PrepareMainWindowForIsolatedUiCase(mainWindow, state, L"go-to-path from other pane navigation-shell validation"))
+    {
+        return false;
+    }
+
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
     state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
     if (suiteRoot.empty())
@@ -9355,132 +9799,6 @@ struct OwnedMenuSessionEscapeResult
     return quoted;
 }
 
-[[nodiscard]] bool TestPaneCommandLineInsertionAndExecute(HWND mainWindow, CaseState& state) noexcept
-{
-    using namespace std::chrono_literals;
-
-    if (! mainWindow || IsWindow(mainWindow) == FALSE)
-    {
-        state.Require(false, L"Main window handle invalid.");
-        return false;
-    }
-
-    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
-    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
-    if (suiteRoot.empty())
-    {
-        return false;
-    }
-
-    const std::filesystem::path root      = suiteRoot / L"work" / (L"command line root " + NewGuidText());
-    const std::filesystem::path alphaPath = root / L"space name.txt";
-    const std::filesystem::path betaPath  = root / L"beta.txt";
-    std::error_code ec;
-    std::filesystem::remove_all(root, ec);
-    ec.clear();
-
-    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create command-line test root.");
-    state.Require(SelfTest::WriteTextFile(alphaPath, "alpha"), L"Failed to create space name.txt for command-line test.");
-    state.Require(SelfTest::WriteTextFile(betaPath, "beta"), L"Failed to create beta.txt for command-line test.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const auto restorePane                                    = wil::scope_exit([&]
-    {
-        g_folderWindow.DebugSetCommandLineLaunchCallback({});
-        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
-        if (leftPathBefore.has_value())
-        {
-            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
-        }
-    });
-
-    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
-                  L"Failed to activate builtin file-system for command-line test.");
-    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for command-line test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"space name.txt", L"beta.txt"}, SelfTest::Scale(3000ms)),
-                  L"Pane contents not ready for command-line test.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"space name.txt"),
-                  L"Failed to focus space name.txt for command-line test.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    FocusFolderViewPane(FolderWindow::Pane::Left);
-    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_BRING_CURRENT_DIR_TO_COMMAND_LINE, 0), 0);
-    PumpPendingMessages();
-
-    FolderWindow::CommandLineDebugSnapshot snapshot{};
-    state.Require(g_folderWindow.DebugGetCommandLineSnapshot(snapshot), L"Command-line snapshot should be available.");
-    state.Require(snapshot.visible, L"Bring Current Directory should show the command-line input.");
-    state.Require(snapshot.hasKeyboardFocus, L"Bring Current Directory should focus the command-line input.");
-    state.Require(snapshot.usesDxUiHost, L"Command-line input should render through a DxUi host.");
-    state.Require(snapshot.usesNativeTextInput, L"Command-line input should use the native DxUi text-input backend.");
-    state.Require(snapshot.visibleNativeChildControlCount == 0u,
-                  std::format(L"Command-line input should not expose visible native STATIC/EDIT controls; got {}.", snapshot.visibleNativeChildControlCount));
-    state.Require(snapshot.pane == FolderWindow::Pane::Left, L"Command-line input should be associated with the focused left pane.");
-    state.Require(snapshot.workingDirectory == root, L"Command-line working directory should be the focused pane folder.");
-    const std::wstring quotedRoot = QuoteExpectedCommandLineText(root.wstring());
-    state.Require(snapshot.text == quotedRoot,
-                  std::format(L"Bring Current Directory should insert the quoted current folder. Expected '{}', got '{}'.", quotedRoot, snapshot.text));
-
-    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_BRING_FILENAME_TO_COMMAND_LINE, 0), 0);
-    PumpPendingMessages();
-    state.Require(g_folderWindow.DebugGetCommandLineSnapshot(snapshot), L"Command-line snapshot should be available after filename insertion.");
-    const std::wstring expectedFocused = quotedRoot + L" " + QuoteExpectedCommandLineText(L"space name.txt");
-    state.Require(snapshot.text == expectedFocused,
-                  std::format(L"Bring Filename should append the focused display name. Expected '{}', got '{}'.", expectedFocused, snapshot.text));
-
-    g_folderWindow.DebugSetCommandLineTextForTest(L"tool.exe");
-    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
-        FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"space name.txt" || name == L"beta.txt"; }, true);
-    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_BRING_FILENAME_TO_COMMAND_LINE, 0), 0);
-    PumpPendingMessages();
-
-    state.Require(g_folderWindow.DebugGetCommandLineSnapshot(snapshot), L"Command-line snapshot should be available after selected path insertion.");
-    const std::wstring expectedSelection =
-        std::wstring(L"tool.exe ") + QuoteExpectedCommandLineText(alphaPath.wstring()) + L" " + QuoteExpectedCommandLineText(betaPath.wstring());
-    state.Require(snapshot.text == expectedSelection,
-                  std::format(L"Bring Filename should append selected item paths. Expected '{}', got '{}'.", expectedSelection, snapshot.text));
-
-    struct LaunchCapture final
-    {
-        uint32_t calls = 0u;
-        std::wstring commandLine;
-        std::filesystem::path workingDirectory;
-    } launch;
-
-    g_folderWindow.DebugSetCommandLineLaunchCallback([&](std::wstring_view commandLine, const std::filesystem::path& workingDirectory) noexcept -> HRESULT
-    {
-        ++launch.calls;
-        launch.commandLine.assign(commandLine);
-        launch.workingDirectory = workingDirectory;
-        return S_OK;
-    });
-
-    HWND editHwnd = snapshot.editHwnd;
-    state.Require(editHwnd != nullptr && IsWindow(editHwnd) != FALSE, L"Command-line edit HWND should be valid before Enter.");
-    if (editHwnd)
-    {
-        SendMessageW(editHwnd, WM_KEYDOWN, VK_RETURN, 0);
-        PumpPendingMessages();
-    }
-
-    state.Require(launch.calls == 1u, std::format(L"Command-line Enter should launch once; got {} calls.", launch.calls));
-    state.Require(launch.commandLine == expectedSelection, L"Command-line Enter should launch the current input text.");
-    state.Require(launch.workingDirectory == root, L"Command-line Enter should use the command-line working directory.");
-    state.Require(g_folderWindow.DebugGetCommandLineSnapshot(snapshot), L"Command-line snapshot should remain available after launch.");
-    state.Require(! snapshot.visible, L"Command-line input should hide after a successful launch.");
-
-    return state.failure.empty();
-}
-
 [[nodiscard]] bool TestCommandOpenCommandShellPrefersWindowsTerminal(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -9602,10 +9920,1010 @@ struct OwnedMenuSessionEscapeResult
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestEmbeddedTerminalCommandStateTruth(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+    const std::filesystem::path root =
+        SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands) / L"work" / (L"terminal command state " + NewGuidText());
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create the Terminal command-state fixture folder.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restore = wil::scope_exit([&]
+    {
+        if (const HWND palette = GetCommandPaletteWindowHandle(); palette != nullptr && IsWindow(palette) != FALSE)
+        {
+            SendMessageW(palette, WM_CLOSE, 0u, 0);
+        }
+        g_folderWindow.DebugCloseTerminalPane(FolderWindow::Pane::Right);
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    g_folderWindow.DebugCloseTerminalPane(FolderWindow::Pane::Right);
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate the local file system for Terminal command-state validation.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
+                  L"Failed to navigate to the Terminal command-state fixture folder.");
+    g_folderWindow.CommandOpenCommandShell(FolderWindow::Pane::Left);
+
+    FolderWindow::TerminalPaneDebugSnapshot snapshot{};
+    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    do
+    {
+        PumpPendingMessages();
+        static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+        if (snapshot.open && snapshot.childHwnd != nullptr && snapshot.lifecycle == TerminalLifecycleState::Running)
+        {
+            break;
+        }
+        Sleep(10u);
+    } while (std::chrono::steady_clock::now() < deadline);
+
+    state.Require(snapshot.open && snapshot.childHwnd != nullptr && IsWindow(snapshot.childHwnd) != FALSE,
+                  L"Terminal command-state validation requires one live embedded Terminal.");
+    state.Require(snapshot.lifecycle == TerminalLifecycleState::Running,
+                  L"The Terminal command-state fixture must reach Running before state queries.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    CommandRuntimeState folderTabState{};
+    CommandRuntimeState previewTabState{};
+    CommandRuntimeState terminalTabState{};
+    CommandRuntimeState copyState{};
+    state.Require(g_folderWindow.QueryTerminalHostCommandState(
+                      snapshot.childHwnd, L"cmd/terminal/tab/select/1", folderTabState) && folderTabState.enabled,
+                  L"Embedded tab identity 1 must expose the available Folder target.");
+    state.Require(g_folderWindow.QueryTerminalHostCommandState(
+                      snapshot.childHwnd, L"cmd/terminal/tab/select/2", previewTabState) && ! previewTabState.enabled,
+                  L"Embedded tab identity 2 must be disabled when Preview is unavailable.");
+    state.Require(g_folderWindow.QueryTerminalHostCommandState(
+                      snapshot.childHwnd, L"cmd/terminal/tab/select/3", terminalTabState) && terminalTabState.enabled,
+                  L"Embedded tab identity 3 must be enabled while its Terminal is live.");
+    state.Require(g_folderWindow.QueryTerminalHostCommandState(
+                      snapshot.childHwnd, L"cmd/terminal/copy", copyState) && ! copyState.enabled,
+                  L"Copy Terminal Selection must be disabled when the Terminal has no selection.");
+
+    state.Require(FocusWindowAndWait(snapshot.childHwnd, SelfTest::Scale(1000ms)),
+                  L"The embedded Terminal must accept focus before direct dispatch validation.");
+    state.Require(! g_folderWindow.ExecuteTerminalHostCommand(L"cmd/terminal/tab/select/2"),
+                  L"Direct dispatch must report not handled for unavailable tab identity 2.");
+    state.Require(g_folderWindow.ExecuteTerminalHostCommand(L"cmd/terminal/tab/select/1"),
+                  L"Direct dispatch must handle available tab identity 1.");
+    state.Require(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot) &&
+                      snapshot.open && ! snapshot.selected,
+                  L"Direct selection of tab identity 1 must hide without closing the Terminal.");
+    state.Require(g_folderWindow.DebugSetPaneContentTab(FolderWindow::Pane::Right, 2u),
+                  L"The test must restore live tab identity 3 before shortcut validation.");
+    state.Require(FocusWindowAndWait(snapshot.childHwnd, SelfTest::Scale(1000ms)),
+                  L"The restored Terminal must accept focus before shortcut validation.");
+    state.Require(! DebugDispatchShortcutCommand(mainWindow, L"cmd/terminal/tab/select/2"),
+                  L"Shortcut dispatch must not consume unavailable tab identity 2.");
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/terminal/tab/select/3"),
+                  L"Shortcut dispatch must handle available tab identity 3.");
+
+    const Common::Settings::ShortcutsSettings shortcuts =
+        g_settings.shortcuts.value_or(ShortcutDefaults::CreateDefaultShortcuts());
+    const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"terminal-command-state-selftest");
+    ShowCommandPaletteWindow(mainWindow, shortcuts, true, theme);
+    PumpPendingMessages();
+    state.Require(DebugSetCommandPaletteSearch(L"cmd/terminal/tab/select/2"),
+                  L"The palette must accept the unavailable numbered-tab query.");
+    PumpPendingMessages();
+    CommandPaletteDebugSnapshot paletteSnapshot{};
+    state.Require(DebugGetCommandPaletteSnapshot(paletteSnapshot) && paletteSnapshot.rowCount == 1u &&
+                      paletteSnapshot.selectedCommandId == L"cmd/terminal/tab/select/2" &&
+                      ! paletteSnapshot.selectedEnabled,
+                  L"The palette must render unavailable tab identity 2 as disabled.");
+    const HWND palette = GetCommandPaletteWindowHandle();
+    if (palette != nullptr && IsWindow(palette) != FALSE)
+    {
+        SendMessageW(palette, WM_KEYDOWN, VK_RETURN, 0u);
+        PumpPendingMessages();
+    }
+    state.Require(GetCommandPaletteWindowHandle() == palette && palette != nullptr && IsWindow(palette) != FALSE,
+                  L"Enter on a disabled numbered-tab row must remain inert and keep the palette open.");
+
+    state.Require(DebugSetCommandPaletteSearch(L"cmd/terminal/close"),
+                  L"The palette must accept the host-owned Terminal Close query.");
+    PumpPendingMessages();
+    state.Require(DebugGetCommandPaletteSnapshot(paletteSnapshot) && paletteSnapshot.rowCount == 1u &&
+                      paletteSnapshot.selectedCommandId == L"cmd/terminal/close" && paletteSnapshot.selectedEnabled,
+                  L"Terminal Close must be enabled while the originating Terminal is live.");
+    g_folderWindow.DebugCloseTerminalPane(FolderWindow::Pane::Right);
+    PumpPendingMessages();
+    if (palette != nullptr && IsWindow(palette) != FALSE)
+    {
+        SendMessageW(palette, WM_KEYDOWN, VK_RETURN, 0u);
+        PumpPendingMessages();
+    }
+    state.Require(GetCommandPaletteWindowHandle() == palette && palette != nullptr && IsWindow(palette) != FALSE,
+                  L"Activation must remain inert after the palette's captured Terminal instance exits.");
+    state.Require(DebugGetCommandPaletteSnapshot(paletteSnapshot) && paletteSnapshot.selectedCommandId == L"cmd/terminal/close" &&
+                      ! paletteSnapshot.selectedEnabled,
+                  L"A replaced or exited Terminal session must rebuild the palette row as disabled without requiring search edits.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestTerminalSessionMenuFloatingDispatch(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path root =
+        SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands) / L"work" / (L"terminal session menu " + NewGuidText());
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create the Terminal session-menu fixture folder.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::optional<Common::Settings::TerminalSettings> settingsBefore = g_settings.terminal;
+    const auto restore = wil::scope_exit([&]() noexcept
+    {
+        FloatingTerminalDebugSnapshot floating{};
+        while (DebugGetFloatingTerminalSnapshot(floating) && floating.tabCount > 0u)
+        {
+            if (! DebugCloseFloatingTerminalTab(floating.tabCount - 1u))
+            {
+                break;
+            }
+            PumpPendingMessages();
+        }
+        g_folderWindow.DebugCloseTerminalPane(FolderWindow::Pane::Right);
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+        g_settings.terminal = settingsBefore;
+    });
+
+    g_folderWindow.DebugCloseTerminalPane(FolderWindow::Pane::Right);
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate the local file system for the Terminal session-menu fixture.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
+                  L"Failed to navigate to the Terminal session-menu fixture folder.");
+    g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+    const HWND folder = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(FocusWindowAndWait(folder, SelfTest::Scale(1000ms)),
+                  L"The first floating Terminal must be launchable from a normal file pane.");
+    CommandRuntimeState initialState{};
+    state.Require(ResolveCommandRuntimeStateFromWindow(mainWindow, folder, L"cmd/terminal/openFloatingWindow",
+                                                       CommandStateSource::ApplicationHost, initialState) && initialState.enabled,
+                  L"Ctrl+Alt+T and Command Shell Window must be enabled before any Terminal exists.");
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/terminal/openFloatingWindow"),
+                  L"The floating Terminal shortcut must open from a file pane without an existing Terminal.");
+    FloatingTerminalDebugSnapshot initialFloating{};
+    state.Require(DebugGetFloatingTerminalSnapshot(initialFloating) && initialFloating.tabCount == 1u,
+                  L"First floating shortcut dispatch must create one live tab.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    state.Require(DebugCloseFloatingTerminalTab(0u), L"Failed to close the initial floating Terminal tab.");
+    PumpPendingMessages();
+    state.Require(FocusWindowAndWait(folder, SelfTest::Scale(1000ms)), L"Restore file-pane focus before menu dispatch.");
+    SendMessageW(mainWindow, WM_COMMAND, IDM_TERMINAL_OPEN_FLOATING_WINDOW, 0);
+    PumpPendingMessages();
+    state.Require(DebugGetFloatingTerminalSnapshot(initialFloating) && initialFloating.tabCount == 1u,
+                  L"Command Shell Window menu dispatch must also create a tab from a file pane.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    state.Require(DebugCloseFloatingTerminalTab(0u), L"Failed to close the menu-created floating Terminal tab.");
+    PumpPendingMessages();
+    g_folderWindow.CommandOpenCommandShell(FolderWindow::Pane::Left);
+
+    FolderWindow::TerminalPaneDebugSnapshot embedded{};
+    const auto embeddedDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    while (std::chrono::steady_clock::now() < embeddedDeadline)
+    {
+        PumpPendingMessages();
+        if (g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, embedded) && embedded.open &&
+            embedded.childHwnd != nullptr && embedded.lifecycle == TerminalLifecycleState::Running)
+        {
+            break;
+        }
+        Sleep(10u);
+    }
+    state.Require(embedded.open && embedded.childHwnd != nullptr && embedded.lifecycle == TerminalLifecycleState::Running,
+                  L"The Terminal session-menu dispatch fixture requires one live embedded Terminal.");
+    state.Require(FocusWindowAndWait(embedded.childHwnd, SelfTest::Scale(1000ms)),
+                  L"The Terminal session-menu dispatch fixture must originate from the embedded Terminal.");
+    state.Require(GetFloatingTerminalWindowHandle() == nullptr,
+                  L"Terminal session-menu dispatch fixture requires no pre-existing floating Terminal.");
+
+    CommandRuntimeState floatingState{};
+    state.Require(g_folderWindow.QueryTerminalHostCommandState(
+                      embedded.childHwnd, L"cmd/terminal/openFloatingWindow", floatingState) &&
+                      floatingState.enabled,
+                  L"The Terminal session-menu floating action must be enabled for a live local Terminal.");
+    const std::optional<std::filesystem::path> launchPath = g_folderWindow.GetActiveTerminalLaunchPath();
+    state.Require(launchPath.has_value() && launchPath.value().lexically_normal() == root.lexically_normal(),
+                  L"The Terminal session-menu floating action must preserve the source pane launch path.");
+    state.Require(g_folderWindow.ExecuteTerminalHostCommand(L"cmd/terminal/openFloatingWindow"),
+                  L"The Terminal session-menu floating action must dispatch through the host command path.");
+
+    FloatingTerminalDebugSnapshot snapshot{};
+    const auto openDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    while (std::chrono::steady_clock::now() < openDeadline)
+    {
+        PumpPendingMessages();
+        if (DebugGetFloatingTerminalSnapshot(snapshot) && snapshot.root != nullptr && snapshot.tabCount == 1u)
+        {
+            break;
+        }
+        Sleep(10u);
+    }
+    state.Require(snapshot.root != nullptr && snapshot.tabCount == 1u,
+                  L"The Terminal session-menu floating action must create one floating Terminal tab.");
+    if (snapshot.tabCount > 0u)
+    {
+        state.Require(DebugCloseFloatingTerminalTab(snapshot.tabCount - 1u),
+                      L"Failed to close the session-menu floating Terminal fixture tab.");
+    }
+
+    const auto closeDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+    while (std::chrono::steady_clock::now() < closeDeadline && GetFloatingTerminalWindowHandle() != nullptr)
+    {
+        PumpPendingMessages();
+        Sleep(10u);
+    }
+    state.Require(GetFloatingTerminalWindowHandle() == nullptr,
+                  L"Session-menu floating Terminal fixture did not release its singleton root.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestEmbeddedTerminalPluginLifecycle(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    const std::filesystem::path root = suiteRoot / L"work" / (L"embedded terminal " + NewGuidText());
+    const std::filesystem::path focusedFile = root / L"space name.txt";
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create embedded-terminal test folder.");
+    state.Require(SelfTest::WriteTextFile(focusedFile, "terminal"), L"Failed to create embedded-terminal focused file.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::optional<Common::Settings::MouseSettings> mouseBefore = g_settings.mouse;
+    const auto restore = wil::scope_exit([&]
+    {
+        g_settings.mouse = mouseBefore;
+        g_folderWindow.DebugCloseTerminalPane(FolderWindow::Pane::Right);
+        g_folderWindow.DebugCloseTerminalPane(FolderWindow::Pane::Left);
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate the local filesystem for embedded-terminal test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
+                  L"Failed to navigate to embedded-terminal test folder.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"space name.txt"}, SelfTest::Scale(3000ms)),
+                  L"Embedded-terminal focused file did not enumerate.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"space name.txt"),
+                  L"Failed to focus embedded-terminal path insertion file.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.CommandOpenCommandShell(FolderWindow::Pane::Left);
+    FolderWindow::TerminalPaneDebugSnapshot snapshot{};
+    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    do
+    {
+        PumpPendingMessages();
+        static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+        if (snapshot.lifecycle == TerminalLifecycleState::Running &&
+            snapshot.activityTrust == TerminalActivityTrust::Trusted && snapshot.idleAtPrimaryPrompt)
+        {
+            break;
+        }
+        Sleep(10u);
+    } while (std::chrono::steady_clock::now() < deadline);
+
+    state.Require(snapshot.open, L"Embedded terminal should be open in the opposite pane.");
+    state.Require(snapshot.selected, L"Embedded terminal tab should be selected.");
+    state.Require(snapshot.childHwnd != nullptr && IsWindow(snapshot.childHwnd) != FALSE,
+                  L"Embedded terminal must expose a live child HWND.");
+    state.Require(WindowExposesUiaProvider(snapshot.childHwnd),
+                  L"Embedded terminal child HWND must expose its plugin-owned UI Automation provider.");
+    state.Require(snapshot.parentHwnd != nullptr && IsWindow(snapshot.parentHwnd) != FALSE,
+                  L"Embedded terminal child HWND must stay parented to the FolderWindow frame.");
+    state.Require(snapshot.visibleTabCount == 2u && ! snapshot.previewTabVisible && snapshot.terminalTabVisible,
+                  L"A terminal-only pane should show Folder and Terminal headers without an inactive Preview tab.");
+    state.Require(g_folderWindow.IsTerminalInputTarget(snapshot.childHwnd),
+                  L"The embedded terminal child must be recognized as an exclusive terminal input target.");
+    state.Require(snapshot.sourcePath == root, L"Embedded terminal should retain its launch folder identity.");
+    state.Require(snapshot.lifecycle == TerminalLifecycleState::Running,
+                  std::format(L"Embedded terminal should reach Running; got lifecycle {}.", static_cast<uint32_t>(snapshot.lifecycle)));
+    state.Require(snapshot.activityTrust == TerminalActivityTrust::Trusted,
+                  std::format(L"The contained PowerShell root should authenticate its prompt state through the private PID-bound pipe; status: {}.",
+                              snapshot.status));
+    state.Require(snapshot.idleAtPrimaryPrompt, L"The authenticated PowerShell root should publish its initial idle prompt.");
+    std::wstring promptText;
+    HRESULT promptRead = E_PENDING;
+    bool promptVisible = false;
+    const auto promptDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+    do
+    {
+        PumpPendingMessages();
+        promptRead = g_folderWindow.DebugGetTerminalScreenText(FolderWindow::Pane::Right, promptText);
+        promptVisible = SUCCEEDED(promptRead) && promptText.find_first_not_of(L" \t\r\n") != std::wstring::npos;
+        if (promptVisible)
+        {
+            break;
+        }
+        Sleep(10u);
+    } while (std::chrono::steady_clock::now() < promptDeadline);
+    // Profiles may abbreviate or omit the current directory. Require visible
+    // VT text without prescribing the user's prompt format. The test-only hook
+    // reads the production formatter without UIA broker discovery or workers.
+    state.Require(promptVisible,
+                  std::format(L"A Running shell must produce initial terminal text (read=0x{:08X}, characters={}).",
+                              static_cast<uint32_t>(promptRead), promptText.size()));
+    state.Require((snapshot.capabilityFlags & TerminalCapabilityPromptTracking) != 0u,
+                  L"A trusted PowerShell prompt should expose prompt-tracking capability.");
+
+    const HWND terminalChild = snapshot.childHwnd;
+    const auto keepAliveUntil = std::chrono::steady_clock::now() + SelfTest::Scale(1000ms);
+    do
+    {
+        PumpPendingMessages();
+        Sleep(10u);
+        static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+        if (! snapshot.open || snapshot.childHwnd != terminalChild || snapshot.lifecycle != TerminalLifecycleState::Running)
+        {
+            break;
+        }
+    } while (std::chrono::steady_clock::now() < keepAliveUntil);
+    RECT keepAliveClient{};
+    if (terminalChild != nullptr)
+    {
+        static_cast<void>(GetClientRect(terminalChild, &keepAliveClient));
+    }
+    if (! state.Require(snapshot.open && snapshot.childHwnd == terminalChild &&
+                            IsWindow(terminalChild) != FALSE && snapshot.lifecycle == TerminalLifecycleState::Running,
+                        std::format(L"The live terminal must still be Running 1s after open, before SwapPanes (open={}, hwnd={}, lifecycle={}, exitCodePresent={}, exitCode={}, client={}x{}).",
+                                    snapshot.open,
+                                    static_cast<void*>(snapshot.childHwnd),
+                                    static_cast<uint32_t>(snapshot.lifecycle),
+                                    snapshot.exitCodePresent,
+                                    snapshot.exitCode,
+                                    keepAliveClient.right - keepAliveClient.left,
+                                    keepAliveClient.bottom - keepAliveClient.top)))
+    {
+        return false;
+    }
+    g_folderWindow.SwapPanes();
+    PumpPendingMessages();
+    FolderWindow::TerminalPaneDebugSnapshot leftAfterSwap{};
+    FolderWindow::TerminalPaneDebugSnapshot rightAfterSwap{};
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Left, leftAfterSwap));
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, rightAfterSwap));
+    state.Require(leftAfterSwap.open && leftAfterSwap.childHwnd == terminalChild && IsWindow(terminalChild) != FALSE,
+                  std::format(L"SwapPanes must rebind the live opposite-pane terminal onto the swapped host pane (leftOpen={}, leftHwnd={}, expected={}, rightOpen={}).",
+                              leftAfterSwap.open,
+                              static_cast<void*>(leftAfterSwap.childHwnd),
+                              static_cast<void*>(terminalChild),
+                              rightAfterSwap.open));
+    state.Require(leftAfterSwap.parentHwnd != nullptr && IsWindow(leftAfterSwap.parentHwnd) != FALSE,
+                  L"SwapPanes must keep the live terminal child parented to the FolderWindow frame.");
+    state.Require(! rightAfterSwap.open,
+                  L"The original host pane must not keep the terminal after SwapPanes.");
+    RECT frameAfterSwap{};
+    RECT termAfterSwap{};
+    state.Require(GetWindowRect(g_folderWindow.GetHwnd(), &frameAfterSwap) != FALSE &&
+                      GetWindowRect(terminalChild, &termAfterSwap) != FALSE &&
+                      ((termAfterSwap.left + termAfterSwap.right) / 2) < ((frameAfterSwap.left + frameAfterSwap.right) / 2),
+                  L"SwapPanes must lay the live terminal child over the destination (left) pane, not leave it on the original host.");
+    const auto afterFirstSwapKeepAliveUntil = std::chrono::steady_clock::now() + SelfTest::Scale(1000ms);
+    do
+    {
+        PumpPendingMessages();
+        Sleep(10u);
+        static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Left, leftAfterSwap));
+        if (! leftAfterSwap.open || leftAfterSwap.childHwnd != terminalChild ||
+            leftAfterSwap.lifecycle != TerminalLifecycleState::Running)
+        {
+            break;
+        }
+    } while (std::chrono::steady_clock::now() < afterFirstSwapKeepAliveUntil);
+    if (! state.Require(leftAfterSwap.open && leftAfterSwap.childHwnd == terminalChild &&
+                            IsWindow(terminalChild) != FALSE && leftAfterSwap.lifecycle == TerminalLifecycleState::Running,
+                        std::format(L"The live terminal must still be Running 1s after the first SwapPanes (open={}, hwnd={}, lifecycle={}).",
+                                    leftAfterSwap.open,
+                                    static_cast<void*>(leftAfterSwap.childHwnd),
+                                    static_cast<uint32_t>(leftAfterSwap.lifecycle))))
+    {
+        return false;
+    }
+
+    state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Right, L"space name.txt") &&
+                      g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Right, L"space name.txt"),
+                  L"The original source folder and focused item must move to the right pane after one SwapPanes.");
+    g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Right);
+    g_folderWindow.CommandBringCurrentDirToCommandLine(FolderWindow::Pane::Right);
+    PumpPendingMessages();
+    FolderView::AlertOverlayDebugSnapshot insertionAlert{};
+    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Right, insertionAlert) && ! insertionAlert.visible,
+                  L"Current-directory insertion after one SwapPanes must retain the Terminal's immutable original source-pane identity.");
+    g_folderWindow.CommandInsertFocusedPathInTerminal(FolderWindow::Pane::Right, false);
+    PumpPendingMessages();
+    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Right, insertionAlert) && ! insertionAlert.visible,
+                  L"Focused-path insertion after one SwapPanes must retain the Terminal's immutable original source-pane identity.");
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Left, leftAfterSwap));
+    state.Require(leftAfterSwap.open && leftAfterSwap.childHwnd == terminalChild && leftAfterSwap.selected,
+                  L"Both post-swap insertion commands must reuse and select the live Terminal on the swapped host pane.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.SwapPanes();
+    FolderWindow::TerminalPaneDebugSnapshot rightBeforePump{};
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, rightBeforePump));
+    PumpPendingMessages();
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+    FolderWindow::TerminalPaneDebugSnapshot leftAfterReturn{};
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Left, leftAfterReturn));
+    if (! state.Require(snapshot.open && snapshot.childHwnd == terminalChild && IsWindow(terminalChild) != FALSE,
+                        std::format(L"A second SwapPanes must restore the live terminal to its original host pane (beforePumpOpen={}, beforePumpHwnd={}, beforePumpLifecycle={}, open={}, hwnd={}, expected={}, lifecycle={}, leftOpen={}).",
+                                    rightBeforePump.open,
+                                    static_cast<void*>(rightBeforePump.childHwnd),
+                                    static_cast<uint32_t>(rightBeforePump.lifecycle),
+                                    snapshot.open,
+                                    static_cast<void*>(snapshot.childHwnd),
+                                    static_cast<void*>(terminalChild),
+                                    static_cast<uint32_t>(snapshot.lifecycle),
+                                    leftAfterReturn.open)))
+    {
+        return false;
+    }
+    RECT frameAfterReturn{};
+    RECT termAfterReturn{};
+    if (! state.Require(GetWindowRect(g_folderWindow.GetHwnd(), &frameAfterReturn) != FALSE &&
+                            GetWindowRect(terminalChild, &termAfterReturn) != FALSE &&
+                            ((termAfterReturn.left + termAfterReturn.right) / 2) > ((frameAfterReturn.left + frameAfterReturn.right) / 2),
+                        L"A second SwapPanes must lay the live terminal child back over the original (right) pane."))
+    {
+        return false;
+    }
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, L"builtin/file-system")),
+                  L"Failed to activate the local filesystem on the right pane for the second terminal.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Right, root, SelfTest::Scale(3000ms)),
+                  L"Failed to navigate the right pane to the embedded-terminal test folder before opening the second terminal.");
+    g_folderWindow.CommandOpenCommandShell(FolderWindow::Pane::Right);
+    FolderWindow::TerminalPaneDebugSnapshot secondTerminal{};
+    const auto secondTerminalDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    do
+    {
+        PumpPendingMessages();
+        static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Left, secondTerminal));
+        if (secondTerminal.open && secondTerminal.childHwnd != nullptr && IsWindow(secondTerminal.childHwnd) != FALSE)
+        {
+            break;
+        }
+        Sleep(10u);
+    } while (std::chrono::steady_clock::now() < secondTerminalDeadline);
+    FolderWindow::TerminalPaneDebugSnapshot rightWhileOpeningSecond{};
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, rightWhileOpeningSecond));
+    state.Require(secondTerminal.open && secondTerminal.childHwnd != nullptr && IsWindow(secondTerminal.childHwnd) != FALSE &&
+                      rightWhileOpeningSecond.open && rightWhileOpeningSecond.childHwnd == terminalChild,
+                  std::format(L"A second opposite-pane terminal must open on the left while the right terminal stays live (leftOpen={}, leftHwnd={}, rightOpen={}, rightHwnd={}, expectedRight={}).",
+                              secondTerminal.open,
+                              static_cast<void*>(secondTerminal.childHwnd),
+                              rightWhileOpeningSecond.open,
+                              static_cast<void*>(rightWhileOpeningSecond.childHwnd),
+                              static_cast<void*>(terminalChild)));
+    g_folderWindow.TogglePreviewPane(FolderWindow::Pane::Left);
+    PumpPendingMessages();
+    state.Require(g_folderWindow.DebugSetPaneContentTab(FolderWindow::Pane::Right, 1u),
+                  L"Preview must be selectable on a pane that also hosts a live Terminal.");
+    PumpPendingMessages();
+    g_folderWindow.SwapPanes();
+    PumpPendingMessages();
+    const size_t leftTabAfterDualSwap = g_folderWindow.DebugGetPaneContentTab(FolderWindow::Pane::Left);
+    const size_t rightTabAfterDualSwap = g_folderWindow.DebugGetPaneContentTab(FolderWindow::Pane::Right);
+    FolderWindow::TerminalPaneDebugSnapshot leftExclusive{};
+    FolderWindow::TerminalPaneDebugSnapshot rightExclusive{};
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Left, leftExclusive));
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, rightExclusive));
+    state.Require(leftTabAfterDualSwap <= 2u && rightTabAfterDualSwap <= 2u &&
+                      (leftTabAfterDualSwap != 1u || ! leftExclusive.selected) &&
+                      (rightTabAfterDualSwap != 1u || ! rightExclusive.selected) &&
+                      (leftTabAfterDualSwap != 2u || leftExclusive.selected) &&
+                      (rightTabAfterDualSwap != 2u || rightExclusive.selected),
+                  std::format(L"SwapPanes must keep exactly one of Folder/Preview/Terminal selected per pane (leftTab={}, rightTab={}, leftTerminalSelected={}, rightTerminalSelected={}).",
+                              leftTabAfterDualSwap,
+                              rightTabAfterDualSwap,
+                              leftExclusive.selected,
+                              rightExclusive.selected));
+    g_folderWindow.SwapPanes();
+    PumpPendingMessages();
+    g_folderWindow.DebugCloseTerminalPane(FolderWindow::Pane::Left);
+    FolderWindow::PreviewPaneDebugSnapshot previewAfterDualSwap{};
+    if (g_folderWindow.DebugGetPreviewPaneSnapshot(previewAfterDualSwap) && previewAfterDualSwap.active)
+    {
+        g_folderWindow.TogglePreviewPane(previewAfterDualSwap.sourcePane);
+    }
+    PumpPendingMessages();
+    state.Require(g_folderWindow.DebugSetPaneContentTab(FolderWindow::Pane::Right, 2u),
+                  L"Restoring the original right-pane Terminal tab must succeed after the exclusive-tab swap fixture.");
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+
+    MSG routedMessage{};
+    routedMessage.hwnd = snapshot.childHwnd;
+    routedMessage.message = WM_KEYDOWN;
+    routedMessage.wParam = static_cast<WPARAM>('P');
+    routedMessage.lParam = static_cast<LPARAM>(1u | (0x19u << 16u));
+    TerminalShortcutRoute route = TerminalShortcutRoute::PassThrough;
+    state.Require(SUCCEEDED(g_folderWindow.RouteTerminalShortcut(snapshot.childHwnd,
+                                                                  L"cmd/app/preferences",
+                                                                  routedMessage,
+                                                                  ShortcutManager::kModCtrl,
+                                                                  route)) &&
+                      route == TerminalShortcutRoute::InvokeHostCommand,
+                  L"A routed Application command should pass the Terminal security gate and return InvokeHostCommand.");
+    route = TerminalShortcutRoute::PassThrough;
+    state.Require(SUCCEEDED(g_folderWindow.RouteTerminalShortcut(snapshot.childHwnd,
+                                                                  L"cmd/terminal/font/increase",
+                                                                  routedMessage,
+                                                                  ShortcutManager::kModCtrl,
+                                                                  route)) &&
+                      route == TerminalShortcutRoute::Handled,
+                  L"A Terminal-local font action should execute through ITerminalActions and return Handled.");
+    routedMessage.wParam = VK_RETURN;
+    routedMessage.lParam = static_cast<LPARAM>(1u | (0x1Cu << 16u));
+    route = TerminalShortcutRoute::Handled;
+    state.Require(SUCCEEDED(g_folderWindow.RouteTerminalShortcut(snapshot.childHwnd,
+                                                                  L"cmd/terminal/copySelectionOrPassthrough",
+                                                                  routedMessage,
+                                                                  0u,
+                                                                  route)) &&
+                      route == TerminalShortcutRoute::PassThrough,
+                  L"Conditional Enter should pass through exactly once when the Terminal has no selection.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const HWND reusedChild = snapshot.childHwnd;
+    SetFocus(reusedChild);
+    PumpPendingMessages();
+    state.Require(GetFocus() == reusedChild, L"Embedded terminal should accept focus before the focused repaint check.");
+    state.Require(RedrawWindow(reusedChild, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW) != FALSE,
+                  L"Embedded terminal focused repaint should complete.");
+
+    const HWND sourceFolderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(sourceFolderView != nullptr && IsWindow(sourceFolderView) != FALSE,
+                  L"Source FolderView should expose a live HWND before the inactive terminal repaint check.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    state.Require(FocusWindowAndWait(sourceFolderView, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Source FolderView should accept foreground focus before the inactive terminal repaint check.");
+    g_settings.mouse = Common::Settings::MouseSettings{
+        .focusFollowsPointerWhenTerminalOpen = true,
+    };
+    state.Require(g_folderWindow.DebugSetPaneContentTab(FolderWindow::Pane::Right, 0u),
+                  L"Failed to select the Folder tab while keeping the embedded terminal open.");
+    PumpPendingMessages();
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+    state.Require(snapshot.open && ! snapshot.selected,
+                  L"Selecting the Folder tab must keep the terminal open without displaying it.");
+    state.Require(IsWindowVisible(reusedChild) == FALSE,
+                  L"Selecting the Folder tab must hide the open terminal child.");
+    const HWND targetFolderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Right);
+    state.Require(targetFolderView != nullptr && IsWindowVisible(targetFolderView) != FALSE,
+                  L"The terminal host pane FolderView must be visible after selecting its Folder tab.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    // SetPaneContentTab focuses the host pane (same path as a mouse tab click). Restore the
+    // source FolderView before proving that a hidden opposite-pane terminal does not arm
+    // terminal-only pointer-follow.
+    state.Require(FocusWindowAndWait(sourceFolderView, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Source FolderView should accept focus after the opposite pane returns to its Folder tab.");
+    state.Require(! g_folderWindow.HandlePanePointerFocus(targetFolderView),
+                  L"Terminal-only focus-follows-pointer mode must stay disabled while an open terminal is hidden behind the Folder tab.");
+    state.Require(GetFocus() == sourceFolderView || IsChild(sourceFolderView, GetFocus()) != FALSE,
+                  L"A hidden terminal must not let pointer movement steal focus from the source FolderView.");
+    state.Require(g_folderWindow.DebugSetPaneContentTab(FolderWindow::Pane::Right, 2u),
+                  L"Failed to display the open Terminal tab before terminal pointer-focus validation.");
+    PumpPendingMessages();
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+    state.Require(snapshot.selected && IsWindowVisible(reusedChild) != FALSE,
+                  L"The Terminal tab must be selected and visible before terminal pointer-focus validation.");
+    state.Require(FocusWindowAndWait(sourceFolderView, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Source FolderView should accept focus before terminal pointer-follow validation.");
+    const HWND mainRoot                = GetAncestor(mainWindow, GA_ROOT);
+    const HWND foregroundBeforeFollow = GetForegroundWindow();
+    const bool foregroundOwned        = mainRoot != nullptr && foregroundBeforeFollow == mainRoot;
+    const bool pointerFocusHandled    = g_folderWindow.HandlePanePointerFocus(reusedChild);
+    state.Require(pointerFocusHandled == foregroundOwned,
+                  std::format(L"Terminal-only pointer-follow must match foreground ownership (handled={}, mainRoot=0x{:X}, foreground=0x{:X}).",
+                              pointerFocusHandled,
+                              reinterpret_cast<uintptr_t>(mainRoot),
+                              reinterpret_cast<uintptr_t>(foregroundBeforeFollow)));
+    if (foregroundOwned)
+    {
+        state.Require(GetFocus() == reusedChild || IsChild(reusedChild, GetFocus()) != FALSE,
+                      L"Terminal-only focus-follows-pointer mode did not focus the displayed embedded terminal pane.");
+    }
+    else
+    {
+        state.Require(GetFocus() == sourceFolderView || IsChild(sourceFolderView, GetFocus()) != FALSE,
+                      L"Terminal-only pointer-follow must fail closed without foreground ownership and preserve source focus.");
+    }
+    SetFocus(sourceFolderView);
+    PumpPendingMessages();
+    state.Require(RedrawWindow(reusedChild, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW) != FALSE,
+                  L"Embedded terminal inactive repaint should complete.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.CommandOpenCommandShell(FolderWindow::Pane::Left);
+    PumpPendingMessages();
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+    state.Require(snapshot.childHwnd == reusedChild,
+                  L"Open Command Shell should reuse the live opposite-pane terminal instead of replacing its process tree.");
+
+    // The post-swap insertion checks leave an unsubmitted line in PSReadLine.
+    // Discard that fixture input before testing follow-when-idle; a working
+    // terminal must defer folder changes while the user is editing a prompt.
+    SendMessageW(reusedChild, WM_CHAR, 0x03u, 1);
+    const auto clearedPromptDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+    do
+    {
+        PumpPendingMessages();
+        static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+        if (snapshot.activityTrust == TerminalActivityTrust::Trusted && snapshot.idleAtPrimaryPrompt)
+        {
+            break;
+        }
+        Sleep(10u);
+    } while (std::chrono::steady_clock::now() < clearedPromptDeadline);
+    state.Require(snapshot.activityTrust == TerminalActivityTrust::Trusted && snapshot.idleAtPrimaryPrompt,
+                  L"Canceling the fixture's unsubmitted line must restore an authenticated idle prompt before follow validation.");
+
+    const std::filesystem::path followedRoot = root / L"followed";
+    const std::filesystem::path followedFile = followedRoot / L"followed item.txt";
+    state.Require(SelfTest::EnsureDirectory(followedRoot), L"Failed to create embedded-terminal follow folder.");
+    state.Require(SelfTest::WriteTextFile(followedFile, "follow"), L"Failed to create embedded-terminal follow item.");
+    state.Require(SUCCEEDED(g_folderWindow.DebugSetTerminalConfiguration(
+                      FolderWindow::Pane::Right, R"json({"followPathWhenIdle":true})json")),
+                  L"Failed to enable terminal follow-when-idle for the lifecycle test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, followedRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, followedRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to navigate the terminal source pane to the follow folder.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"followed item.txt"}, SelfTest::Scale(3000ms)),
+                  L"The terminal follow folder did not enumerate.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"followed item.txt"),
+                  L"Failed to focus the followed terminal insertion item.");
+    const auto followDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    do
+    {
+        PumpPendingMessages();
+        static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+        if (snapshot.followState == TerminalFollowState::Applied && snapshot.activityTrust == TerminalActivityTrust::Trusted &&
+            snapshot.idleAtPrimaryPrompt)
+        {
+            break;
+        }
+        Sleep(10u);
+    } while (std::chrono::steady_clock::now() < followDeadline);
+    state.Require(snapshot.followState == TerminalFollowState::Applied,
+                  std::format(L"The terminal did not confirm the followed PowerShell cwd; status: {}.", snapshot.status));
+    state.Require(snapshot.sourcePath == followedRoot, L"The terminal did not retain the latest source-pane folder identity.");
+
+    g_folderWindow.CommandInsertFocusedPathInTerminal(FolderWindow::Pane::Left, false);
+    g_folderWindow.CommandInsertFocusedPathInTerminal(FolderWindow::Pane::Left, true);
+    PumpPendingMessages();
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+    state.Require(snapshot.open && snapshot.selected, L"Both terminal path-insertion commands must reuse the live opposite-pane terminal.");
+
+    g_folderWindow.CommandBringCurrentDirToCommandLine(FolderWindow::Pane::Left);
+    PumpPendingMessages();
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+    state.Require(snapshot.childHwnd == reusedChild && snapshot.selected,
+                  L"Bring Current Directory must insert through the same live opposite-pane terminal.");
+
+    const uint64_t localSourceGeneration = snapshot.sourceGeneration;
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(
+                      FolderWindow::Pane::Left, L"builtin/file-system-dummy")),
+                  L"Failed to switch the live terminal source pane to the unsupported dummy namespace.");
+    PumpPendingMessages();
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+    state.Require(snapshot.sourceGeneration > localSourceGeneration,
+                  L"A local-to-plugin source transition must advance the terminal source generation.");
+    state.Require(snapshot.sourceLocationKind == TerminalLocationKind::Unsupported && snapshot.sourcePath.empty(),
+                  L"A plugin namespace without validated backing must detach the old terminal source identity.");
+
+    g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
+    g_folderWindow.CommandOpenCommandShell(FolderWindow::Pane::Left);
+    PumpPendingMessages();
+    FolderView::AlertOverlayDebugSnapshot unsupportedAlert{};
+    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, unsupportedAlert) &&
+                      unsupportedAlert.visible,
+                  L"Opening a terminal from an unsupported plugin namespace must show a localized rejection.");
+    state.Require(unsupportedAlert.title == LoadStringResource(nullptr, IDS_CMD_OPEN_COMMAND_SHELL) &&
+                      unsupportedAlert.message == LoadStringResource(nullptr, IDS_MSG_TERMINAL_LOCATION_UNSUPPORTED),
+                  L"Unsupported terminal-open feedback must use localized command and policy resources.");
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+    state.Require(snapshot.childHwnd == reusedChild && snapshot.sourceLocationKind == TerminalLocationKind::Unsupported,
+                  L"Unsupported terminal open must not replace the live child or invent a default-root source.");
+
+    const uint64_t unsupportedSourceGeneration = snapshot.sourceGeneration;
+    const std::filesystem::path archivePath =
+        SelfTest::TryFindRepoRoot() / L"Plugins" / L"FileSystem7z" / L"Tests" / L"Tests.zip";
+    state.Require(SelfTest::PathExists(archivePath),
+                  std::format(L"The plugin-backed terminal fixture archive is missing: '{}'.", archivePath.wstring()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    const std::filesystem::path pluginBackingDirectory = archivePath.parent_path();
+    const std::filesystem::path pluginBackedLocation =
+        NavigationLocation::FormatHistoryPath(L"7z", archivePath.wstring(), L"/");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, pluginBackedLocation);
+    const auto pluginBackedDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+    do
+    {
+        PumpPendingMessages();
+        if (OrdinalString::EqualsNoCase(
+                g_folderWindow.GetFileSystemInstanceContext(FolderWindow::Pane::Left), archivePath.wstring()))
+        {
+            break;
+        }
+        Sleep(10u);
+    } while (std::chrono::steady_clock::now() < pluginBackedDeadline);
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+    state.Require(snapshot.sourceGeneration > unsupportedSourceGeneration &&
+                      snapshot.sourceLocationKind == TerminalLocationKind::PluginBacked &&
+                      OrdinalString::EqualsNoCase(snapshot.sourcePluginShortId, L"7z") &&
+                      snapshot.sourcePath == pluginBackingDirectory,
+                  std::format(L"A plugin instance with validated Windows backing must publish typed plugin-backed identity "
+                              L"(generation {}>{}, kind {}, short ID '{}', path '{}', context '{}').",
+                              snapshot.sourceGeneration,
+                              unsupportedSourceGeneration,
+                              static_cast<uint32_t>(snapshot.sourceLocationKind),
+                              snapshot.sourcePluginShortId,
+                              snapshot.sourcePath.wstring(),
+                              g_folderWindow.GetFileSystemInstanceContext(FolderWindow::Pane::Left)));
+
+    g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
+    g_folderWindow.CommandOpenCommandShell(FolderWindow::Pane::Left);
+    PumpPendingMessages();
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+    state.Require(snapshot.childHwnd == reusedChild && snapshot.sourceLocationKind == TerminalLocationKind::PluginBacked &&
+                      snapshot.sourcePath == pluginBackingDirectory,
+                  L"A supported plugin backing location must control terminal reuse without losing namespace identity.");
+
+    g_folderWindow.DebugCloseTerminalPane(FolderWindow::Pane::Right);
+    PumpPendingMessages();
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+    state.Require(! snapshot.open && snapshot.childHwnd == nullptr, L"Closing the terminal tab must synchronously release its child and instance.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestEmbeddedTerminalShellExitClosesOnlyItsTab(HWND /*mainWindow*/, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+    const std::filesystem::path root =
+        SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands) / L"work" / (L"embedded terminal exit " + NewGuidText());
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create the embedded-terminal exit test folder.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restore = wil::scope_exit([&]
+    {
+        g_folderWindow.DebugCloseTerminalPane(FolderWindow::Pane::Right);
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate the local filesystem for the embedded-terminal exit test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
+                  L"Failed to navigate to the embedded-terminal exit test folder.");
+    g_folderWindow.CommandOpenCommandShell(FolderWindow::Pane::Left);
+
+    FolderWindow::TerminalPaneDebugSnapshot snapshot{};
+    const auto openDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    do
+    {
+        PumpPendingMessages();
+        static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+        if (snapshot.open && snapshot.lifecycle == TerminalLifecycleState::Running && snapshot.childHwnd != nullptr &&
+            snapshot.activityTrust == TerminalActivityTrust::Trusted && snapshot.idleAtPrimaryPrompt)
+        {
+            break;
+        }
+        Sleep(10u);
+    } while (std::chrono::steady_clock::now() < openDeadline);
+
+    state.Require(snapshot.open && snapshot.selected && snapshot.childHwnd != nullptr &&
+                      snapshot.activityTrust == TerminalActivityTrust::Trusted && snapshot.idleAtPrimaryPrompt,
+                  L"The embedded terminal should be live before its shell exits.");
+    state.Require(snapshot.sessionGeneration != 0u, L"The live Terminal session must publish a nonzero session generation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    TerminalEvent staleEvent{};
+    staleEvent.sizeBytes = sizeof(staleEvent);
+    staleEvent.kind = TerminalEventKind::RootSessionExited;
+    staleEvent.instanceId = snapshot.instanceId;
+    staleEvent.instanceId.bytes[0] ^= 0xFFu;
+    staleEvent.sessionGeneration = snapshot.sessionGeneration;
+    staleEvent.exitCodePresent = 1u;
+    staleEvent.exitCode = 0u;
+    staleEvent.finalSnapshotComplete = 1u;
+    g_folderWindow.HandleTerminalSessionExited(staleEvent);
+    static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+    state.Require(snapshot.open, L"A stale Terminal exit event must not close a different live session.");
+
+    const HWND exitedChild = snapshot.childHwnd;
+    state.Require(g_folderWindow.DebugTerminateTerminalRootProcess(FolderWindow::Pane::Right, 0u) == S_OK,
+                  L"The embedded shell-exit regression must terminate the live Terminal root process.");
+
+    const auto closeDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(8000ms);
+    do
+    {
+        PumpPendingMessages();
+        static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+        if (! snapshot.open)
+        {
+            break;
+        }
+        Sleep(10u);
+    } while (std::chrono::steady_clock::now() < closeDeadline);
+
+    state.Require(! snapshot.open && snapshot.childHwnd == nullptr,
+                  L"A real shell exit must close only its matching embedded Terminal tab after final output.");
+    state.Require(IsWindow(exitedChild) == FALSE, L"The exited Terminal child HWND must be destroyed by the normal close path.");
+    const HWND fallbackFolder = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Right);
+    state.Require(fallbackFolder != nullptr && IsWindowVisible(fallbackFolder) != FALSE,
+                  L"Closing an exited Terminal session must select the host pane's Folder fallback.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestEmbeddedTerminalTabVisibilityAndKeyboardTarget(HWND /*mainWindow*/, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    const std::filesystem::path root = suiteRoot / L"work" / (L"embedded terminal chrome " + NewGuidText());
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create the embedded-terminal chrome test folder.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    FolderWindow::PreviewPaneDebugSnapshot previewBefore{};
+    const bool previewWasOpen = g_folderWindow.DebugGetPreviewPaneSnapshot(previewBefore) && previewBefore.active;
+    if (previewWasOpen)
+    {
+        g_folderWindow.TogglePreviewPane(previewBefore.sourcePane);
+        PumpPendingMessages();
+    }
+
+    const auto restore = wil::scope_exit([&]
+    {
+        g_folderWindow.DebugCloseTerminalPane(FolderWindow::Pane::Right);
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+        if (previewWasOpen)
+        {
+            FolderWindow::PreviewPaneDebugSnapshot currentPreview{};
+            if (! g_folderWindow.DebugGetPreviewPaneSnapshot(currentPreview) || ! currentPreview.active)
+            {
+                g_folderWindow.TogglePreviewPane(previewBefore.sourcePane);
+            }
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate the local filesystem for embedded-terminal chrome validation.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
+                  L"Failed to navigate to the embedded-terminal chrome test folder.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.CommandOpenCommandShell(FolderWindow::Pane::Left);
+    FolderWindow::TerminalPaneDebugSnapshot snapshot{};
+    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    do
+    {
+        PumpPendingMessages();
+        static_cast<void>(g_folderWindow.DebugGetTerminalPaneSnapshot(FolderWindow::Pane::Right, snapshot));
+        if (snapshot.open && snapshot.childHwnd != nullptr && IsWindow(snapshot.childHwnd) != FALSE)
+        {
+            break;
+        }
+        Sleep(10u);
+    } while (std::chrono::steady_clock::now() < deadline);
+
+    state.Require(snapshot.open && snapshot.selected && snapshot.childHwnd != nullptr,
+                  L"The embedded terminal should open and select its opposite-pane child for chrome validation.");
+    state.Require(snapshot.visibleTabCount == 2u && ! snapshot.previewTabVisible && snapshot.terminalTabVisible,
+                  L"A terminal-only pane should expose Folder and Terminal headers without an inactive Preview tab.");
+    state.Require(g_folderWindow.IsTerminalInputTarget(snapshot.childHwnd),
+                  L"The embedded terminal child should be classified as a terminal-priority input target.");
+    state.Require(! g_folderWindow.IsTerminalInputTarget(g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left)),
+                  L"A folder view must not be classified as a terminal-priority input target.");
+
+    const HWND rightFolderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Right);
+    const HWND terminalChild   = snapshot.childHwnd;
+    state.Require(g_folderWindow.DebugSetPaneContentTab(FolderWindow::Pane::Right, 2u),
+                  L"Selecting the Terminal content tab through the shared host path must succeed.");
+    PumpPendingMessages();
+    state.Require(GetFocus() == terminalChild || IsChild(terminalChild, GetFocus()) != FALSE,
+                  L"Mouse and command content-tab selection must focus the Terminal child.");
+    state.Require(g_folderWindow.GetFocusedPane() == FolderWindow::Pane::Right,
+                  L"A focused Terminal child must identify as the host pane, not fall through to _activePane.");
+
+    state.Require(g_folderWindow.DebugSetPaneContentTab(FolderWindow::Pane::Right, 0u),
+                  L"Selecting the Folder content tab through the shared host path must succeed.");
+    PumpPendingMessages();
+    state.Require(GetFocus() == rightFolderView || IsChild(rightFolderView, GetFocus()) != FALSE,
+                  L"Switching to the Folder tab must focus the pane FolderView.");
+    return state.failure.empty();
+}
+
 } // namespace (tests)
 
 void RunNavigationCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
 {
+    SelfTest::RunCase(options, suite, L"windows_command_line_argument_quoting_roundtrip", [](CaseState& state) noexcept {
+        return TestWindowsCommandLineArgumentQuoting(state);
+    });
     SelfTest::RunCase(options, suite, L"navigation_location_edit_input_expands_environment_variables", [](CaseState& state) noexcept {
         return TestNavigationLocationEditInputExpandsEnvironmentVariables(state);
     });
@@ -9675,11 +10993,23 @@ void RunNavigationCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTes
     SelfTest::RunCase(options, suite, L"cmd_pane_navigation_change_directory_edit_clipboard_accelerators", [=](CaseState& state) noexcept {
         return TestChangeDirectoryEditClipboardAccelerators(mainWindow, state);
     });
-    SelfTest::RunCase(options, suite, L"cmd_pane_command_line_insertion_and_execute", [=](CaseState& state) noexcept {
-        return TestPaneCommandLineInsertionAndExecute(mainWindow, state);
-    });
     SelfTest::RunCase(options, suite, L"cmd_pane_open_command_shell_prefers_windows_terminal", [=](CaseState& state) noexcept {
         return TestCommandOpenCommandShellPrefersWindowsTerminal(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_embedded_terminal_command_state_truth", [=](CaseState& state) noexcept {
+        return TestEmbeddedTerminalCommandStateTruth(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_terminal_session_menu_floating_dispatch", [=](CaseState& state) noexcept {
+        return TestTerminalSessionMenuFloatingDispatch(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_embedded_terminal_plugin_lifecycle", [=](CaseState& state) noexcept {
+        return TestEmbeddedTerminalPluginLifecycle(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_embedded_terminal_shell_exit_closes_only_its_tab", [=](CaseState& state) noexcept {
+        return TestEmbeddedTerminalShellExitClosesOnlyItsTab(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_embedded_terminal_tab_visibility_and_keyboard_target", [=](CaseState& state) noexcept {
+        return TestEmbeddedTerminalTabVisibilityAndKeyboardTarget(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_navigation_switch_pane_focus_keeps_navigation_shell_stable", [=](CaseState& state) noexcept {
         return TestSwitchPaneFocusKeepsNavigationShellStable(mainWindow, state);
@@ -9689,6 +11019,9 @@ void RunNavigationCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTes
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_navigation_directory_impact_preserves_selection", [](CaseState& state) noexcept {
         return TestDirectoryImpactRefreshPreservesSelectionForSurvivingItems(state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_delete_rehomes_current_item_to_next_or_previous", [](CaseState& state) noexcept {
+        return TestDeleteRehomesCurrentItemToNextOrPrevious(state);
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_navigation_directory_impact_preserves_selection_across_chained_renames", [](CaseState& state) noexcept {
         return TestDirectoryImpactRefreshPreservesSelectionAcrossChainedRenames(state);

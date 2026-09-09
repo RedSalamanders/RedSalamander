@@ -5,13 +5,16 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #ifdef ENABLE_TESTS
 #include <atomic>
@@ -37,6 +40,7 @@ namespace Testing
 // They are compiled only into test-enabled binaries and never alter Release behavior.
 inline std::atomic<HRESULT> g_nextWriteFailure{S_OK};
 inline std::atomic<HRESULT> g_nextFlushFailure{S_OK};
+inline std::atomic<HRESULT> g_nextPublishFailure{S_OK};
 
 inline void FailNextLocalFileTransactionWrite(HRESULT hr) noexcept
 {
@@ -48,6 +52,11 @@ inline void FailNextLocalFileTransactionFlush(HRESULT hr) noexcept
     g_nextFlushFailure.store(FAILED(hr) ? hr : E_FAIL, std::memory_order_relaxed);
 }
 
+inline void FailNextLocalFileTransactionPublish(HRESULT hr) noexcept
+{
+    g_nextPublishFailure.store(FAILED(hr) ? hr : E_FAIL, std::memory_order_relaxed);
+}
+
 [[nodiscard]] inline HRESULT TakeNextLocalFileTransactionWriteFailure() noexcept
 {
     return g_nextWriteFailure.exchange(S_OK, std::memory_order_relaxed);
@@ -56,6 +65,11 @@ inline void FailNextLocalFileTransactionFlush(HRESULT hr) noexcept
 [[nodiscard]] inline HRESULT TakeNextLocalFileTransactionFlushFailure() noexcept
 {
     return g_nextFlushFailure.exchange(S_OK, std::memory_order_relaxed);
+}
+
+[[nodiscard]] inline HRESULT TakeNextLocalFileTransactionPublishFailure() noexcept
+{
+    return g_nextPublishFailure.exchange(S_OK, std::memory_order_relaxed);
 }
 } // namespace Testing
 #endif
@@ -124,16 +138,20 @@ public:
         }
 
         const std::filesystem::path parent = normalizedTarget.parent_path();
+        const std::filesystem::path extendedParent(
+            Common::Paths::ToExtendedWin32Path(parent.native()));
+        const std::filesystem::path extendedTarget(
+            Common::Paths::ToExtendedWin32Path(normalizedTarget.native()));
         if (createParentDirectories)
         {
-            std::filesystem::create_directories(parent, ec);
+            std::filesystem::create_directories(extendedParent, ec);
             if (ec)
             {
                 return HRESULT_FROM_WIN32(static_cast<DWORD>(ec.value()));
             }
         }
 
-        const DWORD parentAttributes = GetFileAttributesW(parent.c_str());
+        const DWORD parentAttributes = GetFileAttributesW(extendedParent.c_str());
         if (parentAttributes == INVALID_FILE_ATTRIBUTES)
         {
             const DWORD error = GetLastError();
@@ -146,7 +164,7 @@ public:
 
         if (policy == ExistingTargetPolicy::FailIfExists)
         {
-            const DWORD targetAttributes = GetFileAttributesW(normalizedTarget.c_str());
+            const DWORD targetAttributes = GetFileAttributesW(extendedTarget.c_str());
             if (targetAttributes != INVALID_FILE_ATTRIBUTES)
             {
                 return HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
@@ -161,20 +179,20 @@ public:
         Common::Paths::UniqueSiblingFileOptions options{};
         options.prefix             = L".$rs-transaction-";
         options.suffix             = L".tmp";
-        options.desiredAccess      = GENERIC_WRITE;
+        options.desiredAccess      = GENERIC_WRITE | DELETE;
         options.shareMode          = FILE_SHARE_READ;
         options.flagsAndAttributes = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN;
 
         std::wstring temporaryPath;
         wil::unique_hfile file;
-        const HRESULT createHr = Common::Paths::CreateUniqueSiblingFile(normalizedTarget.native(), options, temporaryPath, file);
+        const HRESULT createHr = Common::Paths::CreateUniqueSiblingFile(extendedTarget.native(), options, temporaryPath, file);
         if (FAILED(createHr))
         {
             return createHr;
         }
 
         out._file          = std::move(file);
-        out._targetPath    = std::move(normalizedTarget);
+        out._targetPath    = extendedTarget;
         out._temporaryPath = std::filesystem::path(std::move(temporaryPath));
         out._policy        = policy;
         out._committed     = false;
@@ -244,37 +262,76 @@ public:
             const DWORD error = GetLastError();
             return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_WRITE_FAULT : error);
         }
-        _file.reset();
-
         BY_HANDLE_FILE_INFORMATION finalizedInformation{};
-        wil::unique_hfile finalizedFile;
         if (committedFileInformation)
         {
-            finalizedFile.reset(CreateFileW(_temporaryPath.c_str(),
-                                            FILE_READ_ATTRIBUTES,
-                                            FILE_SHARE_READ | FILE_SHARE_DELETE,
-                                            nullptr,
-                                            OPEN_EXISTING,
-                                            FILE_ATTRIBUTE_NORMAL,
-                                            nullptr));
-            if (! finalizedFile)
-            {
-                const DWORD error = GetLastError();
-                return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_READ_FAULT : error);
-            }
-            if (GetFileInformationByHandle(finalizedFile.get(), &finalizedInformation) == FALSE)
+            if (GetFileInformationByHandle(_file.get(), &finalizedInformation) == FALSE)
             {
                 const DWORD error = GetLastError();
                 return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_READ_FAULT : error);
             }
         }
 
+#ifdef ENABLE_TESTS
+        const HRESULT injectedPublishFailure = Testing::TakeNextLocalFileTransactionPublishFailure();
+        if (FAILED(injectedPublishFailure))
+        {
+            return injectedPublishFailure;
+        }
+#endif
+        DWORD handleRenameError = ERROR_SUCCESS;
+        if (_policy == ExistingTargetPolicy::Replace)
+        {
+            const std::wstring& targetNative = _targetPath.native();
+            if (targetNative.size() > (std::numeric_limits<size_t>::max)() / sizeof(wchar_t))
+            {
+                return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
+            }
+            const size_t fileNameBytes = targetNative.size() * sizeof(wchar_t);
+            constexpr size_t kHeaderBytes = offsetof(FILE_RENAME_INFO, FileName);
+            if (fileNameBytes > (std::numeric_limits<DWORD>::max)() - kHeaderBytes - sizeof(wchar_t) ||
+                fileNameBytes > (std::numeric_limits<size_t>::max)() - kHeaderBytes - sizeof(wchar_t))
+            {
+                return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
+            }
+            std::vector<std::byte> renameStorage(kHeaderBytes + fileNameBytes + sizeof(wchar_t));
+            auto* const rename = reinterpret_cast<FILE_RENAME_INFO*>(renameStorage.data());
+            rename->Flags = FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
+            rename->RootDirectory = nullptr;
+            rename->FileNameLength = static_cast<DWORD>(fileNameBytes);
+            std::memcpy(rename->FileName, targetNative.data(), fileNameBytes);
+            if (SetFileInformationByHandle(
+                    _file.get(), FileRenameInfoEx, rename, static_cast<DWORD>(renameStorage.size())) != FALSE)
+            {
+                _file.reset();
+                _temporaryPath.clear();
+                _committed = true;
+                if (committedFileInformation)
+                {
+                    *committedFileInformation = finalizedInformation;
+                }
+                return S_OK;
+            }
+            handleRenameError = GetLastError();
+            if (handleRenameError != ERROR_INVALID_PARAMETER &&
+                handleRenameError != ERROR_INVALID_FUNCTION &&
+                handleRenameError != ERROR_NOT_SUPPORTED &&
+                handleRenameError != ERROR_CALL_NOT_IMPLEMENTED &&
+                handleRenameError != ERROR_ACCESS_DENIED)
+            {
+                return HRESULT_FROM_WIN32(handleRenameError == ERROR_SUCCESS ? ERROR_WRITE_FAULT : handleRenameError);
+            }
+        }
+
+        _file.reset();
         const DWORD moveFlags = MOVEFILE_WRITE_THROUGH |
                                 (_policy == ExistingTargetPolicy::Replace ? static_cast<DWORD>(MOVEFILE_REPLACE_EXISTING) : 0u);
         if (MoveFileExW(_temporaryPath.c_str(), _targetPath.c_str(), moveFlags) == FALSE)
         {
             const DWORD error = GetLastError();
-            return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_WRITE_FAULT : error);
+            return HRESULT_FROM_WIN32(
+                error != ERROR_SUCCESS ? error
+                                       : (handleRenameError != ERROR_SUCCESS ? handleRenameError : ERROR_WRITE_FAULT));
         }
 
         _temporaryPath.clear();

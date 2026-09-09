@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://red-salamander.invalid/schemas/portable-build-attestation-v1.json",
+  "title": "RedSalamander portable same-workflow build attestation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "canonicalization", "attestation_id", "trust_scope", "source_commit", "source_snapshot_id", "producer", "platform", "configuration", "target", "project_selection", "build_arguments", "tests_enabled", "official_release", "toolchain_identity_digest", "vcpkg_identity_digest", "ghostty_runtime_identity", "project_graph_digest", "runtime_dependency_digest", "artifact_manifest_digest", "artifacts", "created_utc"],
+  "properties": {
+    "schema": { "const": "red-salamander.portable-build-attestation.v1" },
+    "canonicalization": { "const": "rs-canonical-json-v1" },
+    "attestation_id": { "$ref": "#/definitions/digest" },
+    "trust_scope": { "const": "same-workflow-run" },
+    "source_commit": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+    "source_snapshot_id": { "$ref": "#/definitions/digest" },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "workflow", "run_id", "run_attempt", "job"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "workflow": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "run_id": { "type": "string", "pattern": "^[0-9]+$", "maxLength": 32 },
+        "run_attempt": { "type": "integer", "minimum": 1 },
+        "job": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "platform": { "enum": ["x64", "ARM64"] },
+    "configuration": { "enum": ["Debug", "Release", "ASan Debug"] },
+    "target": { "$ref": "#/definitions/id" },
+    "project_selection": { "$ref": "#/definitions/relativePathSet" },
+    "build_arguments": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 4096 } },
+    "tests_enabled": { "type": "boolean" },
+    "official_release": { "type": "boolean" },
+    "toolchain_identity_digest": { "$ref": "#/definitions/digest" },
+    "vcpkg_identity_digest": { "$ref": "#/definitions/digest" },
+    "ghostty_runtime_identity": { "anyOf": [{ "$ref": "#/definitions/digest" }, { "type": "null" }] },
+    "project_graph_digest": { "$ref": "#/definitions/digest" },
+    "runtime_dependency_digest": { "$ref": "#/definitions/digest" },
+    "artifact_manifest_digest": { "$ref": "#/definitions/digest" },
+    "artifacts": { "type": "array", "minItems": 1, "maxItems": 4096, "items": { "$ref": "#/definitions/artifact" } },
+    "created_utc": { "type": "string", "format": "date-time", "maxLength": 64 }
+  },
+  "definitions": {
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$" },
+    "relativePath": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//)(?!.*\\\\)[^\\u0000-\\u001f]+$" },
+    "relativePathSet": { "type": "array", "maxItems": 4096, "uniqueItems": true, "items": { "$ref": "#/definitions/relativePath" } },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "role", "relative_path", "size_bytes", "sha256", "runtime_closure"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "role": { "enum": ["launchable", "test", "library", "plugin", "runtime-data", "package", "symbols"] },
+        "relative_path": { "$ref": "#/definitions/relativePath" },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/definitions/digest" },
+        "runtime_closure": { "$ref": "#/definitions/relativePathSet" }
+      }
+    }
+  }
+}

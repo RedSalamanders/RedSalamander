@@ -6,13 +6,26 @@ Viewer plugins allow RedSalamander to open a **dedicated viewer window** for spe
 The viewer is opened with **F3** based on a file’s **extension** and a user-configurable association in settings.
 
 Key points:
-- COM-based plugin architecture (binary compatible, no STL in public interfaces)
+- COM-based plugin ABI (no STL in public interfaces)
 - One viewer window per open request (plugin-defined behavior for reuse is allowed)
 - Viewer receives:
   - focused file path
   - current selection (if any)
   - “Other Files” list (all files in the current folder mapped to the same viewer plugin)
 - Viewer is theme-aware and is notified when the theme changes
+
+`ViewerOpenContext` and `ViewerTheme` each begin with `uint32_t sizeBytes`.
+Every caller sets it to the bytes actually supplied. In the current supported
+source-tree/release generation, every viewer requires the full current record,
+accepts a larger record, and ignores unknown tail bytes. These records have no
+separate version field, and `sizeBytes` does not promise compatibility with
+pre-transition or mixed-release binaries. All shipped viewers and the host are
+built together, so record changes are atomic repository changes. A future
+cross-release binary contract requires explicit generation negotiation before
+interface invocation and new IIDs/adapters plus frozen old/new architecture
+fixtures where layouts changed. `PluginContractTests` covers undersized,
+current, and oversized theme records for every shipped viewer without freezing
+concrete structure sizes in source assertions.
 
 ## Built-in viewer plugins
 
@@ -274,6 +287,8 @@ enum ViewerOpenFlags : uint32_t
 
 struct ViewerOpenContext
 {
+    uint32_t sizeBytes;
+
     HWND ownerWindow;
 
     // Active filesystem instance for `focusedPath`/`otherFiles` paths.
@@ -297,7 +312,7 @@ struct ViewerOpenContext
 
 struct ViewerTheme
 {
-    uint32_t version; // 4
+    uint32_t sizeBytes;
     unsigned int dpi;
 
     uint32_t backgroundArgb;
@@ -317,6 +332,14 @@ struct ViewerTheme
     BOOL highContrast;
     BOOL rainbowMode;
     BOOL darkBase;
+
+    uint32_t diffAddedBackgroundArgb;
+    uint32_t diffRemovedBackgroundArgb;
+    uint32_t diffContextBackgroundArgb;
+    uint32_t diffHeaderBackgroundArgb;
+    uint32_t diffBannerBackgroundArgb;
+    uint32_t diffPlaceholderBackgroundArgb;
+    uint32_t diffDividerArgb;
 };
 
 interface __declspec(novtable) IViewerCallback

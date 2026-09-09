@@ -14,6 +14,7 @@
 #include <d2d1.h>
 
 #include "Helpers.h"
+#include "MonitorTextSnapshot.h"
 
 #pragma warning(push)
 #pragma warning(disable : 4820) // bytes padding added after data member
@@ -28,7 +29,7 @@ struct Line
         D2D1_COLOR_F color{};
     };
 
-    std::wstring text;                  // message text (may include '\n')
+    RedSalamanderMonitor::MonitorTextBlock text; // immutable message text block (may include '\n')
     std::vector<ColorSpan> spans;       // optional text coloring
     bool hasMeta = false;               // whether metadata exists for this logical line
     Debug::InfoParam meta{};            // metadata (time/pid/tid/type)
@@ -63,6 +64,7 @@ public:
 
     // Content mutation
     void SetText(const std::wstring& text);
+    void SetTextSnapshot(RedSalamanderMonitor::MonitorTextSnapshot&& snapshot);
     void AppendText(const std::wstring& more);
     void AppendInfoLine(const std::wstring& text, const Debug::InfoParam& info);
     struct InfoLineInput
@@ -86,7 +88,7 @@ public:
     size_t TotalLength() const;
     size_t LongestLineChars() const;
     uint64_t RetainedTextBytes() const;
-    bool SaveTextToFile(const std::wstring& path) const;
+    [[nodiscard]] RedSalamanderMonitor::MonitorTextSnapshot CaptureTextSnapshot() const;
 
     // Line count methods - explicit visible vs total
     size_t VisibleLineCount() const; // Returns visible lines (filtered)

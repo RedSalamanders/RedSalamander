@@ -6,6 +6,7 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Describe 'Packed FileInfo buffer source contracts' {
     BeforeAll {
         $ownerSource = Get-Content -LiteralPath (Join-Path $repoRoot 'Common\PackedFileInfoBuffer.h') -Raw
+        $abiSource = Get-Content -LiteralPath (Join-Path $repoRoot 'Common\PlugInterfaces\FileSystem.h') -Raw
         $facadeHeaders = @(
             'Plugins\FileSystem7z\FileSystem7z.h'
             'Plugins\FileSystemCurl\FileSystemCurl.h'
@@ -32,8 +33,10 @@ Describe 'Packed FileInfo buffer source contracts' {
         $ownerSource | Should Match 'TryComputeEntrySize'
         $ownerSource | Should Match 'ERROR_ARITHMETIC_OVERFLOW'
         $ownerSource | Should Match 'ERROR_INVALID_DATA'
-        $ownerSource | Should Match 'advance < entrySize'
-        $ownerSource | Should Match 'advance % kEntryAlignment'
+        $ownerSource | Should Match 'LocatePackedFileInfoRecord'
+        $abiSource | Should Match 'class\s+PackedFileInfoCursor\s+final'
+        $abiSource | Should Match 'advance < requiredBytes'
+        $abiSource | Should Match 'advance % alignof\(FileInfo\)'
     }
 
     It 'places the shared owner beneath exactly the six equivalent buffered COM facades' {

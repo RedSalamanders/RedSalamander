@@ -30,9 +30,18 @@
     <RSIsFirstPartyProject Condition="'$(RSProjectDirFromRepoLower)'!='' and '$(RSProjectIsOutsideRepo)'!='True' and '$(RSProjectIsBuildTree)'!='True'">true</RSIsFirstPartyProject>
     <RSIsFirstPartyProject Condition="'$(RSIsFirstPartyProject)'==''">false</RSIsFirstPartyProject>
 
-    <!-- vcpkg manifest mode: keep installs under .build\ too -->
+    <!--
+      vcpkg manifest mode: keep installs under .build\ and give each platform a
+      private metadata root. vcpkg mutates <install-root>\vcpkg\status, so sharing
+      one install root across x64 and ARM64 lets either manifest install purge the
+      other platform's packages even though their triplet directories differ.
+    -->
+    <RSVcpkgPlatformScope Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Platform)'=='x64'">x64</RSVcpkgPlatformScope>
+    <RSVcpkgPlatformScope Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Platform)'=='ARM64'">arm64</RSVcpkgPlatformScope>
+    <RSVcpkgPlatformScope Condition="'$(RSIsFirstPartyProject)'=='true' and '$(RSVcpkgPlatformScope)'=='' and $([System.String]::Copy('$(VCPKG_DEFAULT_TRIPLET)').ToLowerInvariant().StartsWith('arm64-'))">arm64</RSVcpkgPlatformScope>
+    <RSVcpkgPlatformScope Condition="'$(RSIsFirstPartyProject)'=='true' and '$(RSVcpkgPlatformScope)'==''">x64</RSVcpkgPlatformScope>
     <VcpkgManifestRoot Condition="'$(RSIsFirstPartyProject)'=='true' and '$(VcpkgManifestRoot)'==''">$(SolutionDir)</VcpkgManifestRoot>
-    <VcpkgInstalledDir Condition="'$(RSIsFirstPartyProject)'=='true'">$(RSBuildRoot)vcpkg_installed\</VcpkgInstalledDir>
+    <VcpkgInstalledDir Condition="'$(RSIsFirstPartyProject)'=='true'">$(RSBuildRoot)vcpkg_installed\$(RSVcpkgPlatformScope)\</VcpkgInstalledDir>
 
     <!-- Map VS platform to vcpkg triplet (used in ExternalIncludePath / manual copy steps) -->
     <RSVcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Platform)'=='x64'">x64-windows</RSVcpkgTriplet>
@@ -58,14 +67,11 @@
     <RSOutSubdir Condition="'$(RSOutSubdir)'=='' and $([System.String]::Copy('$(MSBuildProjectDirectory)').ToLowerInvariant().Contains('\plugins\'))">Plugins\</RSOutSubdir>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true'">
-    <RSDefaultEnableTests Condition="'$(RSDefaultEnableTests)'==''">true</RSDefaultEnableTests>
-  </PropertyGroup>
-
   <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj'">
     <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
     <PlatformToolset>v145</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
+    <RSBuildEnableTests Condition="'$(RSBuildEnableTests)'=='' and ('$(Configuration)'=='Debug' or '$(Configuration)'=='ASan Debug')">true</RSBuildEnableTests>
     <RSBuildEnableTests Condition="'$(RSBuildEnableTests)'==''">false</RSBuildEnableTests>
     <RSBuildTestDefinitions Condition="'$(RSBuildEnableTests)'=='true'">ENABLE_TESTS;</RSBuildTestDefinitions>
     <RSUseVcpkgManifest Condition="'$(RSUseVcpkgManifest)'==''">true</RSUseVcpkgManifest>
@@ -159,17 +165,16 @@
   </ItemDefinitionGroup>
   <!--
     ENABLE_TESTS is the single gate for test-only hooks and selftest plumbing.
-    Debug/ASan Debug opt in by default for first-party projects unless the project
-    explicitly sets RSDefaultEnableTests=false. Release builds must request test
-    hooks explicitly in the specific test-facing project that needs them.
+    RSBuildEnableTests is resolved once for the invocation and is the single gate
+    for every first-party project. Debug/ASan Debug default to true; Release
+    defaults to false. Validation may explicitly request test-enabled Release.
   -->
-  <ItemDefinitionGroup
-    Condition="'$(RSIsFirstPartyProject)'=='true' and '$(RSDefaultEnableTests)'=='true' and ('$(Configuration)'=='Debug' or '$(Configuration)'=='ASan Debug')">
+  <ItemDefinitionGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(RSBuildEnableTests)'=='true'">
     <ClCompile>
-      <PreprocessorDefinitions>ENABLE_TESTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>$(RSBuildTestDefinitions)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <ResourceCompile>
-      <PreprocessorDefinitions>ENABLE_TESTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>$(RSBuildTestDefinitions)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ResourceCompile>
   </ItemDefinitionGroup>
 

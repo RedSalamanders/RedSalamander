@@ -7,9 +7,11 @@
 #include <format>
 #include <limits>
 #include <thread>
+#include <type_traits>
 #include <utility>
 
 #include "Helpers.h"
+#include "UriEncoding.h"
 
 namespace FileSystemMtpInternal
 {
@@ -292,10 +294,10 @@ std::shared_ptr<IMtpBackendFileReader> CreateMemoryBackendFileReader(std::vector
     std::uint64_t hash = 1469598103934665603ull;
     for (const wchar_t ch : value)
     {
-        const auto lower = static_cast<std::uint64_t>(::towlower(static_cast<wint_t>(ch)));
-        hash ^= lower & 0xFFu;
+        const auto codeUnit = static_cast<std::uint64_t>(static_cast<std::make_unsigned_t<wchar_t>>(ch));
+        hash ^= codeUnit & 0xFFu;
         hash *= 1099511628211ull;
-        hash ^= (lower >> 8u) & 0xFFu;
+        hash ^= (codeUnit >> 8u) & 0xFFu;
         hash *= 1099511628211ull;
     }
     return hash;
@@ -318,19 +320,34 @@ std::shared_ptr<IMtpBackendFileReader> CreateMemoryBackendFileReader(std::vector
     return value;
 }
 
-[[nodiscard]] std::wstring MtpDeviceIdentitySuffix(std::wstring_view pnpId)
+[[nodiscard]] std::wstring EncodeMtpIdentity(std::wstring_view identity)
 {
-    return std::format(L"[devid:{}]", FormatMtpIdentityHash(pnpId));
+    std::wstring encoded;
+    if (identity.empty() || ! Common::Uri::TryPercentEncodeUtf8ToWide(identity, Common::Uri::SlashPolicy::Encode, encoded))
+    {
+        return {};
+    }
+    return encoded;
+}
+
+// The device root path component is the friendly name and nothing else; the device identity is
+// provider metadata (root item ids, picker JSON, saved profile), never a path suffix.
+[[nodiscard]] std::wstring MtpDeviceRootComponent(std::wstring_view friendlyName)
+{
+    std::wstring component = SanitizeMtpPathComponent(std::wstring(friendlyName));
+    return component.empty() ? std::wstring(L"MTP Device") : component;
 }
 
 [[nodiscard]] std::wstring MtpPersistentObjectIdentitySuffix(std::wstring_view persistentId)
 {
-    return std::format(L" [puid:{}]", FormatMtpIdentityHash(persistentId));
+    const std::wstring encoded = EncodeMtpIdentity(persistentId);
+    return encoded.empty() ? std::wstring{} : std::format(L" [puid:{}]", encoded);
 }
 
 [[nodiscard]] std::wstring MtpObjectIdentitySuffix(std::wstring_view objectId)
 {
-    return std::format(L" [oid:{}]", FormatMtpIdentityHash(objectId));
+    const std::wstring encoded = EncodeMtpIdentity(objectId);
+    return encoded.empty() ? std::wstring{} : std::format(L" [oid:{}]", encoded);
 }
 
 [[nodiscard]] std::wstring MtpDuplicateObjectSuffix(const MtpItem& item)

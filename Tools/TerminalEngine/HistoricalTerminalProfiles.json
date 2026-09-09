@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Separates the sealed Gate0/Round4 behavioral cohort from current Terminal runtime validation.",
+  "profiles": {
+    "Gate0": {
+      "expectedFileCount": 19,
+      "workflow": ".github/workflows/terminal-engine-gate0.yml",
+      "triggerPolicy": "manual-or-sealed-branch-with-explicit-run-marker"
+    },
+    "Round4": {
+      "expectedFileCount": 20,
+      "expectedPassedCount": 239,
+      "workflow": ".github/workflows/terminal-engine-round4-closeout.yml",
+      "triggerPolicy": "manual-only"
+    }
+  },
+  "historicalTests": [
+    {
+      "path": "Tools/Tests/TerminalDependencyLifecycle.Tests.ps1",
+      "sha256": "11154a9e66a8bb26a94795e00cf716669d00e5690db9a232f1f8b71fbff97d1e",
+      "profiles": ["Gate0", "Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEngineArchive.Tests.ps1",
+      "sha256": "b1e4b3ab8272eb9dbe47e441bb457052026793cdaf59736913bc226083633954",
+      "profiles": ["Gate0", "Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEngineNotices.Tests.ps1",
+      "sha256": "d16cb796519d8939e1bee950b6994249d2b9f9efba5519ae1627b275728909bb",
+      "profiles": ["Gate0", "Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEngineCandidateAssessment.Tests.ps1",
+      "sha256": "e0bf4dcda4c491e1f9b45d21c31d9d18d5349281a54018e93748436714a78d0d",
+      "profiles": ["Gate0", "Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEngineCandidateUniverseTransition.Tests.ps1",
+      "sha256": "74f556edd53c19bc4cd2f804a53a4a37911ed0742671b6608d09a04dfcfd9462",
+      "profiles": ["Gate0", "Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEngineCollectionDescriptor.Tests.ps1",
+      "sha256": "6f101f899a23e4df2972184094611d9e2670462c9114cbf85631872f8bd7e04c",
+      "profiles": ["Gate0", "Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEngineCollectionDriver.Tests.ps1",
+      "sha256": "91a6a611829910b63be642625d1bfde86ccbd779509a1caee1392655eb899dd0",
+      "profiles": ["Gate0", "Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEngineCollectionNeutrality.Tests.ps1",
+      "sha256": "6b845e411181dfc7b718709247f26cee7453e9fc08ec230a56b24bcffb27b47e",
+      "profiles": ["Gate0", "Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEngineCollectionProvider.Tests.ps1",
+      "sha256": "4844fd853f02bd3fa82bfcfdc8012f05e07d130828e19921866f8061b1260b1e",
+      "profiles": ["Gate0", "Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEngineC7Proof.Tests.ps1",
+      "sha256": "c455ebdb1ed47e42f46a4a9df7869cf35c19849bce34dc4efa369ffea60fb5a8",
+      "profiles": ["Gate0", "Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEngineEvaluator.Tests.ps1",
+      "sha256": "3431f08e595368e3a924e1c4295255ba9718a7868c63ef7b138ff299df452fcd",
+      "profiles": ["Gate0", "Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEngineCandidatePatch.Tests.ps1",
+      "sha256": "89150d5bcc26e936277bc7b50833830fac2cef015af583a37fe97075ae1ff705",
+      "profiles": ["Gate0", "Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEngineFixtureGenerator.Tests.ps1",
+      "sha256": "3cb43131900406591cbc9aa4b2acf634d3c50efad06b0fe43d056e9dea93779e",
+      "profiles": ["Gate0", "Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEngineSourceReview.Tests.ps1",
+      "sha256": "acc5d3957cc8a9882a53c24ba74dff3bda70e892fa5f5fd8abc401dde8c815fe",
+      "profiles": ["Gate0", "Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEngineGate0Harness.Tests.ps1",
+      "sha256": "501327dc0033bd5a9814bdf4b9ac92c89894cc3004971af68154e92acb280088",
+      "profiles": ["Gate0", "Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEngineGate0Probe.Tests.ps1",
+      "sha256": "df020dbd5eb9f3c9652c1cc3c34192c67ea6127595bab94dff7546d3599464c3",
+      "profiles": ["Gate0", "Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEngineNetworkIsolation.Tests.ps1",
+      "sha256": "837305f3fe4f52240ee982e6869a4abce2ecd1ab796ef87578260dd4224e16b7",
+      "profiles": ["Gate0", "Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEnginePeIdentity.Tests.ps1",
+      "sha256": "4f45b022e63dfb3beb88b8dd8dbdebc3bda941b4de0b0193ccd9267fe6e09f6d",
+      "profiles": ["Gate0", "Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEngineRound4Closeout.Tests.ps1",
+      "sha256": "5a3e4779e0616fd709d66fa77d1b82c495dd779ac8552de5b93d4fd410ee4f9e",
+      "profiles": ["Round4"]
+    },
+    {
+      "path": "Tools/Tests/TerminalEvidence.Tests.ps1",
+      "sha256": "9cf61fdea11408bdc6beadf8540e2af18dbe0544353b740c3600c53b77d48e40",
+      "profiles": ["Gate0", "Round4"]
+    }
+  ],
+  "currentRuntimeTests": [
+    "Tools/Tests/TerminalEngineRuntimeImportPolicy.Tests.ps1",
+    "Tools/Tests/TerminalEngineTextIdentity.Tests.ps1",
+    "Tools/Tests/TerminalPluginSourceContracts.Tests.ps1",
+    "Tools/Tests/TerminalRuntimeExportIdentity.Tests.ps1"
+  ],
+  "genericLifecycleFacade": {
+    "classification": "internal-historical-future-upgrade",
+    "currentProductBuilder": "Tools/Build-GhosttyTerminalRuntime.ps1",
+    "compatibilityProject": "External/TerminalEngine/TerminalEngine.proj",
+    "defaultLock": "External/terminal-engine.lock.json",
+    "entryPoints": [
+      "Tools/Build-TerminalEngine.ps1",
+      "Tools/Verify-TerminalEngine.ps1",
+      "Tools/Get-TerminalDependencyStatus.ps1"
+    ]
+  }
+}

@@ -10,4 +10,6 @@ BEGIN
     IDS_FILESYSTEMCURL_SFTP_DESCRIPTION "Système de fichiers virtuel SFTP (protocole de transfert de fichiers SSH)."
     IDS_FILESYSTEMCURL_SCP_DESCRIPTION "Système de fichiers virtuel SCP (copie sécurisée via SSH)."
     IDS_FILESYSTEMCURL_IMAP_DESCRIPTION "Système de fichiers virtuel de messagerie IMAP."
+    IDS_FILESYSTEMCURL_CLEANUP_DEBT_TITLE "Nettoyage distant requis"
+    IDS_FILESYSTEMCURL_CLEANUP_DEBT_MESSAGE "L’opération est terminée, mais {0} élément(s) de récupération n’ont pas pu être supprimés en toute sécurité. Vérifiez et supprimez uniquement les éléments de sauvegarde ou de préparation que vous pouvez identifier."
 END

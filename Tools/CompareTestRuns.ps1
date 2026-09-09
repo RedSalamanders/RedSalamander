@@ -35,6 +35,12 @@
 .PARAMETER MaxTraceDiffLines
     Maximum number of trace-diff lines to display. Default: 120.
 
+.OUTPUTS
+    Human-readable summary, artifact, case, and optional trace differences. No supported pipeline objects.
+
+.NOTES
+    Prerequisites: two archived self-test run folders with compatible result JSON. Side effects: none; both run trees are read-only. Missing required results fail explicitly, while trace artifacts are required only with ShowTraceDiff. Primary use is manual before/after evidence review.
+
 .EXAMPLE
     .\Tools\CompareTestRuns.ps1 `
         Specs\TestRuns\<ComputerHashName>\FileOps\2026-02-27_085402 `
@@ -67,70 +73,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-
-function Resolve-ExistingPath([string]$PathText) {
-    $resolved = Resolve-Path -LiteralPath $PathText -ErrorAction Stop
-    return $resolved.Path
-}
-
-function Find-ResultsJson([string]$RunRoot) {
-    $autoCandidates = @(
-        (Join-Path $RunRoot 'fileops_results.json'),
-        (Join-Path $RunRoot 'compare_results.json'),
-        (Join-Path $RunRoot 'commands_results.json'),
-        (Join-Path $RunRoot 'selftest_run_results.json'),
-        (Join-Path $RunRoot 'results.json')
-    )
-
-    $candidates = switch ($Suite) {
-        'FileOps' { @((Join-Path $RunRoot 'fileops_results.json')) }
-        'CompareDirectories' { @((Join-Path $RunRoot 'compare_results.json')) }
-        'Commands' { @((Join-Path $RunRoot 'commands_results.json')) }
-        'SelfTest' { @((Join-Path $RunRoot 'selftest_run_results.json'), (Join-Path $RunRoot 'results.json')) }
-        'Auto' { $autoCandidates }
-        default { $autoCandidates }
-    }
-
-    foreach ($p in $candidates) {
-        if (Test-Path -LiteralPath $p) {
-            return $p
-        }
-    }
-
-    throw "Could not find results JSON in run folder: $RunRoot"
-}
-
-function Find-TraceTxt([string]$RunRoot) {
-    $autoCandidates = @(
-        (Join-Path $RunRoot 'fileops_trace.txt'),
-        (Join-Path $RunRoot 'compare_trace.txt'),
-        (Join-Path $RunRoot 'commands_trace.txt'),
-        (Join-Path $RunRoot 'selftest_run_trace.txt'),
-        (Join-Path $RunRoot 'trace.txt')
-    )
-
-    $candidates = switch ($Suite) {
-        'FileOps' { @((Join-Path $RunRoot 'fileops_trace.txt')) }
-        'CompareDirectories' { @((Join-Path $RunRoot 'compare_trace.txt')) }
-        'Commands' { @((Join-Path $RunRoot 'commands_trace.txt')) }
-        'SelfTest' { @((Join-Path $RunRoot 'selftest_run_trace.txt'), (Join-Path $RunRoot 'trace.txt')) }
-        'Auto' { $autoCandidates }
-        default { $autoCandidates }
-    }
-
-    foreach ($p in $candidates) {
-        if (Test-Path -LiteralPath $p) {
-            return $p
-        }
-    }
-
-    return $null
-}
-
-function Load-Json([string]$PathText) {
-    $raw = Get-Content -LiteralPath $PathText -Raw
-    return $raw | ConvertFrom-Json -Depth 64
-}
+Import-Module (Join-Path $PSScriptRoot 'Modules\Reporting\TestRunReporting.psm1') -Force
 
 function Get-RunFileMap([string]$RunRoot) {
     $map = @{}
@@ -189,72 +132,17 @@ function Format-DurationDelta([Nullable[int]]$OldMs, [Nullable[int]]$NewMs) {
     return "$delta"
 }
 
-function Get-TotalCases($Results) {
-    $passed = if ($null -eq $Results.passed) { 0 } else { [int]$Results.passed }
-    $failed = if ($null -eq $Results.failed) { 0 } else { [int]$Results.failed }
-    $skipped = if ($null -eq $Results.skipped) { 0 } else { [int]$Results.skipped }
-
-    if ($Results.PSObject.Properties.Match('cases').Count -gt 0 -and $Results.cases -and $Results.cases.Count -gt 0) {
-        return [int]$Results.cases.Count
-    }
-
-    $total = $passed + $failed + $skipped
-    return $total
-}
-
-function Format-Percent([int]$Numerator, [int]$Denominator, [int]$Decimals = 1) {
-    if ($Denominator -le 0) {
-        return ''
-    }
-
-    $pct = 100.0 * $Numerator / [double]$Denominator
-    $fmt = '0.' + ('0' * $Decimals)
-    return ($pct.ToString($fmt, [System.Globalization.CultureInfo]::InvariantCulture) + '%')
-}
-
-function Format-DeltaPercent([Nullable[int]]$OldValue, [Nullable[int]]$NewValue, [int]$Decimals = 1) {
-    if ($null -eq $OldValue -or $null -eq $NewValue) {
-        return $null
-    }
-    if ($OldValue -le 0) {
-        return $null
-    }
-
-    $delta = $NewValue - $OldValue
-    if ($delta -eq 0) {
-        return '0%'
-    }
-
-    $pct = 100.0 * $delta / [double]$OldValue
-    $fmt = '0.' + ('0' * $Decimals)
-    $text = $pct.ToString($fmt, [System.Globalization.CultureInfo]::InvariantCulture) + '%'
-    if ($pct -gt 0) {
-        return "+$text"
-    }
-    return $text
-}
-
-function Get-RunSummaryColor([int]$Failed, [int]$Skipped) {
-    if ($Failed -gt 0) {
-        return 'Red'
-    }
-    if ($Skipped -gt 0) {
-        return 'Yellow'
-    }
-    return 'Green'
-}
-
-$oldRoot = Resolve-ExistingPath $OldRun
-$newRoot = Resolve-ExistingPath $NewRun
+$oldRoot = Resolve-RSExistingPath -Path $OldRun
+$newRoot = Resolve-RSExistingPath -Path $NewRun
 
 Write-Host "Old: $oldRoot"
 Write-Host "New: $newRoot"
 
-$oldResultsPath = Find-ResultsJson $oldRoot
-$newResultsPath = Find-ResultsJson $newRoot
+$oldResultsPath = Find-RSTestRunResultsJson -RunRoot $oldRoot -Suite $Suite -MissingPolicy Throw
+$newResultsPath = Find-RSTestRunResultsJson -RunRoot $newRoot -Suite $Suite -MissingPolicy Throw
 
-$oldResults = Load-Json $oldResultsPath
-$newResults = Load-Json $newResultsPath
+$oldResults = Read-RSJsonFile -Path $oldResultsPath
+$newResults = Read-RSJsonFile -Path $newResultsPath
 
 Write-Host ""
 Write-Host "Summary"
@@ -264,15 +152,15 @@ $oldPassed = if ($null -eq $oldResults.passed) { 0 } else { [int]$oldResults.pas
 $oldFailed = if ($null -eq $oldResults.failed) { 0 } else { [int]$oldResults.failed }
 $oldSkipped = if ($null -eq $oldResults.skipped) { 0 } else { [int]$oldResults.skipped }
 $oldMs = if ($null -eq $oldResults.duration_ms) { $null } else { [int]$oldResults.duration_ms }
-$oldTotal = Get-TotalCases $oldResults
-$oldColor = Get-RunSummaryColor $oldFailed $oldSkipped
+$oldTotal = Get-RSTestRunTotalCases -Results $oldResults
+$oldColor = Get-RSTestRunSummaryColor $oldFailed $oldSkipped
 
 $newPassed = if ($null -eq $newResults.passed) { 0 } else { [int]$newResults.passed }
 $newFailed = if ($null -eq $newResults.failed) { 0 } else { [int]$newResults.failed }
 $newSkipped = if ($null -eq $newResults.skipped) { 0 } else { [int]$newResults.skipped }
 $newMs = if ($null -eq $newResults.duration_ms) { $null } else { [int]$newResults.duration_ms }
-$newTotal = Get-TotalCases $newResults
-$newColor = Get-RunSummaryColor $newFailed $newSkipped
+$newTotal = Get-RSTestRunTotalCases -Results $newResults
+$newColor = Get-RSTestRunSummaryColor $newFailed $newSkipped
 
 $oldSuite = $oldResults.suite
 $newSuite = $newResults.suite
@@ -280,21 +168,21 @@ if ([string]::IsNullOrWhiteSpace($oldSuite)) { $oldSuite = '<unknown>' }
 if ([string]::IsNullOrWhiteSpace($newSuite)) { $newSuite = '<unknown>' }
 
 Write-Host ("Old: suite={0} cases={1} passed={2} ({3}) failed={4} ({5}) skipped={6} ({7}) duration_ms={8}" -f `
-        $oldSuite, $oldTotal, $oldPassed, (Format-Percent $oldPassed $oldTotal), $oldFailed, (Format-Percent $oldFailed $oldTotal), $oldSkipped, (Format-Percent $oldSkipped $oldTotal), $oldMs) `
+        $oldSuite, $oldTotal, $oldPassed, (Format-RSPercent $oldPassed $oldTotal), $oldFailed, (Format-RSPercent $oldFailed $oldTotal), $oldSkipped, (Format-RSPercent $oldSkipped $oldTotal), $oldMs) `
     -ForegroundColor $oldColor
 
 Write-Host ("New: suite={0} cases={1} passed={2} ({3}) failed={4} ({5}) skipped={6} ({7}) duration_ms={8}" -f `
-        $newSuite, $newTotal, $newPassed, (Format-Percent $newPassed $newTotal), $newFailed, (Format-Percent $newFailed $newTotal), $newSkipped, (Format-Percent $newSkipped $newTotal), $newMs) `
+        $newSuite, $newTotal, $newPassed, (Format-RSPercent $newPassed $newTotal), $newFailed, (Format-RSPercent $newFailed $newTotal), $newSkipped, (Format-RSPercent $newSkipped $newTotal), $newMs) `
     -ForegroundColor $newColor
 
 $durDelta = Format-DurationDelta $oldMs $newMs
-$durDeltaPct = Format-DeltaPercent $oldMs $newMs
+$durDeltaPct = Format-RSDeltaPercent $oldMs $newMs
 $durColor = if ($null -eq $durDelta -or $durDelta -eq '0') { 'Gray' } elseif ($durDelta.StartsWith('+')) { 'Red' } else { 'Green' }
 Write-Host ("delta_duration_ms={0} ({1})" -f $durDelta, $durDeltaPct) -ForegroundColor $durColor
 
 $caseDelta = $newTotal - $oldTotal
 $caseDeltaText = if ($caseDelta -eq 0) { '0' } elseif ($caseDelta -gt 0) { "+$caseDelta" } else { "$caseDelta" }
-$caseDeltaPct = Format-DeltaPercent $oldTotal $newTotal
+$caseDeltaPct = Format-RSDeltaPercent $oldTotal $newTotal
 Write-Host ("delta_cases={0} ({1})" -f $caseDeltaText, $caseDeltaPct)
 
 Write-Host ""
@@ -384,7 +272,7 @@ foreach ($name in $allCaseNames) {
             OldMs      = $oldCaseMs
             NewMs      = $newCaseMs
             DeltaMs    = $delta
-            DeltaPct   = Format-DeltaPercent $oldCaseMs $newCaseMs
+            DeltaPct   = Format-RSDeltaPercent $oldCaseMs $newCaseMs
             NewReason  = $b.reason
         }
     }
@@ -397,8 +285,8 @@ if ($caseChanges.Count -eq 0) {
 }
 
 if ($ShowTraceDiff) {
-    $oldTracePath = Find-TraceTxt $oldRoot
-    $newTracePath = Find-TraceTxt $newRoot
+    $oldTracePath = Find-RSTestRunTraceFile -RunRoot $oldRoot -Suite $Suite -MissingPolicy ReturnNull
+    $newTracePath = Find-RSTestRunTraceFile -RunRoot $newRoot -Suite $Suite -MissingPolicy ReturnNull
 
     if (-not $oldTracePath -or -not $newTracePath) {
         Write-Host ""

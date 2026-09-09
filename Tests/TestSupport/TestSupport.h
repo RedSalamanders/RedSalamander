@@ -16,6 +16,8 @@
 #include <thread>
 #include <utility>
 
+#include "TestSandboxPath.h"
+
 namespace RedSalamander::TestSupport
 {
 inline constexpr std::wstring_view kTestRootEnvironmentVariable{L"REDSALAMANDER_TEST_ROOT"};
@@ -60,12 +62,20 @@ struct TestDirectoryOptions final
     {
         result.assign(emptyFallback);
     }
+    if (result.empty())
+    {
+        result.assign(L"case");
+    }
+    if (result.back() == L'.')
+    {
+        result.push_back(L'_');
+    }
     return result;
 }
 
 [[nodiscard]] inline bool IsSafeTestRunId(std::wstring_view text) noexcept
 {
-    if (text.empty() || text.size() > 160u)
+    if (text.empty() || text.size() > 160u || text.back() == L'.')
     {
         return false;
     }
@@ -172,28 +182,38 @@ private:
     ec.clear();
     try
     {
-        const std::wstring configuredRoot = GetEnvironmentString(kTestRootEnvironmentVariable);
-        if (! configuredRoot.empty())
-        {
-            return std::filesystem::path(configuredRoot).lexically_normal();
-        }
-
-        std::filesystem::path current = std::filesystem::current_path(ec);
-        if (ec)
+        const std::filesystem::path repositoryRoot = Common::Testing::FindTestRepositoryRoot(ec);
+        if (ec || repositoryRoot.empty())
         {
             return {};
         }
 
-        current = current.lexically_normal();
-        const std::filesystem::path platformRoot = current.parent_path();
-        const std::filesystem::path buildRoot    = platformRoot.parent_path();
-        if ((current.filename() == L"Debug" || current.filename() == L"Release" || current.filename() == L"ASan Debug") &&
-            buildRoot.filename() == L".build")
+        const std::wstring configuredRoot = GetEnvironmentString(kTestRootEnvironmentVariable);
+        if (! configuredRoot.empty())
         {
-            return (buildRoot / L"TestSandbox").lexically_normal();
+            const std::filesystem::path requested = Common::Testing::NormalizeAbsoluteTestSandboxPath(configuredRoot, ec);
+            if (ec || ! Common::Testing::IsAuthorizedTestSandboxPath(requested, repositoryRoot, false, ec))
+            {
+                if (! ec)
+                {
+                    ec = std::make_error_code(std::errc::permission_denied);
+                }
+                return {};
+            }
+            return requested;
         }
 
-        return (current / L".build" / L"TestSandbox").lexically_normal();
+        const std::filesystem::path requested =
+            (repositoryRoot.root_path() / std::wstring(Common::Testing::kTestSandboxDirectoryName)).lexically_normal();
+        if (! Common::Testing::IsAuthorizedTestSandboxPath(requested, repositoryRoot, true, ec))
+        {
+            if (! ec)
+            {
+                ec = std::make_error_code(std::errc::permission_denied);
+            }
+            return {};
+        }
+        return requested;
     }
     catch (const std::bad_alloc&)
     {
@@ -210,9 +230,9 @@ private:
 [[nodiscard]] inline std::wstring ResolveTestRunId(std::wstring_view fallbackPrefix)
 {
     const std::wstring configuredRunId = GetEnvironmentString(kTestRunIdEnvironmentVariable);
-    if (IsSafeTestRunId(configuredRunId))
+    if (! configuredRunId.empty())
     {
-        return configuredRunId;
+        return IsSafeTestRunId(configuredRunId) ? configuredRunId : std::wstring{};
     }
 
     std::wstring runId(fallbackPrefix);
@@ -235,15 +255,31 @@ private:
         }
 
         const std::wstring runId = ResolveTestRunId(options.fallbackRunIdPrefix);
+        if (runId.empty())
+        {
+            ec = std::make_error_code(std::errc::invalid_argument);
+            return {};
+        }
         const std::wstring_view areaName =
             options.kind == TestDirectoryKind::Scratch ? kScratchDirectoryName : kArtifactsDirectoryName;
-        std::filesystem::path directory =
-            sandboxBase / std::wstring(kRunsDirectoryName) / runId / std::wstring(areaName) / std::wstring(options.harnessSegment);
+        const std::wstring harnessSegment = SanitizeTestSandboxSegment(options.harnessSegment, L"harness");
+        const std::filesystem::path areaRoot =
+            sandboxBase / std::wstring(kRunsDirectoryName) / runId / std::wstring(areaName);
+        std::filesystem::path directory = areaRoot / harnessSegment;
         if (options.includeLeafSegment)
         {
             directory /= SanitizeTestSandboxSegment(options.leafSegment, options.emptyLeafFallback);
         }
         directory = directory.lexically_normal();
+        if (! Common::Testing::IsSameOrDescendantTestSandboxPath(directory, areaRoot) ||
+            ! Common::Testing::IsExistingTestSandboxPathReparseFree(directory, ec))
+        {
+            if (! ec)
+            {
+                ec = std::make_error_code(std::errc::permission_denied);
+            }
+            return {};
+        }
 
         if (options.cleanExisting)
         {

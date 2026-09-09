@@ -27,13 +27,13 @@
 
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
+#include "FileSystemRouteProviderBase.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
 
 enum class FileSystemReparsePointPolicy : uint8_t
 {
-    CopyReparse,
-    FollowTargets,
+    Preserve,
     Skip,
 };
 
@@ -115,6 +115,8 @@ private:
 };
 
 class FileSystem final : public IFileSystem,
+                         public FileSystemRouteCapabilitiesBase,
+                         public IFileSystemObjectBinding,
                          public IFileSystemSearch,
                          public IFileSystemIO,
                          public IFileSystemItemStreams,
@@ -226,12 +228,37 @@ public:
     HRESULT STDMETHODCALLTYPE GetItemProperties(const wchar_t* path, const char** jsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE DeleteItemStream(const wchar_t* path, const wchar_t* streamName) noexcept override;
 
-    HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
+                                                  FileSystemOperation operation,
+                                                  const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE BindObject(const wchar_t* path,
+                                         FileSystemBindFlags flags,
+                                         IFileSystemBoundObject** bound) noexcept override;
+    HRESULT STDMETHODCALLTYPE CreateExclusiveWriter(const wchar_t* stagePath,
+                                                     const FileSystemOptions* options,
+                                                     IFileWriter** writer,
+                                                     IFileSystemBoundObject** ownedStage) noexcept override;
+    HRESULT STDMETHODCALLTYPE CreateExclusiveDirectory(const wchar_t* stagePath,
+                                                        const FileSystemOptions* options,
+                                                        IFileSystemBoundObject** ownedStage) noexcept override;
+    HRESULT STDMETHODCALLTYPE ReadBoundLink(IFileSystemBoundObject* boundLink,
+                                            const FileSystemLinkTransform* transform,
+                                            const FileSystemOptions* options,
+                                            FileSystemLinkInformation* information) noexcept override;
+    HRESULT STDMETHODCALLTYPE CreateExclusiveLink(const wchar_t* stagePath,
+                                                  const FileSystemLinkInformation* information,
+                                                  const FileSystemOptions* options,
+                                                  IFileSystemBoundObject** ownedStage) noexcept override;
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
                                                FileSystemOperation operationType,
                                                FileSystemTransferEndpoint endpoint,
                                                FileSystemTransferHints* hints) noexcept override;
     HRESULT STDMETHODCALLTYPE GetStorageCharacteristics(const wchar_t* path, FileSystemStorageCharacteristics* characteristics) noexcept override;
+
+protected:
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                           FileSystemOperation operation,
+                                           FileSystemRouteDescriptor& descriptor) noexcept override;
 
 private:
     ~FileSystem();
@@ -315,11 +342,10 @@ private:
       "key": "reparsePointPolicy",
       "type": "option",
       "label": "Reparse points (symlinks/junctions)",
-      "description": "When recursively copying/moving directories, controls whether reparse points are recreated as links, followed, or skipped. Default is safest.",
-      "default": "copyReparse",
+      "description": "When recursively copying/moving directories, preserve each reparse point as a link object or skip it. Targets are never followed.",
+      "default": "preserve",
       "options": [
-        { "value": "copyReparse", "label": "Create link/reparse at destination" },
-        { "value": "followTargets", "label": "Follow targets (can loop / escape tree)" },
+        { "value": "preserve", "label": "Preserve link/reparse object" },
         { "value": "skip", "label": "Skip reparse points" }
       ]
     },
@@ -356,7 +382,7 @@ private:
     static constexpr unsigned int kDefaultRecycleBinBatchSize                          = 500u;
     static constexpr unsigned long kDefaultEnumerationSoftMaxBufferMiB                 = 512ul;
     static constexpr unsigned long kDefaultEnumerationHardMaxBufferMiB                 = 2048ul;
-    static constexpr FileSystemReparsePointPolicy kDefaultReparsePointPolicy           = FileSystemReparsePointPolicy::CopyReparse;
+    static constexpr FileSystemReparsePointPolicy kDefaultReparsePointPolicy           = FileSystemReparsePointPolicy::Preserve;
     static constexpr FileSystemSearchBackendPreference kDefaultSearchBackendPreference = FileSystemSearchBackendPreference::Auto;
     static constexpr unsigned int kDefaultSearchMaxDirectoryWalkers                    = 4u;
 
@@ -441,7 +467,7 @@ private:
 
     std::atomic_ulong _refCount{1};
 
-    void UpdateCapabilitiesJson() noexcept;
+    void UpdateCapabilitiesJson(std::string_view rootId, bool remoteRoute) noexcept;
 };
 
 [[nodiscard]] const char* GetFileSystemStaticConfigurationSchema() noexcept;

@@ -72,6 +72,8 @@ Resource forms that RedConfigure can parse but cannot safely rewrite yet must re
 - Dialog template creation must use the resource-aware Win32 callback helpers so `DialogBoxIndirectParamW` and `CreateDialogIndirectParamW` receive the selected satellite template when one exists.
 - Resource-aware dialog helpers must copy template bytes from the selected satellite resource but create the dialog with the embedded owner module `HINSTANCE`, so custom child classes registered by the executable or plugin continue to resolve after switching languages.
 - Top-level menus must be loaded explicitly through the localization manager. Window classes must not rely on `lpszMenuName` for localizable menus because class-template loading bypasses the selected satellite.
+- Every localized `MENU`/`MENUEX` resource must keep the same command, popup, separator, conditional, and nesting structure as its embedded source resource. `Tools/Tests/ResourceLocalizationContracts.Tests.ps1` is the owner-wide structural gate for RedSalamander, RedSalamanderMonitor, RedConfigure, ViewerText, ViewerImgRaw, ViewerPE, ViewerSpace, and ViewerWeb.
+- Every actionable static menu sibling must have exactly one access key, unique within its separator-delimited sibling group in each locale. Disabled/zero-ID placeholders and genuinely dynamic rows are exempt. ViewerText's `IDR_VIEWERTEXT_ENCODING_CATALOG` is localized picker catalog data rather than an actionable menu surface, so its catalog labels are exempt from mnemonic assignment; the compact `IDR_VIEWERTEXT_MENU` remains fully checked.
 - Runtime language changes must re-apply the selected language, rebuild already-created top-level menu resources from the current owner, reset cached submenu handles, rebuild dynamic menu sections, and refresh the visible custom menu model. Existing modal dialogs may continue using the language they were opened with until reopened.
 
 ## RedSalamander menus
@@ -83,7 +85,7 @@ Resource forms that RedConfigure can parse but cannot safely rewrite yet must re
   - A disabled **system high contrast indicator** item may be present; it is not selectable.
   - File themes from `Themes\\*.theme.json5` (separator above and below this section when present).
   - Custom themes from settings (`user/*`) (separated from file themes when both sections exist).
-- FolderView context menu is a resource menu (`IDR_FOLDERVIEW_CONTEXT`) defined in `RedSalamander/RedSalamander.rc`.
+- FolderView item and background context menus are separate resource menus (`IDR_FOLDERVIEW_ITEM_CONTEXT` and `IDR_FOLDERVIEW_BACKGROUND_CONTEXT`) defined in `RedSalamander/RedSalamander.rc`.
 
 ## RedSalamanderMonitor menus
 

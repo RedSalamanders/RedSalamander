@@ -7,6 +7,7 @@
 #include "Helpers.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -121,13 +122,32 @@ struct Utf16CodePoint
     return value >= 0x1F1E6u && value <= 0x1F1FFu;
 }
 
-[[nodiscard]] size_t ConsumeEmojiSuffix(std::wstring_view text, size_t index) noexcept
+[[nodiscard]] bool IsCombiningMark(std::wstring_view text, size_t index, size_t end) noexcept
+{
+    const size_t length = end > index ? std::min<size_t>(end - index, 2u) : 0u;
+    if (length == 0u)
+    {
+        return false;
+    }
+
+    std::array<WORD, 2u> charTypes{};
+    if (GetStringTypeW(CT_CTYPE3, text.data() + index, static_cast<int>(length), charTypes.data()) == FALSE)
+    {
+        return false;
+    }
+
+    constexpr WORD combiningFlags = C3_NONSPACING | C3_DIACRITIC | C3_VOWELMARK;
+    return (charTypes[0] & combiningFlags) != 0u || (length > 1u && (charTypes[1] & combiningFlags) != 0u);
+}
+
+[[nodiscard]] size_t ConsumeTextElementExtenders(std::wstring_view text, size_t index) noexcept
 {
     size_t cursor = std::min(index, text.size());
     while (cursor < text.size())
     {
         const Utf16CodePoint suffix = ReadCodePointAt(text, cursor);
-        if (! IsVariationSelectorCodePoint(suffix.value) && ! IsEmojiModifierCodePoint(suffix.value))
+        if (! IsVariationSelectorCodePoint(suffix.value) && ! IsEmojiModifierCodePoint(suffix.value) &&
+            ! IsCombiningMark(text, cursor, suffix.end))
         {
             break;
         }
@@ -147,14 +167,14 @@ struct Utf16CodePoint
     }
 
     const Utf16CodePoint first = ReadCodePointAt(text, start);
-    size_t boundary            = ConsumeEmojiSuffix(text, first.end);
+    size_t boundary            = ConsumeTextElementExtenders(text, first.end);
 
     if (IsRegionalIndicatorCodePoint(first.value) && boundary < text.size())
     {
         const Utf16CodePoint second = ReadCodePointAt(text, boundary);
         if (IsRegionalIndicatorCodePoint(second.value))
         {
-            return ConsumeEmojiSuffix(text, second.end);
+            return ConsumeTextElementExtenders(text, second.end);
         }
     }
 
@@ -173,7 +193,7 @@ struct Utf16CodePoint
         }
 
         const Utf16CodePoint joined = ReadCodePointAt(text, boundary);
-        boundary                    = ConsumeEmojiSuffix(text, joined.end);
+        boundary                    = ConsumeTextElementExtenders(text, joined.end);
     }
 
     return boundary > start ? boundary : StepToNextCodePoint(text, start);

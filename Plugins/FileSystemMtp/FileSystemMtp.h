@@ -26,6 +26,7 @@
 #include "FileSystemMtp.Internal.h"
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
+#include "FileSystemRouteProviderBase.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
@@ -74,11 +75,13 @@ private:
 class MtpBackendReader;
 
 class FileSystemMtp final : public IFileSystem,
+                            public FileSystemRouteCapabilitiesBase,
                             public IFileSystemIO,
                             public IFileSystemDirectoryOperations,
                             public IFileSystemInitialize,
                             public IInformations,
                             public INavigationMenu,
+                            public IFileSystemAtomicWriter,
                             public IDriveInfo
 {
 public:
@@ -161,7 +164,9 @@ public:
                                           const FileSystemOptions* options = nullptr,
                                           IFileSystemCallback* callback    = nullptr,
                                           void* cookie                     = nullptr) noexcept override;
-    HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
+                                                  FileSystemOperation operation,
+                                                  const char** jsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
                                                FileSystemOperation operationType,
                                                FileSystemTransferEndpoint endpoint,
@@ -182,7 +187,22 @@ public:
                                                void* cookie,
                                                FileSystemDirectorySizeResult* result) noexcept override;
 
-    HRESULT CommitFileWriter(std::wstring_view normalizedPath, FileSystemFlags flags, std::span<const std::byte> bytes) noexcept;
+    HRESULT CommitFileWriter(std::wstring_view normalizedPath,
+                             FileSystemFlags flags,
+                             HANDLE stagingFile,
+                             uint64_t sizeBytes,
+                             uint64_t transmitHash,
+                             std::wstring decidedDestinationPersistentId,
+                             std::shared_ptr<void> payloadOwner) noexcept;
+    [[nodiscard]] HRESULT ResolveReplaceOccupant(std::wstring_view normalizedPath, const FileSystemBasicInformation& expected, std::wstring& persistentId) noexcept;
+
+    // IFileSystemAtomicWriter (R3-1 / C9): the overwrite temp-sibling swap is atomic-final.
+    HRESULT STDMETHODCALLTYPE SupportsAtomicWriterCommit(const wchar_t* path, FileSystemFlags flags, BOOL* supported) noexcept override;
+
+protected:
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                           FileSystemOperation operation,
+                                           FileSystemRouteDescriptor& descriptor) noexcept override;
 
 private:
     friend class MtpBackendReader;
@@ -226,7 +246,7 @@ private:
 
     [[nodiscard]] const char* StoreJson(JsonReturnBuffers& buffers, std::string jsonUtf8) noexcept;
     [[nodiscard]] std::string BuildConfigurationJson() const;
-    [[nodiscard]] std::string BuildCapabilitiesJson() const;
+    [[nodiscard]] std::string BuildCapabilitiesJson(std::wstring_view path) const;
     [[nodiscard]] HRESULT NormalizeInputPath(const wchar_t* path, std::wstring& normalized) const noexcept;
     [[nodiscard]] bool MutationsAllowed() const noexcept;
     [[nodiscard]] HRESULT CheckMutationAllowed() const noexcept;

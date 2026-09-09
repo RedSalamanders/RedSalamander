@@ -2,28 +2,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$testRunPlanScript = Join-Path $repoRoot 'Tools\TestRunPlan.ps1'
+$testRunPlanModule = Join-Path $repoRoot 'Tools\Modules\Testing\TestRunPlan.psm1'
 $showPerfRunsScript = Join-Path $repoRoot 'Tools\Show-PerfRuns.ps1'
-. $testRunPlanScript
-
-function Assert-RSEqual {
-    param(
-        [Parameter(Mandatory = $true)]
-        [AllowNull()]
-        [object]$Actual,
-
-        [Parameter(Mandatory = $true)]
-        [AllowNull()]
-        [object]$Expected,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Message
-    )
-
-    if ($Actual -ne $Expected) {
-        throw "$Message Expected '$Expected' but got '$Actual'."
-    }
-}
+Import-Module $testRunPlanModule -Force -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
 
 function New-RSPerfRunsRoot {
     $root = New-RSTestSandboxScratchDirectory `

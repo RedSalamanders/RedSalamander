@@ -7,6 +7,24 @@
     with the canonical CI/Full run plan. The JSON manifest records test surfaces,
     execution kinds, and derived counts without making documentation own mutable
     totals. Runner-native case listing remains authoritative for in-product cases.
+
+.PARAMETER RepoRoot
+    Specifies the repository root whose source registrations and run plan are inventoried.
+
+.PARAMETER Format
+    Emits machine-readable JSON or a concise human-readable text summary.
+
+.OUTPUTS
+    A JSON string when Format is Json. Text mode writes a summary to the host and emits no supported pipeline objects.
+
+.NOTES
+    Prerequisites: a repository checkout with the canonical self-test registration and Tools Pester structure. Side effects: none; the command is read-only. Exit is nonzero on malformed registrations, missing run-plan surfaces, or inventory reconciliation failure. Primary consumers: Get-SpecInventory.ps1, test-coverage review, and inventory policy tests.
+
+.EXAMPLE
+    .\Tools\Get-TestInventory.ps1 -Format Json
+
+.EXAMPLE
+    .\Tools\Get-TestInventory.ps1 -Format Text
 #>
 
 [CmdletBinding()]
@@ -20,8 +38,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$helper = Join-Path $PSScriptRoot 'TestInventory.ps1'
-. $helper
+$helper = Join-Path $PSScriptRoot 'Modules\Testing\TestInventory.psm1'
+Import-Module $helper -Force -ErrorAction Stop
 
 $inventory = Get-RSTestInventory -RepoRoot $RepoRoot
 

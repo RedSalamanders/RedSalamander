@@ -143,9 +143,10 @@ public:
 
     // Content
     void SetText(const std::wstring& text);
+    void SetTextSnapshot(RedSalamanderMonitor::MonitorTextSnapshot&& snapshot);
     void ClearText();
     std::wstring GetText() const;
-    bool SaveTextToFile(const std::wstring& path) const;
+    [[nodiscard]] RedSalamanderMonitor::MonitorTextSnapshot CaptureTextSnapshot() const;
 
     // Editing Helpers
     void CopySelection();
@@ -165,6 +166,12 @@ public:
     {
         auto lock = _etwQueueCS.lock();
         return _etwEventQueue.size();
+    }
+    void DebugAppendRetainedLine(const Debug::InfoParam& info, std::wstring text);
+    [[nodiscard]] std::vector<UINT32> DebugGetMatchStarts() const;
+    [[nodiscard]] std::pair<size_t, size_t> DebugGetSearchFrontier() const noexcept
+    {
+        return {_searchScanLine, _searchScanOffset};
     }
 #endif
 
@@ -267,6 +274,7 @@ private:
     void CopySelectionToClipboard();
     void RebuildMatches();
     void AppendMatchesForRange(size_t firstSourceLine);
+    void ResetAfterDocumentReplacement();
     bool ValidateDeviceState() const;
     void LogSystemInfo() const;
     std::wstring_view RenderModePerfDetail() const noexcept;
@@ -416,6 +424,8 @@ private:
     bool _searchCaseSensitive = false;
     std::vector<Line::ColorSpan> _matches;
     __int64 _matchIndex = -1;
+    size_t _searchScanLine   = 0u;
+    size_t _searchScanOffset = 0u;
     enum class FindStartMode : uint8_t
     {
         CurrentPosition = 0,

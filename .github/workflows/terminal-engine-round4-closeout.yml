@@ -1,0 +1,213 @@
+name: Terminal Engine Round 4 Closeout
+
+"on":
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  closeout:
+    name: Prove valid no-winner
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 240
+
+    steps:
+      - name: Require executable-cohort workflow to be disabled
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $workflowPath = (
+            "repos/$env:GITHUB_REPOSITORY/actions/workflows/terminal-engine-gate0.yml")
+          $workflow = gh api $workflowPath |
+            ConvertFrom-Json
+          if ([string]$workflow.state -cne 'disabled_manually') {
+            throw 'The frozen executable-cohort workflow must be disabled before Round-4 closeout.'
+          }
+          $manualRuns = gh api --method GET "$workflowPath/runs" `
+            -f event=workflow_dispatch `
+            -f per_page=1 |
+              ConvertFrom-Json
+          if ([int64]$manualRuns.total_count -ne 0) {
+            throw 'The frozen executable-cohort workflow has forbidden manual-dispatch history.'
+          }
+          foreach ($status in @(
+              'in_progress',
+              'queued',
+              'requested',
+              'waiting',
+              'pending')) {
+            $active = gh api --method GET "$workflowPath/runs" `
+              -f status=$status `
+              -f per_page=1 |
+                ConvertFrom-Json
+            if ([int64]$active.total_count -ne 0) {
+              throw "The frozen executable-cohort workflow has an active '$status' run."
+            }
+          }
+
+      - name: Checkout exact branch commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Prove authenticated zero-cohort rejection
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidenceRoot = Join-Path $env:RUNNER_TEMP (
+            'terminal-engine-round4-closeout-evidence')
+          $result = @(
+            & .\Tools\Test-TerminalEngineRound4Closeout.ps1 `
+              -RepoRoot $PWD.Path `
+              -EvidenceRoot $evidenceRoot
+          )
+          if ($result.Count -ne 1 -or
+              [string]$result[0].Status -cne
+                'valid-no-winner-product-blocked') {
+            throw 'Round-4 closeout proof returned an unexpected result.'
+          }
+
+      - name: Verify focused Gate 0 contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tests = @(
+            '.\Tools\Tests\TerminalDependencyLifecycle.Tests.ps1',
+            '.\Tools\Tests\TerminalEngineArchive.Tests.ps1',
+            '.\Tools\Tests\TerminalEngineNotices.Tests.ps1',
+            '.\Tools\Tests\TerminalEngineCandidateAssessment.Tests.ps1',
+            '.\Tools\Tests\TerminalEngineCandidateUniverseTransition.Tests.ps1',
+            '.\Tools\Tests\TerminalEngineCollectionDescriptor.Tests.ps1',
+            '.\Tools\Tests\TerminalEngineCollectionDriver.Tests.ps1',
+            '.\Tools\Tests\TerminalEngineCollectionNeutrality.Tests.ps1',
+            '.\Tools\Tests\TerminalEngineCollectionProvider.Tests.ps1',
+            '.\Tools\Tests\TerminalEngineC7Proof.Tests.ps1',
+            '.\Tools\Tests\TerminalEngineEvaluator.Tests.ps1',
+            '.\Tools\Tests\TerminalEngineCandidatePatch.Tests.ps1',
+            '.\Tools\Tests\TerminalEngineFixtureGenerator.Tests.ps1',
+            '.\Tools\Tests\TerminalEngineSourceReview.Tests.ps1',
+            '.\Tools\Tests\TerminalEngineGate0Harness.Tests.ps1',
+            '.\Tools\Tests\TerminalEngineGate0Probe.Tests.ps1',
+            '.\Tools\Tests\TerminalEngineNetworkIsolation.Tests.ps1',
+            '.\Tools\Tests\TerminalEnginePeIdentity.Tests.ps1',
+            '.\Tools\Tests\TerminalEngineRound4Closeout.Tests.ps1',
+            '.\Tools\Tests\TerminalEvidence.Tests.ps1'
+          )
+          $pester = Get-Command Invoke-Pester -ErrorAction Stop
+          if ($pester.Parameters.ContainsKey('Path')) {
+            $result = Invoke-Pester -Path $tests -PassThru
+          }
+          else {
+            $result = Invoke-Pester -Script $tests -PassThru
+          }
+          function Get-PesterCount {
+            param(
+              [Parameter(Mandatory)]
+              [string[]] $Names
+            )
+            foreach ($name in $Names) {
+              $property = $result.PSObject.Properties[$name]
+              if ($null -ne $property) {
+                return [int]$property.Value
+              }
+            }
+            return 0
+          }
+          $passed = Get-PesterCount @('PassedCount', 'Passed')
+          $failed = Get-PesterCount @('FailedCount', 'Failed')
+          $skipped = Get-PesterCount @('SkippedCount', 'Skipped')
+          $pending = Get-PesterCount @('PendingCount', 'Pending')
+          $inconclusive = Get-PesterCount @(
+            'InconclusiveCount',
+            'Inconclusive')
+          if ($tests.Count -ne 20 -or
+              $passed -ne 239 -or
+              $failed -ne 0 -or
+              $skipped -ne 0 -or
+              $pending -ne 0 -or
+              $inconclusive -ne 0) {
+            throw (
+              'Gate 0 focused contracts were incomplete: ' +
+              "files=$($tests.Count) passed=$passed failed=$failed " +
+              "skipped=$skipped pending=$pending inconclusive=$inconclusive.")
+          }
+
+      - name: Run required full repository suite
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\Tools\Run-AllTests.ps1 -Suite Full -ValidationMode Fresh
+          if ($global:LASTEXITCODE -ne 0) {
+            throw "Full repository suite failed with exit $global:LASTEXITCODE."
+          }
+
+      - name: Reprove no-winner repository state after tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidenceRoot = Join-Path $env:RUNNER_TEMP (
+            'terminal-engine-round4-closeout-final-evidence')
+          $result = @(
+            & .\Tools\Test-TerminalEngineRound4Closeout.ps1 `
+              -RepoRoot $PWD.Path `
+              -EvidenceRoot $evidenceRoot
+          )
+          if ($result.Count -ne 1 -or
+              [string]$result[0].Status -cne
+                'valid-no-winner-product-blocked') {
+            throw 'Final Round-4 no-winner proof returned an unexpected result.'
+          }
+
+      - name: Recheck disabled state and reject an overlapping executable run
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $workflowPath = (
+            "repos/$env:GITHUB_REPOSITORY/actions/workflows/terminal-engine-gate0.yml")
+          $workflow = gh api $workflowPath |
+            ConvertFrom-Json
+          if ([string]$workflow.state -cne 'disabled_manually') {
+            throw 'The frozen executable-cohort workflow was re-enabled during closeout.'
+          }
+
+          $currentRun = gh api (
+            "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID") |
+              ConvertFrom-Json
+          $closeoutStarted = [DateTimeOffset]::Parse(
+            [string]$currentRun.created_at,
+            [Globalization.CultureInfo]::InvariantCulture)
+          $recent = gh api --method GET "$workflowPath/runs" -f per_page=100 |
+            ConvertFrom-Json
+          $overlap = @(
+            $recent.workflow_runs |
+              Where-Object {
+                [DateTimeOffset]::Parse(
+                  [string]$_.created_at,
+                  [Globalization.CultureInfo]::InvariantCulture) -ge
+                    $closeoutStarted
+              })
+          if ($overlap.Count -ne 0) {
+            throw 'The frozen executable-cohort workflow ran during Round-4 closeout.'
+          }
+
+      - name: Record no-winner closeout
+        shell: pwsh
+        run: |
+          @(
+            '## Terminal Engine Gate 0 — Round 4',
+            '',
+            'Valid no-winner result: the authenticated candidate set has zero',
+            'collect dispositions. Collect and the direct provider rejected',
+            'before evidence-root mutation. No collection/finalization',
+            'manifest, engine lock, runtime artifact, or winner was created.',
+            'Product terminal implementation remains blocked.'
+          ) | Out-File `
+            -FilePath $env:GITHUB_STEP_SUMMARY `
+            -Encoding utf8 `
+            -Append

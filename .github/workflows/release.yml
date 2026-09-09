@@ -20,7 +20,11 @@ name: Release
         default: true
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-RedSalamander-${{ github.run_number }}
+  cancel-in-progress: false
 
 # ════════════════════════════════════════════════════════════════════════
 # Job 1: Build (matrix: x64 + optional ARM64 — parallel via reusable workflow)
@@ -35,16 +39,18 @@ jobs:
       release_version: ${{ steps.version.outputs.release_version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Resolve release version
         id: version
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          . (Join-Path $env:GITHUB_WORKSPACE "Tools\Versioning.ps1")
+          Import-Module (Join-Path $env:GITHUB_WORKSPACE "Tools\Modules\Build\Versioning.psm1") -Force -ErrorAction Stop
 
-          $versionContext = Get-RSVersionContext `
+          $versionContext = Resolve-RSVersionContext `
             -RepoRoot $env:GITHUB_WORKSPACE `
             -Configuration Release `
             -Platform x64 `
@@ -62,8 +68,84 @@ jobs:
           "release_version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "build_number=$buildNumber" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
+  ghostty-runtime-preflight:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verify locked Ghostty runtime status
+        id: ghostty_status
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $outputPath = ".build\TerminalEngineStatus\release\status.json"
+          $report = & .\Tools\Get-GhosttyTerminalRuntimeStatus.ps1 `
+            -Mode Online `
+            -OutputPath $outputPath `
+            -ExpectedSourceCommit $env:GITHUB_SHA `
+            -PassThru
+          "report_path=$outputPath" >> $env:GITHUB_OUTPUT
+
+          $lockPath = "External\TerminalEngine\GhosttyRuntimeLock.v1.json"
+          $lockSha256 = (Get-FileHash -LiteralPath $lockPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          $sourceBindingValid = $report.sourceBinding.repositoryCommit -ceq $env:GITHUB_SHA
+          $lockBindingValid = $report.canonicalLock.sha256 -ceq $lockSha256
+          $resultValid = $report.result -notin @("security-review", "required-manual", "unreachable")
+          if ($report.sourceBinding.repositoryCommit -cne $env:GITHUB_SHA) {
+            Write-Warning "Ghostty status source binding does not match the release source commit; the final gate will fail after report upload."
+          }
+          if ($report.canonicalLock.sha256 -cne $lockSha256) {
+            Write-Warning "Ghostty status lock binding does not match the checked-out canonical lock; the final gate will fail after report upload."
+          }
+
+          "source_binding_valid=$($sourceBindingValid.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "lock_binding_valid=$($lockBindingValid.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "result_valid=$($resultValid.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "result=$($report.result)" >> $env:GITHUB_OUTPUT
+          "## Ghostty release preflight" >> $env:GITHUB_STEP_SUMMARY
+          "- Result: $($report.result)" >> $env:GITHUB_STEP_SUMMARY
+          "- Source commit: $($report.sourceBinding.repositoryCommit)" >> $env:GITHUB_STEP_SUMMARY
+          "- Lock SHA-256: $($report.canonicalLock.sha256)" >> $env:GITHUB_STEP_SUMMARY
+
+          if ($report.result -eq "update-observed") {
+            Write-Warning "A Ghostty update was observed; the release remains bound to the reviewed lock."
+          }
+      - name: Upload Ghostty release preflight
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ghostty-runtime-release-preflight-${{ github.run_id }}
+          path: .build/TerminalEngineStatus/release/status.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce Ghostty release preflight
+        if: always() && steps.ghostty_status.outcome == 'success'
+        shell: pwsh
+        run: |
+          if ("${{ steps.ghostty_status.outputs.source_binding_valid }}" -ne "true") {
+            throw "Ghostty status source binding does not match the release source commit."
+          }
+          if ("${{ steps.ghostty_status.outputs.lock_binding_valid }}" -ne "true") {
+            throw "Ghostty status lock binding does not match the checked-out canonical lock."
+          }
+          if ("${{ steps.ghostty_status.outputs.result_valid }}" -ne "true") {
+            throw "Ghostty release preflight failed closed with result '${{ steps.ghostty_status.outputs.result }}'."
+          }
+
+  ghostty-product-qualification:
+    needs: [version-info, ghostty-runtime-preflight]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ghostty-runtime-product-qualification.yml
+    with:
+      build_number: ${{ needs.version-info.outputs.build_number }}
+
   build:
-    needs: version-info
+    needs: [version-info, ghostty-runtime-preflight, ghostty-product-qualification]
     strategy:
       fail-fast: false
       matrix:
@@ -89,7 +171,9 @@ jobs:
         platform: ${{ fromJson((github.event_name != 'workflow_dispatch' || inputs.build_arm64) && '["x64","ARM64"]' || '["x64"]') }}
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Download build output
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -132,7 +216,9 @@ jobs:
 
       - name: Checkout
         if: ${{ inputs.build_msix }}
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Download build output
         if: ${{ inputs.build_msix }}
@@ -152,13 +238,15 @@ jobs:
               [string] $PackageName,
               [Parameter(Mandatory = $true)]
               [string] $FailureMessage,
+              [Parameter(Mandatory = $true)]
+              [string] $PackageVersion,
               [string[]] $ExtraArguments = @()
             )
 
             $oldNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
             try {
               $PSNativeCommandUseErrorActionPreference = $false
-              & choco install $PackageName -y --no-progress --ignore-detected-reboot --ignore-package-exit-codes @ExtraArguments
+              & choco install $PackageName --version $PackageVersion -y --no-progress --ignore-detected-reboot --ignore-package-exit-codes @ExtraArguments
               $exitCode = $LASTEXITCODE
             } finally {
               $PSNativeCommandUseErrorActionPreference = $oldNativeErrorPreference
@@ -169,15 +257,15 @@ jobs:
             $global:LASTEXITCODE = 0
           }
 
-          Invoke-ChocoInstall -PackageName visualstudio2026buildtools -FailureMessage "VS Build Tools install failed"
+          Invoke-ChocoInstall -PackageName visualstudio2026buildtools -PackageVersion 118.8.1 -FailureMessage "VS Build Tools install failed"
 
           $vcPackageParameters = "--includeRecommended"
           if ("${{ matrix.platform }}" -eq "ARM64") {
             $vcPackageParameters += " --add Microsoft.VisualStudio.Component.VC.Tools.ARM64"
           }
 
-          Invoke-ChocoInstall -PackageName visualstudio2026-workload-vctools -FailureMessage "VC workload install failed" -ExtraArguments @("--package-parameters", $vcPackageParameters)
-          Invoke-ChocoInstall -PackageName visualstudio2026-workload-universalbuildtools -FailureMessage "UWP workload install failed"
+          Invoke-ChocoInstall -PackageName visualstudio2026-workload-vctools -PackageVersion 1.0.0 -FailureMessage "VC workload install failed" -ExtraArguments @("--package-parameters", $vcPackageParameters)
+          Invoke-ChocoInstall -PackageName visualstudio2026-workload-universalbuildtools -PackageVersion 1.0.0 -FailureMessage "UWP workload install failed"
 
       - name: Select MSBuild (VS 2026)
         if: ${{ inputs.build_msix }}
@@ -210,59 +298,16 @@ jobs:
           "MSBUILD_EXE_PATH=$msbuild" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           & $msbuild -version
 
-      - name: Generate MSIX assets
-        if: ${{ inputs.build_msix }}
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          & (Join-Path $env:GITHUB_WORKSPACE "Installer\msix\GenerateAssets.ps1")
-
-      - name: Update MSIX version
-        if: ${{ inputs.build_msix }}
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          & (Join-Path $env:GITHUB_WORKSPACE "Installer\msix\UpdateManifestVersion.ps1") `
-            -Version "${{ needs.version-info.outputs.release_version }}" `
-            -Platform "${{ matrix.platform }}"
-
       - name: Build MSIX package
         if: ${{ inputs.build_msix }}
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $platform = "${{ matrix.platform }}"
-          $wapproj = Join-Path $env:GITHUB_WORKSPACE "Installer\msix\RedSalamanderInstaller.wapproj"
-          $solutionDir = $env:GITHUB_WORKSPACE.TrimEnd('\') + '\'
-
-          # Resolve TargetPlatformVersion from installed Windows SDK
-          $uapRoot = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\DesignTime\CommonConfiguration\Neutral\UAP"
-          $installed = Get-ChildItem -Path $uapRoot -Directory -ErrorAction SilentlyContinue |
-              Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' } |
-              Sort-Object { [version]$_.Name } -Descending |
-              Select-Object -First 1
-
-          if (-not $installed) {
-            throw "Windows SDK with UAP props not found."
-          }
-          $targetPlatformVersion = $installed.Name
-
-          $msixParams = @(
-            $wapproj
-            "/t:Build"
-            "/p:Configuration=Release"
-            "/p:Platform=$platform"
-            "/p:TargetPlatformVersion=$targetPlatformVersion"
-            "/p:SolutionDir=$solutionDir"
-            "/p:AppxPackageSigningEnabled=false"
-            "/p:GenerateAppInstallerFile=false"
-            "/p:AppxBundle=Never"
-            "/v:minimal"
-            "/nologo"
-          )
-
-          MSBuild.exe @msixParams
-          if ($LASTEXITCODE -ne 0) { throw "MSIX build failed with exit code $LASTEXITCODE" }
+          & (Join-Path $env:GITHUB_WORKSPACE "Installer\msix\build-msix.ps1") `
+            -Version "${{ needs.version-info.outputs.release_version }}" `
+            -Configuration Release `
+            -Platform "${{ matrix.platform }}" `
+            -MSBuildPath $env:MSBUILD_EXE_PATH
 
       - name: Sign MSIX
         if: ${{ inputs.build_msix && inputs.sign_msix }}
@@ -346,9 +391,13 @@ jobs:
   release:
     runs-on: windows-latest
     needs: [version-info, package-portable, package-msix]
+    permissions:
+      contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Download portable packages
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -369,7 +418,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          . (Join-Path $env:GITHUB_WORKSPACE "Tools\ReleaseArtifactPolicy.ps1")
+          Import-Module (Join-Path $env:GITHUB_WORKSPACE "Tools\Modules\Packaging\ReleaseArtifactPolicy.psm1") -Force -ErrorAction Stop
 
           $artifacts = @(Assert-RSReleaseArtifacts `
             -ArtifactsRoot (Join-Path $env:GITHUB_WORKSPACE "artifacts") `
@@ -384,7 +433,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          . (Join-Path $env:GITHUB_WORKSPACE "Tools\ReleaseArtifactPolicy.ps1")
+          Import-Module (Join-Path $env:GITHUB_WORKSPACE "Tools\Modules\Packaging\ReleaseArtifactPolicy.psm1") -Force -ErrorAction Stop
 
           $policy = @{
             ArtifactsRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts"
@@ -402,15 +451,15 @@ jobs:
           tag_name: ${{ needs.version-info.outputs.release_tag }}
           target_commitish: ${{ github.sha }}
           fail_on_unmatched_files: true
-          files: |
-            artifacts/*.zip
-            artifacts/*.sha256
+          files: artifacts/*
 
-      - name: Upload MSIX to release
-        if: ${{ inputs.build_msix }}
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
-        with:
-          tag_name: ${{ needs.version-info.outputs.release_tag }}
-          target_commitish: ${{ github.sha }}
-          fail_on_unmatched_files: true
-          files: artifacts/*.msix
+  publish-winget:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_arm64 }}
+    needs: [version-info, release]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/winget-release.yml
+    with:
+      version: ${{ needs.version-info.outputs.release_version }}
+      submit: true
+    secrets: inherit

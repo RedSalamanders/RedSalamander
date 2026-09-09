@@ -9,7 +9,24 @@
 
     This wrapper merges Path segments across Machine/User/Process, removes the duplicate
     PATH alias, resolves MSBuild via vswhere when not provided, and then forwards the
-    remaining arguments to MSBuild unchanged.
+    remaining arguments to MSBuild unchanged. Artifact-mutating invocations must include
+    explicit /p:Configuration and /p:Platform properties so coordination is scoped to
+    the exact repository output profile.
+.PARAMETER MSBuildArguments
+    Supplies the project/solution, targets, properties, and other arguments forwarded
+    unchanged to MSBuild. The list must include explicit Configuration and Platform
+    MSBuild properties, either as separate switches or one semicolon/comma-delimited
+    property list.
+.PARAMETER MSBuildPath
+    Overrides MSBuild discovery with an explicit executable path.
+.OUTPUTS
+    Streams MSBuild console output and exits with the child MSBuild exit code; no supported pipeline objects are returned.
+.NOTES
+    Prerequisites: MSBuild, explicit Configuration and Platform properties, the repository
+    build helpers, and uncontaminated profile/shared-dependency artifact scopes. Side
+    effects: normalizes the current process Path environment, acquires scoped coordination
+    locks, launches contained MSBuild, and writes ordinary build outputs/logs. Primary use
+    is direct build diagnosis; build.ps1 remains the canonical repository build entrypoint.
 .EXAMPLE
     .\Tools\Invoke-SanitizedMsbuild.ps1 Z:\src\RedSalamander\Common\DxUi\DxUi.vcxproj /t:Build /p:Configuration=Debug /p:Platform=x64
 #>
@@ -24,17 +41,17 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$sanitizedEnvironmentScript = Join-Path $PSScriptRoot 'SanitizedEnvironment.ps1'
-$artifactOperationLockScript = Join-Path $PSScriptRoot 'ArtifactOperationLock.ps1'
-if (-not (Test-Path $sanitizedEnvironmentScript)) {
-    throw "Sanitized environment helper not found: $sanitizedEnvironmentScript"
+$sanitizedEnvironmentModule = Join-Path $PSScriptRoot 'Modules\Build\SanitizedEnvironment.psm1'
+$artifactOperationLockModule = Join-Path $PSScriptRoot 'Modules\Build\ArtifactOperationLock.psm1'
+if (-not (Test-Path $sanitizedEnvironmentModule)) {
+    throw "Sanitized environment helper not found: $sanitizedEnvironmentModule"
 }
 
-. $sanitizedEnvironmentScript
-if (-not (Test-Path $artifactOperationLockScript)) {
-    throw "Artifact operation lock helper not found: $artifactOperationLockScript"
+Import-Module $sanitizedEnvironmentModule -Force -ErrorAction Stop
+if (-not (Test-Path $artifactOperationLockModule)) {
+    throw "Artifact operation lock helper not found: $artifactOperationLockModule"
 }
-. $artifactOperationLockScript
+Import-Module $artifactOperationLockModule -Force -ErrorAction Stop
 
 function Resolve-MSBuildPath {
     if (-not [string]::IsNullOrWhiteSpace($MSBuildPath)) {
@@ -86,45 +103,73 @@ function Resolve-MSBuildPath {
     throw "Unable to locate MSBuild.exe."
 }
 
-$configuration = ''
-$platform = ''
+$configuration = [string](Get-RSMSBuildPropertyValue `
+        -Arguments $MSBuildArguments `
+        -Name 'Configuration')
+$platform = [string](Get-RSMSBuildPropertyValue `
+        -Arguments $MSBuildArguments `
+        -Name 'Platform')
 $target = 'direct-msbuild'
 foreach ($argument in $MSBuildArguments) {
-    if ($argument -match '^(?i)/p:Configuration=(?<value>.+)$') {
-        $configuration = $Matches.value.Trim('"')
-    }
-    elseif ($argument -match '^(?i)/p:Platform=(?<value>.+)$') {
-        $platform = $Matches.value.Trim('"')
-    }
-    elseif ($target -eq 'direct-msbuild' -and $argument -notmatch '^[/-]') {
+    if ($target -eq 'direct-msbuild' -and $argument -notmatch '^[/-]') {
         $target = $argument
     }
 }
 
 $artifactOperationLock = $null
+$sharedDependencyLock = $null
 try {
+    $artifactOperationScope = @{
+        kind = 'build'
+        target = $target
+        configuration = $configuration
+        platform = $platform
+    }
     $artifactOperationLock = Enter-RSArtifactOperationLock `
         -RepoRoot $repoRoot `
         -Operation "direct MSBuild $target $configuration|$platform" `
-        -Scope @{
-            kind = 'build'
-            target = $target
-            configuration = $configuration
-            platform = $platform
-        }
+        -Scope $artifactOperationScope
 
     if ($artifactOperationLock.WasAbandoned) {
         [void](Set-RSArtifactOperationContaminated `
                 -RepoRoot $repoRoot `
                 -Reason 'The previous build/test owner exited without clearing the exclusive artifact-operation lock.' `
-                -AbandonedOwner $artifactOperationLock.AbandonedOwner)
+                -AbandonedOwner $artifactOperationLock.AbandonedOwner `
+                -Scope $artifactOperationScope)
     }
-    if (Test-RSArtifactOperationContaminated -RepoRoot $repoRoot) {
-        $markerPath = Get-RSArtifactContaminationMarkerPath -RepoRoot $repoRoot
+    if (Test-RSArtifactOperationContaminated -RepoRoot $repoRoot -Scope $artifactOperationScope) {
+        $markerPath = Get-RSArtifactContaminationMarkerPath `
+            -RepoRoot $repoRoot `
+            -Scope $artifactOperationScope
         throw "Direct MSBuild cannot repair contaminated shared artifacts. Run a matching full-solution build.ps1 -Rebuild first. Marker: $markerPath"
     }
 
-    Assert-RSNoResidualArtifactToolProcesses -RepoRoot $repoRoot
+    Assert-RSNoResidualArtifactToolProcesses `
+        -RepoRoot $repoRoot `
+        -Scope $artifactOperationScope
+    $sharedDependencyScope = $artifactOperationScope.Clone()
+    $sharedDependencyScope['coordination'] = 'shared-dependency'
+    $sharedDependencyLock = Enter-RSArtifactOperationLock `
+        -RepoRoot $repoRoot `
+        -Operation "direct MSBuild shared dependency phase $configuration|$platform" `
+        -Scope $sharedDependencyScope
+    if ($sharedDependencyLock.WasAbandoned) {
+        [void](Set-RSArtifactOperationContaminated `
+                -RepoRoot $repoRoot `
+                -Reason 'The previous MSBuild owner exited while it could have been writing shared vcpkg dependencies.' `
+                -AbandonedOwner $sharedDependencyLock.AbandonedOwner `
+                -Scope $sharedDependencyScope)
+    }
+    if (Test-RSArtifactOperationContaminated -RepoRoot $repoRoot -Scope $sharedDependencyScope) {
+        $markerPath = Get-RSArtifactContaminationMarkerPath `
+            -RepoRoot $repoRoot `
+            -Scope $sharedDependencyScope
+        throw "Direct MSBuild cannot repair interrupted shared vcpkg dependencies. Run a full-solution build.ps1 -Rebuild for platform $platform. Marker: $markerPath"
+    }
+    Assert-RSNoResidualArtifactToolProcesses `
+        -RepoRoot $repoRoot `
+        -Scope $sharedDependencyScope
+
     $resolvedMsbuildPath = Resolve-MSBuildPath
     $exitCode = Invoke-RSProcess `
         -FilePath $resolvedMsbuildPath `
@@ -133,5 +178,6 @@ try {
     exit $exitCode
 }
 finally {
+    Exit-RSArtifactOperationLock -Lock $sharedDependencyLock
     Exit-RSArtifactOperationLock -Lock $artifactOperationLock
 }

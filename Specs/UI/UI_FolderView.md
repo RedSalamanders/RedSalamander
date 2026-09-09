@@ -34,7 +34,7 @@
   - normal row labels and overlays use `Segoe UI Variable Text`
   - large overlay titles follow the shared size-based mapping
 - Watermark and status glyphs use `Segoe Fluent Icons`.
-- Any future visible HWND/GDI text added to FolderView-owned surfaces must route through the shared HFONT helper instead of `DEFAULT_GUI_FONT`.
+- FolderView-owned visible text must not introduce an HWND/GDI/HFONT fallback. It stays on the shared DxUi/DirectWrite typography path; any required native interop must be reviewed through `UI_VisibleTypographyAudit.md` and `UI_VisibleNativeAudit.md`.
 
 ## Performance Validation Contract
 
@@ -83,7 +83,7 @@ Measured optimization gates matter: the 2026-05-19 FolderView optimization revie
 - **Helper Headers**:
   - `RedSalamander/FolderViewEmptyStateLayout.h`
   - `RedSalamander/FolderViewIncrementalSearch.h`
-  - `RedSalamander/FolderViewVisualState.h`
+  - `Common/PaneVisualState.h` (shared focused/inactive pane opacity policy)
 - **Implementation (split)**:
   - `RedSalamander/FolderView.cpp` (window lifecycle + message dispatch)
   - `RedSalamander/FolderView.Interaction.cpp` (mouse/keyboard/scroll/command handling)
@@ -129,6 +129,79 @@ Measured optimization gates matter: the 2026-05-19 FolderView optimization revie
   - File: invoke the host’s open-file callback first (used to mount virtual file systems like `7z:`), otherwise fall back to `ShellExecuteW("open")`.
 - Programmatic path changes that replace or clear the NavigationView path MUST retire any active path-edit or full-path-popup native text host before hiding/resetting that child window. A refresh of the same path MAY preserve the edit host, but a different path or empty path must deactivate it so stale TextInput/UIA callbacks cannot navigate or paint against destroyed child HWND state.
 - Embedded NavigationView instances MUST NOT use generic blur-reclaim behavior intended for the top-level pane address bar. Focus recovery after edit/popup dismissal remains owner-scoped so Find/results, file-operation popups, and other embedded hosts can close without stealing focus back to the pane.
+
+## Current Item, Selection, and Location State Contract
+
+### Core invariants
+
+- A **displayed real item** is an item in the accepted model after provider enumeration, visibility rules, hidden-name exclusions, filtering, and sorting. Busy/error overlays, watermarks, host empty messages, and the standard empty-folder parent action are not real items.
+- The **current item** is FolderView's persistent item cursor. It is independent from Win32 keyboard focus and from selection.
+- Every nonempty displayed real-item model MUST have exactly one current item: `_focusedIndex` is valid, exactly one `FolderItem::focused` flag is true, and both representations identify the same item.
+- An empty displayed real-item model has no current item, no selected items, and no range anchor. This is the only stable no-current state.
+- Selection is an independent concrete set containing from zero through all displayed real items. The current item may be selected or unselected; moving, repairing, or restoring current MUST NOT implicitly select it.
+- Every accepted model replacement MUST finish through one invariant-normalization operation that clears stale focused flags, establishes the resolved current item, and makes the current item visible under the normal viewport policy.
+
+### Logical-location identity
+
+The same-location versus navigation decision uses one provider-aware key:
+
+1. logical file-system plugin ID;
+2. stable provider-instance, mount, or connection context;
+3. the logical folder key produced by the active provider's `FileSystemPathIdentity` contract.
+
+Two folder presentations are the same logical location only when all three components are equivalent under the provider contract. Alternate path spellings, junctions, reparse paths, and remounted connections are not guessed by FolderView: they are the same only when the provider returns equivalent identity keys. If a provider cannot promise stable identity across recreation, FolderView scopes identity to the exact live instance context and exact ordinal path text; a recreated instance is navigation.
+
+### Current-item resolution
+
+For an accepted rebuild of the same logical location, including refresh, sort, filter, hide/show, or visibility-policy changes, resolve current in this order:
+
+1. a validated one-shot host target, including successful create/rename intent or the specialized proven-removal result;
+2. the surviving prior current identity;
+3. the first surviving successor of the prior current under the resulting UI order;
+4. the nearest surviving predecessor;
+5. the first displayed item.
+
+For an active keyed sort, successor/predecessor use the exact production directories-first comparator, sort direction, and stable tie-breaker against a non-actionable probe for the removed prior current. For Sort None, scan the prior accepted order forward and then backward for surviving provider-aware identities. The probe is resolver-only state: it is never selected, remembered, exposed through status/UI Automation, or accepted as a command target. Generic repair MUST NOT blindly reuse the old numeric index; if multiple neighboring rows disappear, it still chooses the first surviving successor before any predecessor.
+
+A pure sort preserves current by identity. Passive focus memory MUST NOT override a surviving current during same-location changes. If filtering or hiding removes current, the resolved replacement becomes the remembered item; widening visibility later does not resurrect the older hidden current.
+
+For navigation to another logical folder/provider/context, resolve current in this order:
+
+1. a validated explicit navigation target;
+2. the remembered current identity for the destination when it is displayed;
+3. the first displayed item.
+
+Navigation always starts with empty selection. Returning through Back/Forward restores current only, never selection.
+
+### Bounded per-pane current memory
+
+- Current memory is FolderView-owned, per pane, process-lifetime state and is not serialized.
+- The key is the logical-location key above; the value is the remembered item component normalized and compared through the same provider identity contract.
+- Each pane stores at most **512 entries** and at most **512 KiB** of owned UTF-16 provider/context/folder/item payload. Container overhead is additionally bounded by the entry cap.
+- Insert/update and successful restore touch recency. Eviction is deterministic least-recently-used order with stable insertion order as the tie-breaker, and continues until both caps are satisfied.
+- An individually oversized or unsupported identity is a no-cache event and MUST NOT evict the useful cache or fail navigation. `std::bad_alloc` remains fatal under repository policy.
+- Switching roots/providers does not globally clear this cache. COM pointers, object addresses, HWND values, and other transient addresses MUST NOT be used as identity.
+
+### Selection membership and persistence
+
+- Only displayed real identities may be selected or used by selection-aware commands. Removed, filtered-out, hidden, placeholder, and stale identities are not latent selection.
+- Same-location refresh/sort preserves selected surviving provider-aware identities. New identities start unselected. Removed/filtered/hidden identities leave selection immediately and an ordinary later reappearance remains unselected.
+- A proven same-folder rename chain transfers selection only when its original identity was selected. The short-lived rename provenance is non-actionable and MUST NOT resurrect an ordinary disappearance/reappearance.
+- Select All captures the displayed set at invocation time. If a later filter or visibility rule removes some selected items, those items leave selection; clearing the filter reveals them unselected, so Select All is no longer in effect.
+- Select/Unselect masks, same-name/extension operations, inversion, and Hide Selected/Unselected mutate only the displayed identities present when the command runs. Showing names or widening visibility later does not apply the prior operation to returning identities.
+- Successful Delete/Move removes exactly the proven-removed identities from selection. Failed, `S_FALSE`, cancelled, missing, and otherwise uncertain sources remain selected when their identity survives.
+- Failed, cancelled, stale, or rejected enumeration results do not replace the accepted model and therefore preserve its current item and selection.
+- Save/Restore Selection is the explicit user-requested exception to automatic no-resurrection. Save stores the selected displayed identities, or current-item fallback when selection is empty. Restore replaces live selection with saved identities that are displayed at that instant; identities excluded at restore time remain unselected until the user invokes Restore again after they become visible.
+
+### Command, notification, rendering, and accessibility ownership
+
+- Focus-only commands such as Enter/Open-current and F2/Rename use current. Selection-aware commands use selected displayed identities when selection is nonempty and otherwise fall back to current. Status selection summaries remain selection-only.
+- Commands, menus, and drag gestures snapshot immutable provider-aware target identities before nested UI, asynchronous work, or drag startup. Later current/selection repair cannot retarget a captured operation.
+- Current-item and selection notifications are independent and emit only when their corresponding observable state changes. Selection membership changes and selected-item metadata changes are distinguishable: membership changes cancel or replace obsolete size work, while a same-location metadata refresh for surviving selected folders preserves an explicit Space-size intent by recomputing the current surviving selection. Selection-only changes update selection statistics, status/command state, and size-work cancellation/recomputation but MUST NOT refresh current-item preview/detail consumers or change current ownership.
+- Preview content follows current-item/path changes only. Selection-only input MUST NOT reload an unchanged current-item preview.
+- Current ownership epochs change only when explicit user input changes current identity. Selection-only changes, including empty-background selection clearing, do not change current ownership and do not invalidate an otherwise matching pending Delete/Move rehome. Provider, folder, and sort epochs and exact-per-source-`S_OK` proof remain required.
+- Rendering invalidates the old and new current bounds and cannot retain a stale focused flag. The active/inactive current border remains independent from selection fill.
+- UI Automation selection exposure is selection-based. Current is not reported as selected merely because it is current. The separate empty-folder parent action, if exposed, uses Invoke rather than Selection/SelectionItem semantics.
 
 ## Visual Layout and Grid System
 
@@ -195,7 +268,7 @@ columnWidth[column] = min(columnWidth[column], windowWidth)  // Don't exceed win
 **Text Truncation:**
 - If filename exceeds column width, truncate with ellipsis ("...")
 - Ellipsis rendered at end of visible text
-- Tooltip shows full filename on hover (future enhancement)
+- Filename hover tooltips are not implemented and are not part of the current FolderView contract; the optional product decision is recorded in `Specs/Plans/WIP/Operation_Atlas_RemainingSpecificationDecisions_2026-08-04.md`.
 
 ### Visual Design
 
@@ -289,10 +362,18 @@ instead of inventing a numeric value.
 - Selection persists when focus moves to another item
 
 **Pointer target semantics:**
-- A plain click on an unselected item MUST replace the prior selection with that item before drag detection or command routing reads the selection. A plain click on an already-selected item MAY preserve the existing multi-selection while moving focus.
-- A right-click on an unselected item MUST establish that item as the sole target before the context menu is built. A right-click on an already-selected item MAY preserve the existing multi-selection.
-- A plain click on the empty background MUST clear selection, focus/anchor state, and any armed drag source. Empty-background movement MUST NOT start a drag from a stale selection.
-- Destructive context-menu commands MUST execute only when the selected/focused display-name set still matches the snapshot captured before the nested menu loop. A refresh that removes a named focused item MUST leave focus unset rather than migrate it by positional index, and deferred external commands MUST validate their named target and dispatch in the same refresh turn.
+- The current item, multi-selection set, and transient pointer/drag target are independent state dimensions. Clearing a pointer target or selection MUST NOT remove the current item from a nonempty display.
+- Every left-button-down that hits a displayed real item MUST make that item current during button-down handling, before drag initiation or later command routing observes the gesture. For Shift/Ctrl+Shift with no valid anchor, FolderView MUST first capture the pre-press current item as the inclusive range anchor, then make the hit item current; both anchor and clicked endpoint belong to the range.
+- A plain left-button-down on an unselected item MUST replace the prior selection with that item before drag detection or command routing reads the selection. A plain left-button-down on an already-selected item MUST preserve the existing multi-selection while moving current to the pressed item.
+- Ctrl+Click MUST toggle only the clicked item. Shift+Click MUST replace selection with the inclusive anchor-to-clicked range. Ctrl+Shift+Click MUST add that inclusive range to selection. A valid prior anchor wins; otherwise Shift/Ctrl+Shift uses and includes the valid current item captured immediately before the press.
+- A pointer right-click on an unselected item MUST establish that item as the sole target before the context menu is built. A pointer right-click on an already-selected item MAY preserve the existing multi-selection.
+- A left-button miss on empty background, whether unmodified or combined with Ctrl, Shift, or Ctrl+Shift, MUST clear selection, clear the transient pointer/drag target, disarm any armed drag source, retain current, and reset the range anchor to current. The modifiers have no range/toggle endpoint on a miss. Current ownership does not change.
+- A pointer right-click miss MUST perform the same selection-clear/retain-current/no-ownership-change transition, then route to the background context menu with no item pointer target. Item-only menu commands MUST NOT infer a target from the retained current item.
+- A keyboard context-menu request is not a pointer miss. When a selected/current item exists, it uses the selected-or-current command fallback and MUST NOT hit-test a synthetic client-center point or clear selection. When the pane contains no current item, it loads the background menu; item-only commands are absent.
+- Empty-background movement MUST NOT start a drag from the retained current item or a stale selection: a later drag requires a fresh button press that hits an item and establishes a new pointer/drag target.
+- An item left-button-down MAY arm a potential drag from an immutable post-press source snapshot: the selected displayed identities when selection is nonempty, otherwise the current item. The pressed item must belong to that resolved source; if a modifier gesture leaves it outside the source, no drag is armed. Drag starts only after pointer movement leaves the effective system drag-threshold rectangle centered on the press point. The item's visual bounds MUST NOT add a second threshold. Release inside the threshold rectangle completes the click without dragging. Release, Escape, cancellation, capture loss, teardown, navigation/model replacement, or any new press MUST disarm the prior gesture. Escape also clears selection, retains current, and resets the range anchor to current; Quick Search consumes the same Escape for search exit but still disarms the armed pointer gesture.
+- A double-click MUST apply the normal first-press current/selection rules and activate the resulting current item; it MUST NOT reuse an armed source from an earlier gesture.
+- Destructive context-menu commands MUST execute only when the selected/current provider-aware target set still matches the immutable snapshot captured before the nested menu loop. Generic disappearance repairs current through the same-location successor/predecessor contract above and MUST NOT retarget the captured command. Host-owned Delete/Move remains the more specific exception: it captures its source intent and ownership epochs, accepts only exact per-source `S_OK` removal proof, and resolves replacement only against a newer accepted enumeration after the old current identity disappears. The replacement remains unselected unless it was already a surviving selected identity.
 
 ## Features
 ### 1. Folder Content Display
@@ -316,9 +397,10 @@ instead of inventing a numeric value.
     - A very dim, large watermark glyph (Segoe Fluent Icons `0xE8FF` "Preview").
     - Title text: **Empty folder**.
     - A fun, friendly message with a large emoji, chosen randomly from a small set of resource strings.
-    - Double-click anywhere in the pane navigates **up to the parent folder**.
-    - The focused empty-folder placeholder item is drawn as a normal item row at the top of the pane with localized label text **Go to parent**. Its focus/selection cue MUST span the current pane row width and use the current display mode's row height; it MUST NOT expand to the full pane body and MUST NOT shrink to a compact label-sized tile.
-    - Empty-folder placeholder metrics MUST be recomputed from the current client width, DPI, icon size, and display-mode text-line heights. They MUST NOT inherit tile width/height from the previously displayed non-empty folder or from a previous Brief/Detailed/Extra Detailed/Thumbnails mode.
+    - The localized **Go to parent** row is a separate empty-state Invoke action, not a `FolderItem`, current item, selection, range anchor, remembered item, drag source, or item-command fallback.
+    - Enter while the standard empty-folder action is active, double-click anywhere in that surface, and Backspace invoke the existing `NavigateUp()` route. Root/connection-root callback behavior remains unchanged.
+    - The action's pane-focus visual spans the current pane row width and uses the current display mode's row height, but it is never exposed as selected or as FolderView current. Its metrics MUST be recomputed from the current client width, DPI, icon size, and display-mode text-line heights and MUST NOT inherit prior item geometry.
+    - Filter-empty, explicit host-message, busy/cancel, error, and background-watermark surfaces do not acquire this action.
 
 **View options & filtering:**
 - **Hidden/System visibility** is controlled by settings:
@@ -333,6 +415,8 @@ instead of inventing a numeric value.
   - `cmd/pane/selection/hideUnselectedNames`: add the **currently unselected** item `displayName`s to the hidden-names set (no-op when nothing is selected).
   - `cmd/pane/selection/showHiddenNames`: clears the hidden-names set but MUST NOT change any existing pane filter.
   - The hidden-names set is pane-local and MUST be cleared on folder navigation.
+- Every filter/visibility/hide operation removes excluded identities from live selection immediately. Clearing the filter, showing hidden/system items, or showing hidden names later reveals those identities unselected; there is no latent selection.
+- Select All is a snapshot of the displayed identities at invocation time, not a sticky mode. Select All followed by filter/hide and then unfilter/show preserves selection only for identities that stayed continuously displayed; returning identities are unselected.
 - While a pane filter is active **or** the hidden-names set is non-empty, FolderView SHOULD render a very subtle watermark glyph in the background (Sego UI Symbol `0xE71C`) so the user can tell the pane is filtered/hidden.
 - When the pane filter is active and no rows are visible, the filter state has priority over the generic Empty folder placeholder:
   - FolderView MUST suppress the generic Empty folder centered UI and its parent-row placeholder so the pane does not imply that the directory itself is empty.
@@ -373,6 +457,33 @@ while (entry != nullptr)
 - Network paths (UNC paths)
 - Special folders (Desktop, Documents, etc.)
 
+**File Operations artifact presentation:**
+- FolderView never hides, filters, or removes an item merely because it is a Possible File
+  Operations artifact. The item stays in its ordinary sort position and remains subject only to the
+  user's normal hidden/system, wildcard, and hide-name choices.
+- The shared artifact classifier supplies an orthogonal row state. Possible renders a warning overlay
+  and `Possible interrupted-operation artifact`. This semantic remains available to accessibility
+  even when the current display mode has no details line.
+- A badge or pane cache is not authority. Possible is a recognized generated-name shape only and
+  never proves ownership, cleanup, or recovery authority. Folder refresh or watch change re-queries
+  classification.
+- Each enumeration loads one empty artifact-classifier snapshot. Because the production journal and
+  durable claims are retired, no endpoint/parent claim index is populated or consulted. Only a
+  generated artifact name shape enters the no-follow projection probe; ordinary names perform no
+  artifact capability, identity, or bind work. A future durable claim source must define its own
+  authoritative schema before keyed lookup can return.
+- When an artifact row is focused with no selection, the pane status bar appends the same localized
+  Possible classification text used by Find. The artifact context submenu exposes read-only
+  `Inspect` and `Reveal in pane`; Inspect forces the built-in host viewer so a configured external
+  viewer cannot turn the inspection action into an unguarded launch. `Reveal in pane` is the read-only
+  Open-location presentation. There is no Resume, Roll back, cleanup, or recovery action.
+- Selection, Properties, Reveal/Open location, and the host read-only viewer are inspection. Copy,
+  external Open/Edit, Move, Rename, Delete/Recycle, overwrite, write-capable commands, drag, and
+  clipboard operations touching a Possible row route through the shared exact-set artifact warning
+  before admission. A grant applies only to the captured identities and is revalidated before use.
+- Possible rows remain selectable. A normal explicit file command may proceed only through the
+  Possible-artifact warning; consent never becomes automatic cleanup authority.
+
 **Icon Rendering:**
 - Uses IconCache system image lists (`SHIL_SMALL`/`SHIL_LARGE`/`SHIL_EXTRALARGE`/`SHIL_JUMBO`) and selects the **optimal** list size based on the target icon DIP size and current DPI (FolderView default is 16 DIP list-mode icons).
 - IconCache MUST choose the smallest shell image-list source that is at least as large as the target physical pixel size; do not upscale 16px shell icons on high-DPI displays.
@@ -408,8 +519,14 @@ while (entry != nullptr)
 - `CFSTR_SHELLIDLIST`: Shell ID list for advanced operations
 - `CFSTR_PREFERREDDROPEFFECT`: Suggests copy vs. move. FolderView paste MUST honor `DROPEFFECT_MOVE` as a real file-operation move and treat `DROPEFFECT_COPY`, missing metadata, malformed payloads shorter than `sizeof(DWORD)`, or unsupported metadata as copy.
 - Private FolderView drop data and `CF_HDROP` are untrusted. Readers MUST validate `GlobalSize`, header/offset/alignment, wide encoding, required terminators, count-derived minimum bytes, per-path length, aggregate path length, and a fixed maximum item count before reserving or constructing strings. Clipboard readers MUST apply the same item/path/aggregate bounds; CF_HDROP writers MUST reject arithmetic overflow before `GlobalAlloc`.
-- A paste carrying `DROPEFFECT_MOVE` MUST invalidate the unchanged move clipboard only after the delegated/synchronous operation reports verified success. Failure, cancellation, or a clipboard sequence change MUST preserve the current clipboard; copy clipboard content remains repeatable.
+- A paste carrying `DROPEFFECT_MOVE` captures the complete item list and clipboard sequence. The shared File Operations engine publishes the accepted task and creates a gated worker before asking FolderView to clear that exact sequence; only after the clear attempt does it release the worker. Thread/queue admission failure leaves the clipboard untouched. Clear failure warns but does not discard the accepted task, and the engine's bounded sequence ledger rejects another paste of that exact accepted sequence. A successfully cleared cut payload is never restored, including when the result is `Copied; source kept`, partial, canceled, failed, or indeterminate. Copy clipboard content remains repeatable.
+- Completed retained-source actions select exact display names after the next matching enumeration. `Cut retained items again` is an explicit new clipboard write and is available only for a complete known retained set; immediately before selection/cut, FolderView's owner rebinds every local source no-follow and requires its captured object identity. One missing or replaced item aborts the entire action with a warning.
+- Completion focus and cache updates consume per-item result axes. FolderView removes or advances
+  past a source row only for exact `SourceDisposition::Removed`; Retained and Unknown rows remain and
+  refresh. Destination folders refresh only for Published or Unknown publication, so a known
+  NotPublished conflict does not masquerade as a completed transfer.
 - When a `FileOperationRequestCallback` is installed by `FolderWindow`, FolderView copy/move/paste/drop paths MUST delegate copy and move work without showing a local pre-confirmation. The shared File Operations layer owns the single OK/Cancel confirmation for those delegated operations. Clipboard paste and folder-picker move MUST use the same delegated route and MUST NOT pre-grant overwrite, replace-read-only, or continue-on-error flags.
+- Clipboard paste, internal drag/drop, and external OLE drop capture one immutable File Operations options snapshot, including verification and link policy, and submit qualified source/destination endpoints. No worker rereads live Preferences or provider JSON.
 - Paste Shortcut is local-file-system only. FolderView reads the clipboard on the UI thread, then creates `.lnk` files on value-only background work that captures copied source paths, target folder, path-visit generation, original filesystem identity, request id, and `HWND`, but never captures or dereferences `this`. A FolderView MUST serialize Paste Shortcut requests: if one worker is in flight, later invocations queue the already-captured clipboard payload and run after completion. The worker initializes COM as MTA before calling shell-link APIs and posts completion through `PostMessagePayload`.
 - Paste Shortcut shortcut creation MUST be collision-safe. Each deterministic `GenerateShortcutPath` candidate is probed and saved without replace semantics; if a racing creator wins the same slot (`ERROR_FILE_EXISTS` / `ERROR_ALREADY_EXISTS`), the worker retries the next candidate. Short and long final paths share the same temp-file-plus-move save path. The shell-persist temp path remains reserved between `GetTempFileNameW` and `IPersistFile::Save`; the placeholder is not deleted and exposed to name stealing.
 - Paste Shortcut completion MUST run on the UI thread. Completion always emits `clipboard.paste_shortcut_worker_us`; cache invalidation for `result.targetFolder` uses the captured original filesystem even if the pane changed provider, while current-view refresh and focus restoration additionally require that provider identity, target path, and path-visit generation still match. A failed first completion post is retried from a preserved result payload; request-id matching, a stale timeout, and `WM_NCDESTROY` reset prevent a lost or late completion from wedging or clearing a newer request. Failure reporting via the Paste Shortcut pane alert remains unconditional when the UI receives completion. A stale completion MUST NOT navigate back to the old folder or focus an item there.
@@ -417,13 +534,18 @@ while (entry != nullptr)
 
 **Drag Initiation:**
 ```cpp
-// On mouse drag detected:
-wil::com_ptr<IDataObject> dataObj = CreateDataObject(selectedItems);
+// After an item press moves outside the system drag-threshold rectangle:
+const auto sourceItems = GetSelectedItemsOrCurrentItem();
+wil::com_ptr<IDataObject> dataObj = CreateDataObject(sourceItems);
 wil::com_ptr<IDropSource> dropSource = CreateDropSource();
 DWORD effect;
 DoDragDrop(dataObj.get(), dropSource.get(), 
            DROPEFFECT_COPY | DROPEFFECT_MOVE | DROPEFFECT_LINK, &effect);
 ```
+
+- Drag-source resolution uses selected displayed items when selection is nonempty and otherwise falls back to the current item, matching selection-aware command targeting.
+- The press must hit an item contained in the resolved post-press source snapshot. Empty-background movement and a modifier press that leaves the hit item outside the source cannot start a drag.
+- The source identities are snapshotted for the gesture before OLE drag startup. Later selection/current repair cannot retarget an in-progress drag.
 
 **Visual Feedback:**
 - System-provided drag image (ghost icon + file count badge)
@@ -457,21 +579,36 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 
 **Localization requirement:** the context menu template is defined in `.rc` resources (see `Specs/Core/Core_Localization.md`) and loaded at runtime.
 
-**Resource menu:**
-- `IDR_FOLDERVIEW_CONTEXT` in `RedSalamander/RedSalamander.rc`
+**Resource menus:**
 
-**Menu Items (v1):**
-- Open
-- Open With…
-- Delete
-- Move…
-- Rename
-- Copy
-- Paste
+- `IDR_FOLDERVIEW_ITEM_CONTEXT` in `RedSalamander/RedSalamander.rc`
+- `IDR_FOLDERVIEW_BACKGROUND_CONTEXT` in `RedSalamander/RedSalamander.rc`
+
+**Item target:**
+
+- Open; Open With…; Calculate Occupied Space
+- separator
+- Cut; Copy; Paste
+- separator
+- Move…; Delete…; Rename…
+- separator
+- Operation artifact submenu when the focused row is a Possible artifact; separator
 - Properties
 
+**Background target:**
+
+- Paste
+- New > Folder…, Edit New File…, then dynamic Shell New templates
+- separator
+- Refresh; Calculate Occupied Space
+
 **Runtime behavior:**
-- Items are enabled/disabled based on selection state (or `Current item` when selection is empty) and clipboard state.
+- A pointer invocation on an item targets the preserved selection when the hit item is already selected; otherwise it establishes the hit item as the sole target. A keyboard invocation targets the selected set, or the current item when selection is empty; with no current item it loads the background resource.
+- A pointer miss loads only the background resource. Retained current identity is not an item target and item-only commands are absent rather than disabled.
+- `Cut` is enabled only when the resolved item target can publish local built-in-file-system `CF_HDROP` paths. Providers that the clipboard implementation rejects (including Dummy, S3, MTP, and cloud providers) show Cut disabled rather than a working-looking command that warns after invocation.
+- `Paste` preflight uses the same non-blocking clipboard-format check as the paste path and also requires a live, enumerated destination folder. The file-operation admission path remains authoritative for provider capabilities and revalidates at execution; the popup MUST NOT perform blocking provider I/O merely to predict that later result.
+- The optional Operation artifact submenu is inserted immediately before the separator and final `Properties` action. It is never appended after Properties or debug-only suffixes, and a failed submenu/separator insertion rolls back partial composition.
+- Selection-aware destructive commands compare the post-menu target identities as a multiset, preserving duplicate cardinality; a display-name membership check that can accept a duplicate or substituted target is insufficient.
 - Menu rendering uses the active `MenuTheme` (owner-draw for themed background/selection colors).
 - DxUI context menus opened from right-click or keyboard context-menu commands MUST share the common `DxUi::ContextMenu::Show(...)` input contract: pointer hover highlights visible rows, enabled item clicks invoke immediately, outside clicks and Escape dismiss, arrow keys move the keyboard highlight, Enter/Space invoke, and focus returns to the owning pane when the menu exits.
 ### 4. Keyboard Navigation
@@ -494,16 +631,17 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 - **F4 / Alt+D / Ctrl+L**: Focus the active pane’s NavigationView address bar and enter edit mode (select all). *(Default chord bindings are settings-backed.)*
 
 **Selection Keys:**
-- **Space**: Toggle selection of focused item
-- **Insert**: Toggle selection of focused item and move to next item (Commander-style)
-- **Alt+Up / Alt+Down**: Go to previous/next selected name (wrap allowed). *(Default chord binding is settings-backed.)*
+- **Space**: In normal item-navigation mode, capture the `Current item`, toggle its selection, request selection-size recomputation from the complete post-toggle selected set, and then move `Current item` to the next displayed item when one exists. An initially unselected current item becomes selected and contributes its known file size or asynchronous folder-subtree size; an already-selected current item becomes unselected, pending work for its contribution is canceled, and any stale completion is excluded from the selected total. A reusable cached folder size may remain cached. The move does not wrap, and the destination item is not implicitly selected.
+- **Insert**: Toggle selection of the captured `Current item` and then move to the next displayed item without requesting explicit folder-subtree size computation. The move does not wrap, and the destination item is not implicitly selected.
+- **Alt+Up / Alt+Down**: Move current to the previous/next selected displayed identity, wrapping within the selected set. Preserve selection, set the destination as range anchor, and change current ownership only when the current identity actually changes. *(Default chord binding is settings-backed.)*
 - **Ctrl+Shift+<key left of Backspace>**: Select all items with the same extension as the focused item (adds to selection).
 - **Ctrl+Shift+<key right of 0>**: Unselect all items with the same extension as the focused item (removes from selection).
 - **Ctrl+A**: Select all items *(default chord binding is settings-backed)*
 - **Ctrl+Click**: Toggle individual item selection
 - **Shift+Click**: Range selection from anchor to clicked item
-- **Ctrl+Shift+Arrow** or **Shift+Arrow**: Extend selection without moving focus
-- **Ctrl+Shift+Click** : Extend selection without moving focus
+- **Shift+Arrow/Home/End/Page**: Replace selection with the inclusive anchor-to-endpoint range and make the endpoint current. Preserve a valid anchor; otherwise capture and include the pre-move current item as anchor.
+- **Ctrl+Shift+Arrow/Home/End/Page**: Add the same inclusive range to selection and make the endpoint current. Preserve a valid anchor; otherwise capture and include the pre-move current item as anchor.
+- **Ctrl+Shift+Click**: Add the inclusive anchor-to-clicked range and make the clicked endpoint current during button-down handling.
 - **Shift+Home/End**: Extend selection to start/end
 - **Esc**: Clear selection
 
@@ -512,6 +650,23 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 - **Enter**: Open focused item (folder navigates; file invokes host open hook which may mount a virtual file system or fall back to `ShellExecute`)
 - **Delete**: Delete selected items (with confirmation)
 - **F2**: Rename focused item
+
+F2 submits a one-step `RenamePlan` with `RenameOrigin::InlineRename` to File Operations workers; it never
+calls provider `RenameItem` on the UI thread. The inline editor is the only initial confirmation.
+Before publication, central admission validates the proposed child through the retained typed provider
+route and stores only the provider-owned joined path and collision key. Provider Invalid preserves its
+exact HRESULT; missing, unsupported, or malformed name methods fail closed. The worker re-queries the
+same composite contract after interlock waits and immediately before conditional mutation, so route
+drift cannot retarget the rename. FolderView never substitutes Windows name rules or host path joining.
+An invalid/unsupported request rejected before task publication, or missing host callback wiring,
+shows the localized pane operation-error overlay. Once a task is published, its card is the sole
+failure presentation and FolderView does not add a duplicate pane alert.
+Inline F2 bypasses global Queue/Parallel admission but honors overlapping-root interlocks. Conflict,
+waiting, failure, partial, canceled, or indeterminate state reveals the task immediately. A clean
+running task is revealed after 500 ms; a clean success before that deadline creates no task card or
+completed row, still refreshes the pane, and retains focus by renamed identity. Once revealed, the
+card follows normal task rules and never becomes silent. Tests use a fake clock or zero delay.
+Batch Rename and any F2 action that opens Batch Rename use ordinary queue/card behavior.
 - **Backspace**: Navigate to parent folder
 - **F3/F5/F6/F7/F8**: FolderWindow-global operations (view/copy/move/mkdir/delete) per `Specs/UI/UI_CommandMenuKeyboard.md`.
 
@@ -554,14 +709,18 @@ FolderView implements **incremental search mode** (type-to-search) as specified 
 ### 5. Multi-Selection
 
 **Selection Modes:**
-1. **Single-click**: Move focus to clicked item (does not change selection)
+1. **Plain left-button-down**: Make the hit item current immediately. If it is unselected, replace selection with that item; if already selected, preserve the existing selection.
 2. **Ctrl+Click**: Toggle clicked item selection, keep others
-3. **Shift+Click**: Select range from anchor to clicked item (creates selection)
-4. **Marquee**: Drag on empty space to select multiple (future)
+3. **Shift+Click**: Replace selection with the inclusive range from anchor to clicked item. With no valid anchor, capture the pre-press current item as anchor and include it before moving current to the clicked endpoint.
+4. **Ctrl+Shift+Click**: Add the same inclusive range to the existing selection; use the pre-press current item when no valid anchor exists.
 
 **Visual Feedback:**
 - On folder entry (after enumeration), FolderView sets the `Current item` to the first item (or nearest preserved focus), and starts with **no selection**.
-- On refresh of the currently displayed folder, including refreshes triggered by `DirectoryInfoCache` callbacks, the user selection is preserved for every surviving item whose display name is still present even when size, time, attributes, details, layout, or icon rendering state changed. Items that disappeared from the refreshed list are removed from the selection. When the refresh impact carries chained same-folder rename hints, a selected old display name MUST transfer selection through the full chain to the final new display name; an unselected original MUST NOT become selected merely because it was renamed. When no rename hint is available, the old name is treated as removed.
+- On refresh of the currently displayed logical location, including refreshes triggered by `DirectoryInfoCache` callbacks, preserve selection for every surviving provider-aware identity even when metadata/layout/icon state changes. Remove identities that are no longer displayed. A selected identity may transfer only through a proven chained same-folder rename hint to its final identity; an unselected original MUST NOT become selected merely because it was renamed. Without proven rename provenance, disappearance is removal and an ordinary later reappearance is unselected.
+- A host-owned delete or move treats only an exact per-source `S_OK` result as proof that source was removed; aggregate success, `S_FALSE`, cancellation, missing/not-found, or failure MUST NOT prove removal. Source identity comparisons follow the active provider's path case-sensitivity contract. Once a newer accepted enumeration no longer contains the old focused name, the successful proof feeds the same canonical resulting-UI-order successor/predecessor resolver defined above. Every source proven removed is excluded as a repair candidate even if a stale accepted provider snapshot still contains its identity. The specialized result MUST NOT derive a replacement by applying a captured display index to the pre-sort enumeration payload. If the accepted nonempty model contains no candidate other than identities proven removed, the specialized intent nominates no target and the normal nonempty-model invariant fallback applies until a fresher enumeration arrives. Folder and file removal share this rule; the replacement remains unselected unless it was already part of a surviving selection.
+- Host-owned Move uses the same removal-focus path as Delete. `StartFileOperationFromFolderView` tracks `FILESYSTEM_MOVE` as well as `FILESYSTEM_DELETE`. `CommandMoveToOtherPane` tracks the **source** pane even when the destination is the other pane. Fail-closed epoch and status checks stay the same: a user current-identity change, navigation/provider change, sort change, or a non-`S_OK` current-source outcome MUST NOT apply the specialized rehome.
+- `BeginRemovalFocusTracking` captures `folderPathGeneration`, the focused display name, and only the small requested source-name list plus source indices needed to correlate completion outcomes. It MUST NOT copy every visible `displayName`, capture per-visible-row ordering, or build a packed ordered-name buffer on the UI thread. After proof, current repair reuses the existing probe and production sort comparator rather than maintaining a second removal-specific ordering walk. Begin tracking MUST emit `folder.removal_focus.begin_us` with `value0` = visible item count and `value1` = requested source count. Focused x64 Release evidence on machine `4cb089111a23` measured 490 µs for 4096 visible items and one requested source; the validated archive is `Specs/TestRuns/4cb089111a23/Commands/2026-08-19_183856`. This is a diagnostic sample, not a hard performance budget.
+- Pending removal-focus intent is valid only while provider identity, folder path, sort epoch, and current-ownership epoch still match. A stale enumeration that still contains the old current item retains the intent for a later generation. A user gesture that changes current identity, navigation/provider change, or sort change invalidates it; selection-only changes, including empty-background clearing that retains current, do not. When refreshes coalesce, the newest applicable committed sequence wins and older intents cannot steal current.
 - Same-folder refreshes MUST emit one aggregate metric row per refresh for `folder.refresh.preserve_count`, `folder.refresh.rebuild_count`, `folder.refresh.selection_preserve_count`, `folder.refresh.rename_transfer_count`, `folder.refresh.debounce_delay_ms`, and `folder.refresh.enumeration_count`; they MUST NOT emit per-item refresh rows. `folder.refresh.request_to_paint_us` is emitted once after the next successful present following the refresh result for the same current enumeration generation and uses a dedicated pending refresh slot, not the shared input/navigation-to-paint slot.
 - A ready pending refresh-to-paint metric MUST be discarded, not retained for a later unrelated frame, when the paint path cannot present: missing render target/swap chain/target bitmap fallback, no-target render exit, `EndDraw` failure, `Present1` failure, or legacy `Present` failure. Starting a newer refresh resets any existing pending refresh-to-paint slot before recording the new one.
 - Selected items: Selection background differs between the focused vs unfocused pane (subtle inactive selection), per `Specs/UI/UI_CommandMenuKeyboard.md`.
@@ -1219,7 +1378,7 @@ Example: `FolderView::ReportError(L"EnumerateFolder", hr)` logs the failure and 
 - DirectWrite item text-layout creation (label/details/metadata) is instrumented through the single seam `FolderView::CreateInstrumentedItemTextLayout`, which all three item-layout creation paths (`UpdateItemTextLayouts`, `EnsureItemTextLayout`, `ProcessIdleLayoutBatch`) route through. It emits the `dwrite.text_layout.create_count`, `dwrite.text_layout.create_us`, `dwrite.text_layout.frame_create_count`, and `dwrite.text_layout.frame_create_us` metric families, gated on `Debug::Perf::IsCaptureEnabled()` so normal builds pay nothing; `folderView_perf_scroll_render_stress` asserts their presence. 2026-06-19 same-machine evidence (`Specs/TestRuns/7d3a1247382a/Commands/`, six runs) found text-layout creation is **not** a material cost — about 1.2–1.4% of `render.layout_items_us` and present in only ~5 of ~108 render frames — so a DirectWrite text-layout cache is a measured no-op and MUST NOT be added without new evidence; the seam itself is where such a cache would hook if evidence ever changes. The dominant FolderView layout-pass cost is `render.layout_items_us` (p95 ~200ms versus frame p95 ~50ms), which is the open follow-up lead, not text-layout creation.
 - `FolderView::LayoutItems` is decomposed into per-phase timing metrics `folder.layout.setup_us`, `folder.layout.estimate_metrics_us`, `folder.layout.column_resolve_us`, `folder.layout.bounds_us`, and `folder.layout.update_text_layouts_us` (gated on `Debug::Perf::IsCaptureEnabled()`), plus the `folder.layout.metrics_estimate_pass_count` and `folder.layout.update_visible_item_count` counters; `folderView_perf_scroll_render_stress` asserts the five `_us` keys are present. **Correction (2026-06-19):** an initial decomposition appeared to show `UpdateItemTextLayouts` owning ~82.6% of layout-pass time, but follow-up sub-decomposition found that was ~96% a *measurement artifact* — the perf JSONL sink opened and closed the file on every metric row (~50–150µs each), and the per-creation text-layout emits triggered ~3,748 such writes per run inside that function. After the sink was fixed to keep the append handle open (`Common/Common/PerfJsonl.cpp`), the layout pass is ~15ms p95 and `UpdateItemTextLayouts` ~9ms p95 (Debug) — **not** a bottleneck; the real per-item DirectWrite work (`GetMetrics` 2.2%, `SetMaxWidth` 0%, creation 1.4%) is negligible, so no layout optimization was warranted. See `Specs/Plans/Done/FolderView_LayoutPassDecomposition_MetricPilot_2026-06-19.md` and `Specs/Plans/Done/FolderView_UpdateItemTextLayouts_Optimization_2026-06-19.md`.
 - `folderView_perf_overlay_invalidation_stress` is the focused overlay/quick-search metric guard: it opens a deterministic 180-item local folder, drives incremental search for `overlay`, shows the busy cancel overlay, lets the initial show animation settle, paints bounded overlay frames through the real FolderView render path with a limited message pump, writes `folderView_perf_overlay_invalidation_stress_metrics.json`, and records scenario-local presence counts for `folder.frame.overlay_animation_count`, `folder.frame.overlay_dirty_rect_area_px`, and `render.incremental_search_effect_updates`. The metric scan must begin at the case's initial `perf_metrics.jsonl` byte offset so earlier rows cannot satisfy the case. Overlay dirty-rect optimization claims must cite this scenario plus a same-machine non-overlay scroll comparison.
-- 2026-05-20 closeout evidence for the remaining frame-performance plan used archives `Specs/TestRuns/4cb089111a23/Commands/2026-05-20_213228/` for overlay invalidation and `Specs/TestRuns/4cb089111a23/Commands/2026-05-20_213241/` for normal scroll/render. Both runs exited 0 with 1 passed, 0 failed, and 0 skipped. These archives are the current FolderView regression anchors for the Task 9 closeout.
+- Current FolderView performance proof is owned by the focused cases above. A regression or improvement claim must archive a fresh same-machine run for the affected case and comparison; unavailable historical run directories are not current regression anchors.
 - `folderView_perf_directory_change_storm` is the pane-visible DirectoryInfoCache notification baseline: it opens a local folder in FolderView, applies deterministic create/rename/delete/directory churn, verifies final visible item count and focus stability, writes `folderView_perf_directory_change_storm_metrics.json`, and emits `folder.directory_change_storm_*`, `directorycache.post_refresh_count`, and the aggregate `folder.refresh.*` rows.
 - `folderView_perf_refresh_preservation` is the focused same-folder refresh contract guard: it opens a local folder in FolderView, preserves focus and an active incremental-search query, mutates one created file, one deleted file, one selected same-folder rename, and a bounded create/delete burst, then verifies unchanged selection preservation, selected-rename transfer, focus survival, query survival, and one archived row for every `folder.refresh.*` metric.
 - `folderView_refresh_to_paint_metric_clears_after_failed_render` is the focused failed-frame metric guard: it arms input-to-paint through real keyboard focus navigation and refresh-to-paint through a completed refresh, forces synthetic non-device-loss `EndDraw` failures, verifies neither pending sample emits during the failed frame, then drives later unrelated successful Presents and verifies neither stale sample leaks into them. Render-target absence plus `EndDraw`, `Present1`, and legacy `Present` failures all clear both pending metric slots.
@@ -1246,13 +1405,9 @@ Example: `FolderView::ReportError(L"EnumerateFolder", hr)` logs the failure and 
 - **Threading**: Clear thread ownership, message-based async communication
 - **Performance**: Virtualized rendering, dirty region tracking, async operations
 
-## Future Enhancements
-
-1. **List/Details View**: Table view with columns (Name, Size, Modified)
-2. **Grouping**: Group by type, date, size
-3. **Marquee Selection**: Drag rectangle to select multiple items
-4. **Inline Rename**: Rename without dialog
-5. **Quick Look**: Space bar to preview file without opening
-6. **Column Resizing**: Drag column dividers to resize
-7. **Multi-key Sorting**: Primary + secondary key (e.g. Type then Name)
-8. **Pane-to-Pane Operations**: Copy/move between panes
+Optional view modes, grouping, marquee selection, inline rename, Quick Look,
+resizable detail columns, and multi-key sorting are not current FolderView
+contracts. Product decisions for those proposals are tracked only in
+`Specs/Plans/WIP/Operation_Atlas_RemainingSpecificationDecisions_2026-08-04.md`.
+Pane-to-pane copy and move are current behavior and are specified by
+`Specs/FileSystem/FileSystem_FileOperations.md`.

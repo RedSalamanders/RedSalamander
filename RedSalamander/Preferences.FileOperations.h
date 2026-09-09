@@ -25,8 +25,8 @@ public:
 
 #ifdef ENABLE_TESTS
     [[nodiscard]] PreferencesFileOperationsDebugFocusTarget DebugGetFocusTarget() const noexcept;
-    [[nodiscard]] bool DebugFocusPreCalcEnabledToggle() noexcept;
-    [[nodiscard]] bool DebugGetPreCalcEnabledToggleChecked(bool& outChecked) const noexcept;
+    [[nodiscard]] bool DebugFocusVerifyAfterCopyToggle() noexcept;
+    [[nodiscard]] bool DebugGetVerifyAfterCopyToggleChecked(bool& outChecked) const noexcept;
     [[nodiscard]] bool DebugSelectBandwidthPresetByText(std::wstring_view displayText) noexcept;
     [[nodiscard]] bool DebugSetBridgeBufferText(std::wstring_view text) noexcept;
 #endif
@@ -46,7 +46,6 @@ private:
     RedSalamander::DxUi::Panel* _pageContentRoot = nullptr;
     std::unique_ptr<DxState> _dxState;
     PreferencesDialogState* _state      = nullptr;
-    bool _syncingDxPreCalcWorkersCombo  = false;
     bool _syncingDxBandwidthPresetCombo = false;
     bool _syncingDxCustomBandwidthEdit  = false;
     bool _syncingDxBridgeBufferEdit     = false;

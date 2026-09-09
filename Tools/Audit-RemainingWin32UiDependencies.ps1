@@ -1,3 +1,35 @@
+<#
+.SYNOPSIS
+    Audits remaining Win32 UI dependencies and their reviewed residual allowlist.
+
+.DESCRIPTION
+    Scans owned source roots for native font, GDI text, device-context, and visible
+    control patterns. Each finding is matched against a command-owned residual entry
+    with visibility, owner, reason, and exit condition. Use -FailOnFindings to make
+    unclassified findings fail automation.
+
+.PARAMETER RepoRoot
+    Repository root to scan. Defaults to the parent of the Tools directory.
+
+.PARAMETER AsMarkdown
+    Emits a grouped Markdown summary and finding tables.
+
+.PARAMETER FailOnFindings
+    Throws when one or more findings do not match the reviewed residual allowlist.
+
+.OUTPUTS
+    Structured finding objects by default or Markdown text with AsMarkdown.
+
+.NOTES
+    Prerequisites: repository product/test source. Side effects: none; scanning is read-only. FailOnFindings produces a nonzero exit for unreviewed dependencies. Primary use is Win32 UI migration closeout and source-policy review.
+
+.EXAMPLE
+    .\Tools\Audit-RemainingWin32UiDependencies.ps1 -FailOnFindings
+
+.EXAMPLE
+    .\Tools\Audit-RemainingWin32UiDependencies.ps1 -AsMarkdown
+#>
+[CmdletBinding()]
 param(
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path,
     [switch]$AsMarkdown,
@@ -5,6 +37,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+Import-Module (Join-Path $PSScriptRoot 'Modules\Auditing\RepositorySourceScanner.psm1') -Force
 
 $sourceRoots = @(
     'Common',
@@ -18,6 +51,7 @@ $fileExtensions = @('*.c', '*.cpp', '*.h', '*.hpp', '*.inl', '*.rc')
 $excludedPathFragments = @(
     '\.build\',
     '\Specs\TestRuns\',
+    '\vcpkg_installed\',
     '\.git\'
 )
 
@@ -33,6 +67,15 @@ $patterns = @(
 )
 
 $allowedResidualDependencies = @(
+    @{
+        Category      = 'HDC text/selection bridge'
+        Path          = 'Common\DxUi\DxUi.cpp'
+        LinePattern   = 'GetDC\(nullptr\)|SelectObject\(memoryDc\.get\(\), bitmap\.get\(\)\)'
+        Visibility    = 'visual bitmap interop'
+        Owner         = 'DxUi shared backdrop capture'
+        Reason        = 'The shared popup backdrop helper snapshots screen pixels into a DIB for Direct2D composition; it does not render native text, fonts, or controls.'
+        ExitCondition = 'Replace when shared popup backdrop capture moves to DirectComposition/WIC-only capture or the backdrop effect is removed.'
+    },
     @{
         Category      = 'HDC text/selection bridge'
         Path          = 'Common\DxUi\DxUi.ComboBox.cpp'
@@ -97,6 +140,24 @@ $allowedResidualDependencies = @(
         ExitCondition = 'Replace with a non-HDC render capture helper if one becomes available.'
     },
     @{
+        Category      = 'GDI font creation'
+        Path          = 'Tests\TestSupport\DirectedSelfTestInputWarning.h'
+        LinePattern   = 'CreateFontW\('
+        Visibility    = 'test-only operator warning'
+        Owner         = 'Shared foreground-input selftests'
+        Reason        = 'The shared warning window is shown only while a directed desktop-input selftest is active; it is not product UI.'
+        ExitCondition = 'Replace if the directed-input harness gains a DirectWrite warning surface outside the product process.'
+    },
+    @{
+        Category      = 'Native font message'
+        Path          = 'Tests\TestSupport\DirectedSelfTestInputWarning.h'
+        LinePattern   = 'WM_SETFONT'
+        Visibility    = 'test-only operator warning'
+        Owner         = 'Shared foreground-input selftests'
+        Reason        = 'The shared warning window is shown only while a directed desktop-input selftest is active; it is not product UI.'
+        ExitCondition = 'Replace if the directed-input harness gains a DirectWrite warning surface outside the product process.'
+    },
+    @{
         Category      = 'HDC text/selection bridge'
         Path          = 'RedSalamander\Ui\AlertOverlayWindow.cpp'
         LinePattern   = 'GetDC\(nullptr\)|SelectObject\(memoryDc\.get\(\), bitmap\.get\(\)\)'
@@ -113,6 +174,15 @@ $allowedResidualDependencies = @(
         Owner         = 'ViewerVLC wheel-forwarding self-tests'
         Reason        = 'ENABLE_TESTS creates a tiny synthetic Static child only to exercise VLC child-window wheel forwarding; it is not production app chrome.'
         ExitCondition = 'Remove if the wheel-forwarding test can use a non-HWND child probe.'
+    },
+    @{
+        Category      = 'Native visible control creation'
+        Path          = 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Connections.cpp'
+        LinePattern   = 'host-service-stale-target'
+        Visibility    = 'test-only destroyed target'
+        Owner         = 'Commands host-services self-tests'
+        Reason        = 'The non-visible one-pixel Static HWND is destroyed immediately so the host-services test can prove safe fallback from a stale owner window.'
+        ExitCondition = 'Remove if the stale-owner fallback can be exercised with a non-HWND lifetime probe.'
     },
     @{
         Category      = 'Native visible control creation'
@@ -142,6 +212,15 @@ $allowedResidualDependencies = @(
         ExitCondition = 'Remove if clipboard tests move to a process-level test harness owner.'
     },
     @{
+        Category      = 'Native visible control creation'
+        Path          = 'Tests\DxUiTests\DxUiTests.WindowHost.cpp'
+        LinePattern   = 'CreateWindowExW\(0u, L"STATIC", L"waiting"'
+        Visibility    = 'test-only message queue probe'
+        Owner         = 'DxUi WindowHost tests'
+        Reason        = 'The zero-sized message-only Static HWND exists only to verify the shared bounded message-pump helper.'
+        ExitCondition = 'Remove if the message-pump contract test gains a registered test-only window class or non-HWND probe.'
+    },
+    @{
         Category      = 'HFONT handle'
         Path          = 'Tests\ViewerPETests\ViewerPETests.cpp'
         LinePattern   = 'legacyVisibleHfontSurfaceCount|HFONT text surfaces'
@@ -151,48 +230,6 @@ $allowedResidualDependencies = @(
         ExitCondition = 'Rename the diagnostic counter if the audit eventually excludes identifiers and string literals.'
     }
 )
-
-function Get-RelativeRepoPath
-{
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$BasePath,
-        [Parameter(Mandatory = $true)]
-        [string]$TargetPath
-    )
-
-    $baseFull = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $BasePath).Path)
-    $targetFull = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $TargetPath).Path)
-
-    if (! $baseFull.EndsWith([IO.Path]::DirectorySeparatorChar))
-    {
-        $baseFull += [IO.Path]::DirectorySeparatorChar
-    }
-
-    $baseUri = [Uri]$baseFull
-    $targetUri = [Uri]$targetFull
-    $relativeUri = $baseUri.MakeRelativeUri($targetUri)
-    return [Uri]::UnescapeDataString($relativeUri.ToString()).Replace('/', '\')
-}
-
-function Test-IsExcludedPath
-{
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Path
-    )
-
-    $normalized = [IO.Path]::GetFullPath($Path)
-    foreach ($fragment in $excludedPathFragments)
-    {
-        if ($normalized.IndexOf($fragment, [StringComparison]::OrdinalIgnoreCase) -ge 0)
-        {
-            return $true
-        }
-    }
-
-    return $false
-}
 
 function Get-AllowlistEntry
 {
@@ -222,35 +259,20 @@ function Get-AllowlistEntry
     return $null
 }
 
-$files = foreach ($root in $sourceRoots)
-{
-    $path = Join-Path $RepoRoot $root
-    if (! (Test-Path -LiteralPath $path))
-    {
-        continue
-    }
-
-    foreach ($extension in $fileExtensions)
-    {
-        Get-ChildItem -LiteralPath $path -Recurse -File -Filter $extension | Where-Object {
-            ! (Test-IsExcludedPath -Path $_.FullName)
+$rawResults = @(Find-RSRepositorySourceMatches `
+    -RepositoryRoot $RepoRoot `
+    -SourceRoots $sourceRoots `
+    -Extensions $fileExtensions `
+    -Patterns $patterns `
+    -ExcludedPathFragments $excludedPathFragments |
+    ForEach-Object {
+        [pscustomobject]@{
+            Category = $_.PatternName
+            Path = $_.Path
+            LineNumber = $_.LineNumber
+            Line = $_.Line
         }
-    }
-}
-
-$files = @($files | Sort-Object FullName -Unique)
-$rawResults = foreach ($pattern in $patterns)
-{
-    foreach ($match in ($files | Select-String -Pattern $pattern.Pattern))
-    {
-        [PSCustomObject]@{
-            Category   = $pattern.Category
-            Path       = Get-RelativeRepoPath -BasePath $RepoRoot -TargetPath $match.Path
-            LineNumber = $match.LineNumber
-            Line       = $match.Line.Trim()
-        }
-    }
-}
+    })
 
 $results = foreach ($finding in @($rawResults | Sort-Object Category, Path, LineNumber))
 {

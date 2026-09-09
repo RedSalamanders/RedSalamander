@@ -21,12 +21,14 @@ Build or obtain the x64 and ARM64 portable archives first, then run:
 ```powershell
 .\Installer\winget\generate-manifest.ps1 `
   -Version 7.0.183 `
-  -ZipPath .build\AppPackages\RedSalamander-7.0.183-x64.zip `
-  -Arm64ZipPath .build\AppPackages\RedSalamander-7.0.183-arm64.zip
+  -ZipPath .build\AppPackages\RedSalamander-7.0.183-x64-Portable.zip `
+  -Arm64ZipPath .build\AppPackages\RedSalamander-7.0.183-ARM64-Portable.zip
 ```
 
-If `-Version` is omitted, the script derives the package version through
-`Tools\Versioning.ps1`.
+If `-Version` is omitted, pass a positive `-BuildNumber`; the script constructs
+the version from `Common\Version.h` without reading or allocating repository
+version state. Both ZIP inputs are mandatory and must use the exact selected
+version in their x64/ARM64 portable filenames.
 
 The generator replaces:
 

@@ -1,0 +1,63 @@
+{
+  "formatId": "red-salamander-terminal-engine-lock-corpus",
+  "schemaVersion": 1,
+  "schema": "Specs/Terminal/TerminalEngineLock.schema.json",
+  "cases": [
+    {
+      "id": "positive-https-cache",
+      "valid": true,
+      "operation": "none",
+      "path": null,
+      "value": null,
+      "errorPattern": null
+    },
+    {
+      "id": "negative-unknown-top-level",
+      "valid": false,
+      "operation": "add",
+      "path": "unexpected",
+      "value": true,
+      "errorPattern": "unknown property"
+    },
+    {
+      "id": "negative-legacy-input-path",
+      "valid": false,
+      "operation": "replace-source-with-path",
+      "path": "inputs[0]",
+      "value": "disposable.bin",
+      "errorPattern": "legacy top-level path"
+    },
+    {
+      "id": "negative-https-credential",
+      "valid": false,
+      "operation": "replace",
+      "path": "inputs[0].source.uri",
+      "value": "https://user:secret@example.invalid/source.zip",
+      "errorPattern": "credential-free HTTPS"
+    },
+    {
+      "id": "negative-https-query",
+      "valid": false,
+      "operation": "replace",
+      "path": "inputs[0].source.uri",
+      "value": "https://example.invalid/source.zip?token=secret",
+      "errorPattern": "without query or fragment"
+    },
+    {
+      "id": "negative-missing-winner-lane",
+      "valid": false,
+      "operation": "remove-lane",
+      "path": "lanes[x64/ASan Debug]",
+      "value": null,
+      "errorPattern": "unknown lane"
+    },
+    {
+      "id": "negative-derived-unknown-input",
+      "valid": false,
+      "operation": "replace",
+      "path": "derivedInputs[0].inputIds[0]",
+      "value": "missing",
+      "errorPattern": "unknown input"
+    }
+  ]
+}

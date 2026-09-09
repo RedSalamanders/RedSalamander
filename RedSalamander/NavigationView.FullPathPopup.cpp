@@ -74,7 +74,6 @@ LRESULT NavigationView::OnFullPathPopupCreate([[maybe_unused]] HWND hwnd)
 
 LRESULT NavigationView::OnFullPathPopupNcDestroy(HWND hwnd)
 {
-    const bool restoreFolderViewFocus              = _restoreFolderViewFocusAfterFullPathPopupClose;
     _restoreFolderViewFocusAfterFullPathPopupClose = false;
     _fullPathPopupEditMode                         = false;
 
@@ -93,10 +92,16 @@ LRESULT NavigationView::OnFullPathPopupNcDestroy(HWND hwnd)
     _fullPathPopupMenuOpenForSeparator            = -1;
     _fullPathPopupPendingSeparatorMenuSwitchIndex = -1;
 
-    if (restoreFolderViewFocus && _hWnd && IsWindow(_hWnd.get()) != FALSE)
+#ifdef ENABLE_TESTS
+    // One-shot UI-thread seam: a reentrant teardown can dispatch queued focus work
+    // before native destruction finishes clearing the retiring window's focus.
+    if (_debugFullPathPopupDestroyProbe)
     {
-        PostMessageW(_hWnd.get(), WndMsg::kNavigationViewRestoreFolderFocus, 0, 0);
+        auto probe = std::move(_debugFullPathPopupDestroyProbe);
+        _debugFullPathPopupDestroyProbe = {};
+        probe();
     }
+#endif
 
     return 0;
 }
@@ -779,6 +784,7 @@ void NavigationView::ShowFullPathPopup()
 
 void NavigationView::CloseFullPathPopup()
 {
+    const bool restoreFolderViewFocus = _restoreFolderViewFocusAfterFullPathPopupClose;
     if (_fullPathPopupEdit)
     {
         if (_fullPathPopupEdit->field)
@@ -801,6 +807,14 @@ void NavigationView::CloseFullPathPopup()
     if (_fullPathPopup)
     {
         _fullPathPopup.reset();
+    }
+    // WM_NCDESTROY can pump messages while native destruction still owns focus.
+    // Restore only after reset returns, then queue a second foreground-safe restore
+    // for the enclosing input callback's unwind. Both use the existing guarded route.
+    if (restoreFolderViewFocus && _hWnd && IsWindow(_hWnd.get()) != FALSE)
+    {
+        SendMessageW(_hWnd.get(), WndMsg::kNavigationViewRestoreFolderFocus, 0, 0);
+        PostMessageW(_hWnd.get(), WndMsg::kNavigationViewRestoreFolderFocus, 0, 0);
     }
 }
 

@@ -2090,25 +2090,7 @@ namespace
 
     const auto navigateToViewersPage = [&](PreferencesDebugSnapshot& outSnapshot) noexcept
     {
-        const HWND treeHost = GetDlgItem(prefs, IDC_PREFS_CATEGORY_LIST);
-        state.Require(treeHost != nullptr && IsWindow(treeHost) != FALSE, L"Preferences category host control missing for Viewers theme-cycle validation.");
-        if (! treeHost || IsWindow(treeHost) == FALSE)
-        {
-            return false;
-        }
-
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Viewers theme-cycle validation.");
-        PumpPendingMessages();
-
-        SendMessageW(treeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_HOME, 0);
-        PumpPendingMessages();
-        for (int i = 0; i < 2; ++i)
-        {
-            SendMessageW(treeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(treeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryViewers), L"Failed to select the Preferences Viewers category for theme-cycle validation.");
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
@@ -5404,14 +5386,29 @@ namespace
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    PreferencesDebugSnapshot snapshot{};
-    const bool pluginsGridReady = waitForSnapshot(
-        [](const PreferencesDebugSnapshot& value) noexcept
+    const auto hasPluginsGridSurface = [](const PreferencesDebugSnapshot& value) noexcept
     {
-        return value.currentCategory == kPrefCategoryPlugins && ! value.pluginItemSelected && true /* Phase 8: removed field */
-               && value.pluginsMainListRowCount > 0u;
-    },
-        snapshot);
+        return value.currentCategory == kPrefCategoryPlugins && ! value.pluginItemSelected && ! value.pluginsDetailsActive &&
+               value.pluginsPaneVisible && value.pluginsMainListRowCount > 0u;
+    };
+
+    PreferencesDebugSnapshot snapshot{};
+    if (DebugGetPreferencesDialogSnapshot(snapshot) && snapshot.currentCategory == kPrefCategoryPlugins &&
+        (snapshot.pluginItemSelected || snapshot.pluginsDetailsActive))
+    {
+        for (int attempt = 0; attempt < 3; ++attempt)
+        {
+            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_LEFT, 0);
+            SendMessageW(categoryTreeHost, WM_KEYUP, VK_LEFT, 0);
+            PumpPendingMessages();
+            if (waitForSnapshot(hasPluginsGridSurface, snapshot))
+            {
+                break;
+            }
+        }
+    }
+
+    const bool pluginsGridReady = waitForSnapshot(hasPluginsGridSurface, snapshot);
     state.Require(pluginsGridReady,
                   std::format(L"Preferences Plugins page did not expose its DX grid surface for UIA selection validation; category={} title='{}' "
                               L"pluginItemSelected={} pluginsPaneVisible={} detailsActive={} rows={} visibleRows={} renderedHosts={} childWindows={} "
@@ -6380,7 +6377,8 @@ namespace
 
     const std::wstring expectedNameText = std::wstring(PrefsPlugins::GetDisplayName(selectedPlugin.value()));
     const std::wstring expectedTypeText = selectedPlugin->type == PrefsPluginType::FileSystem ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_FILE_SYSTEM)
-                                                                                              : LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
+                                           : selectedPlugin->type == PrefsPluginType::Terminal ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_TERMINAL)
+                                                                                               : LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
 
     const LONG reorderStartX  = typeHeaderRect.left + ((typeHeaderRect.right - typeHeaderRect.left) / 2);
     const LONG reorderY       = typeHeaderRect.top + ((typeHeaderRect.bottom - typeHeaderRect.top) / 2);
@@ -7491,7 +7489,8 @@ namespace
 
     const std::wstring expectedNameText = std::wstring(PrefsPlugins::GetDisplayName(selectedPlugin.value()));
     const std::wstring expectedTypeText = selectedPlugin->type == PrefsPluginType::FileSystem ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_FILE_SYSTEM)
-                                                                                              : LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
+                                           : selectedPlugin->type == PrefsPluginType::Terminal ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_TERMINAL)
+                                                                                               : LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
     ClearClipboardContents(prefs);
     SendMessageW(activePage, WM_KEYDOWN, VK_CONTROL, 0);
     SendMessageW(activePage, WM_KEYDOWN, static_cast<WPARAM>(L'C'), 0);

@@ -13,9 +13,9 @@ BEGIN
         MENUITEM "&Actualiser\tF5", IDM_VIEWER_FILE_REFRESH
         POPUP "Autres &fichiers"
         BEGIN
-            MENUITEM "&Suivant\tSpace, Ctrl+Down", IDM_VIEWER_OTHER_NEXT
             MENUITEM "&Précédent\tBackspace, Ctrl+Up", IDM_VIEWER_OTHER_PREVIOUS
-            MENUITEM "&Premier\tCtrl+Home", IDM_VIEWER_OTHER_FIRST
+            MENUITEM "&Suivant\tSpace, Ctrl+Down", IDM_VIEWER_OTHER_NEXT
+            MENUITEM "P&remier\tCtrl+Home", IDM_VIEWER_OTHER_FIRST
             MENUITEM "&Dernier\tCtrl+End", IDM_VIEWER_OTHER_LAST
         END
         MENUITEM SEPARATOR
@@ -30,11 +30,6 @@ BEGIN
     POPUP "&Affichage"
     BEGIN
         MENUITEM "&Texte", IDM_VIEWER_VIEW_TEXT
-        MENUITEM "Diff / &Côte à côte", IDM_VIEWER_VIEW_DIFF_SIDE_BY_SIDE
-        MENUITEM "Diff / &Intégré", IDM_VIEWER_VIEW_DIFF_INLINE
-        MENUITEM "Diff / Afficher le texte &inchangé", IDM_VIEWER_VIEW_DIFF_SHOW_UNCHANGED
-        MENUITEM "Diff / &Bloc suivant\tF7", IDM_VIEWER_VIEW_DIFF_NEXT_HUNK
-        MENUITEM "Diff / Bloc &précédent\tShift+F7", IDM_VIEWER_VIEW_DIFF_PREVIOUS_HUNK
         MENUITEM "&Hex", IDM_VIEWER_VIEW_HEX
         POPUP "&Couleurs des octets hex"
         BEGIN
@@ -42,17 +37,48 @@ BEGIN
             MENUITEM "&Désactivé", IDM_VIEWER_VIEW_HEX_BYTE_COLORS_OFF
         END
         MENUITEM SEPARATOR
+        MENUITEM "&Côte à côte", IDM_VIEWER_VIEW_DIFF_SIDE_BY_SIDE
+        MENUITEM "&Intégré", IDM_VIEWER_VIEW_DIFF_INLINE
+        MENUITEM "&Afficher le texte inchangé", IDM_VIEWER_VIEW_DIFF_SHOW_UNCHANGED
+        MENUITEM "Différence &suivante\tF7", IDM_VIEWER_VIEW_DIFF_NEXT_HUNK
+        MENUITEM "Différence &précédente\tShift+F7", IDM_VIEWER_VIEW_DIFF_PREVIOUS_HUNK
+        MENUITEM SEPARATOR
+        MENUITEM "Numéros de &ligne", IDM_VIEWER_VIEW_LINE_NUMBERS
+        MENUITEM "&Retour à la ligne", IDM_VIEWER_VIEW_WRAP
+        MENUITEM SEPARATOR
         MENUITEM "Aller en &haut\tHome", IDM_VIEWER_VIEW_GOTO_TOP
         MENUITEM "Aller en &bas\tEnd", IDM_VIEWER_VIEW_GOTO_BOTTOM
         MENUITEM "Aller à l’&offset...\tCtrl+G", IDM_VIEWER_VIEW_GOTO_OFFSET
-        MENUITEM "Numéros de &ligne", IDM_VIEWER_VIEW_LINE_NUMBERS
-        MENUITEM "&Retour à la ligne", IDM_VIEWER_VIEW_WRAP
     END
     POPUP "&Encodage"
     BEGIN
         MENUITEM "Encodage &suivant\tF8", IDM_VIEWER_ENCODING_NEXT
         MENUITEM "Encodage &précédent\tShift+F8", IDM_VIEWER_ENCODING_PREVIOUS
         MENUITEM SEPARATOR
+        MENUITEM "UTF-&8", IDM_VIEWER_ENCODING_DISPLAY_UTF8
+        MENUITEM "UTF-8 avec &BOM", IDM_VIEWER_ENCODING_DISPLAY_UTF8_BOM
+        MENUITEM "UTF-16 &LE", IDM_VIEWER_ENCODING_DISPLAY_UTF16LE_BOM
+        MENUITEM "UTF-16 B&E", IDM_VIEWER_ENCODING_DISPLAY_UTF16BE_BOM
+        MENUITEM "&Windows-1252", 1252
+        MENUITEM "ANSI s&ystème", IDM_VIEWER_ENCODING_DISPLAY_ANSI
+        MENUITEM SEPARATOR
+        MENUITEM "&Plus d’encodages...", IDM_VIEWER_ENCODING_MORE
+        MENUITEM SEPARATOR
+        POPUP "Encodage d’&enregistrement"
+        BEGIN
+            MENUITEM "Conserver l’encodage &original", IDM_VIEWER_ENCODING_SAVE_KEEP_ORIGINAL
+            MENUITEM "UTF-&8", IDM_VIEWER_ENCODING_SAVE_UTF8
+            MENUITEM "UTF-8 avec &BOM", IDM_VIEWER_ENCODING_SAVE_UTF8_BOM
+            MENUITEM "UTF-16 &LE", IDM_VIEWER_ENCODING_SAVE_UTF16LE_BOM
+            MENUITEM "UTF-16 B&E", IDM_VIEWER_ENCODING_SAVE_UTF16BE_BOM
+        END
+    END
+END
+
+IDR_VIEWERTEXT_ENCODING_CATALOG MENU
+BEGIN
+    POPUP "&Encodage"
+    BEGIN
         MENUITEM "&ANSI", IDM_VIEWER_ENCODING_DISPLAY_ANSI
         MENUITEM "UTF-&7", IDM_VIEWER_ENCODING_DISPLAY_UTF7
         MENUITEM "UTF-&8", IDM_VIEWER_ENCODING_DISPLAY_UTF8
@@ -297,14 +323,19 @@ BEGIN
                 END
             END
         END
-        MENUITEM SEPARATOR
-        MENUITEM "&Conserver l’encodage d’origine", IDM_VIEWER_ENCODING_SAVE_KEEP_ORIGINAL
-        MENUITEM "Convertir à l’enregistrement en UTF-8 &BOM", IDM_VIEWER_ENCODING_SAVE_UTF8_BOM
-        MENUITEM "Convertir à l’enregistrement en UTF-&8", IDM_VIEWER_ENCODING_SAVE_UTF8
-        MENUITEM "Convertir à l’enregistrement en &ANSI", IDM_VIEWER_ENCODING_SAVE_ANSI
-        MENUITEM "Convertir à l’enregistrement en UTF-16 &BE BOM", IDM_VIEWER_ENCODING_SAVE_UTF16BE_BOM
-        MENUITEM "Convertir à l’enregistrement en UTF-16 &LE BOM", IDM_VIEWER_ENCODING_SAVE_UTF16LE_BOM
     END
+END
+
+IDD_VIEWERTEXT_ENCODING_PICKER DIALOGEX 0, 0, 312, 250
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Plus d’encodages"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "&Rechercher par nom ou page de codes :", -1, 8, 8, 296, 10
+    EDITTEXT        IDC_VIEWERTEXT_ENCODING_FILTER, 8, 21, 296, 14, ES_AUTOHSCROLL
+    LISTBOX         IDC_VIEWERTEXT_ENCODING_LIST, 8, 41, 296, 181, LBS_NOTIFY | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    DEFPUSHBUTTON   "&OK", IDOK, 198, 230, 50, 14
+    PUSHBUTTON      "&Annuler", IDCANCEL, 254, 230, 50, 14
 END
 
 STRINGTABLE

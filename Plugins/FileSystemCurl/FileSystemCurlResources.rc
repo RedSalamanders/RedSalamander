@@ -11,4 +11,6 @@ BEGIN
     IDS_FILESYSTEMCURL_SCP_DESCRIPTION "SCP virtual file system (secure copy over SSH)."
     IDS_FILESYSTEMCURL_IMAP_NAME "IMAP"
     IDS_FILESYSTEMCURL_IMAP_DESCRIPTION "IMAP virtual mail file system."
+    IDS_FILESYSTEMCURL_CLEANUP_DEBT_TITLE "Remote cleanup required"
+    IDS_FILESYSTEMCURL_CLEANUP_DEBT_MESSAGE "The operation finished but could not safely remove {0} recovery item(s). Review and remove only backup or staging items that you can identify."
 END

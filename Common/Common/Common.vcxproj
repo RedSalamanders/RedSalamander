@@ -117,6 +117,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>blake3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
@@ -132,6 +133,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>blake3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|x64'">
@@ -147,6 +149,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>blake3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|ARM64'">
@@ -162,6 +165,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>blake3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -179,6 +183,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>blake3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
@@ -196,29 +201,44 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>blake3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Common.h" />
+    <ClInclude Include="..\Blake3Digest.h" />
+    <ClInclude Include="..\ContentDigest.h" />
+    <ClInclude Include="..\DeleteOnCloseTemporaryFile.h" />
     <ClInclude Include="..\EmbeddedViewerBase.h" />
     <ClInclude Include="..\LocalizationManager.h" />
     <ClInclude Include="..\LocalFileTransaction.h" />
     <ClInclude Include="..\MinimumOsVersion.h" />
     <ClInclude Include="..\PaginationGuard.h" />
+    <ClInclude Include="..\PaneVisualState.h" />
     <ClInclude Include="..\PluginConfiguration.h" />
+    <ClInclude Include="..\ProcessCommandLine.h" />
+    <ClInclude Include="..\RegistryUtils.h" />
+    <ClInclude Include="..\SynchronousIoCancelWatch.h" />
+    <ClInclude Include="..\LoopbackHttpFixture.h" />
+    <ClInclude Include="..\TestSandboxPath.h" />
+    <ClInclude Include="..\TestWindowActivationGuard.h" />
     <ClInclude Include="..\ThemeDefinitionIo.h" />
     <ClInclude Include="..\ThemeExpression.h" />
+    <ClInclude Include="..\WslDistributionCatalog.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Common.cpp" />
+    <ClCompile Include="..\Blake3Digest.cpp" />
     <ClCompile Include="LocalizationManager.cpp" />
     <ClCompile Include="..\MinimumOsVersion.cpp" />
+    <ClCompile Include="..\RegistryUtils.cpp" />
     <ClCompile Include="PerfJsonl.cpp" />
     <ClCompile Include="PluginConfiguration.cpp" />
     <ClCompile Include="SettingsStore.cpp" />
     <ClCompile Include="ThemeDefinitionIo.cpp" />
     <ClCompile Include="ThemeExpression.cpp" />
     <ClCompile Include="TraceProvider.cpp" />
+    <ClCompile Include="..\WslDistributionCatalog.cpp" />
     <ClCompile Include="dllmain.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

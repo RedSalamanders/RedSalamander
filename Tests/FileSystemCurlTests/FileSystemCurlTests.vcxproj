@@ -32,9 +32,6 @@
     <ProjectGuid>{9E1D3E21-70E6-4E4F-8C81-FA5AA0340EE5}</ProjectGuid>
     <RootNamespace>FileSystemCurlTests</RootNamespace>
   </PropertyGroup>
-  <PropertyGroup>
-    <RSBuildEnableTests Condition="'$(Configuration)'=='Release'">true</RSBuildEnableTests>
-  </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>

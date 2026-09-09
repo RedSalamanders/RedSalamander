@@ -6,6 +6,9 @@
 #include "DxUiThemePalette.h"
 #include "FileActionLauncher.h"
 #include "FileActionResolver.h"
+#include "FileOperationArtifactRegistry.h"
+#include "FileSystemRouteContract.h"
+#include "FolderWindow.FileOperationsInternal.h"
 #include "FolderWindowInternal.h"
 #include "Helpers.h"
 #include "HostServices.h"
@@ -13,7 +16,9 @@
 #include "MaskSyntax.h"
 #include "NavigationLocation.h"
 #include "PathUtils.h"
+#include "RegistryUtils.h"
 #include "SettingsStore.h"
+#include "TerminalHostSupport.h"
 #include "ViewerPluginManager.h"
 #include "Win32CallbackHelpers.h"
 #include "WindowMessages.h"
@@ -91,96 +96,117 @@ namespace
     return std::format(L"{} ({})", baseName, suffix);
 }
 
-[[nodiscard]] bool DirectoryNamesMatch(std::wstring_view left, std::wstring_view right, bool ignoreCase) noexcept
-{
-    if (! ignoreCase)
-    {
-        return left == right;
-    }
-
-    return CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE) == CSTR_EQUAL;
-}
-
-[[nodiscard]] bool TryCollectExistingDirectoryNames(const wil::com_ptr<IFileSystem>& fileSystem,
-                                                    const std::filesystem::path& folder,
-                                                    std::vector<std::wstring>& outNames) noexcept
+[[nodiscard]] HRESULT CollectExistingChildNames(const wil::com_ptr<IFileSystem>& fileSystem,
+                                                const std::filesystem::path& folder,
+                                                std::vector<std::wstring>& outNames) noexcept
 {
     outNames.clear();
     if (! fileSystem)
     {
-        return false;
+        return E_POINTER;
     }
 
     wil::com_ptr<IFilesInformation> filesInformation;
     const HRESULT hr = fileSystem->ReadDirectoryInfo(folder.c_str(), filesInformation.put());
-    if (FAILED(hr) || ! filesInformation)
+    if (FAILED(hr))
     {
-        return false;
+        return hr;
+    }
+    if (! filesInformation)
+    {
+        return S_OK;
     }
 
-    FileInfo* entry = nullptr;
-    if (FAILED(filesInformation->GetBuffer(&entry)) || entry == nullptr)
+    unsigned long entryCount = 0u;
+    RETURN_IF_FAILED(filesInformation->GetCount(&entryCount));
+    if (entryCount == 0u)
     {
-        return true;
+        return S_OK;
     }
 
-    while (entry != nullptr)
+    FileInfo* buffer = nullptr;
+    RETURN_IF_FAILED(filesInformation->GetBuffer(&buffer));
+    if (buffer == nullptr)
     {
-        if ((entry->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+        return E_POINTER;
+    }
+
+    unsigned long bufferSize = 0u;
+    RETURN_IF_FAILED(filesInformation->GetBufferSize(&bufferSize));
+    Common::Plugins::PackedFileInfoCursor cursor(buffer, bufferSize, entryCount);
+    for (unsigned long entryIndex = 0u; entryIndex < entryCount; ++entryIndex)
+    {
+        const FileInfo* entry = nullptr;
+        RETURN_IF_FAILED(cursor.Next(&entry));
+        const size_t nameChars = static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t);
+        const std::wstring_view name(entry->FileName, nameChars);
+        if (name != L"." && name != L"..")
         {
-            const size_t nameChars = static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t);
-            const std::wstring_view name(entry->FileName, nameChars);
-            if (name != L"." && name != L"..")
-            {
-                outNames.emplace_back(name);
-            }
+            outNames.emplace_back(name);
         }
-
-        if (entry->NextEntryOffset == 0)
-        {
-            break;
-        }
-
-        entry = reinterpret_cast<FileInfo*>(reinterpret_cast<std::byte*>(entry) + entry->NextEntryOffset);
     }
 
-    return true;
+    return S_OK;
 }
 
-[[nodiscard]] std::wstring ResolveInitialCreateDirectoryName(const wil::com_ptr<IFileSystem>& fileSystem,
-                                                             const std::filesystem::path& folder,
-                                                             std::wstring_view defaultName,
-                                                             bool ignoreCase) noexcept
+[[nodiscard]] HRESULT ResolveInitialCreateDirectoryName(const wil::com_ptr<IFileSystem>& fileSystem,
+                                                        const std::filesystem::path& folder,
+                                                        std::wstring_view defaultName,
+                                                        std::wstring_view pluginId,
+                                                        std::wstring& nameOut) noexcept
 {
-    std::vector<std::wstring> existingDirectoryNames;
-    if (! TryCollectExistingDirectoryNames(fileSystem, folder, existingDirectoryNames))
+    nameOut.clear();
+    if (! fileSystem || folder.empty() || defaultName.empty() || pluginId.empty())
     {
-        return std::wstring(defaultName);
+        return E_INVALIDARG;
+    }
+    std::vector<std::wstring> existingChildNames;
+    RETURN_IF_FAILED(CollectExistingChildNames(fileSystem, folder, existingChildNames));
+    wil::com_ptr<IFileSystemRouteCapabilities> route;
+    const HRESULT routeHr = fileSystem->QueryInterface(__uuidof(IFileSystemRouteCapabilities), route.put_void());
+    if (FAILED(routeHr) || ! route)
+    {
+        return FAILED(routeHr) ? routeHr : E_NOINTERFACE;
     }
 
-    const auto isTaken = [&](std::wstring_view candidate) noexcept
+    std::unordered_set<std::wstring> existingKeys;
+    existingKeys.reserve(existingChildNames.size());
+    for (const std::wstring& existingName : existingChildNames)
     {
-        for (const std::wstring& existingName : existingDirectoryNames)
+        // Existing names only need their provider collision key. A child the provider cannot key
+        // (a legacy name outside the provider's own rules) cannot collide with a provider-valid
+        // candidate, so it is skipped instead of blocking the command for the whole folder.
+        const FileSystemRouteContract::StringResult existing =
+            FileSystemRouteContract::QueryChildNameCollisionKey(route.get(), folder.native(), existingName, FILESYSTEM_CREATE_DIRECTORY);
+        if (existing.state == FileSystemRouteContract::QueryState::Available && ! existing.value.empty())
         {
-            if (DirectoryNamesMatch(existingName, candidate, ignoreCase))
-            {
-                return true;
-            }
+            existingKeys.insert(existing.value);
         }
-
-        return false;
-    };
+    }
 
     for (unsigned int suffix = 0u; suffix < 10000u; ++suffix)
     {
         std::wstring candidate = BuildCreateDirectorySuggestedName(defaultName, suffix);
-        if (! isTaken(candidate))
+        const FileSystemRouteContract::ChildNameContractResult candidateContract = FileSystemRouteContract::QueryChildNameContract(
+            route.get(), folder.native(), candidate, FILESYSTEM_CREATE_DIRECTORY, pluginId);
+        if (candidateContract.state == FileSystemRouteContract::QueryState::Available &&
+            candidateContract.nameStatus == FILESYSTEM_CHILD_NAME_INVALID)
         {
-            return candidate;
+            continue;
+        }
+        if (candidateContract.state != FileSystemRouteContract::QueryState::Available ||
+            candidateContract.nameStatus != FILESYSTEM_CHILD_NAME_VALID || candidateContract.collisionKey.empty())
+        {
+            return FAILED(candidateContract.status) ? candidateContract.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        }
+        if (! existingKeys.contains(candidateContract.collisionKey))
+        {
+            nameOut = std::move(candidate);
+            return S_OK;
         }
     }
 
-    return std::format(L"{} ({})", defaultName, GetTickCount64());
+    return HRESULT_FROM_WIN32(ERROR_TOO_MANY_NAMES);
 }
 
 [[nodiscard]] bool TryParseCreateDirectorySuggestedSuffix(std::wstring_view requestedName, std::wstring_view defaultName, unsigned int& outSuffix) noexcept
@@ -262,46 +288,11 @@ using ShellNewTemplateKind       = FolderWindow::ShellNewTemplateKind;
     return StringUtils::TrimWhitespaceCopy(text);
 }
 
-[[nodiscard]] std::optional<std::wstring> ReadRegistryStringValue(HKEY key, const wchar_t* valueName)
-{
-    DWORD type               = 0;
-    DWORD byteCount          = 0;
-    const LSTATUS sizeStatus = RegQueryValueExW(key, valueName, nullptr, &type, nullptr, &byteCount);
-    if (sizeStatus != ERROR_SUCCESS || (type != REG_SZ && type != REG_EXPAND_SZ) || byteCount == 0u)
-    {
-        return std::nullopt;
-    }
-
-    std::wstring value((byteCount / sizeof(wchar_t)) + 1u, L'\0');
-    const LSTATUS readStatus = RegQueryValueExW(key, valueName, nullptr, &type, reinterpret_cast<BYTE*>(value.data()), &byteCount);
-    if (readStatus != ERROR_SUCCESS || (type != REG_SZ && type != REG_EXPAND_SZ))
-    {
-        return std::nullopt;
-    }
-
-    value.resize(byteCount / sizeof(wchar_t));
-    value = TrimNullTerminatedRegistryString(std::move(value));
-    if (value.empty())
-    {
-        return std::nullopt;
-    }
-
-    if (type == REG_EXPAND_SZ)
-    {
-        const DWORD expandedChars = ExpandEnvironmentStringsW(value.c_str(), nullptr, 0);
-        if (expandedChars > 0u)
-        {
-            std::wstring expanded(expandedChars, L'\0');
-            const DWORD written = ExpandEnvironmentStringsW(value.c_str(), expanded.data(), expandedChars);
-            if (written > 0u && written <= expandedChars)
-            {
-                value = TrimNullTerminatedRegistryString(std::move(expanded));
-            }
-        }
-    }
-
-    return value.empty() ? std::nullopt : std::optional<std::wstring>(std::move(value));
-}
+const Common::Registry::StringReadOptions kShellRegistryStringReadOptions = {
+    .allowExpandString       = true,
+    .expandEnvironmentString = true,
+    .trimWhitespace          = true,
+};
 
 [[nodiscard]] std::optional<std::vector<std::byte>> ReadRegistryBinaryValue(HKEY key, const wchar_t* valueName)
 {
@@ -360,7 +351,7 @@ using ShellNewTemplateKind       = FolderWindow::ShellNewTemplateKind;
         return {};
     }
 
-    std::optional<std::wstring> progId = ReadRegistryStringValue(extensionKey.get(), nullptr);
+    std::optional<std::wstring> progId = Common::Registry::ReadBoundedStringValue(extensionKey.get(), nullptr, kShellRegistryStringReadOptions);
     if (! progId.has_value())
     {
         return {};
@@ -372,7 +363,9 @@ using ShellNewTemplateKind       = FolderWindow::ShellNewTemplateKind;
         return {};
     }
 
-    if (std::optional<std::wstring> friendlyType = ReadRegistryStringValue(progKey.get(), L"FriendlyTypeName"); friendlyType.has_value())
+    if (std::optional<std::wstring> friendlyType =
+            Common::Registry::ReadBoundedStringValue(progKey.get(), L"FriendlyTypeName", kShellRegistryStringReadOptions);
+        friendlyType.has_value())
     {
         std::wstring loaded = LoadIndirectShellString(friendlyType.value());
         if (! loaded.empty())
@@ -381,7 +374,8 @@ using ShellNewTemplateKind       = FolderWindow::ShellNewTemplateKind;
         }
     }
 
-    if (std::optional<std::wstring> defaultName = ReadRegistryStringValue(progKey.get(), nullptr); defaultName.has_value())
+    if (std::optional<std::wstring> defaultName = Common::Registry::ReadBoundedStringValue(progKey.get(), nullptr, kShellRegistryStringReadOptions);
+        defaultName.has_value())
     {
         return defaultName.value();
     }
@@ -477,7 +471,8 @@ using ShellNewTemplateKind       = FolderWindow::ShellNewTemplateKind;
 [[nodiscard]] std::optional<ShellNewTemplateDefinition> TryBuildShellNewTemplateFromRegistry(std::wstring_view extension, HKEY shellNewKey)
 {
     std::wstring displayName;
-    if (std::optional<std::wstring> itemName = ReadRegistryStringValue(shellNewKey, L"ItemName"); itemName.has_value())
+    if (std::optional<std::wstring> itemName = Common::Registry::ReadBoundedStringValue(shellNewKey, L"ItemName", kShellRegistryStringReadOptions);
+        itemName.has_value())
     {
         displayName = LoadIndirectShellString(itemName.value());
     }
@@ -503,7 +498,8 @@ using ShellNewTemplateKind       = FolderWindow::ShellNewTemplateKind;
         return result;
     }
 
-    if (std::optional<std::wstring> fileName = ReadRegistryStringValue(shellNewKey, L"FileName"); fileName.has_value())
+    if (std::optional<std::wstring> fileName = Common::Registry::ReadBoundedStringValue(shellNewKey, L"FileName", kShellRegistryStringReadOptions);
+        fileName.has_value())
     {
         if (std::optional<std::filesystem::path> templatePath = ResolveShellNewFileNameTemplatePath(fileName.value()); templatePath.has_value())
         {
@@ -1960,6 +1956,41 @@ struct ChangeAttributesCompletedPayload final
     bool refreshNeeded = false;
 };
 
+struct DirectMutationArtifactGuard final
+{
+    FolderWindow* owner = nullptr;
+    wil::com_ptr<IFileSystem> fileSystem;
+    std::wstring pluginId;
+    std::wstring instanceContext;
+    FileOperationArtifacts::TouchGuardReceipt receipt;
+};
+
+[[nodiscard]] HRESULT PrepareDirectMutationArtifactGuard(
+    const std::span<const std::filesystem::path> paths,
+    void* const cookie) noexcept
+{
+    auto* guard = static_cast<DirectMutationArtifactGuard*>(cookie);
+    if (guard == nullptr || guard->owner == nullptr || ! guard->fileSystem || guard->pluginId.empty())
+    {
+        return E_INVALIDARG;
+    }
+    return guard->owner->ConfirmExternalArtifactTouchForProvider(
+        guard->fileSystem.get(), guard->pluginId, guard->instanceContext, paths, &guard->receipt);
+}
+
+[[nodiscard]] HRESULT RevalidateDirectMutationArtifactGuard(
+    const std::span<const std::filesystem::path> paths,
+    void* const cookie) noexcept
+{
+    const auto* guard = static_cast<const DirectMutationArtifactGuard*>(cookie);
+    if (guard == nullptr || ! guard->fileSystem || guard->pluginId.empty())
+    {
+        return E_INVALIDARG;
+    }
+    return FileOperationArtifacts::RevalidateProviderTouchGuard(
+        guard->fileSystem.get(), guard->pluginId, guard->instanceContext, guard->receipt, paths);
+}
+
 [[nodiscard]] bool IsChangeAttributesDirectory(unsigned long attributes) noexcept
 {
     return (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
@@ -2328,6 +2359,8 @@ using MakeFileListSettings = Common::Settings::MakeFileListSettings;
 
 #ifdef ENABLE_TESTS
 std::optional<MakeFileListSettings> g_makeFileListAutomation;
+// UI-thread-only one-shot used when a test exercises the real options prompt but must bypass the OS Save picker.
+std::optional<std::filesystem::path> g_makeFileListOutputFileAutomation;
 std::atomic_uint32_t g_makeFileListWorkerDelayMs{0u};
 std::atomic_bool g_makeFileListWorkerActive{false};
 #endif
@@ -6570,8 +6603,8 @@ enum class ArchiveTargetDecision : uint8_t
         return false;
     }
 
-    if (DirectoryNamesMatch(stem, L"CON", true) || DirectoryNamesMatch(stem, L"PRN", true) || DirectoryNamesMatch(stem, L"AUX", true) ||
-        DirectoryNamesMatch(stem, L"NUL", true) || DirectoryNamesMatch(stem, L"CONIN$", true) || DirectoryNamesMatch(stem, L"CONOUT$", true))
+    if (EqualsNoCase(stem, L"CON") || EqualsNoCase(stem, L"PRN") || EqualsNoCase(stem, L"AUX") ||
+        EqualsNoCase(stem, L"NUL") || EqualsNoCase(stem, L"CONIN$") || EqualsNoCase(stem, L"CONOUT$"))
     {
         return true;
     }
@@ -6581,7 +6614,7 @@ enum class ArchiveTargetDecision : uint8_t
         const wchar_t suffix = stem[3];
         if (suffix >= L'1' && suffix <= L'9')
         {
-            return DirectoryNamesMatch(stem.substr(0u, 3u), L"COM", true) || DirectoryNamesMatch(stem.substr(0u, 3u), L"LPT", true);
+            return EqualsNoCase(stem.substr(0u, 3u), L"COM") || EqualsNoCase(stem.substr(0u, 3u), L"LPT");
         }
     }
 
@@ -9191,10 +9224,9 @@ void RefreshFolderViewIfPathMatches(FolderView& folderView, const std::filesyste
     normalizeSlashes(fromText);
 
     const std::wstring message = FormatStringResource(nullptr, IDS_FMT_FILEOPS_CONFIRM_PERMANENT_DELETE, what, fromText);
-    const std::wstring caption = LoadStringResource(nullptr, IDS_CAPTION_CONFIRM);
+    const std::wstring caption = LoadStringResource(nullptr, IDS_FILEOP_OPERATION_DELETE);
 
     HostPromptRequest prompt{};
-    prompt.version       = 1;
     prompt.sizeBytes     = sizeof(prompt);
     prompt.scope         = (ownerWindow && IsWindow(ownerWindow)) ? HOST_ALERT_SCOPE_WINDOW : HOST_ALERT_SCOPE_APPLICATION;
     prompt.severity      = HOST_ALERT_WARNING;
@@ -9203,35 +9235,11 @@ void RefreshFolderViewIfPathMatches(FolderView& folderView, const std::filesyste
     prompt.title         = caption.c_str();
     prompt.message       = message.c_str();
     prompt.defaultResult = HOST_PROMPT_RESULT_CANCEL;
+    prompt.presentation  = HOST_PROMPT_PRESENTATION_DELETE;
 
     HostPromptResult promptResult = HOST_PROMPT_RESULT_NONE;
     const HRESULT hrPrompt        = HostShowPrompt(prompt, nullptr, &promptResult);
     return SUCCEEDED(hrPrompt) && promptResult == HOST_PROMPT_RESULT_OK;
-}
-
-[[nodiscard]] HRESULT DeleteUnpackedArchives(const std::vector<std::filesystem::path>& archivePaths) noexcept
-{
-    for (const std::filesystem::path& path : archivePaths)
-    {
-        std::error_code ec;
-        const bool exists = std::filesystem::exists(path, ec);
-        if (ec)
-        {
-            return HResultFromErrorCode(ec);
-        }
-        if (! exists)
-        {
-            continue;
-        }
-
-        static_cast<void>(std::filesystem::remove(path, ec));
-        if (ec)
-        {
-            return HResultFromErrorCode(ec);
-        }
-    }
-
-    return S_OK;
 }
 
 [[nodiscard]] std::wstring OpenedFilesDisplayNameForPath(const std::filesystem::path& path)
@@ -9256,6 +9264,18 @@ void RefreshFolderViewIfPathMatches(FolderView& folderView, const std::filesyste
 }
 
 } // namespace
+
+#ifdef ENABLE_TESTS
+HRESULT FolderWindowFileSystemInternal::DebugResolveInitialCreateDirectoryNameForTests(
+    const wil::com_ptr<IFileSystem>& fileSystem,
+    const std::filesystem::path& folder,
+    std::wstring_view defaultName,
+    std::wstring_view pluginId,
+    std::wstring& nameOut) noexcept
+{
+    return ResolveInitialCreateDirectoryName(fileSystem, folder, defaultName, pluginId, nameOut);
+}
+#endif
 
 LRESULT FolderWindow::OnMakeFileListTaskUpdate(LPARAM lp) noexcept
 {
@@ -10263,9 +10283,15 @@ void DebugSetMakeFileListAutomation(const Common::Settings::MakeFileListSettings
     g_makeFileListAutomation = options;
 }
 
+void DebugSetNextMakeFileListOutputFile(const std::filesystem::path& outputFile) noexcept
+{
+    g_makeFileListOutputFileAutomation = outputFile;
+}
+
 void DebugClearMakeFileListAutomation() noexcept
 {
     g_makeFileListAutomation.reset();
+    g_makeFileListOutputFileAutomation.reset();
     g_makeFileListWorkerDelayMs.store(0u, std::memory_order_release);
 }
 
@@ -10571,11 +10597,35 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
         }
     });
 
-    wil::com_ptr<IFileSystemDirectoryOperations> dirOps;
-    state.fileSystem->QueryInterface(__uuidof(IFileSystemDirectoryOperations), dirOps.put_void());
+    const std::wstring defaultNameBase = LoadStringResource(nullptr, IDS_NEW_FOLDER_DEFAULT_NAME);
+    if (defaultNameBase.empty())
+    {
+        return;
+    }
 
-    const bool canUseWin32 = IsFilePluginShortId(state.pluginShortId) && LooksLikeWindowsAbsolutePath(base.wstring());
-    if (! dirOps && ! canUseWin32)
+    std::wstring initialName;
+    const HRESULT initialNameHr = ResolveInitialCreateDirectoryName(state.fileSystem, base, defaultNameBase, state.pluginId, initialName);
+    if (FAILED(initialNameHr))
+    {
+        std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+        std::wstring message = pluginName.empty()
+            ? LoadStringResource(nullptr, IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED)
+            : FormatStringResource(nullptr, IDS_FMT_PANE_CREATE_DIR_UNSUPPORTED_PLUGIN, pluginName);
+        state.folderView.ShowAlertOverlay(
+            FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
+        return;
+    }
+
+    EnsureFileOperations();
+    if (! _fileOperations)
+    {
+        return;
+    }
+
+    FileOperations::CreateDirectoryAdmission initialAdmission{};
+    const HRESULT initialAdmissionHr = _fileOperations->QualifyCreateDirectory(
+        state.fileSystem, state.pluginId, state.instanceContext, base, initialName, initialAdmission);
+    if (FAILED(initialAdmissionHr))
     {
         std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
         std::wstring message;
@@ -10587,19 +10637,23 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
         {
             message = LoadStringResource(nullptr, IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED);
         }
-
-        state.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
+        state.folderView.ShowAlertOverlay(
+            FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
         return;
     }
 
-    const std::wstring defaultNameBase = LoadStringResource(nullptr, IDS_NEW_FOLDER_DEFAULT_NAME);
-    if (defaultNameBase.empty())
+    wil::com_ptr<IFileSystemDirectoryOperations> dirOps;
+    state.fileSystem->QueryInterface(__uuidof(IFileSystemDirectoryOperations), dirOps.put_void());
+    if (! dirOps && ! initialAdmission.allowLocalNativeFallback)
     {
+        std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+        std::wstring message = pluginName.empty()
+            ? LoadStringResource(nullptr, IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED)
+            : FormatStringResource(nullptr, IDS_FMT_PANE_CREATE_DIR_UNSUPPORTED_PLUGIN, pluginName);
+        state.folderView.ShowAlertOverlay(
+            FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
         return;
     }
-
-    const bool treatSuggestedNamesCaseInsensitive = IsFilePluginShortId(state.pluginShortId);
-    const std::wstring initialName = ResolveInitialCreateDirectoryName(state.fileSystem, base, defaultNameBase, treatSuggestedNamesCaseInsensitive);
 
     if (! ownerWindow)
     {
@@ -10626,18 +10680,25 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
             candidateName = BuildCreateDirectorySuggestedName(defaultNameBase, suggestedSuffix + static_cast<unsigned int>(attempt));
         }
 
-        const std::filesystem::path newFolderPath = base / std::filesystem::path(candidateName);
-        if (newFolderPath.empty())
+        FileOperations::CreateDirectoryAdmission createAdmission{};
+        const HRESULT admissionHr = _fileOperations->QualifyCreateDirectory(
+            state.fileSystem, state.pluginId, state.instanceContext, base, candidateName, createAdmission);
+        if (FAILED(admissionHr))
         {
-            continue;
+            std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+            std::wstring message = LoadStringResource(nullptr, IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED);
+            state.folderView.ShowAlertOverlay(
+                FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
+            return;
         }
+        const std::filesystem::path& newFolderPath = createAdmission.candidateProviderPath;
 
         HRESULT hr = S_OK;
         if (dirOps)
         {
             hr = dirOps->CreateDirectory(newFolderPath.c_str());
         }
-        else
+        else if (createAdmission.allowLocalNativeFallback)
         {
             if (::CreateDirectoryW(newFolderPath.c_str(), nullptr) == 0)
             {
@@ -10645,10 +10706,14 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
                 hr                = HRESULT_FROM_WIN32(error);
             }
         }
+        else
+        {
+            hr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        }
 
         if (SUCCEEDED(hr))
         {
-            const std::wstring focusName = newFolderPath.filename().wstring();
+            const std::wstring focusName = candidateName;
             if (! focusName.empty())
             {
                 state.folderView.RememberFocusedItemForFolder(base, focusName);
@@ -11260,6 +11325,102 @@ bool FolderWindow::DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) co
     return true;
 }
 
+bool FolderWindow::DebugGetTerminalPaneSnapshot(Pane hostPane, TerminalPaneDebugSnapshot& out) const noexcept
+{
+    out = {};
+    out.hostPane = hostPane;
+    const PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    out.open       = host.terminalOpen && host.terminal != nullptr;
+    out.selected   = host.terminalTabSelected;
+    out.childHwnd  = host.terminalHwnd;
+    out.parentHwnd = host.terminalHwnd ? GetParent(host.terminalHwnd) : nullptr;
+    out.sourceLocationKind = host.terminalSourceLocationKind;
+    out.sourcePluginShortId = host.terminalSourcePluginShortId;
+    out.sourcePath = host.terminalSourcePath;
+    out.sourceGeneration = host.terminalSourceGeneration;
+    if (host.previewTabsControl)
+    {
+        out.visibleTabCount    = host.previewTabsControl->GetVisibleTabCount();
+        out.previewTabVisible  = host.previewTabsControl->IsTabVisible(1u);
+        out.terminalTabVisible = host.previewTabsControl->IsTabVisible(2u);
+    }
+    if (host.terminal)
+    {
+        TerminalViewState state{};
+        state.sizeBytes = sizeof(state);
+        if (SUCCEEDED(host.terminal->GetViewState(&state)))
+        {
+            out.lifecycle = state.activity.lifecycleState;
+            out.activityTrust = state.activity.activityTrust;
+            out.followState = state.followState;
+            out.instanceId = state.instanceId;
+            out.sessionGeneration = state.sessionGeneration;
+            out.capabilityFlags = state.capabilityFlags;
+            out.exitCodePresent = state.exitCodePresent != 0u;
+            out.exitCode = state.exitCode;
+            out.finalSnapshotComplete = state.finalSnapshotComplete != 0u;
+            out.idleAtPrimaryPrompt = state.activity.idleAtPrimaryPrompt != 0u;
+            if (state.status.data != nullptr)
+            {
+                out.status.assign(state.status.data, state.status.length);
+            }
+            CoTaskMemFree(state.title.data);
+            CoTaskMemFree(state.status.data);
+        }
+    }
+    return true;
+}
+
+HRESULT FolderWindow::DebugSetTerminalConfiguration(Pane hostPane, const char* configurationJsonUtf8) noexcept
+{
+    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    if (! host.terminal)
+    {
+        return E_HANDLE;
+    }
+    wil::com_ptr<IInformations> information;
+    const HRESULT queryHr = host.terminal->QueryInterface(__uuidof(IInformations), information.put_void());
+    return SUCCEEDED(queryHr) && information ? information->SetConfiguration(configurationJsonUtf8) : queryHr;
+}
+
+HRESULT FolderWindow::DebugTerminateTerminalRootProcess(Pane hostPane, uint32_t exitCode) noexcept
+{
+    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    return host.terminal ? TerminalHostSupport::DebugTerminateRootProcess(host.terminal.get(), exitCode) : E_HANDLE;
+}
+
+void FolderWindow::DebugCloseTerminalPane(Pane hostPane) noexcept
+{
+    CloseTerminalPane(hostPane);
+}
+
+bool FolderWindow::DebugSetPaneContentTab(Pane hostPane, size_t tabIndex) noexcept
+{
+    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    if (! host.previewTabsVisible || tabIndex > 2u)
+    {
+        return false;
+    }
+
+    SetPaneContentTab(hostPane, tabIndex);
+    return (tabIndex == 0u && ! host.previewTabSelected && ! host.terminalTabSelected) ||
+        (tabIndex == 1u && host.previewTabSelected) || (tabIndex == 2u && host.terminalTabSelected);
+}
+
+size_t FolderWindow::DebugGetPaneContentTab(Pane hostPane) const noexcept
+{
+    const PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    if (host.terminalTabSelected)
+    {
+        return 2u;
+    }
+    if (host.previewTabSelected)
+    {
+        return 1u;
+    }
+    return 0u;
+}
+
 bool FolderWindow::DebugSetPreviewPaneTab(Pane hostPane, bool previewTab) noexcept
 {
     if (! _previewSourcePane.has_value() || OppositePane(_previewSourcePane.value()) != hostPane)
@@ -11489,6 +11650,103 @@ size_t FolderWindow::DebugGetSelectedCount(Pane pane) const noexcept
     return state.folderView.DebugGetSelectedItemCount();
 }
 
+FolderView::SelectionStats FolderWindow::DebugGetCachedPaneSelectionStatsForSelfTest(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.selectionStats;
+}
+
+FolderView::DebugFocusSelectionStateSnapshot FolderWindow::DebugGetFocusSelectionStateSnapshot(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugGetFocusSelectionStateSnapshot();
+}
+
+void FolderWindow::DebugRememberPaneFocusedItemForFolder(Pane pane,
+                                                         const std::filesystem::path& folder,
+                                                         std::wstring_view itemDisplayName) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.RememberFocusedItemForFolder(folder, itemDisplayName);
+}
+
+void FolderWindow::DebugClearPaneFocusMemoryForSelfTest(Pane pane) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.DebugClearFocusMemoryForSelfTest();
+}
+
+bool FolderWindow::DebugRememberPaneFocusMemoryEntryForSelfTest(Pane pane,
+                                                                const std::filesystem::path& folder,
+                                                                std::wstring_view itemDisplayName) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugRememberFocusMemoryEntryForSelfTest(folder, itemDisplayName);
+}
+
+std::wstring FolderWindow::DebugLookupPaneFocusMemoryEntryForSelfTest(Pane pane, const std::filesystem::path& folder) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugLookupFocusMemoryEntryForSelfTest(folder);
+}
+
+void FolderWindow::DebugSetPaneFileSystemContextForSelfTest(Pane pane,
+                                                             std::wstring_view pluginId,
+                                                             std::wstring_view instanceContext) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.SetFileSystemContext(pluginId, instanceContext);
+}
+
+void FolderWindow::DebugSetPaneSuppressOleDragDropForSelfTest(Pane pane, const bool suppress) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.DebugSetSuppressOleDragDropForSelfTest(suppress);
+}
+
+std::vector<std::filesystem::path> FolderWindow::DebugGetPaneCommandTargetPathsForSelfTest(Pane pane) const
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.GetSelectedOrFocusedPaths();
+}
+
+std::vector<std::filesystem::path> FolderWindow::DebugGetPaneLastDragStartPathsForSelfTest(Pane pane) const
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugGetLastDragStartPathsForSelfTest();
+}
+
+uint64_t FolderWindow::DebugGetPaneDragStartCountForSelfTest(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugGetDragStartCountForSelfTest();
+}
+
+void FolderWindow::DebugClearPaneSelectionAnchorForSelfTest(Pane pane) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.DebugClearSelectionAnchorForSelfTest();
+}
+
+void FolderWindow::DebugSendPaneKeyForSelfTest(Pane pane, WPARAM key, bool ctrl, bool shift)
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.DebugSendKeyForSelfTest(key, ctrl, shift);
+}
+
+std::optional<POINT> FolderWindow::DebugGetPaneItemCenterClientPointForSelfTest(Pane pane,
+                                                                                std::wstring_view displayName) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugGetItemCenterClientPointForSelfTest(displayName);
+}
+
+std::optional<POINT> FolderWindow::DebugGetPaneEmptyBackgroundClientPointForSelfTest(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugGetEmptyBackgroundClientPointForSelfTest();
+}
+
 uint64_t FolderWindow::DebugGetWarmPaneRenderingCallCount(Pane pane) const noexcept
 {
     const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
@@ -11549,6 +11807,18 @@ bool FolderWindow::DebugGetNavigationViewSnapshot(Pane pane, NavigationViewDebug
     return state.navigationView.DebugGetSnapshot(out);
 }
 
+void FolderWindow::DebugSetNavigationFullPathPopupDestroyProbe(Pane pane, std::function<void()> probe)
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.navigationView.DebugSetFullPathPopupDestroyProbe(std::move(probe));
+}
+
+HRESULT FolderWindow::DebugGetTerminalScreenText(Pane hostPane, std::wstring& text) const noexcept
+{
+    const PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    return TerminalHostSupport::DebugGetScreenText(host.terminal.get(), text);
+}
+
 bool FolderWindow::DebugFocusNavigationViewRegion(Pane pane, NavigationView::FocusRegion region) noexcept
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
@@ -11571,6 +11841,12 @@ bool FolderWindow::DebugGetIncrementalSearchSnapshot(Pane pane, FolderView::Incr
 {
     const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     return state.folderView.DebugGetIncrementalSearchSnapshot(out);
+}
+
+void FolderWindow::DebugExitIncrementalSearch(Pane pane) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.DebugExitIncrementalSearch();
 }
 
 FolderView::NameFilterState FolderWindow::DebugGetNameFilterState(Pane pane) const
@@ -11598,6 +11874,25 @@ FolderView::FilterWatermarkVisualMode FolderWindow::DebugGetFilterWatermarkVisua
     return state.folderView.DebugGetFilterWatermarkVisualMode();
 }
 #endif
+
+void ShowArtifactTouchGuardFailure(FolderWindow& window,
+                                   const FolderWindow::Pane pane,
+                                   const size_t pathCount,
+                                   const HRESULT hr) noexcept
+{
+    std::wstring title = LoadStringResource(nullptr, IDS_FILEOPS_ARTIFACT_TOUCH_TITLE);
+    if (title.empty())
+    {
+        title = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+    }
+    std::wstring message = FormatStringResource(nullptr, IDS_FMT_FILEOPS_ARTIFACT_TOUCH_BLOCKED, pathCount);
+    if (message.empty())
+    {
+        message = title;
+    }
+    window.ShowPaneAlertOverlay(
+        pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message), hr, true, false);
+}
 
 void FolderWindow::CommandSelectionSelectDialog(Pane pane)
 {
@@ -11917,6 +12212,10 @@ void FolderWindow::CommandMakeFileList(Pane pane)
     std::optional<MakeFileListSettings> requestedOptions;
     bool automated = false;
 #ifdef ENABLE_TESTS
+    // Consume this even when the options prompt is cancelled so it cannot leak into a later command.
+    std::optional<std::filesystem::path> automatedOutputFile = std::exchange(g_makeFileListOutputFileAutomation, std::nullopt);
+#endif
+#ifdef ENABLE_TESTS
     if (g_makeFileListAutomation.has_value())
     {
         requestedOptions = g_makeFileListAutomation.value();
@@ -11950,6 +12249,14 @@ void FolderWindow::CommandMakeFileList(Pane pane)
 
     if (options.outputTarget == Common::Settings::MakeFileListOutputTarget::File && ! automated)
     {
+#ifdef ENABLE_TESTS
+        if (automatedOutputFile.has_value())
+        {
+            options.outputFile = automatedOutputFile.value();
+        }
+        else
+#endif
+        {
         const std::optional<std::filesystem::path> outputFile = PromptForMakeFileListOutputFile(ownerWindow, currentFolder.value(), options);
         if (! outputFile.has_value())
         {
@@ -11957,6 +12264,7 @@ void FolderWindow::CommandMakeFileList(Pane pane)
             return;
         }
         options.outputFile = outputFile.value();
+        }
     }
 
     if (options.outputTarget == Common::Settings::MakeFileListOutputTarget::File && options.outputFile.empty())
@@ -12274,8 +12582,10 @@ void FolderWindow::CommandPack(Pane pane)
     {
         FolderView::FileOperationRequest deleteRequest{};
         deleteRequest.operation   = FILESYSTEM_DELETE;
+        deleteRequest.origin      = FolderView::FileOperationRequest::Origin::PackCleanup;
         deleteRequest.sourcePaths = selectedPaths;
         deleteRequest.flags       = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
+        deleteRequest.archiveDeleteAfterConfirmed = true;
         const HRESULT deleteHr    = StartFileOperationFromFolderView(pane, std::move(deleteRequest));
         if (FAILED(deleteHr))
         {
@@ -12493,7 +12803,13 @@ void FolderWindow::CommandUnpack(Pane pane)
 
     if (deleteArchiveAfterUnpack)
     {
-        const HRESULT deleteHr = DeleteUnpackedArchives(selectedPaths);
+        FolderView::FileOperationRequest deleteRequest{};
+        deleteRequest.operation   = FILESYSTEM_DELETE;
+        deleteRequest.origin      = FolderView::FileOperationRequest::Origin::UnpackCleanup;
+        deleteRequest.sourcePaths = selectedPaths;
+        deleteRequest.flags       = FILESYSTEM_FLAG_NONE;
+        deleteRequest.archiveDeleteAfterConfirmed = true;
+        const HRESULT deleteHr    = StartFileOperationFromFolderView(pane, std::move(deleteRequest));
         if (FAILED(deleteHr))
         {
             ShowArchiveOverlay(
@@ -13446,6 +13762,26 @@ void FolderWindow::CommandChangeAttributes(Pane pane)
         return;
     }
 
+    FileOperationArtifacts::TouchGuardReceipt artifactTouchReceipt;
+    if (! options.includeSubdirectories)
+    {
+        const HRESULT artifactTouchHr = ConfirmExternalArtifactTouch(pane, paths, &artifactTouchReceipt);
+        if (artifactTouchHr != S_OK)
+        {
+            if (FAILED(artifactTouchHr))
+            {
+                ShowArtifactTouchGuardFailure(*this, pane, paths.size(), artifactTouchHr);
+            }
+            Debug::Perf::Emit(L"fileattrs.change_attributes_us",
+                              L"artifact-guard",
+                              Debug::Perf::ElapsedUs(startedAt),
+                              static_cast<uint64_t>(paths.size()),
+                              0u,
+                              artifactTouchHr);
+            return;
+        }
+    }
+
     wil::com_ptr<IFileSystemItemStreams> streamOps;
     if (options.removeAlternateDataStreams)
     {
@@ -13471,8 +13807,12 @@ void FolderWindow::CommandChangeAttributes(Pane pane)
         const HWND ownerHwnd                 = _hWnd.get();
         wil::com_ptr<IFileSystem> fileSystem = state.fileSystem;
         const std::wstring title             = task.title;
+        const std::wstring pluginId          = state.pluginId;
+        const std::wstring instanceContext   = state.instanceContext;
+        FolderWindow* const owner            = this;
 
-        state.changeAttributesThread = std::jthread([ownerHwnd, pane, fileSystem, paths, options, title, taskId](std::stop_token stopToken) noexcept
+        state.changeAttributesThread = std::jthread(
+            [owner, ownerHwnd, pane, fileSystem, pluginId, instanceContext, paths, options, title, taskId](std::stop_token stopToken) noexcept
         {
             const auto operationStartedAt = std::chrono::steady_clock::now();
             const HRESULT coinitHr        = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
@@ -13521,6 +13861,25 @@ void FolderWindow::CommandChangeAttributes(Pane pane)
                 }
             }
 
+            DirectMutationArtifactGuard artifactGuard{
+                .owner = owner,
+                .fileSystem = fileSystem,
+                .pluginId = pluginId,
+                .instanceContext = instanceContext,
+            };
+            if (SUCCEEDED(operationHr) && ! workItems.empty())
+            {
+                hr = PrepareDirectMutationArtifactGuard(workItems, &artifactGuard);
+                if (hr != S_OK)
+                {
+                    operationHr = hr == S_FALSE ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : hr;
+                    if (operationHr != HRESULT_FROM_WIN32(ERROR_CANCELLED) && operationHr != E_ABORT)
+                    {
+                        RecordChangeAttributesFailure(report, operationHr);
+                    }
+                }
+            }
+
             progress.enumerating  = false;
             progress.applying     = true;
             progress.plannedItems = static_cast<uint64_t>(workItems.size());
@@ -13537,6 +13896,17 @@ void FolderWindow::CommandChangeAttributes(Pane pane)
                     }
 
                     progress.currentPath = path;
+                    const std::array guardedPath{path};
+                    hr = RevalidateDirectMutationArtifactGuard(guardedPath, &artifactGuard);
+                    if (hr != S_OK)
+                    {
+                        operationHr = hr == S_FALSE ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : hr;
+                        if (operationHr != HRESULT_FROM_WIN32(ERROR_CANCELLED) && operationHr != E_ABORT)
+                        {
+                            RecordChangeAttributesFailure(report, operationHr);
+                        }
+                        break;
+                    }
                     ApplyChangeAttributesToPath(workerFileIo.get(), workerStreamOps.get(), path, options, report, refreshNeeded);
                     ++progress.completedItems;
                     progress.MaybePostTaskUpdate();
@@ -13564,8 +13934,22 @@ void FolderWindow::CommandChangeAttributes(Pane pane)
 
     ChangeAttributesReport report{};
     bool refreshNeeded = false;
+    DirectMutationArtifactGuard artifactGuard{
+        .owner = this,
+        .fileSystem = state.fileSystem,
+        .pluginId = state.pluginId,
+        .instanceContext = state.instanceContext,
+        .receipt = std::move(artifactTouchReceipt),
+    };
     for (const std::filesystem::path& path : paths)
     {
+        const std::array guardedPath{path};
+        const HRESULT artifactTouchHr = RevalidateDirectMutationArtifactGuard(guardedPath, &artifactGuard);
+        if (artifactTouchHr != S_OK)
+        {
+            RecordChangeAttributesFailure(report, artifactTouchHr);
+            break;
+        }
         ApplyChangeAttributesToPath(fileIo.get(), streamOps.get(), path, options, report, refreshNeeded);
     }
     report.summary = BuildChangeAttributesReportSummary(report);
@@ -13636,12 +14020,35 @@ void FolderWindow::CommandChangeCase(Pane pane)
         return;
     }
 
+    const ChangeCase::Options options = dialogResult.value();
+
     const HWND ownerHwnd                 = _hWnd.get();
     wil::com_ptr<IFileSystem> fileSystem = state.fileSystem;
-    const ChangeCase::Options options    = dialogResult.value();
     const std::wstring title             = LoadStringResource(nullptr, IDS_CMD_CHANGE_CASE);
+    const std::wstring pluginId          = state.pluginId;
 
-    state.changeCaseThread = std::jthread([ownerHwnd, pane, fileSystem, paths, options, title](std::stop_token stopToken) noexcept
+    EnsureFileOperations();
+
+    std::filesystem::path focusFolder;
+    std::wstring focusDisplayName;
+    const std::optional<std::filesystem::path> focusedPath = state.folderView.GetFocusedPath();
+    if (focusedPath.has_value() &&
+        std::ranges::any_of(paths, [&](const std::filesystem::path& path) noexcept { return OrdinalString::EqualsNoCasePath(path, focusedPath.value()); }))
+    {
+        focusFolder      = focusedPath.value().parent_path();
+        focusDisplayName = ChangeCase::TransformLeafName(focusedPath.value().filename().wstring(), options);
+    }
+
+    state.changeCaseThread =
+        std::jthread([ownerHwnd,
+                      pane,
+                      fileSystem,
+                      pluginId,
+                      paths,
+                      options,
+                      title,
+                      focusFolder,
+                      focusDisplayName](std::stop_token stopToken) mutable noexcept
     {
         const HRESULT coinitHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
         if (FAILED(coinitHr))
@@ -13658,19 +14065,20 @@ void FolderWindow::CommandChangeCase(Pane pane)
             std::wstring title;
             ULONGLONG startTick      = 0;
             ULONGLONG lastPostedTick = 0;
-            uint64_t infoTaskId      = 0;
+            std::shared_ptr<ChangeCaseTaskReceipt> receipt;
+            bool taskRevealPosted = false;
             ChangeCase::ProgressUpdate last{};
 
             void PostTaskUpdate(bool finished, HRESULT hr) noexcept
             {
-                if (! hwnd || IsWindow(hwnd) == FALSE || infoTaskId == 0)
+                if (! hwnd || IsWindow(hwnd) == FALSE || ! taskRevealPosted)
                 {
                     return;
                 }
 
                 FolderWindow::InformationalTaskUpdate info{};
                 info.kind                       = FolderWindow::InformationalTaskUpdate::Kind::ChangeCase;
-                info.taskId                     = infoTaskId;
+                info.taskId                     = receipt ? receipt->taskId.load(std::memory_order_acquire) : 0u;
                 info.title                      = title;
                 info.changeCaseCurrentPath      = last.currentPath;
                 info.changeCaseScannedFolders   = last.scannedFolders;
@@ -13684,12 +14092,13 @@ void FolderWindow::CommandChangeCase(Pane pane)
 
                 auto payload    = std::make_unique<ChangeCaseTaskPayload>();
                 payload->update = std::move(info);
+                payload->receipt = receipt;
                 static_cast<void>(PostMessagePayload(hwnd, WndMsg::kChangeCaseTaskUpdate, 0, std::move(payload)));
             }
 
             void EnsureTaskVisibleAfterThreshold() noexcept
             {
-                if (! hwnd || IsWindow(hwnd) == FALSE || infoTaskId != 0)
+                if (! hwnd || IsWindow(hwnd) == FALSE || taskRevealPosted)
                 {
                     return;
                 }
@@ -13713,18 +14122,13 @@ void FolderWindow::CommandChangeCase(Pane pane)
 
                 auto payload    = std::make_unique<ChangeCaseTaskPayload>();
                 payload->update = std::move(info);
-
-                ChangeCaseTaskPayload* raw = payload.release();
-                DWORD_PTR result           = 0;
-                const LRESULT sendOk =
-                    SendMessageTimeoutW(hwnd, WndMsg::kChangeCaseTaskUpdate, 0, reinterpret_cast<LPARAM>(raw), SMTO_ABORTIFHUNG | SMTO_BLOCK, 1000, &result);
-                if (sendOk == 0)
+                payload->receipt = receipt;
+                if (! PostMessagePayload(hwnd, WndMsg::kChangeCaseTaskUpdate, 0, std::move(payload)))
                 {
-                    delete raw;
                     return;
                 }
 
-                infoTaskId     = static_cast<uint64_t>(result);
+                taskRevealPosted = true;
                 lastPostedTick = nowTick;
             }
         };
@@ -13734,6 +14138,7 @@ void FolderWindow::CommandChangeCase(Pane pane)
         progressState.pane      = pane;
         progressState.title     = title;
         progressState.startTick = GetTickCount64();
+        progressState.receipt   = std::make_shared<ChangeCaseTaskReceipt>();
 
         const auto onProgress = [](const ChangeCase::ProgressUpdate& update, void* cookie) noexcept
         {
@@ -13746,7 +14151,7 @@ void FolderWindow::CommandChangeCase(Pane pane)
             state->last = update;
             state->EnsureTaskVisibleAfterThreshold();
 
-            if (state->infoTaskId != 0)
+            if (state->taskRevealPosted)
             {
                 const ULONGLONG nowTick = GetTickCount64();
                 if (state->lastPostedTick != 0 && nowTick >= state->lastPostedTick && (nowTick - state->lastPostedTick) < 100ull)
@@ -13759,7 +14164,16 @@ void FolderWindow::CommandChangeCase(Pane pane)
             }
         };
 
-        const HRESULT operationHr = ChangeCase::ApplyToPaths(*fileSystem, paths, options, stopToken, onProgress, &progressState);
+        const auto discoveryStartedAt = std::chrono::steady_clock::now();
+        std::vector<BatchRenameExecutionOp> operations;
+        const HRESULT operationHr = ChangeCase::BuildRenameOperations(
+            *fileSystem, pluginId, paths, options, operations, stopToken, onProgress, &progressState);
+        Debug::Perf::Emit(L"changecase.discovery.us",
+                          SUCCEEDED(operationHr) ? L"planned" : L"failed",
+                          Debug::Perf::ElapsedUs(discoveryStartedAt),
+                          progressState.last.scannedEntries,
+                          static_cast<uint64_t>(operations.size()),
+                          operationHr);
 
         progressState.EnsureTaskVisibleAfterThreshold();
         progressState.PostTaskUpdate(true, operationHr);
@@ -13767,8 +14181,12 @@ void FolderWindow::CommandChangeCase(Pane pane)
         if (ownerHwnd && IsWindow(ownerHwnd) != FALSE)
         {
             auto completed  = std::make_unique<ChangeCaseCompletedPayload>();
-            completed->pane = pane;
-            completed->hr   = operationHr;
+            completed->pane             = pane;
+            completed->hr               = operationHr;
+            completed->fileSystem       = fileSystem;
+            completed->operations       = std::move(operations);
+            completed->focusFolder      = focusFolder;
+            completed->focusDisplayName = focusDisplayName;
             static_cast<void>(PostMessagePayload(ownerHwnd, WndMsg::kChangeCaseCompleted, 0, std::move(completed)));
         }
     });

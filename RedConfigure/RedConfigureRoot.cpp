@@ -2069,16 +2069,10 @@ private:
         if (! text.has_value()) return;
         const auto rows = _session.GetLocalizationReviewRows();
         if (_selectedReviewRow >= rows.size()) return;
-        size_t cultureIndex = 0u;
-        for (size_t index = 0u; index < rows[_selectedReviewRow].targets.size(); ++index)
-        {
-            if (rows[_selectedReviewRow].targets[index].cultureName == _selectedReviewCulture)
-            {
-                cultureIndex = index;
-                break;
-            }
-        }
-        if (_session.ApplyClipboardMatrix(_selectedReviewRow, cultureIndex, text.value()))
+        const std::vector<std::wstring> orderedCultures = _languageColumns.GetOrderedCultures();
+        const RedConfigure::Workflow::LocalizationClipboardPasteTarget target = RedConfigure::Workflow::BuildLocalizationClipboardPasteTarget(
+            rows, _localizationReviewViewRows, _selectedReviewRow, orderedCultures, _selectedReviewCulture);
+        if (_session.ApplyClipboardMatrix(target.destinationRows, target.destinationCultures, text.value()))
         {
             RebuildTranslationView(true);
             SyncExportPreviews();

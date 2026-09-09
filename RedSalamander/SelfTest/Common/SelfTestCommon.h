@@ -3,12 +3,11 @@
 // SelfTestCommon - debug-only self-test infrastructure shared by all suites.
 //
 // Artifacts are written to:
-//   %LOCALAPPDATA%\RedSalamander\SelfTest\last_run\   (current run)
-//   %LOCALAPPDATA%\RedSalamander\SelfTest\previous_run\  (previous run, kept for diffing)
+//   X:\RedSalamander.Perf\runs\<run-id>\artifacts\selftest\last_run\
+//   where X: is the selected fixed local drive.
 //
-// When running selftests from a developer checkout, the harness also attempts to archive the
-// key artifacts into the repo under:
-//   Specs\TestRuns\<ComputerHashName>\<Area>\yyyy-MM-dd_HHmmss\
+// Each run may create a compact archive beneath its own artifacts directory. Promotion to
+// Specs\TestRuns is an explicit tooling action and never a self-test side effect.
 // so runs can be compared over time without relying on external scripts.
 //
 // Everything in this header is compiled only when ENABLE_TESTS is defined. Release builds without
@@ -61,6 +60,9 @@ struct SelfTestOptions
     // When set, run the exact matching case name (case-insensitive), every case with that
     // case-insensitive prefix when the filter ends in '_', or an exact comma-separated case list.
     std::wstring caseFilter;
+    // Optional Commands source-family selector. This is orthogonal to caseFilter: the family
+    // establishes the process-level membership boundary and caseFilter may narrow within it.
+    std::wstring commandsFamily;
     // Run every matched case this many times in-process. One is the normal single-pass mode.
     uint32_t repeatCount = 1;
     // One-based repeat attempt for explicit case-order dispatchers.
@@ -415,6 +417,8 @@ void SetRunStartedUtcIso(std::wstring_view startedUtcIso) noexcept;
 std::wstring_view GetRunStartedUtcIso() noexcept;
 
 bool EnsureDirectory(const std::filesystem::path& path) noexcept;
+// Removes a self-test tree without traversing directory reparse points and clears read-only
+// attributes only on entries being deleted.
 bool RemoveAll(const std::filesystem::path& path) noexcept;
 [[nodiscard]] bool WriteBinaryFile(const std::filesystem::path& path, std::span<const std::byte> bytes) noexcept;
 [[nodiscard]] bool WriteTextFile(const std::filesystem::path& path, std::wstring_view text);
@@ -431,8 +435,12 @@ bool RemoveAll(const std::filesystem::path& path) noexcept;
 [[nodiscard]] uint64_t StableDeviceHash(std::wstring_view value) noexcept;
 [[nodiscard]] std::optional<uint64_t> ExtractJsonUInt(std::string_view json, std::string_view key) noexcept;
 
-// Load and pin the configured MTP plugin while resolving a debug self-test export. The caller may
-// retain the module when the returned object is implemented by the plugin.
+// Load and pin a configured plugin while resolving a debug self-test export. The caller may retain
+// the module when the returned object is implemented by the plugin.
+[[nodiscard]] HRESULT LoadPluginSelfTestExport(std::wstring_view pluginId,
+                                               std::string_view exportName,
+                                               wil::unique_hmodule& module,
+                                               FARPROC& exportAddress) noexcept;
 [[nodiscard]] HRESULT LoadMtpPluginSelfTestExport(std::string_view exportName,
                                                   wil::unique_hmodule& module,
                                                   FARPROC& exportAddress) noexcept;
@@ -485,10 +493,9 @@ void WriteSuiteJson(const SelfTestSuiteResult& result, const std::filesystem::pa
 void WriteRunJson(const SelfTestRunResult& result, const std::filesystem::path& path);
 void MarkInFlightSelfTestCaseCrashed(SelfTestRunResult& runResult, std::wstring_view reason) noexcept;
 
-// Copies the meaningful artifacts from %LOCALAPPDATA%\RedSalamander\SelfTest\last_run\
-// into the repo under Specs\TestRuns\<ComputerHashName>\<Area>\yyyy-MM-dd_HHmmss\.
-// Fresh run/suite JSON is written directly from the current in-memory result when available.
-// If the repo root cannot be found (e.g. installed build), this is a no-op.
+// Copies meaningful artifacts into a compact archive inside the selected
+// RedSalamander.Perf run. Fresh run/suite JSON is written directly from the
+// current in-memory result when available.
 void TryArchiveLastRunToRepo(std::wstring_view area, int exitCode, uint64_t durationMs, const SelfTestRunResult* runResult = nullptr) noexcept;
 
 } // namespace SelfTest

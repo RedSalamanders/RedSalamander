@@ -1,140 +1,325 @@
 # Cross-File-System Bridge Specification
 
-## Overview
+## Purpose
 
-The cross-file-system bridge is the host-side engine that copies or moves data between two **different** `IFileSystem` plugin instances (e.g. local disk ↔ S3, 7z archive → local, FTP ↔ OneDrive). A plugin's native `CopyItem`/`MoveItem` can only operate inside its own backend; when source and destination live in different plugins (or different connection contexts of the same plugin), no single plugin can perform the transfer. The bridge fills that gap: the host pumps file bytes itself through the `IFileReader`/`IFileWriter` streaming contract (`Common/PlugInterfaces/FileSystem.h`), staging each file to a temporary destination name and promoting it only after the byte count checks out.
+The bridge streams a qualified source object into a qualified destination when no tested native
+provider strategy can fulfill the request. It implements Copy, managed Move, or Copy-only according
+to the path-scoped capability-v2 and binding contract in
+`Specs/Plugins/Plugins_VirtualFileSystem.md`.
 
-**Design goals:**
-- No partial or corrupt file is ever visible at the final destination path (staged temp + rename-promote).
-- Cross-FS MOVE never deletes a source file unless the destination copy has been re-verified.
-- Backend-agnostic: the bridge depends only on `IFileSystemIO` (`CreateFileReader`/`CreateFileWriter`), `GetTransferHints`, and the regular `IFileSystem` operations (`MoveItem` for promote, `DeleteItem` for cleanup, `ReadDirectoryInfo` for tree walks).
-- Adaptive throughput: buffer size from plugin transfer hints, double-buffered pipelining for large files, per-connection concurrency budgets, live bandwidth limiting.
+The bridge never follows a link, treats a hash as identity, or performs pathname source cleanup.
 
-Implementation lives in `RedSalamander/FolderWindow.FileOperations.State.cpp` (`CrossFileSystemBridge`, ~:6794-9279). This document describes the code as it is.
+## Admission
 
-## When the Bridge Engages
+Both endpoints must return valid `IFileSystemPathCapabilities2` documents for the concrete paths
+and operation. Copy requires a readable source and writable destination with compatible transfer
+policy. Managed Move additionally requires:
 
-Two gates, both of which MUST pass:
+- no-follow `IFileSystemObjectBinding` for the source;
+- exact object/revision snapshot and a reader opened from that bound object;
+- destination exclusive stage ownership and conditional publication, or (R3-2) a destination
+  route advertising `FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST` whose atomic-final writer stages
+  privately, publishes conditionally, and proves the published content;
+- exact source `DeleteIfUnchanged`;
+- every required consent and requested verification.
 
-1. **UI-time capability gate** (`CanCrossFileSystemCopyMove`, `FolderWindow.FileOperations.cpp:287`). When the two panes differ in plugin id **or** instance context, a COPY/MOVE is only offered if:
-   - Both plugins publish valid `GetCapabilities` JSON (v1 with all four sections `operations`/`concurrency`/`crossFileSystem`/`pathIdentity`; any violation is **fail-closed** — the operation is disabled).
-   - Source has `operations.read`, destination has `operations.write`; MOVE additionally requires source `operations.delete`.
-   - The source's `crossFileSystem.export.copy|move` id list allows the destination plugin AND the destination's `crossFileSystem.import.copy|move` list allows the source plugin (`*` wildcard supported).
-2. **Task-time switch** (`State.cpp:6459`): `useCrossFileSystemBridge = (_destinationFileSystem != nullptr) && (COPY || MOVE)`. The command handler passes a destination file system only when contexts differ. Both sides MUST answer the `IFileSystemIO` QI, otherwise the task fails with `ERROR_NOT_SUPPORTED`.
+If any destructive prerequisite is absent, the bridge selects Copy-only before source cleanup and
+reports `Copied; source kept`.
 
-When the gate does not fire, the host delegates to the source plugin's native `CopyItem`/`MoveItem`. The bridge only runs in `ExecutionMode::PerItem`; there is no batch (`CopyItems`) bridge path — each top-level item gets its own `CrossFileSystemBridge` instance and `CopyPath` call.
+Strategy admission and per-item cleanup are separate safety gates. Admission may select Managed
+only when the concrete Move pair, Copy pair, capability claims, and the source binding interface
+are present, together with either the destination binding interface or the writer proof route
+(R3-2; on that route only regular files carry a proof, so links and directories retain their
+source per item). Each item then binds its exact source no-follow with read and delete authority. Local
+Managed Move retains that handle with read-only sharing so a concurrent writer, rename, or delete
+cannot enter between the bound read and conditional cleanup. If this per-item authority cannot be
+acquired, the item is copied through the already-qualified Copy route and the source is retained.
+The downgrade is terminal and does not re-enter admission or try an unbound Delete.
 
-Note: not every plugin participates. GoogleDrive does not implement `IFileSystemIO` at all and declares empty `crossFileSystem` lists (bridge fully disabled both directions). 7z is export-copy only (read-only backend, `CreateFileWriter` returns `ERROR_NOT_SUPPORTED`). MicrosoftDrive allows cross-FS copy but not move.
+For Local Move, equal volume-qualified endpoints are necessary but not sufficient for Native.
+Admission probes only the selected top-level shape. Regular files may use same-volume Native;
+directories and link objects use Managed because Local does not claim Native semantic-link
+equivalence. A regular directory targeting an existing regular directory remains Managed folder
+merge so child collisions stay owned by the central conflict engine. No recursive qualification
+walk is permitted.
 
-## Data Flow — One File
+## One-file flow
 
-`CopyFileWithBuffer` runs this sequence per file:
+1. Bind the source no-follow and validate a regular-file/object kind.
+2. Bind/classify the destination root, ancestors, and existing final object no-follow.
+3. Create a cryptographically unpredictable sibling stage exclusively and retain the returned
+   ownership token.
+4. Open the source reader from the binding and stream into the stage writer with bounded buffers.
+5. Reject provider success with null outputs, oversized read/write counts, early EOF, byte-count
+   mismatch, failed Commit, or unknown stage outcome.
+6. Publish through the stage token. Absence requires `expectedDestination == nullptr`; replacement
+   requires the exact rebound destination token.
+7. If verification was selected, verify the exact published object with BLAKE3 or an equivalent
+   bound provider proof; on a route without object binding whose writer proves content
+   (`IFileWriterContentProof`, R3-2), compare the digest the provider reports for the published
+   object with the streamed bytes.
+8. Apply metadata and any required deferred-consent decision.
+9. For managed Move only, call `DeleteIfUnchanged` on the same exact bound source retained from the
+   read. That provider boundary performs the identity/revision revalidation and mutation; the host
+   does not first reopen or compare the source pathname. A known non-commit retains the source and
+   reports `Copied; source kept`; changed or otherwise unavailable proof also retains it. Unknown
+   mutation outcome is indeterminate and is not retried.
 
-```
-  1 acquire per-connection copy/move permits (both endpoints, ascending-id order)
-  2 destination overwrite policy check (prompt BEFORE any bytes move)
-  3 CreateFileReader(source); snapshot source basic information (best effort)
-  4 reader->GetSize(); failure is fatal (ERROR_PARTIAL_COPY, nothing written)
-  5 query destination IFileSystemAtomicWriter for this exact final path
-  6 create either a staged sibling writer or an explicitly atomic final-path writer
-  7 if the writer exposes IFileWriterExpectedSize, provide the source size before Write
-  8 pump bytes while computing the copy-time FNV-1a hash
-  9 require written bytes == source size; Commit; promote staged output when applicable
- 10 re-open final destination and require its size == source size for COPY and MOVE
- 11 COPY: hash final destination and require it to match; mismatch deletes the bad final
- 12 SetFileBasicInformation (best effort); record size/hash/source snapshot in the manifest
-```
+One transaction record (R3-3). The bridge keeps every fact of this flow for a regular file in one
+`PublicationTransaction` record (admission grants and expectations, the source authority and
+metadata snapshot, the Move cleanup record, the reader and the sizes the transfer is held to, the
+writer route, the stage and writer handles with their proofs, the pump counters, and the
+post-commit proofs) with an explicit state: `Admitted`, `SourceBound`, `Staged`, `Written`,
+`Committed`, `Published`, `Verified`. The flow runs as ten phase methods on that record
+(`AdmitDestination`, `BindSource`, `RouteWriter`, `PrepareStage`, `TransferPreContentMetadata`,
+`Pump`, `CommitAndProve`, `Publish`, `VerifyPublished`, `FinishCleanup`); each early return is the
+status the item reports, and the receipt (publication, verification, source disposition, failure
+phase) follows from the state reached. The three payloads share the one owner of the exact
+`PublishAs` outcome (`PublishOwnedStageAs`): the file payload publishes its owned stage, the link
+payload records a partial post-publication cleanup as a stage-commit failure, and the directory
+payload publishes without payload diagnostics. Provider-native atomic operations (Native Move,
+provider copy) stay adapters outside this record.
 
-The bridge never infers atomic-final behavior from staging-name syntax. `IFileSystemAtomicWriter::SupportsAtomicWriterCommit` is the only opt-in; otherwise the writer receives a CSPRNG-named sibling and the destination plugin's `MoveItem` promotes it. S3 opts in because multipart completion is its atomic publication point.
+The bound source plus retry count forms one item-sized cleanup record. A retryable known non-commit
+enters the shared conflict surface. `Retry` calls only `DeleteIfUnchanged` again while retaining the
+same authority; it never repeats stage creation, transfer, publication, verification, or metadata.
+`Skip` makes source retention terminal. Cancel releases the record without another delete. The
+record is released only after Removed, retained-source Skip, Cancel, or indeterminate/contract-fail
+classification, so an outer item retry cannot lose or accidentally reconstruct its authority.
+Sharing, access denied, path too long, and disk full are source-cleanup buckets. Each permits at most
+one Retry of `DeleteIfUnchanged`; Skip retains the source. Destination metadata is not consulted to
+classify those post-publication failures.
 
-**Serial pump:** loop of `Read(buffer, bufferBytes)` → inner write loop that tolerates short writes (`Write` returning 0 bytes → `ERROR_WRITE_FAULT`); `Read` returning 0 bytes is EOF. Short reads are valid. Successful provider counts are untrusted: `bytesRead > bytesToRead` or `bytesWritten > bytesToWrite` fails with `ERROR_INVALID_DATA` before counters, hashes, or buffer offsets consume the value.
+There is no mandatory destination reread and no mandatory digest when verification is off.
+Verification is independent of delete authority. Publication or cleanup with unknown outcome is
+not retried until reconciliation proves identity.
 
-**Pipelined pump:** selected when `fileTotalBytes > bufferBytes`. Exactly two buffer slots; one `std::jthread` reader fills slots round-robin, the calling thread drains them as the writer, synchronized by one mutex + one condition variable. Allocation/thread-start failure degrades to the serial pump. A writer-side stop sets the pipeline stop flag, wakes task pause waiters and the pipeline condition variable, and then joins, so a reader parked in the host pause gate cannot strand shutdown.
+Verify On deliberately routes every non-Native copied regular payload through this exact-authority
+bridge, including same-endpoint Local Copy that would otherwise call provider `CopyItem`. This is one
+semantic engine cutover, not a provider copy followed by a pathname hash: publication, link policy,
+metadata, typed conflict callbacks, and proof/readback all remain attached to the returned authority.
 
-Both pumps poll cancellation and pause per chunk, update atomic task-wide counters with overflow checks, and apply bandwidth delays outside the throttle-state mutex. Progress cadence is resolved from transfer hints (200 ms minimum). Progress callbacks are serialized and round-trip `FileSystemOptions`; a failed callback aborts the copy.
+When verification is requested, the source digest is updated from the same ordered bytes accepted
+by the stage writer. After publication the bridge first queries the returned exact authority for
+`IFileSystemBoundContentProof`; a valid BLAKE3/size proof completes verification without an extra
+destination read. Otherwise an advertised host-readback route opens the exact bound publication and
+streams BLAKE3 through the same bounded buffer, pause/cancel checkpoints, and task bandwidth
+limiter. It never reopens the destination pathname. Digest mismatch is `Failed`; no usable exact
+proof/readback is `Unavailable`; cancellation is `Canceled`. All three release the cleanup record
+source-retained and prohibit `DeleteIfUnchanged`. They do not recopy the item or enter an ordinary
+Exists/Retry conflict.
 
-## Directory Trees
+Writer proof (R3-2). A destination route that advertises `FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST`
+binds no published object; its atomic-final writer instead reports the digest the service holds for
+the object it published. Before the first byte the bridge asks the writer which digests it can
+prove (`GetContentProofAlgorithms`) and hashes the streamed bytes with each of them alongside the
+BLAKE3 source digest; after a successful Commit it asks for the proof (`GetCommittedContentProof`)
+and compares size and digest. That comparison is the item's verification result when verification
+was requested, and it is the content proof Managed Move requires on such a route: the cleanup
+record stays armed through publication, a matching proof allows `DeleteIfUnchanged` on the bound
+source, and a missing or different proof retains the source (`Copied; source kept`). The writer
+proof never substitutes for bound authority in conflict decisions: overwrite on those routes stays
+the R3-1 conditional replacement, and nothing is deleted by name.
 
-`CopyPath` (`:9214`) dispatches per top-level item:
+The bridge reserves one verification transfer lane per task. Discovery-ahead may continue, but the
+next file's reader/writer pump and publication cannot overlap the current file's provider proof or
+host readback. Directory workers and top-level item scheduling both obey this bound; verification
+progress is therefore sequential with transfer even when ordinary Copy concurrency is greater than
+one.
 
-- Root and child reparse points, including reparse-point files, honor `ReparsePointPolicy`: Skip records/skips the entry, FollowTargets dereferences it, and CopyReparse records `ERROR_NOT_SUPPORTED`. The bridge never silently materializes a reparse target under Skip/CopyReparse.
-- Every source-supplied child component is validated before any source or destination path join. Empty names, `.`, `..`, separators, embedded NUL/C0/DEL, duplicates, and destination-invalid components are rejected per item. Windows-style destinations additionally reject `:*?"<>|`, trailing dot/space, DOS device names, components over 255 UTF-16 code units, and case-insensitive sibling collisions. Invalid entries produce `ERROR_INVALID_NAME`; valid siblings may continue and the directory result becomes `ERROR_PARTIAL_COPY`.
-- Directories go through `EnsureDestinationDirectory` (`:7232`; 3-attempt probe/create loop, dest-is-file collision prompts then deletes) and then either:
-  - **Sequential** (`CopyDirectorySequential` :8649): one `ReadDirectoryInfo` enumeration, direct recursion per subdirectory. An empty directory — plugin returns `(nullptr, S_OK)` — is success.
-  - **Parallel** (`CopyDirectoryParallel` :8807): the calling thread produces work items from an explicit stack (creating directories itself), files flow through an admission queue capped at 16 entries with condition-variable backpressure; workers from the process-wide `PerItemTaskScheduler` each allocate a private `bufferBytes` buffer and run `CopyFileWithBuffer`. Chosen when `ComputeWithinFolderBudget()` (task budget divided by active top-level items) exceeds 1.
-- `FILESYSTEM_FLAG_CONTINUE_ON_ERROR` makes child failures non-fatal; the tree then finishes with `ERROR_PARTIAL_COPY`. Any per-file conflict Skip also makes the item result `ERROR_PARTIAL_COPY`.
-- For endpoints advertising `FILESYSTEM_TRANSFER_HINT_HIGH_METADATA_COST`, the host suppresses the separate pre-calculation traversal. The copy walk remains authoritative; COPY lists each source directory once and MOVE lists it once for copy plus once for cleanup.
+An opaque provider proof advances logical verification progress once for the proven content size and
+is charged to the task bandwidth limiter as one completed unit after the provider returns. It does
+not fabricate host-readback bytes, read calls, a verification graph sample, or a readback rate. Exact
+host readback is charged incrementally per buffer and is the only source of the verification graph
+series.
 
-## Buffering & Adaptive Sizing
+## Directory traversal
 
-- Setting: `fileOperations.crossFsBridgeBufferSizeKB`, default 4096 KB, clamped 512–16384 KB at load (`Common/SettingsStore.cpp:3307`), snapshotted into the task at start (`FolderWindow.FileOperations.State.Runtime.cpp`).
-- Provider hints remain active even when the user changed the configured buffer setting. The source and destination are queried for `FileSystemTransferHints`; the maximum nonzero preferred buffer is clamped to 512 KiB–16 MiB and wins. Without an explicit buffer hint, WAN latency or `PREFERS_LARGE_BUFFERS` raises the configured fallback to at least 8 MiB.
-- The bridge merges the maximum latency class, ORs flags, and uses the maximum requested progress period. `HIGH_METADATA_COST` also controls pre-calculation as described above.
-- The resolved tuning is frozen for the task and emitted in perf details; there is no mid-flight retune. Curl advertises 1 MiB to match its ring; local/7z/cloud providers retain provider-appropriate hints.
-- Host bridge-buffer reservations are governed by one cancellation-aware process-wide 256 MiB budget. Each pipelined file reserves two buffers; directory workers release idle primary reservations and acquire their own. Provider-internal buffers are separate from this host budget, but the S3 multipart writer has its own process-wide four-part/256 MiB admission budget. Therefore the bridge plus S3 writer buffers have a documented combined ceiling of 512 MiB, excluding SDK/HTTP implementation overhead.
+The bridge uses the single-pass discovery scheduler from
+`Specs/FileSystem/FileSystem_FileOperations.md`.
 
-## Integrity Guarantees & MOVE Semantics
+- There is no separate pre-calculation traversal or Calculating phase.
+- Discovery-ahead and execution share one bounded queue.
+- Skip discovery stops ahead-work and releases its reservation; just-in-time safety discovery
+  remains mandatory.
+- Directory-on-directory merges. Conflicts are raised for colliding children.
+- Recursive Move deletes each proven source file after its own destination contract, then removes
+  directories non-recursively and deepest-first.
+- A new/changed, skipped, or retained source descendant blocks parent removal without opening a
+  second cleanup prompt. That retention propagates through only the affected ancestor chain.
+- Directory metadata retains only O(depth) state. Metadata is restored post-order only for a
+  destination directory created or replaced by the current operation; a pre-existing merge target
+  keeps its own metadata.
+- `Common/FileOperationTraversalPolicy.h` is shared with the Local provider for the quantitative
+  ceilings plus queue-target and worker-reservation calculations; bridge queue/error/I/O ownership
+  remains local to the host.
+- The bridge walkers (sequential, parallel producer, and link traversal) keep their directory
+  frames on an explicit stack, not on the C++ stack: a frame holds one directory's enumeration,
+  child cursor, retained-byte accounting, created-directory metadata, and Managed cleanup record,
+  and pops post-order with exactly the metadata restore and cleanup decision the recursive walker
+  performed (R4-T1). Depth is therefore reported (`bridge.traversal.*` counters), not terminal,
+  and so is each open directory's retained listing (the provider's `IFilesInformation` buffer plus
+  the frame's index of child-name views, released when the frame pops; R4-T3). Retained memory is
+  therefore proportional to the widest listing on the currently open path, not to the tree, and is
+  no longer capped by a fixed budget: a duplicate child
+  name, or a case-only variant when the destination folds case, is still refused per directory,
+  but no aggregate metadata budget stops a large directory. The hard ceilings that remain are
+  4,096 retained work entries and 16 MiB retained UTF-16 queued-path text over the task-lifetime
+  parallel work queue. Reaching one of those stops discovery for the task even under Continue on error, emits the
+  exact limit diagnostic, and leaves prior completed publications intact. The self-test depth override
+  (`SetFileOpsBridgeTraversalDepthLimitForSelfTest`) is the only way `bridge.traversal.depthLimit`
+  is still produced. The Local provider's permanent-delete walk keeps its frames on an explicit
+  stack as well (R4-T2); only its native copy walkers, reachable through the provider's own
+  `CopyItem`, keep a depth ceiling.
 
-**Guaranteed by the host for all backends:**
-- A source whose size cannot be read is never copied (fatal pre-check).
-- The writer sees the source size before its first write when it exposes `IFileWriterExpectedSize`. This lets cloud writers stream without whole-file local spooling while preserving ABI compatibility for older writers.
-- The final destination is accepted only after exact pump byte count, successful `Commit`, and a fresh final-path size check. COPY additionally re-hashes the final destination against the FNV-1a accumulated while bytes were copied. A bad COPY final is best-effort deleted and the item fails `ERROR_PARTIAL_COPY`.
-- Overwrite/replace-readonly grants are stripped from ordinary temp writers and re-applied at promote. An explicitly atomic final writer receives only the grants established by the same pre-transfer conflict decision.
-- MOVE source deletion remains a separate pass after the whole tree copied. COPY never records this cleanup manifest. A file is deleted only when it can be extracted from the MOVE manifest, the source basic-info snapshot still matches, destination size matches, and a destination-only hash matches the copy-time hash. Each manifest node is erased before its cleanup decision continues, so retained proof memory decreases through the cleanup walk and reaches zero even when a changed source shell is preserved. The cleanup phase does not reopen and re-read the source. Directories are removed only after verified children; changing only a source root's basic information preserves that root shell, deletes still-matching copied children, and yields `ERROR_PARTIAL_COPY`.
-- The native local plugin takes the strong-consistency branch permitted by the MOVE contract. A successful `CopyFileEx` (or completed staged `CopyFile`) is the byte-copy proof; the plugin records no-follow source and destination snapshots, requires the source snapshot to remain stable across the copy, and revalidates both snapshots before deletion. It performs no post-copy content reread. The existing-destination resume path is the exceptional case: because this invocation did not copy the bytes, it hashes both files once before accepting them as identical.
+Links are handled as objects. Skip records the link outcome without opening its target. Preserve
+binds and classifies the source no-follow, calls `ReadBoundLink` on that exact authority, creates a
+cryptographically named link stage through `CreateExclusiveLink`, and publishes only through that
+owned stage's `PublishAs`. Provider success with a null link token or a published non-Link snapshot
+is a contract violation. The bridge never materializes, hydrates, or mutates a target object. For
+Managed Move, `DeleteIfUnchanged` on the retained link authority becomes reachable only after
+successful publication; any unsupported/changed/indeterminate publication reports source-kept.
 
-**Backend-dependent (NOT guaranteed by the host):**
+Preserve is literal (see the File Operations spec's link policy): the payload is the stored target
+text, kind, and relative flag, and the provider reports it as outside-root with no source-relative
+component; any other mapping is a provider-contract failure. Each link publishes in provider order
+as soon as it is read, under both the sequential walk and parallel directory traversal. The bridge
+keeps no sparse component map, failed-prefix records, deferred link queue, dependency
+classification, or held directory cleanups, and it never builds a complete source tree, target
+graph, or pathname cleanup manifest. A link into the moved tree therefore keeps naming the source
+location; the spec states that consequence and the engine does not repair it.
 
-| Backend | Reader short reads | GetSize freshness | Abort-safety of writer | Notes |
-|---|---|---|---|---|
-| Local (Win32) | only at EOF | open-time (file opened share-write/delete) | SAFE — own temp-sibling staging + `FlushFileBuffers` on Commit | durable commit |
-| 7z | routine (streaming modes) | archive-index-time | n/a (read-only) | decode/CRC failures are terminal and remain latched across reads/seeks |
-| Curl (FTP/SFTP/HTTP) | fills up to the 1 MiB ring or EOF | targeted SIZE/stat probe, otherwise unknown/fatal | final path protected by host staging | unknown size is never fabricated as zero; post-replace backup cleanup is warning-only |
-| S3 | fills requests; exact range and `Content-Range` required | HEAD snapshot, or ranged-GET total when HEAD is denied; pinned by versionId or ETag | SAFE — multipart completion publishes atomically; abort on release | async one-part overlap; final-key atomic writer removes bridge CopyObject promotion |
-| MicrosoftDrive | fills requested range up to 16 MiB | metadata snapshot pinned by ETag | SAFE — expected-size upload session streams during Write | cross-FS move disabled; no whole-file `%TEMP%` spool for known nonempty sizes |
-| GoogleDrive | — | — | — | no `IFileSystemIO`; bridge disabled |
-| Dummy | never short | exact | SAFE (RAM) | test backend |
+The sequential walker validates one provider directory buffer, then keeps only that active
+directory's bounded entry/name views plus its O(depth) ancestor frames.
 
-S3 and MicrosoftDrive range requests pin the object revision; a same-size concurrent replacement fails closed instead of producing a torn stream. Timestamps are copied best-effort (`SetFileBasicInformation`, warning-only). Reparse payloads, ACLs, alternate data streams, and extended attributes are never transferred.
+## Buffering and scheduling
 
-## Failure Handling & Cleanup
+- Active admitted file pumps: at most 16; queued/active work is also charged to the traversal entry
+  and path-text ceilings until its terminal item result releases the reservation.
+- Aggregate host pump buffers: at most 256 MiB.
+- Buffer size is clamped from both endpoint hints and measured provider behavior.
+- A scheduling checkpoint occurs at no more than 4 MiB or 50 ms.
+- Enumeration shares provider concurrency but not byte-bandwidth accounting.
+- Verification bytes consume the configured bandwidth limit and are reported separately from pump
+  throughput.
+- Pause, Cancel, deadline, and live bandwidth changes are observed at checkpoints.
 
-- A `wil::scope_exit` armed when a staged writer is created deletes its temp on every pre-promote failure. An atomic-final writer has no host temp. A COPY that fails final size/hash verification best-effort deletes the bad final. Cleanup failure is diagnostic and cannot rewrite the already-determined transfer status.
-- Cancellation (`task._cancelled` or jthread stop token) is polled per chunk in both pumps, in throttle sleeps, in condition-variable predicates, and by the progress callback. Cancel mid-file → temp deleted, source untouched. Cancel mid-MOVE-cleanup after some deletes is logged (`bridge.move.cleanup.cancelled`); already-verified-and-deleted sources stay deleted.
-- Transient MOVE-cleanup probe errors (sharing violation, busy, timeout, network) are retried 3× with backoff.
-- A circuit breaker wraps whole top-level bridge calls (never chunks), keyed by connection-profile GUIDs. Its transient vocabulary includes the HRESULTs actually emitted by Curl/S3/network providers (`ERROR_TIMEOUT`, `ERROR_SEM_TIMEOUT`, connection abort/refusal, `ERROR_BAD_NET_RESP`, `ERROR_UNEXP_NET_ERR`, and related network failures). Cancellation/auth failures do not count; local disk is exempt.
+Current numeric queue targets are perf parameters, not Preferences or ABI. Tuning must preserve
+boundedness, non-starvation, and immediate Skip-discovery release.
 
-## Concurrency Model
+The FBP-10 architecture decision is to retain the current overlapped bridge pipeline: a disabled-
+pipeline baseline and enabled-pipeline candidate must be measured in the same test-enabled Release
+process on the same machine before changing its worker or buffer shape. The accepted 2026-08-27
+evidence used four 32-MiB Dummy files with 30-ms chunk latency and an 8-MiB resolved buffer; the
+disabled baseline completed in 130.484 seconds and the enabled candidate in 0.250 seconds. Therefore
+no additional thread layer, per-file buffer owner, or larger aggregate budget is authorized. Future
+tuning must preserve the 16-pump/256-MiB ceilings, checkpoint cancellation, discovery non-starvation,
+and correctness while demonstrating a lower measured cost without a throughput regression.
 
-- One `std::jthread` per task; per-item fan-out via the process-wide `PerItemTaskScheduler` (≤16 workers, round-robin fairness across tasks). When a scheduler worker waits for a nested job, it helps execute that target job; saturating all workers with directory producers cannot deadlock nested file work.
-- Bridge parallelism budget = `min(source budget, destination budget)`, each derived from the plugin's capabilities JSON (`concurrency.copyMoveMax`) or, in Auto mode, from `GetStorageCharacteristics().preferredCopyMoveConcurrency`; capped at 16 and further clamped by per-connection-profile overrides.
-- Per-connection copy/move semaphore permits (`ConnectionConcurrencyLimiter`) bound concurrent transfers per profile across all tasks; dual-connection transfers acquire permits in ascending connection-id order to avoid deadlock.
-- Within one file, at most two threads touch data (pipelined reader + calling-thread writer), never the same stream concurrently. Shared perf counters are atomic. Progress callbacks and `FileSystemOptions` snapshots use the callback mutex; parallel workers use stable stream IDs.
-- Conflict prompts are serialized: one prompt per task, other workers wait in `WaitWhilePaused`; cacheable actions use the `All similar` toggle, and skip-all behavior is represented only by `Skip` plus that toggle. The first producer/worker failure is published before stop and is preferred over synthetic `ERROR_CANCELLED` unless cancellation was actually requested.
+## Conflict and cleanup
 
-## Test Hooks (`ENABLE_TESTS` builds only; absent from production)
+Stage creation is exclusive. Overwrite/replace-read-only consent applies only to final conditional
+publication and never authorizes a stage pathname. Keep Both is finalized by create-exclusive
+publication. Collision classification reads source and destination metadata no-follow before the
+prompt. Folder-on-folder merges recurse and prompt only on colliding children; file/directory kind
+mismatches never gain Overwrite. An exact final destination link is a typed Replace link / Keep
+Both / Skip conflict, while any linked destination ancestor remains a hard stop.
 
-- The Causeway bridge I/O decorator can independently inject source over-report, premature EOF, writer under-consumption/over-report, destination size faults, and file-reparse metadata. Successful read/write counts remain pass-through by default.
-- Hostile source enumeration injects separators, traversal, embedded NUL/control, ADS syntax, DOS device names, and case collisions while retaining a valid sibling.
-- `FailNextBridgeFileCopyForSelfTest` injects inside the shared `CopyFileWithBuffer` worker path so both sequential and parallel failure propagation are covered.
-- `SetFileOpsBridgePipelineModeForSelfTest` forces the pipelined pump on/off.
-- Pause points cover MOVE cleanup, MOVE-manifest extraction, and writer-failure/paused-reader shutdown; all hooks have bounded bailout. MOVE manifest peak/current counters support deterministic shrink-to-zero assertions, and runtime perf rows emit peak and remaining entry counts.
-- Env-var-driven destination mutators: create a file at a pending destination-directory path (CreateDirectory race), or rewrite a promoted destination before MOVE cleanup (corruption-detection tests).
-- Scheduler saturation, buffer-budget peak, high-metadata enumeration counts, normalized transient HRESULTs, and transfer-hint resolution are observable deterministically.
-- Provider-local debug tests cover MicrosoftDrive range/request-count and streaming upload, S3 version pinning/async multipart/atomic capability, Curl unknown-size/read-fill/EOF-tail/cleanup semantics, and 7z persistent corrupt-entry failure.
-- Coverage lives in `RedSalamander/SelfTest/FileOperations/` (Causeway/Fairstream/Phase 11 families) plus `PluginContractTests`. New cases MUST be registered in `kFileOpsFamilyDefinitions` or Full-suite runs skip them silently.
+Before a destructive collision action is exposed, the host binds the current final destination
+no-follow and retains that exact authority across the prompt. Overwrite, Replace read-only, and
+Replace link return it with the decision; the provider consumes it once through `PublishAs` or
+`RenameIfUnchanged`. If the provider cannot bind that authority, Replace link is withheld, and
+Overwrite/Replace read-only are offered only when the destination's atomic-final writer accepts
+the overwrite flag (R3-1): the bridge reads the occupant no-follow before the prompt, creates the
+writer with the granted flags, passes that occupant through `IFileWriterExpectedReplacement`
+before the first byte, and the provider replaces only that occupant (`ERROR_REVISION_MISMATCH`
+otherwise, nothing published). A route that can do neither withholds every destructive action.
+Replacing a directory link uses an atomically created, identity-owned directory stage;
+the resulting receipt never becomes a recursive overwrite grant. Metadata restoration targets the
+published bound object and has no pathname fallback.
 
-## Known Limitations
+An operation-wide compatibility overwrite flag is not a destination receipt. When the final name is
+absent, both Local and cross-provider publication remain create-exclusive and retain the newly
+published authority; the flag cannot force the replacement path or require a nonexistent bound
+destination. When exact published authority is unavailable, metadata restoration is skipped with a
+typed authority-unavailable diagnostic. Copy keeps the provider defaults; managed Move applies the
+metadata/source-retention gate before exact source cleanup.
 
-- Reparse points cannot be copied cross-FS (Skip or FollowTargets only).
-- Metadata transfer is timestamps/attributes best-effort only; no ACLs, ADS, or sparse/compressed semantics.
-- `GetSize` remains mandatory. Curl tries a targeted SIZE/stat probe; a genuinely sizeless source still fails closed rather than streaming to an unverifiable final.
-- Files not larger than one buffer (default 4 MiB) always use the serial pump.
-- Bridge COPY destination hashing adds one destination read pass. Bridge MOVE cleanup adds one destination hash pass but never re-reads the source. Native local cross-volume MOVE normally adds zero content-read passes after `CopyFileEx` because stable source/destination snapshots are its strong-consistency proof.
-- Host pump buffers are capped at 256 MiB process-wide. S3 multipart payload buffers are independently capped at 256 MiB process-wide, for a 512 MiB combined application-owned transfer-buffer ceiling; provider SDK/HTTP internals are outside this accounting.
+Keep Both belongs to the reported collision depth. The bridge chooses the sibling path in the
+colliding item's parent and records only that changed component in the sparse semantic-link map.
+It never retries a nested collision by renaming the selected top-level directory. Apply-to-all is
+an explicit exact-scope grant; plain Skip is one-shot and Skip All is unavailable for Recycle or
+unresolved semantic-link target retention.
 
-## Security Posture
+Cleanup may call `AbortOwnedObject` only for the exact stage token returned by exclusive creation.
+A name pattern such as `.rs_tmp_` is never cleanup authority. Publication failure, cancellation,
+or provider uncertainty preserves any object whose ownership/outcome cannot be proven and reports
+an artifact/result axis.
 
-The host is the trust boundary between remote/plugin namespaces and the destination filesystem. It validates every length-delimited child component before path construction, distrusts provider byte counts, pins cloud object revisions, verifies final COPY content, and preserves MOVE sources unless the destination-only proof matches the copy-time hash. These checks are host obligations and do not depend on third-party plugins sanitizing names or reporting well-formed counts.
+The current bridge chooses exactly one publication route per file: a provider-confirmed atomic
+final writer, or an identity-owned exclusive stage. Absence of both fails before source bytes are
+read. The atomic-final route carries a granted replacement only together with the occupant
+expectation (R3-1); a writer that cannot carry it fails the item before any byte is read
+(`bridge.replace.expectationUnavailable`), and a refused replacement is reported as
+`bridge.replace.occupantChanged` with nothing published; the bridge then re-raises the collision on
+the current occupant, at most twice per item, before `ERROR_REVISION_MISMATCH` reaches the item
+executor's ordinary retryable conflict (Retry, Skip, Cancel). The identity-owned route binds an existing destination no-follow after overwrite consent,
+commits the stage, calls `PublishAs` with that exact expected destination, validates the returned
+known/committed state and non-null published authority, and performs size verification and metadata
+write through that authority. Content verification duplicates the retained content-capable handle;
+it does not reopen the published pathname, so a concurrent replacement is inspected as the new
+pathname owner but is never substituted for or deleted as the operation-owned publication. The
+bridge never promotes or cleans a stage by pathname. `S_OK` with a null
+source reader, writer, expected binding, stage authority, or committed publication authority is a
+provider-contract violation and fails closed.
 
-The remaining deliberate limits are fail-closed: unknown source size, unsupported reparse preservation, unprobeable final destination, or revision mismatch prevents successful completion. See `Specs/Reviews/FileSystemBridge-2026-07-07-Findings.md` and the completed Causeway plan for item-level rationale and evidence.
+The bridge never escalates privileges and never pathname-deletes after a sharing/access failure.
+
+## Results
+
+Every item reports strategy plus `PublicationState`, `VerificationState`,
+`SourceDisposition`, `ItemCompletion`, exact HRESULT/provider status, byte/timing counters,
+link action, metadata loss, and artifact references.
+
+- Copy-only with publication is not a failed Copy; it is a partial/with-notes Move result.
+- A source is Removed only after exact conditional deletion reports a known committed outcome.
+- Unknown publication or source disposition maps to `ERROR_IO_INCOMPLETE`.
+- Security-significant metadata-loss consent is resolved against the exact owned stage before
+  publication. Cancel reports `NotPublished + Retained + Canceled`; a later cancellation preserves
+  the exact publication state already recorded by the bridge.
+- Cancel after prior completed items is Partial/Canceled according to aggregate mapping.
+
+## Provider validation
+
+All reader/writer/bound-object methods validate required output pointers. The host validates:
+
+- capability-v2 path profile and required sections;
+- QI claims and non-null returned interfaces;
+- `sizeBytes` on every public struct;
+- read/write counts and monotonic positions;
+- exact Commit/publication output;
+- conditional-mutation `outcomeKnown` on every return path;
+- Abort/deadline and quiet-point behavior advertised by the profile.
+
+An advertised true/supported claim has an executable provider contract test. Contract violation
+disables the affected strategy and is diagnosed once per provider instance/profile.
+
+## Metrics and tests
+
+Metrics record endpoint profiles, selected strategy, source read/destination write/source hash/
+exact published-object readback bytes, proof/readback call counts,
+pump/Commit/publication/verification/metadata/delete/quiet-point duration,
+buffer and admitted-file high-water, traversal depth/retained entries/path bytes/metadata bytes and
+limit hits, semantic-link sparse-map/deferred-queue high-water and immediate/resolved/retained counts,
+discovery mode/queue/starvation, and typed result axes. The
+identity-owned route additionally records aggregate stage-creation duration/count, publication
+duration/count, and retained-stage count; it never emits a row per descendant.
+
+Deterministic tests cover short/over-read/write, early EOF, null-success outputs, stage collision,
+publication replacement race, source replacement race, conditional delete conflict, cancellation
+at every phase, backward links, forward links with a nested Keep Both rename, link cycles, failed
+dependency source retention, directory mutation during traversal, verification Off zero-work,
+provider proof, bound host-readback, zero-byte content, mismatch, unavailable proof, cancellation
+before cleanup, Native NotApplicable, deep long paths, wide-tree
+retention high-water, exact ceiling diagnostics with prior-success preservation, post-order directory
+metadata, bounded memory, and Copy-only downgrade.

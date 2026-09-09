@@ -9,6 +9,60 @@
       - summarizing one run
       - comparing two runs
       - showing metric evolution over time
+
+.PARAMETER RunsRoot
+    Selects the archived TestRuns root to inspect.
+
+.PARAMETER Scenario
+    Filters records to one scenario identifier.
+
+.PARAMETER Area
+    Filters discovered runs to one area directory.
+
+.PARAMETER Metric
+    Filters output to one metric name.
+
+.PARAMETER FolderViewPreset
+    Applies the reviewed FolderView metric family preset.
+
+.PARAMETER CompareRun
+    Specifies exactly two run paths or identifiers to compare.
+
+.PARAMETER Run
+    Selects one run for detailed summary output.
+
+.PARAMETER BudgetPath
+    Selects an optional JSON5 performance-budget contract used for quality evaluation.
+
+.PARAMETER MinimumSamplesForP95
+    Sets the minimum sample count required to treat p95 as statistically available.
+
+.PARAMETER MinimumSamplesForP99
+    Sets the minimum sample count required to treat p99 as statistically available.
+
+.PARAMETER FailOnQuality
+    Produces a nonzero exit when selected records fail sample-quality or budget checks.
+
+.PARAMETER ShowBuildFlavor
+    Includes build configuration/flavor metadata in run output.
+
+.PARAMETER Trend
+    Shows chronological metric evolution across matching runs.
+
+.PARAMETER Help
+    Prints detailed command usage without reading archived runs.
+
+.OUTPUTS
+    Human-readable host output only. The command does not mutate or return archived run objects.
+
+.NOTES
+    Prerequisites: archived PerfJsonl metrics with the schema described in Specs/Testing/Testing_PerformanceValidation.md. Side effects: none; reads evidence and optional budgets only. Exit is nonzero for malformed evidence and, with -FailOnQuality, for blocking quality findings. Primary use is performance review and before/after closeout.
+
+.EXAMPLE
+    .\Tools\Show-PerfRuns.ps1 -Area FolderView -Trend
+
+.EXAMPLE
+    .\Tools\Show-PerfRuns.ps1 -CompareRun <baseline>,<candidate> -FailOnQuality
 #>
 
 param(

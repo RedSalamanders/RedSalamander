@@ -15,9 +15,6 @@ constexpr float kTreeBadgeMinHeightDip          = 16.0f;
 constexpr float kTreeBadgeMaxHeightDip          = 18.0f;
 constexpr float kTreeBadgeHorizontalPaddingDip  = 16.0f;
 constexpr float kTreeContentInsetDip            = 2.0f;
-constexpr float kTreeChevronHalfWidthDip        = 4.0f;
-constexpr float kTreeChevronHalfHeightDip       = 2.5f;
-constexpr float kPiOverTwo                      = 1.57079632679f;
 constexpr size_t kTreeBadgeWidthCacheMaxEntries = 64u;
 
 struct TreeResolvedRowVisuals final
@@ -90,25 +87,6 @@ struct TreeResolvedRowVisuals final
     return from + ((to - from) * std::clamp(t, 0.0f, 1.0f));
 }
 
-[[nodiscard]] D2D1_POINT_2F RotatePoint(const D2D1_POINT_2F& point, float angleRadians) noexcept
-{
-    const float cosAngle = std::cos(angleRadians);
-    const float sinAngle = std::sin(angleRadians);
-    return D2D1::Point2F((point.x * cosAngle) - (point.y * sinAngle), (point.x * sinAngle) + (point.y * cosAngle));
-}
-
-[[nodiscard]] float EaseInOutCubic(float t) noexcept
-{
-    const float x = std::clamp(t, 0.0f, 1.0f);
-    if (x < 0.5f)
-    {
-        return 4.0f * x * x * x;
-    }
-
-    const float inverse = (-2.0f * x) + 2.0f;
-    return 1.0f - ((inverse * inverse * inverse) * 0.5f);
-}
-
 [[nodiscard]] D2D1_COLOR_F WithAlpha(const D2D1_COLOR_F& color, float alpha) noexcept
 {
     D2D1_COLOR_F result = color;
@@ -150,8 +128,6 @@ struct TreeResolvedRowVisuals final
     return count;
 }
 
-void DrawChevronGlyph(WindowHost& host, const D2D1_RECT_F& rect, float expandedProgress, const D2D1_COLOR_F& color);
-
 void DrawTreeRow(WindowHost& host,
                  const ThemePalette& theme,
                  const TreeItemLayoutMetrics& layout,
@@ -183,7 +159,7 @@ void DrawTreeRow(WindowHost& host,
 
     if (layout.hasExpander)
     {
-        DrawChevronGlyph(host, layout.expanderRect, expanderProgress, WithAlpha(rowVisuals.expander, alpha));
+        DrawDisclosureChevron(host, layout.expanderRect, expanderProgress, WithAlpha(rowVisuals.expander, alpha));
     }
 
     if (layout.hasIcon)
@@ -209,34 +185,6 @@ void DrawTreeRow(WindowHost& host,
     DrawCenteredText(host, item.text, layout.textRect, FontRole::Body, textColor, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, false);
 }
 
-void DrawChevronGlyph(WindowHost& host, const D2D1_RECT_F& rect, float expandedProgress, const D2D1_COLOR_F& color)
-{
-    auto* dc    = host.GetDeviceContext();
-    auto* brush = host.GetSolidBrush(color);
-    if (! dc || ! brush)
-    {
-        return;
-    }
-
-    const float centerX      = (rect.left + rect.right) * 0.5f;
-    const float centerY      = (rect.top + rect.bottom) * 0.5f;
-    const float angleRadians = Lerp(-kPiOverTwo, 0.0f, expandedProgress);
-
-    const D2D1_POINT_2F downStart = D2D1::Point2F(-kTreeChevronHalfWidthDip, -kTreeChevronHalfHeightDip);
-    const D2D1_POINT_2F downMid   = D2D1::Point2F(0.0f, kTreeChevronHalfHeightDip);
-    const D2D1_POINT_2F downEnd   = D2D1::Point2F(kTreeChevronHalfWidthDip, -kTreeChevronHalfHeightDip);
-
-    const D2D1_POINT_2F startVector = RotatePoint(downStart, angleRadians);
-    const D2D1_POINT_2F midVector   = RotatePoint(downMid, angleRadians);
-    const D2D1_POINT_2F endVector   = RotatePoint(downEnd, angleRadians);
-
-    const D2D1_POINT_2F startPoint = D2D1::Point2F(centerX + startVector.x, centerY + startVector.y);
-    const D2D1_POINT_2F midPoint   = D2D1::Point2F(centerX + midVector.x, centerY + midVector.y);
-    const D2D1_POINT_2F endPoint   = D2D1::Point2F(centerX + endVector.x, centerY + endVector.y);
-
-    dc->DrawLine(startPoint, midPoint, brush, 1.35f);
-    dc->DrawLine(midPoint, endPoint, brush, 1.35f);
-}
 } // namespace
 
 std::optional<size_t> IDxTreeModel::FindVisibleItemById(uint64_t itemId) const noexcept
@@ -1529,7 +1477,7 @@ float Tree::ComputeExpanderProgress(uint64_t itemId, bool expanded, uint64_t now
 
     const uint64_t elapsedMs    = nowTickMs - it->startTickMs;
     const float transition      = std::clamp(static_cast<float>(elapsedMs) / static_cast<float>(_treeExpanderAnimationDurationMs), 0.0f, 1.0f);
-    const float easedTransition = EaseInOutCubic(transition);
+    const float easedTransition = EvaluateEasing(EasingCurve::PointToPoint, transition);
     return Lerp(it->fromProgress, it->toProgress, easedTransition);
 }
 
@@ -1643,7 +1591,7 @@ float Tree::GetTreeExpansionProgress(uint64_t nowTickMs) const noexcept
 
     const uint64_t elapsedMs = nowTickMs > _treeExpansionAnimation->startTickMs ? (nowTickMs - _treeExpansionAnimation->startTickMs) : 0u;
     const float progress     = std::clamp(static_cast<float>(elapsedMs) / static_cast<float>(_treeExpansionAnimationDurationMs), 0.0f, 1.0f);
-    return EaseInOutCubic(progress);
+    return EvaluateEasing(EasingCurve::PointToPoint, progress);
 }
 
 std::optional<size_t> Tree::FindNextTypeaheadMatch(std::wstring_view prefix) const noexcept

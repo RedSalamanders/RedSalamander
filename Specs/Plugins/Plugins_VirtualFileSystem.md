@@ -1,5 +1,6 @@
 # Plugin Interface Specification
 
+
 ## Overview 
 The Plugin Interface enables RedSalamander to support multiple file system implementations through a COM-based plugin architecture. This interface abstracts file system operations, allowing seamless integration of local file systems, network shares, virtual file systems, or cloud storage without modifying the core application.
 
@@ -537,9 +538,32 @@ interface __declspec(uuid("b612a5d1-7e55-4e08-a3da-8d0d9f5d0f31"))
 The primary interface for directory enumeration and file operations. This supersedes the original enumeration-only `IFileSystem` (`{fd57f938-3def-43d1-ba8f-2d27adf4fd56}`). Search remains an optional interface (`IFileSystemSearch`).
 
 ```cpp
+interface __declspec(uuid("9be5ee85-f247-4a95-953b-5f18ed76719d"))
+         __declspec(novtable)
+         IFileSystemPathCapabilities2 : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE GetPathCapabilities(
+        const wchar_t* path,
+        FileSystemOperation operation,
+        const char** jsonUtf8
+    ) noexcept = 0;
+};
+
+// Separate from IFileSystem so its existing IID and vtable do not change.
+interface __declspec(uuid("1e924d87-2e62-4ab4-9f37-c565d465f25e"))
+         __declspec(novtable)
+         IFileSystemRouteCapabilities : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE GetRouteFacts(...) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE IsTransferPeerAllowed(...) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE ValidateChildName(...) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetChildNameCollisionKey(...) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE JoinPath(...) noexcept = 0;
+};
+
 interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21"))
          __declspec(novtable)
-         IFileSystem : public IUnknown
+         IFileSystem : public IFileSystemPathCapabilities2
 {
     // Reads complete directory listing in a single call
     // Parameters:
@@ -633,13 +657,6 @@ interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21"))
         void* cookie = nullptr                      // default: none
     ) noexcept = 0;
 
-    // Returns a UTF-8 JSON/JSON5 string describing supported operations and cross-filesystem policy.
-    // The string pointer is owned by the plugin and remains valid until the next call or object release.
-    // Implementations SHOULD return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) when unsupported.
-    virtual HRESULT STDMETHODCALLTYPE GetCapabilities(
-        const char** jsonUtf8
-    ) noexcept = 0;
-
     // Transfer hints for cross-filesystem bridge buffering and progress cadence.
     // Parameters:
     //   path: Plugin-native path for the source or destination endpoint
@@ -678,7 +695,7 @@ interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21"))
 - Single-call enumeration model (all entries returned at once)
 - No incremental/streaming API (entire directory loaded into memory)
 - Suitable for typical user directories (thousands of files)
-- For massive directories (100K+ files), consider pagination in future versions
+- The public ABI has no paged enumeration contract. Any pagination proposal is owned by `Specs/Plans/WIP/Operation_Atlas_RemainingSpecificationDecisions_2026-08-04.md`; providers and hosts must not invent incompatible private paging semantics.
 - `GetTransferHints(...)` is a host-tuning contract only; plugins MUST NOT treat it as a user-visible policy surface.
 - `GetStorageCharacteristics(...)` is the authoritative plugin-to-host classification for Auto concurrency and diagnostics; the host does not infer storage behavior from plugin type.
 
@@ -714,7 +731,10 @@ created solely for this interface.
 
 Optional (but currently required by the host) I/O interface for:
 - fast attribute queries (without doing a full `ReadDirectoryInfo()` enumeration)
-- opening a read-only stream for file contents (`IFileReader`)
+- opening a read-only stream for file contents (`IFileReader`); a reader created through
+  `IFileSystemIO::CreateFileReader` receives no options, so a provider whose transfer can block
+  implements the optional `IFileReaderOperationControl` (`SetOperationControl`) and the host hands
+  it the task's operation control before the first `Read` (R0f-Curl-OR1)
 - propagating basic metadata (timestamps + attributes) across filesystems (`GetFileBasicInformation` / `SetFileBasicInformation`)
 - retrieving item properties for a themed Properties dialog (see `GetItemProperties`)
 
@@ -784,15 +804,83 @@ interface __declspec(uuid("2c7c32b3-8a0f-4e25-8d3a-6a5f1d0a1e2c"))
 
 `FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY` authorizes replacement of a read-only destination; it has no
 standalone meaning without `FILESYSTEM_FLAG_ALLOW_OVERWRITE`. A writer MUST reject that contradictory flag set
-before opening or changing the destination. In particular, a failed `CREATE_NEW` path must never clear a
+with `E_INVALIDARG` before opening or changing the destination. In particular, a failed `CREATE_NEW` path must never clear a
 pre-existing file's read-only attribute in order to retry the same non-overwrite operation.
 
 ### Stream and Provider Data-Integrity Contracts
 
-- `IFileReader::GetSize()` returning `S_OK` is a size commitment. Readers that know the logical file length MUST fail reads that cannot supply bytes up to that committed length; premature EOF must surface as `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)`, `HRESULT_FROM_WIN32(ERROR_HANDLE_EOF)`, or a more specific failed HRESULT, never as a successful short transfer.
+- `IFileReader::GetSize()` returning `S_OK` is a size commitment, including when
+  the committed size is zero. Readers that know the logical file length MUST
+  validate the actual stream terminator and reject both a premature EOF and any
+  bytes beyond the commitment; these conditions surface as
+  `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)`,
+  `HRESULT_FROM_WIN32(ERROR_HANDLE_EOF)`,
+  `HRESULT_FROM_WIN32(ERROR_INVALID_DATA)`, or a more specific failed HRESULT,
+  never as a successful short/overlong transfer. A zero-size commitment still
+  requires validation that the provider delivered no bytes.
+- A seeked known-size reader commits to the remaining range, not the original
+  full range. It MUST reject an offset beyond the commitment, validate a seek to
+  the committed end as a zero-byte range, and expose successful EOF only after
+  the active generation terminates with the exact remaining byte count. After a
+  failed generation, seek/restart MUST discard its buffered bytes and terminal
+  state before a new generation can become visible.
+- When a provider has both directory-listing metadata and a targeted file-size
+  primitive, provider-native transfer and direct-reader creation MUST resolve
+  one per-file commitment. A successful targeted result supersedes the listing;
+  only an explicit unsupported/unavailable result may fall back to the listing
+  or an unknown-size policy. Authentication, disappearance, cancellation, and
+  hard protocol/transport errors MUST propagate and MUST NOT be converted into
+  unknown size or hidden behind possibly stale listing metadata.
+- Curl metadata-only size probes MUST own both body and header output callbacks
+  on every attempt, including after easy-handle reset. FTP NOBODY may emit
+  synthesized headers through the body callback; use a constant-storage sink,
+  never the process's default CRT stream or an unbounded response accumulator.
+  The sink does not turn a failed probe into success or replace the targeted
+  size/reply checks above.
+- Native FTP/SFTP/SCP entry lookup MUST use the shared bounded strict listing
+  cursor, including single/bulk mutation admission and directory-size root lookup.
+  Retain only the current row and requested match, not whole parent directories.
+  A match or missing result is accepted only after successful LIST termination;
+  malformed, out-of-parent, oversized rows and duplicate matches invalidate it.
+  No partial match is returned on failure. Unrelated rows may omit timestamp
+  materialization, but the requested occupant retains the exact ordinary parser
+  metadata used by replacement validation. This is a current path observation,
+  not immutable object identity or protection against a subsequent remote writer.
+  IMAP retains its separate mailbox/UID adapter and is not qualified by this rule.
+  Unix/DOS row parsing may reuse only filename allocation, never previous-row
+  metadata: reset attributes, known size and every timestamp before materializing
+  a new row. Reuse the shared strict UTF converter; invalid input must not preserve
+  stale output. DOS file sizes must consume their complete integer token, rejecting
+  suffixes/fractions instead of admitting a truncated numeric prefix.
+- Curl cursor multi connection caches travel with the existing exclusively
+  borrowed easy-handle pool entries. Detach the easy handle on success, failure
+  and cancellation, and reset per-call callbacks before returning it. Repeated
+  lookups must reuse healthy connections rather than destroy/recreate a pool per
+  entry. The existing four idle entries per connection and 60-second lazy expiry
+  apply to the paired owners; shutdown drains them outside the pool lock.
+  Each entry owns distinct blocking and cursor easy handles so attaching a cursor
+  cannot destroy the blocking API's private connection cache. Reset both handles'
+  callbacks on return. This adds a bounded handle per entry, not another global
+  pool, and does not increase the four-entry idle limit.
+  A native cursor reads ahead only into its existing fixed buffer, pausing before
+  accepting any callback bytes that do not fit. Small listings reach successful
+  protocol termination before yielding their first row. On transport completion
+  (or terminal cursor failure/cancellation), detach and return the borrow while
+  the cursor retains only its buffered records and parse state; parent objects
+  must not pin completed connections while child traversal runs. The worker
+  clears borrowed callback state before pool publication. Large listings remain
+  bounded and streaming; fragment boundaries must not drop or replay bytes.
 - Providers that read object-store or HTTP-like ranged bodies MUST validate the expected byte count against both protocol metadata (for example `Content-Length` when present) and the body bytes delivered. Negative lengths, overlong bodies, and short bodies are provider data errors and MUST fail the read.
 - An object-store reader MAY recover from a metadata/HEAD access denial when ranged GET remains authorized. In that case it MUST leave size unknown until a successful range response, parse and validate the response `Content-Range` total and requested start/end, capture the response revision (`versionId` or ETag), and make `GetSize()` and reads fail if those proofs are absent or inconsistent. The S3 provider follows this path only for access denial; missing-object and other HEAD failures remain fatal.
 - Staged remote writers/uploads MUST treat `Commit()` as successful only after the staged object/file has been durably completed and the provider can prove the committed size matches the source size when the source size is known. Failed or mismatched staged uploads should clean up the staged object and return `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)`.
+- Provider-native Copy MAY continue with an unknown source size only when it
+  retains the source and can independently prove the exact complete staged and
+  published byte count. Provider-native Move MUST preserve the source and fail
+  before destination mutation when it cannot establish the source commitment
+  required to prove completeness. A recursive destructive Move MUST complete
+  that per-file commitment preflight for the whole source tree before its first
+  destination mutation unless it maintains an equivalent complete rollback
+  transaction.
 - Archive providers MUST normalize archive entry keys to relative provider paths before indexing. Absolute/UNC/device-style keys, drive-qualified keys, empty path components, `.`/`..` components, NUL components, and stream/ADS-like colon components remain invalid archive data. Duplicate normalized keys and file/directory hierarchy collisions MUST resolve deterministically without exposing two objects at one path. FileSystem7z keeps the first indexed entry, warns and drops later duplicates, and drops a descendant when a first-indexed ancestor is a file; unaffected root entries remain browsable instead of rejecting the entire archive.
 - Providers whose current paths are not stable item identities (`pathTextStableIdentity = false`) MUST keep same-provider destructive or overwrite-capable mutations fail-closed unless the operation API carries and revalidates stable provider IDs.
 
@@ -804,10 +892,36 @@ Optional write-only stream abstraction for filesystem plugins.
 
 The host uses this interface for **cross-filesystem copy/move bridging** (streaming `IFileReader` → `IFileWriter`) and for other host-managed data transfers.
 
+A returned writer is an independently owned COM object. It MUST retain every provider instance, connection
+service, and module lifetime it can dereference through `Write`, `Commit`, optional capability methods, or
+destruction; callers may release the factory and filesystem interfaces immediately after writer creation. Curl's
+public writers therefore hold a normal strong `wil::com_ptr<FileSystemCurl>`, not a raw back pointer or a module
+pin standing in for instance ownership. Curl does not expose a streaming-to-final-path writer:
+`CreateFileWriter` returns a temp-staged `TempFileWriter` that publishes through `PublishCurlWriterTransaction`.
+`GetPathCapabilities` is built dynamically (write true for FTP/SFTP/SCP, false for IMAP) and MUST stay honest.
+
 Notes:
 - Implementations MUST be safe for large files (64-bit offsets/sizes).
 - Implementations SHOULD support sequential writes efficiently.
 - Implementations MUST tolerate being released without `Commit()` (treat as abort/best-effort cleanup).
+- Curl FTP/SFTP/SCP writers publish through an operation-owned remote staging sibling.
+  A failed upload, exact-size verification, prepare, or promotion retains its primary
+  HRESULT; a failure to delete that safe staging sibling is reported separately as
+  cleanup debt. A committed overwrite with a retained rollback sibling still returns
+  `S_OK`, exposes the committed size, and sends the normal destination notification.
+  Its first `Commit()` emits at most one aggregate content-free cleanup-debt warning;
+  repeating a successful `Commit()` is idempotent and emits no second endpoint work,
+  notification, warning, or alert.
+
+`IFileSystemAtomicWriter` is an optional claim about the concrete final-path writer. The host calls
+`SupportsAtomicWriterCommit(path, flags, &supported)` with the same path and effective overwrite/
+read-only grants it will pass to `CreateFileWriter`. `TRUE` is valid only when readers cannot observe
+partial content and `Commit()` atomically publishes the complete object at that final path. A probe,
+provider name, or a writer-local byte count is not a substitute for this guarantee. When this claim
+is absent, false, or fails, the bridge requires `IFileSystemObjectBinding::CreateExclusiveWriter`
+and publishes through the returned exact stage authority; it never falls back to an unowned temp
+pathname. FileSystemDummy implements the atomic-final route because its writer buffers privately
+and commits one complete node while holding the provider mutex.
 
 ```cpp
 interface __declspec(uuid("b6f0a9e1-8c8b-4b72-9f3e-2f2b4b8b9c41"))
@@ -819,6 +933,34 @@ interface __declspec(uuid("b6f0a9e1-8c8b-4b72-9f3e-2f2b4b8b9c41"))
     virtual HRESULT STDMETHODCALLTYPE Commit() noexcept = 0;
 };
 ```
+
+`GetPosition()` reports the current stream cursor only. It is not proof that `Commit()` published that many bytes and MUST NOT be used as committed-object integrity evidence.
+
+### 4b. IFileWriterCommitSizeProof Interface (optional)
+
+**UUID:** `{f64f3fed-7262-435c-b509-c9751b6e0280}`
+
+Optional post-Commit proof exposed by a concrete `IFileWriter` through `QueryInterface`. It lets the host avoid a redundant immediate final-path size metadata request for cross-filesystem MOVE while retaining the later destination size/hash verification that gates source deletion.
+
+```cpp
+interface __declspec(uuid("f64f3fed-7262-435c-b509-c9751b6e0280"))
+         __declspec(novtable)
+         IFileWriterCommitSizeProof : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE GetCommittedSize(uint64_t* sizeBytes) noexcept = 0;
+};
+```
+
+Contract:
+
+- `GetCommittedSize(nullptr)` returns `E_POINTER`.
+- Before this writer's `Commit()` has succeeded, `GetCommittedSize(...)` returns `HRESULT_FROM_WIN32(ERROR_INVALID_STATE)`.
+- After successful `Commit()`, `S_OK` returns the exact byte count published by that Commit. The answer comes only from writer-local state and MUST NOT perform filesystem, service, or network I/O.
+- A successful staged `MoveItem` promotion preserves the proof because promotion must preserve the committed object's bytes.
+- The host accepts proof only after successful `Commit()` and only when it exactly matches the independently known source size. Missing interface, failed call, or size mismatch falls back to the normal final-path size verification; provider ID and `IFileSystemAtomicWriter` are not substitutes for this capability.
+- This proof removes only the immediate MOVE re-stat. It never authorizes MOVE source deletion; the host still verifies final destination size and content hash during cleanup. COPY retains its final destination reader/hash pass.
+
+The built-in Dummy, S3 multipart, and Microsoft Drive writers implement this interface. Microsoft Drive currently disables cross-filesystem MOVE, so its implementation establishes the writer contract and future-proofs the provider while COPY continues its required final hash pass.
 
 ### 4c. IFileSystemDirectoryOperations Interface (optional)
 
@@ -881,79 +1023,401 @@ interface __declspec(uuid("4a8f7cf2-f81c-4278-b182-7183e6bed6f3"))
 };
 ```
 
-### 4d. Capabilities (`IFileSystem::GetCapabilities`) (mandatory)
+### 4d. Typed route capabilities (`IFileSystemRouteCapabilities`) (mandatory)
 
-Provides a **read-only** capabilities declaration for the filesystem plugin.
+Provides the path- and operation-scoped executable route declaration for the
+filesystem plugin. **JSON is optional diagnostics** and extensions; every shipped
+provider still returns its existing non-empty capability-v2 document for tools and
+search extensions, but production admission and path identity never consult it.
 
-The host uses this to:
+The typed interface supplies:
 - enable/disable UI commands (rename/delete/properties, etc.)
-- decide whether same-provider copy/move/delete can create a task
-- decide whether cross-filesystem copy/move is allowed (explicit opt-in, per plugin pair)
+- decide whether same-provider copy/move/delete/rename or provider Create Directory is admitted
+- decide whether cross-filesystem copy/move is allowed through a directional full-ID peer query
 - decide which provider-native path identity relation host-side planners must use for collision, dependency, cache-notification, and refresh decisions
+- validate a child name and obtain the provider-owned joined path and collision key
 
-Capabilities are returned via `IFileSystem::GetCapabilities(...)` on the active filesystem instance.
+Executable capabilities are returned through
+`QueryInterface(IFileSystemRouteCapabilities)` followed by `GetRouteFacts(path,
+operation, ...)`. The path and operation select the concrete profile; callers must
+not reuse facts for another path/profile without another query. The separate
+interface also owns `IsTransferPeerAllowed`, `ValidateChildName`,
+`GetChildNameCollisionKey`, and `JoinPath`.
+
+`IFileSystemPathCapabilities2::GetPathCapabilities` remains inherited and mandatory
+for the current same-generation provider set because removing it would change the
+existing `IFileSystem` ABI. Its UTF-8 JSON is a diagnostic mirror plus extension
+surface. Missing or malformed JSON is diagnosable, but cannot change a valid typed
+route; conversely, positive JSON can never compensate for missing, unsupported, or
+malformed typed facts.
 
 Normative rules:
-- Every `IFileSystem` implementation MUST return `S_OK` and a non-empty UTF-8 JSON document with `version: 1`, `operations`, `concurrency`, `crossFileSystem`, and `pathIdentity`.
+- Every `IFileSystem` implementation MUST expose the typed IID and return a complete
+  `FileSystemRouteFacts` current prefix. All enum values and `BOOL` fields are
+  validated; provider/profile/root IDs and accepted separators are non-empty; every
+  concurrency bound and maximum child-name length is positive; route/watchdog facts
+  are internally consistent.
+- Variable UTF-16 facts are copied into the caller's arena. The producer validates
+  exact current record sizes and never retains caller storage. The central consumer
+  uses a 4 KiB normal arena, permits one exact bounded retry, rejects more than
+  64 KiB, and validates all returned pointers/lengths before copying.
+- Every shipped provider also returns `S_OK` and a non-empty diagnostic UTF-8 JSON document with
+  `version: 2`, a non-empty `pathProfile`, a non-empty path-scoped `rootId`, and the required `operations`, `concurrency`,
+  `transfer`, `identity`, `publication`, `verification`, `links`, `metadata`, `cancellation`, `names`,
+  and `directories` objects.
 - Providers MUST advertise unsupported actions with `false` operation fields or empty import/export policy lists. Returning `ERROR_NOT_SUPPORTED`, `E_NOTIMPL`, an empty document, or `nullptr` for `jsonUtf8` is a contract violation.
-- The host MUST treat any failed `GetCapabilities` HRESULT, a null/empty document, an invalid/unparseable document, or a document missing the required `operations`, `concurrency`, `crossFileSystem`, or `pathIdentity` objects as a provider contract violation: capability-gated operations are disabled (fail-closed, same-provider Copy/Move/Delete/Batch Rename rejected before task creation) and the violation is logged via `Debug::Error` once per provider instance (identifying the plugin id when known).
-- Missing, malformed, unstable, or unsupported `pathIdentity` is also a provider contract violation. Host planners that need predictive path identity, including Batch Rename and same-context Copy/Move/Delete, MUST reject before mutation rather than falling back to a guessed relation.
+- Each true typed operation field is a feasibility claim for that exact host route; method presence and
+  diagnostic JSON are insufficient. Delete means Permanent Delete and Recycle means a
+  request carrying `FILESYSTEM_FLAG_USE_RECYCLE_BIN`. The host tests and admits those bits
+  independently. A provider that can recycle but cannot permanently delete advertises
+  `recycle:true` and `delete:false`.
+- The host MUST treat missing typed QI, a failed typed call, an arena violation,
+  malformed facts, empty/mismatched full provider/profile/root identity, or an
+  uncomparable path identity as unavailable or a provider contract violation. The
+  affected strategy is disabled fail-closed and diagnosed once per provider instance/profile.
+- Missing, malformed, unstable, or unsupported typed name identity semantics are
+  unavailable or a provider contract violation. Predictive planners reject before
+  mutation rather than guessing.
+- The canonical composite child-name helper invokes `ValidateChildName`, `JoinPath`,
+  and `GetChildNameCollisionKey` against one retained typed-route generation and
+  copies every output before return. Provider Invalid preserves its exact failure;
+  unsupported, missing, mismatched-parent/leaf, empty, oversized, or malformed join/key
+  output fails closed. It never applies generic Windows reserved-name, separator,
+  length, normalization, or case rules.
+- Inline F2, Batch Rename preview/worker/execution, Change Case, and Create Directory
+  are the accepted consumers. Batch and Change Case combine a typed parent path key
+  with the provider collision key; Create Directory canonicalizes the one parent
+  listing and all suffix candidates through the same provider method. None may use
+  diagnostic JSON, provider short IDs, Local-only enumeration, or host joining as a
+  fallback.
+- Cross-filesystem Copy/Move planning requires both the source Export query and
+  destination Import query to admit the opposite full plugin ID. A strict `FALSE`
+  is a truthful supported response, not malformed data; the host MUST
+  reject that direction before task creation, popup allocation, or worker start.
+  Since R0f (2026-09-03) every built-in network and cloud provider (SMB/UNC through Local,
+  FTP/SFTP/SCP, S3, Microsoft Drive, Google Drive) publishes the opposite full plugin ID for
+  import Copy/Move and advertises its same-provider Copy/Move/Rename truthfully through the typed
+  route facts; the earlier FTP/SFTP/SCP restriction (empty import lists until atomic no-replace
+  publication existed) is gone, and each provider's spec owns its containment and publication
+  rules.
+- `FileSystemRouteFacts::cancellationRoute` is required for the exact requested path and operation and is one of
+  `bounded`, `providerWatchdog`, or `uncontained`. `bounded` means the complete executable route,
+  including readers/writers opened by it, has a deterministic tested quiet point.
+  `providerWatchdog` means the provider owns a tested nonzero watchdog, backend-cancel,
+  quarantine, and unload-safety route. `uncontained` means no in-process bound is currently
+  proved. The host rejects an uncontained mutation route before allocating a task, card, or
+  worker; operation booleans and import/export lists cannot override that rejection.
+- `providerWatchdogTimeoutMs` is also required. It MUST be a nonzero unsigned
+  32-bit value only for `providerWatchdog` and MUST be zero for `bounded` and `uncontained`.
+  The value is provider-owned; it is not a host join deadline. The retired
+  `quietPointTimeoutMs` member is invalid because the host never enforced it.
+- Route containment does not enable browsing or inspection. An uncontained provider instance may
+  still enumerate and expose non-mutating information; only File Operations mutation admission is
+  disabled for that exact response.
 
-**Per-instance rule:** capabilities are **per `IFileSystem` instance**, and MAY vary based on:
+**Path-profile rule:** typed facts are per active `IFileSystem` instance, requested path,
+operation, and returned `pathProfileId`, and MAY vary based on:
 - plugin mode (e.g. S3 vs S3Tables),
 - transport/protocol (e.g. FTP vs IMAP within a single DLL),
 - connection/profile configuration.
 
-The host MUST treat capabilities as instance-scoped and MUST NOT assume a DLL has a single fixed capability set.
+The host MUST NOT assume an instance or DLL has one fixed capability set.
 
-#### Provider path identity (`pathIdentity`) (mandatory)
+**Namespace-root rule:** `rootId` is an opaque provider assertion identifying the namespace root
+that contains the queried path. It is compared only inside the same plugin, configured instance,
+and returned path profile; the host does not parse it. Multi-root instances MUST return distinct
+stable IDs for distinct local volumes, buckets/directory buckets, device storages, drives, or other
+provider roots. A single-root configured instance MAY return one stable provider-root token. The
+value is admission qualification, not object mutation authority; exact source/destination identity
+still comes from binding and boundary revalidation.
 
-`pathIdentity` is the provider-native rule for deciding whether two plugin-path components or full plugin paths identify the same item inside one `IFileSystem` instance. Host code that predicts collisions or pairs mutation results MUST use this profile through a shared helper; it MUST NOT embed ad hoc `CharUpper`, `LCMapStringEx`, `_wcsicmp`, `CompareStringOrdinal`, or exact-string decisions at call sites.
+#### ABI-v2 operation control and object binding
 
-Supported `pathIdentity` fields:
+`FileSystemOptions` includes `FileSystemLinkPolicy::{Preserve, Skip}` (consumed by Copy; a Move
+always receives Preserve), `FileSystemMoveMode::{Default, NativeOnly}`, an absolute
+`GetTickCount64()` deadline, and an optional raw `IFileSystemOperationControl` callback plus cookie.
+Follow value 0 is reserved and invalid. The callback is not COM. The host keeps it alive until the
+provider call and every object opened with those options are released.
 
-- `version`: MUST be `1`.
+Every provider entry point that consumes a non-null `FileSystemOptions` validates the complete
+header before provider I/O. Only `FILESYSTEM_LINK_PRESERVE` and `FILESYSTEM_LINK_SKIP` are valid.
+The per-call link policy overrides any provider configuration default and remains fixed for the
+call; a provider MUST NOT reread its live link-policy configuration while that call is executing.
+
+The operation-control ABI is synchronous and thread-safe. It exposes:
+
+- `FileSystemShouldAbort`, the bounded cancellation/deadline checkpoint;
+- `FileSystemGetDiscoveryMode`, returning `FILESYSTEM_DISCOVERY_AHEAD` or the irreversible
+  `FILESYSTEM_DISCOVERY_JUST_IN_TIME` mode selected after Skip;
+- `FileSystemReportDiscoveryProgress`, accepting a size-validated
+  `FileSystemDiscoveryProgress` with cumulative bytes/files/directories for that governed
+  top-level provider call, current retained queue depth, and `traversalClosed`.
+
+Recursive providers query the mode at bounded producer/consumer scheduling checkpoints. A callback
+failure or invalid mode switches provider scheduling to just-in-time or fails the reporting call;
+it never authorizes an unbounded queue or a second totals traversal. Reported cumulative counters
+are monotonic within one callback cookie. The host may invoke the control concurrently from provider
+workers, so provider and host implementations must not depend on UI-thread affinity. Enumeration
+metadata is outside the byte-bandwidth budget; transfer and verification bytes remain governed by
+`FileSystemOptions::bandwidthLimitBytesPerSecond`.
+
+The built-in Local, Curl, Microsoft Drive, MTP, and S3 providers join
+`FileSystemShouldAbort` at their bounded enumeration, item-start, reader/writer, retry, commit, and
+recursive scheduling boundaries even while a profile advertises `abort: false` and
+`deadline: false`. Those false claims are intentional: a provider may change either claim to true
+only after every blocking transport call in that profile has a bounded abort/deadline route and an
+executable teardown/quiet-point test. A checkpoint between blocking calls improves cancellation
+latency but is not itself evidence for a true capability bit. MTP watchdog abandonment quarantines
+the affected device session; it never terminates a worker thread or unloads a plugin with live work.
+
+The Local provider's content-capable `IFileSystemBoundObject::OpenReader` is the fixed-volume
+regular-file exception with an executable pending-I/O quiet point. It reopens the already-retained
+object as an independent overlapped handle, verifies the same `FILE_ID_INFO`, and keeps logical seek
+position in the reader rather than in a shared kernel file pointer. While an overlapped `ReadFile`
+is pending, the reader polls the captured `FileSystemOptions.operationControl`; Cancel/deadline
+cancels only that `OVERLAPPED` request with `CancelIoEx`, drains completion, returns the original
+control HRESULT, and reports zero bytes. Normal completion advances the private position and
+`ERROR_HANDLE_EOF` is exposed as ordinary successful zero-byte EOF. The legacy Local path reader
+uses the same overlapped implementation but has no operation control; File Operations must prefer
+the option-bearing exact bound reader. This does not change the profile-wide `abort: false` or
+`deadline: false` claims, because writer and other provider-call paths are not proved by this rule.
+
+`NativeOnly` is valid only for Move. A provider receiving it MUST either complete its qualified
+provider/OS-native Move or fail before any generic/unqualified fallback. A provider-native
+conditional server-side strategy may include source deletion as an intrinsic part of that proven
+route. A provider may advertise `nativeMove: true` only when this constraint is executable for the
+queried path profile.
+
+Optional `IFileSystemIdentityDelete` (`7c2d9a4e-5b31-4f8e-9a6d-0e3f1b7c8d52`, C10) lets a
+provider without object binding name the object at a path with a stable identity
+(`FileSystemDeleteIdentity`: an object key with its version or ETag, a provider file id):
+`ResolveDeleteIdentity` is read-only and no-follow; `DeleteIfIdentity` behaves as `DeleteItem`,
+including its per-item receipt, but deletes only while the live identity still equals the one
+resolved earlier and returns `ERROR_REVISION_MISMATCH` with nothing deleted otherwise. S3 and Google
+Drive implement it; the host pins every Permanent Delete root through it while the task prepares.
+
+Optional `IFileSystemObjectBinding`
+(`d8ae290a-b84c-42ec-982c-7c01dedc7603`) and `IFileSystemBoundObject`
+(`5ed3921d-a486-42cc-a5c3-33d97f75c5b5`) implement:
+
+- no-follow `BindObject` with explicit read/metadata/delete/rename/publication flags;
+- atomic `CreateExclusiveWriter` returning both writer and owned-stage token;
+- atomic `CreateExclusiveDirectory` returning the exact newly created directory-stage token;
+- bounded literal `ReadBoundLink` from the exact retained link object;
+- `CreateExclusiveLink` returning the exact owned file-symlink, directory-symlink, or junction
+  stage token;
+- immutable object/revision snapshot and `IsSameObject`;
+- reader/basic-information read and exact-object basic-information write through the binding;
+- conditional `PublishAs`, `RenameIfUnchanged`, and `DeleteIfUnchanged`;
+- `AbortOwnedObject` only for the exact exclusively created object.
+
+An exact bound object may additionally expose `IFileSystemBoundMetadata`
+(`145b7908-1876-4c76-9900-88961d43f2ab`). `GetMetadataSnapshot` reports a bounded per-object feature
+mask and logical/allocated-size facts from the retained no-follow handle. A feature class the
+provider failed to inspect is an inspection failure returned from the call, never a class reported
+as unsupported: the host treats an unsupported class as absent and would prove nothing about it. `TransferMetadataTo`
+accepts only another exact bound object: `PREPARE_CONTENT` applies allocation/encryption features
+before bytes are written; `FINALIZE` transfers named-stream/EA/basic metadata and reports inherited
+or changed security. The returned attempted/preserved/lost/changed masks are authoritative for the
+item. Capability JSON is a path-profile summary and MUST NOT be treated as proof that a particular
+object's metadata was preserved. A provider MUST NOT reopen either pathname inside this interface.
+Success with invalid structure sizes, an unowned destination, or unavailable exact authority is a
+contract failure, not permission for a pathname fallback.
+
+An exact bound regular object may additionally expose `IFileSystemBoundContentProof`
+(`ed24d2c9-3377-468a-a8b2-72862353f7d1`). `GetContentProof` reads only the already-bound
+object/revision and returns a size-validated `FileSystemContentProof`. Phase 4 defines
+`FILESYSTEM_CONTENT_PROOF_BLAKE3_256` as a 32-byte BLAKE3 digest plus the exact content size. The
+provider MUST NOT reopen a pathname, follow a link target, or return a proof for a different
+revision. This interface is optional and verification-only: it never authorizes overwrite, Skip,
+publication, artifact cleanup, or source deletion. A missing/failed/malformed proof may fall back
+only to an advertised exact bound-object host readback; otherwise the item reports verification
+`Unavailable`.
+
+Every conditional call initializes `FileSystemConditionalMutationResult::outcomeKnown`, including
+transport failure. Unknown outcome forbids retry or destructive cleanup until exact reconciliation.
+`expectedDestination == nullptr` means publish/rename only if absent; replacement requires the
+exact bound destination. `FILESYSTEM_FLAG_ALLOW_REPLACE_LINK` is valid only together with
+`FILESYSTEM_FLAG_ALLOW_OVERWRITE` and an expected destination whose no-follow snapshot is Link.
+Ordinary Overwrite cannot replace a link object. Success with a required null output is a contract
+violation.
+
+The initialized known-noncommit value is not valid after a potentially committing rename, delete,
+abort, publication, or replacement-rollback call unless exact retained authority proves the
+original object still exists. A failed pathname operation followed by unavailable or contradictory
+reconciliation reports `outcomeKnown == FALSE`; it must not inherit the pre-call default. Delete and
+`AbortOwnedObject` obey the same rule as rename.
+
+An operation-wide `FILESYSTEM_FLAG_ALLOW_OVERWRITE` bit does not fabricate
+`expectedDestination`. If the final name is absent, publication remains exclusive and returns the
+new bound authority. Providers must not select a replacement-only writer or fail for a missing
+destination merely because that compatibility bit is present.
+
+`ReadBoundLink` never opens, reads, hydrates, or mutates the target object. The caller first supplies
+an empty target buffer; `ERROR_INSUFFICIENT_BUFFER` returns the exact UTF-16 length, after which one
+bounded retry supplies the buffer including its terminating NUL. Preserve is literal: the payload is
+the stored target text with its stored relative/absolute spelling and flag, `targetMapping` is
+`OutsideSourceRoot`, and the source-relative length is zero. The transform's roots and at most 4,096
+component mappings are validated and otherwise ignored; `MappedInsideSourceRoot`,
+`InsideSourceRootUnmappable`, and the source-relative buffer are reserved for an optional retarget
+transform that no built-in provider implements. The returned string is capped at 32,767 UTF-16 code
+units, and a partial/missing required buffer fails the call. `CreateExclusiveLink` must fail when
+the stage name already exists and return a bound ownership token for the exact newly created link.
+Success with a null token, a partial target payload, an unsupported link kind, or an unowned stage is
+a provider-contract violation/failure; the host never falls back to creating target contents.
+
+Binding is optional. Its absence disables managed destructive Move and identity-owned recovery for
+that path profile; it does not disable honest Copy or a separately advertised/tested native Move.
+It also disables host-owned Permanent Delete unless the provider exposes a separately advertised,
+contract-tested native exact-identity delete that consumes the immutable selected identity and returns
+known mutation truth. Pathname reopen after confirmation is not such a strategy.
+The host copies `objectId` and `revisionId` during `GetSnapshot`; provider-owned pointers are valid
+only for the bound-object lifetime and are never retained as raw authority. Revalidation rebinds
+the current provider path no-follow, calls `expected->IsSameObject(current)`, and cross-checks the
+copied object/revision snapshots. `IsSameObject == true` and object-ID equality must agree; a
+disagreement is a provider-contract violation, while a matching object with a different revision
+snapshot or kind is Changed. Missing,
+unsupported, changed, indeterminate, and provider-contract-violation are distinct states. `S_OK`
+with a null bound object, an invalid kind, an empty/null object ID, an inconsistent revision
+pointer/length pair, or an identity token over 64 KiB fails closed as a provider-contract violation.
+The local provider binding supports no-follow nonzero `FILE_ID_INFO` identity, regular-file reads
+through a duplicate of the retained content-capable handle, handle-bound metadata writes, exact
+conditional rename/delete, bounded exact-handle link reads, and exclusive visible file/link stage
+creation/publication. The Local link route parses only name-surrogate symlink/junction payloads,
+performs the selected-root/sparse transform without opening the target, and publishes through the
+same conditional stage authority used by regular files. Content reads do not
+reopen the pathname and therefore remain attached to the exact object after a concurrent rename or
+replacement. A binding requested with `FILESYSTEM_BIND_DELETE` retains delete access and admits
+only read sharing; this deliberately excludes concurrent write/delete/rename opens while a Local
+Managed Move reads and conditionally removes that exact object. Failure to acquire that stronger
+per-item binding is a Copy-only/source-kept downgrade, never permission to use pathname cleanup. It
+classifies a reparse object as Link only for a name-surrogate
+reparse tag; non-name-surrogate WOF/cloud/dedup-style reparses retain their regular-file/directory
+kind. Local advertises `boundDelete`, `conditionalDelete`, `exclusiveStage`, and
+`conditionalPublish` only because these paths are executable and contract-tested. Replacement
+moves the exact expected destination handle to a recognizable `.rs_bak_` sibling, publishes the
+stage with no-replace semantics, and deletes/restores only retained handles. A replacement race is
+never overwritten or pathname-deleted; uncertain cleanup retains a visible Possible artifact.
+
+`FILE_ID_INFO` success with an all-zero `FILE_ID_128` is Unsupported, never a persistent object ID
+and never equal to another zero ID. For an object created exclusively by the current operation, Local
+may fall back to a distinct lifetime-scoped capability consisting of the retained exact creation
+handle plus a cryptographically random nonce. That capability authorizes only operations on that
+owned stage while the handle remains retained. It cannot be reopened by path, serialized, cached,
+used for a pre-existing source/destination, or replaced by the 64-bit file index from
+`BY_HANDLE_FILE_INFORMATION`. If the exact retained handle cannot prove an operation's result, the
+provider reports Unknown and preserves the artifact for reconciliation.
+
+Local `exclusiveStage` is executable on a destination only when exclusive creation returns either
+the persistent nonzero identity or the exact retained-handle stage capability. Unsupported
+persistent identity alone does not reject a just-created stage, but failure to retain exact stage
+authority returns `ERROR_NOT_SUPPORTED` before an unsafe publish/cleanup route is selected. Direct
+Local file, link, and directory stage paths report every `AbortOwnedObject` result; they never
+discard cleanup failure merely because final publication is exactly NotPublished.
+
+The same name-surrogate test is mandatory at the Local Native Move collision boundary. A destination
+with `FILE_ATTRIBUTE_REPARSE_POINT` is a Destination link only when its tag is a name surrogate;
+WOF, cloud-placeholder, dedup, and other non-name-surrogate tags remain ordinary file/directory
+objects for typed conflict classification. Failure to query the tag is fail-closed and never grants
+Replace link.
+
+Local Native Copy uses that same tag-aware kind at every root/child/destination-ensure branch.
+Preserve/Skip is applied only to name-surrogate symlink/junction objects. WOF, cloud-placeholder,
+dedup, and other non-name-surrogate objects continue through ordinary file copy or directory merge;
+an unavailable tag stops before publication instead of guessing Link or offering Replace link.
+
+Local bound regular objects also expose `IFileSystemBoundMetadata`. The provider copies MOTW,
+non-default ADS, and NT backup EA records from the retained source handle to the exact owned stage,
+applies sparse and EFS controls before content (compression inherits from the destination folder
+as in File Explorer), restores basic metadata after named-stream
+writes, and reports destination-inherited security as changed. The host re-applies basic metadata
+through the exact published authority after stage promotion because promotion clears staging-only
+Hidden/Temporary state. Any failed feature is returned in the exact loss mask; it is never silently
+claimed from the JSON profile.
+
+Inline Rename capability and executable authority are deliberately separate claims during the
+Phase 1 cutover:
+
+| Provider path profile | Base `rename` claim | Object binding / conditional rename | Current host behavior |
+|---|---:|---:|---|
+| Local FileSystem | `true` | Implemented and contract-tested | `RenamePlan(InlineRename)` executes on a File Operations worker after exact source/parent binding and revalidation. |
+| FileSystemDummy, Microsoft Drive, and S3 flat-prefix | May be `true` | Not implemented in the current slice | Admission may publish a task, but interlock preparation fails closed before provider mutation and the failed task remains visible. Advertising base Rename does not imply identity-owned Inline Rename execution. |
+| 7-Zip, Curl, Google Drive, and every profile advertising `rename: false` | `false` | Absent or irrelevant | Admission rejects before task publication; FolderView presents the existing pane error overlay because no central task exists. |
+
+No provider may bypass this matrix by falling back from a failed bound Inline Rename to pathname
+`RenameItem`. Providers that want executable Inline Rename must implement and contract-test
+`IFileSystemObjectBinding::BindObject(...FILESYSTEM_BIND_RENAME...)` and
+`IFileSystemBoundObject::RenameIfUnchanged` for the queried path profile.
+
+#### Provider path-name identity (`names`) (mandatory)
+
+`names` is the provider-native rule for deciding whether two plugin-path components or full
+plugin paths identify the same item inside one path profile. It is path-name identity only and does
+not replace bound object/revision identity.
+
+Required `names` fields:
+
 - `pathTextStableIdentity`: MUST be `true` when canonical plugin path text uniquely identifies one item in this instance. Providers that allow duplicate display names in one parent MUST encode a stable disambiguator in plugin paths before setting this to `true`; otherwise they MUST set it to `false`.
-- `componentComparison`: MUST be exactly one of the two concrete relations below. A plugin MUST commit to the relation it actually enforces. **`unknown` (or any value other than the two below) is NOT a legal plugin value** — a plugin MUST NOT emit it, and the host treats it as a capability contract violation (fail closed). A plugin that cannot positively prove its instance relation MUST still declare the conservative concrete relation it enforces (default `ordinalCaseSensitive`, which is data-safe: without overwrite flags an existing destination fails with `ERROR_ALREADY_EXISTS` rather than being overwritten); it MUST NOT punt. Note that path-text uniqueness is a *separate* axis carried by `pathTextStableIdentity` (e.g. duplicate display names) — it is not encoded through `componentComparison`.
+- `comparison`: MUST be exactly one of the two concrete relations below. `unknown` is illegal.
   - `ordinalCaseSensitive`: UTF-16 code-unit equality; no locale folding and no Unicode normalization.
   - `ordinalIgnoreCase`: Windows ordinal case-insensitive equality, equivalent to `CompareStringOrdinal(..., TRUE)` for equality. This is accent-sensitive and normalization-sensitive; composed and decomposed Unicode remain distinct unless the provider itself canonicalizes them in path text.
-- `normalization`: MUST be `none` for v1. Providers MUST NOT claim Unicode normalization that the host helper does not implement.
+- `normalization`: MUST be `none` until the host implements another advertised value.
 - `preferredSeparator`: The separator the provider emits for canonical plugin paths, usually `"\\"` for local Windows-like providers and `"/"` for remote/object/archive providers.
 - `acceptedSeparators`: The separators the provider accepts as equivalent during path parsing. Local Windows-like providers usually accept both `"\\"` and `"/"`; object and URL-like providers usually accept only `"/"`.
 - `casePreserving`: `true` when the provider preserves display casing even if identity is case-insensitive.
-- `caseOnlyRename`: MUST be one of `supported`, `noOp`, `unsupported`, or `notApplicable`. Case-only rename means source and destination components differ as text but compare equal by `componentComparison`.
+- `caseOnlyRename`: MUST be one of `supported`, `noOp`, `unsupported`, or `notApplicable`. Case-only rename means source and destination components differ as text but compare equal by `comparison`.
 
 Host obligations:
 
-- The host MUST parse `pathIdentity` into one `FileSystemPathIdentity` profile per active provider instance and reuse that profile for every host-side path identity decision for that provider.
+- The canonical typed helper MUST map the returned comparison/separator/case fields
+  into one `FileSystemPathIdentity` profile and reuse it only within the returned
+  provider/profile/root identity.
 - Maps and caches MAY use folded keys for speed only when the helper owns the key algorithm; callers MUST verify key hits with the helper equality relation before treating them as equal.
-- If `pathTextStableIdentity` is `false`, `componentComparison` is absent or not one of the two allowed concrete values (a plugin emitting `unknown` is a contract violation, not a legal state), `normalization` is not `none`, or any required field is invalid, host planners that need predictive identity MUST reject the feature before mutation rather than falling back to a guessed relation. `unknown` exists only as the host's internal label for such a rejected/contract-violating profile; it is never a value a conforming plugin sends.
+- If `pathTextStableIdentity` is false, `comparison` is invalid, `normalization` is unsupported, or another required field is invalid, predictive planners reject before mutation rather than guessing.
 - User text features such as case-insensitive search/replace, sorting labels, or macro-name lookup are not path identity decisions. They MAY use UI text semantics, but those helpers MUST NOT be reused for collision/dependency/refresh/undo decisions.
-- For a provider whose `componentComparison` is `ordinalIgnoreCase` — notably the **local Windows file system** (`builtin/file-system`) and its local-equivalent (`builtin/file-system-dummy`) — the host MUST apply exactly Windows ordinal case-insensitive equality (`CompareStringOrdinal(left, -1, right, -1, TRUE) == CSTR_EQUAL`) at **every** path-identity decision site for that provider, with no per-site variation. The host MUST NOT substitute `CharUpper*`/uppercase folding, `LCMapStringEx`/invariant-lowercase folding, `_wcsicmp`, or `std::filesystem::path` equality for that relation. When a local pane has no live `IFileSystem` instance, the host MUST use the default local `ordinalIgnoreCase` profile rather than a guessed relation.
+- For a provider whose `names.comparison` is `ordinalIgnoreCase` — notably the **local Windows file system** (`builtin/file-system`) and its local-equivalent (`builtin/file-system-dummy`) — the host MUST apply exactly Windows ordinal case-insensitive equality (`CompareStringOrdinal(left, -1, right, -1, TRUE) == CSTR_EQUAL`) at **every** path-identity decision site for that provider, with no per-site variation. The host MUST NOT substitute `CharUpper*`/uppercase folding, `LCMapStringEx`/invariant-lowercase folding, `_wcsicmp`, or `std::filesystem::path` equality for that relation. When a local pane has no live `IFileSystem` instance, the host MUST use the default local `ordinalIgnoreCase` profile rather than a guessed relation.
 
 Provider obligations:
 
 - Providers MUST declare the relation they actually enforce for siblings in the current instance, not a convenient UI sort relation.
-- If behavior can vary by connection, server, bucket, archive, or mount context, the provider MUST return the instance-specific relation from `GetCapabilities()`. If it cannot positively determine the instance relation, it MUST still return a concrete conservative relation (default `ordinalCaseSensitive`) — it MUST NOT return `unknown`.
-- Providers that support same-provider rename MUST keep `RenameItem` and `RenameItems` collision behavior consistent with `pathIdentity`. Without overwrite flags, a destination that already identifies an existing sibling by `componentComparison` MUST fail rather than silently replacing it.
+- If behavior varies by connection, server, bucket, archive, mount, or path, the provider returns the exact relation from `GetRouteFacts`. It never returns an unknown enum.
+- Providers keep rename collision behavior consistent with `GetChildNameCollisionKey`; without an overwrite grant an existing sibling with the same key fails. The key may encode stricter provider/path-scoped equivalence than the general component comparison and is the executable sibling-collision authority.
+- A provider that cannot atomically enforce publish-if-absent/no-replace MUST advertise the affected same-provider Copy, Move, and Rename operations as false. Its direct no-overwrite entry points MUST return `HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)` before endpoint work; a prior absence probe, process-local lock, or unconditional rename is not a conditional-publication primitive.
 
 Current built-in provider declarations:
 
-| Provider | `pathTextStableIdentity` | `componentComparison` | Separators | `caseOnlyRename` | Notes |
+| Provider | `pathTextStableIdentity` | `names.comparison` | Separators | `caseOnlyRename` | Notes |
 |----------|--------------------------|-----------------------|------------|------------------|-------|
 | Local FileSystem (`builtin/file-system`) | `true` | `ordinalIgnoreCase` | preferred `"\\"`, accepts `"\\"` and `"/"` | `supported` | Host treats local paths as Windows ordinal case-insensitive for collision/dependency planning. Per-directory Windows case-sensitive mode is not a supported Batch Rename surface until a path-scoped identity extension exists. |
 | FileSystemDummy (`builtin/file-system-dummy`) | `true` | `ordinalIgnoreCase` | preferred `"\\"`, accepts `"\\"` and `"/"` | `supported` | Mirrors the local Windows-like identity relation for deterministic offline testing. |
 | 7-Zip (`builtin/file-system-7z`) | `true` | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` | `notApplicable` | Same-provider mutation is unsupported; archive entry paths remain exact text identities. |
-| Google Drive (`builtin/file-system-gdrive`) | `false` unless plugin paths encode stable item IDs | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` | `notApplicable` | Same-provider mutation is unsupported today. Display names are case-distinct, so the concrete relation is `ordinalCaseSensitive`; fail-closed comes from `pathTextStableIdentity = false` (duplicate display names), NOT from a `componentComparison` of `unknown`. |
+| Google Drive (`builtin/file-system-gdrive`) | `true` (R0f-GDrive: exposed names are unique per folder; duplicates carry the `[id:...]` decoration and an ambiguous text fails closed with `ERROR_DUP_NAME`) | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` | `notApplicable` | Same-provider mutation is unsupported today. Display names are case-distinct, so the concrete relation is `ordinalCaseSensitive`; fail-closed comes from `pathTextStableIdentity = false` (duplicate display names), not from an `unknown` comparison mode. |
 | Microsoft Drive (`builtin/file-system-onedrive-personal`, `builtin/file-system-onedrive-business`, `builtin/file-system-sharepoint`) | `true` | `ordinalIgnoreCase` | preferred `"/"`, accepts `"/"` | `supported` | The provider's sibling lookup and debug Graph model are case-insensitive. |
-| Curl SFTP/SCP (`builtin/file-system-sftp`, `builtin/file-system-scp`) | `true` | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` | `supported` | POSIX-like remote paths are treated as exact UTF-16 component identities after protocol decoding. |
-| Curl FTP (`builtin/file-system-ftp`) | `true` | `ordinalCaseSensitive` (conservative default; the proven relation when the connection can determine it) | preferred `"/"`, accepts `"/"` | `supported` | FTP path text uniquely identifies items (no duplicate display names), so `pathTextStableIdentity` is `true`. Server case behavior varies, but the plugin MUST declare a concrete relation — never `unknown`. The conservative `ordinalCaseSensitive` default is data-safe (worst case: a spurious `ERROR_ALREADY_EXISTS` on a case-insensitive server, never an overwrite); the plugin SHOULD upgrade to the proven instance relation when it can (e.g. from server type/`FEAT`). |
+| Curl SFTP/SCP (`builtin/file-system-sftp`, `builtin/file-system-scp`) | `true` | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` | `notApplicable` | POSIX-like remote paths are exact UTF-16 component identities after protocol decoding. Same-provider Copy, native Move (files and directories through one server rename), Rename, and Delete are admitted; rename overwrite has no atomic no-replace primitive, so overwrite is the rollback-sibling sequence, and a directory-onto-directory destination is a known `ERROR_FILE_EXISTS` non-commit that the host continues as a rename merge. |
+| Curl FTP (`builtin/file-system-ftp`) | `true` | `ordinalCaseSensitive` (conservative default; the proven relation when the connection can determine it) | preferred `"/"`, accepts `"/"` | `notApplicable` | FTP path text uniquely identifies items (no duplicate display names), so `pathTextStableIdentity` is `true`. Server case behavior varies, but the plugin MUST declare a concrete relation — never `unknown`. Same-provider Copy, native Move (files and directories through one `RNFR`/`RNTO`), Rename, and Delete are admitted; `RNTO` has no atomic no-replace primitive, so overwrite is the rollback-sibling sequence, and a directory-onto-directory destination is a known `ERROR_FILE_EXISTS` non-commit that the host continues as a rename merge. |
 | Curl IMAP (`builtin/file-system-imap`) | `true` | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` | `notApplicable` | Same-provider rename/move is unsupported. |
-| MTP/PTP (`builtin/file-system-mtp`) | `true` after the plugin encodes device/object identity suffixes | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` plus `mtp:/`, `mtp://`, and slash-rooted input | `supported` only where the device accepts rename | WPD object display names may be duplicated; plugin paths MUST encode `devpuid:`/`devid:` device keys and `puid:`/`oid:` object suffixes before exposing stable path text. Ambiguous unsuffixed mutation fails closed. |
+| MTP/PTP (`builtin/file-system-mtp`) | `true` after the plugin encodes object identity suffixes (device roots are plain friendly names) | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` plus `mtp:/`, `mtp://`, and slash-rooted input | `supported` only where the device accepts rename | WPD object display names may be duplicated; plugin paths MUST carry reversible percent-encoded full `devpuid:`/`devid:` device keys and `puid:`/`oid:` object identities. Full-token comparison is ordinal case-sensitive; ambiguous unsuffixed mutation fails closed. |
 | S3 (`builtin/file-system-s3`) | `true` | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` | `supported` | Object keys are exact byte/text identities after the plugin's UTF-16 path decoding. |
 | S3 Table (`builtin/file-system-s3table`) | `true` | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` | `notApplicable` | Same-provider mutation is unsupported. |
 
-Providers advertising `caseOnlyRename: "supported"` MUST execute a requested case-only leaf rename rather than collapse it as a self/no-op. Curl FTP/SFTP/SCP use their advertised case-sensitive path identity for self-rename detection. Microsoft Drive treats a same-item-id request with different leaf casing as a Graph name PATCH; only an exact textual source/destination match is a no-op.
+Current typed route/namespace declarations:
+
+| Provider/profile | Cancellation route | Namespace | Executable mutation summary |
+|---|---|---|---|
+| Local fixed-volume `local-win32` | bounded | real container | Copy/Move/native Move/Delete/Recycle/Rename/Create Directory plus exact binding/publication/link facts |
+| Local SMB `local-win32-smb` | bounded (R0f-SMB: the shared synchronous-I/O cancel watch aborts a stuck call with `CancelSynchronousIo`) | real container | Same executable mutations as `local-win32`: Copy/Move/native Move/Delete/Recycle/Rename/Create Directory plus exact binding/publication/link facts |
+| 7-Zip `7z-archive` | bounded | provider virtual folder | read/properties/export Copy only |
+| Curl FTP/SFTP/SCP | provider watchdog (R0f-Curl: every transfer and control command polls the host's operation control) | provider virtual folder | Copy, native Move, Delete, Rename, Create Directory, read and write through the central routes |
+| Curl IMAP | uncontained | provider virtual folder | read/export Copy only; mutation admission rejects the uncontained route |
+| Dummy `dummy-local` | bounded | real container | deterministic Copy/Move/native Move/Create Directory test route |
+| Google Drive (writable profile) | provider watchdog (R0f-GDrive) | provider virtual folder | Copy, native Move, Delete, Rename, Recycle, Create Directory, read and write; names are unique per folder (`pathTextStableIdentity: true`, duplicates carry the `[id:...]` decoration) |
+| Google Drive read-only connection profile (same `google-drive` profile id) | provider watchdog (R0f-GDrive) | provider virtual folder | read/export Copy only; the connection profile keeps its route read-only |
+| Microsoft Drive `microsoft-drive-graph` | provider watchdog (R0f-Graph) | provider virtual folder | Copy, native Move, Rename, Recycle (`operations.recycle: true`, `operations.delete: false`; the Graph permanent-delete endpoint stays unavailable), Create Directory, read and write |
+| MTP `mtp-device-storage` | provider watchdog, 30 s | provider virtual folder | read/write/Copy/Move/Create Directory depend on current device state; positive concurrency bounds do not grant a false operation bit; overwrite replaces only the occupant decided on (C9) |
+| S3 `s3-flat-prefix` | provider watchdog (R0f-S3: the CRT continue handler polls the operation control on every request plus bounded connect, stall-monitor, and retry policy) | provider virtual folder | Copy, Move, native Move, Delete, Create Directory, read and write; Rename and Recycle false; mutations act on the object key resolved at commit |
+| S3 Tables `s3-table-read-only` | uncontained | provider virtual folder | read/properties/export Copy only |
+
+Providers advertising `caseOnlyRename: "supported"` MUST execute a requested case-only leaf rename rather than collapse it as a self/no-op. Microsoft Drive treats a same-item-id request with different leaf casing as a Graph name PATCH; only an exact textual source/destination match is a no-op. Curl FTP/SFTP/SCP advertise `notApplicable` while their Rename capability is disabled.
 
 ### 4e. Transfer Hints (`IFileSystem::GetTransferHints`)
 
@@ -986,43 +1450,161 @@ Normative rules:
 - Plugins with non-volume-backed storage (cloud, virtual, memory) SHOULD still return a meaningful classification rather than a Win32-volume approximation.
 - The host treats this call as the authoritative plugin-to-host classification; it does not infer storage behavior from plugin type.
 
-Capabilities JSON (version 1):
+Diagnostic/extension capabilities JSON (version 2; never executable route authority):
 
 ```json5
 {
-  "version": 1,
+  "version": 2,
+  "pathProfile": "provider-profile-id",
+  "rootId": "opaque-provider-root-id",
   "operations": {
     "copy": true,
     "move": true,
+    "nativeMove": true,
     "delete": true,
     "rename": true,
+    "createDirectory": true,
     "properties": true,
     "read": true,   // supports enumeration + IFileReader
-    "write": false  // supports IFileWriter via IFileSystemIO::CreateFileWriter
+    "write": false,
+    "recycle": false
   },
   "concurrency": {
     "copyMoveMax": 4,
     "deleteMax": 8,
     "deleteRecycleBinMax": 2
   },
-  "crossFileSystem": {
+  "transfer": {
     // Plugin ids are long-form ids (PluginMetaData.id), case-insensitive.
     // "*" means any plugin id.
     "export": { "copy": ["*"], "move": ["*"] }, // this plugin may be the SOURCE when destination id matches
     "import": { "copy": ["builtin/file-system"], "move": [] } // this plugin may be the DESTINATION when source id matches
   },
-  "pathIdentity": {
-    "version": 1,
+  "identity": {
+    "object": "none",
+    "revision": "none",
+    "boundDelete": false,
+    "conditionalDelete": false
+  },
+  "publication": {
+    "exclusiveStage": false,
+    "conditionalPublish": false,
+    "committedSize": false
+  },
+  "verification": {
+    "hostReadback": false,
+    "providerProof": "none" // "none" or "blake3-bound-object"
+  },
+  "links": {
+    "preserveFileLink": false,
+    "preserveDirectoryLink": false,
+    "retargetInTree": false,
+    "exactLinkRemoval": false
+  },
+  "metadata": {
+    "motw": "unknown",
+    "alternateStreams": "unknown",
+    "extendedAttributes": "unknown",
+    "sparse": "unknown",
+    "efs": "unknown"
+  },
+  "cancellation": {
+    "abort": false,
+    "deadline": false,
+    "routeClass": "bounded",
+    "providerWatchdogTimeoutMs": 0
+  },
+  "names": {
     "pathTextStableIdentity": true,
-    "componentComparison": "ordinalIgnoreCase",
+    "comparison": "ordinalIgnoreCase",
     "normalization": "none",
     "preferredSeparator": "\\",
     "acceptedSeparators": ["\\", "/"],
     "casePreserving": true,
-    "caseOnlyRename": "supported"
-  }
+    "caseOnlyRename": "supported",
+    "maxComponentUtf16": 255
+  },
+  "directories": { "model": "native" }
 }
 ```
+
+`verification.hostReadback` declares that the exact published binding can open a content reader for
+host BLAKE3 readback. `verification.providerProof == "blake3-bound-object"` declares the optional
+bound proof above. Both are executable path-profile claims and require contract tests; neither is
+object identity or deletion authority. Missing `verification`, an unknown proof string, or a
+non-boolean `hostReadback` fails capability parsing closed.
+
+The five metadata strings are path-profile summaries (`preserved`, `reported-loss`, or `unknown`),
+not executable per-item proof. Exact bridge transfer uses `IFileSystemBoundMetadata`; missing or
+failed exact results are surfaced as loss/change outcomes even when the profile says `preserved`.
+
+`operations.move` and `operations.nativeMove` are deliberately separate required booleans:
+
+- `move` declares that the provider Move entry point is available for the requested profile. It is
+  operation admission only and is never proof that the engine may select the Native Move strategy.
+- `nativeMove` declares that the profile has a provider/OS-native Move route. The engine may use it
+  only after qualifying the exact source and destination profiles and every provider-specific pair
+  predicate and passes `FILESYSTEM_MOVE_NATIVE_ONLY`. A provider whose `MoveItem` cannot disable
+  copy/delete fallback for the queried profile MUST report `nativeMove: false`.
+- There is no separate link proof for Native Move. A Move never applies the link policy, so
+  `nativeMove: true` admits Native Move for every item shape (regular file, directory tree, link
+  object) on one qualified endpoint.
+
+`operations.createDirectory` is also a required Boolean. It admits only
+`IFileSystemDirectoryOperations::CreateDirectory` for the queried parent/candidate path profile; it
+does not place the command inside `StartOperation` and it does not authorize a Win32 fallback. The
+host queries both the concrete parent and the joined candidate with `FILESYSTEM_CREATE_DIRECTORY`,
+requires matching non-empty `rootId`/`pathProfile` and executable `names` semantics, and rejects a
+provider-native separator, component-limit, or containment violation before mutation. A provider
+must return `false` when directory creation is synthetic, session-only, or unsupported.
+
+For a Move request, the Copy export/import pair may admit only `CopyOnly`: publish through Copy,
+never call source Delete, retain the source, and report `Copied; source kept`. The separate Move
+pair is one necessary fact for managed destructive Move. Managed additionally requires
+`identity.boundDelete`, `identity.conditionalDelete`, `publication.exclusiveStage`,
+`publication.conditionalPublish`, and both optional binding interfaces for the concrete endpoints.
+If the Copy pair is proven but any of those destructive facts is absent, selection is Copy-only.
+An empty Move pair therefore prohibits managed copy-delete, not the safe Copy-only downgrade.
+
+Missing either field, a non-boolean value, or an otherwise incomplete required v2 section is a
+provider-contract violation and fails capability parsing closed. `S_OK` plus `{}` is invalid.
+
+#### Built-in capability-v2 profile matrix
+
+The following rows are the mandatory Phase 0 declarations for every shipped profile. They are
+executable safety claims, not documentation inferred from method existence. `C/M/N/D/K/R/W` means
+same-provider Copy, Move entry point, qualified native Move, Delete, Create Directory, Read, and
+Write. A provider may
+change a row only with the matching provider spec and a contract test that calls every newly true
+operation for that exact profile. `links.retargetInTree` is reserved for the optional retarget plan and is `false`
+for every shipped profile: File Operations copies link payloads literally (`FileSystem_FileOperations.md`,
+"Link policy: literal Preserve"), so no profile may claim an in-tree rewrite.
+
+| Provider/profile | Operations and transfer | Identity and publication | Links, metadata, cancellation, directories | Safe strategy consequence |
+|---|---|---|---|---|
+| Local `local-win32` | `C/M/N/D/K/R/W=true`, Recycle true; Copy/Move import/export `*` | No-follow `FILE_ID_INFO` identity plus exact metadata/regular-file reader binding; no revision; bound/conditional delete and exclusive/conditional publication true; committed size; verification host readback plus exact bound-object BLAKE3 proof | Every provider Move mode is one native rename only and contains no folder-merge or copy/delete fallback; recursive Copy queues only bounded file/reparse work, walks directories with O(depth) state, caps depth/entries/path text/ancestor metadata at 128/4,096/16 MiB/8 MiB, and restores newly created directory metadata post-order; Managed link preservation is literal: the stored target text and relative flag are copied unchanged (File Operations literal Preserve), so `retargetInTree=false`; exact MOTW/ADS/EA/basic/sparse/compression/EFS transfer with security-change reporting; bound regular-file reader pending-I/O Cancel/deadline proved, profile-wide Abort/deadline false; `bounded/0`; native directories | Qualified fixed-volume work remains admitted. UNC and mapped-remote paths return the `local-win32-smb` profile below with the same admitted mutations. Same-volume Move of a regular file, a directory tree, or a link object is Native (one rename). A directory onto an existing directory is the host rename merge: each child relocated by one provider rename, emptied source directories removed by exact `DeleteIfUnchanged`. Cross-volume Move uses Managed. Direct provider folder-merge/cross-volume Move fails source-kept. |
+| Local SMB `local-win32-smb` | Same declarations as `local-win32` (`C/M/N/D/K/R/W=true`, Recycle true; Copy/Move import/export `*`) | Same no-follow `FILE_ID_INFO` binding, publication, and proof declarations | Same link, metadata, and walker declarations; `bounded/0` through the shared synchronous-I/O cancel watch that aborts a stuck call with `CancelSynchronousIo` (R0f-SMB) | UNC and mapped-remote paths are admitted with the same strategies as `local-win32`; a share that stops answering ends the blocked call through the cancel watch instead of holding the task. |
+| Dummy `dummy-local` | `C/M/N/K/R/W=true`; Delete/Rename/Recycle false; Copy/Move import/export `*` | No object/revision binding and no conditional publication/delete | Link objects are not representable; metadata unknown; Abort/deadline false; `bounded/0`; native directory model | `FILESYSTEM_MOVE_NATIVE_ONLY` performs the deterministic locked node relocation/merge and rejects unknown modes before work. It is not evidence that another provider with the same operation bits has native authority. Managed destructive Move, Delete, Rename, and Recycle are unavailable. |
+| 7-Zip `7z-archive` | `K=false`; mutations/write false; Read/properties and Copy export true | No object/revision or publication/delete proof | Link proof false; metadata unknown; Abort/deadline false; deterministic `bounded/0`; virtual directories | Read-only Copy source. Move, import, rename, delete, Create Directory, and recovery mutation are unsupported. |
+| Curl `curl-remote-path` (FTP/SFTP/SCP) | `C/M/N/D/K/R/W=true`, Rename true, Recycle false; Copy import/export `*`, no Move bridge | Path identity only (`object: none`, no revision); no bound/conditional delete or conditional publication; committed size through the writer digest | Link proof false; metadata reported lost; every transfer and control command polls the host's operation control through libcurl's progress callback plus the transport timeouts, `providerWatchdog` with deadline (R0f-Curl); the reader implements the operation-control interface so a blocked Read ends on cancel; provider-virtual directories | Same-provider Copy, Move, native Move (one server rename for a file or a directory on one connection; a directory onto an existing directory continues as the host rename merge; another connection is Copy-only), Delete, Rename, Create Directory, and bridge Copy are admitted through the provider-owned watchdog. Mutations act on the path the server lists at commit; the host's exact-authority routes stay unavailable, so overwrite and Permanent Delete act on the name, and the Permanent Delete card says that this location deletes by name (C10). |
+| Curl `imap-mailbox` | `K=false`; Copy/Move/native/Delete/Rename/Recycle/write false; Read/properties true; Copy export only | `imapUid`, no revision or conditional delete/publication | Link proof false; metadata reported lost; Abort/deadline false; `uncontained/0`; provider-virtual directories | Inspection remains available. Every File Operations mutation route is rejected before task creation. |
+| Google Drive `google-drive` | `C/M/N/D/K/R/W=true`, Rename and Recycle true; Copy import/export `*`, no Move bridge | Provider file ID (`object: providerItemId`, `revision: version`); `pathTextStableIdentity: true` with the `[id:...]` decoration for duplicate names; no bound/conditional delete or conditional publication; committed size through the writer digest | Link objects are not representable; metadata reported lost; every transfer polls the host's operation control through libcurl's progress callback plus the connect and hard request timeouts, `providerWatchdog` with deadline (R0f-GDrive); provider-virtual directories | File Operations and Create Directory are admitted through the provider-owned watchdog; a read-only connection profile keeps the same profile id and its route read/export-only. Mutations resolve the file ID at commit; Permanent Delete pins the file ID while the task prepares and deletes only that file (`IFileSystemIdentityDelete`, C10). |
+| Microsoft Drive `microsoft-drive-graph` | `K=true`; Move/native Move/Rename/read/write and Recycle true; same-provider Copy and permanent Delete false; Copy import/export `*`, no Move bridge | Provider item ID + ETag (`object: providerItemId`, `revision: etag`); Recycle resolves and consumes one stable item ID; committed size through the writer digest; no bound/conditional permanent delete or conditional publication | Link objects are not representable; metadata reported lost; operation-control polling around every WinHTTP step plus the resolve/connect/send/receive timeouts, `providerWatchdog` with deadline (R0f-Graph); provider-virtual directories | Move, native Move, Rename, Recycle, Create Directory, and bridge Copy are admitted through the provider-owned watchdog. Delete is Recycle by stable item ID; no permanent-delete route exists. Overwrite resolves the occupant by item ID and ETag before the first write and fails closed on a zero modification time. |
+| MTP writable `mtp-device-storage` | `K=true`; Copy/Move/read/write true; native/Delete/Rename/Recycle false; Copy import/export, no Move bridge | Provider persistent ID, no revision; committed size; conditional replace through `IFileWriterExpectedReplacement` on the persistent ID resolved at the decision (C9); no bound/conditional delete or conditional publication | Link proof false; metadata reported lost; canonical checkpoints plus watchdog/backend cancel/quarantine and unload gating; `providerWatchdog/30000`; staged-file writer has zero private payload buffer, upload/relay buffers are at most 4 MiB, verification at most 8 MiB, reader request state at most 8 MiB; provider-virtual directories | Qualified Create Directory and transfer routes remain admitted through the provider-owned watchdog. Overwrite of an existing file is offered (R3-1): `SupportsAtomicWriterCommit` accepts the overwrite flag because the temp-sibling swap publishes atomically and deletes only the decided occupant. Overwrite recovery uses one exact-parent enumeration and a schema-v3 record containing complete device, temp, and original-destination identities. It mutates only the uniquely rebound temp object when the destination is proved absent or still carries the recorded destination PUID; path/name/size/time/hash hints never grant authority, and old, invalid, replacement-occupied, or ambiguous records are quarantined without mutation. Backend Delete/Rename method availability is not a central executable claim. The legacy Move entry point may choose WPD move or bounded device-stream copy/delete internally, so it is not native authority. Host-managed destructive Move is unavailable; an unproven transfer becomes Copy-only/source kept. |
+| MTP read-only/disconnected `mtp-device-storage` | `K=false`; writable operations/import false; Read/properties reflect the live readable profile; native always false | Same persistent-ID shape only when the device can produce it; no revision/delete/publication proof | Same loss/cancellation/directory declarations as the live profile | Capability is instance/device-state honest. No cached writable or Create Directory claim survives read-only, invalid-profile, or disconnected state. |
+| S3 `s3-flat-prefix` | `K=true`; Copy/Move/native/Delete/read/write true; Rename/Recycle false; Copy/Move import/export `*` | Object key + VersionId-or-ETag; committed size; public binding flags remain false while provider-native exact-revision logic owns the strategy | Link objects are not representable; metadata reported lost; the CRT continue handler polls the host's operation control on every request armed from the calling thread, plus bounded connect, stall-monitor, and retry policy, `providerWatchdog` with deadline (R0f-S3); the ranged reader implements the operation-control interface and arms every GetObject on its own thread, so a cancel ends an in-flight read within the bound (C8); known-size multipart reserve is exact and four 4-KiB writers retain at most 16 KiB; flat-prefix directories | Copy, Move, native Move, Delete, Create Directory, and bridge transfers are admitted through the provider-owned watchdog. The R0b conditional per-observation Delete and pinned-revision native Move are the provider's own algorithms; the host's exact-authority routes stay unavailable (`boundDelete`/`conditionalDelete` false), so Permanent Delete pins the object's version id or ETag while the task prepares and deletes only that revision (`IFileSystemIdentityDelete`, C10); a prefix keeps the per-observation conditional delete for its descendants. |
+| S3 Table `s3-table-read-only` | `K=false`; mutations/write/import false; Read/properties and Copy export true | No object/revision or publication/delete proof | Link proof false; metadata unknown; Abort/deadline false; `uncontained/0`; provider-virtual directories | Inspection remains available. File Operations mutation is rejected before task creation. It is not the S3 directory-bucket profile and never creates markers/directories. |
+
+Only Local `local-win32` currently advertises verification host readback and
+`blake3-bound-object`. Every other shipped profile publishes
+`{"hostReadback":false,"providerProof":"none"}` until its exact-bound proof/readback route and
+contract tests land. General `read: true`, final-path reads, ETags, checksums with weaker/ambiguous
+semantics, and method existence are not verification claims.
+
+Detailed provider behavior remains owned by `FileSystem_FtpSftpScp.md`, `FileSystem_Imap.md`,
+`FileSystem_GoogleDrive.md`, `FileSystem_MicrosoftDrive.md`, `FileSystem_Mtp.md`, and
+`FileSystem_S3.md`. This matrix is the complete normative owner for Local, Dummy, and 7-Zip until
+provider-specific files become necessary; creating three empty wrapper specs is not required.
 
 ### 4g. Item properties (`IFileSystemIO::GetItemProperties`) (optional)
 
@@ -1109,10 +1691,10 @@ Creates a new directory at the specified path.
 
 #### GetDirectorySize
 
-Computes the total size of a directory tree, optionally recursively.
+Computes a file's size or the total size of a directory tree, optionally recursively.
 
 **Parameters:**
-- `path`: Root directory to start from (must exist and be a directory).
+- `path`: Existing root item. A regular file returns its size, `fileCount == 1`, and `directoryCount == 0`; a directory counts its children.
 - `flags`: Use `FILESYSTEM_FLAG_RECURSIVE` for recursive computation; otherwise only immediate children are counted.
 - `callback`: Optional progress callback (may be `nullptr` for synchronous completion without progress).
 - `cookie`: Opaque value passed to callback methods.
@@ -1123,14 +1705,14 @@ Computes the total size of a directory tree, optionally recursively.
 - `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)` (also stored in `result->status`): Computation completed with best-effort totals after one or more non-root descendants were skipped.
 - `HRESULT_FROM_WIN32(ERROR_CANCELLED)`: Operation was cancelled via callback.
 - `HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND)`: Path does not exist.
-- `HRESULT_FROM_WIN32(ERROR_DIRECTORY)`: Path is not a directory.
+- `HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)`: The provider cannot determine the selected file root's size; unknown size is not a successful zero-byte result.
 - `E_POINTER`: `path` or `result` is `nullptr`.
 - `E_INVALIDARG`: `path` is empty.
 
 **Progress Reporting:**
 - Plugins SHOULD report progress every 100 entries OR every 200ms, whichever comes first.
 - Progress callback includes current totals and the path currently being scanned.
-- Plugins MUST check `DirectorySizeShouldCancel` after each progress report.
+- Plugins MUST check `DirectorySizeShouldCancel` after each successful progress report; a failed progress report is itself a global callback failure.
 - When `callback` is non-null, plugins MUST report progress before cancellation checks so cancel/failure paths expose the latest known totals and current path.
 - On successful completion, plugins MUST emit one final progress callback with `currentPath == nullptr` and final totals before returning.
 
@@ -1143,6 +1725,9 @@ Computes the total size of a directory tree, optionally recursively.
 - Plugins SHOULD skip reparse points (symlinks, junctions) to avoid infinite loops.
 - Plugins SHOULD continue siblings after access-denied, path-vanished, sharing/lock, transient network, or device-not-ready errors for individual descendants and report `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)` both as the call result and in `result->status`, while preserving totals for entries that were successfully observed. Missing or denied root paths and structural/global failures remain hard failures.
 - The `directoryCount` field excludes the root directory itself.
+- Unknown descendant sizes must not be added as known zero bytes. Keep observed file counts, preserve known bytes as a lower bound, and report partial totals. Never wrap any counter or byte sum on overflow.
+- Callback failures and cancellation are global failures, even when their HRESULT also describes an eligible descendant error. A later final-progress or cancellation callback must not overwrite a prior root, structural, or other global failure. Successful final progress is followed by the same cancellation check as other progress reports.
+- Accumulated skipped-child partial totals are not a global failure: cancellation or failure from final feedback takes precedence over that partial status, while preserving the observed totals.
 
 **Host usage:**
 - `FolderWindow` uses `CreateDirectory` for `F7` (Create directory) when available:
@@ -1150,9 +1735,28 @@ Computes the total size of a directory tree, optionally recursively.
   - The host displays the destination path where the folder will be created.
   - When the prompt opens, the entire suggested folder name is selected so typing immediately replaces it.
   - The host suggests the first available localized default name before the user confirms: the base default first, then `... (1)`, `... (2)`, and so on when earlier suggestions already exist in the target folder.
-  - The host validates the typed folder name as a single path segment and rejects invalid characters (`\\ / : * ? " < > |`) before calling `CreateDirectory`.
-  - If the interface is not available (QI fails), the host treats the operation as unsupported and shows a localized error message.
+  - Before opening the prompt, and again for the accepted leaf immediately before mutation, the
+    host queries `IFileSystemPathCapabilities2` with `FILESYSTEM_CREATE_DIRECTORY` for the concrete
+    parent and provider-joined candidate. Both documents must advertise
+    `operations.createDirectory: true`, return matching non-empty `pathProfile`/`rootId`, and expose
+    stable executable `names` semantics.
+  - The host validates the typed folder name as one provider-native component using
+    `names.maxComponentUtf16`, `preferredSeparator`, and `acceptedSeparators`; it joins and derives
+    parent/leaf with those same semantics, then proves the candidate remains immediately below the
+    qualified parent and inside the same root.
+  - A provider path is never reinterpreted as Win32 because it is textually absolute. Local native
+    `CreateDirectoryW` is permitted only after the exact builtin Local candidate passes capability,
+    root, containment, component, and supported-namespace checks. Device, `GLOBALROOT`, and NT
+    namespace envelopes fail before the fallback. The built-in Local provider repeats the same
+    shared supported-namespace gate inside `IFileSystemDirectoryOperations::CreateDirectory`, so a
+    direct in-process QI caller cannot bypass the host invariant.
+  - Otherwise the host requires `IFileSystemDirectoryOperations`; missing QI or a false capability
+    is unsupported and leaves the namespace unchanged.
   - If `CreateDirectory` returns `E_NOTIMPL`, the host treats the operation as unsupported and shows a localized error message that includes the plugin display name.
+- For a flat-prefix object store, a trailing separator is representation syntax, not existence
+  proof. `GetAttributes` reports a directory only after an exact marker or a non-empty current
+  prefix query; it must not let `CreateDirectory` return `ERROR_ALREADY_EXISTS` for an uncommitted
+  synthetic path.
 - `FolderWindow` uses `GetDirectorySize` for selection size calculation and properties display.
 - If not available, the host treats these operations as unsupported for that plugin.
 
@@ -1223,6 +1827,7 @@ interface __declspec(uuid("0d9ef549-4e54-4086-8a5c-f9d3e6120211"))
 - This writer API is **not** part of the public COM interface and must not be called by the host.
 - Buffered provider facades for 7z, Curl, Google Drive, Microsoft Drive, MTP, and S3 use
   `Common::Plugins::PackedFileInfoBuffer` for checked aggregate/name sizing, `alignof(FileInfo)` entry layout,
+  and `Common::Plugins::PackedFileInfoCursor` / `LocatePackedFileInfoRecord` for bounded consumer traversal before the first field read,
   zero/single/multi-entry construction, common query behavior, and bounded `NextEntryOffset` traversal.
   Providers sort and populate metadata before/through that owner; those policies are not shared.
 - Local `FilesInformation` remains a resumable streaming/native-enumeration buffer, and FileSystemDummy retains
@@ -1347,6 +1952,7 @@ typedef enum FileSystemOperation
     FILESYSTEM_MOVE = 2,
     FILESYSTEM_DELETE = 3,
     FILESYSTEM_RENAME = 4,
+    FILESYSTEM_CREATE_DIRECTORY = 5,
     FILESYSTEM_TYPE_FORCE_DWORD = 0xffffffff
 } FileSystemOperation;
 
@@ -1361,6 +1967,18 @@ typedef enum FileSystemFlags
     FILESYSTEM_FLAG_FORCE_DWORD = 0xffffffff
 } FileSystemFlags;
 
+typedef enum FileSystemLinkPolicy
+{
+    FILESYSTEM_LINK_PRESERVE = 1,
+    FILESYSTEM_LINK_SKIP = 2
+} FileSystemLinkPolicy;
+
+typedef enum FileSystemMoveMode
+{
+    FILESYSTEM_MOVE_DEFAULT = 0,
+    FILESYSTEM_MOVE_NATIVE_ONLY = 1
+} FileSystemMoveMode;
+
 typedef struct FileSystemOptions
 {
     uint32_t sizeBytes; // sizeof(FileSystemOptions)
@@ -1372,6 +1990,12 @@ typedef struct FileSystemOptions
     // 0 = plugin default. Non-zero clamps copy/move fan-out for the whole call, including recursive
     // work a plugin schedules internally under one top-level host item.
     uint32_t copyMoveMaxConcurrency;
+
+    FileSystemLinkPolicy linkPolicy;
+    FileSystemMoveMode moveMode;
+    uint64_t deadlineTickCount64;
+    IFileSystemOperationControl* operationControl;
+    void* operationControlCookie;
 } FileSystemOptions;
 
 typedef struct FileSystemRenamePair
@@ -1407,6 +2031,14 @@ typedef struct FileSystemArena
 - For `[out]` structs (e.g. `FileSystemDirectorySizeResult* result`), the caller MUST initialize `result->sizeBytes` before calling into the plugin.
 - `FileSystemOptions::bandwidthLimitBytesPerSecond` applies to data-transfer operations (copy/move) and MAY be ignored for rename/delete.
 - `FileSystemOptions::copyMoveMaxConcurrency` applies to copy/move operations and clamps provider-side fan-out, including recursive internal work for a single top-level host item. `0` means plugin/default concurrency.
+- `FileSystemOptions::moveMode == FILESYSTEM_MOVE_NATIVE_ONLY` is valid only for Move and forbids generic/unqualified fallback. A provider-native conditional server-side strategy may still delete as part of its qualified route; a provider that cannot honor the constraint fails before mutation.
+- Every profile advertising `operations.nativeMove: true` MUST accept `FILESYSTEM_MOVE_NATIVE_ONLY`
+  in both `MoveItem` and `MoveItems`, reject every unknown `moveMode` with `E_INVALIDARG` before
+  provider I/O, and contract-test the exact qualified route. Method existence or the ordinary
+  `operations.move` bit is not sufficient evidence.
+- S3's conditioned bounded relay is a provider-internal alternative within its pinned-revision
+  NativeOnly route. It retains the same exact source-read, publication, and conditional-delete
+  authority and is not a host-managed or pathname copy/delete fallback.
 - The callback receives an in/out `FileSystemOptions* options` parameter; callers MAY adjust it and plugins SHOULD use the updated values for subsequent work.
 - Callback `options` may be `nullptr`; callers must check before writing to it.
 - Default options: `options == nullptr` (unlimited bandwidth and default concurrency). If `options` is provided, `bandwidthLimitBytesPerSecond == 0` is treated as unlimited and `copyMoveMaxConcurrency == 0` is treated as plugin/default concurrency.
@@ -1416,6 +2048,20 @@ typedef struct FileSystemArena
 - Recursive Move implementations MUST NOT treat children skipped by parser validation as successfully moved. If enumeration drops a malformed child record (for example an empty remote display name), the source parent MUST be considered incomplete, the operation MUST preserve that source parent, and the provider SHOULD report `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)`.
 - Provider-side Move implementations that upload or copy data before deleting a source MUST prove the destination object/file is complete before source deletion. For staged remote uploads, the staged object SHOULD be re-statted before promotion and its size MUST match the source size; otherwise the staged object should be cleaned up and the source preserved with `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)`.
 - Provider-side delete-after-copy logic MUST use the strongest cheap proof available for that backend before deleting the source: known-size equality at minimum, provider IDs/version tokens when exposed, and object metadata such as ETag/checksum where the provider contract makes those values meaningful. If the provider cannot prove the copied item maps to the planned source/destination identity, the source MUST be preserved.
+- A provider that lacks atomic no-replace publication MUST set the affected `operations.copy`, `operations.move`, and `operations.rename` fields to false. Its corresponding direct no-overwrite methods MUST reject with `HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)` before endpoint commands, while any explicitly overwrite-authorized compatibility path remains non-advertised and does not weaken the capability contract.
+- Recovery after publication MUST NOT delete, replace, or restore a destination by pathname unless the provider can prove immutable ownership of that exact object/revision. When that identity is unavailable, preserve the current destination, source, rollback/staging artifacts, and any concurrent directory children; report partial-state truth (normally `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)`) and expose cleanup debt rather than pretending rollback succeeded.
+- A provider with post-publication cleanup must keep primary mutation, cleanup, and
+  source-deletion outcomes distinct. A committed primary plus cleanup-only debt remains
+  operation/item success; a failed primary retains that failure even when cleanup also
+  fails; and a post-publication source-delete failure remains a partial result. Batch or
+  recursive workers MUST aggregate cleanup debt thread-safely and expose it once per
+  public operation through content-free telemetry and user guidance. Observation MUST
+  NOT leak endpoint, path, identity, credential, payload, or randomized-artifact text.
+- S3 Copy/Move and Microsoft Drive Move MUST pass their existing committed-primary cleanup result
+  through `FileSystemItemCompleted`. A committed primary reports `outcomeKnown == TRUE`,
+  `mutationCommitted == TRUE`, Copy source presence `TRUE` or Move source presence `FALSE`, and
+  `ownedStageDisposition == Retained` when backup cleanup failed. Cleanup-only failure does not
+  replace the successful item HRESULT. The host emits one independent localized cleanup-debt warning.
 
 **Arena Pattern (Required):**
 - All pointer fields in `FileSystemRenamePair`, plus all string pointer parameters passed via `IFileSystemCallback`, MUST reference memory inside a `FileSystemArena`.
@@ -1440,10 +2086,35 @@ enum class FileSystemIssueAction : uint8_t
     None = 0,
     Overwrite,
     ReplaceReadOnly,
+    ReplaceLink,
     PermanentDelete,
     Retry,
+    KeepBoth,
     Skip,
     Cancel,
+};
+
+enum class FileSystemOwnedStageDisposition : uint32_t
+{
+    NotApplicable = 0,
+    NotCreated,
+    Removed,
+    Published,
+    Retained,
+    Unknown,
+    RetainedIncomplete,
+};
+
+// Versioned per-item mutation truth. Providers initialize every field even when status failed.
+// A null pointer is permitted only when the provider cannot expose mutation truth; the host then
+// treats destructive recovery or escalation as indeterminate and fails closed.
+struct FileSystemItemMutationResult
+{
+    uint32_t sizeBytes; // sizeof(FileSystemItemMutationResult)
+    BOOL outcomeKnown;
+    BOOL mutationCommitted;
+    BOOL originalStillPresent;
+    FileSystemOwnedStageDisposition ownedStageDisposition;
 };
 
 interface __declspec(novtable) IFileSystemCallback
@@ -1466,7 +2137,8 @@ interface __declspec(novtable) IFileSystemCallback
         void* cookie
     ) noexcept = 0;
 
-    // Per-item completion callback (success or failure).
+    // Per-item completion callback (success or failure). mutationResult is valid only for the
+    // callback duration and is copied by a host that needs it.
     // options may be nullptr; callers must check before writing to it.
     virtual HRESULT STDMETHODCALLTYPE FileSystemItemCompleted(
         FileSystemOperation operationType,
@@ -1474,6 +2146,7 @@ interface __declspec(novtable) IFileSystemCallback
         const wchar_t* sourcePath,
         const wchar_t* destinationPath,
         HRESULT status,
+        const FileSystemItemMutationResult* mutationResult,
         FileSystemOptions* options,
         void* cookie
     ) noexcept = 0;
@@ -1482,18 +2155,98 @@ interface __declspec(novtable) IFileSystemCallback
     virtual HRESULT STDMETHODCALLTYPE FileSystemShouldCancel(BOOL* pCancel, void* cookie) noexcept = 0;
 
     // Called by the plugin when an operation hits a conflict/issue that requires a user decision.
-    // action must be non-null. Implementations should set it even when returning failure/cancellation.
+    // action and expectedDestination must be non-null and initialized on every return path.
+    // A destructive action returns the exact no-follow destination authority captured before the
+    // prompt; non-destructive actions return null.
     virtual HRESULT STDMETHODCALLTYPE FileSystemIssue(
         FileSystemOperation operationType,
         const wchar_t* sourcePath,
         const wchar_t* destinationPath,
         HRESULT status,
         FileSystemIssueAction* action,
+        IFileSystemBoundObject** expectedDestination,
         FileSystemOptions* options,
         void* cookie
     ) noexcept = 0;
 };
 ```
+
+The original prefix ending before `ownedStageDisposition` remains an accepted v1 record; the full
+size advertises the appended stage axis. `sizeBytes` is validated against one of those explicit
+versions before any result field is read. Boolean fields must be canonical `TRUE` or
+`FALSE`; malformed records are contract violations. Consumers retain receipts through
+`FileSystemRouteContract::SnapshotItemMutationResult`, which validates the prefix and
+copies only advertised, understood fields while the provider buffer remains alive.
+A V1 receipt may occupy exactly its 16-byte prefix; never assign the complete current
+structure from that pointer. Missing stage information stays `NotApplicable`; future
+suffixes are ignored and the snapshot advertises only its understood size. The host
+rejects malformed completions with `E_INVALIDARG` and replaces earlier receipt truth
+with unknown, even if the provider ignores that callback return. A missing completion
+receipt clears earlier proof rather than inheriting a child or attempt's outcome.
+`C0_MutationReceiptPrefixBoundary` exercises the actual host callback with an
+inaccessible page directly after the V1 prefix and unsupported size headers.
+`outcomeKnown == FALSE` means the other two
+fields cannot authorize cleanup. A known non-commit normally reports `mutationCommitted == FALSE`
+and `originalStillPresent == TRUE`; a known committed removal reports `TRUE/FALSE`. Providers must
+not infer these facts from a later pathname probe. The Local Recycle implementation derives them
+from the shell operation's per-item completion callback. If the shell does not supply a terminal
+per-item outcome, it reports unknown rather than guessing. This record does not replace the typed
+operation result axes; it supplies mutation authority for host-side recovery decisions.
+`ownedStageDisposition` is independent of final mutation truth. `Retained`, `Unknown`, and
+`RetainedIncomplete` identify possible provider-created artifacts, block automatic retry/destructive
+cleanup, and do not turn a proven final non-commit into unknown final publication. `Retained` is
+known cleanup debt and does not by itself make a committed primary Indeterminate; `Unknown` and
+`RetainedIncomplete` do.
+`RetainedIncomplete` means the provider knows its exact created object still exists and knows it does
+not contain the complete requested payload; it is not an alias for ordinary intentional retention.
+
+Local Permanent Delete is synchronous and handle-bound. Before the selected root itself is removed,
+cancellation, open/sharing failure, and a recursive partial child failure are known non-commits for
+that root (`TRUE/FALSE/TRUE`). A successful root removal is `TRUE/TRUE/FALSE`. The host therefore
+distinguishes an explicit child Skip from an unexpected recursive partial failure: the former is a
+neutral `Skipped` top-level result, while the latter is `Failed` with the selected root Retained.
+For a recursive Local root, `DeleteIfUnchanged` accepts only `RECURSIVE` and `CONTINUE_ON_ERROR` as
+execution modifiers. Continue-on-error remains inside the retained root authority: it deletes
+unrelated children, returns `ERROR_PARTIAL_COPY` when a child cannot be removed, and never converts
+that partial walk into a committed removal of the selected root.
+Recycle keeps unknown as its initial result and replaces it only from shell per-item completion.
+
+A provider-native Delete or Native Move that returns success without a valid
+`FileSystemMutationReceipt` supplies no destructive mutation truth. The host must classify the
+item as Indeterminate/`ERROR_IO_INCOMPLETE` before any generic success mapping. It must not infer
+source removal or destination publication from `S_OK`, a later pathname probe, or a true
+capability bit.
+
+`Overwrite`, `ReplaceReadOnly`, and `ReplaceLink` are executable receipts only when
+`expectedDestination` is non-null. The provider consumes that exact authority once through
+`PublishAs` or `RenameIfUnchanged`; it never converts the receipt into a call-wide overwrite flag,
+reopens the pathname as authority, or applies it to a descendant. A provider that cannot consume
+the exact authority must not receive or expose those actions. `ReplaceLink` authorizes replacement
+of the exact no-follow destination link object and never its target. `KeepBoth` asks the provider to retry the currently reported colliding item with a
+collision-safe sibling name in that item's parent; it is not permission to rename or recopy the
+selected top-level root. A provider must not return success for either action unless it implements
+the corresponding exact operation. The built-in Local recursive Copy route implements child-level
+`KeepBoth` with the shared sibling-name algorithm. For an absent regular-file destination it writes
+the exclusively created final leaf while retaining that exact bound object for commit or abort;
+overwrite continues through identity-owned staged replacement. Under Preserve, Local records only
+actual child renames in a bounded sparse map and defers every file-symlink/directory-symlink/junction
+publication until traversal has finalized those names. It then
+rebuilds each link from a no-follow semantic payload; raw `COPY_FILE_COPY_SYMLINK` text is not a
+meaning-preservation substitute. Deferred records plus sparse paths are capped by the shared
+4,096-entry/16-MiB traversal ceilings, and a bound failure stops instead of guessing a target. The
+host does not send `KeepBoth` to in-tree providers that cannot execute it; their supported top-level
+retry remains host-owned.
+
+The Local absent-name regular-file route retains the same `IFileSystemBoundObject` returned by
+`CreateExclusiveWriter(finalPath)` through pre-content metadata, bounded content transfer, commit,
+and post-content metadata. Failure invokes `AbortOwnedObject` on that object and never performs
+pathname cleanup. The single exact Local abort uses a cleanup-only options snapshot so primary
+Cancel/deadline state cannot revoke already-proved authority; this exception is confined to the
+direct-final route and does not redefine other owned-stage compensation. Exact removal reports
+`Removed`; a known surviving partial reports
+`RetainedIncomplete` plus `ERROR_IO_INCOMPLETE`; an outcome that cannot be reconciled reports
+`Unknown`. Successful direct-final Copy reports `Published`. This contract does not change the
+overwrite, directory, reparse-object, Move, or non-Local provider routes.
 
 #### Arena Helpers (C++ only)
 
@@ -1753,7 +2506,7 @@ interface __declspec(uuid("00417f3e-f0f5-4add-8dea-4407d5169ef6"))
 
 #### Search capabilities JSON
 
-`IFileSystem::GetCapabilities()` may expose:
+`IFileSystemPathCapabilities2::GetPathCapabilities()` may expose:
 
 ```json
 {
@@ -1960,13 +2713,13 @@ The `Plugins/FileSystemDummy/` project provides a deterministic in-memory file s
 | Plugin | Plugin IDs / short IDs | Mutating operations | Watch mode | v1 external change coverage | Dependency behavior | Verification |
 | --- | --- | --- | --- | --- | --- | --- |
 | Local file system | `builtin/file-system` / `file` | Copy, move, delete, rename, read, write, create directory | Native Win32-backed `IFileSystemDirectoryWatch` | Local external changes and in-app mutations | Acts as the source of backing-path invalidation for mounted contexts | `Phase7_CacheBorrowNoWatchInvalidation`, `Phase7_CrossPaneVisibleRefreshLocal`, `Phase7_CrossPaneRelocateLocal` |
-| Dummy file system | `builtin/file-system-dummy` / implementation-specific short ID (currently `fk`) | Copy, move, delete, rename, read, write, create directory | Native plugin watch | Deterministic plugin-generated changes and in-app mutations | None | `Phase7_CrossPaneVisibleRefreshDummy` |
+| Dummy file system | `builtin/file-system-dummy` / implementation-specific short ID (currently `fk`) | Copy, move, read, write, create directory (Delete, Rename, and Recycle are deliberately not advertised: the provider has no receipt-bearing implementation for them, so the host rejects them before mutation) | Native plugin watch | Deterministic plugin-generated changes and in-app mutations | None | `Phase7_CrossPaneVisibleRefreshDummy` (host-routed same-provider Copy) |
 | 7z mount | `builtin/file-system-7z` / `7z` | Read-only | No direct watch interface | None directly; updated through local backing-path impacts | Backing archive rename retargets; delete exits mount | `Phase15_FileSystem7zMountPathImpact` |
 | FTP | `builtin/file-system-ftp` / `ftp` | Copy, move, delete, rename, read, write, create directory | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure` plus gated remote phases |
 | SFTP | `builtin/file-system-sftp` / `sftp` | Copy, move, delete, rename, read, write, create directory | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure` plus gated remote phases |
 | SCP | `builtin/file-system-scp` / `scp` | Copy, move, delete, rename, read, write, create directory | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure` plus gated remote phases |
-| IMAP | `builtin/file-system-imap` / `imap` | Copy, move, delete, rename, read, write, create directory | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure` plus gated remote phases |
-| MTP/PTP portable devices | `builtin/file-system-mtp` / `mtp` | Device-dependent read/write via staged whole-object transfer; no random writes | No direct watch interface in v1 | Manual refresh/poll; hot-plug invalidates device/session state | WPD device/session identity; no local backing dependency | `mtp.*` deterministic fake-backend coverage plus gated scratch-folder live smoke |
+| IMAP | `builtin/file-system-imap` / `imap` | Read/export Copy only (typed facts keep IMAP read-only; its mutation route is `uncontained` and admission rejects it) | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure` plus gated remote phases |
+| MTP/PTP portable devices | `builtin/file-system-mtp` / `mtp` | Device-dependent read/write via a delete-on-close staged file and bounded WPD streaming; no random writes | No direct watch interface in v1 | Manual refresh/poll; hot-plug invalidates device/session state | WPD device/session identity; no local backing dependency | `mtp.*` deterministic fake-backend memory/watchdog coverage plus gated scratch-folder live smoke |
 | S3 | `builtin/file-system-s3` / `s3` | Copy, move, delete, rename, read, write, create directory | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure`; live sandbox phase remains configuration-gated |
 
 ### MTP/PTP portable-device file system
@@ -1976,11 +2729,11 @@ The `Plugins/FileSystemDummy/` project provides a deterministic in-memory file s
 Required host/plugin contract points:
 - The short ID is `mtp`; the embedded protocol identity token `IDS_FILESYSTEMMTP_FSNAME` is intentionally language-neutral.
 - Accepted path forms include `mtp:/`, `mtp://`, slash-rooted paths, and connection-manager paths; the plugin normalizes them to one slash-rooted provider path.
-- Device roots must include stable `devpuid:` keys when available, or session-scoped `devid:` keys when no persistent device identity exists.
-- Duplicate object display names must be disambiguated with stable `puid:` suffixes when available, or session-scoped `oid:` suffixes; ambiguous unsuffixed mutation must fail closed.
+- Device roots are the device friendly name (made distinct with ` (n)` only when two connected devices share a folded name); the persistent device id or PnP id is provider metadata on the root item and in the saved profile, never a path suffix.
+- Duplicate object display names must be disambiguated with reversible percent-encoded full `puid:` suffixes when available, or full session-scoped `oid:` suffixes. Full identity comparison is ordinal case-sensitive; ambiguous unsuffixed mutation fails closed.
 - MTP declares `ordinalCaseSensitive` identity. The plugin may present localized display names, but collision, overwrite, cache, and mutation decisions use the encoded provider path text.
 - v1 omits `IFileSystemDirectoryWatch`; device hot-plug and backend events invalidate state, and visible panes rely on refresh/poll.
-- Public writes are whole-object staged transfers. Random write is unsupported. Overwrite safety and byte verification are governed by the MTP spec, not by local-file assumptions.
+- Public writes are whole-object staged transfers. Random write is unsupported. Overwrite safety and byte verification are governed by the MTP spec, not by local-file assumptions. Recovery requires a schema-v3 record with matching full device identity, exactly one full temp-PUID rebound, and destination state proved by the recorded original-destination PUID in the same exact-parent enumeration; weak metadata and path occupancy are never mutation authority.
 - Runtime refresh must honor the common `RedSalamanderPluginCanUnloadNow()` deferral contract before unregistering resources or calling `FreeLibrary`.
 
 ## Error Handling
@@ -2072,60 +2825,34 @@ if (FAILED(hr)) {
 - Cache is managed by the host outside the plugin.
 - Host cache identity is based on logical plugin context (`pluginId + normalized instanceContext`) plus normalized folder path.
 
-**3. Parallel Enumeration:**
-- For network file systems, consider parallel queries across subdirectories
-- Use thread pool for concurrent directory reads
-- Aggregate results before returning to caller
+**3. Directory enumeration:**
+- The current ABI returns one complete directory result; it has no paged or
+  streaming enumeration contract.
+- Providers must keep asynchronous enumeration cancellable and must not block
+  the UI thread.
+- Whether to introduce a paged ABI is a product/architecture decision owned by
+  the Atlas remaining-decisions plan, not by this current interface contract.
 
-**4. Lazy Loading:**
-- Current API loads entire directory upfront
-- Future enhancement: Implement streaming API for incremental enumeration
-- Useful for massive directories (100K+ files)
-
-**5. Batch Operations:**
+**4. Batch Operations:**
 - Validate upfront where possible (e.g., destination existence) to fail fast
 - Throttle progress callbacks to avoid UI churn
 - Prefer sequential I/O on spinning disks; allow parallelism only when safe
 
-**6. Search:**
+**5. Search:**
 - Stream matches through callbacks instead of buffering large result sets
 - Provide periodic progress updates for long-running searches
 
-**Performance Targets:**
-- Local file system: <100ms for 10K files
-- Network share: <500ms for 10K files (depends on network latency)
-- Memory usage: <10MB for 100K files
+Concrete performance budgets and evidence rules are owned by
+`Specs/Testing/Testing_PerformanceValidation.md` and the provider-specific
+specification. Unmeasured generic latency or memory numbers are not part of the
+plugin ABI.
 
-## Future Extensions
-
-### Planned Features
-
-**1. File I/O Streams:**
-```cpp
-interface IFileSystemStreams : public IUnknown {
-    HRESULT ReadFile(const wchar_t* path, IStream** ppStream);
-    HRESULT WriteFile(const wchar_t* path, IStream* pStream);
-};
-```
-
-**2. Metadata write operations:**
-- `IFileSystemIO` (above) provides fast attribute reads (`GetAttributes`).
-- Future versions may add write APIs for attributes/times (either via new methods on a new interface GUID or a separate interface).
-
-**3. External remote change polling:**
-
-- Synthetic directory-watch implementations only guarantee notifications for successful RedSalamander/plugin-initiated mutations in v1.
-- Unrelated backend-side changes may still require manual refresh or a future polling/subscription mechanism.
-
-**4. Streaming Enumeration:**
-- Paged or streaming directory enumeration for very large folders
-- Incremental host updates without a full in-memory buffer
-
-**5. Virtual File Systems:**
-- ZIP/archive browsing
-- FTP/SFTP remote file systems
-- Cloud storage (OneDrive, Google Drive, Dropbox)
-- In-memory file systems for testing
+The current ABI already supplies file readers/writers through `IFileSystemIO`,
+basic metadata writes through `SetFileBasicInformation`, and implementations
+for local, archive, FTP/SFTP/SCP, MTP, Microsoft Drive, Google Drive, S3, IMAP,
+and test filesystems. External backend polling/subscription and paged directory
+enumeration are not current ABI promises; their decision record is
+`Specs/Plans/WIP/Operation_Atlas_RemainingSpecificationDecisions_2026-08-04.md`.
 
 ## Documentation
 

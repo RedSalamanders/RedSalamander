@@ -1008,11 +1008,15 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
     summary.taskId                                   = task._taskId;
     summary.operation                                = task._operation;
     summary.sourcePane                               = task._sourcePane;
+    summary.sourcePluginId                           = task._sourcePluginId;
+    summary.sourcePluginShortId                      = task._sourcePluginShortId;
+    summary.sourceInstanceContext                    = task._sourceInstanceContext;
     summary.destinationPane                          = task._destinationPane;
     summary.destinationPluginId                      = task._destinationPluginId;
     summary.destinationPluginShortId                 = task._destinationPluginShortId;
     summary.destinationInstanceContext               = task._destinationInstanceContext;
     summary.destinationFolder                        = task.GetDestinationFolder();
+    summary.flags                                    = task._flags;
     summary.diagnosticsLogPath                       = GetDiagnosticsLogPathForDate(localNow);
     summary.resultHr                                 = task.GetResult();
     summary.completedTick                            = GetTickCount64();
@@ -1021,7 +1025,8 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
     summary.completedItems                           = progressSnapshot.completedItems;
     summary.totalBytes                               = progressSnapshot.totalBytes;
     summary.completedBytes                           = progressSnapshot.completedBytes;
-    summary.preCalcSkipped                           = task._preCalcSkipped.load(std::memory_order_acquire);
+    summary.discoverySkipped                         = task._discoverySkipped.load(std::memory_order_acquire);
+    summary.discoveryClosed                          = task._discoveryClosed.load(std::memory_order_acquire);
     summary.completedFiles                           = progressSnapshot.completedFiles;
     summary.completedFolders                         = progressSnapshot.completedFolders;
     summary.autoConcurrencyUsed                      = task._autoConcurrencyUsed.load(std::memory_order_acquire);
@@ -1029,6 +1034,176 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
     summary.autoConcurrencyDestinationStorageKind    = task._autoConcurrencyDestinationStorageKind.load(std::memory_order_acquire);
     summary.autoTunedConcurrency                     = task._autoTunedConcurrency.load(std::memory_order_acquire);
     summary.effectiveConcurrencyBudget               = task._effectiveConcurrencyBudget.load(std::memory_order_acquire);
+    summary.clipboardMoveAdmission                    = task._clipboardMoveAdmission;
+    summary.clipboardMoveConsumed                     = task._clipboardMoveConsumed.load(std::memory_order_acquire);
+    summary.clipboardMoveConsumptionStatus            = task._clipboardMoveConsumptionStatus.load(std::memory_order_acquire);
+
+    bool anySkipped = false;
+    {
+        std::scoped_lock lock(task._sourceItemStatusMutex);
+        const auto increment = [](unsigned long& value) noexcept
+        {
+            if (value < std::numeric_limits<unsigned long>::max())
+            {
+                ++value;
+            }
+        };
+        for (size_t sourceIndex = 0u; sourceIndex < task._sourceItemResultBuilders.size(); ++sourceIndex)
+        {
+            const std::optional<FileOperations::FileOperationItemResult>& item = task._sourceItemResultBuilders[sourceIndex].terminal;
+            if (! item.has_value())
+            {
+                increment(summary.unknownPublicationItemCount);
+                increment(summary.unknownSourceCount);
+                increment(summary.indeterminateItemCount);
+                if (sourceIndex < task._sourcePaths.size())
+                {
+                    summary.unknownSourcePaths.push_back(task._sourcePaths[sourceIndex]);
+                }
+                continue;
+            }
+            if (item->publication == FileOperations::PublicationState::Published)
+            {
+                increment(summary.publishedItemCount);
+            }
+            else if (item->publication == FileOperations::PublicationState::Unknown)
+            {
+                increment(summary.unknownPublicationItemCount);
+            }
+            // A resolved DirectoryShell publishes a folder and moves no source object: it is a merge
+            // instruction, neither a removed nor a kept source.
+            const bool mergeInstruction = sourceIndex < task._resolvedItems.size() &&
+                                          task._resolvedItems[sourceIndex].kind == FolderWindow::ResolvedFileOperationItemKind::DirectoryShell;
+            if (! mergeInstruction)
+            {
+                switch (item->sourceDisposition)
+                {
+                    case FileOperations::SourceDisposition::Removed: increment(summary.removedSourceCount); break;
+                    case FileOperations::SourceDisposition::Retained:
+                    {
+                        increment(summary.retainedSourceCount);
+                        if (item->strategy == FileOperations::OperationStrategy::Native)
+                        {
+                            increment(summary.retainedSourceNativeCount);
+                        }
+                        std::filesystem::path retainedPath(item->finalSourcePath);
+                        if (retainedPath.empty() && sourceIndex < task._sourcePaths.size())
+                        {
+                            retainedPath = task._sourcePaths[sourceIndex];
+                        }
+                        if (! retainedPath.empty())
+                        {
+                            summary.retainedSourcePaths.push_back(retainedPath);
+                            if (item->retainedSourceIdentity.has_value())
+                            {
+                                summary.exactRetainedSourceItems.push_back(CompletedTaskSummary::RetainedSourceActionItem{
+                                    .providerPath = std::move(retainedPath),
+                                    .identity = item->retainedSourceIdentity.value(),
+                                });
+                            }
+                        }
+                        break;
+                    }
+                    case FileOperations::SourceDisposition::Unknown:
+                    {
+                        increment(summary.unknownSourceCount);
+                        std::filesystem::path unknownPath(item->finalSourcePath);
+                        if (unknownPath.empty() && sourceIndex < task._sourcePaths.size())
+                        {
+                            unknownPath = task._sourcePaths[sourceIndex];
+                        }
+                        if (! unknownPath.empty())
+                        {
+                            summary.unknownSourcePaths.push_back(std::move(unknownPath));
+                        }
+                        break;
+                    }
+                }
+            }
+            if (item->verification == FileOperations::VerificationState::Verified)
+            {
+                increment(summary.verifiedItemCount);
+            }
+            else if (item->verification == FileOperations::VerificationState::Failed ||
+                     item->verification == FileOperations::VerificationState::Unavailable ||
+                     item->verification == FileOperations::VerificationState::Canceled)
+            {
+                increment(summary.verificationProblemItemCount);
+                if (item->verification == FileOperations::VerificationState::Failed)
+                {
+                    increment(summary.verificationFailedItemCount);
+                }
+                else if (item->verification == FileOperations::VerificationState::Unavailable)
+                {
+                    increment(summary.verificationUnavailableItemCount);
+                }
+                else
+                {
+                    increment(summary.verificationCanceledItemCount);
+                }
+            }
+            anySkipped = anySkipped || item->completion == FileOperations::ItemCompletion::Skipped;
+            if (item->ownedStageDisposition == FileOperations::OwnedStageDisposition::Retained ||
+                item->ownedStageDisposition == FileOperations::OwnedStageDisposition::RetainedIncomplete)
+            {
+                increment(summary.retainedOwnedStageCount);
+            }
+            else if (item->ownedStageDisposition == FileOperations::OwnedStageDisposition::Unknown)
+            {
+                increment(summary.unknownOwnedStageCount);
+            }
+            if (item->completion == FileOperations::ItemCompletion::Indeterminate ||
+                item->publication == FileOperations::PublicationState::Unknown ||
+                item->sourceDisposition == FileOperations::SourceDisposition::Unknown)
+            {
+                increment(summary.indeterminateItemCount);
+            }
+        }
+    }
+
+    if (summary.unknownPublicationItemCount > 0u || summary.unknownSourceCount > 0u)
+    {
+        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_UNKNOWN);
+    }
+    else if (summary.verificationFailedItemCount > 0u)
+    {
+        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_VERIFICATION_FAILED);
+    }
+    else if (summary.verificationCanceledItemCount > 0u)
+    {
+        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_VERIFICATION_CANCELED);
+    }
+    else if (summary.verificationUnavailableItemCount > 0u)
+    {
+        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_VERIFICATION_UNAVAILABLE);
+    }
+    else if (summary.indeterminateItemCount == 0u && summary.retainedOwnedStageCount > 0u)
+    {
+        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_COMPLETED_CLEANUP_RETAINED);
+    }
+    else if (summary.verifiedItemCount > 0u && summary.verificationProblemItemCount == 0u && summary.operation == FILESYSTEM_COPY)
+    {
+        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_VERIFIED);
+    }
+    else if (summary.operation == FILESYSTEM_MOVE && summary.publishedItemCount > 0u && summary.retainedSourceCount > 0u)
+    {
+        summary.resultSummary = LoadStringResource(nullptr,
+                                                   summary.retainedSourceNativeCount == summary.retainedSourceCount
+                                                       ? IDS_FILEOPS_RESULT_MOVED_SOURCE_FOLDER_KEPT
+                                                       : IDS_FILEOPS_RESULT_COPIED_SOURCE_KEPT);
+    }
+    else if (anySkipped && summary.publishedItemCount == 0u)
+    {
+        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_SKIPPED);
+    }
+    else if (summary.operation == FILESYSTEM_COPY && summary.publishedItemCount > 0u)
+    {
+        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_COPIED);
+    }
+    else if ((summary.operation == FILESYSTEM_MOVE || summary.operation == FILESYSTEM_RENAME) && summary.removedSourceCount > 0u)
+    {
+        summary.resultSummary = LoadStringResource(nullptr, IDS_FILEOPS_RESULT_MOVED);
+    }
 
     {
         std::scoped_lock lock(task._progressPathMutex);
@@ -1080,6 +1255,26 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
         }
     }
 
+    if (summary.clipboardMoveAdmission && (summary.retainedSourceCount > 0u || summary.unknownSourceCount > 0u))
+    {
+        if (summary.warningCount == 0u)
+        {
+            summary.warningCount = 1u;
+        }
+        if (summary.clipboardMoveConsumed && summary.unknownSourceCount > 0u)
+        {
+            summary.lastDiagnosticMessage = LoadStringResource(nullptr, IDS_FILEOPS_CLIPBOARD_SOURCE_UNKNOWN);
+        }
+        else if (summary.clipboardMoveConsumed)
+        {
+            summary.lastDiagnosticMessage = LoadStringResource(nullptr, IDS_FILEOPS_CLIPBOARD_SOURCES_REMAIN);
+        }
+        else if (summary.lastDiagnosticMessage.empty())
+        {
+            summary.lastDiagnosticMessage = LoadStringResource(nullptr, IDS_FILEOPS_CLIPBOARD_MOVE_CLEAR_FAILED);
+        }
+    }
+
     if (FAILED(summary.resultHr) && summary.warningCount == 0 && summary.errorCount == 0)
     {
         const HRESULT partialHr = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
@@ -1118,7 +1313,7 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
     }
 
     std::wstring completedStatus = L"success";
-    if (summary.resultHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY))
+    if (summary.resultHr == S_FALSE || summary.resultHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY))
     {
         completedStatus = L"partial";
     }
@@ -1180,7 +1375,59 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
         EnqueueTaskDiagnostic(std::move(autoEntry));
     }
 
+    const bool cleanCompletion = summary.resultHr == S_OK && summary.warningCount == 0u &&
+        summary.errorCount == 0u && summary.indeterminateItemCount == 0u;
+    const bool inlineRenameSilentCompletion = task._suppressCleanCompletionSummary && cleanCompletion &&
+        summary.operation == FILESYSTEM_RENAME && summary.publishedItemCount == 1u &&
+        summary.removedSourceCount == 1u && summary.retainedSourceCount == 0u && summary.unknownSourceCount == 0u;
+    const bool routineSilentPresentation = ! task._suppressCleanCompletionSummary && cleanCompletion;
+    bool completedWhilePresentationHidden = false;
+    if (inlineRenameSilentCompletion || routineSilentPresentation)
     {
+        Task::TaskPresentationState expected = Task::TaskPresentationState::Hidden;
+        completedWhilePresentationHidden = task._presentationState.compare_exchange_strong(
+            expected,
+            Task::TaskPresentationState::SuppressedCleanSuccess,
+            std::memory_order_acq_rel,
+            std::memory_order_acquire);
+        if (completedWhilePresentationHidden)
+        {
+            const ULONGLONG admittedTick =
+                task._presentationDeadlineTick >= FileOperations::kTaskCardRevealDelayMs
+                    ? task._presentationDeadlineTick - FileOperations::kTaskCardRevealDelayMs
+                    : 0u;
+            const ULONGLONG completedPresentationTick = TaskPresentationNowTick();
+            Debug::Perf::Emit(L"FileOps.TaskPresentation.SilentCleanSuccessMs",
+                              L"hidden-completion",
+                              completedPresentationTick >= admittedTick ? completedPresentationTick - admittedTick : 0u,
+                              FileOperations::kTaskCardRevealDelayMs,
+                              1u,
+                              S_OK);
+            if (inlineRenameSilentCompletion)
+            {
+                Debug::Perf::Emit(L"FileOps.InlineRename.SilentCleanSuccessMs",
+                                  L"hidden-completion",
+                                  completedPresentationTick >= admittedTick ? completedPresentationTick - admittedTick : 0u,
+                                  FileOperations::kInlineRenameCardRevealDelayMs,
+                                  1u,
+                                  S_OK);
+            }
+        }
+#ifdef ENABLE_TESTS
+        if (completedWhilePresentationHidden && inlineRenameSilentCompletion)
+        {
+            _debugInlineRenameSilentCleanCompletionCount.fetch_add(1u, std::memory_order_relaxed);
+        }
+#endif
+    }
+
+    const bool suppressCompletedSummary = completedWhilePresentationHidden && inlineRenameSilentCompletion;
+    if (! suppressCompletedSummary)
+    {
+        if (! completedWhilePresentationHidden)
+        {
+            task.RequestPresentationReveal();
+        }
         std::scoped_lock lock(_mutex);
         _completedTasks.push_front(summary);
         while (_completedTasks.size() > kMaxCompletedTaskSummaries)

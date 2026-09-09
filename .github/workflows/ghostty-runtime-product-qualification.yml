@@ -1,0 +1,293 @@
+name: Ghostty Runtime Product Qualification
+
+"on":
+  workflow_call:
+    inputs:
+      build_number:
+        description: Positive build number used for both build receipts and package identity
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: Positive build number used for both build receipts and package identity
+        required: true
+        default: "1"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ghostty-product-native-${{ github.ref }}-${{ inputs.build_number }}
+  cancel-in-progress: false
+
+jobs:
+  qualify-arm64-product:
+    name: Native ARM64 admitted-product qualification
+    runs-on: windows-11-vs2026-arm
+    timeout-minutes: 240
+
+    steps:
+      - name: Enable long Git paths before checkout
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config --global core.longpaths true
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to enable Git long-path support.' }
+
+      - name: Checkout exact branch commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Select test-data root
+        id: test-root
+        shell: pwsh
+        run: |
+          $root = Join-Path ([IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE)) 'RedSalamander.Perf'
+          "REDSALAMANDER_TEST_ROOT=$root" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "path=$root" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Require native ARM64 host and approved identity
+        shell: pwsh
+        env:
+          RS_BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $osArchitecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+          $processArchitecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()
+          if ($osArchitecture -cne 'Arm64' -or $processArchitecture -cne 'Arm64') {
+            throw "Native ARM64 product qualification requires Arm64 OS/process; found $osArchitecture/$processArchitecture."
+          }
+          if ($env:RS_BUILD_NUMBER -cnotmatch '^[1-9][0-9]*$') {
+            throw "build_number must be a positive integer; found '$env:RS_BUILD_NUMBER'."
+          }
+          Write-Host "Native ARM64 host: $osArchitecture/$processArchitecture"
+
+      - name: Bootstrap the pinned vcpkg tool
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $manifest = Get-Content -LiteralPath .\vcpkg.json -Raw | ConvertFrom-Json
+          $portsBaseline = ([string]$manifest.'builtin-baseline').Trim().ToLowerInvariant()
+          $toolPin = Get-Content -LiteralPath .\vcpkg-tool.json -Raw | ConvertFrom-Json
+          $toolRepository = ([string]$toolPin.repository).Trim()
+          $toolCommit = ([string]$toolPin.commit).Trim().ToLowerInvariant()
+          if ($portsBaseline -cnotmatch '^[0-9a-f]{40}$') {
+            throw "vcpkg.json builtin-baseline is not a lowercase full commit: '$portsBaseline'."
+          }
+          if ([string]::IsNullOrWhiteSpace($toolRepository)) {
+            throw 'vcpkg-tool.json repository is missing/empty.'
+          }
+          if ($toolCommit -cnotmatch '^[0-9a-f]{40}$') {
+            throw "vcpkg-tool.json commit is not a lowercase full commit: '$toolCommit'."
+          }
+
+          New-Item -ItemType Directory -Force -Path .\.build | Out-Null
+          git clone $toolRepository .\.build\vcpkg-tool
+          if ($LASTEXITCODE -ne 0) { throw "git clone vcpkg failed with exit code $LASTEXITCODE." }
+          Push-Location .\.build\vcpkg-tool
+          try {
+            foreach ($requiredCommit in @($toolCommit, $portsBaseline) | Select-Object -Unique) {
+              git cat-file -e "$requiredCommit`^{commit}" 2>$null
+              if ($LASTEXITCODE -ne 0) {
+                git fetch --depth 1 origin $requiredCommit
+                if ($LASTEXITCODE -ne 0) {
+                  throw "Unable to fetch pinned vcpkg commit '$requiredCommit'."
+                }
+              }
+            }
+
+            $toolMetadata = git show "${toolCommit}:scripts/vcpkg-tools.json" | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to read scripts/vcpkg-tools.json from vcpkg tool commit '$toolCommit'."
+            }
+            $portsMetadata = git show "${portsBaseline}:scripts/vcpkg-tools.json" | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to read scripts/vcpkg-tools.json from vcpkg ports baseline '$portsBaseline'."
+            }
+            $toolSchemaVersion = [int]$toolMetadata.'schema-version'
+            $portsSchemaVersion = [int]$portsMetadata.'schema-version'
+            if ($toolSchemaVersion -lt 1 -or $portsSchemaVersion -lt 1) {
+              throw "vcpkg tool metadata schema versions must be positive integers; tool=$toolSchemaVersion ports=$portsSchemaVersion."
+            }
+            if ($toolSchemaVersion -lt $portsSchemaVersion) {
+              throw "vcpkg tool commit '$toolCommit' supports tools schema $toolSchemaVersion, older than ports baseline '$portsBaseline' schema $portsSchemaVersion. Update vcpkg-tool.json with the baseline."
+            }
+            Write-Host "vcpkg tools schema: tool=$toolSchemaVersion ports=$portsSchemaVersion"
+
+            git checkout --detach $toolCommit
+            if ($LASTEXITCODE -ne 0) { throw "Unable to check out pinned vcpkg tool commit '$toolCommit'." }
+            $actualToolCommit = (git rev-parse HEAD).Trim().ToLowerInvariant()
+            if ($actualToolCommit -cne $toolCommit) {
+              throw "vcpkg tool identity mismatch: expected '$toolCommit', found '$actualToolCommit'."
+            }
+
+            git worktree add --detach ..\vcpkg-registry $portsBaseline
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to materialize pinned vcpkg ports baseline '$portsBaseline'."
+            }
+            $actualPortsBaseline = (git -C ..\vcpkg-registry rev-parse HEAD).Trim().ToLowerInvariant()
+            if ($actualPortsBaseline -cne $portsBaseline) {
+              throw "vcpkg ports identity mismatch: expected '$portsBaseline', found '$actualPortsBaseline'."
+            }
+          }
+          finally {
+            Pop-Location
+          }
+
+          & .\.build\vcpkg-tool\bootstrap-vcpkg.bat
+          if ($LASTEXITCODE -ne 0) { throw "bootstrap-vcpkg.bat failed with exit code $LASTEXITCODE." }
+
+      - name: Install pinned ARM64 dependencies
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Keep the executable checkout at the independently pinned tool commit
+          # while the explicit root supplies ports/version metadata from the
+          # manifest baseline. VCPKG_ROOT alone is ignored for an executable
+          # that already resides in a valid vcpkg checkout.
+          .\vcpkg-install.ps1 `
+            -Platform ARM64 `
+            -VcpkgExe .\.build\vcpkg-tool\vcpkg.exe `
+            -VcpkgRoot .\.build\vcpkg-registry
+          if ($LASTEXITCODE -ne 0) { throw "ARM64 dependency installation failed with exit code $LASTEXITCODE." }
+
+      - name: Configure pinned ARM64 vcpkg build integration
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $toolRoot = (Resolve-Path -LiteralPath .\.build\vcpkg-tool).Path
+          $installedRoot = (Resolve-Path -LiteralPath .\.build\vcpkg_installed\arm64).Path
+          $triplet = 'arm64-windows'
+          $tripletRoot = Join-Path $installedRoot $triplet
+          $includeRoot = Join-Path $tripletRoot 'include'
+          $msbuildRoot = Join-Path $toolRoot 'scripts\buildsystems\msbuild'
+          $vcpkgProps = Join-Path $msbuildRoot 'vcpkg.props'
+          $vcpkgTargets = Join-Path $msbuildRoot 'vcpkg.targets'
+          foreach ($requiredPath in @(
+              $includeRoot,
+              (Join-Path $tripletRoot 'debug\lib'),
+              (Join-Path $tripletRoot 'lib'),
+              $vcpkgProps,
+              $vcpkgTargets)) {
+            if (-not (Test-Path -LiteralPath $requiredPath)) {
+              throw "Pinned ARM64 vcpkg build input not found: $requiredPath"
+            }
+          }
+
+          # Hosted runners do not guarantee the Visual Studio vcpkg integration
+          # component. Import the pinned checkout process-locally and bind it to
+          # the repository-owned install root; never mutate user-wide MSBuild.
+          $environment = [ordered]@{
+            ForceImportBeforeCppTargets = $vcpkgProps
+            ForceImportAfterCppTargets = $vcpkgTargets
+            VcpkgRoot = $toolRoot
+            VcpkgManifestInstall = 'false'
+            # BuildEvidence consumes the vcpkg tlog as an output declaration.
+            # The built-in copier records source paths there; the pinned
+            # PowerShell copier records the copied destination paths.
+            VcpkgXUseBuiltInApplocalDeps = 'false'
+            VCPkgLocalAppDataDisabled = 'true'
+            VCPKG_DEFAULT_TRIPLET = $triplet
+            VCPKG_INSTALLED_DIR = $installedRoot
+            VcpkgInstalledDir = $installedRoot.TrimEnd('\') + '\'
+            CL = ('/I"{0}" {1}' -f $includeRoot, $env:CL).Trim()
+          }
+          foreach ($entry in $environment.GetEnumerator()) {
+            "{0}={1}" -f $entry.Key, $entry.Value |
+              Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+
+      - name: Build admitted Debug ARM64 product with tests
+        shell: pwsh
+        env:
+          RS_BUILD_NUMBER: ${{ inputs.build_number }}
+          RSBuildEnableTests: 'true'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\build.ps1 `
+            -Configuration Debug `
+            -Platform ARM64 `
+            -Rebuild `
+            -BuildNumber ([int]$env:RS_BUILD_NUMBER) `
+            -MaxCpuCount 4
+          if ($LASTEXITCODE -ne 0) { throw "Debug ARM64 build failed with exit code $LASTEXITCODE." }
+
+      - name: Validate admitted runtime and Terminal contracts natively
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $runtime = .\Tools\Build-GhosttyTerminalRuntime.ps1 -Platform ARM64 -Offline -PassThru
+          if ($runtime.machine -cne 'ARM64' -or [int]$runtime.exportCount -le 0) {
+            throw 'The admitted ARM64 runtime returned an invalid identity.'
+          }
+          & .\.build\ARM64\Debug\PluginContractTests.exe --terminal-selftests
+          if ($LASTEXITCODE -ne 0) { throw "Native ARM64 Terminal contracts failed with exit code $LASTEXITCODE." }
+
+      - name: Run representative embedded-terminal Commands natively
+        shell: pwsh
+        env:
+          RS_BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($caseFilter in @(
+              'terminal_',
+              'cmd_pane_embedded_terminal_',
+              'cmd_pane_open_command_shell_prefers_windows_terminal')) {
+            .\Tools\Run-AllTests.ps1 `
+              -Suite Commands `
+              -ValidationMode Fresh `
+              -SkipBuild `
+              -CaseFilter $caseFilter `
+              -Configuration Debug `
+              -Platform ARM64 `
+              -AllowExternalTestRoot `
+              -BuildNumber ([int]$env:RS_BUILD_NUMBER)
+            if ($LASTEXITCODE -ne 0) {
+              throw "Native ARM64 Commands filter '$caseFilter' failed with exit code $LASTEXITCODE."
+            }
+          }
+
+      - name: Build production Release ARM64 product
+        shell: pwsh
+        env:
+          RS_BUILD_NUMBER: ${{ inputs.build_number }}
+          RSBuildEnableTests: 'false'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\build.ps1 `
+            -Configuration Release `
+            -Platform ARM64 `
+            -Rebuild `
+            -BuildNumber ([int]$env:RS_BUILD_NUMBER) `
+            -MaxCpuCount 4
+          if ($LASTEXITCODE -ne 0) { throw "Release ARM64 build failed with exit code $LASTEXITCODE." }
+
+      - name: Build and execute native ARM64 portable smoke
+        shell: pwsh
+        env:
+          RS_BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\Installer\zip\build-zip.ps1 `
+            -Configuration Release `
+            -Platform ARM64 `
+            -BuildNumber ([int]$env:RS_BUILD_NUMBER)
+          if ($LASTEXITCODE -ne 0) { throw "Native ARM64 portable qualification failed with exit code $LASTEXITCODE." }
+
+      - name: Upload native product qualification evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ghostty-product-native-arm64-${{ github.run_id }}
+          path: |
+            .build/logs/
+            .build/BuildReceipts/
+            ${{ steps.test-root.outputs.path }}/
+            .build/AppPackages/*ARM64*.zip
+            .build/TerminalEngine/Product/ARM64/terminal-runtime-identity.json
+          if-no-files-found: error
+          retention-days: 30

@@ -210,8 +210,8 @@ void RefreshWindowHostAccessibilitySnapshot(HWND hwnd, WindowHost* host) noexcep
 void PublishEmptyWindowHostAccessibilitySnapshot(HWND hwnd, WindowHost* host) noexcept;
 [[nodiscard]] LRESULT ReturnWindowHostAccessibilityProvider(HWND hwnd, WPARAM wp, LPARAM lp) noexcept;
 [[nodiscard]] bool TryHandleWindowHostAccessibilityMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, LRESULT& outResult) noexcept;
-#if defined(ENABLE_TESTS)
 [[nodiscard]] IRawElementProviderFragmentRoot* CreateWindowHostAccessibilityProvider(HWND hwnd) noexcept;
+#if defined(ENABLE_TESTS)
 void DebugSetAccessibilityUiActionHandlerStallForTest(HANDLE enteredEvent, HANDLE releaseEvent) noexcept;
 void DebugSetAccessibilityUiActionHandlerTakenStallForTest(HANDLE enteredEvent, HANDLE releaseEvent) noexcept;
 void DebugSetAccessibilityUiActionPostedEventForTest(HANDLE postedEvent) noexcept;

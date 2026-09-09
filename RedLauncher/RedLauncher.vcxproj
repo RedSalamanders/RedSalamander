@@ -33,7 +33,6 @@
     <RootNamespace>RedLauncher</RootNamespace>
   </PropertyGroup>
   <PropertyGroup>
-    <RSDefaultEnableTests>false</RSDefaultEnableTests>
     <RSVersionFileDescription>RedSalamander WinGet Launcher</RSVersionFileDescription>
     <RSVersionInternalName>RedLauncher</RSVersionInternalName>
     <RSVersionOriginalFilename>RedLauncher.exe</RSVersionOriginalFilename>

@@ -50,6 +50,10 @@ namespace PreferencesDialog
 [[nodiscard]] bool DebugSelectKeyboardListRow(size_t rowIndex) noexcept;
 [[nodiscard]] bool DebugFindKeyboardListRowByCommandId(std::wstring_view commandId, size_t& outRowIndex) noexcept;
 [[nodiscard]] bool DebugGetKeyboardVisibleRowChordByCommandId(std::wstring_view commandId, std::wstring& outChordText) noexcept;
+[[nodiscard]] bool DebugGetKeyboardVisibleRowPresentationByCommandId(
+    std::wstring_view commandId,
+    std::wstring& outScopeText,
+    std::wstring& outTooltipText) noexcept;
 [[nodiscard]] bool DebugGetKeyboardListRowClientRect(size_t rowIndex, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugGetKeyboardListHeaderClientRect(size_t columnIndex, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugHitTestKeyboardListClientPoint(
@@ -72,6 +76,7 @@ namespace PreferencesDialog
 [[nodiscard]] bool DebugSelectEditorsDefaultEditNewAction(std::wstring_view actionId) noexcept;
 [[nodiscard]] bool DebugSetKeyboardSearchText(std::wstring_view text) noexcept;
 [[nodiscard]] bool DebugSetKeyboardFunctionBarScope() noexcept;
+[[nodiscard]] bool DebugSetKeyboardTerminalScope() noexcept;
 [[nodiscard]] bool DebugCaptureKeyboardShortcut(uint32_t vk, uint32_t modifiers) noexcept;
 [[nodiscard]] bool DebugFocusViewersSearchField() noexcept;
 [[nodiscard]] bool DebugFocusKeyboardSearchField() noexcept;
@@ -81,6 +86,8 @@ namespace PreferencesDialog
 [[nodiscard]] bool DebugSelectGeneralLanguage(std::wstring_view displayText) noexcept;
 [[nodiscard]] bool DebugSelectGeneralReducedMotion(std::wstring_view displayText) noexcept;
 [[nodiscard]] bool DebugSelectGeneralWindowBackdrop(std::wstring_view displayText) noexcept;
+[[nodiscard]] bool DebugSetMouseFocusFollowsPointerSettings(bool always, bool whenTerminalOpen) noexcept;
+[[nodiscard]] bool DebugGetMouseFocusFollowsPointerSettings(Common::Settings::MouseSettings& outSettings) noexcept;
 [[nodiscard]] bool DebugFocusPanesLeftDisplayToggle() noexcept;
 [[nodiscard]] bool DebugSelectPanesLeftDisplay(std::wstring_view displayText) noexcept;
 [[nodiscard]] bool DebugFocusPanesLeftStatusBarToggle() noexcept;
@@ -96,8 +103,8 @@ namespace PreferencesDialog
 void DebugSetSettingsFileOpenCapture(bool capture) noexcept;
 void DebugClearLastSettingsFileOpen() noexcept;
 [[nodiscard]] bool DebugGetLastSettingsFileOpen(std::filesystem::path& outPath, HRESULT& outHr) noexcept;
-[[nodiscard]] bool DebugFocusFileOperationsPreCalcEnabledToggle() noexcept;
-[[nodiscard]] bool DebugGetFileOperationsPreCalcEnabledToggleChecked(bool& outChecked) noexcept;
+[[nodiscard]] bool DebugFocusFileOperationsVerifyAfterCopyToggle() noexcept;
+[[nodiscard]] bool DebugGetFileOperationsVerifyAfterCopyToggleChecked(bool& outChecked) noexcept;
 [[nodiscard]] bool DebugSelectFileOperationsBandwidthPreset(std::wstring_view displayText) noexcept;
 [[nodiscard]] bool DebugSelectCompareDirectoriesContentWorkers(std::wstring_view displayText) noexcept;
 [[nodiscard]] bool DebugSetFileOperationsBridgeBufferText(std::wstring_view text) noexcept;

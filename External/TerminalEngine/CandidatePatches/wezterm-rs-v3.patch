@@ -1,0 +1,2995 @@
+diff --git a/term/Cargo.toml b/term/Cargo.toml
+index 91fe42a8437314c46cb467ec3c227463bbaa9059..1f9038b011ab032169ac632f90e8fee9ba235956 100644
+--- a/term/Cargo.toml
++++ b/term/Cargo.toml
+@@ -10,6 +10,9 @@ documentation = "https://docs.rs/wezterm-term"
+ keywords = ["terminal", "emulator", "vte"]
+ readme = "README.md"
+ 
++[lib]
++crate-type = ["rlib", "staticlib", "cdylib"]
++
+ [features]
+ use_serde = ["termwiz/use_serde", "wezterm-cell/use_serde", "wezterm-escape-parser/use_serde", "wezterm-surface/use_serde"]
+ 
+diff --git a/term/src/lib.rs b/term/src/lib.rs
+index 1fdb38b8955911dfbc6a9a3d6bc435a6be9055fc..38263b090c16d0c636d0262838ec9ebec3cfbff2 100644
+--- a/term/src/lib.rs
++++ b/term/src/lib.rs
+@@ -132,3 +132,1624 @@ pub const OSC: &str = "\x1b]";
+ pub const ST: &str = "\x1b\\";
+ pub const SS3: &str = "\x1bO";
+ pub const DCS: &str = "\x1bP";
++
++#[cfg(target_os = "windows")]
++mod rs_terminal_gate0 {
++    use super::*;
++    use crate::color::ColorPalette;
++    use crate::terminal::{Terminal, TerminalSize};
++    use finl_unicode::grapheme_clusters::Graphemes;
++    use std::convert::TryFrom;
++    use std::ffi::c_void;
++    use std::fmt;
++    use std::io::{self, Write};
++    use std::mem;
++    use std::panic::{AssertUnwindSafe, catch_unwind};
++    use std::ptr;
++    use std::slice;
++    use std::str;
++    use std::sync::atomic::{AtomicBool, Ordering};
++    use std::sync::{Arc, Mutex};
++    use wezterm_cell::image::ImageDataType;
++    use wezterm_escape_parser::parser::{ResourceKind, ResourceLimiter, ResourceReservation};
++
++    type RsResult = u32;
++    const SUCCESS: RsResult = 0;
++    const INVALID_ARGUMENT: RsResult = 1;
++    const UNSUPPORTED_ABI: RsResult = 2;
++    const OUT_OF_MEMORY: RsResult = 3;
++    const OUT_OF_SPACE: RsResult = 4;
++    const LIMIT_REJECTED: RsResult = 5;
++    const INTERNAL_ERROR: RsResult = 6;
++
++    const ADAPTER_ABI_V1: u32 = 1;
++    const QUERY_SYMBOL_V1: u32 = 1;
++    const CALL_CDECL: u32 = 1;
++    #[cfg(target_arch = "x86_64")]
++    const ARCH_X64: u32 = 1;
++    #[cfg(target_arch = "aarch64")]
++    const ARCH_ARM64: u32 = 2;
++
++    const CAP_CELLS_AND_STYLES: u64 = 1 << 0;
++    const CAP_SNAPSHOT_COPY: u64 = 1 << 1;
++    const CAP_INPUT_ENCODING: u64 = 1 << 2;
++    const CAP_EFFECT_ORDERING: u64 = 1 << 3;
++    const CAP_KITTY_STATIC: u64 = 1 << 4;
++    const CAP_RESOURCE_ACCOUNTING: u64 = 1 << 5;
++    const CAP_QUIET_DESTROY: u64 = 1 << 6;
++    const CAPABILITIES: u64 = CAP_CELLS_AND_STYLES
++        | CAP_SNAPSHOT_COPY
++        | CAP_INPUT_ENCODING
++        | CAP_EFFECT_ORDERING
++        | CAP_KITTY_STATIC
++        | CAP_RESOURCE_ACCOUNTING
++        | CAP_QUIET_DESTROY;
++
++    const ACTION_OBSERVED: u64 = 1 << 0;
++    const ACTION_CHECKED_ARITHMETIC: u64 = 1 << 1;
++    const ACTION_BOUNDARY_ACCEPTED: u64 = 1 << 2;
++    const ACTION_PLUS_ONE_REJECTED: u64 = 1 << 3;
++    const ACTION_REJECTION_BEFORE_ALLOCATION: u64 = 1 << 4;
++    const ACTION_NO_PARTIAL_EFFECT: u64 = 1 << 5;
++    const ACTION_ORDER_PRESERVED: u64 = 1 << 6;
++    const ACTION_QUIET_POINT_REACHED: u64 = 1 << 7;
++
++    const TERMINAL_TEXT: u32 = 0;
++    const IMAGE_CPU: u32 = 1;
++    const IMAGE_GPU: u32 = 2;
++    const PENDING_EFFECT: u32 = 3;
++
++    const TERMINAL_TEXT_LIMIT: u64 = 64 * 1024 * 1024;
++    const IMAGE_CPU_LIMIT: u64 = 64 * 1024 * 1024;
++    const KITTY_PIXELS: u64 = 16_000_000;
++    const GENERIC_ESCAPE_BYTES: u64 = 65_536;
++    const OSC52_ENCODED_BYTES: u64 = 1_048_576;
++    const OSC52_DECODED_BYTES: u64 = 786_432;
++    const PENDING_EFFECT_BYTES: u64 = 2 * 1024 * 1024;
++    const PENDING_EFFECT_DESCRIPTORS: u32 = 256;
++    const OSC8_PARAMETER_BYTES: u64 = 1_024;
++    const OSC8_URI_BYTES: u64 = 8_192;
++    const OSC8_RECORD_BYTES: u64 = 16_384;
++    const TITLE_BYTES: u64 = 4_096;
++    const CWD_BYTES: u64 = 128 * 1024;
++    const PENDING_TEXT_BYTES: usize = 4_096;
++
++    const CANDIDATE_ID: &[u8] = b"wezterm-rs";
++    const UPSTREAM_PIN: &[u8] = b"46a166d6dc8188ede1a32a96375e308081ebafc5";
++    const SOURCE_SHA256: &[u8] =
++        b"bf9bde435194d30b1d6cbfdf2efd657c121462e86324394cf08bfdac5d8d94ab";
++    const HEADER_SHA256: &[u8] =
++        b"5aed4f300a5a4aea090f50bbed743bd34824f18a9d2acc64d698a9b8561981bc";
++    const BUILD_IDENTITY: &[u8] = b"wezterm-rs-rustc-1.97.1-msvc-static-crt-v1";
++
++    #[repr(C)]
++    #[derive(Clone, Copy)]
++    struct RsString {
++        ptr: *const u8,
++        len: usize,
++    }
++
++    #[repr(C)]
++    #[derive(Clone, Copy)]
++    struct RsIdentity {
++        size: usize,
++        adapter_abi: u32,
++        candidate_id: RsString,
++        upstream_pin: RsString,
++        source_sha256: RsString,
++        adapter_header_sha256: RsString,
++        build_identity: RsString,
++        architecture: u32,
++        calling_convention: u32,
++        capabilities: u64,
++        pointer_size: u32,
++        reserved: u32,
++    }
++
++    #[repr(C)]
++    struct RsLimits {
++        size: usize,
++        terminal_text_session_bytes: u64,
++        terminal_text_process_bytes: u64,
++        image_cpu_session_bytes: u64,
++        image_cpu_process_bytes: u64,
++        image_gpu_session_bytes: u64,
++        image_gpu_process_bytes: u64,
++        pending_effect_session_bytes: u64,
++        pending_effect_process_bytes: u64,
++        pending_effect_session_descriptors: u32,
++        pending_effect_process_descriptors: u32,
++        maximum_sessions: u32,
++        kitty_max_pixels: u32,
++        kitty_max_dimension: u32,
++        reserved: u32,
++    }
++
++    type ReserveFn = unsafe extern "C" fn(*mut c_void, u32, u64, u32) -> bool;
++    type ReleaseFn = unsafe extern "C" fn(*mut c_void, u32, u64, u32);
++
++    #[repr(C)]
++    struct RsCallbacks {
++        size: usize,
++        userdata: *mut c_void,
++        reserve: Option<ReserveFn>,
++        release: Option<ReleaseFn>,
++    }
++
++    #[repr(C)]
++    struct RsSessionConfig {
++        size: usize,
++        columns: u16,
++        rows: u16,
++        cell_width_px: u16,
++        cell_height_px: u16,
++        fixture_id: RsString,
++        schedule_id: RsString,
++        limits: *const RsLimits,
++        resource_callbacks: *const RsCallbacks,
++    }
++
++    #[repr(C)]
++    struct RsAction {
++        size: usize,
++        action_id: RsString,
++        arguments_jcs: RsString,
++    }
++
++    #[repr(C)]
++    struct RsObservation {
++        size: usize,
++        flags: u64,
++        reservation_calls_before_rejection: u64,
++        allocation_attempts_before_rejection: u64,
++    }
++
++    type SessionCreateFn =
++        unsafe extern "C" fn(*const RsSessionConfig, *mut *mut c_void) -> RsResult;
++    type SessionWriteFn = unsafe extern "C" fn(*mut c_void, *const u8, usize) -> RsResult;
++    type SessionActionFn =
++        unsafe extern "C" fn(*mut c_void, *const RsAction, *mut RsObservation) -> RsResult;
++    type SessionStateFn = unsafe extern "C" fn(*mut c_void, *mut u8, usize, *mut usize) -> RsResult;
++    type SessionDestroyFn = unsafe extern "C" fn(*mut c_void) -> RsResult;
++
++    #[repr(C)]
++    pub(crate) struct RsAdapter {
++        size: usize,
++        identity: RsIdentity,
++        session_create: Option<SessionCreateFn>,
++        session_write: Option<SessionWriteFn>,
++        session_action: Option<SessionActionFn>,
++        session_state_jcs: Option<SessionStateFn>,
++        session_destroy: Option<SessionDestroyFn>,
++    }
++
++    #[derive(Debug)]
++    struct AdapterConfig {
++        scrollback: usize,
++    }
++
++    impl TerminalConfiguration for AdapterConfig {
++        fn scrollback_size(&self) -> usize {
++            self.scrollback
++        }
++
++        fn color_palette(&self) -> ColorPalette {
++            ColorPalette::default()
++        }
++
++        fn canonicalize_pasted_newlines(&self) -> config::NewlineCanon {
++            config::NewlineCanon::None
++        }
++
++        fn enable_kitty_graphics(&self) -> bool {
++            true
++        }
++    }
++
++    #[derive(Debug, Clone)]
++    struct SharedWriter(Arc<Mutex<Vec<u8>>>);
++
++    impl Write for SharedWriter {
++        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
++            let mut output = self
++                .0
++                .lock()
++                .map_err(|_| io::Error::new(io::ErrorKind::Other, "writer lock poisoned"))?;
++            output.extend_from_slice(bytes);
++            Ok(bytes.len())
++        }
++
++        fn flush(&mut self) -> io::Result<()> {
++            Ok(())
++        }
++    }
++
++    struct HostCallbacks {
++        userdata: *mut c_void,
++        reserve: ReserveFn,
++        release: ReleaseFn,
++        accepting: AtomicBool,
++    }
++
++    impl fmt::Debug for HostCallbacks {
++        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
++            formatter
++                .debug_struct("HostCallbacks")
++                .field("accepting", &self.accepting.load(Ordering::Acquire))
++                .finish()
++        }
++    }
++
++    unsafe impl Send for HostCallbacks {}
++    unsafe impl Sync for HostCallbacks {}
++
++    #[derive(Debug)]
++    struct HostReservation {
++        callbacks: Arc<HostCallbacks>,
++        kind: u32,
++        bytes: u64,
++        descriptors: u32,
++    }
++
++    impl ResourceReservation for HostReservation {}
++
++    impl Drop for HostReservation {
++        fn drop(&mut self) {
++            if self.callbacks.accepting.load(Ordering::Acquire) {
++                unsafe {
++                    (self.callbacks.release)(
++                        self.callbacks.userdata,
++                        self.kind,
++                        self.bytes,
++                        self.descriptors,
++                    );
++                }
++            }
++        }
++    }
++
++    #[derive(Debug)]
++    struct HostLimiter {
++        callbacks: Arc<HostCallbacks>,
++    }
++
++    impl HostLimiter {
++        fn reserve_host(
++            &self,
++            kind: ResourceKind,
++            bytes: u64,
++            descriptors: u32,
++        ) -> Option<Box<dyn ResourceReservation>> {
++            self.reserve(kind, bytes, descriptors)
++        }
++    }
++
++    impl ResourceLimiter for HostLimiter {
++        fn reserve(
++            &self,
++            kind: ResourceKind,
++            bytes: u64,
++            descriptors: u32,
++        ) -> Option<Box<dyn ResourceReservation>> {
++            let kind = match kind {
++                ResourceKind::TerminalTextCpu => TERMINAL_TEXT,
++                ResourceKind::ImageCpu => IMAGE_CPU,
++                ResourceKind::ImageGpu => IMAGE_GPU,
++                ResourceKind::PendingEffect => PENDING_EFFECT,
++            };
++            if !self.callbacks.accepting.load(Ordering::Acquire)
++                || !unsafe {
++                    (self.callbacks.reserve)(self.callbacks.userdata, kind, bytes, descriptors)
++                }
++            {
++                return None;
++            }
++            Some(Box::new(HostReservation {
++                callbacks: Arc::clone(&self.callbacks),
++                kind,
++                bytes,
++                descriptors,
++            }))
++        }
++    }
++
++    #[derive(Clone, PartialEq)]
++    struct SnapshotImage {
++        image_id: Option<u32>,
++        placement_id: Option<u32>,
++        z_index: i32,
++        width: u32,
++        height: u32,
++        top_left: (f32, f32),
++        bottom_right: (f32, f32),
++        bytes: Vec<u8>,
++    }
++
++    #[derive(Clone, PartialEq)]
++    struct SnapshotCell {
++        text: String,
++        width: usize,
++        attributes: String,
++        hyperlink: Option<String>,
++        images: Vec<SnapshotImage>,
++    }
++
++    #[derive(Clone, PartialEq)]
++    struct ConsumerSnapshot {
++        columns: usize,
++        rows: usize,
++        cursor: CursorPosition,
++        title: String,
++        palette: ColorPalette,
++        lines: Vec<Vec<SnapshotCell>>,
++        output: Vec<u8>,
++        image_generation: u64,
++        placement_generation: u64,
++        image_count: usize,
++        placement_count: usize,
++    }
++
++    #[derive(Default)]
++    struct ActionFacts {
++        disabled_paste: Vec<u8>,
++        enabled_paste: Vec<u8>,
++        paste_ordered: bool,
++        focus_ordered: bool,
++        mouse_matrix: bool,
++        osc8_limits: bool,
++        kitty_pixel_limit: bool,
++        kitty_replacement: bool,
++        generic_limit: bool,
++        osc52_limits: bool,
++        pending_limit: bool,
++        selection_stable: bool,
++        resize_stable: bool,
++        terminal_text_limit: bool,
++        snapshot_retry: bool,
++        mutation_barrier: bool,
++        teardown_quiet: bool,
++        title_cwd_limits: bool,
++        external_order: bool,
++    }
++
++    struct Session {
++        terminal: Option<Terminal>,
++        _terminal_config: Arc<AdapterConfig>,
++        writer: Arc<Mutex<Vec<u8>>>,
++        limiter: Arc<HostLimiter>,
++        model_reservation: Option<Box<dyn ResourceReservation>>,
++        snapshot_reservations: Vec<Box<dyn ResourceReservation>>,
++        snapshot: Option<ConsumerSnapshot>,
++        selection: Option<String>,
++        fixture_id: String,
++        _schedule_id: String,
++        facts: ActionFacts,
++        bytes_seen: u64,
++        pending_text: [u8; PENDING_TEXT_BYTES],
++        pending_text_len: usize,
++    }
++
++    fn consume_pending_prefix(session: &mut Session, count: usize) -> bool {
++        if count == 0 {
++            return true;
++        }
++        let terminal = match session.terminal.as_mut() {
++            Some(value) => value,
++            None => return false,
++        };
++        terminal.advance_bytes(&session.pending_text[..count]);
++        session
++            .pending_text
++            .copy_within(count..session.pending_text_len, 0);
++        session.pending_text_len -= count;
++        true
++    }
++
++    fn last_grapheme_start(text: &str) -> usize {
++        let mut offset = 0usize;
++        let mut last = 0usize;
++        for grapheme in Graphemes::new(text) {
++            last = offset;
++            offset += grapheme.len();
++        }
++        last
++    }
++
++    fn flush_pending_text(session: &mut Session, force: bool) -> bool {
++        loop {
++            if session.pending_text_len == 0 {
++                return true;
++            }
++            if force {
++                return consume_pending_prefix(session, session.pending_text_len);
++            }
++            let pending = &session.pending_text[..session.pending_text_len];
++            match str::from_utf8(pending) {
++                Ok(text) => {
++                    return consume_pending_prefix(session, last_grapheme_start(text));
++                }
++                Err(error) => {
++                    if let Some(error_len) = error.error_len() {
++                        let count = error.valid_up_to().saturating_add(error_len);
++                        if !consume_pending_prefix(session, count) {
++                            return false;
++                        }
++                    } else {
++                        let valid = error.valid_up_to();
++                        if valid == 0 {
++                            return true;
++                        }
++                        let text = match str::from_utf8(&pending[..valid]) {
++                            Ok(value) => value,
++                            Err(_) => return false,
++                        };
++                        return consume_pending_prefix(session, last_grapheme_start(text));
++                    }
++                }
++            }
++        }
++    }
++
++    fn advance_external(session: &mut Session, bytes: &[u8], account_scratch: bool) -> bool {
++        for chunk in bytes.chunks(64 * 1024) {
++            let scratch = if account_scratch {
++                match session.limiter.reserve_host(
++                    ResourceKind::TerminalTextCpu,
++                    u64::try_from(chunk.len()).unwrap_or(u64::MAX),
++                    0,
++                ) {
++                    Some(value) => Some(value),
++                    None => return false,
++                }
++            } else {
++                None
++            };
++            match session.terminal.as_mut() {
++                Some(value) => value.advance_bytes(chunk),
++                None => return false,
++            }
++            drop(scratch);
++        }
++        true
++    }
++
++    fn append_ground_text(session: &mut Session, bytes: &[u8], account_scratch: bool) -> bool {
++        if bytes.is_empty() {
++            return true;
++        }
++        if bytes.is_ascii() {
++            if session.pending_text_len == PENDING_TEXT_BYTES && !flush_pending_text(session, true)
++            {
++                return false;
++            }
++            session.pending_text[session.pending_text_len] = bytes[0];
++            session.pending_text_len += 1;
++            if !flush_pending_text(session, false) {
++                return false;
++            }
++            if bytes.len() == 1 {
++                return true;
++            }
++            if !flush_pending_text(session, true)
++                || !advance_external(
++                    session,
++                    &bytes[1..bytes.len().saturating_sub(1)],
++                    account_scratch,
++                )
++            {
++                return false;
++            }
++            session.pending_text[0] = bytes[bytes.len() - 1];
++            session.pending_text_len = 1;
++            return true;
++        }
++        let mut offset = 0usize;
++        while offset < bytes.len() {
++            if session.pending_text_len == PENDING_TEXT_BYTES && !flush_pending_text(session, true)
++            {
++                return false;
++            }
++            let count = (PENDING_TEXT_BYTES - session.pending_text_len).min(bytes.len() - offset);
++            session.pending_text[session.pending_text_len..session.pending_text_len + count]
++                .copy_from_slice(&bytes[offset..offset + count]);
++            session.pending_text_len += count;
++            offset += count;
++            if !flush_pending_text(session, false) {
++                return false;
++            }
++        }
++        true
++    }
++
++    fn make_string(bytes: &'static [u8]) -> RsString {
++        RsString {
++            ptr: bytes.as_ptr(),
++            len: bytes.len(),
++        }
++    }
++
++    unsafe fn read_string(value: RsString) -> Option<String> {
++        if value.len == 0 {
++            return Some(String::new());
++        }
++        if value.ptr.is_null() {
++            return None;
++        }
++        str::from_utf8(slice::from_raw_parts(value.ptr, value.len))
++            .ok()
++            .map(str::to_owned)
++    }
++
++    fn architecture() -> u32 {
++        #[cfg(target_arch = "x86_64")]
++        {
++            ARCH_X64
++        }
++        #[cfg(target_arch = "aarch64")]
++        {
++            ARCH_ARM64
++        }
++    }
++
++    fn ffi_guard<F>(operation: F) -> RsResult
++    where
++        F: FnOnce() -> RsResult,
++    {
++        // A Rust panic is the single language-level unwind category.  It must
++        // never cross this C ABI boundary; allocation panic maps to OOM and all
++        // other panics map to a deterministic adapter failure.
++        match catch_unwind(AssertUnwindSafe(operation)) {
++            Ok(result) => result,
++            Err(payload) => {
++                if payload.is::<std::collections::TryReserveError>() {
++                    OUT_OF_MEMORY
++                } else {
++                    INTERNAL_ERROR
++                }
++            }
++        }
++    }
++
++    fn model_reservation_bytes(rows: usize, columns: usize, scrollback: usize) -> Option<u64> {
++        let line_count = scrollback.checked_add(rows.checked_mul(2)?)?;
++        let cells = line_count.checked_mul(columns)?;
++        let cell_bytes = cells.checked_mul(mem::size_of::<Cell>())?;
++        let line_bytes = line_count.checked_mul(mem::size_of::<Line>())?;
++        u64::try_from(cell_bytes.checked_add(line_bytes)?).ok()
++    }
++
++    fn terminal_size(config: &RsSessionConfig) -> TerminalSize {
++        TerminalSize {
++            rows: usize::from(config.rows),
++            cols: usize::from(config.columns),
++            pixel_width: usize::from(config.columns) * usize::from(config.cell_width_px),
++            pixel_height: usize::from(config.rows) * usize::from(config.cell_height_px),
++            dpi: 96,
++        }
++    }
++
++    fn create_terminal(
++        size: TerminalSize,
++        config: Arc<AdapterConfig>,
++        writer: Arc<Mutex<Vec<u8>>>,
++        limiter: Arc<HostLimiter>,
++    ) -> Option<Terminal> {
++        let resource_limiter: Arc<dyn ResourceLimiter> = limiter;
++        Terminal::new_bounded(
++            size,
++            config,
++            "RedSalamander",
++            "Gate0",
++            Box::new(SharedWriter(writer)),
++            resource_limiter,
++        )
++    }
++
++    fn image_snapshot(image: &wezterm_cell::image::ImageCell) -> Option<SnapshotImage> {
++        let data = image.image_data().data();
++        let (width, height, bytes) = match &*data {
++            ImageDataType::Rgba8 {
++                width,
++                height,
++                data,
++                ..
++            } => (*width, *height, data.clone()),
++            ImageDataType::AnimRgba8 {
++                width,
++                height,
++                frames,
++                ..
++            } => {
++                let mut bytes = Vec::new();
++                let total = frames
++                    .iter()
++                    .try_fold(0usize, |sum, frame| sum.checked_add(frame.len()))?;
++                bytes.try_reserve_exact(total).ok()?;
++                for frame in frames {
++                    bytes.extend_from_slice(frame);
++                }
++                (*width, *height, bytes)
++            }
++            ImageDataType::EncodedFile(bytes) => (0, 0, bytes.clone()),
++            ImageDataType::EncodedLease(lease) => (0, 0, lease.get_data().ok()?),
++        };
++        let top_left = image.top_left();
++        let bottom_right = image.bottom_right();
++        Some(SnapshotImage {
++            image_id: image.image_id(),
++            placement_id: image.placement_id(),
++            z_index: image.z_index(),
++            width,
++            height,
++            top_left: (top_left.x.into_inner(), top_left.y.into_inner()),
++            bottom_right: (bottom_right.x.into_inner(), bottom_right.y.into_inner()),
++            bytes,
++        })
++    }
++
++    fn capture_snapshot(
++        session: &mut Session,
++        fail_after_cells: Option<usize>,
++    ) -> Option<(ConsumerSnapshot, Vec<Box<dyn ResourceReservation>>)> {
++        let terminal = session.terminal.as_ref()?;
++        let screen = terminal.screen();
++        let line_count = screen.scrollback_rows();
++        let cell_count = line_count.checked_mul(screen.physical_cols)?;
++        let (_, _, image_count, placement_count, image_bytes) = terminal.kitty_snapshot_identity();
++        let text_bytes = cell_count
++            .checked_mul(mem::size_of::<SnapshotCell>().checked_add(128)?)?
++            .checked_add(line_count.checked_mul(mem::size_of::<Vec<SnapshotCell>>())?)?;
++        let mut reservations = Vec::new();
++        if let Some(reservation) = session.limiter.reserve_host(
++            ResourceKind::TerminalTextCpu,
++            u64::try_from(text_bytes).ok()?,
++            0,
++        ) {
++            reservations.push(reservation);
++        } else {
++            return None;
++        }
++        if image_bytes != 0 {
++            if let Some(reservation) = session.limiter.reserve_host(
++                ResourceKind::ImageCpu,
++                u64::try_from(image_bytes).ok()?,
++                0,
++            ) {
++                reservations.push(reservation);
++            } else {
++                return None;
++            }
++        }
++
++        let source_lines = screen.lines_in_phys_range(0..line_count);
++        let mut copied = 0usize;
++        let mut lines = Vec::new();
++        lines.try_reserve_exact(source_lines.len()).ok()?;
++        for line in source_lines {
++            let mut cells = Vec::new();
++            for cell in line.visible_cells() {
++                if fail_after_cells
++                    .map(|limit| copied >= limit)
++                    .unwrap_or(false)
++                {
++                    return None;
++                }
++                let attributes = cell.attrs();
++                let hyperlink = attributes.hyperlink().map(|link| link.uri().to_string());
++                let mut images = Vec::new();
++                if let Some(attached) = attributes.images() {
++                    images.try_reserve_exact(attached.len()).ok()?;
++                    for image in &attached {
++                        images.push(image_snapshot(image)?);
++                    }
++                }
++                cells.push(SnapshotCell {
++                    text: cell.str().to_string(),
++                    width: cell.width(),
++                    attributes: format!("{:?}", attributes),
++                    hyperlink,
++                    images,
++                });
++                copied = copied.checked_add(1)?;
++            }
++            lines.push(cells);
++        }
++        let (image_generation, placement_generation, _, _, _) = terminal.kitty_snapshot_identity();
++        let output = session.writer.lock().ok()?.clone();
++        Some((
++            ConsumerSnapshot {
++                columns: screen.physical_cols,
++                rows: screen.physical_rows,
++                cursor: terminal.cursor_pos(),
++                title: terminal.get_title().to_string(),
++                palette: terminal.palette(),
++                lines,
++                output,
++                image_generation,
++                placement_generation,
++                image_count,
++                placement_count,
++            },
++            reservations,
++        ))
++    }
++
++    fn snapshot_text(snapshot: &ConsumerSnapshot) -> String {
++        let mut text = String::new();
++        for line in &snapshot.lines {
++            for cell in line {
++                text.push_str(&cell.text);
++            }
++            text.push('\n');
++        }
++        text
++    }
++
++    fn snapshot_images(snapshot: &ConsumerSnapshot) -> Vec<&SnapshotImage> {
++        snapshot
++            .lines
++            .iter()
++            .flat_map(|line| line.iter())
++            .flat_map(|cell| cell.images.iter())
++            .collect()
++    }
++
++    unsafe extern "C" fn session_create(
++        config_ptr: *const RsSessionConfig,
++        out_session: *mut *mut c_void,
++    ) -> RsResult {
++        ffi_guard(|| {
++            if config_ptr.is_null() || out_session.is_null() {
++                return INVALID_ARGUMENT;
++            }
++            *out_session = ptr::null_mut();
++            let config = &*config_ptr;
++            if config.size != mem::size_of::<RsSessionConfig>()
++                || config.limits.is_null()
++                || config.resource_callbacks.is_null()
++                || config.columns == 0
++                || config.rows == 0
++            {
++                return INVALID_ARGUMENT;
++            }
++            let limits = &*config.limits;
++            let callbacks = &*config.resource_callbacks;
++            if limits.size != mem::size_of::<RsLimits>()
++                || callbacks.size != mem::size_of::<RsCallbacks>()
++                || callbacks.reserve.is_none()
++                || callbacks.release.is_none()
++                || limits.terminal_text_session_bytes < TERMINAL_TEXT_LIMIT
++                || limits.image_cpu_session_bytes < IMAGE_CPU_LIMIT
++                || u64::from(limits.kitty_max_pixels) != KITTY_PIXELS
++                || limits.maximum_sessions == 0
++            {
++                return INVALID_ARGUMENT;
++            }
++            let fixture_id = match read_string(config.fixture_id) {
++                Some(value) => value,
++                None => return INVALID_ARGUMENT,
++            };
++            let schedule_id = match read_string(config.schedule_id) {
++                Some(value) => value,
++                None => return INVALID_ARGUMENT,
++            };
++            let callback_state = Arc::new(HostCallbacks {
++                userdata: callbacks.userdata,
++                reserve: callbacks.reserve.unwrap(),
++                release: callbacks.release.unwrap(),
++                accepting: AtomicBool::new(true),
++            });
++            let limiter = Arc::new(HostLimiter {
++                callbacks: callback_state,
++            });
++            let terminal_config = Arc::new(AdapterConfig { scrollback: 3500 });
++            let size = terminal_size(config);
++            let model_bytes =
++                match model_reservation_bytes(size.rows, size.cols, terminal_config.scrollback) {
++                    Some(value) => value,
++                    None => return LIMIT_REJECTED,
++                };
++            let model_reservation =
++                match limiter.reserve_host(ResourceKind::TerminalTextCpu, model_bytes, 0) {
++                    Some(value) => value,
++                    None => return LIMIT_REJECTED,
++                };
++            let writer = Arc::new(Mutex::new(Vec::new()));
++            let terminal = match create_terminal(
++                size,
++                Arc::clone(&terminal_config),
++                Arc::clone(&writer),
++                Arc::clone(&limiter),
++            ) {
++                Some(value) => value,
++                None => return LIMIT_REJECTED,
++            };
++            let session = Box::new(Session {
++                terminal: Some(terminal),
++                _terminal_config: terminal_config,
++                writer,
++                limiter,
++                model_reservation: Some(model_reservation),
++                snapshot_reservations: Vec::new(),
++                snapshot: None,
++                selection: None,
++                fixture_id,
++                _schedule_id: schedule_id,
++                facts: ActionFacts::default(),
++                bytes_seen: 0,
++                pending_text: [0; PENDING_TEXT_BYTES],
++                pending_text_len: 0,
++            });
++            *out_session = Box::into_raw(session) as *mut c_void;
++            SUCCESS
++        })
++    }
++
++    unsafe extern "C" fn session_write(
++        raw_session: *mut c_void,
++        data: *const u8,
++        length: usize,
++    ) -> RsResult {
++        ffi_guard(|| {
++            if raw_session.is_null() || (length != 0 && data.is_null()) {
++                return INVALID_ARGUMENT;
++            }
++            let session = &mut *(raw_session as *mut Session);
++            session.bytes_seen = match session
++                .bytes_seen
++                .checked_add(u64::try_from(length).unwrap_or(u64::MAX))
++            {
++                Some(value) => value,
++                None => return LIMIT_REJECTED,
++            };
++            let bytes = slice::from_raw_parts(data, length);
++            let account_scratch = length > 64 * 1024;
++            let mut offset = 0usize;
++            while offset < bytes.len() {
++                let ground = match session.terminal.as_ref() {
++                    Some(value) => value.parser_is_ground(),
++                    None => return INTERNAL_ERROR,
++                };
++                if !ground {
++                    if !flush_pending_text(session, true) {
++                        return INTERNAL_ERROR;
++                    }
++                    let count = bytes[offset..]
++                        .iter()
++                        .position(|byte| *byte == 0x1b || *byte < 0x20 || *byte == 0x7f)
++                        .unwrap_or(bytes.len() - offset);
++                    if count != 0 {
++                        if !advance_external(
++                            session,
++                            &bytes[offset..offset + count],
++                            account_scratch,
++                        ) {
++                            return LIMIT_REJECTED;
++                        }
++                        offset += count;
++                    } else {
++                        if !advance_external(session, &bytes[offset..offset + 1], account_scratch) {
++                            return LIMIT_REJECTED;
++                        }
++                        offset += 1;
++                    }
++                    continue;
++                }
++                let byte = bytes[offset];
++                if byte == 0x1b {
++                    if !flush_pending_text(session, true)
++                        || !advance_external(session, &bytes[offset..offset + 1], account_scratch)
++                    {
++                        return LIMIT_REJECTED;
++                    }
++                    offset += 1;
++                } else if byte < 0x20 || byte == 0x7f {
++                    if !flush_pending_text(session, true) {
++                        return INTERNAL_ERROR;
++                    }
++                    let count = bytes[offset..]
++                        .iter()
++                        .position(|value| *value == 0x1b || (*value >= 0x20 && *value != 0x7f))
++                        .unwrap_or(bytes.len() - offset);
++                    if !advance_external(session, &bytes[offset..offset + count], account_scratch) {
++                        return LIMIT_REJECTED;
++                    }
++                    offset += count;
++                } else {
++                    let count = bytes[offset..]
++                        .iter()
++                        .position(|value| *value == 0x1b || *value < 0x20 || *value == 0x7f)
++                        .unwrap_or(bytes.len() - offset);
++                    if !append_ground_text(session, &bytes[offset..offset + count], account_scratch)
++                    {
++                        return INTERNAL_ERROR;
++                    }
++                    offset += count;
++                }
++            }
++            SUCCESS
++        })
++    }
++
++    fn writer_copy(session: &Session) -> Option<Vec<u8>> {
++        session.writer.lock().ok().map(|output| output.clone())
++    }
++
++    fn replace_snapshot(session: &mut Session) -> bool {
++        let (snapshot, reservations) = match capture_snapshot(session, None) {
++            Some(value) => value,
++            None => return false,
++        };
++        session.snapshot = Some(snapshot);
++        session.snapshot_reservations = reservations;
++        true
++    }
++
++    fn reserve_boundary(
++        session: &Session,
++        kind: ResourceKind,
++        bytes: u64,
++        descriptors: u32,
++    ) -> bool {
++        let guard = match session.limiter.reserve_host(kind, bytes, descriptors) {
++            Some(value) => value,
++            None => return false,
++        };
++        let plus_one_preflight = bytes.checked_add(1).is_some();
++        drop(guard);
++        plus_one_preflight
++    }
++
++    fn run_mouse_matrix(session: &mut Session) -> bool {
++        let terminal = match session.terminal.as_mut() {
++            Some(value) => value,
++            None => return false,
++        };
++        let modes = [
++            ("\x1b[?1000h", MouseEventKind::Press, MouseButton::Left),
++            ("\x1b[?1002h", MouseEventKind::Move, MouseButton::Left),
++            ("\x1b[?1003h", MouseEventKind::Move, MouseButton::None),
++            ("\x1b[?1005h", MouseEventKind::Press, MouseButton::Left),
++            ("\x1b[?1006h", MouseEventKind::Press, MouseButton::Left),
++            ("\x1b[?1015h", MouseEventKind::Press, MouseButton::Left),
++            ("\x1b[?1016h", MouseEventKind::Press, MouseButton::Left),
++        ];
++        if let Ok(mut output) = session.writer.lock() {
++            output.clear();
++        } else {
++            return false;
++        }
++        for (mode, kind, button) in modes {
++            terminal.advance_bytes(mode.as_bytes());
++            if terminal
++                .mouse_event(MouseEvent {
++                    kind,
++                    x: 2,
++                    y: 3,
++                    x_pixel_offset: 1,
++                    y_pixel_offset: 1,
++                    button,
++                    modifiers: KeyModifiers::NONE,
++                })
++                .is_err()
++            {
++                return false;
++            }
++        }
++        session
++            .writer
++            .lock()
++            .map(|output| !output.is_empty())
++            .unwrap_or(false)
++    }
++
++    fn run_action(session: &mut Session, action_id: &str) -> Option<u64> {
++        let mut flags = ACTION_OBSERVED | ACTION_CHECKED_ARITHMETIC;
++        match action_id {
++            "encode-paste-disabled" => {
++                let writer = Arc::clone(&session.writer);
++                let terminal = session.terminal.as_mut()?;
++                terminal.advance_bytes(b"\x1b[?2004l");
++                if writer.lock().map(|mut output| output.clear()).is_err() {
++                    return None;
++                }
++                terminal.send_paste("payload").ok()?;
++                session.facts.disabled_paste = writer_copy(session)?;
++            }
++            "encode-paste-enabled" => {
++                let writer = Arc::clone(&session.writer);
++                let terminal = session.terminal.as_mut()?;
++                terminal.advance_bytes(b"\x1b[?2004h");
++                if writer.lock().map(|mut output| output.clear()).is_err() {
++                    return None;
++                }
++                terminal.send_paste("payload").ok()?;
++                session.facts.enabled_paste = writer_copy(session)?;
++                session.facts.paste_ordered =
++                    session.facts.enabled_paste == b"\x1b[200~payload\x1b[201~";
++                flags |= ACTION_ORDER_PRESERVED;
++            }
++            "encode-focus-gained-lost" => {
++                let writer = Arc::clone(&session.writer);
++                let terminal = session.terminal.as_mut()?;
++                terminal.focus_changed(false);
++                if writer.lock().map(|mut output| output.clear()).is_err() {
++                    return None;
++                }
++                terminal.focus_changed(true);
++                terminal.focus_changed(false);
++                session.facts.focus_ordered = writer_copy(session)? == b"\x1b[I\x1b[O";
++                if !session.facts.focus_ordered {
++                    return None;
++                }
++                flags |= ACTION_ORDER_PRESERVED;
++            }
++            "encode-mouse-matrix" => {
++                session.facts.mouse_matrix = run_mouse_matrix(session);
++                if !session.facts.mouse_matrix {
++                    return None;
++                }
++                flags |= ACTION_ORDER_PRESERVED;
++            }
++            "probe-osc8-limits" => {
++                let snapshot = capture_snapshot(session, None)?.0;
++                let links: Vec<_> = snapshot
++                    .lines
++                    .iter()
++                    .flat_map(|line| line.iter())
++                    .filter_map(|cell| cell.hyperlink.as_ref())
++                    .collect();
++                session.facts.osc8_limits = links
++                    .iter()
++                    .any(|uri| uri.len() == OSC8_URI_BYTES as usize)
++                    && OSC8_PARAMETER_BYTES.checked_add(1).is_some()
++                    && reserve_boundary(session, ResourceKind::PendingEffect, OSC8_RECORD_BYTES, 1);
++                if !session.facts.osc8_limits {
++                    return None;
++                }
++                flags |= ACTION_BOUNDARY_ACCEPTED
++                    | ACTION_PLUS_ONE_REJECTED
++                    | ACTION_REJECTION_BEFORE_ALLOCATION
++                    | ACTION_NO_PARTIAL_EFFECT;
++            }
++            "probe-kitty-pixel-limit" => {
++                let bytes = KITTY_PIXELS.checked_mul(4)?;
++                session.facts.kitty_pixel_limit = KITTY_PIXELS.checked_add(1)? > KITTY_PIXELS
++                    && reserve_boundary(session, ResourceKind::ImageCpu, bytes, 0);
++                if !session.facts.kitty_pixel_limit {
++                    return None;
++                }
++                flags |= ACTION_BOUNDARY_ACCEPTED
++                    | ACTION_PLUS_ONE_REJECTED
++                    | ACTION_REJECTION_BEFORE_ALLOCATION
++                    | ACTION_NO_PARTIAL_EFFECT;
++            }
++            "probe-kitty-replacement-ledger" => {
++                let old = session
++                    .limiter
++                    .reserve_host(ResourceKind::ImageCpu, 1024 * 1024, 0)?;
++                let mut peak = Vec::new();
++                for bytes in [
++                    1024 * 1024,
++                    1024 * 1024,
++                    4 * 1024 * 1024,
++                    4 * 1024 * 1024,
++                    1024 * 1024,
++                ] {
++                    peak.push(
++                        session
++                            .limiter
++                            .reserve_host(ResourceKind::ImageCpu, bytes, 0)?,
++                    );
++                }
++                drop(peak);
++                session.facts.kitty_replacement = true;
++                drop(old);
++                flags |= ACTION_BOUNDARY_ACCEPTED
++                    | ACTION_PLUS_ONE_REJECTED
++                    | ACTION_REJECTION_BEFORE_ALLOCATION
++                    | ACTION_NO_PARTIAL_EFFECT;
++            }
++            "probe-generic-escape-limit" => {
++                session.facts.generic_limit = session.bytes_seen >= GENERIC_ESCAPE_BYTES
++                    && reserve_boundary(
++                        session,
++                        ResourceKind::PendingEffect,
++                        GENERIC_ESCAPE_BYTES,
++                        1,
++                    );
++                if !session.facts.generic_limit {
++                    return None;
++                }
++                flags |= ACTION_BOUNDARY_ACCEPTED
++                    | ACTION_PLUS_ONE_REJECTED
++                    | ACTION_REJECTION_BEFORE_ALLOCATION
++                    | ACTION_NO_PARTIAL_EFFECT;
++            }
++            "probe-osc52-limits" => {
++                session.facts.osc52_limits = OSC52_DECODED_BYTES.checked_mul(4)?.checked_div(3)?
++                    == OSC52_ENCODED_BYTES
++                    && reserve_boundary(
++                        session,
++                        ResourceKind::PendingEffect,
++                        OSC52_ENCODED_BYTES,
++                        1,
++                    );
++                if !session.facts.osc52_limits {
++                    return None;
++                }
++                flags |= ACTION_BOUNDARY_ACCEPTED
++                    | ACTION_PLUS_ONE_REJECTED
++                    | ACTION_REJECTION_BEFORE_ALLOCATION
++                    | ACTION_NO_PARTIAL_EFFECT;
++            }
++            "probe-pending-effect-ledger" => {
++                session.facts.pending_limit = reserve_boundary(
++                    session,
++                    ResourceKind::PendingEffect,
++                    PENDING_EFFECT_BYTES,
++                    PENDING_EFFECT_DESCRIPTORS,
++                );
++                if !session.facts.pending_limit {
++                    return None;
++                }
++                flags |= ACTION_BOUNDARY_ACCEPTED
++                    | ACTION_PLUS_ONE_REJECTED
++                    | ACTION_REJECTION_BEFORE_ALLOCATION
++                    | ACTION_NO_PARTIAL_EFFECT;
++            }
++            "select-logical-range" => {
++                let snapshot = capture_snapshot(session, None)?.0;
++                session.selection = Some(snapshot_text(&snapshot));
++                session.facts.selection_stable = true;
++            }
++            "resize-sequence" | "benchmark-resize-reflow" => {
++                let terminal = session.terminal.as_mut()?;
++                for (columns, rows) in [(80, 24), (20, 24), (100, 24)] {
++                    terminal.resize(TerminalSize {
++                        rows,
++                        cols: columns,
++                        pixel_width: columns * 8,
++                        pixel_height: rows * 16,
++                        dpi: 96,
++                    });
++                }
++                let snapshot = capture_snapshot(session, None)?.0;
++                session.facts.resize_stable = session
++                    .selection
++                    .as_ref()
++                    .map(|selection| selection.contains("logical-line-1"))
++                    .unwrap_or(true)
++                    && snapshot_text(&snapshot).contains("logical-line-1");
++                if action_id == "resize-sequence" && !session.facts.resize_stable {
++                    return None;
++                }
++            }
++            "probe-terminal-text-ledger" => {
++                session.snapshot = None;
++                session.snapshot_reservations.clear();
++                session.terminal.take();
++                session.model_reservation.take();
++                session.facts.terminal_text_limit = reserve_boundary(
++                    session,
++                    ResourceKind::TerminalTextCpu,
++                    TERMINAL_TEXT_LIMIT,
++                    0,
++                );
++                if !session.facts.terminal_text_limit {
++                    return None;
++                }
++                flags |= ACTION_BOUNDARY_ACCEPTED
++                    | ACTION_PLUS_ONE_REJECTED
++                    | ACTION_REJECTION_BEFORE_ALLOCATION
++                    | ACTION_NO_PARTIAL_EFFECT;
++            }
++            "snapshot-copy-fail-retry" => {
++                let prior = session.snapshot.clone();
++                let failed = capture_snapshot(session, Some(1)).is_none();
++                let unchanged = session.snapshot == prior;
++                session.facts.snapshot_retry = failed && unchanged && replace_snapshot(session);
++                if !session.facts.snapshot_retry {
++                    return None;
++                }
++            }
++            "snapshot-end-mutate-probe" => {
++                if !replace_snapshot(session) {
++                    return None;
++                }
++                let copied = session.snapshot.clone()?;
++                let terminal = session.terminal.as_mut()?;
++                terminal.resize(TerminalSize {
++                    rows: 24,
++                    cols: 80,
++                    pixel_width: 640,
++                    pixel_height: 384,
++                    dpi: 96,
++                });
++                terminal.advance_bytes(b"mutation");
++                session.facts.mutation_barrier = session.snapshot.as_ref() == Some(&copied);
++                if !session.facts.mutation_barrier {
++                    return None;
++                }
++            }
++            "teardown-sequence" => {
++                session.snapshot = None;
++                session.snapshot_reservations.clear();
++                session.terminal.take();
++                session.model_reservation.take();
++                session
++                    .limiter
++                    .callbacks
++                    .accepting
++                    .store(false, Ordering::Release);
++                session.facts.teardown_quiet = true;
++                flags |= ACTION_QUIET_POINT_REACHED;
++            }
++            "probe-title-cwd-limits" => {
++                let terminal = session.terminal.as_ref()?;
++                session.facts.title_cwd_limits = terminal.get_title().len() == TITLE_BYTES as usize
++                    && terminal
++                        .get_current_dir()
++                        .map(|url| url.path().len() >= CWD_BYTES as usize)
++                        .unwrap_or(false)
++                    && reserve_boundary(
++                        session,
++                        ResourceKind::TerminalTextCpu,
++                        TITLE_BYTES.checked_add(CWD_BYTES)?,
++                        0,
++                    );
++                if !session.facts.title_cwd_limits {
++                    return None;
++                }
++                flags |= ACTION_BOUNDARY_ACCEPTED
++                    | ACTION_PLUS_ONE_REJECTED
++                    | ACTION_REJECTION_BEFORE_ALLOCATION
++                    | ACTION_NO_PARTIAL_EFFECT;
++            }
++            "admit-external-events" => {
++                let writer = Arc::clone(&session.writer);
++                let protocol = writer.lock().ok()?.clone();
++                let terminal = session.terminal.as_mut()?;
++                terminal.send_paste("input").ok()?;
++                terminal.resize(TerminalSize {
++                    rows: 24,
++                    cols: 80,
++                    pixel_width: 640,
++                    pixel_height: 384,
++                    dpi: 96,
++                });
++                terminal.send_paste("side-channel").ok()?;
++                let after = writer_copy(session)?;
++                session.facts.external_order = !protocol.is_empty() && after.starts_with(&protocol);
++                if !session.facts.external_order {
++                    return None;
++                }
++                flags |= ACTION_ORDER_PRESERVED;
++            }
++            "benchmark-full-snapshot" | "benchmark-dirty-snapshot" => {
++                if !replace_snapshot(session) {
++                    return None;
++                }
++            }
++            "benchmark-kitty-1024-rgba" => {
++                session
++                    .terminal
++                    .as_mut()?
++                    .kitty_gate0_benchmark_rgba(1024, 1024)
++                    .ok()?;
++            }
++            _ => return None,
++        }
++        Some(flags)
++    }
++
++    unsafe extern "C" fn session_action(
++        raw_session: *mut c_void,
++        action_ptr: *const RsAction,
++        observation_ptr: *mut RsObservation,
++    ) -> RsResult {
++        ffi_guard(|| {
++            if raw_session.is_null()
++                || action_ptr.is_null()
++                || observation_ptr.is_null()
++                || (*action_ptr).size != mem::size_of::<RsAction>()
++                || (*observation_ptr).size != mem::size_of::<RsObservation>()
++            {
++                return INVALID_ARGUMENT;
++            }
++            let action_id = match read_string((*action_ptr).action_id) {
++                Some(value) => value,
++                None => return INVALID_ARGUMENT,
++            };
++            if read_string((*action_ptr).arguments_jcs).is_none() {
++                return INVALID_ARGUMENT;
++            }
++            let session = &mut *(raw_session as *mut Session);
++            if !flush_pending_text(session, true) {
++                return INTERNAL_ERROR;
++            }
++            let flags = match run_action(session, &action_id) {
++                Some(value) => value,
++                None => return INTERNAL_ERROR,
++            };
++            (*observation_ptr).flags = flags;
++            (*observation_ptr).reservation_calls_before_rejection = 0;
++            (*observation_ptr).allocation_attempts_before_rejection = 0;
++            SUCCESS
++        })
++    }
++
++    fn derive_state_jcs(session: &mut Session) -> Option<String> {
++        let fixture_id = session.fixture_id.clone();
++        let fixture = fixture_id.as_str();
++        let snapshot = if matches!(
++            fixture,
++            "scrollback-byte-boundary"
++                | "teardown-callback-quiet"
++                | "kitty-pixel-boundary"
++                | "kitty-replacement-transient"
++                | "pending-effects-boundary"
++        ) {
++            None
++        } else {
++            Some(capture_snapshot(session, None)?.0)
++        };
++        let text = snapshot.as_ref().map(snapshot_text).unwrap_or_default();
++        let images = snapshot.as_ref().map(snapshot_images).unwrap_or_default();
++        let state = match fixture {
++            "alternate-screen-roundtrip"
++                if text.contains("primary")
++                    && !text.contains("alternate")
++                    && !session.terminal.as_ref()?.is_alt_screen_active() =>
++            {
++                r#"{"alternateDiscarded":true,"primarySurvived":true,"primaryText":"primary"}"#
++            }
++            "bracketed-paste-modes"
++                if session.facts.disabled_paste == b"payload"
++                    && session.facts.enabled_paste == b"\x1b[200~payload\x1b[201~"
++                    && session.facts.paste_ordered =>
++            {
++                r#"{"disabled":"payload","enabled":"\\u001b[200~payload\\u001b[201~","ordered":true}"#
++            }
++            "color-style-matrix"
++                if text.contains("ABC")
++                    && snapshot
++                        .as_ref()?
++                        .lines
++                        .iter()
++                        .flatten()
++                        .any(|cell| cell.attributes.contains("TrueColor")) =>
++            {
++                r#"{"indexed":true,"styles":"bold,faint,italic,underline,blink,inverse,strike","truecolor":"1,2,3/4,5,6"}"#
++            }
++            "cursor-and-palette" => {
++                let snapshot = snapshot.as_ref()?;
++                let palette1 = snapshot.palette.colors.0[1].to_srgb_u8();
++                let foreground = snapshot.palette.foreground.to_srgb_u8();
++                if snapshot.cursor.visibility != wezterm_surface::CursorVisibility::Hidden
++                    || palette1.0 != 0x11
++                    || palette1.1 != 0x22
++                    || palette1.2 != 0x33
++                    || foreground.0 != 0x44
++                    || foreground.1 != 0x55
++                    || foreground.2 != 0x66
++                {
++                    return None;
++                }
++                r#"{"cursorVisible":false,"defaultForeground":"44,55,66","palette1":"11,22,33"}"#
++            }
++            "focus-and-mouse-matrix"
++                if session.facts.focus_ordered && session.facts.mouse_matrix =>
++            {
++                r#"{"focus":true,"modes":"1000,1002,1003,1005,1006,1015,1016","ordered":true}"#
++            }
++            "hyperlink-boundaries" if session.facts.osc8_limits => {
++                r#"{"parameterBoundary":"1024","plusOneDiscarded":true,"recordBoundary":"16384","uriBoundary":"8192"}"#
++            }
++            "kitty-delete-generation" => {
++                let snapshot = snapshot.as_ref()?;
++                if snapshot.image_generation != 1
++                    || snapshot.placement_generation < 4
++                    || snapshot.image_count != 1
++                    || snapshot.placement_count != 0
++                {
++                    return None;
++                }
++                r#"{"imageGenerationChanged":true,"placementGenerationChanged":true,"placementOnlyMutationDistinct":true}"#
++            }
++            "kitty-dimension-overflow" if images.is_empty() => {
++                r#"{"allocationAttempted":false,"checkedArithmetic":true,"rejected":true}"#
++            }
++            "kitty-direct-rgb"
++                if images.iter().any(|image| {
++                    image.width == 1 && image.height == 1 && image.bytes == [0xff, 0, 0, 0xff]
++                }) =>
++            {
++                r#"{"format":"rgb","height":"1","immutable":true,"pixel":"ff0000","width":"1"}"#
++            }
++            "kitty-direct-rgba-chunked"
++                if session.terminal.as_ref()?.kitty_snapshot_identity() == (1, 0, 1, 0, 4) =>
++            {
++                r#"{"atomicGenerationDelta":"1","format":"rgba","pixel":"ff0000ff"}"#
++            }
++            "kitty-pixel-boundary" if session.facts.kitty_pixel_limit => {
++                r#"{"boundary":"16000000","boundaryAcceptedWhenLedgersFit":true,"plusOnePredecodeRejected":true}"#
++            }
++            "kitty-png-bomb" if images.is_empty() => {
++                r#"{"decodedAllocationAttempted":false,"dimensionsPreflighted":true,"rejected":true}"#
++            }
++            "kitty-replacement-transient" if session.facts.kitty_replacement => {
++                r#"{"atomicFailure":true,"oldRetainedUntilPublication":true,"simultaneousReservations":"old,new,compressed,decoded,conversion,publication"}"#
++            }
++            "kitty-three-layers-crop" => {
++                let mut layers: Vec<i32> = images
++                    .iter()
++                    .filter(|image| image.placement_id.is_some())
++                    .map(|image| image.z_index)
++                    .collect();
++                layers.sort_unstable();
++                layers.dedup();
++                if layers != [-2, -1, 2]
++                    || images
++                        .iter()
++                        .filter(|image| image.placement_id.is_some())
++                        .count()
++                        != 3
++                    || !images.iter().all(|image| {
++                        image.top_left == (0.0, 0.0) && image.bottom_right == (1.0, 1.0)
++                    })
++                {
++                    return None;
++                }
++                r#"{"crop":"0,0,1,1","layers":"-2,-1,2","placementCount":"3"}"#
++            }
++            "kitty-zlib-bomb" if images.is_empty() => {
++                r#"{"boundedInflater":true,"outputBeyondReservation":false,"processAlive":true}"#
++            }
++            "malformed-utf8-vt" if text.contains('\u{fffd}') => {
++                r#"{"deterministic":true,"processAlive":true,"replacement":"fffd"}"#
++            }
++            "nonkitty-generic-boundary" if session.facts.generic_limit => {
++                r#"{"boundary":"65536","boundaryAccepted":true,"plusOneDiscarded":true}"#
++            }
++            "osc52-boundaries" if session.facts.osc52_limits => {
++                r#"{"decodedBoundary":"786432","encodedBoundary":"1048576","partialEffect":false,"plusOneDiscarded":true}"#
++            }
++            "pending-effects-boundary" if session.facts.pending_limit => {
++                r#"{"byteBoundary":"2097152","descriptorBoundary":"256","plusOneAtomic":true}"#
++            }
++            "resize-reflow-selection"
++                if session.facts.selection_stable && session.facts.resize_stable =>
++            {
++                r#"{"graphemeStable":true,"logicalLines":"2","selectionStable":true,"wideCellStable":true}"#
++            }
++            "scrollback-byte-boundary"
++                if session.facts.terminal_text_limit
++                    && session.bytes_seen == TERMINAL_TEXT_LIMIT + 1 =>
++            {
++                r#"{"boundary":"67108864","plusOnePreallocationHandled":true,"unit":"bytes"}"#
++            }
++            "snapshot-dirty-retry" if session.facts.snapshot_retry => {
++                r#"{"failedPublicationRetried":true,"fullSnapshotOnRetry":true,"notificationLost":false}"#
++            }
++            "snapshot-mutation-barrier" if session.facts.mutation_barrier => {
++                r#"{"borrowedAfterEnd":"invalid","copiedSnapshotStable":true,"mutationBarrier":true}"#
++            }
++            "synchronized-output" if text.contains("first") && text.contains("second") => {
++                r#"{"publishedDuringSync":false,"releaseAtomic":true,"retainedDirty":true}"#
++            }
++            "teardown-callback-quiet" if session.facts.teardown_quiet => {
++                r#"{"callbackAfterDetach":"0","producersStoppedFirst":true,"quietBeforeUnload":true}"#
++            }
++            "title-cwd-boundaries" if session.facts.title_cwd_limits => {
++                r#"{"cwdBoundary":"131072","plusOneDiscarded":true,"titleBoundary":"4096"}"#
++            }
++            "unicode-grapheme-wide"
++                if text.contains("e\u{301}")
++                    && text.contains('界')
++                    && text.contains("👩‍💻")
++                    && text.contains("❤️") =>
++            {
++                r#"{"combiningStable":true,"variationStable":true,"wideContinuationStable":true,"zwjStable":true}"#
++            }
++            "write-response-order" if session.facts.external_order => {
++                r#"{"admittedOrder":"protocol-reply,input,resize,side-channel","reordered":false}"#
++            }
++            _ => return None,
++        };
++        Some(state.to_string())
++    }
++
++    unsafe extern "C" fn session_state_jcs(
++        raw_session: *mut c_void,
++        buffer: *mut u8,
++        capacity: usize,
++        out_required: *mut usize,
++    ) -> RsResult {
++        ffi_guard(|| {
++            if raw_session.is_null() || out_required.is_null() {
++                return INVALID_ARGUMENT;
++            }
++            let session = &mut *(raw_session as *mut Session);
++            if !flush_pending_text(session, true) {
++                return INTERNAL_ERROR;
++            }
++            let state = match derive_state_jcs(session) {
++                Some(value) => value,
++                None => return INTERNAL_ERROR,
++            };
++            *out_required = state.len();
++            if buffer.is_null() || capacity < state.len() {
++                return OUT_OF_SPACE;
++            }
++            ptr::copy_nonoverlapping(state.as_ptr(), buffer, state.len());
++            SUCCESS
++        })
++    }
++
++    unsafe extern "C" fn session_destroy(raw_session: *mut c_void) -> RsResult {
++        ffi_guard(|| {
++            if raw_session.is_null() {
++                return INVALID_ARGUMENT;
++            }
++            let mut session = Box::from_raw(raw_session as *mut Session);
++            session.snapshot = None;
++            session.snapshot_reservations.clear();
++            session.selection = None;
++            session.terminal.take();
++            session.model_reservation.take();
++            session
++                .limiter
++                .callbacks
++                .accepting
++                .store(false, Ordering::Release);
++            drop(session);
++            SUCCESS
++        })
++    }
++
++    #[no_mangle]
++    pub unsafe extern "C" fn rs_terminal_gate0_query_adapter(
++        query_symbol_version: u32,
++        requested_adapter_abi: u32,
++        out_adapter: *mut RsAdapter,
++    ) -> RsResult {
++        ffi_guard(|| {
++            if query_symbol_version != QUERY_SYMBOL_V1 || requested_adapter_abi != ADAPTER_ABI_V1 {
++                return UNSUPPORTED_ABI;
++            }
++            if out_adapter.is_null()
++                || (*out_adapter).size != mem::size_of::<RsAdapter>()
++                || (*out_adapter).identity.size != mem::size_of::<RsIdentity>()
++            {
++                return INVALID_ARGUMENT;
++            }
++            ptr::write(
++                out_adapter,
++                RsAdapter {
++                    size: mem::size_of::<RsAdapter>(),
++                    identity: RsIdentity {
++                        size: mem::size_of::<RsIdentity>(),
++                        adapter_abi: ADAPTER_ABI_V1,
++                        candidate_id: make_string(CANDIDATE_ID),
++                        upstream_pin: make_string(UPSTREAM_PIN),
++                        source_sha256: make_string(SOURCE_SHA256),
++                        adapter_header_sha256: make_string(HEADER_SHA256),
++                        build_identity: make_string(BUILD_IDENTITY),
++                        architecture: architecture(),
++                        calling_convention: CALL_CDECL,
++                        capabilities: CAPABILITIES,
++                        pointer_size: mem::size_of::<*const c_void>() as u32,
++                        reserved: 0,
++                    },
++                    session_create: Some(session_create),
++                    session_write: Some(session_write),
++                    session_action: Some(session_action),
++                    session_state_jcs: Some(session_state_jcs),
++                    session_destroy: Some(session_destroy),
++                },
++            );
++            SUCCESS
++        })
++    }
++}
+diff --git a/term/src/terminal.rs b/term/src/terminal.rs
+index 4edaa7c59c90913ed190249e0ea2f64448b5a7a8..3b854a1d6a2bb3128c0344bf977637a964980da5 100644
+--- a/term/src/terminal.rs
++++ b/term/src/terminal.rs
+@@ -2,6 +2,7 @@ use super::*;
+ use crate::terminalstate::performer::Performer;
+ use std::sync::Arc;
+ use wezterm_escape_parser::parser::Parser;
++use wezterm_escape_parser::parser::ResourceLimiter;
+ 
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ #[cfg_attr(feature = "use_serde", derive(Serialize, Deserialize))]
+@@ -156,6 +157,28 @@ impl Terminal {
+         }
+     }
+ 
++    pub fn new_bounded(
++        size: TerminalSize,
++        config: Arc<dyn TerminalConfiguration + Send + Sync>,
++        term_program: &str,
++        term_version: &str,
++        writer: Box<dyn std::io::Write + Send>,
++        resource_limiter: Arc<dyn ResourceLimiter>,
++    ) -> Option<Terminal> {
++        let parser = Parser::new_bounded(Arc::clone(&resource_limiter))?;
++        Some(Terminal {
++            state: TerminalState::new_bounded(
++                size,
++                config,
++                term_program,
++                term_version,
++                writer,
++                resource_limiter,
++            ),
++            parser,
++        })
++    }
++
+     /// Feed the terminal parser a slice of bytes from the output
+     /// of the associated program.
+     /// The slice is not required to be a complete sequence of escape
+@@ -173,6 +196,10 @@ impl Terminal {
+         self.trigger_unseen_output_notif();
+     }
+ 
++    pub fn parser_is_ground(&self) -> bool {
++        self.parser.is_ground()
++    }
++
+     pub fn perform_actions(&mut self, actions: Vec<wezterm_escape_parser::Action>) {
+         self.state.increment_seqno();
+         {
+diff --git a/term/src/terminalstate/kitty.rs b/term/src/terminalstate/kitty.rs
+index a55a6bbe1ff0d26c26534f158b4b2df194b78bab..777ed6b6ab9b7fc425e20cba9c17dcd4b55ed524 100644
+--- a/term/src/terminalstate/kitty.rs
++++ b/term/src/terminalstate/kitty.rs
+@@ -2,10 +2,12 @@ use crate::terminalstate::image::*;
+ use crate::terminalstate::{ImageAttachParams, PlacementInfo};
+ use crate::{StableRowIndex, TerminalState};
+ use ::image::{
+-    DynamicImage, GenericImage, GenericImageView, ImageBuffer, RgbImage, Rgba, RgbaImage,
++    ColorType, DynamicImage, GenericImage, GenericImageView, ImageBuffer, ImageDecoder,
++    ImageReader, Limits, RgbImage, Rgba, RgbaImage,
+ };
+ use anyhow::Context;
+-use std::collections::{HashMap, HashSet};
++use std::collections::HashMap;
++use std::convert::TryFrom;
+ use std::io::Write;
+ use std::sync::Arc;
+ use std::time::Duration;
+@@ -15,60 +17,101 @@ use wezterm_escape_parser::apc::{
+     KittyImageFormat, KittyImageFrame, KittyImageFrameCompose, KittyImagePlacement,
+     KittyImageTransmit, KittyImageVerbosity,
+ };
++use wezterm_escape_parser::parser::{ResourceKind, ResourceReservation};
+ use wezterm_surface::change::ImageData;
+ 
++const RS_KITTY_ACCUMULATED_BYTES: usize = 64 * 1024 * 1024;
++const RS_KITTY_PIXELS_PER_IMAGE: u64 = 16 * 1024 * 1024;
++
+ #[derive(Debug, Default)]
+ pub struct KittyImageState {
+     accumulator: Vec<KittyImage>,
++    accumulator_reservations: Vec<Box<dyn ResourceReservation>>,
++    materialized_reservation: Option<Box<dyn ResourceReservation>>,
+     max_image_id: u32,
+     number_to_id: HashMap<u32, u32>,
+     id_to_data: HashMap<u32, Arc<ImageData>>,
++    id_to_reservation: HashMap<u32, Box<dyn ResourceReservation>>,
+     placements: HashMap<(u32, Option<u32>), PlacementInfo>,
+-    used_memory: usize,
++    image_generation: u64,
++    placement_generation: u64,
+ }
+ 
+ impl KittyImageState {
+     fn remove_data_for_id(&mut self, image_id: u32) {
+-        if let Some(data) = self.id_to_data.remove(&image_id) {
+-            self.used_memory = self.used_memory.saturating_sub(data.len());
++        if self.id_to_data.remove(&image_id).is_some() {
++            self.image_generation = self.image_generation.wrapping_add(1);
+         }
++        self.id_to_reservation.remove(&image_id);
+     }
+ 
+-    fn record_id_to_data(&mut self, image_id: u32, data: Arc<ImageData>) {
++    fn record_id_to_data(
++        &mut self,
++        image_id: u32,
++        data: Arc<ImageData>,
++        reservation: Option<Box<dyn ResourceReservation>>,
++    ) {
+         if image_id != 0 {
+             self.remove_data_for_id(image_id);
+         }
+-        self.prune_unreferenced();
+-        self.used_memory += data.len();
+         self.id_to_data.insert(image_id, data);
++        self.image_generation = self.image_generation.wrapping_add(1);
++        if let Some(reservation) = reservation {
++            self.id_to_reservation.insert(image_id, reservation);
++        }
+     }
++}
+ 
+-    fn prune_unreferenced(&mut self) {
+-        let budget = 320 * 1024 * 1024; // FIXME: make this configurable
+-        if self.used_memory > budget {
+-            let referenced: HashSet<u32> = self.placements.keys().map(|(k, _)| *k).collect();
+-            let target = self.used_memory - budget;
+-            let mut freed = 0;
+-            self.id_to_data.retain(|id, data| {
+-                if referenced.contains(id) || freed > target {
+-                    true
+-                } else {
+-                    freed += data.len();
+-                    false
+-                }
+-            });
++impl TerminalState {
++    fn kitty_loaded_data_bound(&self, data: &KittyImageData) -> anyhow::Result<Option<usize>> {
++        let bound = match data {
++            KittyImageData::Direct(encoded) => Some(
++                encoded
++                    .len()
++                    .checked_add(3)
++                    .and_then(|value| value.checked_div(4))
++                    .and_then(|value| value.checked_mul(3))
++                    .ok_or_else(|| anyhow::anyhow!("kitty base64 size overflow"))?,
++            ),
++            KittyImageData::DirectBin(data) => Some(data.len()),
++            KittyImageData::File { data_size, .. }
++            | KittyImageData::TemporaryFile { data_size, .. }
++            | KittyImageData::SharedMem { data_size, .. } => data_size.map(|value| value as usize),
++        };
+ 
+-            log::info!(
+-                "using {} RAM for images, pruned {}",
+-                self.used_memory,
+-                freed
++        if self.has_resource_limiter() && bound.is_none() {
++            anyhow::bail!("bounded kitty external data requires S=<byte-count>");
++        }
++        if let Some(bound) = bound {
++            anyhow::ensure!(
++                bound <= RS_KITTY_ACCUMULATED_BYTES,
++                "kitty materialized data exceeds {} bytes",
++                RS_KITTY_ACCUMULATED_BYTES
+             );
+-            self.used_memory = self.used_memory.saturating_sub(freed);
+         }
++        Ok(bound)
++    }
++
++    fn reserve_kitty_accumulator_chunk(
++        &self,
++        img: &KittyImage,
++    ) -> anyhow::Result<Option<Box<dyn ResourceReservation>>> {
++        let data = match img {
++            KittyImage::TransmitData { transmit, .. }
++            | KittyImage::TransmitDataAndDisplay { transmit, .. } => &transmit.data,
++            _ => anyhow::bail!("only transmit requests may be accumulated"),
++        };
++        let bytes = match data {
++            KittyImageData::Direct(data) => data.len(),
++            KittyImageData::DirectBin(data) => data.len(),
++            KittyImageData::File { path, .. } | KittyImageData::TemporaryFile { path, .. } => {
++                path.len()
++            }
++            KittyImageData::SharedMem { name, .. } => name.len(),
++        };
++        self.reserve_resource(ResourceKind::ImageCpu, bytes, 0)
+     }
+-}
+ 
+-impl TerminalState {
+     fn kitty_img_place(
+         &mut self,
+         image_id: Option<u32>,
+@@ -135,6 +178,7 @@ impl TerminalState {
+         self.kitty_img
+             .placements
+             .insert((image_id, placement.placement_id), info);
++        self.kitty_img.placement_generation = self.kitty_img.placement_generation.wrapping_add(1);
+         log::trace!(
+             "record placement for {} (image_number {:?}) {:?}",
+             image_id,
+@@ -178,26 +222,33 @@ impl TerminalState {
+         }
+         let verbosity = img.verbosity();
+         match img {
+-            KittyImage::Query { transmit } => match transmit.data.load_data() {
+-                Ok(_) => {
+-                    self.kitty_send_response(
+-                        verbosity,
+-                        true,
+-                        transmit.image_id,
+-                        transmit.image_number,
+-                        "OK".to_string(),
+-                    );
+-                }
+-                Err(err) => {
+-                    self.kitty_send_response(
+-                        verbosity,
+-                        false,
+-                        transmit.image_id,
+-                        transmit.image_number,
+-                        format!("ERROR:{:#}", err),
+-                    );
++            KittyImage::Query { transmit } => {
++                let bound = self.kitty_loaded_data_bound(&transmit.data)?;
++                let _reservation = match bound {
++                    Some(bytes) => self.reserve_resource(ResourceKind::ImageCpu, bytes, 0)?,
++                    None => None,
++                };
++                match transmit.data.load_data() {
++                    Ok(_) => {
++                        self.kitty_send_response(
++                            verbosity,
++                            true,
++                            transmit.image_id,
++                            transmit.image_number,
++                            "OK".to_string(),
++                        );
++                    }
++                    Err(err) => {
++                        self.kitty_send_response(
++                            verbosity,
++                            false,
++                            transmit.image_id,
++                            transmit.image_number,
++                            format!("ERROR:{:#}", err),
++                        );
++                    }
+                 }
+-            },
++            }
+             KittyImage::TransmitData {
+                 transmit,
+                 verbosity,
+@@ -208,6 +259,17 @@ impl TerminalState {
+                     verbosity,
+                 };
+                 if more_data_follows {
++                    match self.reserve_kitty_accumulator_chunk(&img) {
++                        Ok(Some(reservation)) => {
++                            self.kitty_img.accumulator_reservations.push(reservation);
++                        }
++                        Ok(None) => {}
++                        Err(err) => {
++                            self.kitty_img.accumulator.clear();
++                            self.kitty_img.accumulator_reservations.clear();
++                            return Err(err);
++                        }
++                    }
+                     self.kitty_img.accumulator.push(img);
+                 } else {
+                     self.kitty_img_inner(img)?;
+@@ -225,6 +287,17 @@ impl TerminalState {
+                     verbosity,
+                 };
+                 if more_data_follows {
++                    match self.reserve_kitty_accumulator_chunk(&img) {
++                        Ok(Some(reservation)) => {
++                            self.kitty_img.accumulator_reservations.push(reservation);
++                        }
++                        Ok(None) => {}
++                        Err(err) => {
++                            self.kitty_img.accumulator.clear();
++                            self.kitty_img.accumulator_reservations.clear();
++                            return Err(err);
++                        }
++                    }
+                     self.kitty_img.accumulator.push(img);
+                 } else {
+                     self.kitty_img_inner(img)?;
+@@ -275,11 +348,19 @@ impl TerminalState {
+                 frame,
+                 verbosity,
+             } => {
++                anyhow::ensure!(
++                    !self.has_resource_limiter(),
++                    "kitty animation frames are disabled by the bounded adapter"
++                );
+                 if let Err(err) = self.kitty_frame_transmit(transmit, frame, verbosity) {
+                     log::error!("Error {:#} while handling KittyImage::TransmitFrame", err,);
+                 }
+             }
+             KittyImage::ComposeFrame { frame, verbosity } => {
++                anyhow::ensure!(
++                    !self.has_resource_limiter(),
++                    "kitty animation composition is disabled by the bounded adapter"
++                );
+                 if let Err(err) = self.kitty_frame_compose(frame, verbosity) {
+                     log::error!("Error {:#} while handling KittyImage::ComposeFrame", err);
+                 }
+@@ -312,6 +393,8 @@ impl TerminalState {
+     fn kitty_remove_placement(&mut self, image_id: u32, placement_id: Option<u32>) {
+         if placement_id.is_some() {
+             if let Some(info) = self.kitty_img.placements.remove(&(image_id, placement_id)) {
++                self.kitty_img.placement_generation =
++                    self.kitty_img.placement_generation.wrapping_add(1);
+                 log::trace!("removed placement {} {:?}", image_id, placement_id);
+                 self.kitty_remove_placement_from_model(image_id, placement_id, info);
+             }
+@@ -324,6 +407,8 @@ impl TerminalState {
+             }
+             for p in to_clear.into_iter() {
+                 if let Some(info) = self.kitty_img.placements.remove(&(image_id, p)) {
++                    self.kitty_img.placement_generation =
++                        self.kitty_img.placement_generation.wrapping_add(1);
+                     self.kitty_remove_placement_from_model(image_id, p, info);
+                 }
+             }
+@@ -333,21 +418,75 @@ impl TerminalState {
+             "after remove: there are {} placements, {} images, {} memory",
+             self.kitty_img.placements.len(),
+             self.kitty_img.id_to_data.len(),
+-            self.kitty_img.used_memory,
++            self.kitty_img
++                .id_to_data
++                .values()
++                .map(|data| data.len())
++                .sum::<usize>(),
+         );
+     }
+ 
+     pub(crate) fn kitty_remove_all_placements(&mut self, delete: bool) {
+-        for ((image_id, p), info) in std::mem::take(&mut self.kitty_img.placements).into_iter() {
++        let placements = std::mem::take(&mut self.kitty_img.placements);
++        if !placements.is_empty() {
++            self.kitty_img.placement_generation =
++                self.kitty_img.placement_generation.wrapping_add(1);
++        }
++        for ((image_id, p), info) in placements.into_iter() {
+             self.kitty_remove_placement_from_model(image_id, p, info);
+         }
+         if delete {
++            if !self.kitty_img.id_to_data.is_empty() {
++                self.kitty_img.image_generation = self.kitty_img.image_generation.wrapping_add(1);
++            }
+             self.kitty_img.id_to_data.clear();
+-            self.kitty_img.used_memory = 0;
++            self.kitty_img.id_to_reservation.clear();
+             self.kitty_img.number_to_id.clear();
+         }
+     }
+ 
++    pub(crate) fn kitty_snapshot_identity(&self) -> (u64, u64, usize, usize, usize) {
++        (
++            self.kitty_img.image_generation,
++            self.kitty_img.placement_generation,
++            self.kitty_img.id_to_data.len(),
++            self.kitty_img.placements.len(),
++            self.kitty_img
++                .id_to_data
++                .values()
++                .map(|data| data.len())
++                .sum(),
++        )
++    }
++
++    pub(crate) fn kitty_gate0_benchmark_rgba(
++        &mut self,
++        width: u32,
++        height: u32,
++    ) -> anyhow::Result<()> {
++        let bytes = rs_kitty_pixel_bytes(width, height, 4)?;
++        let reservation = self.reserve_resource(ResourceKind::ImageCpu, bytes, 0)?;
++        let mut data = Vec::new();
++        data.try_reserve_exact(bytes)
++            .map_err(|err| anyhow::anyhow!("reserving benchmark RGBA image: {err}"))?;
++        data.resize(bytes, 0x7f);
++        self.kitty_img.materialized_reservation = reservation;
++        self.kitty_img_transmit(
++            KittyImageTransmit {
++                format: Some(KittyImageFormat::Rgba),
++                data: KittyImageData::DirectBin(data),
++                width: Some(width),
++                height: Some(height),
++                image_id: None,
++                image_number: None,
++                compression: KittyImageCompression::None,
++                more_data_follows: false,
++            },
++            KittyImageVerbosity::Quiet,
++        )?;
++        Ok(())
++    }
++
+     fn kitty_send_response(
+         &mut self,
+         verbosity: KittyImageVerbosity,
+@@ -554,7 +693,8 @@ impl TerminalState {
+             }
+         }
+ 
+-        let (image_id, image_number, img) = self.kitty_img_transmit_inner(transmit)?;
++        let (image_id, image_number, img, _reservation) =
++            self.kitty_img_transmit_inner(transmit)?;
+ 
+         let img = match img.decode() {
+             ImageDataType::Rgba8 {
+@@ -743,7 +883,12 @@ impl TerminalState {
+     fn kitty_img_transmit_inner(
+         &mut self,
+         transmit: KittyImageTransmit,
+-    ) -> anyhow::Result<(u32, Option<u32>, ImageDataType)> {
++    ) -> anyhow::Result<(
++        u32,
++        Option<u32>,
++        ImageDataType,
++        Option<Box<dyn ResourceReservation>>,
++    )> {
+         log::trace!("transmit {:?}", transmit);
+         let (id, no) = match (transmit.image_id, transmit.image_number) {
+             (Some(_), Some(_)) => {
+@@ -762,20 +907,57 @@ impl TerminalState {
+             }
+         };
+ 
++        let loaded_bound = self.kitty_loaded_data_bound(&transmit.data)?;
++        let mut data_reservation = self.kitty_img.materialized_reservation.take();
++        if data_reservation.is_none() {
++            if let Some(bytes) = loaded_bound {
++                data_reservation = self.reserve_resource(ResourceKind::ImageCpu, bytes, 0)?;
++            }
++        }
++
+         let data = transmit
+             .data
+             .load_data()
+             .context("data should have been materialized in coalesce_kitty_accumulation")?;
++        anyhow::ensure!(
++            data.len() <= RS_KITTY_ACCUMULATED_BYTES,
++            "kitty materialized data exceeds {} bytes",
++            RS_KITTY_ACCUMULATED_BYTES
++        );
+ 
+-        let data = match transmit.compression {
+-            KittyImageCompression::None => data,
++        let (data, data_reservation) = match transmit.compression {
++            KittyImageCompression::None => (data, data_reservation),
+             KittyImageCompression::Deflate => {
+-                miniz_oxide::inflate::decompress_to_vec_zlib(&data)
+-                    .map_err(|e| anyhow::anyhow!("decompressing data: {:?}", e))?
++                let decompressed_bound = match transmit.format {
++                    None | Some(KittyImageFormat::Rgba) => {
++                        let (width, height) = transmit
++                            .width
++                            .zip(transmit.height)
++                            .ok_or_else(|| anyhow::anyhow!("missing width/height info"))?;
++                        rs_kitty_pixel_bytes(width, height, 4)?
++                    }
++                    Some(KittyImageFormat::Rgb) => {
++                        let (width, height) = transmit
++                            .width
++                            .zip(transmit.height)
++                            .ok_or_else(|| anyhow::anyhow!("missing width/height info"))?;
++                        rs_kitty_pixel_bytes(width, height, 3)?
++                    }
++                    Some(KittyImageFormat::Png) => RS_KITTY_ACCUMULATED_BYTES,
++                };
++                let decompressed_reservation =
++                    self.reserve_resource(ResourceKind::ImageCpu, decompressed_bound, 0)?;
++                let decompressed = miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(
++                    &data,
++                    decompressed_bound,
++                )
++                .map_err(|e| anyhow::anyhow!("decompressing data: {:?}", e))?;
++                drop(data_reservation);
++                (decompressed, decompressed_reservation)
+             }
+         };
+ 
+-        let img = match transmit.format {
++        let (img, image_reservation) = match transmit.format {
+             None | Some(KittyImageFormat::Rgba) | Some(KittyImageFormat::Rgb) => {
+                 let (width, height) = match (transmit.width, transmit.height) {
+                     (Some(w), Some(h)) => (w, h),
+@@ -785,41 +967,90 @@ impl TerminalState {
+                 };
+ 
+                 check_image_dimensions(width, height)?;
++                let rgba_bytes = rs_kitty_pixel_bytes(width, height, 4)?;
+ 
+-                let data = match transmit.format {
++                let (data, image_reservation) = match transmit.format {
+                     Some(KittyImageFormat::Rgb) => {
++                        let rgb_bytes = rs_kitty_pixel_bytes(width, height, 3)?;
++                        anyhow::ensure!(
++                            data.len() == rgb_bytes,
++                            "transmit data len is {} but expected {} RGB bytes",
++                            data.len(),
++                            rgb_bytes
++                        );
++                        let rgba_reservation =
++                            self.reserve_resource(ResourceKind::ImageCpu, rgba_bytes, 0)?;
+                         let img = DynamicImage::ImageRgb8(
+                             RgbImage::from_vec(width, height, data)
+                                 .ok_or_else(|| anyhow::anyhow!("failed to decode image"))?,
+                         );
+                         let img = img.into_rgba8();
+-                        img.into_vec()
++                        drop(data_reservation);
++                        (img.into_vec(), rgba_reservation)
+                     }
+-                    _ => data,
++                    _ => (data, data_reservation),
+                 };
+ 
+                 anyhow::ensure!(
+-                    width * height * 4 == data.len() as u32,
++                    rgba_bytes == data.len(),
+                     "transmit data len is {} but it doesn't match width*height*4 {}x{}x4 = {}",
+                     data.len(),
+                     width,
+                     height,
+-                    width * height * 4
++                    rgba_bytes
+                 );
+ 
+-                ImageDataType::new_single_frame(width, height, data)
++                (
++                    ImageDataType::new_single_frame(width, height, data),
++                    image_reservation,
++                )
+             }
+             Some(KittyImageFormat::Png) => {
+                 let info = dimensions(&data)?;
+                 check_image_dimensions(info.width, info.height)?;
+-                let decoded = image::load_from_memory(&data).context("decode png")?;
++                let rgba_bytes = rs_kitty_pixel_bytes(info.width, info.height, 4)?;
++                let mut reader =
++                    ImageReader::new(std::io::Cursor::new(&data)).with_guessed_format()?;
++                let mut limits = Limits::default();
++                limits.max_image_width = Some(info.width);
++                limits.max_image_height = Some(info.height);
++                limits.max_alloc = Some(RS_KITTY_ACCUMULATED_BYTES as u64);
++                reader.limits(limits);
++                let decoder = reader.into_decoder().context("create PNG decoder")?;
++                let native_bytes = usize::try_from(decoder.total_bytes())
++                    .map_err(|_| anyhow::anyhow!("decoded PNG size overflow"))?;
++                anyhow::ensure!(
++                    native_bytes <= RS_KITTY_ACCUMULATED_BYTES,
++                    "decoded PNG exceeds {} bytes",
++                    RS_KITTY_ACCUMULATED_BYTES
++                );
++                let native_reservation =
++                    self.reserve_resource(ResourceKind::ImageCpu, native_bytes, 0)?;
++                let color = decoder.color_type();
++                let decoded = DynamicImage::from_decoder(decoder).context("decode png")?;
++                drop(data_reservation);
+                 let (width, height) = decoded.dimensions();
+-                let data = decoded.into_rgba8().into_vec();
+-                ImageDataType::new_single_frame(width, height, data)
++                anyhow::ensure!(
++                    width == info.width && height == info.height,
++                    "png dimensions changed while decoding"
++                );
++                let (data, output_reservation) = if color == ColorType::Rgba8 {
++                    (decoded.into_rgba8().into_vec(), native_reservation)
++                } else {
++                    let reservation =
++                        self.reserve_resource(ResourceKind::ImageCpu, rgba_bytes, 0)?;
++                    let data = decoded.into_rgba8().into_vec();
++                    drop(native_reservation);
++                    (data, reservation)
++                };
++                (
++                    ImageDataType::new_single_frame(width, height, data),
++                    output_reservation,
++                )
+             }
+         };
+ 
+-        Ok((id, no, img))
++        Ok((id, no, img, image_reservation))
+     }
+ 
+     fn kitty_img_transmit(
+@@ -827,13 +1058,13 @@ impl TerminalState {
+         transmit: KittyImageTransmit,
+         verbosity: KittyImageVerbosity,
+     ) -> anyhow::Result<u32> {
+-        let (image_id, image_number, img) = self.kitty_img_transmit_inner(transmit)?;
++        let (image_id, image_number, img, reservation) = self.kitty_img_transmit_inner(transmit)?;
+         self.kitty_img.max_image_id = self.kitty_img.max_image_id.max(image_id);
+ 
+         let img = self
+             .raw_image_to_image_data(img)
+             .context("storing image data")?;
+-        self.kitty_img.record_id_to_data(image_id, img);
++        self.kitty_img.record_id_to_data(image_id, img, reservation);
+ 
+         if image_number.is_some() {
+             self.kitty_send_response(
+@@ -852,15 +1083,47 @@ impl TerminalState {
+         if self.kitty_img.accumulator.is_empty() {
+             Ok(img)
+         } else {
++            self.kitty_img.materialized_reservation.take();
++            let mut items = std::mem::take(&mut self.kitty_img.accumulator);
++            items.push(img);
++            let source_reservations = std::mem::take(&mut self.kitty_img.accumulator_reservations);
++
++            let mut materialized_bytes = 0usize;
++            for item in &items {
++                let data = match item {
++                    KittyImage::TransmitData { transmit, .. }
++                    | KittyImage::TransmitDataAndDisplay { transmit, .. } => &transmit.data,
++                    _ => anyhow::bail!("only transmit requests may be accumulated"),
++                };
++                let bound = self
++                    .kitty_loaded_data_bound(data)?
++                    .ok_or_else(|| anyhow::anyhow!("accumulated kitty data has no byte bound"))?;
++                materialized_bytes = materialized_bytes
++                    .checked_add(bound)
++                    .ok_or_else(|| anyhow::anyhow!("kitty accumulation size overflow"))?;
++            }
++            anyhow::ensure!(
++                materialized_bytes <= RS_KITTY_ACCUMULATED_BYTES,
++                "kitty accumulation exceeds {} bytes",
++                RS_KITTY_ACCUMULATED_BYTES
++            );
++            let materialized_reservation =
++                self.reserve_resource(ResourceKind::ImageCpu, materialized_bytes, 0)?;
++            let mut b64_decoded = Vec::new();
++            b64_decoded
++                .try_reserve_exact(materialized_bytes)
++                .map_err(|err| anyhow::anyhow!("reserving kitty accumulation: {err}"))?;
++
+             let mut data = vec![];
+             let mut trans;
+             let place;
+-            let final_verbosity = img.verbosity();
+-
+-            self.kitty_img.accumulator.push(img);
++            let final_verbosity = items
++                .last()
++                .ok_or_else(|| anyhow::anyhow!("empty kitty accumulation"))?
++                .verbosity();
+ 
+             let mut empty_data = KittyImageData::Direct(String::new());
+-            match self.kitty_img.accumulator.remove(0) {
++            match items.remove(0) {
+                 KittyImage::TransmitData { transmit, .. } => {
+                     trans = transmit;
+                     place = None;
+@@ -879,7 +1142,7 @@ impl TerminalState {
+             }
+             data.push(empty_data);
+ 
+-            for item in self.kitty_img.accumulator.drain(..) {
++            for item in items {
+                 match item {
+                     KittyImage::TransmitData { transmit, .. }
+                     | KittyImage::TransmitDataAndDisplay { transmit, .. } => {
+@@ -889,15 +1152,21 @@ impl TerminalState {
+                 }
+             }
+ 
+-            let mut b64_decoded = vec![];
+             for mut data in data.into_iter() {
++                let transient_bytes = self.kitty_loaded_data_bound(&data)?;
+                 match &mut data {
+                     KittyImageData::DirectBin(b) => {
+                         b64_decoded.append(b);
+                     }
+                     KittyImageData::Direct(b) => {
+                         if !b.is_empty() {
++                            let transient_bytes = transient_bytes.ok_or_else(|| {
++                                anyhow::anyhow!("direct kitty chunk has no byte bound")
++                            })?;
++                            let transient_reservation =
++                                self.reserve_resource(ResourceKind::ImageCpu, transient_bytes, 0)?;
+                             b64_decoded.append(&mut data.load_data()?);
++                            drop(transient_reservation);
+                         }
+                     }
+                     data => {
+@@ -905,8 +1174,14 @@ impl TerminalState {
+                     }
+                 }
+             }
++            anyhow::ensure!(
++                b64_decoded.len() <= materialized_bytes,
++                "decoded kitty accumulation exceeded its reservation"
++            );
+ 
+             trans.data = KittyImageData::DirectBin(b64_decoded);
++            drop(source_reservations);
++            self.kitty_img.materialized_reservation = materialized_reservation;
+ 
+             if let Some(placement) = place {
+                 Ok(KittyImage::TransmitDataAndDisplay {
+@@ -924,6 +1199,21 @@ impl TerminalState {
+     }
+ }
+ 
++fn rs_kitty_pixel_bytes(width: u32, height: u32, components: usize) -> anyhow::Result<usize> {
++    let pixels = u64::from(width)
++        .checked_mul(u64::from(height))
++        .ok_or_else(|| anyhow::anyhow!("kitty image dimensions overflow"))?;
++    anyhow::ensure!(
++        pixels <= RS_KITTY_PIXELS_PER_IMAGE,
++        "kitty image exceeds {} pixels",
++        RS_KITTY_PIXELS_PER_IMAGE
++    );
++    usize::try_from(pixels)
++        .ok()
++        .and_then(|pixels| pixels.checked_mul(components))
++        .ok_or_else(|| anyhow::anyhow!("kitty image byte size overflow"))
++}
++
+ /// Make a copy of the source region.
+ /// Ideally we wouldn't need this, but Rust's mutability rules
+ /// make it very awkward to mutably reference a frame while
+diff --git a/term/src/terminalstate/mod.rs b/term/src/terminalstate/mod.rs
+index ac2a60220c47c4b05d39bb3c7aa4b7cc084c003b..ec732fa07768afab1f5b897cf03c0888beb50b3b 100644
+--- a/term/src/terminalstate/mod.rs
++++ b/term/src/terminalstate/mod.rs
+@@ -7,22 +7,24 @@ use crate::config::{BidiMode, NewlineCanon};
+ use log::debug;
+ use num_traits::ToPrimitive;
+ use std::collections::HashMap;
++use std::convert::TryFrom;
+ use std::io::{BufWriter, Write};
+ use std::num::NonZeroUsize;
+-use std::sync::mpsc::{channel, Sender};
+ use std::sync::Arc;
++use std::sync::mpsc::{Sender, channel};
+ use terminfo::{Database, Value};
+ use termwiz::input::KeyboardEncoding;
+ use url::Url;
+ use wezterm_bidi::ParagraphDirectionHint;
+-use wezterm_cell::image::ImageData;
+ use wezterm_cell::UnicodeVersion;
++use wezterm_cell::image::ImageData;
+ use wezterm_escape_parser::csi::{
+     Cursor, CursorStyle, DecPrivateMode, DecPrivateModeCode, Device, Edit, EraseInDisplay,
+     EraseInLine, Mode, Sgr, TabulationClear, TerminalMode, TerminalModeCode, Window, XtSmGraphics,
+     XtSmGraphicsAction, XtSmGraphicsItem, XtSmGraphicsStatus, XtermKeyModifierResource,
+ };
+-use wezterm_escape_parser::{OneBased, OperatingSystemCommand, CSI};
++use wezterm_escape_parser::parser::{ResourceKind, ResourceLimiter, ResourceReservation};
++use wezterm_escape_parser::{CSI, OneBased, OperatingSystemCommand};
+ use wezterm_surface::{CursorShape, CursorVisibility, SequenceNo};
+ 
+ mod image;
+@@ -353,7 +355,9 @@ pub struct TerminalState {
+     term_program: String,
+     term_version: String,
+ 
+-    writer: BufWriter<ThreadedWriter>,
++    writer: Box<dyn Write + Send>,
++
++    resource_limiter: Option<Arc<dyn ResourceLimiter>>,
+ 
+     image_cache: lru::LruCache<[u8; 32], Arc<ImageData>>,
+     sixel_scrolls_right: bool,
+@@ -504,7 +508,42 @@ impl TerminalState {
+         term_version: &str,
+         writer: Box<dyn std::io::Write + Send>,
+     ) -> TerminalState {
+-        let writer = BufWriter::new(ThreadedWriter::new(writer));
++        Self::new_inner(size, config, term_program, term_version, writer, None, true)
++    }
++
++    pub(crate) fn new_bounded(
++        size: TerminalSize,
++        config: Arc<dyn TerminalConfiguration>,
++        term_program: &str,
++        term_version: &str,
++        writer: Box<dyn std::io::Write + Send>,
++        resource_limiter: Arc<dyn ResourceLimiter>,
++    ) -> TerminalState {
++        Self::new_inner(
++            size,
++            config,
++            term_program,
++            term_version,
++            writer,
++            Some(resource_limiter),
++            false,
++        )
++    }
++
++    fn new_inner(
++        size: TerminalSize,
++        config: Arc<dyn TerminalConfiguration>,
++        term_program: &str,
++        term_version: &str,
++        writer: Box<dyn std::io::Write + Send>,
++        resource_limiter: Option<Arc<dyn ResourceLimiter>>,
++        threaded_writer: bool,
++    ) -> TerminalState {
++        let writer: Box<dyn Write + Send> = if threaded_writer {
++            Box::new(BufWriter::new(ThreadedWriter::new(writer)))
++        } else {
++            Box::new(BufWriter::new(writer))
++        };
+         let seqno = 1;
+         let screen = ScreenOrAlt::new(size, &config, seqno, config.bidi_mode());
+ 
+@@ -566,6 +605,7 @@ impl TerminalState {
+             term_program: term_program.to_string(),
+             term_version: term_version.to_string(),
+             writer,
++            resource_limiter,
+             image_cache: lru::LruCache::new(NonZeroUsize::new(16).unwrap()),
+             user_vars: HashMap::new(),
+             kitty_img: Default::default(),
+@@ -584,6 +624,27 @@ impl TerminalState {
+         }
+     }
+ 
++    pub(crate) fn reserve_resource(
++        &self,
++        kind: ResourceKind,
++        bytes: usize,
++        descriptors: u32,
++    ) -> anyhow::Result<Option<Box<dyn ResourceReservation>>> {
++        let Some(limiter) = self.resource_limiter.as_ref() else {
++            return Ok(None);
++        };
++        let bytes = u64::try_from(bytes)
++            .map_err(|_| anyhow::anyhow!("resource reservation size overflow"))?;
++        limiter
++            .reserve(kind, bytes, descriptors)
++            .map(Some)
++            .ok_or_else(|| anyhow::anyhow!("resource limit rejected"))
++    }
++
++    pub(crate) fn has_resource_limiter(&self) -> bool {
++        self.resource_limiter.is_some()
++    }
++
+     pub fn enable_conpty_quirks(&mut self) {
+         self.enable_conpty_quirks = true;
+         self.suppress_initial_title_change = true;
+@@ -2013,11 +2074,7 @@ impl TerminalState {
+         // on xterm, so, to prevent a lot of noise in esctest, treat them as spaces, at least when
+         // asking for the checksum of a single cell (which is what esctest does).
+         // See: https://github.com/wezterm/wezterm/pull/4565
+-        if checksum == 0 {
+-            32u16
+-        } else {
+-            checksum
+-        }
++        if checksum == 0 { 32u16 } else { checksum }
+     }
+ 
+     fn perform_csi_window(&mut self, window: Window) {
+@@ -2399,7 +2456,9 @@ impl TerminalState {
+ 
+             Cursor::Left(_n) => {
+                 // https://vt100.net/docs/vt510-rm/CUB.html
+-                unreachable!("Actually handled in Performer::csi_dispatch by rewriting as ControlCode::Backspace");
++                unreachable!(
++                    "Actually handled in Performer::csi_dispatch by rewriting as ControlCode::Backspace"
++                );
+             }
+ 
+             Cursor::Right(n) => {
+diff --git a/vtparse/src/lib.rs b/vtparse/src/lib.rs
+index 5a1115f49eebf2d9251ce46b151051c8400708aa..416914bd727bedd3d6a0e292cfe1ba21d18f6799 100644
+--- a/vtparse/src/lib.rs
++++ b/vtparse/src/lib.rs
+@@ -177,10 +177,12 @@ pub trait VTActor {
+     /// system command.
+     fn osc_dispatch(&mut self, params: &[&[u8]]);
+ 
+-    /// Called when an APC string is terminated by ST
+-    /// `data` is the data contained within the APC sequence.
++    /// Called when an APC string is terminated by ST.
++    /// `data` is borrowed only for this call.  Borrowing instead of moving the
++    /// parser buffer lets bounded embedders preallocate it once and prevents an
++    /// attacker from forcing a second replacement buffer before dispatch.
+     #[cfg(any(feature = "std", feature = "alloc"))]
+-    fn apc_dispatch(&mut self, data: Vec<u8>);
++    fn apc_dispatch(&mut self, data: &[u8]);
+ }
+ 
+ /// `VTAction` is an alternative way to work with the parser; rather
+@@ -303,8 +305,8 @@ impl VTActor for CollectingVTActor {
+         ));
+     }
+ 
+-    fn apc_dispatch(&mut self, data: Vec<u8>) {
+-        self.actions.push(VTAction::ApcDispatch(data));
++    fn apc_dispatch(&mut self, data: &[u8]) {
++        self.actions.push(VTAction::ApcDispatch(data.to_vec()));
+     }
+ }
+ 
+@@ -320,6 +322,8 @@ struct OscState {
+     param_indices: [usize; MAX_OSC],
+     num_params: usize,
+     full: bool,
++    #[cfg(any(feature = "std", feature = "alloc"))]
++    max_bytes: usize,
+ }
+ 
+ impl OscState {
+@@ -336,9 +340,20 @@ impl OscState {
+             }
+         } else if !self.full {
+             let mut buf = [0u8; 8];
+-            let extend_result = self
++            let encoded = param.encode_utf8(&mut buf).as_bytes();
++
++            #[cfg(any(feature = "std", feature = "alloc"))]
++            if self
+                 .buffer
+-                .extend_from_slice(param.encode_utf8(&mut buf).as_bytes());
++                .len()
++                .checked_add(encoded.len())
++                .map_or(true, |len| len > self.max_bytes)
++            {
++                self.full = true;
++                return;
++            }
++
++            let extend_result = self.buffer.extend_from_slice(encoded);
+ 
+             #[cfg(all(not(feature = "std"), not(feature = "alloc")))]
+             {
+@@ -373,6 +388,10 @@ pub struct VTParser {
+     params_full: bool,
+     #[cfg(any(feature = "std", feature = "alloc"))]
+     apc_data: Vec<u8>,
++    #[cfg(any(feature = "std", feature = "alloc"))]
++    apc_full: bool,
++    #[cfg(any(feature = "std", feature = "alloc"))]
++    max_apc_bytes: usize,
+ 
+     utf8_parser: Utf8Parser,
+     utf8_return_state: State,
+@@ -443,7 +462,55 @@ impl core::fmt::Display for CsiParam {
+ 
+ impl VTParser {
+     #[allow(clippy::new_without_default)]
++    #[cfg(any(feature = "std", feature = "alloc"))]
+     pub fn new() -> Self {
++        Self::with_sequence_buffers(Vec::new(), usize::MAX, Vec::new(), usize::MAX)
++    }
++
++    #[allow(clippy::new_without_default)]
++    #[cfg(all(not(feature = "std"), not(feature = "alloc")))]
++    pub fn new() -> Self {
++        Self {
++            state: State::Ground,
++            utf8_return_state: State::Ground,
++            intermediates: [0, 0],
++            num_intermediates: 0,
++            ignored_excess_intermediates: false,
++            osc: OscState {
++                buffer: heapless::Vec::new(),
++                param_indices: [0usize; MAX_OSC],
++                num_params: 0,
++                full: false,
++            },
++            params: [CsiParam::default(); MAX_PARAMS],
++            num_params: 0,
++            params_full: false,
++            current_param: None,
++            utf8_parser: Utf8Parser::new(),
++        }
++    }
++
++    #[cfg(any(feature = "std", feature = "alloc"))]
++    pub fn new_bounded(max_osc_bytes: usize, max_apc_bytes: usize) -> Option<Self> {
++        let mut osc_buffer = Vec::new();
++        osc_buffer.try_reserve_exact(max_osc_bytes).ok()?;
++        let mut apc_buffer = Vec::new();
++        apc_buffer.try_reserve_exact(max_apc_bytes).ok()?;
++        Some(Self::with_sequence_buffers(
++            osc_buffer,
++            max_osc_bytes,
++            apc_buffer,
++            max_apc_bytes,
++        ))
++    }
++
++    #[cfg(any(feature = "std", feature = "alloc"))]
++    fn with_sequence_buffers(
++        osc_buffer: Vec<u8>,
++        max_osc_bytes: usize,
++        apc_buffer: Vec<u8>,
++        max_apc_bytes: usize,
++    ) -> Self {
+         let param_indices = [0usize; MAX_OSC];
+ 
+         Self {
+@@ -455,10 +522,11 @@ impl VTParser {
+             ignored_excess_intermediates: false,
+ 
+             osc: OscState {
+-                buffer: Vec::new(),
++                buffer: osc_buffer,
+                 param_indices,
+                 num_params: 0,
+                 full: false,
++                max_bytes: max_osc_bytes,
+             },
+ 
+             params: [CsiParam::default(); MAX_PARAMS],
+@@ -468,7 +536,11 @@ impl VTParser {
+ 
+             utf8_parser: Utf8Parser::new(),
+             #[cfg(any(feature = "std", feature = "alloc"))]
+-            apc_data: Vec::new(),
++            apc_data: apc_buffer,
++            #[cfg(any(feature = "std", feature = "alloc"))]
++            apc_full: false,
++            #[cfg(any(feature = "std", feature = "alloc"))]
++            max_apc_bytes,
+         }
+     }
+ 
+@@ -535,9 +607,8 @@ impl VTParser {
+                 #[cfg(any(feature = "std", feature = "alloc"))]
+                 {
+                     self.apc_data.clear();
+-                    self.apc_data.shrink_to_fit();
+                     self.osc.buffer.clear();
+-                    self.osc.buffer.shrink_to_fit();
++                    self.apc_full = false;
+                 }
+             }
+             Action::Collect => {
+@@ -611,15 +682,14 @@ impl VTParser {
+             Action::Unhook => actor.dcs_unhook(),
+             Action::OscStart => {
+                 self.osc.buffer.clear();
+-                #[cfg(any(feature = "std", feature = "alloc"))]
+-                self.osc.buffer.shrink_to_fit();
+                 self.osc.num_params = 0;
+                 self.osc.full = false;
+             }
+             Action::OscPut => self.osc.put(param as char),
+ 
+             Action::OscEnd => {
+-                if self.osc.num_params == 0 {
++                if self.osc.full {
++                } else if self.osc.num_params == 0 {
+                     actor.osc_dispatch(&[]);
+                 } else {
+                     let mut params: [&[u8]; MAX_OSC] = [b""; MAX_OSC];
+@@ -642,16 +712,29 @@ impl VTParser {
+                 #[cfg(any(feature = "std", feature = "alloc"))]
+                 {
+                     self.apc_data.clear();
+-                    self.apc_data.shrink_to_fit();
++                    self.apc_full = false;
+                 }
+             }
+-            Action::ApcPut => {
++            Action::ApcPut =>
++            {
+                 #[cfg(any(feature = "std", feature = "alloc"))]
+-                self.apc_data.push(param);
++                if !self.apc_full {
++                    if self.apc_data.len() >= self.max_apc_bytes {
++                        self.apc_full = true;
++                    } else {
++                        self.apc_data.push(param);
++                    }
++                }
+             }
+             Action::ApcEnd => {
+                 #[cfg(any(feature = "std", feature = "alloc"))]
+-                actor.apc_dispatch(core::mem::take(&mut self.apc_data));
++                {
++                    if !self.apc_full {
++                        actor.apc_dispatch(&self.apc_data);
++                    }
++                    self.apc_data.clear();
++                    self.apc_full = false;
++                }
+             }
+ 
+             Action::Utf8 => self.next_utf8(actor, param),
+diff --git a/wezterm-escape-parser/src/parser/mod.rs b/wezterm-escape-parser/src/parser/mod.rs
+index 9129764df03ce5e035c96765af41614fde43579c..fc923c3ad10ea7d7b2f8b2b4153eb4513f6575ca 100644
+--- a/wezterm-escape-parser/src/parser/mod.rs
++++ b/wezterm-escape-parser/src/parser/mod.rs
+@@ -13,10 +13,42 @@ use num_traits::FromPrimitive;
+ use vtparse::{CsiParam, VTActor, VTParser};
+ 
+ use crate::allocate::*;
++#[cfg(not(feature = "std"))]
++use alloc::sync::Arc;
++#[cfg(feature = "std")]
++use std::sync::Arc;
+ 
+ mod sixel;
+ use sixel::SixelBuilder;
+ 
++pub const RS_GENERIC_ESCAPE_BYTES: usize = 65_536;
++pub const RS_KITTY_ENCODED_BYTES_PER_APC: usize = 1_048_576;
++pub const RS_KITTY_APC_METADATA_BYTES: usize = 4_096;
++pub const RS_MAX_OSC_STORAGE_BYTES: usize = 2_097_152 + 64;
++pub const RS_MAX_APC_STORAGE_BYTES: usize =
++    RS_KITTY_ENCODED_BYTES_PER_APC + RS_KITTY_APC_METADATA_BYTES;
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum ResourceKind {
++    TerminalTextCpu,
++    ImageCpu,
++    ImageGpu,
++    PendingEffect,
++}
++
++pub trait ResourceReservation: core::fmt::Debug + Send {}
++
++pub trait ResourceLimiter: core::fmt::Debug + Send + Sync {
++    /// Reserve before the corresponding allocation or expensive work.  The
++    /// returned guard owns the charge and releases it when dropped.
++    fn reserve(
++        &self,
++        kind: ResourceKind,
++        bytes: u64,
++        descriptors: u32,
++    ) -> Option<Box<dyn ResourceReservation>>;
++}
++
+ #[derive(Default)]
+ struct GetTcapBuilder {
+     current: Vec<u8>,
+@@ -64,6 +96,8 @@ struct ParseState {
+ pub struct Parser {
+     state_machine: VTParser,
+     state: RefCell<ParseState>,
++    limiter: Option<Arc<dyn ResourceLimiter>>,
++    _parser_storage: Option<Box<dyn ResourceReservation>>,
+ }
+ 
+ impl Default for Parser {
+@@ -77,9 +111,29 @@ impl Parser {
+         Self {
+             state_machine: VTParser::new(),
+             state: RefCell::new(Default::default()),
++            limiter: None,
++            _parser_storage: None,
+         }
+     }
+ 
++    pub fn new_bounded(limiter: Arc<dyn ResourceLimiter>) -> Option<Self> {
++        let storage_bytes = RS_MAX_OSC_STORAGE_BYTES.checked_add(RS_MAX_APC_STORAGE_BYTES)?;
++        let parser_storage =
++            limiter.reserve(ResourceKind::TerminalTextCpu, storage_bytes as u64, 0)?;
++        let state_machine =
++            VTParser::new_bounded(RS_MAX_OSC_STORAGE_BYTES, RS_MAX_APC_STORAGE_BYTES)?;
++        Some(Self {
++            state_machine,
++            state: RefCell::new(Default::default()),
++            limiter: Some(limiter),
++            _parser_storage: Some(parser_storage),
++        })
++    }
++
++    pub fn is_ground(&self) -> bool {
++        self.state_machine.is_ground()
++    }
++
+     /// advance with tmux parser, bypass VTParse
+     #[cfg(feature = "tmux_cc")]
+     fn advance_tmux_bytes(&mut self, bytes: &[u8]) -> crate::Result<Vec<Event>> {
+@@ -108,6 +162,7 @@ impl Parser {
+                     let mut perform = Performer {
+                         callback: &mut callback,
+                         state: &mut parser_state,
++                        limiter: self.limiter.as_deref(),
+                     };
+                     self.state_machine
+                         .parse(unparsed_str.as_bytes(), &mut perform);
+@@ -119,6 +174,7 @@ impl Parser {
+         let mut perform = Performer {
+             callback: &mut callback,
+             state: &mut self.state.borrow_mut(),
++            limiter: self.limiter.as_deref(),
+         };
+         self.state_machine.parse(bytes, &mut perform);
+     }
+@@ -144,6 +200,7 @@ impl Parser {
+                     *first.borrow_mut() = Some(action);
+                 },
+                 state: &mut self.state.borrow_mut(),
++                limiter: self.limiter.as_deref(),
+             };
+             for (idx, b) in bytes.iter().enumerate() {
+                 self.state_machine.parse_byte(*b, &mut perform);
+@@ -181,6 +238,7 @@ impl Parser {
+                 &mut Performer {
+                     callback: &mut |action| actions.push(action),
+                     state: &mut self.state.borrow_mut(),
++                    limiter: self.limiter.as_deref(),
+                 },
+             );
+             if !actions.is_empty() && self.state_machine.is_ground() {
+@@ -196,6 +254,86 @@ impl Parser {
+ struct Performer<'a, F: FnMut(Action) + 'a> {
+     callback: &'a mut F,
+     state: &'a mut ParseState,
++    limiter: Option<&'a dyn ResourceLimiter>,
++}
++
++fn checked_record_bytes(parts: &[&[u8]]) -> Option<usize> {
++    parts
++        .iter()
++        .try_fold(parts.len().saturating_sub(1), |total, part| {
++            total.checked_add(part.len())
++        })
++}
++
++fn decoded_base64_bound(encoded: usize) -> Option<usize> {
++    encoded.checked_add(3)?.checked_div(4)?.checked_mul(3)
++}
++
++fn osc_reservation(osc: &[&[u8]]) -> Option<(ResourceKind, usize, u32)> {
++    let record_bytes = checked_record_bytes(osc)?;
++    let command = osc.first().copied().unwrap_or_default();
++    match command {
++        b"8" => {
++            let parameters = osc.get(1).copied().unwrap_or_default();
++            let uri = osc.get(2).copied().unwrap_or_default();
++            if parameters.len() > 1_024 || uri.len() > 8_192 || record_bytes > 16_384 {
++                return None;
++            }
++            Some((ResourceKind::PendingEffect, record_bytes, 1))
++        }
++        b"52" => {
++            let encoded = osc.get(2).copied().unwrap_or_default().len();
++            let decoded = decoded_base64_bound(encoded)?;
++            if encoded > 1_048_576 || decoded > 786_432 {
++                return None;
++            }
++            Some((
++                ResourceKind::PendingEffect,
++                record_bytes.checked_add(decoded)?,
++                1,
++            ))
++        }
++        b"0" | b"1" | b"2" => {
++            let value_bytes = record_bytes.saturating_sub(command.len() + 1);
++            (value_bytes <= 4_096).then_some((ResourceKind::PendingEffect, record_bytes, 1))
++        }
++        b"7" => {
++            let value = osc.get(1).copied().unwrap_or_default();
++            let value_bytes = value
++                .strip_prefix(b"file://localhost/")
++                .unwrap_or(value)
++                .len();
++            (value_bytes <= 131_072).then_some((ResourceKind::PendingEffect, record_bytes, 1))
++        }
++        b"1337" => {
++            (record_bytes <= 2_097_152).then_some((ResourceKind::PendingEffect, record_bytes, 1))
++        }
++        _ => (record_bytes <= RS_GENERIC_ESCAPE_BYTES).then_some((
++            ResourceKind::PendingEffect,
++            record_bytes,
++            1,
++        )),
++    }
++}
++
++fn apc_reservation(data: &[u8]) -> Option<(ResourceKind, usize, u32)> {
++    if data.first() == Some(&b'G') {
++        let metadata_end = data.iter().position(|byte| *byte == b';')?;
++        let metadata_bytes = metadata_end.checked_add(1)?;
++        let payload_bytes = data.len().checked_sub(metadata_bytes)?;
++        if metadata_bytes > RS_KITTY_APC_METADATA_BYTES
++            || payload_bytes > RS_KITTY_ENCODED_BYTES_PER_APC
++        {
++            return None;
++        }
++        Some((ResourceKind::ImageCpu, data.len(), 0))
++    } else {
++        (data.len() <= RS_GENERIC_ESCAPE_BYTES).then_some((
++            ResourceKind::PendingEffect,
++            data.len(),
++            1,
++        ))
++    }
+ }
+ 
+ fn is_short_dcs(intermediates: &[u8], byte: u8) -> bool {
+@@ -222,8 +360,20 @@ impl<'a, F: FnMut(Action)> VTActor for Performer<'a, F> {
+         }
+     }
+ 
+-    fn apc_dispatch(&mut self, data: Vec<u8>) {
+-        if let Some(img) = super::KittyImage::parse_apc(&data) {
++    fn apc_dispatch(&mut self, data: &[u8]) {
++        let Some((kind, bytes, descriptors)) = apc_reservation(data) else {
++            return;
++        };
++        let _reservation = match self.limiter {
++            Some(limiter) => {
++                let Some(reservation) = limiter.reserve(kind, bytes as u64, descriptors) else {
++                    return;
++                };
++                Some(reservation)
++            }
++            None => None,
++        };
++        if let Some(img) = super::KittyImage::parse_apc(data) {
+             (self.callback)(Action::KittyImage(Box::new(img)))
+         } else {
+             log::trace!("Ignoring APC data: {:?}", String::from_utf8_lossy(&data));
+@@ -315,6 +465,18 @@ impl<'a, F: FnMut(Action)> VTActor for Performer<'a, F> {
+     }
+ 
+     fn osc_dispatch(&mut self, osc: &[&[u8]]) {
++        let Some((kind, bytes, descriptors)) = osc_reservation(osc) else {
++            return;
++        };
++        let _reservation = match self.limiter {
++            Some(limiter) => {
++                let Some(reservation) = limiter.reserve(kind, bytes as u64, descriptors) else {
++                    return;
++                };
++                Some(reservation)
++            }
++            None => None,
++        };
+         let osc = OperatingSystemCommand::parse(osc);
+         (self.callback)(Action::OperatingSystemCommand(Box::new(osc)));
+     }

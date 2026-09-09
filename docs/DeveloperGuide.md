@@ -37,6 +37,8 @@ runs the full suite); pass `-SkipBuild` to reuse an existing Debug build:
 ```powershell
 .\Tools\Run-AllTests.ps1 -Suite Full
 .\Tools\Run-AllTests.ps1 -SkipBuild
+.\Tools\Run-AllTests.ps1 -Suite Full -ValidationMode Resume -ResumeFrom <run-id>
+.\Tools\Run-AllTests.ps1 -Suite Full -ValidationMode Affected -ImpactBase origin/master
 ```
 
 Useful outputs:
@@ -266,7 +268,7 @@ This subsystem runs every long file operation (Copy `F5`, Move `F6`, Delete `Del
 
 #### Control flow
 
-`ThreadMain` enters the queue first via `EnterOperation`: if `_waitForOthers`, the task FIFO-blocks on `_queueCv` until `_activeOperations == 0` and it is the queue head (Wait mode); otherwise it bumps `_activeOperations` and proceeds (Parallel). Pre-calc runs while holding the slot. For Copy with pre-calc enabled, "5F early admission" runs `RunPreCalculation` on a side `std::jthread` (via `TryStartPreCalculationThread`) concurrently with the transfer so bytes move before the recursive scan finishes; Move/Delete keep serial pre-calc-then-execute because they mutate the source. `ExecuteOperation` either calls the same-context `IFileSystem` bulk/per-item APIs or, when `_destinationFileSystem` is set, drives the host cross-filesystem bridge. Per-item work for `maxConcurrency > 1` is dispatched through the process-wide `PerItemTaskScheduler` (`GetPerItemTaskScheduler()`), a shared bounded worker pool issuing short `processIndex(i)` work items so one large operation never pins every worker. Completion calls `PostCompleted`, which sets `_taskFinished`, builds a `CompletedTaskSummary` (`RecordCompletedTask`), and posts `WndMsg::kFileOperationCompleted` to the FolderWindow (`OnFileOperationCompleted`).
+`ThreadMain` enters the queue first via `EnterOperation`: if `_waitForOthers`, the task FIFO-blocks on `_queueCv` until `_activeOperations == 0` and it is the queue head (Wait mode); otherwise it bumps `_activeOperations` and proceeds (Parallel). Pre-calc runs while holding the slot. For Copy with pre-calc enabled, "5F early admission" runs `RunPreCalculation` on a side `std::jthread` (via `TryStartPreCalculationThread`) concurrently with the transfer so bytes move before the recursive scan finishes; Move/Delete keep serial pre-calc-then-execute because they mutate the source. `ExecuteOperation` either calls the same-context `IFileSystem` bulk/per-item APIs or, when `_destinationFileSystem` is set, drives the host cross-filesystem bridge. Per-item work uses one `QualifiedItemPolicy` for serial and parallel execution. For `maxConcurrency > 1`, `PerItemTaskScheduler` (`GetPerItemTaskScheduler()`) dispatches short `itemPolicy.Process(i)` calls through a shared bounded worker pool so one large operation never pins every worker. Completion calls `PostCompleted`, which sets `_taskFinished`, builds a `CompletedTaskSummary` (`RecordCompletedTask`), and posts `WndMsg::kFileOperationCompleted` to the FolderWindow (`OnFileOperationCompleted`).
 
 #### Threading rules
 
@@ -709,11 +711,11 @@ Translations are resource-only satellite DLLs under `RedSalamander/Lang/<culture
 
 #### Build
 
-`build.ps1` (repo root) is the wrapper over MSBuild on `RedSalamander.sln`. It locates MSBuild via `vswhere`/path search (prefers VS 2026 / toolset v145), stamps versions through `Tools\Versioning.ps1`, and supports `-Configuration {Debug|Release|ASan Debug}`, `-Platform {x64|ARM64}`, `-ProjectName`, `-Clean`/`-Rebuild`, and packaging (`-Msix`, `-Msi`, `-Zip`, `-GenerateWingetManifest`). Helper modules under `Tools/` (`BuildProjectSelection.ps1`, `MSBuildInvocation.ps1`, `ProcessStreaming.ps1`) drive project selection and streamed logging to `.build\logs\`. Language satellite projects are validated to land in the `Lang\` output folder.
+`build.ps1` (repo root) is the wrapper over MSBuild on `RedSalamander.sln`. It locates MSBuild via `vswhere`/path search (prefers VS 2026 / toolset v145), stamps versions through `Tools\Modules\Build\Versioning.psm1`, and supports `-Configuration {Debug|Release|ASan Debug}`, `-Platform {x64|ARM64}`, `-ProjectName`, `-Clean`/`-Rebuild`, and packaging (`-Msix`, `-Msi`, `-Zip`, `-GenerateWingetManifest`). Private build implementation is grouped under `Tools/Modules/`; stable scripts at the Tools root are entrypoints or compatibility shims. Language satellite projects are validated to land in the `Lang\` output folder. Use [`Tools/README.md`](../Tools/README.md) and `Tools/tool-inventory.json` to find each command's purpose, consumers, side effects, and owner; tooling changes follow `Specs/Testing/Testing_ToolingGovernance.md`.
 
 #### Tests
 
-In-product self-tests are debug-only (`ENABLE_TESTS`) and split by suite under `RedSalamander/SelfTest/` (`Commands/`, `CompareDirectories/`, `FileOperations/`, shared `Common/SelfTestCommon.h`). They run via CLI flags parsed in `RedSalamander.cpp`: `--commands-selftest`, `--compare-selftest`, `--fileops-selftest`, with `--selftest-case=`, `--selftest-fail-fast`, `--selftest-list-cases`, `--selftest-timeout-multiplier=`. The shared `SelfTest::RunCase` template records each declared case as `passed`/`failed`/`skipped` with a reason into `results.json` (artifacts under `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\`, archived to `Specs/TestRuns/`). `Tools/Run-AllTests.ps1 -Suite Full` builds Debug, runs the suites plus standalone native/CppUnitTest/Pester tests, cross-checks each suite against `--selftest-list-cases` for coverage drift, and writes `run-all-tests-results.json`. See `Specs/Testing/Testing_SelfTests.md`, `Specs/Testing/Testing_TestCoverage.md`, `Specs/Testing/Testing_PerformanceValidation.md`.
+In-product self-tests are debug-only (`ENABLE_TESTS`) and split by suite under `RedSalamander/SelfTest/` (`Commands/`, `CompareDirectories/`, `FileOperations/`, shared `Common/SelfTestCommon.h`). They run via CLI flags parsed in `RedSalamander.cpp`: `--commands-selftest`, `--compare-selftest`, `--fileops-selftest`, with `--selftest-case=`, the governed Commands-only `--selftest-family=`, `--selftest-fail-fast`, `--selftest-list-cases`, and `--selftest-timeout-multiplier=`. The shared `SelfTest::RunCase` template records each declared case as `passed`/`failed`/`skipped` with a reason into `results.json` beneath exact `X:\RedSalamander.Perf\runs\<runId>\artifacts\selftest\last_run`; test tooling does not create, audit, or clean runtime data outside that marked root and never automatically writes `Specs/TestRuns/`. `Tools/Run-AllTests.ps1 -Suite Full` builds Debug, runs the suites plus standalone native/CppUnitTest/Pester tests, cross-checks each suite against `--selftest-list-cases` for coverage drift, and writes composite aggregate v2 plus a v1 compatibility sidecar. Fresh is the final-closeout authority; explicit exact Resume may reuse promoted entries, while Affected and Commands-family runs report repository `NOT_EVALUATED`. See `Specs/Testing/Testing_SelfTests.md`, `Specs/Testing/Testing_TestCoverage.md`, `Specs/Testing/Testing_ValidationEvidence.md`, `Specs/Testing/Testing_PerformanceValidation.md`.
 
 #### Threading / UI-thread rules
 
@@ -727,7 +729,7 @@ GUI self-tests must run foreground (focus/pointer routing); launch the GUI-subsy
 | `RedSalamander/Lang/<culture>/*.rc + *.vcxproj` | Satellite translation DLLs |
 | `Common/LocalizationManager.h` (`Localization::`) | Owner registration + localized resource lookup |
 | `Common/Helpers.h` | `LoadStringResource`/`FormatStringResource`/`MessageBoxResource` |
-| `build.ps1` + `Tools/*.ps1` | MSBuild wrapper, versioning, packaging |
+| `build.ps1` + `Tools/README.md` | Build wrapper and catalog of versioning, packaging, audit, reporting, and support tools |
 | `RedSalamander/SelfTest/Common/SelfTestCommon.h` | `RunCase`, result/artifact contract |
 | `Tools/Run-AllTests.ps1` | Unified runner + coverage cross-check |
 

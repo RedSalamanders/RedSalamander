@@ -99,9 +99,11 @@ RAW + sidecar pairing:
 - When the viewer is in **Thumbnail** mode and a sidecar JPEG exists, ViewerImgRaw displays the sidecar JPEG instead of opening/decoding the RAW.
 
 Menu (DxUi-hosted from the hidden native menu model):
-- File: Refresh (`F5`), Export..., Exit (`Esc`)
-- Other Files: Next / Previous / First / Last
-- View: Fit to Window / Actual Size / Toggle Fit↔100%, Zoom In/Out/Reset, Transform (rotate/flip/reset), Adjust (brightness/contrast/gamma + grayscale/negative), Image Source (RAW / Thumbnail), Show Exif Overlay
+- File: Refresh (`F5`), Export..., Other Files, separator, Exit (`Esc`)
+- Other Files: Previous / Next / First / Last
+- View: Fit to Window / Actual Size / Toggle Fit↔100%, Zoom In/Out/Reset, Transform (rotate clockwise/counterclockwise, flip, reset), Adjust (explicit Increase/Decrease Brightness, Contrast, and Gamma labels plus grayscale/negative), Image Source (RAW / Thumbnail), Show Exif Overlay
+- Other Files is a File submenu, not a top-level category. Every actionable
+  static sibling has one access key unique within its separator-delimited group.
 
 When the shared `RedSalamander.DxNativeMenuBar` host attaches successfully, the window detaches its live native `HMENU`, adopts that detached handle as the single hidden RAII menu-model owner, and renders the visible top menu bar through DxUi. If attach fails, the handle remains solely window-owned and the native menu stays visible as the functional fallback. `Alt`, `F10`, and menu mnemonics continue to route through the active menu bar.
 

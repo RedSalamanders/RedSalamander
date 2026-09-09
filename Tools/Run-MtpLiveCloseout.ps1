@@ -10,6 +10,44 @@
     production WPD enumeration path with an impossible requested device name and
     is useful for archiving "no device visible" evidence without writes.
 
+.PARAMETER Device
+    Selects the approved live MTP/PTP device name or pattern for the destructive smoke.
+
+.PARAMETER Scratch
+    Names the dedicated disposable device folder in which the live mutation matrix may run.
+
+.PARAMETER ProbeNoDevice
+    Runs the production enumeration path with an impossible selector and performs no device writes.
+
+.PARAMETER SkipBuild
+    Reuses an existing test-enabled build instead of building before the focused case.
+
+.PARAMETER TimeoutMultiplier
+    Scales the focused CompareDirectories case timeout for slow devices or hosts.
+
+.PARAMETER Platform
+    Selects the x64 or ARM64 build lane.
+
+.PARAMETER Configuration
+    Selects the test-enabled build configuration.
+
+.PARAMETER ArchiveRoot
+    Selects the evidence directory below the current X:\RedSalamander.Perf run.
+    Relative values are resolved below that run. The default is
+    runs\<runId>\artifacts\mtp-live-closeout.
+
+.PARAMETER TestRoot
+    Exact X:\RedSalamander.Perf root. The repository drive is used by default.
+
+.PARAMETER AllowExternalTestRoot
+    Allows first-time initialization of the exact selected X:\RedSalamander.Perf root.
+
+.OUTPUTS
+    No supported pipeline objects. Writes command, environment, device-probe, test logs, and copied self-test artifacts below ArchiveRoot and exits with the focused runner's exit code.
+
+.NOTES
+    Prerequisites: Windows WPD support, an approved live device and disposable scratch folder for Live mode, an initialized X:\RedSalamander.Perf root, and the normal test toolchain unless -SkipBuild is used. Side effects: Live mode creates, reads, overwrites, renames, copies, moves, and deletes only inside the supplied device scratch folder; both modes write local evidence only below the selected test root. Primary use is explicit operator closeout, never default CI.
+
 .EXAMPLE
     .\Tools\Run-MtpLiveCloseout.ps1 -ProbeNoDevice -SkipBuild
 
@@ -39,7 +77,11 @@ param(
 
     [string]$Configuration = 'Debug',
 
-    [string]$ArchiveRoot = ''
+    [string]$ArchiveRoot = '',
+
+    [string]$TestRoot = $env:REDSALAMANDER_TEST_ROOT,
+
+    [switch]$AllowExternalTestRoot
 )
 
 Set-StrictMode -Version Latest
@@ -55,11 +97,36 @@ if (-not (Test-Path $runAll)) {
     throw "Run-AllTests.ps1 not found at $runAll"
 }
 
+$testRunPlanModule = Join-Path $repoRoot 'Tools\Modules\Testing\TestRunPlan.psm1'
+Import-Module $testRunPlanModule -Force -ErrorAction Stop
+$selectedTestRoot = Get-RSTestSandboxRoot `
+    -RepoRoot $repoRoot `
+    -TestRootOverride $TestRoot `
+    -SelfTestRootOverride '' `
+    -AllowExternalInitialization:$AllowExternalTestRoot
+[void](Initialize-RSTestSandboxRoot `
+        -TestRoot $selectedTestRoot `
+        -RepoRoot $repoRoot `
+        -AllowExternalInitialization:$AllowExternalTestRoot)
+$context = New-RSTestRunContext `
+    -RepoRoot $repoRoot `
+    -RunId (New-RSTestRunId) `
+    -TestRootOverride $selectedTestRoot `
+    -SelfTestRootOverride ''
+
 if ([string]::IsNullOrWhiteSpace($ArchiveRoot)) {
-    $stamp = Get-Date -Format 'yyyy-MM-dd_HHmmss'
-    $ArchiveRoot = Join-Path $repoRoot "Specs\TestRuns\local_scratch\MtpLiveCloseout\$stamp"
+    $ArchiveRoot = Join-Path $context.RunRoot 'artifacts\mtp-live-closeout'
 } elseif (-not [System.IO.Path]::IsPathRooted($ArchiveRoot)) {
-    $ArchiveRoot = Join-Path $repoRoot $ArchiveRoot
+    $ArchiveRoot = Join-Path $context.RunRoot $ArchiveRoot
+}
+$ArchiveRoot = Assert-RSTestSandboxContainedPath `
+    -TestRoot $context.TestRoot `
+    -Path $ArchiveRoot `
+    -RequireDescendant
+$selfTestArtifactRoot = [IO.Path]::GetFullPath($context.ArtifactRoot).TrimEnd('\')
+if ($ArchiveRoot.StartsWith("$selfTestArtifactRoot\", [System.StringComparison]::OrdinalIgnoreCase) -or
+    [string]::Equals($ArchiveRoot.TrimEnd('\'), $selfTestArtifactRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "ArchiveRoot must not be the self-test artifact source: $ArchiveRoot"
 }
 
 New-Item -ItemType Directory -Force -Path $ArchiveRoot | Out-Null
@@ -68,6 +135,8 @@ $deviceValue = if ($ProbeNoDevice) { '__redsal_mtp_probe_no_such_device__' } els
 $scratchValue = if ($ProbeNoDevice) { '' } else { $Scratch }
 
 $previousEnv = @{
+    REDSALAMANDER_TEST_ROOT           = [Environment]::GetEnvironmentVariable('REDSALAMANDER_TEST_ROOT', 'Process')
+    REDSALAMANDER_TEST_RUN_ID         = [Environment]::GetEnvironmentVariable('REDSALAMANDER_TEST_RUN_ID', 'Process')
     REDSALAMANDER_SELFTEST_MTP_DEVICE  = [Environment]::GetEnvironmentVariable('REDSALAMANDER_SELFTEST_MTP_DEVICE', 'Process')
     REDSALAMANDER_SELFTEST_MTP_PROFILE = [Environment]::GetEnvironmentVariable('REDSALAMANDER_SELFTEST_MTP_PROFILE', 'Process')
     REDSALAMANDER_SELFTEST_MTP_ROOT    = [Environment]::GetEnvironmentVariable('REDSALAMANDER_SELFTEST_MTP_ROOT', 'Process')
@@ -125,6 +194,8 @@ function Write-DeviceProbe {
 
 $exitCode = 1
 try {
+    Set-ProcessEnvironmentValue -Name 'REDSALAMANDER_TEST_ROOT' -Value $context.TestRoot
+    Set-ProcessEnvironmentValue -Name 'REDSALAMANDER_TEST_RUN_ID' -Value $context.RunId
     Set-ProcessEnvironmentValue -Name 'REDSALAMANDER_SELFTEST_MTP_DEVICE' -Value $deviceValue
     Set-ProcessEnvironmentValue -Name 'REDSALAMANDER_SELFTEST_MTP_SCRATCH' -Value $scratchValue
 
@@ -150,12 +221,18 @@ try {
         '-ExecutionPolicy', 'Bypass',
         '-File', $runAll,
         '-Suite', 'Compare',
+        '-ValidationMode', 'Fresh',
         '-CaseFilter', 'mtp_live_device_smoke',
         '-FailFast',
         '-TimeoutMultiplier', ([string]::Format([System.Globalization.CultureInfo]::InvariantCulture, '{0}', $TimeoutMultiplier)),
         '-Platform', $Platform,
-        '-Configuration', $Configuration
+        '-Configuration', $Configuration,
+        '-TestRoot', $context.TestRoot,
+        '-RunId', $context.RunId
     )
+    if ($AllowExternalTestRoot) {
+        $arguments += '-AllowExternalTestRoot'
+    }
     if ($SkipBuild) {
         $arguments += '-SkipBuild'
     }
@@ -174,7 +251,7 @@ try {
 
     $exitCode = if ($null -ne $process.ExitCode) { [int]$process.ExitCode } else { 0 }
 
-    $lastRun = Join-Path $env:LOCALAPPDATA 'RedSalamander\SelfTest\last_run'
+    $lastRun = $context.ArtifactRoot
     if (Test-Path $lastRun) {
         $lastRunArchive = Join-Path $ArchiveRoot 'last_run'
         New-Item -ItemType Directory -Force -Path $lastRunArchive | Out-Null
@@ -197,7 +274,11 @@ try {
     if (Test-Path $resultsJson) {
         try {
             $summary = Get-Content $resultsJson | ConvertFrom-Json
-            $summaryLines += "- Result: total=$($summary.total) passed=$($summary.passed) failed=$($summary.failed) skipped=$($summary.skipped)"
+            if ($summary.schema -eq 'red-salamander.run-all-tests.v2') {
+                $summaryLines += "- Result: repository=$($summary.repository_verdict) change=$($summary.change_verdict) executed=$($summary.counts.executed) reused=$($summary.counts.reused) total=$($summary.case_counts.total) passed=$($summary.case_counts.passed) failed=$($summary.case_counts.failed) skipped=$($summary.case_counts.skipped)"
+            } else {
+                $summaryLines += "- Result: total=$($summary.total) passed=$($summary.passed) failed=$($summary.failed) skipped=$($summary.skipped)"
+            }
         } catch {
             $summaryLines += "- Result: unable to parse run-all-tests-results.json ($($_.Exception.Message))"
         }

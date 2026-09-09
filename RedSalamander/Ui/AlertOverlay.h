@@ -34,6 +34,7 @@
 
 #include "DxUi/DxUi.Typography.h"
 #include "DxUi/DxUi.h"
+#include "FluentIcons.h"
 
 namespace RedSalamander::Ui
 {
@@ -45,6 +46,14 @@ enum class AlertSeverity : uint8_t
     Busy,
 };
 
+enum class AlertPresentation : uint8_t
+{
+    Severity,
+    Copy,
+    Move,
+    Delete,
+};
+
 struct AlertButton
 {
     uint32_t id = 0;
@@ -52,12 +61,31 @@ struct AlertButton
     bool primary = false;
 };
 
+struct AlertOptionChoice
+{
+    uint64_t value = 0;
+    std::wstring label;
+};
+
+// A compact prompt-owned choice. It deliberately supports only cycling a
+// finite set of values; file-operation confirmation does not need a generic
+// form or arbitrary text-entry surface.
+struct AlertOption
+{
+    uint32_t id = 0;
+    std::wstring label;
+    std::vector<AlertOptionChoice> choices;
+    size_t selectedIndex = 0;
+};
+
 struct AlertModel
 {
     AlertSeverity severity = AlertSeverity::Error;
+    AlertPresentation presentation = AlertPresentation::Severity;
     std::wstring title;
     std::wstring message;
     bool closable = true;
+    std::vector<AlertOption> options;
     std::vector<AlertButton> buttons;
 };
 
@@ -92,6 +120,7 @@ struct AlertHitTest
     {
         None,
         Close,
+        Option,
         Button,
     };
 
@@ -127,6 +156,10 @@ public:
     void SetModel(AlertModel model)
     {
         _model = std::move(model);
+#if defined(ENABLE_TESTS)
+        _debugLastDrawnIconPresentation = AlertPresentation::Severity;
+        _debugLastDrawnIconGlyph        = L'\0';
+#endif
         InvalidateTextLayouts();
         InvalidateButtonLayouts();
         InvalidateLayout();
@@ -162,6 +195,7 @@ public:
         _bodyFormat.reset();
         _buttonFormat.reset();
         _iconFormat.reset();
+        _closeIconFormat.reset();
         _iconGlyphSet   = IconGlyphSet::None;
         _dwriteIdentity = nullptr;
         InvalidateTextLayouts();
@@ -181,30 +215,64 @@ public:
 
     void ClearFocusedButton() noexcept
     {
-        _focusedButtonId.reset();
+        _focusedControl = {};
     }
 
     [[nodiscard]] std::optional<uint32_t> GetFocusedButtonId() const noexcept
     {
-        return _focusedButtonId;
+        return _focusedControl.part == AlertHitTest::Part::Button ? std::optional<uint32_t>(_focusedControl.buttonId) : std::nullopt;
+    }
+
+    [[nodiscard]] std::optional<uint32_t> GetFocusedOptionId() const noexcept
+    {
+        return _focusedControl.part == AlertHitTest::Part::Option ? std::optional<uint32_t>(_focusedControl.buttonId) : std::nullopt;
+    }
+
+    [[nodiscard]] std::optional<uint64_t> GetOptionValue(uint32_t optionId) const noexcept
+    {
+        for (const auto& option : _model.options)
+        {
+            if (option.id == optionId && ! option.choices.empty() && option.selectedIndex < option.choices.size())
+            {
+                return option.choices[option.selectedIndex].value;
+            }
+        }
+        return std::nullopt;
+    }
+
+    [[nodiscard]] bool ActivateOption(uint32_t optionId, bool reverse = false) noexcept
+    {
+        for (auto& option : _model.options)
+        {
+            if (option.id != optionId || option.choices.empty())
+            {
+                continue;
+            }
+
+            option.selectedIndex = reverse ? (option.selectedIndex == 0u ? option.choices.size() - 1u : option.selectedIndex - 1u)
+                                           : ((option.selectedIndex + 1u) % option.choices.size());
+            InvalidateLayout();
+            return true;
+        }
+        return false;
     }
 
     [[nodiscard]] bool FocusNextButton(bool reverse) noexcept
     {
         if (_model.buttons.empty())
         {
-            const bool changed = _focusedButtonId.has_value();
-            _focusedButtonId.reset();
+            const bool changed = _focusedControl.part == AlertHitTest::Part::Button;
+            _focusedControl = {};
             return changed;
         }
 
         size_t nextIndex = 0;
-        if (_focusedButtonId.has_value())
+        if (_focusedControl.part == AlertHitTest::Part::Button)
         {
             std::optional<size_t> currentIndex;
             for (size_t i = 0; i < _model.buttons.size(); ++i)
             {
-                if (_model.buttons[i].id == _focusedButtonId.value())
+                if (_model.buttons[i].id == _focusedControl.buttonId)
                 {
                     currentIndex = i;
                     break;
@@ -233,12 +301,49 @@ public:
         }
 
         const uint32_t nextId = _model.buttons[nextIndex].id;
-        if (_focusedButtonId.has_value() && _focusedButtonId.value() == nextId)
+        if (_focusedControl.part == AlertHitTest::Part::Button && _focusedControl.buttonId == nextId)
         {
             return false;
         }
 
-        _focusedButtonId = nextId;
+        _focusedControl.part     = AlertHitTest::Part::Button;
+        _focusedControl.buttonId = nextId;
+        return true;
+    }
+
+    [[nodiscard]] bool FocusNextInteractive(bool reverse) noexcept
+    {
+        std::vector<AlertHitTest> controls;
+        controls.reserve(_model.options.size() + _model.buttons.size());
+        for (const auto& option : _model.options)
+        {
+            controls.push_back(AlertHitTest{.part = AlertHitTest::Part::Option, .buttonId = option.id});
+        }
+        for (const auto& button : _model.buttons)
+        {
+            controls.push_back(AlertHitTest{.part = AlertHitTest::Part::Button, .buttonId = button.id});
+        }
+        if (controls.empty())
+        {
+            const bool changed = _focusedControl.part != AlertHitTest::Part::None;
+            _focusedControl = {};
+            return changed;
+        }
+
+        size_t nextIndex = reverse ? controls.size() - 1u : 0u;
+        for (size_t index = 0; index < controls.size(); ++index)
+        {
+            if (controls[index].part == _focusedControl.part && controls[index].buttonId == _focusedControl.buttonId)
+            {
+                nextIndex = reverse ? (index == 0u ? controls.size() - 1u : index - 1u) : ((index + 1u) % controls.size());
+                break;
+            }
+        }
+        if (controls[nextIndex].part == _focusedControl.part && controls[nextIndex].buttonId == _focusedControl.buttonId)
+        {
+            return false;
+        }
+        _focusedControl = controls[nextIndex];
         return true;
     }
 
@@ -277,6 +382,21 @@ public:
     {
         return _debugUsesSharedButtonChrome;
     }
+
+    [[nodiscard]] AlertPresentation DebugGetLastDrawnIconPresentationForTest() const noexcept
+    {
+        return _debugLastDrawnIconPresentation;
+    }
+
+    [[nodiscard]] wchar_t DebugGetLastDrawnIconGlyphForTest() const noexcept
+    {
+        return _debugLastDrawnIconGlyph;
+    }
+
+    [[nodiscard]] wchar_t DebugGetLastDrawnCloseGlyphForTest() const noexcept
+    {
+        return _debugLastDrawnCloseGlyph;
+    }
 #endif
 
     [[nodiscard]] bool EnsureLayout(IDWriteFactory* dwriteFactory, float clientWidthDip, float clientHeightDip) noexcept
@@ -307,6 +427,9 @@ public:
         constexpr float kButtonHeightDip      = 32.0f;
         constexpr float kButtonMinWidthDip    = 84.0f;
         constexpr float kButtonHorzPaddingDip = 14.0f;
+        constexpr float kOptionHeightDip      = 32.0f;
+        constexpr float kOptionGapDip         = 8.0f;
+        constexpr float kOptionsTextGapDip    = 14.0f;
 
         const float minDimDip      = std::min(clientWidthDip, clientHeightDip);
         const float outerMarginDip = std::min(kOuterMarginDip, minDimDip * 0.06f);
@@ -370,7 +493,12 @@ public:
         }
 
         const float buttonRowHeightDip = _model.buttons.empty() ? 0.0f : kButtonHeightDip;
-        const float contentHeightDip   = std::max(showIcon ? kIconSizeDip : 0.0f, textHeightDip);
+        const float optionBlockHeightDip = _model.options.empty()
+            ? 0.0f
+            : static_cast<float>(_model.options.size()) * kOptionHeightDip +
+                  static_cast<float>(_model.options.size() - 1u) * kOptionGapDip;
+        const float textAndOptionsHeightDip = textHeightDip + (optionBlockHeightDip > 0.0f ? kOptionsTextGapDip + optionBlockHeightDip : 0.0f);
+        const float contentHeightDip        = std::max(showIcon ? kIconSizeDip : 0.0f, textAndOptionsHeightDip);
 
         float desiredPanelHeight = innerPaddingDip * 2.0f + contentHeightDip;
         if (buttonRowHeightDip > 0.0f)
@@ -430,6 +558,33 @@ public:
             textRect            = D2D1::RectF(iconRect.right + kIconTextGapDip, bodyTextRect.top, bodyTextRect.right, bodyTextRect.bottom);
         }
 
+        _optionRects.clear();
+        if (optionBlockHeightDip > 0.0f)
+        {
+            const float optionTop = std::min(textRect.bottom, textRect.top + textHeightDip + kOptionsTextGapDip);
+            float rowTop          = optionTop;
+            for (const auto& option : _model.options)
+            {
+                if (rowTop + kOptionHeightDip > textRect.bottom)
+                {
+                    break;
+                }
+
+                OptionRect row{};
+                row.id    = option.id;
+                row.rect  = D2D1::RectF(textRect.left, rowTop, textRect.right, rowTop + kOptionHeightDip);
+                row.label = option.label;
+                if (! option.choices.empty() && option.selectedIndex < option.choices.size())
+                {
+                    row.label.append(L": ");
+                    row.label.append(option.choices[option.selectedIndex].label);
+                }
+                _optionRects.emplace_back(std::move(row));
+                rowTop += kOptionHeightDip + kOptionGapDip;
+            }
+            textRect.bottom = std::max(textRect.top, optionTop - kOptionsTextGapDip);
+        }
+
         _layoutBodyTextRect = bodyTextRect;
         _layoutIconRect     = iconRect;
         _layoutTextRect     = textRect;
@@ -471,6 +626,17 @@ public:
             }
         }
 
+        for (const auto& option : _optionRects)
+        {
+            if (PointInRect(ptDip, option.rect))
+            {
+                AlertHitTest hit{};
+                hit.part     = AlertHitTest::Part::Option;
+                hit.buttonId = option.id;
+                return hit;
+            }
+        }
+
         return {};
     }
 
@@ -491,6 +657,7 @@ public:
 #if defined(ENABLE_TESTS)
         _debugUsesSharedCloseChrome  = false;
         _debugUsesSharedButtonChrome = false;
+        _debugLastDrawnCloseGlyph     = L'\0';
 #endif
         if (! target || ! dwriteFactory)
         {
@@ -553,7 +720,7 @@ public:
         D2D1::ColorF panelColor  = _theme.background;
         D2D1::ColorF accentColor = _theme.accent;
         D2D1::ColorF textColor   = _theme.text;
-        ResolvePalette(_model.severity, panelColor, accentColor, textColor);
+        ResolvePalette(_model.severity, _model.presentation, panelColor, accentColor, textColor);
 
         _backgroundBrush->SetColor(panelColor);
         _backgroundBrush->SetOpacity(kCardOpacity * overlayOpacity);
@@ -583,7 +750,7 @@ public:
 
             _textBrush->SetColor(accentColor);
             _textBrush->SetOpacity(overlayOpacity);
-            DrawSeverityIcon(target, _textBrush.get(), _model.severity, iconRect, overlayOpacity, elapsedMs);
+            DrawPromptIcon(target, _textBrush.get(), _model.severity, _model.presentation, iconRect, overlayOpacity, elapsedMs);
         }
 
         _textBrush->SetColor(textColor);
@@ -612,6 +779,7 @@ public:
         {
             DrawButtons(target, overlayOpacity, kButtonCornerDip);
         }
+        DrawOptions(target, overlayOpacity, kButtonCornerDip);
 
         target->SetTransform(baseTransform);
     }
@@ -624,6 +792,13 @@ private:
         bool primary = false;
         std::wstring_view label;
         float labelWidthDip = 0.0f;
+    };
+
+    struct OptionRect
+    {
+        uint32_t id = 0;
+        D2D1_RECT_F rect{};
+        std::wstring label;
     };
 
     static bool PointInRect(D2D1_POINT_2F pt, const D2D1_RECT_F& rc) noexcept
@@ -677,6 +852,7 @@ private:
         constexpr float kBodySizeDip   = 14.0f;
         constexpr float kButtonSizeDip = 13.0f;
         constexpr float kIconSizeDip   = 56.0f;
+        constexpr float kCloseIconSizeDip = 16.0f;
 
         static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
             dwriteFactory, RedSalamander::DxUi::Typography::MakeUiTextSpec(kTitleSizeDip, DWRITE_FONT_WEIGHT_SEMI_BOLD), _titleFormat.put(), L""));
@@ -700,6 +876,19 @@ private:
         if (_iconFormat)
         {
             _iconGlyphSet = IconGlyphSet::Fluent;
+
+            if (FAILED(RedSalamander::DxUi::Typography::CreateTextFormat(
+                    dwriteFactory, RedSalamander::DxUi::Typography::MakeUiIconSpec(kCloseIconSizeDip), _closeIconFormat.put(), L"")))
+            {
+                _closeIconFormat.reset();
+                static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
+                    dwriteFactory,
+                    RedSalamander::DxUi::Typography::TypographySpec{.familyName = RedSalamander::DxUi::Typography::kSegoeMdl2AssetsFamily,
+                                                                    .weight = DWRITE_FONT_WEIGHT_NORMAL,
+                                                                    .sizeDip = kCloseIconSizeDip},
+                    _closeIconFormat.put(),
+                    L""));
+            }
         }
         else
         {
@@ -714,6 +903,14 @@ private:
             if (_iconFormat)
             {
                 _iconGlyphSet = IconGlyphSet::Unicode;
+                static_cast<void>(dwriteFactory->CreateTextFormat(L"Segoe UI Symbol",
+                                                                  nullptr,
+                                                                  DWRITE_FONT_WEIGHT_NORMAL,
+                                                                  DWRITE_FONT_STYLE_NORMAL,
+                                                                  DWRITE_FONT_STRETCH_NORMAL,
+                                                                  kCloseIconSizeDip,
+                                                                  L"",
+                                                                  _closeIconFormat.put()));
             }
         }
 
@@ -737,23 +934,36 @@ private:
             static_cast<void>(_iconFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER));
             static_cast<void>(_iconFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
         }
+        if (_closeIconFormat)
+        {
+            static_cast<void>(_closeIconFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP));
+            static_cast<void>(_closeIconFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER));
+            static_cast<void>(_closeIconFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
+        }
     }
 
     void ResetFocus() noexcept
     {
-        _focusedButtonId.reset();
+        _focusedControl = {};
         for (const auto& button : _model.buttons)
         {
             if (button.primary)
             {
-                _focusedButtonId = button.id;
+                _focusedControl.part     = AlertHitTest::Part::Button;
+                _focusedControl.buttonId = button.id;
                 return;
             }
         }
 
         if (! _model.buttons.empty())
         {
-            _focusedButtonId = _model.buttons.front().id;
+            _focusedControl.part     = AlertHitTest::Part::Button;
+            _focusedControl.buttonId = _model.buttons.front().id;
+        }
+        else if (! _model.options.empty())
+        {
+            _focusedControl.part     = AlertHitTest::Part::Option;
+            _focusedControl.buttonId = _model.options.front().id;
         }
     }
 
@@ -837,6 +1047,7 @@ private:
         _layoutButtonRowHeightDip = 0.0f;
         _layoutShowIcon           = false;
         _buttonRects.clear();
+        _optionRects.clear();
         _hasLayout = false;
     }
 
@@ -908,8 +1119,36 @@ private:
         }
     }
 
-    void ResolvePalette(AlertSeverity severity, D2D1::ColorF& panelBackground, D2D1::ColorF& accentColor, D2D1::ColorF& textColor) const noexcept
+    void ResolvePalette(AlertSeverity severity,
+                        AlertPresentation presentation,
+                        D2D1::ColorF& panelBackground,
+                        D2D1::ColorF& accentColor,
+                        D2D1::ColorF& textColor) const noexcept
     {
+        if (presentation == AlertPresentation::Copy)
+        {
+            panelBackground = _theme.infoBackground;
+            accentColor     = _theme.infoText;
+            textColor       = _theme.infoText;
+            return;
+        }
+
+        if (presentation == AlertPresentation::Move)
+        {
+            panelBackground = _theme.warningBackground;
+            accentColor     = _theme.warningText;
+            textColor       = _theme.warningText;
+            return;
+        }
+
+        if (presentation == AlertPresentation::Delete)
+        {
+            panelBackground = _theme.errorBackground;
+            accentColor     = _theme.errorText;
+            textColor       = _theme.errorText;
+            return;
+        }
+
         if (severity == AlertSeverity::Error)
         {
             panelBackground = _theme.errorBackground;
@@ -954,36 +1193,42 @@ private:
         const float w      = std::max(0.0f, rect.right - rect.left);
         const float h      = std::max(0.0f, rect.bottom - rect.top);
         const float size   = std::min(w, h);
-        const float stroke = std::clamp(size * 0.10f, 1.5f, 2.5f);
-        const float pad    = size * 0.28f;
         const float radius = size * 0.35f;
+
+        const wchar_t closeGlyph = _iconGlyphSet == IconGlyphSet::Fluent ? FluentIcons::kClear : FluentIcons::kFallbackClear;
+        const wchar_t closeText[2]{closeGlyph, L'\0'};
 
         _backgroundBrush->SetOpacity(opacity);
         RedSalamander::DxUi::ButtonChromeDrawSpec chrome{};
         chrome.bounds      = rect;
+        chrome.text        = _closeIconFormat ? std::wstring_view(closeText, 1u) : std::wstring_view{};
         chrome.variant     = RedSalamander::DxUi::ButtonVariant::IconOnly;
         chrome.hovered     = hot;
         chrome.customStyle = RedSalamander::DxUi::ButtonChromeCustomStyle{
             .fill            = D2D1::ColorF(accentColor.r, accentColor.g, accentColor.b, 0.14f),
+            .text            = accentColor,
             .showFill        = hot,
             .showBorder      = false,
             .showFocus       = false,
             .cornerRadiusDip = radius,
         };
-        RedSalamander::DxUi::DrawButtonChrome(target, _backgroundBrush.get(), nullptr, nullptr, MakeChromeThemePalette(), chrome);
+        RedSalamander::DxUi::DrawButtonChrome(target, _backgroundBrush.get(), nullptr, _closeIconFormat.get(), MakeChromeThemePalette(), chrome);
 #if defined(ENABLE_TESTS)
         _debugUsesSharedCloseChrome = true;
+        _debugLastDrawnCloseGlyph   = _closeIconFormat ? closeGlyph : L'\0';
 #endif
 
-        const D2D1_POINT_2F a = D2D1::Point2F(rect.left + pad, rect.top + pad);
-        const D2D1_POINT_2F b = D2D1::Point2F(rect.right - pad, rect.bottom - pad);
-        const D2D1_POINT_2F c = D2D1::Point2F(rect.right - pad, rect.top + pad);
-        const D2D1_POINT_2F d = D2D1::Point2F(rect.left + pad, rect.bottom - pad);
+        if (_closeIconFormat)
+        {
+            return;
+        }
 
+        const float stroke = std::clamp(size * 0.10f, 1.5f, 2.5f);
+        const float pad    = size * 0.28f;
         _textBrush->SetColor(accentColor);
         _textBrush->SetOpacity(opacity);
-        target->DrawLine(a, b, _textBrush.get(), stroke);
-        target->DrawLine(c, d, _textBrush.get(), stroke);
+        target->DrawLine(D2D1::Point2F(rect.left + pad, rect.top + pad), D2D1::Point2F(rect.right - pad, rect.bottom - pad), _textBrush.get(), stroke);
+        target->DrawLine(D2D1::Point2F(rect.right - pad, rect.top + pad), D2D1::Point2F(rect.left + pad, rect.bottom - pad), _textBrush.get(), stroke);
     }
 
     void LayoutButtons(const D2D1_RECT_F& rowRect, float gapDip, float heightDip, float minWidthDip, float horzPaddingDip) noexcept
@@ -1095,7 +1340,7 @@ private:
         for (const auto& btn : _buttonRects)
         {
             const bool hot     = (_hot.part == AlertHitTest::Part::Button && _hot.buttonId == btn.id);
-            const bool focused = (_focusedButtonId.has_value() && _focusedButtonId.value() == btn.id);
+            const bool focused = (_focusedControl.part == AlertHitTest::Part::Button && _focusedControl.buttonId == btn.id);
 
             _backgroundBrush->SetOpacity(opacity);
             RedSalamander::DxUi::ButtonChromeDrawSpec chrome{};
@@ -1111,6 +1356,142 @@ private:
             _debugUsesSharedButtonChrome = true;
 #endif
         }
+    }
+
+    void DrawOptions(ID2D1RenderTarget* target, float opacity, float cornerDip) noexcept
+    {
+        if (! target || ! _backgroundBrush || ! _textBrush)
+        {
+            return;
+        }
+
+        for (const auto& option : _optionRects)
+        {
+            const bool hot = _hot.part == AlertHitTest::Part::Option && _hot.buttonId == option.id;
+            const bool focused = _focusedControl.part == AlertHitTest::Part::Option && _focusedControl.buttonId == option.id;
+            ButtonRect chromeSource{};
+            chromeSource.id      = option.id;
+            chromeSource.rect    = option.rect;
+            chromeSource.label   = option.label;
+            chromeSource.primary = false;
+
+            _backgroundBrush->SetOpacity(opacity);
+            RedSalamander::DxUi::ButtonChromeDrawSpec chrome{};
+            chrome.bounds          = option.rect;
+            chrome.text            = option.label;
+            chrome.hovered         = hot;
+            chrome.focused         = focused;
+            chrome.keyboardFocused = focused;
+            chrome.customStyle     = MakeOverlayButtonChromeStyle(chromeSource, hot, focused, cornerDip);
+            RedSalamander::DxUi::DrawButtonChrome(
+                target, _backgroundBrush.get(), _buttonFormat.get(), nullptr, MakeChromeThemePalette(), chrome);
+#if defined(ENABLE_TESTS)
+            _debugUsesSharedButtonChrome = true;
+#endif
+        }
+    }
+
+    void DrawPromptIcon(ID2D1RenderTarget* target,
+                        ID2D1SolidColorBrush* brush,
+                        AlertSeverity severity,
+                        AlertPresentation presentation,
+                        const D2D1_RECT_F& rect,
+                        float opacity,
+                        uint64_t elapsedMs) noexcept
+    {
+        if (! target || ! brush)
+        {
+            return;
+        }
+
+#if defined(ENABLE_TESTS)
+        _debugLastDrawnIconPresentation = presentation;
+        _debugLastDrawnIconGlyph        = L'\0';
+#endif
+
+        const float width  = std::max(0.0f, rect.right - rect.left);
+        const float height = std::max(0.0f, rect.bottom - rect.top);
+        const float size   = std::min(width, height);
+        if (size <= 0.0f)
+        {
+            return;
+        }
+
+        const D2D1_POINT_2F center = D2D1::Point2F((rect.left + rect.right) * 0.5f, (rect.top + rect.bottom) * 0.5f);
+        const float stroke         = std::clamp(size * 0.06f, 2.0f, 4.0f);
+        brush->SetOpacity(opacity);
+
+        if (presentation == AlertPresentation::Copy)
+        {
+            if (_iconFormat && _iconGlyphSet != IconGlyphSet::None)
+            {
+                const wchar_t glyph = _iconGlyphSet == IconGlyphSet::Fluent ? FluentIcons::kCopyTo : FluentIcons::kFallbackCopyTo;
+#if defined(ENABLE_TESTS)
+                _debugLastDrawnIconGlyph = glyph;
+#endif
+                const wchar_t text[2]{glyph, L'\0'};
+                target->DrawTextW(text, 1u, _iconFormat.get(), rect, brush, D2D1_DRAW_TEXT_OPTIONS_NO_SNAP, DWRITE_MEASURING_MODE_NATURAL);
+                return;
+            }
+
+            const float cardWidth  = size * 0.52f;
+            const float cardHeight = size * 0.62f;
+            const float offset     = size * 0.13f;
+            const float radius     = std::max(2.0f, size * 0.05f);
+            const D2D1_RECT_F back = D2D1::RectF(center.x - cardWidth * 0.5f - offset,
+                                                 center.y - cardHeight * 0.5f - offset,
+                                                 center.x + cardWidth * 0.5f - offset,
+                                                 center.y + cardHeight * 0.5f - offset);
+            const D2D1_RECT_F front = D2D1::RectF(center.x - cardWidth * 0.5f + offset,
+                                                  center.y - cardHeight * 0.5f + offset,
+                                                  center.x + cardWidth * 0.5f + offset,
+                                                  center.y + cardHeight * 0.5f + offset);
+            target->DrawRoundedRectangle(D2D1::RoundedRect(back, radius, radius), brush, stroke);
+            target->DrawRoundedRectangle(D2D1::RoundedRect(front, radius, radius), brush, stroke);
+            return;
+        }
+
+        if (presentation == AlertPresentation::Move)
+        {
+            if (_iconFormat && _iconGlyphSet != IconGlyphSet::None)
+            {
+                const wchar_t glyph =
+                    _iconGlyphSet == IconGlyphSet::Fluent ? FluentIcons::kMoveToFolder : FluentIcons::kFallbackMoveToFolder;
+#if defined(ENABLE_TESTS)
+                _debugLastDrawnIconGlyph = glyph;
+#endif
+                const wchar_t text[2]{glyph, 0};
+                target->DrawTextW(text, 1u, _iconFormat.get(), rect, brush, D2D1_DRAW_TEXT_OPTIONS_NO_SNAP, DWRITE_MEASURING_MODE_NATURAL);
+                return;
+            }
+
+            const float halfShaft = size * 0.30f;
+            const float head      = size * 0.22f;
+            const float tip       = size * 0.38f;
+            target->DrawLine(D2D1::Point2F(center.x - halfShaft, center.y), D2D1::Point2F(center.x + tip, center.y), brush, stroke);
+            target->DrawLine(D2D1::Point2F(center.x + tip, center.y), D2D1::Point2F(center.x + tip - head, center.y - head), brush, stroke);
+            target->DrawLine(D2D1::Point2F(center.x + tip, center.y), D2D1::Point2F(center.x + tip - head, center.y + head), brush, stroke);
+            return;
+        }
+
+        if (presentation == AlertPresentation::Delete)
+        {
+            if (_iconFormat && _iconGlyphSet != IconGlyphSet::None)
+            {
+                const wchar_t glyph = _iconGlyphSet == IconGlyphSet::Fluent ? FluentIcons::kDelete : FluentIcons::kFallbackDelete;
+#if defined(ENABLE_TESTS)
+                _debugLastDrawnIconGlyph = glyph;
+#endif
+                const wchar_t text[2]{glyph, L'\0'};
+                target->DrawTextW(text, 1u, _iconFormat.get(), rect, brush, D2D1_DRAW_TEXT_OPTIONS_NO_SNAP, DWRITE_MEASURING_MODE_NATURAL);
+                return;
+            }
+
+            DrawSeverityIcon(target, brush, AlertSeverity::Error, rect, opacity, elapsedMs);
+            return;
+        }
+
+        DrawSeverityIcon(target, brush, severity, rect, opacity, elapsedMs);
     }
 
     void DrawSeverityIcon(
@@ -1256,6 +1637,7 @@ private:
     wil::com_ptr<IDWriteTextFormat> _bodyFormat;
     wil::com_ptr<IDWriteTextFormat> _buttonFormat;
     wil::com_ptr<IDWriteTextFormat> _iconFormat;
+    wil::com_ptr<IDWriteTextFormat> _closeIconFormat;
     IconGlyphSet _iconGlyphSet = IconGlyphSet::None;
 
     std::wstring _cachedTitle;
@@ -1269,6 +1651,7 @@ private:
     std::vector<std::wstring_view> _cachedButtonLabels;
     std::vector<ButtonRect> _buttonBaseRects;
     std::vector<ButtonRect> _buttonRects;
+    std::vector<OptionRect> _optionRects;
 
     D2D1_RECT_F _panelRect{};
     D2D1_RECT_F _closeRect{};
@@ -1282,13 +1665,16 @@ private:
     bool _hasLayout                 = false;
 
     AlertHitTest _hot{};
-    std::optional<uint32_t> _focusedButtonId;
+    AlertHitTest _focusedControl{};
     uint64_t _startTickMs = 0;
 #if defined(ENABLE_TESTS)
     float _debugLastDrawOpacity       = 0.0f;
     float _debugLastDrawScrimOpacity  = 0.0f;
     bool _debugUsesSharedCloseChrome  = false;
     bool _debugUsesSharedButtonChrome = false;
+    AlertPresentation _debugLastDrawnIconPresentation = AlertPresentation::Severity;
+    wchar_t _debugLastDrawnIconGlyph = L'\0';
+    wchar_t _debugLastDrawnCloseGlyph = L'\0';
 #endif
 };
 } // namespace RedSalamander::Ui

@@ -12,8 +12,8 @@ BEGIN
         MENUITEM "更新(&R)\tF5", IDM_VIEWERWEB_FILE_REFRESH
         POPUP "その他のファイル(&F)"
         BEGIN
-            MENUITEM "次へ(&N)\tSpace, Ctrl+Down", IDM_VIEWERWEB_OTHER_NEXT
             MENUITEM "前へ(&P)\tBackspace, Ctrl+Up", IDM_VIEWERWEB_OTHER_PREVIOUS
+            MENUITEM "次へ(&N)\tSpace, Ctrl+Down", IDM_VIEWERWEB_OTHER_NEXT
             MENUITEM "最初(&F)\tCtrl+Home", IDM_VIEWERWEB_OTHER_FIRST
             MENUITEM "最後(&L)\tCtrl+End", IDM_VIEWERWEB_OTHER_LAST
         END
@@ -31,13 +31,12 @@ BEGIN
         MENUITEM "ズームイン(&I)\tCtrl++", IDM_VIEWERWEB_VIEW_ZOOM_IN
         MENUITEM "ズームアウト(&O)\tCtrl+-", IDM_VIEWERWEB_VIEW_ZOOM_OUT
         MENUITEM "ズームリセット(&R)\tCtrl+0", IDM_VIEWERWEB_VIEW_ZOOM_RESET
-        MENUITEM SEPARATOR
-        MENUITEM "Toggle 開発ツール(&D)\tF12", IDM_VIEWERWEB_VIEW_DEVTOOLS
     END
     POPUP "ツール(&T)"
     BEGIN
         MENUITEM "URL をコピー(&U)\tCtrl+L", IDM_VIEWERWEB_TOOLS_COPY_URL
         MENUITEM "ブラウザーで開く(&B)\tCtrl+Enter", IDM_VIEWERWEB_TOOLS_OPEN_EXTERNAL
+        MENUITEM "開発ツールの切り替え(&D)\tF12", IDM_VIEWERWEB_VIEW_DEVTOOLS
         MENUITEM SEPARATOR
         MENUITEM "すべて展開 (JSON/JSONL)(&E)", IDM_VIEWERWEB_TOOLS_JSON_EXPAND_ALL
         MENUITEM "すべて折りたたむ (JSON/JSONL)(&C)", IDM_VIEWERWEB_TOOLS_JSON_COLLAPSE_ALL
