@@ -1,5 +1,5 @@
-#include "FileSystemS3.Internal.h"
 #include "ContentDigest.h"
+#include "FileSystemS3.Internal.h"
 
 #include <aws/s3-crt/model/GetObjectRequest.h>
 #include <aws/s3-crt/model/HeadObjectRequest.h>
@@ -7,10 +7,10 @@
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <charconv>
-#include <cstddef>
+#include <chrono>
 #include <condition_variable>
+#include <cstddef>
 #include <cstring>
 #include <deque>
 #include <format>
@@ -32,7 +32,7 @@ static HRESULT TryGetS3ObjectSummaryFromClient(Aws::S3Crt::S3CrtClient& client,
                                                uint64_t& outSizeBytes,
                                                __int64& outLastWriteTime,
                                                bool& outFound,
-                                               Aws::String* outEtag = nullptr,
+                                               Aws::String* outEtag      = nullptr,
                                                Aws::String* outVersionId = nullptr) noexcept
 {
     outSizeBytes     = 0;
@@ -204,8 +204,8 @@ struct S3ContentRange final
 
     const auto parse = [](std::string_view value, uint64_t& output) noexcept
     {
-        const char* const begin = value.data();
-        const char* const end   = begin + value.size();
+        const char* const begin    = value.data();
+        const char* const end      = begin + value.size();
         const auto [cursor, error] = std::from_chars(begin, end, output);
         return error == std::errc{} && cursor == end;
     };
@@ -258,14 +258,11 @@ void FsS3::RunDebugRangeReadContractSelfTest(unsigned int& passed, unsigned int&
           L"S3 upload should preserve the underlying source read failure");
 
     S3ContentRange contentRange{};
-    check(ShouldDiscoverS3SizeFromRange(HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED)),
-          L"S3 reader should defer a HEAD access denial to ranged GET size discovery");
-    check(! ShouldDiscoverS3SizeFromRange(HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)),
-          L"S3 reader should not hide non-permission HEAD failures");
+    check(ShouldDiscoverS3SizeFromRange(HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED)), L"S3 reader should defer a HEAD access denial to ranged GET size discovery");
+    check(! ShouldDiscoverS3SizeFromRange(HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)), L"S3 reader should not hide non-permission HEAD failures");
     check(ParseS3ContentRange("bytes 0-9/25", contentRange) == S_OK && contentRange.first == 0u && contentRange.last == 9u && contentRange.total == 25u,
           L"S3 reader should discover object size from a validated Content-Range");
-    check(ParseS3ContentRange("bytes 10-9/25", contentRange) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-          L"S3 reader should reject a reversed Content-Range");
+    check(ParseS3ContentRange("bytes 10-9/25", contentRange) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"S3 reader should reject a reversed Content-Range");
     check(ParseS3ContentRange("bytes 0-25/25", contentRange) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
           L"S3 reader should reject a Content-Range ending beyond the object size");
 
@@ -745,8 +742,7 @@ private:
         uint64_t sizeBytes    = 0;
         __int64 lastWriteTime = 0;
         bool found            = false;
-        const HRESULT hr =
-            TryGetS3ObjectSummaryFromClient(*_client, _bucketCtx, _bucket, _key, sizeBytes, lastWriteTime, found, &_etag, &_versionId);
+        const HRESULT hr      = TryGetS3ObjectSummaryFromClient(*_client, _bucketCtx, _bucket, _key, sizeBytes, lastWriteTime, found, &_etag, &_versionId);
         if (FAILED(hr))
         {
             return hr;
@@ -820,16 +816,16 @@ private:
             return FsS3::HresultFromAwsError(err);
         }
 
-        auto result                      = outcome.GetResultWithOwnership();
-        const Aws::String responseEtag   = result.GetETag();
+        auto result                         = outcome.GetResultWithOwnership();
+        const Aws::String responseEtag      = result.GetETag();
         const Aws::String responseVersionId = result.GetVersionId();
-        const HRESULT versionHr = ObserveS3ReadVersion(_etag, _versionId, responseEtag, responseVersionId);
+        const HRESULT versionHr             = ObserveS3ReadVersion(_etag, _versionId, responseEtag, responseVersionId);
         if (FAILED(versionHr))
         {
             return versionHr;
         }
-        const auto responseContentLength = result.GetContentLength();
-        uint64_t expectedBytes           = maxBytes;
+        const auto responseContentLength       = result.GetContentLength();
+        uint64_t expectedBytes                 = maxBytes;
         const Aws::String responseContentRange = result.GetContentRange();
         S3ContentRange contentRange{};
         const HRESULT contentRangeHr = ParseS3ContentRange(std::string_view(responseContentRange.data(), responseContentRange.size()), contentRange);
@@ -852,7 +848,7 @@ private:
         {
             return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
         }
-        Aws::IOStream& stream            = result.GetBody();
+        Aws::IOStream& stream = result.GetBody();
 
         size_t total = 0;
         while (stream.good() && total < static_cast<size_t>(expectedBytes))
@@ -900,20 +896,19 @@ private:
 // R3-1: the object that occupied the destination when an overwrite-capable writer was created.
 struct S3ReplaceOccupant final
 {
-    bool found             = false;
-    uint64_t sizeBytes     = 0;
-    __int64 lastWriteTime  = 0;
+    bool found            = false;
+    uint64_t sizeBytes    = 0;
+    __int64 lastWriteTime = 0;
     FsS3::S3ObjectRevision revision;
 };
 
-[[nodiscard]] HRESULT EnsureWritableS3Target(
-    FileSystemS3& owner,
-    const FsS3::ResolvedAwsContext& bucketCtx,
-    std::string_view bucket,
-    std::string_view key,
-    std::wstring_view pluginPath,
-    bool allowOverwrite,
-    S3ReplaceOccupant* occupantOut) noexcept
+[[nodiscard]] HRESULT EnsureWritableS3Target(FileSystemS3& owner,
+                                             const FsS3::ResolvedAwsContext& bucketCtx,
+                                             std::string_view bucket,
+                                             std::string_view key,
+                                             std::wstring_view pluginPath,
+                                             bool allowOverwrite,
+                                             S3ReplaceOccupant* occupantOut) noexcept
 {
     if (bucket.empty() || key.empty())
     {
@@ -924,8 +919,8 @@ struct S3ReplaceOccupant final
     __int64 existingLastWrite = 0;
     bool found                = false;
     FsS3::S3ObjectRevision existingRevision;
-    const HRESULT existsHr =
-        FsS3::TryGetS3ObjectSummary(owner, bucketCtx, bucket, key, existingSize, existingLastWrite, found, occupantOut != nullptr ? &existingRevision : nullptr);
+    const HRESULT existsHr = FsS3::TryGetS3ObjectSummary(
+        owner, bucketCtx, bucket, key, existingSize, existingLastWrite, found, occupantOut != nullptr ? &existingRevision : nullptr);
     if (FAILED(existsHr))
     {
         return existsHr;
@@ -950,7 +945,7 @@ struct S3ReplaceOccupant final
 
     std::vector<std::wstring> ancestorPluginPaths;
     std::wstring currentPluginPath = FsS3::NormalizePluginPath(pluginPath);
-    const size_t ancestorCount = static_cast<size_t>(std::count(trimmedKey.begin(), trimmedKey.end(), '/'));
+    const size_t ancestorCount     = static_cast<size_t>(std::count(trimmedKey.begin(), trimmedKey.end(), '/'));
     ancestorPluginPaths.reserve(ancestorCount);
     for (size_t index = 0; index < ancestorCount; ++index)
     {
@@ -1025,12 +1020,12 @@ struct S3ReplaceOccupant final
 #if defined(ENABLE_TESTS)
 struct MultipartWriterDebugTransport final
 {
-    void* cookie = nullptr;
-    HRESULT (*begin)(void*, FsS3::S3MultipartUploadSession&) noexcept = nullptr;
-    HRESULT (*put)(void*, const void*, size_t, bool) noexcept = nullptr;
-    HRESULT (*upload)(void*, int, size_t, std::string&) noexcept = nullptr;
+    void* cookie                                                                                 = nullptr;
+    HRESULT (*begin)(void*, FsS3::S3MultipartUploadSession&) noexcept                            = nullptr;
+    HRESULT (*put)(void*, const void*, size_t, bool) noexcept                                    = nullptr;
+    HRESULT (*upload)(void*, int, size_t, std::string&) noexcept                                 = nullptr;
     HRESULT (*complete)(void*, const std::vector<FsS3::S3MultipartUploadedPart>&, bool) noexcept = nullptr;
-    HRESULT (*abort)(void*) noexcept = nullptr;
+    HRESULT (*abort)(void*) noexcept                                                             = nullptr;
 };
 
 std::atomic<const MultipartWriterDebugTransport*> g_multipartWriterDebugTransport{nullptr};
@@ -1056,8 +1051,8 @@ public:
 
 struct MultipartWriterDebugContext final
 {
-    MultipartWriterDebugContext()  = default;
-    ~MultipartWriterDebugContext() = default;
+    MultipartWriterDebugContext()                                              = default;
+    ~MultipartWriterDebugContext()                                             = default;
     MultipartWriterDebugContext(const MultipartWriterDebugContext&)            = delete;
     MultipartWriterDebugContext(MultipartWriterDebugContext&&)                 = delete;
     MultipartWriterDebugContext& operator=(const MultipartWriterDebugContext&) = delete;
@@ -1069,24 +1064,24 @@ struct MultipartWriterDebugContext final
     std::vector<int> startedParts;
     std::vector<int> completedParts;
     std::vector<int> committedParts;
-    int failingPart = 0;
-    HRESULT failingPartHr = HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE);
-    int secondaryFailingPart = 0;
-    HRESULT secondaryFailingPartHr = HRESULT_FROM_WIN32(ERROR_TIMEOUT);
-    bool failingPartObserved = false;
-    unsigned long defaultPartDelayMs = 0u;
-    unsigned int activeUploads = 0u;
-    unsigned int activeUploadHighWater = 0u;
-    unsigned int beginCalls = 0u;
-    unsigned int putCalls = 0u;
-    unsigned int uploadCalls = 0u;
-    unsigned int completeCalls = 0u;
-    unsigned int abortCalls = 0u;
-    unsigned int abortFailuresRemaining = 0u;
-    HRESULT abortFailureHr = HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE);
-    bool publicationDestinationExists = false;
+    int failingPart                      = 0;
+    HRESULT failingPartHr                = HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE);
+    int secondaryFailingPart             = 0;
+    HRESULT secondaryFailingPartHr       = HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+    bool failingPartObserved             = false;
+    unsigned long defaultPartDelayMs     = 0u;
+    unsigned int activeUploads           = 0u;
+    unsigned int activeUploadHighWater   = 0u;
+    unsigned int beginCalls              = 0u;
+    unsigned int putCalls                = 0u;
+    unsigned int uploadCalls             = 0u;
+    unsigned int completeCalls           = 0u;
+    unsigned int abortCalls              = 0u;
+    unsigned int abortFailuresRemaining  = 0u;
+    HRESULT abortFailureHr               = HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE);
+    bool publicationDestinationExists    = false;
     bool publicationDestinationPreserved = false;
-    bool putDestinationMustNotExist = false;
+    bool putDestinationMustNotExist      = false;
     bool completeDestinationMustNotExist = false;
 };
 #endif
@@ -1098,21 +1093,21 @@ struct PendingMultipartAbort final
     std::wstring pluginPath;
     unsigned int attemptCount = 0u;
 #if defined(ENABLE_TESTS)
-    void* debugCookie = nullptr;
+    void* debugCookie                     = nullptr;
     HRESULT (*debugAbort)(void*) noexcept = nullptr;
 #endif
 };
 
-const int kMultipartAbortCleanupModuleAnchor = 0;
-constexpr auto kMultipartAbortRetryDelay = std::chrono::seconds(1);
+const int kMultipartAbortCleanupModuleAnchor    = 0;
+constexpr auto kMultipartAbortRetryDelay        = std::chrono::seconds(1);
 constexpr size_t kMultipartAbortMaxItemsPerPass = 16u;
-using UniqueThreadpoolTimer = wil::unique_any<PTP_TIMER, decltype(&::CloseThreadpoolTimer), ::CloseThreadpoolTimer>;
+using UniqueThreadpoolTimer                     = wil::unique_any<PTP_TIMER, decltype(&::CloseThreadpoolTimer), ::CloseThreadpoolTimer>;
 
 class PendingMultipartAbortQueue final
 {
 public:
-    PendingMultipartAbortQueue() = default;
-    ~PendingMultipartAbortQueue() = default;
+    PendingMultipartAbortQueue()                                             = default;
+    ~PendingMultipartAbortQueue()                                            = default;
     PendingMultipartAbortQueue(const PendingMultipartAbortQueue&)            = delete;
     PendingMultipartAbortQueue(PendingMultipartAbortQueue&&)                 = delete;
     PendingMultipartAbortQueue& operator=(const PendingMultipartAbortQueue&) = delete;
@@ -1159,8 +1154,8 @@ public:
             if (const auto now = std::chrono::steady_clock::now(); now < _nextAttempt)
             {
                 _timerScheduled = true;
-                timerDue = _nextAttempt;
-                armTimer = true;
+                timerDue        = _nextAttempt;
+                armTimer        = true;
             }
             else
             {
@@ -1186,15 +1181,15 @@ public:
 
         const BOOL submitted = TrySubmitThreadpoolCallback(
             [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
+        {
+            std::unique_ptr<WorkItem> work(static_cast<WorkItem*>(context));
+            if (! work)
             {
-                std::unique_ptr<WorkItem> work(static_cast<WorkItem*>(context));
-                if (! work)
-                {
-                    return;
-                }
-                TransferModulePinToCallbackReturn(instance, work->moduleKeepAlive);
-                work->queue->RunOnePass();
-            },
+                return;
+            }
+            TransferModulePinToCallbackReturn(instance, work->moduleKeepAlive);
+            work->queue->RunOnePass();
+        },
             work.get(),
             nullptr);
         if (submitted == FALSE)
@@ -1234,8 +1229,8 @@ public:
 private:
     struct WorkItem final
     {
-        WorkItem() = default;
-        ~WorkItem() = default;
+        WorkItem()                           = default;
+        ~WorkItem()                          = default;
         WorkItem(const WorkItem&)            = delete;
         WorkItem(WorkItem&&)                 = delete;
         WorkItem& operator=(const WorkItem&) = delete;
@@ -1247,12 +1242,12 @@ private:
 
     struct TimerItem final
     {
-        TimerItem() = default;
-        ~TimerItem() = default;
-        TimerItem(const TimerItem&) = delete;
-        TimerItem(TimerItem&&) = delete;
+        TimerItem()                            = default;
+        ~TimerItem()                           = default;
+        TimerItem(const TimerItem&)            = delete;
+        TimerItem(TimerItem&&)                 = delete;
         TimerItem& operator=(const TimerItem&) = delete;
-        TimerItem& operator=(TimerItem&&) = delete;
+        TimerItem& operator=(TimerItem&&)      = delete;
 
         PendingMultipartAbortQueue* queue = nullptr;
         wil::unique_hmodule moduleKeepAlive;
@@ -1261,8 +1256,8 @@ private:
 
     void ArmRetryTimer(std::chrono::steady_clock::time_point due) noexcept
     {
-        auto timerItem = std::make_unique<TimerItem>();
-        timerItem->queue = this;
+        auto timerItem             = std::make_unique<TimerItem>();
+        timerItem->queue           = this;
         timerItem->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kMultipartAbortCleanupModuleAnchor);
         if (! timerItem->moduleKeepAlive)
         {
@@ -1272,21 +1267,21 @@ private:
         }
         timerItem->timer.reset(CreateThreadpoolTimer(
             [](PTP_CALLBACK_INSTANCE instance, void* context, PTP_TIMER) noexcept
+        {
+            std::unique_ptr<TimerItem> timer(static_cast<TimerItem*>(context));
+            if (! timer)
             {
-                std::unique_ptr<TimerItem> timer(static_cast<TimerItem*>(context));
-                if (! timer)
-                {
-                    return;
-                }
-                TransferModulePinToCallbackReturn(instance, timer->moduleKeepAlive);
-                PendingMultipartAbortQueue* queue = timer->queue;
-                {
-                    std::lock_guard lock(queue->_mutex);
-                    queue->_timerScheduled = false;
-                }
-                queue->_changed.notify_all();
-                queue->Schedule();
-            },
+                return;
+            }
+            TransferModulePinToCallbackReturn(instance, timer->moduleKeepAlive);
+            PendingMultipartAbortQueue* queue = timer->queue;
+            {
+                std::lock_guard lock(queue->_mutex);
+                queue->_timerScheduled = false;
+            }
+            queue->_changed.notify_all();
+            queue->Schedule();
+        },
             timerItem.get(),
             nullptr));
         if (! timerItem->timer)
@@ -1296,17 +1291,15 @@ private:
             return;
         }
 
-        const auto delay = due > std::chrono::steady_clock::now() ? due - std::chrono::steady_clock::now()
-                                                                   : std::chrono::steady_clock::duration::zero();
-        const uint64_t delayMs = static_cast<uint64_t>(
-            std::max<int64_t>(1, std::chrono::duration_cast<std::chrono::milliseconds>(delay).count()));
+        const auto delay       = due > std::chrono::steady_clock::now() ? due - std::chrono::steady_clock::now() : std::chrono::steady_clock::duration::zero();
+        const uint64_t delayMs = static_cast<uint64_t>(std::max<int64_t>(1, std::chrono::duration_cast<std::chrono::milliseconds>(delay).count()));
         LARGE_INTEGER relativeDue{};
         const uint64_t maximumDelayMs = static_cast<uint64_t>((std::numeric_limits<LONGLONG>::max)() / 10'000ll);
-        relativeDue.QuadPart = -static_cast<LONGLONG>(std::min(delayMs, maximumDelayMs) * 10'000u);
+        relativeDue.QuadPart          = -static_cast<LONGLONG>(std::min(delayMs, maximumDelayMs) * 10'000u);
         FILETIME dueFileTime{};
-        dueFileTime.dwLowDateTime = relativeDue.LowPart;
+        dueFileTime.dwLowDateTime  = relativeDue.LowPart;
         dueFileTime.dwHighDateTime = static_cast<DWORD>(relativeDue.HighPart);
-        TimerItem* rawTimer = timerItem.release();
+        TimerItem* rawTimer        = timerItem.release();
         SetThreadpoolTimer(rawTimer->timer.get(), &dueFileTime, 0u, 0u);
     }
 
@@ -1318,8 +1311,7 @@ private:
             return pending.debugAbort(pending.debugCookie);
         }
 #endif
-        return pending.owner ? FsS3::AbortS3MultipartUpload(*pending.owner.get(), pending.session)
-                             : HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+        return pending.owner ? FsS3::AbortS3MultipartUpload(*pending.owner.get(), pending.session) : HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     }
 
     void RunOnePass() noexcept
@@ -1361,7 +1353,7 @@ private:
         {
             std::lock_guard lock(_mutex);
             _workerScheduled = false;
-            _nextAttempt = retryNeeded ? std::chrono::steady_clock::now() + kMultipartAbortRetryDelay : std::chrono::steady_clock::now();
+            _nextAttempt     = retryNeeded ? std::chrono::steady_clock::now() + kMultipartAbortRetryDelay : std::chrono::steady_clock::now();
         }
         _changed.notify_all();
         Schedule();
@@ -1396,7 +1388,7 @@ private:
     std::deque<std::unique_ptr<PendingMultipartAbort>> _pending;
     std::chrono::steady_clock::time_point _nextAttempt{};
     bool _workerScheduled = false;
-    bool _timerScheduled = false;
+    bool _timerScheduled  = false;
 };
 
 [[nodiscard]] PendingMultipartAbortQueue& MultipartAbortQueue() noexcept
@@ -1496,7 +1488,7 @@ public:
 private:
     void MarkAcquired() noexcept
     {
-        _held                 = true;
+        _held                = true;
         const uint64_t inUse = g_multipartWriterBuffersInUse.fetch_add(1u, std::memory_order_relaxed) + 1u;
         UpdateRelaxedMultipartTelemetryPeak(g_multipartWriterBufferPeak, inUse);
     }
@@ -1543,19 +1535,23 @@ private:
 struct S3WriterUploadPlan final
 {
     uint64_t partSizeBytes = FsS3::kMultipartMinPartSizeBytes;
-    uint64_t partCount = 0u;
+    uint64_t partCount     = 0u;
 };
 
 [[nodiscard]] HRESULT PlanS3WriterUpload(uint64_t expectedSize, S3WriterUploadPlan& plan) noexcept
 {
-    constexpr uint64_t maximumParts = 10'000u;
+    constexpr uint64_t maximumParts  = 10'000u;
     constexpr uint64_t fixedPartSize = FsS3::kMultipartMinPartSizeBytes;
-    plan = {.partSizeBytes = fixedPartSize,
-            .partCount = expectedSize == 0u ? 0u : expectedSize / fixedPartSize + (expectedSize % fixedPartSize == 0u ? 0u : 1u)};
+    plan                             = {.partSizeBytes = fixedPartSize,
+                                        .partCount     = expectedSize == 0u ? 0u : expectedSize / fixedPartSize + (expectedSize % fixedPartSize == 0u ? 0u : 1u)};
     return plan.partCount <= maximumParts ? S_OK : HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
 }
 
-class MultipartS3FileWriter final : public IFileWriter, public IFileWriterExpectedSize, public IFileWriterCommitSizeProof, public IFileWriterExpectedReplacement, public IFileWriterContentProof
+class MultipartS3FileWriter final : public IFileWriter,
+                                    public IFileWriterExpectedSize,
+                                    public IFileWriterCommitSizeProof,
+                                    public IFileWriterExpectedReplacement,
+                                    public IFileWriterContentProof
 {
 public:
     MultipartS3FileWriter(FileSystemS3* owner,
@@ -1680,14 +1676,13 @@ public:
         {
             return _failedHr;
         }
-        if (_expectedSize.has_value() &&
-            (static_cast<uint64_t>(bytesToWrite) > _expectedSize.value() - std::min(_expectedSize.value(), _position)))
+        if (_expectedSize.has_value() && (static_cast<uint64_t>(bytesToWrite) > _expectedSize.value() - std::min(_expectedSize.value(), _position)))
         {
             return RememberFailure(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE));
         }
         EnsureMetricsStarted();
 
-        const auto* src = static_cast<const std::byte*>(buffer);
+        const auto* src         = static_cast<const std::byte*>(buffer);
         unsigned long remaining = bytesToWrite;
         while (remaining > 0u)
         {
@@ -1928,7 +1923,7 @@ public:
             return planHr;
         }
         _partSizeBytes = plan.partSizeBytes;
-        _expectedSize = sizeBytes;
+        _expectedSize  = sizeBytes;
         return S_OK;
     }
 
@@ -1942,8 +1937,8 @@ public:
 private:
     struct PendingPart final
     {
-        PendingPart() = default;
-        ~PendingPart() = default;
+        PendingPart()                              = default;
+        ~PendingPart()                             = default;
         PendingPart(const PendingPart&)            = delete;
         PendingPart& operator=(const PendingPart&) = delete;
         PendingPart(PendingPart&&)                 = delete;
@@ -1995,9 +1990,9 @@ private:
 
 #if defined(ENABLE_TESTS)
         const MultipartWriterDebugTransport* debugTransport = g_multipartWriterDebugTransport.load(std::memory_order_acquire);
-        HRESULT hr = (debugTransport != nullptr && debugTransport->begin != nullptr)
-                         ? debugTransport->begin(debugTransport->cookie, _session)
-                         : FsS3::BeginS3MultipartUpload(*_owner.get(), _bucketCtx, _bucket, _key, _session);
+        HRESULT hr                                          = (debugTransport != nullptr && debugTransport->begin != nullptr)
+                                                                  ? debugTransport->begin(debugTransport->cookie, _session)
+                                                                  : FsS3::BeginS3MultipartUpload(*_owner.get(), _bucketCtx, _bucket, _key, _session);
 #else
         HRESULT hr = FsS3::BeginS3MultipartUpload(*_owner.get(), _bucketCtx, _bucket, _key, _session);
 #endif
@@ -2036,7 +2031,7 @@ private:
             return S_OK;
         }
 
-        const auto waitStartedAt              = std::chrono::steady_clock::now();
+        const auto waitStartedAt             = std::chrono::steady_clock::now();
         std::unique_ptr<PendingPart> pending = std::move(_pendingParts.front());
         _pendingParts.pop_front();
         if (pending->uploadThread.joinable())
@@ -2112,8 +2107,7 @@ private:
         uint64_t reserveBytes = _partSizeBytes;
         if (_expectedSize.has_value())
         {
-            reserveBytes = (std::min)(_partSizeBytes,
-                                      _expectedSize.value() > _position ? _expectedSize.value() - _position : uint64_t{0u});
+            reserveBytes = (std::min)(_partSizeBytes, _expectedSize.value() > _position ? _expectedSize.value() - _position : uint64_t{0u});
         }
         if (reserveBytes != 0u)
         {
@@ -2152,10 +2146,10 @@ private:
             return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
         }
 
-        auto pending          = std::make_unique<PendingPart>();
-        pending->bufferLease  = std::move(_bufferLease);
-        pending->data         = std::move(_buffer);
-        pending->partNumber   = _nextPartNumber;
+        auto pending            = std::make_unique<PendingPart>();
+        pending->bufferLease    = std::move(_bufferLease);
+        pending->data           = std::move(_buffer);
+        pending->partNumber     = _nextPartNumber;
         PendingPart* pendingPtr = pending.get();
         try
         {
@@ -2163,26 +2157,17 @@ private:
             {
                 const uint64_t activeUploads = _activeUploads.fetch_add(1u, std::memory_order_acq_rel) + 1u;
                 UpdateRelaxedMultipartTelemetryPeak(_inFlightHighWater, activeUploads);
-                auto activeGuard = wil::scope_exit([&]() noexcept { _activeUploads.fetch_sub(1u, std::memory_order_acq_rel); });
+                auto activeGuard           = wil::scope_exit([&]() noexcept { _activeUploads.fetch_sub(1u, std::memory_order_acq_rel); });
                 const auto uploadStartedAt = std::chrono::steady_clock::now();
 #if defined(ENABLE_TESTS)
                 const MultipartWriterDebugTransport* debugTransport = g_multipartWriterDebugTransport.load(std::memory_order_acquire);
                 pendingPtr->hr = (debugTransport != nullptr && debugTransport->upload != nullptr)
-                                     ? debugTransport->upload(
-                                           debugTransport->cookie, pendingPtr->partNumber, pendingPtr->data.size(), pendingPtr->eTag)
-                                     : FsS3::UploadS3MultipartPartFromMemory(*_owner.get(),
-                                                                            _session,
-                                                                            pendingPtr->partNumber,
-                                                                            pendingPtr->data.data(),
-                                                                            pendingPtr->data.size(),
-                                                                            pendingPtr->eTag);
+                                     ? debugTransport->upload(debugTransport->cookie, pendingPtr->partNumber, pendingPtr->data.size(), pendingPtr->eTag)
+                                     : FsS3::UploadS3MultipartPartFromMemory(
+                                           *_owner.get(), _session, pendingPtr->partNumber, pendingPtr->data.data(), pendingPtr->data.size(), pendingPtr->eTag);
 #else
-                pendingPtr->hr = FsS3::UploadS3MultipartPartFromMemory(*_owner.get(),
-                                                                       _session,
-                                                                       pendingPtr->partNumber,
-                                                                       pendingPtr->data.data(),
-                                                                       pendingPtr->data.size(),
-                                                                       pendingPtr->eTag);
+                pendingPtr->hr = FsS3::UploadS3MultipartPartFromMemory(
+                    *_owner.get(), _session, pendingPtr->partNumber, pendingPtr->data.data(), pendingPtr->data.size(), pendingPtr->eTag);
 #endif
                 pendingPtr->uploadUs = Debug::Perf::ElapsedUs(uploadStartedAt);
                 RecordWorkerFailure(pendingPtr->hr);
@@ -2226,7 +2211,7 @@ private:
 
     HRESULT FinishFailure(HRESULT hr) noexcept
     {
-        const HRESULT drainHr = DrainPendingParts();
+        const HRESULT drainHr   = DrainPendingParts();
         const HRESULT primaryHr = FAILED(hr) ? hr : drainHr;
         static_cast<void>(RememberFailure(primaryHr));
         if (_hasSession)
@@ -2253,8 +2238,8 @@ private:
 
 #if defined(ENABLE_TESTS)
         const MultipartWriterDebugTransport* debugTransport = g_multipartWriterDebugTransport.load(std::memory_order_acquire);
-        void* debugCookie                     = debugTransport != nullptr ? debugTransport->cookie : nullptr;
-        HRESULT (*debugAbort)(void*) noexcept = debugTransport != nullptr ? debugTransport->abort : nullptr;
+        void* debugCookie                                   = debugTransport != nullptr ? debugTransport->cookie : nullptr;
+        HRESULT (*debugAbort)(void*) noexcept               = debugTransport != nullptr ? debugTransport->abort : nullptr;
         const HRESULT hr = (debugTransport != nullptr && debugTransport->abort != nullptr) ? debugTransport->abort(debugTransport->cookie)
                                                                                            : FsS3::AbortS3MultipartUpload(*_owner.get(), _session);
 #else
@@ -2287,7 +2272,7 @@ private:
     {
         if (! _metricsStarted)
         {
-            _metricsStarted = true;
+            _metricsStarted   = true;
             _metricsStartedAt = std::chrono::steady_clock::now();
         }
     }
@@ -2305,8 +2290,8 @@ private:
         }
 
         EnsureMetricsStarted();
-        const uint64_t totalUs = Debug::Perf::ElapsedUs(_metricsStartedAt);
-        const uint64_t highWater = _inFlightHighWater.load(std::memory_order_acquire);
+        const uint64_t totalUs    = Debug::Perf::ElapsedUs(_metricsStartedAt);
+        const uint64_t highWater  = _inFlightHighWater.load(std::memory_order_acquire);
         const std::wstring detail = std::format(L"path={} maxInFlight={} scheduledParts={} uploadedPartBytes={} bufferBudgetBytes={}",
                                                 _pluginPath,
                                                 _maxInFlightParts,
@@ -2315,8 +2300,7 @@ private:
                                                 kMultipartWriterBufferBudgetBytes);
         Debug::Perf::Emit(L"FileOps.S3.Multipart.TotalUs", detail, totalUs, _position, _scheduledPartCount, hr);
         Debug::Perf::Emit(L"FileOps.S3.Multipart.InFlightHighWater", detail, 0u, highWater, _maxInFlightParts, hr);
-        Debug::Perf::Emit(
-            L"FileOps.S3.Multipart.CapacityWaitUs", detail, _bufferBudgetWaitUs + _partWindowWaitUs, _bufferBudgetWaitUs, _partWindowWaitUs, hr);
+        Debug::Perf::Emit(L"FileOps.S3.Multipart.CapacityWaitUs", detail, _bufferBudgetWaitUs + _partWindowWaitUs, _bufferBudgetWaitUs, _partWindowWaitUs, hr);
         Debug::Perf::Emit(L"FileOps.S3.Multipart.PartUploadUs", detail, _partUploadUs, _scheduledPartCount, _uploadedPartBytes, hr);
         if (FAILED(hr))
         {
@@ -2339,18 +2323,18 @@ private:
     std::atomic<uint64_t> _activeUploads{0u};
     std::atomic<uint64_t> _inFlightHighWater{0u};
     std::atomic<HRESULT> _firstWorkerFailure{S_OK};
-    uint64_t _position            = 0u;
-    uint64_t _partSizeBytes       = FsS3::kMultipartMinPartSizeBytes;
-    uint64_t _uploadedPartBytes   = 0u;
-    uint64_t _bufferBudgetWaitUs  = 0u;
-    uint64_t _partWindowWaitUs    = 0u;
-    uint64_t _partUploadUs        = 0u;
-    HRESULT _failedHr             = S_OK;
+    uint64_t _position           = 0u;
+    uint64_t _partSizeBytes      = FsS3::kMultipartMinPartSizeBytes;
+    uint64_t _uploadedPartBytes  = 0u;
+    uint64_t _bufferBudgetWaitUs = 0u;
+    uint64_t _partWindowWaitUs   = 0u;
+    uint64_t _partUploadUs       = 0u;
+    HRESULT _failedHr            = S_OK;
     std::optional<uint64_t> _expectedSize;
-    size_t _scheduledPartCount    = 0u;
-    size_t _maxInFlightParts      = kMultipartWriterMaxInFlightParts;
-    int _nextPartNumber           = 1;
-    bool _allowOverwrite = false;
+    size_t _scheduledPartCount = 0u;
+    size_t _maxInFlightParts   = kMultipartWriterMaxInFlightParts;
+    int _nextPartNumber        = 1;
+    bool _allowOverwrite       = false;
     std::optional<S3ReplaceOccupant> _replaceOccupant; // R3-1: occupant at creation (overwrite writers only)
     bool _replaceConditional = false;                  // R3-1: the host granted a replacement of that occupant
     FsS3::S3ObjectRevision _committedRevision;         // R3-2: ETag/version/CRC-64 S3 reported at publication
@@ -2409,130 +2393,130 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
     MultipartWriterDebugContext context{};
     const MultipartWriterDebugTransport transport{
         .cookie = &context,
-        .begin = [](void* cookie, FsS3::S3MultipartUploadSession& session) noexcept -> HRESULT
+        .begin  = [](void* cookie, FsS3::S3MultipartUploadSession& session) noexcept -> HRESULT
+    {
+        auto* value = static_cast<MultipartWriterDebugContext*>(cookie);
         {
-            auto* value = static_cast<MultipartWriterDebugContext*>(cookie);
-            {
-                std::lock_guard lock(value->mutex);
-                ++value->beginCalls;
-            }
-            session.bucket   = "bucket";
-            session.key      = "final.bin";
-            session.uploadId = "debug-upload";
-            return S_OK;
-        },
+            std::lock_guard lock(value->mutex);
+            ++value->beginCalls;
+        }
+        session.bucket   = "bucket";
+        session.key      = "final.bin";
+        session.uploadId = "debug-upload";
+        return S_OK;
+    },
         .put = [](void* cookie, const void* buffer, size_t sizeBytes, bool destinationMustNotExist) noexcept -> HRESULT
+    {
+        auto* value = static_cast<MultipartWriterDebugContext*>(cookie);
+        std::lock_guard lock(value->mutex);
+        ++value->putCalls;
+        value->putDestinationMustNotExist = destinationMustNotExist;
+        if (buffer == nullptr || sizeBytes != 1024u * 1024u)
         {
-            auto* value = static_cast<MultipartWriterDebugContext*>(cookie);
-            std::lock_guard lock(value->mutex);
-            ++value->putCalls;
-            value->putDestinationMustNotExist = destinationMustNotExist;
-            if (buffer == nullptr || sizeBytes != 1024u * 1024u)
-            {
-                return E_INVALIDARG;
-            }
-            if (value->publicationDestinationExists)
-            {
-                value->publicationDestinationPreserved = destinationMustNotExist;
-                Aws::Client::AWSError<Aws::Client::CoreErrors> error;
-                error.SetResponseCode(Aws::Http::HttpResponseCode::PRECONDITION_FAILED);
-                return destinationMustNotExist ? FsS3::HresultFromS3ConditionalPublicationError(error, true) : S_OK;
-            }
-            return S_OK;
-        },
+            return E_INVALIDARG;
+        }
+        if (value->publicationDestinationExists)
+        {
+            value->publicationDestinationPreserved = destinationMustNotExist;
+            Aws::Client::AWSError<Aws::Client::CoreErrors> error;
+            error.SetResponseCode(Aws::Http::HttpResponseCode::PRECONDITION_FAILED);
+            return destinationMustNotExist ? FsS3::HresultFromS3ConditionalPublicationError(error, true) : S_OK;
+        }
+        return S_OK;
+    },
         .upload = [](void* cookie, int partNumber, size_t sizeBytes, std::string& eTag) noexcept -> HRESULT
+    {
+        auto* value = static_cast<MultipartWriterDebugContext*>(cookie);
+        if (partNumber <= 0 || sizeBytes != FsS3::kMultipartMinPartSizeBytes)
         {
-            auto* value = static_cast<MultipartWriterDebugContext*>(cookie);
-            if (partNumber <= 0 || sizeBytes != FsS3::kMultipartMinPartSizeBytes)
-            {
-                return E_INVALIDARG;
-            }
+            return E_INVALIDARG;
+        }
 
-            unsigned long delayMs = 0u;
-            HRESULT configuredFailure = S_OK;
-            {
-                std::lock_guard lock(value->mutex);
-                ++value->uploadCalls;
-                ++value->activeUploads;
-                value->activeUploadHighWater = (std::max)(value->activeUploadHighWater, value->activeUploads);
-                value->startedParts.push_back(partNumber);
-                delayMs = value->defaultPartDelayMs;
-                if (static_cast<size_t>(partNumber) < value->partDelayMs.size() && value->partDelayMs[static_cast<size_t>(partNumber)] != 0u)
-                {
-                    delayMs = value->partDelayMs[static_cast<size_t>(partNumber)];
-                }
-                if (partNumber == value->failingPart)
-                {
-                    configuredFailure = value->failingPartHr;
-                }
-                else if (partNumber == value->secondaryFailingPart)
-                {
-                    configuredFailure = value->secondaryFailingPartHr;
-                }
-                value->cv.notify_all();
-            }
-
-            if (delayMs != 0u)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(delayMs));
-            }
-
-            {
-                std::lock_guard lock(value->mutex);
-                --value->activeUploads;
-                value->completedParts.push_back(partNumber);
-                if (FAILED(configuredFailure))
-                {
-                    value->failingPartObserved = true;
-                }
-                value->cv.notify_all();
-            }
-            if (FAILED(configuredFailure))
-            {
-                return configuredFailure;
-            }
-            eTag = std::format("debug-etag-{}", partNumber);
-            return S_OK;
-        },
-        .complete = [](void* cookie, const std::vector<FsS3::S3MultipartUploadedPart>& parts, bool destinationMustNotExist) noexcept -> HRESULT
+        unsigned long delayMs     = 0u;
+        HRESULT configuredFailure = S_OK;
         {
-            auto* value = static_cast<MultipartWriterDebugContext*>(cookie);
             std::lock_guard lock(value->mutex);
-            ++value->completeCalls;
-            value->completeDestinationMustNotExist = destinationMustNotExist;
-            value->committedParts.clear();
-            int expectedPart = 1;
-            for (const auto& part : parts)
+            ++value->uploadCalls;
+            ++value->activeUploads;
+            value->activeUploadHighWater = (std::max)(value->activeUploadHighWater, value->activeUploads);
+            value->startedParts.push_back(partNumber);
+            delayMs = value->defaultPartDelayMs;
+            if (static_cast<size_t>(partNumber) < value->partDelayMs.size() && value->partDelayMs[static_cast<size_t>(partNumber)] != 0u)
             {
-                value->committedParts.push_back(part.partNumber);
-                if (part.partNumber != expectedPart || part.eTag != std::format("debug-etag-{}", expectedPart))
-                {
-                    return E_INVALIDARG;
-                }
-                ++expectedPart;
+                delayMs = value->partDelayMs[static_cast<size_t>(partNumber)];
             }
-            if (value->publicationDestinationExists)
+            if (partNumber == value->failingPart)
             {
-                value->publicationDestinationPreserved = destinationMustNotExist;
-                Aws::Client::AWSError<Aws::Client::CoreErrors> error;
-                error.SetResponseCode(Aws::Http::HttpResponseCode::CONFLICT);
-                return destinationMustNotExist ? FsS3::HresultFromS3ConditionalPublicationError(error, true) : S_OK;
+                configuredFailure = value->failingPartHr;
             }
-            return parts.empty() ? E_INVALIDARG : S_OK;
-        },
-        .abort = [](void* cookie) noexcept -> HRESULT
-        {
-            auto* value = static_cast<MultipartWriterDebugContext*>(cookie);
-            std::lock_guard lock(value->mutex);
-            ++value->abortCalls;
-            const bool fail = value->abortFailuresRemaining != 0u;
-            if (fail)
+            else if (partNumber == value->secondaryFailingPart)
             {
-                --value->abortFailuresRemaining;
+                configuredFailure = value->secondaryFailingPartHr;
             }
             value->cv.notify_all();
-            return fail ? value->abortFailureHr : S_OK;
-        },
+        }
+
+        if (delayMs != 0u)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(delayMs));
+        }
+
+        {
+            std::lock_guard lock(value->mutex);
+            --value->activeUploads;
+            value->completedParts.push_back(partNumber);
+            if (FAILED(configuredFailure))
+            {
+                value->failingPartObserved = true;
+            }
+            value->cv.notify_all();
+        }
+        if (FAILED(configuredFailure))
+        {
+            return configuredFailure;
+        }
+        eTag = std::format("debug-etag-{}", partNumber);
+        return S_OK;
+    },
+        .complete = [](void* cookie, const std::vector<FsS3::S3MultipartUploadedPart>& parts, bool destinationMustNotExist) noexcept -> HRESULT
+    {
+        auto* value = static_cast<MultipartWriterDebugContext*>(cookie);
+        std::lock_guard lock(value->mutex);
+        ++value->completeCalls;
+        value->completeDestinationMustNotExist = destinationMustNotExist;
+        value->committedParts.clear();
+        int expectedPart = 1;
+        for (const auto& part : parts)
+        {
+            value->committedParts.push_back(part.partNumber);
+            if (part.partNumber != expectedPart || part.eTag != std::format("debug-etag-{}", expectedPart))
+            {
+                return E_INVALIDARG;
+            }
+            ++expectedPart;
+        }
+        if (value->publicationDestinationExists)
+        {
+            value->publicationDestinationPreserved = destinationMustNotExist;
+            Aws::Client::AWSError<Aws::Client::CoreErrors> error;
+            error.SetResponseCode(Aws::Http::HttpResponseCode::CONFLICT);
+            return destinationMustNotExist ? FsS3::HresultFromS3ConditionalPublicationError(error, true) : S_OK;
+        }
+        return parts.empty() ? E_INVALIDARG : S_OK;
+    },
+        .abort = [](void* cookie) noexcept -> HRESULT
+    {
+        auto* value = static_cast<MultipartWriterDebugContext*>(cookie);
+        std::lock_guard lock(value->mutex);
+        ++value->abortCalls;
+        const bool fail = value->abortFailuresRemaining != 0u;
+        if (fail)
+        {
+            --value->abortFailuresRemaining;
+        }
+        value->cv.notify_all();
+        return fail ? value->abortFailureHr : S_OK;
+    },
     };
     const MultipartWriterDebugTransportScope transportScope(transport);
 
@@ -2543,35 +2527,33 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
         context.startedParts.clear();
         context.completedParts.clear();
         context.committedParts.clear();
-        context.failingPart            = 0;
-        context.failingPartHr          = HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE);
-        context.secondaryFailingPart   = 0;
-        context.secondaryFailingPartHr = HRESULT_FROM_WIN32(ERROR_TIMEOUT);
-        context.failingPartObserved    = false;
-        context.defaultPartDelayMs     = defaultDelayMs;
-        context.activeUploads          = 0u;
-        context.activeUploadHighWater = 0u;
-        context.beginCalls             = 0u;
-        context.putCalls               = 0u;
-        context.uploadCalls            = 0u;
-        context.completeCalls          = 0u;
-        context.abortCalls             = 0u;
-        context.abortFailuresRemaining = 0u;
-        context.abortFailureHr         = HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE);
+        context.failingPart                     = 0;
+        context.failingPartHr                   = HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE);
+        context.secondaryFailingPart            = 0;
+        context.secondaryFailingPartHr          = HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+        context.failingPartObserved             = false;
+        context.defaultPartDelayMs              = defaultDelayMs;
+        context.activeUploads                   = 0u;
+        context.activeUploadHighWater           = 0u;
+        context.beginCalls                      = 0u;
+        context.putCalls                        = 0u;
+        context.uploadCalls                     = 0u;
+        context.completeCalls                   = 0u;
+        context.abortCalls                      = 0u;
+        context.abortFailuresRemaining          = 0u;
+        context.abortFailureHr                  = HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE);
         context.publicationDestinationExists    = false;
         context.publicationDestinationPreserved = false;
-        context.putDestinationMustNotExist       = false;
-        context.completeDestinationMustNotExist  = false;
+        context.putDestinationMustNotExist      = false;
+        context.completeDestinationMustNotExist = false;
     };
 
     resetContext();
     {
         constexpr uint64_t maximumPlannedBytes = FsS3::kMultipartMinPartSizeBytes * 10'000u;
         S3WriterUploadPlan plan{};
-        check(PlanS3WriterUpload(0u, plan) == S_OK && plan.partCount == 0u,
-              L"S3 expected-size planner should model an empty upload without parts");
-        check(PlanS3WriterUpload(maximumPlannedBytes, plan) == S_OK && plan.partCount == 10'000u &&
-                  plan.partSizeBytes == FsS3::kMultipartMinPartSizeBytes,
+        check(PlanS3WriterUpload(0u, plan) == S_OK && plan.partCount == 0u, L"S3 expected-size planner should model an empty upload without parts");
+        check(PlanS3WriterUpload(maximumPlannedBytes, plan) == S_OK && plan.partCount == 10'000u && plan.partSizeBytes == FsS3::kMultipartMinPartSizeBytes,
               L"S3 expected-size planner should accept the fixed-memory 10,000-part boundary");
         check(PlanS3WriterUpload(maximumPlannedBytes + 1u, plan) == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE),
               L"S3 expected-size planner should reject the first unrepresentable byte");
@@ -2582,8 +2564,7 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
         wil::com_ptr<IFileWriterExpectedSize> expectedSizeWriter;
         check(rejectedWriter && rejectedWriter.try_query_to(expectedSizeWriter.put()) && expectedSizeWriter,
               L"S3 writer should expose expected-size planning through QueryInterface");
-        check(expectedSizeWriter && expectedSizeWriter->SetExpectedSize(maximumPlannedBytes + 1u) ==
-                                        HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE),
+        check(expectedSizeWriter && expectedSizeWriter->SetExpectedSize(maximumPlannedBytes + 1u) == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE),
               L"S3 writer should reject an unrepresentable upload before the first Write");
         check(context.beginCalls == 0u && context.putCalls == 0u && context.uploadCalls == 0u,
               L"rejected S3 expected sizes should perform zero network activity");
@@ -2597,19 +2578,18 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
         std::array<MultipartS3FileWriter*, kTinyWriterCount> implementations{};
         std::array<std::byte, kTinyPayloadBytes> payload{};
         size_t totalCapacity = 0u;
-        bool prepared = true;
+        bool prepared        = true;
         for (size_t index = 0u; index < writers.size(); ++index)
         {
-            auto* implementation = new (std::nothrow) MultipartS3FileWriter(
-                owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "tiny.bin", std::format(L"/bucket/tiny-{}.bin", index), true);
+            auto* implementation = new (std::nothrow)
+                MultipartS3FileWriter(owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "tiny.bin", std::format(L"/bucket/tiny-{}.bin", index), true);
             implementations[index] = implementation;
             writers[index].attach(implementation);
             wil::com_ptr<IFileWriterExpectedSize> expectedSizeWriter;
             unsigned long written = 0u;
             prepared = prepared && writers[index] && writers[index].try_query_to(expectedSizeWriter.put()) && expectedSizeWriter &&
                        SUCCEEDED(expectedSizeWriter->SetExpectedSize(payload.size())) &&
-                       SUCCEEDED(writers[index]->Write(payload.data(), static_cast<unsigned long>(payload.size()), &written)) &&
-                       written == payload.size();
+                       SUCCEEDED(writers[index]->Write(payload.data(), static_cast<unsigned long>(payload.size()), &written)) && written == payload.size();
             if (implementation != nullptr)
             {
                 totalCapacity += implementation->DebugAssemblyBufferCapacity();
@@ -2622,8 +2602,7 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
     resetContext();
     {
         wil::com_ptr<IFileWriter> writer;
-        writer.attach(new (std::nothrow)
-                          MultipartS3FileWriter(owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "proof.bin", L"/bucket/proof.bin", true));
+        writer.attach(new (std::nothrow) MultipartS3FileWriter(owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "proof.bin", L"/bucket/proof.bin", true));
         check(static_cast<bool>(writer), L"committed-size proof writer allocation should succeed");
         wil::com_ptr<IFileWriterCommitSizeProof> proof;
         check(writer && writer.try_query_to(proof.put()) && proof, L"S3 writer should expose the committed-size proof contract");
@@ -2638,7 +2617,7 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
         check(expectedSizeWriter && SUCCEEDED(expectedSizeWriter->SetExpectedSize(payload.size())),
               L"S3 writer should accept a representable size before the first Write");
         unsigned long bytesWritten = 0u;
-        HRESULT hr = writer ? writer->Write(payload.data(), static_cast<unsigned long>(payload.size()), &bytesWritten) : E_POINTER;
+        HRESULT hr                 = writer ? writer->Write(payload.data(), static_cast<unsigned long>(payload.size()), &bytesWritten) : E_POINTER;
         if (SUCCEEDED(hr) && writer)
         {
             hr = writer->Commit();
@@ -2651,14 +2630,14 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
 
     struct ScenarioResult final
     {
-        uint64_t durationUs = 0u;
-        uint64_t bufferPeak = 0u;
-        unsigned int beginCalls = 0u;
-        unsigned int uploadCalls = 0u;
-        unsigned int completeCalls = 0u;
-        unsigned int abortCalls = 0u;
+        uint64_t durationUs                = 0u;
+        uint64_t bufferPeak                = 0u;
+        unsigned int beginCalls            = 0u;
+        unsigned int uploadCalls           = 0u;
+        unsigned int completeCalls         = 0u;
+        unsigned int abortCalls            = 0u;
         unsigned int activeUploadHighWater = 0u;
-        HRESULT hr = E_FAIL;
+        HRESULT hr                         = E_FAIL;
     };
 
     std::vector<std::byte> part(static_cast<size_t>(FsS3::kMultipartMinPartSizeBytes), std::byte{0x5a});
@@ -2669,8 +2648,7 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
         ScenarioResult result{};
         MultipartWriterMaxInFlightScope maxInFlightScope(maxInFlight);
         wil::com_ptr<IFileWriter> writer;
-        writer.attach(new (std::nothrow)
-                          MultipartS3FileWriter(owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "final.bin", std::wstring(path), true));
+        writer.attach(new (std::nothrow) MultipartS3FileWriter(owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "final.bin", std::wstring(path), true));
         if (! writer)
         {
             result.hr = E_OUTOFMEMORY;
@@ -2681,7 +2659,7 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
         for (unsigned int partIndex = 0u; partIndex < 4u; ++partIndex)
         {
             unsigned long bytesWritten = 0u;
-            result.hr = writer->Write(part.data(), static_cast<unsigned long>(part.size()), &bytesWritten);
+            result.hr                  = writer->Write(part.data(), static_cast<unsigned long>(part.size()), &bytesWritten);
             if (FAILED(result.hr) || bytesWritten != part.size())
             {
                 if (SUCCEEDED(result.hr))
@@ -2700,35 +2678,44 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
         result.bufferPeak = g_multipartWriterBufferPeak.load(std::memory_order_acquire);
         {
             std::lock_guard lock(context.mutex);
-            result.beginCalls             = context.beginCalls;
-            result.uploadCalls            = context.uploadCalls;
-            result.completeCalls          = context.completeCalls;
-            result.abortCalls             = context.abortCalls;
+            result.beginCalls            = context.beginCalls;
+            result.uploadCalls           = context.uploadCalls;
+            result.completeCalls         = context.completeCalls;
+            result.abortCalls            = context.abortCalls;
             result.activeUploadHighWater = context.activeUploadHighWater;
         }
         return result;
     };
 
-    const ScenarioResult baseline = runFourPartScenario(1u, L"/bucket/baseline.bin");
-    const ScenarioResult candidate = runFourPartScenario(2u, L"/bucket/candidate.bin");
-    constexpr uint64_t kScenarioBytes = 4ull * static_cast<uint64_t>(FsS3::kMultipartMinPartSizeBytes);
+    const ScenarioResult baseline               = runFourPartScenario(1u, L"/bucket/baseline.bin");
+    const ScenarioResult candidate              = runFourPartScenario(2u, L"/bucket/candidate.bin");
+    constexpr uint64_t kScenarioBytes           = 4ull * static_cast<uint64_t>(FsS3::kMultipartMinPartSizeBytes);
     constexpr uint64_t kMaximumCandidatePercent = 70u;
-    check(SUCCEEDED(baseline.hr) && baseline.beginCalls == 1u && baseline.uploadCalls == 4u && baseline.completeCalls == 1u &&
-              baseline.abortCalls == 0u && baseline.activeUploadHighWater == 1u,
+    check(SUCCEEDED(baseline.hr) && baseline.beginCalls == 1u && baseline.uploadCalls == 4u && baseline.completeCalls == 1u && baseline.abortCalls == 0u &&
+              baseline.activeUploadHighWater == 1u,
           L"single-worker baseline should commit four ordered multipart payloads with high-water one");
-    check(SUCCEEDED(candidate.hr) && candidate.beginCalls == 1u && candidate.uploadCalls == 4u && candidate.completeCalls == 1u &&
-              candidate.abortCalls == 0u && candidate.activeUploadHighWater >= 2u,
+    check(SUCCEEDED(candidate.hr) && candidate.beginCalls == 1u && candidate.uploadCalls == 4u && candidate.completeCalls == 1u && candidate.abortCalls == 0u &&
+              candidate.activeUploadHighWater >= 2u,
           L"bounded candidate should commit four ordered multipart payloads with at least two concurrent uploads");
     check(candidate.durationUs * 100u <= baseline.durationUs * kMaximumCandidatePercent,
           L"two-worker candidate should improve the fixed-latency four-part baseline by at least thirty percent");
     check(baseline.bufferPeak <= static_cast<uint64_t>(kMultipartWriterBufferSlots) &&
-              candidate.bufferPeak <= static_cast<uint64_t>(kMultipartWriterBufferSlots) &&
-              g_multipartWriterBuffersInUse.load(std::memory_order_acquire) == 0u,
+              candidate.bufferPeak <= static_cast<uint64_t>(kMultipartWriterBufferSlots) && g_multipartWriterBuffersInUse.load(std::memory_order_acquire) == 0u,
           L"multipart scenarios should remain inside the four-payload process budget and release every permit");
     if (Debug::Perf::IsCaptureEnabled())
     {
-        Debug::Perf::Emit(L"FileOps.S3.Multipart.Baseline", L"single-worker; four 64-MiB parts; fixed 150-ms transport", baseline.durationUs, kScenarioBytes, 4u, baseline.hr);
-        Debug::Perf::Emit(L"FileOps.S3.Multipart.Candidate", L"two-worker; four 64-MiB parts; fixed 150-ms transport", candidate.durationUs, kScenarioBytes, 4u, candidate.hr);
+        Debug::Perf::Emit(L"FileOps.S3.Multipart.Baseline",
+                          L"single-worker; four 64-MiB parts; fixed 150-ms transport",
+                          baseline.durationUs,
+                          kScenarioBytes,
+                          4u,
+                          baseline.hr);
+        Debug::Perf::Emit(L"FileOps.S3.Multipart.Candidate",
+                          L"two-worker; four 64-MiB parts; fixed 150-ms transport",
+                          candidate.durationUs,
+                          kScenarioBytes,
+                          4u,
+                          candidate.hr);
         Debug::Perf::Emit(L"FileOps.S3.Multipart.Improvement",
                           L"candidate gate <= 70 percent of baseline",
                           baseline.durationUs - (std::min)(baseline.durationUs, candidate.durationUs),
@@ -2752,8 +2739,7 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
     {
         MultipartWriterMaxInFlightScope maxInFlightScope(2u);
         wil::com_ptr<IFileWriter> writer;
-        writer.attach(new (std::nothrow)
-                          MultipartS3FileWriter(owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "ordered.bin", L"/bucket/ordered.bin", true));
+        writer.attach(new (std::nothrow) MultipartS3FileWriter(owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "ordered.bin", L"/bucket/ordered.bin", true));
         check(static_cast<bool>(writer), L"out-of-order completion writer allocation should succeed");
         if (writer)
         {
@@ -2761,7 +2747,7 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
             for (unsigned int partIndex = 0u; partIndex < 2u && SUCCEEDED(hr); ++partIndex)
             {
                 unsigned long bytesWritten = 0u;
-                hr = writer->Write(part.data(), static_cast<unsigned long>(part.size()), &bytesWritten);
+                hr                         = writer->Write(part.data(), static_cast<unsigned long>(part.size()), &bytesWritten);
                 if (SUCCEEDED(hr) && bytesWritten != part.size())
                 {
                     hr = HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
@@ -2786,18 +2772,17 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
     constexpr HRESULT kInjectedPartFailure = HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE);
     {
         std::lock_guard lock(context.mutex);
-        context.partDelayMs[1] = 120u;
-        context.partDelayMs[2] = 10u;
-        context.failingPart    = 2;
-        context.failingPartHr  = kInjectedPartFailure;
+        context.partDelayMs[1]         = 120u;
+        context.partDelayMs[2]         = 10u;
+        context.failingPart            = 2;
+        context.failingPartHr          = kInjectedPartFailure;
         context.secondaryFailingPart   = 1;
         context.secondaryFailingPartHr = HRESULT_FROM_WIN32(ERROR_TIMEOUT);
     }
     {
         MultipartWriterMaxInFlightScope maxInFlightScope(2u);
         wil::com_ptr<IFileWriter> writer;
-        writer.attach(new (std::nothrow)
-                          MultipartS3FileWriter(owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "failure.bin", L"/bucket/failure.bin", true));
+        writer.attach(new (std::nothrow) MultipartS3FileWriter(owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "failure.bin", L"/bucket/failure.bin", true));
         check(static_cast<bool>(writer), L"first-failure writer allocation should succeed");
         if (writer)
         {
@@ -2805,7 +2790,7 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
             for (unsigned int partIndex = 0u; partIndex < 2u && SUCCEEDED(hr); ++partIndex)
             {
                 unsigned long bytesWritten = 0u;
-                hr = writer->Write(part.data(), static_cast<unsigned long>(part.size()), &bytesWritten);
+                hr                         = writer->Write(part.data(), static_cast<unsigned long>(part.size()), &bytesWritten);
             }
             bool failureObserved = false;
             {
@@ -2813,7 +2798,7 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
                 failureObserved = context.cv.wait_for(lock, std::chrono::seconds(2), [&]() noexcept { return context.failingPartObserved; });
             }
             unsigned long bytesWritten = 0u;
-            const HRESULT failureHr = writer->Write(part.data(), static_cast<unsigned long>(part.size()), &bytesWritten);
+            const HRESULT failureHr    = writer->Write(part.data(), static_cast<unsigned long>(part.size()), &bytesWritten);
             check(failureObserved && failureHr == kInjectedPartFailure && bytesWritten == 0u,
                   L"the first worker failure should stop later scheduling and propagate its exact HRESULT");
             writer.reset();
@@ -2823,22 +2808,20 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
         std::lock_guard lock(context.mutex);
         check(context.uploadCalls == 2u && context.completeCalls == 0u && context.abortCalls == 1u && context.activeUploads == 0u,
               L"first worker failure should join both workers, abort exactly once, and never complete");
-        check(g_multipartWriterBuffersInUse.load(std::memory_order_acquire) == 0u,
-              L"first worker failure should release all multipart payload permits");
+        check(g_multipartWriterBuffersInUse.load(std::memory_order_acquire) == 0u, L"first worker failure should release all multipart payload permits");
     }
 
     resetContext();
     std::vector<std::byte> smallObject(1024u * 1024u, std::byte{0x2a});
     {
         wil::com_ptr<IFileWriter> writer;
-        writer.attach(new (std::nothrow)
-                          MultipartS3FileWriter(owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "small.bin", L"/bucket/small.bin", true));
+        writer.attach(new (std::nothrow) MultipartS3FileWriter(owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "small.bin", L"/bucket/small.bin", true));
         check(static_cast<bool>(writer), L"small-object writer allocation should succeed");
         if (writer)
         {
             unsigned long bytesWritten = 0u;
-            const HRESULT writeHr = writer->Write(smallObject.data(), static_cast<unsigned long>(smallObject.size()), &bytesWritten);
-            const HRESULT commitHr = SUCCEEDED(writeHr) ? writer->Commit() : writeHr;
+            const HRESULT writeHr      = writer->Write(smallObject.data(), static_cast<unsigned long>(smallObject.size()), &bytesWritten);
+            const HRESULT commitHr     = SUCCEEDED(writeHr) ? writer->Commit() : writeHr;
             check(SUCCEEDED(commitHr) && bytesWritten == smallObject.size(), L"small-object PutObject path should remain successful");
             writer.reset();
         }
@@ -2862,8 +2845,8 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
         if (writer)
         {
             unsigned long bytesWritten = 0u;
-            const HRESULT writeHr = writer->Write(smallObject.data(), static_cast<unsigned long>(smallObject.size()), &bytesWritten);
-            const HRESULT commitHr = SUCCEEDED(writeHr) ? writer->Commit() : writeHr;
+            const HRESULT writeHr      = writer->Write(smallObject.data(), static_cast<unsigned long>(smallObject.size()), &bytesWritten);
+            const HRESULT commitHr     = SUCCEEDED(writeHr) ? writer->Commit() : writeHr;
             check(commitHr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS) && bytesWritten == smallObject.size(),
                   L"small-object no-overwrite publication should reject a destination injected after preflight");
         }
@@ -2881,14 +2864,14 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
     }
     {
         wil::com_ptr<IFileWriter> writer;
-        writer.attach(new (std::nothrow)
-                          MultipartS3FileWriter(owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "small-overwrite.bin", L"/bucket/small-overwrite.bin", true));
+        writer.attach(new (std::nothrow) MultipartS3FileWriter(
+            owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "small-overwrite.bin", L"/bucket/small-overwrite.bin", true));
         check(static_cast<bool>(writer), L"small-object overwrite-authorized race writer allocation should succeed");
         if (writer)
         {
             unsigned long bytesWritten = 0u;
-            const HRESULT writeHr = writer->Write(smallObject.data(), static_cast<unsigned long>(smallObject.size()), &bytesWritten);
-            const HRESULT commitHr = SUCCEEDED(writeHr) ? writer->Commit() : writeHr;
+            const HRESULT writeHr      = writer->Write(smallObject.data(), static_cast<unsigned long>(smallObject.size()), &bytesWritten);
+            const HRESULT commitHr     = SUCCEEDED(writeHr) ? writer->Commit() : writeHr;
             check(SUCCEEDED(commitHr) && bytesWritten == smallObject.size(),
                   L"small-object overwrite-authorized publication should replace an injected destination");
         }
@@ -2912,8 +2895,8 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
         if (writer)
         {
             unsigned long bytesWritten = 0u;
-            const HRESULT writeHr = writer->Write(part.data(), static_cast<unsigned long>(part.size()), &bytesWritten);
-            const HRESULT commitHr = SUCCEEDED(writeHr) ? writer->Commit() : writeHr;
+            const HRESULT writeHr      = writer->Write(part.data(), static_cast<unsigned long>(part.size()), &bytesWritten);
+            const HRESULT commitHr     = SUCCEEDED(writeHr) ? writer->Commit() : writeHr;
             check(commitHr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS) && bytesWritten == part.size(),
                   L"multipart no-overwrite completion should reject a destination injected after preflight");
         }
@@ -2931,16 +2914,15 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
     }
     {
         wil::com_ptr<IFileWriter> writer;
-        writer.attach(new (std::nothrow)
-                          MultipartS3FileWriter(owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "multipart-overwrite.bin", L"/bucket/multipart-overwrite.bin", true));
+        writer.attach(new (std::nothrow) MultipartS3FileWriter(
+            owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "multipart-overwrite.bin", L"/bucket/multipart-overwrite.bin", true));
         check(static_cast<bool>(writer), L"multipart overwrite-authorized race writer allocation should succeed");
         if (writer)
         {
             unsigned long bytesWritten = 0u;
-            const HRESULT writeHr = writer->Write(part.data(), static_cast<unsigned long>(part.size()), &bytesWritten);
-            const HRESULT commitHr = SUCCEEDED(writeHr) ? writer->Commit() : writeHr;
-            check(SUCCEEDED(commitHr) && bytesWritten == part.size(),
-                  L"multipart overwrite-authorized completion should replace an injected destination");
+            const HRESULT writeHr      = writer->Write(part.data(), static_cast<unsigned long>(part.size()), &bytesWritten);
+            const HRESULT commitHr     = SUCCEEDED(writeHr) ? writer->Commit() : writeHr;
+            check(SUCCEEDED(commitHr) && bytesWritten == part.size(), L"multipart overwrite-authorized completion should replace an injected destination");
         }
     }
     {
@@ -2960,14 +2942,14 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
     check(static_cast<bool>(abandonedWriter), L"multipart cleanup test writer allocation should succeed");
     if (abandonedWriter)
     {
-        unsigned long bytesWritten = 0u;
+        unsigned long bytesWritten   = 0u;
         const HRESULT abandonedWrite = abandonedWriter->Write(part.data(), static_cast<unsigned long>(part.size()), &bytesWritten);
         check(SUCCEEDED(abandonedWrite) && bytesWritten == part.size(), L"multipart cleanup test should establish an upload session");
         abandonedWriter.reset();
     }
 
-    const bool cleanupDrained = FsS3::WaitForPendingMultipartAbortCleanupForTest(5000u);
-    unsigned int abortCalls   = 0u;
+    const bool cleanupDrained  = FsS3::WaitForPendingMultipartAbortCleanupForTest(5000u);
+    unsigned int abortCalls    = 0u;
     unsigned int activeUploads = 0u;
     {
         std::lock_guard lock(context.mutex);
@@ -2981,16 +2963,15 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
     {
         std::lock_guard lock(context.mutex);
         context.abortFailuresRemaining = 1u;
-        context.abortFailureHr = HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        context.abortFailureHr         = HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
     }
-    abandonedWriter.attach(new (std::nothrow)
-                               MultipartS3FileWriter(owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "already-aborted.bin", L"/bucket/already-aborted.bin", true));
+    abandonedWriter.attach(new (std::nothrow) MultipartS3FileWriter(
+        owner.get(), FsS3::ResolvedAwsContext{}, "bucket", "already-aborted.bin", L"/bucket/already-aborted.bin", true));
     check(static_cast<bool>(abandonedWriter), L"terminal abort-status writer allocation should succeed");
     if (abandonedWriter)
     {
         unsigned long bytesWritten = 0u;
-        check(SUCCEEDED(abandonedWriter->Write(part.data(), static_cast<unsigned long>(part.size()), &bytesWritten)) &&
-                  bytesWritten == part.size(),
+        check(SUCCEEDED(abandonedWriter->Write(part.data(), static_cast<unsigned long>(part.size()), &bytesWritten)) && bytesWritten == part.size(),
               L"terminal abort-status test should establish an upload session");
         abandonedWriter.reset();
     }
@@ -2999,8 +2980,7 @@ void FsS3::RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigne
         std::lock_guard lock(context.mutex);
         abortCalls = context.abortCalls;
     }
-    check(terminalCleanupDrained && abortCalls == 1u,
-          L"an already-absent multipart upload should be terminal success and must not retry");
+    check(terminalCleanupDrained && abortCalls == 1u, L"an already-absent multipart upload should be terminal success and must not retry");
 }
 #endif
 
@@ -3021,7 +3001,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetAttributes(const wchar_t* path, unsig
 #if defined(ENABLE_TESTS)
     if (_mode == FileSystemS3Mode::S3)
     {
-        bool debugHandled = false;
+        bool debugHandled     = false;
         const HRESULT debugHr = FsS3::TryGetDebugS3Attributes(path, debugHandled, *fileAttributes);
         if (debugHandled)
         {
@@ -3401,9 +3381,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CreateFileWriter(const wchar_t* path, Fi
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemS3::SupportsAtomicWriterCommit(const wchar_t* path,
-                                                                   [[maybe_unused]] FileSystemFlags flags,
-                                                                   BOOL* supported) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemS3::SupportsAtomicWriterCommit(const wchar_t* path, [[maybe_unused]] FileSystemFlags flags, BOOL* supported) noexcept
 {
     if (supported == nullptr)
     {

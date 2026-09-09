@@ -317,13 +317,13 @@ private:
     std::atomic_uint64_t _openRequestId{0};
     std::shared_ptr<AsyncOpenSchedulerState> _asyncOpenScheduler;
 #if defined(ENABLE_TESTS)
-    uint64_t _debugFinalSuccessCount   = 0u;
-    uint64_t _debugFinalFailureCount   = 0u;
-    uint64_t _debugPreviewSuccessCount = 0u;
-    uint64_t _debugApplyOrdinal = 0u;
+    uint64_t _debugFinalSuccessCount       = 0u;
+    uint64_t _debugFinalFailureCount       = 0u;
+    uint64_t _debugPreviewSuccessCount     = 0u;
+    uint64_t _debugApplyOrdinal            = 0u;
     uint64_t _debugLastPreviewApplyOrdinal = 0u;
-    uint64_t _debugLastFinalApplyOrdinal = 0u;
-    uint64_t _debugProgressApplyCount = 0u;
+    uint64_t _debugLastFinalApplyOrdinal   = 0u;
+    uint64_t _debugProgressApplyCount      = 0u;
     std::atomic_bool _debugPrefetchCommitPaused{false};
 #endif
     bool _isLoading = false;

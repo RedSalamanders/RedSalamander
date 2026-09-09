@@ -2064,8 +2064,8 @@ bool DebugGetAlertOverlayWindowSnapshot(HWND hwnd, AlertOverlayWindowDebugSnapsh
     out.optionValues.reserve(model.options.size());
     for (const AlertOption& option : model.options)
     {
-        out.optionValues.push_back(
-            (! option.choices.empty() && option.selectedIndex < option.choices.size()) ? option.choices[option.selectedIndex].value : 0u);
+        out.optionValues.push_back((! option.choices.empty() && option.selectedIndex < option.choices.size()) ? option.choices[option.selectedIndex].value
+                                                                                                              : 0u);
     }
     out.primaryButtonLabel.clear();
     for (const AlertButton& button : model.buttons)

@@ -22,12 +22,12 @@ TerminalUtf16Span TerminalSpan(std::wstring_view text) noexcept
 TerminalLogicalLocation OwnedTerminalLocation::View() const noexcept
 {
     TerminalLogicalLocation value{};
-    value.sizeBytes = sizeof(value);
-    value.kind = kind;
-    value.windowsPath = TerminalSpan(windowsPath);
-    value.wslDistribution = TerminalSpan(wslDistribution);
-    value.wslAbsolutePath = TerminalSpan(wslAbsolutePath);
-    value.pluginShortId = TerminalSpan(pluginShortId);
+    value.sizeBytes                = sizeof(value);
+    value.kind                     = kind;
+    value.windowsPath              = TerminalSpan(windowsPath);
+    value.wslDistribution          = TerminalSpan(wslDistribution);
+    value.wslAbsolutePath          = TerminalSpan(wslAbsolutePath);
+    value.pluginShortId            = TerminalSpan(pluginShortId);
     value.pluginBackingWindowsPath = TerminalSpan(pluginBackingWindowsPath);
     return value;
 }
@@ -48,13 +48,13 @@ std::filesystem::path OwnedTerminalLocation::IdentityPath() const
 OwnedTerminalLocation MakeTerminalLocation(const std::filesystem::path& path)
 {
     OwnedTerminalLocation result{};
-    const std::wstring text = path.wstring();
+    const std::wstring text                     = path.wstring();
     constexpr std::wstring_view localhostPrefix = L"\\\\wsl.localhost\\";
-    constexpr std::wstring_view legacyPrefix = L"\\\\wsl$\\";
-    const auto startsWithNoCase = [](std::wstring_view value, std::wstring_view prefix) noexcept
+    constexpr std::wstring_view legacyPrefix    = L"\\\\wsl$\\";
+    const auto startsWithNoCase                 = [](std::wstring_view value, std::wstring_view prefix) noexcept
     {
         return value.size() >= prefix.size() &&
-            CompareStringOrdinal(value.data(), static_cast<int>(prefix.size()), prefix.data(), static_cast<int>(prefix.size()), TRUE) == CSTR_EQUAL;
+               CompareStringOrdinal(value.data(), static_cast<int>(prefix.size()), prefix.data(), static_cast<int>(prefix.size()), TRUE) == CSTR_EQUAL;
     };
     size_t prefixLength = 0u;
     if (startsWithNoCase(text, localhostPrefix))
@@ -83,20 +83,19 @@ OwnedTerminalLocation MakeTerminalLocation(const std::filesystem::path& path)
     {
         case Common::Paths::WindowsPathClass::DriveAbsolute:
         case Common::Paths::WindowsPathClass::ExtendedDriveAbsolute:
-            result.kind = TerminalLocationKind::WindowsLocal;
+            result.kind        = TerminalLocationKind::WindowsLocal;
             result.windowsPath = text;
             break;
         case Common::Paths::WindowsPathClass::Unc:
         case Common::Paths::WindowsPathClass::ExtendedUnc:
-            result.kind = TerminalLocationKind::WindowsUnc;
+            result.kind        = TerminalLocationKind::WindowsUnc;
             result.windowsPath = text;
             break;
         case Common::Paths::WindowsPathClass::Relative:
         case Common::Paths::WindowsPathClass::Rooted:
         case Common::Paths::WindowsPathClass::DriveRelative:
         case Common::Paths::WindowsPathClass::ExtendedOther:
-        case Common::Paths::WindowsPathClass::Device:
-            break;
+        case Common::Paths::WindowsPathClass::Device: break;
     }
     return result;
 }
@@ -104,17 +103,17 @@ OwnedTerminalLocation MakeTerminalLocation(const std::filesystem::path& path)
 TerminalTheme BuildTerminalTheme(const AppTheme& appTheme, uint32_t dpi) noexcept
 {
     TerminalTheme theme{};
-    theme.sizeBytes = sizeof(theme);
-    theme.dpi = dpi;
-    theme.dark = appTheme.dark ? 1u : 0u;
-    theme.highContrast = appTheme.highContrast ? 1u : 0u;
-    theme.backgroundArgb = ColorToArgb(appTheme.folderView.backgroundColor);
-    theme.foregroundArgb = ColorToArgb(appTheme.folderView.textNormal);
-    theme.cursorArgb = theme.foregroundArgb;
+    theme.sizeBytes               = sizeof(theme);
+    theme.dpi                     = dpi;
+    theme.dark                    = appTheme.dark ? 1u : 0u;
+    theme.highContrast            = appTheme.highContrast ? 1u : 0u;
+    theme.backgroundArgb          = ColorToArgb(appTheme.folderView.backgroundColor);
+    theme.foregroundArgb          = ColorToArgb(appTheme.folderView.textNormal);
+    theme.cursorArgb              = theme.foregroundArgb;
     theme.selectionBackgroundArgb = ColorToArgb(appTheme.folderView.itemBackgroundSelected);
     theme.selectionForegroundArgb = ColorToArgb(appTheme.folderView.textSelected);
-    theme.hyperlinkArgb = ColorToArgb(appTheme.accent);
-    theme.inactiveStatusArgb = ColorToArgb(appTheme.folderView.textDisabled);
+    theme.hyperlinkArgb           = ColorToArgb(appTheme.accent);
+    theme.inactiveStatusArgb      = ColorToArgb(appTheme.folderView.textDisabled);
     return theme;
 }
 
@@ -134,8 +133,7 @@ HRESULT DebugGetScreenText(ITerminal* terminal, std::wstring& text) noexcept
     using DebugGetScreenTextFn = HRESULT(__stdcall*)(ITerminal*, TerminalOwnedUtf16*) noexcept;
 #pragma warning(push)
 #pragma warning(disable : 4191) // GetProcAddress returns FARPROC; this test-only export has the declared ABI.
-    const auto getText = reinterpret_cast<DebugGetScreenTextFn>(
-        GetProcAddress(module, "RedSalamanderTerminalDebugGetScreenText"));
+    const auto getText = reinterpret_cast<DebugGetScreenTextFn>(GetProcAddress(module, "RedSalamanderTerminalDebugGetScreenText"));
 #pragma warning(pop)
     if (getText == nullptr)
     {
@@ -165,15 +163,12 @@ HRESULT DebugTerminateRootProcess(ITerminal* terminal, uint32_t exitCode) noexce
     using DebugTerminateRootProcessFn = HRESULT(__stdcall*)(ITerminal*, uint32_t);
 #pragma warning(push)
 #pragma warning(disable : 4191) // GetProcAddress returns FARPROC; this test-only export has the declared ABI.
-    const auto terminate = reinterpret_cast<DebugTerminateRootProcessFn>(
-        GetProcAddress(module, "RedSalamanderTerminalDebugTerminateRootProcess"));
+    const auto terminate = reinterpret_cast<DebugTerminateRootProcessFn>(GetProcAddress(module, "RedSalamanderTerminalDebugTerminateRootProcess"));
 #pragma warning(pop)
     return terminate != nullptr ? terminate(terminal, exitCode) : E_NOINTERFACE;
 }
 
-HRESULT DebugRunCommandExperiencePerfSelfTests(
-    unsigned int* passedTests,
-    unsigned int* failedTests) noexcept
+HRESULT DebugRunCommandExperiencePerfSelfTests(unsigned int* passedTests, unsigned int* failedTests) noexcept
 {
     if (passedTests == nullptr || failedTests == nullptr)
     {
@@ -187,8 +182,7 @@ HRESULT DebugRunCommandExperiencePerfSelfTests(
     using DebugPerfSelfTestsFn = HRESULT(__stdcall*)(unsigned int*, unsigned int*);
 #pragma warning(push)
 #pragma warning(disable : 4191) // GetProcAddress returns FARPROC; this test-only export has the declared ABI.
-    const auto run = reinterpret_cast<DebugPerfSelfTestsFn>(
-        GetProcAddress(module, "RedSalamanderTerminalDebugCommandExperiencePerfSelfTests"));
+    const auto run = reinterpret_cast<DebugPerfSelfTestsFn>(GetProcAddress(module, "RedSalamanderTerminalDebugCommandExperiencePerfSelfTests"));
 #pragma warning(pop)
     return run != nullptr ? run(passedTests, failedTests) : E_NOINTERFACE;
 }

@@ -686,7 +686,7 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
             }
             if (! run.completed.load(std::memory_order_acquire))
             {
-                run.recoverySent = true;
+                run.recoverySent   = true;
                 const HWND overlay = getOverlayWindow();
                 if (overlay && IsWindow(overlay) != FALSE)
                 {
@@ -713,7 +713,9 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
             run.completed.store(true, std::memory_order_release);
         });
 
-        static_cast<void>(waitForWorker(run.completed, operation, [&]() noexcept
+        static_cast<void>(waitForWorker(run.completed,
+                                        operation,
+                                        [&]() noexcept
         {
             const HWND overlay = getOverlayWindow();
             if (overlay && IsWindow(overlay) != FALSE)
@@ -817,7 +819,7 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
             }
             if (! run.completed.load(std::memory_order_acquire))
             {
-                run.recoverySent = true;
+                run.recoverySent  = true;
                 const HWND window = GetConnectionManagerDialogHandle();
                 if (window && IsWindow(window) != FALSE)
                 {
@@ -835,7 +837,9 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
             run.completed.store(true, std::memory_order_release);
         });
 
-        static_cast<void>(waitForWorker(run.completed, operation, [&]() noexcept
+        static_cast<void>(waitForWorker(run.completed,
+                                        operation,
+                                        [&]() noexcept
         {
             const HWND window = GetConnectionManagerDialogHandle();
             if (window && IsWindow(window) != FALSE)
@@ -3772,16 +3776,16 @@ enum class ConnectionManagerCloseAction
             ConnectionManagerDebugSnapshot diagnostic{};
             const bool capturedSnapshot = DebugGetConnectionManagerDialogSnapshot(diagnostic);
             const HWND currentHandle    = GetConnectionManagerDialogHandle();
-            state.failure = std::format(L"Connection Manager window did not open during cycle {}. currentHandle=0x{:X} currentIsWindow={} "
-                                        L"mainEnabled={} activePane={} focusedPane={} capturedSnapshot={} snapshot={}",
-                                        cycle,
-                                        reinterpret_cast<UINT_PTR>(currentHandle),
-                                        (currentHandle && IsWindow(currentHandle) != FALSE) ? 1 : 0,
-                                        IsWindowEnabled(mainWindow) != FALSE ? 1 : 0,
-                                        static_cast<int>(g_folderWindow.GetActivePane()),
-                                        static_cast<int>(g_folderWindow.GetFocusedPane()),
-                                        capturedSnapshot ? 1 : 0,
-                                        DescribeConnectionManagerSnapshot(diagnostic));
+            state.failure               = std::format(L"Connection Manager window did not open during cycle {}. currentHandle=0x{:X} currentIsWindow={} "
+                                                      L"mainEnabled={} activePane={} focusedPane={} capturedSnapshot={} snapshot={}",
+                                                      cycle,
+                                                      reinterpret_cast<UINT_PTR>(currentHandle),
+                                                      (currentHandle && IsWindow(currentHandle) != FALSE) ? 1 : 0,
+                                                      IsWindowEnabled(mainWindow) != FALSE ? 1 : 0,
+                                                      static_cast<int>(g_folderWindow.GetActivePane()),
+                                                      static_cast<int>(g_folderWindow.GetFocusedPane()),
+                                                      capturedSnapshot ? 1 : 0,
+                                                      DescribeConnectionManagerSnapshot(diagnostic));
             return false;
         }
 

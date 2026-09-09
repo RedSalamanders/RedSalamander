@@ -8,9 +8,9 @@ namespace ShortcutDefaults
 {
 struct WindowsTerminalReviewCoverage final
 {
-    size_t p1Mapped = 48u;
+    size_t p1Mapped            = 48u;
     size_t deferredPassThrough = 12u;
-    size_t notApplicable = 8u;
+    size_t notApplicable       = 8u;
 
     [[nodiscard]] constexpr size_t Total() const noexcept
     {

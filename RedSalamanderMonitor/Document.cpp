@@ -199,8 +199,8 @@ void Document::SetText(const std::wstring& text)
     _lines.clear();
     _visibleLines.clear(); // Clear visible lines when replacing all text
     _retainedTextBytes = 0u;
-    size_t start = 0;
-    size_t end   = 0;
+    size_t start       = 0;
+    size_t end         = 0;
     while (end != std::wstring::npos)
     {
         end = text.find(L'\n', start);
@@ -365,7 +365,7 @@ void Document::AppendInfoLineUnsafe(std::wstring text, const Debug::InfoParam& i
 {
     StripCarriageReturns(text);
     Line line;
-    line.text = std::move(text);
+    line.text               = std::move(text);
     line.newlineCount       = static_cast<UINT32>(std::count(line.text.begin(), line.text.end(), L'\n'));
     line.cachedDisplayValid = false;
     line.hasMeta            = true;
@@ -466,8 +466,8 @@ Document::RetentionResult Document::EnforceRetentionLimits(size_t maxLines, uint
         return result;
     }
 
-    _totalLengthValid  = false;
-    _offsetsValid      = false;
+    _totalLengthValid = false;
+    _offsetsValid     = false;
     _lineOffsets.clear();
     _maxLineCharsValid = false;
     _maxLineChars      = 0u;
@@ -954,17 +954,17 @@ RedSalamanderMonitor::MonitorTextSnapshot Document::CaptureTextSnapshot() const
     RedSalamanderMonitor::MonitorTextSnapshot snapshot;
     {
         std::shared_lock lock(_rwMutex);
-        const auto lockStarted = std::chrono::steady_clock::now();
+        const auto lockStarted     = std::chrono::steady_clock::now();
         snapshot.retainedTextBytes = _retainedTextBytes;
         for (const Line& line : _lines)
         {
             snapshot.lines.push_back(line.text);
             ++snapshot.sharedBlockCount;
         }
-        snapshot.sharedBlockBytes = snapshot.retainedTextBytes;
+        snapshot.sharedBlockBytes            = snapshot.retainedTextBytes;
         snapshot.peakAdditionalSnapshotBytes = static_cast<uint64_t>(snapshot.lines.size()) * sizeof(RedSalamanderMonitor::MonitorTextBlock);
-        snapshot.lockHoldUs = static_cast<uint64_t>(
-            std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - lockStarted).count());
+        snapshot.lockHoldUs =
+            static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - lockStarted).count());
     }
     return snapshot;
 }

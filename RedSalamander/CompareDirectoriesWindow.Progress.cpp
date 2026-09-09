@@ -118,7 +118,7 @@ void CompareDirectoriesWindow::SetSessionCallbacksForRun(uint64_t runId) noexcep
         payload->relativeFolder             = relativeFolder;
         payload->entryName                  = std::wstring(currentEntryName);
         payload->enqueuedAt                 = SteadyClock::now();
-        const WPARAM operationKey            = static_cast<WPARAM>(payload->runId);
+        const WPARAM operationKey           = static_cast<WPARAM>(payload->runId);
         static_cast<void>(PostMessagePayload(hwnd, WndMsg::kCompareDirectoriesScanProgress, operationKey, std::move(payload)));
     });
 
@@ -151,7 +151,7 @@ void CompareDirectoriesWindow::SetSessionCallbacksForRun(uint64_t runId) noexcep
         payload->relativeFolder           = relativeFolder;
         payload->entryName                = std::wstring(entryName);
         payload->enqueuedAt               = SteadyClock::now();
-        const WPARAM operationKey          = static_cast<WPARAM>(payload->runId);
+        const WPARAM operationKey         = static_cast<WPARAM>(payload->runId);
         static_cast<void>(PostMessagePayload(hwnd, WndMsg::kCompareDirectoriesContentProgress, operationKey, std::move(payload)));
     });
 
@@ -305,12 +305,9 @@ void CompareDirectoriesWindow::OnDecisionRefreshTimer() noexcept
 LRESULT CompareDirectoriesWindow::OnScanProgress(WPARAM operationKey, LPARAM lp) noexcept
 {
     auto drained = TakeAndCoalesceContiguousPostedPayloads<ScanProgressPayload>(
-        _hWnd.get(),
-        WndMsg::kCompareDirectoriesScanProgress,
-        operationKey,
-        lp,
-        [](const ScanProgressPayload&, uint64_t) noexcept { return true; },
-        [](std::unique_ptr<ScanProgressPayload>& current, std::unique_ptr<ScanProgressPayload> newer) noexcept { current = std::move(newer); });
+        _hWnd.get(), WndMsg::kCompareDirectoriesScanProgress, operationKey, lp, [](const ScanProgressPayload&, uint64_t) noexcept {
+        return true;
+    }, [](std::unique_ptr<ScanProgressPayload>& current, std::unique_ptr<ScanProgressPayload> newer) noexcept { current = std::move(newer); });
     auto payload = std::move(drained.payload);
     if (! payload)
     {
@@ -368,12 +365,9 @@ LRESULT CompareDirectoriesWindow::OnScanProgress(WPARAM operationKey, LPARAM lp)
 LRESULT CompareDirectoriesWindow::OnContentProgress(WPARAM operationKey, LPARAM lp) noexcept
 {
     auto drained = TakeAndCoalesceContiguousPostedPayloads<ContentProgressPayload>(
-        _hWnd.get(),
-        WndMsg::kCompareDirectoriesContentProgress,
-        operationKey,
-        lp,
-        [](const ContentProgressPayload&, uint64_t) noexcept { return true; },
-        [](std::unique_ptr<ContentProgressPayload>& current, std::unique_ptr<ContentProgressPayload> newer) noexcept { current = std::move(newer); });
+        _hWnd.get(), WndMsg::kCompareDirectoriesContentProgress, operationKey, lp, [](const ContentProgressPayload&, uint64_t) noexcept {
+        return true;
+    }, [](std::unique_ptr<ContentProgressPayload>& current, std::unique_ptr<ContentProgressPayload> newer) noexcept { current = std::move(newer); });
     auto payload = std::move(drained.payload);
     if (! payload)
     {

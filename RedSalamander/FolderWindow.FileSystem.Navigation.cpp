@@ -1,10 +1,10 @@
 #include "ChangeCase.h"
-#include "FolderWindow.FileSystem.Private.h"
 #include "ConnectionManagerWindow.h"
 #include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
 #include "FileActionLauncher.h"
 #include "FileActionResolver.h"
+#include "FolderWindow.FileSystem.Private.h"
 #include "FolderWindowInternal.h"
 #include "Helpers.h"
 #include "HostServices.h"
@@ -63,8 +63,7 @@ using TerminalHostSupport::MakeTerminalLocation;
 using TerminalHostSupport::OwnedTerminalLocation;
 using TerminalHostSupport::TerminalSpan;
 
-[[nodiscard]] OwnedTerminalLocation MakePluginBackedTerminalLocation(
-    std::wstring_view pluginShortId, const std::filesystem::path& backingWindowsPath)
+[[nodiscard]] OwnedTerminalLocation MakePluginBackedTerminalLocation(std::wstring_view pluginShortId, const std::filesystem::path& backingWindowsPath)
 {
     OwnedTerminalLocation result;
     const OwnedTerminalLocation backing = MakeTerminalLocation(backingWindowsPath);
@@ -78,8 +77,7 @@ using TerminalHostSupport::TerminalSpan;
     return result;
 }
 
-[[nodiscard]] std::optional<std::filesystem::path> ResolveTerminalBackingDirectory(
-    std::wstring_view instanceContext) noexcept
+[[nodiscard]] std::optional<std::filesystem::path> ResolveTerminalBackingDirectory(std::wstring_view instanceContext) noexcept
 {
     const std::optional<std::filesystem::path> contextPath = TryResolveInstanceContextToWindowsPath(instanceContext);
     if (! contextPath.has_value())
@@ -103,11 +101,10 @@ using TerminalHostSupport::TerminalSpan;
     return parent.empty() ? std::nullopt : std::optional<std::filesystem::path>(parent);
 }
 
-[[nodiscard]] OwnedTerminalLocation MakePaneTerminalSourceLocation(
-    bool localFileSystem,
-    std::wstring_view pluginShortId,
-    std::wstring_view instanceContext,
-    const std::optional<std::filesystem::path>& providerPath)
+[[nodiscard]] OwnedTerminalLocation MakePaneTerminalSourceLocation(bool localFileSystem,
+                                                                   std::wstring_view pluginShortId,
+                                                                   std::wstring_view instanceContext,
+                                                                   const std::optional<std::filesystem::path>& providerPath)
 {
     if (localFileSystem)
     {
@@ -115,13 +112,10 @@ using TerminalHostSupport::TerminalSpan;
     }
 
     const std::optional<std::filesystem::path> backingPath = ResolveTerminalBackingDirectory(instanceContext);
-    return backingPath.has_value()
-        ? MakePluginBackedTerminalLocation(pluginShortId, backingPath.value())
-        : OwnedTerminalLocation{};
+    return backingPath.has_value() ? MakePluginBackedTerminalLocation(pluginShortId, backingPath.value()) : OwnedTerminalLocation{};
 }
 
-[[nodiscard]] bool EqualTerminalWindowsPaths(
-    const std::filesystem::path& left, const std::filesystem::path& right) noexcept
+[[nodiscard]] bool EqualTerminalWindowsPaths(const std::filesystem::path& left, const std::filesystem::path& right) noexcept
 {
     return wil::compare_string_ordinal(left.native(), right.native(), true) == wistd::weak_ordering::equivalent;
 }
@@ -359,8 +353,7 @@ std::optional<std::filesystem::path> FolderWindow::ResolveCommandLineWorkingDire
     }
 
     const std::optional<std::filesystem::path> folderPath = state.folderView.GetFolderPath();
-    if (! folderPath.has_value() || folderPath.value().empty() ||
-        MakeTerminalLocation(folderPath.value()).kind == TerminalLocationKind::Unsupported)
+    if (! folderPath.has_value() || folderPath.value().empty() || MakeTerminalLocation(folderPath.value()).kind == TerminalLocationKind::Unsupported)
     {
         return std::nullopt;
     }
@@ -376,8 +369,8 @@ std::optional<std::filesystem::path> FolderWindow::GetActiveTerminalLaunchPath()
 std::optional<std::filesystem::path> FolderWindow::ResolveTerminalCommandWorkingDirectory(Pane pane) const
 {
     const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
-    if (state.terminalOpen && state.terminal != nullptr &&
-        state.terminalSourceLocationKind != TerminalLocationKind::Unsupported && ! state.terminalSourcePath.empty())
+    if (state.terminalOpen && state.terminal != nullptr && state.terminalSourceLocationKind != TerminalLocationKind::Unsupported &&
+        ! state.terminalSourcePath.empty())
     {
         return state.terminalSourcePath;
     }
@@ -403,20 +396,20 @@ void FolderWindow::CommandBringCurrentDirToCommandLine(Pane pane)
         return;
     }
 
-    const Pane hostPane = OppositePane(pane);
-    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    const Pane hostPane                        = OppositePane(pane);
+    PaneState& host                            = hostPane == Pane::Left ? _leftPane : _rightPane;
     const OwnedTerminalLocation sourceLocation = MakeTerminalLocation(workingDirectory.value());
     TerminalPathInsertion insertion{};
-    insertion.sizeBytes = sizeof(insertion);
+    insertion.sizeBytes                               = sizeof(insertion);
     insertion.initiatingSource.folderWindowInstanceId = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this));
-    insertion.initiatingSource.paneInstanceId = host.terminalOriginalSourcePaneInstanceId;
-    insertion.initiatingSourceGeneration = host.terminalSourceGeneration;
-    insertion.initiatingSourceLocation = sourceLocation.View();
-    insertion.mode = TerminalPathInsertionMode::CurrentDirectoryFull;
-    insertion.itemLocation.sizeBytes = sizeof(insertion.itemLocation);
-    insertion.itemLocation.kind = TerminalLocationKind::Unsupported;
-    insertion.parentLocation.sizeBytes = sizeof(insertion.parentLocation);
-    insertion.parentLocation.kind = TerminalLocationKind::Unsupported;
+    insertion.initiatingSource.paneInstanceId         = host.terminalOriginalSourcePaneInstanceId;
+    insertion.initiatingSourceGeneration              = host.terminalSourceGeneration;
+    insertion.initiatingSourceLocation                = sourceLocation.View();
+    insertion.mode                                    = TerminalPathInsertionMode::CurrentDirectoryFull;
+    insertion.itemLocation.sizeBytes                  = sizeof(insertion.itemLocation);
+    insertion.itemLocation.kind                       = TerminalLocationKind::Unsupported;
+    insertion.parentLocation.sizeBytes                = sizeof(insertion.parentLocation);
+    insertion.parentLocation.kind                     = TerminalLocationKind::Unsupported;
 
     const HRESULT insertHr = host.terminal ? host.terminal->InsertPath(&insertion) : E_HANDLE;
     perf.SetHr(insertHr);
@@ -875,8 +868,8 @@ void FolderWindow::CommandInsertFocusedPathInTerminal(Pane pane, bool fullPath)
     Debug::Perf::Scope perf(fullPath ? L"terminal.insert_full_path_us" : L"terminal.insert_context_path_us");
     SetActivePane(pane);
     const std::optional<std::filesystem::path> workingDirectory = ResolveCommandLineWorkingDirectory(pane);
-    PaneState& source = pane == Pane::Left ? _leftPane : _rightPane;
-    const std::optional<std::filesystem::path> focusedPath = source.folderView.GetFocusedPath();
+    PaneState& source                                           = pane == Pane::Left ? _leftPane : _rightPane;
+    const std::optional<std::filesystem::path> focusedPath      = source.folderView.GetFocusedPath();
     if (! workingDirectory.has_value() || ! focusedPath.has_value() || focusedPath.value().empty())
     {
         ShowShellFeedbackOverlay(*this, pane, IDS_CMD_BRING_FILENAME_TO_COMMAND_LINE, IDS_MSG_TERMINAL_ITEM_REQUIRED);
@@ -891,23 +884,23 @@ void FolderWindow::CommandInsertFocusedPathInTerminal(Pane pane, bool fullPath)
         return;
     }
 
-    const Pane hostPane = OppositePane(pane);
-    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
-    const OwnedTerminalLocation itemLocation = MakeTerminalLocation(focusedPath.value());
+    const Pane hostPane                        = OppositePane(pane);
+    PaneState& host                            = hostPane == Pane::Left ? _leftPane : _rightPane;
+    const OwnedTerminalLocation itemLocation   = MakeTerminalLocation(focusedPath.value());
     const OwnedTerminalLocation parentLocation = MakeTerminalLocation(workingDirectory.value());
-    const std::wstring displayLeaf = focusedPath.value().filename().wstring();
+    const std::wstring displayLeaf             = focusedPath.value().filename().wstring();
 
     TerminalPathInsertion insertion{};
-    insertion.sizeBytes = sizeof(insertion);
+    insertion.sizeBytes                               = sizeof(insertion);
     insertion.initiatingSource.folderWindowInstanceId = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this));
-    insertion.initiatingSource.paneInstanceId = host.terminalOriginalSourcePaneInstanceId;
-    insertion.initiatingSourceGeneration = host.terminalSourceGeneration;
-    insertion.initiatingSourceLocation = parentLocation.View();
-    insertion.itemGeneration = 1u;
-    insertion.mode = fullPath ? TerminalPathInsertionMode::AlwaysFull : TerminalPathInsertionMode::ContextualLeafOrFull;
-    insertion.itemLocation = itemLocation.View();
-    insertion.parentLocation = parentLocation.View();
-    insertion.displayLeaf = fullPath ? TerminalUtf16Span{} : TerminalSpan(displayLeaf);
+    insertion.initiatingSource.paneInstanceId         = host.terminalOriginalSourcePaneInstanceId;
+    insertion.initiatingSourceGeneration              = host.terminalSourceGeneration;
+    insertion.initiatingSourceLocation                = parentLocation.View();
+    insertion.itemGeneration                          = 1u;
+    insertion.mode                                    = fullPath ? TerminalPathInsertionMode::AlwaysFull : TerminalPathInsertionMode::ContextualLeafOrFull;
+    insertion.itemLocation                            = itemLocation.View();
+    insertion.parentLocation                          = parentLocation.View();
+    insertion.displayLeaf                             = fullPath ? TerminalUtf16Span{} : TerminalSpan(displayLeaf);
 
     const HRESULT insertHr = host.terminal->InsertPath(&insertion);
     perf.SetHr(insertHr);
@@ -927,14 +920,11 @@ HRESULT FolderWindow::OpenTerminalPane(Pane sourcePane, const std::filesystem::p
         return E_INVALIDARG;
     }
 
-    PaneState& source = sourcePane == Pane::Left ? _leftPane : _rightPane;
+    PaneState& source                          = sourcePane == Pane::Left ? _leftPane : _rightPane;
     const OwnedTerminalLocation launchLocation = MakeTerminalLocation(workingDirectory);
-    const bool localFileSystem = IsFilePluginShortId(source.pluginShortId);
+    const bool localFileSystem                 = IsFilePluginShortId(source.pluginShortId);
     const OwnedTerminalLocation sourceLocation = MakePaneTerminalSourceLocation(
-        localFileSystem,
-        source.pluginShortId,
-        source.instanceContext,
-        localFileSystem ? std::optional<std::filesystem::path>(workingDirectory) : std::nullopt);
+        localFileSystem, source.pluginShortId, source.instanceContext, localFileSystem ? std::optional<std::filesystem::path>(workingDirectory) : std::nullopt);
     if (launchLocation.kind == TerminalLocationKind::Unsupported || sourceLocation.kind == TerminalLocationKind::Unsupported)
     {
         perf.SetHr(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
@@ -947,7 +937,7 @@ HRESULT FolderWindow::OpenTerminalPane(Pane sourcePane, const std::filesystem::p
     }
 
     const Pane hostPane = OppositePane(sourcePane);
-    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    PaneState& host     = hostPane == Pane::Left ? _leftPane : _rightPane;
     if (! host.hPreviewContent || IsWindow(host.hPreviewContent.get()) == FALSE)
     {
         perf.SetHr(E_HANDLE);
@@ -957,18 +947,17 @@ HRESULT FolderWindow::OpenTerminalPane(Pane sourcePane, const std::filesystem::p
     if (host.terminal)
     {
         TerminalViewState state{};
-        state.sizeBytes = sizeof(state);
+        state.sizeBytes       = sizeof(state);
         const HRESULT stateHr = host.terminal->GetViewState(&state);
-        const bool reusable = SUCCEEDED(stateHr) &&
-            (state.activity.lifecycleState == TerminalLifecycleState::Starting ||
-             state.activity.lifecycleState == TerminalLifecycleState::Running);
+        const bool reusable   = SUCCEEDED(stateHr) && (state.activity.lifecycleState == TerminalLifecycleState::Starting ||
+                                                       state.activity.lifecycleState == TerminalLifecycleState::Running);
         CoTaskMemFree(state.title.data);
         CoTaskMemFree(state.status.data);
         if (reusable)
         {
             PublishTerminalSourceLocation(sourcePane, workingDirectory);
-            host.previewTabsVisible = true;
-            host.previewTabSelected = false;
+            host.previewTabsVisible  = true;
+            host.previewTabSelected  = false;
             host.terminalTabSelected = true;
             UpdatePreviewTabSelection(hostPane);
             CalculateLayout();
@@ -1000,14 +989,14 @@ HRESULT FolderWindow::OpenTerminalPane(Pane sourcePane, const std::filesystem::p
     static_assert(sizeof(guid) == sizeof(TerminalInstanceId));
 
     TerminalOpenContext context{};
-    context.sizeBytes = sizeof(context);
+    context.sizeBytes    = sizeof(context);
     context.parentWindow = _hWnd.get();
     memcpy(context.instanceId.bytes, &guid, sizeof(guid));
     context.originalSource.folderWindowInstanceId = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this));
-    context.originalSource.paneInstanceId = sourcePane == Pane::Left ? 1u : 2u;
-    context.sourceGeneration = 1u;
-    context.sourceLocation   = sourceLocation.View();
-    context.launchLocation   = launchLocation.View();
+    context.originalSource.paneInstanceId         = sourcePane == Pane::Left ? 1u : 2u;
+    context.sourceGeneration                      = 1u;
+    context.sourceLocation                        = sourceLocation.View();
+    context.launchLocation                        = launchLocation.View();
 
     const TerminalTheme theme = BuildTerminalTheme();
     static_cast<void>(terminal->SetTheme(&theme));
@@ -1020,7 +1009,7 @@ HRESULT FolderWindow::OpenTerminalPane(Pane sourcePane, const std::filesystem::p
     }
 
     HWND terminalHwnd = nullptr;
-    hr = terminal->GetChildWindow(&terminalHwnd);
+    hr                = terminal->GetChildWindow(&terminalHwnd);
     if (FAILED(hr) || ! terminalHwnd || IsWindow(terminalHwnd) == FALSE || GetParent(terminalHwnd) != _hWnd.get())
     {
         static_cast<void>(terminal->Close());
@@ -1037,17 +1026,17 @@ HRESULT FolderWindow::OpenTerminalPane(Pane sourcePane, const std::filesystem::p
         return hr;
     }
 
-    host.terminal            = std::move(terminal);
-    host.terminalHwnd        = terminalHwnd;
-    host.terminalOpen        = true;
-    host.terminalSourceLocationKind = sourceLocation.kind;
-    host.terminalSourcePluginShortId = sourceLocation.pluginShortId;
-    host.terminalSourcePath  = sourceLocation.IdentityPath();
-    host.terminalSourceGeneration = context.sourceGeneration;
+    host.terminal                             = std::move(terminal);
+    host.terminalHwnd                         = terminalHwnd;
+    host.terminalOpen                         = true;
+    host.terminalSourceLocationKind           = sourceLocation.kind;
+    host.terminalSourcePluginShortId          = sourceLocation.pluginShortId;
+    host.terminalSourcePath                   = sourceLocation.IdentityPath();
+    host.terminalSourceGeneration             = context.sourceGeneration;
     host.terminalOriginalSourcePaneInstanceId = sourcePane == Pane::Left ? 1u : 2u;
-    host.previewTabsVisible  = true;
-    host.previewTabSelected  = false;
-    host.terminalTabSelected = true;
+    host.previewTabsVisible                   = true;
+    host.previewTabSelected                   = false;
+    host.terminalTabSelected                  = true;
     UpdatePreviewTabSelection(hostPane);
     CalculateLayout();
     AdjustChildWindows();
@@ -1057,8 +1046,7 @@ HRESULT FolderWindow::OpenTerminalPane(Pane sourcePane, const std::filesystem::p
     return S_OK;
 }
 
-void FolderWindow::PublishTerminalSourceLocation(
-    Pane sourcePane, const std::optional<std::filesystem::path>& path) noexcept
+void FolderWindow::PublishTerminalSourceLocation(Pane sourcePane, const std::optional<std::filesystem::path>& path) noexcept
 {
     PaneState& host = OppositePane(sourcePane) == Pane::Left ? _leftPane : _rightPane;
     if (! host.terminal)
@@ -1067,33 +1055,28 @@ void FolderWindow::PublishTerminalSourceLocation(
     }
 
     TerminalSourceUpdate update{};
-    update.sizeBytes = sizeof(update);
+    update.sizeBytes                             = sizeof(update);
     update.originalSource.folderWindowInstanceId = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this));
-    update.originalSource.paneInstanceId = host.terminalOriginalSourcePaneInstanceId != 0u
-        ? host.terminalOriginalSourcePaneInstanceId
-        : (sourcePane == Pane::Left ? 1u : 2u);
+    update.originalSource.paneInstanceId =
+        host.terminalOriginalSourcePaneInstanceId != 0u ? host.terminalOriginalSourcePaneInstanceId : (sourcePane == Pane::Left ? 1u : 2u);
     if (host.terminalSourceGeneration == (std::numeric_limits<uint64_t>::max)())
     {
         return;
     }
-    update.sourceGeneration = host.terminalSourceGeneration + 1u;
-    PaneState& source = sourcePane == Pane::Left ? _leftPane : _rightPane;
+    update.sourceGeneration    = host.terminalSourceGeneration + 1u;
+    PaneState& source          = sourcePane == Pane::Left ? _leftPane : _rightPane;
     const bool localFileSystem = IsFilePluginShortId(source.pluginShortId);
-    const OwnedTerminalLocation location = MakePaneTerminalSourceLocation(
-        localFileSystem, source.pluginShortId, source.instanceContext, localFileSystem ? path : std::nullopt);
-    update.disposition = location.kind == TerminalLocationKind::Unsupported
-        ? TerminalSourceDisposition::Detached
-        : TerminalSourceDisposition::Active;
-    update.sourceLocation = location.View();
+    const OwnedTerminalLocation location =
+        MakePaneTerminalSourceLocation(localFileSystem, source.pluginShortId, source.instanceContext, localFileSystem ? path : std::nullopt);
+    update.disposition     = location.kind == TerminalLocationKind::Unsupported ? TerminalSourceDisposition::Detached : TerminalSourceDisposition::Active;
+    update.sourceLocation  = location.View();
     const HRESULT updateHr = host.terminal->UpdateSourceLocation(&update);
     if (SUCCEEDED(updateHr))
     {
-        host.terminalSourceGeneration = update.sourceGeneration;
-        host.terminalSourceLocationKind = location.kind;
+        host.terminalSourceGeneration    = update.sourceGeneration;
+        host.terminalSourceLocationKind  = location.kind;
         host.terminalSourcePluginShortId = location.pluginShortId;
-        host.terminalSourcePath = update.disposition == TerminalSourceDisposition::Active
-            ? location.IdentityPath()
-            : std::filesystem::path{};
+        host.terminalSourcePath          = update.disposition == TerminalSourceDisposition::Active ? location.IdentityPath() : std::filesystem::path{};
     }
 }
 
@@ -1106,17 +1089,17 @@ void FolderWindow::CloseTerminalPane(Pane hostPane) noexcept
         static_cast<void>(host.terminal->Close());
         host.terminal.reset();
     }
-    host.terminalHwnd = nullptr;
-    host.terminalOpen = false;
+    host.terminalHwnd               = nullptr;
+    host.terminalOpen               = false;
     host.terminalSourceLocationKind = TerminalLocationKind::Unsupported;
     host.terminalSourcePluginShortId.clear();
     host.terminalSourcePath.clear();
-    host.terminalSourceGeneration = 0u;
+    host.terminalSourceGeneration             = 0u;
     host.terminalOriginalSourcePaneInstanceId = 0u;
-    host.terminalTabSelected = false;
-    const bool previewAvailable = _previewSourcePane.has_value() && OppositePane(_previewSourcePane.value()) == hostPane;
-    host.previewTabsVisible = previewAvailable;
-    host.previewTabSelected = previewAvailable;
+    host.terminalTabSelected                  = false;
+    const bool previewAvailable               = _previewSourcePane.has_value() && OppositePane(_previewSourcePane.value()) == hostPane;
+    host.previewTabsVisible                   = previewAvailable;
+    host.previewTabSelected                   = previewAvailable;
     UpdatePreviewTabSelection(hostPane);
     CalculateLayout();
     AdjustChildWindows();
@@ -1181,8 +1164,7 @@ void FolderWindow::SwapPanes()
     std::swap(_leftPane.terminalSourceGeneration, _rightPane.terminalSourceGeneration);
     std::swap(_leftPane.terminalOriginalSourcePaneInstanceId, _rightPane.terminalOriginalSourcePaneInstanceId);
 
-    const auto previewHostedOn = [this](Pane pane) noexcept
-    { return _previewSourcePane.has_value() && OppositePane(_previewSourcePane.value()) == pane; };
+    const auto previewHostedOn = [this](Pane pane) noexcept { return _previewSourcePane.has_value() && OppositePane(_previewSourcePane.value()) == pane; };
     const auto normalizeExclusiveContentTab = [](PaneState& state, bool previewAvailable) noexcept
     {
         if (! state.terminalOpen)
@@ -1210,7 +1192,7 @@ void FolderWindow::SwapPanes()
     };
 
     {
-        _suppressEmbeddedTerminalLayout = true;
+        _suppressEmbeddedTerminalLayout  = true;
         const auto restoreTerminalLayout = wil::scope_exit([&]() noexcept { _suppressEmbeddedTerminalLayout = false; });
         applyPaneState(Pane::Left, _leftPane, rightPluginPath);
         applyPaneState(Pane::Right, _rightPane, leftPluginPath);
@@ -1227,15 +1209,9 @@ void FolderWindow::SwapPanes()
             return;
         }
         const RECT& rect = pane == Pane::Left ? _leftPreviewContentRect : _rightPreviewContentRect;
-        const int width = std::max(0L, rect.right - rect.left);
+        const int width  = std::max(0L, rect.right - rect.left);
         const int height = std::max(0L, rect.bottom - rect.top);
-        SetWindowPos(host.hPreviewContent.get(),
-                     HWND_BOTTOM,
-                     rect.left,
-                     rect.top,
-                     width,
-                     height,
-                     SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER);
+        SetWindowPos(host.hPreviewContent.get(), HWND_BOTTOM, rect.left, rect.top, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER);
     };
     if (_leftPane.terminalTabSelected)
     {
@@ -1250,7 +1226,7 @@ void FolderWindow::SwapPanes()
         LayoutEmbeddedTerminal(Pane::Right);
     }
     {
-        _suppressEmbeddedTerminalLayout = true;
+        _suppressEmbeddedTerminalLayout  = true;
         const auto restoreTerminalLayout = wil::scope_exit([&]() noexcept { _suppressEmbeddedTerminalLayout = false; });
         AdjustChildWindows();
         UpdatePreviewTabSelection(Pane::Left);

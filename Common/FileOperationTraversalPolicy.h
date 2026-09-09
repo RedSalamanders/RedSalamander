@@ -16,8 +16,8 @@ inline constexpr uint64_t kTraversalMaxQueuedPathBytes  = 16ull * 1024ull * 1024
 inline constexpr uint64_t kTraversalMaxMetadataBytes    = 8ull * 1024ull * 1024ull;
 inline constexpr uint64_t kTraversalRecordOverheadBytes = 128u;
 
-inline constexpr size_t kDiscoveryLowWater = 32u;
-inline constexpr size_t kDiscoveryTarget   = 128u;
+inline constexpr size_t kDiscoveryLowWater  = 32u;
+inline constexpr size_t kDiscoveryTarget    = 128u;
 inline constexpr size_t kDiscoveryMaxTarget = 256u;
 
 [[nodiscard]] constexpr size_t DiscoveryQueueTarget(size_t concurrency, bool discoveryAhead) noexcept
@@ -29,15 +29,12 @@ inline constexpr size_t kDiscoveryMaxTarget = 256u;
     }
 
     constexpr size_t kConcurrencyScale = 16u;
-    const size_t scaled = boundedConcurrency > std::numeric_limits<size_t>::max() / kConcurrencyScale
-        ? std::numeric_limits<size_t>::max()
-        : boundedConcurrency * kConcurrencyScale;
+    const size_t scaled                = boundedConcurrency > std::numeric_limits<size_t>::max() / kConcurrencyScale ? std::numeric_limits<size_t>::max()
+                                                                                                                     : boundedConcurrency * kConcurrencyScale;
     return (std::min)((std::max)(kDiscoveryTarget, scaled), kDiscoveryMaxTarget);
 }
 
-[[nodiscard]] constexpr size_t DiscoveryWorkerLimit(size_t concurrency,
-                                                    size_t queuedEntries,
-                                                    bool discoveryAhead) noexcept
+[[nodiscard]] constexpr size_t DiscoveryWorkerLimit(size_t concurrency, size_t queuedEntries, bool discoveryAhead) noexcept
 {
     const size_t boundedConcurrency = (std::max)(size_t{1u}, concurrency);
     if (! discoveryAhead || boundedConcurrency <= 1u)
@@ -45,7 +42,6 @@ inline constexpr size_t kDiscoveryMaxTarget = 256u;
         return boundedConcurrency;
     }
 
-    return queuedEntries < kDiscoveryLowWater ? (std::max)(size_t{1u}, boundedConcurrency / 2u)
-                                               : boundedConcurrency - 1u;
+    return queuedEntries < kDiscoveryLowWater ? (std::max)(size_t{1u}, boundedConcurrency / 2u) : boundedConcurrency - 1u;
 }
 } // namespace Common::FileOperations

@@ -396,18 +396,14 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
                       std::format(L"Shortcuts window should expose at least two rows for live selection churn validation during {}; saw {}.",
                                   cycleLabel,
                                   shortcutsSnapshot.rowCount));
-        const size_t applicationRows = static_cast<size_t>(std::count(shortcutsSnapshot.rowGroupStableIds.begin(),
-                                                                      shortcutsSnapshot.rowGroupStableIds.end(),
-                                                                      3u));
-        const size_t terminalRows = static_cast<size_t>(std::count(shortcutsSnapshot.rowGroupStableIds.begin(),
-                                                                   shortcutsSnapshot.rowGroupStableIds.end(),
-                                                                   4u));
+        const size_t applicationRows =
+            static_cast<size_t>(std::count(shortcutsSnapshot.rowGroupStableIds.begin(), shortcutsSnapshot.rowGroupStableIds.end(), 3u));
+        const size_t terminalRows = static_cast<size_t>(std::count(shortcutsSnapshot.rowGroupStableIds.begin(), shortcutsSnapshot.rowGroupStableIds.end(), 4u));
         state.Require(shortcutsSnapshot.groupCount == 4u,
                       std::format(L"The binding-centric Helper should expose exactly four shortcut groups; saw {}.", shortcutsSnapshot.groupCount));
         state.Require(applicationRows == 4u,
                       std::format(L"The Helper should expose the four default Application bindings as separate rows; saw {}.", applicationRows));
-        state.Require(terminalRows == 46u,
-                      std::format(L"The Helper should expose all 46 default Terminal bindings as separate rows; saw {}.", terminalRows));
+        state.Require(terminalRows == 46u, std::format(L"The Helper should expose all 46 default Terminal bindings as separate rows; saw {}.", terminalRows));
         state.Require(shortcutsSnapshot.rowCommandIds.size() == shortcutsSnapshot.rowCount &&
                           shortcutsSnapshot.rowGroupStableIds.size() == shortcutsSnapshot.rowCount &&
                           shortcutsSnapshot.rowKeyTexts.size() == shortcutsSnapshot.rowCount,
@@ -1029,8 +1025,8 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         }
 
         Trace(std::format(L"Shortcuts live search: {} reading initial search ValuePattern", phaseLabel));
-        const auto initialSearchState =
-            CollectVisibleDescendantValuePatternStateWithMessagePump(shortcuts, UIA_EditControlTypeId, std::format(L"Shortcuts {} initial search read", phaseLabel));
+        const auto initialSearchState = CollectVisibleDescendantValuePatternStateWithMessagePump(
+            shortcuts, UIA_EditControlTypeId, std::format(L"Shortcuts {} initial search read", phaseLabel));
         state.Require(initialSearchState.has_value(),
                       std::format(L"Failed to collect UI Automation value state for the Shortcuts search field during {}.", phaseLabel));
         if (initialSearchState.has_value())
@@ -1073,9 +1069,9 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         }
 
         Trace(std::format(L"Shortcuts live search: {} setting query '{}'", phaseLabel, searchQuery));
-        state.Require(SetVisibleDescendantValueWithMessagePump(
-                          shortcuts, UIA_EditControlTypeId, searchQuery, std::format(L"Shortcuts {} search SetValue", phaseLabel)),
-                      std::format(L"Failed to apply the live UIA search query '{}' to the Shortcuts search field during {}.", searchQuery, phaseLabel));
+        state.Require(
+            SetVisibleDescendantValueWithMessagePump(shortcuts, UIA_EditControlTypeId, searchQuery, std::format(L"Shortcuts {} search SetValue", phaseLabel)),
+            std::format(L"Failed to apply the live UIA search query '{}' to the Shortcuts search field during {}.", searchQuery, phaseLabel));
         state.Require(waitForSnapshot(
                           [&](const ShortcutsWindowDebugSnapshot& value) noexcept
         {
@@ -1147,8 +1143,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
 
     ShortcutsWindowDebugSnapshot snapshot{};
     Trace(L"Shortcuts live search: clearing reopened query");
-    state.Require(SetVisibleDescendantValueWithMessagePump(
-                      shortcuts, UIA_EditControlTypeId, L"", L"Shortcuts reopened live search clear SetValue"),
+    state.Require(SetVisibleDescendantValueWithMessagePump(shortcuts, UIA_EditControlTypeId, L"", L"Shortcuts reopened live search clear SetValue"),
                   L"Failed to clear the Shortcuts search field through live UIA interaction after reopen.");
     state.Require(waitForSnapshot(
                       [&](const ShortcutsWindowDebugSnapshot& value) noexcept
@@ -1161,8 +1156,8 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     state.Require(snapshot.visibleChildWindowCount == 0u, L"Shortcuts live UIA search clear should not expose visible child fallback after reopen.");
 
     Trace(L"Shortcuts live search: reading cleared reopened search ValuePattern");
-    const auto restoredSearchState = CollectVisibleDescendantValuePatternStateWithMessagePump(
-        shortcuts, UIA_EditControlTypeId, L"Shortcuts reopened live search clear read");
+    const auto restoredSearchState =
+        CollectVisibleDescendantValuePatternStateWithMessagePump(shortcuts, UIA_EditControlTypeId, L"Shortcuts reopened live search clear read");
     state.Require(restoredSearchState.has_value(),
                   L"Failed to collect UI Automation value state for the Shortcuts search field after clearing the reopened live query.");
     if (restoredSearchState.has_value())
@@ -2258,9 +2253,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         SendMessageW(shortcuts, WM_KEYDOWN, VK_ESCAPE, 0);
         SendMessageW(shortcuts, WM_KEYUP, VK_ESCAPE, 0);
         state.Require(WaitForWindowClosed(shortcuts, SelfTest::Scale(3000ms)),
-                      std::format(L"Shortcuts Escape did not close the window during {}; {}.",
-                                  context,
-                                  DescribeShortcutsEscapeStateForSelfTest(shortcuts)));
+                      std::format(L"Shortcuts Escape did not close the window during {}; {}.", context, DescribeShortcutsEscapeStateForSelfTest(shortcuts)));
         state.Require(GetShortcutsWindowHandle() == nullptr || IsWindow(GetShortcutsWindowHandle()) == FALSE,
                       std::format(L"Shortcuts window should not remain open after {}; {}.", context, DescribeShortcutsEscapeStateForSelfTest(shortcuts)));
         return state.failure.empty();
@@ -5575,14 +5568,13 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
 
 [[nodiscard]] bool TestCommandVisualsUseFluentIconFontWhenAvailable(CaseState& state) noexcept
 {
-    const std::wstring fluentSettings = ResolveCommandVisualText(CommandVisualId::Settings, true);
+    const std::wstring fluentSettings   = ResolveCommandVisualText(CommandVisualId::Settings, true);
     const std::wstring fallbackSettings = ResolveCommandVisualText(CommandVisualId::Settings, false);
     state.Require(fluentSettings == std::wstring(1u, FluentIcons::kSettings),
                   L"The command visual resolver must use the Segoe Fluent Settings glyph when the icon font is available.");
     state.Require(fluentSettings.size() == 1u && fluentSettings.front() >= L'\uE000' && fluentSettings.front() <= L'\uF8FF',
                   L"Fluent command visuals must remain private-use glyphs so DxUi selects FontRole::Icon.");
-    state.Require(fallbackSettings.size() == 1u &&
-                      (fallbackSettings.front() < L'\uE000' || fallbackSettings.front() > L'\uF8FF'),
+    state.Require(fallbackSettings.size() == 1u && (fallbackSettings.front() < L'\uE000' || fallbackSettings.front() > L'\uF8FF'),
                   L"The command visual fallback must not claim an unavailable private-use icon-font glyph.");
     return state.failure.empty();
 }
@@ -5591,15 +5583,13 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
 {
     Common::Settings::ShortcutsSettings shortcuts = g_settings.shortcuts.value_or(Common::Settings::ShortcutsSettings{});
     shortcuts.terminal.push_back(Common::Settings::ShortcutBinding{
-        .vk = VK_F6,
+        .vk        = VK_F6,
         .modifiers = ShortcutManager::kModCtrl | ShortcutManager::kModAlt,
         .commandId = L"cmd/terminal/find",
     });
     Common::Settings::ShortcutsSettings precedenceFixture{};
     const auto bind = [](uint32_t vk, std::wstring_view commandId)
-    {
-        return Common::Settings::ShortcutBinding{.vk = vk, .modifiers = ShortcutManager::kModCtrl, .commandId = std::wstring(commandId)};
-    };
+    { return Common::Settings::ShortcutBinding{.vk = vk, .modifiers = ShortcutManager::kModCtrl, .commandId = std::wstring(commandId)}; };
     precedenceFixture.application = {
         bind(VK_F7, L"cmd/app/commandPalette"),
         bind(VK_F8, L"cmd/app/commandPalette"),
@@ -5612,34 +5602,30 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         bind(VK_F9, L"cmd/terminal/find"),
         bind(VK_F10, L"cmd/app/commandPalette"),
     };
-    const std::vector<ShortcutCommandCatalogEntry> precedenceCatalog =
-        BuildShortcutCommandCatalog(precedenceFixture, ShortcutCommandContext::Terminal);
+    const std::vector<ShortcutCommandCatalogEntry> precedenceCatalog = BuildShortcutCommandCatalog(precedenceFixture, ShortcutCommandContext::Terminal);
     const auto paletteEntry = std::ranges::find(precedenceCatalog, L"cmd/app/commandPalette", &ShortcutCommandCatalogEntry::commandId);
-    const auto findEntry = std::ranges::find(precedenceCatalog, L"cmd/terminal/find", &ShortcutCommandCatalogEntry::commandId);
+    const auto findEntry    = std::ranges::find(precedenceCatalog, L"cmd/terminal/find", &ShortcutCommandCatalogEntry::commandId);
     state.Require(paletteEntry != precedenceCatalog.end() && paletteEntry->shortcutTexts.size() == 1u &&
-                      paletteEntry->shortcutTexts.front() == ShortcutText::FormatChordText(Common::Keyboard::KeyPosition::None, VK_F10, ShortcutManager::kModCtrl),
+                      paletteEntry->shortcutTexts.front() ==
+                          ShortcutText::FormatChordText(Common::Keyboard::KeyPosition::None, VK_F10, ShortcutManager::kModCtrl),
                   L"Terminal palette aliases must drop pass-through, unassigned, and different-command overrides while deduplicating a same-command override.");
     state.Require(findEntry != precedenceCatalog.end() && findEntry->shortcutTexts.size() == 1u &&
                       findEntry->shortcutTexts.front() == ShortcutText::FormatChordText(Common::Keyboard::KeyPosition::None, VK_F9, ShortcutManager::kModCtrl),
                   L"The effective Terminal override must expose its alias only on the command runtime will dispatch.");
-    const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"command-palette-terminal-selftest");
+    const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, L"command-palette-terminal-selftest");
     const HWND returnFocus = GetFocus();
     ShowCommandPaletteWindow(mainWindow, shortcuts, true, theme);
     PumpPendingMessages();
     const HWND palette = GetCommandPaletteWindowHandle();
-    state.Require(palette != nullptr && IsWindow(palette) != FALSE,
-                  L"Ctrl+Shift+P palette test should create one live global command-palette window.");
-    state.Require(DebugSetCommandPaletteSearch(L"cmd/terminal/find"),
-                  L"Command palette should accept a terminal-command search query.");
+    state.Require(palette != nullptr && IsWindow(palette) != FALSE, L"Ctrl+Shift+P palette test should create one live global command-palette window.");
+    state.Require(DebugSetCommandPaletteSearch(L"cmd/terminal/find"), L"Command palette should accept a terminal-command search query.");
     PumpPendingMessages();
     CommandPaletteDebugSnapshot snapshot{};
     state.Require(DebugGetCommandPaletteSnapshot(snapshot), L"Command palette should expose a deterministic debug snapshot.");
     state.Require(snapshot.terminalContext && snapshot.rowCount == 1u && snapshot.selectedCommandId == L"cmd/terminal/find",
                   L"Terminal-context palette should rank the canonical Find Terminal Text command as the sole exact result.");
-    state.Require(snapshot.selectedShortcutCount == 2u,
-                  L"Command-centric palette should aggregate the factory Find binding and its user alias on one row.");
-    state.Require(! snapshot.selectedEnabled,
-                  L"A Terminal command without a live originating Terminal instance must render disabled in the palette.");
+    state.Require(snapshot.selectedShortcutCount == 2u, L"Command-centric palette should aggregate the factory Find binding and its user alias on one row.");
+    state.Require(! snapshot.selectedEnabled, L"A Terminal command without a live originating Terminal instance must render disabled in the palette.");
     if (palette != nullptr && IsWindow(palette) != FALSE)
     {
         SendMessageW(palette, WM_KEYDOWN, VK_RETURN, 0u);
@@ -5647,8 +5633,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         state.Require(GetCommandPaletteWindowHandle() == palette && IsWindow(palette) != FALSE,
                       L"Activating a disabled palette row must remain inert and keep the palette open.");
     }
-    state.Require(DebugSetCommandPaletteSearch(L"no command can match this phrase"),
-                  L"Command palette should accept a deterministic no-match query.");
+    state.Require(DebugSetCommandPaletteSearch(L"no command can match this phrase"), L"Command palette should accept a deterministic no-match query.");
     PumpPendingMessages();
     state.Require(DebugGetCommandPaletteSnapshot(snapshot) && snapshot.rowCount == 0u,
                   L"Command palette should expose an explicit empty result state for a no-match query.");
@@ -5657,21 +5642,18 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         SendMessageW(palette, WM_CLOSE, 0u, 0);
         PumpPendingMessages();
     }
-    state.Require(GetCommandPaletteWindowHandle() == nullptr,
-                  L"Closing the command palette should retire its transient root window.");
+    state.Require(GetCommandPaletteWindowHandle() == nullptr, L"Closing the command palette should retire its transient root window.");
     if (returnFocus != nullptr && IsWindow(returnFocus) != FALSE)
     {
-        state.Require(GetFocus() == returnFocus,
-                      L"Closing the global command palette should restore the exact originating focus target.");
+        state.Require(GetFocus() == returnFocus, L"Closing the global command palette should restore the exact originating focus target.");
     }
 
     ShowCommandPaletteWindow(mainWindow, shortcuts, false, theme);
     PumpPendingMessages();
-    state.Require(DebugSetCommandPaletteSearch(L"cmd/app/showShortcuts"),
-                  L"Command Palette should accept an enabled Application command query.");
+    state.Require(DebugSetCommandPaletteSearch(L"cmd/app/showShortcuts"), L"Command Palette should accept an enabled Application command query.");
     PumpPendingMessages();
-    state.Require(DebugGetCommandPaletteSnapshot(snapshot) && snapshot.rowCount == 1u &&
-                      snapshot.selectedCommandId == L"cmd/app/showShortcuts" && snapshot.selectedEnabled,
+    state.Require(DebugGetCommandPaletteSnapshot(snapshot) && snapshot.rowCount == 1u && snapshot.selectedCommandId == L"cmd/app/showShortcuts" &&
+                      snapshot.selectedEnabled,
                   L"Display Shortcuts must be an enabled palette command in Folder context.");
     const HWND enabledPalette = GetCommandPaletteWindowHandle();
     if (enabledPalette != nullptr && IsWindow(enabledPalette) != FALSE)
@@ -5679,11 +5661,9 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         SendMessageW(enabledPalette, WM_KEYDOWN, VK_RETURN, 0u);
         PumpPendingMessages();
     }
-    state.Require(GetCommandPaletteWindowHandle() == nullptr,
-                  L"Enter on an enabled palette row must close the palette and dispatch the command.");
+    state.Require(GetCommandPaletteWindowHandle() == nullptr, L"Enter on an enabled palette row must close the palette and dispatch the command.");
     const HWND shortcutsWindow = GetShortcutsWindowHandle();
-    state.Require(shortcutsWindow != nullptr && IsWindow(shortcutsWindow) != FALSE,
-                  L"Enabled palette activation must open the Display Shortcuts window.");
+    state.Require(shortcutsWindow != nullptr && IsWindow(shortcutsWindow) != FALSE, L"Enabled palette activation must open the Display Shortcuts window.");
     if (shortcutsWindow != nullptr && IsWindow(shortcutsWindow) != FALSE)
     {
         SendMessageW(shortcutsWindow, WM_CLOSE, 0u, 0);
@@ -5694,9 +5674,8 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
 
 [[nodiscard]] bool TestCommandPaletteIsSingletonWhileOpen(HWND mainWindow, CaseState& state) noexcept
 {
-    const Common::Settings::ShortcutsSettings shortcuts =
-        g_settings.shortcuts.value_or(Common::Settings::ShortcutsSettings{});
-    const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"command-palette-singleton-selftest");
+    const Common::Settings::ShortcutsSettings shortcuts = g_settings.shortcuts.value_or(Common::Settings::ShortcutsSettings{});
+    const AppTheme theme                                = ResolveAppTheme(ThemeMode::Dark, L"command-palette-singleton-selftest");
     ShowCommandPaletteWindow(mainWindow, shortcuts, false, theme);
     PumpPendingMessages();
     const HWND first = GetCommandPaletteWindowHandle();
@@ -5714,27 +5693,24 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
 
 [[nodiscard]] bool TestCommandPaletteClosesOnDeactivation(HWND mainWindow, CaseState& state) noexcept
 {
-    const Common::Settings::ShortcutsSettings shortcuts =
-        g_settings.shortcuts.value_or(ShortcutDefaults::CreateDefaultShortcuts());
-    const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"command-palette-deactivation-selftest");
+    const Common::Settings::ShortcutsSettings shortcuts = g_settings.shortcuts.value_or(ShortcutDefaults::CreateDefaultShortcuts());
+    const AppTheme theme                                = ResolveAppTheme(ThemeMode::Dark, L"command-palette-deactivation-selftest");
     ShowCommandPaletteWindow(mainWindow, shortcuts, false, theme);
     PumpPendingMessages();
     const HWND palette = GetCommandPaletteWindowHandle();
-    state.Require(palette != nullptr && IsWindow(palette) != FALSE,
-                  L"The global command palette should open before deactivation validation.");
+    state.Require(palette != nullptr && IsWindow(palette) != FALSE, L"The global command palette should open before deactivation validation.");
     if (palette != nullptr && IsWindow(palette) != FALSE)
     {
         SendMessageW(palette, WM_ACTIVATE, MAKEWPARAM(WA_INACTIVE, FALSE), reinterpret_cast<LPARAM>(mainWindow));
         PumpPendingMessages();
     }
-    state.Require(GetCommandPaletteWindowHandle() == nullptr,
-                  L"The transient global command palette must close when its app window deactivates.");
+    state.Require(GetCommandPaletteWindowHandle() == nullptr, L"The transient global command palette must close when its app window deactivates.");
     return state.failure.empty();
 }
 
 [[nodiscard]] bool TestTerminalShortcutHelperRemainsBindingCentric(HWND mainWindow, CaseState& state) noexcept
 {
-    Common::Settings::Settings settings = g_settings;
+    Common::Settings::Settings settings                 = g_settings;
     const Common::Settings::ShortcutsSettings shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
     ShortcutManager manager;
     manager.Load(shortcuts);
@@ -5742,20 +5718,17 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     ShowShortcutsWindow(mainWindow, settings, shortcuts, manager, theme);
     PumpPendingMessages();
     const HWND helper = GetShortcutsWindowHandle();
-    state.Require(helper != nullptr && IsWindow(helper) != FALSE,
-                  L"The F1 shortcut Helper should open as a live binding-centric DxUi window.");
+    state.Require(helper != nullptr && IsWindow(helper) != FALSE, L"The F1 shortcut Helper should open as a live binding-centric DxUi window.");
     ShortcutsWindowDebugSnapshot snapshot{};
-    state.Require(DebugGetShortcutsWindowSnapshot(snapshot),
-                  L"The shortcut Helper should expose its deterministic binding rows.");
-    if (snapshot.rowCommandIds.size() == snapshot.rowGroupStableIds.size() &&
-        snapshot.rowCommandIds.size() == snapshot.rowKeyTexts.size())
+    state.Require(DebugGetShortcutsWindowSnapshot(snapshot), L"The shortcut Helper should expose its deterministic binding rows.");
+    if (snapshot.rowCommandIds.size() == snapshot.rowGroupStableIds.size() && snapshot.rowCommandIds.size() == snapshot.rowKeyTexts.size())
     {
         constexpr uint64_t kFunctionBarGroup = 1u;
         constexpr uint64_t kApplicationGroup = 3u;
-        constexpr uint64_t kTerminalGroup = 4u;
-        size_t applicationRows = 0u;
-        size_t terminalRows = 0u;
-        size_t f11ConnectRows = 0u;
+        constexpr uint64_t kTerminalGroup    = 4u;
+        size_t applicationRows               = 0u;
+        size_t terminalRows                  = 0u;
+        size_t f11ConnectRows                = 0u;
         std::unordered_set<std::wstring> terminalCommands;
         for (size_t index = 0u; index < snapshot.rowCommandIds.size(); ++index)
         {
@@ -5768,8 +5741,8 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
                 ++terminalRows;
                 terminalCommands.emplace(snapshot.rowCommandIds[index]);
             }
-            if (snapshot.rowGroupStableIds[index] == kFunctionBarGroup &&
-                snapshot.rowCommandIds[index] == L"cmd/pane/connect" && snapshot.rowKeyTexts[index] == L"F11")
+            if (snapshot.rowGroupStableIds[index] == kFunctionBarGroup && snapshot.rowCommandIds[index] == L"cmd/pane/connect" &&
+                snapshot.rowKeyTexts[index] == L"F11")
             {
                 ++f11ConnectRows;
             }
@@ -5791,43 +5764,36 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         SendMessageW(helper, WM_CLOSE, 0u, 0);
         PumpPendingMessages();
     }
-    state.Require(GetShortcutsWindowHandle() == nullptr,
-                  L"Closing the binding-centric shortcut Helper should retire its root window.");
+    state.Require(GetShortcutsWindowHandle() == nullptr, L"Closing the binding-centric shortcut Helper should retire its root window.");
     return state.failure.empty();
 }
 
 [[nodiscard]] bool TestTerminalShortcutPreferencesShowsGlobalOverride(HWND mainWindow, CaseState& state) noexcept
 {
     const Common::Settings::Settings savedSettings = g_settings;
-    const auto restoreSettings = wil::scope_exit([&]() noexcept { g_settings = savedSettings; });
-    g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
+    const auto restoreSettings                     = wil::scope_exit([&]() noexcept { g_settings = savedSettings; });
+    g_settings.shortcuts                           = ShortcutDefaults::CreateDefaultShortcuts();
     Common::Settings::ShortcutBinding overrideBinding{};
-    overrideBinding.vk = static_cast<uint32_t>('P');
+    overrideBinding.vk        = static_cast<uint32_t>('P');
     overrideBinding.modifiers = ShortcutManager::kModCtrl | ShortcutManager::kModShift;
     overrideBinding.commandId = std::wstring(ShortcutIds::kPassThroughCommandId);
     g_settings.shortcuts->terminal.push_back(std::move(overrideBinding));
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
-    const HWND preferences = WaitForWindow(
-        [] noexcept { return GetPreferencesDialogHandle(); },
-        SelfTest::Scale(std::chrono::milliseconds(2000)));
-    state.Require(preferences != nullptr && IsWindow(preferences) != FALSE,
-                  L"Preferences must open before validating Terminal override presentation.");
+    const HWND preferences = WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(std::chrono::milliseconds(2000)));
+    state.Require(preferences != nullptr && IsWindow(preferences) != FALSE, L"Preferences must open before validating Terminal override presentation.");
     if (preferences == nullptr)
     {
         return false;
     }
-    state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
-                  L"Preferences must navigate to Keyboard for Terminal override validation.");
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard), L"Preferences must navigate to Keyboard for Terminal override validation.");
     PumpPendingMessages();
-    state.Require(DebugSetPreferencesKeyboardTerminalScope(),
-                  L"Preferences must select the Terminal shortcut scope.");
+    state.Require(DebugSetPreferencesKeyboardTerminalScope(), L"Preferences must select the Terminal shortcut scope.");
     PumpPendingMessages();
 
     std::wstring scopeText;
     std::wstring tooltipText;
-    const bool captured = DebugGetPreferencesKeyboardVisibleRowPresentationByCommandId(
-        ShortcutIds::kPassThroughCommandId, scopeText, tooltipText);
+    const bool captured              = DebugGetPreferencesKeyboardVisibleRowPresentationByCommandId(ShortcutIds::kPassThroughCommandId, scopeText, tooltipText);
     const std::wstring overrideLabel = LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_OVERRIDES_GLOBAL);
     state.Require(captured && ! overrideLabel.empty() && scopeText.find(overrideLabel) != std::wstring::npos &&
                       tooltipText.find(overrideLabel) != std::wstring::npos,
@@ -5844,10 +5810,8 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     Common::Settings::Settings settings = g_settings;
     settings.terminal.reset();
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"floating-terminal-selftest");
-    const FloatingTerminalOpenRequest firstRequest{
-        .profileId = L"builtin/terminal", .providerId = L"builtin/file-system", .canonicalPath = L"C:\\"};
-    const FloatingTerminalOpenRequest secondRequest{
-        .profileId = L"builtin/terminal", .providerId = L"builtin/file-system", .canonicalPath = L"C:\\Windows"};
+    const FloatingTerminalOpenRequest firstRequest{.profileId = L"builtin/terminal", .providerId = L"builtin/file-system", .canonicalPath = L"C:\\"};
+    const FloatingTerminalOpenRequest secondRequest{.profileId = L"builtin/terminal", .providerId = L"builtin/file-system", .canonicalPath = L"C:\\Windows"};
     state.Require(SUCCEEDED(ShowFloatingTerminalWindow(mainWindow, settings, firstRequest, theme)),
                   L"Floating Terminal should create its singleton root and first independent tab.");
     state.Require(SUCCEEDED(ShowFloatingTerminalWindow(mainWindow, settings, firstRequest, theme)) &&
@@ -5867,8 +5831,8 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         }
         return false;
     }
-    state.Require(before.tabCount == 3u && before.paths.size() == 3u && before.paths[0] == L"C:\\" &&
-                      before.paths[1] == L"C:\\" && before.paths[2] == L"C:\\Windows",
+    state.Require(before.tabCount == 3u && before.paths.size() == 3u && before.paths[0] == L"C:\\" && before.paths[1] == L"C:\\" &&
+                      before.paths[2] == L"C:\\Windows",
                   L"One floating root should retain ordered independent tabs and allow duplicate paths.");
     std::unordered_set<std::wstring> stableIds(before.tabIds.begin(), before.tabIds.end());
     state.Require(stableIds.size() == 3u, L"Every floating Terminal tab must have a distinct stable ID.");
@@ -5882,25 +5846,23 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
         PumpPendingMessages();
         const bool capturedPlacement = settings.terminal.has_value() && settings.terminal->floatingWindow.has_value() &&
-            settings.terminal->floatingWindow->placement.bounds.width == 812 &&
-            settings.terminal->floatingWindow->placement.bounds.height == 533;
-        state.Require(capturedPlacement,
-                      L"Floating Terminal resize messages should coalesce into the remembered outer-window placement.");
+                                       settings.terminal->floatingWindow->placement.bounds.width == 812 &&
+                                       settings.terminal->floatingWindow->placement.bounds.height == 533;
+        state.Require(capturedPlacement, L"Floating Terminal resize messages should coalesce into the remembered outer-window placement.");
     }
     state.Require(DebugReorderFloatingTerminalTab(0u, 2u), L"Floating Terminal should reorder tabs by stable model position.");
     FloatingTerminalDebugSnapshot reordered{};
     const bool reorderedCaptured = DebugGetFloatingTerminalSnapshot(reordered);
     state.Require(reorderedCaptured && reordered.tabIds.size() == 3u && reordered.root == root && reordered.tabIds[2] == before.tabIds[0],
                   L"Reordering tabs must preserve the singleton root and move the same stable tab ID.");
-    if (!reorderedCaptured || reordered.tabIds.size() != 3u)
+    if (! reorderedCaptured || reordered.tabIds.size() != 3u)
     {
         PrepareFloatingTerminalWindowForAppShutdown();
         SendMessageW(root, WM_CLOSE, 0u, 0);
         PumpPendingMessages();
         return false;
     }
-    state.Require(settings.terminal.has_value() && settings.terminal->floatingWindow.has_value() &&
-                      settings.terminal->floatingWindow->tabs.size() == 3u &&
+    state.Require(settings.terminal.has_value() && settings.terminal->floatingWindow.has_value() && settings.terminal->floatingWindow->tabs.size() == 3u &&
                       settings.terminal->floatingWindow->tabs[2].tabId == before.tabIds[0],
                   L"Floating tab reorder should immediately synchronize ordered restore state.");
 
@@ -5915,29 +5877,27 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     const bool rootClosed = GetFloatingTerminalWindowHandle() == nullptr;
-    const bool restoreMarked = settings.terminal.has_value() && settings.terminal->floatingWindow.has_value() &&
-        settings.terminal->floatingWindow->wasOpenAtCleanShutdown;
-    state.Require(rootClosed && restoreMarked,
-                  std::format(L"Clean app shutdown should close the singleton while preserving an explicit restore marker; rootClosed={}, "
-                              L"restoreMarked={}, tabRecords={}.",
-                              rootClosed,
-                              restoreMarked,
-                              settings.terminal.has_value() && settings.terminal->floatingWindow.has_value()
-                                  ? settings.terminal->floatingWindow->tabs.size()
-                                  : 0u));
+    const bool restoreMarked =
+        settings.terminal.has_value() && settings.terminal->floatingWindow.has_value() && settings.terminal->floatingWindow->wasOpenAtCleanShutdown;
+    state.Require(
+        rootClosed && restoreMarked,
+        std::format(L"Clean app shutdown should close the singleton while preserving an explicit restore marker; rootClosed={}, "
+                    L"restoreMarked={}, tabRecords={}.",
+                    rootClosed,
+                    restoreMarked,
+                    settings.terminal.has_value() && settings.terminal->floatingWindow.has_value() ? settings.terminal->floatingWindow->tabs.size() : 0u));
     state.Require(SUCCEEDED(RestoreFloatingTerminalWindowAfterStartup(mainWindow, settings, theme)),
                   L"Startup should restore the one remembered floating Terminal window.");
     PumpPendingMessages();
     FloatingTerminalDebugSnapshot restored{};
-    state.Require(DebugGetFloatingTerminalSnapshot(restored) && restored.tabCount == 3u &&
-                      restored.tabIds == reordered.tabIds && restored.paths == reordered.paths,
+    state.Require(DebugGetFloatingTerminalSnapshot(restored) && restored.tabCount == 3u && restored.tabIds == reordered.tabIds &&
+                      restored.paths == reordered.paths,
                   L"Floating Terminal restore should preserve tab IDs, order, duplicate paths, and trusted path identity.");
     while (restored.tabCount != 0u)
     {
-        state.Require(DebugCloseFloatingTerminalTab(restored.tabCount - 1u),
-                      L"Each floating Terminal tab should close independently.");
+        state.Require(DebugCloseFloatingTerminalTab(restored.tabCount - 1u), L"Each floating Terminal tab should close independently.");
         PumpPendingMessages();
-        if (!DebugGetFloatingTerminalSnapshot(restored))
+        if (! DebugGetFloatingTerminalSnapshot(restored))
         {
             restored.tabCount = 0u;
         }
@@ -5947,10 +5907,8 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         PumpPendingMessages();
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    state.Require(GetFloatingTerminalWindowHandle() == nullptr,
-                  L"Closing the last floating Terminal tab should close and retire the singleton root.");
-    state.Require(settings.terminal->floatingWindow->tabs.empty() &&
-                      !settings.terminal->floatingWindow->wasOpenAtCleanShutdown,
+    state.Require(GetFloatingTerminalWindowHandle() == nullptr, L"Closing the last floating Terminal tab should close and retire the singleton root.");
+    state.Require(settings.terminal->floatingWindow->tabs.empty() && ! settings.terminal->floatingWindow->wasOpenAtCleanShutdown,
                   L"Closed tabs must be removed from restore state without retaining a closed-session ledger.");
     return state.failure.empty();
 }
@@ -5960,34 +5918,30 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     Common::Settings::Settings settings = g_settings;
     settings.terminal.reset();
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"floating-terminal-shell-exit-selftest");
-    const FloatingTerminalOpenRequest request{
-        .profileId = L"builtin/terminal", .providerId = L"builtin/file-system", .canonicalPath = L"C:\\"};
+    const FloatingTerminalOpenRequest request{.profileId = L"builtin/terminal", .providerId = L"builtin/file-system", .canonicalPath = L"C:\\"};
     state.Require(SUCCEEDED(ShowFloatingTerminalWindow(mainWindow, settings, request, theme)),
                   L"The shell-exit regression should open one real floating Terminal tab.");
     FloatingTerminalDebugSnapshot snapshot{};
     const auto openDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds(5));
-    bool captured = false;
+    bool captured           = false;
     do
     {
         PumpPendingMessages();
         captured = DebugGetFloatingTerminalSnapshot(snapshot);
-        if (captured && snapshot.selectedLifecycle == TerminalLifecycleState::Running &&
-            snapshot.selectedSessionGeneration != 0u && snapshot.selectedActivityTrust == TerminalActivityTrust::Trusted &&
-            snapshot.selectedIdleAtPrimaryPrompt)
+        if (captured && snapshot.selectedLifecycle == TerminalLifecycleState::Running && snapshot.selectedSessionGeneration != 0u &&
+            snapshot.selectedActivityTrust == TerminalActivityTrust::Trusted && snapshot.selectedIdleAtPrimaryPrompt)
         {
             break;
         }
         Sleep(10u);
     } while (std::chrono::steady_clock::now() < openDeadline);
-    state.Require(captured && snapshot.tabCount == 1u && snapshot.selectedChild != nullptr &&
-                      IsWindow(snapshot.selectedChild) != FALSE && snapshot.selectedLifecycle == TerminalLifecycleState::Running &&
-                      snapshot.selectedSessionGeneration != 0u && snapshot.selectedActivityTrust == TerminalActivityTrust::Trusted &&
-                      snapshot.selectedIdleAtPrimaryPrompt,
+    state.Require(captured && snapshot.tabCount == 1u && snapshot.selectedChild != nullptr && IsWindow(snapshot.selectedChild) != FALSE &&
+                      snapshot.selectedLifecycle == TerminalLifecycleState::Running && snapshot.selectedSessionGeneration != 0u &&
+                      snapshot.selectedActivityTrust == TerminalActivityTrust::Trusted && snapshot.selectedIdleAtPrimaryPrompt,
                   L"The shell-exit regression should obtain the one live Terminal child.");
     if (captured && snapshot.selectedChild != nullptr && IsWindow(snapshot.selectedChild) != FALSE)
     {
-        state.Require(DebugTerminateFloatingTerminalRootProcess(0u) == S_OK,
-                      L"The shell-exit regression must terminate the live Terminal root process.");
+        state.Require(DebugTerminateFloatingTerminalRootProcess(0u) == S_OK, L"The shell-exit regression must terminate the live Terminal root process.");
     }
 
     const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds(15));
@@ -6005,8 +5959,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
                               snapshot.selectedFinalSnapshotComplete,
                               snapshot.pendingExitPayloadCount,
                               snapshot.selectedChild != nullptr && IsWindow(snapshot.selectedChild) != FALSE));
-    state.Require(settings.terminal.has_value() && settings.terminal->floatingWindow.has_value() &&
-                      settings.terminal->floatingWindow->tabs.empty() &&
+    state.Require(settings.terminal.has_value() && settings.terminal->floatingWindow.has_value() && settings.terminal->floatingWindow->tabs.empty() &&
                       ! settings.terminal->floatingWindow->wasOpenAtCleanShutdown,
                   L"Shell-exit teardown must remove the closed tab from restore state.");
     if (! closed)
@@ -6040,15 +5993,11 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         return values[index];
     };
     const auto elapsedUs = [](std::chrono::steady_clock::time_point startedAt) noexcept
-    {
-        return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::steady_clock::now() - startedAt).count());
-    };
+    { return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count()); };
 
-    unsigned int pluginPassed = 0u;
-    unsigned int pluginFailed = 0u;
-    const HRESULT pluginPerfHr = TerminalHostSupport::DebugRunCommandExperiencePerfSelfTests(
-        &pluginPassed, &pluginFailed);
+    unsigned int pluginPassed  = 0u;
+    unsigned int pluginFailed  = 0u;
+    const HRESULT pluginPerfHr = TerminalHostSupport::DebugRunCommandExperiencePerfSelfTests(&pluginPassed, &pluginFailed);
     state.Require(SUCCEEDED(pluginPerfHr) && pluginPassed != 0u && pluginFailed == 0u,
                   std::format(L"Terminal model/router performance selftests must pass (passed={}, failed={}, hr=0x{:08X}).",
                               pluginPassed,
@@ -6060,7 +6009,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     }
 
     const Common::Settings::ShortcutsSettings shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
-    const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"terminal-command-experience-perf");
+    const AppTheme theme                                = ResolveAppTheme(ThemeMode::Dark, L"terminal-command-experience-perf");
     std::vector<uint64_t> paletteOpenDurations;
     paletteOpenDurations.reserve(100u);
     for (size_t iteration = 0u; iteration < 100u; ++iteration)
@@ -6069,8 +6018,8 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         ShowCommandPaletteWindow(mainWindow, shortcuts, (iteration & 1u) != 0u, theme);
         CommandPaletteDebugSnapshot snapshot{};
         const HWND palette = GetCommandPaletteWindowHandle();
-        const bool visible = palette != nullptr && IsWindow(palette) != FALSE &&
-            IsWindowVisible(palette) != FALSE && DebugGetCommandPaletteSnapshot(snapshot) && snapshot.rowCount != 0u;
+        const bool visible = palette != nullptr && IsWindow(palette) != FALSE && IsWindowVisible(palette) != FALSE &&
+                             DebugGetCommandPaletteSnapshot(snapshot) && snapshot.rowCount != 0u;
         paletteOpenDurations.push_back(elapsedUs(startedAt));
         state.Require(visible, L"Every command-palette perf iteration must reach a visible populated model.");
         PumpPendingMessages();
@@ -6079,54 +6028,46 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
             SendMessageW(livePalette, WM_CLOSE, 0u, 0);
             PumpPendingMessages();
         }
-        state.Require(GetCommandPaletteWindowHandle() == nullptr,
-                      L"Command-palette perf iterations must release their singleton root.");
+        state.Require(GetCommandPaletteWindowHandle() == nullptr, L"Command-palette perf iterations must release their singleton root.");
     }
-    state.Require(percentile(paletteOpenDurations, 95u, 100u) <= 100'000u,
-                  L"Command-palette warm open-to-visible p95 must remain at or below 100 ms.");
+    state.Require(percentile(paletteOpenDurations, 95u, 100u) <= 100'000u, L"Command-palette warm open-to-visible p95 must remain at or below 100 ms.");
 
     ShowCommandPaletteWindow(mainWindow, shortcuts, true, theme);
     PumpPendingMessages();
     std::vector<uint64_t> paletteFilterDurations;
     paletteFilterDurations.reserve(1'000u);
-    constexpr std::array<std::wstring_view, 8u> kPaletteQueries{{
-        L"terminal", L"copy", L"tab", L"settings", L"ctrl", L"pane", L"find", L""}};
+    constexpr std::array<std::wstring_view, 8u> kPaletteQueries{{L"terminal", L"copy", L"tab", L"settings", L"ctrl", L"pane", L"find", L""}};
     for (size_t iteration = 0u; iteration < 1'000u; ++iteration)
     {
         const auto startedAt = std::chrono::steady_clock::now();
-        const bool filtered = DebugSetCommandPaletteSearch(kPaletteQueries[iteration % kPaletteQueries.size()]);
+        const bool filtered  = DebugSetCommandPaletteSearch(kPaletteQueries[iteration % kPaletteQueries.size()]);
         paletteFilterDurations.push_back(elapsedUs(startedAt));
         state.Require(filtered, L"Every command-palette filter perf iteration must update the production model.");
     }
-    state.Require(percentile(paletteFilterDurations, 95u, 100u) <= 16'700u,
-                  L"Command-palette incremental-filter p95 must remain within one 60 Hz frame.");
+    state.Require(percentile(paletteFilterDurations, 95u, 100u) <= 16'700u, L"Command-palette incremental-filter p95 must remain within one 60 Hz frame.");
     if (const HWND palette = GetCommandPaletteWindowHandle(); palette != nullptr)
     {
         SendMessageW(palette, WM_CLOSE, 0u, 0);
         PumpPendingMessages();
     }
-    state.Require(GetCommandPaletteWindowHandle() == nullptr,
-                  L"The command-palette stress surface must release all retained root state.");
+    state.Require(GetCommandPaletteWindowHandle() == nullptr, L"The command-palette stress surface must release all retained root state.");
 
     Common::Settings::Settings zoomSettings = g_settings;
     zoomSettings.terminal.reset();
     Common::Settings::JsonValue zoomTerminalConfiguration;
-    const HRESULT zoomConfigurationHr =
-        Common::Settings::ParseJsonValue(R"({"defaultShell":"cmd"})", zoomTerminalConfiguration);
-    state.Require(SUCCEEDED(zoomConfigurationHr),
-                  L"The zoom/reflow perf scenario must create its deterministic cmd Terminal configuration.");
+    const HRESULT zoomConfigurationHr = Common::Settings::ParseJsonValue(R"({"defaultShell":"cmd"})", zoomTerminalConfiguration);
+    state.Require(SUCCEEDED(zoomConfigurationHr), L"The zoom/reflow perf scenario must create its deterministic cmd Terminal configuration.");
     if (SUCCEEDED(zoomConfigurationHr))
     {
         zoomSettings.plugins.configurationByPluginId[L"builtin/terminal"] = std::move(zoomTerminalConfiguration);
     }
-    const FloatingTerminalOpenRequest zoomRequest{
-        .profileId = L"builtin/terminal", .providerId = L"builtin/file-system", .canonicalPath = L"C:\\"};
+    const FloatingTerminalOpenRequest zoomRequest{.profileId = L"builtin/terminal", .providerId = L"builtin/file-system", .canonicalPath = L"C:\\"};
     state.Require(SUCCEEDED(ShowFloatingTerminalWindow(mainWindow, zoomSettings, zoomRequest, theme)),
                   L"The zoom/reflow perf scenario must create one real hosted Terminal.");
     FloatingTerminalDebugSnapshot zoomSnapshot{};
     const auto zoomReadyDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds(10));
-    while ((! DebugGetFloatingTerminalSnapshot(zoomSnapshot) ||
-            zoomSnapshot.selectedLifecycle != TerminalLifecycleState::Running || zoomSnapshot.selectedChild == nullptr) &&
+    while ((! DebugGetFloatingTerminalSnapshot(zoomSnapshot) || zoomSnapshot.selectedLifecycle != TerminalLifecycleState::Running ||
+            zoomSnapshot.selectedChild == nullptr) &&
            std::chrono::steady_clock::now() < zoomReadyDeadline)
     {
         PumpPendingMessages();
@@ -6137,11 +6078,11 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         SetWindowPos(zoomSnapshot.root, nullptr, 80, 80, 900, 620, SWP_NOZORDER | SWP_NOACTIVATE);
         PumpPendingMessages();
     }
-    const HWND zoomRoot = zoomSnapshot.root;
+    const HWND zoomRoot  = zoomSnapshot.root;
     const HWND zoomChild = zoomSnapshot.selectedChild;
     RECT zoomGeometry{};
-    const bool zoomHosted = zoomRoot != nullptr && zoomChild != nullptr && IsWindow(zoomChild) != FALSE &&
-        GetClientRect(zoomChild, &zoomGeometry) != FALSE && zoomGeometry.right > 0 && zoomGeometry.bottom > 0;
+    const bool zoomHosted = zoomRoot != nullptr && zoomChild != nullptr && IsWindow(zoomChild) != FALSE && GetClientRect(zoomChild, &zoomGeometry) != FALSE &&
+                            zoomGeometry.right > 0 && zoomGeometry.bottom > 0;
     state.Require(zoomHosted, L"The zoom/reflow perf scenario must reach a non-empty standard Terminal geometry.");
 
     const auto measureRenderPhase = [&](std::wstring_view detail, std::vector<uint64_t>& durations) noexcept
@@ -6149,8 +6090,8 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         bool rendered = zoomHosted;
         for (size_t iteration = 0u; iteration < 500u && rendered; ++iteration)
         {
-            const auto startedAt = std::chrono::steady_clock::now();
-            rendered = RedrawWindow(zoomChild, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_NOERASE) != FALSE;
+            const auto startedAt      = std::chrono::steady_clock::now();
+            rendered                  = RedrawWindow(zoomChild, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_NOERASE) != FALSE;
             const uint64_t durationUs = elapsedUs(startedAt);
             durations.push_back(durationUs);
             Debug::Perf::Emit(L"terminal.render.frame_us",
@@ -6162,16 +6103,14 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         }
         return rendered;
     };
-    const bool zoomBaselinePrepared = zoomHosted &&
-        ExecuteFloatingTerminalCommand(L"cmd/terminal/font/increase") &&
-        ExecuteFloatingTerminalCommand(L"cmd/terminal/font/decrease") &&
-        ExecuteFloatingTerminalCommand(L"cmd/terminal/font/reset");
+    const bool zoomBaselinePrepared = zoomHosted && ExecuteFloatingTerminalCommand(L"cmd/terminal/font/increase") &&
+                                      ExecuteFloatingTerminalCommand(L"cmd/terminal/font/decrease") &&
+                                      ExecuteFloatingTerminalCommand(L"cmd/terminal/font/reset");
     if (zoomHosted)
     {
         for (size_t warmup = 0u; warmup < 50u; ++warmup)
         {
-            static_cast<void>(RedrawWindow(
-                zoomChild, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_NOERASE));
+            static_cast<void>(RedrawWindow(zoomChild, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_NOERASE));
         }
     }
     std::vector<uint64_t> zoomBaselineFrames;
@@ -6179,35 +6118,31 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     zoomBaselineFrames.reserve(500u);
     zoomCandidateFrames.reserve(500u);
     const bool zoomBaselineRendered = measureRenderPhase(L"zoom_baseline", zoomBaselineFrames);
-    const auto hostedZoomStartedAt = std::chrono::steady_clock::now();
-    bool zoomCommandsValid = zoomHosted;
+    const auto hostedZoomStartedAt  = std::chrono::steady_clock::now();
+    bool zoomCommandsValid          = zoomHosted;
     for (size_t cycle = 0u; cycle < 100u && zoomCommandsValid; ++cycle)
     {
-        zoomCommandsValid = ExecuteFloatingTerminalCommand(L"cmd/terminal/font/increase") &&
-            ExecuteFloatingTerminalCommand(L"cmd/terminal/font/decrease") &&
-            ExecuteFloatingTerminalCommand(L"cmd/terminal/font/reset");
+        zoomCommandsValid = ExecuteFloatingTerminalCommand(L"cmd/terminal/font/increase") && ExecuteFloatingTerminalCommand(L"cmd/terminal/font/decrease") &&
+                            ExecuteFloatingTerminalCommand(L"cmd/terminal/font/reset");
     }
     const uint64_t hostedZoomDurationUs = elapsedUs(hostedZoomStartedAt);
-    Debug::Perf::EmitDurationUs(
-        L"terminal.shortcut.zoom_hosted_cycle_batch_us", hostedZoomDurationUs, 100u, 300u);
+    Debug::Perf::EmitDurationUs(L"terminal.shortcut.zoom_hosted_cycle_batch_us", hostedZoomDurationUs, 100u, 300u);
     if (zoomHosted)
     {
         for (size_t warmup = 0u; warmup < 50u; ++warmup)
         {
-            static_cast<void>(RedrawWindow(
-                zoomChild, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_NOERASE));
+            static_cast<void>(RedrawWindow(zoomChild, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_NOERASE));
         }
     }
     const bool zoomCandidateRendered = measureRenderPhase(L"zoom_candidate", zoomCandidateFrames);
     FloatingTerminalDebugSnapshot zoomAfter{};
     RECT zoomGeometryAfter{};
-    const bool zoomRetainedStateStable = DebugGetFloatingTerminalSnapshot(zoomAfter) && zoomAfter.root == zoomRoot &&
-        zoomAfter.selectedChild == zoomChild && zoomAfter.tabCount == 1u &&
-        GetClientRect(zoomChild, &zoomGeometryAfter) != FALSE && EqualRect(&zoomGeometry, &zoomGeometryAfter) != FALSE;
-    const uint64_t zoomBaselineP95Us = percentile(zoomBaselineFrames, 95u, 100u);
-    const uint64_t zoomCandidateP95Us = percentile(zoomCandidateFrames, 95u, 100u);
-    state.Require(zoomBaselinePrepared && zoomBaselineRendered && zoomCommandsValid && zoomCandidateRendered &&
-                      zoomRetainedStateStable,
+    const bool zoomRetainedStateStable = DebugGetFloatingTerminalSnapshot(zoomAfter) && zoomAfter.root == zoomRoot && zoomAfter.selectedChild == zoomChild &&
+                                         zoomAfter.tabCount == 1u && GetClientRect(zoomChild, &zoomGeometryAfter) != FALSE &&
+                                         EqualRect(&zoomGeometry, &zoomGeometryAfter) != FALSE;
+    const uint64_t zoomBaselineP95Us   = percentile(zoomBaselineFrames, 95u, 100u);
+    const uint64_t zoomCandidateP95Us  = percentile(zoomCandidateFrames, 95u, 100u);
+    state.Require(zoomBaselinePrepared && zoomBaselineRendered && zoomCommandsValid && zoomCandidateRendered && zoomRetainedStateStable,
                   L"The hosted zoom/reflow scenario must keep one Terminal, one tab, and identical settled geometry.");
     state.Require(! zoomBaselineFrames.empty() && zoomCandidateFrames.size() == zoomBaselineFrames.size() &&
                       zoomCandidateP95Us <= zoomBaselineP95Us + zoomBaselineP95Us / 10u,
@@ -6225,8 +6160,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         PumpPendingMessages();
         Sleep(10u);
     }
-    state.Require(GetFloatingTerminalWindowHandle() == nullptr,
-                  L"The hosted zoom/reflow perf fixture must release its Terminal root and tab.");
+    state.Require(GetFloatingTerminalWindowHandle() == nullptr, L"The hosted zoom/reflow perf fixture must release its Terminal root and tab.");
 
     Common::Settings::Settings floatingSettings = g_settings;
     floatingSettings.terminal.reset();
@@ -6245,11 +6179,9 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
             PumpPendingMessages();
         }
         const FloatingTerminalOpenRequest request{
-            .profileId = L"builtin/terminal",
-            .providerId = L"builtin/file-system",
-            .canonicalPath = std::wstring(kPaths[iteration % kPaths.size()])};
+            .profileId = L"builtin/terminal", .providerId = L"builtin/file-system", .canonicalPath = std::wstring(kPaths[iteration % kPaths.size()])};
         const auto startedAt = std::chrono::steady_clock::now();
-        floatingValid = floatingValid && SUCCEEDED(ShowFloatingTerminalWindow(mainWindow, floatingSettings, request, theme));
+        floatingValid        = floatingValid && SUCCEEDED(ShowFloatingTerminalWindow(mainWindow, floatingSettings, request, theme));
         tabOpenDurations.push_back(elapsedUs(startedAt));
         PumpPendingMessages();
         FloatingTerminalDebugSnapshot after{};
@@ -6261,13 +6193,12 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         floatingValid = floatingValid && after.root == singletonRoot;
         if (after.tabCount > 1u)
         {
-            floatingValid = floatingValid && DebugReorderFloatingTerminalTab(after.tabCount - 1u, 0u) &&
-                ExecuteFloatingTerminalCommand(L"cmd/terminal/tab/next");
+            floatingValid =
+                floatingValid && DebugReorderFloatingTerminalTab(after.tabCount - 1u, 0u) && ExecuteFloatingTerminalCommand(L"cmd/terminal/tab/next");
         }
     }
     state.Require(floatingValid, L"The floating perf scenario must keep exactly one root and at most 25 live tabs across 100 opens.");
-    state.Require(percentile(tabOpenDurations, 95u, 100u) <= 150'000u,
-                  L"Floating Terminal warm tab-open p95 must remain at or below 150 ms.");
+    state.Require(percentile(tabOpenDurations, 95u, 100u) <= 150'000u, L"Floating Terminal warm tab-open p95 must remain at or below 150 ms.");
 
     FloatingTerminalDebugSnapshot beforeRestore{};
     state.Require(DebugGetFloatingTerminalSnapshot(beforeRestore) && beforeRestore.tabCount == 25u,
@@ -6281,7 +6212,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
         PumpPendingMessages();
     }
-    const std::vector<std::wstring> expectedIds = beforeRestore.tabIds;
+    const std::vector<std::wstring> expectedIds   = beforeRestore.tabIds;
     const std::vector<std::wstring> expectedPaths = beforeRestore.paths;
     PrepareFloatingTerminalWindowForAppShutdown();
     if (beforeRestore.root != nullptr)
@@ -6293,19 +6224,17 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         PumpPendingMessages();
         Sleep(10u);
     }
-    state.Require(GetFloatingTerminalWindowHandle() == nullptr,
-                  L"The floating perf restore phase must fully retire the first singleton root.");
+    state.Require(GetFloatingTerminalWindowHandle() == nullptr, L"The floating perf restore phase must fully retire the first singleton root.");
 
-    const auto restoreStartedAt = std::chrono::steady_clock::now();
-    const HRESULT restoreHr = RestoreFloatingTerminalWindowAfterStartup(mainWindow, floatingSettings, theme);
+    const auto restoreStartedAt       = std::chrono::steady_clock::now();
+    const HRESULT restoreHr           = RestoreFloatingTerminalWindowAfterStartup(mainWindow, floatingSettings, theme);
     const uint64_t restoreToVisibleUs = elapsedUs(restoreStartedAt);
     PumpPendingMessages();
     FloatingTerminalDebugSnapshot restored{};
-    const bool restoreValid = SUCCEEDED(restoreHr) && DebugGetFloatingTerminalSnapshot(restored) &&
-        restored.tabCount == 25u && restored.tabIds == expectedIds && restored.paths == expectedPaths;
+    const bool restoreValid = SUCCEEDED(restoreHr) && DebugGetFloatingTerminalSnapshot(restored) && restored.tabCount == 25u &&
+                              restored.tabIds == expectedIds && restored.paths == expectedPaths;
     state.Require(restoreValid, L"Floating Terminal restore must preserve all 25 tab IDs, order, profiles, and trusted paths.");
-    state.Require(restoreToVisibleUs <= 250'000u,
-                  L"Floating Terminal restore-to-visible must remain at or below 250 ms.");
+    state.Require(restoreToVisibleUs <= 250'000u, L"Floating Terminal restore-to-visible must remain at or below 250 ms.");
 
     std::vector<uint64_t> exitDurations;
     exitDurations.reserve(25u);
@@ -6319,7 +6248,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
             break;
         }
         const size_t previousCount = live.tabCount;
-        const auto readyDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds(5));
+        const auto readyDeadline   = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds(5));
         while ((live.selectedLifecycle != TerminalLifecycleState::Running || live.selectedSessionGeneration == 0u) &&
                std::chrono::steady_clock::now() < readyDeadline)
         {
@@ -6327,11 +6256,11 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
             Sleep(5u);
             static_cast<void>(DebugGetFloatingTerminalSnapshot(live));
         }
-        const auto exitStartedAt = std::chrono::steady_clock::now();
+        const auto exitStartedAt                  = std::chrono::steady_clock::now();
         uint64_t previousRootExitTimingGeneration = 0u;
-        uint64_t ignoredRootExitDurationUs = 0u;
+        uint64_t ignoredRootExitDurationUs        = 0u;
         DebugGetFloatingTerminalRootExitTiming(previousRootExitTimingGeneration, ignoredRootExitDurationUs);
-        floatingValid = floatingValid && DebugTerminateFloatingTerminalRootProcess(0u) == S_OK;
+        floatingValid           = floatingValid && DebugTerminateFloatingTerminalRootProcess(0u) == S_OK;
         const auto exitDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds(10));
         do
         {
@@ -6349,7 +6278,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         const uint64_t exitDurationUs = elapsedUs(exitStartedAt);
         exitDurations.push_back(exitDurationUs);
         uint64_t rootExitTimingGeneration = 0u;
-        uint64_t rootExitToCloseUs = 0u;
+        uint64_t rootExitToCloseUs        = 0u;
         DebugGetFloatingTerminalRootExitTiming(rootExitTimingGeneration, rootExitToCloseUs);
         if (rootExitTimingGeneration == previousRootExitTimingGeneration + 1u)
         {
@@ -6360,16 +6289,13 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     state.Require(floatingValid && exitDurations.size() == 25u && rootExitToCloseDurations.size() == 25u,
                   L"Every restored floating tab must close exactly once through its real root-shell exit callback.");
     const uint64_t terminateToCloseP95Us = percentile(exitDurations, 95u, 100u);
-    const uint64_t rootExitToCloseP95Us = percentile(rootExitToCloseDurations, 95u, 100u);
+    const uint64_t rootExitToCloseP95Us  = percentile(rootExitToCloseDurations, 95u, 100u);
     state.Require(rootExitToCloseP95Us <= 100'000u,
-                  std::format(L"Kernel-observed root-exit-to-tab-close p95 ({} us) must remain at or below 100 ms.",
-                              rootExitToCloseP95Us));
+                  std::format(L"Kernel-observed root-exit-to-tab-close p95 ({} us) must remain at or below 100 ms.", rootExitToCloseP95Us));
     state.Require(terminateToCloseP95Us <= 250'000u,
-                  std::format(L"The test termination hook-to-tab-close p95 ({} us) must remain at or below 250 ms.",
-                              terminateToCloseP95Us));
+                  std::format(L"The test termination hook-to-tab-close p95 ({} us) must remain at or below 250 ms.", terminateToCloseP95Us));
     state.Require(GetFloatingTerminalWindowHandle() == nullptr && floatingSettings.terminal.has_value() &&
-                      floatingSettings.terminal->floatingWindow.has_value() &&
-                      floatingSettings.terminal->floatingWindow->tabs.empty() &&
+                      floatingSettings.terminal->floatingWindow.has_value() && floatingSettings.terminal->floatingWindow->tabs.empty() &&
                       ! floatingSettings.terminal->floatingWindow->wasOpenAtCleanShutdown,
                   L"The floating perf scenario must end with zero retained roots, tabs, callbacks, payloads, and restore records.");
 

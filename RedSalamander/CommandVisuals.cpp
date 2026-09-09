@@ -6,10 +6,7 @@
 
 std::wstring ResolveCommandVisualText(CommandVisualId visualId, bool fluentIconFontAvailable)
 {
-    const auto icon = [fluentIconFontAvailable](wchar_t fluent, wchar_t fallback)
-    {
-        return std::wstring(1u, fluentIconFontAvailable ? fluent : fallback);
-    };
+    const auto icon = [fluentIconFontAvailable](wchar_t fluent, wchar_t fallback) { return std::wstring(1u, fluentIconFontAvailable ? fluent : fallback); };
     switch (visualId)
     {
         case CommandVisualId::Settings: return icon(FluentIcons::kSettings, L'⚙');

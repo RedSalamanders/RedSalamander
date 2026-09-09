@@ -64,8 +64,7 @@ namespace
 [[nodiscard]] Common::Json::UniqueDocument ReadJsonDocument(const std::string_view jsonUtf8) noexcept
 {
     std::string jsonCopy(jsonUtf8);
-    return Common::Json::UniqueDocument{
-        yyjson_read_opts(jsonCopy.data(), jsonCopy.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, nullptr)};
+    return Common::Json::UniqueDocument{yyjson_read_opts(jsonCopy.data(), jsonCopy.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, nullptr)};
 }
 
 [[nodiscard]] std::optional<FileSystemPathCaseOnlyRename> ParseCaseOnlyRename(yyjson_val* value) noexcept
@@ -130,7 +129,7 @@ namespace
             }
 
             const int sourceLength = static_cast<int>(component.size());
-            const int required = LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_UPPERCASE, component.data(), sourceLength, nullptr, 0, nullptr, nullptr, 0);
+            const int required     = LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_UPPERCASE, component.data(), sourceLength, nullptr, 0, nullptr, nullptr, 0);
             // CompareStringOrdinal uses simple ordinal folding. Refuse expanding mappings so a
             // locale-style multi-code-unit transform can never create a false hash collision.
             if (required != sourceLength)
@@ -139,15 +138,8 @@ namespace
             }
             const size_t originalSize = key.size();
             key.resize(originalSize + static_cast<size_t>(required));
-            const int written = LCMapStringEx(LOCALE_NAME_INVARIANT,
-                                              LCMAP_UPPERCASE,
-                                              component.data(),
-                                              sourceLength,
-                                              key.data() + originalSize,
-                                              required,
-                                              nullptr,
-                                              nullptr,
-                                              0);
+            const int written =
+                LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_UPPERCASE, component.data(), sourceLength, key.data() + originalSize, required, nullptr, nullptr, 0);
             if (written != required)
             {
                 key.resize(originalSize);
@@ -166,8 +158,7 @@ namespace
         return std::nullopt;
     }
 
-    const Common::Json::MemberResult<int64_t> documentVersion =
-        Common::Json::GetInt64Member(root, "version", Common::Json::MemberRequirement::Required);
+    const Common::Json::MemberResult<int64_t> documentVersion = Common::Json::GetInt64Member(root, "version", Common::Json::MemberRequirement::Required);
     if (! documentVersion.HasValue() || documentVersion.value != 2)
     {
         return std::nullopt;
@@ -254,8 +245,7 @@ namespace
         return std::nullopt;
     }
 
-    const Common::Json::MemberResult<bool> casePreserving =
-        Common::Json::GetBoolMember(identity, "casePreserving", Common::Json::MemberRequirement::Required);
+    const Common::Json::MemberResult<bool> casePreserving = Common::Json::GetBoolMember(identity, "casePreserving", Common::Json::MemberRequirement::Required);
     if (! casePreserving.HasValue())
     {
         return std::nullopt;
@@ -285,8 +275,7 @@ FileSystemPathIdentity FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSyst
     };
 }
 
-std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentityContract(
-    const std::string_view jsonUtf8, const std::wstring_view pluginId) noexcept
+std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentityContract(const std::string_view jsonUtf8, const std::wstring_view pluginId) noexcept
 {
     static_cast<void>(pluginId);
 
@@ -304,15 +293,13 @@ std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentityContr
     return ParseDiagnosticFileSystemPathIdentityContractFromRoot(yyjson_doc_get_root(doc.get()), pluginId);
 }
 
-std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentityContractFromRoot(
-    yyjson_val* root, const std::wstring_view pluginId) noexcept
+std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentityContractFromRoot(yyjson_val* root, const std::wstring_view pluginId) noexcept
 {
     static_cast<void>(pluginId);
     return ParseFileSystemPathIdentityFromRoot(root, false);
 }
 
-std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentity(
-    const std::string_view jsonUtf8, const std::wstring_view pluginId) noexcept
+std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentity(const std::string_view jsonUtf8, const std::wstring_view pluginId) noexcept
 {
     static_cast<void>(pluginId);
 
@@ -330,8 +317,7 @@ std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentity(
     return ParseFileSystemPathIdentityFromRoot(yyjson_doc_get_root(doc.get()), true);
 }
 
-std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemRenamePathIdentity(
-    const std::string_view jsonUtf8, const std::wstring_view pluginId) noexcept
+std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemRenamePathIdentity(const std::string_view jsonUtf8, const std::wstring_view pluginId) noexcept
 {
     static_cast<void>(pluginId);
 
@@ -346,17 +332,15 @@ std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemRenamePathIdentit
         return std::nullopt;
     }
 
-    yyjson_val* root = yyjson_doc_get_root(doc.get());
-    const Common::Json::MemberResult<int64_t> version =
-        Common::Json::GetInt64Member(root, "version", Common::Json::MemberRequirement::Required);
+    yyjson_val* root                                  = yyjson_doc_get_root(doc.get());
+    const Common::Json::MemberResult<int64_t> version = Common::Json::GetInt64Member(root, "version", Common::Json::MemberRequirement::Required);
     if (! root || ! yyjson_is_obj(root) || ! version.HasValue() || version.value != 2)
     {
         return std::nullopt;
     }
 
-    yyjson_val* operations = yyjson_obj_get(root, "operations");
-    const Common::Json::MemberResult<bool> rename =
-        Common::Json::GetBoolMember(operations, "rename", Common::Json::MemberRequirement::Required);
+    yyjson_val* operations                        = yyjson_obj_get(root, "operations");
+    const Common::Json::MemberResult<bool> rename = Common::Json::GetBoolMember(operations, "rename", Common::Json::MemberRequirement::Required);
     if (! rename.HasValue() || ! rename.value)
     {
         return std::nullopt;
@@ -434,8 +418,8 @@ namespace
     {
         serverStart = 8u;
     }
-    else if (path.size() > 2u && IsAcceptedSeparator(identity, path[0]) && IsAcceptedSeparator(identity, path[1]) &&
-             ! IsAcceptedSeparator(identity, path[2]) && path[2] != L'?' && path[2] != L'.')
+    else if (path.size() > 2u && IsAcceptedSeparator(identity, path[0]) && IsAcceptedSeparator(identity, path[1]) && ! IsAcceptedSeparator(identity, path[2]) &&
+             path[2] != L'?' && path[2] != L'.')
     {
         serverStart = 2u;
     }
@@ -455,9 +439,7 @@ namespace
 }
 } // namespace
 
-bool TryGetFileSystemParentPath(const FileSystemPathIdentity& identity,
-                                std::wstring_view path,
-                                std::wstring& parentOut) noexcept
+bool TryGetFileSystemParentPath(const FileSystemPathIdentity& identity, std::wstring_view path, std::wstring& parentOut) noexcept
 {
     parentOut.clear();
     if (path.empty() || identity.acceptedSeparators.empty())
@@ -495,9 +477,7 @@ bool TryGetFileSystemParentPath(const FileSystemPathIdentity& identity,
     return ! parentOut.empty();
 }
 
-bool TryGetFileSystemLeafName(const FileSystemPathIdentity& identity,
-                              std::wstring_view path,
-                              std::wstring& leafOut) noexcept
+bool TryGetFileSystemLeafName(const FileSystemPathIdentity& identity, std::wstring_view path, std::wstring& leafOut) noexcept
 {
     leafOut.clear();
     if (path.empty() || identity.acceptedSeparators.empty())
@@ -510,7 +490,7 @@ bool TryGetFileSystemLeafName(const FileSystemPathIdentity& identity,
         path.remove_suffix(1u);
     }
 
-    const size_t separator = path.find_last_of(identity.acceptedSeparators);
+    const size_t separator  = path.find_last_of(identity.acceptedSeparators);
     const size_t leafOffset = separator == std::wstring_view::npos ? 0u : separator + 1u;
     if (leafOffset >= path.size())
     {
@@ -537,9 +517,7 @@ std::wstring JoinFileSystemPath(const FileSystemPathIdentity& identity, const st
     return result;
 }
 
-bool IsStrictDescendantPath(const FileSystemPathIdentity& identity,
-                            const std::wstring_view prefix,
-                            const std::wstring_view candidate) noexcept
+bool IsStrictDescendantPath(const FileSystemPathIdentity& identity, const std::wstring_view prefix, const std::wstring_view candidate) noexcept
 {
     if (! identity.pathTextStableIdentity || prefix.empty())
     {
@@ -554,9 +532,8 @@ bool IsStrictDescendantPath(const FileSystemPathIdentity& identity,
         const size_t candidateSeparator = FindNextAcceptedSeparator(identity, candidate, candidateOffset);
         const size_t prefixEnd          = prefixSeparator == std::wstring_view::npos ? prefix.size() : prefixSeparator;
         const size_t candidateEnd       = candidateSeparator == std::wstring_view::npos ? candidate.size() : candidateSeparator;
-        if (! EquivalentComponent(identity,
-                                  prefix.substr(prefixOffset, prefixEnd - prefixOffset),
-                                  candidate.substr(candidateOffset, candidateEnd - candidateOffset)))
+        if (! EquivalentComponent(
+                identity, prefix.substr(prefixOffset, prefixEnd - prefixOffset), candidate.substr(candidateOffset, candidateEnd - candidateOffset)))
         {
             return false;
         }
@@ -627,8 +604,8 @@ bool TryGetFileSystemRelativePath(const FileSystemPathIdentity& identity,
 
     while (candidateOffset < candidate.size())
     {
-        const size_t separator = FindNextAcceptedSeparator(identity, candidate, candidateOffset);
-        const size_t end       = separator == std::wstring_view::npos ? candidate.size() : separator;
+        const size_t separator            = FindNextAcceptedSeparator(identity, candidate, candidateOffset);
+        const size_t end                  = separator == std::wstring_view::npos ? candidate.size() : separator;
         const std::wstring_view component = candidate.substr(candidateOffset, end - candidateOffset);
         if (component.empty())
         {

@@ -6,8 +6,8 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <chrono>
 #include <cassert>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <cstring>
@@ -63,8 +63,7 @@ struct ComInitialization
                 APTTYPE apartmentType{};
                 APTTYPEQUALIFIER apartmentQualifier{};
                 const HRESULT apartmentHr = CoGetApartmentType(&apartmentType, &apartmentQualifier);
-                assert(SUCCEEDED(apartmentHr) && apartmentType == APTTYPE_MTA &&
-                       "WPD backend calls must execute on the lifetime-MTA command worker.");
+                assert(SUCCEEDED(apartmentHr) && apartmentType == APTTYPE_MTA && "WPD backend calls must execute on the lifetime-MTA command worker.");
                 static_cast<void>(apartmentHr); // assert is compiled out by test-enabled Release builds.
             }
 #endif
@@ -1030,7 +1029,7 @@ public:
             return seekHr;
         }
 
-        _position  = position.QuadPart;
+        _position   = position.QuadPart;
         newPosition = _position;
         return S_OK;
     }
@@ -1083,8 +1082,8 @@ private:
 
 struct SelfTestWpdOptions
 {
-    uint32_t readFileDelayMs = 0;
-    bool sessionDeathOnce = false;
+    uint32_t readFileDelayMs            = 0;
+    bool sessionDeathOnce               = false;
     bool changeFileSizeAfterFirstLookup = false;
     bool replacePhotoAfterFirstLookup   = false; // R0c-OR2: another writer replaced the photo (new object id and PUID)
     bool writable                       = false; // R0c-OR2: let the plugin reach the overwrite commit on this fixture
@@ -1100,11 +1099,7 @@ struct SelfTestWpdOptions
     };
 }
 
-[[nodiscard]] MtpItem SelfTestItem(std::wstring name,
-                                   std::wstring objectId,
-                                   unsigned long attributes,
-                                   uint64_t sizeBytes = 0,
-                                   std::wstring persistentId = {})
+[[nodiscard]] MtpItem SelfTestItem(std::wstring name, std::wstring objectId, unsigned long attributes, uint64_t sizeBytes = 0, std::wstring persistentId = {})
 {
     if (persistentId.empty())
     {
@@ -1127,16 +1122,16 @@ struct SelfTestWpdOptions
 class WpdDeviceOperations
 {
 public:
-    virtual ~WpdDeviceOperations() = default;
-    virtual MtpBackendInfo GetInfo() const noexcept = 0;
-    virtual HRESULT EnumerateDevices(std::vector<DeviceDescriptor>& devices) noexcept = 0;
+    virtual ~WpdDeviceOperations()                                                        = default;
+    virtual MtpBackendInfo GetInfo() const noexcept                                       = 0;
+    virtual HRESULT EnumerateDevices(std::vector<DeviceDescriptor>& devices) noexcept     = 0;
     virtual HRESULT OpenSession(std::wstring_view pnpId,
                                 DWORD desiredAccess,
                                 wil::com_ptr<IPortableDevice>& device,
-                                wil::com_ptr<IPortableDeviceContent>& content) noexcept = 0;
+                                wil::com_ptr<IPortableDeviceContent>& content) noexcept   = 0;
     virtual HRESULT EnumerateItems(const wil::com_ptr<IPortableDeviceContent>& content,
                                    std::wstring_view parentObjectId,
-                                   std::vector<MtpItem>& items) noexcept = 0;
+                                   std::vector<MtpItem>& items) noexcept                  = 0;
     virtual HRESULT CreateReader(const ResolvedObject& resolved,
                                  const std::shared_ptr<WpdCancellationState>& cancelState,
                                  std::shared_ptr<IMtpBackendFileReader>& reader) noexcept = 0;
@@ -1163,9 +1158,7 @@ public:
         return OpenDeviceSession(pnpId, desiredAccess, device, content);
     }
 
-    HRESULT EnumerateItems(const wil::com_ptr<IPortableDeviceContent>& content,
-                           std::wstring_view parentObjectId,
-                           std::vector<MtpItem>& items) noexcept override
+    HRESULT EnumerateItems(const wil::com_ptr<IPortableDeviceContent>& content, std::wstring_view parentObjectId, std::vector<MtpItem>& items) noexcept override
     {
         return EnumerateObjectItems(content, parentObjectId, items);
     }
@@ -1217,19 +1210,14 @@ public:
         return S_OK;
     }
 
-    HRESULT OpenSession(std::wstring_view,
-                        DWORD,
-                        wil::com_ptr<IPortableDevice>& device,
-                        wil::com_ptr<IPortableDeviceContent>& content) noexcept override
+    HRESULT OpenSession(std::wstring_view, DWORD, wil::com_ptr<IPortableDevice>& device, wil::com_ptr<IPortableDeviceContent>& content) noexcept override
     {
         device.reset();
         content.reset();
         return S_OK;
     }
 
-    HRESULT EnumerateItems(const wil::com_ptr<IPortableDeviceContent>&,
-                           std::wstring_view parentObjectId,
-                           std::vector<MtpItem>& items) noexcept override
+    HRESULT EnumerateItems(const wil::com_ptr<IPortableDeviceContent>&, std::wstring_view parentObjectId, std::vector<MtpItem>& items) noexcept override
     {
         items.clear();
         if (_options.sessionDeathOnce && parentObjectId == L"selftest-camera" && ! _sessionDeathReturned)
@@ -1253,8 +1241,8 @@ public:
         {
             constexpr std::string_view original = "RedSalamander deterministic MTP fixture\r\n";
             constexpr std::string_view changed  = "RedSalamander refreshed MTP fixture payload\r\n";
-            const uint32_t lookupIndex = _photoLookupCount++;
-            const bool changedSize     = _options.changeFileSizeAfterFirstLookup && lookupIndex != 0u;
+            const uint32_t lookupIndex          = _photoLookupCount++;
+            const bool changedSize              = _options.changeFileSizeAfterFirstLookup && lookupIndex != 0u;
             // R0c-OR2: after the first lookup the photo is a different object under the same name.
             const bool replaced = _options.replacePhotoAfterFirstLookup && lookupIndex != 0u;
             items.push_back(SelfTestItem(L"photo001.txt",
@@ -1276,7 +1264,7 @@ public:
     {
         constexpr std::string_view original = "RedSalamander deterministic MTP fixture\r\n";
         constexpr std::string_view changed  = "RedSalamander refreshed MTP fixture payload\r\n";
-        const std::string_view payload = resolved.item.sizeBytes == changed.size() ? changed : original;
+        const std::string_view payload      = resolved.item.sizeBytes == changed.size() ? changed : original;
         std::vector<std::byte> bytes(payload.size());
         std::memcpy(bytes.data(), payload.data(), payload.size());
         reader = CreateMemoryBackendFileReader(std::move(bytes), _options.readFileDelayMs);
@@ -1372,10 +1360,7 @@ HRESULT WritePortableDeviceStream(IStream* stream, DWORD optimalBufferSize, std:
     return SetFilePointerEx(sourceFile, start, nullptr, FILE_BEGIN) != FALSE ? S_OK : HRESULT_FROM_WIN32(GetLastError());
 }
 
-HRESULT WritePortableDeviceStreamFromHandle(IStream* stream,
-                                            DWORD optimalBufferSize,
-                                            HANDLE sourceFile,
-                                            uint64_t expectedSizeBytes) noexcept
+HRESULT WritePortableDeviceStreamFromHandle(IStream* stream, DWORD optimalBufferSize, HANDLE sourceFile, uint64_t expectedSizeBytes) noexcept
 {
     if (stream == nullptr)
     {
@@ -1383,15 +1368,13 @@ HRESULT WritePortableDeviceStreamFromHandle(IStream* stream,
     }
     RETURN_IF_FAILED(RewindSourceFile(sourceFile));
 
-    const DWORD chunkSize = std::clamp(
-        optimalBufferSize == 0u ? kWriteChunkDefault : optimalBufferSize, kWriteChunkMinimum, kWriteChunkMaximum);
+    const DWORD chunkSize = std::clamp(optimalBufferSize == 0u ? kWriteChunkDefault : optimalBufferSize, kWriteChunkMinimum, kWriteChunkMaximum);
     std::vector<std::byte> buffer(chunkSize);
     uint64_t transferred = 0u;
     while (transferred < expectedSizeBytes)
     {
-        const DWORD requested = static_cast<DWORD>((std::min)(
-            static_cast<uint64_t>(buffer.size()), expectedSizeBytes - transferred));
-        DWORD read = 0u;
+        const DWORD requested = static_cast<DWORD>((std::min)(static_cast<uint64_t>(buffer.size()), expectedSizeBytes - transferred));
+        DWORD read            = 0u;
         if (ReadFile(sourceFile, buffer.data(), requested, &read, nullptr) == FALSE)
         {
             return HRESULT_FROM_WIN32(GetLastError());
@@ -1404,7 +1387,7 @@ HRESULT WritePortableDeviceStreamFromHandle(IStream* stream,
         ULONG offset = 0u;
         while (offset < read)
         {
-            ULONG written = 0u;
+            ULONG written         = 0u;
             const HRESULT writeHr = stream->Write(buffer.data() + offset, read - offset, &written);
             if (FAILED(writeHr))
             {
@@ -1423,10 +1406,7 @@ HRESULT WritePortableDeviceStreamFromHandle(IStream* stream,
     return S_OK;
 }
 
-HRESULT ComparePortableDeviceStreamWithHandle(IStream* stream,
-                                              DWORD optimalBufferSize,
-                                              HANDLE sourceFile,
-                                              uint64_t expectedSizeBytes) noexcept
+HRESULT ComparePortableDeviceStreamWithHandle(IStream* stream, DWORD optimalBufferSize, HANDLE sourceFile, uint64_t expectedSizeBytes) noexcept
 {
     if (stream == nullptr)
     {
@@ -1434,14 +1414,13 @@ HRESULT ComparePortableDeviceStreamWithHandle(IStream* stream,
     }
     RETURN_IF_FAILED(RewindSourceFile(sourceFile));
 
-    const DWORD chunkSize = std::clamp(
-        optimalBufferSize == 0u ? kReadChunkDefault : optimalBufferSize, kReadChunkMinimum, kReadChunkMaximum);
+    const DWORD chunkSize = std::clamp(optimalBufferSize == 0u ? kReadChunkDefault : optimalBufferSize, kReadChunkMinimum, kReadChunkMaximum);
     std::vector<std::byte> deviceBuffer(chunkSize);
     std::vector<std::byte> sourceBuffer(chunkSize);
     uint64_t compared = 0u;
     for (;;)
     {
-        ULONG deviceRead = 0u;
+        ULONG deviceRead       = 0u;
         const HRESULT deviceHr = stream->Read(deviceBuffer.data(), static_cast<ULONG>(deviceBuffer.size()), &deviceRead);
         if (FAILED(deviceHr))
         {
@@ -1471,27 +1450,23 @@ HRESULT ComparePortableDeviceStreamWithHandle(IStream* stream,
     return compared == expectedSizeBytes ? S_OK : HRESULT_FROM_WIN32(ERROR_CRC);
 }
 
-HRESULT CopyPortableDeviceStream(IStream* source,
-                                 DWORD sourceOptimalBufferSize,
-                                 IStream* destination,
-                                 DWORD destinationOptimalBufferSize,
-                                 uint64_t expectedSizeBytes) noexcept
+HRESULT CopyPortableDeviceStream(
+    IStream* source, DWORD sourceOptimalBufferSize, IStream* destination, DWORD destinationOptimalBufferSize, uint64_t expectedSizeBytes) noexcept
 {
     if (source == nullptr || destination == nullptr)
     {
         return E_POINTER;
     }
 
-    const DWORD sourceChunk = std::clamp(
-        sourceOptimalBufferSize == 0u ? kReadChunkDefault : sourceOptimalBufferSize, kReadChunkMinimum, kReadChunkMaximum);
-    const DWORD destinationChunk = std::clamp(
-        destinationOptimalBufferSize == 0u ? kWriteChunkDefault : destinationOptimalBufferSize, kWriteChunkMinimum, kWriteChunkMaximum);
+    const DWORD sourceChunk = std::clamp(sourceOptimalBufferSize == 0u ? kReadChunkDefault : sourceOptimalBufferSize, kReadChunkMinimum, kReadChunkMaximum);
+    const DWORD destinationChunk =
+        std::clamp(destinationOptimalBufferSize == 0u ? kWriteChunkDefault : destinationOptimalBufferSize, kWriteChunkMinimum, kWriteChunkMaximum);
     const DWORD chunkSize = (std::min)(sourceChunk, destinationChunk);
     std::vector<std::byte> buffer(chunkSize);
     uint64_t transferred = 0u;
     for (;;)
     {
-        ULONG bytesRead = 0u;
+        ULONG bytesRead      = 0u;
         const HRESULT readHr = source->Read(buffer.data(), static_cast<ULONG>(buffer.size()), &bytesRead);
         if (FAILED(readHr))
         {
@@ -1505,7 +1480,7 @@ HRESULT CopyPortableDeviceStream(IStream* source,
         ULONG offset = 0u;
         while (offset < bytesRead)
         {
-            ULONG written = 0u;
+            ULONG written         = 0u;
             const HRESULT writeHr = destination->Write(buffer.data() + offset, bytesRead - offset, &written);
             if (FAILED(writeHr))
             {
@@ -1648,7 +1623,9 @@ public:
             return S_OK;
         }
 
-        return RunResolvedOperationWithCacheRetry(normalized, kReadAccess, [&](const ResolvedObject& resolved) noexcept
+        return RunResolvedOperationWithCacheRetry(normalized,
+                                                  kReadAccess,
+                                                  [&](const ResolvedObject& resolved) noexcept
         {
             if ((resolved.item.attributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
             {
@@ -2280,8 +2257,8 @@ private:
         }
         if (matchedDevice != nullptr)
         {
-            descriptor = *matchedDevice;
-            _deviceDescriptorByDisplayKey[requestedKey] = descriptor;
+            descriptor                                                         = *matchedDevice;
+            _deviceDescriptorByDisplayKey[requestedKey]                        = descriptor;
             _deviceDescriptorByDisplayKey[CaseFoldKey(descriptor.displayName)] = descriptor;
             return S_OK;
         }
@@ -2295,8 +2272,8 @@ private:
                              wil::com_ptr<IPortableDeviceContent>& content) noexcept
     {
         const std::wstring key = CaseFoldKey(pnpId);
-        if (const auto cached = _sessionsByPnpId.find(key); cached != _sessionsByPnpId.end() &&
-                                                          DesiredAccessIsCovered(cached->second.desiredAccess, desiredAccess))
+        if (const auto cached = _sessionsByPnpId.find(key);
+            cached != _sessionsByPnpId.end() && DesiredAccessIsCovered(cached->second.desiredAccess, desiredAccess))
         {
             device  = cached->second.device;
             content = cached->second.content;
@@ -2312,15 +2289,15 @@ private:
             return FailAndMaybeInvalidateCaches(openHr);
         }
 
-        device  = session.device;
-        content = session.content;
+        device                = session.device;
+        content               = session.content;
         _sessionsByPnpId[key] = std::move(session);
         return S_OK;
     }
 
     HRESULT TryResolveCachedPath(std::wstring_view normalizedPath, DWORD desiredAccess, ResolvedObject& resolved, bool& found) noexcept
     {
-        found = false;
+        found                  = false;
         const std::wstring key = CaseFoldKey(normalizedPath);
         const auto cached      = _pathCache.find(key);
         if (cached == _pathCache.end())
@@ -2336,14 +2313,14 @@ private:
             return FailAndMaybeInvalidateCaches(sessionHr);
         }
 
-        resolved            = ResolvedObject{};
-        resolved.deviceRoot = cached->second.deviceRoot;
+        resolved               = ResolvedObject{};
+        resolved.deviceRoot    = cached->second.deviceRoot;
         resolved.fromPathCache = true;
-        resolved.pnpId      = cached->second.pnpId;
-        resolved.objectId   = cached->second.objectId;
-        resolved.item       = cached->second.item;
-        resolved.device     = std::move(device);
-        resolved.content    = std::move(content);
+        resolved.pnpId         = cached->second.pnpId;
+        resolved.objectId      = cached->second.objectId;
+        resolved.item          = cached->second.item;
+        resolved.device        = std::move(device);
+        resolved.content       = std::move(content);
         _pathCacheHits.fetch_add(1u, std::memory_order_acq_rel);
         found = true;
         return S_OK;
@@ -2455,19 +2432,17 @@ private:
 
         switch (hr)
         {
-        case HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND):
-        case HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND):
-        case HRESULT_FROM_WIN32(ERROR_INVALID_NAME):
-        case HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED):
-        case HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS):
-        case HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY):
-        case HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED):
-        case HRESULT_FROM_WIN32(ERROR_WRITE_PROTECT):
-        case HRESULT_FROM_WIN32(ERROR_CANCELLED):
-        case HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED):
-            return false;
-        default:
-            return true;
+            case HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND):
+            case HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND):
+            case HRESULT_FROM_WIN32(ERROR_INVALID_NAME):
+            case HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED):
+            case HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS):
+            case HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY):
+            case HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED):
+            case HRESULT_FROM_WIN32(ERROR_WRITE_PROTECT):
+            case HRESULT_FROM_WIN32(ERROR_CANCELLED):
+            case HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED): return false;
+            default: return true;
         }
     }
 
@@ -2487,8 +2462,7 @@ private:
         return hr;
     }
 
-    template<typename Operation>
-    HRESULT RunResolvedOperationWithCacheRetry(std::wstring_view path, DWORD desiredAccess, Operation&& operation) noexcept
+    template <typename Operation> HRESULT RunResolvedOperationWithCacheRetry(std::wstring_view path, DWORD desiredAccess, Operation&& operation) noexcept
     {
         for (uint32_t attempt = 0u; attempt < 2u; ++attempt)
         {
@@ -2539,7 +2513,7 @@ private:
             return S_OK;
         }
 
-        bool foundCached = false;
+        bool foundCached       = false;
         const HRESULT cachedHr = TryResolveCachedPath(normalized, desiredAccess, resolved, foundCached);
         if (FAILED(cachedHr))
         {
@@ -2583,7 +2557,7 @@ private:
         {
             currentPath = JoinPath(currentPath, segments[index]);
 
-            bool childCached = false;
+            bool childCached            = false;
             const HRESULT childCachedHr = TryResolveCachedPath(currentPath, desiredAccess, resolved, childCached);
             if (FAILED(childCachedHr))
             {
@@ -2612,9 +2586,7 @@ private:
         return S_OK;
     }
 
-    HRESULT ResolveDestinationPathCached(std::wstring_view path,
-                                         ResolvedDestination& destination,
-                                         DWORD desiredAccess = kWriteAccess) noexcept
+    HRESULT ResolveDestinationPathCached(std::wstring_view path, ResolvedDestination& destination, DWORD desiredAccess = kWriteAccess) noexcept
     {
         destination                = ResolvedDestination{};
         destination.normalizedPath = NormalizeMtpPath(path);
@@ -2735,29 +2707,23 @@ private:
         RETURN_IF_FAILED(EnsureDestinationDoesNotExistCached(destination));
 
         wil::com_ptr<IPortableDeviceValues> values;
-        RETURN_IF_FAILED(CreateObjectValues(destination.parent.objectId,
-                                            destination.leafName,
-                                            WPD_CONTENT_TYPE_GENERIC_FILE,
-                                            WPD_OBJECT_FORMAT_UNSPECIFIED,
-                                            sizeBytes,
-                                            true,
-                                            values));
+        RETURN_IF_FAILED(CreateObjectValues(
+            destination.parent.objectId, destination.leafName, WPD_CONTENT_TYPE_GENERIC_FILE, WPD_OBJECT_FORMAT_UNSPECIFIED, sizeBytes, true, values));
 
         wil::com_ptr<IStream> stream;
         DWORD optimalBufferSize = 0u;
-        PWSTR rawCookie = nullptr;
-        auto freeCookie = wil::scope_exit([&rawCookie]() noexcept
+        PWSTR rawCookie         = nullptr;
+        auto freeCookie         = wil::scope_exit([&rawCookie]() noexcept
         {
             if (rawCookie != nullptr)
             {
                 CoTaskMemFree(rawCookie);
             }
         });
-        RETURN_IF_FAILED(destination.parent.content->CreateObjectWithPropertiesAndData(
-            values.get(), stream.put(), &optimalBufferSize, &rawCookie));
+        RETURN_IF_FAILED(destination.parent.content->CreateObjectWithPropertiesAndData(values.get(), stream.put(), &optimalBufferSize, &rawCookie));
         ScopedActiveWpdStream activeStream(_cancelState.get(), stream);
 
-        bool committed = false;
+        bool committed  = false;
         auto abortWrite = wil::scope_exit([&]() noexcept
         {
             if (! committed)
@@ -2802,7 +2768,10 @@ private:
         return hr;
     }
 
-    HRESULT CopyOrMoveFileByTransferCached(std::wstring_view sourcePath, const ResolvedObject& source, const ResolvedDestination& destination, bool move) noexcept
+    HRESULT CopyOrMoveFileByTransferCached(std::wstring_view sourcePath,
+                                           const ResolvedObject& source,
+                                           const ResolvedDestination& destination,
+                                           bool move) noexcept
     {
         ScopedActiveWpdContent activeSource(_cancelState.get(), source.content);
         ScopedActiveWpdContent activeDestination(_cancelState.get(), destination.parent.content);
@@ -2813,8 +2782,7 @@ private:
         wil::com_ptr<IStream> sourceStream;
         DWORD sourceOptimalBufferSize = 0u;
         const std::wstring sourceObjectId(source.objectId);
-        RETURN_IF_FAILED(sourceResources->GetStream(
-            sourceObjectId.c_str(), WPD_RESOURCE_DEFAULT, STGM_READ, &sourceOptimalBufferSize, sourceStream.put()));
+        RETURN_IF_FAILED(sourceResources->GetStream(sourceObjectId.c_str(), WPD_RESOURCE_DEFAULT, STGM_READ, &sourceOptimalBufferSize, sourceStream.put()));
         ScopedActiveWpdStream activeSourceStream(_cancelState.get(), sourceStream);
 
         wil::com_ptr<IPortableDeviceValues> values;
@@ -2828,19 +2796,19 @@ private:
 
         wil::com_ptr<IStream> destinationStream;
         DWORD destinationOptimalBufferSize = 0u;
-        PWSTR rawCookie = nullptr;
-        auto freeCookie = wil::scope_exit([&rawCookie]() noexcept
+        PWSTR rawCookie                    = nullptr;
+        auto freeCookie                    = wil::scope_exit([&rawCookie]() noexcept
         {
             if (rawCookie != nullptr)
             {
                 CoTaskMemFree(rawCookie);
             }
         });
-        RETURN_IF_FAILED(destination.parent.content->CreateObjectWithPropertiesAndData(
-            values.get(), destinationStream.put(), &destinationOptimalBufferSize, &rawCookie));
+        RETURN_IF_FAILED(
+            destination.parent.content->CreateObjectWithPropertiesAndData(values.get(), destinationStream.put(), &destinationOptimalBufferSize, &rawCookie));
         ScopedActiveWpdStream activeDestinationStream(_cancelState.get(), destinationStream);
 
-        bool committed = false;
+        bool committed  = false;
         auto abortWrite = wil::scope_exit([&]() noexcept
         {
             if (! committed)
@@ -2848,11 +2816,8 @@ private:
                 AbortPortableDeviceWriteStream(destinationStream.get());
             }
         });
-        RETURN_IF_FAILED(CopyPortableDeviceStream(sourceStream.get(),
-                                                  sourceOptimalBufferSize,
-                                                  destinationStream.get(),
-                                                  destinationOptimalBufferSize,
-                                                  source.item.sizeBytes));
+        RETURN_IF_FAILED(CopyPortableDeviceStream(
+            sourceStream.get(), sourceOptimalBufferSize, destinationStream.get(), destinationOptimalBufferSize, source.item.sizeBytes));
         RETURN_IF_FAILED(destinationStream->Commit(STGC_DEFAULT));
         committed = true;
         InvalidatePathCacheSubtree(destination.normalizedPath);
@@ -2978,7 +2943,7 @@ HRESULT EnumerateMtpConnectionBrowseDevices(std::vector<MtpConnectionBrowseDevic
     for (const DeviceDescriptor& descriptor : descriptors)
     {
         std::wstring devicePuid = descriptor.pnpId;
-        const HRESULT puidHr = ReadConnectionBrowseDevicePersistentId(descriptor.pnpId, devicePuid);
+        const HRESULT puidHr    = ReadConnectionBrowseDevicePersistentId(descriptor.pnpId, devicePuid);
         if (FAILED(puidHr) || devicePuid.empty())
         {
             devicePuid = descriptor.pnpId;

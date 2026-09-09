@@ -76,7 +76,7 @@ struct FakeMtpReaderStats
     while (offset < bytes.size())
     {
         const DWORD requested = static_cast<DWORD>((std::min)(bytes.size() - offset, size_t{1024u * 1024u}));
-        DWORD read = 0u;
+        DWORD read            = 0u;
         if (ReadFile(sourceFile, bytes.data() + offset, requested, &read, nullptr) == FALSE)
         {
             return HRESULT_FROM_WIN32(GetLastError());
@@ -250,14 +250,14 @@ class FakeMtpBackend final : public IMtpBackend
 public:
     explicit FakeMtpBackend(std::string_view optionsJsonUtf8)
     {
-        _operationDelayMs                   = ReadUInt32Option(optionsJsonUtf8, "operationDelayMs", 0u, 5'000u);
-        _readFileDelayMs                    = ReadUInt32Option(optionsJsonUtf8, "readFileDelayMs", 0u, 30'000u);
-        _cancelUnblocksDelay                = ReadBoolOption(optionsJsonUtf8, "cancelUnblocksDelay", false);
-        _moveFallbackDeleteSourceFails      = ReadBoolOption(optionsJsonUtf8, "moveFallbackDeleteSourceFails", false);
-        _omitPersistentIdForCreatedFiles    = ReadBoolOption(optionsJsonUtf8, "omitPersistentIdForCreatedFiles", false);
+        _operationDelayMs                = ReadUInt32Option(optionsJsonUtf8, "operationDelayMs", 0u, 5'000u);
+        _readFileDelayMs                 = ReadUInt32Option(optionsJsonUtf8, "readFileDelayMs", 0u, 30'000u);
+        _cancelUnblocksDelay             = ReadBoolOption(optionsJsonUtf8, "cancelUnblocksDelay", false);
+        _moveFallbackDeleteSourceFails   = ReadBoolOption(optionsJsonUtf8, "moveFallbackDeleteSourceFails", false);
+        _omitPersistentIdForCreatedFiles = ReadBoolOption(optionsJsonUtf8, "omitPersistentIdForCreatedFiles", false);
         // C9: a device that names existing objects but not the objects it creates; only overwrite temp
         // siblings come back without a persistent id, so the destination resolve before the upload succeeds.
-        _omitPersistentIdForOverwriteTemps  = ReadBoolOption(optionsJsonUtf8, "omitPersistentIdForOverwriteTemps", false);
+        _omitPersistentIdForOverwriteTemps             = ReadBoolOption(optionsJsonUtf8, "omitPersistentIdForOverwriteTemps", false);
         std::wstring omitPersistentIdForPropertiesPath = ReadStringOptionWide(optionsJsonUtf8, "omitPersistentIdForPropertiesPath");
         if (! omitPersistentIdForPropertiesPath.empty())
         {
@@ -296,7 +296,7 @@ public:
         }
         _writeFileFailOncePathContains           = ReadStringOptionWide(optionsJsonUtf8, "writeFileFailOncePathContains");
         _copyItemFailOnceDestinationPathContains = ReadStringOptionWide(optionsJsonUtf8, "copyItemFailOnceDestinationPathContains");
-        const uint32_t r0cSiblingCount            = ReadUInt32Option(optionsJsonUtf8, "r0cSiblingCount", 0u, 4'096u);
+        const uint32_t r0cSiblingCount           = ReadUInt32Option(optionsJsonUtf8, "r0cSiblingCount", 0u, 4'096u);
         std::wstring disconnectEnumerateOncePath = ReadStringOptionWide(optionsJsonUtf8, "disconnectEnumerateOncePath");
         if (! disconnectEnumerateOncePath.empty())
         {
@@ -361,12 +361,8 @@ public:
                                                   : index == 1u ? L"casepuid"
                                                   : index == 2u ? L"puid/with %] caf\u00E9"
                                                                 : std::format(L"r0c-puid-{:04}", index);
-                const std::wstring exposedLeaf = std::wstring(L"r0c-collision.txt") + MtpPersistentObjectIdentitySuffix(persistentId);
-                AddFile(L"/Fake Phone/Internal Storage/DCIM/Camera/" + exposedLeaf,
-                        persistentId,
-                        r0cBytes,
-                        now,
-                        L"r0c-collision.txt");
+                const std::wstring exposedLeaf  = std::wstring(L"r0c-collision.txt") + MtpPersistentObjectIdentitySuffix(persistentId);
+                AddFile(L"/Fake Phone/Internal Storage/DCIM/Camera/" + exposedLeaf, persistentId, r0cBytes, now, L"r0c-collision.txt");
             }
         }
     }
@@ -598,12 +594,12 @@ public:
         }
         else
         {
-            node.creationTime = now;
+            node.creationTime           = now;
             const bool omitPersistentId = _omitPersistentIdForCreatedFiles ||
                                           (_omitPersistentIdForOverwriteTemps && LeafName(normalized).find(L".rs-mtp-overwrite-") != std::wstring::npos);
-            node.persistentId = omitPersistentId ? std::wstring() : L"puid-" + std::to_wstring(_nextObjectId);
-            node.objectId     = L"oid-" + std::to_wstring(_nextObjectId);
-            node.displayName  = LeafName(normalized);
+            node.persistentId           = omitPersistentId ? std::wstring() : L"puid-" + std::to_wstring(_nextObjectId);
+            node.objectId               = L"oid-" + std::to_wstring(_nextObjectId);
+            node.displayName            = LeafName(normalized);
             ++_nextObjectId;
         }
 
@@ -807,11 +803,11 @@ public:
             ReplaceOccupantAsConcurrentWriterLocked(normalized);
         });
 
-        const std::string nameUtf8 = Utf8FromUtf16(LeafName(normalized));
+        const std::string nameUtf8   = Utf8FromUtf16(LeafName(normalized));
         const std::wstring_view puid = normalized == _omitPersistentIdForPropertiesPath ? std::wstring_view{} : std::wstring_view(node->persistentId);
         const std::string puidUtf8   = Utf8FromUtf16(puid);
         const auto [backendThreadIdsObserved, backendThreadIdsOverflow] = BackendThreadStats();
-        jsonUtf8                   = std::format(
+        jsonUtf8                                                        = std::format(
             R"json({{"version":1,"backend":"fake","name":"{}","persistentId":"{}","streamable":{},"sizeBytes":{},"instrumentation":{{"activeBackendCalls":{},"maxConcurrentBackendCalls":{},"backendThreadIdsObserved":{},"backendThreadIdsOverflow":{},"operationDelayMs":{},"cancelRequests":{},"writeFileCalls":{},"readFileCalls":{},"lastReadBytes":{},"fileSizeCalls":{},"copyItemCalls":{},"lastCopyBytes":{},"lastMoveFallbackBytes":{},"propertyBatchCalls":{},"propertyPerItemCalls":{}}}}})json",
             JsonEscapeUtf8(nameUtf8),
             JsonEscapeUtf8(puidUtf8),
@@ -1014,7 +1010,7 @@ private:
         const std::wstring source = NormalizeMtpPath(sourcePath);
         const std::wstring dest   = NormalizeMtpPath(destinationPath);
         MaybeReplaceDestinationDuringOverwriteUploadLocked(dest);
-        const auto sourceIt       = _nodes.find(source);
+        const auto sourceIt = _nodes.find(source);
         if (sourceIt == _nodes.end())
         {
             return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
@@ -1131,12 +1127,12 @@ private:
 
     mutable std::mutex _mutex;
     std::unordered_map<std::wstring, FakeNode> _nodes;
-    uint64_t _nextObjectId                = 1;
-    uint32_t _operationDelayMs            = 0;
-    uint32_t _readFileDelayMs             = 0;
-    bool _cancelUnblocksDelay             = false;
-    bool _moveFallbackDeleteSourceFails   = false;
-    bool _omitPersistentIdForCreatedFiles = false;
+    uint64_t _nextObjectId                  = 1;
+    uint32_t _operationDelayMs              = 0;
+    uint32_t _readFileDelayMs               = 0;
+    bool _cancelUnblocksDelay               = false;
+    bool _moveFallbackDeleteSourceFails     = false;
+    bool _omitPersistentIdForCreatedFiles   = false;
     bool _omitPersistentIdForOverwriteTemps = false;
     std::wstring _omitPersistentIdForPropertiesPath;
     std::wstring _writeFileFailOncePathContains;

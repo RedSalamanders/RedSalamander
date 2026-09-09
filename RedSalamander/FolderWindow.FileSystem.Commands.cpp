@@ -1,5 +1,4 @@
 #include "ChangeCase.h"
-#include "FolderWindow.FileSystem.Private.h"
 #include "ConnectionManagerWindow.h"
 #include "ConnectionSecrets.h"
 #include "DxUi/DxUi.h"
@@ -9,6 +8,7 @@
 #include "FileOperationArtifactRegistry.h"
 #include "FileSystemRouteContract.h"
 #include "FolderWindow.FileOperationsInternal.h"
+#include "FolderWindow.FileSystem.Private.h"
 #include "FolderWindowInternal.h"
 #include "Helpers.h"
 #include "HostServices.h"
@@ -187,15 +187,14 @@ namespace
     for (unsigned int suffix = 0u; suffix < 10000u; ++suffix)
     {
         std::wstring candidate = BuildCreateDirectorySuggestedName(defaultName, suffix);
-        const FileSystemRouteContract::ChildNameContractResult candidateContract = FileSystemRouteContract::QueryChildNameContract(
-            route.get(), folder.native(), candidate, FILESYSTEM_CREATE_DIRECTORY, pluginId);
-        if (candidateContract.state == FileSystemRouteContract::QueryState::Available &&
-            candidateContract.nameStatus == FILESYSTEM_CHILD_NAME_INVALID)
+        const FileSystemRouteContract::ChildNameContractResult candidateContract =
+            FileSystemRouteContract::QueryChildNameContract(route.get(), folder.native(), candidate, FILESYSTEM_CREATE_DIRECTORY, pluginId);
+        if (candidateContract.state == FileSystemRouteContract::QueryState::Available && candidateContract.nameStatus == FILESYSTEM_CHILD_NAME_INVALID)
         {
             continue;
         }
-        if (candidateContract.state != FileSystemRouteContract::QueryState::Available ||
-            candidateContract.nameStatus != FILESYSTEM_CHILD_NAME_VALID || candidateContract.collisionKey.empty())
+        if (candidateContract.state != FileSystemRouteContract::QueryState::Available || candidateContract.nameStatus != FILESYSTEM_CHILD_NAME_VALID ||
+            candidateContract.collisionKey.empty())
         {
             return FAILED(candidateContract.status) ? candidateContract.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         }
@@ -1965,30 +1964,24 @@ struct DirectMutationArtifactGuard final
     FileOperationArtifacts::TouchGuardReceipt receipt;
 };
 
-[[nodiscard]] HRESULT PrepareDirectMutationArtifactGuard(
-    const std::span<const std::filesystem::path> paths,
-    void* const cookie) noexcept
+[[nodiscard]] HRESULT PrepareDirectMutationArtifactGuard(const std::span<const std::filesystem::path> paths, void* const cookie) noexcept
 {
     auto* guard = static_cast<DirectMutationArtifactGuard*>(cookie);
     if (guard == nullptr || guard->owner == nullptr || ! guard->fileSystem || guard->pluginId.empty())
     {
         return E_INVALIDARG;
     }
-    return guard->owner->ConfirmExternalArtifactTouchForProvider(
-        guard->fileSystem.get(), guard->pluginId, guard->instanceContext, paths, &guard->receipt);
+    return guard->owner->ConfirmExternalArtifactTouchForProvider(guard->fileSystem.get(), guard->pluginId, guard->instanceContext, paths, &guard->receipt);
 }
 
-[[nodiscard]] HRESULT RevalidateDirectMutationArtifactGuard(
-    const std::span<const std::filesystem::path> paths,
-    void* const cookie) noexcept
+[[nodiscard]] HRESULT RevalidateDirectMutationArtifactGuard(const std::span<const std::filesystem::path> paths, void* const cookie) noexcept
 {
     const auto* guard = static_cast<const DirectMutationArtifactGuard*>(cookie);
     if (guard == nullptr || ! guard->fileSystem || guard->pluginId.empty())
     {
         return E_INVALIDARG;
     }
-    return FileOperationArtifacts::RevalidateProviderTouchGuard(
-        guard->fileSystem.get(), guard->pluginId, guard->instanceContext, guard->receipt, paths);
+    return FileOperationArtifacts::RevalidateProviderTouchGuard(guard->fileSystem.get(), guard->pluginId, guard->instanceContext, guard->receipt, paths);
 }
 
 [[nodiscard]] bool IsChangeAttributesDirectory(unsigned long attributes) noexcept
@@ -2411,20 +2404,20 @@ struct MakeFileListProgressState final
         }
 
         FolderWindow::InformationalTaskUpdate info{};
-        info.kind                            = FolderWindow::InformationalTaskUpdate::Kind::MakeFileList;
-        info.taskId                          = taskId;
-        info.title                           = title;
-        info.makeFileListCollecting          = ! finished && collecting;
-        info.makeFileListRendering           = ! finished && rendering;
-        info.makeFileListWriting             = ! finished && writing;
-        info.makeFileListCurrentPath         = currentPath;
-        info.makeFileListScannedFolders      = scannedFolders;
-        info.makeFileListScannedEntries      = scannedEntries;
-        info.makeFileListTotalEntries        = totalEntries;
-        info.makeFileListRenderedEntries     = renderedEntries;
-        info.finished                        = finished;
-        info.resultHr                        = hr;
-        info.doneSummary                     = std::move(doneSummary);
+        info.kind                        = FolderWindow::InformationalTaskUpdate::Kind::MakeFileList;
+        info.taskId                      = taskId;
+        info.title                       = title;
+        info.makeFileListCollecting      = ! finished && collecting;
+        info.makeFileListRendering       = ! finished && rendering;
+        info.makeFileListWriting         = ! finished && writing;
+        info.makeFileListCurrentPath     = currentPath;
+        info.makeFileListScannedFolders  = scannedFolders;
+        info.makeFileListScannedEntries  = scannedEntries;
+        info.makeFileListTotalEntries    = totalEntries;
+        info.makeFileListRenderedEntries = renderedEntries;
+        info.finished                    = finished;
+        info.resultHr                    = hr;
+        info.doneSummary                 = std::move(doneSummary);
 
         auto payload    = std::make_unique<MakeFileListTaskPayload>();
         payload->update = std::move(info);
@@ -2599,8 +2592,7 @@ enum class MakeFileListEntryReadResult : uint8_t
     Failed,
 };
 
-[[nodiscard]] MakeFileListEntryReadResult TryReadMakeFileListEntry(
-    const std::filesystem::path& path, bool includeDirectories, MakeFileListEntry& out) noexcept
+[[nodiscard]] MakeFileListEntryReadResult TryReadMakeFileListEntry(const std::filesystem::path& path, bool includeDirectories, MakeFileListEntry& out) noexcept
 {
     WIN32_FILE_ATTRIBUTE_DATA data{};
     if (GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data) == FALSE)
@@ -2747,8 +2739,8 @@ enum class MakeFileListEntryReadResult : uint8_t
 
     if (options.sourceMode == Common::Settings::MakeFileListSourceMode::CurrentFolder)
     {
-        if (const HRESULT hr = CollectMakeFileListDirectoryContents(
-                currentFolder, options.recursive, options.includeDirectories, stopToken, progress, entries, failures);
+        if (const HRESULT hr =
+                CollectMakeFileListDirectoryContents(currentFolder, options.recursive, options.includeDirectories, stopToken, progress, entries, failures);
             FAILED(hr))
         {
             return hr;
@@ -2767,8 +2759,7 @@ enum class MakeFileListEntryReadResult : uint8_t
             std::error_code ec;
             if (options.recursive && std::filesystem::is_directory(path, ec))
             {
-                if (const HRESULT hr =
-                        CollectMakeFileListDirectoryContents(path, true, options.includeDirectories, stopToken, progress, entries, failures);
+                if (const HRESULT hr = CollectMakeFileListDirectoryContents(path, true, options.includeDirectories, stopToken, progress, entries, failures);
                     FAILED(hr))
                 {
                     return hr;
@@ -3126,7 +3117,7 @@ void AppendMakeFileListCsvRow(std::wstring& output, const std::vector<std::wstri
     {
         return renderHr;
     }
-    outUtf8          = Utf8FromUtf16ForMakeFileList(outClipboardText);
+    outUtf8 = Utf8FromUtf16ForMakeFileList(outClipboardText);
     if (stopToken.stop_requested())
     {
         return HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -3134,8 +3125,7 @@ void AppendMakeFileListCsvRow(std::wstring& output, const std::vector<std::wstri
     return (! outClipboardText.empty() && outUtf8.empty()) ? HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION) : S_OK;
 }
 
-[[nodiscard]] HRESULT WriteMakeFileListUtf8File(
-    const std::filesystem::path& path, std::string_view bytes, const std::stop_token& stopToken) noexcept
+[[nodiscard]] HRESULT WriteMakeFileListUtf8File(const std::filesystem::path& path, std::string_view bytes, const std::stop_token& stopToken) noexcept
 {
     if (stopToken.stop_requested())
     {
@@ -3143,8 +3133,7 @@ void AppendMakeFileListCsvRow(std::wstring& output, const std::vector<std::wstri
     }
 
     Common::Files::LocalFileTransaction transaction;
-    HRESULT hr = Common::Files::LocalFileTransaction::Create(
-        path, Common::Files::ExistingTargetPolicy::Replace, true, transaction);
+    HRESULT hr = Common::Files::LocalFileTransaction::Create(path, Common::Files::ExistingTargetPolicy::Replace, true, transaction);
     if (FAILED(hr))
     {
         return hr;
@@ -3196,8 +3185,8 @@ void AppendMakeFileListCsvRow(std::wstring& output, const std::vector<std::wstri
 }
 
 [[nodiscard]] std::optional<std::filesystem::path> PromptForMakeFileListOutputFile(HWND owner,
-                                                                                  const std::filesystem::path& currentFolder,
-                                                                                  const MakeFileListSettings& options) noexcept
+                                                                                   const std::filesystem::path& currentFolder,
+                                                                                   const MakeFileListSettings& options) noexcept
 {
     constexpr size_t kFileBufferChars = 32768u;
     std::vector<wchar_t> fileBuffer(kFileBufferChars, L'\0');
@@ -4122,7 +4111,7 @@ struct ArchiveUnpackPromptResult final
     std::filesystem::path destinationPath;
     ArchiveUnpackerDefinition unpacker;
     ArchiveExistingTargetPolicy conflictPolicy = ArchiveExistingTargetPolicy::Skip;
-    bool deleteArchive = false;
+    bool deleteArchive                         = false;
     std::wstring maskText;
 };
 
@@ -4841,8 +4830,7 @@ struct ArchiveUnpackPromptTextPayload final
         const std::wstring_view archiveText = normalizedArchive.native();
         const bool samePath                 = Common::Paths::NormalizedWindowsPathEqualsNoCase(sourceText, archiveText);
         const bool sourceIsDirectory        = (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u;
-        if (samePath ||
-            (sourceIsDirectory && Common::Paths::IsSameOrDescendantNormalizedWindowsPath(sourceText, archiveText)))
+        if (samePath || (sourceIsDirectory && Common::Paths::IsSameOrDescendantNormalizedWindowsPath(sourceText, archiveText)))
         {
             return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
         }
@@ -4982,14 +4970,13 @@ public:
         UpdateWindow(_hWnd.get());
         SetForegroundWindow(_hWnd.get());
 
-        const RedSalamander::DxUi::DxUiModalLoopResult loopResult =
-            RedSalamander::DxUi::RunDxUiModalLoop(_hWnd.get(),
-                                                  RedSalamander::DxUi::DxUiModalLoopOptions{
-                                                      .diagnosticName = L"ArchivePackPrompt",
-                                                      .shouldContinue = ShouldContinueModalLoop,
-                                                      .context        = this,
-                                                      .onQuit         = OnModalLoopQuit,
-                                                  });
+        const RedSalamander::DxUi::DxUiModalLoopResult loopResult = RedSalamander::DxUi::RunDxUiModalLoop(_hWnd.get(),
+                                                                                                          RedSalamander::DxUi::DxUiModalLoopOptions{
+                                                                                                              .diagnosticName = L"ArchivePackPrompt",
+                                                                                                              .shouldContinue = ShouldContinueModalLoop,
+                                                                                                              .context        = this,
+                                                                                                              .onQuit         = OnModalLoopQuit,
+                                                                                                          });
         if (loopResult == RedSalamander::DxUi::DxUiModalLoopResult::GetMessageFailed)
         {
             return std::nullopt;
@@ -5080,9 +5067,7 @@ public:
             }
             case WM_ERASEBKGND: return 1;
             case WM_NCACTIVATE: ApplyTitleBarTheme(hwnd, self->_theme, wParam != FALSE); return DefWindowProcW(hwnd, message, wParam, lParam);
-            case WM_CLOSE:
-                self->Cancel();
-                return 0;
+            case WM_CLOSE: self->Cancel(); return 0;
             case WM_NCDESTROY:
 #ifdef ENABLE_TESTS
                 g_archivePackPromptWindow.store(nullptr);
@@ -5455,9 +5440,7 @@ private:
                 snapshot->commandButtonsFitInClient           = _lastButtonsBottomDip <= client.bottom;
                 return TRUE;
             }
-            case ArchivePackPromptDebugCommand::SetPackerIndex:
-                SetPackerIndex(static_cast<size_t>(lParam));
-                return TRUE;
+            case ArchivePackPromptDebugCommand::SetPackerIndex: SetPackerIndex(static_cast<size_t>(lParam)); return TRUE;
             case ArchivePackPromptDebugCommand::SetArchivePath:
             {
                 const auto* payload = reinterpret_cast<const ArchivePackPromptArchivePathPayload*>(lParam);
@@ -5474,12 +5457,8 @@ private:
                     _deleteAfterCheckbox->SetChecked(lParam != 0);
                 }
                 return TRUE;
-            case ArchivePackPromptDebugCommand::Confirm:
-                Confirm();
-                return TRUE;
-            case ArchivePackPromptDebugCommand::Cancel:
-                Cancel();
-                return TRUE;
+            case ArchivePackPromptDebugCommand::Confirm: Confirm(); return TRUE;
+            case ArchivePackPromptDebugCommand::Cancel: Cancel(); return TRUE;
         }
 
         return FALSE;
@@ -5648,14 +5627,13 @@ public:
         UpdateWindow(_hWnd.get());
         SetForegroundWindow(_hWnd.get());
 
-        const RedSalamander::DxUi::DxUiModalLoopResult loopResult =
-            RedSalamander::DxUi::RunDxUiModalLoop(_hWnd.get(),
-                                                  RedSalamander::DxUi::DxUiModalLoopOptions{
-                                                      .diagnosticName = L"ArchiveUnpackPrompt",
-                                                      .shouldContinue = ShouldContinueModalLoop,
-                                                      .context        = this,
-                                                      .onQuit         = OnModalLoopQuit,
-                                                  });
+        const RedSalamander::DxUi::DxUiModalLoopResult loopResult = RedSalamander::DxUi::RunDxUiModalLoop(_hWnd.get(),
+                                                                                                          RedSalamander::DxUi::DxUiModalLoopOptions{
+                                                                                                              .diagnosticName = L"ArchiveUnpackPrompt",
+                                                                                                              .shouldContinue = ShouldContinueModalLoop,
+                                                                                                              .context        = this,
+                                                                                                              .onQuit         = OnModalLoopQuit,
+                                                                                                          });
         if (loopResult == RedSalamander::DxUi::DxUiModalLoopResult::GetMessageFailed)
         {
             return std::nullopt;
@@ -6098,11 +6076,10 @@ private:
     [[nodiscard]] ArchiveUnpackPromptResult ReadResultFromUi() const
     {
         ArchiveUnpackPromptResult result{};
-        result.unpacker      = SelectedUnpacker();
-        result.conflictPolicy =
-            _conflictPolicyCombo && _conflictPolicyCombo->GetSelectedIndex().value_or(0u) == 1u ? ArchiveExistingTargetPolicy::Replace
-                                                                                                 : ArchiveExistingTargetPolicy::Skip;
-        result.deleteArchive = _deleteAfterCheckbox && _deleteAfterCheckbox->IsChecked();
+        result.unpacker       = SelectedUnpacker();
+        result.conflictPolicy = _conflictPolicyCombo && _conflictPolicyCombo->GetSelectedIndex().value_or(0u) == 1u ? ArchiveExistingTargetPolicy::Replace
+                                                                                                                    : ArchiveExistingTargetPolicy::Skip;
+        result.deleteArchive  = _deleteAfterCheckbox && _deleteAfterCheckbox->IsChecked();
         result.destinationPath =
             std::filesystem::path(StringUtils::TrimWhitespaceCopy(_destinationCombo ? std::wstring(_destinationCombo->GetText()) : std::wstring{}));
         result.maskText = StringUtils::TrimWhitespaceCopy(_maskField ? std::wstring(_maskField->GetText()) : std::wstring{});
@@ -6157,8 +6134,8 @@ private:
                 snapshot->unpackerExtension                       = selectedUnpacker.extensionNoDot;
                 snapshot->unpackerCount                           = _unpackers.size();
                 snapshot->selectedUnpackerIndex                   = SelectedUnpackerIndex();
-                snapshot->conflictPolicyIndex = _conflictPolicyCombo ? _conflictPolicyCombo->GetSelectedIndex().value_or(0u) : 0u;
-                snapshot->replaceExistingFiles = snapshot->conflictPolicyIndex == 1u;
+                snapshot->conflictPolicyIndex                     = _conflictPolicyCombo ? _conflictPolicyCombo->GetSelectedIndex().value_or(0u) : 0u;
+                snapshot->replaceExistingFiles                    = snapshot->conflictPolicyIndex == 1u;
                 snapshot->deleteAfterUnpacking                    = _deleteAfterCheckbox && _deleteAfterCheckbox->IsChecked();
                 snapshot->maskText                                = _maskField ? std::wstring(_maskField->GetText()) : std::wstring{};
                 snapshot->maskHelpVisible                         = _maskHelpVisible;
@@ -6331,8 +6308,8 @@ struct ArchiveOperationResult final
     HRESULT hr = S_OK;
     std::filesystem::path archivePath;
     std::filesystem::path destinationPath;
-    uint64_t entryCount     = 0u;
-    uint64_t bytesProcessed = 0u;
+    uint64_t entryCount           = 0u;
+    uint64_t bytesProcessed       = 0u;
     uint64_t skippedConflictCount = 0u;
     std::vector<std::wstring> entries;
 };
@@ -6396,8 +6373,7 @@ enum class ArchiveTargetDecision : uint8_t
 
 [[nodiscard]] Common::Files::ExistingTargetPolicy LocalFilePolicyForArchive(ArchiveExistingTargetPolicy policy) noexcept
 {
-    return policy == ArchiveExistingTargetPolicy::Replace ? Common::Files::ExistingTargetPolicy::Replace
-                                                           : Common::Files::ExistingTargetPolicy::FailIfExists;
+    return policy == ArchiveExistingTargetPolicy::Replace ? Common::Files::ExistingTargetPolicy::Replace : Common::Files::ExistingTargetPolicy::FailIfExists;
 }
 
 [[nodiscard]] bool IsArchiveTargetExistsFailure(HRESULT hr) noexcept
@@ -6410,7 +6386,7 @@ enum class ArchiveTargetDecision : uint8_t
                                             ArchiveExistingTargetPolicy policy,
                                             ArchiveTargetDecision& outDecision) noexcept
 {
-    outDecision = ArchiveTargetDecision::Extract;
+    outDecision            = ArchiveTargetDecision::Extract;
     const DWORD attributes = GetFileAttributesW(targetPath.c_str());
     if (attributes == INVALID_FILE_ATTRIBUTES)
     {
@@ -6603,8 +6579,8 @@ enum class ArchiveTargetDecision : uint8_t
         return false;
     }
 
-    if (EqualsNoCase(stem, L"CON") || EqualsNoCase(stem, L"PRN") || EqualsNoCase(stem, L"AUX") ||
-        EqualsNoCase(stem, L"NUL") || EqualsNoCase(stem, L"CONIN$") || EqualsNoCase(stem, L"CONOUT$"))
+    if (EqualsNoCase(stem, L"CON") || EqualsNoCase(stem, L"PRN") || EqualsNoCase(stem, L"AUX") || EqualsNoCase(stem, L"NUL") || EqualsNoCase(stem, L"CONIN$") ||
+        EqualsNoCase(stem, L"CONOUT$"))
     {
         return true;
     }
@@ -8031,8 +8007,7 @@ private:
 {
     outCrc32 = 0u;
     Common::Files::LocalFileTransaction transaction;
-    HRESULT transactionHr = Common::Files::LocalFileTransaction::Create(
-        targetPath, LocalFilePolicyForArchive(conflictPolicy), true, transaction);
+    HRESULT transactionHr = Common::Files::LocalFileTransaction::Create(targetPath, LocalFilePolicyForArchive(conflictPolicy), true, transaction);
     if (FAILED(transactionHr))
     {
         return conflictPolicy == ArchiveExistingTargetPolicy::Skip && IsArchiveTargetExistsFailure(transactionHr) ? S_FALSE : transactionHr;
@@ -8294,8 +8269,7 @@ public:
         }
 
         Common::Files::LocalFileTransaction transaction;
-        const HRESULT createHr = Common::Files::LocalFileTransaction::Create(
-            targetPath, LocalFilePolicyForArchive(conflictPolicy), true, transaction);
+        const HRESULT createHr = Common::Files::LocalFileTransaction::Create(targetPath, LocalFilePolicyForArchive(conflictPolicy), true, transaction);
         if (FAILED(createHr))
         {
             return createHr;
@@ -8924,7 +8898,7 @@ private:
     for (SevenZipExtractEntry& entry : entries)
     {
         ArchiveTargetDecision decision = ArchiveTargetDecision::Extract;
-        result.hr = ClassifyArchiveTarget(entry.targetPath, entry.directory, conflictPolicy, decision);
+        result.hr                      = ClassifyArchiveTarget(entry.targetPath, entry.directory, conflictPolicy, decision);
         if (FAILED(result.hr))
         {
             return result;
@@ -9054,7 +9028,7 @@ private:
             return result;
         }
         ArchiveTargetDecision decision = ArchiveTargetDecision::Extract;
-        result.hr = ClassifyArchiveTarget(targetPath, entry.directory, conflictPolicy, decision);
+        result.hr                      = ClassifyArchiveTarget(targetPath, entry.directory, conflictPolicy, decision);
         if (FAILED(result.hr))
         {
             return result;
@@ -9266,12 +9240,11 @@ void RefreshFolderViewIfPathMatches(FolderView& folderView, const std::filesyste
 } // namespace
 
 #ifdef ENABLE_TESTS
-HRESULT FolderWindowFileSystemInternal::DebugResolveInitialCreateDirectoryNameForTests(
-    const wil::com_ptr<IFileSystem>& fileSystem,
-    const std::filesystem::path& folder,
-    std::wstring_view defaultName,
-    std::wstring_view pluginId,
-    std::wstring& nameOut) noexcept
+HRESULT FolderWindowFileSystemInternal::DebugResolveInitialCreateDirectoryNameForTests(const wil::com_ptr<IFileSystem>& fileSystem,
+                                                                                       const std::filesystem::path& folder,
+                                                                                       std::wstring_view defaultName,
+                                                                                       std::wstring_view pluginId,
+                                                                                       std::wstring& nameOut) noexcept
 {
     return ResolveInitialCreateDirectoryName(fileSystem, folder, defaultName, pluginId, nameOut);
 }
@@ -9327,13 +9300,13 @@ LRESULT FolderWindow::OnMakeFileListCompleted(LPARAM lp) noexcept
     if (SUCCEEDED(hr) && payload->options.outputTarget == Common::Settings::MakeFileListOutputTarget::Clipboard)
     {
         hr = Common::Clipboard::TrySetUnicodeText(GetClipboardOwnerWindow(_hWnd.get()), payload->clipboardText) ? S_OK
-                                                                                                    : HRESULT_FROM_WIN32(ERROR_CLIPBOARD_NOT_OPEN);
+                                                                                                                : HRESULT_FROM_WIN32(ERROR_CLIPBOARD_NOT_OPEN);
     }
 
     Debug::Perf::Emit(L"makeFileList.output_us",
                       payload->options.outputTarget == Common::Settings::MakeFileListOutputTarget::File ? L"file" : L"clipboard",
                       payload->options.outputTarget == Common::Settings::MakeFileListOutputTarget::File ? payload->outputElapsedUs
-                                                                                                         : Debug::Perf::ElapsedUs(outputStartedAt),
+                                                                                                        : Debug::Perf::ElapsedUs(outputStartedAt),
                       payload->outputBytes,
                       payload->entryCount,
                       hr);
@@ -9357,12 +9330,12 @@ LRESULT FolderWindow::OnMakeFileListCompleted(LPARAM lp) noexcept
     }
     else if (FAILED(hr))
     {
-        finalTask.doneSummary = FormatStringResource(nullptr,
-                                                     IDS_FMT_MAKE_FILE_LIST_FAILED,
-                                                     payload->options.outputTarget == Common::Settings::MakeFileListOutputTarget::File
-                                                         ? payload->options.outputFile.wstring()
-                                                         : payload->currentFolder.wstring(),
-                                                     static_cast<unsigned long>(static_cast<uint32_t>(hr)));
+        finalTask.doneSummary =
+            FormatStringResource(nullptr,
+                                 IDS_FMT_MAKE_FILE_LIST_FAILED,
+                                 payload->options.outputTarget == Common::Settings::MakeFileListOutputTarget::File ? payload->options.outputFile.wstring()
+                                                                                                                   : payload->currentFolder.wstring(),
+                                 static_cast<unsigned long>(static_cast<uint32_t>(hr)));
         static_cast<void>(CreateOrUpdateInformationalTask(finalTask));
 
         const std::wstring message = payload->options.outputTarget == Common::Settings::MakeFileListOutputTarget::File
@@ -10607,12 +10580,10 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
     const HRESULT initialNameHr = ResolveInitialCreateDirectoryName(state.fileSystem, base, defaultNameBase, state.pluginId, initialName);
     if (FAILED(initialNameHr))
     {
-        std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
-        std::wstring message = pluginName.empty()
-            ? LoadStringResource(nullptr, IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED)
-            : FormatStringResource(nullptr, IDS_FMT_PANE_CREATE_DIR_UNSUPPORTED_PLUGIN, pluginName);
-        state.folderView.ShowAlertOverlay(
-            FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
+        std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+        std::wstring message = pluginName.empty() ? LoadStringResource(nullptr, IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED)
+                                                  : FormatStringResource(nullptr, IDS_FMT_PANE_CREATE_DIR_UNSUPPORTED_PLUGIN, pluginName);
+        state.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
         return;
     }
 
@@ -10623,8 +10594,8 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
     }
 
     FileOperations::CreateDirectoryAdmission initialAdmission{};
-    const HRESULT initialAdmissionHr = _fileOperations->QualifyCreateDirectory(
-        state.fileSystem, state.pluginId, state.instanceContext, base, initialName, initialAdmission);
+    const HRESULT initialAdmissionHr =
+        _fileOperations->QualifyCreateDirectory(state.fileSystem, state.pluginId, state.instanceContext, base, initialName, initialAdmission);
     if (FAILED(initialAdmissionHr))
     {
         std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
@@ -10637,8 +10608,7 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
         {
             message = LoadStringResource(nullptr, IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED);
         }
-        state.folderView.ShowAlertOverlay(
-            FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
+        state.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
         return;
     }
 
@@ -10646,12 +10616,10 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
     state.fileSystem->QueryInterface(__uuidof(IFileSystemDirectoryOperations), dirOps.put_void());
     if (! dirOps && ! initialAdmission.allowLocalNativeFallback)
     {
-        std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
-        std::wstring message = pluginName.empty()
-            ? LoadStringResource(nullptr, IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED)
-            : FormatStringResource(nullptr, IDS_FMT_PANE_CREATE_DIR_UNSUPPORTED_PLUGIN, pluginName);
-        state.folderView.ShowAlertOverlay(
-            FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
+        std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+        std::wstring message = pluginName.empty() ? LoadStringResource(nullptr, IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED)
+                                                  : FormatStringResource(nullptr, IDS_FMT_PANE_CREATE_DIR_UNSUPPORTED_PLUGIN, pluginName);
+        state.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
         return;
     }
 
@@ -10681,11 +10649,11 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
         }
 
         FileOperations::CreateDirectoryAdmission createAdmission{};
-        const HRESULT admissionHr = _fileOperations->QualifyCreateDirectory(
-            state.fileSystem, state.pluginId, state.instanceContext, base, candidateName, createAdmission);
+        const HRESULT admissionHr =
+            _fileOperations->QualifyCreateDirectory(state.fileSystem, state.pluginId, state.instanceContext, base, candidateName, createAdmission);
         if (FAILED(admissionHr))
         {
-            std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+            std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
             std::wstring message = LoadStringResource(nullptr, IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED);
             state.folderView.ShowAlertOverlay(
                 FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
@@ -11201,11 +11169,8 @@ void FolderWindow::DebugSetThumbnailProviderMode(Pane pane, FolderView::DebugThu
     state.folderView.DebugSetThumbnailProviderMode(mode);
 }
 
-bool FolderWindow::DebugSeedThumbnailPendingAndPostThumbnailBitmapMessagesForTest(Pane pane,
-                                                                                  uint64_t pendingCount,
-                                                                                  uint64_t staleBatchMessageCount,
-                                                                                  uint64_t staleGenerationMessageCount,
-                                                                                  uint64_t unaccountedCurrentMessageCount)
+bool FolderWindow::DebugSeedThumbnailPendingAndPostThumbnailBitmapMessagesForTest(
+    Pane pane, uint64_t pendingCount, uint64_t staleBatchMessageCount, uint64_t staleGenerationMessageCount, uint64_t unaccountedCurrentMessageCount)
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     return state.folderView.DebugSeedThumbnailPendingAndPostThumbnailBitmapMessagesForTest(
@@ -11248,9 +11213,9 @@ bool FolderWindow::DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) co
             static_cast<int>(std::lround(hostState.previewContentHost.DipsToPixels(hostState.previewPropertiesScroll->GetScrollOffset())));
         out.previewPropertiesScrollMaxPx = static_cast<int>(std::lround(hostState.previewContentHost.DipsToPixels(scrollMaxDip)));
     }
-    out.folderViewVisible  = hostState.hFolderView && IsWindowVisible(hostState.hFolderView.get()) != FALSE;
-    out.previewTabsHwnd    = hostState.hPreviewTabs.get();
-    out.previewContentHwnd = hostState.hPreviewContent.get();
+    out.folderViewVisible   = hostState.hFolderView && IsWindowVisible(hostState.hFolderView.get()) != FALSE;
+    out.previewTabsHwnd     = hostState.hPreviewTabs.get();
+    out.previewContentHwnd  = hostState.hPreviewContent.get();
     const HWND embeddedHwnd = hostState.previewViewerInstance ? hostState.previewViewerInstance->embeddedHwnd : nullptr;
     if (IsOwnedPreviewEmbeddedHwnd(hostState, hostState.previewViewerInstance, embeddedHwnd))
     {
@@ -11280,11 +11245,11 @@ bool FolderWindow::DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) co
     out.previewLastOpenHiddenRejectedChildCount = _debugPreviewLastOpenHiddenRejectedChildCount;
     out.previewLastOpenRejectedChildCardinality = _debugPreviewLastOpenRejectedChildCardinality;
     out.previewLastReopenRejectedChildSet       = _debugPreviewLastReopenRejectedChildSet;
-    out.previewViewerInstanceId = reinterpret_cast<uintptr_t>(hostState.previewViewerInstance);
-    out.tabRect                 = hostPane == Pane::Left ? _leftPreviewTabsRect : _rightPreviewTabsRect;
-    out.contentRect             = hostPane == Pane::Left ? _leftPreviewContentRect : _rightPreviewContentRect;
-    out.previewedPath           = hostState.previewedPath;
-    out.previewText             = hostState.previewText;
+    out.previewViewerInstanceId                 = reinterpret_cast<uintptr_t>(hostState.previewViewerInstance);
+    out.tabRect                                 = hostPane == Pane::Left ? _leftPreviewTabsRect : _rightPreviewTabsRect;
+    out.contentRect                             = hostPane == Pane::Left ? _leftPreviewContentRect : _rightPreviewContentRect;
+    out.previewedPath                           = hostState.previewedPath;
+    out.previewText                             = hostState.previewText;
 #if defined(ENABLE_TESTS) && defined(_DEBUG)
     if (out.previewEmbeddedViewerHwnd && hostState.previewViewerPluginId == L"builtin/viewer-text")
     {
@@ -11327,17 +11292,17 @@ bool FolderWindow::DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) co
 
 bool FolderWindow::DebugGetTerminalPaneSnapshot(Pane hostPane, TerminalPaneDebugSnapshot& out) const noexcept
 {
-    out = {};
-    out.hostPane = hostPane;
-    const PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
-    out.open       = host.terminalOpen && host.terminal != nullptr;
-    out.selected   = host.terminalTabSelected;
-    out.childHwnd  = host.terminalHwnd;
-    out.parentHwnd = host.terminalHwnd ? GetParent(host.terminalHwnd) : nullptr;
-    out.sourceLocationKind = host.terminalSourceLocationKind;
+    out                     = {};
+    out.hostPane            = hostPane;
+    const PaneState& host   = hostPane == Pane::Left ? _leftPane : _rightPane;
+    out.open                = host.terminalOpen && host.terminal != nullptr;
+    out.selected            = host.terminalTabSelected;
+    out.childHwnd           = host.terminalHwnd;
+    out.parentHwnd          = host.terminalHwnd ? GetParent(host.terminalHwnd) : nullptr;
+    out.sourceLocationKind  = host.terminalSourceLocationKind;
     out.sourcePluginShortId = host.terminalSourcePluginShortId;
-    out.sourcePath = host.terminalSourcePath;
-    out.sourceGeneration = host.terminalSourceGeneration;
+    out.sourcePath          = host.terminalSourcePath;
+    out.sourceGeneration    = host.terminalSourceGeneration;
     if (host.previewTabsControl)
     {
         out.visibleTabCount    = host.previewTabsControl->GetVisibleTabCount();
@@ -11350,16 +11315,16 @@ bool FolderWindow::DebugGetTerminalPaneSnapshot(Pane hostPane, TerminalPaneDebug
         state.sizeBytes = sizeof(state);
         if (SUCCEEDED(host.terminal->GetViewState(&state)))
         {
-            out.lifecycle = state.activity.lifecycleState;
-            out.activityTrust = state.activity.activityTrust;
-            out.followState = state.followState;
-            out.instanceId = state.instanceId;
-            out.sessionGeneration = state.sessionGeneration;
-            out.capabilityFlags = state.capabilityFlags;
-            out.exitCodePresent = state.exitCodePresent != 0u;
-            out.exitCode = state.exitCode;
+            out.lifecycle             = state.activity.lifecycleState;
+            out.activityTrust         = state.activity.activityTrust;
+            out.followState           = state.followState;
+            out.instanceId            = state.instanceId;
+            out.sessionGeneration     = state.sessionGeneration;
+            out.capabilityFlags       = state.capabilityFlags;
+            out.exitCodePresent       = state.exitCodePresent != 0u;
+            out.exitCode              = state.exitCode;
             out.finalSnapshotComplete = state.finalSnapshotComplete != 0u;
-            out.idleAtPrimaryPrompt = state.activity.idleAtPrimaryPrompt != 0u;
+            out.idleAtPrimaryPrompt   = state.activity.idleAtPrimaryPrompt != 0u;
             if (state.status.data != nullptr)
             {
                 out.status.assign(state.status.data, state.status.length);
@@ -11403,8 +11368,8 @@ bool FolderWindow::DebugSetPaneContentTab(Pane hostPane, size_t tabIndex) noexce
     }
 
     SetPaneContentTab(hostPane, tabIndex);
-    return (tabIndex == 0u && ! host.previewTabSelected && ! host.terminalTabSelected) ||
-        (tabIndex == 1u && host.previewTabSelected) || (tabIndex == 2u && host.terminalTabSelected);
+    return (tabIndex == 0u && ! host.previewTabSelected && ! host.terminalTabSelected) || (tabIndex == 1u && host.previewTabSelected) ||
+           (tabIndex == 2u && host.terminalTabSelected);
 }
 
 size_t FolderWindow::DebugGetPaneContentTab(Pane hostPane) const noexcept
@@ -11662,9 +11627,7 @@ FolderView::DebugFocusSelectionStateSnapshot FolderWindow::DebugGetFocusSelectio
     return state.folderView.DebugGetFocusSelectionStateSnapshot();
 }
 
-void FolderWindow::DebugRememberPaneFocusedItemForFolder(Pane pane,
-                                                         const std::filesystem::path& folder,
-                                                         std::wstring_view itemDisplayName) noexcept
+void FolderWindow::DebugRememberPaneFocusedItemForFolder(Pane pane, const std::filesystem::path& folder, std::wstring_view itemDisplayName) noexcept
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     state.folderView.RememberFocusedItemForFolder(folder, itemDisplayName);
@@ -11676,9 +11639,7 @@ void FolderWindow::DebugClearPaneFocusMemoryForSelfTest(Pane pane) noexcept
     state.folderView.DebugClearFocusMemoryForSelfTest();
 }
 
-bool FolderWindow::DebugRememberPaneFocusMemoryEntryForSelfTest(Pane pane,
-                                                                const std::filesystem::path& folder,
-                                                                std::wstring_view itemDisplayName) noexcept
+bool FolderWindow::DebugRememberPaneFocusMemoryEntryForSelfTest(Pane pane, const std::filesystem::path& folder, std::wstring_view itemDisplayName) noexcept
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     return state.folderView.DebugRememberFocusMemoryEntryForSelfTest(folder, itemDisplayName);
@@ -11690,9 +11651,7 @@ std::wstring FolderWindow::DebugLookupPaneFocusMemoryEntryForSelfTest(Pane pane,
     return state.folderView.DebugLookupFocusMemoryEntryForSelfTest(folder);
 }
 
-void FolderWindow::DebugSetPaneFileSystemContextForSelfTest(Pane pane,
-                                                             std::wstring_view pluginId,
-                                                             std::wstring_view instanceContext) noexcept
+void FolderWindow::DebugSetPaneFileSystemContextForSelfTest(Pane pane, std::wstring_view pluginId, std::wstring_view instanceContext) noexcept
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     state.folderView.SetFileSystemContext(pluginId, instanceContext);
@@ -11734,8 +11693,7 @@ void FolderWindow::DebugSendPaneKeyForSelfTest(Pane pane, WPARAM key, bool ctrl,
     state.folderView.DebugSendKeyForSelfTest(key, ctrl, shift);
 }
 
-std::optional<POINT> FolderWindow::DebugGetPaneItemCenterClientPointForSelfTest(Pane pane,
-                                                                                std::wstring_view displayName) const noexcept
+std::optional<POINT> FolderWindow::DebugGetPaneItemCenterClientPointForSelfTest(Pane pane, std::wstring_view displayName) const noexcept
 {
     const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     return state.folderView.DebugGetItemCenterClientPointForSelfTest(displayName);
@@ -11875,10 +11833,7 @@ FolderView::FilterWatermarkVisualMode FolderWindow::DebugGetFilterWatermarkVisua
 }
 #endif
 
-void ShowArtifactTouchGuardFailure(FolderWindow& window,
-                                   const FolderWindow::Pane pane,
-                                   const size_t pathCount,
-                                   const HRESULT hr) noexcept
+void ShowArtifactTouchGuardFailure(FolderWindow& window, const FolderWindow::Pane pane, const size_t pathCount, const HRESULT hr) noexcept
 {
     std::wstring title = LoadStringResource(nullptr, IDS_FILEOPS_ARTIFACT_TOUCH_TITLE);
     if (title.empty())
@@ -12184,11 +12139,8 @@ void FolderWindow::CommandMakeFileList(Pane pane)
     if (state.makeFileListThread.joinable())
     {
         RequestMakeFileListCancellation(pane);
-        ShowMakeFileListOverlay(*this,
-                                pane,
-                                FolderView::OverlaySeverity::Information,
-                                LoadStringResource(nullptr, IDS_MSG_MAKE_FILE_LIST_CANCELLATION_REQUESTED),
-                                S_FALSE);
+        ShowMakeFileListOverlay(
+            *this, pane, FolderView::OverlaySeverity::Information, LoadStringResource(nullptr, IDS_MSG_MAKE_FILE_LIST_CANCELLATION_REQUESTED), S_FALSE);
         Debug::Perf::Emit(L"makeFileList.command_return_us", L"cancel-requested", Debug::Perf::ElapsedUs(totalStartedAt), 0u, 0u, S_FALSE);
         return;
     }
@@ -12257,13 +12209,13 @@ void FolderWindow::CommandMakeFileList(Pane pane)
         else
 #endif
         {
-        const std::optional<std::filesystem::path> outputFile = PromptForMakeFileListOutputFile(ownerWindow, currentFolder.value(), options);
-        if (! outputFile.has_value())
-        {
-            Debug::Perf::Emit(L"makeFileList.total_us", L"save-cancelled", Debug::Perf::ElapsedUs(totalStartedAt), 0u, 0u, S_FALSE);
-            return;
-        }
-        options.outputFile = outputFile.value();
+            const std::optional<std::filesystem::path> outputFile = PromptForMakeFileListOutputFile(ownerWindow, currentFolder.value(), options);
+            if (! outputFile.has_value())
+            {
+                Debug::Perf::Emit(L"makeFileList.total_us", L"save-cancelled", Debug::Perf::ElapsedUs(totalStartedAt), 0u, 0u, S_FALSE);
+                return;
+            }
+            options.outputFile = outputFile.value();
         }
     }
 
@@ -12297,8 +12249,8 @@ void FolderWindow::CommandMakeFileList(Pane pane)
     {
 #ifdef ENABLE_TESTS
         const auto clearWorkerActive = wil::scope_exit([] { g_makeFileListWorkerActive.store(false, std::memory_order_release); });
-        const uint32_t delayMs = g_makeFileListWorkerDelayMs.exchange(0u, std::memory_order_acq_rel);
-        uint32_t waitedMs      = 0u;
+        const uint32_t delayMs       = g_makeFileListWorkerDelayMs.exchange(0u, std::memory_order_acq_rel);
+        uint32_t waitedMs            = 0u;
         while (waitedMs < delayMs && ! stopToken.stop_requested())
         {
             const uint32_t sliceMs = (std::min)(10u, delayMs - waitedMs);
@@ -12318,7 +12270,7 @@ void FolderWindow::CommandMakeFileList(Pane pane)
         uint64_t collectFailures = 0u;
         std::vector<MakeFileListEntry> entries;
         const auto collectStartedAt = std::chrono::steady_clock::now();
-        HRESULT operationHr = CollectMakeFileListEntries(root, selectedPaths, options, stopToken, progress, collectFailures, entries);
+        HRESULT operationHr         = CollectMakeFileListEntries(root, selectedPaths, options, stopToken, progress, collectFailures, entries);
         if (operationHr == HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && stopToken.stop_requested())
         {
             operationHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -12340,7 +12292,7 @@ void FolderWindow::CommandMakeFileList(Pane pane)
         if (SUCCEEDED(operationHr))
         {
             const auto renderStartedAt = std::chrono::steady_clock::now();
-            operationHr = RenderMakeFileListOutput(entries, options, stopToken, progress, outputUtf8, clipboardText);
+            operationHr                = RenderMakeFileListOutput(entries, options, stopToken, progress, outputUtf8, clipboardText);
             if (operationHr == HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && stopToken.stop_requested())
             {
                 operationHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -12373,8 +12325,8 @@ void FolderWindow::CommandMakeFileList(Pane pane)
                 {
                     operationHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
                 }
-                outputElapsedUs            = Debug::Perf::ElapsedUs(outputStartedAt);
-                outputTarget               = options.outputFile.wstring();
+                outputElapsedUs = Debug::Perf::ElapsedUs(outputStartedAt);
+                outputTarget    = options.outputFile.wstring();
             }
             else
             {
@@ -12420,15 +12372,15 @@ void FolderWindow::CommandPack(Pane pane)
     const auto recordDebugResult = [&](const ArchiveOperationResult& operationResult)
     {
         ArchiveCommandDebugResult debugResult{};
-        debugResult.operation          = L"pack";
-        debugResult.hr                 = operationResult.hr;
-        debugResult.archivePath        = operationResult.archivePath;
-        debugResult.destinationPath    = operationResult.destinationPath;
-        debugResult.entryCount         = operationResult.entryCount;
-        debugResult.bytesProcessed     = operationResult.bytesProcessed;
+        debugResult.operation            = L"pack";
+        debugResult.hr                   = operationResult.hr;
+        debugResult.archivePath          = operationResult.archivePath;
+        debugResult.destinationPath      = operationResult.destinationPath;
+        debugResult.entryCount           = operationResult.entryCount;
+        debugResult.bytesProcessed       = operationResult.bytesProcessed;
         debugResult.skippedConflictCount = operationResult.skippedConflictCount;
-        debugResult.entries            = operationResult.entries;
-        _debugLastArchiveCommandResult = std::move(debugResult);
+        debugResult.entries              = operationResult.entries;
+        _debugLastArchiveCommandResult   = std::move(debugResult);
     };
 #endif
 
@@ -12529,12 +12481,8 @@ void FolderWindow::CommandPack(Pane pane)
 #ifdef ENABLE_TESTS
         recordDebugResult(result);
 #endif
-        ShowArchiveOverlay(*this,
-                           pane,
-                           IDS_CMD_PACK,
-                           FolderView::OverlaySeverity::Warning,
-                           LoadStringResource(nullptr, IDS_MSG_ARCHIVE_OUTPUT_INSIDE_SOURCE),
-                           result.hr);
+        ShowArchiveOverlay(
+            *this, pane, IDS_CMD_PACK, FolderView::OverlaySeverity::Warning, LoadStringResource(nullptr, IDS_MSG_ARCHIVE_OUTPUT_INSIDE_SOURCE), result.hr);
         Debug::Perf::Emit(L"archive.pack_us", L"unsafe-output", Debug::Perf::ElapsedUs(startedAt), 0u, 0u, result.hr);
         return;
     }
@@ -12581,12 +12529,12 @@ void FolderWindow::CommandPack(Pane pane)
     if (deleteSourcesAfterPack)
     {
         FolderView::FileOperationRequest deleteRequest{};
-        deleteRequest.operation   = FILESYSTEM_DELETE;
-        deleteRequest.origin      = FolderView::FileOperationRequest::Origin::PackCleanup;
-        deleteRequest.sourcePaths = selectedPaths;
-        deleteRequest.flags       = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
+        deleteRequest.operation                   = FILESYSTEM_DELETE;
+        deleteRequest.origin                      = FolderView::FileOperationRequest::Origin::PackCleanup;
+        deleteRequest.sourcePaths                 = selectedPaths;
+        deleteRequest.flags                       = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
         deleteRequest.archiveDeleteAfterConfirmed = true;
-        const HRESULT deleteHr    = StartFileOperationFromFolderView(pane, std::move(deleteRequest));
+        const HRESULT deleteHr                    = StartFileOperationFromFolderView(pane, std::move(deleteRequest));
         if (FAILED(deleteHr))
         {
             ShowArchiveOverlay(
@@ -12625,15 +12573,15 @@ void FolderWindow::CommandUnpack(Pane pane)
     const auto recordDebugResult = [&](const ArchiveOperationResult& operationResult)
     {
         ArchiveCommandDebugResult debugResult{};
-        debugResult.operation          = L"unpack";
-        debugResult.hr                 = operationResult.hr;
-        debugResult.archivePath        = operationResult.archivePath;
-        debugResult.destinationPath    = operationResult.destinationPath;
-        debugResult.entryCount         = operationResult.entryCount;
-        debugResult.bytesProcessed     = operationResult.bytesProcessed;
+        debugResult.operation            = L"unpack";
+        debugResult.hr                   = operationResult.hr;
+        debugResult.archivePath          = operationResult.archivePath;
+        debugResult.destinationPath      = operationResult.destinationPath;
+        debugResult.entryCount           = operationResult.entryCount;
+        debugResult.bytesProcessed       = operationResult.bytesProcessed;
         debugResult.skippedConflictCount = operationResult.skippedConflictCount;
-        debugResult.entries            = operationResult.entries;
-        _debugLastArchiveCommandResult = std::move(debugResult);
+        debugResult.entries              = operationResult.entries;
+        _debugLastArchiveCommandResult   = std::move(debugResult);
     };
 #endif
 
@@ -12804,12 +12752,12 @@ void FolderWindow::CommandUnpack(Pane pane)
     if (deleteArchiveAfterUnpack)
     {
         FolderView::FileOperationRequest deleteRequest{};
-        deleteRequest.operation   = FILESYSTEM_DELETE;
-        deleteRequest.origin      = FolderView::FileOperationRequest::Origin::UnpackCleanup;
-        deleteRequest.sourcePaths = selectedPaths;
-        deleteRequest.flags       = FILESYSTEM_FLAG_NONE;
+        deleteRequest.operation                   = FILESYSTEM_DELETE;
+        deleteRequest.origin                      = FolderView::FileOperationRequest::Origin::UnpackCleanup;
+        deleteRequest.sourcePaths                 = selectedPaths;
+        deleteRequest.flags                       = FILESYSTEM_FLAG_NONE;
         deleteRequest.archiveDeleteAfterConfirmed = true;
-        const HRESULT deleteHr    = StartFileOperationFromFolderView(pane, std::move(deleteRequest));
+        const HRESULT deleteHr                    = StartFileOperationFromFolderView(pane, std::move(deleteRequest));
         if (FAILED(deleteHr))
         {
             ShowArchiveOverlay(
@@ -13811,8 +13759,8 @@ void FolderWindow::CommandChangeAttributes(Pane pane)
         const std::wstring instanceContext   = state.instanceContext;
         FolderWindow* const owner            = this;
 
-        state.changeAttributesThread = std::jthread(
-            [owner, ownerHwnd, pane, fileSystem, pluginId, instanceContext, paths, options, title, taskId](std::stop_token stopToken) noexcept
+        state.changeAttributesThread =
+            std::jthread([owner, ownerHwnd, pane, fileSystem, pluginId, instanceContext, paths, options, title, taskId](std::stop_token stopToken) noexcept
         {
             const auto operationStartedAt = std::chrono::steady_clock::now();
             const HRESULT coinitHr        = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
@@ -13862,9 +13810,9 @@ void FolderWindow::CommandChangeAttributes(Pane pane)
             }
 
             DirectMutationArtifactGuard artifactGuard{
-                .owner = owner,
-                .fileSystem = fileSystem,
-                .pluginId = pluginId,
+                .owner           = owner,
+                .fileSystem      = fileSystem,
+                .pluginId        = pluginId,
                 .instanceContext = instanceContext,
             };
             if (SUCCEEDED(operationHr) && ! workItems.empty())
@@ -13935,11 +13883,11 @@ void FolderWindow::CommandChangeAttributes(Pane pane)
     ChangeAttributesReport report{};
     bool refreshNeeded = false;
     DirectMutationArtifactGuard artifactGuard{
-        .owner = this,
-        .fileSystem = state.fileSystem,
-        .pluginId = state.pluginId,
+        .owner           = this,
+        .fileSystem      = state.fileSystem,
+        .pluginId        = state.pluginId,
         .instanceContext = state.instanceContext,
-        .receipt = std::move(artifactTouchReceipt),
+        .receipt         = std::move(artifactTouchReceipt),
     };
     for (const std::filesystem::path& path : paths)
     {
@@ -14040,15 +13988,7 @@ void FolderWindow::CommandChangeCase(Pane pane)
     }
 
     state.changeCaseThread =
-        std::jthread([ownerHwnd,
-                      pane,
-                      fileSystem,
-                      pluginId,
-                      paths,
-                      options,
-                      title,
-                      focusFolder,
-                      focusDisplayName](std::stop_token stopToken) mutable noexcept
+        std::jthread([ownerHwnd, pane, fileSystem, pluginId, paths, options, title, focusFolder, focusDisplayName](std::stop_token stopToken) mutable noexcept
     {
         const HRESULT coinitHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
         if (FAILED(coinitHr))
@@ -14090,8 +14030,8 @@ void FolderWindow::CommandChangeCase(Pane pane)
                 info.finished                   = finished;
                 info.resultHr                   = hr;
 
-                auto payload    = std::make_unique<ChangeCaseTaskPayload>();
-                payload->update = std::move(info);
+                auto payload     = std::make_unique<ChangeCaseTaskPayload>();
+                payload->update  = std::move(info);
                 payload->receipt = receipt;
                 static_cast<void>(PostMessagePayload(hwnd, WndMsg::kChangeCaseTaskUpdate, 0, std::move(payload)));
             }
@@ -14120,8 +14060,8 @@ void FolderWindow::CommandChangeCase(Pane pane)
                 info.changeCaseEnumerating      = last.phase == ChangeCase::ProgressUpdate::Phase::Enumerating;
                 info.changeCaseRenaming         = last.phase == ChangeCase::ProgressUpdate::Phase::Renaming;
 
-                auto payload    = std::make_unique<ChangeCaseTaskPayload>();
-                payload->update = std::move(info);
+                auto payload     = std::make_unique<ChangeCaseTaskPayload>();
+                payload->update  = std::move(info);
                 payload->receipt = receipt;
                 if (! PostMessagePayload(hwnd, WndMsg::kChangeCaseTaskUpdate, 0, std::move(payload)))
                 {
@@ -14129,7 +14069,7 @@ void FolderWindow::CommandChangeCase(Pane pane)
                 }
 
                 taskRevealPosted = true;
-                lastPostedTick = nowTick;
+                lastPostedTick   = nowTick;
             }
         };
 
@@ -14166,8 +14106,7 @@ void FolderWindow::CommandChangeCase(Pane pane)
 
         const auto discoveryStartedAt = std::chrono::steady_clock::now();
         std::vector<BatchRenameExecutionOp> operations;
-        const HRESULT operationHr = ChangeCase::BuildRenameOperations(
-            *fileSystem, pluginId, paths, options, operations, stopToken, onProgress, &progressState);
+        const HRESULT operationHr = ChangeCase::BuildRenameOperations(*fileSystem, pluginId, paths, options, operations, stopToken, onProgress, &progressState);
         Debug::Perf::Emit(L"changecase.discovery.us",
                           SUCCEEDED(operationHr) ? L"planned" : L"failed",
                           Debug::Perf::ElapsedUs(discoveryStartedAt),
@@ -14180,7 +14119,7 @@ void FolderWindow::CommandChangeCase(Pane pane)
 
         if (ownerHwnd && IsWindow(ownerHwnd) != FALSE)
         {
-            auto completed  = std::make_unique<ChangeCaseCompletedPayload>();
+            auto completed              = std::make_unique<ChangeCaseCompletedPayload>();
             completed->pane             = pane;
             completed->hr               = operationHr;
             completed->fileSystem       = fileSystem;

@@ -19,9 +19,9 @@
 
 namespace
 {
-using CreateFactoryFunc                            = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t* pluginId, void**);
-using EnumeratePluginsFunc                         = HRESULT(__stdcall*)(REFIID, const PluginMetaData** metaData, unsigned int* count);
-using GetConfigurationSchemaExportFunc             = HRESULT(__stdcall*)(REFIID, const wchar_t* pluginId, const char** schemaJsonUtf8);
+using CreateFactoryFunc                = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t* pluginId, void**);
+using EnumeratePluginsFunc             = HRESULT(__stdcall*)(REFIID, const PluginMetaData** metaData, unsigned int* count);
+using GetConfigurationSchemaExportFunc = HRESULT(__stdcall*)(REFIID, const wchar_t* pluginId, const char** schemaJsonUtf8);
 
 bool IsDllPath(const std::filesystem::path& path) noexcept
 {
@@ -437,8 +437,8 @@ HRESULT ViewerPluginManager::GetConfigurationSchema(std::wstring_view pluginId, 
     {
         const wchar_t* requestedPluginId = entry->factoryPluginId.empty() ? nullptr : entry->factoryPluginId.c_str();
         const char* schema               = nullptr;
-        const IID& requestedInterface = entry->type == PluginType::Terminal ? __uuidof(ITerminal) : __uuidof(IViewer);
-        const HRESULT schemaHr         = getConfigurationSchema(requestedInterface, requestedPluginId, &schema);
+        const IID& requestedInterface    = entry->type == PluginType::Terminal ? __uuidof(ITerminal) : __uuidof(IViewer);
+        const HRESULT schemaHr           = getConfigurationSchema(requestedInterface, requestedPluginId, &schema);
         if (SUCCEEDED(schemaHr))
         {
             outSchemaJsonUtf8 = SafeCoalesce(schema);
@@ -869,8 +869,8 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
             continue;
         }
 
-        bool handledAsMulti = false;
-        bool isRequestedType = true;
+        bool handledAsMulti           = false;
+        bool isRequestedType          = true;
         const IID& requestedInterface = candidate.type == PluginType::Terminal ? __uuidof(ITerminal) : __uuidof(IViewer);
 
         wil::unique_hmodule probe(LoadLibraryExW(candidate.path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH));
@@ -1069,9 +1069,8 @@ HRESULT ViewerPluginManager::EnsureLoaded(PluginEntry& entry) noexcept
         }
         if (! IsValidEnumeratedPluginRange(metaData, count))
         {
-            entry.loadError = std::format(L"RedSalamanderEnumeratePlugins returned an invalid metadata range (pointer={}, count={}).",
-                                          metaData != nullptr,
-                                          count);
+            entry.loadError =
+                std::format(L"RedSalamanderEnumeratePlugins returned an invalid metadata range (pointer={}, count={}).", metaData != nullptr, count);
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
@@ -1094,9 +1093,8 @@ HRESULT ViewerPluginManager::EnsureLoaded(PluginEntry& entry) noexcept
 
         if (! selectedMeta)
         {
-            entry.loadError = entry.factoryPluginId.empty()
-                                  ? L"A multi-plugin module requires a logical plugin id."
-                                  : std::format(L"Enumerated plugin id '{}' was not found.", entry.factoryPluginId);
+            entry.loadError = entry.factoryPluginId.empty() ? L"A multi-plugin module requires a logical plugin id."
+                                                            : std::format(L"Enumerated plugin id '{}' was not found.", entry.factoryPluginId);
             return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
         }
 
@@ -1197,23 +1195,22 @@ HRESULT ViewerPluginManager::EnsureLoaded(PluginEntry& entry) noexcept
 
 void ViewerPluginManager::UnloadAll(ModuleUnloadMode mode) noexcept
 {
-    PluginModuleLifecycle::UnloadAll(
-        _plugins,
-        _deferredUnloadEntries,
-        mode,
-        [this](PluginEntry& entry, ModuleUnloadMode unloadMode) noexcept
-        {
+    PluginModuleLifecycle::UnloadAll(_plugins,
+                                     _deferredUnloadEntries,
+                                     mode,
+                                     [this](PluginEntry& entry, ModuleUnloadMode unloadMode) noexcept
+    {
 #ifdef ENABLE_TESTS
-            const std::wstring traceId   = entry.id;
-            const std::wstring tracePath = entry.path.wstring();
-            SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::UnloadAll: unload begin id='{}' path='{}'", traceId, tracePath));
+        const std::wstring traceId   = entry.id;
+        const std::wstring tracePath = entry.path.wstring();
+        SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::UnloadAll: unload begin id='{}' path='{}'", traceId, tracePath));
 #endif
-            const bool unloaded = Unload(entry, unloadMode);
+        const bool unloaded = Unload(entry, unloadMode);
 #ifdef ENABLE_TESTS
-            SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::UnloadAll: unload complete id='{}'", traceId));
+        SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::UnloadAll: unload complete id='{}'", traceId));
 #endif
-            return unloaded;
-        });
+        return unloaded;
+    });
 }
 
 bool ViewerPluginManager::Unload(PluginEntry& entry, ModuleUnloadMode mode) noexcept
@@ -1235,7 +1232,7 @@ bool ViewerPluginManager::Unload(PluginEntry& entry, ModuleUnloadMode mode) noex
     if (! unloaded)
     {
         PluginModuleLifecycle::MarkDeferred(entry);
-        entry.createFactory  = nullptr;
+        entry.createFactory = nullptr;
         return false;
     }
     entry.unloadDeferred = false;

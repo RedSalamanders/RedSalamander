@@ -1,8 +1,8 @@
 #if defined(ENABLE_TESTS)
 
 // The loopback HTTP fixture must precede the Windows headers the plugin header pulls in.
-#include "LoopbackHttpFixture.h"
 #include "ContentDigest.h"
+#include "LoopbackHttpFixture.h"
 
 #include "FileSystemMicrosoftDrive.h"
 
@@ -11,8 +11,8 @@
 #include <cctype>
 #include <charconv>
 #include <chrono>
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
 #include <format>
 #include <map>
 #include <memory>
@@ -179,7 +179,8 @@ class FakeGraphDrive final
 public:
     FakeGraphDrive()
     {
-        _items.push_back(DriveItem{.id = "root", .name = "", .parentId = "", .isFolder = true, .bytes = {}, .version = 1u, .modified = Common::SelfTest::LoopbackHttpNowSeconds()});
+        _items.push_back(DriveItem{
+            .id = "root", .name = "", .parentId = "", .isFolder = true, .bytes = {}, .version = 1u, .modified = Common::SelfTest::LoopbackHttpNowSeconds()});
     }
     FakeGraphDrive(const FakeGraphDrive&)            = delete;
     FakeGraphDrive& operator=(const FakeGraphDrive&) = delete;
@@ -258,10 +259,10 @@ public:
         if (path.starts_with("items/"))
         {
             path.remove_prefix(6u);
-            const size_t slash   = path.find('/');
-            const std::string id = std::string(path.substr(0, slash));
+            const size_t slash          = path.find('/');
+            const std::string id        = std::string(path.substr(0, slash));
             const std::string_view tail = slash == std::string_view::npos ? std::string_view{} : path.substr(slash);
-            DriveItem* item      = FindByIdLocked(id);
+            DriveItem* item             = FindByIdLocked(id);
             if (item == nullptr)
             {
                 return ErrorResponse(404, "itemNotFound", "The resource could not be found.");
@@ -388,12 +389,12 @@ private:
 
     [[nodiscard]] DriveItem& AddItemLocked(std::string name, std::string parentId, bool isFolder)
     {
-        _items.push_back(DriveItem{.id = std::format("item-{}", ++_nextId),
-                                   .name = std::move(name),
+        _items.push_back(DriveItem{.id       = std::format("item-{}", ++_nextId),
+                                   .name     = std::move(name),
                                    .parentId = std::move(parentId),
                                    .isFolder = isFolder,
-                                   .bytes = {},
-                                   .version = ++_nextVersion,
+                                   .bytes    = {},
+                                   .version  = ++_nextVersion,
                                    .modified = Common::SelfTest::LoopbackHttpNowSeconds()});
         return _items.back();
     }
@@ -417,16 +418,17 @@ private:
 
     [[nodiscard]] std::string ItemJsonLocked(const DriveItem& item) const
     {
-        std::string json = std::format(R"({{"id":{},"name":{},"eTag":{},"cTag":{},"size":{},"parentReference":{{"id":{},"driveId":{}}},"createdDateTime":"{}","lastModifiedDateTime":"{}",)",
-                                       JsonQuote(item.id),
-                                       JsonQuote(item.name),
-                                       JsonQuote(Etag(item)),
-                                       JsonQuote(Etag(item)),
-                                       item.bytes.size(),
-                                       JsonQuote(item.parentId),
-                                       JsonQuote(kDriveId),
-                                       Common::SelfTest::LoopbackHttpIso8601(item.modified),
-                                       Common::SelfTest::LoopbackHttpIso8601(item.modified));
+        std::string json = std::format(
+            R"({{"id":{},"name":{},"eTag":{},"cTag":{},"size":{},"parentReference":{{"id":{},"driveId":{}}},"createdDateTime":"{}","lastModifiedDateTime":"{}",)",
+            JsonQuote(item.id),
+            JsonQuote(item.name),
+            JsonQuote(Etag(item)),
+            JsonQuote(Etag(item)),
+            item.bytes.size(),
+            JsonQuote(item.parentId),
+            JsonQuote(kDriveId),
+            Common::SelfTest::LoopbackHttpIso8601(item.modified),
+            Common::SelfTest::LoopbackHttpIso8601(item.modified));
         if (item.isFolder)
         {
             size_t childCount = 0u;
@@ -449,11 +451,12 @@ private:
                 static_cast<void>(Common::Crypto::ComputeContentDigest(algorithm, std::as_bytes(std::span(item.bytes)), digest));
                 return JsonQuote(Common::Crypto::EncodeBase64Digest(digest));
             };
-            json += std::format(R"("file":{{"mimeType":"application/octet-stream","hashes":{{"sha256Hash":{},"sha1Hash":{},"quickXorHash":{}}}}},"@microsoft.graph.downloadUrl":{}}})",
-                                digestBase64(Common::Crypto::ContentDigestAlgorithm::Sha256),
-                                digestBase64(Common::Crypto::ContentDigestAlgorithm::Sha1),
-                                digestBase64(Common::Crypto::ContentDigestAlgorithm::QuickXor),
-                                JsonQuote(_baseUrl + "/download/" + item.id));
+            json += std::format(
+                R"("file":{{"mimeType":"application/octet-stream","hashes":{{"sha256Hash":{},"sha1Hash":{},"quickXorHash":{}}}}},"@microsoft.graph.downloadUrl":{}}})",
+                digestBase64(Common::Crypto::ContentDigestAlgorithm::Sha256),
+                digestBase64(Common::Crypto::ContentDigestAlgorithm::Sha1),
+                digestBase64(Common::Crypto::ContentDigestAlgorithm::QuickXor),
+                JsonQuote(_baseUrl + "/download/" + item.id));
         }
         return json;
     }
@@ -494,7 +497,8 @@ private:
         json += "]";
         if (index < children.size())
         {
-            json += std::format(R"(,"@odata.nextLink":{})", JsonQuote(std::format("{}/v1.0/drives/{}/items/{}/children?$top={}&$skip={}", _baseUrl, kDriveId, parent.id, top, index)));
+            json += std::format(R"(,"@odata.nextLink":{})",
+                                JsonQuote(std::format("{}/v1.0/drives/{}/items/{}/children?$top={}&$skip={}", _baseUrl, kDriveId, parent.id, top, index)));
         }
         json += "}";
         LoopbackHttpResponse response = JsonResponse(200, std::move(json));
@@ -543,7 +547,8 @@ private:
         }
         if (request.method == "PATCH" && tail.empty())
         {
-            if (const std::string* ifMatch = request.Header("if-match"); ifMatch != nullptr && StripQuotes(*ifMatch) != StripQuotes(Etag(item)) && *ifMatch != "*")
+            if (const std::string* ifMatch = request.Header("if-match");
+                ifMatch != nullptr && StripQuotes(*ifMatch) != StripQuotes(Etag(item)) && *ifMatch != "*")
             {
                 return ErrorResponse(412, "preconditionFailed", "ETag does not match.");
             }
@@ -590,10 +595,10 @@ private:
 
     [[nodiscard]] LoopbackHttpResponse StoreFileLocked(std::string_view drivePath, std::vector<uint8_t> bytes, bool allowOverwrite)
     {
-        const size_t slash              = drivePath.find_last_of('/');
-        const std::string parentPath    = slash == std::string_view::npos || slash == 0u ? std::string("/") : std::string(drivePath.substr(0, slash));
-        const std::string leaf          = std::string(drivePath.substr(slash == std::string_view::npos ? 0u : slash + 1u));
-        DriveItem* parent               = FindByPathLocked(parentPath);
+        const size_t slash           = drivePath.find_last_of('/');
+        const std::string parentPath = slash == std::string_view::npos || slash == 0u ? std::string("/") : std::string(drivePath.substr(0, slash));
+        const std::string leaf       = std::string(drivePath.substr(slash == std::string_view::npos ? 0u : slash + 1u));
+        DriveItem* parent            = FindByPathLocked(parentPath);
         if (parent == nullptr || ! parent->isFolder || leaf.empty())
         {
             return ErrorResponse(404, "itemNotFound", "parent not found");
@@ -659,7 +664,8 @@ private:
         }
         const std::string sessionId = std::format("session-{}", ++_nextId);
         _uploads.insert_or_assign(sessionId, UploadSession{.path = std::string(drivePath), .allowOverwrite = allowOverwrite, .bytes = {}, .total = 0u});
-        return JsonResponse(200, std::format(R"({{"uploadUrl":{},"expirationDateTime":"2099-01-01T00:00:00Z"}})", JsonQuote(_baseUrl + "/upload/" + sessionId)));
+        return JsonResponse(200,
+                            std::format(R"({{"uploadUrl":{},"expirationDateTime":"2099-01-01T00:00:00Z"}})", JsonQuote(_baseUrl + "/upload/" + sessionId)));
     }
 
     [[nodiscard]] LoopbackHttpResponse HandleUploadLocked(const LoopbackHttpRequest& request, std::string_view sessionId)
@@ -708,7 +714,8 @@ private:
         upload.bytes.insert(upload.bytes.end(), request.body.begin(), request.body.end());
         if (upload.bytes.size() < upload.total)
         {
-            return JsonResponse(202, std::format(R"({{"expirationDateTime":"2099-01-01T00:00:00Z","nextExpectedRanges":["{}-{}"]}})", upload.bytes.size(), upload.total - 1u));
+            return JsonResponse(
+                202, std::format(R"({{"expirationDateTime":"2099-01-01T00:00:00Z","nextExpectedRanges":["{}-{}"]}})", upload.bytes.size(), upload.total - 1u));
         }
         const std::string drivePath   = upload.path;
         const bool allowOverwrite     = upload.allowOverwrite;
@@ -893,13 +900,14 @@ void RunGraphStalledRequestCancelSelfTests(unsigned int& passed, unsigned int& f
         }
         constexpr uint32_t kConnectTimeoutMs = 2'000u;
         constexpr uint32_t kRequestTimeoutMs = 3'000u;
-        HRESULT hr = fileSystem->SetConfiguration(R"({"connectTimeoutMs":2000,"requestTimeoutMs":3000})");
+        HRESULT hr                           = fileSystem->SetConfiguration(R"({"connectTimeoutMs":2000,"requestTimeoutMs":3000})");
         if (! DebugCheck(SUCCEEDED(hr), L"Microsoft Drive instance should accept the fixture configuration", passed, failed))
         {
             return;
         }
         const unsigned long boundMs = FileSystemMicrosoftDriveInternal::GraphProviderWatchdogTimeoutMs(kConnectTimeoutMs, kRequestTimeoutMs);
-        DebugCheck(boundMs > 0u && boundMs <= 20'000u, L"the Graph provider-owned bound must be a small nonzero value for the fixture timeouts", passed, failed);
+        DebugCheck(
+            boundMs > 0u && boundMs <= 20'000u, L"the Graph provider-owned bound must be a small nonzero value for the fixture timeouts", passed, failed);
 
         const auto recycleWithControl = [&](const wchar_t* path, CancelControl* control, std::atomic<HRESULT>& result) noexcept
         {
@@ -935,7 +943,10 @@ void RunGraphStalledRequestCancelSelfTests(unsigned int& passed, unsigned int& f
             deleter.join();
             DebugCheck(listingReached, L"the folder Recycle must list the children on the fixture", passed, failed);
             DebugCheck(returned, L"a request whose body is still arriving must return after Cancel", passed, failed);
-            DebugCheck(deleteHr.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_CANCELLED), L"a canceled streaming request must report ERROR_CANCELLED", passed, failed);
+            DebugCheck(deleteHr.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                       L"a canceled streaming request must report ERROR_CANCELLED",
+                       passed,
+                       failed);
             std::fwprintf(stderr, L"[Microsoft Drive] streaming request returned %llu ms after Cancel\n", static_cast<unsigned long long>(cancelMs));
             DebugCheck(cancelMs < 3'000u, L"Cancel must return a streaming request within a few read chunks", passed, failed);
             DebugCheck(endpoint.Server().RequestCount("DELETE") == 0u, L"a Recycle canceled while listing must not delete anything", passed, failed);
@@ -970,8 +981,14 @@ void RunGraphStalledRequestCancelSelfTests(unsigned int& passed, unsigned int& f
             deleter.join();
             DebugCheck(deleteReached, L"the stalled DELETE must reach the fixture", passed, failed);
             DebugCheck(returned, L"a request the server never answers must return after Cancel", passed, failed);
-            DebugCheck(deleteHr.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_CANCELLED), L"a canceled stalled request must report ERROR_CANCELLED", passed, failed);
-            std::fwprintf(stderr, L"[Microsoft Drive] stalled request returned %llu ms after Cancel (declared bound %lu ms)\n", static_cast<unsigned long long>(cancelMs), boundMs);
+            DebugCheck(deleteHr.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                       L"a canceled stalled request must report ERROR_CANCELLED",
+                       passed,
+                       failed);
+            std::fwprintf(stderr,
+                          L"[Microsoft Drive] stalled request returned %llu ms after Cancel (declared bound %lu ms)\n",
+                          static_cast<unsigned long long>(cancelMs),
+                          boundMs);
             DebugCheck(cancelMs <= boundMs + 5'000u, L"Cancel on a silent server must return within the declared provider-owned bound", passed, failed);
             if (! returned)
             {
@@ -990,7 +1007,10 @@ void RunGraphStalledRequestCancelSelfTests(unsigned int& passed, unsigned int& f
                        L"an un-canceled stalled request must fail through the transport bound, not as a cancel",
                        passed,
                        failed);
-            std::fwprintf(stderr, L"[Microsoft Drive] stalled request returned on its own after %llu ms (declared bound %lu ms)\n", static_cast<unsigned long long>(elapsedMs), boundMs);
+            std::fwprintf(stderr,
+                          L"[Microsoft Drive] stalled request returned on its own after %llu ms (declared bound %lu ms)\n",
+                          static_cast<unsigned long long>(elapsedMs),
+                          boundMs);
             DebugCheck(elapsedMs <= boundMs + 5'000u, L"the provider-owned bound must return a stalled request on its own", passed, failed);
         }
         endpoint.Server().SetStallMethod({}, 0u);
@@ -1117,7 +1137,9 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderMicrosoftDriveSt
     }
 }
 
-extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderMicrosoftDriveFakeGraphRequestLogForSelfTest(void* endpoint, wchar_t* buffer, unsigned int capacity) noexcept
+extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderMicrosoftDriveFakeGraphRequestLogForSelfTest(void* endpoint,
+                                                                                                             wchar_t* buffer,
+                                                                                                             unsigned int capacity) noexcept
 {
     if (endpoint == nullptr || buffer == nullptr || capacity == 0u)
     {

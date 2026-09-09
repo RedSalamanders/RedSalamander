@@ -1,7 +1,7 @@
 #include "FolderViewInternal.h"
 #ifdef ENABLE_TESTS
-#include "SelfTestCommon.h"
 #include "SelfTest/Common/SelfTestLatencyHooks.h"
+#include "SelfTestCommon.h"
 #endif
 
 #include <exception>
@@ -969,18 +969,18 @@ HRESULT FolderView::ExtractProviderAllowedThumbnailWithDeadline(const ThumbnailL
 
     struct ProviderAllowedWork
     {
-        ProviderAllowedWork() noexcept                              = default;
-        ProviderAllowedWork(const ProviderAllowedWork&)             = delete;
-        ProviderAllowedWork& operator=(const ProviderAllowedWork&)  = delete;
-        ProviderAllowedWork(ProviderAllowedWork&&)                  = delete;
-        ProviderAllowedWork& operator=(ProviderAllowedWork&&)       = delete;
+        ProviderAllowedWork() noexcept                             = default;
+        ProviderAllowedWork(const ProviderAllowedWork&)            = delete;
+        ProviderAllowedWork& operator=(const ProviderAllowedWork&) = delete;
+        ProviderAllowedWork(ProviderAllowedWork&&)                 = delete;
+        ProviderAllowedWork& operator=(ProviderAllowedWork&&)      = delete;
 
         std::shared_ptr<ProviderAllowedSharedState> state;
-        HWND hwnd                         = nullptr;
-        uint64_t thumbnailLoadBatchId     = 0;
-        uint64_t enumerationGeneration    = 0;
-        size_t itemIndex                  = static_cast<size_t>(-1);
-        uint32_t targetPx                 = 0;
+        HWND hwnd                      = nullptr;
+        uint64_t thumbnailLoadBatchId  = 0;
+        uint64_t enumerationGeneration = 0;
+        size_t itemIndex               = static_cast<size_t>(-1);
+        uint32_t targetPx              = 0;
         std::filesystem::path fullPath;
 
         void Execute() noexcept
@@ -1032,17 +1032,17 @@ HRESULT FolderView::ExtractProviderAllowedThumbnailWithDeadline(const ThumbnailL
                 return;
             }
 
-            auto payload                         = std::make_unique<ThumbnailBitmapRequest>();
-            payload->thumbnailLoadBatchId        = thumbnailLoadBatchId;
-            payload->enumerationGeneration       = enumerationGeneration;
-            payload->itemIndex                   = itemIndex;
-            payload->targetPx                    = targetPx;
-            payload->postedAt                    = std::chrono::steady_clock::now();
-            payload->hBitmap                     = std::move(lateBitmap);
-            payload->hr                          = hr;
-            payload->usedFallback                = false;
-            payload->countsPending               = false;
-            payload->sourceKind                  = ThumbnailBitmapRequest::SourceKind::Shell;
+            auto payload                   = std::make_unique<ThumbnailBitmapRequest>();
+            payload->thumbnailLoadBatchId  = thumbnailLoadBatchId;
+            payload->enumerationGeneration = enumerationGeneration;
+            payload->itemIndex             = itemIndex;
+            payload->targetPx              = targetPx;
+            payload->postedAt              = std::chrono::steady_clock::now();
+            payload->hBitmap               = std::move(lateBitmap);
+            payload->hr                    = hr;
+            payload->usedFallback          = false;
+            payload->countsPending         = false;
+            payload->sourceKind            = ThumbnailBitmapRequest::SourceKind::Shell;
             static_cast<void>(PostMessagePayload(hwnd, WndMsg::kFolderViewCreateThumbnailBitmap, 0, std::move(payload)));
         }
     };
@@ -1054,14 +1054,14 @@ HRESULT FolderView::ExtractProviderAllowedThumbnailWithDeadline(const ThumbnailL
         return HRESULT_FROM_WIN32(GetLastError());
     }
 
-    auto work                         = std::make_unique<ProviderAllowedWork>();
-    work->state                       = state;
-    work->hwnd                        = _hWnd.get();
-    work->thumbnailLoadBatchId        = request.thumbnailLoadBatchId;
-    work->enumerationGeneration       = request.enumerationGeneration;
-    work->itemIndex                   = request.itemIndex;
-    work->targetPx                    = request.targetPx;
-    work->fullPath                    = request.fullPath;
+    auto work                   = std::make_unique<ProviderAllowedWork>();
+    work->state                 = state;
+    work->hwnd                  = _hWnd.get();
+    work->thumbnailLoadBatchId  = request.thumbnailLoadBatchId;
+    work->enumerationGeneration = request.enumerationGeneration;
+    work->itemIndex             = request.itemIndex;
+    work->targetPx              = request.targetPx;
+    work->fullPath              = request.fullPath;
 
     if (! SubmitOwnedThreadpoolCallback(work))
     {
@@ -1751,15 +1751,14 @@ bool FolderView::DebugSeedThumbnailPendingAndPostThumbnailBitmapMessagesForTest(
     const uint64_t staleBatchId      = currentBatchId == 0u ? 1u : currentBatchId - 1u;
     const uint64_t staleGeneration   = currentGeneration == UINT64_MAX ? currentGeneration - 1u : currentGeneration + 1u;
     const uint32_t targetPx          = static_cast<uint32_t>(std::max(1, PxFromDip(_iconSizeDip)));
-    const auto postThumbnailMessage =
-        [&](uint64_t batchId, uint64_t enumerationGeneration, bool successfulBitmap) -> bool
+    const auto postThumbnailMessage  = [&](uint64_t batchId, uint64_t enumerationGeneration, bool successfulBitmap) -> bool
     {
-        auto payload                         = std::make_unique<ThumbnailBitmapRequest>();
-        payload->thumbnailLoadBatchId        = batchId;
-        payload->enumerationGeneration       = enumerationGeneration;
-        payload->itemIndex                   = 0u;
-        payload->targetPx                    = targetPx;
-        payload->postedAt                    = std::chrono::steady_clock::now();
+        auto payload                   = std::make_unique<ThumbnailBitmapRequest>();
+        payload->thumbnailLoadBatchId  = batchId;
+        payload->enumerationGeneration = enumerationGeneration;
+        payload->itemIndex             = 0u;
+        payload->targetPx              = targetPx;
+        payload->postedAt              = std::chrono::steady_clock::now();
         if (successfulBitmap)
         {
             payload->hBitmap = CreateSyntheticThumbnailBitmap(targetPx, 0u, false);

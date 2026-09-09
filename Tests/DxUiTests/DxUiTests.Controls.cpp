@@ -137,7 +137,7 @@ void TestFocusRingPaintPathsHandleMissingDeviceContext()
 void TestChevronGlyphRenderingIsSharedAcrossComboBoxAndGrid()
 {
     const std::filesystem::path repoRoot = FindRepoRootForDxUiTests();
-    const auto readSource = [](const std::filesystem::path& path, const char* context)
+    const auto readSource                = [](const std::filesystem::path& path, const char* context)
     {
         std::ifstream input(path);
         Require(input.good(), context);
@@ -147,9 +147,8 @@ void TestChevronGlyphRenderingIsSharedAcrossComboBoxAndGrid()
     const std::string header = readSource(repoRoot / L"Common" / L"DxUi" / L"DxUi.h", "DxUi header is readable for chevron glyph contract");
     const std::string controls =
         readSource(repoRoot / L"Common" / L"DxUi" / L"DxUi.Controls.cpp", "DxUi controls source is readable for chevron glyph contract");
-    const std::string combo =
-        readSource(repoRoot / L"Common" / L"DxUi" / L"DxUi.ComboBox.cpp", "DxUi ComboBox source is readable for chevron glyph contract");
-    const std::string grid = readSource(repoRoot / L"Common" / L"DxUi" / L"DxUi.Grid.cpp", "DxUi Grid source is readable for chevron glyph contract");
+    const std::string combo = readSource(repoRoot / L"Common" / L"DxUi" / L"DxUi.ComboBox.cpp", "DxUi ComboBox source is readable for chevron glyph contract");
+    const std::string grid  = readSource(repoRoot / L"Common" / L"DxUi" / L"DxUi.Grid.cpp", "DxUi Grid source is readable for chevron glyph contract");
 
     Require(header.find("enum class ChevronDirection") != std::string::npos && header.find("void DrawChevronGlyph(") != std::string::npos,
             "DxUi publishes the canonical directional chevron glyph renderer");
@@ -540,7 +539,7 @@ void TestMenuBarCachesItemLayoutRectsAndWidths()
     Require(hitTestBlock.find("const MenuBarLayoutCache& layout") != std::string::npos, "MenuBar hit testing reuses cached layout");
     Require(hitTestBlock.find("GetItemRect(host, index)") == std::string::npos, "MenuBar hit testing no longer asks each item to rebuild preceding geometry");
 
-    const std::string paintBlock = requireSourceBlock("void MenuBar::Paint", "bool MenuBar::OnMouseMove", "MenuBar paint block is found");
+    const std::string paintBlock           = requireSourceBlock("void MenuBar::Paint", "bool MenuBar::OnMouseMove", "MenuBar paint block is found");
     const std::string normalizedPaintBlock = RemoveAsciiWhitespace(paintBlock);
     Require(normalizedPaintBlock.find("constMenuBarLayoutCache&layout=EnsureMenuBarLayoutCache(host)") != std::string::npos,
             "MenuBar paint reuses cached layout");
@@ -780,15 +779,9 @@ void TestTabControlBodyDragReleaseOverCloseButtonDoesNotCloseTab()
         closeRequestedIndex = index;
         return false;
     });
-    tabs->SetOnTabClosed([&](size_t)
-    {
-        ++closedCount;
-    });
+    tabs->SetOnTabClosed([&](size_t) { ++closedCount; });
 
-    const auto centerOf = [](const D2D1_RECT_F& rect) noexcept
-    {
-        return D2D1::Point2F((rect.left + rect.right) * 0.5f, (rect.top + rect.bottom) * 0.5f);
-    };
+    const auto centerOf = [](const D2D1_RECT_F& rect) noexcept { return D2D1::Point2F((rect.left + rect.right) * 0.5f, (rect.top + rect.bottom) * 0.5f); };
 
     const D2D1_RECT_F firstTabRect   = tabs->DebugGetTabRect(0u);
     const D2D1_RECT_F thirdCloseRect = tabs->DebugGetCloseButtonRect(2u);
@@ -824,10 +817,7 @@ void TestTabControlReorderingPolicyPreservesStableHostIndices()
 
     Require(! tabs->IsTabReorderingEnabled(), "fixed-index TabControl host disables pointer reordering");
     const std::array expectedTitles{std::wstring_view(L"Folder"), std::wstring_view(L"Preview"), std::wstring_view(L"Terminal")};
-    const auto centerOf = [](const D2D1_RECT_F& rect) noexcept
-    {
-        return D2D1::Point2F((rect.left + rect.right) * 0.5f, (rect.top + rect.bottom) * 0.5f);
-    };
+    const auto centerOf = [](const D2D1_RECT_F& rect) noexcept { return D2D1::Point2F((rect.left + rect.right) * 0.5f, (rect.top + rect.bottom) * 0.5f); };
 
     for (size_t fromIndex = 0u; fromIndex < tabs->GetTabCount(); ++fromIndex)
     {
@@ -842,8 +832,7 @@ void TestTabControlReorderingPolicyPreservesStableHostIndices()
             Require(tabs->OnMouseDown(host, fromPoint, false, 0u), "fixed-index TabControl handles drag-start selection");
             Require(tabs->OnMouseMove(host, toPoint, 0u), "fixed-index TabControl handles cross-tab pointer movement");
             static_cast<void>(tabs->OnMouseUp(host, toPoint, false, 0u));
-            Require(tabs->GetSelectedIndex() == fromIndex,
-                    "fixed-index TabControl pointer movement preserves the selected semantic page");
+            Require(tabs->GetSelectedIndex() == fromIndex, "fixed-index TabControl pointer movement preserves the selected semantic page");
             for (size_t index = 0u; index < expectedTitles.size(); ++index)
             {
                 Require(tabs->GetTabTitle(index) == expectedTitles[index],
@@ -853,8 +842,7 @@ void TestTabControlReorderingPolicyPreservesStableHostIndices()
     }
 
     tabs->SetTabVisible(1u, false);
-    Require(! tabs->IsTabVisible(1u) && tabs->GetTabTitle(2u) == L"Terminal",
-            "hidden fixed-index tab retains later semantic indices");
+    Require(! tabs->IsTabVisible(1u) && tabs->GetTabTitle(2u) == L"Terminal", "hidden fixed-index tab retains later semantic indices");
     tabs->SetSelectedIndex(2u);
     Require(tabs->GetSelectedIndex() == 2u && tabs->OnKeyDown(host, VK_LEFT, 0u) && tabs->GetSelectedIndex() == 0u,
             "fixed-index TabControl keyboard navigation skips a hidden semantic tab");
@@ -865,7 +853,7 @@ void TestTabControlReorderingReportsStableMove()
     using namespace RedSalamander::DxUi;
 
     WindowHost host;
-    auto root = std::make_unique<Panel>();
+    auto root  = std::make_unique<Panel>();
     auto* tabs = root->AddChild<TabControl>();
     tabs->SetBounds(D2D1::RectF(0.0f, 0.0f, 640.0f, 180.0f));
     tabs->AddTab<Panel>(L"Alpha");
@@ -876,16 +864,15 @@ void TestTabControlReorderingReportsStableMove()
 
     std::optional<std::pair<size_t, size_t>> move;
     tabs->SetOnTabReordered([&](size_t fromIndex, size_t toIndex) noexcept { move = std::pair{fromIndex, toIndex}; });
-    const D2D1_RECT_F first = tabs->DebugGetTabRect(0u);
+    const D2D1_RECT_F first  = tabs->DebugGetTabRect(0u);
     const D2D1_RECT_F second = tabs->DebugGetTabRect(1u);
     const D2D1_POINT_2F from = D2D1::Point2F((first.left + first.right) * 0.5f, (first.top + first.bottom) * 0.5f);
-    const D2D1_POINT_2F to = D2D1::Point2F(second.left + 2.0f, (second.top + second.bottom) * 0.5f);
+    const D2D1_POINT_2F to   = D2D1::Point2F(second.left + 2.0f, (second.top + second.bottom) * 0.5f);
     Require(tabs->OnMouseDown(host, from, false, 0u), "reorder-reporting TabControl accepts the drag start");
     Require(tabs->OnMouseMove(host, to, 0u), "reorder-reporting TabControl accepts the drag move");
     static_cast<void>(tabs->OnMouseUp(host, to, false, 0u));
     Require(move == std::pair<size_t, size_t>{0u, 1u}, "TabControl reports the exact stable from/to move");
-    Require(tabs->GetTabTitle(0u) == L"Bravo" && tabs->GetTabTitle(1u) == L"Alpha",
-            "TabControl reorder notification matches the committed page order");
+    Require(tabs->GetTabTitle(0u) == L"Bravo" && tabs->GetTabTitle(1u) == L"Alpha", "TabControl reorder notification matches the committed page order");
 }
 
 void TestToggleMouseActivationOnlyFiresToggledCallbackWithUpdatedState()
@@ -1449,14 +1436,10 @@ void TestThroughputGraphHonorsMotionRainbowAndHighContrastContracts()
     Require(normalizedStart.r == normalizedEnd.r && normalizedStart.g == normalizedEnd.g && normalizedStart.b == normalizedEnd.b &&
                 normalizedStart.a == normalizedEnd.a,
             "throughput graph exposes one normalized hue-to-color contract for graph and related stream UI");
-    Require(! ShouldRenderThroughputGraphBands(false, true, false, 1u),
-            "ordinary-theme throughput bands stay off for one admitted stream");
-    Require(ShouldRenderThroughputGraphBands(false, true, false, 2u),
-            "ordinary-theme throughput bands engage for concurrent admitted streams");
-    Require(ShouldRenderThroughputGraphBands(true, true, false, 1u),
-            "Rainbow throughput bands may color one admitted stream");
-    Require(! ShouldRenderThroughputGraphBands(true, true, true, 2u),
-            "High Contrast suppresses throughput hue bands");
+    Require(! ShouldRenderThroughputGraphBands(false, true, false, 1u), "ordinary-theme throughput bands stay off for one admitted stream");
+    Require(ShouldRenderThroughputGraphBands(false, true, false, 2u), "ordinary-theme throughput bands engage for concurrent admitted streams");
+    Require(ShouldRenderThroughputGraphBands(true, true, false, 1u), "Rainbow throughput bands may color one admitted stream");
+    Require(! ShouldRenderThroughputGraphBands(true, true, true, 2u), "High Contrast suppresses throughput hue bands");
 
     WindowHost host;
     ThemePalette palette{};
@@ -1472,15 +1455,15 @@ void TestThroughputGraphHonorsMotionRainbowAndHighContrastContracts()
     host.SetRoot(std::move(root));
 
     std::array<ThroughputGraphSample, 2u> samples{};
-    samples[0].value                  = 10.0;
-    samples[0].hueDegrees             = 20.0f;
-    samples[0].hueWeights[0]          = ThroughputGraphHueWeight{20.0f, 1.0, 0u};
-    samples[0].hueWeightCount         = 1u;
-    samples[1].value                  = 20.0;
-    samples[1].hueDegrees             = 220.0f;
-    samples[1].hueWeights[0]          = ThroughputGraphHueWeight{20.0f, 1.0, 0u};
-    samples[1].hueWeights[1]          = ThroughputGraphHueWeight{220.0f, 1.0, 1u};
-    samples[1].hueWeightCount         = 2u;
+    samples[0].value          = 10.0;
+    samples[0].hueDegrees     = 20.0f;
+    samples[0].hueWeights[0]  = ThroughputGraphHueWeight{20.0f, 1.0, 0u};
+    samples[0].hueWeightCount = 1u;
+    samples[1].value          = 20.0;
+    samples[1].hueDegrees     = 220.0f;
+    samples[1].hueWeights[0]  = ThroughputGraphHueWeight{20.0f, 1.0, 0u};
+    samples[1].hueWeights[1]  = ThroughputGraphHueWeight{220.0f, 1.0, 1u};
+    samples[1].hueWeightCount = 2u;
     graph->SetSamples(samples);
     constexpr std::array<double, 2u> verificationSamples{{0.0, 7.0}};
     graph->SetSecondarySamples(verificationSamples);
@@ -1492,8 +1475,7 @@ void TestThroughputGraphHonorsMotionRainbowAndHighContrastContracts()
     Require(state.secondarySeriesVisible && state.secondarySeriesColorCustomized,
             "throughput graph exposes the distinct themed verification-throughput series");
     Require(state.transitionActive, "throughput graph eases a changed latest sample when motion is enabled");
-    Require(state.currentValueMarkerVisible && state.targetCurrentValue == 16.0,
-            "throughput graph retains the current effective-bandwidth marker");
+    Require(state.currentValueMarkerVisible && state.targetCurrentValue == 16.0, "throughput graph retains the current effective-bandwidth marker");
     static_cast<void>(graph->Tick(host, 100u));
     static_cast<void>(graph->Tick(host, 180u));
     state = graph->GetDebugState();
@@ -1505,8 +1487,7 @@ void TestThroughputGraphHonorsMotionRainbowAndHighContrastContracts()
     state = graph->GetDebugState();
     Require(! state.transitionActive && state.displayedLatestValue == state.targetLatestValue,
             "throughput graph completes its bounded latest-value transition");
-    Require(state.displayedCurrentValue == state.targetCurrentValue,
-            "throughput graph completes its bounded current-bandwidth marker transition");
+    Require(state.displayedCurrentValue == state.targetCurrentValue, "throughput graph completes its bounded current-bandwidth marker transition");
 
     graph->Paint(host);
     state = graph->GetDebugState();
@@ -1528,8 +1509,7 @@ void TestThroughputGraphHonorsMotionRainbowAndHighContrastContracts()
     state = graph->GetDebugState();
     Require(state.reducedMotion && ! state.transitionActive && state.displayedLatestValue == state.targetLatestValue,
             "reduced motion snaps throughput graph updates to the target value");
-    Require(state.displayedCurrentValue == state.targetCurrentValue,
-            "reduced motion snaps the current-bandwidth marker while keeping it visible");
+    Require(state.displayedCurrentValue == state.targetCurrentValue, "reduced motion snaps the current-bandwidth marker while keeping it visible");
 }
 
 } // namespace

@@ -100,16 +100,16 @@ case SelfTestState::Step::FileOps_CopyMergeIntoExistingFolder:
             conflictLayout.conflictDecisionDetailsLoadingVisible || conflictLayout.conflictDiscoveryIndicatorVisible ||
             conflictLayout.conflictTransferProgressVisible || ! conflictLayout.lastNoteVisibleWithoutClipping)
         {
-            Fail(std::format(
-                L"Actionable conflict card violated its decision-state contract (waiting={0}, promptBeforeActions={1}, promptFits={2}, contextFits={3}, loading={4}, discovery={5}, transfer={6}, lastNoteFits={7}).",
-                conflictLayout.conflictWaitingForDecisionVisible,
-                conflictLayout.conflictPromptPrecedesActions,
-                conflictLayout.conflictPromptVisibleWithoutClipping,
-                conflictLayout.conflictContextVisibleWithoutClipping,
-                conflictLayout.conflictDecisionDetailsLoadingVisible,
-                conflictLayout.conflictDiscoveryIndicatorVisible,
-                conflictLayout.conflictTransferProgressVisible,
-                conflictLayout.lastNoteVisibleWithoutClipping));
+            Fail(std::format(L"Actionable conflict card violated its decision-state contract (waiting={0}, promptBeforeActions={1}, promptFits={2}, "
+                             L"contextFits={3}, loading={4}, discovery={5}, transfer={6}, lastNoteFits={7}).",
+                             conflictLayout.conflictWaitingForDecisionVisible,
+                             conflictLayout.conflictPromptPrecedesActions,
+                             conflictLayout.conflictPromptVisibleWithoutClipping,
+                             conflictLayout.conflictContextVisibleWithoutClipping,
+                             conflictLayout.conflictDecisionDetailsLoadingVisible,
+                             conflictLayout.conflictDiscoveryIndicatorVisible,
+                             conflictLayout.conflictTransferProgressVisible,
+                             conflictLayout.lastNoteVisibleWithoutClipping));
             return true;
         }
 
@@ -175,9 +175,8 @@ case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume:
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
-        AppendLog(std::format(L"Move-merge timeout at substep {} with race attempts {}.",
-                              state.stepState,
-                              TakeFileOpsNativeMoveCreateDirectoryRaceAttemptsForSelfTest()));
+        AppendLog(std::format(
+            L"Move-merge timeout at substep {} with race attempts {}.", state.stepState, TakeFileOpsNativeMoveCreateDirectoryRaceAttemptsForSelfTest()));
         const auto logTimedOutTask = [&](std::wstring_view label, const std::optional<uint64_t>& taskId) noexcept
         {
             const auto* task = state.fileOps != nullptr && taskId.has_value() ? state.fileOps->FindTask(taskId.value()) : nullptr;
@@ -197,97 +196,85 @@ case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume:
         return true;
     }
 
-    const std::filesystem::path srcRoot   = state.tempRoot / L"clearflow-move-merge-src";
-    const std::filesystem::path dstRoot   = state.tempRoot / L"clearflow-move-merge-dst";
-    const std::filesystem::path srcFoo    = srcRoot / L"Foo";
-    const std::filesystem::path dstFoo    = dstRoot / L"Foo";
-    const std::filesystem::path srcFile   = srcFoo / L"new.bin";
-    const std::filesystem::path dstFile   = dstFoo / L"new.bin";
-    const std::filesystem::path srcNested = srcFoo / L"nested" / L"child.bin";
-    const std::filesystem::path dstNested = dstFoo / L"nested" / L"child.bin";
-    const std::filesystem::path dstKeep   = dstFoo / L"keep.bin";
-    const std::filesystem::path srcConflict = srcFoo / L"conflict.bin";
-    const std::filesystem::path dstConflict = dstFoo / L"conflict.bin";
-    const std::filesystem::path nativeSrcRoot = state.tempRoot / L"clearflow-native-file-src";
-    const std::filesystem::path nativeDstRoot = state.tempRoot / L"clearflow-native-file-dst";
-    const std::filesystem::path nativeSource  = nativeSrcRoot / L"native.bin";
-    const std::filesystem::path nativeTarget  = nativeDstRoot / nativeSource.filename();
-    const std::filesystem::path raceSrcRoot   = state.tempRoot / L"clearflow-native-race-src";
-    const std::filesystem::path raceDstRoot   = state.tempRoot / L"clearflow-native-race-dst";
-    const std::filesystem::path raceSource    = raceSrcRoot / L"RacedFolder";
-    const std::filesystem::path raceTarget    = raceDstRoot / raceSource.filename();
-    const std::filesystem::path raceSourceFile = raceSource / L"source.bin";
-    const std::filesystem::path raceTargetFile = raceTarget / raceSourceFile.filename();
-    const std::filesystem::path mixedSrcRoot   = state.tempRoot / L"clearflow-mixed-strategy-src";
-    const std::filesystem::path mixedDstRoot   = state.tempRoot / L"clearflow-mixed-strategy-dst";
-    const std::filesystem::path mixedMergeSource = mixedSrcRoot / L"MergeFolder";
-    const std::filesystem::path mixedNativeSource = mixedSrcRoot / L"native.bin";
-    const std::filesystem::path mixedMergeTarget = mixedDstRoot / mixedMergeSource.filename();
-    const std::filesystem::path mixedNativeTarget = mixedDstRoot / mixedNativeSource.filename();
-    const std::filesystem::path atomicNativeSrcRoot = state.tempRoot / L"clearflow-atomic-native-src";
-    const std::filesystem::path atomicNativeDstRoot = state.tempRoot / L"clearflow-atomic-native-dst";
-    const std::filesystem::path atomicNativeSource = atomicNativeSrcRoot / L"Folder";
-    const std::filesystem::path atomicNativeTarget = atomicNativeDstRoot / atomicNativeSource.filename();
-    const std::filesystem::path atomicNativeSourceFile = atomicNativeSource / L"source.bin";
-    const std::filesystem::path atomicNativeTargetFile = atomicNativeTarget / L"keep.bin";
-    const std::filesystem::path caseOnlyRoot = state.tempRoot / L"clearflow-case-only-directory";
-    const std::filesystem::path caseOnlySource = caseOnlyRoot / L"CaseOnlyFolder";
-    const std::filesystem::path caseOnlyDestination = caseOnlyRoot / L"caseonlyfolder";
-    const std::filesystem::path caseOnlyChild = caseOnlyDestination / L"child.bin";
-    const std::filesystem::path caseEntropySource = caseOnlyRoot / L"CaseEntropyFolder";
-    const std::filesystem::path caseEntropyDestination = caseOnlyRoot / L"caseentropyfolder";
-    const std::filesystem::path caseCollisionSource = caseOnlyRoot / L"CaseCollisionFolder";
+    const std::filesystem::path srcRoot                  = state.tempRoot / L"clearflow-move-merge-src";
+    const std::filesystem::path dstRoot                  = state.tempRoot / L"clearflow-move-merge-dst";
+    const std::filesystem::path srcFoo                   = srcRoot / L"Foo";
+    const std::filesystem::path dstFoo                   = dstRoot / L"Foo";
+    const std::filesystem::path srcFile                  = srcFoo / L"new.bin";
+    const std::filesystem::path dstFile                  = dstFoo / L"new.bin";
+    const std::filesystem::path srcNested                = srcFoo / L"nested" / L"child.bin";
+    const std::filesystem::path dstNested                = dstFoo / L"nested" / L"child.bin";
+    const std::filesystem::path dstKeep                  = dstFoo / L"keep.bin";
+    const std::filesystem::path srcConflict              = srcFoo / L"conflict.bin";
+    const std::filesystem::path dstConflict              = dstFoo / L"conflict.bin";
+    const std::filesystem::path nativeSrcRoot            = state.tempRoot / L"clearflow-native-file-src";
+    const std::filesystem::path nativeDstRoot            = state.tempRoot / L"clearflow-native-file-dst";
+    const std::filesystem::path nativeSource             = nativeSrcRoot / L"native.bin";
+    const std::filesystem::path nativeTarget             = nativeDstRoot / nativeSource.filename();
+    const std::filesystem::path raceSrcRoot              = state.tempRoot / L"clearflow-native-race-src";
+    const std::filesystem::path raceDstRoot              = state.tempRoot / L"clearflow-native-race-dst";
+    const std::filesystem::path raceSource               = raceSrcRoot / L"RacedFolder";
+    const std::filesystem::path raceTarget               = raceDstRoot / raceSource.filename();
+    const std::filesystem::path raceSourceFile           = raceSource / L"source.bin";
+    const std::filesystem::path raceTargetFile           = raceTarget / raceSourceFile.filename();
+    const std::filesystem::path mixedSrcRoot             = state.tempRoot / L"clearflow-mixed-strategy-src";
+    const std::filesystem::path mixedDstRoot             = state.tempRoot / L"clearflow-mixed-strategy-dst";
+    const std::filesystem::path mixedMergeSource         = mixedSrcRoot / L"MergeFolder";
+    const std::filesystem::path mixedNativeSource        = mixedSrcRoot / L"native.bin";
+    const std::filesystem::path mixedMergeTarget         = mixedDstRoot / mixedMergeSource.filename();
+    const std::filesystem::path mixedNativeTarget        = mixedDstRoot / mixedNativeSource.filename();
+    const std::filesystem::path atomicNativeSrcRoot      = state.tempRoot / L"clearflow-atomic-native-src";
+    const std::filesystem::path atomicNativeDstRoot      = state.tempRoot / L"clearflow-atomic-native-dst";
+    const std::filesystem::path atomicNativeSource       = atomicNativeSrcRoot / L"Folder";
+    const std::filesystem::path atomicNativeTarget       = atomicNativeDstRoot / atomicNativeSource.filename();
+    const std::filesystem::path atomicNativeSourceFile   = atomicNativeSource / L"source.bin";
+    const std::filesystem::path atomicNativeTargetFile   = atomicNativeTarget / L"keep.bin";
+    const std::filesystem::path caseOnlyRoot             = state.tempRoot / L"clearflow-case-only-directory";
+    const std::filesystem::path caseOnlySource           = caseOnlyRoot / L"CaseOnlyFolder";
+    const std::filesystem::path caseOnlyDestination      = caseOnlyRoot / L"caseonlyfolder";
+    const std::filesystem::path caseOnlyChild            = caseOnlyDestination / L"child.bin";
+    const std::filesystem::path caseEntropySource        = caseOnlyRoot / L"CaseEntropyFolder";
+    const std::filesystem::path caseEntropyDestination   = caseOnlyRoot / L"caseentropyfolder";
+    const std::filesystem::path caseCollisionSource      = caseOnlyRoot / L"CaseCollisionFolder";
     const std::filesystem::path caseCollisionDestination = caseOnlyRoot / L"casecollisionfolder";
-    const std::filesystem::path crossVolumeSource = state.tempRoot / L"clearflow-cross-volume-managed.bin";
+    const std::filesystem::path crossVolumeSource        = state.tempRoot / L"clearflow-cross-volume-managed.bin";
 
     if (state.stepState == 0)
     {
         AppendLog(L"Move-merge qualification: seeding fixtures");
-        if (! RecreateEmptyDirectory(srcRoot) || ! RecreateEmptyDirectory(dstRoot) ||
-            ! RecreateEmptyDirectory(nativeSrcRoot) || ! RecreateEmptyDirectory(nativeDstRoot) ||
-            ! RecreateEmptyDirectory(raceSrcRoot) || ! RecreateEmptyDirectory(raceDstRoot) ||
-            ! RecreateEmptyDirectory(mixedSrcRoot) || ! RecreateEmptyDirectory(mixedDstRoot) ||
-            ! RecreateEmptyDirectory(atomicNativeSrcRoot) || ! RecreateEmptyDirectory(atomicNativeDstRoot) ||
-            ! RecreateEmptyDirectory(caseOnlyRoot))
+        if (! RecreateEmptyDirectory(srcRoot) || ! RecreateEmptyDirectory(dstRoot) || ! RecreateEmptyDirectory(nativeSrcRoot) ||
+            ! RecreateEmptyDirectory(nativeDstRoot) || ! RecreateEmptyDirectory(raceSrcRoot) || ! RecreateEmptyDirectory(raceDstRoot) ||
+            ! RecreateEmptyDirectory(mixedSrcRoot) || ! RecreateEmptyDirectory(mixedDstRoot) || ! RecreateEmptyDirectory(atomicNativeSrcRoot) ||
+            ! RecreateEmptyDirectory(atomicNativeDstRoot) || ! RecreateEmptyDirectory(caseOnlyRoot))
         {
             Fail(L"Failed to reset move-merge directories.");
             return true;
         }
 
         if (! WriteTestFile(srcFile, 4 * 1024) || ! WriteTestFile(srcNested, 6 * 1024) || ! WriteTestFile(dstKeep, 3 * 1024) ||
-            ! WriteTestFile(srcConflict, 5 * 1024) || ! WriteTestFile(dstConflict, 1024) ||
-            ! WriteTestFile(nativeSource, 2 * 1024) || ! WriteTestFile(raceSourceFile, 9 * 1024) ||
-            ! WriteTestFile(mixedMergeSource / L"merge.bin", 5 * 1024) ||
-            ! WriteTestFile(mixedNativeSource, 6 * 1024) ||
-            ! WriteTestFile(mixedMergeTarget / L"keep.bin", 2 * 1024) ||
+            ! WriteTestFile(srcConflict, 5 * 1024) || ! WriteTestFile(dstConflict, 1024) || ! WriteTestFile(nativeSource, 2 * 1024) ||
+            ! WriteTestFile(raceSourceFile, 9 * 1024) || ! WriteTestFile(mixedMergeSource / L"merge.bin", 5 * 1024) ||
+            ! WriteTestFile(mixedNativeSource, 6 * 1024) || ! WriteTestFile(mixedMergeTarget / L"keep.bin", 2 * 1024) ||
             ! WriteTestFile(atomicNativeSourceFile, 3 * 1024) || ! WriteTestFile(atomicNativeTargetFile, 2 * 1024) ||
-            ! WriteTestFile(caseOnlySource / L"child.bin", 1536) ||
-            ! WriteTestFile(caseEntropySource / L"child.bin", 1024) ||
+            ! WriteTestFile(caseOnlySource / L"child.bin", 1536) || ! WriteTestFile(caseEntropySource / L"child.bin", 1024) ||
             ! WriteTestFile(caseCollisionSource / L"child.bin", 2048))
         {
             Fail(L"Failed to seed move-merge test tree.");
             return true;
         }
 
-        const HRESULT caseOnlyDirectoryHr = state.fsLocal->RenameItem(caseOnlySource.c_str(),
-                                                                       caseOnlyDestination.c_str(),
-                                                                       FILESYSTEM_FLAG_NONE,
-                                                                       nullptr,
-                                                                       nullptr,
-                                                                       nullptr);
-        bool sawOriginalCase = false;
+        const HRESULT caseOnlyDirectoryHr =
+            state.fsLocal->RenameItem(caseOnlySource.c_str(), caseOnlyDestination.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+        bool sawOriginalCase    = false;
         bool sawDestinationCase = false;
         std::error_code caseOnlyEc;
-        for (std::filesystem::directory_iterator it(caseOnlyRoot, caseOnlyEc), end;
-             ! caseOnlyEc && it != end;
-             it.increment(caseOnlyEc))
+        for (std::filesystem::directory_iterator it(caseOnlyRoot, caseOnlyEc), end; ! caseOnlyEc && it != end; it.increment(caseOnlyEc))
         {
             const std::wstring leaf = it->path().filename().native();
             sawOriginalCase |= leaf == L"CaseOnlyFolder";
             sawDestinationCase |= leaf == L"caseonlyfolder";
         }
-        if (FAILED(caseOnlyDirectoryHr) || caseOnlyEc || sawOriginalCase || ! sawDestinationCase ||
-            ! FileSizeEquals(caseOnlyChild, 1536))
+        if (FAILED(caseOnlyDirectoryHr) || caseOnlyEc || sawOriginalCase || ! sawDestinationCase || ! FileSizeEquals(caseOnlyChild, 1536))
         {
             Fail(std::format(L"Local provider case-only directory Rename must preserve the existing temp-rename behavior (hr=0x{:08X}).",
                              static_cast<unsigned long>(caseOnlyDirectoryHr)));
@@ -295,9 +282,9 @@ case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume:
         }
 
         constexpr wchar_t kCaseEntropyFailureEnv[] = L"REDSALAMANDER_FILEOPS_CASE_RENAME_ENTROPY_FAIL_PATH";
-        constexpr wchar_t kCaseCollisionPathEnv[] = L"REDSALAMANDER_FILEOPS_CASE_RENAME_TEMP_COLLISION_PATH";
+        constexpr wchar_t kCaseCollisionPathEnv[]  = L"REDSALAMANDER_FILEOPS_CASE_RENAME_TEMP_COLLISION_PATH";
         constexpr wchar_t kCaseCollisionFiredEnv[] = L"REDSALAMANDER_FILEOPS_CASE_RENAME_TEMP_COLLISION_FIRED";
-        const auto clearCaseRenameHooks = wil::scope_exit([&]() noexcept
+        const auto clearCaseRenameHooks            = wil::scope_exit([&]() noexcept
         {
             const std::wstring collisionTempPath = GetEnvVarTrimmed(kCaseCollisionFiredEnv);
             if (! collisionTempPath.empty())
@@ -311,7 +298,7 @@ case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume:
             static_cast<void>(SetEnvironmentVariableW(kCaseCollisionPathEnv, nullptr));
             static_cast<void>(SetEnvironmentVariableW(kCaseCollisionFiredEnv, nullptr));
         });
-        const auto hasExactLeaf = [&](std::wstring_view expected) noexcept
+        const auto hasExactLeaf                    = [&](std::wstring_view expected) noexcept
         {
             std::error_code ec;
             for (std::filesystem::directory_iterator it(caseOnlyRoot, ec), end; ! ec && it != end; it.increment(ec))
@@ -329,14 +316,9 @@ case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume:
             Fail(L"Failed to arm case-only rename entropy-failure fixture.");
             return true;
         }
-        const HRESULT entropyRenameHr = state.fsLocal->RenameItem(caseEntropySource.c_str(),
-                                                                   caseEntropyDestination.c_str(),
-                                                                   FILESYSTEM_FLAG_NONE,
-                                                                   nullptr,
-                                                                   nullptr,
-                                                                   nullptr);
-        if (entropyRenameHr != HRESULT_FROM_WIN32(ERROR_GEN_FAILURE) || ! hasExactLeaf(L"CaseEntropyFolder") ||
-            hasExactLeaf(L"caseentropyfolder"))
+        const HRESULT entropyRenameHr =
+            state.fsLocal->RenameItem(caseEntropySource.c_str(), caseEntropyDestination.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+        if (entropyRenameHr != HRESULT_FROM_WIN32(ERROR_GEN_FAILURE) || ! hasExactLeaf(L"CaseEntropyFolder") || hasExactLeaf(L"caseentropyfolder"))
         {
             Fail(std::format(L"Case-only rename entropy failure must occur before the first rename (hr=0x{0:08X}).",
                              static_cast<unsigned long>(entropyRenameHr)));
@@ -348,69 +330,60 @@ case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume:
             Fail(L"Failed to arm case-only rename temporary-sibling collision fixture.");
             return true;
         }
-        const HRESULT collisionRenameHr = state.fsLocal->RenameItem(caseCollisionSource.c_str(),
-                                                                     caseCollisionDestination.c_str(),
-                                                                     FILESYSTEM_FLAG_NONE,
-                                                                     nullptr,
-                                                                     nullptr,
-                                                                     nullptr);
+        const HRESULT collisionRenameHr =
+            state.fsLocal->RenameItem(caseCollisionSource.c_str(), caseCollisionDestination.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
         const std::wstring collisionTempPath = GetEnvVarTrimmed(kCaseCollisionFiredEnv);
         const std::wstring collisionTempLeaf = std::filesystem::path(collisionTempPath).filename().native();
-        bool leakedCaseTemp = false;
+        bool leakedCaseTemp                  = false;
         std::error_code leakedTempEc;
-        for (std::filesystem::directory_iterator it(caseOnlyRoot, leakedTempEc), end;
-             ! leakedTempEc && it != end;
-             it.increment(leakedTempEc))
+        for (std::filesystem::directory_iterator it(caseOnlyRoot, leakedTempEc), end; ! leakedTempEc && it != end; it.increment(leakedTempEc))
         {
             const std::filesystem::path enumeratedPath = it->path();
             leakedCaseTemp |= enumeratedPath.filename().native().starts_with(L".rs_case_tmp_") &&
                               ! OrdinalString::EqualsNoCase(enumeratedPath.filename().native(), collisionTempLeaf);
         }
-        if (FAILED(collisionRenameHr) || collisionTempPath.empty() ||
-            ! FileSizeEquals(std::filesystem::path(collisionTempPath) / L"race.marker", 4u) ||
+        if (FAILED(collisionRenameHr) || collisionTempPath.empty() || ! FileSizeEquals(std::filesystem::path(collisionTempPath) / L"race.marker", 4u) ||
             ! hasExactLeaf(L"casecollisionfolder") || hasExactLeaf(L"CaseCollisionFolder") || leakedCaseTemp || leakedTempEc)
         {
-            Fail(std::format(
-                L"Case-only rename must recover from an exclusively claimed temporary-sibling collision without overwriting it "
-                L"(hr=0x{0:08X}, temp='{1}', marker={2}, final={3}, original={4}, leaked={5}, enumError={6}).",
-                static_cast<unsigned long>(collisionRenameHr),
-                collisionTempPath,
-                FileSizeEquals(std::filesystem::path(collisionTempPath) / L"race.marker", 4u) ? 1 : 0,
-                hasExactLeaf(L"casecollisionfolder") ? 1 : 0,
-                hasExactLeaf(L"CaseCollisionFolder") ? 1 : 0,
-                leakedCaseTemp ? 1 : 0,
-                leakedTempEc.value()));
+            Fail(std::format(L"Case-only rename must recover from an exclusively claimed temporary-sibling collision without overwriting it "
+                             L"(hr=0x{0:08X}, temp='{1}', marker={2}, final={3}, original={4}, leaked={5}, enumError={6}).",
+                             static_cast<unsigned long>(collisionRenameHr),
+                             collisionTempPath,
+                             FileSizeEquals(std::filesystem::path(collisionTempPath) / L"race.marker", 4u) ? 1 : 0,
+                             hasExactLeaf(L"casecollisionfolder") ? 1 : 0,
+                             hasExactLeaf(L"CaseCollisionFolder") ? 1 : 0,
+                             leakedCaseTemp ? 1 : 0,
+                             leakedTempEc.value()));
             return true;
         }
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
         FileSystemOptions nativeOptions{};
-        nativeOptions.sizeBytes  = sizeof(nativeOptions);
-        nativeOptions.moveMode   = FILESYSTEM_MOVE_NATIVE_ONLY;
-        nativeOptions.linkPolicy = FILESYSTEM_LINK_PRESERVE;
-        const HRESULT atomicNativeHr = state.fsLocal->MoveItem(
-            atomicNativeSource.c_str(), atomicNativeTarget.c_str(), flags, &nativeOptions, nullptr, nullptr);
-        if (atomicNativeHr != HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) ||
-            ! FileSizeEquals(atomicNativeSourceFile, 3 * 1024) || ! FileSizeEquals(atomicNativeTargetFile, 2 * 1024) ||
-            std::filesystem::exists(atomicNativeTarget / atomicNativeSourceFile.filename()))
+        nativeOptions.sizeBytes      = sizeof(nativeOptions);
+        nativeOptions.moveMode       = FILESYSTEM_MOVE_NATIVE_ONLY;
+        nativeOptions.linkPolicy     = FILESYSTEM_LINK_PRESERVE;
+        const HRESULT atomicNativeHr = state.fsLocal->MoveItem(atomicNativeSource.c_str(), atomicNativeTarget.c_str(), flags, &nativeOptions, nullptr, nullptr);
+        if (atomicNativeHr != HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) || ! FileSizeEquals(atomicNativeSourceFile, 3 * 1024) ||
+            ! FileSizeEquals(atomicNativeTargetFile, 2 * 1024) || std::filesystem::exists(atomicNativeTarget / atomicNativeSourceFile.filename()))
         {
-            Fail(std::format(L"Local Native directory Move must be one non-mutating provider operation when a regular destination directory exists (hr=0x{:08X}).",
-                             static_cast<unsigned long>(atomicNativeHr)));
+            Fail(std::format(
+                L"Local Native directory Move must be one non-mutating provider operation when a regular destination directory exists (hr=0x{:08X}).",
+                static_cast<unsigned long>(atomicNativeHr)));
             return true;
         }
 
         AppendLog(L"Move-merge qualification: admitting Managed merge task");
-        state.taskB                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_MOVE,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {srcFoo},
-                                                                 dstRoot,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        state.taskB = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_MOVE,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {srcFoo},
+                                                 dstRoot,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskB.has_value())
         {
             Fail(L"Failed to start same-volume move-merge task.");
@@ -440,13 +413,13 @@ case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume:
         // C1: the shapes are Preparing facts now (admission no longer probes the provider); each
         // task's prepared strategy is checked once both have run.
         state.markerTick = nowTick;
-        state.stepState = 1;
+        state.stepState  = 1;
         return false;
     }
 
     if (state.stepState == 1)
     {
-        auto* task = state.fileOps && state.taskB.has_value() ? state.fileOps->FindTask(state.taskB.value()) : nullptr;
+        auto* task        = state.fileOps && state.taskB.has_value() ? state.fileOps->FindTask(state.taskB.value()) : nullptr;
         const auto prompt = TryGetConflictPromptCopy(task);
         if (! prompt.has_value())
         {
@@ -471,9 +444,7 @@ case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume:
             NormalizePathForCompare(prompt->sourcePath) != NormalizePathForCompare(srcConflict.native()) ||
             NormalizePathForCompare(prompt->destinationPath) != NormalizePathForCompare(dstConflict.native()))
         {
-            Fail(std::format(L"Managed same-volume directory merge exposed the wrong conflict: '{}' -> '{}'.",
-                             prompt->sourcePath,
-                             prompt->destinationPath));
+            Fail(std::format(L"Managed same-volume directory merge exposed the wrong conflict: '{}' -> '{}'.", prompt->sourcePath, prompt->destinationPath));
             return true;
         }
         task->SubmitConflictDecision(FolderWindow::FileOperationState::Task::ConflictAction::Overwrite, false);
@@ -496,7 +467,7 @@ case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume:
                 return true;
             }
         }
-        const auto it = state.taskB.has_value() ? state.completedTasks.find(state.taskB.value()) : state.completedTasks.end();
+        const auto it       = state.taskB.has_value() ? state.completedTasks.find(state.taskB.value()) : state.completedTasks.end();
         const auto nativeIt = state.taskC.has_value() ? state.completedTasks.find(state.taskC.value()) : state.completedTasks.end();
         if (it == state.completedTasks.end() || nativeIt == state.completedTasks.end())
         {
@@ -525,8 +496,7 @@ case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume:
         }
 
         if (it->second.conflictPromptCount != 1u || nativeIt->second.conflictPromptCount != 0u || ! FileSizeEquals(dstFile, 4 * 1024) ||
-            ! FileSizeEquals(dstNested, 6 * 1024) || ! FileSizeEquals(dstKeep, 3 * 1024) ||
-            ! FileSizeEquals(dstConflict, 5 * 1024) ||
+            ! FileSizeEquals(dstNested, 6 * 1024) || ! FileSizeEquals(dstKeep, 3 * 1024) || ! FileSizeEquals(dstConflict, 5 * 1024) ||
             std::filesystem::exists(nativeSource, ec) || ! FileSizeEquals(nativeTarget, 2 * 1024))
         {
             Fail(std::format(L"Same-volume directory Move integrity failure (mergePrompts={}, nativePrompts={}).",
@@ -557,11 +527,8 @@ case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume:
                                                  FolderWindow::FileOperationState::ExecutionMode::PerItem);
         AppendLog(std::format(L"Move-merge qualification: race admission returned task={}", state.taskA.value_or(0u)));
         const auto* raceTask = state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
-        const std::shared_ptr<const FileOperations::FileOperationPlanGroup> racePlans =
-            raceTask != nullptr ? raceTask->LoadPlans() : nullptr;
-        const auto* racePlan = racePlans && racePlans->size() == 1u
-            ? std::get_if<FileOperations::TransferPlan>(&racePlans->front())
-            : nullptr;
+        const std::shared_ptr<const FileOperations::FileOperationPlanGroup> racePlans = raceTask != nullptr ? raceTask->LoadPlans() : nullptr;
+        const auto* racePlan = racePlans && racePlans->size() == 1u ? std::get_if<FileOperations::TransferPlan>(&racePlans->front()) : nullptr;
         if (racePlan == nullptr || racePlan->strategy != FileOperations::OperationStrategy::Native)
         {
             SetFileOpsNativeMoveCreateDirectoryRaceForSelfTest(0u);
@@ -584,8 +551,8 @@ case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume:
         const unsigned long raceAttempts = TakeFileOpsNativeMoveCreateDirectoryRaceAttemptsForSelfTest();
         SetFileOpsNativeMoveCreateDirectoryRaceForSelfTest(0u);
         std::error_code ec;
-        if (raceAttempts != 1u || FAILED(raceIt->second.hr) || raceIt->second.conflictPromptCount != 0u ||
-            std::filesystem::exists(raceSource, ec) || ! FileSizeEquals(raceTargetFile, 9 * 1024))
+        if (raceAttempts != 1u || FAILED(raceIt->second.hr) || raceIt->second.conflictPromptCount != 0u || std::filesystem::exists(raceSource, ec) ||
+            ! FileSizeEquals(raceTargetFile, 9 * 1024))
         {
             Fail(std::format(L"A raced destination directory must continue the Native item as a rename merge (nativeAttempts={}, hr=0x{:08X}, prompts={}).",
                              raceAttempts,
@@ -616,8 +583,7 @@ case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume:
         // destination-absent sibling differ only at execution.
         uint32_t mixedPlanCount = 0u;
         uint32_t mixedMask      = 0u;
-        for (const ULONGLONG waitStart = GetTickCount64();
-             state.taskA.has_value() && mixedPlanCount == 0u && GetTickCount64() - waitStart < 10'000ull;)
+        for (const ULONGLONG waitStart = GetTickCount64(); state.taskA.has_value() && mixedPlanCount == 0u && GetTickCount64() - waitStart < 10'000ull;)
         {
             if (! DebugGetPreparedTransferPlanShapeForSelfTest(state.taskA.value(), &mixedPlanCount, &mixedMask))
             {
@@ -642,35 +608,22 @@ case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume:
             return false;
         }
         std::error_code ec;
-        if (FAILED(mixedIt->second.hr) || mixedIt->second.conflictPromptCount != 0u ||
-            std::filesystem::exists(mixedMergeSource, ec) || std::filesystem::exists(mixedNativeSource, ec) ||
-            ! FileSizeEquals(mixedMergeTarget / L"merge.bin", 5 * 1024) ||
-            ! FileSizeEquals(mixedMergeTarget / L"keep.bin", 2 * 1024) ||
-            ! FileSizeEquals(mixedNativeTarget, 6 * 1024))
+        if (FAILED(mixedIt->second.hr) || mixedIt->second.conflictPromptCount != 0u || std::filesystem::exists(mixedMergeSource, ec) ||
+            std::filesystem::exists(mixedNativeSource, ec) || ! FileSizeEquals(mixedMergeTarget / L"merge.bin", 5 * 1024) ||
+            ! FileSizeEquals(mixedMergeTarget / L"keep.bin", 2 * 1024) || ! FileSizeEquals(mixedNativeTarget, 6 * 1024))
         {
             Fail(std::format(L"Mixed rename-merge and regular-file selection failed per-item execution (hr=0x{:08X}, prompts={}).",
                              static_cast<unsigned long>(mixedIt->second.hr),
                              mixedIt->second.conflictPromptCount));
             return true;
         }
-        Debug::Perf::Emit(L"FileOps.SelfTest.MixedLocalMoveStrategies",
-                          L"native-rename-merge;native-regular-file",
-                          0u,
-                          2u,
-                          0u,
-                          S_OK);
+        Debug::Perf::Emit(L"FileOps.SelfTest.MixedLocalMoveStrategies", L"native-rename-merge;native-regular-file", 0u, 2u, 0u, S_OK);
 
         std::wstring alternateVolumeSkipDetail;
-        const std::optional<std::filesystem::path> alternateRoot =
-            TryCreateAlternateWritableVolumeSelfTestRoot(state.tempRoot, alternateVolumeSkipDetail);
+        const std::optional<std::filesystem::path> alternateRoot = TryCreateAlternateWritableVolumeSelfTestRoot(state.tempRoot, alternateVolumeSkipDetail);
         if (! alternateRoot.has_value())
         {
-            Debug::Perf::Emit(L"FileOps.SelfTest.CrossVolumeHostAdmission",
-                              std::format(L"skip={}", alternateVolumeSkipDetail),
-                              0u,
-                              0u,
-                              0u,
-                              S_FALSE);
+            Debug::Perf::Emit(L"FileOps.SelfTest.CrossVolumeHostAdmission", std::format(L"skip={}", alternateVolumeSkipDetail), 0u, 0u, 0u, S_FALSE);
             NextStep(state, SelfTestState::Step::Beeline_RenameMergeSkipKeepsSourceFolder);
             return false;
         }
@@ -703,9 +656,8 @@ case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume:
         const auto* crossVolumeTask = state.fileOps ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
         const std::shared_ptr<const FileOperations::FileOperationPlanGroup> crossVolumePlans =
             crossVolumeTask != nullptr ? crossVolumeTask->LoadPlans() : nullptr;
-        const auto* crossVolumeTransfer = crossVolumePlans && crossVolumePlans->size() == 1u
-            ? std::get_if<FileOperations::TransferPlan>(&crossVolumePlans->front())
-            : nullptr;
+        const auto* crossVolumeTransfer =
+            crossVolumePlans && crossVolumePlans->size() == 1u ? std::get_if<FileOperations::TransferPlan>(&crossVolumePlans->front()) : nullptr;
         if (crossVolumeTransfer == nullptr || crossVolumeTransfer->strategy != FileOperations::OperationStrategy::Managed)
         {
             Fail(L"A real Local cross-volume Move must be admitted as Managed, not Native or CopyOnly.");
@@ -726,8 +678,7 @@ case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume:
 
         const std::filesystem::path crossVolumeDestination = state.fileOpsAlternateVolumeRoot / crossVolumeSource.filename();
         std::error_code ec;
-        if (FAILED(it->second.hr) || std::filesystem::exists(crossVolumeSource, ec) ||
-            ! FileSizeEquals(crossVolumeDestination, 7 * 1024))
+        if (FAILED(it->second.hr) || std::filesystem::exists(crossVolumeSource, ec) || ! FileSizeEquals(crossVolumeDestination, 7 * 1024))
         {
             Fail(std::format(L"Real cross-volume host Managed Move failed integrity/source-disposition checks: 0x{:08X}.",
                              static_cast<unsigned long>(it->second.hr)));
@@ -841,9 +792,9 @@ case SelfTestState::Step::Beeline_RenameMergeSkipKeepsSourceFolder:
     }
     std::error_code ec;
     const bool sourceKept = completed->second.hr == S_FALSE || completed->second.hr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
-    if (! sourceKept || completed->second.conflictPromptCount != 2u || ! FileSizeEquals(dstOverwrite, 5 * 1024) ||
-        std::filesystem::exists(srcOverwrite, ec) || ! FileSizeEquals(dstNested, 2 * 1024) || std::filesystem::exists(srcFoo / L"nested", ec) ||
-        ! FileSizeEquals(srcSkip, 3 * 1024) || ! FileSizeEquals(dstSkip, 1 * 1024) || ! std::filesystem::is_directory(srcFoo, ec))
+    if (! sourceKept || completed->second.conflictPromptCount != 2u || ! FileSizeEquals(dstOverwrite, 5 * 1024) || std::filesystem::exists(srcOverwrite, ec) ||
+        ! FileSizeEquals(dstNested, 2 * 1024) || std::filesystem::exists(srcFoo / L"nested", ec) || ! FileSizeEquals(srcSkip, 3 * 1024) ||
+        ! FileSizeEquals(dstSkip, 1 * 1024) || ! std::filesystem::is_directory(srcFoo, ec))
     {
         Fail(std::format(L"Beeline rename merge with a skipped child must relocate the rest and keep the source folder (hr=0x{:08X}, prompts={}).",
                          static_cast<unsigned long>(completed->second.hr),
@@ -872,17 +823,17 @@ case SelfTestState::Step::FileOps_ReparseDirectoryMergeIntoExistingFolder:
         return true;
     }
 
-    const std::filesystem::path srcRoot         = state.tempRoot / L"clearflow-reparse-merge-src";
-    const std::filesystem::path dstRoot         = state.tempRoot / L"clearflow-reparse-merge-dst";
-    const std::filesystem::path targetRoot      = state.tempRoot / L"clearflow-reparse-merge-target";
-    const std::filesystem::path targetFile      = targetRoot / L"payload.bin";
-    const std::filesystem::path sourceLink      = srcRoot / L"linkToTarget";
-    const std::filesystem::path destinationLink = dstRoot / L"linkToTarget";
-    const std::filesystem::path nativeSourceRoot       = state.tempRoot / L"clearflow-native-destination-link-src";
-    const std::filesystem::path nativeDestinationRoot  = state.tempRoot / L"clearflow-native-destination-link-dst";
-    const std::filesystem::path nativeLinkTargetRoot   = state.tempRoot / L"clearflow-native-destination-link-target";
-    const std::filesystem::path nativeSource           = nativeSourceRoot / L"Folder";
-    const std::filesystem::path nativeSourceFile       = nativeSource / L"source-only.bin";
+    const std::filesystem::path srcRoot               = state.tempRoot / L"clearflow-reparse-merge-src";
+    const std::filesystem::path dstRoot               = state.tempRoot / L"clearflow-reparse-merge-dst";
+    const std::filesystem::path targetRoot            = state.tempRoot / L"clearflow-reparse-merge-target";
+    const std::filesystem::path targetFile            = targetRoot / L"payload.bin";
+    const std::filesystem::path sourceLink            = srcRoot / L"linkToTarget";
+    const std::filesystem::path destinationLink       = dstRoot / L"linkToTarget";
+    const std::filesystem::path nativeSourceRoot      = state.tempRoot / L"clearflow-native-destination-link-src";
+    const std::filesystem::path nativeDestinationRoot = state.tempRoot / L"clearflow-native-destination-link-dst";
+    const std::filesystem::path nativeLinkTargetRoot  = state.tempRoot / L"clearflow-native-destination-link-target";
+    const std::filesystem::path nativeSource          = nativeSourceRoot / L"Folder";
+    const std::filesystem::path nativeSourceFile      = nativeSource / L"source-only.bin";
     const std::filesystem::path nativeDestinationLink = nativeDestinationRoot / nativeSource.filename();
     const std::filesystem::path nativeTargetSentinel  = nativeLinkTargetRoot / L"target-only.bin";
 
@@ -891,9 +842,8 @@ case SelfTestState::Step::FileOps_ReparseDirectoryMergeIntoExistingFolder:
         static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), R"json({"reparsePointPolicy":"preserve"})json"));
 
         if (! RecreateEmptyDirectory(srcRoot) || ! RecreateEmptyDirectory(dstRoot) || ! RecreateEmptyDirectory(targetRoot) ||
-            ! RecreateEmptyDirectory(nativeSourceRoot) || ! RecreateEmptyDirectory(nativeDestinationRoot) ||
-            ! RecreateEmptyDirectory(nativeLinkTargetRoot) || ! WriteTestFile(targetFile, 512) ||
-            ! WriteTestFile(nativeSourceFile, 384) || ! WriteTestFile(nativeTargetSentinel, 256))
+            ! RecreateEmptyDirectory(nativeSourceRoot) || ! RecreateEmptyDirectory(nativeDestinationRoot) || ! RecreateEmptyDirectory(nativeLinkTargetRoot) ||
+            ! WriteTestFile(targetFile, 512) || ! WriteTestFile(nativeSourceFile, 384) || ! WriteTestFile(nativeTargetSentinel, 256))
         {
             Fail(L"Failed to reset reparse merge directories.");
             return true;
@@ -911,18 +861,13 @@ case SelfTestState::Step::FileOps_ReparseDirectoryMergeIntoExistingFolder:
         }
 
         FileSystemOptions nativeOptions{};
-        nativeOptions.sizeBytes  = sizeof(nativeOptions);
-        nativeOptions.moveMode   = FILESYSTEM_MOVE_NATIVE_ONLY;
-        nativeOptions.linkPolicy = FILESYSTEM_LINK_PRESERVE;
-        const HRESULT nativeProviderHr = state.fsLocal->MoveItem(nativeSource.c_str(),
-                                                                  nativeDestinationLink.c_str(),
-                                                                  static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
-                                                                  &nativeOptions,
-                                                                  nullptr,
-                                                                  nullptr);
+        nativeOptions.sizeBytes        = sizeof(nativeOptions);
+        nativeOptions.moveMode         = FILESYSTEM_MOVE_NATIVE_ONLY;
+        nativeOptions.linkPolicy       = FILESYSTEM_LINK_PRESERVE;
+        const HRESULT nativeProviderHr = state.fsLocal->MoveItem(
+            nativeSource.c_str(), nativeDestinationLink.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE), &nativeOptions, nullptr, nullptr);
         if (nativeProviderHr != HRESULT_FROM_WIN32(ERROR_REPARSE_POINT_ENCOUNTERED) || ! FileSizeEquals(nativeSourceFile, 384) ||
-            ! FileSizeEquals(nativeTargetSentinel, 256) ||
-            std::filesystem::exists(nativeLinkTargetRoot / nativeSourceFile.filename()))
+            ! FileSizeEquals(nativeTargetSentinel, 256) || std::filesystem::exists(nativeLinkTargetRoot / nativeSourceFile.filename()))
         {
             Fail(std::format(L"Local Native Move must reject a destination junction without merging through it (hr=0x{:08X}).",
                              static_cast<unsigned long>(nativeProviderHr)));
@@ -977,8 +922,7 @@ case SelfTestState::Step::FileOps_ReparseDirectoryMergeIntoExistingFolder:
             sourceLink.c_str(), destinationLink.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE), nullptr, nullptr, nullptr);
         if (noGrantCopyHr != HRESULT_FROM_WIN32(ERROR_DATATYPE_MISMATCH))
         {
-            Fail(std::format(L"Link-on-directory Copy expected typed mismatch, got 0x{:08X}.",
-                             static_cast<unsigned long>(noGrantCopyHr)));
+            Fail(std::format(L"Link-on-directory Copy expected typed mismatch, got 0x{:08X}.", static_cast<unsigned long>(noGrantCopyHr)));
             return true;
         }
 
@@ -996,13 +940,12 @@ case SelfTestState::Step::FileOps_ReparseDirectoryMergeIntoExistingFolder:
             return true;
         }
 
-        const HRESULT overwriteCopyHr = state.fsLocal->CopyItem(
-            sourceLink.c_str(),
-            destinationLink.c_str(),
-            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE),
-            nullptr,
-            nullptr,
-            nullptr);
+        const HRESULT overwriteCopyHr = state.fsLocal->CopyItem(sourceLink.c_str(),
+                                                                destinationLink.c_str(),
+                                                                static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE),
+                                                                nullptr,
+                                                                nullptr,
+                                                                nullptr);
         if (overwriteCopyHr != HRESULT_FROM_WIN32(ERROR_DATATYPE_MISMATCH))
         {
             Fail(std::format(L"An operation-wide Overwrite flag must not replace a directory with a link (hr=0x{:08X}).",
@@ -1011,8 +954,7 @@ case SelfTestState::Step::FileOps_ReparseDirectoryMergeIntoExistingFolder:
         }
 
         const DWORD finalDestinationAttributes = ::GetFileAttributesW(destinationLink.c_str());
-        if (finalDestinationAttributes == INVALID_FILE_ATTRIBUTES ||
-            (finalDestinationAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0u ||
+        if (finalDestinationAttributes == INVALID_FILE_ATTRIBUTES || (finalDestinationAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0u ||
             (finalDestinationAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
         {
             Fail(L"Type-mismatch handling changed the existing real destination directory.");
@@ -1045,10 +987,8 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
     if (state.stepState == 0)
     {
-        const auto requireCapabilities = [&](IFileSystem* fs,
-                                             std::wstring_view providerName,
-                                             std::wstring_view providerId,
-                                             ProviderCapabilitySnapshot& snapshot) noexcept -> bool
+        const auto requireCapabilities =
+            [&](IFileSystem* fs, std::wstring_view providerName, std::wstring_view providerId, ProviderCapabilitySnapshot& snapshot) noexcept -> bool
         {
             std::wstring reason;
             if (! TryReadTypedProviderCapabilities(fs, providerId, snapshot, reason))
@@ -1080,16 +1020,15 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         };
 
         constexpr uint64_t kR2RouteQueryCount = 4'096u;
-        const auto r2RouteQueryStarted         = std::chrono::steady_clock::now();
-        bool r2RouteQueryValid                 = true;
-        uint64_t r2ResultBytes                 = 0u;
-        uint64_t r2ArenaFallbackCount          = 0u;
-        uint64_t r2RejectedCount               = 0u;
+        const auto r2RouteQueryStarted        = std::chrono::steady_clock::now();
+        bool r2RouteQueryValid                = true;
+        uint64_t r2ResultBytes                = 0u;
+        uint64_t r2ArenaFallbackCount         = 0u;
+        uint64_t r2RejectedCount              = 0u;
         for (uint64_t iteration = 0u; iteration < kR2RouteQueryCount; ++iteration)
         {
-            const FileSystemRouteContract::QueryResult route =
-                FileSystemRouteContract::Query(state.fsDummy.get(), L"/", FILESYSTEM_COPY, kPluginIdDummy);
-            r2RouteQueryValid = route.state == FileSystemRouteContract::QueryState::Available && r2RouteQueryValid;
+            const FileSystemRouteContract::QueryResult route = FileSystemRouteContract::Query(state.fsDummy.get(), L"/", FILESYSTEM_COPY, kPluginIdDummy);
+            r2RouteQueryValid                                = route.state == FileSystemRouteContract::QueryState::Available && r2RouteQueryValid;
             r2ArenaFallbackCount += route.usedArenaFallback ? 1u : 0u;
             r2RejectedCount += route.state == FileSystemRouteContract::QueryState::Available ? 0u : 1u;
             r2ResultBytes += sizeof(FileSystemRouteContract::Snapshot);
@@ -1107,58 +1046,37 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                           kR2RouteQueryCount,
                           kR2RouteQueryCount,
                           r2RouteQueryValid ? S_OK : E_FAIL);
-        Debug::Perf::Emit(L"FileOps.RouteFacts.JsonParseCount",
-                          L"typed-route-candidate",
-                          0u,
-                          0u,
-                          kR2RouteQueryCount,
-                          r2RouteQueryValid ? S_OK : E_FAIL);
-        Debug::Perf::Emit(L"FileOps.RouteFacts.TypedQueryCount",
-                          L"typed-route-candidate",
-                          0u,
-                          kR2RouteQueryCount,
-                          kR2RouteQueryCount,
-                          r2RouteQueryValid ? S_OK : E_FAIL);
-        Debug::Perf::Emit(L"FileOps.RouteFacts.ArenaFallbackCount",
-                          L"typed-route-candidate",
-                          0u,
-                          r2ArenaFallbackCount,
-                          0u,
-                          r2ArenaFallbackCount == 0u ? S_OK : E_FAIL);
-        Debug::Perf::Emit(L"FileOps.RouteFacts.RejectedCount",
-                          L"typed-route-candidate",
-                          0u,
-                          r2RejectedCount,
-                          0u,
-                          r2RejectedCount == 0u ? S_OK : E_FAIL);
+        Debug::Perf::Emit(L"FileOps.RouteFacts.JsonParseCount", L"typed-route-candidate", 0u, 0u, kR2RouteQueryCount, r2RouteQueryValid ? S_OK : E_FAIL);
+        Debug::Perf::Emit(
+            L"FileOps.RouteFacts.TypedQueryCount", L"typed-route-candidate", 0u, kR2RouteQueryCount, kR2RouteQueryCount, r2RouteQueryValid ? S_OK : E_FAIL);
+        Debug::Perf::Emit(
+            L"FileOps.RouteFacts.ArenaFallbackCount", L"typed-route-candidate", 0u, r2ArenaFallbackCount, 0u, r2ArenaFallbackCount == 0u ? S_OK : E_FAIL);
+        Debug::Perf::Emit(L"FileOps.RouteFacts.RejectedCount", L"typed-route-candidate", 0u, r2RejectedCount, 0u, r2RejectedCount == 0u ? S_OK : E_FAIL);
         Debug::Perf::Emit(L"FileOps.RouteFacts.ResultBytes",
                           L"typed-route-candidate",
                           0u,
                           r2ResultBytes,
                           sizeof(FileSystemRouteContract::Snapshot),
                           r2RouteQueryValid ? S_OK : E_FAIL);
-        if (! require(r2RouteQueryValid && r2ArenaFallbackCount == 0u && r2RejectedCount == 0u &&
-                          r2RouteQueryElapsedUs < 2'000'000u,
+        if (! require(r2RouteQueryValid && r2ArenaFallbackCount == 0u && r2RejectedCount == 0u && r2RouteQueryElapsedUs < 2'000'000u,
                       L"R2 typed capability queries must remain valid, allocation-free on normal facts, and below two seconds."))
         {
             return true;
         }
 
-        constexpr IID kR2RouteCapabilitiesIid{
-            0x1e924d87, 0x2e62, 0x4ab4, {0x9f, 0x37, 0xc5, 0x65, 0xd4, 0x65, 0xf2, 0x5e}};
+        constexpr IID kR2RouteCapabilitiesIid{0x1e924d87, 0x2e62, 0x4ab4, {0x9f, 0x37, 0xc5, 0x65, 0xd4, 0x65, 0xf2, 0x5e}};
         wil::com_ptr<IUnknown> typedRouteCapabilities;
-        const HRESULT typedRouteCapabilitiesHr =
-            state.fsDummy->QueryInterface(kR2RouteCapabilitiesIid, typedRouteCapabilities.put_void());
+        const HRESULT typedRouteCapabilitiesHr = state.fsDummy->QueryInterface(kR2RouteCapabilitiesIid, typedRouteCapabilities.put_void());
         if (! require(SUCCEEDED(typedRouteCapabilitiesHr) && typedRouteCapabilities,
                       L"Every shipped provider must expose the R2 typed route-capability IID; JSON cannot be executable authority."))
         {
             return true;
         }
 
-        if (! require(localCaps.preserveFileLink && localCaps.preserveDirectoryLink && ! localCaps.retargetInTree &&
-                          localCaps.exactLinkRemoval && ! dummyCaps.preserveFileLink && ! dummyCaps.preserveDirectoryLink &&
-                          ! dummyCaps.retargetInTree && ! dummyCaps.exactLinkRemoval && ! sevenZipCaps.preserveFileLink &&
-                          ! sevenZipCaps.preserveDirectoryLink && ! sevenZipCaps.retargetInTree && ! sevenZipCaps.exactLinkRemoval,
+        if (! require(localCaps.preserveFileLink && localCaps.preserveDirectoryLink && ! localCaps.retargetInTree && localCaps.exactLinkRemoval &&
+                          ! dummyCaps.preserveFileLink && ! dummyCaps.preserveDirectoryLink && ! dummyCaps.retargetInTree && ! dummyCaps.exactLinkRemoval &&
+                          ! sevenZipCaps.preserveFileLink && ! sevenZipCaps.preserveDirectoryLink && ! sevenZipCaps.retargetInTree &&
+                          ! sevenZipCaps.exactLinkRemoval,
                       L"Literal link preservation (no in-tree retarget) must remain a truthful path-profile claim."))
         {
             return true;
@@ -1173,21 +1091,21 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         FileOperations::CreateDirectoryAdmission localDirectoryAdmission{};
         FileOperations::CreateDirectoryAdmission dummyDirectoryAdmission{};
         FileOperations::CreateDirectoryAdmission rejectedDirectoryAdmission{};
-        const HRESULT localDirectoryAdmissionHr = state.fileOps->QualifyCreateDirectory(
-            state.fsLocal, kPluginIdLocal, {}, state.tempRoot, L"qualified-create-directory", localDirectoryAdmission);
+        const HRESULT localDirectoryAdmissionHr =
+            state.fileOps->QualifyCreateDirectory(state.fsLocal, kPluginIdLocal, {}, state.tempRoot, L"qualified-create-directory", localDirectoryAdmission);
         const HRESULT dummyDirectoryAdmissionHr = state.fileOps->QualifyCreateDirectory(
             state.fsDummy, kPluginIdDummy, {}, std::filesystem::path(L"/"), L"qualified-create-directory", dummyDirectoryAdmission);
         const HRESULT readOnlyDirectoryAdmissionHr = state.fileOps->QualifyCreateDirectory(
             state.fs7z, kPluginId7z, {}, std::filesystem::path(L"/"), L"qualified-create-directory", rejectedDirectoryAdmission);
-        const HRESULT invalidSeparatorAdmissionHr = state.fileOps->QualifyCreateDirectory(
-            state.fsDummy, kPluginIdDummy, {}, std::filesystem::path(L"/"), L"nested/name", rejectedDirectoryAdmission);
-        const HRESULT deviceNamespaceAdmissionHr = state.fileOps->QualifyCreateDirectory(
-            state.fsLocal,
-            kPluginIdLocal,
-            {},
-            std::filesystem::path(LR"(\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy1)"),
-            L"blocked",
-            rejectedDirectoryAdmission);
+        const HRESULT invalidSeparatorAdmissionHr =
+            state.fileOps->QualifyCreateDirectory(state.fsDummy, kPluginIdDummy, {}, std::filesystem::path(L"/"), L"nested/name", rejectedDirectoryAdmission);
+        const HRESULT deviceNamespaceAdmissionHr =
+            state.fileOps->QualifyCreateDirectory(state.fsLocal,
+                                                  kPluginIdLocal,
+                                                  {},
+                                                  std::filesystem::path(LR"(\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy1)"),
+                                                  L"blocked",
+                                                  rejectedDirectoryAdmission);
         if (! require(localDirectoryAdmissionHr == S_OK && localDirectoryAdmission.allowLocalNativeFallback &&
                           ! localDirectoryAdmission.endpoint.rootId.empty() &&
                           localDirectoryAdmission.candidateProviderPath == state.tempRoot / L"qualified-create-directory",
@@ -1213,55 +1131,53 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         const FileOperations::MoveStrategyQualificationFacts managedFacts{
-            .nativeMoveQualified = false,
-            .copyPairQualified = true,
-            .movePairQualified = true,
-            .sourceBoundDelete = true,
-            .sourceConditionalDelete = true,
-            .destinationExclusiveStage = true,
+            .nativeMoveQualified           = false,
+            .copyPairQualified             = true,
+            .movePairQualified             = true,
+            .sourceBoundDelete             = true,
+            .sourceConditionalDelete       = true,
+            .destinationExclusiveStage     = true,
             .destinationConditionalPublish = true,
-            .sourceBindingAvailable = true,
-            .destinationBindingAvailable = true,
+            .sourceBindingAvailable        = true,
+            .destinationBindingAvailable   = true,
         };
-        const std::optional<FileOperations::OperationStrategy> managedSelection =
-            FileOperations::SelectMoveStrategy(managedFacts);
+        const std::optional<FileOperations::OperationStrategy> managedSelection = FileOperations::SelectMoveStrategy(managedFacts);
         FileOperations::MoveStrategyQualificationFacts nativeFacts{};
-        nativeFacts.nativeMoveQualified = true;
-        FileOperations::MoveStrategyQualificationFacts copyOnlyFacts = managedFacts;
-        copyOnlyFacts.movePairQualified = false;
-        FileOperations::MoveStrategyQualificationFacts unboundFacts = managedFacts;
-        unboundFacts.sourceBindingAvailable = false;
+        nativeFacts.nativeMoveQualified                                 = true;
+        FileOperations::MoveStrategyQualificationFacts copyOnlyFacts    = managedFacts;
+        copyOnlyFacts.movePairQualified                                 = false;
+        FileOperations::MoveStrategyQualificationFacts unboundFacts     = managedFacts;
+        unboundFacts.sourceBindingAvailable                             = false;
         FileOperations::MoveStrategyQualificationFacts unsupportedFacts = managedFacts;
-        unsupportedFacts.copyPairQualified = false;
-        unsupportedFacts.movePairQualified = false;
+        unsupportedFacts.copyPairQualified                              = false;
+        unsupportedFacts.movePairQualified                              = false;
         if (! require(FileOperations::SelectMoveStrategy(nativeFacts) == FileOperations::OperationStrategy::Native &&
                           managedSelection == FileOperations::OperationStrategy::Managed &&
                           FileOperations::SelectMoveStrategy(copyOnlyFacts) == FileOperations::OperationStrategy::CopyOnly &&
                           FileOperations::SelectMoveStrategy(unboundFacts) == FileOperations::OperationStrategy::CopyOnly &&
                           ! FileOperations::SelectMoveStrategy(unsupportedFacts).has_value(),
-                      L"Move strategy qualification must prefer Native, require every destructive proof for Managed, downgrade through Copy, and reject without Copy."))
+                      L"Move strategy qualification must prefer Native, require every destructive proof for Managed, downgrade through Copy, and reject "
+                      L"without Copy."))
         {
             return true;
         }
 
         const FileOperations::ManagedCleanupMutationFacts removedFacts{
-            .status = S_OK,
-            .outcomeKnown = true,
-            .mutationCommitted = true,
+            .status               = S_OK,
+            .outcomeKnown         = true,
+            .mutationCommitted    = true,
             .originalStillPresent = false,
         };
-        FileOperations::ManagedCleanupMutationFacts retainedFacts = removedFacts;
-        retainedFacts.status = HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION);
-        retainedFacts.mutationCommitted = false;
-        retainedFacts.originalStillPresent = true;
+        FileOperations::ManagedCleanupMutationFacts retainedFacts      = removedFacts;
+        retainedFacts.status                                           = HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION);
+        retainedFacts.mutationCommitted                                = false;
+        retainedFacts.originalStillPresent                             = true;
         FileOperations::ManagedCleanupMutationFacts indeterminateFacts = retainedFacts;
-        indeterminateFacts.outcomeKnown = false;
+        indeterminateFacts.outcomeKnown                                = false;
         FileOperations::ManagedCleanupMutationFacts contradictoryFacts = removedFacts;
-        contradictoryFacts.originalStillPresent = true;
-        if (! require(FileOperations::ClassifyManagedCleanupMutation(removedFacts) ==
-                              FileOperations::ManagedCleanupAttemptDisposition::Removed &&
-                          FileOperations::ClassifyManagedCleanupMutation(retainedFacts) ==
-                              FileOperations::ManagedCleanupAttemptDisposition::Retained &&
+        contradictoryFacts.originalStillPresent                        = true;
+        if (! require(FileOperations::ClassifyManagedCleanupMutation(removedFacts) == FileOperations::ManagedCleanupAttemptDisposition::Removed &&
+                          FileOperations::ClassifyManagedCleanupMutation(retainedFacts) == FileOperations::ManagedCleanupAttemptDisposition::Retained &&
                           FileOperations::ClassifyManagedCleanupMutation(indeterminateFacts) ==
                               FileOperations::ManagedCleanupAttemptDisposition::Indeterminate &&
                           FileOperations::ClassifyManagedCleanupMutation(contradictoryFacts) ==
@@ -1276,28 +1192,29 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             .instanceId = L"instance",
             .profileId  = L"profile",
             .rootId     = L"root",
-            .pathIdentity = FileSystemPathIdentity{
-                .pathTextStableIdentity = true,
-                .componentComparison    = FileSystemPathComponentComparison::OrdinalCaseSensitive,
-                .preferredSeparator     = L'/',
-                .acceptedSeparators     = L"/",
-                .casePreserving         = true,
-                .caseOnlyRename         = FileSystemPathCaseOnlyRename::NotApplicable,
-            },
+            .pathIdentity =
+                FileSystemPathIdentity{
+                    .pathTextStableIdentity = true,
+                    .componentComparison    = FileSystemPathComponentComparison::OrdinalCaseSensitive,
+                    .preferredSeparator     = L'/',
+                    .acceptedSeparators     = L"/",
+                    .casePreserving         = true,
+                    .caseOnlyRename         = FileSystemPathCaseOnlyRename::NotApplicable,
+                },
             .cancellationRouteClass = FileOperations::CancellationRouteClass::Bounded,
         };
         FileOperations::TransferPlan validTransfer{};
-        validTransfer.intent              = FileOperations::TransferIntent::Move;
-        validTransfer.strategy            = FileOperations::OperationStrategy::CopyOnly;
-        validTransfer.sourceEndpoint      = validationEndpoint;
-        validTransfer.destinationEndpoint = validationEndpoint;
-        validTransfer.selectedItems       = {{.providerPath = L"/source/a.txt"}, {.providerPath = L"/source/b.txt"}};
+        validTransfer.intent                         = FileOperations::TransferIntent::Move;
+        validTransfer.strategy                       = FileOperations::OperationStrategy::CopyOnly;
+        validTransfer.sourceEndpoint                 = validationEndpoint;
+        validTransfer.destinationEndpoint            = validationEndpoint;
+        validTransfer.selectedItems                  = {{.providerPath = L"/source/a.txt"}, {.providerPath = L"/source/b.txt"}};
         validTransfer.destination.providerFolderPath = L"/destination";
-        validTransfer.explicitMappings = {
+        validTransfer.explicitMappings               = {
             {.sourceIndex = 0u, .destinationProviderPath = L"/destination/a.txt"},
             {.sourceIndex = 1u, .destinationProviderPath = L"/destination/b.txt"},
         };
-        validTransfer.moveClipboardSequence = FileOperations::ClipboardSequence{.windowsSequenceNumber = 42u};
+        validTransfer.moveClipboardSequence                  = FileOperations::ClipboardSequence{.windowsSequenceNumber = 42u};
         FileOperations::PlanRejectionBucket validationBucket = FileOperations::PlanRejectionBucket::None;
         if (! require(SUCCEEDED(FileOperations::ValidatePlan(FileOperations::FileOperationPlan{validTransfer}, &validationBucket)) &&
                           validationBucket == FileOperations::PlanRejectionBucket::None,
@@ -1307,8 +1224,8 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         FileOperations::TransferPlan explicitCopy = validTransfer;
-        explicitCopy.intent                        = FileOperations::TransferIntent::Copy;
-        explicitCopy.strategy                      = FileOperations::OperationStrategy::Copy;
+        explicitCopy.intent                       = FileOperations::TransferIntent::Copy;
+        explicitCopy.strategy                     = FileOperations::OperationStrategy::Copy;
         explicitCopy.moveClipboardSequence.reset();
         if (! require(SUCCEEDED(FileOperations::ValidatePlan(FileOperations::FileOperationPlan{explicitCopy}, &validationBucket)),
                       L"Ordinary Copy must use its explicit Copy strategy instead of borrowing the Managed Move strategy."))
@@ -1329,7 +1246,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         crossProfileDestination.selectedItems                = {{.providerPath = L"/source/a.txt"}};
         crossProfileDestination.explicitMappings.clear();
         crossProfileDestination.moveClipboardSequence.reset();
-        crossProfileDestination.destinationEndpoint.rootId = L"destination-root";
+        crossProfileDestination.destinationEndpoint.rootId       = L"destination-root";
         crossProfileDestination.destinationEndpoint.pathIdentity = FileSystemPathIdentity{
             .pathTextStableIdentity = true,
             .componentComparison    = FileSystemPathComponentComparison::OrdinalCaseSensitive,
@@ -1340,16 +1257,14 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         };
         crossProfileDestination.destination.providerFolderPath = L"bucket\\destination";
         std::wstring resolvedProviderDestination;
-        if (! require(FileOperations::TryResolveTransferDestinationProviderPath(
-                          crossProfileDestination, 0u, resolvedProviderDestination) &&
+        if (! require(FileOperations::TryResolveTransferDestinationProviderPath(crossProfileDestination, 0u, resolvedProviderDestination) &&
                           resolvedProviderDestination == L"bucket\\destination\\a.txt",
                       L"Transfer destination resolution must derive the leaf from the source profile and join with the destination profile."))
         {
             return true;
         }
         crossProfileDestination.explicitMappings = {{.sourceIndex = 0u, .destinationProviderPath = L"bucket\\destination\\mapped.txt"}};
-        if (! require(FileOperations::TryResolveTransferDestinationProviderPath(
-                          crossProfileDestination, 0u, resolvedProviderDestination) &&
+        if (! require(FileOperations::TryResolveTransferDestinationProviderPath(crossProfileDestination, 0u, resolvedProviderDestination) &&
                           resolvedProviderDestination == L"bucket\\destination\\mapped.txt",
                       L"An explicit transfer mapping must remain the exact execution and completion destination."))
         {
@@ -1357,9 +1272,9 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         FileOperations::TransferPlan secondRootTransfer = validTransfer;
-        secondRootTransfer.sourceEndpoint.rootId         = L"second-root";
-        secondRootTransfer.selectedItems                 = {{.providerPath = L"/second-root/c.txt"}};
-        secondRootTransfer.explicitMappings              = {{.sourceIndex = 0u, .destinationProviderPath = L"/destination/c.txt"}};
+        secondRootTransfer.sourceEndpoint.rootId        = L"second-root";
+        secondRootTransfer.selectedItems                = {{.providerPath = L"/second-root/c.txt"}};
+        secondRootTransfer.explicitMappings             = {{.sourceIndex = 0u, .destinationProviderPath = L"/destination/c.txt"}};
         const FileOperations::FileOperationPlanGroup mixedRootGroup{
             FileOperations::FileOperationPlan{validTransfer},
             FileOperations::FileOperationPlan{secondRootTransfer},
@@ -1374,7 +1289,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
 
-        FileOperations::TransferPlan duplicateMapping = validTransfer;
+        FileOperations::TransferPlan duplicateMapping    = validTransfer;
         duplicateMapping.explicitMappings[1].sourceIndex = 0u;
         if (! require(FileOperations::ValidatePlan(FileOperations::FileOperationPlan{duplicateMapping}, &validationBucket) == E_INVALIDARG &&
                           validationBucket == FileOperations::PlanRejectionBucket::InvalidExplicitMappings,
@@ -1383,7 +1298,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
 
-        FileOperations::TransferPlan escapingMapping = validTransfer;
+        FileOperations::TransferPlan escapingMapping                = validTransfer;
         escapingMapping.explicitMappings[1].destinationProviderPath = L"/outside/b.txt";
         if (! require(FileOperations::ValidatePlan(FileOperations::FileOperationPlan{escapingMapping}, &validationBucket) == E_INVALIDARG &&
                           validationBucket == FileOperations::PlanRejectionBucket::EscapingDestinationMapping,
@@ -1393,19 +1308,19 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         FileOperations::QualifiedEndpoint ignoreCaseEndpoint = validationEndpoint;
-        ignoreCaseEndpoint.pluginId                           = L"selftest/ignore-case-provider";
-        ignoreCaseEndpoint.profileId                          = L"ignore-case-profile";
-        ignoreCaseEndpoint.pathIdentity->componentComparison  = FileSystemPathComponentComparison::OrdinalIgnoreCase;
-        ignoreCaseEndpoint.pathIdentity->acceptedSeparators   = L"\\/";
+        ignoreCaseEndpoint.pluginId                          = L"selftest/ignore-case-provider";
+        ignoreCaseEndpoint.profileId                         = L"ignore-case-profile";
+        ignoreCaseEndpoint.pathIdentity->componentComparison = FileSystemPathComponentComparison::OrdinalIgnoreCase;
+        ignoreCaseEndpoint.pathIdentity->acceptedSeparators  = L"\\/";
 
-        FileOperations::TransferPlan ignoreCaseMapping = validTransfer;
-        ignoreCaseMapping.intent                       = FileOperations::TransferIntent::Copy;
-        ignoreCaseMapping.strategy                     = FileOperations::OperationStrategy::Copy;
-        ignoreCaseMapping.sourceEndpoint               = ignoreCaseEndpoint;
-        ignoreCaseMapping.destinationEndpoint          = ignoreCaseEndpoint;
-        ignoreCaseMapping.selectedItems                = {{.providerPath = L"/source/a.txt"}};
+        FileOperations::TransferPlan ignoreCaseMapping   = validTransfer;
+        ignoreCaseMapping.intent                         = FileOperations::TransferIntent::Copy;
+        ignoreCaseMapping.strategy                       = FileOperations::OperationStrategy::Copy;
+        ignoreCaseMapping.sourceEndpoint                 = ignoreCaseEndpoint;
+        ignoreCaseMapping.destinationEndpoint            = ignoreCaseEndpoint;
+        ignoreCaseMapping.selectedItems                  = {{.providerPath = L"/source/a.txt"}};
         ignoreCaseMapping.destination.providerFolderPath = L"/Destination";
-        ignoreCaseMapping.explicitMappings = {{.sourceIndex = 0u, .destinationProviderPath = L"/destination/a.txt"}};
+        ignoreCaseMapping.explicitMappings               = {{.sourceIndex = 0u, .destinationProviderPath = L"/destination/a.txt"}};
         ignoreCaseMapping.moveClipboardSequence.reset();
         if (! require(SUCCEEDED(FileOperations::ValidatePlan(FileOperations::FileOperationPlan{ignoreCaseMapping}, &validationBucket)),
                       L"Destination containment must use the admitted ignore-case path profile, not a host-local lexical comparison."))
@@ -1413,10 +1328,10 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
 
-        FileOperations::TransferPlan ignoreCaseSameFolder = ignoreCaseMapping;
-        ignoreCaseSameFolder.intent                        = FileOperations::TransferIntent::Move;
-        ignoreCaseSameFolder.strategy                      = FileOperations::OperationStrategy::Native;
-        ignoreCaseSameFolder.selectedItems                 = {{.providerPath = L"/Foo/a.txt"}};
+        FileOperations::TransferPlan ignoreCaseSameFolder   = ignoreCaseMapping;
+        ignoreCaseSameFolder.intent                         = FileOperations::TransferIntent::Move;
+        ignoreCaseSameFolder.strategy                       = FileOperations::OperationStrategy::Native;
+        ignoreCaseSameFolder.selectedItems                  = {{.providerPath = L"/Foo/a.txt"}};
         ignoreCaseSameFolder.destination.providerFolderPath = L"/foo";
         ignoreCaseSameFolder.explicitMappings.clear();
         if (! require(FileOperations::ValidatePlan(FileOperations::FileOperationPlan{ignoreCaseSameFolder}, &validationBucket) == E_INVALIDARG &&
@@ -1426,7 +1341,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
 
-        FileOperations::TransferPlan ignoreCaseEscape = ignoreCaseMapping;
+        FileOperations::TransferPlan ignoreCaseEscape                     = ignoreCaseMapping;
         ignoreCaseEscape.explicitMappings.front().destinationProviderPath = L"/Destination-Else/a.txt";
         if (! require(FileOperations::ValidatePlan(FileOperations::FileOperationPlan{ignoreCaseEscape}, &validationBucket) == E_INVALIDARG &&
                           validationBucket == FileOperations::PlanRejectionBucket::EscapingDestinationMapping,
@@ -1436,11 +1351,11 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         const FileOperations::QualifiedEndpoint localValidationEndpoint{
-            .pluginId   = L"builtin/file-system",
-            .instanceId = L"host/default",
-            .profileId  = L"local-win32",
-            .rootId     = L"local-volume",
-            .pathIdentity = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem(),
+            .pluginId               = L"builtin/file-system",
+            .instanceId             = L"host/default",
+            .profileId              = L"local-win32",
+            .rootId                 = L"local-volume",
+            .pathIdentity           = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem(),
             .cancellationRouteClass = FileOperations::CancellationRouteClass::Bounded,
         };
         if (! require(! FileOperations::MutationInterlockAccessesConflict(FileOperations::MutationInterlockAccess::ReadSource,
@@ -1458,10 +1373,10 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
         FileOperations::TransferPlan sameFolderCopy{};
-        sameFolderCopy.intent              = FileOperations::TransferIntent::Copy;
-        sameFolderCopy.sourceEndpoint      = localValidationEndpoint;
-        sameFolderCopy.destinationEndpoint = localValidationEndpoint;
-        sameFolderCopy.selectedItems       = {{.providerPath = L"C:\\work\\report.txt"}};
+        sameFolderCopy.intent                         = FileOperations::TransferIntent::Copy;
+        sameFolderCopy.sourceEndpoint                 = localValidationEndpoint;
+        sameFolderCopy.destinationEndpoint            = localValidationEndpoint;
+        sameFolderCopy.selectedItems                  = {{.providerPath = L"C:\\work\\report.txt"}};
         sameFolderCopy.destination.providerFolderPath = L"C:\\work";
         if (! require(SUCCEEDED(FileOperations::ValidatePlan(FileOperations::FileOperationPlan{sameFolderCopy}, &validationBucket)),
                       L"Same-folder Copy must remain admissible so execution can create a Keep Both sibling."))
@@ -1469,7 +1384,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
 
-        FileOperations::TransferPlan destinationInsideSource = sameFolderCopy;
+        FileOperations::TransferPlan destinationInsideSource       = sameFolderCopy;
         destinationInsideSource.selectedItems.front().providerPath = L"C:\\work\\tree";
         destinationInsideSource.destination.providerFolderPath     = L"C:\\work\\tree\\child";
         if (! require(FileOperations::ValidatePlan(FileOperations::FileOperationPlan{destinationInsideSource}, &validationBucket) == E_INVALIDARG &&
@@ -1480,8 +1395,8 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         FileOperations::TransferPlan sameFolderMove = sameFolderCopy;
-        sameFolderMove.intent   = FileOperations::TransferIntent::Move;
-        sameFolderMove.strategy = FileOperations::OperationStrategy::Native;
+        sameFolderMove.intent                       = FileOperations::TransferIntent::Move;
+        sameFolderMove.strategy                     = FileOperations::OperationStrategy::Native;
         if (! require(FileOperations::ValidatePlan(FileOperations::FileOperationPlan{sameFolderMove}, &validationBucket) == E_INVALIDARG &&
                           validationBucket == FileOperations::PlanRejectionBucket::SameFolderMove,
                       L"Same-folder Move must be rejected structurally while same-folder Copy remains admissible."))
@@ -1489,7 +1404,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
 
-        FileOperations::TransferPlan deviceNamespace = sameFolderCopy;
+        FileOperations::TransferPlan deviceNamespace       = sameFolderCopy;
         deviceNamespace.selectedItems.front().providerPath = LR"(\\?\GLOBALROOT\Device\HarddiskVolumeShadowCopy1\report.txt)";
         if (! require(FileOperations::ValidatePlan(FileOperations::FileOperationPlan{deviceNamespace}, &validationBucket) == E_INVALIDARG &&
                           validationBucket == FileOperations::PlanRejectionBucket::UnsupportedDeviceNamespace,
@@ -1499,8 +1414,8 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         FileOperations::TransferPlan invalidClipboard = validTransfer;
-        invalidClipboard.intent   = FileOperations::TransferIntent::Copy;
-        invalidClipboard.strategy = FileOperations::OperationStrategy::Copy;
+        invalidClipboard.intent                       = FileOperations::TransferIntent::Copy;
+        invalidClipboard.strategy                     = FileOperations::OperationStrategy::Copy;
         if (! require(FileOperations::ValidatePlan(FileOperations::FileOperationPlan{invalidClipboard}, &validationBucket) == E_INVALIDARG &&
                           validationBucket == FileOperations::PlanRejectionBucket::InvalidClipboardSequence,
                       L"Only Move plans may carry a non-zero clipboard sequence."))
@@ -1512,10 +1427,11 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         permanentDelete.endpoint      = validationEndpoint;
         permanentDelete.selectedItems = {{
             .providerPath = L"/source/a.txt",
-            .ingressSnapshot = FileOperations::ProviderIdentitySnapshot{
-                .objectId = {std::byte{0x01}},
-                .pathProfileId = validationEndpoint.profileId,
-            },
+            .ingressSnapshot =
+                FileOperations::ProviderIdentitySnapshot{
+                    .objectId      = {std::byte{0x01}},
+                    .pathProfileId = validationEndpoint.profileId,
+                },
         }};
         permanentDelete.mode          = FileOperations::DeleteMode::Permanent;
         if (! require(FileOperations::ValidatePlan(FileOperations::FileOperationPlan{permanentDelete}, &validationBucket) == E_INVALIDARG &&
@@ -1535,7 +1451,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         FileOperations::RenamePlan unspecifiedRename{};
-        unspecifiedRename.endpoint = validationEndpoint;
+        unspecifiedRename.endpoint      = validationEndpoint;
         unspecifiedRename.finalMappings = {{.source = {.providerPath = L"/source/a.txt"}, .finalLeafName = L"renamed.txt"}};
         if (! require(FileOperations::ValidatePlan(FileOperations::FileOperationPlan{unspecifiedRename}, &validationBucket) == E_INVALIDARG &&
                           validationBucket == FileOperations::PlanRejectionBucket::InvalidRename,
@@ -1545,8 +1461,8 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         FileOperations::RenamePlan invalidRename = unspecifiedRename;
-        invalidRename.origin = FileOperations::RenameOrigin::InlineRename;
-        invalidRename.finalMappings = {{.source = {.providerPath = L"/source/a.txt"}, .finalLeafName = L"nested/name.txt"}};
+        invalidRename.origin                     = FileOperations::RenameOrigin::InlineRename;
+        invalidRename.finalMappings              = {{.source = {.providerPath = L"/source/a.txt"}, .finalLeafName = L"nested/name.txt"}};
         if (! require(FileOperations::ValidatePlan(FileOperations::FileOperationPlan{invalidRename}, &validationBucket) == E_INVALIDARG &&
                           validationBucket == FileOperations::PlanRejectionBucket::InvalidRename,
                       L"RenamePlan leaf names must not contain provider path separators."))
@@ -1554,8 +1470,8 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
 
-        const std::filesystem::path bindingRoot = state.tempRoot / L"host-object-binding";
-        const std::filesystem::path bindingPath = bindingRoot / L"source.bin";
+        const std::filesystem::path bindingRoot  = state.tempRoot / L"host-object-binding";
+        const std::filesystem::path bindingPath  = bindingRoot / L"source.bin";
         const std::filesystem::path bindingAlias = bindingRoot / L"source-alias.bin";
         if (! require(SelfTest::EnsureDirectory(bindingRoot) && SelfTest::WriteTextFile(bindingPath, "original") &&
                           CreateHardLinkW(bindingAlias.c_str(), bindingPath.c_str(), nullptr) != FALSE,
@@ -1570,16 +1486,15 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             FileOperations::BindObjectAuthority(state.fsLocal.get(), bindingPath.native(), L"local-win32", hostBindingFlags);
         if (! require(boundAuthority.state == FileOperations::ObjectBindingState::Bound && SUCCEEDED(boundAuthority.status) &&
                           boundAuthority.authority.boundObject && ! boundAuthority.authority.identity.objectId.empty() &&
-                          boundAuthority.authority.identity.revisionId.empty() &&
-                          boundAuthority.authority.identity.pathProfileId == L"local-win32" &&
+                          boundAuthority.authority.identity.revisionId.empty() && boundAuthority.authority.identity.pathProfileId == L"local-win32" &&
                           boundAuthority.authority.kind == FILESYSTEM_BOUND_REGULAR_FILE,
                       L"Host binding should copy a complete exact local identity snapshot."))
         {
             return true;
         }
 
-        FileOperations::ObjectRevalidationResult sameAuthority = FileOperations::RevalidateObjectAuthority(
-            state.fsLocal.get(), bindingAlias.native(), L"local-win32", hostBindingFlags, boundAuthority.authority);
+        FileOperations::ObjectRevalidationResult sameAuthority =
+            FileOperations::RevalidateObjectAuthority(state.fsLocal.get(), bindingAlias.native(), L"local-win32", hostBindingFlags, boundAuthority.authority);
         if (! require(sameAuthority.state == FileOperations::ObjectRevalidationState::Same && SUCCEEDED(sameAuthority.status),
                       L"Host revalidation should recognize a hard-link alias as the same object."))
         {
@@ -1587,22 +1502,24 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         FileOperations::RenamePlan duplicateObjectRename{};
-        duplicateObjectRename.origin   = FileOperations::RenameOrigin::BatchRename;
-        duplicateObjectRename.endpoint = validationEndpoint;
+        duplicateObjectRename.origin             = FileOperations::RenameOrigin::BatchRename;
+        duplicateObjectRename.endpoint           = validationEndpoint;
         duplicateObjectRename.endpoint.profileId = L"local-win32";
-        duplicateObjectRename.finalMappings = {
+        duplicateObjectRename.finalMappings      = {
             {
-                .source = {
-                    .providerPath = bindingPath.native(),
-                    .ingressSnapshot = boundAuthority.authority.identity,
-                },
+                .source =
+                    {
+                        .providerPath    = bindingPath.native(),
+                        .ingressSnapshot = boundAuthority.authority.identity,
+                    },
                 .finalLeafName = L"renamed-one.bin",
             },
             {
-                .source = {
-                    .providerPath = bindingAlias.native(),
-                    .ingressSnapshot = sameAuthority.current.identity,
-                },
+                .source =
+                    {
+                        .providerPath    = bindingAlias.native(),
+                        .ingressSnapshot = sameAuthority.current.identity,
+                    },
                 .finalLeafName = L"renamed-two.bin",
             },
         };
@@ -1618,8 +1535,8 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         {
             return true;
         }
-        FileOperations::ObjectRevalidationResult changedAuthority = FileOperations::RevalidateObjectAuthority(
-            state.fsLocal.get(), bindingPath.native(), L"local-win32", hostBindingFlags, boundAuthority.authority);
+        FileOperations::ObjectRevalidationResult changedAuthority =
+            FileOperations::RevalidateObjectAuthority(state.fsLocal.get(), bindingPath.native(), L"local-win32", hostBindingFlags, boundAuthority.authority);
         if (! require(changedAuthority.state == FileOperations::ObjectRevalidationState::Changed && SUCCEEDED(changedAuthority.status),
                       L"Host revalidation should classify same-path replacement as changed."))
         {
@@ -1630,8 +1547,8 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         {
             return true;
         }
-        FileOperations::ObjectRevalidationResult missingAuthority = FileOperations::RevalidateObjectAuthority(
-            state.fsLocal.get(), bindingPath.native(), L"local-win32", hostBindingFlags, boundAuthority.authority);
+        FileOperations::ObjectRevalidationResult missingAuthority =
+            FileOperations::RevalidateObjectAuthority(state.fsLocal.get(), bindingPath.native(), L"local-win32", hostBindingFlags, boundAuthority.authority);
         if (! require(missingAuthority.state == FileOperations::ObjectRevalidationState::Missing && FAILED(missingAuthority.status),
                       L"Host revalidation should keep disappearance distinct from changed and indeterminate."))
         {
@@ -1651,24 +1568,25 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             .instanceId = L"host/default",
             .profileId  = L"dummy-local",
             .rootId     = L"dummy-root",
-            .pathIdentity = FileSystemPathIdentity{
-                .pathTextStableIdentity = true,
-                .componentComparison    = FileSystemPathComponentComparison::OrdinalIgnoreCase,
-                .preferredSeparator     = L'\\',
-                .acceptedSeparators     = L"\\/",
-                .casePreserving         = true,
-                .caseOnlyRename         = FileSystemPathCaseOnlyRename::Supported,
-            },
+            .pathIdentity =
+                FileSystemPathIdentity{
+                    .pathTextStableIdentity = true,
+                    .componentComparison    = FileSystemPathComponentComparison::OrdinalIgnoreCase,
+                    .preferredSeparator     = L'\\',
+                    .acceptedSeparators     = L"\\/",
+                    .casePreserving         = true,
+                    .caseOnlyRename         = FileSystemPathCaseOnlyRename::Supported,
+                },
             .cancellationRouteClass = FileOperations::CancellationRouteClass::Bounded,
         };
 
         constexpr uint64_t kR0dPerfIterations = 4'096u;
         FileOperations::TransferPlan r0dPerfPlan{};
-        r0dPerfPlan.intent              = FileOperations::TransferIntent::Move;
-        r0dPerfPlan.strategy            = FileOperations::OperationStrategy::Native;
-        r0dPerfPlan.sourceEndpoint      = dummyValidationEndpoint;
-        r0dPerfPlan.destinationEndpoint = dummyValidationEndpoint;
-        r0dPerfPlan.selectedItems       = {{.providerPath = L"/r0d-perf-source.bin"}};
+        r0dPerfPlan.intent                         = FileOperations::TransferIntent::Move;
+        r0dPerfPlan.strategy                       = FileOperations::OperationStrategy::Native;
+        r0dPerfPlan.sourceEndpoint                 = dummyValidationEndpoint;
+        r0dPerfPlan.destinationEndpoint            = dummyValidationEndpoint;
+        r0dPerfPlan.selectedItems                  = {{.providerPath = L"/r0d-perf-source.bin"}};
         r0dPerfPlan.destination.providerFolderPath = L"/r0d-perf-destination";
         FolderWindow::FileOperationState::Task r0dPerfTask(*state.fileOps);
         r0dPerfTask.StorePlans(std::make_shared<const FileOperations::FileOperationPlanGroup>(
@@ -1676,8 +1594,8 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         r0dPerfTask._operation   = FILESYSTEM_MOVE;
         r0dPerfTask._sourcePaths = {std::filesystem::path(L"/r0d-perf-source.bin")};
 
-        const auto r0dPerfStarted = std::chrono::steady_clock::now();
-        bool r0dPerfValid          = true;
+        const auto r0dPerfStarted     = std::chrono::steady_clock::now();
+        bool r0dPerfValid             = true;
         uint64_t r0dAdmissionChecksum = 0u;
         for (uint64_t iteration = 0u; iteration < kR0dPerfIterations; ++iteration)
         {
@@ -1690,16 +1608,16 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             r0dPerfTask.InitializeSourceItemResultBuilders();
             r0dPerfTask.MarkSourceItemsMutationPossible();
             r0dPerfTask._sourceItemResultBuilders.front().status = S_OK;
-            const HRESULT classificationHr = r0dPerfTask.FinalizeTypedItemResults(S_OK);
+            const HRESULT classificationHr                       = r0dPerfTask.FinalizeTypedItemResults(S_OK);
             const FileOperations::FileOperationItemResult* classified =
                 r0dPerfTask._sourceItemResultBuilders.size() == 1u && r0dPerfTask._sourceItemResultBuilders.front().terminal.has_value()
-                ? std::addressof(r0dPerfTask._sourceItemResultBuilders.front().terminal.value())
-                : nullptr;
+                    ? std::addressof(r0dPerfTask._sourceItemResultBuilders.front().terminal.value())
+                    : nullptr;
             r0dPerfValid = classificationHr == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) && classified != nullptr &&
-                classified->completion == FileOperations::ItemCompletion::Indeterminate && r0dPerfValid;
+                           classified->completion == FileOperations::ItemCompletion::Indeterminate && r0dPerfValid;
         }
-        const uint64_t r0dPerfElapsedUs = Debug::Perf::ElapsedUs(r0dPerfStarted);
-        constexpr uint64_t kR0dCapabilityQueryCount = kR0dPerfIterations * 3u;
+        const uint64_t r0dPerfElapsedUs               = Debug::Perf::ElapsedUs(r0dPerfStarted);
+        constexpr uint64_t kR0dCapabilityQueryCount   = kR0dPerfIterations * 3u;
         constexpr uint64_t kR0dAdmissionDecisionCount = kR0dPerfIterations * 2u;
         Debug::Perf::Emit(L"FileOps.SelfTest.R0d.CapabilityReceiptHonestyUs",
                           L"dummy-4096-capability-admission-receipt",
@@ -1739,19 +1657,18 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         if (! require(EnsureDummyFolderExists(state.fsDummy.get(), L"/r0d-null-receipt-move") &&
                           EnsureDummyFolderExists(state.fsDummy.get(), r0dMoveDestination) &&
                           EnsureDummyFolderExists(state.fsDummy.get(), L"/r0d-null-receipt-delete") &&
-                          DummyWriteTextFile(state.fsDummy.get(), r0dMoveSource, "move") &&
-                          DummyWriteTextFile(state.fsDummy.get(), r0dDeleteSource, "delete"),
+                          DummyWriteTextFile(state.fsDummy.get(), r0dMoveSource, "move") && DummyWriteTextFile(state.fsDummy.get(), r0dDeleteSource, "delete"),
                       L"R0d null-receipt fixtures should create deterministic Dummy objects."))
         {
             return true;
         }
 
         FileOperations::TransferPlan r0dMovePlan{};
-        r0dMovePlan.intent              = FileOperations::TransferIntent::Move;
-        r0dMovePlan.strategy            = FileOperations::OperationStrategy::Native;
-        r0dMovePlan.sourceEndpoint      = dummyValidationEndpoint;
-        r0dMovePlan.destinationEndpoint = dummyValidationEndpoint;
-        r0dMovePlan.selectedItems       = {{.providerPath = std::wstring(r0dMoveSource)}};
+        r0dMovePlan.intent                         = FileOperations::TransferIntent::Move;
+        r0dMovePlan.strategy                       = FileOperations::OperationStrategy::Native;
+        r0dMovePlan.sourceEndpoint                 = dummyValidationEndpoint;
+        r0dMovePlan.destinationEndpoint            = dummyValidationEndpoint;
+        r0dMovePlan.selectedItems                  = {{.providerPath = std::wstring(r0dMoveSource)}};
         r0dMovePlan.destination.providerFolderPath = std::wstring(r0dMoveDestination);
         FolderWindow::FileOperationState::Task r0dMoveTask(*state.fileOps);
         r0dMoveTask.StorePlans(std::make_shared<const FileOperations::FileOperationPlanGroup>(
@@ -1785,17 +1702,15 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         const HRESULT r0dDeleteExecutionHr = r0dDeleteTask.ExecuteOperation();
         const HRESULT r0dDeleteFinalHr     = r0dDeleteTask.FinalizeTypedItemResults(r0dDeleteExecutionHr);
 
-        const auto indeterminateResult = [](const FolderWindow::FileOperationState::Task& task,
-                                            FileOperations::PublicationState expectedPublication) noexcept
+        const auto indeterminateResult = [](const FolderWindow::FileOperationState::Task& task, FileOperations::PublicationState expectedPublication) noexcept
         {
             return task._sourceItemResultBuilders.size() == 1u && task._sourceItemResultBuilders.front().terminal.has_value() &&
-                task._sourceItemResultBuilders.front().terminal->publication == expectedPublication &&
-                task._sourceItemResultBuilders.front().terminal->sourceDisposition == FileOperations::SourceDisposition::Unknown &&
-                task._sourceItemResultBuilders.front().terminal->completion == FileOperations::ItemCompletion::Indeterminate &&
-                task._sourceItemResultBuilders.front().terminal->status == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+                   task._sourceItemResultBuilders.front().terminal->publication == expectedPublication &&
+                   task._sourceItemResultBuilders.front().terminal->sourceDisposition == FileOperations::SourceDisposition::Unknown &&
+                   task._sourceItemResultBuilders.front().terminal->completion == FileOperations::ItemCompletion::Indeterminate &&
+                   task._sourceItemResultBuilders.front().terminal->status == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
         };
-        if (! require(r0dMoveExecutionHr == S_OK && r0dDeleteExecutionHr == S_OK &&
-                          r0dMoveFinalHr == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) &&
+        if (! require(r0dMoveExecutionHr == S_OK && r0dDeleteExecutionHr == S_OK && r0dMoveFinalHr == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) &&
                           r0dDeleteFinalHr == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) &&
                           indeterminateResult(r0dMoveTask, FileOperations::PublicationState::Unknown) &&
                           indeterminateResult(r0dDeleteTask, FileOperations::PublicationState::NotAttempted),
@@ -1807,11 +1722,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         constexpr std::wstring_view dummyInlineRenameRoot   = L"/inline-rename-unbound";
         constexpr std::wstring_view dummyInlineRenameSource = L"/inline-rename-unbound/source.txt";
         constexpr std::wstring_view dummyInlineRenameTarget = L"/inline-rename-unbound/renamed.txt";
-        static_cast<void>(state.fsDummy->DeleteItem(std::wstring(dummyInlineRenameRoot).c_str(),
-                                                    FILESYSTEM_FLAG_RECURSIVE,
-                                                    nullptr,
-                                                    nullptr,
-                                                    nullptr));
+        static_cast<void>(state.fsDummy->DeleteItem(std::wstring(dummyInlineRenameRoot).c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr));
         if (! require(EnsureDummyFolderExists(state.fsDummy.get(), dummyInlineRenameRoot) &&
                           DummyWriteTextFile(state.fsDummy.get(), dummyInlineRenameSource, "unbound-rename"),
                       L"Unbound Inline Rename fixture should create its deterministic source."))
@@ -1823,8 +1734,8 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
         FileOperations::RenamePlan unboundInlineRename{};
-        unboundInlineRename.origin   = FileOperations::RenameOrigin::InlineRename;
-        unboundInlineRename.endpoint = dummyValidationEndpoint;
+        unboundInlineRename.origin        = FileOperations::RenameOrigin::InlineRename;
+        unboundInlineRename.endpoint      = dummyValidationEndpoint;
         unboundInlineRename.finalMappings = {{
             .source        = {.providerPath = std::wstring(dummyInlineRenameSource)},
             .finalLeafName = L"renamed.txt",
@@ -1835,14 +1746,13 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         unboundInlineRenameTask._operation     = FILESYSTEM_RENAME;
         unboundInlineRenameTask._executionMode = FolderWindow::FileOperationState::ExecutionMode::PerItem;
         unboundInlineRenameTask._fileSystem    = state.fsDummy;
-        const HRESULT unboundInlineRenameHr = unboundInlineRenameTask.PrepareMutationInterlockScopes();
+        const HRESULT unboundInlineRenameHr    = unboundInlineRenameTask.PrepareMutationInterlockScopes();
         wil::com_ptr<IFileSystemIO> unboundDummyIo;
         std::string retainedUnboundSource;
         std::string unexpectedUnboundTarget;
         if (! require(unboundInlineRenameHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) &&
                           SUCCEEDED(state.fsDummy->QueryInterface(IID_PPV_ARGS(unboundDummyIo.addressof()))) && unboundDummyIo &&
-                          ReadFileTextFsIo(unboundDummyIo, dummyInlineRenameSource, retainedUnboundSource) &&
-                          retainedUnboundSource == "unbound-rename" &&
+                          ReadFileTextFsIo(unboundDummyIo, dummyInlineRenameSource, retainedUnboundSource) && retainedUnboundSource == "unbound-rename" &&
                           ! ReadFileTextFsIo(unboundDummyIo, dummyInlineRenameTarget, unexpectedUnboundTarget),
                       L"A provider advertising base Rename without object binding must fail interlock preparation before mutation."))
         {
@@ -1850,12 +1760,12 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         FileOperations::TransferMutationGuard unsupportedBindingDescendant = FileOperations::PrepareTransferMutationGuard(state.fsDummy.get(),
-                                                                                                                             state.fsDummy.get(),
-                                                                                                                             dummyValidationEndpoint,
-                                                                                                                             dummyValidationEndpoint,
-                                                                                                                             FileOperations::TransferIntent::Move,
-                                                                                                                             L"/Source",
-                                                                                                                             L"\\source\\child");
+                                                                                                                          state.fsDummy.get(),
+                                                                                                                          dummyValidationEndpoint,
+                                                                                                                          dummyValidationEndpoint,
+                                                                                                                          FileOperations::TransferIntent::Move,
+                                                                                                                          L"/Source",
+                                                                                                                          L"\\source\\child");
         if (! require(unsupportedBindingDescendant.state == FileOperations::TransferSafetyState::DestinationInsideSource &&
                           FAILED(unsupportedBindingDescendant.status),
                       L"A stable provider path profile must stop a destination-inside-source transfer even when object binding is unsupported."))
@@ -1876,12 +1786,12 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         FileOperations::TransferMutationGuard directSameObject = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
-                                                                                                                state.fsLocal.get(),
-                                                                                                                localValidationEndpoint,
-                                                                                                                localValidationEndpoint,
-                                                                                                                FileOperations::TransferIntent::Copy,
-                                                                                                                guardSource.native(),
-                                                                                                                guardSource.native());
+                                                                                                              state.fsLocal.get(),
+                                                                                                              localValidationEndpoint,
+                                                                                                              localValidationEndpoint,
+                                                                                                              FileOperations::TransferIntent::Copy,
+                                                                                                              guardSource.native(),
+                                                                                                              guardSource.native());
         if (! require(directSameObject.state == FileOperations::TransferSafetyState::SameObject && directSameObject.samePathText &&
                           FAILED(directSameObject.status),
                       L"A direct same-path Copy must be classified as the same object so execution can select Keep Both before mutation."))
@@ -1890,12 +1800,12 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         FileOperations::TransferMutationGuard hardLinkSameObject = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
-                                                                                                                  state.fsLocal.get(),
-                                                                                                                  localValidationEndpoint,
-                                                                                                                  localValidationEndpoint,
-                                                                                                                  FileOperations::TransferIntent::Copy,
-                                                                                                                  guardSource.native(),
-                                                                                                                  guardAlias.native());
+                                                                                                                state.fsLocal.get(),
+                                                                                                                localValidationEndpoint,
+                                                                                                                localValidationEndpoint,
+                                                                                                                FileOperations::TransferIntent::Copy,
+                                                                                                                guardSource.native(),
+                                                                                                                guardAlias.native());
         if (! require(hardLinkSameObject.state == FileOperations::TransferSafetyState::SameObject && ! hardLinkSameObject.samePathText &&
                           FAILED(hardLinkSameObject.status),
                       L"A hard-link destination alias must stop as the same object and must not be converted into same-path Keep Both."))
@@ -1903,19 +1813,17 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
 
-        const auto requireSameObjectAlias = [&](const std::filesystem::path& aliasPath,
-                                                bool expectedSamePathText,
-                                                std::wstring_view label) noexcept -> bool
+        const auto requireSameObjectAlias = [&](const std::filesystem::path& aliasPath, bool expectedSamePathText, std::wstring_view label) noexcept -> bool
         {
             FileOperations::TransferMutationGuard aliasGuard = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
-                                                                                                               state.fsLocal.get(),
-                                                                                                               localValidationEndpoint,
-                                                                                                               localValidationEndpoint,
-                                                                                                               FileOperations::TransferIntent::Copy,
-                                                                                                               guardSource.native(),
-                                                                                                               aliasPath.native());
-            return require(aliasGuard.state == FileOperations::TransferSafetyState::SameObject &&
-                               aliasGuard.samePathText == expectedSamePathText && FAILED(aliasGuard.status),
+                                                                                                            state.fsLocal.get(),
+                                                                                                            localValidationEndpoint,
+                                                                                                            localValidationEndpoint,
+                                                                                                            FileOperations::TransferIntent::Copy,
+                                                                                                            guardSource.native(),
+                                                                                                            aliasPath.native());
+            return require(aliasGuard.state == FileOperations::TransferSafetyState::SameObject && aliasGuard.samePathText == expectedSamePathText &&
+                               FAILED(aliasGuard.status),
                            std::format(L"The {} alias must resolve to the exact source object before provider mutation.", label));
         };
 
@@ -1936,8 +1844,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
         std::array<wchar_t, MAX_PATH> volumeRoot{};
         const std::optional<std::wstring> volumeGuidRoot = TryGetVolumeGuidPathForPath(guardSource);
-        if (GetVolumePathNameW(guardSource.c_str(), volumeRoot.data(), static_cast<DWORD>(volumeRoot.size())) != FALSE &&
-            volumeGuidRoot.has_value())
+        if (GetVolumePathNameW(guardSource.c_str(), volumeRoot.data(), static_cast<DWORD>(volumeRoot.size())) != FALSE && volumeGuidRoot.has_value())
         {
             const std::wstring sourceText = guardSource.native();
             const std::wstring rootText(volumeRoot.data());
@@ -1968,13 +1875,14 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             if (written > 0u && written < shortPath.size() &&
                 ! OrdinalString::EqualsNoCase(longAliasSource.native(), std::wstring_view(shortPath.data(), written)))
             {
-                FileOperations::TransferMutationGuard shortNameGuard = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
-                                                                                                                      state.fsLocal.get(),
-                                                                                                                      localValidationEndpoint,
-                                                                                                                      localValidationEndpoint,
-                                                                                                                      FileOperations::TransferIntent::Copy,
-                                                                                                                      longAliasSource.native(),
-                                                                                                                      std::wstring_view(shortPath.data(), written));
+                FileOperations::TransferMutationGuard shortNameGuard =
+                    FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
+                                                                 state.fsLocal.get(),
+                                                                 localValidationEndpoint,
+                                                                 localValidationEndpoint,
+                                                                 FileOperations::TransferIntent::Copy,
+                                                                 longAliasSource.native(),
+                                                                 std::wstring_view(shortPath.data(), written));
                 if (! require(shortNameGuard.state == FileOperations::TransferSafetyState::SameObject && ! shortNameGuard.samePathText &&
                                   FAILED(shortNameGuard.status),
                               L"An available 8.3 alias must resolve to the exact long-name source object."))
@@ -1992,7 +1900,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             AppendLog(L"Provider identity matrix: 8.3 aliases are unavailable; environment-gated case skipped.");
         }
 
-        wchar_t substLetter = L'\0';
+        wchar_t substLetter       = L'\0';
         const DWORD logicalDrives = GetLogicalDrives();
         for (wchar_t candidate = L'Y'; candidate >= L'D'; --candidate)
         {
@@ -2007,13 +1915,12 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         {
             const std::wstring deviceName{substLetter, L':'};
             const std::wstring rawTarget = std::wstring(L"\\??\\") + guardRoot.native();
-            constexpr DWORD defineFlags = DDD_RAW_TARGET_PATH | DDD_NO_BROADCAST_SYSTEM;
+            constexpr DWORD defineFlags  = DDD_RAW_TARGET_PATH | DDD_NO_BROADCAST_SYSTEM;
             if (DefineDosDeviceW(defineFlags, deviceName.c_str(), rawTarget.c_str()) != FALSE)
             {
-                auto removeSubst = wil::scope_exit([&]() noexcept
+                auto removeSubst                       = wil::scope_exit([&]() noexcept
                 {
-                    constexpr DWORD removeFlags =
-                        DDD_REMOVE_DEFINITION | DDD_EXACT_MATCH_ON_REMOVE | DDD_RAW_TARGET_PATH | DDD_NO_BROADCAST_SYSTEM;
+                    constexpr DWORD removeFlags = DDD_REMOVE_DEFINITION | DDD_EXACT_MATCH_ON_REMOVE | DDD_RAW_TARGET_PATH | DDD_NO_BROADCAST_SYSTEM;
                     static_cast<void>(DefineDosDeviceW(removeFlags, deviceName.c_str(), rawTarget.c_str()));
                 });
                 const std::filesystem::path substAlias = deviceName + L"\\" + guardSource.filename().native();
@@ -2037,26 +1944,14 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         {
             FileOperations::QualifiedEndpoint driveEndpoint{};
             FileOperations::QualifiedEndpoint uncEndpoint{};
-            const bool driveQualified = FileOperations::TryQualifyEndpointForSelfTest(state.fsLocal,
-                                                                                       guardSource.native(),
-                                                                                       FILESYSTEM_COPY,
-                                                                                       L"builtin/file-system",
-                                                                                       L"host/default",
-                                                                                       driveEndpoint);
-            const bool uncQualified = FileOperations::TryQualifyEndpointForSelfTest(state.fsLocal,
-                                                                                     uncAlias.native(),
-                                                                                     FILESYSTEM_COPY,
-                                                                                     L"builtin/file-system",
-                                                                                     L"host/default",
-                                                                                     uncEndpoint);
-            if (! require(driveQualified && uncQualified &&
-                              uncEndpoint.profileId == L"local-win32-smb" &&
+            const bool driveQualified = FileOperations::TryQualifyEndpointForSelfTest(
+                state.fsLocal, guardSource.native(), FILESYSTEM_COPY, L"builtin/file-system", L"host/default", driveEndpoint);
+            const bool uncQualified = FileOperations::TryQualifyEndpointForSelfTest(
+                state.fsLocal, uncAlias.native(), FILESYSTEM_COPY, L"builtin/file-system", L"host/default", uncEndpoint);
+            if (! require(driveQualified && uncQualified && uncEndpoint.profileId == L"local-win32-smb" &&
                               uncEndpoint.cancellationRouteClass == FileOperations::CancellationRouteClass::Bounded &&
                               uncEndpoint.providerWatchdogTimeoutMs == 0u &&
-                              CanSameFileSystemOperation(state.fsLocal,
-                                                         uncAlias.native(),
-                                                         FILESYSTEM_COPY,
-                                                         L"builtin/file-system"),
+                              CanSameFileSystemOperation(state.fsLocal, uncAlias.native(), FILESYSTEM_COPY, L"builtin/file-system"),
                           L"Local UNC must stay a distinct route profile that R0f-SMB admits as bounded without opening the share."))
             {
                 return true;
@@ -2067,17 +1962,16 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                 // Cancellation route classification is intentionally distinct for Local SMB,
                 // while the lower-level Local object-binding contract still uses one Win32
                 // identity profile. Isolate that existing identity proof from admission here.
-                uncIdentityEndpoint.profileId = driveEndpoint.profileId;
-                uncIdentityEndpoint.cancellationRouteClass = FileOperations::CancellationRouteClass::Bounded;
+                uncIdentityEndpoint.profileId                       = driveEndpoint.profileId;
+                uncIdentityEndpoint.cancellationRouteClass          = FileOperations::CancellationRouteClass::Bounded;
                 FileOperations::TransferMutationGuard uncAliasGuard = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
-                                                                                                                      state.fsLocal.get(),
-                                                                                                                      driveEndpoint,
-                                                                                                                      uncIdentityEndpoint,
-                                                                                                                      FileOperations::TransferIntent::Copy,
-                                                                                                                      guardSource.native(),
-                                                                                                                      uncAlias.native());
-                if (! require(driveEndpoint.rootId != uncEndpoint.rootId &&
-                                  uncAliasGuard.state == FileOperations::TransferSafetyState::SameObject &&
+                                                                                                                   state.fsLocal.get(),
+                                                                                                                   driveEndpoint,
+                                                                                                                   uncIdentityEndpoint,
+                                                                                                                   FileOperations::TransferIntent::Copy,
+                                                                                                                   guardSource.native(),
+                                                                                                                   uncAlias.native());
+                if (! require(driveEndpoint.rootId != uncEndpoint.rootId && uncAliasGuard.state == FileOperations::TransferSafetyState::SameObject &&
                                   ! uncAliasGuard.samePathText && FAILED(uncAliasGuard.status),
                               L"The Local Win32 identity profile must still detect a drive/UNC alias independently of cancellation admission."))
                 {
@@ -2095,29 +1989,28 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         FileOperations::TransferMutationGuard readyGuard = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
-                                                                                                          state.fsLocal.get(),
-                                                                                                          localValidationEndpoint,
-                                                                                                          localValidationEndpoint,
-                                                                                                          FileOperations::TransferIntent::Copy,
-                                                                                                          guardSource.native(),
-                                                                                                          guardMissingDestination.native());
-        if (! require(readyGuard.state == FileOperations::TransferSafetyState::Ready && readyGuard.destinationWasMissing &&
-                          SUCCEEDED(readyGuard.status),
+                                                                                                        state.fsLocal.get(),
+                                                                                                        localValidationEndpoint,
+                                                                                                        localValidationEndpoint,
+                                                                                                        FileOperations::TransferIntent::Copy,
+                                                                                                        guardSource.native(),
+                                                                                                        guardMissingDestination.native());
+        if (! require(readyGuard.state == FileOperations::TransferSafetyState::Ready && readyGuard.destinationWasMissing && SUCCEEDED(readyGuard.status),
                       L"A distinct source and missing destination should retain exact authority and remain ready."))
         {
             return true;
         }
 
-        HRESULT readyRevalidationStatus = E_UNEXPECTED;
+        HRESULT readyRevalidationStatus                             = E_UNEXPECTED;
         const FileOperations::TransferSafetyState readyRevalidation = FileOperations::RevalidateTransferMutationGuard(state.fsLocal.get(),
-                                                                                                                        state.fsLocal.get(),
-                                                                                                                        localValidationEndpoint,
-                                                                                                                        localValidationEndpoint,
-                                                                                                                        FileOperations::TransferIntent::Copy,
-                                                                                                                        guardSource.native(),
-                                                                                                                        guardMissingDestination.native(),
-                                                                                                                        readyGuard,
-                                                                                                                        readyRevalidationStatus);
+                                                                                                                      state.fsLocal.get(),
+                                                                                                                      localValidationEndpoint,
+                                                                                                                      localValidationEndpoint,
+                                                                                                                      FileOperations::TransferIntent::Copy,
+                                                                                                                      guardSource.native(),
+                                                                                                                      guardMissingDestination.native(),
+                                                                                                                      readyGuard,
+                                                                                                                      readyRevalidationStatus);
         if (! require(readyRevalidation == FileOperations::TransferSafetyState::Ready && SUCCEEDED(readyRevalidationStatus),
                       L"Unchanged retained source and destination authority should revalidate at the provider boundary."))
         {
@@ -2125,12 +2018,12 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         FileOperations::TransferMutationGuard sameFolderMoveGuard = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
-                                                                                                                   state.fsLocal.get(),
-                                                                                                                   localValidationEndpoint,
-                                                                                                                   localValidationEndpoint,
-                                                                                                                   FileOperations::TransferIntent::Move,
-                                                                                                                   guardSource.native(),
-                                                                                                                   (guardRoot / L"renamed.bin").native());
+                                                                                                                 state.fsLocal.get(),
+                                                                                                                 localValidationEndpoint,
+                                                                                                                 localValidationEndpoint,
+                                                                                                                 FileOperations::TransferIntent::Move,
+                                                                                                                 guardSource.native(),
+                                                                                                                 (guardRoot / L"renamed.bin").native());
         if (! require(sameFolderMoveGuard.state == FileOperations::TransferSafetyState::SameFolderMove && FAILED(sameFolderMoveGuard.status),
                       L"Exact parent identity must reject a same-folder Move even when the destination leaf differs."))
         {
@@ -2144,19 +2037,19 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
         FileOperations::TransferMutationGuard subtreeGuard = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
-                                                                                                            state.fsLocal.get(),
-                                                                                                            localValidationEndpoint,
-                                                                                                            localValidationEndpoint,
-                                                                                                            FileOperations::TransferIntent::Copy,
-                                                                                                            guardTree.native(),
-                                                                                                            (guardTreeChild / L"copy").native());
+                                                                                                          state.fsLocal.get(),
+                                                                                                          localValidationEndpoint,
+                                                                                                          localValidationEndpoint,
+                                                                                                          FileOperations::TransferIntent::Copy,
+                                                                                                          guardTree.native(),
+                                                                                                          (guardTreeChild / L"copy").native());
         if (! require(subtreeGuard.state == FileOperations::TransferSafetyState::DestinationInsideSource && FAILED(subtreeGuard.status),
                       L"No-follow ancestor identity must reject a directory destination discovered inside its source tree."))
         {
             return true;
         }
 
-        const std::filesystem::path guardOutsideTarget = guardRoot / L"outside-target";
+        const std::filesystem::path guardOutsideTarget   = guardRoot / L"outside-target";
         const std::filesystem::path guardDestinationLink = guardDestinationRoot / L"linked-parent";
         if (! require(SelfTest::EnsureDirectory(guardOutsideTarget) && TryCreateJunction(guardDestinationLink, guardOutsideTarget),
                       L"Transfer containment fixture should create a destination junction ancestor."))
@@ -2164,12 +2057,12 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
         FileOperations::TransferMutationGuard linkAncestorGuard = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
-                                                                                                                 state.fsLocal.get(),
-                                                                                                                 localValidationEndpoint,
-                                                                                                                 localValidationEndpoint,
-                                                                                                                 FileOperations::TransferIntent::Copy,
-                                                                                                                 guardTree.native(),
-                                                                                                                 (guardDestinationLink / L"copy").native());
+                                                                                                               state.fsLocal.get(),
+                                                                                                               localValidationEndpoint,
+                                                                                                               localValidationEndpoint,
+                                                                                                               FileOperations::TransferIntent::Copy,
+                                                                                                               guardTree.native(),
+                                                                                                               (guardDestinationLink / L"copy").native());
         if (! require(linkAncestorGuard.state == FileOperations::TransferSafetyState::AncestryLink && FAILED(linkAncestorGuard.status),
                       L"A no-follow destination junction ancestor must be an explicit conflict, never a traversed containment shortcut."))
         {
@@ -2177,94 +2070,92 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         FileOperations::TransferMutationGuard destinationSwapGuard = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
-                                                                                                                    state.fsLocal.get(),
-                                                                                                                    localValidationEndpoint,
-                                                                                                                    localValidationEndpoint,
-                                                                                                                    FileOperations::TransferIntent::Copy,
-                                                                                                                    guardSource.native(),
-                                                                                                                    guardMissingDestination.native());
+                                                                                                                  state.fsLocal.get(),
+                                                                                                                  localValidationEndpoint,
+                                                                                                                  localValidationEndpoint,
+                                                                                                                  FileOperations::TransferIntent::Copy,
+                                                                                                                  guardSource.native(),
+                                                                                                                  guardMissingDestination.native());
         if (! require(destinationSwapGuard.state == FileOperations::TransferSafetyState::Ready &&
                           SelfTest::WriteTextFile(guardMissingDestination, "destination-race"),
                       L"Destination-swap fixture should prepare a missing destination and then publish a racing object."))
         {
             return true;
         }
-        HRESULT destinationSwapStatus = E_UNEXPECTED;
+        HRESULT destinationSwapStatus                                  = E_UNEXPECTED;
         const FileOperations::TransferSafetyState destinationSwapState = FileOperations::RevalidateTransferMutationGuard(state.fsLocal.get(),
-                                                                                                                          state.fsLocal.get(),
-                                                                                                                          localValidationEndpoint,
-                                                                                                                          localValidationEndpoint,
-                                                                                                                          FileOperations::TransferIntent::Copy,
-                                                                                                                          guardSource.native(),
-                                                                                                                          guardMissingDestination.native(),
-                                                                                                                          destinationSwapGuard,
-                                                                                                                          destinationSwapStatus);
+                                                                                                                         state.fsLocal.get(),
+                                                                                                                         localValidationEndpoint,
+                                                                                                                         localValidationEndpoint,
+                                                                                                                         FileOperations::TransferIntent::Copy,
+                                                                                                                         guardSource.native(),
+                                                                                                                         guardMissingDestination.native(),
+                                                                                                                         destinationSwapGuard,
+                                                                                                                         destinationSwapStatus);
         if (! require(destinationSwapState == FileOperations::TransferSafetyState::DestinationChanged && FAILED(destinationSwapStatus),
                       L"A destination appearing after classification must fail closed at final mutation-boundary revalidation."))
         {
             return true;
         }
 
-        const std::filesystem::path finalLinkSwap = guardDestinationRoot / L"final-link-swap";
+        const std::filesystem::path finalLinkSwap                = guardDestinationRoot / L"final-link-swap";
         FileOperations::TransferMutationGuard finalLinkSwapGuard = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
-                                                                                                                  state.fsLocal.get(),
-                                                                                                                  localValidationEndpoint,
-                                                                                                                  localValidationEndpoint,
-                                                                                                                  FileOperations::TransferIntent::Copy,
-                                                                                                                  guardSource.native(),
-                                                                                                                  finalLinkSwap.native());
-        if (! require(finalLinkSwapGuard.state == FileOperations::TransferSafetyState::Ready &&
-                          TryCreateJunction(finalLinkSwap, guardOutsideTarget),
+                                                                                                                state.fsLocal.get(),
+                                                                                                                localValidationEndpoint,
+                                                                                                                localValidationEndpoint,
+                                                                                                                FileOperations::TransferIntent::Copy,
+                                                                                                                guardSource.native(),
+                                                                                                                finalLinkSwap.native());
+        if (! require(finalLinkSwapGuard.state == FileOperations::TransferSafetyState::Ready && TryCreateJunction(finalLinkSwap, guardOutsideTarget),
                       L"Final-link swap fixture should classify a missing destination before replacing it with a junction."))
         {
             return true;
         }
-        HRESULT finalLinkSwapStatus = E_UNEXPECTED;
+        HRESULT finalLinkSwapStatus                                  = E_UNEXPECTED;
         const FileOperations::TransferSafetyState finalLinkSwapState = FileOperations::RevalidateTransferMutationGuard(state.fsLocal.get(),
-                                                                                                                         state.fsLocal.get(),
-                                                                                                                         localValidationEndpoint,
-                                                                                                                         localValidationEndpoint,
-                                                                                                                         FileOperations::TransferIntent::Copy,
-                                                                                                                         guardSource.native(),
-                                                                                                                         finalLinkSwap.native(),
-                                                                                                                         finalLinkSwapGuard,
-                                                                                                                         finalLinkSwapStatus);
+                                                                                                                       state.fsLocal.get(),
+                                                                                                                       localValidationEndpoint,
+                                                                                                                       localValidationEndpoint,
+                                                                                                                       FileOperations::TransferIntent::Copy,
+                                                                                                                       guardSource.native(),
+                                                                                                                       finalLinkSwap.native(),
+                                                                                                                       finalLinkSwapGuard,
+                                                                                                                       finalLinkSwapStatus);
         if (! require(finalLinkSwapState == FileOperations::TransferSafetyState::DestinationChanged && FAILED(finalLinkSwapStatus),
                       L"An exact destination link appearing after classification must be a destination change and fail closed before mutation."))
         {
             return true;
         }
 
-        const std::filesystem::path ancestorSwapParent = guardDestinationRoot / L"ancestor-swap-parent";
+        const std::filesystem::path ancestorSwapParent      = guardDestinationRoot / L"ancestor-swap-parent";
         const std::filesystem::path ancestorSwapDestination = ancestorSwapParent / L"copy.bin";
         if (! require(SelfTest::EnsureDirectory(ancestorSwapParent), L"Ancestor-swap fixture should create its original destination parent."))
         {
             return true;
         }
         FileOperations::TransferMutationGuard ancestorSwapGuard = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
-                                                                                                                  state.fsLocal.get(),
-                                                                                                                  localValidationEndpoint,
-                                                                                                                  localValidationEndpoint,
-                                                                                                                  FileOperations::TransferIntent::Copy,
-                                                                                                                  guardSource.native(),
-                                                                                                                  ancestorSwapDestination.native());
-        if (! require(ancestorSwapGuard.state == FileOperations::TransferSafetyState::Ready &&
-                          RemoveDirectoryW(ancestorSwapParent.c_str()) != FALSE &&
+                                                                                                               state.fsLocal.get(),
+                                                                                                               localValidationEndpoint,
+                                                                                                               localValidationEndpoint,
+                                                                                                               FileOperations::TransferIntent::Copy,
+                                                                                                               guardSource.native(),
+                                                                                                               ancestorSwapDestination.native());
+        if (! require(ancestorSwapGuard.state == FileOperations::TransferSafetyState::Ready && RemoveDirectoryW(ancestorSwapParent.c_str()) != FALSE &&
                           TryCreateJunction(ancestorSwapParent, guardOutsideTarget),
                       L"Ancestor-swap fixture should replace a retained destination parent with a junction."))
         {
             return true;
         }
-        HRESULT ancestorSwapStatus = E_UNEXPECTED;
+        HRESULT ancestorSwapStatus                                  = E_UNEXPECTED;
         const FileOperations::TransferSafetyState ancestorSwapState = FileOperations::RevalidateTransferMutationGuard(state.fsLocal.get(),
-                                                                                                                        state.fsLocal.get(),
-                                                                                                                        localValidationEndpoint,
-                                                                                                                        localValidationEndpoint,
-                                                                                                                        FileOperations::TransferIntent::Copy,
-                                                                                                                        guardSource.native(),
-                                                                                                                        ancestorSwapDestination.native(),
-                                                                                                                        ancestorSwapGuard,
-                                                                                                                        ancestorSwapStatus);
+                                                                                                                      state.fsLocal.get(),
+                                                                                                                      localValidationEndpoint,
+                                                                                                                      localValidationEndpoint,
+                                                                                                                      FileOperations::TransferIntent::Copy,
+                                                                                                                      guardSource.native(),
+                                                                                                                      ancestorSwapDestination.native(),
+                                                                                                                      ancestorSwapGuard,
+                                                                                                                      ancestorSwapStatus);
         if (! require(ancestorSwapState != FileOperations::TransferSafetyState::Ready && FAILED(ancestorSwapStatus),
                       L"A retained destination ancestor replaced by a link must fail closed before provider mutation."))
         {
@@ -2273,43 +2164,40 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
         const std::filesystem::path guardReplacementSource      = guardRoot / L"replacement-source.bin";
         const std::filesystem::path guardReplacementDestination = guardDestinationRoot / L"replacement-copy.bin";
-        if (! require(SelfTest::WriteTextFile(guardReplacementSource, "original-source"),
-                      L"Source-swap fixture should create the original source object."))
+        if (! require(SelfTest::WriteTextFile(guardReplacementSource, "original-source"), L"Source-swap fixture should create the original source object."))
         {
             return true;
         }
         FileOperations::TransferMutationGuard sourceSwapGuard = FileOperations::PrepareTransferMutationGuard(state.fsLocal.get(),
-                                                                                                               state.fsLocal.get(),
-                                                                                                               localValidationEndpoint,
-                                                                                                               localValidationEndpoint,
-                                                                                                               FileOperations::TransferIntent::Copy,
-                                                                                                               guardReplacementSource.native(),
-                                                                                                               guardReplacementDestination.native());
-        if (! require(sourceSwapGuard.state == FileOperations::TransferSafetyState::Ready &&
-                          DeleteFileW(guardReplacementSource.c_str()) != FALSE &&
+                                                                                                             state.fsLocal.get(),
+                                                                                                             localValidationEndpoint,
+                                                                                                             localValidationEndpoint,
+                                                                                                             FileOperations::TransferIntent::Copy,
+                                                                                                             guardReplacementSource.native(),
+                                                                                                             guardReplacementDestination.native());
+        if (! require(sourceSwapGuard.state == FileOperations::TransferSafetyState::Ready && DeleteFileW(guardReplacementSource.c_str()) != FALSE &&
                           SelfTest::WriteTextFile(guardReplacementSource, "replacement-source"),
                       L"Source-swap fixture should replace the classified source pathname with a different object."))
         {
             return true;
         }
-        HRESULT sourceSwapStatus = E_UNEXPECTED;
+        HRESULT sourceSwapStatus                                  = E_UNEXPECTED;
         const FileOperations::TransferSafetyState sourceSwapState = FileOperations::RevalidateTransferMutationGuard(state.fsLocal.get(),
-                                                                                                                     state.fsLocal.get(),
-                                                                                                                     localValidationEndpoint,
-                                                                                                                     localValidationEndpoint,
-                                                                                                                     FileOperations::TransferIntent::Copy,
-                                                                                                                     guardReplacementSource.native(),
-                                                                                                                     guardReplacementDestination.native(),
-                                                                                                                     sourceSwapGuard,
-                                                                                                                     sourceSwapStatus);
+                                                                                                                    state.fsLocal.get(),
+                                                                                                                    localValidationEndpoint,
+                                                                                                                    localValidationEndpoint,
+                                                                                                                    FileOperations::TransferIntent::Copy,
+                                                                                                                    guardReplacementSource.native(),
+                                                                                                                    guardReplacementDestination.native(),
+                                                                                                                    sourceSwapGuard,
+                                                                                                                    sourceSwapStatus);
         if (! require(sourceSwapState == FileOperations::TransferSafetyState::SourceChanged && FAILED(sourceSwapStatus),
                       L"A source replacement after classification must fail closed before provider mutation."))
         {
             return true;
         }
 
-        const FileOperations::ObjectBindingResult nullSuccess =
-            FileOperations::ValidateSuccessfulBoundObjectForSelfTest(nullptr, L"local-win32");
+        const FileOperations::ObjectBindingResult nullSuccess = FileOperations::ValidateSuccessfulBoundObjectForSelfTest(nullptr, L"local-win32");
         if (! require(nullSuccess.state == FileOperations::ObjectBindingState::ProviderContractViolation && FAILED(nullSuccess.status),
                       L"A successful provider call with a null bound object must be a contract violation."))
         {
@@ -2332,7 +2220,10 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                 }
                 return E_NOINTERFACE;
             }
-            ULONG STDMETHODCALLTYPE AddRef() noexcept override { return _refs.fetch_add(1u, std::memory_order_relaxed) + 1u; }
+            ULONG STDMETHODCALLTYPE AddRef() noexcept override
+            {
+                return _refs.fetch_add(1u, std::memory_order_relaxed) + 1u;
+            }
             ULONG STDMETHODCALLTYPE Release() noexcept override
             {
                 const ULONG value = _refs.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
@@ -2352,10 +2243,22 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                 snapshot->committedSizeBytes = 0u;
                 return S_OK;
             }
-            HRESULT STDMETHODCALLTYPE IsSameObject(IFileSystemBoundObject*, BOOL*) noexcept override { return E_NOTIMPL; }
-            HRESULT STDMETHODCALLTYPE OpenReader(const FileSystemOptions*, IFileReader**) noexcept override { return E_NOTIMPL; }
-            HRESULT STDMETHODCALLTYPE GetBasicInformation(FileSystemBasicInformation*) noexcept override { return E_NOTIMPL; }
-            HRESULT STDMETHODCALLTYPE SetBasicInformation(const FileSystemBasicInformation*) noexcept override { return E_NOTIMPL; }
+            HRESULT STDMETHODCALLTYPE IsSameObject(IFileSystemBoundObject*, BOOL*) noexcept override
+            {
+                return E_NOTIMPL;
+            }
+            HRESULT STDMETHODCALLTYPE OpenReader(const FileSystemOptions*, IFileReader**) noexcept override
+            {
+                return E_NOTIMPL;
+            }
+            HRESULT STDMETHODCALLTYPE GetBasicInformation(FileSystemBasicInformation*) noexcept override
+            {
+                return E_NOTIMPL;
+            }
+            HRESULT STDMETHODCALLTYPE SetBasicInformation(const FileSystemBasicInformation*) noexcept override
+            {
+                return E_NOTIMPL;
+            }
             HRESULT STDMETHODCALLTYPE PublishAs(const wchar_t*,
                                                 IFileSystemBoundObject*,
                                                 FileSystemFlags,
@@ -2374,9 +2277,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             {
                 return E_NOTIMPL;
             }
-            HRESULT STDMETHODCALLTYPE DeleteIfUnchanged(FileSystemFlags,
-                                                        const FileSystemOptions*,
-                                                        FileSystemConditionalMutationResult*) noexcept override
+            HRESULT STDMETHODCALLTYPE DeleteIfUnchanged(FileSystemFlags, const FileSystemOptions*, FileSystemConditionalMutationResult*) noexcept override
             {
                 return E_NOTIMPL;
             }
@@ -2420,7 +2321,10 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                 }
                 return E_NOINTERFACE;
             }
-            ULONG STDMETHODCALLTYPE AddRef() noexcept override { return _refs.fetch_add(1u, std::memory_order_relaxed) + 1u; }
+            ULONG STDMETHODCALLTYPE AddRef() noexcept override
+            {
+                return _refs.fetch_add(1u, std::memory_order_relaxed) + 1u;
+            }
             ULONG STDMETHODCALLTYPE Release() noexcept override
             {
                 const ULONG value = _refs.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
@@ -2447,9 +2351,18 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                 *same = FALSE;
                 return HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
             }
-            HRESULT STDMETHODCALLTYPE OpenReader(const FileSystemOptions*, IFileReader**) noexcept override { return E_NOTIMPL; }
-            HRESULT STDMETHODCALLTYPE GetBasicInformation(FileSystemBasicInformation*) noexcept override { return E_NOTIMPL; }
-            HRESULT STDMETHODCALLTYPE SetBasicInformation(const FileSystemBasicInformation*) noexcept override { return E_NOTIMPL; }
+            HRESULT STDMETHODCALLTYPE OpenReader(const FileSystemOptions*, IFileReader**) noexcept override
+            {
+                return E_NOTIMPL;
+            }
+            HRESULT STDMETHODCALLTYPE GetBasicInformation(FileSystemBasicInformation*) noexcept override
+            {
+                return E_NOTIMPL;
+            }
+            HRESULT STDMETHODCALLTYPE SetBasicInformation(const FileSystemBasicInformation*) noexcept override
+            {
+                return E_NOTIMPL;
+            }
             HRESULT STDMETHODCALLTYPE PublishAs(const wchar_t*,
                                                 IFileSystemBoundObject*,
                                                 FileSystemFlags,
@@ -2468,9 +2381,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             {
                 return E_NOTIMPL;
             }
-            HRESULT STDMETHODCALLTYPE DeleteIfUnchanged(FileSystemFlags,
-                                                        const FileSystemOptions*,
-                                                        FileSystemConditionalMutationResult*) noexcept override
+            HRESULT STDMETHODCALLTYPE DeleteIfUnchanged(FileSystemFlags, const FileSystemOptions*, FileSystemConditionalMutationResult*) noexcept override
             {
                 return E_NOTIMPL;
             }
@@ -2499,20 +2410,20 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
         FileOperations::TransferMutationGuard indeterminateGuard{};
-        indeterminateGuard.state  = FileOperations::TransferSafetyState::Ready;
-        indeterminateGuard.status = S_OK;
-        indeterminateGuard.source = std::move(indeterminateAuthority.authority);
-        indeterminateGuard.destinationWasMissing = true;
-        HRESULT indeterminateStatus = S_OK;
+        indeterminateGuard.state                                     = FileOperations::TransferSafetyState::Ready;
+        indeterminateGuard.status                                    = S_OK;
+        indeterminateGuard.source                                    = std::move(indeterminateAuthority.authority);
+        indeterminateGuard.destinationWasMissing                     = true;
+        HRESULT indeterminateStatus                                  = S_OK;
         const FileOperations::TransferSafetyState indeterminateState = FileOperations::RevalidateTransferMutationGuard(state.fsLocal.get(),
-                                                                                                                         state.fsLocal.get(),
-                                                                                                                         localValidationEndpoint,
-                                                                                                                         localValidationEndpoint,
-                                                                                                                         FileOperations::TransferIntent::Copy,
-                                                                                                                         guardSource.native(),
-                                                                                                                         guardMissingDestination.native(),
-                                                                                                                         indeterminateGuard,
-                                                                                                                         indeterminateStatus);
+                                                                                                                       state.fsLocal.get(),
+                                                                                                                       localValidationEndpoint,
+                                                                                                                       localValidationEndpoint,
+                                                                                                                       FileOperations::TransferIntent::Copy,
+                                                                                                                       guardSource.native(),
+                                                                                                                       guardMissingDestination.native(),
+                                                                                                                       indeterminateGuard,
+                                                                                                                       indeterminateStatus);
         if (! require(indeterminateState == FileOperations::TransferSafetyState::Indeterminate && FAILED(indeterminateStatus),
                       L"An indeterminate provider comparison at the final mutation boundary must fail closed before I/O."))
         {
@@ -2521,8 +2432,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
         const char* localCapabilitiesJson = nullptr;
         const HRESULT localCapabilitiesHr = state.fsLocal->GetPathCapabilities(L"/", FILESYSTEM_MOVE, &localCapabilitiesJson);
-        if (! require(SUCCEEDED(localCapabilitiesHr) && localCapabilitiesJson != nullptr &&
-                          AreFileSystemCapabilitiesV2ValidForSelfTest(localCapabilitiesJson),
+        if (! require(SUCCEEDED(localCapabilitiesHr) && localCapabilitiesJson != nullptr && AreFileSystemCapabilitiesV2ValidForSelfTest(localCapabilitiesJson),
                       L"Local FileSystem should return a host-parseable capability-v2 document.") ||
             ! require(! AreFileSystemCapabilitiesV2ValidForSelfTest("{}"), L"The host must reject an empty capability-v2 object."))
         {
@@ -2550,7 +2460,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
         std::string missingMoveJson(localCapabilitiesJsonSnapshot);
         constexpr std::string_view kMoveMember = R"json("move":true,)json";
-        const size_t moveMemberOffset           = missingMoveJson.find(kMoveMember);
+        const size_t moveMemberOffset          = missingMoveJson.find(kMoveMember);
         if (! require(moveMemberOffset != std::string::npos, L"Local capability fixture should contain the required operations.move member."))
         {
             return true;
@@ -2564,9 +2474,8 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
         std::string missingAbortJson(localCapabilitiesJsonSnapshot);
         constexpr std::string_view kAbortMember = R"json("abort":false,)json";
-        const size_t abortMemberOffset = missingAbortJson.find(kAbortMember);
-        if (! require(abortMemberOffset != std::string::npos,
-                      L"Local capability fixture should contain the required cancellation.abort member."))
+        const size_t abortMemberOffset          = missingAbortJson.find(kAbortMember);
+        if (! require(abortMemberOffset != std::string::npos, L"Local capability fixture should contain the required cancellation.abort member."))
         {
             return true;
         }
@@ -2579,7 +2488,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
         std::string missingRouteClassJson(localCapabilitiesJsonSnapshot);
         constexpr std::string_view kBoundedRouteMember = R"json("routeClass":"bounded",)json";
-        const size_t routeClassMemberOffset = missingRouteClassJson.find(kBoundedRouteMember);
+        const size_t routeClassMemberOffset            = missingRouteClassJson.find(kBoundedRouteMember);
         if (! require(routeClassMemberOffset != std::string::npos,
                       L"Local fixed-volume capability fixture should classify the exact operation route as bounded."))
         {
@@ -2603,14 +2512,12 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
         std::string invalidProviderWatchdogJson(localCapabilitiesJsonSnapshot);
         constexpr std::string_view kProviderWatchdogMember = R"json("providerWatchdogTimeoutMs":0)json";
-        const size_t providerWatchdogMemberOffset = invalidProviderWatchdogJson.find(kProviderWatchdogMember);
-        if (! require(providerWatchdogMemberOffset != std::string::npos,
-                      L"A bounded route should carry an explicit zero provider-watchdog timeout."))
+        const size_t providerWatchdogMemberOffset          = invalidProviderWatchdogJson.find(kProviderWatchdogMember);
+        if (! require(providerWatchdogMemberOffset != std::string::npos, L"A bounded route should carry an explicit zero provider-watchdog timeout."))
         {
             return true;
         }
-        invalidProviderWatchdogJson.replace(
-            providerWatchdogMemberOffset, kProviderWatchdogMember.size(), R"json("providerWatchdogTimeoutMs":-1)json");
+        invalidProviderWatchdogJson.replace(providerWatchdogMemberOffset, kProviderWatchdogMember.size(), R"json("providerWatchdogTimeoutMs":-1)json");
         if (! require(! AreFileSystemCapabilitiesV2ValidForSelfTest(invalidProviderWatchdogJson),
                       L"The host must reject a negative provider-owned watchdog timeout."))
         {
@@ -2626,8 +2533,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         std::string boundedWithWatchdogJson(localCapabilitiesJsonSnapshot);
-        boundedWithWatchdogJson.replace(
-            providerWatchdogMemberOffset, kProviderWatchdogMember.size(), R"json("providerWatchdogTimeoutMs":30000)json");
+        boundedWithWatchdogJson.replace(providerWatchdogMemberOffset, kProviderWatchdogMember.size(), R"json("providerWatchdogTimeoutMs":30000)json");
         if (! require(! AreFileSystemCapabilitiesV2ValidForSelfTest(boundedWithWatchdogJson),
                       L"A bounded route must not claim a provider-owned watchdog timeout."))
         {
@@ -2635,8 +2541,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         std::string watchdogWithoutTimeoutJson(localCapabilitiesJsonSnapshot);
-        watchdogWithoutTimeoutJson.replace(
-            routeClassMemberOffset, kBoundedRouteMember.size(), R"json("routeClass":"providerWatchdog",)json");
+        watchdogWithoutTimeoutJson.replace(routeClassMemberOffset, kBoundedRouteMember.size(), R"json("routeClass":"providerWatchdog",)json");
         if (! require(! AreFileSystemCapabilitiesV2ValidForSelfTest(watchdogWithoutTimeoutJson),
                       L"A provider-watchdog route must carry a nonzero provider-owned timeout."))
         {
@@ -2645,13 +2550,11 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
         std::string validProviderWatchdogJson(std::move(watchdogWithoutTimeoutJson));
         const size_t watchdogTimeoutOffset = validProviderWatchdogJson.find(kProviderWatchdogMember);
-        if (! require(watchdogTimeoutOffset != std::string::npos,
-                      L"Provider-watchdog fixture should retain the required timeout member."))
+        if (! require(watchdogTimeoutOffset != std::string::npos, L"Provider-watchdog fixture should retain the required timeout member."))
         {
             return true;
         }
-        validProviderWatchdogJson.replace(
-            watchdogTimeoutOffset, kProviderWatchdogMember.size(), R"json("providerWatchdogTimeoutMs":30000)json");
+        validProviderWatchdogJson.replace(watchdogTimeoutOffset, kProviderWatchdogMember.size(), R"json("providerWatchdogTimeoutMs":30000)json");
         if (! require(AreFileSystemCapabilitiesV2ValidForSelfTest(validProviderWatchdogJson),
                       L"A provider-watchdog route with a nonzero provider-owned timeout must remain valid."))
         {
@@ -2665,35 +2568,20 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
         std::string uncontainedCapabilitiesJson(localCapabilitiesJsonSnapshot);
         constexpr std::string_view kUncontainedRouteMember = R"json("routeClass":"uncontained",)json";
-        uncontainedCapabilitiesJson.replace(
-            uncontainedCapabilitiesJson.find(kBoundedRouteMember), kBoundedRouteMember.size(), kUncontainedRouteMember);
+        uncontainedCapabilitiesJson.replace(uncontainedCapabilitiesJson.find(kBoundedRouteMember), kBoundedRouteMember.size(), kUncontainedRouteMember);
 
-        auto typedFalseOwner = std::make_unique<UncontainedNeverReturningFileSystem>(
-            uncontainedCapabilitiesJson, true, false);
-        const FileSystemRouteContract::QueryResult typedFalse = FileSystemRouteContract::Query(
-            static_cast<IFileSystem*>(typedFalseOwner.get()),
-            L"/",
-            FILESYSTEM_COPY,
-            L"selftest/uncontained-never-return");
+        auto typedFalseOwner = std::make_unique<UncontainedNeverReturningFileSystem>(uncontainedCapabilitiesJson, true, false);
+        const FileSystemRouteContract::QueryResult typedFalse =
+            FileSystemRouteContract::Query(static_cast<IFileSystem*>(typedFalseOwner.get()), L"/", FILESYSTEM_COPY, L"selftest/uncontained-never-return");
         auto malformedJsonOwner = std::make_unique<UncontainedNeverReturningFileSystem>("not-json", true, true);
-        const FileSystemRouteContract::QueryResult typedTrueMalformedJson = FileSystemRouteContract::Query(
-            static_cast<IFileSystem*>(malformedJsonOwner.get()),
-            L"/",
-            FILESYSTEM_COPY,
-            L"selftest/uncontained-never-return");
-        auto missingTypedOwner = std::make_unique<UncontainedNeverReturningFileSystem>(
-            uncontainedCapabilitiesJson, false, true);
-        const FileSystemRouteContract::QueryResult missingTyped = FileSystemRouteContract::Query(
-            static_cast<IFileSystem*>(missingTypedOwner.get()),
-            L"/",
-            FILESYSTEM_COPY,
-            L"selftest/uncontained-never-return");
-        if (! require(typedFalse.state == FileSystemRouteContract::QueryState::Available &&
-                          ! typedFalse.snapshot.copyOperation &&
-                          typedTrueMalformedJson.state == FileSystemRouteContract::QueryState::Available &&
-                          typedTrueMalformedJson.snapshot.copyOperation &&
-                          missingTyped.state == FileSystemRouteContract::QueryState::ContractViolation &&
-                          missingTyped.status == E_NOINTERFACE,
+        const FileSystemRouteContract::QueryResult typedTrueMalformedJson =
+            FileSystemRouteContract::Query(static_cast<IFileSystem*>(malformedJsonOwner.get()), L"/", FILESYSTEM_COPY, L"selftest/uncontained-never-return");
+        auto missingTypedOwner = std::make_unique<UncontainedNeverReturningFileSystem>(uncontainedCapabilitiesJson, false, true);
+        const FileSystemRouteContract::QueryResult missingTyped =
+            FileSystemRouteContract::Query(static_cast<IFileSystem*>(missingTypedOwner.get()), L"/", FILESYSTEM_COPY, L"selftest/uncontained-never-return");
+        if (! require(typedFalse.state == FileSystemRouteContract::QueryState::Available && ! typedFalse.snapshot.copyOperation &&
+                          typedTrueMalformedJson.state == FileSystemRouteContract::QueryState::Available && typedTrueMalformedJson.snapshot.copyOperation &&
+                          missingTyped.state == FileSystemRouteContract::QueryState::ContractViolation && missingTyped.status == E_NOINTERFACE,
                       L"Typed route facts must override positive JSON, ignore malformed diagnostic JSON, and fail closed when the typed IID is absent."))
         {
             return true;
@@ -2706,30 +2594,28 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         std::vector<FolderWindow::FileOperationState::Task*> tasksBeforeUncontainedAdmission;
         std::vector<FolderWindow::FileOperationState::Task*> tasksAfterUncontainedAdmission;
         state.fileOps->CollectTasks(tasksBeforeUncontainedAdmission);
-        uint64_t rejectedTaskId = 0u;
-        const HRESULT uncontainedAdmissionHr = state.fileOps->AdmitOperation(
-            FILESYSTEM_COPY,
-            FolderWindow::Pane::Left,
-            FolderWindow::Pane::Right,
-            neverReturningFileSystem,
-            {std::filesystem::path(L"/never-return/source.bin")},
-            std::filesystem::path(L"/never-return/destination"),
-            FILESYSTEM_FLAG_NONE,
-            false,
-            0u,
-            FolderWindow::FileOperationState::ExecutionMode::PerItem,
-            false,
-            nullptr,
-            &rejectedTaskId,
-            {},
-            {},
-            L"selftest/uncontained-never-return",
-            L"uncontained-never-return");
+        uint64_t rejectedTaskId              = 0u;
+        const HRESULT uncontainedAdmissionHr = state.fileOps->AdmitOperation(FILESYSTEM_COPY,
+                                                                             FolderWindow::Pane::Left,
+                                                                             FolderWindow::Pane::Right,
+                                                                             neverReturningFileSystem,
+                                                                             {std::filesystem::path(L"/never-return/source.bin")},
+                                                                             std::filesystem::path(L"/never-return/destination"),
+                                                                             FILESYSTEM_FLAG_NONE,
+                                                                             false,
+                                                                             0u,
+                                                                             FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                                             false,
+                                                                             nullptr,
+                                                                             &rejectedTaskId,
+                                                                             {},
+                                                                             {},
+                                                                             L"selftest/uncontained-never-return",
+                                                                             L"uncontained-never-return");
         state.fileOps->CollectTasks(tasksAfterUncontainedAdmission);
         const uint64_t providerOperationCallCount = neverReturningObserver->ProviderOperationCallCount();
         if (! require(uncontainedAdmissionHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) && rejectedTaskId == 0u &&
-                          tasksAfterUncontainedAdmission.size() == tasksBeforeUncontainedAdmission.size() &&
-                          providerOperationCallCount == 0u,
+                          tasksAfterUncontainedAdmission.size() == tasksBeforeUncontainedAdmission.size() && providerOperationCallCount == 0u,
                       L"An uncontained never-returning route must be rejected before task publication, worker creation, or provider operation calls."))
         {
             return true;
@@ -2755,10 +2641,8 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 #else
         constexpr uint64_t kR0eSelfTestCeilingUs = 2'000'000u;
 #endif
-        if (! require(r0eCapabilityParseCount == kR0ePerfIterations &&
-                          r0eAdmissionDecisionCount == kR0ePerfIterations &&
-                          r0eRejectedUncontainedCount == 1u && providerOperationCallCount == 0u &&
-                          r0eElapsedUs < kR0eSelfTestCeilingUs,
+        if (! require(r0eCapabilityParseCount == kR0ePerfIterations && r0eAdmissionDecisionCount == kR0ePerfIterations && r0eRejectedUncontainedCount == 1u &&
+                          providerOperationCallCount == 0u && r0eElapsedUs < kR0eSelfTestCeilingUs,
                       L"R0e capability/admission containment must remain complete, provider-call-free, and within the build-specific ceiling."))
         {
             return true;
@@ -2766,7 +2650,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
         std::string missingCreateDirectoryJson(localCapabilitiesJsonSnapshot);
         constexpr std::string_view kCreateDirectoryMember = R"json("createDirectory":true,)json";
-        const size_t createDirectoryMemberOffset = missingCreateDirectoryJson.find(kCreateDirectoryMember);
+        const size_t createDirectoryMemberOffset          = missingCreateDirectoryJson.find(kCreateDirectoryMember);
         if (! require(createDirectoryMemberOffset != std::string::npos,
                       L"Local capability fixture should contain the required operations.createDirectory member."))
         {
@@ -2781,10 +2665,8 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
         std::string emptyRootJson(localCapabilitiesJsonSnapshot);
         constexpr std::string_view kRootPrefix = R"json("rootId": ")json";
-        const size_t rootValueBegin = emptyRootJson.find(kRootPrefix);
-        const size_t rootValueEnd = rootValueBegin == std::string::npos
-            ? std::string::npos
-            : emptyRootJson.find('"', rootValueBegin + kRootPrefix.size());
+        const size_t rootValueBegin            = emptyRootJson.find(kRootPrefix);
+        const size_t rootValueEnd = rootValueBegin == std::string::npos ? std::string::npos : emptyRootJson.find('"', rootValueBegin + kRootPrefix.size());
         if (! require(rootValueBegin != std::string::npos && rootValueEnd != std::string::npos,
                       L"Local capability fixture should contain a replaceable rootId string."))
         {
@@ -2799,13 +2681,12 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
         std::string missingVerificationJson(localCapabilitiesJsonSnapshot);
         const size_t verificationMemberOffset = missingVerificationJson.find(R"json("verification")json");
-        if (! require(verificationMemberOffset != std::string::npos,
-                      L"Local capability fixture should contain the required verification object."))
+        if (! require(verificationMemberOffset != std::string::npos, L"Local capability fixture should contain the required verification object."))
         {
             return true;
         }
         const size_t verificationLineStart = missingVerificationJson.rfind('\n', verificationMemberOffset);
-        const size_t verificationLineEnd = missingVerificationJson.find('\n', verificationMemberOffset);
+        const size_t verificationLineEnd   = missingVerificationJson.find('\n', verificationMemberOffset);
         if (! require(verificationLineStart != std::string::npos && verificationLineEnd != std::string::npos,
                       L"Local capability verification fixture should occupy one removable JSON line."))
         {
@@ -2820,9 +2701,8 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
         std::string unknownProofJson(localCapabilitiesJsonSnapshot);
         constexpr std::string_view kKnownProviderProof = "blake3-bound-object";
-        const size_t providerProofOffset = unknownProofJson.find(kKnownProviderProof);
-        if (! require(providerProofOffset != std::string::npos,
-                      L"Local capability fixture should contain its exact BLAKE3 provider-proof claim."))
+        const size_t providerProofOffset               = unknownProofJson.find(kKnownProviderProof);
+        if (! require(providerProofOffset != std::string::npos, L"Local capability fixture should contain its exact BLAKE3 provider-proof claim."))
         {
             return true;
         }
@@ -2833,19 +2713,14 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
 
-        constexpr FileSystemFlags kExpectedAtomicFlags = static_cast<FileSystemFlags>(
-            static_cast<uint32_t>(FILESYSTEM_FLAG_RECURSIVE) | static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_OVERWRITE) |
-            static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY));
+        constexpr FileSystemFlags kExpectedAtomicFlags =
+            static_cast<FileSystemFlags>(static_cast<uint32_t>(FILESYSTEM_FLAG_RECURSIVE) | static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_OVERWRITE) |
+                                         static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY));
         FlagSensitiveAtomicWriter flagSensitiveAtomicWriter(kExpectedAtomicFlags);
-        FileSystemFlags effectiveFinalFlags   = FILESYSTEM_FLAG_NONE;
+        FileSystemFlags effectiveFinalFlags  = FILESYSTEM_FLAG_NONE;
         FileSystemFlags fallbackSiblingFlags = FILESYSTEM_FLAG_NONE;
-        const bool useAtomicWriter = ResolveFileOpsAtomicWriterRouteForSelfTest(&flagSensitiveAtomicWriter,
-                                                                                L"/atomic-flags.bin",
-                                                                                FILESYSTEM_FLAG_RECURSIVE,
-                                                                                true,
-                                                                                true,
-                                                                                effectiveFinalFlags,
-                                                                                fallbackSiblingFlags);
+        const bool useAtomicWriter           = ResolveFileOpsAtomicWriterRouteForSelfTest(
+            &flagSensitiveAtomicWriter, L"/atomic-flags.bin", FILESYSTEM_FLAG_RECURSIVE, true, true, effectiveFinalFlags, fallbackSiblingFlags);
         if (! require(useAtomicWriter && flagSensitiveAtomicWriter.ProbeCount() == 1u &&
                           static_cast<uint32_t>(flagSensitiveAtomicWriter.ObservedFlags()) == static_cast<uint32_t>(kExpectedAtomicFlags) &&
                           static_cast<uint32_t>(effectiveFinalFlags) == static_cast<uint32_t>(kExpectedAtomicFlags) &&
@@ -2856,15 +2731,10 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         FlagSensitiveAtomicWriter decliningAtomicWriter(FILESYSTEM_FLAG_NONE);
-        effectiveFinalFlags   = FILESYSTEM_FLAG_NONE;
+        effectiveFinalFlags  = FILESYSTEM_FLAG_NONE;
         fallbackSiblingFlags = FILESYSTEM_FLAG_NONE;
-        if (! require(! ResolveFileOpsAtomicWriterRouteForSelfTest(&decliningAtomicWriter,
-                                                                    L"/atomic-decline.bin",
-                                                                    FILESYSTEM_FLAG_RECURSIVE,
-                                                                    true,
-                                                                    true,
-                                                                    effectiveFinalFlags,
-                                                                    fallbackSiblingFlags) &&
+        if (! require(! ResolveFileOpsAtomicWriterRouteForSelfTest(
+                          &decliningAtomicWriter, L"/atomic-decline.bin", FILESYSTEM_FLAG_RECURSIVE, true, true, effectiveFinalFlags, fallbackSiblingFlags) &&
                           decliningAtomicWriter.ProbeCount() == 1u &&
                           static_cast<uint32_t>(decliningAtomicWriter.ObservedFlags()) == static_cast<uint32_t>(kExpectedAtomicFlags) &&
                           fallbackSiblingFlags == FILESYSTEM_FLAG_RECURSIVE,
@@ -2928,16 +2798,15 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
 
-
         if (! state.fileOps)
         {
             Fail(L"Provider capability matrix test lost FileOperationState.");
             return true;
         }
 
-        const std::filesystem::path copyOnlySource = state.tempRoot / L"copy-only-move-source.bin";
+        const std::filesystem::path copyOnlySource          = state.tempRoot / L"copy-only-move-source.bin";
         const std::filesystem::path copyOnlyDestinationRoot = state.tempRoot / L"copy-only-move-destination";
-        const std::filesystem::path copyOnlyDestination = copyOnlyDestinationRoot / copyOnlySource.filename();
+        const std::filesystem::path copyOnlyDestination     = copyOnlyDestinationRoot / copyOnlySource.filename();
         std::error_code copyOnlyEc;
         std::filesystem::create_directories(copyOnlyDestinationRoot, copyOnlyEc);
         if (! require(! copyOnlyEc && SelfTest::WriteTextFile(copyOnlySource, "copy-only"),
@@ -2957,31 +2826,27 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         FolderWindow::FileOperationState::Task copyOnlyTask(*state.fileOps);
         copyOnlyTask.StorePlans(std::make_shared<const FileOperations::FileOperationPlanGroup>(
             FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(copyOnlyPlan)}}));
-        copyOnlyTask._operation       = FILESYSTEM_MOVE;
-        copyOnlyTask._executionMode   = FolderWindow::FileOperationState::ExecutionMode::PerItem;
-        copyOnlyTask._fileSystem      = state.fsLocal;
-        copyOnlyTask._sourcePaths     = {copyOnlySource};
-        copyOnlyTask._destinationFolder = copyOnlyDestinationRoot;
+        copyOnlyTask._operation                = FILESYSTEM_MOVE;
+        copyOnlyTask._executionMode            = FolderWindow::FileOperationState::ExecutionMode::PerItem;
+        copyOnlyTask._fileSystem               = state.fsLocal;
+        copyOnlyTask._sourcePaths              = {copyOnlySource};
+        copyOnlyTask._destinationFolder        = copyOnlyDestinationRoot;
         copyOnlyTask._sourcePathAttributesHint = {GetFileAttributesW(copyOnlySource.c_str())};
         AppendLog(L"Provider matrix: preparing Copy-only interlock roles.");
         const HRESULT copyOnlyInterlockHr = copyOnlyTask.PrepareMutationInterlockScopes();
-        AppendLog(std::format(L"Provider matrix: Copy-only interlock preparation returned 0x{:08X}.",
-                              static_cast<unsigned long>(copyOnlyInterlockHr)));
-        const bool hasCopyOnlyReadScope = std::ranges::any_of(
-            copyOnlyTask._mutationInterlockScopes,
-            [&](const FileOperations::MutationInterlockScope& scope) noexcept
-            {
-                return scope.access == FileOperations::MutationInterlockAccess::ReadSource &&
-                       EquivalentPath(localValidationEndpoint.pathIdentity.value(), scope.providerPath, copyOnlySource.native());
-            });
-        const auto copyOnlyPublishScopeIt = std::ranges::find_if(
-            copyOnlyTask._mutationInterlockScopes,
-            [&](const FileOperations::MutationInterlockScope& scope) noexcept
-            {
-                return scope.access == FileOperations::MutationInterlockAccess::PublishDestination &&
-                       EquivalentPath(localValidationEndpoint.pathIdentity.value(), scope.providerPath, copyOnlyDestination.native()) &&
-                       ! scope.anchors.empty();
-            });
+        AppendLog(std::format(L"Provider matrix: Copy-only interlock preparation returned 0x{:08X}.", static_cast<unsigned long>(copyOnlyInterlockHr)));
+        const bool hasCopyOnlyReadScope    = std::ranges::any_of(copyOnlyTask._mutationInterlockScopes,
+                                                                 [&](const FileOperations::MutationInterlockScope& scope) noexcept
+        {
+            return scope.access == FileOperations::MutationInterlockAccess::ReadSource &&
+                   EquivalentPath(localValidationEndpoint.pathIdentity.value(), scope.providerPath, copyOnlySource.native());
+        });
+        const auto copyOnlyPublishScopeIt  = std::ranges::find_if(copyOnlyTask._mutationInterlockScopes,
+                                                                  [&](const FileOperations::MutationInterlockScope& scope) noexcept
+        {
+            return scope.access == FileOperations::MutationInterlockAccess::PublishDestination &&
+                   EquivalentPath(localValidationEndpoint.pathIdentity.value(), scope.providerPath, copyOnlyDestination.native()) && ! scope.anchors.empty();
+        });
         const bool hasCopyOnlyPublishScope = copyOnlyPublishScopeIt != copyOnlyTask._mutationInterlockScopes.end();
         if (! require(SUCCEEDED(copyOnlyInterlockHr) && hasCopyOnlyReadScope && hasCopyOnlyPublishScope,
                       L"Copy-only Move must register its source as ReadSource and its final destination leaf as anchored PublishDestination."))
@@ -2990,28 +2855,27 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
 
         {
-            const FileOperations::MutationInterlockScope& publishScope = *copyOnlyPublishScopeIt;
-            FileOperations::MutationInterlockScope sameLeafScope       = publishScope;
+            const FileOperations::MutationInterlockScope& publishScope  = *copyOnlyPublishScopeIt;
+            FileOperations::MutationInterlockScope sameLeafScope        = publishScope;
             FileOperations::MutationInterlockScope distinctSiblingScope = publishScope;
-            distinctSiblingScope.providerPath = (copyOnlyDestinationRoot / L"different-sibling.bin").native();
-            bool rebuiltDistinctAnchors = true;
+            distinctSiblingScope.providerPath                           = (copyOnlyDestinationRoot / L"different-sibling.bin").native();
+            bool rebuiltDistinctAnchors                                 = true;
             for (FileOperations::MutationInterlockAnchor& anchor : distinctSiblingScope.anchors)
             {
                 rebuiltDistinctAnchors = rebuiltDistinctAnchors && anchor.authority &&
-                    TryGetFileSystemRelativePath(localValidationEndpoint.pathIdentity.value(),
-                                                 anchor.authority->retained.providerPath,
-                                                 distinctSiblingScope.providerPath,
-                                                 anchor.relativePath);
+                                         TryGetFileSystemRelativePath(localValidationEndpoint.pathIdentity.value(),
+                                                                      anchor.authority->retained.providerPath,
+                                                                      distinctSiblingScope.providerPath,
+                                                                      anchor.relativePath);
                 anchor.relativePathKey = TryMakePathKey(localValidationEndpoint.pathIdentity.value(), anchor.relativePath);
                 rebuiltDistinctAnchors = rebuiltDistinctAnchors && anchor.relativePathKey.has_value();
             }
 
             FileOperations::MutationInterlockScope ancestorScope = publishScope;
-            ancestorScope.providerPath = copyOnlyDestinationRoot.native();
+            ancestorScope.providerPath                           = copyOnlyDestinationRoot.native();
             ancestorScope.anchors.resize(1u);
             ancestorScope.anchors.front().relativePath.clear();
-            ancestorScope.anchors.front().relativePathKey =
-                TryMakePathKey(localValidationEndpoint.pathIdentity.value(), L"");
+            ancestorScope.anchors.front().relativePathKey = TryMakePathKey(localValidationEndpoint.pathIdentity.value(), L"");
 
             FileOperations::MutationInterlockScope conservativeScope = publishScope;
             conservativeScope.root.reset();
@@ -3019,25 +2883,25 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             conservativeScope.conservativeIdentityDomain = true;
 
             FileOperations::MutationInterlockScope sharedReadScope = publishScope;
-            sharedReadScope.access = FileOperations::MutationInterlockAccess::ReadSource;
-            sameLeafScope.access   = FileOperations::MutationInterlockAccess::ReadSource;
+            sharedReadScope.access                                 = FileOperations::MutationInterlockAccess::ReadSource;
+            sameLeafScope.access                                   = FileOperations::MutationInterlockAccess::ReadSource;
 
-            if (! require(rebuiltDistinctAnchors &&
-                              FileOperations::DebugMutationScopesOverlapForSelfTest(publishScope, publishScope) &&
+            if (! require(rebuiltDistinctAnchors && FileOperations::DebugMutationScopesOverlapForSelfTest(publishScope, publishScope) &&
                               ! FileOperations::DebugMutationScopesOverlapForSelfTest(publishScope, distinctSiblingScope) &&
                               FileOperations::DebugMutationScopesOverlapForSelfTest(publishScope, ancestorScope) &&
                               FileOperations::DebugMutationScopesOverlapForSelfTest(publishScope, conservativeScope) &&
                               ! FileOperations::DebugMutationScopesOverlapForSelfTest(sameLeafScope, sharedReadScope),
-                          L"Anchored interlocks must serialize the same or ancestor target, admit distinct siblings, fail unsupported identity domains conservatively, and share reads."))
+                          L"Anchored interlocks must serialize the same or ancestor target, admit distinct siblings, fail unsupported identity domains "
+                          L"conservatively, and share reads."))
             {
                 return true;
             }
         }
 
         {
-            constexpr size_t kLargeSelectionCount = 256u;
-            constexpr size_t kSharedAncestorAllowance = 32u;
-            const std::filesystem::path retentionSourceRoot = state.tempRoot / L"interlock-large-selection-source";
+            constexpr size_t kLargeSelectionCount                = 256u;
+            constexpr size_t kSharedAncestorAllowance            = 32u;
+            const std::filesystem::path retentionSourceRoot      = state.tempRoot / L"interlock-large-selection-source";
             const std::filesystem::path retentionDestinationRoot = state.tempRoot / L"interlock-large-selection-destination";
             if (! require(RecreateEmptyDirectory(retentionSourceRoot) && RecreateEmptyDirectory(retentionDestinationRoot),
                           L"Large-selection interlock fixture should create its source and destination roots."))
@@ -3046,10 +2910,10 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             }
 
             FileOperations::TransferPlan retentionPlan{};
-            retentionPlan.intent              = FileOperations::TransferIntent::Copy;
-            retentionPlan.strategy            = FileOperations::OperationStrategy::Copy;
-            retentionPlan.sourceEndpoint      = localValidationEndpoint;
-            retentionPlan.destinationEndpoint = localValidationEndpoint;
+            retentionPlan.intent                         = FileOperations::TransferIntent::Copy;
+            retentionPlan.strategy                       = FileOperations::OperationStrategy::Copy;
+            retentionPlan.sourceEndpoint                 = localValidationEndpoint;
+            retentionPlan.destinationEndpoint            = localValidationEndpoint;
             retentionPlan.destination.providerFolderPath = retentionDestinationRoot.native();
             std::vector<std::filesystem::path> retentionSources;
             retentionPlan.selectedItems.reserve(kLargeSelectionCount);
@@ -3076,19 +2940,17 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             retentionTask._destinationFolder = retentionDestinationRoot;
 
             const auto retentionStarted = std::chrono::steady_clock::now();
-            const HRESULT retentionHr = retentionTask.PrepareMutationInterlockScopes();
+            const HRESULT retentionHr   = retentionTask.PrepareMutationInterlockScopes();
             std::unordered_set<const FileOperations::MutationInterlockAuthorityNode*> uniqueAuthorityNodes;
-            size_t maxAuthorityDepth = 0u;
-            size_t readSourceScopes = 0u;
+            size_t maxAuthorityDepth        = 0u;
+            size_t readSourceScopes         = 0u;
             size_t publishDestinationScopes = 0u;
             for (const FileOperations::MutationInterlockScope& scope : retentionTask._mutationInterlockScopes)
             {
                 readSourceScopes += scope.access == FileOperations::MutationInterlockAccess::ReadSource ? 1u : 0u;
                 publishDestinationScopes += scope.access == FileOperations::MutationInterlockAccess::PublishDestination ? 1u : 0u;
                 size_t authorityDepth = 0u;
-                for (std::shared_ptr<const FileOperations::MutationInterlockAuthorityNode> node = scope.root;
-                     node;
-                     node = node->parent)
+                for (std::shared_ptr<const FileOperations::MutationInterlockAuthorityNode> node = scope.root; node; node = node->parent)
                 {
                     uniqueAuthorityNodes.emplace(node.get());
                     ++authorityDepth;
@@ -3099,14 +2961,11 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                 }
                 maxAuthorityDepth = (std::max)(maxAuthorityDepth, authorityDepth);
             }
-            const uint64_t retentionPrepareUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
-                                                                           std::chrono::steady_clock::now() - retentionStarted)
-                                                                           .count());
-            if (! require(SUCCEEDED(retentionHr) &&
-                              retentionTask._mutationInterlockScopes.size() == kLargeSelectionCount * 2u &&
+            const uint64_t retentionPrepareUs =
+                static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - retentionStarted).count());
+            if (! require(SUCCEEDED(retentionHr) && retentionTask._mutationInterlockScopes.size() == kLargeSelectionCount * 2u &&
                               readSourceScopes == kLargeSelectionCount && publishDestinationScopes == kLargeSelectionCount &&
-                              uniqueAuthorityNodes.size() <= kLargeSelectionCount + kSharedAncestorAllowance &&
-                              maxAuthorityDepth <= 1024u,
+                              uniqueAuthorityNodes.size() <= kLargeSelectionCount + kSharedAncestorAllowance && maxAuthorityDepth <= 1024u,
                           L"Large-selection interlock retention must keep one source and final-leaf scope per item while interning shared ancestors."))
             {
                 return true;
@@ -3125,21 +2984,19 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
                 retainedPublishScopes.emplace_back(scope);
                 FileOperations::MutationInterlockScope siblingScope = scope;
-                siblingScope.providerPath =
-                    (retentionDestinationRoot / std::format(L"disjoint-{:03}.bin", disjointPublishScopes.size())).native();
-                bool rebuiltAnchors = true;
+                siblingScope.providerPath = (retentionDestinationRoot / std::format(L"disjoint-{:03}.bin", disjointPublishScopes.size())).native();
+                bool rebuiltAnchors       = true;
                 for (FileOperations::MutationInterlockAnchor& anchor : siblingScope.anchors)
                 {
-                    rebuiltAnchors = rebuiltAnchors && anchor.authority &&
-                        TryGetFileSystemRelativePath(localValidationEndpoint.pathIdentity.value(),
-                                                     anchor.authority->retained.providerPath,
-                                                     siblingScope.providerPath,
-                                                     anchor.relativePath);
+                    rebuiltAnchors         = rebuiltAnchors && anchor.authority &&
+                                             TryGetFileSystemRelativePath(localValidationEndpoint.pathIdentity.value(),
+                                                                          anchor.authority->retained.providerPath,
+                                                                          siblingScope.providerPath,
+                                                                          anchor.relativePath);
                     anchor.relativePathKey = TryMakePathKey(localValidationEndpoint.pathIdentity.value(), anchor.relativePath);
-                    rebuiltAnchors = rebuiltAnchors && anchor.relativePathKey.has_value();
+                    rebuiltAnchors         = rebuiltAnchors && anchor.relativePathKey.has_value();
                 }
-                if (! require(rebuiltAnchors,
-                              L"Large-selection disjoint admission fixture must rebuild every retained anchor suffix."))
+                if (! require(rebuiltAnchors, L"Large-selection disjoint admission fixture must rebuild every retained anchor suffix."))
                 {
                     return true;
                 }
@@ -3147,53 +3004,29 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             }
 
             const auto comparisonStarted = std::chrono::steady_clock::now();
-            uint64_t scopeComparisons = 0u;
-            const bool disjointSetsOverlap = FileOperations::DebugMutationScopeSetsOverlapForSelfTest(
-                retainedPublishScopes,
-                disjointPublishScopes,
-                scopeComparisons);
-            const uint64_t comparisonUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
-                                                                     std::chrono::steady_clock::now() - comparisonStarted)
-                                                                     .count());
+            uint64_t scopeComparisons    = 0u;
+            const bool disjointSetsOverlap =
+                FileOperations::DebugMutationScopeSetsOverlapForSelfTest(retainedPublishScopes, disjointPublishScopes, scopeComparisons);
+            const uint64_t comparisonUs =
+                static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - comparisonStarted).count());
             constexpr uint64_t kCartesianScopeComparisons = kLargeSelectionCount * kLargeSelectionCount;
             if (! require(! disjointSetsOverlap && retainedPublishScopes.size() == kLargeSelectionCount &&
-                              disjointPublishScopes.size() == kLargeSelectionCount &&
-                              scopeComparisons > 0u && scopeComparisons < kCartesianScopeComparisons,
+                              disjointPublishScopes.size() == kLargeSelectionCount && scopeComparisons > 0u && scopeComparisons < kCartesianScopeComparisons,
                           L"Large-selection admission must prove 256x256 disjoint publication leaves without a false overlap or Cartesian scan."))
             {
                 return true;
             }
 
-            Debug::Perf::Emit(L"FileOps.Interlock.CheckUs",
-                              L"selftest-local-256x256-disjoint-publish-leaves",
-                              comparisonUs,
-                              scopeComparisons,
-                              1u,
-                              S_OK);
-            Debug::Perf::Emit(L"FileOps.Interlock.ScopeComparisons",
-                              L"selftest-local-256x256-disjoint-publish-leaves",
-                              0u,
-                              scopeComparisons,
-                              1u,
-                              S_OK);
-            Debug::Perf::Emit(L"FileOps.Interlock.ActiveCandidates",
-                              L"selftest-local-256x256-disjoint-publish-leaves",
-                              0u,
-                              1u,
-                              scopeComparisons,
-                              S_OK);
+            Debug::Perf::Emit(L"FileOps.Interlock.CheckUs", L"selftest-local-256x256-disjoint-publish-leaves", comparisonUs, scopeComparisons, 1u, S_OK);
+            Debug::Perf::Emit(L"FileOps.Interlock.ScopeComparisons", L"selftest-local-256x256-disjoint-publish-leaves", 0u, scopeComparisons, 1u, S_OK);
+            Debug::Perf::Emit(L"FileOps.Interlock.ActiveCandidates", L"selftest-local-256x256-disjoint-publish-leaves", 0u, 1u, scopeComparisons, S_OK);
             Debug::Perf::Emit(L"FileOps.SelfTest.InterlockLargeSelectionRetainedAuthorityNodes",
                               L"local-256-top-level-items",
                               retentionPrepareUs,
                               uniqueAuthorityNodes.size(),
                               kLargeSelectionCount,
                               S_OK);
-            Debug::Perf::Emit(L"FileOps.SelfTest.InterlockLargeSelectionMaxAuthorityDepth",
-                              L"local-256-top-level-items",
-                              0u,
-                              maxAuthorityDepth,
-                              1024u,
-                              S_OK);
+            Debug::Perf::Emit(L"FileOps.SelfTest.InterlockLargeSelectionMaxAuthorityDepth", L"local-256-top-level-items", 0u, maxAuthorityDepth, 1024u, S_OK);
         }
 
         {
@@ -3202,7 +3035,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             task._sourcePaths = {state.tempRoot / L"typed-stage-cleanup-source.bin"};
             task.InitializeSourceItemResultBuilders();
             task.MarkSourceItemsMutationPossible();
-            task._sourceItemResultBuilders.front().status = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
+            task._sourceItemResultBuilders.front().status   = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
             task._sourceItemResultBuilders.front().mutation = FileSystemItemMutationResult{
                 .sizeBytes             = sizeof(FileSystemItemMutationResult),
                 .outcomeKnown          = TRUE,
@@ -3212,15 +3045,14 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             };
 
             const HRESULT typedHr = task.FinalizeTypedItemResults(HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE));
-            const FileOperations::FileOperationItemResult* result = task._sourceItemResultBuilders.size() == 1u &&
-                    task._sourceItemResultBuilders.front().terminal.has_value()
-                ? std::addressof(task._sourceItemResultBuilders.front().terminal.value())
-                : nullptr;
-            const bool axesMatch = result != nullptr &&
-                result->publication == FileOperations::PublicationState::NotPublished &&
-                result->sourceDisposition == FileOperations::SourceDisposition::Retained &&
-                result->completion == FileOperations::ItemCompletion::Indeterminate &&
-                result->ownedStageDisposition == FileOperations::OwnedStageDisposition::Unknown;
+            const FileOperations::FileOperationItemResult* result =
+                task._sourceItemResultBuilders.size() == 1u && task._sourceItemResultBuilders.front().terminal.has_value()
+                    ? std::addressof(task._sourceItemResultBuilders.front().terminal.value())
+                    : nullptr;
+            const bool axesMatch = result != nullptr && result->publication == FileOperations::PublicationState::NotPublished &&
+                                   result->sourceDisposition == FileOperations::SourceDisposition::Retained &&
+                                   result->completion == FileOperations::ItemCompletion::Indeterminate &&
+                                   result->ownedStageDisposition == FileOperations::OwnedStageDisposition::Unknown;
             if (! require(typedHr == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) && axesMatch,
                           L"An unknown owned-stage cleanup must remain NotPublished + source Retained while the independent stage axis is Unknown."))
             {
@@ -3237,7 +3069,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             task.MarkSourceItemsMutationPossible();
             for (auto& builder : task._sourceItemResultBuilders)
             {
-                builder.status = S_OK;
+                builder.status   = S_OK;
                 builder.mutation = FileSystemItemMutationResult{
                     .sizeBytes             = sizeof(FileSystemItemMutationResult),
                     .outcomeKnown          = TRUE,
@@ -3248,12 +3080,11 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             }
 
             const auto reductionStartedAt = std::chrono::steady_clock::now();
-            const HRESULT reductionHr = task.FinalizeTypedItemResults(S_OK);
-            const uint64_t reductionUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
-                                                                    std::chrono::steady_clock::now() - reductionStartedAt)
-                                                                    .count());
-            size_t completedCount = 0u;
-            size_t retainedDebtCount = 0u;
+            const HRESULT reductionHr     = task.FinalizeTypedItemResults(S_OK);
+            const uint64_t reductionUs =
+                static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - reductionStartedAt).count());
+            size_t completedCount     = 0u;
+            size_t retainedDebtCount  = 0u;
             size_t indeterminateCount = 0u;
             for (const auto& builder : task._sourceItemResultBuilders)
             {
@@ -3267,20 +3098,15 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                 indeterminateCount += result.completion == FileOperations::ItemCompletion::Indeterminate ? 1u : 0u;
             }
             const uint64_t retainedBytesPerResult = sizeof(task._sourceItemResultBuilders.front()) + sizeof(task._sourcePaths.front());
-            Debug::Perf::Emit(L"FileOps.CleanupDebt.ReduceUs",
-                              L"committed-retained-4096",
-                              reductionUs,
-                              kCleanupDebtResultCount,
-                              completedCount,
-                              reductionHr);
+            Debug::Perf::Emit(L"FileOps.CleanupDebt.ReduceUs", L"committed-retained-4096", reductionUs, kCleanupDebtResultCount, completedCount, reductionHr);
             Debug::Perf::EmitValue(L"FileOps.CleanupDebt.ResultCount", kCleanupDebtResultCount, reductionHr);
             Debug::Perf::EmitValue(L"FileOps.CleanupDebt.CompletedCount", completedCount, reductionHr);
             Debug::Perf::EmitValue(L"FileOps.CleanupDebt.RetainedDebtCount", retainedDebtCount, reductionHr);
             Debug::Perf::EmitValue(L"FileOps.CleanupDebt.IndeterminateCount", indeterminateCount, reductionHr);
             Debug::Perf::EmitValue(L"FileOps.CleanupDebt.RetainedBytesPerResult", retainedBytesPerResult, reductionHr);
 
-            if (! require(reductionHr == S_OK && completedCount == kCleanupDebtResultCount &&
-                              retainedDebtCount == kCleanupDebtResultCount && indeterminateCount == 0u,
+            if (! require(reductionHr == S_OK && completedCount == kCleanupDebtResultCount && retainedDebtCount == kCleanupDebtResultCount &&
+                              indeterminateCount == 0u,
                           L"Committed primary results with retained cleanup debt must remain Completed while preserving the independent Retained debt axis."))
             {
                 return true;
@@ -3291,25 +3117,24 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         const HRESULT copyOnlyHr = copyOnlyTask.ExecuteOperation();
         AppendLog(std::format(L"Provider matrix: Copy-only fixture returned 0x{:08X}.", static_cast<unsigned long>(copyOnlyHr)));
         if (! require(copyOnlyHr == S_FALSE && std::filesystem::exists(copyOnlySource, copyOnlyEc) &&
-                          std::filesystem::exists(copyOnlyDestination, copyOnlyEc) &&
-                          std::filesystem::file_size(copyOnlyDestination, copyOnlyEc) == 9u && ! copyOnlyEc,
+                          std::filesystem::exists(copyOnlyDestination, copyOnlyEc) && std::filesystem::file_size(copyOnlyDestination, copyOnlyEc) == 9u &&
+                          ! copyOnlyEc,
                       L"Copy-only Move must execute Copy, retain the source, and report a non-clean source-kept result."))
         {
             return true;
         }
 
-        constexpr std::wstring_view entropyDummyRoot = L"/stage-entropy-source";
-        constexpr std::wstring_view entropyDummyFile = L"/stage-entropy-source/payload.bin";
+        constexpr std::wstring_view entropyDummyRoot       = L"/stage-entropy-source";
+        constexpr std::wstring_view entropyDummyFile       = L"/stage-entropy-source/payload.bin";
         const std::filesystem::path entropyDestinationRoot = state.tempRoot / L"stage-entropy-destination";
-        const std::filesystem::path entropyDestination = entropyDestinationRoot / L"payload.bin";
+        const std::filesystem::path entropyDestination     = entropyDestinationRoot / L"payload.bin";
         static_cast<void>(state.fsDummy->DeleteItem(std::wstring(entropyDummyRoot).c_str(),
                                                     static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY),
                                                     nullptr,
                                                     nullptr,
                                                     nullptr));
         if (! require(EnsureDummyFolderExists(state.fsDummy.get(), entropyDummyRoot) &&
-                          DummyWriteTextFile(state.fsDummy.get(), entropyDummyFile, "entropy-source") &&
-                          RecreateEmptyDirectory(entropyDestinationRoot),
+                          DummyWriteTextFile(state.fsDummy.get(), entropyDummyFile, "entropy-source") && RecreateEmptyDirectory(entropyDestinationRoot),
                       L"Stage entropy failure fixture should create its source and destination root."))
         {
             return true;
@@ -3326,14 +3151,14 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         FolderWindow::FileOperationState::Task entropyTask(*state.fileOps);
         entropyTask.StorePlans(std::make_shared<const FileOperations::FileOperationPlanGroup>(
             FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(entropyPlan)}}));
-        entropyTask._operation                 = FILESYSTEM_COPY;
-        entropyTask._executionMode             = FolderWindow::FileOperationState::ExecutionMode::PerItem;
-        entropyTask._fileSystem                = state.fsDummy;
-        entropyTask._destinationFileSystem     = state.fsLocal;
-        entropyTask._sourcePaths               = {std::filesystem::path(entropyDummyFile)};
-        entropyTask._destinationFolder         = entropyDestinationRoot;
-        entropyTask._sourcePathAttributesHint  = {FILE_ATTRIBUTE_NORMAL};
-        entropyTask._flags = FILESYSTEM_FLAG_CONTINUE_ON_ERROR;
+        entropyTask._operation                = FILESYSTEM_COPY;
+        entropyTask._executionMode            = FolderWindow::FileOperationState::ExecutionMode::PerItem;
+        entropyTask._fileSystem               = state.fsDummy;
+        entropyTask._destinationFileSystem    = state.fsLocal;
+        entropyTask._sourcePaths              = {std::filesystem::path(entropyDummyFile)};
+        entropyTask._destinationFolder        = entropyDestinationRoot;
+        entropyTask._sourcePathAttributesHint = {FILE_ATTRIBUTE_NORMAL};
+        entropyTask._flags                    = FILESYSTEM_FLAG_CONTINUE_ON_ERROR;
 
         SetFileOpsBridgeFailNextStageEntropyForSelfTest(1u);
         const auto resetStageEntropyHook = wil::scope_exit([]() noexcept
@@ -3349,8 +3174,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         std::string entropySourceText;
         wil::com_ptr<IFileSystemIO> entropyDummyIo;
         const bool entropySourceRetained = SUCCEEDED(state.fsDummy->QueryInterface(IID_PPV_ARGS(entropyDummyIo.addressof()))) && entropyDummyIo &&
-                                           ReadFileTextFsIo(entropyDummyIo, entropyDummyFile, entropySourceText) &&
-                                           entropySourceText == "entropy-source";
+                                           ReadFileTextFsIo(entropyDummyIo, entropyDummyFile, entropySourceText) && entropySourceText == "entropy-source";
         std::error_code entropyEc;
         if (! require(entropyHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) && entropyAttempts == 1u &&
                           entropyTask._perf.bridgeStageCreateCount.load(std::memory_order_acquire) == 0u && entropySourceRetained &&
@@ -3360,9 +3184,9 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
 
-        const std::filesystem::path bulkRejectedSource = state.tempRoot / L"bulk-transfer-rejected-source.bin";
+        const std::filesystem::path bulkRejectedSource          = state.tempRoot / L"bulk-transfer-rejected-source.bin";
         const std::filesystem::path bulkRejectedDestinationRoot = state.tempRoot / L"bulk-transfer-rejected-destination";
-        const std::filesystem::path bulkRejectedDestination = bulkRejectedDestinationRoot / bulkRejectedSource.filename();
+        const std::filesystem::path bulkRejectedDestination     = bulkRejectedDestinationRoot / bulkRejectedSource.filename();
         std::error_code rejectedRouteEc;
         std::filesystem::create_directories(bulkRejectedDestinationRoot, rejectedRouteEc);
         if (! require(! rejectedRouteEc && SelfTest::WriteTextFile(bulkRejectedSource, "bulk-rejected"),
@@ -3397,9 +3221,9 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
 
         // Beeline: the endpoint tuple decides the route. A Native plan stays a provider rename
         // whatever destination provider object the task carries for the same qualified endpoint.
-        const std::filesystem::path nativeExplicitSource = state.tempRoot / L"native-explicit-destination-source.bin";
+        const std::filesystem::path nativeExplicitSource          = state.tempRoot / L"native-explicit-destination-source.bin";
         const std::filesystem::path nativeExplicitDestinationRoot = state.tempRoot / L"native-explicit-destination";
-        const std::filesystem::path nativeExplicitDestination = nativeExplicitDestinationRoot / nativeExplicitSource.filename();
+        const std::filesystem::path nativeExplicitDestination     = nativeExplicitDestinationRoot / nativeExplicitSource.filename();
         std::filesystem::create_directories(nativeExplicitDestinationRoot, rejectedRouteEc);
         if (! require(! rejectedRouteEc && SelfTest::WriteTextFile(nativeExplicitSource, "native-explicit-destination"),
                       L"Native explicit-destination fixture should create its source and destination folder."))
@@ -3416,17 +3240,16 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         FolderWindow::FileOperationState::Task nativeExplicitTask(*state.fileOps);
         nativeExplicitTask.StorePlans(std::make_shared<const FileOperations::FileOperationPlanGroup>(
             FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(nativeExplicitPlan)}}));
-        nativeExplicitTask._operation              = FILESYSTEM_MOVE;
-        nativeExplicitTask._executionMode          = FolderWindow::FileOperationState::ExecutionMode::PerItem;
-        nativeExplicitTask._fileSystem             = state.fsLocal;
-        nativeExplicitTask._destinationFileSystem  = state.fsLocal;
-        nativeExplicitTask._sourcePaths            = {nativeExplicitSource};
-        nativeExplicitTask._destinationFolder      = nativeExplicitDestinationRoot;
+        nativeExplicitTask._operation                = FILESYSTEM_MOVE;
+        nativeExplicitTask._executionMode            = FolderWindow::FileOperationState::ExecutionMode::PerItem;
+        nativeExplicitTask._fileSystem               = state.fsLocal;
+        nativeExplicitTask._destinationFileSystem    = state.fsLocal;
+        nativeExplicitTask._sourcePaths              = {nativeExplicitSource};
+        nativeExplicitTask._destinationFolder        = nativeExplicitDestinationRoot;
         nativeExplicitTask._sourcePathAttributesHint = {GetFileAttributesW(nativeExplicitSource.c_str())};
         AppendLog(L"Provider matrix: executing Native explicit-destination fixture.");
         const HRESULT nativeExplicitHr = nativeExplicitTask.ExecuteOperation();
-        AppendLog(std::format(L"Provider matrix: Native explicit-destination fixture returned 0x{:08X}.",
-                              static_cast<unsigned long>(nativeExplicitHr)));
+        AppendLog(std::format(L"Provider matrix: Native explicit-destination fixture returned 0x{:08X}.", static_cast<unsigned long>(nativeExplicitHr)));
         if (! require(nativeExplicitHr == S_OK && ! std::filesystem::exists(nativeExplicitSource, rejectedRouteEc) &&
                           std::filesystem::exists(nativeExplicitDestination, rejectedRouteEc),
                       L"A provider-native Move with an explicit destination provider object on the same endpoint must rename, never enter the bridge."))
@@ -3479,10 +3302,9 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                           1u,
                           racedMergeHr);
 
-        const std::filesystem::path managedMoveSource = state.tempRoot / L"managed-move-source.bin";
+        const std::filesystem::path managedMoveSource      = state.tempRoot / L"managed-move-source.bin";
         const std::filesystem::path managedMoveDestination = nativeExplicitDestinationRoot / managedMoveSource.filename();
-        if (! require(SelfTest::WriteTextFile(managedMoveSource, "managed-move-exact"),
-                      L"Managed Move fixture should create its source."))
+        if (! require(SelfTest::WriteTextFile(managedMoveSource, "managed-move-exact"), L"Managed Move fixture should create its source."))
         {
             return true;
         }
@@ -3496,17 +3318,16 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         FolderWindow::FileOperationState::Task managedMoveTask(*state.fileOps);
         managedMoveTask.StorePlans(std::make_shared<const FileOperations::FileOperationPlanGroup>(
             FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(managedMovePlan)}}));
-        managedMoveTask._operation              = FILESYSTEM_MOVE;
-        managedMoveTask._executionMode          = FolderWindow::FileOperationState::ExecutionMode::PerItem;
-        managedMoveTask._fileSystem             = state.fsLocal;
-        managedMoveTask._destinationFileSystem  = state.fsLocal;
-        managedMoveTask._sourcePaths            = {managedMoveSource};
-        managedMoveTask._destinationFolder      = nativeExplicitDestinationRoot;
+        managedMoveTask._operation                = FILESYSTEM_MOVE;
+        managedMoveTask._executionMode            = FolderWindow::FileOperationState::ExecutionMode::PerItem;
+        managedMoveTask._fileSystem               = state.fsLocal;
+        managedMoveTask._destinationFileSystem    = state.fsLocal;
+        managedMoveTask._sourcePaths              = {managedMoveSource};
+        managedMoveTask._destinationFolder        = nativeExplicitDestinationRoot;
         managedMoveTask._sourcePathAttributesHint = {GetFileAttributesW(managedMoveSource.c_str())};
         AppendLog(L"Provider matrix: executing Managed Move fixture.");
         const HRESULT managedMoveHr = managedMoveTask.ExecuteOperation();
-        AppendLog(std::format(L"Provider matrix: Managed Move fixture returned 0x{:08X}.",
-                              static_cast<unsigned long>(managedMoveHr)));
+        AppendLog(std::format(L"Provider matrix: Managed Move fixture returned 0x{:08X}.", static_cast<unsigned long>(managedMoveHr)));
         wil::com_ptr<IFileSystemIO> managedLocalIo;
         std::string managedDestinationText;
         if (! require(managedMoveHr == S_OK && ! std::filesystem::exists(managedMoveSource, rejectedRouteEc) &&
@@ -3519,22 +3340,20 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
 
-        const std::filesystem::path managedBusySource = state.tempRoot / L"managed-move-busy-source.bin";
+        const std::filesystem::path managedBusySource      = state.tempRoot / L"managed-move-busy-source.bin";
         const std::filesystem::path managedBusyDestination = nativeExplicitDestinationRoot / managedBusySource.filename();
-        if (! require(SelfTest::WriteTextFile(managedBusySource, "managed-source-kept"),
-                      L"Managed Move source-kept fixture should create its source."))
+        if (! require(SelfTest::WriteTextFile(managedBusySource, "managed-source-kept"), L"Managed Move source-kept fixture should create its source."))
         {
             return true;
         }
         wil::unique_handle externalWriter(CreateFileW(managedBusySource.c_str(),
-                                                       GENERIC_WRITE,
-                                                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                                       nullptr,
-                                                       OPEN_EXISTING,
-                                                       FILE_ATTRIBUTE_NORMAL,
-                                                       nullptr));
-        if (! require(static_cast<bool>(externalWriter),
-                      L"Managed Move source-kept fixture should retain an external write handle."))
+                                                      GENERIC_WRITE,
+                                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                      nullptr,
+                                                      OPEN_EXISTING,
+                                                      FILE_ATTRIBUTE_NORMAL,
+                                                      nullptr));
+        if (! require(static_cast<bool>(externalWriter), L"Managed Move source-kept fixture should retain an external write handle."))
         {
             return true;
         }
@@ -3557,8 +3376,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         managedBusyTask._sourcePathAttributesHint = {GetFileAttributesW(managedBusySource.c_str())};
         AppendLog(L"Provider matrix: executing Managed source-kept fixture.");
         const HRESULT managedBusyHr = managedBusyTask.ExecuteOperation();
-        AppendLog(std::format(L"Provider matrix: Managed source-kept fixture returned 0x{:08X}.",
-                              static_cast<unsigned long>(managedBusyHr)));
+        AppendLog(std::format(L"Provider matrix: Managed source-kept fixture returned 0x{:08X}.", static_cast<unsigned long>(managedBusyHr)));
         std::string managedBusyDestinationText;
         if (! require(managedBusyHr == S_FALSE && std::filesystem::exists(managedBusySource, rejectedRouteEc) &&
                           std::filesystem::exists(managedBusyDestination, rejectedRouteEc) &&
@@ -3569,11 +3387,10 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
 
-        const std::filesystem::path managedRaceSource = state.tempRoot / L"managed-move-cleanup-race-source.bin";
+        const std::filesystem::path managedRaceSource      = state.tempRoot / L"managed-move-cleanup-race-source.bin";
         const std::filesystem::path managedRaceReplacement = state.tempRoot / L"managed-move-cleanup-race-replacement.bin";
         const std::filesystem::path managedRaceDestination = nativeExplicitDestinationRoot / managedRaceSource.filename();
-        if (! require(SelfTest::WriteTextFile(managedRaceSource, "managed-cleanup-race"),
-                      L"Managed Move cleanup-race fixture should create its source."))
+        if (! require(SelfTest::WriteTextFile(managedRaceSource, "managed-cleanup-race"), L"Managed Move cleanup-race fixture should create its source."))
         {
             return true;
         }
@@ -3601,8 +3418,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         {
             AppendLog(L"Provider matrix: Managed cleanup-race worker entered ExecuteOperation.");
             managedRaceHr = managedRaceTask.ExecuteOperation();
-            AppendLog(std::format(L"Provider matrix: Managed cleanup-race worker returned 0x{:08X}.",
-                                  static_cast<unsigned long>(managedRaceHr)));
+            AppendLog(std::format(L"Provider matrix: Managed cleanup-race worker returned 0x{:08X}.", static_cast<unsigned long>(managedRaceHr)));
         });
         const ULONGLONG managedRaceWaitDeadline = GetTickCount64() + 4'000ull;
         while (! HasFileOpsBridgeMoveSourceCleanupPauseEnteredForSelfTest() && GetTickCount64() < managedRaceWaitDeadline)
@@ -3612,13 +3428,10 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         const bool cleanupPauseEntered = HasFileOpsBridgeMoveSourceCleanupPauseEnteredForSelfTest();
         AppendLog(std::format(L"Provider matrix: Managed cleanup-race pause entered={0}.", cleanupPauseEntered));
         SetLastError(ERROR_SUCCESS);
-        const BOOL replacementMove = cleanupPauseEntered
-            ? MoveFileExW(managedRaceSource.c_str(), managedRaceReplacement.c_str(), MOVEFILE_REPLACE_EXISTING)
-            : FALSE;
+        const BOOL replacementMove =
+            cleanupPauseEntered ? MoveFileExW(managedRaceSource.c_str(), managedRaceReplacement.c_str(), MOVEFILE_REPLACE_EXISTING) : FALSE;
         const DWORD replacementMoveError = GetLastError();
-        AppendLog(std::format(L"Provider matrix: Managed cleanup-race replacement move result={0}, error={1}.",
-                              replacementMove,
-                              replacementMoveError));
+        AppendLog(std::format(L"Provider matrix: Managed cleanup-race replacement move result={0}, error={1}.", replacementMove, replacementMoveError));
         ReleaseFileOpsBridgeMoveSourceCleanupPauseForSelfTest();
         SetFileOpsBridgeMoveSourceCleanupPauseForSelfTest(false);
         AppendLog(L"Provider matrix: Managed cleanup-race pause released; joining worker.");
@@ -3626,9 +3439,8 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         AppendLog(L"Provider matrix: Managed cleanup-race worker joined.");
         std::string managedRaceDestinationText;
         if (! require(cleanupPauseEntered && replacementMove == FALSE &&
-                          (replacementMoveError == ERROR_SHARING_VIOLATION || replacementMoveError == ERROR_ACCESS_DENIED) &&
-                          managedRaceHr == S_OK && ! std::filesystem::exists(managedRaceSource, rejectedRouteEc) &&
-                          ! std::filesystem::exists(managedRaceReplacement, rejectedRouteEc) &&
+                          (replacementMoveError == ERROR_SHARING_VIOLATION || replacementMoveError == ERROR_ACCESS_DENIED) && managedRaceHr == S_OK &&
+                          ! std::filesystem::exists(managedRaceSource, rejectedRouteEc) && ! std::filesystem::exists(managedRaceReplacement, rejectedRouteEc) &&
                           ReadFileTextFsIo(managedLocalIo, managedRaceDestination.native(), managedRaceDestinationText) &&
                           managedRaceDestinationText == "managed-cleanup-race",
                       L"Managed Move must retain exact source authority through cleanup so a pathname replacement cannot enter the publish/delete window."))
@@ -3645,7 +3457,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             plan.destinationEndpoint = localValidationEndpoint;
             plan.selectedItems.push_back({.providerPath = source.native()});
             plan.destination.providerFolderPath = nativeExplicitDestinationRoot.native();
-            auto task = std::make_unique<FolderWindow::FileOperationState::Task>(*state.fileOps);
+            auto task                           = std::make_unique<FolderWindow::FileOperationState::Task>(*state.fileOps);
             task->StorePlans(std::make_shared<const FileOperations::FileOperationPlanGroup>(
                 FileOperations::FileOperationPlanGroup{FileOperations::FileOperationPlan{std::move(plan)}}));
             task->_operation                = FILESYSTEM_MOVE;
@@ -3663,7 +3475,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         using CleanupBucket = FolderWindow::FileOperationState::Task::ConflictBucket;
         struct CleanupFailureScenario final
         {
-            HRESULT status = E_FAIL;
+            HRESULT status       = E_FAIL;
             CleanupBucket bucket = CleanupBucket::Unknown;
             std::wstring_view name;
         };
@@ -3679,11 +3491,10 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             const CleanupFailureScenario& scenario = cleanupFailureScenarios[scenarioIndex];
             for (const bool chooseRetry : {true, false})
             {
-                const std::wstring decisionName = chooseRetry ? L"retry" : L"skip";
-                const std::filesystem::path source = state.tempRoot /
-                    std::format(L"managed-cleanup-{}-{}-{}.bin", scenario.name, decisionName, scenarioIndex);
+                const std::wstring decisionName    = chooseRetry ? L"retry" : L"skip";
+                const std::filesystem::path source = state.tempRoot / std::format(L"managed-cleanup-{}-{}-{}.bin", scenario.name, decisionName, scenarioIndex);
                 const std::filesystem::path destination = nativeExplicitDestinationRoot / source.filename();
-                const std::string payload = std::format("managed-cleanup-{}-{}", scenarioIndex, chooseRetry ? "retry" : "skip");
+                const std::string payload               = std::format("managed-cleanup-{}-{}", scenarioIndex, chooseRetry ? "retry" : "skip");
                 if (! require(SelfTest::WriteTextFile(source, payload),
                               std::format(L"Managed cleanup {} {} fixture should create its source.", scenario.name, decisionName)))
                 {
@@ -3716,13 +3527,10 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                 }
 
                 const bool promptValid = prompt.has_value() && prompt->status == scenario.status && prompt->bucket == scenario.bucket &&
-                    PromptHasAction(prompt.value(), FolderWindow::FileOperationState::Task::ConflictAction::Retry) &&
-                    PromptHasAction(prompt.value(), FolderWindow::FileOperationState::Task::ConflictAction::Skip);
-                AppendLog(std::format(L"Provider matrix: Managed cleanup {0} {1} prompt observed={2}, valid={3}.",
-                                      scenario.name,
-                                      decisionName,
-                                      prompt.has_value(),
-                                      promptValid));
+                                         PromptHasAction(prompt.value(), FolderWindow::FileOperationState::Task::ConflictAction::Retry) &&
+                                         PromptHasAction(prompt.value(), FolderWindow::FileOperationState::Task::ConflictAction::Skip);
+                AppendLog(std::format(
+                    L"Provider matrix: Managed cleanup {0} {1} prompt observed={2}, valid={3}.", scenario.name, decisionName, prompt.has_value(), promptValid));
                 if (promptValid)
                 {
                     cleanupTask->SubmitConflictDecision(chooseRetry ? FolderWindow::FileOperationState::Task::ConflictAction::Retry
@@ -3734,9 +3542,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                 {
                     cleanupTask->RequestCancel();
                 }
-                AppendLog(std::format(L"Provider matrix: Managed cleanup {0} {1} decision submitted; joining worker.",
-                                      scenario.name,
-                                      decisionName));
+                AppendLog(std::format(L"Provider matrix: Managed cleanup {0} {1} decision submitted; joining worker.", scenario.name, decisionName));
                 cleanupWorker.join();
                 AppendLog(std::format(L"Provider matrix: Managed cleanup {0} {1} worker joined.", scenario.name, decisionName));
 
@@ -3750,8 +3556,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                 scenarioEc.clear();
                 const bool destinationMatches = ReadFileTextFsIo(managedLocalIo, destination.native(), destinationText) && destinationText == payload;
                 AppendLog(std::format(L"Provider matrix: Managed cleanup {0} {1} destination checked.", scenario.name, decisionName));
-                const bool terminalStateMatches = chooseRetry ? cleanupHr == S_OK && ! sourceExists
-                                                              : cleanupHr == S_FALSE && sourceExists;
+                const bool terminalStateMatches = chooseRetry ? cleanupHr == S_OK && ! sourceExists : cleanupHr == S_FALSE && sourceExists;
                 if (! require(promptValid && injectedAttempts == 1u && terminalStateMatches && destinationMatches,
                               std::format(L"Managed cleanup {} {} must prompt in the source-cleanup bucket, preserve publication, and {} the source.",
                                           scenario.name,
@@ -3772,7 +3577,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                           S_OK);
         AppendLog(L"Provider matrix: Managed cleanup matrix perf evidence emitted.");
 
-        const std::filesystem::path managedUnknownSource = state.tempRoot / L"managed-move-cleanup-unknown-source.bin";
+        const std::filesystem::path managedUnknownSource      = state.tempRoot / L"managed-move-cleanup-unknown-source.bin";
         const std::filesystem::path managedUnknownDestination = nativeExplicitDestinationRoot / managedUnknownSource.filename();
         if (! require(SelfTest::WriteTextFile(managedUnknownSource, "managed-cleanup-unknown"),
                       L"Managed Move unknown-cleanup fixture should create its source."))
@@ -3782,31 +3587,28 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         auto managedUnknownTask = makeManagedCleanupTask(managedUnknownSource);
         SetFileOpsManagedCleanupUnknownOutcomeForSelfTest(1u);
         AppendLog(L"Provider matrix: executing Managed unknown-cleanup fixture.");
-        const HRESULT managedUnknownHr = managedUnknownTask->ExecuteOperation();
+        const HRESULT managedUnknownHr      = managedUnknownTask->ExecuteOperation();
         const HRESULT managedUnknownTypedHr = managedUnknownTask->FinalizeTypedItemResults(managedUnknownHr);
-        AppendLog(std::format(L"Provider matrix: Managed unknown-cleanup fixture returned 0x{:08X}.",
-                              static_cast<unsigned long>(managedUnknownHr)));
+        AppendLog(std::format(L"Provider matrix: Managed unknown-cleanup fixture returned 0x{:08X}.", static_cast<unsigned long>(managedUnknownHr)));
         const unsigned long managedUnknownAttempts = TakeFileOpsManagedCleanupUnknownOutcomeAttemptsForSelfTest();
         SetFileOpsManagedCleanupUnknownOutcomeForSelfTest(0u);
         std::string managedUnknownDestinationText;
-        const bool unknownAxes = managedUnknownTask->_sourceItemResultBuilders.size() == 1u &&
-            managedUnknownTask->_sourceItemResultBuilders.front().terminal.has_value() &&
+        const bool unknownAxes =
+            managedUnknownTask->_sourceItemResultBuilders.size() == 1u && managedUnknownTask->_sourceItemResultBuilders.front().terminal.has_value() &&
             managedUnknownTask->_sourceItemResultBuilders.front().terminal->publication == FileOperations::PublicationState::Published &&
             managedUnknownTask->_sourceItemResultBuilders.front().terminal->sourceDisposition == FileOperations::SourceDisposition::Unknown &&
             managedUnknownTask->_sourceItemResultBuilders.front().terminal->completion == FileOperations::ItemCompletion::Indeterminate;
-        if (! require(managedUnknownHr == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) &&
-                          managedUnknownTypedHr == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) && unknownAxes && managedUnknownAttempts == 1u &&
-                          std::filesystem::exists(managedUnknownSource, rejectedRouteEc) &&
+        if (! require(managedUnknownHr == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) && managedUnknownTypedHr == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) &&
+                          unknownAxes && managedUnknownAttempts == 1u && std::filesystem::exists(managedUnknownSource, rejectedRouteEc) &&
                           ReadFileTextFsIo(managedLocalIo, managedUnknownDestination.native(), managedUnknownDestinationText) &&
-                          managedUnknownDestinationText == "managed-cleanup-unknown" &&
-                          ! TryGetConflictPromptCopy(managedUnknownTask.get()).has_value(),
+                          managedUnknownDestinationText == "managed-cleanup-unknown" && ! TryGetConflictPromptCopy(managedUnknownTask.get()).has_value(),
                       L"Managed Move must report an unknown cleanup outcome as indeterminate without recopied-item Retry or another Delete call."))
         {
             return true;
         }
 
-        const std::filesystem::path managedTreeSource = state.tempRoot / L"managed-move-tree";
-        const std::filesystem::path managedTreeChild = managedTreeSource / L"nested" / L"child.bin";
+        const std::filesystem::path managedTreeSource      = state.tempRoot / L"managed-move-tree";
+        const std::filesystem::path managedTreeChild       = managedTreeSource / L"nested" / L"child.bin";
         const std::filesystem::path managedTreeDestination = nativeExplicitDestinationRoot / managedTreeSource.filename();
         std::filesystem::create_directories(managedTreeChild.parent_path(), rejectedRouteEc);
         if (! require(! rejectedRouteEc && SelfTest::WriteTextFile(managedTreeChild, "managed-tree"),
@@ -3847,19 +3649,17 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
         }
         if (! managedTreeDone.load(std::memory_order_acquire))
         {
-            const std::optional<FolderWindow::FileOperationState::Task::ConflictPromptState> managedTreePrompt =
-                TryGetConflictPromptCopy(&managedTreeTask);
-            AppendLog(std::format(
-                L"Provider matrix: Managed directory Move exceeded its bound with {0} bridge-budget bytes in use; prompt={1}, status=0x{2:08X}, bucket={3}; cancelling.",
-                GetFileOpsBridgeBufferBudgetInUseForSelfTest(),
-                managedTreePrompt.has_value(),
-                managedTreePrompt.has_value() ? static_cast<unsigned long>(managedTreePrompt->status) : 0ul,
-                managedTreePrompt.has_value() ? static_cast<unsigned int>(managedTreePrompt->bucket) : 0u));
+            const std::optional<FolderWindow::FileOperationState::Task::ConflictPromptState> managedTreePrompt = TryGetConflictPromptCopy(&managedTreeTask);
+            AppendLog(std::format(L"Provider matrix: Managed directory Move exceeded its bound with {0} bridge-budget bytes in use; prompt={1}, "
+                                  L"status=0x{2:08X}, bucket={3}; cancelling.",
+                                  GetFileOpsBridgeBufferBudgetInUseForSelfTest(),
+                                  managedTreePrompt.has_value(),
+                                  managedTreePrompt.has_value() ? static_cast<unsigned long>(managedTreePrompt->status) : 0ul,
+                                  managedTreePrompt.has_value() ? static_cast<unsigned int>(managedTreePrompt->bucket) : 0u));
             managedTreeTask.RequestCancel();
         }
         managedTreeWorker.join();
-        AppendLog(std::format(L"Provider matrix: Managed directory Move fixture returned 0x{:08X}.",
-                              static_cast<unsigned long>(managedTreeHr)));
+        AppendLog(std::format(L"Provider matrix: Managed directory Move fixture returned 0x{:08X}.", static_cast<unsigned long>(managedTreeHr)));
         std::string managedTreeDestinationText;
         const std::filesystem::path managedTreeDestinationChild = managedTreeDestination / L"nested" / L"child.bin";
         if (! require(managedTreeHr == S_OK && ! std::filesystem::exists(managedTreeSource, rejectedRouteEc) &&
@@ -3883,8 +3683,7 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
         if (! require(! CanSameFileSystemOperation(state.fsDummy, L"/", FILESYSTEM_DELETE, kPluginIdDummy) &&
-                          ! CanSameFileSystemOperation(
-                              state.fsDummy, L"/", FILESYSTEM_DELETE, kPluginIdDummy, FILESYSTEM_FLAG_USE_RECYCLE_BIN) &&
+                          ! CanSameFileSystemOperation(state.fsDummy, L"/", FILESYSTEM_DELETE, kPluginIdDummy, FILESYSTEM_FLAG_USE_RECYCLE_BIN) &&
                           ! CanSameFileSystemOperation(state.fsDummy, L"/", FILESYSTEM_RENAME, kPluginIdDummy),
                       L"FileSystemDummy host admission should reject Permanent Delete, Recycle, and Rename before task creation."))
         {
@@ -3908,22 +3707,13 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
         FileSystemOptions dummyNativeOptions{};
-        dummyNativeOptions.sizeBytes = sizeof(FileSystemOptions);
-        dummyNativeOptions.moveMode  = FILESYSTEM_MOVE_NATIVE_ONLY;
-        const HRESULT dummyNativeSingleHr = state.fsDummy->MoveItem(L"/native-mode-source/single.txt",
-                                                                    L"/native-mode-destination/single.txt",
-                                                                    FILESYSTEM_FLAG_NONE,
-                                                                    &dummyNativeOptions,
-                                                                    nullptr,
-                                                                    nullptr);
+        dummyNativeOptions.sizeBytes      = sizeof(FileSystemOptions);
+        dummyNativeOptions.moveMode       = FILESYSTEM_MOVE_NATIVE_ONLY;
+        const HRESULT dummyNativeSingleHr = state.fsDummy->MoveItem(
+            L"/native-mode-source/single.txt", L"/native-mode-destination/single.txt", FILESYSTEM_FLAG_NONE, &dummyNativeOptions, nullptr, nullptr);
         const wchar_t* dummyBatchSources[] = {L"/native-mode-source/batch.txt"};
-        const HRESULT dummyNativeBatchHr = state.fsDummy->MoveItems(dummyBatchSources,
-                                                                    1u,
-                                                                    L"/native-mode-destination",
-                                                                    FILESYSTEM_FLAG_NONE,
-                                                                    &dummyNativeOptions,
-                                                                    nullptr,
-                                                                    nullptr);
+        const HRESULT dummyNativeBatchHr =
+            state.fsDummy->MoveItems(dummyBatchSources, 1u, L"/native-mode-destination", FILESYSTEM_FLAG_NONE, &dummyNativeOptions, nullptr, nullptr);
         std::string dummySingleText;
         std::string dummyBatchText;
         std::string dummyRetainedText;
@@ -3937,29 +3727,19 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             return true;
         }
         FileSystemOptions dummyInvalidMoveOptions = dummyNativeOptions;
-        dummyInvalidMoveOptions.moveMode = static_cast<FileSystemMoveMode>(2u);
-        const HRESULT dummyInvalidSingleHr = state.fsDummy->MoveItem(L"/missing",
-                                                                     L"/native-mode-destination/missing",
-                                                                     FILESYSTEM_FLAG_NONE,
-                                                                     &dummyInvalidMoveOptions,
-                                                                     nullptr,
-                                                                     nullptr);
-        const HRESULT dummyInvalidBatchHr = state.fsDummy->MoveItems(dummyBatchSources,
-                                                                     1u,
-                                                                     L"/native-mode-destination",
-                                                                     FILESYSTEM_FLAG_NONE,
-                                                                     &dummyInvalidMoveOptions,
-                                                                     nullptr,
-                                                                     nullptr);
+        dummyInvalidMoveOptions.moveMode          = static_cast<FileSystemMoveMode>(2u);
+        const HRESULT dummyInvalidSingleHr =
+            state.fsDummy->MoveItem(L"/missing", L"/native-mode-destination/missing", FILESYSTEM_FLAG_NONE, &dummyInvalidMoveOptions, nullptr, nullptr);
+        const HRESULT dummyInvalidBatchHr =
+            state.fsDummy->MoveItems(dummyBatchSources, 1u, L"/native-mode-destination", FILESYSTEM_FLAG_NONE, &dummyInvalidMoveOptions, nullptr, nullptr);
         if (! require(dummyInvalidSingleHr == E_INVALIDARG && dummyInvalidBatchHr == E_INVALIDARG,
                       L"Dummy MoveItem/MoveItems should reject an unknown moveMode before mutation."))
         {
             return true;
         }
 
-        if (! require(! sevenZipCaps.copyOperation && ! sevenZipCaps.moveOperation && ! sevenZipCaps.nativeMoveOperation &&
-                          ! sevenZipCaps.renameOperation && ! sevenZipCaps.deleteOperation && sevenZipCaps.properties && sevenZipCaps.read &&
-                          ! sevenZipCaps.write,
+        if (! require(! sevenZipCaps.copyOperation && ! sevenZipCaps.moveOperation && ! sevenZipCaps.nativeMoveOperation && ! sevenZipCaps.renameOperation &&
+                          ! sevenZipCaps.deleteOperation && sevenZipCaps.properties && sevenZipCaps.read && ! sevenZipCaps.write,
                       L"FileSystem7z should advertise read/properties only for same-provider operations.") ||
             ! require(! CanSameFileSystemOperation(state.fs7z, L"/missing.txt", FILESYSTEM_RENAME, kPluginId7z),
                       L"Host admission should reject a rename:false provider before task publication.") ||
@@ -4089,10 +3869,8 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             }
             if (caps.nativeMoveOperation != expectNativeMove)
             {
-                Fail(std::format(L"{} native Move capability mismatch: declared {} expected {}.",
-                                 providerName,
-                                 caps.nativeMoveOperation ? 1 : 0,
-                                 expectNativeMove ? 1 : 0));
+                Fail(std::format(
+                    L"{} native Move capability mismatch: declared {} expected {}.", providerName, caps.nativeMoveOperation ? 1 : 0, expectNativeMove ? 1 : 0));
                 return false;
             }
             if (expectSameProviderCopy != nullptr && caps.copyOperation != *expectSameProviderCopy)
@@ -4115,11 +3893,9 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                                  expectRecycle ? 1 : 0));
                 return false;
             }
-            const bool permanentDeleteAdmitted =
-                CanSameFileSystemOperation(fs, L"/", FILESYSTEM_DELETE, pluginId, FILESYSTEM_FLAG_NONE);
-            const bool recycleAdmitted =
-                CanSameFileSystemOperation(fs, L"/", FILESYSTEM_DELETE, pluginId, FILESYSTEM_FLAG_USE_RECYCLE_BIN);
-            const bool renameAdmitted = CanSameFileSystemOperation(fs, L"/", FILESYSTEM_RENAME, pluginId);
+            const bool permanentDeleteAdmitted          = CanSameFileSystemOperation(fs, L"/", FILESYSTEM_DELETE, pluginId, FILESYSTEM_FLAG_NONE);
+            const bool recycleAdmitted                  = CanSameFileSystemOperation(fs, L"/", FILESYSTEM_DELETE, pluginId, FILESYSTEM_FLAG_USE_RECYCLE_BIN);
+            const bool renameAdmitted                   = CanSameFileSystemOperation(fs, L"/", FILESYSTEM_RENAME, pluginId);
             const bool expectedPermanentDeleteAdmission = expectMutationAdmission && expectDelete;
             const bool expectedRecycleAdmission         = expectMutationAdmission && expectRecycle;
             const bool expectedRenameAdmission          = expectMutationAdmission && expectRename;
@@ -4243,21 +4019,18 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
             // R0f-Curl: FTP/SFTP/SCP are full file-manager destinations (providerWatchdog route, same-provider
             // Copy/Move/Rename/Delete, Copy export and import). Move export/import stay denied until the
             // source can be deleted conditionally; Recycle never exists on these protocols.
-            if (! caps.copyOperation || ! caps.moveOperation || ! caps.nativeMoveOperation ||
-                ! caps.renameOperation || ! caps.deleteOperation || caps.recycleOperation || ! caps.read ||
-                ! caps.write ||
-                ! caps.exportCopyWildcard || caps.exportMoveWildcard || ! caps.importCopyWildcard || caps.importMoveWildcard ||
-                ! requirePathIdentity(caps, providerName, true, L"ordinalCaseSensitive", L'/', L"/", L"notApplicable"))
+            if (! caps.copyOperation || ! caps.moveOperation || ! caps.nativeMoveOperation || ! caps.renameOperation || ! caps.deleteOperation ||
+                caps.recycleOperation || ! caps.read || ! caps.write || ! caps.exportCopyWildcard || caps.exportMoveWildcard || ! caps.importCopyWildcard ||
+                caps.importMoveWildcard || ! requirePathIdentity(caps, providerName, true, L"ordinalCaseSensitive", L'/', L"/", L"notApplicable"))
             {
-                Fail(std::format(L"{} must advertise same-provider Copy/Move/Rename/Delete plus Copy export and import, and deny Move export/import and Recycle (R0f-Curl).",
-                                 providerName));
+                Fail(std::format(
+                    L"{} must advertise same-provider Copy/Move/Rename/Delete plus Copy export and import, and deny Move export/import and Recycle (R0f-Curl).",
+                    providerName));
                 return false;
             }
 
-            if (! CanSameFileSystemOperation(fs, L"/", FILESYSTEM_COPY, pluginId) ||
-                ! CanSameFileSystemOperation(fs, L"/", FILESYSTEM_MOVE, pluginId) ||
-                ! CanSameFileSystemOperation(fs, L"/", FILESYSTEM_RENAME, pluginId) ||
-                ! CanSameFileSystemOperation(fs, L"/", FILESYSTEM_DELETE, pluginId))
+            if (! CanSameFileSystemOperation(fs, L"/", FILESYSTEM_COPY, pluginId) || ! CanSameFileSystemOperation(fs, L"/", FILESYSTEM_MOVE, pluginId) ||
+                ! CanSameFileSystemOperation(fs, L"/", FILESYSTEM_RENAME, pluginId) || ! CanSameFileSystemOperation(fs, L"/", FILESYSTEM_DELETE, pluginId))
             {
                 Fail(std::format(L"{} host planning must admit all four capability-v2 operations on the providerWatchdog route (R0f-Curl).", providerName));
                 return false;
@@ -4291,26 +4064,31 @@ case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
                 return false;
             }
 
-            const bool copyIn  = CanCrossFileSystemCopyMoveForSelfTest(state.fsLocal, state.tempRoot.native(), kPluginIdLocal, fs, L"/", pluginId, FILESYSTEM_COPY);
-            const bool moveIn  = CanCrossFileSystemCopyMoveForSelfTest(state.fsLocal, state.tempRoot.native(), kPluginIdLocal, fs, L"/", pluginId, FILESYSTEM_MOVE);
-            const bool copyOut = CanCrossFileSystemCopyMoveForSelfTest(fs, L"/", pluginId, state.fsLocal, state.tempRoot.native(), kPluginIdLocal, FILESYSTEM_COPY);
-            const bool moveOut = CanCrossFileSystemCopyMoveForSelfTest(fs, L"/", pluginId, state.fsLocal, state.tempRoot.native(), kPluginIdLocal, FILESYSTEM_MOVE);
+            const bool copyIn =
+                CanCrossFileSystemCopyMoveForSelfTest(state.fsLocal, state.tempRoot.native(), kPluginIdLocal, fs, L"/", pluginId, FILESYSTEM_COPY);
+            const bool moveIn =
+                CanCrossFileSystemCopyMoveForSelfTest(state.fsLocal, state.tempRoot.native(), kPluginIdLocal, fs, L"/", pluginId, FILESYSTEM_MOVE);
+            const bool copyOut =
+                CanCrossFileSystemCopyMoveForSelfTest(fs, L"/", pluginId, state.fsLocal, state.tempRoot.native(), kPluginIdLocal, FILESYSTEM_COPY);
+            const bool moveOut =
+                CanCrossFileSystemCopyMoveForSelfTest(fs, L"/", pluginId, state.fsLocal, state.tempRoot.native(), kPluginIdLocal, FILESYSTEM_MOVE);
             // Cross-provider planning admits Move wherever it admits Copy; execution keeps the Move
             // source whenever the destination cannot prove publication (typed Move import/export
             // lists stay empty for these routes, see the caps checks above).
             if (! copyIn || ! moveIn || ! copyOut || ! moveOut)
             {
-                Fail(std::format(
-                    L"{} host planning must admit cross-provider Copy and Move in both directions on the providerWatchdog route (R0f-Curl): copyIn={} moveIn={} copyOut={} moveOut={}.",
-                    providerName,
-                    copyIn,
-                    moveIn,
-                    copyOut,
-                    moveOut));
+                Fail(std::format(L"{} host planning must admit cross-provider Copy and Move in both directions on the providerWatchdog route (R0f-Curl): "
+                                 L"copyIn={} moveIn={} copyOut={} moveOut={}.",
+                                 providerName,
+                                 copyIn,
+                                 moveIn,
+                                 copyOut,
+                                 moveOut));
                 return false;
             }
 
-            AppendLog(std::format(L"Provider conformance: {} is a providerWatchdog full destination (Copy both ways, same-provider Copy/Move/Rename/Delete); Move export/import stay denied.",
+            AppendLog(std::format(L"Provider conformance: {} is a providerWatchdog full destination (Copy both ways, same-provider Copy/Move/Rename/Delete); "
+                                  L"Move export/import stay denied.",
                                   providerName));
             return true;
         };
@@ -4487,21 +4265,20 @@ case SelfTestState::Step::R4A19_DiscoveryMeasurementFacts:
         return true;
     }
 
-    constexpr unsigned int kDirectoryCount = 16u;
-    constexpr unsigned int kFilesPerDirectory = 8u;
-    constexpr size_t kFileBytes = 256u * 1024u;
-    constexpr unsigned int kDeleteFileCount = 1'024u;
-    constexpr unsigned int kDeleteDirectoryCount = 128u;
+    constexpr unsigned int kDirectoryCount          = 16u;
+    constexpr unsigned int kFilesPerDirectory       = 8u;
+    constexpr size_t kFileBytes                     = 256u * 1024u;
+    constexpr unsigned int kDeleteFileCount         = 1'024u;
+    constexpr unsigned int kDeleteDirectoryCount    = 128u;
     constexpr unsigned int kDeleteFilesPerDirectory = kDeleteFileCount / kDeleteDirectoryCount;
-    constexpr size_t kDeleteFileBytes = 1u * 1024u;
-    constexpr uint64_t kExpectedBytes =
-        static_cast<uint64_t>(kDirectoryCount) * kFilesPerDirectory * kFileBytes;
-    constexpr uint64_t kExpectedDeleteBytes = static_cast<uint64_t>(kDeleteFileCount) * kDeleteFileBytes;
-    const std::filesystem::path sourceRoot = state.tempRoot / L"r4-a19-measurement-src";
-    const std::filesystem::path destinationRoot = state.tempRoot / L"r4-a19-measurement-dst";
-    const std::filesystem::path copiedRoot = destinationRoot / sourceRoot.filename();
-    const std::filesystem::path deleteRoot = state.tempRoot / L"r4-a19-small-delete";
-    const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
+    constexpr size_t kDeleteFileBytes               = 1u * 1024u;
+    constexpr uint64_t kExpectedBytes               = static_cast<uint64_t>(kDirectoryCount) * kFilesPerDirectory * kFileBytes;
+    constexpr uint64_t kExpectedDeleteBytes         = static_cast<uint64_t>(kDeleteFileCount) * kDeleteFileBytes;
+    const std::filesystem::path sourceRoot          = state.tempRoot / L"r4-a19-measurement-src";
+    const std::filesystem::path destinationRoot     = state.tempRoot / L"r4-a19-measurement-dst";
+    const std::filesystem::path copiedRoot          = destinationRoot / sourceRoot.filename();
+    const std::filesystem::path deleteRoot          = state.tempRoot / L"r4-a19-small-delete";
+    const FileSystemFlags flags                     = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
 
     if (state.stepState == 0)
     {
@@ -4537,15 +4314,8 @@ case SelfTestState::Step::R4A19_DiscoveryMeasurementFacts:
             return true;
         }
 
-        state.taskA = StartFileOperationAndGetId(state.fileOps,
-                                                 FILESYSTEM_COPY,
-                                                 FolderWindow::Pane::Left,
-                                                 FolderWindow::Pane::Right,
-                                                 state.fsLocal,
-                                                 {sourceRoot},
-                                                 destinationRoot,
-                                                 flags,
-                                                 false);
+        state.taskA = StartFileOperationAndGetId(
+            state.fileOps, FILESYSTEM_COPY, FolderWindow::Pane::Left, FolderWindow::Pane::Right, state.fsLocal, {sourceRoot}, destinationRoot, flags, false);
         if (! state.taskA.has_value())
         {
             Fail(L"Failed to start the R4-A19 discovery measurement copy.");
@@ -4553,7 +4323,7 @@ case SelfTestState::Step::R4A19_DiscoveryMeasurementFacts:
         }
 
         state.r4A19ScenarioStartTick = GetTickCount64();
-        state.stepState = 1;
+        state.stepState              = 1;
         return false;
     }
 
@@ -4564,14 +4334,11 @@ case SelfTestState::Step::R4A19_DiscoveryMeasurementFacts:
     }
 
     const CompletedTaskInfo& completion = completionIt->second;
-    const ULONGLONG durationMs = completion.completionTick >= state.r4A19ScenarioStartTick
-                                    ? completion.completionTick - state.r4A19ScenarioStartTick
-                                    : 0u;
+    const ULONGLONG durationMs = completion.completionTick >= state.r4A19ScenarioStartTick ? completion.completionTick - state.r4A19ScenarioStartTick : 0u;
     if (state.stepState == 1 &&
         (FAILED(completion.hr) || ! completion.discoveryClosed || ! completion.firstMutationBeforeDiscoveryClosed ||
          completion.discoveredTotalBytes != kExpectedBytes || completion.discoveredFiles != kDirectoryCount * kFilesPerDirectory ||
-         completion.discoveryMaxQueueDepth > 256u || durationMs >= 30'000u ||
-         CountFilesRecursive(copiedRoot) != kDirectoryCount * kFilesPerDirectory))
+         completion.discoveryMaxQueueDepth > 256u || durationMs >= 30'000u || CountFilesRecursive(copiedRoot) != kDirectoryCount * kFilesPerDirectory))
     {
         Fail(std::format(L"R4-A19 Local Copy control failed: hr=0x{:08X} closed={} mutationBeforeClose={} discoveredBytes={}/{} "
                          L"discoveredFiles={}/{} copiedFiles={} queueMax={} durationMs={}.",
@@ -4596,10 +4363,8 @@ case SelfTestState::Step::R4A19_DiscoveryMeasurementFacts:
         return true;
     }
 
-    if (state.stepState == 1 &&
-        (completion.discoveryFirstMutationUs == 0u || completion.discoveryFirstMutationUs > 1'000'000u ||
-        completion.discoveryBytesCompletedWhileOpen == 0u || completion.discoveryMutationsCompletedWhileOpen == 0u)
-       )
+    if (state.stepState == 1 && (completion.discoveryFirstMutationUs == 0u || completion.discoveryFirstMutationUs > 1'000'000u ||
+                                 completion.discoveryBytesCompletedWhileOpen == 0u || completion.discoveryMutationsCompletedWhileOpen == 0u))
     {
         Fail(std::format(L"R4-A19 discovery facts are invalid: firstMutationUs={} bytesWhileOpen={} mutationsWhileOpen={}.",
                          completion.discoveryFirstMutationUs,
@@ -4640,31 +4405,23 @@ case SelfTestState::Step::R4A19_DiscoveryMeasurementFacts:
             }
         }
 
-        state.taskA = StartFileOperationAndGetId(state.fileOps,
-                                                 FILESYSTEM_DELETE,
-                                                 FolderWindow::Pane::Left,
-                                                 std::nullopt,
-                                                 state.fsLocal,
-                                                 {deleteRoot},
-                                                 {},
-                                                 flags,
-                                                 false);
+        state.taskA =
+            StartFileOperationAndGetId(state.fileOps, FILESYSTEM_DELETE, FolderWindow::Pane::Left, std::nullopt, state.fsLocal, {deleteRoot}, {}, flags, false);
         if (! state.taskA.has_value())
         {
             Fail(L"Failed to start the R4-A19 small-file Delete task.");
             return true;
         }
         state.r4A19ScenarioStartTick = GetTickCount64();
-        state.stepState = 2;
+        state.stepState              = 2;
         return false;
     }
 
-    if (FAILED(completion.hr) || ! completion.discoveryClosed || ! completion.firstMutationBeforeDiscoveryClosed ||
-        std::filesystem::exists(deleteRoot) || completion.discoveredTotalBytes != kExpectedDeleteBytes ||
-        completion.discoveredFiles != kDeleteFileCount || completion.discoveryMaxQueueDepth > 256u ||
+    if (FAILED(completion.hr) || ! completion.discoveryClosed || ! completion.firstMutationBeforeDiscoveryClosed || std::filesystem::exists(deleteRoot) ||
+        completion.discoveredTotalBytes != kExpectedDeleteBytes || completion.discoveredFiles != kDeleteFileCount || completion.discoveryMaxQueueDepth > 256u ||
         completion.discoveryFirstMutationUs == 0u || completion.discoveryFirstMutationUs > 1'000'000u ||
-        completion.discoveryBytesCompletedWhileOpen != kExpectedDeleteBytes ||
-        completion.discoveryMutationsCompletedWhileOpen != 1u || completion.progressCallbackCount != 0u || durationMs >= 30'000u)
+        completion.discoveryBytesCompletedWhileOpen != kExpectedDeleteBytes || completion.discoveryMutationsCompletedWhileOpen != 1u ||
+        completion.progressCallbackCount != 0u || durationMs >= 30'000u)
     {
         Fail(std::format(L"R4-A19 Local Delete control failed: hr=0x{:08X} closed={} mutationBeforeClose={} sourceExists={} "
                          L"discoveredBytes={}/{} discoveredFiles={}/{} firstMutationUs={} bytesWhileOpen={} mutationsWhileOpen={} "
@@ -4704,31 +4461,25 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
         return true;
     }
 
-    constexpr std::wstring_view kDummySourceRoot = L"/r4-a19-dummy-source";
-    constexpr std::wstring_view kDummyDestinationRoot = L"/r4-a19-dummy-destination";
-    constexpr unsigned int kDummyDirectoryCount = 8u;
-    constexpr unsigned int kDummyFilesPerDirectory = 8u;
-    constexpr size_t kDummyFileBytes = 8u * 1024u;
-    constexpr uint64_t kExpectedDummyBytes =
-        static_cast<uint64_t>(kDummyDirectoryCount) * kDummyFilesPerDirectory * kDummyFileBytes;
-    constexpr std::wstring_view kMtpSourceRoot =
-        L"/Fake Phone/Internal Storage/DCIM/Camera/r4-a19-source";
-    constexpr std::wstring_view kMtpPhoto =
-        L"/Fake Phone/Internal Storage/DCIM/Camera/r4-a19-source/file-00.bin";
-    constexpr size_t kExpectedMtpFiles = 8u;
-    constexpr size_t kMtpFileBytes = 64u * 1024u;
-    constexpr uint64_t kExpectedMtpBytes = kExpectedMtpFiles * kMtpFileBytes;
-    const std::filesystem::path mtpDestinationRoot = state.tempRoot / L"r4-a19-mtp-destination";
+    constexpr std::wstring_view kDummySourceRoot         = L"/r4-a19-dummy-source";
+    constexpr std::wstring_view kDummyDestinationRoot    = L"/r4-a19-dummy-destination";
+    constexpr unsigned int kDummyDirectoryCount          = 8u;
+    constexpr unsigned int kDummyFilesPerDirectory       = 8u;
+    constexpr size_t kDummyFileBytes                     = 8u * 1024u;
+    constexpr uint64_t kExpectedDummyBytes               = static_cast<uint64_t>(kDummyDirectoryCount) * kDummyFilesPerDirectory * kDummyFileBytes;
+    constexpr std::wstring_view kMtpSourceRoot           = L"/Fake Phone/Internal Storage/DCIM/Camera/r4-a19-source";
+    constexpr std::wstring_view kMtpPhoto                = L"/Fake Phone/Internal Storage/DCIM/Camera/r4-a19-source/file-00.bin";
+    constexpr size_t kExpectedMtpFiles                   = 8u;
+    constexpr size_t kMtpFileBytes                       = 64u * 1024u;
+    constexpr uint64_t kExpectedMtpBytes                 = kExpectedMtpFiles * kMtpFileBytes;
+    const std::filesystem::path mtpDestinationRoot       = state.tempRoot / L"r4-a19-mtp-destination";
     const std::filesystem::path mtpCancelDestinationRoot = state.tempRoot / L"r4-a19-mtp-cancel-destination";
-    const FileSystemFlags recursiveFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
+    const FileSystemFlags recursiveFlags                 = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
 
     const auto bridgeResourcesAreBounded = [](const CompletedTaskInfo& info) noexcept
     {
-        return info.discoveryMaxQueueDepth <= 256u &&
-               info.bridgeAdmissionMaxQueueDepth <= 256u &&
-               info.bridgeTraversalMaxRetainedEntries <= 4'096u &&
-               info.bridgeTraversalMaxQueuedPathBytes <= 16u * 1024u * 1024u &&
-               info.bridgeTraversalMaxMetadataBytes <= 8u * 1024u * 1024u &&
+        return info.discoveryMaxQueueDepth <= 256u && info.bridgeAdmissionMaxQueueDepth <= 256u && info.bridgeTraversalMaxRetainedEntries <= 4'096u &&
+               info.bridgeTraversalMaxQueuedPathBytes <= 16u * 1024u * 1024u && info.bridgeTraversalMaxMetadataBytes <= 8u * 1024u * 1024u &&
                info.bridgeTraversalLimitHitCount == 0u;
     };
 
@@ -4742,12 +4493,10 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
             return true;
         }
 
-        const FileSystemFlags cleanupFlags =
-            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+        const FileSystemFlags cleanupFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
         static_cast<void>(state.fsDummy->DeleteItem(std::wstring(kDummySourceRoot).c_str(), cleanupFlags, nullptr, nullptr, nullptr));
         static_cast<void>(state.fsDummy->DeleteItem(std::wstring(kDummyDestinationRoot).c_str(), cleanupFlags, nullptr, nullptr, nullptr));
-        if (! EnsureDummyFolderExists(state.fsDummy.get(), kDummySourceRoot) ||
-            ! EnsureDummyFolderExists(state.fsDummy.get(), kDummyDestinationRoot))
+        if (! EnsureDummyFolderExists(state.fsDummy.get(), kDummySourceRoot) || ! EnsureDummyFolderExists(state.fsDummy.get(), kDummyDestinationRoot))
         {
             Fail(L"R4-A19 failed to create the Dummy control roots.");
             return true;
@@ -4756,8 +4505,7 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
         const std::string payload(kDummyFileBytes, static_cast<char>(0x5a));
         for (unsigned int directoryIndex = 0u; directoryIndex < kDummyDirectoryCount; ++directoryIndex)
         {
-            const std::wstring directory =
-                std::wstring(kDummySourceRoot) + std::format(L"/dir-{:02}", directoryIndex);
+            const std::wstring directory = std::wstring(kDummySourceRoot) + std::format(L"/dir-{:02}", directoryIndex);
             if (! EnsureDummyFolderExists(state.fsDummy.get(), directory))
             {
                 Fail(L"R4-A19 failed to create a Dummy control directory.");
@@ -4799,7 +4547,7 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
             return true;
         }
         state.r4A19ScenarioStartTick = nowTick;
-        state.stepState = 1u;
+        state.stepState              = 1u;
         return false;
     }
 
@@ -4813,9 +4561,7 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
 
         const CompletedTaskInfo& info = completed->second;
         const uint64_t durationUs =
-            info.completionTick >= state.r4A19ScenarioStartTick
-                ? static_cast<uint64_t>(info.completionTick - state.r4A19ScenarioStartTick) * 1000u
-                : 0u;
+            info.completionTick >= state.r4A19ScenarioStartTick ? static_cast<uint64_t>(info.completionTick - state.r4A19ScenarioStartTick) * 1000u : 0u;
         wil::com_ptr<IFileSystemIO> dummyIo;
         if (FAILED(state.fsDummy->QueryInterface(IID_PPV_ARGS(dummyIo.addressof()))) || ! dummyIo)
         {
@@ -4829,11 +4575,8 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
         {
             for (unsigned int fileIndex = 0u; fileIndex < kDummyFilesPerDirectory; ++fileIndex)
             {
-                const std::filesystem::path file =
-                    std::filesystem::path(kDummyDestinationRoot) /
-                    std::filesystem::path(kDummySourceRoot).filename() /
-                    std::format(L"dir-{:02}", directoryIndex) /
-                    std::format(L"file-{:02}.bin", fileIndex);
+                const std::filesystem::path file = std::filesystem::path(kDummyDestinationRoot) / std::filesystem::path(kDummySourceRoot).filename() /
+                                                   std::format(L"dir-{:02}", directoryIndex) / std::format(L"file-{:02}.bin", fileIndex);
                 std::string actual;
                 if (! ReadFileTextFsIo(dummyIo, file, actual) || actual != expected)
                 {
@@ -4843,13 +4586,9 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
             }
         }
 
-        if (FAILED(info.hr) || ! bytesMatch || ! info.discoveryClosed ||
-            ! info.firstMutationBeforeDiscoveryClosed ||
-            info.discoveryFirstMutationUs == 0u || info.discoveryFirstMutationUs > 1'000'000u ||
-            info.discoveryBytesCompletedWhileOpen == 0u ||
-            info.discoveryMutationsCompletedWhileOpen == 0u ||
-            info.discoveryStarvationCount != 0u || info.discoveryMaxQueueDepth > 256u ||
-            durationUs >= 30'000'000u)
+        if (FAILED(info.hr) || ! bytesMatch || ! info.discoveryClosed || ! info.firstMutationBeforeDiscoveryClosed || info.discoveryFirstMutationUs == 0u ||
+            info.discoveryFirstMutationUs > 1'000'000u || info.discoveryBytesCompletedWhileOpen == 0u || info.discoveryMutationsCompletedWhileOpen == 0u ||
+            info.discoveryStarvationCount != 0u || info.discoveryMaxQueueDepth > 256u || durationUs >= 30'000'000u)
         {
             Fail(std::format(L"R4-A19 Dummy control failed: hr=0x{:08X} bytesMatch={} closed={} beforeClose={} "
                              L"discoveredBytes={} expectedPayloadBytes={} files={} expectedPayloadFiles={} firstMutationUs={} bytesWhileOpen={} "
@@ -4879,12 +4618,10 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
                           info.hr);
         AppendLog(L"R4-A19 provider control: Dummy complete; loading fake MTP.");
 
-        using CreateMtpForSelfTestFunc =
-            HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const char*, void**) noexcept;
+        using CreateMtpForSelfTestFunc = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const char*, void**) noexcept;
         wil::unique_hmodule module;
         FARPROC createAddress = nullptr;
-        HRESULT hr = SelfTest::LoadMtpPluginSelfTestExport(
-            "RedSalamanderMtpCreateForSelfTest", module, createAddress);
+        HRESULT hr            = SelfTest::LoadMtpPluginSelfTestExport("RedSalamanderMtpCreateForSelfTest", module, createAddress);
         if (FAILED(hr) || createAddress == nullptr)
         {
             Fail(std::format(L"R4-A19 fake-MTP factory is unavailable: 0x{:08X}.", static_cast<unsigned long>(hr)));
@@ -4899,15 +4636,10 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
         FactoryOptions factoryOptions{};
         factoryOptions.debugLevel = DEBUG_LEVEL_NONE;
         wil::com_ptr<IFileSystem> mtp;
-        hr = createMtp(__uuidof(IFileSystem),
-                       &factoryOptions,
-                       GetHostServices(),
-                       R"json({"operationDelayMs":25})json",
-                       mtp.put_void());
+        hr = createMtp(__uuidof(IFileSystem), &factoryOptions, GetHostServices(), R"json({"operationDelayMs":25})json", mtp.put_void());
         if (FAILED(hr) || ! mtp)
         {
-            Fail(std::format(L"R4-A19 failed to create the serialized fake-MTP instance: 0x{:08X}.",
-                             static_cast<unsigned long>(hr)));
+            Fail(std::format(L"R4-A19 failed to create the serialized fake-MTP instance: 0x{:08X}.", static_cast<unsigned long>(hr)));
             return true;
         }
         AppendLog(L"R4-A19 provider control: fake-MTP object created.");
@@ -4919,8 +4651,7 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
         AppendLog(std::format(L"R4-A19 provider control: fake-MTP IInformations QI returned 0x{:08X}.", static_cast<unsigned long>(hr)));
         if (SUCCEEDED(hr))
         {
-            hr = mtpInfo->SetConfiguration(
-                R"json({"readOnly":false,"commandTimeoutMs":5000})json");
+            hr = mtpInfo->SetConfiguration(R"json({"readOnly":false,"commandTimeoutMs":5000})json");
             AppendLog(std::format(L"R4-A19 provider control: fake-MTP configuration returned 0x{:08X}.", static_cast<unsigned long>(hr)));
         }
         if (SUCCEEDED(hr))
@@ -4942,8 +4673,7 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
         if (SUCCEEDED(hr))
         {
             hr = mtp->QueryInterface(IID_PPV_ARGS(mtpDirectoryOperations.addressof()));
-            AppendLog(std::format(L"R4-A19 provider control: fake-MTP directory-operations QI returned 0x{:08X}.",
-                                  static_cast<unsigned long>(hr)));
+            AppendLog(std::format(L"R4-A19 provider control: fake-MTP directory-operations QI returned 0x{:08X}.", static_cast<unsigned long>(hr)));
         }
         if (FAILED(hr) || ! mtpIo || ! mtpDirectoryOperations)
         {
@@ -4955,15 +4685,13 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
         hr = mtpDirectoryOperations->CreateDirectory(mtpSourceRoot.c_str());
         if (FAILED(hr))
         {
-            Fail(std::format(L"R4-A19 failed to create the ordinary-name fake-MTP source directory: 0x{:08X}.",
-                             static_cast<unsigned long>(hr)));
+            Fail(std::format(L"R4-A19 failed to create the ordinary-name fake-MTP source directory: 0x{:08X}.", static_cast<unsigned long>(hr)));
             return true;
         }
         const std::string mtpPayload(kMtpFileBytes, static_cast<char>(0x4d));
         for (size_t fileIndex = 0u; fileIndex < kExpectedMtpFiles; ++fileIndex)
         {
-            const std::filesystem::path filePath =
-                std::filesystem::path(kMtpSourceRoot) / std::format(L"file-{:02}.bin", fileIndex);
+            const std::filesystem::path filePath = std::filesystem::path(kMtpSourceRoot) / std::format(L"file-{:02}.bin", fileIndex);
             if (! WriteFileTextFsIo(mtpIo, filePath, mtpPayload))
             {
                 Fail(std::format(L"R4-A19 failed to seed ordinary fake-MTP file {:02}.", fileIndex));
@@ -4972,8 +4700,8 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
         }
 
         state.r4A19MtpModule = std::move(module);
-        state.r4A19Mtp = std::move(mtp);
-        state.r4A19MtpIo = std::move(mtpIo);
+        state.r4A19Mtp       = std::move(mtp);
+        state.r4A19MtpIo     = std::move(mtpIo);
         if (! RecreateEmptyDirectory(mtpDestinationRoot))
         {
             Fail(L"R4-A19 failed to reset the fake-MTP destination.");
@@ -5000,7 +4728,7 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
             return true;
         }
         state.r4A19ScenarioStartTick = GetTickCount64();
-        state.stepState = 2u;
+        state.stepState              = 2u;
         return false;
     }
 
@@ -5014,30 +4742,22 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
 
         const CompletedTaskInfo& info = completed->second;
         const uint64_t durationUs =
-            info.completionTick >= state.r4A19ScenarioStartTick
-                ? static_cast<uint64_t>(info.completionTick - state.r4A19ScenarioStartTick) * 1000u
-                : 0u;
+            info.completionTick >= state.r4A19ScenarioStartTick ? static_cast<uint64_t>(info.completionTick - state.r4A19ScenarioStartTick) * 1000u : 0u;
         const std::filesystem::path copiedCamera = mtpDestinationRoot / L"r4-a19-source";
         wil::com_ptr<IFileSystemIO> localIo;
-        const HRESULT localIoHr = state.fsLocal
-            ? state.fsLocal->QueryInterface(IID_PPV_ARGS(localIo.addressof()))
-            : E_POINTER;
+        const HRESULT localIoHr = state.fsLocal ? state.fsLocal->QueryInterface(IID_PPV_ARGS(localIo.addressof())) : E_POINTER;
         const std::string expectedMtpPayload(kMtpFileBytes, static_cast<char>(0x4d));
         bool mtpBytesMatch = SUCCEEDED(localIoHr) && localIo;
         for (size_t fileIndex = 0u; fileIndex < kExpectedMtpFiles && mtpBytesMatch; ++fileIndex)
         {
             std::string actual;
             const std::filesystem::path filePath = copiedCamera / std::format(L"file-{:02}.bin", fileIndex);
-            mtpBytesMatch = ReadFileTextFsIo(localIo, filePath, actual) && actual == expectedMtpPayload;
+            mtpBytesMatch                        = ReadFileTextFsIo(localIo, filePath, actual) && actual == expectedMtpPayload;
         }
-        if (FAILED(info.hr) || CountFilesRecursive(copiedCamera) != kExpectedMtpFiles ||
-            ! mtpBytesMatch || info.discoveredTotalBytes != kExpectedMtpBytes ||
-            ! info.discoveryClosed || ! info.firstMutationBeforeDiscoveryClosed ||
-            info.discoveredFiles != kExpectedMtpFiles ||
-            info.discoveryFirstMutationUs == 0u || info.discoveryFirstMutationUs > 1'000'000u ||
-            info.discoveryBytesCompletedWhileOpen == 0u ||
-            info.discoveryMutationsCompletedWhileOpen == 0u ||
-            info.discoveryStarvationCount != 0u || ! bridgeResourcesAreBounded(info) ||
+        if (FAILED(info.hr) || CountFilesRecursive(copiedCamera) != kExpectedMtpFiles || ! mtpBytesMatch || info.discoveredTotalBytes != kExpectedMtpBytes ||
+            ! info.discoveryClosed || ! info.firstMutationBeforeDiscoveryClosed || info.discoveredFiles != kExpectedMtpFiles ||
+            info.discoveryFirstMutationUs == 0u || info.discoveryFirstMutationUs > 1'000'000u || info.discoveryBytesCompletedWhileOpen == 0u ||
+            info.discoveryMutationsCompletedWhileOpen == 0u || info.discoveryStarvationCount != 0u || ! bridgeResourcesAreBounded(info) ||
             durationUs >= 30'000'000u)
         {
             Fail(std::format(L"R4-A19 fake-MTP control failed: hr=0x{:08X} copiedFiles={}/{} bytesMatch={} discoveredBytes={}/{} closed={} "
@@ -5104,9 +4824,7 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
 
     if (state.stepState == 3u)
     {
-        auto* task = state.fileOps && state.taskA.has_value()
-            ? state.fileOps->FindTask(state.taskA.value())
-            : nullptr;
+        auto* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
         if (task != nullptr)
         {
             uint64_t completedBytes = 0u;
@@ -5118,7 +4836,7 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
             {
                 task->RequestCancel();
                 state.markerTick = nowTick;
-                state.stepState = 4u;
+                state.stepState  = 4u;
                 return false;
             }
         }
@@ -5137,24 +4855,16 @@ case SelfTestState::Step::R4A19_DiscoveryProviderControls:
         return false;
     }
 
-    const CompletedTaskInfo& info = completed->second;
-    const uint64_t cancelUs =
-        info.completionTick >= state.markerTick
-            ? static_cast<uint64_t>(info.completionTick - state.markerTick) * 1000u
-            : 0u;
-    const HRESULT canceledHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    const CompletedTaskInfo& info    = completed->second;
+    const uint64_t cancelUs          = info.completionTick >= state.markerTick ? static_cast<uint64_t>(info.completionTick - state.markerTick) * 1000u : 0u;
+    const HRESULT canceledHr         = HRESULT_FROM_WIN32(ERROR_CANCELLED);
     const HRESULT operationAbortedHr = HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED);
-    const char* properties = nullptr;
-    const HRESULT propertiesHr = state.r4A19MtpIo
-        ? state.r4A19MtpIo->GetItemProperties(std::wstring(kMtpPhoto).c_str(), &properties)
-        : E_POINTER;
+    const char* properties           = nullptr;
+    const HRESULT propertiesHr       = state.r4A19MtpIo ? state.r4A19MtpIo->GetItemProperties(std::wstring(kMtpPhoto).c_str(), &properties) : E_POINTER;
     const std::optional<uint64_t> maxConcurrentBackendCalls =
-        SUCCEEDED(propertiesHr) && properties != nullptr
-            ? SelfTest::ExtractJsonUInt(properties, "maxConcurrentBackendCalls")
-            : std::nullopt;
-    if ((info.hr != canceledHr && info.hr != operationAbortedHr && info.hr != E_ABORT) || cancelUs > 500'000u ||
-        ! info.discoveryClosed || ! maxConcurrentBackendCalls.has_value() ||
-        maxConcurrentBackendCalls.value() != 1u || ! bridgeResourcesAreBounded(info))
+        SUCCEEDED(propertiesHr) && properties != nullptr ? SelfTest::ExtractJsonUInt(properties, "maxConcurrentBackendCalls") : std::nullopt;
+    if ((info.hr != canceledHr && info.hr != operationAbortedHr && info.hr != E_ABORT) || cancelUs > 500'000u || ! info.discoveryClosed ||
+        ! maxConcurrentBackendCalls.has_value() || maxConcurrentBackendCalls.value() != 1u || ! bridgeResourcesAreBounded(info))
     {
         Fail(std::format(L"R4-A19 fake-MTP cancel/serialization failed: hr=0x{:08X} cancelUs={} closed={} "
                          L"propsHr=0x{:08X} maxBackend={} discoveryQueue={} bridgeQueue={} retained={}/{}/{} limits={} "
@@ -5198,19 +4908,18 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
         return true;
     }
 
-    constexpr unsigned int kFileCount = 4u;
-    constexpr size_t kFileBytes = 4u * 1024u * 1024u;
-    constexpr uint64_t kTaskBytes = static_cast<uint64_t>(kFileCount) * kFileBytes;
+    constexpr unsigned int kFileCount            = 4u;
+    constexpr size_t kFileBytes                  = 4u * 1024u * 1024u;
+    constexpr uint64_t kTaskBytes                = static_cast<uint64_t>(kFileCount) * kFileBytes;
     constexpr uint64_t kSpeedLimitBytesPerSecond = 16u * 1024u * 1024u;
-    const std::filesystem::path cBase = state.tempRoot / L"r4-a19-independent-c";
-    const std::filesystem::path cSource = cBase / L"source-c";
-    const std::filesystem::path cDestination = cBase / L"destination-c";
+    const std::filesystem::path cBase            = state.tempRoot / L"r4-a19-independent-c";
+    const std::filesystem::path cSource          = cBase / L"source-c";
+    const std::filesystem::path cDestination     = cBase / L"destination-c";
 
     if (state.stepState == 0u)
     {
         std::wstring alternateDetail;
-        const std::optional<std::filesystem::path> alternate =
-            TryCreateAlternateWritableVolumeSelfTestRoot(state.tempRoot, alternateDetail);
+        const std::optional<std::filesystem::path> alternate = TryCreateAlternateWritableVolumeSelfTestRoot(state.tempRoot, alternateDetail);
         if (! alternate.has_value())
         {
             Fail(std::format(L"R4-A19 independent-volume control is blocked: {}.", alternateDetail));
@@ -5218,11 +4927,11 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
         }
         state.fileOpsAlternateVolumeRoot = alternate.value();
 
-        const std::filesystem::path dBase = state.fileOpsAlternateVolumeRoot / L"r4-a19-independent-d";
-        const std::filesystem::path dSource = dBase / L"source-d";
+        const std::filesystem::path dBase        = state.fileOpsAlternateVolumeRoot / L"r4-a19-independent-d";
+        const std::filesystem::path dSource      = dBase / L"source-d";
         const std::filesystem::path dDestination = dBase / L"destination-d";
-        if (! RecreateEmptyDirectory(cSource) || ! RecreateEmptyDirectory(cDestination) ||
-            ! RecreateEmptyDirectory(dSource) || ! RecreateEmptyDirectory(dDestination))
+        if (! RecreateEmptyDirectory(cSource) || ! RecreateEmptyDirectory(cDestination) || ! RecreateEmptyDirectory(dSource) ||
+            ! RecreateEmptyDirectory(dDestination))
         {
             Fail(L"R4-A19 failed to reset the independent-volume fixture.");
             return true;
@@ -5254,15 +4963,14 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
             return true;
         }
         state.r4A19ScenarioStartTick = nowTick;
-        state.stepState = 1u;
+        state.stepState              = 1u;
         return false;
     }
 
-    const std::filesystem::path dBase = state.fileOpsAlternateVolumeRoot / L"r4-a19-independent-d";
-    const std::filesystem::path dSource = dBase / L"source-d";
+    const std::filesystem::path dBase        = state.fileOpsAlternateVolumeRoot / L"r4-a19-independent-d";
+    const std::filesystem::path dSource      = dBase / L"source-d";
     const std::filesystem::path dDestination = dBase / L"destination-d";
-    const auto verifyTree = [&](const std::filesystem::path& source,
-                                const std::filesystem::path& destinationRoot) noexcept
+    const auto verifyTree                    = [&](const std::filesystem::path& source, const std::filesystem::path& destinationRoot) noexcept
     {
         const std::filesystem::path copied = destinationRoot / source.filename();
         if (CountFilesRecursive(copied) != kFileCount)
@@ -5287,12 +4995,10 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
         {
             return false;
         }
-        state.r4A19VolumeCIsolatedUs =
-            completed->second.completionTick >= state.r4A19ScenarioStartTick
-                ? static_cast<uint64_t>(completed->second.completionTick - state.r4A19ScenarioStartTick) * 1000u
-                : 0u;
-        if (FAILED(completed->second.hr) || ! verifyTree(cSource, cDestination) ||
-            completed->second.discoveredTotalBytes != kTaskBytes ||
+        state.r4A19VolumeCIsolatedUs = completed->second.completionTick >= state.r4A19ScenarioStartTick
+                                           ? static_cast<uint64_t>(completed->second.completionTick - state.r4A19ScenarioStartTick) * 1000u
+                                           : 0u;
+        if (FAILED(completed->second.hr) || ! verifyTree(cSource, cDestination) || completed->second.discoveredTotalBytes != kTaskBytes ||
             state.r4A19VolumeCIsolatedUs >= 30'000'000u)
         {
             Fail(std::format(L"R4-A19 primary isolated control failed: hr=0x{:08X} bytes={}/{} durationUs={}.",
@@ -5319,7 +5025,7 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
             return true;
         }
         state.r4A19ScenarioStartTick = nowTick;
-        state.stepState = 2u;
+        state.stepState              = 2u;
         return false;
     }
 
@@ -5330,12 +5036,10 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
         {
             return false;
         }
-        state.r4A19VolumeDIsolatedUs =
-            completed->second.completionTick >= state.r4A19ScenarioStartTick
-                ? static_cast<uint64_t>(completed->second.completionTick - state.r4A19ScenarioStartTick) * 1000u
-                : 0u;
-        if (FAILED(completed->second.hr) || ! verifyTree(dSource, dDestination) ||
-            completed->second.discoveredTotalBytes != kTaskBytes ||
+        state.r4A19VolumeDIsolatedUs = completed->second.completionTick >= state.r4A19ScenarioStartTick
+                                           ? static_cast<uint64_t>(completed->second.completionTick - state.r4A19ScenarioStartTick) * 1000u
+                                           : 0u;
+        if (FAILED(completed->second.hr) || ! verifyTree(dSource, dDestination) || completed->second.discoveredTotalBytes != kTaskBytes ||
             state.r4A19VolumeDIsolatedUs >= 30'000'000u)
         {
             Fail(std::format(L"R4-A19 alternate isolated control failed: hr=0x{:08X} bytes={}/{} durationUs={}.",
@@ -5377,8 +5081,8 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
             return true;
         }
         state.r4A19IndependentProgressOverlap = false;
-        state.r4A19ScenarioStartTick = nowTick;
-        state.stepState = 3u;
+        state.r4A19ScenarioStartTick          = nowTick;
+        state.stepState                       = 3u;
         return false;
     }
 
@@ -5397,8 +5101,7 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
             completedB = taskB->_progressCompletedBytes;
         }
         state.r4A19IndependentProgressOverlap =
-            state.r4A19IndependentProgressOverlap ||
-            (taskA->HasStarted() && taskB->HasStarted() && completedA > 0u && completedB > 0u);
+            state.r4A19IndependentProgressOverlap || (taskA->HasStarted() && taskB->HasStarted() && completedA > 0u && completedB > 0u);
     }
 
     const auto completedA = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
@@ -5410,15 +5113,12 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
 
     const uint64_t concurrentUs =
         (std::max)(completedA->second.completionTick, completedB->second.completionTick) >= state.r4A19ScenarioStartTick
-            ? static_cast<uint64_t>((std::max)(completedA->second.completionTick, completedB->second.completionTick) -
-                                    state.r4A19ScenarioStartTick) * 1000u
+            ? static_cast<uint64_t>((std::max)(completedA->second.completionTick, completedB->second.completionTick) - state.r4A19ScenarioStartTick) * 1000u
             : 0u;
     const uint64_t slowerIsolatedUs = (std::max)(state.r4A19VolumeCIsolatedUs, state.r4A19VolumeDIsolatedUs);
     const uint64_t concurrentGateUs = (slowerIsolatedUs * 135u + 99u) / 100u;
-    if (FAILED(completedA->second.hr) || FAILED(completedB->second.hr) ||
-        ! state.r4A19IndependentProgressOverlap || ! verifyTree(cSource, cDestination) ||
-        ! verifyTree(dSource, dDestination) || concurrentUs >= 30'000'000u ||
-        concurrentUs > concurrentGateUs)
+    if (FAILED(completedA->second.hr) || FAILED(completedB->second.hr) || ! state.r4A19IndependentProgressOverlap || ! verifyTree(cSource, cDestination) ||
+        ! verifyTree(dSource, dDestination) || concurrentUs >= 30'000'000u || concurrentUs > concurrentGateUs)
     {
         Fail(std::format(L"R4-A19 independent-volume control failed: hrA=0x{:08X} hrB=0x{:08X} overlap={} "
                          L"bytesA={}/{} bytesB={}/{} isolatedC={} isolatedD={} concurrent={} gate={}.",
@@ -5436,24 +5136,15 @@ case SelfTestState::Step::R4A19_DiscoveryIndependentVolumes:
         return true;
     }
 
-    const std::wstring volumeDetail = std::format(
-        L"primary={};alternate={};bytesPerTask={};speedLimit={}",
-        state.tempRoot.root_path().wstring(),
-        state.fileOpsAlternateVolumeRoot.root_path().wstring(),
-        kTaskBytes,
-        kSpeedLimitBytesPerSecond);
-    Debug::Perf::Emit(L"FileOps.SelfTest.R4A19.IndependentVolumes",
-                      volumeDetail,
-                      concurrentUs,
-                      slowerIsolatedUs,
-                      state.r4A19IndependentProgressOverlap ? 1u : 0u,
-                      S_OK);
-    Debug::Perf::EmitValue(L"FileOps.SelfTest.R4A19.IndependentVolumeCIsolatedUs",
-                           state.r4A19VolumeCIsolatedUs,
-                           S_OK);
-    Debug::Perf::EmitValue(L"FileOps.SelfTest.R4A19.IndependentVolumeDIsolatedUs",
-                           state.r4A19VolumeDIsolatedUs,
-                           S_OK);
+    const std::wstring volumeDetail = std::format(L"primary={};alternate={};bytesPerTask={};speedLimit={}",
+                                                  state.tempRoot.root_path().wstring(),
+                                                  state.fileOpsAlternateVolumeRoot.root_path().wstring(),
+                                                  kTaskBytes,
+                                                  kSpeedLimitBytesPerSecond);
+    Debug::Perf::Emit(
+        L"FileOps.SelfTest.R4A19.IndependentVolumes", volumeDetail, concurrentUs, slowerIsolatedUs, state.r4A19IndependentProgressOverlap ? 1u : 0u, S_OK);
+    Debug::Perf::EmitValue(L"FileOps.SelfTest.R4A19.IndependentVolumeCIsolatedUs", state.r4A19VolumeCIsolatedUs, S_OK);
+    Debug::Perf::EmitValue(L"FileOps.SelfTest.R4A19.IndependentVolumeDIsolatedUs", state.r4A19VolumeDIsolatedUs, S_OK);
 
     const std::filesystem::path alternateRoot = std::move(state.fileOpsAlternateVolumeRoot);
     static_cast<void>(SelfTest::RemoveAll(alternateRoot));
@@ -5469,8 +5160,8 @@ case SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns:
     // ERROR_OPERATION_ABORTED after Cancel, and the task must end as canceled within the bound.
     static wil::com_ptr<IFileSystem> blockedFileSystem;
     static UncontainedNeverReturningFileSystem* blockedObserver = nullptr;
-    static ULONGLONG cancelRequestedTick                       = 0u;
-    const ULONGLONG nowTick                                    = GetTickCount64();
+    static ULONGLONG cancelRequestedTick                        = 0u;
+    const ULONGLONG nowTick                                     = GetTickCount64();
     if (HasTimedOut(state, nowTick, 30'000ull))
     {
         if (blockedObserver != nullptr)
@@ -5498,7 +5189,7 @@ case SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns:
             return true;
         }
 
-        uint64_t taskId          = 0u;
+        uint64_t taskId           = 0u;
         const HRESULT admissionHr = state.fileOps->AdmitOperation(FILESYSTEM_COPY,
                                                                   FolderWindow::Pane::Left,
                                                                   FolderWindow::Pane::Right,
@@ -5551,10 +5242,11 @@ case SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns:
         if (! returned || readStatus != HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED))
         {
             blockedObserver->ReleaseBlockedRead();
-            Fail(std::format(L"R0f-SMB witness: the wedged synchronous call must return ERROR_OPERATION_ABORTED after Cancel (returned={}, status=0x{:08X}, ms={}).",
-                             returned,
-                             static_cast<unsigned long>(readStatus),
-                             returnMs));
+            Fail(std::format(
+                L"R0f-SMB witness: the wedged synchronous call must return ERROR_OPERATION_ABORTED after Cancel (returned={}, status=0x{:08X}, ms={}).",
+                returned,
+                static_cast<unsigned long>(readStatus),
+                returnMs));
             return true;
         }
         state.stepState = 2u;
@@ -5608,12 +5300,12 @@ case SelfTestState::Step::R0fSmb_LoopbackReadWriteCreateDelete:
         return true;
     }
 
-    constexpr unsigned int kFileCount = 3u;
-    constexpr size_t kFileBytes       = 256u * 1024u;
+    constexpr unsigned int kFileCount       = 3u;
+    constexpr size_t kFileBytes             = 256u * 1024u;
     const std::filesystem::path localBase   = state.tempRoot / L"r0f-smb-local";
     const std::filesystem::path localSource = localBase / L"source";
     const std::filesystem::path localMoved  = localBase / L"moved-back";
-    const auto verifyTree = [&](const std::filesystem::path& copied) noexcept
+    const auto verifyTree                   = [&](const std::filesystem::path& copied) noexcept
     {
         if (CountFilesRecursive(copied) != kFileCount)
         {
@@ -5642,9 +5334,9 @@ case SelfTestState::Step::R0fSmb_LoopbackReadWriteCreateDelete:
         uncRoot = uncSandbox / L"r0f-smb-share";
 
         FileOperations::QualifiedEndpoint uncEndpoint{};
-        if (! FileOperations::TryQualifyEndpointForSelfTest(state.fsLocal, uncRoot.native(), FILESYSTEM_COPY, L"builtin/file-system", L"host/default", uncEndpoint) ||
-            uncEndpoint.profileId != L"local-win32-smb" ||
-            uncEndpoint.cancellationRouteClass != FileOperations::CancellationRouteClass::Bounded)
+        if (! FileOperations::TryQualifyEndpointForSelfTest(
+                state.fsLocal, uncRoot.native(), FILESYSTEM_COPY, L"builtin/file-system", L"host/default", uncEndpoint) ||
+            uncEndpoint.profileId != L"local-win32-smb" || uncEndpoint.cancellationRouteClass != FileOperations::CancellationRouteClass::Bounded)
         {
             Fail(L"R0f-SMB loopback: the UNC alias must qualify as the bounded local-win32-smb route.");
             return true;
@@ -5799,7 +5491,8 @@ case SelfTestState::Step::R0fSmb_LoopbackReadWriteCreateDelete:
     if (FAILED(completed->second.hr) || std::filesystem::exists(uncRoot / L"created") || std::filesystem::exists(uncRoot / L"renamed.bin") ||
         std::filesystem::exists(uncRoot / L"copy-dst"))
     {
-        Fail(std::format(L"R0f-SMB loopback: Delete on the share failed or left objects behind (hr=0x{:08X}).", static_cast<unsigned long>(completed->second.hr)));
+        Fail(std::format(L"R0f-SMB loopback: Delete on the share failed or left objects behind (hr=0x{:08X}).",
+                         static_cast<unsigned long>(completed->second.hr)));
         return true;
     }
     static_cast<void>(SelfTest::RemoveAll(uncRoot));
@@ -5824,8 +5517,8 @@ case SelfTestState::Step::C0_CurlHostPartialTreeFailure:
     static wil::com_ptr<IFileSystemIO> ftpIo;
     static std::wstring ftpRoot;
     static ULONGLONG phaseStartTick   = 0u;
-    const bool refusedDirectoryMove = state.step == SelfTestState::Step::BR5_CurlHostDirectoryMoveRefused;
-    const bool directoryMoveWitness = refusedDirectoryMove || state.step == SelfTestState::Step::BR5_CurlHostDirectoryMove;
+    const bool refusedDirectoryMove   = state.step == SelfTestState::Step::BR5_CurlHostDirectoryMoveRefused;
+    const bool directoryMoveWitness   = refusedDirectoryMove || state.step == SelfTestState::Step::BR5_CurlHostDirectoryMove;
     const bool partialDeleteWitness   = state.step == SelfTestState::Step::C0_CurlHostPartialTreeFailure;
     const bool committedDeleteWitness = partialDeleteWitness || state.step == SelfTestState::Step::C0_CurlHostCommittedDeleteResponseLost;
     using StopFakeFtpFn               = void(__stdcall*)(void*) noexcept;
@@ -5906,7 +5599,7 @@ case SelfTestState::Step::C0_CurlHostPartialTreeFailure:
         }
         const std::wstring byName = LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_PERMANENT_DELETE_BY_NAME);
         const bool saysByName     = prompt->bucket == FolderWindow::FileOperationState::Task::ConflictBucket::PermanentDeleteConfirmation && ! byName.empty() &&
-                                prompt->consentDetail.find(byName) != std::wstring::npos;
+                                    prompt->consentDetail.find(byName) != std::wstring::npos;
         task->SubmitConflictDecision(FolderWindow::FileOperationState::Task::ConflictAction::Cancel, false);
         HostSetAutoAcceptPrompts(true);
         if (! saysByName)
@@ -5941,7 +5634,7 @@ case SelfTestState::Step::C0_CurlHostPartialTreeFailure:
 
     const auto directoryMoveSnapshot = [&](BOOL arm, unsigned int& renameFromCount, unsigned int& renameToCount, BOOL& stateCorrect) noexcept -> HRESULT
     {
-        using WitnessFn = HRESULT(__stdcall*)(void*, BOOL, BOOL, unsigned int*, unsigned int*, BOOL*) noexcept;
+        using WitnessFn       = HRESULT(__stdcall*)(void*, BOOL, BOOL, unsigned int*, unsigned int*, BOOL*) noexcept;
         const FARPROC address = curlModule ? GetProcAddress(curlModule.get(), "RedSalamanderCurlDirectoryMoveForSelfTest") : nullptr;
         if (! address)
         {
@@ -5970,24 +5663,37 @@ case SelfTestState::Step::C0_CurlHostPartialTreeFailure:
             return false;
         }
         unsigned int renameFromCount = 0u;
-        unsigned int renameToCount = 0u;
-        BOOL stateCorrect = FALSE;
-        const HRESULT witnessHr = directoryMoveSnapshot(FALSE, renameFromCount, renameToCount, stateCorrect);
-        const auto& result = completed->second;
-        const auto* item = result.sourceItemResults.size() == 1u && result.sourceItemResults.front().has_value()
-                               ? &result.sourceItemResults.front().value() : nullptr;
-        const bool truthful = item && (refusedDirectoryMove
-            ? result.hr == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) && item->completion == FileOperations::ItemCompletion::Indeterminate &&
-              item->publication == FileOperations::PublicationState::Unknown && item->sourceDisposition == FileOperations::SourceDisposition::Unknown
-            : result.hr == S_OK && item->completion == FileOperations::ItemCompletion::Completed &&
-              item->publication == FileOperations::PublicationState::Published && item->sourceDisposition == FileOperations::SourceDisposition::Removed);
-        const bool passed = SUCCEEDED(witnessHr) && renameFromCount == 1u && renameToCount == 1u && stateCorrect && truthful && result.conflictPromptCount == 0u;
+        unsigned int renameToCount   = 0u;
+        BOOL stateCorrect            = FALSE;
+        const HRESULT witnessHr      = directoryMoveSnapshot(FALSE, renameFromCount, renameToCount, stateCorrect);
+        const auto& result           = completed->second;
+        const auto* item =
+            result.sourceItemResults.size() == 1u && result.sourceItemResults.front().has_value() ? &result.sourceItemResults.front().value() : nullptr;
+        const bool truthful = item && (refusedDirectoryMove ? result.hr == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) &&
+                                                                  item->completion == FileOperations::ItemCompletion::Indeterminate &&
+                                                                  item->publication == FileOperations::PublicationState::Unknown &&
+                                                                  item->sourceDisposition == FileOperations::SourceDisposition::Unknown
+                                                            : result.hr == S_OK && item->completion == FileOperations::ItemCompletion::Completed &&
+                                                                  item->publication == FileOperations::PublicationState::Published &&
+                                                                  item->sourceDisposition == FileOperations::SourceDisposition::Removed);
+        const bool passed =
+            SUCCEEDED(witnessHr) && renameFromCount == 1u && renameToCount == 1u && stateCorrect && truthful && result.conflictPromptCount == 0u;
         Debug::Perf::Emit(L"FileOps.SelfTest.CurlHostDirectoryMove",
-                          refusedDirectoryMove ? L"RNTO=550;source-tree-intact;no-relay-or-cleanup;host=unknown" : L"RNTO=250;subtree-relocated;no-relay-or-cleanup",
-                          (nowTick - phaseStartTick) * 1000u, renameFromCount, renameToCount, passed ? S_OK : E_FAIL);
-        const std::wstring detail = passed ? std::wstring{} : std::format(
-            L"hr=0x{:08X}, rnfr={}, rnto={}, state={}, truthful={}, prompts={}.{}",
-            static_cast<unsigned long>(result.hr), renameFromCount, renameToCount, stateCorrect, truthful, result.conflictPromptCount, taskDiagnostics());
+                          refusedDirectoryMove ? L"RNTO=550;source-tree-intact;no-relay-or-cleanup;host=unknown"
+                                               : L"RNTO=250;subtree-relocated;no-relay-or-cleanup",
+                          (nowTick - phaseStartTick) * 1000u,
+                          renameFromCount,
+                          renameToCount,
+                          passed ? S_OK : E_FAIL);
+        const std::wstring detail = passed ? std::wstring{}
+                                           : std::format(L"hr=0x{:08X}, rnfr={}, rnto={}, state={}, truthful={}, prompts={}.{}",
+                                                         static_cast<unsigned long>(result.hr),
+                                                         renameFromCount,
+                                                         renameToCount,
+                                                         stateCorrect,
+                                                         truthful,
+                                                         result.conflictPromptCount,
+                                                         taskDiagnostics());
         HostSetAutoAcceptPrompts(true);
         stopFakeFtp();
         curlModule.reset();
@@ -6124,8 +5830,8 @@ case SelfTestState::Step::C0_CurlHostPartialTreeFailure:
         if (directoryMoveWitness)
         {
             unsigned int renameFromCount = 0u;
-            unsigned int renameToCount = 0u;
-            BOOL stateCorrect = FALSE;
+            unsigned int renameToCount   = 0u;
+            BOOL stateCorrect            = FALSE;
             if (FAILED(directoryMoveSnapshot(TRUE, renameFromCount, renameToCount, stateCorrect)))
             {
                 stopFakeFtp();
@@ -6134,12 +5840,19 @@ case SelfTestState::Step::C0_CurlHostPartialTreeFailure:
                 return true;
             }
             HostSetAutoAcceptPrompts(false);
-            state.taskA = StartFileOperationAndGetId(state.fileOps, FILESYSTEM_MOVE,
-                                                     FolderWindow::Pane::Left, FolderWindow::Pane::Right,
-                                                     ftp, {std::filesystem::path(ftpPath(L"br5/source"))},
+            state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                     FILESYSTEM_MOVE,
+                                                     FolderWindow::Pane::Left,
+                                                     FolderWindow::Pane::Right,
+                                                     ftp,
+                                                     {std::filesystem::path(ftpPath(L"br5/source"))},
                                                      std::filesystem::path(ftpPath(L"br5/destination")),
-                                                     FILESYSTEM_FLAG_RECURSIVE, false, 0u,
-                                                     FolderWindow::FileOperationState::ExecutionMode::PerItem, false, ftp);
+                                                     FILESYSTEM_FLAG_RECURSIVE,
+                                                     false,
+                                                     0u,
+                                                     FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                     false,
+                                                     ftp);
             if (! state.taskA.has_value())
             {
                 HostSetAutoAcceptPrompts(true);
@@ -6148,7 +5861,7 @@ case SelfTestState::Step::C0_CurlHostPartialTreeFailure:
                 Fail(L"BR-5 could not admit the same-connection host directory Move.");
                 return true;
             }
-            phaseStartTick = nowTick;
+            phaseStartTick  = nowTick;
             state.stepState = 11u;
             return false;
         }
@@ -6283,7 +5996,8 @@ case SelfTestState::Step::C0_CurlHostPartialTreeFailure:
         if (! byteExact)
         {
             stopFakeFtp();
-            Fail(std::format(L"R0f-Curl: Copy back from the fake FTP server failed or is not byte-exact (hr=0x{:08X}).", static_cast<unsigned long>(completed->second.hr)));
+            Fail(std::format(L"R0f-Curl: Copy back from the fake FTP server failed or is not byte-exact (hr=0x{:08X}).",
+                             static_cast<unsigned long>(completed->second.hr)));
             return true;
         }
 
@@ -6299,7 +6013,8 @@ case SelfTestState::Step::C0_CurlHostPartialTreeFailure:
             Fail(std::format(L"R0f-Curl: provider CreateDirectory on the fake FTP server failed (hr=0x{:08X}).", static_cast<unsigned long>(createHr)));
             return true;
         }
-        const HRESULT renameHr = ftp->RenameItem(ftpPath(L"source/payload-01.bin").c_str(), ftpPath(L"source/renamed.bin").c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+        const HRESULT renameHr =
+            ftp->RenameItem(ftpPath(L"source/payload-01.bin").c_str(), ftpPath(L"source/renamed.bin").c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
         if (FAILED(renameHr) || ftpExists(L"source/payload-01.bin") || ! ftpExists(L"source/renamed.bin"))
         {
             stopFakeFtp();
@@ -6521,15 +6236,8 @@ case SelfTestState::Step::C0_CurlHostPartialTreeFailure:
         }
         HostSetAutoAcceptPrompts(false);
         HostClearTestPromptResultOverride();
-        state.taskA = StartFileOperationAndGetId(state.fileOps,
-                                                 FILESYSTEM_DELETE,
-                                                 FolderWindow::Pane::Right,
-                                                 std::nullopt,
-                                                 ftp,
-                                                 {std::filesystem::path(victim)},
-                                                 {},
-                                                 FILESYSTEM_FLAG_NONE,
-                                                 false);
+        state.taskA = StartFileOperationAndGetId(
+            state.fileOps, FILESYSTEM_DELETE, FolderWindow::Pane::Right, std::nullopt, ftp, {std::filesystem::path(victim)}, {}, FILESYSTEM_FLAG_NONE, false);
         if (! state.taskA.has_value())
         {
             HostSetAutoAcceptPrompts(true);
@@ -6551,14 +6259,14 @@ case SelfTestState::Step::R0fS3_FakeS3ReadWriteCreateDelete:
     // provider CreateDirectory and Rename on S3, Delete on S3 through a task. The route must
     // qualify as providerWatchdog with a nonzero provider-owned bound.
     static wil::unique_hmodule s3Module;
-    static void* fakeS3             = nullptr;
-    static unsigned int fakeS3Port  = 0u;
+    static void* fakeS3            = nullptr;
+    static unsigned int fakeS3Port = 0u;
     static wil::com_ptr<IFileSystem> s3;
     static wil::com_ptr<IFileSystemIO> s3Io;
     static std::wstring s3Root;
     static ULONGLONG phaseStartTick = 0u;
     using StopFakeS3Fn              = void(__stdcall*)(void*) noexcept;
-    const auto stopFakeS3 = []() noexcept
+    const auto stopFakeS3           = []() noexcept
     {
         s3Io.reset();
         s3.reset();
@@ -6629,13 +6337,13 @@ case SelfTestState::Step::R0fS3_FakeS3ReadWriteCreateDelete:
         return true;
     }
 
-    constexpr unsigned int kFileCount = 3u;
-    constexpr size_t kFileBytes       = 64u * 1024u;
+    constexpr unsigned int kFileCount       = 3u;
+    constexpr size_t kFileBytes             = 64u * 1024u;
     const std::filesystem::path localBase   = state.tempRoot / L"r0f-s3-local";
     const std::filesystem::path localSource = localBase / L"source";
     const std::filesystem::path localBack   = localBase / L"copied-back";
-    const auto s3Path = [&](std::wstring_view leaf) { return s3Root + std::wstring(leaf); };
-    const auto s3Exists = [&](std::wstring_view leaf) noexcept
+    const auto s3Path                       = [&](std::wstring_view leaf) { return s3Root + std::wstring(leaf); };
+    const auto s3Exists                     = [&](std::wstring_view leaf) noexcept
     {
         unsigned long attributes = 0u;
         return s3Io && SUCCEEDED(s3Io->GetAttributes(s3Path(leaf).c_str(), &attributes));
@@ -6747,10 +6455,10 @@ case SelfTestState::Step::R0fS3_FakeS3ReadWriteCreateDelete:
 
     if (state.stepState == 0u)
     {
-        using StartFakeS3Fn = HRESULT(__stdcall*)(unsigned int*, void**) noexcept;
-        using CreateFn      = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
+        using StartFakeS3Fn  = HRESULT(__stdcall*)(unsigned int*, void**) noexcept;
+        using CreateFn       = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
         FARPROC startAddress = nullptr;
-        HRESULT hr = SelfTest::LoadPluginSelfTestExport(kPluginIdS3, "RedSalamanderS3StartFakeS3ForSelfTest", s3Module, startAddress);
+        HRESULT hr           = SelfTest::LoadPluginSelfTestExport(kPluginIdS3, "RedSalamanderS3StartFakeS3ForSelfTest", s3Module, startAddress);
         if (FAILED(hr) || startAddress == nullptr)
         {
             Fail(std::format(L"R0f-S3: the fake S3 fixture export is unavailable: 0x{:08X}.", static_cast<unsigned long>(hr)));
@@ -6922,7 +6630,8 @@ case SelfTestState::Step::R0fS3_FakeS3ReadWriteCreateDelete:
         {
             const std::wstring diagnostics = fixtureLog();
             stopFakeS3();
-            Fail(std::format(L"R0f-S3: provider CreateDirectory on the fake S3 endpoint failed (hr=0x{:08X}).{}", static_cast<unsigned long>(createHr), diagnostics));
+            Fail(std::format(
+                L"R0f-S3: provider CreateDirectory on the fake S3 endpoint failed (hr=0x{:08X}).{}", static_cast<unsigned long>(createHr), diagnostics));
             return true;
         }
         const HRESULT renameHr =
@@ -7191,7 +6900,7 @@ case SelfTestState::Step::R0fGraph_FakeGraphReadWriteCreateRenameRecycle:
     static ULONGLONG phaseStartTick = 0u;
     using StopFakeGraphFn           = void(__stdcall*)(void*) noexcept;
     using FakeGraphLogFn            = HRESULT(__stdcall*)(void*, wchar_t*, unsigned int) noexcept;
-    const auto stopFakeGraph = []() noexcept
+    const auto stopFakeGraph        = []() noexcept
     {
         graphIo.reset();
         graph.reset();
@@ -7261,13 +6970,13 @@ case SelfTestState::Step::R0fGraph_FakeGraphReadWriteCreateRenameRecycle:
         return true;
     }
 
-    constexpr unsigned int kFileCount = 3u;
-    constexpr size_t kFileBytes       = 64u * 1024u;
+    constexpr unsigned int kFileCount       = 3u;
+    constexpr size_t kFileBytes             = 64u * 1024u;
     const std::filesystem::path localBase   = state.tempRoot / L"r0f-graph-local";
     const std::filesystem::path localSource = localBase / L"source";
     const std::filesystem::path localBack   = localBase / L"copied-back";
-    const auto graphPath = [&](std::wstring_view leaf) { return graphRoot + std::wstring(leaf); };
-    const auto graphExists = [&](std::wstring_view leaf) noexcept
+    const auto graphPath                    = [&](std::wstring_view leaf) { return graphRoot + std::wstring(leaf); };
+    const auto graphExists                  = [&](std::wstring_view leaf) noexcept
     {
         unsigned long attributes = 0u;
         return graphIo && SUCCEEDED(graphIo->GetAttributes(graphPath(leaf).c_str(), &attributes));
@@ -7277,8 +6986,9 @@ case SelfTestState::Step::R0fGraph_FakeGraphReadWriteCreateRenameRecycle:
     {
         using StartFakeGraphFn = HRESULT(__stdcall*)(unsigned int*, void**) noexcept;
         using CreateFn         = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
-        FARPROC startAddress = nullptr;
-        HRESULT hr = SelfTest::LoadPluginSelfTestExport(kPluginIdOneDrivePersonal, "RedSalamanderMicrosoftDriveStartFakeGraphForSelfTest", graphModule, startAddress);
+        FARPROC startAddress   = nullptr;
+        HRESULT hr =
+            SelfTest::LoadPluginSelfTestExport(kPluginIdOneDrivePersonal, "RedSalamanderMicrosoftDriveStartFakeGraphForSelfTest", graphModule, startAddress);
         if (FAILED(hr) || startAddress == nullptr)
         {
             Fail(std::format(L"R0f-Graph: the fake Graph fixture export is unavailable: 0x{:08X}.", static_cast<unsigned long>(hr)));
@@ -7303,7 +7013,8 @@ case SelfTestState::Step::R0fGraph_FakeGraphReadWriteCreateRenameRecycle:
         factoryOptions.debugLevel = DEBUG_LEVEL_NONE;
 #pragma warning(push)
 #pragma warning(disable : 4191)
-        hr = reinterpret_cast<CreateFn>(createAddress)(__uuidof(IFileSystem), &factoryOptions, GetHostServices(), kPluginIdOneDrivePersonal.data(), graph.put_void());
+        hr = reinterpret_cast<CreateFn>(createAddress)(
+            __uuidof(IFileSystem), &factoryOptions, GetHostServices(), kPluginIdOneDrivePersonal.data(), graph.put_void());
 #pragma warning(pop)
         if (FAILED(hr) || ! graph)
         {
@@ -7448,16 +7159,18 @@ case SelfTestState::Step::R0fGraph_FakeGraphReadWriteCreateRenameRecycle:
         {
             const std::wstring diagnostics = fixtureLog();
             stopFakeGraph();
-            Fail(std::format(L"R0f-Graph: provider CreateDirectory on the fake Graph endpoint failed (hr=0x{:08X}).{}", static_cast<unsigned long>(createHr), diagnostics));
+            Fail(std::format(
+                L"R0f-Graph: provider CreateDirectory on the fake Graph endpoint failed (hr=0x{:08X}).{}", static_cast<unsigned long>(createHr), diagnostics));
             return true;
         }
-        const HRESULT renameHr =
-            graph->RenameItem(graphPath(L"source/payload-01.bin").c_str(), graphPath(L"source/renamed.bin").c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+        const HRESULT renameHr = graph->RenameItem(
+            graphPath(L"source/payload-01.bin").c_str(), graphPath(L"source/renamed.bin").c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
         if (FAILED(renameHr) || graphExists(L"source/payload-01.bin") || ! graphExists(L"source/renamed.bin"))
         {
             const std::wstring diagnostics = fixtureLog();
             stopFakeGraph();
-            Fail(std::format(L"R0f-Graph: provider Rename on the fake Graph endpoint failed (hr=0x{:08X}).{}", static_cast<unsigned long>(renameHr), diagnostics));
+            Fail(std::format(
+                L"R0f-Graph: provider Rename on the fake Graph endpoint failed (hr=0x{:08X}).{}", static_cast<unsigned long>(renameHr), diagnostics));
             return true;
         }
 
@@ -7743,13 +7456,13 @@ case SelfTestState::Step::C0_GDriveCommittedDeleteResponseLost:
         return true;
     }
 
-    constexpr unsigned int kFileCount = 3u;
-    constexpr size_t kFileBytes       = 64u * 1024u;
+    constexpr unsigned int kFileCount       = 3u;
+    constexpr size_t kFileBytes             = 64u * 1024u;
     const std::filesystem::path localBase   = state.tempRoot / L"r0f-gdrive-local";
     const std::filesystem::path localSource = localBase / L"source";
     const std::filesystem::path localBack   = localBase / L"copied-back";
-    const auto drivePath = [&](std::wstring_view leaf) { return driveRoot + std::wstring(leaf); };
-    const auto driveExists = [&](std::wstring_view leaf) noexcept
+    const auto drivePath                    = [&](std::wstring_view leaf) { return driveRoot + std::wstring(leaf); };
+    const auto driveExists                  = [&](std::wstring_view leaf) noexcept
     {
         unsigned long attributes = 0u;
         return driveIo && SUCCEEDED(driveIo->GetAttributes(drivePath(leaf).c_str(), &attributes));
@@ -7818,7 +7531,7 @@ case SelfTestState::Step::C0_GDriveCommittedDeleteResponseLost:
     {
         using StartFakeDriveFn = HRESULT(__stdcall*)(unsigned int*, void**) noexcept;
         using CreateFn         = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
-        FARPROC startAddress = nullptr;
+        FARPROC startAddress   = nullptr;
         HRESULT hr = SelfTest::LoadPluginSelfTestExport(kPluginIdGoogleDrive, "RedSalamanderGoogleDriveStartFakeDriveForSelfTest", driveModule, startAddress);
         if (FAILED(hr) || startAddress == nullptr)
         {
@@ -7844,7 +7557,8 @@ case SelfTestState::Step::C0_GDriveCommittedDeleteResponseLost:
         factoryOptions.debugLevel = DEBUG_LEVEL_NONE;
 #pragma warning(push)
 #pragma warning(disable : 4191)
-        hr = reinterpret_cast<CreateFn>(createAddress)(__uuidof(IFileSystem), &factoryOptions, GetHostServices(), kPluginIdGoogleDrive.data(), drive.put_void());
+        hr =
+            reinterpret_cast<CreateFn>(createAddress)(__uuidof(IFileSystem), &factoryOptions, GetHostServices(), kPluginIdGoogleDrive.data(), drive.put_void());
 #pragma warning(pop)
         if (FAILED(hr) || ! drive)
         {
@@ -8018,16 +7732,18 @@ case SelfTestState::Step::C0_GDriveCommittedDeleteResponseLost:
         {
             const std::wstring diagnostics = fixtureLog();
             stopFakeDrive();
-            Fail(std::format(L"R0f-GDrive: provider CreateDirectory on the fake Drive endpoint failed (hr=0x{:08X}).{}", static_cast<unsigned long>(createHr), diagnostics));
+            Fail(std::format(
+                L"R0f-GDrive: provider CreateDirectory on the fake Drive endpoint failed (hr=0x{:08X}).{}", static_cast<unsigned long>(createHr), diagnostics));
             return true;
         }
-        const HRESULT renameHr =
-            drive->RenameItem(drivePath(L"source/payload-01.bin").c_str(), drivePath(L"source/renamed.bin").c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+        const HRESULT renameHr = drive->RenameItem(
+            drivePath(L"source/payload-01.bin").c_str(), drivePath(L"source/renamed.bin").c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
         if (FAILED(renameHr) || driveExists(L"source/payload-01.bin") || ! driveExists(L"source/renamed.bin"))
         {
             const std::wstring diagnostics = fixtureLog();
             stopFakeDrive();
-            Fail(std::format(L"R0f-GDrive: provider Rename on the fake Drive endpoint failed (hr=0x{:08X}).{}", static_cast<unsigned long>(renameHr), diagnostics));
+            Fail(std::format(
+                L"R0f-GDrive: provider Rename on the fake Drive endpoint failed (hr=0x{:08X}).{}", static_cast<unsigned long>(renameHr), diagnostics));
             return true;
         }
         // Native Move: one parent change re-homes the object without copying bytes.
@@ -8037,7 +7753,8 @@ case SelfTestState::Step::C0_GDriveCommittedDeleteResponseLost:
         {
             const std::wstring diagnostics = fixtureLog();
             stopFakeDrive();
-            Fail(std::format(L"R0f-GDrive: provider native Move on the fake Drive endpoint failed (hr=0x{:08X}).{}", static_cast<unsigned long>(moveHr), diagnostics));
+            Fail(std::format(
+                L"R0f-GDrive: provider native Move on the fake Drive endpoint failed (hr=0x{:08X}).{}", static_cast<unsigned long>(moveHr), diagnostics));
             return true;
         }
 
@@ -8193,9 +7910,9 @@ case SelfTestState::Step::C0_GDriveCommittedDeleteResponseLost:
         {
             return false;
         }
-        unsigned int requests     = 0u;
-        unsigned int commits      = 0u;
-        const HRESULT snapshotHr  = mutationCommitFailure(FALSE, requests, commits);
+        unsigned int requests    = 0u;
+        unsigned int commits     = 0u;
+        const HRESULT snapshotHr = mutationCommitFailure(FALSE, requests, commits);
         const bool backendChanged =
             committedDeleteWitness ? ! driveExists(L"source/payload-00.bin") : driveExists(L"payload-00.bin") && driveExists(L"source/payload-00.bin");
         const auto& result  = failedCopy->second;
@@ -8237,8 +7954,9 @@ case SelfTestState::Step::C0_GDriveCommittedDeleteResponseLost:
             return true;
         }
         static_cast<void>(SelfTest::RemoveAll(localBase));
-        NextStep(state, committedDeleteWitness ? SelfTestState::Step::C0_NativeCopyFailurePreservesKnownAxes
-                                              : SelfTestState::Step::C0_GDriveCommittedDeleteResponseLost);
+        NextStep(state,
+                 committedDeleteWitness ? SelfTestState::Step::C0_NativeCopyFailurePreservesKnownAxes
+                                        : SelfTestState::Step::C0_GDriveCommittedDeleteResponseLost);
         return false;
     }
 
@@ -8653,40 +8371,40 @@ case SelfTestState::Step::C0_LocalKnownNoCommitReceipts:
     const auto& result = completed->second;
     std::vector<FolderWindow::FileOperationState::TaskDiagnosticEntry> diagnostics;
     state.fileOps->CollectDiagnostics(diagnostics);
-    const bool indeterminateLogged = std::ranges::any_of(diagnostics,
-                                                         [&](const auto& entry) noexcept
-    { return entry.taskId == state.taskA.value() && entry.category == L"item.mutation.indeterminate"; });
+    const bool indeterminateLogged = std::ranges::any_of(
+        diagnostics, [&](const auto& entry) noexcept { return entry.taskId == state.taskA.value() && entry.category == L"item.mutation.indeterminate"; });
     std::string bytes;
-    bool diskCorrect = false;
-    bool truthful    = false;
-    const bool haveItem = result.sourceItemResults.size() == 1u && result.sourceItemResults[0].has_value();
+    bool diskCorrect                                   = false;
+    bool truthful                                      = false;
+    const bool haveItem                                = result.sourceItemResults.size() == 1u && result.sourceItemResults[0].has_value();
     const FileOperations::FileOperationItemResult item = haveItem ? result.sourceItemResults[0].value() : FileOperations::FileOperationItemResult{};
     switch (scenario)
     {
         case Scenario::FileCancelAtPrompt:
             diskCorrect = ReadFileTextFsIo(io, destination / L"a.bin", bytes) && bytes == occupantText && ReadFileTextFsIo(io, sourceDir / L"a.bin", bytes) &&
                           bytes == sourceText;
-            truthful = haveItem && item.completion == FileOperations::ItemCompletion::Canceled &&
-                       item.publication == FileOperations::PublicationState::NotPublished &&
-                       item.sourceDisposition == FileOperations::SourceDisposition::Retained &&
-                       item.ownedStageDisposition == FileOperations::OwnedStageDisposition::NotCreated && result.conflictPromptCount == 1u;
+            truthful    = haveItem && item.completion == FileOperations::ItemCompletion::Canceled &&
+                          item.publication == FileOperations::PublicationState::NotPublished &&
+                          item.sourceDisposition == FileOperations::SourceDisposition::Retained &&
+                          item.ownedStageDisposition == FileOperations::OwnedStageDisposition::NotCreated && result.conflictPromptCount == 1u;
             break;
         case Scenario::MergeCancelAfterChildPublished:
         {
             std::error_code ec;
             diskCorrect = std::filesystem::is_directory(destination / L"tree" / L"a-sub", ec) && ! ec &&
                           ReadFileTextFsIo(io, destination / L"tree" / L"z.bin", bytes) && bytes == occupantText;
-            truthful = haveItem && item.completion == FileOperations::ItemCompletion::Canceled &&
-                       item.publication == FileOperations::PublicationState::Published &&
-                       item.sourceDisposition == FileOperations::SourceDisposition::Retained && result.conflictPromptCount == 1u;
+            truthful    = haveItem && item.completion == FileOperations::ItemCompletion::Canceled &&
+                          item.publication == FileOperations::PublicationState::Published &&
+                          item.sourceDisposition == FileOperations::SourceDisposition::Retained && result.conflictPromptCount == 1u;
             break;
         }
         case Scenario::LockedNativeMove:
         default:
         {
             std::error_code ec;
-            diskCorrect = ReadFileTextFsIo(io, sourceDir / L"m.bin", bytes) && bytes == sourceText && ! std::filesystem::exists(destination / L"m.bin", ec) && ! ec;
-            truthful    = haveItem && item.completion == FileOperations::ItemCompletion::Skipped &&
+            diskCorrect =
+                ReadFileTextFsIo(io, sourceDir / L"m.bin", bytes) && bytes == sourceText && ! std::filesystem::exists(destination / L"m.bin", ec) && ! ec;
+            truthful = haveItem && item.completion == FileOperations::ItemCompletion::Skipped &&
                        item.publication == FileOperations::PublicationState::NotPublished &&
                        item.sourceDisposition == FileOperations::SourceDisposition::Retained && result.conflictPromptCount == 1u;
             break;
@@ -8955,12 +8673,13 @@ case SelfTestState::Step::R3_1_IdentityLessReplaceDummy:
                             diagnostics += std::format(L" [{} 0x{:08X} {}]", entry.category, static_cast<unsigned long>(entry.status), entry.message);
                         }
                     }
-                    Fail(std::format(L"R3-1: the Exists prompt on the identity-less Dummy route must offer Overwrite (bucket={} status=0x{:08X} actions=[{}] grants={}).{}",
-                                     static_cast<int>(prompt->bucket),
-                                     static_cast<unsigned long>(prompt->status),
-                                     actions,
-                                     task->_conflictAtomicReplaceGrantCount.load(std::memory_order_acquire),
-                                     diagnostics));
+                    Fail(std::format(
+                        L"R3-1: the Exists prompt on the identity-less Dummy route must offer Overwrite (bucket={} status=0x{:08X} actions=[{}] grants={}).{}",
+                        static_cast<int>(prompt->bucket),
+                        static_cast<unsigned long>(prompt->status),
+                        actions,
+                        task->_conflictAtomicReplaceGrantCount.load(std::memory_order_acquire),
+                        diagnostics));
                     return true;
                 }
                 task->SubmitConflictDecision(Task::ConflictAction::Overwrite, false);
@@ -9022,9 +8741,10 @@ case SelfTestState::Step::R3_1_IdentityLessReplaceDummy:
                 }
                 if (prompt->status != HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH) || ! PromptHasAction(prompt.value(), Task::ConflictAction::Skip))
                 {
-                    Fail(std::format(L"R3-1: the refused replacement must surface as a retryable conflict carrying ERROR_REVISION_MISMATCH (bucket={} status=0x{:08X}).",
-                                     static_cast<int>(prompt->bucket),
-                                     static_cast<unsigned long>(prompt->status)));
+                    Fail(std::format(
+                        L"R3-1: the refused replacement must surface as a retryable conflict carrying ERROR_REVISION_MISMATCH (bucket={} status=0x{:08X}).",
+                        static_cast<int>(prompt->bucket),
+                        static_cast<unsigned long>(prompt->status)));
                     return true;
                 }
                 task->SubmitConflictDecision(Task::ConflictAction::Skip, false);
@@ -9112,9 +8832,8 @@ case SelfTestState::Step::R3_2_WriterProofDummy:
     };
     const auto describe = [&](const CompletedTaskInfo& completed) -> std::wstring
     {
-        const auto* const result = completed.sourceItemResults.empty() || ! completed.sourceItemResults.front().has_value()
-                                       ? nullptr
-                                       : &completed.sourceItemResults.front().value();
+        const auto* const result =
+            completed.sourceItemResults.empty() || ! completed.sourceItemResults.front().has_value() ? nullptr : &completed.sourceItemResults.front().value();
         return std::format(L"task hr=0x{:08X} verification={} disposition={} providerProofs={} hostReadbacks={} prompts={}",
                            static_cast<unsigned long>(completed.hr),
                            result != nullptr ? static_cast<unsigned>(result->verification) : 255u,
@@ -9171,7 +8890,8 @@ case SelfTestState::Step::R3_2_WriterProofDummy:
         }
         restoreVerifySetting();
         const CompletedTaskInfo& info = completed->second;
-        const auto* const result      = info.sourceItemResults.empty() || ! info.sourceItemResults.front().has_value() ? nullptr : &info.sourceItemResults.front().value();
+        const auto* const result =
+            info.sourceItemResults.empty() || ! info.sourceItemResults.front().has_value() ? nullptr : &info.sourceItemResults.front().value();
         if (info.hr != S_OK || result == nullptr || result->verification != FileOperations::VerificationState::Verified ||
             info.verificationProviderProofCount != 1u || info.verificationHostReadbackCount != 0u || info.conflictPromptCount != 0u)
         {
@@ -9205,7 +8925,8 @@ case SelfTestState::Step::R3_2_WriterProofDummy:
             return false;
         }
         const CompletedTaskInfo& info = completed->second;
-        const auto* const result      = info.sourceItemResults.empty() || ! info.sourceItemResults.front().has_value() ? nullptr : &info.sourceItemResults.front().value();
+        const auto* const result =
+            info.sourceItemResults.empty() || ! info.sourceItemResults.front().has_value() ? nullptr : &info.sourceItemResults.front().value();
         std::error_code ec;
         const bool sourceGone = ! std::filesystem::exists(moveFile, ec);
         if (info.hr != S_OK || result == nullptr || result->sourceDisposition != FileOperations::SourceDisposition::Removed || ! sourceGone ||
@@ -9262,49 +8983,80 @@ case SelfTestState::Step::R3_3_PublicationFaultMatrix:
     };
     static constexpr std::array<FaultRow, 17> kRows{{
         {L"failNextFileCopy", [] { SetFileOpsBridgeFailNextFileCopiesForSelfTest(1u); }, [] { SetFileOpsBridgeFailNextFileCopiesForSelfTest(0u); }, false},
-        {L"failSourceGetSize", [] { SetFileOpsBridgeFailNextSourceGetSizeForSelfTest(1u); }, [] { SetFileOpsBridgeFailNextSourceGetSizeForSelfTest(0u); }, false},
-        {L"failDestinationGetSize", [] { SetFileOpsBridgeFailNextDestinationGetSizeForSelfTest(1u); }, [] { SetFileOpsBridgeFailNextDestinationGetSizeForSelfTest(0u); }, false},
-        {L"failDestinationOpen", [] { SetFileOpsBridgeFailNextDestinationOpenForSelfTest(1u, E_ACCESSDENIED); }, [] { SetFileOpsBridgeFailNextDestinationOpenForSelfTest(0u, S_OK); }, false},
+        {L"failSourceGetSize",
+         [] { SetFileOpsBridgeFailNextSourceGetSizeForSelfTest(1u); },
+         [] { SetFileOpsBridgeFailNextSourceGetSizeForSelfTest(0u); },
+         false},
+        {L"failDestinationGetSize",
+         [] { SetFileOpsBridgeFailNextDestinationGetSizeForSelfTest(1u); },
+         [] { SetFileOpsBridgeFailNextDestinationGetSizeForSelfTest(0u); },
+         false},
+        {L"failDestinationOpen",
+         [] { SetFileOpsBridgeFailNextDestinationOpenForSelfTest(1u, E_ACCESSDENIED); },
+         [] { SetFileOpsBridgeFailNextDestinationOpenForSelfTest(0u, S_OK); },
+         false},
         {L"nullSourceReader", [] { SetFileOpsBridgeNullNextSourceReaderForSelfTest(1u); }, [] { SetFileOpsBridgeNullNextSourceReaderForSelfTest(0u); }, false},
-        {L"wrongDestinationSize", [] { SetFileOpsBridgeReportWrongDestinationSizeForSelfTest(1u); }, [] { SetFileOpsBridgeReportWrongDestinationSizeForSelfTest(0u); }, false},
+        {L"wrongDestinationSize",
+         [] { SetFileOpsBridgeReportWrongDestinationSizeForSelfTest(1u); },
+         [] { SetFileOpsBridgeReportWrongDestinationSizeForSelfTest(0u); },
+         false},
         {L"failStageEntropy", [] { SetFileOpsBridgeFailNextStageEntropyForSelfTest(1u); }, [] { SetFileOpsBridgeFailNextStageEntropyForSelfTest(0u); }, false},
         {L"overReportRead", [] { SetFileOpsBridgeOverReportNextReadForSelfTest(1u); }, [] { SetFileOpsBridgeOverReportNextReadForSelfTest(0u); }, false},
         {L"prematureEofRead", [] { SetFileOpsBridgePrematureEofNextReadForSelfTest(1u); }, [] { SetFileOpsBridgePrematureEofNextReadForSelfTest(0u); }, false},
-        {L"underConsumeWrite", [] { SetFileOpsBridgeUnderConsumeNextWriteForSelfTest(1u); }, [] { SetFileOpsBridgeUnderConsumeNextWriteForSelfTest(0u); static_cast<void>(TakeFileOpsBridgeUnderConsumeNextWriteAttemptsForSelfTest()); }, false},
+        {L"underConsumeWrite",
+         [] { SetFileOpsBridgeUnderConsumeNextWriteForSelfTest(1u); },
+         []
+    {
+        SetFileOpsBridgeUnderConsumeNextWriteForSelfTest(0u);
+        static_cast<void>(TakeFileOpsBridgeUnderConsumeNextWriteAttemptsForSelfTest());
+    },
+         false},
         {L"overReportWrite", [] { SetFileOpsBridgeOverReportNextWriteForSelfTest(1u); }, [] { SetFileOpsBridgeOverReportNextWriteForSelfTest(0u); }, false},
         {L"injectFileReparse", [] { SetFileOpsBridgeInjectFileReparseForSelfTest(1u); }, [] { SetFileOpsBridgeInjectFileReparseForSelfTest(0u); }, false},
-        {L"verificationUnavailable", [] { SetFileOpsVerificationForceUnavailableForSelfTest(1u); }, [] { SetFileOpsVerificationForceUnavailableForSelfTest(0u); }, true},
+        {L"verificationUnavailable",
+         [] { SetFileOpsVerificationForceUnavailableForSelfTest(1u); },
+         [] { SetFileOpsVerificationForceUnavailableForSelfTest(0u); },
+         true},
         {L"verificationMismatch", [] { SetFileOpsVerificationForceMismatchForSelfTest(1u); }, [] { SetFileOpsVerificationForceMismatchForSelfTest(0u); }, true},
-        {L"verificationHostReadback", [] { SetFileOpsVerificationForceHostReadbackForSelfTest(1u); }, [] { SetFileOpsVerificationForceHostReadbackForSelfTest(0u); }, true},
-        {L"managedCleanupKnownNonCommit", [] { SetFileOpsManagedCleanupKnownNonCommitForSelfTest(E_ACCESSDENIED, 1u); }, [] { SetFileOpsManagedCleanupKnownNonCommitForSelfTest(S_OK, 0u); }, false},
-        {L"managedCleanupUnknownOutcome", [] { SetFileOpsManagedCleanupUnknownOutcomeForSelfTest(1u); }, [] { SetFileOpsManagedCleanupUnknownOutcomeForSelfTest(0u); }, false},
+        {L"verificationHostReadback",
+         [] { SetFileOpsVerificationForceHostReadbackForSelfTest(1u); },
+         [] { SetFileOpsVerificationForceHostReadbackForSelfTest(0u); },
+         true},
+        {L"managedCleanupKnownNonCommit",
+         [] { SetFileOpsManagedCleanupKnownNonCommitForSelfTest(E_ACCESSDENIED, 1u); },
+         [] { SetFileOpsManagedCleanupKnownNonCommitForSelfTest(S_OK, 0u); },
+         false},
+        {L"managedCleanupUnknownOutcome",
+         [] { SetFileOpsManagedCleanupUnknownOutcomeForSelfTest(1u); },
+         [] { SetFileOpsManagedCleanupUnknownOutcomeForSelfTest(0u); },
+         false},
     }};
-    constexpr size_t kRouteCount            = 3u; // 0 Local->Local, 1 Local->Dummy (proof), 2 Local->Dummy (no proof)
-    constexpr size_t kRowCount              = kRows.size() * kRouteCount * 2u;
-    constexpr size_t kFileBytes             = 64u * 1024u;
-    const std::filesystem::path srcRoot     = state.tempRoot / L"r3-3-matrix-src";
-    const std::filesystem::path localDst    = state.tempRoot / L"r3-3-matrix-dst";
-    const std::wstring dummyDst             = L"/r3-3-matrix-dst";
-    const auto restoreVerifySetting         = [&]() noexcept
+    constexpr size_t kRouteCount         = 3u; // 0 Local->Local, 1 Local->Dummy (proof), 2 Local->Dummy (no proof)
+    constexpr size_t kRowCount           = kRows.size() * kRouteCount * 2u;
+    constexpr size_t kFileBytes          = 64u * 1024u;
+    const std::filesystem::path srcRoot  = state.tempRoot / L"r3-3-matrix-src";
+    const std::filesystem::path localDst = state.tempRoot / L"r3-3-matrix-dst";
+    const std::wstring dummyDst          = L"/r3-3-matrix-dst";
+    const auto restoreVerifySetting      = [&]() noexcept
     {
         EnsureFileOperationsSettingsForSelfTest().verifyAfterCopy =
             state.fileOperationsOriginal.has_value() ? state.fileOperationsOriginal->verifyAfterCopy : false;
     };
     // stepState encodes the row (0..kRowCount-1) * 2 + phase (0 = start, 1 = waiting).
-    const size_t row      = state.stepState / 2u;
-    const size_t rowIndex = row % kRows.size();
-    const size_t route    = (row / kRows.size()) % kRouteCount;
-    const bool isMove     = (row / (kRows.size() * kRouteCount)) != 0u;
-    const std::wstring fileName = std::format(L"matrix-{}.bin", row);
+    const size_t row                       = state.stepState / 2u;
+    const size_t rowIndex                  = row % kRows.size();
+    const size_t route                     = (row / kRows.size()) % kRouteCount;
+    const bool isMove                      = (row / (kRows.size() * kRouteCount)) != 0u;
+    const std::wstring fileName            = std::format(L"matrix-{}.bin", row);
     const std::filesystem::path sourceFile = srcRoot / fileName;
-    const auto dummyObjectExists = [&](const std::wstring& dummyPath) noexcept -> bool
+    const auto dummyObjectExists           = [&](const std::wstring& dummyPath) noexcept -> bool
     {
         wil::com_ptr<IFileSystemIO> io;
         wil::com_ptr<IFileReader> reader;
         return state.fsDummy && SUCCEEDED(state.fsDummy->QueryInterface(IID_PPV_ARGS(io.addressof()))) && io &&
                SUCCEEDED(io->CreateFileReader(dummyPath.c_str(), reader.addressof())) && reader;
     };
-    const auto describeRow = [&]() { return std::format(L"row {} ({}, route {}, {})", row, kRows[rowIndex].name, route, isMove ? L"move" : L"copy"); };
+    const auto describeRow  = [&]() { return std::format(L"row {} ({}, route {}, {})", row, kRows[rowIndex].name, route, isMove ? L"move" : L"copy"); };
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 600'000ull))
     {
@@ -9397,10 +9149,11 @@ case SelfTestState::Step::R3_3_PublicationFaultMatrix:
     kRows[rowIndex].disarm();
     restoreVerifySetting();
     const CompletedTaskInfo& info = completed->second;
-    const auto* const result      = info.sourceItemResults.empty() || ! info.sourceItemResults.front().has_value() ? nullptr : &info.sourceItemResults.front().value();
+    const auto* const result =
+        info.sourceItemResults.empty() || ! info.sourceItemResults.front().has_value() ? nullptr : &info.sourceItemResults.front().value();
     std::error_code ec;
-    const bool sourceExists      = std::filesystem::exists(sourceFile, ec);
-    const bool destinationExists = route == 0u ? std::filesystem::exists(localDst / fileName, ec) : dummyObjectExists(dummyDst + L"/" + fileName);
+    const bool sourceExists        = std::filesystem::exists(sourceFile, ec);
+    const bool destinationExists   = route == 0u ? std::filesystem::exists(localDst / fileName, ec) : dummyObjectExists(dummyDst + L"/" + fileName);
     size_t localDestinationEntries = 0u;
     if (route == 0u)
     {
@@ -9459,7 +9212,8 @@ case SelfTestState::Step::R3_3_PublicationFaultMatrix:
     }
     if (! violation.empty())
     {
-        Fail(std::format(L"R3-3 fault matrix violation at {}: {} (task hr=0x{:08X} status=0x{:08X} completion={} publication={} verification={} disposition={} sourceExists={} destinationExists={}).",
+        Fail(std::format(L"R3-3 fault matrix violation at {}: {} (task hr=0x{:08X} status=0x{:08X} completion={} publication={} verification={} disposition={} "
+                         L"sourceExists={} destinationExists={}).",
                          describeRow(),
                          violation,
                          static_cast<unsigned long>(info.hr),
@@ -9587,7 +9341,8 @@ case SelfTestState::Step::R3_4_ReplaceWithoutOccupantTokenRefused:
         }
         SetFileOpsBridgeFailNextDestinationBasicInfoForSelfTest(0u);
         const CompletedTaskInfo& info = completed->second;
-        const auto* const result      = info.sourceItemResults.empty() || ! info.sourceItemResults.front().has_value() ? nullptr : &info.sourceItemResults.front().value();
+        const auto* const result =
+            info.sourceItemResults.empty() || ! info.sourceItemResults.front().has_value() ? nullptr : &info.sourceItemResults.front().value();
         if (result == nullptr || result->publication == FileOperations::PublicationState::Published || info.hr == S_OK)
         {
             Fail(std::format(L"R3-4: a replacement without an occupant token must not publish (task hr=0x{:08X} publication={}).",
@@ -9698,12 +9453,12 @@ case SelfTestState::Step::R4T_DeepTreeCopyCompletesIteratively:
     // (parallel producer) and the copy is copied again with verification requested (sequential
     // walker); both complete with every item published and no traversal-limit diagnostic. Dummy
     // paths have no length limit, so the walkers, not the provider, are what this exercises.
-    constexpr uint32_t kLevels                  = 300u;
-    constexpr std::wstring_view kRoot           = L"/r4t-deep";
-    const std::wstring sourceRoot               = std::wstring(kRoot) + L"/src";
-    const std::wstring copyRoot                 = std::wstring(kRoot) + L"/copy";
-    const std::wstring moveRoot                 = std::wstring(kRoot) + L"/moved";
-    const auto chainPath = [&](const std::wstring& root, uint32_t levels) noexcept
+    constexpr uint32_t kLevels        = 300u;
+    constexpr std::wstring_view kRoot = L"/r4t-deep";
+    const std::wstring sourceRoot     = std::wstring(kRoot) + L"/src";
+    const std::wstring copyRoot       = std::wstring(kRoot) + L"/copy";
+    const std::wstring moveRoot       = std::wstring(kRoot) + L"/moved";
+    const auto chainPath              = [&](const std::wstring& root, uint32_t levels) noexcept
     {
         std::wstring path = root;
         for (uint32_t level = 1u; level <= levels; ++level)
@@ -9794,19 +9549,19 @@ case SelfTestState::Step::R4T_DeepTreeCopyCompletesIteratively:
         // identity), so the sequential walker is reached through verification: a verified Copy
         // runs with a within-folder budget of one.
         EnsureFileOperationsSettingsForSelfTest().verifyAfterCopy = true;
-        state.taskA = StartFileOperationAndGetId(state.fileOps,
-                                                 FILESYSTEM_COPY,
-                                                 FolderWindow::Pane::Left,
-                                                 FolderWindow::Pane::Right,
-                                                 state.fsDummy,
-                                                 {std::filesystem::path(copyRoot + L"/src")},
-                                                 std::filesystem::path(moveRoot),
-                                                 FILESYSTEM_FLAG_RECURSIVE,
-                                                 false,
-                                                 0,
-                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                 false,
-                                                 state.fsDummy);
+        state.taskA                                               = StartFileOperationAndGetId(state.fileOps,
+                                                                                               FILESYSTEM_COPY,
+                                                                                               FolderWindow::Pane::Left,
+                                                                                               FolderWindow::Pane::Right,
+                                                                                               state.fsDummy,
+                                                                                               {std::filesystem::path(copyRoot + L"/src")},
+                                                                                               std::filesystem::path(moveRoot),
+                                                                                               FILESYSTEM_FLAG_RECURSIVE,
+                                                                                               false,
+                                                                                               0,
+                                                                                               FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                                                               false,
+                                                                                               state.fsDummy);
         if (! state.taskA.has_value())
         {
             restoreVerification();
@@ -9844,9 +9599,9 @@ case SelfTestState::Step::R4T2_DeepTreeLocalDeleteCompletes:
     // so a directory chain far deeper than the former 128-level walk-depth ceiling is removed. The
     // chain is created through the Local plugin (extended-length paths), lies beyond MAX_PATH, and
     // is deleted permanently through the host File Operations.
-    constexpr uint32_t kLevels             = 300u;
-    const std::filesystem::path root       = state.tempRoot / L"r4t2-deep";
-    const ULONGLONG nowTick                = GetTickCount64();
+    constexpr uint32_t kLevels       = 300u;
+    const std::filesystem::path root = state.tempRoot / L"r4t2-deep";
+    const ULONGLONG nowTick          = GetTickCount64();
     if (HasTimedOut(state, nowTick, 180'000ull))
     {
         HostClearTestPromptResultOverride();
@@ -10028,8 +9783,7 @@ case SelfTestState::Step::R4T3_WideDirectoryCopyCompletes:
         restoreDummyConfig();
         const std::wstring firstCopied = copyRoot + L"/src/" + childName(0u);
         const std::wstring lastCopied  = copyRoot + L"/src/" + childName(kChildren - 1u);
-        if (FAILED(completed->second.hr) || completed->second.bridgeTraversalLimitHitCount != 0u || ! dummyExists(firstCopied) ||
-            ! dummyExists(lastCopied))
+        if (FAILED(completed->second.hr) || completed->second.bridgeTraversalLimitHitCount != 0u || ! dummyExists(firstCopied) || ! dummyExists(lastCopied))
         {
             Fail(std::format(L"R4T3: the 20,000-child directory Copy must complete without a traversal ceiling (hr=0x{:08X}, limit hits={}, "
                              L"retained metadata high-water={} bytes, first present={}, last present={}).",
@@ -10056,12 +9810,12 @@ case SelfTestState::Step::R4A02_DontStartCancelsBeforeMutation:
     // runs once it terminates (source gone, Copy complete). Don't start: the Delete ends as a Preparing
     // cancel, nothing is removed, the Copy completes. The Copy is slow because it publishes into the
     // seeded Dummy provider (5 ms per access).
-    const bool dontStart                = state.step == SelfTestState::Step::R4A02_DontStartCancelsBeforeMutation;
-    const wchar_t* const label          = dontStart ? L"R4A02 don't start" : L"R4A02 queue after";
-    const std::filesystem::path srcDir  = state.tempRoot / (dontStart ? L"r4a02-dontstart-src" : L"r4a02-queue-src");
+    const bool dontStart                   = state.step == SelfTestState::Step::R4A02_DontStartCancelsBeforeMutation;
+    const wchar_t* const label             = dontStart ? L"R4A02 don't start" : L"R4A02 queue after";
+    const std::filesystem::path srcDir     = state.tempRoot / (dontStart ? L"r4a02-dontstart-src" : L"r4a02-queue-src");
     constexpr std::wstring_view kDummyRoot = L"/r4a02";
-    const std::wstring dummyDest        = std::wstring(kDummyRoot) + (dontStart ? L"/dontstart" : L"/queue");
-    const ULONGLONG nowTick             = GetTickCount64();
+    const std::wstring dummyDest           = std::wstring(kDummyRoot) + (dontStart ? L"/dontstart" : L"/queue");
+    const ULONGLONG nowTick                = GetTickCount64();
     if (HasTimedOut(state, nowTick, 300'000ull))
     {
         HostClearTestPromptResultOverride();
@@ -10161,9 +9915,9 @@ case SelfTestState::Step::R4A02_DontStartCancelsBeforeMutation:
             return false;
         }
         if (prompt->bucket != Task::ConflictBucket::SameHostOverlap || ! PromptHasAction(prompt.value(), Task::ConflictAction::Proceed) ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently) ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::Cancel) || prompt->defaultAction != Task::ConflictAction::Proceed ||
-            prompt->escapeAction != Task::ConflictAction::Cancel || prompt->overlapTaskId != state.taskA.value())
+            ! PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently) || ! PromptHasAction(prompt.value(), Task::ConflictAction::Cancel) ||
+            prompt->defaultAction != Task::ConflictAction::Proceed || prompt->escapeAction != Task::ConflictAction::Cancel ||
+            prompt->overlapTaskId != state.taskA.value())
         {
             Fail(std::format(L"{}: the warning must name the overlapping Copy (task {}) with Queue (default), Run, and Don't start "
                              L"(bucket={}, named task={}).",
@@ -10200,11 +9954,12 @@ case SelfTestState::Step::R4A02_DontStartCancelsBeforeMutation:
         {
             if (deleteDone->second.hr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || ! sourceExists || FAILED(copyDone->second.hr))
             {
-                Fail(std::format(L"{}: Don't start must end the Delete as a cancel with the source intact (delete hr=0x{:08X}, source exists={}, copy hr=0x{:08X}).",
-                                 label,
-                                 static_cast<unsigned long>(deleteDone->second.hr),
-                                 sourceExists,
-                                 static_cast<unsigned long>(copyDone->second.hr)));
+                Fail(std::format(
+                    L"{}: Don't start must end the Delete as a cancel with the source intact (delete hr=0x{:08X}, source exists={}, copy hr=0x{:08X}).",
+                    label,
+                    static_cast<unsigned long>(deleteDone->second.hr),
+                    sourceExists,
+                    static_cast<unsigned long>(copyDone->second.hr)));
                 return true;
             }
             NextStep(state, SelfTestState::Step::R4A02_ReadReadDoesNotWarn);
@@ -10256,10 +10011,24 @@ case SelfTestState::Step::R4A02_ReadReadDoesNotWarn:
                 return true;
             }
         }
-        state.taskA = StartFileOperationAndGetId(
-            state.fileOps, FILESYSTEM_COPY, FolderWindow::Pane::Left, FolderWindow::Pane::Right, state.fsLocal, {srcDir}, dstA, FILESYSTEM_FLAG_RECURSIVE, false);
-        state.taskB = StartFileOperationAndGetId(
-            state.fileOps, FILESYSTEM_COPY, FolderWindow::Pane::Left, FolderWindow::Pane::Right, state.fsLocal, {srcDir}, dstB, FILESYSTEM_FLAG_RECURSIVE, false);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {srcDir},
+                                                 dstA,
+                                                 FILESYSTEM_FLAG_RECURSIVE,
+                                                 false);
+        state.taskB = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {srcDir},
+                                                 dstB,
+                                                 FILESYSTEM_FLAG_RECURSIVE,
+                                                 false);
         if (! state.taskA.has_value() || ! state.taskB.has_value())
         {
             Fail(L"R4A02 read/read: one of the Copies did not start.");
@@ -10331,10 +10100,24 @@ case SelfTestState::Step::R4A02_SameDestinationWarns:
                 return true;
             }
         }
-        state.taskA = StartFileOperationAndGetId(
-            state.fileOps, FILESYSTEM_COPY, FolderWindow::Pane::Left, FolderWindow::Pane::Right, state.fsLocal, {sourceA}, destination, FILESYSTEM_FLAG_RECURSIVE, false);
-        state.taskB = StartFileOperationAndGetId(
-            state.fileOps, FILESYSTEM_COPY, FolderWindow::Pane::Left, FolderWindow::Pane::Right, state.fsLocal, {sourceB}, destination, FILESYSTEM_FLAG_RECURSIVE, false);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {sourceA},
+                                                 destination,
+                                                 FILESYSTEM_FLAG_RECURSIVE,
+                                                 false);
+        state.taskB = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {sourceB},
+                                                 destination,
+                                                 FILESYSTEM_FLAG_RECURSIVE,
+                                                 false);
         if (! state.taskA.has_value() || ! state.taskB.has_value())
         {
             Fail(L"R4A02 same destination could not start both Copies.");
@@ -10345,8 +10128,8 @@ case SelfTestState::Step::R4A02_SameDestinationWarns:
     }
     if (state.stepState == 1u)
     {
-        Task* const taskA = state.fileOps->FindTask(state.taskA.value());
-        Task* const taskB = state.fileOps->FindTask(state.taskB.value());
+        Task* const taskA  = state.fileOps->FindTask(state.taskA.value());
+        Task* const taskB  = state.fileOps->FindTask(state.taskB.value());
         const auto promptA = TryGetConflictPromptCopy(taskA);
         const auto promptB = TryGetConflictPromptCopy(taskB);
         if (! promptA.has_value() && ! promptB.has_value())
@@ -10417,15 +10200,15 @@ case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
     // scope is the same destination subtree. The second task bypasses only the disclosed active
     // relation, both tasks are admitted at once, and disjoint members from both immutable result
     // sets reach the destination without disabling ordinary per-item policy.
-    const std::filesystem::path rootA   = state.tempRoot / L"r4a02-run-a";
-    const std::filesystem::path rootB   = state.tempRoot / L"r4a02-run-b";
-    const std::filesystem::path rootC   = state.tempRoot / L"r4a02-run-c";
-    const std::filesystem::path sourceA = rootA / L"shared";
-    const std::filesystem::path sourceB = rootB / L"shared";
-    const std::filesystem::path sourceC = rootC / L"shared";
-    const std::filesystem::path destination = state.tempRoot / L"r4a02-run-out";
+    const std::filesystem::path rootA                             = state.tempRoot / L"r4a02-run-a";
+    const std::filesystem::path rootB                             = state.tempRoot / L"r4a02-run-b";
+    const std::filesystem::path rootC                             = state.tempRoot / L"r4a02-run-c";
+    const std::filesystem::path sourceA                           = rootA / L"shared";
+    const std::filesystem::path sourceB                           = rootB / L"shared";
+    const std::filesystem::path sourceC                           = rootC / L"shared";
+    const std::filesystem::path destination                       = state.tempRoot / L"r4a02-run-out";
     constexpr uint64_t kConcurrentWitnessSpeedLimitBytesPerSecond = 128ull * 1024ull;
-    const ULONGLONG nowTick = GetTickCount64();
+    const ULONGLONG nowTick                                       = GetTickCount64();
     if (HasTimedOut(state, nowTick, 300'000ull))
     {
         Fail(std::format(L"R4A02 Run concurrent timed out at step {}.", state.stepState));
@@ -10518,7 +10301,7 @@ case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
     if (state.stepState == 2u)
     {
         Task* const second = state.fileOps->FindTask(state.taskB.value());
-        const auto prompt = TryGetConflictPromptCopy(second);
+        const auto prompt  = TryGetConflictPromptCopy(second);
         if (! prompt.has_value())
         {
             if (state.completedTasks.contains(state.taskB.value()))
@@ -10529,8 +10312,7 @@ case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
             return false;
         }
         if (prompt->bucket != Task::ConflictBucket::SameHostOverlap || prompt->overlapTaskId != state.taskA.value() ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::Proceed) ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently) ||
+            ! PromptHasAction(prompt.value(), Task::ConflictAction::Proceed) || ! PromptHasAction(prompt.value(), Task::ConflictAction::RunConcurrently) ||
             ! PromptHasAction(prompt.value(), Task::ConflictAction::Cancel) || prompt->defaultAction != Task::ConflictAction::Proceed ||
             prompt->escapeAction != Task::ConflictAction::Cancel)
         {
@@ -10603,13 +10385,11 @@ case SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe:
         return false;
     }
     std::error_code outputEc;
-    const bool outputsPresent = std::filesystem::exists(destination / L"shared" / L"a000.bin", outputEc) &&
-                                std::filesystem::exists(destination / L"shared" / L"a399.bin", outputEc) &&
-                                std::filesystem::exists(destination / L"shared" / L"b000.bin", outputEc) &&
-                                std::filesystem::exists(destination / L"shared" / L"b399.bin", outputEc);
+    const bool outputsPresent =
+        std::filesystem::exists(destination / L"shared" / L"a000.bin", outputEc) && std::filesystem::exists(destination / L"shared" / L"a399.bin", outputEc) &&
+        std::filesystem::exists(destination / L"shared" / L"b000.bin", outputEc) && std::filesystem::exists(destination / L"shared" / L"b399.bin", outputEc);
     if (! state.r4a02ConcurrentAdmissionObserved || FAILED(completedA->second.hr) || FAILED(completedB->second.hr) ||
-        completedC->second.hr != HRESULT_FROM_WIN32(ERROR_CANCELLED) ||
-        completedB->second.interlockWaitCount != 0u || ! outputsPresent)
+        completedC->second.hr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || completedB->second.interlockWaitCount != 0u || ! outputsPresent)
     {
         Fail(std::format(L"R4A02 Run concurrent must admit both disclosed tasks and retain both result sets "
                          L"(observed={}, A=0x{:08X}, B=0x{:08X}, C=0x{:08X}, B waits={}, outputs={}).",
@@ -10634,19 +10414,20 @@ case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
     // consequence without relying on transfer timing. The item gate must protect the live publisher
     // for Skip, Queue, and explicit destructive consent. The Queue row forces the fixed publication
     // index into overflow and proves the conservative active-scope fallback.
-    const uint32_t scenario = state.r4a02LiveOutputScenario;
-    const wchar_t* const scenarioName = scenario == 0u ? L"Skip" : scenario == 1u ? L"Queue" : L"Delete anyway";
-    const std::filesystem::path sourceParent = state.tempRoot / std::format(L"r4a02-live-source-{}", scenario);
-    const std::filesystem::path sourceItem   = sourceParent / L"a-published.bin";
-    const std::filesystem::path destination  = state.tempRoot / std::format(L"r4a02-live-output-{}", scenario);
+    const uint32_t scenario                   = state.r4a02LiveOutputScenario;
+    const wchar_t* const scenarioName         = scenario == 0u ? L"Skip" : scenario == 1u ? L"Queue" : L"Delete anyway";
+    const std::filesystem::path sourceParent  = state.tempRoot / std::format(L"r4a02-live-source-{}", scenario);
+    const std::filesystem::path sourceItem    = sourceParent / L"a-published.bin";
+    const std::filesystem::path destination   = state.tempRoot / std::format(L"r4a02-live-output-{}", scenario);
     const std::filesystem::path publishedItem = destination / L"a-published.bin";
-    const auto releasePauses = []() noexcept {
+    const auto releasePauses                  = []() noexcept
+    {
         ReleaseFileOpsPermanentDeleteBeforeLiveOutputGuardPauseForSelfTest();
         SetFileOpsPermanentDeleteBeforeLiveOutputGuardPauseForSelfTest(false);
         ReleaseFileOpsLiveOutputPublishedPauseForSelfTest();
         SetFileOpsLiveOutputPublishedPauseForSelfTest(false);
     };
-    const ULONGLONG nowTick                   = GetTickCount64();
+    const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 300'000ull))
     {
         releasePauses();
@@ -10835,8 +10616,8 @@ case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
         Task* const publisher = state.fileOps->FindTask(state.taskA.value());
         if (scenario == 1u)
         {
-            state.r4a02LiveOutputQueueObserved = publisher != nullptr && ! state.completedTasks.contains(state.taskA.value()) &&
-                                                 ! state.completedTasks.contains(state.taskB.value());
+            state.r4a02LiveOutputQueueObserved =
+                publisher != nullptr && ! state.completedTasks.contains(state.taskA.value()) && ! state.completedTasks.contains(state.taskB.value());
             ReleaseFileOpsLiveOutputPublishedPauseForSelfTest();
             SetFileOpsLiveOutputPublishedPauseForSelfTest(false);
         }
@@ -10844,7 +10625,7 @@ case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
         return false;
     }
 
-    const auto publisherDone = state.completedTasks.find(state.taskA.value());
+    const auto publisherDone   = state.completedTasks.find(state.taskA.value());
     const auto invalidatorDone = state.completedTasks.find(state.taskB.value());
     std::error_code existsEc;
     const bool itemExists = std::filesystem::exists(publishedItem, existsEc);
@@ -10859,7 +10640,7 @@ case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
         return false;
     }
 
-    const bool expectedItemExists = scenario == 0u;
+    const bool expectedItemExists       = scenario == 0u;
     const HRESULT expectedInvalidatorHr = scenario == 0u ? S_FALSE : S_OK;
     if (FAILED(publisherDone->second.hr) || invalidatorDone->second.hr != expectedInvalidatorHr || itemExists != expectedItemExists ||
         ! state.r4a02LiveOutputQueueObserved)
@@ -10889,7 +10670,7 @@ case SelfTestState::Step::R4A02_LiveOutputGuardChoices:
 
 case SelfTestState::Step::R4A02_DisjointWritesDoNotWarn:
 {
-    using Task = FolderWindow::FileOperationState::Task;
+    using Task                          = FolderWindow::FileOperationState::Task;
     const std::filesystem::path sourceA = state.tempRoot / L"r4a02-disjoint-source-a";
     const std::filesystem::path sourceB = state.tempRoot / L"r4a02-disjoint-source-b";
     const std::filesystem::path targetA = state.tempRoot / L"r4a02-disjoint-target-a";
@@ -10913,10 +10694,24 @@ case SelfTestState::Step::R4A02_DisjointWritesDoNotWarn:
             Fail(L"R4A02 disjoint writes could not stage the sources.");
             return true;
         }
-        state.taskA = StartFileOperationAndGetId(
-            state.fileOps, FILESYSTEM_COPY, FolderWindow::Pane::Left, FolderWindow::Pane::Right, state.fsLocal, {sourceA}, targetA, FILESYSTEM_FLAG_RECURSIVE, false);
-        state.taskB = StartFileOperationAndGetId(
-            state.fileOps, FILESYSTEM_COPY, FolderWindow::Pane::Left, FolderWindow::Pane::Right, state.fsLocal, {sourceB}, targetB, FILESYSTEM_FLAG_RECURSIVE, false);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {sourceA},
+                                                 targetA,
+                                                 FILESYSTEM_FLAG_RECURSIVE,
+                                                 false);
+        state.taskB = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {sourceB},
+                                                 targetB,
+                                                 FILESYSTEM_FLAG_RECURSIVE,
+                                                 false);
         if (! state.taskA.has_value() || ! state.taskB.has_value())
         {
             Fail(L"R4A02 disjoint writes could not start both Copies.");
@@ -10955,7 +10750,7 @@ case SelfTestState::Step::R4A02_RenamePublishKeepsIndexPrecise:
     // scope it holds. That publication must be indexed like any other live output, not degrade the
     // whole host to the overflow fallback (which also withholds Invalidate for every other task) for
     // as long as the rename task lives. Observed at the publish pause point while the task is live.
-    using Task = FolderWindow::FileOperationState::Task;
+    using Task                         = FolderWindow::FileOperationState::Task;
     const std::filesystem::path root   = state.tempRoot / L"r4a02-rename-index";
     const std::filesystem::path source = root / L"before.bin";
     const std::filesystem::path target = root / L"after.bin";
@@ -10973,8 +10768,7 @@ case SelfTestState::Step::R4A02_RenamePublishKeepsIndexPrecise:
     }
     if (state.stepState == 0u)
     {
-        const wil::com_ptr<IFileSystem> paneFileSystem =
-            state.folderWindow ? state.folderWindow->GetFileSystem(FolderWindow::Pane::Left) : nullptr;
+        const wil::com_ptr<IFileSystem> paneFileSystem = state.folderWindow ? state.folderWindow->GetFileSystem(FolderWindow::Pane::Left) : nullptr;
         if (! state.fileOps || ! paneFileSystem)
         {
             Fail(L"R4A02 rename index requires the left pane file system.");
@@ -11023,7 +10817,8 @@ case SelfTestState::Step::R4A02_RenamePublishKeepsIndexPrecise:
         releasePauses();
         if (rename == nullptr || overflowed)
         {
-            Fail(std::format(L"R4A02 rename index: a live rename publication must be indexed under its parent scope, not overflow the host index (task present={}, overflow={}).",
+            Fail(std::format(L"R4A02 rename index: a live rename publication must be indexed under its parent scope, not overflow the host index (task "
+                             L"present={}, overflow={}).",
                              rename != nullptr ? 1 : 0,
                              overflowed ? 1 : 0));
             return true;
@@ -11064,9 +10859,9 @@ case SelfTestState::Step::R4A02_LatePublisherStillWarns:
     // it, instead of falling back to the silent interlock wait. T0 is a slow Dummy copy that keeps
     // queue mode busy so the newer Copy stays prepared; T1 is a Permanent Delete of folder X held
     // before its bind (before publication); T2 is a Copy into X admitted while T1 is held.
-    using Task = FolderWindow::FileOperationState::Task;
-    static ULONGLONG releaseTick = 0u;
-    static bool slowCanceled     = false;
+    using Task                             = FolderWindow::FileOperationState::Task;
+    static ULONGLONG releaseTick           = 0u;
+    static bool slowCanceled               = false;
     const std::filesystem::path root       = state.tempRoot / L"r4a02-late-publisher";
     const std::filesystem::path folderX    = root / L"x";
     const std::filesystem::path sourceFile = root / L"payload.bin";
@@ -11128,8 +10923,8 @@ case SelfTestState::Step::R4A02_LatePublisherStillWarns:
             Fail(L"R4A02 late publisher could not stage its folders.");
             return true;
         }
-        releaseTick  = 0u;
-        slowCanceled = false;
+        releaseTick                  = 0u;
+        slowCanceled                 = false;
         state.r4a02QueueModeOriginal = state.fileOps->GetQueueNewTasks();
         state.fileOps->ApplyQueueMode(true);
         state.taskC = StartFileOperationAndGetId(state.fileOps,
@@ -11270,10 +11065,11 @@ case SelfTestState::Step::R4A02_LatePublisherStillWarns:
             ! PromptHasAction(prompt.value(), Task::ConflictAction::Proceed) || ! PromptHasAction(prompt.value(), Task::ConflictAction::Cancel))
         {
             releaseAll();
-            Fail(std::format(L"R4A02 late publisher: the Delete's warning must name the Copy (task {}) with Queue after and Don't start (bucket={}, named task={}).",
-                             state.taskB.value(),
-                             static_cast<unsigned int>(prompt->bucket),
-                             prompt->overlapTaskId));
+            Fail(std::format(
+                L"R4A02 late publisher: the Delete's warning must name the Copy (task {}) with Queue after and Don't start (bucket={}, named task={}).",
+                state.taskB.value(),
+                static_cast<unsigned int>(prompt->bucket),
+                prompt->overlapTaskId));
             return true;
         }
         remove->SubmitConflictDecision(Task::ConflictAction::Proceed, false);
@@ -11303,10 +11099,11 @@ case SelfTestState::Step::R4A02_LatePublisherStillWarns:
         if (FAILED(copyDone->second.hr) || FAILED(removeDone->second.hr) || std::filesystem::exists(folderX, ec) ||
             removeDone->second.completionTick < copyDone->second.completionTick)
         {
-            Fail(std::format(L"R4A02 late publisher: the Copy must complete first (hr=0x{:08X}) and the queued Delete after it (hr=0x{:08X}, folder exists={}).",
-                             static_cast<unsigned long>(copyDone->second.hr),
-                             static_cast<unsigned long>(removeDone->second.hr),
-                             std::filesystem::exists(folderX, ec) ? 1 : 0));
+            Fail(
+                std::format(L"R4A02 late publisher: the Copy must complete first (hr=0x{:08X}) and the queued Delete after it (hr=0x{:08X}, folder exists={}).",
+                            static_cast<unsigned long>(copyDone->second.hr),
+                            static_cast<unsigned long>(removeDone->second.hr),
+                            std::filesystem::exists(folderX, ec) ? 1 : 0));
             return true;
         }
         static_cast<void>(SelfTest::RemoveAll(root));
@@ -11325,17 +11122,15 @@ case SelfTestState::Step::Phase5_DiscoverySingleTraversal:
         return true;
     }
 
-    constexpr unsigned int kDirectoryCount = 8u;
-    constexpr unsigned int kFilesPerDirectory = 8u;
-    constexpr size_t kFileBytes = 1024u;
-    constexpr uint64_t kExpectedBytes =
-        static_cast<uint64_t>(kDirectoryCount) * kFilesPerDirectory * kFileBytes;
-    constexpr unsigned long kExpectedFiles = kDirectoryCount * kFilesPerDirectory;
+    constexpr unsigned int kDirectoryCount       = 8u;
+    constexpr unsigned int kFilesPerDirectory    = 8u;
+    constexpr size_t kFileBytes                  = 1024u;
+    constexpr uint64_t kExpectedBytes            = static_cast<uint64_t>(kDirectoryCount) * kFilesPerDirectory * kFileBytes;
+    constexpr unsigned long kExpectedFiles       = kDirectoryCount * kFilesPerDirectory;
     constexpr unsigned long kExpectedDirectories = kDirectoryCount + 1u;
-    const std::filesystem::path sourceRoot = state.tempRoot / L"discovery-single-traversal-src";
-    const std::filesystem::path destinationRoot = state.tempRoot / L"discovery-single-traversal-dst";
-    const FileSystemFlags flags =
-        static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+    const std::filesystem::path sourceRoot       = state.tempRoot / L"discovery-single-traversal-src";
+    const std::filesystem::path destinationRoot  = state.tempRoot / L"discovery-single-traversal-dst";
+    const FileSystemFlags flags                  = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
 
     if (state.stepState == 0)
     {
@@ -11374,15 +11169,8 @@ case SelfTestState::Step::Phase5_DiscoverySingleTraversal:
             return true;
         }
 
-        state.taskA = StartFileOperationAndGetId(state.fileOps,
-                                                 FILESYSTEM_COPY,
-                                                 FolderWindow::Pane::Left,
-                                                 FolderWindow::Pane::Right,
-                                                 state.fsLocal,
-                                                 {sourceRoot},
-                                                 destinationRoot,
-                                                 flags,
-                                                 false);
+        state.taskA = StartFileOperationAndGetId(
+            state.fileOps, FILESYSTEM_COPY, FolderWindow::Pane::Left, FolderWindow::Pane::Right, state.fsLocal, {sourceRoot}, destinationRoot, flags, false);
         if (! state.taskA.has_value())
         {
             Fail(L"Failed to start the single-traversal discovery copy.");
@@ -11406,23 +11194,19 @@ case SelfTestState::Step::Phase5_DiscoverySingleTraversal:
     }
 
     const CompletedTaskInfo& completion = completionIt->second;
-    if (FAILED(completion.hr) || ! completion.discoveryClosed ||
-        completion.discoveredTotalBytes != kExpectedBytes ||
-        completion.discoveredFiles != kExpectedFiles ||
-        completion.discoveredDirectories != kExpectedDirectories ||
-        completion.discoveryMaxQueueDepth > 256u)
+    if (FAILED(completion.hr) || ! completion.discoveryClosed || completion.discoveredTotalBytes != kExpectedBytes ||
+        completion.discoveredFiles != kExpectedFiles || completion.discoveredDirectories != kExpectedDirectories || completion.discoveryMaxQueueDepth > 256u)
     {
-        Fail(std::format(
-            L"Single traversal mismatch: hr=0x{:08X} closed={} bytes={}/{} files={}/{} dirs={}/{} queueMax={}.",
-            static_cast<unsigned long>(completion.hr),
-            completion.discoveryClosed ? 1 : 0,
-            completion.discoveredTotalBytes,
-            kExpectedBytes,
-            completion.discoveredFiles,
-            kExpectedFiles,
-            completion.discoveredDirectories,
-            kExpectedDirectories,
-            completion.discoveryMaxQueueDepth));
+        Fail(std::format(L"Single traversal mismatch: hr=0x{:08X} closed={} bytes={}/{} files={}/{} dirs={}/{} queueMax={}.",
+                         static_cast<unsigned long>(completion.hr),
+                         completion.discoveryClosed ? 1 : 0,
+                         completion.discoveredTotalBytes,
+                         kExpectedBytes,
+                         completion.discoveredFiles,
+                         kExpectedFiles,
+                         completion.discoveredDirectories,
+                         kExpectedDirectories,
+                         completion.discoveryMaxQueueDepth));
         return true;
     }
 
@@ -11431,8 +11215,7 @@ case SelfTestState::Step::Phase5_DiscoverySingleTraversal:
     {
         for (unsigned int fileIndex = 0u; fileIndex < kFilesPerDirectory; ++fileIndex)
         {
-            const std::filesystem::path copied =
-                copiedRoot / std::format(L"dir-{:02}", directoryIndex) / std::format(L"file-{:02}.bin", fileIndex);
+            const std::filesystem::path copied = copiedRoot / std::format(L"dir-{:02}", directoryIndex) / std::format(L"file-{:02}.bin", fileIndex);
             if (! FileSizeEquals(copied, kFileBytes))
             {
                 Fail(std::format(L"Single traversal failed to publish {} intact.", copied.wstring()));
@@ -11594,9 +11377,8 @@ case SelfTestState::Step::Phase5_DiscoveryCancelReleasesSlot:
         FileOperationsPopupInternal::TaskSnapshot queuedTaskSnapshot{};
         static_cast<void>(DebugGetFileOperationsPopupTaskSnapshot(popup, state.taskB.value(), queuedTaskSnapshot));
         if (! queuedLayout.taskStartNowVisible || ! queuedLayout.taskCancelVisible || ! queuedLayout.taskSpeedLimitVisible ||
-            ! queuedLayout.taskSpeedLimitUsesSelectorChrome || ! queuedLayout.taskSpeedLimitShowsCurrentValue ||
-            queuedLayout.taskQueueMoveUpVisible || ! queuedLayout.taskQueueMoveDownVisible ||
-            ! queuedLayoutC.taskQueueMoveUpVisible || queuedLayoutC.taskQueueMoveDownVisible)
+            ! queuedLayout.taskSpeedLimitUsesSelectorChrome || ! queuedLayout.taskSpeedLimitShowsCurrentValue || queuedLayout.taskQueueMoveUpVisible ||
+            ! queuedLayout.taskQueueMoveDownVisible || ! queuedLayoutC.taskQueueMoveUpVisible || queuedLayoutC.taskQueueMoveDownVisible)
         {
             if (! HasTimedOut(state, GetTickCount64(), 5'000ull))
             {
@@ -11623,7 +11405,6 @@ case SelfTestState::Step::Phase5_DiscoveryCancelReleasesSlot:
             return true;
         }
 
-
         FileOperationsPopupInternal::TaskSnapshot queuedTaskSnapshotC{};
         static_cast<void>(DebugGetFileOperationsPopupTaskSnapshot(popup, state.taskC.value(), queuedTaskSnapshotC));
         const uint64_t firstKeyBefore  = queuedTaskSnapshot.queueOrderKey;
@@ -11639,8 +11420,8 @@ case SelfTestState::Step::Phase5_DiscoveryCancelReleasesSlot:
         FileOperationsPopupInternal::TaskSnapshot reorderedTaskB{};
         FileOperationsPopupInternal::TaskSnapshot reorderedTaskC{};
         if (! DebugGetFileOperationsPopupTaskSnapshot(popup, state.taskB.value(), reorderedTaskB) ||
-            ! DebugGetFileOperationsPopupTaskSnapshot(popup, state.taskC.value(), reorderedTaskC) ||
-            reorderedTaskB.queueOrderKey != secondKeyBefore || reorderedTaskC.queueOrderKey != firstKeyBefore)
+            ! DebugGetFileOperationsPopupTaskSnapshot(popup, state.taskC.value(), reorderedTaskC) || reorderedTaskB.queueOrderKey != secondKeyBefore ||
+            reorderedTaskC.queueOrderKey != firstKeyBefore)
         {
             Fail(std::format(L"Queue reorder should swap engine order keys; before B={} C={}, after B={} C={}.",
                              firstKeyBefore,
@@ -11706,19 +11487,17 @@ case SelfTestState::Step::Phase5_DiscoveryCancelReleasesSlot:
 
             if (! layout.taskToggleCollapseVisible || ! layout.taskCancelVisible || ! layout.taskSpeedLimitVisible ||
                 ! layout.taskSpeedLimitUsesSelectorChrome || ! layout.taskSpeedLimitShowsCurrentValue ||
-                (layout.taskDiscoveryAheadActive && ! layout.taskSkipVisible) ||
-                (! layout.taskDiscoveryAheadActive && layout.taskSkipVisible))
+                (layout.taskDiscoveryAheadActive && ! layout.taskSkipVisible) || (! layout.taskDiscoveryAheadActive && layout.taskSkipVisible))
             {
-                Fail(std::format(
-                    L"Copy task should expose collapse, Speed Limit, and Cancel throughout, with Skip exactly while discovery-ahead is active; "
-                    L"collapse={} discovery={} skip={} speedLimit={} speedLimitSelector={} speedLimitValue={} cancel={}.",
-                    layout.taskToggleCollapseVisible ? 1 : 0,
-                    layout.taskDiscoveryAheadActive ? 1 : 0,
-                    layout.taskSkipVisible ? 1 : 0,
-                    layout.taskSpeedLimitVisible ? 1 : 0,
-                    layout.taskSpeedLimitUsesSelectorChrome ? 1 : 0,
-                    layout.taskSpeedLimitShowsCurrentValue ? 1 : 0,
-                    layout.taskCancelVisible ? 1 : 0));
+                Fail(std::format(L"Copy task should expose collapse, Speed Limit, and Cancel throughout, with Skip exactly while discovery-ahead is active; "
+                                 L"collapse={} discovery={} skip={} speedLimit={} speedLimitSelector={} speedLimitValue={} cancel={}.",
+                                 layout.taskToggleCollapseVisible ? 1 : 0,
+                                 layout.taskDiscoveryAheadActive ? 1 : 0,
+                                 layout.taskSkipVisible ? 1 : 0,
+                                 layout.taskSpeedLimitVisible ? 1 : 0,
+                                 layout.taskSpeedLimitUsesSelectorChrome ? 1 : 0,
+                                 layout.taskSpeedLimitShowsCurrentValue ? 1 : 0,
+                                 layout.taskCancelVisible ? 1 : 0));
                 return true;
             }
 
@@ -11732,38 +11511,38 @@ case SelfTestState::Step::Phase5_DiscoveryCancelReleasesSlot:
 
             if (layout.footerQueueModeSegmentedVisible || ! layout.footerQueueModeSelectorVisible || ! layout.footerQueueModeUsesSelectorChrome ||
                 ! layout.footerQueueModeSelectorHitTargetActive || ! layout.footerOptionsVisible || ! layout.footerOptionsHitTargetActive ||
-                ! layout.footerAggregateProgressVisible || ! layout.footerDetailsToggleVisible ||
-                ! layout.footerDetailsToggleUsesDisclosureChrome || layout.footerAutoDismissVisible ||
-                layout.footerDensityToggleVisible || ! layout.footerDetailsToggleRightAligned || layout.reducedMotionEnabled ||
-                ! layout.autoResizeAnimationEnabled || layout.footerQueueModeAnimationEnabled || ! layout.taskCardAnimationEnabled ||
-                ! layout.hostedProgressAnimationEnabled || ! layout.usesDxUiHost || layout.hostedActionControlCount == 0u ||
-                layout.hostedProgressControlCount == 0u || layout.hostedGraphControlCount == 0u)
+                ! layout.footerAggregateProgressVisible || ! layout.footerDetailsToggleVisible || ! layout.footerDetailsToggleUsesDisclosureChrome ||
+                layout.footerAutoDismissVisible || layout.footerDensityToggleVisible || ! layout.footerDetailsToggleRightAligned ||
+                layout.reducedMotionEnabled || ! layout.autoResizeAnimationEnabled || layout.footerQueueModeAnimationEnabled ||
+                ! layout.taskCardAnimationEnabled || ! layout.hostedProgressAnimationEnabled || ! layout.usesDxUiHost ||
+                layout.hostedActionControlCount == 0u || layout.hostedProgressControlCount == 0u || layout.hostedGraphControlCount == 0u)
             {
-                Fail(std::format(L"File Operations popup footer should expose one mode selector, Options, aggregate progress, animated resize, and a "
-                                  L"right-aligned details toggle through hosted controls during active work. segmented={} selector={} selectorChrome={} selectorHit={} "
-                                  L"options={} optionsHit={} aggregate={} details={} detailsDisclosure={} autoDismiss={} density={} rightAligned={} reducedMotion={} "
-                                  L"animatedResize={} queueAnimation={} cardAnimation={} progressAnimation={} hosted={} actions={} progress={} graphs={}.",
-                                  layout.footerQueueModeSegmentedVisible ? 1 : 0,
-                                  layout.footerQueueModeSelectorVisible ? 1 : 0,
-                                  layout.footerQueueModeUsesSelectorChrome ? 1 : 0,
-                                  layout.footerQueueModeSelectorHitTargetActive ? 1 : 0,
-                                  layout.footerOptionsVisible ? 1 : 0,
-                                  layout.footerOptionsHitTargetActive ? 1 : 0,
-                                  layout.footerAggregateProgressVisible ? 1 : 0,
-                                  layout.footerDetailsToggleVisible ? 1 : 0,
-                                  layout.footerDetailsToggleUsesDisclosureChrome ? 1 : 0,
-                                  layout.footerAutoDismissVisible ? 1 : 0,
-                                  layout.footerDensityToggleVisible ? 1 : 0,
-                                  layout.footerDetailsToggleRightAligned ? 1 : 0,
-                                  layout.reducedMotionEnabled ? 1 : 0,
-                                  layout.autoResizeAnimationEnabled ? 1 : 0,
-                                  layout.footerQueueModeAnimationEnabled ? 1 : 0,
-                                  layout.taskCardAnimationEnabled ? 1 : 0,
-                                  layout.hostedProgressAnimationEnabled ? 1 : 0,
-                                  layout.usesDxUiHost ? 1 : 0,
-                                  layout.hostedActionControlCount,
-                                  layout.hostedProgressControlCount,
-                                  layout.hostedGraphControlCount));
+                Fail(std::format(
+                    L"File Operations popup footer should expose one mode selector, Options, aggregate progress, animated resize, and a "
+                    L"right-aligned details toggle through hosted controls during active work. segmented={} selector={} selectorChrome={} selectorHit={} "
+                    L"options={} optionsHit={} aggregate={} details={} detailsDisclosure={} autoDismiss={} density={} rightAligned={} reducedMotion={} "
+                    L"animatedResize={} queueAnimation={} cardAnimation={} progressAnimation={} hosted={} actions={} progress={} graphs={}.",
+                    layout.footerQueueModeSegmentedVisible ? 1 : 0,
+                    layout.footerQueueModeSelectorVisible ? 1 : 0,
+                    layout.footerQueueModeUsesSelectorChrome ? 1 : 0,
+                    layout.footerQueueModeSelectorHitTargetActive ? 1 : 0,
+                    layout.footerOptionsVisible ? 1 : 0,
+                    layout.footerOptionsHitTargetActive ? 1 : 0,
+                    layout.footerAggregateProgressVisible ? 1 : 0,
+                    layout.footerDetailsToggleVisible ? 1 : 0,
+                    layout.footerDetailsToggleUsesDisclosureChrome ? 1 : 0,
+                    layout.footerAutoDismissVisible ? 1 : 0,
+                    layout.footerDensityToggleVisible ? 1 : 0,
+                    layout.footerDetailsToggleRightAligned ? 1 : 0,
+                    layout.reducedMotionEnabled ? 1 : 0,
+                    layout.autoResizeAnimationEnabled ? 1 : 0,
+                    layout.footerQueueModeAnimationEnabled ? 1 : 0,
+                    layout.taskCardAnimationEnabled ? 1 : 0,
+                    layout.hostedProgressAnimationEnabled ? 1 : 0,
+                    layout.usesDxUiHost ? 1 : 0,
+                    layout.hostedActionControlCount,
+                    layout.hostedProgressControlCount,
+                    layout.hostedGraphControlCount));
                 return true;
             }
 
@@ -11796,8 +11575,7 @@ case SelfTestState::Step::Phase5_DiscoveryCancelReleasesSlot:
             }
 
             if (taskA->_lastProgressCallbackTick != 0 &&
-                (! layout.taskTransferProgressVisible ||
-                 (! layout.taskTransferProgressDeterminate && ! layout.taskTransferProgressMarqueeVisible)))
+                (! layout.taskTransferProgressVisible || (! layout.taskTransferProgressDeterminate && ! layout.taskTransferProgressMarqueeVisible)))
             {
                 Fail(std::format(L"A discovery-ahead task with transfer callbacks should expose determinate/provisional transfer progress or a marquee; "
                                  L"visible={} determinate={} provisional={} marquee={}.",
@@ -11814,9 +11592,9 @@ case SelfTestState::Step::Phase5_DiscoveryCancelReleasesSlot:
                 return true;
             }
 
-            const AppTheme motionRestoreTheme = state.folderWindow->GetTheme();
-            const auto restoreMotionTheme     = wil::scope_exit([&]() noexcept { state.folderWindow->ApplyTheme(motionRestoreTheme); });
-            AppTheme reducedMotionTheme       = motionRestoreTheme;
+            const AppTheme motionRestoreTheme        = state.folderWindow->GetTheme();
+            const auto restoreMotionTheme            = wil::scope_exit([&]() noexcept { state.folderWindow->ApplyTheme(motionRestoreTheme); });
+            AppTheme reducedMotionTheme              = motionRestoreTheme;
             reducedMotionTheme.reducedMotionOverride = true;
             state.folderWindow->ApplyTheme(reducedMotionTheme);
 
@@ -11952,11 +11730,11 @@ case SelfTestState::Step::Phase5_DiscoveryCancelLatencyLocal:
     constexpr unsigned int kFileCount             = 512u;
     // Keep enough throttled payload outstanding that observing discovery-ahead cannot race a
     // complete transfer on a fast machine before the UI thread submits cancellation.
-    constexpr size_t kFileBytes                   = 64u * 1024u;
-    constexpr uint64_t kSpeedLimitBytesPerSecond  = 64u * 1024u;
-    const std::filesystem::path sourceRoot         = state.tempRoot / L"discovery-cancel-latency-src";
-    const std::filesystem::path destinationRoot    = state.tempRoot / L"discovery-cancel-latency-dst";
-    const FileSystemFlags flags                    = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+    constexpr size_t kFileBytes                  = 64u * 1024u;
+    constexpr uint64_t kSpeedLimitBytesPerSecond = 64u * 1024u;
+    const std::filesystem::path sourceRoot       = state.tempRoot / L"discovery-cancel-latency-src";
+    const std::filesystem::path destinationRoot  = state.tempRoot / L"discovery-cancel-latency-dst";
+    const FileSystemFlags flags                  = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
 
     if (state.stepState == 0)
     {
@@ -12043,17 +11821,14 @@ case SelfTestState::Step::Phase5_DiscoveryCancelLatencyLocal:
 
         const ULONGLONG cancelLatencyMs =
             (state.markerTick != 0 && completion.completionTick >= state.markerTick) ? (completion.completionTick - state.markerTick) : 0ull;
-        AppendLog(std::format(L"Phase5_DiscoveryCancelLatencyLocal latency={}ms threshold={}ms files={}",
-                              cancelLatencyMs,
-                              kCancelLatencyThresholdMs,
-                              kFileCount));
-        Debug::Perf::Emit(
-            L"FileOps.SelfTest.DiscoveryCancelLatency",
-            std::format(L"files={} fileBytes={} thresholdMs={} path={}", kFileCount, kFileBytes, kCancelLatencyThresholdMs, sourceRoot.wstring()),
-            cancelLatencyMs * 1000ull,
-            kFileCount,
-            kCancelLatencyThresholdMs,
-            completion.hr);
+        AppendLog(
+            std::format(L"Phase5_DiscoveryCancelLatencyLocal latency={}ms threshold={}ms files={}", cancelLatencyMs, kCancelLatencyThresholdMs, kFileCount));
+        Debug::Perf::Emit(L"FileOps.SelfTest.DiscoveryCancelLatency",
+                          std::format(L"files={} fileBytes={} thresholdMs={} path={}", kFileCount, kFileBytes, kCancelLatencyThresholdMs, sourceRoot.wstring()),
+                          cancelLatencyMs * 1000ull,
+                          kFileCount,
+                          kCancelLatencyThresholdMs,
+                          completion.hr);
 
         if (state.markerTick == 0)
         {
@@ -12216,10 +11991,7 @@ case SelfTestState::Step::Phase5_DiscoverySkipContinues:
 }
 case SelfTestState::Step::Phase5_CancelQueuedTask:
 {
-    const auto isCancelHr = [](HRESULT hr) noexcept -> bool
-    {
-        return hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || hr == E_ABORT;
-    };
+    const auto isCancelHr    = [](HRESULT hr) noexcept -> bool { return hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || hr == E_ABORT; };
     const auto summarizeTask = [&](std::optional<std::uint64_t> idOpt) -> std::wstring
     {
         if (! idOpt.has_value() || ! state.fileOps)
@@ -12231,14 +12003,13 @@ case SelfTestState::Step::Phase5_CancelQueuedTask:
         FolderWindow::FileOperationState::Task* task = state.fileOps->FindTask(id);
         const auto completionIt                      = state.completedTasks.find(id);
         const bool completed                         = completionIt != state.completedTasks.end();
-        const std::wstring completedText             = completed
-                                                           ? std::format(L" completed=1 hr=0x{:08X} started={} items={}/{} bytes={}",
-                                                                         static_cast<unsigned long>(completionIt->second.hr),
-                                                                         completionIt->second.started,
-                                                                         completionIt->second.progressCompletedItems,
-                                                                         completionIt->second.progressTotalItems,
-                                                                         completionIt->second.progressCompletedBytes)
-                                                           : L" completed=0";
+        const std::wstring completedText             = completed ? std::format(L" completed=1 hr=0x{:08X} started={} items={}/{} bytes={}",
+                                                                               static_cast<unsigned long>(completionIt->second.hr),
+                                                                               completionIt->second.started,
+                                                                               completionIt->second.progressCompletedItems,
+                                                                               completionIt->second.progressTotalItems,
+                                                                               completionIt->second.progressCompletedBytes)
+                                                                 : L" completed=0";
         if (! task)
         {
             return std::format(L"id={} live=0{}", id, completedText);
@@ -12254,19 +12025,20 @@ case SelfTestState::Step::Phase5_CancelQueuedTask:
             completedBytes = task->_progressCompletedBytes;
         }
 
-        return std::format(L"id={} live=1 waiting={} entered={} started={} qpause={} discoveryAhead={} discoveryClosed={} discoverySkipped={} items={}/{} bytes={}{}",
-                           id,
-                           task->IsWaitingInQueue(),
-                           task->HasEnteredOperation(),
-                           task->HasStarted(),
-                           task->IsQueuePaused(),
-                           task->_discoveryAheadActive.load(std::memory_order_acquire),
-                           task->_discoveryClosed.load(std::memory_order_acquire),
-                           task->_discoverySkipped.load(std::memory_order_acquire),
-                           completedItems,
-                           totalItems,
-                           completedBytes,
-                           completedText);
+        return std::format(
+            L"id={} live=1 waiting={} entered={} started={} qpause={} discoveryAhead={} discoveryClosed={} discoverySkipped={} items={}/{} bytes={}{}",
+            id,
+            task->IsWaitingInQueue(),
+            task->HasEnteredOperation(),
+            task->HasStarted(),
+            task->IsQueuePaused(),
+            task->_discoveryAheadActive.load(std::memory_order_acquire),
+            task->_discoveryClosed.load(std::memory_order_acquire),
+            task->_discoverySkipped.load(std::memory_order_acquire),
+            completedItems,
+            totalItems,
+            completedBytes,
+            completedText);
     };
 
     const ULONGLONG nowTick = GetTickCount64();
@@ -12329,9 +12101,8 @@ case SelfTestState::Step::Phase5_CancelQueuedTask:
     {
         if (state.completedTasks.find(state.taskA.value()) != state.completedTasks.end())
         {
-            Fail(std::format(L"Active queue holder completed before the queued task could be created. A: {} B: {}",
-                             summarizeTask(state.taskA),
-                             summarizeTask(state.taskB)));
+            Fail(std::format(
+                L"Active queue holder completed before the queued task could be created. A: {} B: {}", summarizeTask(state.taskA), summarizeTask(state.taskB)));
             return true;
         }
         if (taskA && ! taskA->_discoverySkipped.load(std::memory_order_acquire))
@@ -12392,9 +12163,8 @@ case SelfTestState::Step::Phase5_CancelQueuedTask:
         }
         if (state.completedTasks.find(state.taskB.value()) != state.completedTasks.end())
         {
-            Fail(std::format(L"Queued task completed before cancellation could observe the queue. A: {} B: {}",
-                             summarizeTask(state.taskA),
-                             summarizeTask(state.taskB)));
+            Fail(std::format(
+                L"Queued task completed before cancellation could observe the queue. A: {} B: {}", summarizeTask(state.taskA), summarizeTask(state.taskB)));
             return true;
         }
         if (! taskB)
@@ -12404,9 +12174,7 @@ case SelfTestState::Step::Phase5_CancelQueuedTask:
         taskB->SetDesiredSpeedLimit(kQueueHoldSpeedLimitBytesPerSecond);
         if (taskB->HasEnteredOperation())
         {
-            Fail(std::format(L"Queued task entered operation before queued cancellation. A: {} B: {}",
-                             summarizeTask(state.taskA),
-                             summarizeTask(state.taskB)));
+            Fail(std::format(L"Queued task entered operation before queued cancellation. A: {} B: {}", summarizeTask(state.taskA), summarizeTask(state.taskB)));
             return true;
         }
         if (taskB->IsWaitingInQueue())
@@ -12548,11 +12316,11 @@ case SelfTestState::Step::BR3_CancelQueuePausedTransfer:
 
     if (state.stepState == 0)
     {
-        const std::filesystem::path root = state.tempRoot / L"br3-queue-paused-cancel";
+        const std::filesystem::path root         = state.tempRoot / L"br3-queue-paused-cancel";
         const std::filesystem::path destinationA = root / L"destination-a";
         const std::filesystem::path destinationB = root / L"destination-b";
-        const std::filesystem::path sourceA = root / L"source-a.bin";
-        const std::filesystem::path sourceB = root / L"source-b.bin";
+        const std::filesystem::path sourceA      = root / L"source-a.bin";
+        const std::filesystem::path sourceB      = root / L"source-b.bin";
         if (! RecreateEmptyDirectory(root) || ! RecreateEmptyDirectory(destinationA) || ! RecreateEmptyDirectory(destinationB) ||
             ! WriteTestFile(sourceA, 16u * 1024u * 1024u) || ! WriteTestFile(sourceB, 16u * 1024u * 1024u))
         {
@@ -12563,10 +12331,26 @@ case SelfTestState::Step::BR3_CancelQueuePausedTransfer:
         state.fileOps->ApplyQueueMode(false);
         state.queuePausedTask.reset();
         constexpr uint64_t kSpeedLimit = 512u * 1024u;
-        state.taskA = StartFileOperationAndGetId(state.fileOps, FILESYSTEM_COPY, FolderWindow::Pane::Left, FolderWindow::Pane::Right,
-                                                state.fsLocal, {sourceA}, destinationA, FILESYSTEM_FLAG_NONE, false, kSpeedLimit);
-        state.taskB = StartFileOperationAndGetId(state.fileOps, FILESYSTEM_COPY, FolderWindow::Pane::Left, FolderWindow::Pane::Right,
-                                                state.fsLocal, {sourceB}, destinationB, FILESYSTEM_FLAG_NONE, false, kSpeedLimit);
+        state.taskA                    = StartFileOperationAndGetId(state.fileOps,
+                                                                    FILESYSTEM_COPY,
+                                                                    FolderWindow::Pane::Left,
+                                                                    FolderWindow::Pane::Right,
+                                                                    state.fsLocal,
+                                                                    {sourceA},
+                                                                    destinationA,
+                                                                    FILESYSTEM_FLAG_NONE,
+                                                                    false,
+                                                                    kSpeedLimit);
+        state.taskB                    = StartFileOperationAndGetId(state.fileOps,
+                                                                    FILESYSTEM_COPY,
+                                                                    FolderWindow::Pane::Left,
+                                                                    FolderWindow::Pane::Right,
+                                                                    state.fsLocal,
+                                                                    {sourceB},
+                                                                    destinationB,
+                                                                    FILESYSTEM_FLAG_NONE,
+                                                                    false,
+                                                                    kSpeedLimit);
         if (! state.taskA.has_value() || ! state.taskB.has_value())
         {
             Fail(L"BR3 queue-paused cancellation could not admit both copy tasks.");
@@ -12599,18 +12383,17 @@ case SelfTestState::Step::BR3_CancelQueuePausedTransfer:
             return false;
         }
         const bool aQueued = taskA->IsQueuePaused();
-        auto* queuedTask = aQueued ? taskA : taskB;
-        auto* holderTask = aQueued ? taskB : taskA;
+        auto* queuedTask   = aQueued ? taskA : taskB;
+        auto* holderTask   = aQueued ? taskB : taskA;
         holderTask->SetPaused(true);
-        if (queuedTask->_dbgPauseWaiterCount.load(std::memory_order_acquire) == 0u ||
-            holderTask->_dbgPauseWaiterCount.load(std::memory_order_acquire) == 0u)
+        if (queuedTask->_dbgPauseWaiterCount.load(std::memory_order_acquire) == 0u || holderTask->_dbgPauseWaiterCount.load(std::memory_order_acquire) == 0u)
         {
             return false;
         }
         // Both workers are actually parked. The first remains active and paused throughout
         // the assertion, so finishing it or changing Queue mode cannot mask failed cancellation.
         state.queuePausedTask = aQueued ? state.taskA : state.taskB;
-        state.markerTick = nowTick;
+        state.markerTick      = nowTick;
         queuedTask->RequestCancel();
         state.stepState = 3;
         return false;
@@ -12619,18 +12402,21 @@ case SelfTestState::Step::BR3_CancelQueuePausedTransfer:
     if (state.stepState == 3)
     {
         const auto completed = state.completedTasks.find(state.queuePausedTask.value());
-        const bool timedOut = nowTick >= state.markerTick && nowTick - state.markerTick > 3'000ull;
+        const bool timedOut  = nowTick >= state.markerTick && nowTick - state.markerTick > 3'000ull;
         if (completed == state.completedTasks.end() && ! timedOut)
         {
             return false;
         }
         const uint64_t holderId = state.queuePausedTask == state.taskA ? state.taskB.value() : state.taskA.value();
-        auto* holderTask = state.fileOps->FindTask(holderId);
-        const bool cancelled = completed != state.completedTasks.end() &&
-            (completed->second.hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || completed->second.hr == E_ABORT);
+        auto* holderTask        = state.fileOps->FindTask(holderId);
+        const bool cancelled =
+            completed != state.completedTasks.end() && (completed->second.hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || completed->second.hr == E_ABORT);
         const bool passed = cancelled && holderTask && holderTask->IsPaused() && holderTask->HasEnteredOperation() && ! timedOut;
-        Debug::Perf::Emit(L"FileOps.SelfTest.QueuePausedCancelLatency", L"local-two-active-transfers;holder-remains-paused",
-                          (nowTick - state.markerTick) * 1000ull, passed ? 1u : 0u, 3'000'000u,
+        Debug::Perf::Emit(L"FileOps.SelfTest.QueuePausedCancelLatency",
+                          L"local-two-active-transfers;holder-remains-paused",
+                          (nowTick - state.markerTick) * 1000ull,
+                          passed ? 1u : 0u,
+                          3'000'000u,
                           passed ? S_OK : HRESULT_FROM_WIN32(ERROR_TIMEOUT));
         // Recover the pre-fix loop before reporting a failed assertion, so the RED run itself
         // cannot leave a spinning task behind or hang the following family at shutdown.
@@ -12702,11 +12488,11 @@ case SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery:
         return true;
     }
 
-    const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
-    const std::filesystem::path sourceA = state.tempRoot / L"discovery-a";
-    const std::filesystem::path sourceB = state.tempRoot / L"discovery-b";
-    const std::filesystem::path destinationA = state.tempRoot / L"discovery-switch-dst-a";
-    const std::filesystem::path destinationB = state.tempRoot / L"discovery-switch-dst-b";
+    const FileSystemFlags flags                  = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+    const std::filesystem::path sourceA          = state.tempRoot / L"discovery-a";
+    const std::filesystem::path sourceB          = state.tempRoot / L"discovery-b";
+    const std::filesystem::path destinationA     = state.tempRoot / L"discovery-switch-dst-a";
+    const std::filesystem::path destinationB     = state.tempRoot / L"discovery-switch-dst-b";
     constexpr uint64_t kSpeedLimitBytesPerSecond = 64u;
 
     if (state.stepState == 0)
@@ -12825,8 +12611,7 @@ case SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery:
 
     {
         std::scoped_lock lock(pausedTask->_progressMutex);
-        if (pausedTask->_progressCompletedItems != state.pauseResumeBaselineItems ||
-            pausedTask->_progressCompletedBytes != state.pauseResumeBaselineBytes)
+        if (pausedTask->_progressCompletedItems != state.pauseResumeBaselineItems || pausedTask->_progressCompletedBytes != state.pauseResumeBaselineBytes)
         {
             // Queue mode is observed at bounded provider progress checkpoints. A callback already
             // in flight when the mode changes may publish its final chunk before blocking. Move the
@@ -12839,7 +12624,7 @@ case SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery:
         }
     }
 
-    const ULONGLONG skipRequestedTick = pausedTask->_discoverySkipRequestedTick.load(std::memory_order_acquire);
+    const ULONGLONG skipRequestedTick       = pausedTask->_discoverySkipRequestedTick.load(std::memory_order_acquire);
     const ULONGLONG reservationReleasedTick = pausedTask->_discoveryReservationReleasedTick.load(std::memory_order_acquire);
     if (skipRequestedTick == 0u || reservationReleasedTick < skipRequestedTick)
     {
@@ -12852,12 +12637,8 @@ case SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery:
         Fail(std::format(L"Skip discovery release latency was {}ms (limit 50ms).", releaseLatencyMs));
         return true;
     }
-    Debug::Perf::Emit(L"FileOps.SelfTest.DiscoverySkipRelease",
-                      L"",
-                      releaseLatencyMs * 1000ull,
-                      state.pauseResumeBaselineItems,
-                      state.pauseResumeBaselineBytes,
-                      S_OK);
+    Debug::Perf::Emit(
+        L"FileOps.SelfTest.DiscoverySkipRelease", L"", releaseLatencyMs * 1000ull, state.pauseResumeBaselineItems, state.pauseResumeBaselineBytes, S_OK);
 
     NextStep(state, SelfTestState::Step::Phase5_SwitchWaitToParallelResume);
     return false;
@@ -12924,8 +12705,7 @@ case SelfTestState::Step::Phase5_SwitchWaitToParallelResume:
             const auto it = state.completedTasks.find(pausedId);
             if (it != state.completedTasks.end())
             {
-                if (it->second.progressCompletedItems <= state.pauseResumeBaselineItems &&
-                    it->second.progressCompletedBytes <= state.pauseResumeBaselineBytes)
+                if (it->second.progressCompletedItems <= state.pauseResumeBaselineItems && it->second.progressCompletedBytes <= state.pauseResumeBaselineBytes)
                 {
                     Fail(std::format(L"Queue-paused task completed without publishing progress after resume (hr=0x{:08X}).",
                                      static_cast<unsigned long>(it->second.hr)));
@@ -13045,9 +12825,8 @@ case SelfTestState::Step::Phase6_PopupRateSmoothing:
     constexpr uint64_t kLimitedBytesPerSecond = 8ull * 1024ull * 1024ull;
     const std::wstring unlimitedText          = DebugFormatFileOperationsSpeedLimitSelectorText(0);
     const std::wstring expectedUnlimitedText  = LoadStringResource(nullptr, IDS_FILEOP_SPEED_LIMIT_BUTTON_UNLIMITED);
-    const std::wstring limitedText             = DebugFormatFileOperationsSpeedLimitSelectorText(kLimitedBytesPerSecond);
-    const std::wstring expectedLimitedText =
-        FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_LIMIT_BUTTON_BYTES, FormatBytesCompact(kLimitedBytesPerSecond));
+    const std::wstring limitedText            = DebugFormatFileOperationsSpeedLimitSelectorText(kLimitedBytesPerSecond);
+    const std::wstring expectedLimitedText = FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_LIMIT_BUTTON_BYTES, FormatBytesCompact(kLimitedBytesPerSecond));
     if (unlimitedText != expectedUnlimitedText || limitedText != expectedLimitedText || limitedText == unlimitedText)
     {
         Fail(std::format(L"Speed Limit selector did not expose its localized current value: unlimited='{}' limited='{}'.", unlimitedText, limitedText));
@@ -13147,8 +12926,8 @@ case SelfTestState::Step::Phase6_PopupSmokeResizeAndPause:
         return true;
     }
 
-    const std::filesystem::path srcDir  = state.tempRoot / L"phase6-src";
-    const std::filesystem::path dstDir  = state.tempRoot / L"phase6-dst";
+    const std::filesystem::path srcDir = state.tempRoot / L"phase6-src";
+    const std::filesystem::path dstDir = state.tempRoot / L"phase6-dst";
 
     if (state.stepState == 0)
     {
@@ -13252,11 +13031,12 @@ case SelfTestState::Step::Phase6_PopupSmokeResizeAndPause:
         if (! layout.graphEtaLabelRightAligned || layout.taskInlineSpeedRowVisible || layout.taskInlineEtaRowVisible ||
             layout.taskExpandedBaseHeightDip != 244.0f)
         {
-            Fail(std::format(L"Active transfer card did not use the compact graph-label layout (etaRight={0}, inlineSpeed={1}, inlineEta={2}, baseHeightDip={3}).",
-                             layout.graphEtaLabelRightAligned,
-                             layout.taskInlineSpeedRowVisible,
-                             layout.taskInlineEtaRowVisible,
-                             layout.taskExpandedBaseHeightDip));
+            Fail(std::format(
+                L"Active transfer card did not use the compact graph-label layout (etaRight={0}, inlineSpeed={1}, inlineEta={2}, baseHeightDip={3}).",
+                layout.graphEtaLabelRightAligned,
+                layout.taskInlineSpeedRowVisible,
+                layout.taskInlineEtaRowVisible,
+                layout.taskExpandedBaseHeightDip));
             return true;
         }
         if (! layout.footerPauseResumeAllVisible || ! layout.footerPauseResumeAllPauses)
@@ -13492,7 +13272,7 @@ case SelfTestState::Step::Phase6_DeleteBytesMeaningful:
     if (auto* task = state.fileOps->FindTask(deleteTaskId))
     {
         const bool discoveryDone = task->_discoveryClosed.load(std::memory_order_acquire);
-        const uint64_t total   = task->_discoveredTotalBytes.load(std::memory_order_acquire);
+        const uint64_t total     = task->_discoveredTotalBytes.load(std::memory_order_acquire);
         if (discoveryDone && total > 0)
         {
             state.markerTick |= 1ull;
@@ -13883,16 +13663,16 @@ case SelfTestState::Step::Phase6_ParallelBandwidthThrottleFairness:
     constexpr unsigned int kCopyConcurrency        = 4u;
     constexpr int kFileCount                       = 4;
     constexpr uint64_t kFileBytes                  = 8ull * 1024ull * 1024ull;
-    constexpr uint64_t kSpeedLimitBytesPerSecond      = 4ull * 1024ull * 1024ull;
-    constexpr uint64_t kAllowedDurationSlowdownUs     = 250'000ull;
-    constexpr uint64_t kAllowedSkewRegressionBytes    = 1ull * 1024ull * 1024ull;
+    constexpr uint64_t kSpeedLimitBytesPerSecond   = 4ull * 1024ull * 1024ull;
+    constexpr uint64_t kAllowedDurationSlowdownUs  = 250'000ull;
+    constexpr uint64_t kAllowedSkewRegressionBytes = 1ull * 1024ull * 1024ull;
     // A host snapshot cannot resolve skew below one callback publication. Keep the floor tied to
     // the measured callback quantum; larger scheduler skew remains a failure.
     constexpr uint64_t kObservableSkewCallbackQuanta = 1ull;
-    constexpr uint64_t kMinSamplesPerRun              = 4ull;
-    const std::filesystem::path srcDir                = state.tempRoot / L"phase6-parallel-bandwidth-src";
-    const std::filesystem::path sharedDstDir          = state.tempRoot / L"phase6-parallel-bandwidth-shared-dst";
-    const std::filesystem::path perWorkerDstDir       = state.tempRoot / L"phase6-parallel-bandwidth-perworker-dst";
+    constexpr uint64_t kMinSamplesPerRun             = 4ull;
+    const std::filesystem::path srcDir               = state.tempRoot / L"phase6-parallel-bandwidth-src";
+    const std::filesystem::path sharedDstDir         = state.tempRoot / L"phase6-parallel-bandwidth-shared-dst";
+    const std::filesystem::path perWorkerDstDir      = state.tempRoot / L"phase6-parallel-bandwidth-perworker-dst";
 
     const auto ensureWorkerModeBackup = [&]() noexcept
     {
@@ -14128,17 +13908,17 @@ case SelfTestState::Step::Phase6_ParallelBandwidthThrottleFairness:
     {
         state.taskA.reset();
         state.taskB.reset();
-        state.parallelBandwidthRunStartTick          = 0;
-        state.parallelBandwidthBaselineUs            = 0;
-        state.parallelBandwidthCandidateUs           = 0;
-        state.parallelBandwidthBaselineMaxSkewBytes  = 0;
-        state.parallelBandwidthCandidateMaxSkewBytes = 0;
+        state.parallelBandwidthRunStartTick                   = 0;
+        state.parallelBandwidthBaselineUs                     = 0;
+        state.parallelBandwidthCandidateUs                    = 0;
+        state.parallelBandwidthBaselineMaxSkewBytes           = 0;
+        state.parallelBandwidthCandidateMaxSkewBytes          = 0;
         state.parallelBandwidthBaselineMaxCallbackDeltaBytes  = 0;
         state.parallelBandwidthCandidateMaxCallbackDeltaBytes = 0;
-        state.parallelBandwidthBaselineMaxActive     = 0;
-        state.parallelBandwidthCandidateMaxActive    = 0;
-        state.parallelBandwidthBaselineSamples       = 0;
-        state.parallelBandwidthCandidateSamples      = 0;
+        state.parallelBandwidthBaselineMaxActive              = 0;
+        state.parallelBandwidthCandidateMaxActive             = 0;
+        state.parallelBandwidthBaselineSamples                = 0;
+        state.parallelBandwidthCandidateSamples               = 0;
 
         ensureWorkerModeBackup();
         if (! applyCopyConfig() || ! seedSourceDir(srcDir) || ! setWorkerMode(kSharedMode, L"shared-only baseline") ||
@@ -14260,17 +14040,16 @@ case SelfTestState::Step::Phase6_ParallelBandwidthThrottleFairness:
                       state.parallelBandwidthCandidateMaxSkewBytes,
                       S_OK);
 
-    AppendLog(
-        std::format(L"Phase6_ParallelBandwidthThrottleFairness shared={}us perWorker={}us sharedSkew={}B perWorkerSkew={}B sharedActive={} "
-                    L"perWorkerActive={} sharedMaxCallbackDelta={}B perWorkerMaxCallbackDelta={}B",
-                    state.parallelBandwidthBaselineUs,
-                    state.parallelBandwidthCandidateUs,
-                    state.parallelBandwidthBaselineMaxSkewBytes,
-                    state.parallelBandwidthCandidateMaxSkewBytes,
-                    state.parallelBandwidthBaselineMaxActive,
-                    state.parallelBandwidthCandidateMaxActive,
-                    state.parallelBandwidthBaselineMaxCallbackDeltaBytes,
-                    state.parallelBandwidthCandidateMaxCallbackDeltaBytes));
+    AppendLog(std::format(L"Phase6_ParallelBandwidthThrottleFairness shared={}us perWorker={}us sharedSkew={}B perWorkerSkew={}B sharedActive={} "
+                          L"perWorkerActive={} sharedMaxCallbackDelta={}B perWorkerMaxCallbackDelta={}B",
+                          state.parallelBandwidthBaselineUs,
+                          state.parallelBandwidthCandidateUs,
+                          state.parallelBandwidthBaselineMaxSkewBytes,
+                          state.parallelBandwidthCandidateMaxSkewBytes,
+                          state.parallelBandwidthBaselineMaxActive,
+                          state.parallelBandwidthCandidateMaxActive,
+                          state.parallelBandwidthBaselineMaxCallbackDeltaBytes,
+                          state.parallelBandwidthCandidateMaxCallbackDeltaBytes));
 
     if (state.parallelBandwidthBaselineUs == 0 || state.parallelBandwidthCandidateUs == 0)
     {
@@ -14307,10 +14086,9 @@ case SelfTestState::Step::Phase6_ParallelBandwidthThrottleFairness:
 
     const uint64_t maxCallbackDeltaBytes =
         (std::max)(state.parallelBandwidthBaselineMaxCallbackDeltaBytes, state.parallelBandwidthCandidateMaxCallbackDeltaBytes);
-    const uint64_t observableSkewFloorBytes =
-        maxCallbackDeltaBytes > (std::numeric_limits<uint64_t>::max)() / kObservableSkewCallbackQuanta
-            ? (std::numeric_limits<uint64_t>::max)()
-            : maxCallbackDeltaBytes * kObservableSkewCallbackQuanta;
+    const uint64_t observableSkewFloorBytes = maxCallbackDeltaBytes > (std::numeric_limits<uint64_t>::max)() / kObservableSkewCallbackQuanta
+                                                  ? (std::numeric_limits<uint64_t>::max)()
+                                                  : maxCallbackDeltaBytes * kObservableSkewCallbackQuanta;
     const uint64_t comparativeSkewLimitBytes =
         state.parallelBandwidthBaselineMaxSkewBytes > (std::numeric_limits<uint64_t>::max)() - kAllowedSkewRegressionBytes
             ? (std::numeric_limits<uint64_t>::max)()

@@ -167,8 +167,8 @@ bool TestPluginOwnerSatelliteLoadsFromHostLangDirectory() noexcept
     Check(SUCCEEDED(registerHr), L"plugin-like resource owner registration succeeds for shared Lang lookup", success);
 
     Localization::LanguagePreference preference;
-    preference.kind    = Localization::LanguagePreferenceKind::Culture;
-    preference.culture = L"fr-FR";
+    preference.kind       = Localization::LanguagePreferenceKind::Culture;
+    preference.culture    = L"fr-FR";
     const HRESULT applyHr = Localization::ApplyLanguagePreference(preference);
     Check(SUCCEEDED(applyHr), L"fr-FR language preference applies for shared Lang lookup", success);
 
@@ -190,9 +190,9 @@ bool TestNestedResourceOwnerRegistrationKeepsSatelliteUntilLastRelease() noexcep
     HINSTANCE instance = GetModuleHandleW(nullptr);
     Check(instance != nullptr, L"test module handle resolves for nested owner registration", success);
 
-    const HRESULT firstRegisterHr = Localization::RegisterResourceOwner(L"LocalizationTests", instance);
+    const HRESULT firstRegisterHr       = Localization::RegisterResourceOwner(L"LocalizationTests", instance);
     const HRESULT conflictingRegisterHr = Localization::RegisterResourceOwner(L"ConflictingLocalizationOwner", instance);
-    const HRESULT secondRegisterHr = Localization::RegisterResourceOwner(L"LocalizationTests", instance);
+    const HRESULT secondRegisterHr      = Localization::RegisterResourceOwner(L"LocalizationTests", instance);
     Check(SUCCEEDED(firstRegisterHr) && SUCCEEDED(secondRegisterHr), L"nested resource owner registrations succeed", success);
     Check(conflictingRegisterHr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS),
           L"the same resource-owner instance cannot be registered under a conflicting name",
@@ -202,9 +202,7 @@ bool TestNestedResourceOwnerRegistrationKeepsSatelliteUntilLastRelease() noexcep
     preference.kind    = Localization::LanguagePreferenceKind::Culture;
     preference.culture = L"fr-FR";
     Check(SUCCEEDED(Localization::ApplyLanguagePreference(preference)), L"nested owner language preference applies", success);
-    Check(LoadStringResource(instance, IDS_LOCALIZATION_TEST_PRESENT) == L"Chaine de test francaise",
-          L"nested owner resolves its satellite",
-          success);
+    Check(LoadStringResource(instance, IDS_LOCALIZATION_TEST_PRESENT) == L"Chaine de test francaise", L"nested owner resolves its satellite", success);
 
     Localization::UnregisterResourceOwner(instance);
     Check(LoadStringResource(instance, IDS_LOCALIZATION_TEST_PRESENT) == L"Chaine de test francaise",

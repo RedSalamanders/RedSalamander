@@ -2,8 +2,8 @@
 #include <array>
 #include <cstring>
 #include <filesystem>
-#include <fstream>
 #include <format>
+#include <fstream>
 #include <iostream>
 #include <latch>
 #include <limits>
@@ -26,18 +26,18 @@
 #include "Helpers.h"
 #include "LocalizationManager.h"
 #include "PackedFileInfoBuffer.h"
-#include "RegistryUtils.h"
-#include "WslDistributionCatalog.h"
-#include "YyjsonHelpers.h"
-#include "TestSupport.h"
 #include "PlugInterfaces/Factory.h"
+#include "PlugInterfaces/FactoryImpl.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Terminal.h"
 #include "PlugInterfaces/Viewer.h"
-#include "PlugInterfaces/FactoryImpl.h"
+#include "RegistryUtils.h"
 #include "TerminalVtUpgradeTestContract.h"
+#include "TestSupport.h"
+#include "WslDistributionCatalog.h"
+#include "YyjsonHelpers.h"
 
 #include <wil/com.h>
 #include <wil/resource.h>
@@ -122,7 +122,9 @@ enum class ScriptedRouteFault : uint8_t
 class ScriptedRouteCapabilities final : public IFileSystemRouteCapabilities
 {
 public:
-    explicit ScriptedRouteCapabilities(ScriptedRouteFault fault) noexcept : _fault(fault) {}
+    explicit ScriptedRouteCapabilities(ScriptedRouteFault fault) noexcept : _fault(fault)
+    {
+    }
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** object) noexcept override
     {
@@ -139,8 +141,14 @@ public:
         return E_NOINTERFACE;
     }
 
-    ULONG STDMETHODCALLTYPE AddRef() noexcept override { return 1u; }
-    ULONG STDMETHODCALLTYPE Release() noexcept override { return 1u; }
+    ULONG STDMETHODCALLTYPE AddRef() noexcept override
+    {
+        return 1u;
+    }
+    ULONG STDMETHODCALLTYPE Release() noexcept override
+    {
+        return 1u;
+    }
 
     HRESULT STDMETHODCALLTYPE GetRouteFacts(const wchar_t* path,
                                             FileSystemOperation operation,
@@ -158,101 +166,85 @@ public:
         }
 
         const std::wstring_view provider = _fault == ScriptedRouteFault::EmptyProviderId ? std::wstring_view{} : L"selftest/typed-route";
-        static const std::wstring largeProfile(
-            FileSystemRouteContract::kNormalArenaBytes / sizeof(wchar_t) + 32u, L'p');
-        const std::wstring_view profile = _fault == ScriptedRouteFault::RequiresArenaFallback
-            ? std::wstring_view(largeProfile)
-            : std::wstring_view(L"selftest-profile");
-        constexpr std::wstring_view root = L"selftest-root";
+        static const std::wstring largeProfile(FileSystemRouteContract::kNormalArenaBytes / sizeof(wchar_t) + 32u, L'p');
+        const std::wstring_view profile =
+            _fault == ScriptedRouteFault::RequiresArenaFallback ? std::wstring_view(largeProfile) : std::wstring_view(L"selftest-profile");
+        constexpr std::wstring_view root       = L"selftest-root";
         constexpr std::wstring_view separators = L"/";
-        const uint64_t required64 = Bytes(provider) + Bytes(profile) + Bytes(root) + Bytes(separators);
+        const uint64_t required64              = Bytes(provider) + Bytes(profile) + Bytes(root) + Bytes(separators);
         if (required64 > (std::numeric_limits<unsigned long>::max)())
         {
             return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
         }
         facts->requiredArenaBytes = static_cast<unsigned long>(required64);
-        if (arena->buffer == nullptr || arena->usedBytes > arena->capacityBytes ||
-            facts->requiredArenaBytes > arena->capacityBytes - arena->usedBytes)
+        if (arena->buffer == nullptr || arena->usedBytes > arena->capacityBytes || facts->requiredArenaBytes > arena->capacityBytes - arena->usedBytes)
         {
             return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
         }
 
-        const wchar_t* accepted = Copy(separators, arena);
-        const wchar_t* providerId = Copy(provider, arena);
+        const wchar_t* accepted      = Copy(separators, arena);
+        const wchar_t* providerId    = Copy(provider, arena);
         const wchar_t* pathProfileId = Copy(profile, arena);
-        const wchar_t* rootId = Copy(root, arena);
+        const wchar_t* rootId        = Copy(root, arena);
         if (accepted == nullptr || providerId == nullptr || pathProfileId == nullptr || rootId == nullptr)
         {
             return E_OUTOFMEMORY;
         }
 
-        facts->sizeBytes = _fault == ScriptedRouteFault::OversizedPrefix
-            ? sizeof(FileSystemRouteFacts) + 16u
-            : (_fault == ScriptedRouteFault::InvalidRecordSize ? sizeof(FileSystemRouteFacts) - 1u : sizeof(FileSystemRouteFacts));
-        facts->availability = _fault == ScriptedRouteFault::InvalidAvailability
-            ? static_cast<FileSystemRouteAvailability>(99u)
-            : FILESYSTEM_ROUTE_AVAILABLE;
-        facts->cancellationRoute = _fault == ScriptedRouteFault::InvalidCancellation
-            ? static_cast<FileSystemCancellationRoute>(99u)
-            : FILESYSTEM_CANCELLATION_BOUNDED;
-        facts->namespaceKind = _fault == ScriptedRouteFault::InvalidNamespace
-            ? static_cast<FileSystemNamespaceKind>(99u)
-            : FILESYSTEM_NAMESPACE_REAL_CONTAINER;
-        facts->componentComparison = _fault == ScriptedRouteFault::InvalidComparison
-            ? static_cast<FileSystemRouteComponentComparison>(99u)
-            : FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
-        facts->normalization = _fault == ScriptedRouteFault::InvalidNormalization
-            ? static_cast<FileSystemRouteNormalization>(99u)
-            : FILESYSTEM_ROUTE_NORMALIZATION_NONE;
-        facts->caseOnlyRename = _fault == ScriptedRouteFault::InvalidCaseRename
-            ? static_cast<FileSystemRouteCaseOnlyRename>(99u)
-            : FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED;
-        facts->proofFlags = _fault == ScriptedRouteFault::InvalidProofFlags ? 0x80000000u : FILESYSTEM_ROUTE_PROOF_NONE;
-        facts->providerWatchdogTimeoutMs = _fault == ScriptedRouteFault::WatchdogContradiction ? 30'000u : 0u;
-        facts->copyMoveMaxConcurrency = 1u;
-        facts->deleteMaxConcurrency = 1u;
+        facts->sizeBytes    = _fault == ScriptedRouteFault::OversizedPrefix
+                                  ? sizeof(FileSystemRouteFacts) + 16u
+                                  : (_fault == ScriptedRouteFault::InvalidRecordSize ? sizeof(FileSystemRouteFacts) - 1u : sizeof(FileSystemRouteFacts));
+        facts->availability = _fault == ScriptedRouteFault::InvalidAvailability ? static_cast<FileSystemRouteAvailability>(99u) : FILESYSTEM_ROUTE_AVAILABLE;
+        facts->cancellationRoute =
+            _fault == ScriptedRouteFault::InvalidCancellation ? static_cast<FileSystemCancellationRoute>(99u) : FILESYSTEM_CANCELLATION_BOUNDED;
+        facts->namespaceKind = _fault == ScriptedRouteFault::InvalidNamespace ? static_cast<FileSystemNamespaceKind>(99u) : FILESYSTEM_NAMESPACE_REAL_CONTAINER;
+        facts->componentComparison = _fault == ScriptedRouteFault::InvalidComparison ? static_cast<FileSystemRouteComponentComparison>(99u)
+                                                                                     : FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
+        facts->normalization =
+            _fault == ScriptedRouteFault::InvalidNormalization ? static_cast<FileSystemRouteNormalization>(99u) : FILESYSTEM_ROUTE_NORMALIZATION_NONE;
+        facts->caseOnlyRename =
+            _fault == ScriptedRouteFault::InvalidCaseRename ? static_cast<FileSystemRouteCaseOnlyRename>(99u) : FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED;
+        facts->proofFlags                     = _fault == ScriptedRouteFault::InvalidProofFlags ? 0x80000000u : FILESYSTEM_ROUTE_PROOF_NONE;
+        facts->providerWatchdogTimeoutMs      = _fault == ScriptedRouteFault::WatchdogContradiction ? 30'000u : 0u;
+        facts->copyMoveMaxConcurrency         = 1u;
+        facts->deleteMaxConcurrency           = 1u;
         facts->deleteRecycleBinMaxConcurrency = 1u;
-        facts->maxComponentUtf16 = 255u;
-        facts->copyOperation = _fault == ScriptedRouteFault::NonStrictBoolean ? 2 : TRUE;
-        facts->moveOperation = TRUE;
-        facts->nativeMoveOperation = TRUE;
-        facts->deleteOperation = TRUE;
-        facts->renameOperation = TRUE;
-        facts->createDirectoryOperation = TRUE;
-        facts->propertiesOperation = TRUE;
-        facts->readOperation = TRUE;
-        facts->writeOperation = TRUE;
-        facts->recycleOperation = TRUE;
-        facts->boundDelete = TRUE;
-        facts->conditionalDelete = TRUE;
-        facts->exclusiveStage = TRUE;
-        facts->conditionalPublish = TRUE;
-        facts->committedSize = TRUE;
-        facts->preserveFileLink = TRUE;
-        facts->preserveDirectoryLink = TRUE;
-        facts->retargetInTree = TRUE;
-        facts->exactLinkRemoval = TRUE;
-        facts->cancellationAbort = TRUE;
-        facts->cancellationDeadline = TRUE;
-        facts->pathTextStableIdentity = _fault == ScriptedRouteFault::UnsupportedIdentity ? FALSE : TRUE;
-        facts->casePreserving = TRUE;
-        facts->preferredSeparator = L'/';
-        facts->acceptedSeparators = accepted;
-        facts->providerId = _fault == ScriptedRouteFault::OutsideArenaPointer
-            ? L"selftest/typed-route"
-            : (_fault == ScriptedRouteFault::MisalignedArenaPointer
-                   ? reinterpret_cast<const wchar_t*>(arena->buffer + 1u)
-                   : providerId);
+        facts->maxComponentUtf16              = 255u;
+        facts->copyOperation                  = _fault == ScriptedRouteFault::NonStrictBoolean ? 2 : TRUE;
+        facts->moveOperation                  = TRUE;
+        facts->nativeMoveOperation            = TRUE;
+        facts->deleteOperation                = TRUE;
+        facts->renameOperation                = TRUE;
+        facts->createDirectoryOperation       = TRUE;
+        facts->propertiesOperation            = TRUE;
+        facts->readOperation                  = TRUE;
+        facts->writeOperation                 = TRUE;
+        facts->recycleOperation               = TRUE;
+        facts->boundDelete                    = TRUE;
+        facts->conditionalDelete              = TRUE;
+        facts->exclusiveStage                 = TRUE;
+        facts->conditionalPublish             = TRUE;
+        facts->committedSize                  = TRUE;
+        facts->preserveFileLink               = TRUE;
+        facts->preserveDirectoryLink          = TRUE;
+        facts->retargetInTree                 = TRUE;
+        facts->exactLinkRemoval               = TRUE;
+        facts->cancellationAbort              = TRUE;
+        facts->cancellationDeadline           = TRUE;
+        facts->pathTextStableIdentity         = _fault == ScriptedRouteFault::UnsupportedIdentity ? FALSE : TRUE;
+        facts->casePreserving                 = TRUE;
+        facts->preferredSeparator             = L'/';
+        facts->acceptedSeparators             = accepted;
+        facts->providerId    = _fault == ScriptedRouteFault::OutsideArenaPointer
+                                   ? L"selftest/typed-route"
+                                   : (_fault == ScriptedRouteFault::MisalignedArenaPointer ? reinterpret_cast<const wchar_t*>(arena->buffer + 1u) : providerId);
         facts->pathProfileId = pathProfileId;
-        facts->rootId = rootId;
+        facts->rootId        = rootId;
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE IsTransferPeerAllowed(const wchar_t*,
-                                                    FileSystemOperation,
-                                                    FileSystemTransferPeerRole,
-                                                    const wchar_t*,
-                                                    BOOL* allowed) noexcept override
+    HRESULT STDMETHODCALLTYPE
+    IsTransferPeerAllowed(const wchar_t*, FileSystemOperation, FileSystemTransferPeerRole, const wchar_t*, BOOL* allowed) noexcept override
     {
         if (allowed == nullptr)
         {
@@ -276,14 +268,14 @@ public:
             return E_POINTER;
         }
         validation->sizeBytes = sizeof(*validation);
-        validation->status = _fault == ScriptedRouteFault::InvalidNameResult
-            ? static_cast<FileSystemChildNameStatus>(99u)
-            : (_fault == ScriptedRouteFault::ProviderInvalidName
-                   ? FILESYSTEM_CHILD_NAME_INVALID
-                   : (_fault == ScriptedRouteFault::UnsupportedName ? FILESYSTEM_CHILD_NAME_UNSUPPORTED : FILESYSTEM_CHILD_NAME_VALID));
+        validation->status    = _fault == ScriptedRouteFault::InvalidNameResult
+                                    ? static_cast<FileSystemChildNameStatus>(99u)
+                                    : (_fault == ScriptedRouteFault::ProviderInvalidName
+                                           ? FILESYSTEM_CHILD_NAME_INVALID
+                                           : (_fault == ScriptedRouteFault::UnsupportedName ? FILESYSTEM_CHILD_NAME_UNSUPPORTED : FILESYSTEM_CHILD_NAME_VALID));
         validation->failureStatus = _fault == ScriptedRouteFault::ProviderInvalidName
-            ? HRESULT_FROM_WIN32(ERROR_INVALID_NAME)
-            : (_fault == ScriptedRouteFault::UnsupportedName ? HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) : S_OK);
+                                        ? HRESULT_FROM_WIN32(ERROR_INVALID_NAME)
+                                        : (_fault == ScriptedRouteFault::UnsupportedName ? HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) : S_OK);
         return S_OK;
     }
 
@@ -301,8 +293,8 @@ public:
         if (_fault == ScriptedRouteFault::CollisionOutsideArena)
         {
             *requiredArenaBytes = 4u * sizeof(wchar_t);
-            arena->usedBytes = *requiredArenaBytes;
-            *key = L"bad";
+            arena->usedBytes    = *requiredArenaBytes;
+            *key                = L"bad";
             return S_OK;
         }
         if (_fault == ScriptedRouteFault::EmptyCollisionKey)
@@ -311,8 +303,7 @@ public:
         }
         if (_fault == ScriptedRouteFault::ChildStringArenaFallback)
         {
-            static const std::wstring largeKey(
-                FileSystemRouteContract::kNormalArenaBytes / sizeof(wchar_t) + 32u, L'k');
+            static const std::wstring largeKey(FileSystemRouteContract::kNormalArenaBytes / sizeof(wchar_t) + 32u, L'k');
             return CopyOutput(largeKey, arena, key, requiredArenaBytes);
         }
         return CopyOutput(childName, arena, key, requiredArenaBytes);
@@ -356,8 +347,7 @@ private:
         {
             return nullptr;
         }
-        wchar_t* output = static_cast<wchar_t*>(
-            AllocateFromFileSystemArena(arena, static_cast<unsigned long>(bytes64), alignof(wchar_t)));
+        wchar_t* output = static_cast<wchar_t*>(AllocateFromFileSystemArena(arena, static_cast<unsigned long>(bytes64), alignof(wchar_t)));
         if (output == nullptr)
         {
             return nullptr;
@@ -370,10 +360,7 @@ private:
         return output;
     }
 
-    [[nodiscard]] static HRESULT CopyOutput(std::wstring_view text,
-                                            FileSystemArena* arena,
-                                            const wchar_t** output,
-                                            unsigned long* requiredArenaBytes) noexcept
+    [[nodiscard]] static HRESULT CopyOutput(std::wstring_view text, FileSystemArena* arena, const wchar_t** output, unsigned long* requiredArenaBytes) noexcept
     {
         const uint64_t bytes64 = Bytes(text);
         if (bytes64 > (std::numeric_limits<unsigned long>::max)())
@@ -381,8 +368,7 @@ private:
             return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
         }
         *requiredArenaBytes = static_cast<unsigned long>(bytes64);
-        if (arena->buffer == nullptr || arena->usedBytes > arena->capacityBytes ||
-            *requiredArenaBytes > arena->capacityBytes - arena->usedBytes)
+        if (arena->buffer == nullptr || arena->usedBytes > arena->capacityBytes || *requiredArenaBytes > arena->capacityBytes - arena->usedBytes)
         {
             return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
         }
@@ -435,11 +421,7 @@ void Check(bool condition, const wchar_t* message, bool& success) noexcept
     std::wcout << L"[       OK ] " << message << L"\n";
 }
 
-[[nodiscard]] bool SetRegistryStringValue(HKEY key,
-                                          const wchar_t* valueName,
-                                          DWORD type,
-                                          std::wstring_view value,
-                                          bool includeTerminator) noexcept
+[[nodiscard]] bool SetRegistryStringValue(HKEY key, const wchar_t* valueName, DWORD type, std::wstring_view value, bool includeTerminator) noexcept
 {
     const std::wstring stored(value);
     const size_t byteCount = (stored.size() + (includeTerminator ? 1u : 0u)) * sizeof(wchar_t);
@@ -448,27 +430,14 @@ void Check(bool condition, const wchar_t* message, bool& success) noexcept
         return false;
     }
 
-    return RegSetValueExW(key,
-                          valueName,
-                          0u,
-                          type,
-                          reinterpret_cast<const BYTE*>(stored.c_str()),
-                          static_cast<DWORD>(byteCount)) == ERROR_SUCCESS;
+    return RegSetValueExW(key, valueName, 0u, type, reinterpret_cast<const BYTE*>(stored.c_str()), static_cast<DWORD>(byteCount)) == ERROR_SUCCESS;
 }
 
 [[nodiscard]] wil::unique_hkey CreateVolatileRegistryKey(HKEY parent, const wchar_t* subKey) noexcept
 {
     wil::unique_hkey key;
     DWORD disposition = 0u;
-    if (RegCreateKeyExW(parent,
-                        subKey,
-                        0u,
-                        nullptr,
-                        REG_OPTION_VOLATILE,
-                        KEY_ALL_ACCESS,
-                        nullptr,
-                        key.put(),
-                        &disposition) != ERROR_SUCCESS)
+    if (RegCreateKeyExW(parent, subKey, 0u, nullptr, REG_OPTION_VOLATILE, KEY_ALL_ACCESS, nullptr, key.put(), &disposition) != ERROR_SUCCESS)
     {
         return {};
     }
@@ -494,9 +463,7 @@ void ReplaceRegistryStringAfterSizeRead(HKEY key, const wchar_t* valueName, unsi
 
 void TestRegistryAndWslCatalogContracts(bool& success) noexcept
 {
-    const std::wstring testPath = std::format(L"Software\\RedSalamander\\Tests\\PluginContract\\RegistryWsl-{}-{}",
-                                               GetCurrentProcessId(),
-                                               GetTickCount64());
+    const std::wstring testPath = std::format(L"Software\\RedSalamander\\Tests\\PluginContract\\RegistryWsl-{}-{}", GetCurrentProcessId(), GetTickCount64());
     static_cast<void>(RegDeleteTreeW(HKEY_CURRENT_USER, testPath.c_str()));
 
     wil::unique_hkey testRoot = CreateVolatileRegistryKey(HKEY_CURRENT_USER, testPath.c_str());
@@ -511,15 +478,11 @@ void TestRegistryAndWslCatalogContracts(bool& success) noexcept
         static_cast<void>(RegDeleteTreeW(HKEY_CURRENT_USER, testPath.c_str()));
     });
 
-    Check(SetRegistryStringValue(testRoot.get(), L"Terminated", REG_SZ, L"terminated", true),
-          L"terminated registry fixture writes",
-          success);
+    Check(SetRegistryStringValue(testRoot.get(), L"Terminated", REG_SZ, L"terminated", true), L"terminated registry fixture writes", success);
     const auto terminated = Common::Registry::ReadBoundedStringValue(testRoot.get(), L"Terminated");
     Check(terminated.has_value() && terminated.value() == L"terminated", L"bounded registry reader accepts terminated REG_SZ", success);
 
-    Check(SetRegistryStringValue(testRoot.get(), L"NonTerminated", REG_SZ, L"nonterminated", false),
-          L"nonterminated registry fixture writes",
-          success);
+    Check(SetRegistryStringValue(testRoot.get(), L"NonTerminated", REG_SZ, L"nonterminated", false), L"nonterminated registry fixture writes", success);
     const auto nonterminated = Common::Registry::ReadBoundedStringValue(testRoot.get(), L"NonTerminated");
     Check(nonterminated.has_value() && nonterminated.value() == L"nonterminated",
           L"bounded registry reader uses returned length for nonterminated REG_SZ",
@@ -540,12 +503,7 @@ void TestRegistryAndWslCatalogContracts(bool& success) noexcept
     Check(! Common::Registry::ReadBoundedStringValue(testRoot.get(), L"OddBytes").has_value(), L"bounded registry reader rejects odd byte counts", success);
 
     const DWORD wrongTypeValue = 7u;
-    Check(RegSetValueExW(testRoot.get(),
-                         L"WrongType",
-                         0u,
-                         REG_DWORD,
-                         reinterpret_cast<const BYTE*>(&wrongTypeValue),
-                         sizeof(wrongTypeValue)) == ERROR_SUCCESS,
+    Check(RegSetValueExW(testRoot.get(), L"WrongType", 0u, REG_DWORD, reinterpret_cast<const BYTE*>(&wrongTypeValue), sizeof(wrongTypeValue)) == ERROR_SUCCESS,
           L"wrong-type registry fixture writes",
           success);
     Check(! Common::Registry::ReadBoundedStringValue(testRoot.get(), L"WrongType").has_value(), L"bounded registry reader rejects wrong types", success);
@@ -587,20 +545,11 @@ void TestRegistryAndWslCatalogContracts(bool& success) noexcept
         }
 
         const DWORD value = modern.value();
-        return RegSetValueExW(distributionKey.get(),
-                              L"Modern",
-                              0u,
-                              REG_DWORD,
-                              reinterpret_cast<const BYTE*>(&value),
-                              sizeof(value)) == ERROR_SUCCESS;
+        return RegSetValueExW(distributionKey.get(), L"Modern", 0u, REG_DWORD, reinterpret_cast<const BYTE*>(&value), sizeof(value)) == ERROR_SUCCESS;
     };
 
-    Check(addDistribution(L"{00000000-0000-0000-0000-000000000001}", L"zulu", L"C:\\WSL\\Zulu", std::nullopt),
-          L"WSL1 catalog fixture writes",
-          success);
-    Check(addDistribution(L"{00000000-0000-0000-0000-000000000002}", L"Alpha", L"C:\\WSL\\Alpha", 1u),
-          L"WSL2 catalog fixture writes",
-          success);
+    Check(addDistribution(L"{00000000-0000-0000-0000-000000000001}", L"zulu", L"C:\\WSL\\Zulu", std::nullopt), L"WSL1 catalog fixture writes", success);
+    Check(addDistribution(L"{00000000-0000-0000-0000-000000000002}", L"Alpha", L"C:\\WSL\\Alpha", 1u), L"WSL2 catalog fixture writes", success);
     Check(addDistribution(L"{00000000-0000-0000-0000-000000000003}", L"DOCKER-DESKTOP-data", L"C:\\WSL\\Docker", 1u),
           L"Docker utility catalog fixture writes",
           success);
@@ -625,12 +574,11 @@ void TestRegistryAndWslCatalogContracts(bool& success) noexcept
 void TestDeleteOnCloseTemporaryFileContracts(bool& success) noexcept
 {
     std::error_code error;
-    const std::filesystem::path root = RedSalamander::TestSupport::AcquireTestDirectory(
-        {.harnessSegment      = L"PluginContractTests",
-         .leafSegment         = L"delete-on-close-temporary-file",
-         .fallbackRunIdPrefix = L"plugin-contract",
-         .kind                = RedSalamander::TestSupport::TestDirectoryKind::Scratch},
-        error);
+    const std::filesystem::path root = RedSalamander::TestSupport::AcquireTestDirectory({.harnessSegment      = L"PluginContractTests",
+                                                                                         .leafSegment         = L"delete-on-close-temporary-file",
+                                                                                         .fallbackRunIdPrefix = L"plugin-contract",
+                                                                                         .kind = RedSalamander::TestSupport::TestDirectoryKind::Scratch},
+                                                                                        error);
     Check(! error && ! root.empty(), L"delete-on-close helper acquires TestSandbox scratch", success);
     if (error || root.empty())
     {
@@ -660,7 +608,7 @@ void TestDeleteOnCloseTemporaryFileContracts(bool& success) noexcept
 #if defined(ENABLE_TESTS)
     Common::Files::Testing::FailNextDeleteOnCloseTemporaryFileOpen(HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED));
     wil::unique_hfile failedFile;
-    const HRESULT failedHr = Common::Files::CreateDeleteOnCloseTemporaryFile(options, failedFile);
+    const HRESULT failedHr        = Common::Files::CreateDeleteOnCloseTemporaryFile(options, failedFile);
     const bool reservationRemoved = std::filesystem::directory_iterator(root, error) == std::filesystem::directory_iterator{};
     Check(failedHr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) && ! failedFile && ! error && reservationRemoved,
           L"failed reopen deletes the GetTempFileName reservation",
@@ -669,10 +617,10 @@ void TestDeleteOnCloseTemporaryFileContracts(bool& success) noexcept
 
     struct ConcurrentResult
     {
-        ConcurrentResult() = default;
-        ConcurrentResult(const ConcurrentResult&)            = delete;
-        ConcurrentResult& operator=(const ConcurrentResult&) = delete;
-        ConcurrentResult(ConcurrentResult&&) noexcept        = default;
+        ConcurrentResult()                                       = default;
+        ConcurrentResult(const ConcurrentResult&)                = delete;
+        ConcurrentResult& operator=(const ConcurrentResult&)     = delete;
+        ConcurrentResult(ConcurrentResult&&) noexcept            = default;
         ConcurrentResult& operator=(ConcurrentResult&&) noexcept = default;
 
         HRESULT hr = E_PENDING;
@@ -693,7 +641,7 @@ void TestDeleteOnCloseTemporaryFileContracts(bool& success) noexcept
             ready.count_down();
             start.wait();
             ConcurrentResult& result = results[index];
-            result.hr = Common::Files::CreateDeleteOnCloseTemporaryFile(options, result.file);
+            result.hr                = Common::Files::CreateDeleteOnCloseTemporaryFile(options, result.file);
             if (FAILED(result.hr) || ! result.file)
             {
                 return;
@@ -714,7 +662,7 @@ void TestDeleteOnCloseTemporaryFileContracts(bool& success) noexcept
     workers.clear();
 
     std::unordered_set<std::wstring> paths;
-    bool allCreated = true;
+    bool allCreated      = true;
     bool policyPreserved = true;
     for (const ConcurrentResult& result : results)
     {
@@ -757,9 +705,8 @@ void TestPackedFileInfoBuffer(bool& success) noexcept
     Check(buffer.GetBuffer(&first) == S_OK && first == nullptr, L"packed FileInfo empty result exposes a null buffer", success);
     Check(buffer.GetBufferSize(&byteSize) == S_OK && byteSize == 0, L"packed FileInfo empty result has zero used bytes", success);
     Check(buffer.GetCount(&count) == S_OK && count == 0, L"packed FileInfo empty result has zero entries", success);
-    Check(buffer.Get(0, &first) == HRESULT_FROM_WIN32(ERROR_NO_MORE_FILES) && first == nullptr,
-          L"packed FileInfo empty result rejects indexed access",
-          success);
+    Check(
+        buffer.Get(0, &first) == HRESULT_FROM_WIN32(ERROR_NO_MORE_FILES) && first == nullptr, L"packed FileInfo empty result rejects indexed access", success);
 
     const std::vector<PackedFileInfoTestEntry> entries = {
         {L"a", 7u, FILE_ATTRIBUTE_NORMAL, 11u},
@@ -776,18 +723,15 @@ void TestPackedFileInfoBuffer(bool& success) noexcept
     });
     Check(buildHr == S_OK, L"packed FileInfo owner builds a multi-entry result", success);
     Check(buffer.GetBuffer(&first) == S_OK && first != nullptr, L"packed FileInfo multi-entry result exposes its buffer", success);
-    Check(buffer.GetBufferSize(&byteSize) == S_OK && byteSize >= sizeof(FileInfo),
-          L"packed FileInfo multi-entry result exposes its used byte size",
-          success);
-    Check(first != nullptr && (reinterpret_cast<uintptr_t>(first) % alignof(FileInfo)) == 0u,
-          L"packed FileInfo buffer base honors FileInfo alignment",
-          success);
+    Check(buffer.GetBufferSize(&byteSize) == S_OK && byteSize >= sizeof(FileInfo), L"packed FileInfo multi-entry result exposes its used byte size", success);
+    Check(
+        first != nullptr && (reinterpret_cast<uintptr_t>(first) % alignof(FileInfo)) == 0u, L"packed FileInfo buffer base honors FileInfo alignment", success);
     Check(buffer.GetCount(&count) == S_OK && count == entries.size(), L"packed FileInfo count matches the source entries", success);
 
     for (unsigned long index = 0; index < entries.size(); ++index)
     {
-        FileInfo* entry = nullptr;
-        const HRESULT getHr = buffer.Get(index, &entry);
+        FileInfo* entry                    = nullptr;
+        const HRESULT getHr                = buffer.Get(index, &entry);
         const std::wstring_view actualName = entry ? std::wstring_view(entry->FileName, entry->FileNameSize / sizeof(wchar_t)) : std::wstring_view{};
         Check(getHr == S_OK && entry != nullptr && actualName == entries[index].name && entry->FileIndex == entries[index].fileIndex &&
                   entry->FileAttributes == entries[index].attributes && entry->EndOfFile == static_cast<__int64>(entries[index].sizeBytes),
@@ -820,45 +764,41 @@ void TestPackedFileInfoBuffer(bool& success) noexcept
         --first->FileNameSize;
     }
 
-    const FileInfo* located = nullptr;
+    const FileInfo* located             = nullptr;
     constexpr unsigned long headerBytes = static_cast<unsigned long>(offsetof(FileInfo, FileName));
-    Check(Common::Plugins::LocatePackedFileInfoRecord(first, headerBytes - 1u, count, 0u, &located) ==
-              HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && located == nullptr,
+    Check(Common::Plugins::LocatePackedFileInfoRecord(first, headerBytes - 1u, count, 0u, &located) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
+              located == nullptr,
           L"packed FileInfo traversal rejects a truncated first header before reading fields",
           success);
     Check(originalOffset > headerBytes &&
               Common::Plugins::LocatePackedFileInfoRecord(first, originalOffset + headerBytes - 1u, count, 0u, &located) ==
-                  HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && located == nullptr,
+                  HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
+              located == nullptr,
           L"packed FileInfo traversal rejects a truncated later header even when index zero was requested",
           success);
     if (first)
     {
         const unsigned long savedNameSize = first->FileNameSize;
-        first->FileNameSize = byteSize;
-        Check(Common::Plugins::LocatePackedFileInfoRecord(first, byteSize, count, 0u, &located) ==
-                  HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+        first->FileNameSize               = byteSize;
+        Check(Common::Plugins::LocatePackedFileInfoRecord(first, byteSize, count, 0u, &located) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
               L"packed FileInfo traversal rejects a name extending beyond its record",
               success);
         first->FileNameSize = savedNameSize;
 
         first->NextEntryOffset = 0u;
-        Check(Common::Plugins::LocatePackedFileInfoRecord(first, byteSize, count, 0u, &located) ==
-                  HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+        Check(Common::Plugins::LocatePackedFileInfoRecord(first, byteSize, count, 0u, &located) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
               L"packed FileInfo traversal rejects an early terminal record",
               success);
         first->NextEntryOffset = originalOffset;
     }
 
     FileInfo* finalEntry = nullptr;
-    Check(buffer.Get(2u, &finalEntry) == S_OK && finalEntry != nullptr,
-          L"packed FileInfo malformed corpus locates the final valid record",
-          success);
+    Check(buffer.Get(2u, &finalEntry) == S_OK && finalEntry != nullptr, L"packed FileInfo malformed corpus locates the final valid record", success);
     if (finalEntry)
     {
         finalEntry->NextEntryOffset = static_cast<unsigned long>(alignof(FileInfo));
-        located = nullptr;
-        Check(Common::Plugins::LocatePackedFileInfoRecord(first, byteSize, count, 0u, &located) ==
-                  HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && located == nullptr,
+        located                     = nullptr;
+        Check(Common::Plugins::LocatePackedFileInfoRecord(first, byteSize, count, 0u, &located) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && located == nullptr,
               L"packed FileInfo traversal rejects a nonzero terminal offset before returning an earlier record",
               success);
         finalEntry->NextEntryOffset = 0u;
@@ -873,17 +813,17 @@ void TestPackedFileInfoBuffer(bool& success) noexcept
 // ---------------------------------------------------------------------------
 // Export function typedefs
 // ---------------------------------------------------------------------------
-using PfnEnumeratePlugins       = HRESULT(__stdcall*)(REFIID, const PluginMetaData**, unsigned int*);
-using PfnCreate                 = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
-using PfnGetConfigurationSchema = HRESULT(__stdcall*)(REFIID, const wchar_t*, const char**);
-using PfnRunDebugSelfTests      = HRESULT(__stdcall*)(unsigned int*, unsigned int*);
-using PfnRunTerminalVtUpgradeCorpus = HRESULT(__stdcall*)(TerminalVtUpgradeTestContract::Evidence*);
-using PfnPluginShutdown         = void(__stdcall*)() noexcept;
-using PfnPluginCanUnloadNow     = BOOL(__stdcall*)() noexcept;
+using PfnEnumeratePlugins                           = HRESULT(__stdcall*)(REFIID, const PluginMetaData**, unsigned int*);
+using PfnCreate                                     = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
+using PfnGetConfigurationSchema                     = HRESULT(__stdcall*)(REFIID, const wchar_t*, const char**);
+using PfnRunDebugSelfTests                          = HRESULT(__stdcall*)(unsigned int*, unsigned int*);
+using PfnRunTerminalVtUpgradeCorpus                 = HRESULT(__stdcall*)(TerminalVtUpgradeTestContract::Evidence*);
+using PfnPluginShutdown                             = void(__stdcall*)() noexcept;
+using PfnPluginCanUnloadNow                         = BOOL(__stdcall*)() noexcept;
 using PfnTerminalAccessibilityLocalizationSelfTests = HRESULT(__stdcall*)(unsigned int*, unsigned int*) noexcept;
-using PfnTerminalDebugGetDiagnosticText = HRESULT(__stdcall*)(ITerminal*, TerminalOwnedUtf16*) noexcept;
+using PfnTerminalDebugGetDiagnosticText             = HRESULT(__stdcall*)(ITerminal*, TerminalOwnedUtf16*) noexcept;
 #if defined(_DEBUG)
-using PfnDebugCurlRuntimeProbe  = HRESULT(__stdcall*)() noexcept;
+using PfnDebugCurlRuntimeProbe = HRESULT(__stdcall*)() noexcept;
 #endif
 
 #if defined(_DEBUG)
@@ -958,13 +898,13 @@ constexpr std::array<std::wstring_view, 1> kTerminalDlls = {
 [[nodiscard]] std::string_view GetJsonStringMember(yyjson_val* object, const char* key) noexcept
 {
     yyjson_val* value = object != nullptr ? yyjson_obj_get(object, key) : nullptr;
-    const char* text = value != nullptr && yyjson_is_str(value) ? yyjson_get_str(value) : nullptr;
+    const char* text  = value != nullptr && yyjson_is_str(value) ? yyjson_get_str(value) : nullptr;
     return text != nullptr ? std::string_view(text) : std::string_view{};
 }
 
 [[nodiscard]] bool JsonScalarMemberEqual(yyjson_val* left, yyjson_val* right, const char* key) noexcept
 {
-    yyjson_val* leftValue = left != nullptr ? yyjson_obj_get(left, key) : nullptr;
+    yyjson_val* leftValue  = left != nullptr ? yyjson_obj_get(left, key) : nullptr;
     yyjson_val* rightValue = right != nullptr ? yyjson_obj_get(right, key) : nullptr;
     if (leftValue == nullptr || rightValue == nullptr)
     {
@@ -987,18 +927,16 @@ constexpr std::array<std::wstring_view, 1> kTerminalDlls = {
 
 [[nodiscard]] bool TerminalSchemaInvariantsEqual(yyjson_doc* leftDocument, yyjson_doc* rightDocument) noexcept
 {
-    yyjson_val* leftRoot = leftDocument != nullptr ? yyjson_doc_get_root(leftDocument) : nullptr;
+    yyjson_val* leftRoot  = leftDocument != nullptr ? yyjson_doc_get_root(leftDocument) : nullptr;
     yyjson_val* rightRoot = rightDocument != nullptr ? yyjson_doc_get_root(rightDocument) : nullptr;
-    if (! yyjson_is_obj(leftRoot) || ! yyjson_is_obj(rightRoot) ||
-        ! JsonScalarMemberEqual(leftRoot, rightRoot, "version"))
+    if (! yyjson_is_obj(leftRoot) || ! yyjson_is_obj(rightRoot) || ! JsonScalarMemberEqual(leftRoot, rightRoot, "version"))
     {
         return false;
     }
 
-    yyjson_val* leftFields = yyjson_obj_get(leftRoot, "fields");
+    yyjson_val* leftFields  = yyjson_obj_get(leftRoot, "fields");
     yyjson_val* rightFields = yyjson_obj_get(rightRoot, "fields");
-    if (! yyjson_is_arr(leftFields) || ! yyjson_is_arr(rightFields) ||
-        yyjson_arr_size(leftFields) != yyjson_arr_size(rightFields))
+    if (! yyjson_is_arr(leftFields) || ! yyjson_is_arr(rightFields) || yyjson_arr_size(leftFields) != yyjson_arr_size(rightFields))
     {
         return false;
     }
@@ -1006,17 +944,16 @@ constexpr std::array<std::wstring_view, 1> kTerminalDlls = {
     constexpr std::array scalarMembers = {"key", "type", "default", "min", "max"};
     for (size_t fieldIndex = 0u; fieldIndex < yyjson_arr_size(leftFields); ++fieldIndex)
     {
-        yyjson_val* leftField = yyjson_arr_get(leftFields, fieldIndex);
+        yyjson_val* leftField  = yyjson_arr_get(leftFields, fieldIndex);
         yyjson_val* rightField = yyjson_arr_get(rightFields, fieldIndex);
         if (! yyjson_is_obj(leftField) || ! yyjson_is_obj(rightField) ||
-            ! std::ranges::all_of(scalarMembers, [leftField, rightField](const char* member) noexcept {
-                return JsonScalarMemberEqual(leftField, rightField, member);
-            }))
+            ! std::ranges::all_of(scalarMembers,
+                                  [leftField, rightField](const char* member) noexcept { return JsonScalarMemberEqual(leftField, rightField, member); }))
         {
             return false;
         }
 
-        yyjson_val* leftOptions = yyjson_obj_get(leftField, "options");
+        yyjson_val* leftOptions  = yyjson_obj_get(leftField, "options");
         yyjson_val* rightOptions = yyjson_obj_get(rightField, "options");
         if ((leftOptions == nullptr) != (rightOptions == nullptr))
         {
@@ -1026,15 +963,13 @@ constexpr std::array<std::wstring_view, 1> kTerminalDlls = {
         {
             continue;
         }
-        if (! yyjson_is_arr(leftOptions) || ! yyjson_is_arr(rightOptions) ||
-            yyjson_arr_size(leftOptions) != yyjson_arr_size(rightOptions))
+        if (! yyjson_is_arr(leftOptions) || ! yyjson_is_arr(rightOptions) || yyjson_arr_size(leftOptions) != yyjson_arr_size(rightOptions))
         {
             return false;
         }
         for (size_t optionIndex = 0u; optionIndex < yyjson_arr_size(leftOptions); ++optionIndex)
         {
-            if (! JsonScalarMemberEqual(
-                    yyjson_arr_get(leftOptions, optionIndex), yyjson_arr_get(rightOptions, optionIndex), "value"))
+            if (! JsonScalarMemberEqual(yyjson_arr_get(leftOptions, optionIndex), yyjson_arr_get(rightOptions, optionIndex), "value"))
             {
                 return false;
             }
@@ -1045,8 +980,8 @@ constexpr std::array<std::wstring_view, 1> kTerminalDlls = {
 
 [[nodiscard]] bool HasExpectedTerminalSchemaShape(yyjson_doc* document) noexcept
 {
-    yyjson_val* root = document != nullptr ? yyjson_doc_get_root(document) : nullptr;
-    yyjson_val* fields = yyjson_is_obj(root) ? yyjson_obj_get(root, "fields") : nullptr;
+    yyjson_val* root                                        = document != nullptr ? yyjson_doc_get_root(document) : nullptr;
+    yyjson_val* fields                                      = yyjson_is_obj(root) ? yyjson_obj_get(root, "fields") : nullptr;
     constexpr std::array<std::string_view, 10> expectedKeys = {
         "defaultShell",
         "fontFamily",
@@ -1105,11 +1040,11 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
             return;
         }
 
-        const auto enumerate = reinterpret_cast<PfnEnumeratePlugins>(GetProcAddress(module.get(), "RedSalamanderEnumeratePlugins"));
-        const auto schema = reinterpret_cast<PfnGetConfigurationSchema>(GetProcAddress(module.get(), "RedSalamanderGetConfigurationSchema"));
+        const auto enumerate          = reinterpret_cast<PfnEnumeratePlugins>(GetProcAddress(module.get(), "RedSalamanderEnumeratePlugins"));
+        const auto schema             = reinterpret_cast<PfnGetConfigurationSchema>(GetProcAddress(module.get(), "RedSalamanderGetConfigurationSchema"));
         const auto accessibilityTests = reinterpret_cast<PfnTerminalAccessibilityLocalizationSelfTests>(
             GetProcAddress(module.get(), "RedSalamanderTerminalAccessibilityLocalizationSelfTests"));
-        const auto shutdown = reinterpret_cast<PfnPluginShutdown>(GetProcAddress(module.get(), "RedSalamanderPluginShutdown"));
+        const auto shutdown  = reinterpret_cast<PfnPluginShutdown>(GetProcAddress(module.get(), "RedSalamanderPluginShutdown"));
         const auto canUnload = reinterpret_cast<PfnPluginCanUnloadNow>(GetProcAddress(module.get(), "RedSalamanderPluginCanUnloadNow"));
         Check(enumerate != nullptr && schema != nullptr && shutdown != nullptr && canUnload != nullptr,
               L"Terminal.dll: localization contract resolves schema and lifecycle exports",
@@ -1120,9 +1055,7 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
         }
         if (runTestOnlyContracts)
         {
-            Check(accessibilityTests != nullptr,
-                  L"Terminal.dll: test-enabled localization contract resolves the accessibility selftest export",
-                  success);
+            Check(accessibilityTests != nullptr, L"Terminal.dll: test-enabled localization contract resolves the accessibility selftest export", success);
             if (accessibilityTests == nullptr)
             {
                 return;
@@ -1143,11 +1076,9 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
         });
 
         const PluginMetaData* metadata = nullptr;
-        unsigned int count = 0u;
-        const HRESULT enumerateHr = enumerate(__uuidof(ITerminal), &metadata, &count);
-        Check(enumerateHr == S_OK && metadata != nullptr && count == 1u,
-              L"Terminal.dll: localization contract enumerates the embedded terminal",
-              success);
+        unsigned int count             = 0u;
+        const HRESULT enumerateHr      = enumerate(__uuidof(ITerminal), &metadata, &count);
+        Check(enumerateHr == S_OK && metadata != nullptr && count == 1u, L"Terminal.dll: localization contract enumerates the embedded terminal", success);
         if (FAILED(enumerateHr) || metadata == nullptr || count != 1u)
         {
             return;
@@ -1155,42 +1086,35 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
 
         const auto readSchema = [&](std::wstring_view culture, std::string& output) noexcept
         {
-            const HRESULT languageHr = Localization::ApplyLanguagePreference(
-                {.kind = Localization::LanguagePreferenceKind::Culture, .culture = std::wstring(culture)});
-            const char* json = nullptr;
-            const HRESULT schemaHr = SUCCEEDED(languageHr)
-                ? schema(__uuidof(ITerminal), metadata[0].id, &json)
-                : languageHr;
-            output = SUCCEEDED(schemaHr) && json != nullptr ? json : "";
+            const HRESULT languageHr =
+                Localization::ApplyLanguagePreference({.kind = Localization::LanguagePreferenceKind::Culture, .culture = std::wstring(culture)});
+            const char* json       = nullptr;
+            const HRESULT schemaHr = SUCCEEDED(languageHr) ? schema(__uuidof(ITerminal), metadata[0].id, &json) : languageHr;
+            output                 = SUCCEEDED(schemaHr) && json != nullptr ? json : "";
             return languageHr == S_OK && schemaHr == S_OK && ! output.empty();
         };
 
         std::string englishSchema;
         std::string frenchSchema;
         std::string japaneseSchema;
-        Check(readSchema(L"en-US", englishSchema) && readSchema(L"fr-FR", frenchSchema) &&
-                  readSchema(L"ja-JP", japaneseSchema),
+        Check(readSchema(L"en-US", englishSchema) && readSchema(L"fr-FR", frenchSchema) && readSchema(L"ja-JP", japaneseSchema),
               L"Terminal.dll: embedded English and French/Japanese satellite schemas load live",
               success);
 
-        unique_yyjson_doc englishDocument = ParseJson(englishSchema.c_str());
-        unique_yyjson_doc frenchDocument = ParseJson(frenchSchema.c_str());
+        unique_yyjson_doc englishDocument  = ParseJson(englishSchema.c_str());
+        unique_yyjson_doc frenchDocument   = ParseJson(frenchSchema.c_str());
         unique_yyjson_doc japaneseDocument = ParseJson(japaneseSchema.c_str());
-        Check(englishDocument && frenchDocument && japaneseDocument,
-              L"Terminal.dll: every localized schema is valid UTF-8 JSON",
-              success);
+        Check(englishDocument && frenchDocument && japaneseDocument, L"Terminal.dll: every localized schema is valid UTF-8 JSON", success);
         if (englishDocument && frenchDocument && japaneseDocument)
         {
-            yyjson_val* englishRoot = yyjson_doc_get_root(englishDocument.get());
-            yyjson_val* frenchRoot = yyjson_doc_get_root(frenchDocument.get());
+            yyjson_val* englishRoot  = yyjson_doc_get_root(englishDocument.get());
+            yyjson_val* frenchRoot   = yyjson_doc_get_root(frenchDocument.get());
             yyjson_val* japaneseRoot = yyjson_doc_get_root(japaneseDocument.get());
-            Check(GetJsonStringMember(englishRoot, "title") == "Embedded Terminal" &&
-                      GetJsonStringMember(frenchRoot, "title") == "Terminal intégré" &&
+            Check(GetJsonStringMember(englishRoot, "title") == "Embedded Terminal" && GetJsonStringMember(frenchRoot, "title") == "Terminal intégré" &&
                       GetJsonStringMember(japaneseRoot, "title") == "組み込みターミナル",
                   L"Terminal.dll: schema display text follows the selected culture",
                   success);
-            Check(HasExpectedTerminalSchemaShape(englishDocument.get()) &&
-                      TerminalSchemaInvariantsEqual(englishDocument.get(), frenchDocument.get()) &&
+            Check(HasExpectedTerminalSchemaShape(englishDocument.get()) && TerminalSchemaInvariantsEqual(englishDocument.get(), frenchDocument.get()) &&
                       TerminalSchemaInvariantsEqual(englishDocument.get(), japaneseDocument.get()),
                   L"Terminal.dll: localized schemas preserve invariant keys, types, defaults, bounds, and option values",
                   success);
@@ -1205,7 +1129,7 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
         {
             unsigned int accessibilityPassed = 0u;
             unsigned int accessibilityFailed = 0u;
-            const HRESULT accessibilityHr = accessibilityTests(&accessibilityPassed, &accessibilityFailed);
+            const HRESULT accessibilityHr    = accessibilityTests(&accessibilityPassed, &accessibilityFailed);
             Check(accessibilityHr == S_OK && accessibilityPassed == 4u && accessibilityFailed == 0u,
                   L"Terminal.dll: live UI Automation Name resolves through the active Japanese resource satellite",
                   success);
@@ -1219,12 +1143,11 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
     }
 
     std::error_code error;
-    const std::filesystem::path fixtureRoot = RedSalamander::TestSupport::AcquireTestDirectory(
-        {.harnessSegment = L"PluginContractTests",
-         .leafSegment = L"terminal-localized-runtime-diagnostic",
-         .fallbackRunIdPrefix = L"plugin-contract",
-         .kind = RedSalamander::TestSupport::TestDirectoryKind::Scratch},
-        error);
+    const std::filesystem::path fixtureRoot = RedSalamander::TestSupport::AcquireTestDirectory({.harnessSegment      = L"PluginContractTests",
+                                                                                                .leafSegment         = L"terminal-localized-runtime-diagnostic",
+                                                                                                .fallbackRunIdPrefix = L"plugin-contract",
+                                                                                                .kind = RedSalamander::TestSupport::TestDirectoryKind::Scratch},
+                                                                                               error);
     Check(! error && ! fixtureRoot.empty(), L"Terminal.dll: localized runtime diagnostic acquires TestSandbox scratch", success);
     if (error || fixtureRoot.empty())
     {
@@ -1233,8 +1156,8 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
 
     const std::filesystem::path fixtureLang = fixtureRoot / L"Lang";
     std::filesystem::create_directories(fixtureLang, error);
-    const std::filesystem::path fixtureModulePath = fixtureRoot / L"Terminal.dll";
-    const std::filesystem::path sourceSatellitePath = executableDirectory / L"Lang" / L"Terminal-ja-JP.dll";
+    const std::filesystem::path fixtureModulePath    = fixtureRoot / L"Terminal.dll";
+    const std::filesystem::path sourceSatellitePath  = executableDirectory / L"Lang" / L"Terminal-ja-JP.dll";
     const std::filesystem::path fixtureSatellitePath = fixtureLang / L"Terminal-ja-JP.dll";
     if (! error)
     {
@@ -1242,8 +1165,7 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
     }
     if (! error)
     {
-        std::filesystem::copy_file(
-            sourceSatellitePath, fixtureSatellitePath, std::filesystem::copy_options::overwrite_existing, error);
+        std::filesystem::copy_file(sourceSatellitePath, fixtureSatellitePath, std::filesystem::copy_options::overwrite_existing, error);
     }
     Check(! error, L"Terminal.dll: isolated fixture contains the plugin and Japanese satellite but no private runtime", success);
     if (error)
@@ -1262,10 +1184,10 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
         }
 
         const auto enumerate = reinterpret_cast<PfnEnumeratePlugins>(GetProcAddress(module.get(), "RedSalamanderEnumeratePlugins"));
-        const auto create = reinterpret_cast<PfnCreate>(GetProcAddress(module.get(), "RedSalamanderCreate"));
-        const auto getDiagnostic = reinterpret_cast<PfnTerminalDebugGetDiagnosticText>(
-            GetProcAddress(module.get(), "RedSalamanderTerminalDebugGetDiagnosticText"));
-        const auto shutdown = reinterpret_cast<PfnPluginShutdown>(GetProcAddress(module.get(), "RedSalamanderPluginShutdown"));
+        const auto create    = reinterpret_cast<PfnCreate>(GetProcAddress(module.get(), "RedSalamanderCreate"));
+        const auto getDiagnostic =
+            reinterpret_cast<PfnTerminalDebugGetDiagnosticText>(GetProcAddress(module.get(), "RedSalamanderTerminalDebugGetDiagnosticText"));
+        const auto shutdown  = reinterpret_cast<PfnPluginShutdown>(GetProcAddress(module.get(), "RedSalamanderPluginShutdown"));
         const auto canUnload = reinterpret_cast<PfnPluginCanUnloadNow>(GetProcAddress(module.get(), "RedSalamanderPluginCanUnloadNow"));
         Check(enumerate != nullptr && create != nullptr && getDiagnostic != nullptr && shutdown != nullptr && canUnload != nullptr,
               L"Terminal.dll: isolated diagnostic fixture resolves factory, diagnostic, and lifecycle exports",
@@ -1277,12 +1199,9 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
 
         const HRESULT registerHr = Localization::RegisterResourceOwner(L"Terminal", module.get());
         const HRESULT languageHr = SUCCEEDED(registerHr)
-            ? Localization::ApplyLanguagePreference(
-                  {.kind = Localization::LanguagePreferenceKind::Culture, .culture = L"ja-JP"})
-            : registerHr;
-        Check(registerHr == S_OK && languageHr == S_OK,
-              L"Terminal.dll: isolated diagnostic fixture activates its Japanese resource owner",
-              success);
+                                       ? Localization::ApplyLanguagePreference({.kind = Localization::LanguagePreferenceKind::Culture, .culture = L"ja-JP"})
+                                       : registerHr;
+        Check(registerHr == S_OK && languageHr == S_OK, L"Terminal.dll: isolated diagnostic fixture activates its Japanese resource owner", success);
         if (FAILED(registerHr) || FAILED(languageHr))
         {
             return;
@@ -1294,10 +1213,9 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
         });
 
         const PluginMetaData* metadata = nullptr;
-        unsigned int count = 0u;
-        const HRESULT enumerateHr = enumerate(__uuidof(ITerminal), &metadata, &count);
-        wil::unique_hwnd parent(CreateWindowExW(
-            0u, L"STATIC", L"", WS_OVERLAPPED, 0, 0, 1, 1, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr));
+        unsigned int count             = 0u;
+        const HRESULT enumerateHr      = enumerate(__uuidof(ITerminal), &metadata, &count);
+        wil::unique_hwnd parent(CreateWindowExW(0u, L"STATIC", L"", WS_OVERLAPPED, 0, 0, 1, 1, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr));
         Check(enumerateHr == S_OK && metadata != nullptr && count == 1u && parent != nullptr,
               L"Terminal.dll: isolated diagnostic fixture enumerates and creates a valid parent window",
               success);
@@ -1310,14 +1228,14 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
         wil::com_ptr_nothrow<ITerminal> terminal;
         const HRESULT createHr = create(__uuidof(ITerminal), &options, &g_nullHost, metadata[0].id, terminal.put_void());
         TerminalOpenContext context{};
-        context.sizeBytes = sizeof(context);
-        context.parentWindow = parent.get();
-        context.sourceGeneration = 1u;
+        context.sizeBytes                = sizeof(context);
+        context.parentWindow             = parent.get();
+        context.sourceGeneration         = 1u;
         context.sourceLocation.sizeBytes = sizeof(context.sourceLocation);
-        context.sourceLocation.kind = TerminalLocationKind::Unsupported;
+        context.sourceLocation.kind      = TerminalLocationKind::Unsupported;
         context.launchLocation.sizeBytes = sizeof(context.launchLocation);
-        context.launchLocation.kind = TerminalLocationKind::Unsupported;
-        const HRESULT openHr = SUCCEEDED(createHr) && terminal ? terminal->Open(&context) : createHr;
+        context.launchLocation.kind      = TerminalLocationKind::Unsupported;
+        const HRESULT openHr             = SUCCEEDED(createHr) && terminal ? terminal->Open(&context) : createHr;
         Check(createHr == S_OK && terminal != nullptr && openHr == S_OK,
               L"Terminal.dll: missing private runtime enters the supported diagnostic lifecycle",
               success);
@@ -1325,11 +1243,8 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
         TerminalOwnedUtf16 diagnostic{};
         const HRESULT diagnosticHr = terminal ? getDiagnostic(terminal.get(), &diagnostic) : E_UNEXPECTED;
         wil::unique_cotaskmem_string diagnosticOwner(diagnostic.data);
-        const std::wstring_view diagnosticText = diagnostic.data != nullptr
-            ? std::wstring_view(diagnostic.data, diagnostic.length)
-            : std::wstring_view{};
-        Check(diagnosticHr == S_OK &&
-                  diagnosticText.find(L"組み込みターミナル エンジンを利用できません。") != std::wstring_view::npos &&
+        const std::wstring_view diagnosticText = diagnostic.data != nullptr ? std::wstring_view(diagnostic.data, diagnostic.length) : std::wstring_view{};
+        Check(diagnosticHr == S_OK && diagnosticText.find(L"組み込みターミナル エンジンを利用できません。") != std::wstring_view::npos &&
                   diagnosticText.find(L"プライベート Ghostty ランタイムを検証用に排他的に開けませんでした") != std::wstring_view::npos &&
                   diagnosticText.find(L"The private Ghostty runtime") == std::wstring_view::npos,
               L"Terminal.dll: production missing-runtime diagnostic is formatted from Japanese resources",
@@ -1355,16 +1270,12 @@ void TestTerminalLocalizedContracts(bool& success, bool runTestOnlyContracts = t
 void TestPackagedGhosttyRuntimeLoad(bool& success) noexcept
 {
     const std::wstring runtimePath = GetExeDir() + L"Plugins\\TerminalRuntime\\ghostty-vt.dll";
-    wil::unique_hmodule runtime(LoadLibraryExW(
-        runtimePath.c_str(),
-        nullptr,
-        LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_APPLICATION_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32));
+    wil::unique_hmodule runtime(
+        LoadLibraryExW(runtimePath.c_str(), nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_APPLICATION_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32));
     Check(static_cast<bool>(runtime), L"package Ghostty runtime loads natively", success);
     if (runtime)
     {
-        Check(GetProcAddress(runtime.get(), "ghostty_build_info") != nullptr,
-              L"package Ghostty runtime resolves its ABI identity export",
-              success);
+        Check(GetProcAddress(runtime.get(), "ghostty_build_info") != nullptr, L"package Ghostty runtime resolves its ABI identity export", success);
     }
 }
 
@@ -1462,17 +1373,15 @@ void TestViewerSizedRecords(std::wstring_view relPath, bool& success) noexcept
     }
 
     const auto enumerate = reinterpret_cast<PfnEnumeratePlugins>(GetProcAddress(module.get(), "RedSalamanderEnumeratePlugins"));
-    const auto create = reinterpret_cast<PfnCreate>(GetProcAddress(module.get(), "RedSalamanderCreate"));
-    Check(enumerate != nullptr && create != nullptr,
-          std::format(L"{}: sized-record test resolves factory exports", relPath).c_str(),
-          success);
+    const auto create    = reinterpret_cast<PfnCreate>(GetProcAddress(module.get(), "RedSalamanderCreate"));
+    Check(enumerate != nullptr && create != nullptr, std::format(L"{}: sized-record test resolves factory exports", relPath).c_str(), success);
     if (enumerate == nullptr || create == nullptr)
     {
         return;
     }
 
     const PluginMetaData* metadata = nullptr;
-    unsigned int count = 0u;
+    unsigned int count             = 0u;
     if (enumerate(__uuidof(IViewer), &metadata, &count) != S_OK || metadata == nullptr || count == 0u)
     {
         Check(false, std::format(L"{}: sized-record test enumerates a viewer", relPath).c_str(), success);
@@ -1482,9 +1391,7 @@ void TestViewerSizedRecords(std::wstring_view relPath, bool& success) noexcept
     FactoryOptions options{};
     wil::com_ptr_nothrow<IViewer> viewer;
     const HRESULT createHr = create(__uuidof(IViewer), &options, &g_nullHost, metadata[0].id, viewer.put_void());
-    Check(createHr == S_OK && viewer != nullptr,
-          std::format(L"{}: sized-record test creates a viewer", relPath).c_str(),
-          success);
+    Check(createHr == S_OK && viewer != nullptr, std::format(L"{}: sized-record test creates a viewer", relPath).c_str(), success);
     if (FAILED(createHr) || ! viewer)
     {
         return;
@@ -1492,9 +1399,7 @@ void TestViewerSizedRecords(std::wstring_view relPath, bool& success) noexcept
 
     ViewerOpenContext shortOpen{};
     shortOpen.sizeBytes = sizeof(ViewerOpenContext) - 1u;
-    Check(viewer->Open(&shortOpen) == E_INVALIDARG,
-          std::format(L"{}: Open rejects an undersized ViewerOpenContext", relPath).c_str(),
-          success);
+    Check(viewer->Open(&shortOpen) == E_INVALIDARG, std::format(L"{}: Open rejects an undersized ViewerOpenContext", relPath).c_str(), success);
 
     ViewerTheme shortTheme{};
     shortTheme.sizeBytes = sizeof(ViewerTheme) - 1u;
@@ -1504,10 +1409,8 @@ void TestViewerSizedRecords(std::wstring_view relPath, bool& success) noexcept
 
     ViewerTheme currentTheme{};
     currentTheme.sizeBytes = sizeof(currentTheme);
-    currentTheme.dpi = USER_DEFAULT_SCREEN_DPI;
-    Check(viewer->SetTheme(&currentTheme) == S_OK,
-          std::format(L"{}: SetTheme accepts the current ViewerTheme record", relPath).c_str(),
-          success);
+    currentTheme.dpi       = USER_DEFAULT_SCREEN_DPI;
+    Check(viewer->SetTheme(&currentTheme) == S_OK, std::format(L"{}: SetTheme accepts the current ViewerTheme record", relPath).c_str(), success);
 
     struct ExtendedViewerTheme final
     {
@@ -1515,11 +1418,9 @@ void TestViewerSizedRecords(std::wstring_view relPath, bool& success) noexcept
         uint64_t unknownTail[4]{};
     };
     ExtendedViewerTheme extendedTheme{};
-    extendedTheme.base = currentTheme;
+    extendedTheme.base           = currentTheme;
     extendedTheme.base.sizeBytes = sizeof(extendedTheme);
-    Check(viewer->SetTheme(&extendedTheme.base) == S_OK,
-          std::format(L"{}: SetTheme ignores an unknown ViewerTheme tail", relPath).c_str(),
-          success);
+    Check(viewer->SetTheme(&extendedTheme.base) == S_OK, std::format(L"{}: SetTheme ignores an unknown ViewerTheme tail", relPath).c_str(), success);
 
     static_cast<void>(viewer->SetCallback(nullptr, nullptr));
     static_cast<void>(viewer->Close());
@@ -1528,7 +1429,7 @@ void TestViewerSizedRecords(std::wstring_view relPath, bool& success) noexcept
 void TestTerminalSizedRecords(bool& success, bool runTestOnlyContracts = true) noexcept
 {
     constexpr std::wstring_view relativePath = L"Plugins\\Terminal.dll";
-    const std::wstring absPath = GetExeDir() + std::wstring(relativePath);
+    const std::wstring absPath               = GetExeDir() + std::wstring(relativePath);
     wil::unique_hmodule module(LoadLibraryExW(absPath.c_str(), nullptr, 0));
     Check(static_cast<bool>(module), L"Terminal.dll: sized-record test loads DLL", success);
     if (! module)
@@ -1537,7 +1438,7 @@ void TestTerminalSizedRecords(bool& success, bool runTestOnlyContracts = true) n
     }
 
     const auto enumerate = reinterpret_cast<PfnEnumeratePlugins>(GetProcAddress(module.get(), "RedSalamanderEnumeratePlugins"));
-    const auto create = reinterpret_cast<PfnCreate>(GetProcAddress(module.get(), "RedSalamanderCreate"));
+    const auto create    = reinterpret_cast<PfnCreate>(GetProcAddress(module.get(), "RedSalamanderCreate"));
     if (enumerate == nullptr || create == nullptr)
     {
         Check(false, L"Terminal.dll: sized-record test resolves factory exports", success);
@@ -1545,7 +1446,7 @@ void TestTerminalSizedRecords(bool& success, bool runTestOnlyContracts = true) n
     }
 
     const PluginMetaData* metadata = nullptr;
-    unsigned int count = 0u;
+    unsigned int count             = 0u;
     if (enumerate(__uuidof(ITerminal), &metadata, &count) != S_OK || metadata == nullptr || count == 0u)
     {
         Check(false, L"Terminal.dll: sized-record test enumerates a terminal", success);
@@ -1563,9 +1464,7 @@ void TestTerminalSizedRecords(bool& success, bool runTestOnlyContracts = true) n
 
     TerminalOpenContext shortOpen{};
     shortOpen.sizeBytes = sizeof(TerminalOpenContext) - 1u;
-    Check(terminal->Open(&shortOpen) == E_INVALIDARG,
-          L"Terminal.dll: Open rejects an undersized TerminalOpenContext",
-          success);
+    Check(terminal->Open(&shortOpen) == E_INVALIDARG, L"Terminal.dll: Open rejects an undersized TerminalOpenContext", success);
 
     TerminalTheme shortTheme{};
     shortTheme.sizeBytes = sizeof(TerminalTheme) - 1u;
@@ -1575,9 +1474,7 @@ void TestTerminalSizedRecords(bool& success, bool runTestOnlyContracts = true) n
 
     TerminalTheme currentTheme{};
     currentTheme.sizeBytes = sizeof(currentTheme);
-    Check(terminal->SetTheme(&currentTheme) == S_OK,
-          L"Terminal.dll: SetTheme accepts the current TerminalTheme record",
-          success);
+    Check(terminal->SetTheme(&currentTheme) == S_OK, L"Terminal.dll: SetTheme accepts the current TerminalTheme record", success);
 
     struct ExtendedTerminalTheme final
     {
@@ -1585,25 +1482,20 @@ void TestTerminalSizedRecords(bool& success, bool runTestOnlyContracts = true) n
         uint64_t unknownTail[4]{};
     };
     ExtendedTerminalTheme extendedTheme{};
-    extendedTheme.base = currentTheme;
+    extendedTheme.base           = currentTheme;
     extendedTheme.base.sizeBytes = sizeof(extendedTheme);
-    Check(terminal->SetTheme(&extendedTheme.base) == S_OK,
-          L"Terminal.dll: SetTheme ignores an unknown TerminalTheme tail",
-          success);
+    Check(terminal->SetTheme(&extendedTheme.base) == S_OK, L"Terminal.dll: SetTheme ignores an unknown TerminalTheme tail", success);
 
     TerminalViewState shortState{};
     shortState.sizeBytes = sizeof(TerminalViewState) - 1u;
-    Check(terminal->GetViewState(&shortState) == E_INVALIDARG,
-          L"Terminal.dll: GetViewState rejects an undersized TerminalViewState",
-          success);
+    Check(terminal->GetViewState(&shortState) == E_INVALIDARG, L"Terminal.dll: GetViewState rejects an undersized TerminalViewState", success);
 
     TerminalViewState currentState{};
-    currentState.sizeBytes = sizeof(currentState);
+    currentState.sizeBytes       = sizeof(currentState);
     const HRESULT currentStateHr = terminal->GetViewState(&currentState);
     wil::unique_cotaskmem_string currentTitle(currentState.title.data);
     wil::unique_cotaskmem_string currentStatus(currentState.status.data);
-    Check(currentStateHr == S_OK && currentState.sizeBytes == sizeof(currentState) &&
-              currentState.activity.sizeBytes == sizeof(currentState.activity),
+    Check(currentStateHr == S_OK && currentState.sizeBytes == sizeof(currentState) && currentState.activity.sizeBytes == sizeof(currentState.activity),
           L"Terminal.dll: GetViewState returns current nested sizeBytes values",
           success);
 
@@ -1613,37 +1505,31 @@ void TestTerminalSizedRecords(bool& success, bool runTestOnlyContracts = true) n
         uint64_t unknownTail[4]{0xA55AA55AA55AA55Aull, 0xA55AA55AA55AA55Aull, 0xA55AA55AA55AA55Aull, 0xA55AA55AA55AA55Aull};
     };
     ExtendedTerminalViewState extendedState{};
-    extendedState.base.sizeBytes = sizeof(extendedState);
+    extendedState.base.sizeBytes  = sizeof(extendedState);
     const HRESULT extendedStateHr = terminal->GetViewState(&extendedState.base);
     wil::unique_cotaskmem_string extendedTitle(extendedState.base.title.data);
     wil::unique_cotaskmem_string extendedStatus(extendedState.base.status.data);
-    const bool tailPreserved = std::ranges::all_of(extendedState.unknownTail, [](uint64_t value) noexcept {
-        return value == 0xA55AA55AA55AA55Aull;
-    });
-    Check(extendedStateHr == S_OK && tailPreserved,
-          L"Terminal.dll: GetViewState accepts and preserves an unknown caller tail",
-          success);
+    const bool tailPreserved = std::ranges::all_of(extendedState.unknownTail, [](uint64_t value) noexcept { return value == 0xA55AA55AA55AA55Aull; });
+    Check(extendedStateHr == S_OK && tailPreserved, L"Terminal.dll: GetViewState accepts and preserves an unknown caller tail", success);
 
     wil::com_ptr_nothrow<ITerminalActions> actions;
     const HRESULT actionsHr = terminal->QueryInterface(__uuidof(ITerminalActions), actions.put_void());
-    Check(actionsHr == S_OK && actions != nullptr,
-          L"Terminal.dll: ITerminal exposes the release-lockstep ITerminalActions capability",
-          success);
+    Check(actionsHr == S_OK && actions != nullptr, L"Terminal.dll: ITerminal exposes the release-lockstep ITerminalActions capability", success);
     if (actions)
     {
         constexpr std::wstring_view unknownCommand = L"cmd/app/contractProbe";
         TerminalShortcutRequest shortcut{};
-        shortcut.sizeBytes = sizeof(shortcut);
-        shortcut.commandId = {unknownCommand.data(), static_cast<uint32_t>(unknownCommand.size())};
-        shortcut.message = WM_KEYDOWN;
-        shortcut.virtualKey = 'P';
-        shortcut.scanCode = 0x19u;
-        shortcut.repeatCount = 1u;
-        shortcut.instanceId = currentState.instanceId;
-        shortcut.sessionGeneration = currentState.sessionGeneration;
-        TerminalShortcutRoute route = TerminalShortcutRoute::Blocked;
+        shortcut.sizeBytes                    = sizeof(shortcut);
+        shortcut.commandId                    = {unknownCommand.data(), static_cast<uint32_t>(unknownCommand.size())};
+        shortcut.message                      = WM_KEYDOWN;
+        shortcut.virtualKey                   = 'P';
+        shortcut.scanCode                     = 0x19u;
+        shortcut.repeatCount                  = 1u;
+        shortcut.instanceId                   = currentState.instanceId;
+        shortcut.sessionGeneration            = currentState.sessionGeneration;
+        TerminalShortcutRoute route           = TerminalShortcutRoute::Blocked;
         TerminalShortcutRequest shortShortcut = shortcut;
-        shortShortcut.sizeBytes = sizeof(shortShortcut) - 1u;
+        shortShortcut.sizeBytes               = sizeof(shortShortcut) - 1u;
         Check(actions->RouteShortcut(&shortShortcut, &route) == E_INVALIDARG && route == TerminalShortcutRoute::PassThrough,
               L"Terminal.dll: RouteShortcut rejects undersized input and initializes fail-open output",
               success);
@@ -1652,22 +1538,20 @@ void TestTerminalSizedRecords(bool& success, bool runTestOnlyContracts = true) n
               L"Terminal.dll: an eligible non-plugin command routes back to the host",
               success);
         shortcut.modifierFlags = TerminalShortcutModifierCtrl | TerminalShortcutModifierAlt | TerminalShortcutModifierRightAlt;
-        route = TerminalShortcutRoute::Blocked;
+        route                  = TerminalShortcutRoute::Blocked;
         Check(actions->RouteShortcut(&shortcut, &route) == S_OK && route == TerminalShortcutRoute::PassThrough,
               L"Terminal.dll: printable AltGr input passes through before host-command arbitration",
               success);
 
         constexpr std::wstring_view findCommand = L"cmd/terminal/find";
         TerminalActionRequest action{};
-        action.sizeBytes = sizeof(action);
-        action.commandId = {findCommand.data(), static_cast<uint32_t>(findCommand.size())};
-        action.instanceId = currentState.instanceId;
+        action.sizeBytes         = sizeof(action);
+        action.commandId         = {findCommand.data(), static_cast<uint32_t>(findCommand.size())};
+        action.instanceId        = currentState.instanceId;
         action.sessionGeneration = currentState.sessionGeneration;
         TerminalActionState actionState{};
         actionState.sizeBytes = sizeof(actionState);
-        Check(actions->GetActionState(&action, nullptr) == E_POINTER,
-              L"Terminal.dll: GetActionState rejects a null output record",
-              success);
+        Check(actions->GetActionState(&action, nullptr) == E_POINTER, L"Terminal.dll: GetActionState rejects a null output record", success);
 
         struct ActionStateWithCanary final
         {
@@ -1676,15 +1560,14 @@ void TestTerminalSizedRecords(bool& success, bool runTestOnlyContracts = true) n
         };
         ActionStateWithCanary undersizedState{};
         std::memset(&undersizedState, 0xA5, sizeof(undersizedState));
-        undersizedState.base.sizeBytes = sizeof(TerminalActionState) - 1u;
+        undersizedState.base.sizeBytes               = sizeof(TerminalActionState) - 1u;
         const ActionStateWithCanary undersizedBefore = undersizedState;
         Check(actions->GetActionState(&action, &undersizedState.base) == E_INVALIDARG &&
                   std::memcmp(&undersizedState, &undersizedBefore, sizeof(undersizedState)) == 0,
               L"Terminal.dll: GetActionState rejects an undersized output without touching its canary",
               success);
 
-        Check(actions->GetActionState(&action, &actionState) == S_OK && actionState.enabled == 0u &&
-                  actions->ExecuteAction(&action) == E_NOTIMPL,
+        Check(actions->GetActionState(&action, &actionState) == S_OK && actionState.enabled == 0u && actions->ExecuteAction(&action) == E_NOTIMPL,
               L"Terminal.dll: unavailable Find is disabled and yields instead of consuming input",
               success);
 
@@ -1692,9 +1575,7 @@ void TestTerminalSizedRecords(bool& success, bool runTestOnlyContracts = true) n
         extendedActionState.base.sizeBytes = sizeof(extendedActionState);
         extendedActionState.tail.fill(0xA55AA55AA55AA55Aull);
         Check(actions->GetActionState(&action, &extendedActionState.base) == S_OK &&
-                  std::ranges::all_of(extendedActionState.tail, [](uint64_t value) noexcept {
-                      return value == 0xA55AA55AA55AA55Aull;
-                  }),
+                  std::ranges::all_of(extendedActionState.tail, [](uint64_t value) noexcept { return value == 0xA55AA55AA55AA55Aull; }),
               L"Terminal.dll: GetActionState accepts and preserves an unknown caller tail",
               success);
 
@@ -1704,22 +1585,21 @@ void TestTerminalSizedRecords(bool& success, bool runTestOnlyContracts = true) n
               success);
 
         constexpr std::wstring_view copyOrPassthroughCommand = L"cmd/terminal/copySelectionOrPassthrough";
-        action.commandId = {copyOrPassthroughCommand.data(), static_cast<uint32_t>(copyOrPassthroughCommand.size())};
-        Check(actions->GetActionState(&action, &actionState) == S_OK && actionState.enabled == 0u &&
-                  actions->ExecuteAction(&action) == S_FALSE,
+        action.commandId                                     = {copyOrPassthroughCommand.data(), static_cast<uint32_t>(copyOrPassthroughCommand.size())};
+        Check(actions->GetActionState(&action, &actionState) == S_OK && actionState.enabled == 0u && actions->ExecuteAction(&action) == S_FALSE,
               L"Terminal.dll: copySelectionOrPassthrough is a plugin action that is disabled without a selection and does not pass through from ExecuteAction",
               success);
     }
 
     struct CallbackProbe final : ITerminalEventCallback
     {
-        void STDMETHODCALLTYPE OnTerminalEvent(const TerminalEvent* /*event*/, void* /*cookie*/) noexcept override {}
+        void STDMETHODCALLTYPE OnTerminalEvent(const TerminalEvent* /*event*/, void* /*cookie*/) noexcept override
+        {
+        }
     } callbackProbe;
     int callbackCookie = 0;
-    Check(terminal->SetCallback(nullptr, &callbackCookie) == E_INVALIDARG &&
-              terminal->SetCallback(&callbackProbe, nullptr) == E_INVALIDARG &&
-              terminal->SetCallback(&callbackProbe, &callbackCookie) == S_OK &&
-              terminal->SetCallback(nullptr, nullptr) == S_OK,
+    Check(terminal->SetCallback(nullptr, &callbackCookie) == E_INVALIDARG && terminal->SetCallback(&callbackProbe, nullptr) == E_INVALIDARG &&
+              terminal->SetCallback(&callbackProbe, &callbackCookie) == S_OK && terminal->SetCallback(nullptr, nullptr) == S_OK,
           L"Terminal.dll: weak event callback registration accepts only both-null or both-non-null pairs",
           success);
 
@@ -1735,7 +1615,7 @@ void TestTerminalSizedRecords(bool& success, bool runTestOnlyContracts = true) n
         {
             CoTaskMemFree(liveState.title.data);
             CoTaskMemFree(liveState.status.data);
-            findAction.instanceId = liveState.instanceId;
+            findAction.instanceId        = liveState.instanceId;
             findAction.sessionGeneration = liveState.sessionGeneration;
         }
         static_cast<void>(actions->ExecuteAction(&findAction));
@@ -1747,10 +1627,10 @@ void TestTerminalSizedRecords(bool& success, bool runTestOnlyContracts = true) n
         return;
     }
 
-    using PfnJoinTid = DWORD(__stdcall*)(ITerminal*);
-    const auto joinTid = reinterpret_cast<PfnJoinTid>(GetProcAddress(module.get(), "RedSalamanderTerminalDebugCommandSurfaceJoinTid"));
+    using PfnJoinTid           = DWORD(__stdcall*)(ITerminal*);
+    const auto joinTid         = reinterpret_cast<PfnJoinTid>(GetProcAddress(module.get(), "RedSalamanderTerminalDebugCommandSurfaceJoinTid"));
     const DWORD closeCallerTid = GetCurrentThreadId();
-    DWORD observedJoinTid = 0u;
+    DWORD observedJoinTid      = 0u;
     for (int attempt = 0; attempt < 50; ++attempt)
     {
         observedJoinTid = joinTid != nullptr ? joinTid(terminal.get()) : 0u;
@@ -1784,24 +1664,24 @@ void TestTerminalSizedRecords(bool& success, bool runTestOnlyContracts = true) n
 void TestTransactionalConfiguration(IInformations& information, std::wstring_view relativePath, const wchar_t* pluginId, bool& success) noexcept
 {
     constexpr char kForwardConfiguration[] = R"json({"observatoryUnknown":{"value":17}})json";
-    const HRESULT forwardHr = information.SetConfiguration(kForwardConfiguration);
-    const char* configuration = nullptr;
-    const HRESULT getForwardHr = information.GetConfiguration(&configuration);
-    const std::string preserved = configuration != nullptr ? configuration : "";
+    const HRESULT forwardHr                = information.SetConfiguration(kForwardConfiguration);
+    const char* configuration              = nullptr;
+    const HRESULT getForwardHr             = information.GetConfiguration(&configuration);
+    const std::string preserved            = configuration != nullptr ? configuration : "";
     Check(forwardHr == S_OK && getForwardHr == S_OK && preserved.find("\"observatoryUnknown\"") != std::string::npos,
           std::format(L"{}: SetConfiguration(pluginId={}) preserves unknown members", relativePath, pluginId).c_str(),
           success);
 
-    const HRESULT malformedHr = information.SetConfiguration("{");
-    configuration = nullptr;
+    const HRESULT malformedHr         = information.SetConfiguration("{");
+    configuration                     = nullptr;
     const HRESULT getAfterMalformedHr = information.GetConfiguration(&configuration);
     Check(malformedHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && getAfterMalformedHr == S_OK && configuration != nullptr &&
               std::string_view(configuration) == preserved,
           std::format(L"{}: malformed configuration preserves live state for pluginId={}", relativePath, pluginId).c_str(),
           success);
 
-    const HRESULT wrongRootHr = information.SetConfiguration("[]");
-    configuration = nullptr;
+    const HRESULT wrongRootHr         = information.SetConfiguration("[]");
+    configuration                     = nullptr;
     const HRESULT getAfterWrongRootHr = information.GetConfiguration(&configuration);
     Check(wrongRootHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && getAfterWrongRootHr == S_OK && configuration != nullptr &&
               std::string_view(configuration) == preserved,
@@ -1810,14 +1690,13 @@ void TestTransactionalConfiguration(IInformations& information, std::wstring_vie
 
     if (relativePath == L"Plugins\\FileSystem7z.dll" || relativePath == L"Plugins\\FileSystemCurl.dll")
     {
-        constexpr char kLegacyPasswordConfiguration[] =
-            R"json({"defaultPassword":"observatory-password-sentinel","observatoryUnknown":17})json";
+        constexpr char kLegacyPasswordConfiguration[] = R"json({"defaultPassword":"observatory-password-sentinel","observatoryUnknown":17})json";
         constexpr char kLegacyCurlSecretConfiguration[] =
             R"json({"defaultPassword":"observatory-password-sentinel","sshKeyPassphrase":"observatory-passphrase-sentinel","observatoryUnknown":17})json";
-        const char* legacyConfiguration = relativePath == L"Plugins\\FileSystemCurl.dll" ? kLegacyCurlSecretConfiguration : kLegacyPasswordConfiguration;
-        const HRESULT secretHr          = information.SetConfiguration(legacyConfiguration);
-        configuration          = nullptr;
-        const HRESULT getSecretHr = information.GetConfiguration(&configuration);
+        const char* legacyConfiguration  = relativePath == L"Plugins\\FileSystemCurl.dll" ? kLegacyCurlSecretConfiguration : kLegacyPasswordConfiguration;
+        const HRESULT secretHr           = information.SetConfiguration(legacyConfiguration);
+        configuration                    = nullptr;
+        const HRESULT getSecretHr        = information.GetConfiguration(&configuration);
         const std::string_view sanitized = configuration != nullptr ? configuration : "";
         Check(secretHr == S_OK && getSecretHr == S_OK && sanitized.find("observatoryUnknown") != std::string_view::npos &&
                   sanitized.find("observatory-password-sentinel") == std::string_view::npos &&
@@ -1865,12 +1744,11 @@ void TestLocalWriterFlagContract(IFileSystem& fileSystem, bool& success) noexcep
     }
 
     std::error_code error;
-    const std::filesystem::path root = RedSalamander::TestSupport::AcquireTestDirectory(
-        {.harnessSegment     = L"PluginContractTests",
-         .leafSegment        = L"observatory-track13-local-writer",
-         .fallbackRunIdPrefix = L"plugin-contract",
-         .kind                = RedSalamander::TestSupport::TestDirectoryKind::Scratch},
-        error);
+    const std::filesystem::path root = RedSalamander::TestSupport::AcquireTestDirectory({.harnessSegment      = L"PluginContractTests",
+                                                                                         .leafSegment         = L"observatory-track13-local-writer",
+                                                                                         .fallbackRunIdPrefix = L"plugin-contract",
+                                                                                         .kind = RedSalamander::TestSupport::TestDirectoryKind::Scratch},
+                                                                                        error);
     Check(! error && ! root.empty(), L"local writer flag proof acquires TestSandbox scratch", success);
     if (error || root.empty())
     {
@@ -1885,9 +1763,7 @@ void TestLocalWriterFlagContract(IFileSystem& fileSystem, bool& success) noexcep
     Check(madeReadOnly, L"local writer flag proof seeds a read-only destination", success);
 
     wil::com_ptr_nothrow<IFileWriter> writer;
-    const HRESULT createHr = madeReadOnly
-                                 ? io->CreateFileWriter(target.c_str(), FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY, writer.put())
-                                 : E_UNEXPECTED;
+    const HRESULT createHr = madeReadOnly ? io->CreateFileWriter(target.c_str(), FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY, writer.put()) : E_UNEXPECTED;
     const DWORD attributes = ::GetFileAttributesW(target.c_str());
     Check(createHr == E_INVALIDARG && ! writer && attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_READONLY) != 0u,
           L"local writer rejects replace-readonly without overwrite and preserves destination attributes",
@@ -1911,28 +1787,18 @@ void TestDummyTransactionalMutationContracts(IFileSystem& fileSystem, bool& succ
         return;
     }
 
-    const std::wstring root = std::format(L"/observatory-track13-{}", GetTickCount64());
+    const std::wstring root  = std::format(L"/observatory-track13-{}", GetTickCount64());
     const auto makeDirectory = [&](std::wstring_view suffix) noexcept
-    {
-        return directoryOperations->CreateDirectory((root + std::wstring(suffix)).c_str()) == S_OK;
-    };
-    const auto makeFile = [&](std::wstring_view suffix) noexcept
-    {
-        return CreateEmptyProviderFile(*io.get(), root + std::wstring(suffix));
-    };
+    { return directoryOperations->CreateDirectory((root + std::wstring(suffix)).c_str()) == S_OK; };
+    const auto makeFile = [&](std::wstring_view suffix) noexcept { return CreateEmptyProviderFile(*io.get(), root + std::wstring(suffix)); };
 
     const bool copySeeded = makeDirectory(L"") && makeDirectory(L"/copy-source") && makeDirectory(L"/copy-destination") &&
-                            makeFile(L"/copy-source/first.txt") && makeFile(L"/copy-source/late.txt") &&
-                            makeFile(L"/copy-destination/late.txt");
+                            makeFile(L"/copy-source/first.txt") && makeFile(L"/copy-source/late.txt") && makeFile(L"/copy-destination/late.txt");
     Check(copySeeded, L"dummy copy rollback proof seeds source and late destination collision", success);
-    const HRESULT copyHr = copySeeded
-                               ? fileSystem.CopyItem((root + L"/copy-source").c_str(),
-                                                     (root + L"/copy-destination").c_str(),
-                                                     FILESYSTEM_FLAG_RECURSIVE,
-                                                     nullptr,
-                                                     nullptr,
-                                                     nullptr)
-                               : E_UNEXPECTED;
+    const HRESULT copyHr =
+        copySeeded
+            ? fileSystem.CopyItem((root + L"/copy-source").c_str(), (root + L"/copy-destination").c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr)
+            : E_UNEXPECTED;
     Check(copyHr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) && ! ProviderFileExists(*io.get(), root + L"/copy-destination/first.txt"),
           L"dummy directory copy preflights a late collision without partial destination mutation",
           success);
@@ -1940,14 +1806,10 @@ void TestDummyTransactionalMutationContracts(IFileSystem& fileSystem, bool& succ
     const bool moveSeeded = makeDirectory(L"/move-source") && makeDirectory(L"/move-destination") && makeFile(L"/move-source/first.txt") &&
                             makeFile(L"/move-source/late.txt") && makeFile(L"/move-destination/late.txt");
     Check(moveSeeded, L"dummy move rollback proof seeds source and late destination collision", success);
-    const HRESULT moveHr = moveSeeded
-                               ? fileSystem.MoveItem((root + L"/move-source").c_str(),
-                                                     (root + L"/move-destination").c_str(),
-                                                     FILESYSTEM_FLAG_RECURSIVE,
-                                                     nullptr,
-                                                     nullptr,
-                                                     nullptr)
-                               : E_UNEXPECTED;
+    const HRESULT moveHr =
+        moveSeeded
+            ? fileSystem.MoveItem((root + L"/move-source").c_str(), (root + L"/move-destination").c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr)
+            : E_UNEXPECTED;
     Check(moveHr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) && ProviderFileExists(*io.get(), root + L"/move-source/first.txt") &&
               ! ProviderFileExists(*io.get(), root + L"/move-destination/first.txt"),
           L"dummy directory move preflights a late collision without partial source or destination mutation",
@@ -1956,19 +1818,14 @@ void TestDummyTransactionalMutationContracts(IFileSystem& fileSystem, bool& succ
     const bool deleteSeeded = makeDirectory(L"/delete-source") && makeFile(L"/delete-source/readonly-child.txt") &&
                               SetProviderReadOnly(*io.get(), root + L"/delete-source/readonly-child.txt");
     Check(deleteSeeded, L"dummy recursive delete proof seeds a read-only descendant", success);
-    const HRESULT deleteHr = deleteSeeded
-                                 ? fileSystem.DeleteItem(
-                                       (root + L"/delete-source").c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr)
-                                 : E_UNEXPECTED;
+    const HRESULT deleteHr =
+        deleteSeeded ? fileSystem.DeleteItem((root + L"/delete-source").c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr) : E_UNEXPECTED;
     Check(deleteHr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) && ProviderFileExists(*io.get(), root + L"/delete-source/readonly-child.txt"),
           L"dummy recursive delete applies read-only policy to descendants before mutation",
           success);
 
-    const FileSystemFlags cleanupFlags =
-        static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
-    Check(fileSystem.DeleteItem(root.c_str(), cleanupFlags, nullptr, nullptr, nullptr) == S_OK,
-          L"dummy Track 13 proof cleans its provider fixture",
-          success);
+    const FileSystemFlags cleanupFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+    Check(fileSystem.DeleteItem(root.c_str(), cleanupFlags, nullptr, nullptr, nullptr) == S_OK, L"dummy Track 13 proof cleans its provider fixture", success);
 }
 
 void TestTrack13ProviderContracts(IFileSystem& fileSystem, std::wstring_view relativePath, bool& success) noexcept
@@ -1987,52 +1844,43 @@ void TestTypedRouteValidatorContracts(bool& success) noexcept
 {
     {
         ScriptedRouteCapabilities route(ScriptedRouteFault::None);
-        const FileSystemRouteContract::QueryResult result =
-            FileSystemRouteContract::Query(&route, L"/", FILESYSTEM_COPY, L"selftest/typed-route");
-        Check(result.state == FileSystemRouteContract::QueryState::Available && result.status == S_OK &&
-                  ! result.usedArenaFallback && result.snapshot.pathIdentity.has_value(),
+        const FileSystemRouteContract::QueryResult result = FileSystemRouteContract::Query(&route, L"/", FILESYSTEM_COPY, L"selftest/typed-route");
+        Check(result.state == FileSystemRouteContract::QueryState::Available && result.status == S_OK && ! result.usedArenaFallback &&
+                  result.snapshot.pathIdentity.has_value(),
               L"typed route validator accepts a current complete fact set",
               success);
-        const FileSystemRouteContract::QueryResult mismatch =
-            FileSystemRouteContract::Query(&route, L"/", FILESYSTEM_COPY, L"selftest/other-provider");
-        Check(mismatch.state == FileSystemRouteContract::QueryState::ContractViolation,
-              L"typed route validator rejects a mismatched full provider ID",
-              success);
+        const FileSystemRouteContract::QueryResult mismatch = FileSystemRouteContract::Query(&route, L"/", FILESYSTEM_COPY, L"selftest/other-provider");
+        Check(
+            mismatch.state == FileSystemRouteContract::QueryState::ContractViolation, L"typed route validator rejects a mismatched full provider ID", success);
     }
     {
         ScriptedRouteCapabilities route(ScriptedRouteFault::OversizedPrefix);
-        const FileSystemRouteContract::QueryResult result =
-            FileSystemRouteContract::Query(&route, L"/", FILESYSTEM_COPY, L"selftest/typed-route");
+        const FileSystemRouteContract::QueryResult result = FileSystemRouteContract::Query(&route, L"/", FILESYSTEM_COPY, L"selftest/typed-route");
         Check(result.state == FileSystemRouteContract::QueryState::Available,
               L"typed route consumer accepts a provider record with a valid current prefix",
               success);
     }
     {
         ScriptedRouteCapabilities route(ScriptedRouteFault::UnsupportedIdentity);
-        const FileSystemRouteContract::QueryResult result =
-            FileSystemRouteContract::Query(&route, L"/", FILESYSTEM_COPY, L"selftest/typed-route");
+        const FileSystemRouteContract::QueryResult result = FileSystemRouteContract::Query(&route, L"/", FILESYSTEM_COPY, L"selftest/typed-route");
         Check(result.state == FileSystemRouteContract::QueryState::Unsupported,
               L"typed route validator classifies an uncomparable path identity as Unsupported",
               success);
     }
     {
         ScriptedRouteCapabilities route(ScriptedRouteFault::RequiresArenaFallback);
-        const FileSystemRouteContract::QueryResult result =
-            FileSystemRouteContract::Query(&route, L"/", FILESYSTEM_COPY, L"selftest/typed-route");
-        const std::wstring copiedProfile = result.snapshot.pathProfileId;
-        const FileSystemRouteContract::QueryResult second =
-            FileSystemRouteContract::Query(&route, L"/", FILESYSTEM_COPY, L"selftest/typed-route");
+        const FileSystemRouteContract::QueryResult result = FileSystemRouteContract::Query(&route, L"/", FILESYSTEM_COPY, L"selftest/typed-route");
+        const std::wstring copiedProfile                  = result.snapshot.pathProfileId;
+        const FileSystemRouteContract::QueryResult second = FileSystemRouteContract::Query(&route, L"/", FILESYSTEM_COPY, L"selftest/typed-route");
         Check(result.state == FileSystemRouteContract::QueryState::Available && result.usedArenaFallback &&
-                  copiedProfile.size() > FileSystemRouteContract::kNormalArenaBytes / sizeof(wchar_t) &&
-                  result.snapshot.pathProfileId == copiedProfile && second.snapshot.pathProfileId == copiedProfile,
+                  copiedProfile.size() > FileSystemRouteContract::kNormalArenaBytes / sizeof(wchar_t) && result.snapshot.pathProfileId == copiedProfile &&
+                  second.snapshot.pathProfileId == copiedProfile,
               L"typed route validator performs one bounded arena retry and copies returned strings immediately",
               success);
 #ifdef ENABLE_TESTS
         const FileSystemRouteContract::QueryResult allocationFailure =
-            FileSystemRouteContract::QueryWithAllocationFailureForSelfTest(
-                &route, L"/", FILESYSTEM_COPY, L"selftest/typed-route");
-        Check(allocationFailure.state == FileSystemRouteContract::QueryState::ContractViolation &&
-                  allocationFailure.status == E_OUTOFMEMORY,
+            FileSystemRouteContract::QueryWithAllocationFailureForSelfTest(&route, L"/", FILESYSTEM_COPY, L"selftest/typed-route");
+        Check(allocationFailure.state == FileSystemRouteContract::QueryState::ContractViolation && allocationFailure.status == E_OUTOFMEMORY,
               L"typed route validator fails closed on deterministic fallback allocation failure",
               success);
 #endif
@@ -2057,29 +1905,26 @@ void TestTypedRouteValidatorContracts(bool& success) noexcept
     for (const ScriptedRouteFault fault : malformedFaults)
     {
         ScriptedRouteCapabilities route(fault);
-        const FileSystemRouteContract::QueryResult result =
-            FileSystemRouteContract::Query(&route, L"/", FILESYSTEM_COPY, L"selftest/typed-route");
+        const FileSystemRouteContract::QueryResult result = FileSystemRouteContract::Query(&route, L"/", FILESYSTEM_COPY, L"selftest/typed-route");
         Check(result.state == FileSystemRouteContract::QueryState::ContractViolation,
               std::format(L"typed route validator rejects malformed fact fault {}", static_cast<unsigned int>(fault)).c_str(),
               success);
     }
     {
         ScriptedRouteCapabilities route(ScriptedRouteFault::NonStrictPeer);
-        const FileSystemRouteContract::BooleanResult peer = FileSystemRouteContract::QueryTransferPeerAllowed(
-            &route, L"/", FILESYSTEM_COPY, FILESYSTEM_TRANSFER_PEER_EXPORT, L"selftest/peer");
-        Check(peer.state == FileSystemRouteContract::QueryState::ContractViolation,
-              L"typed route validator rejects a non-strict peer BOOL",
-              success);
+        const FileSystemRouteContract::BooleanResult peer =
+            FileSystemRouteContract::QueryTransferPeerAllowed(&route, L"/", FILESYSTEM_COPY, FILESYSTEM_TRANSFER_PEER_EXPORT, L"selftest/peer");
+        Check(peer.state == FileSystemRouteContract::QueryState::ContractViolation, L"typed route validator rejects a non-strict peer BOOL", success);
     }
     {
         ScriptedRouteCapabilities route(ScriptedRouteFault::PeerDenied);
-        const FileSystemRouteContract::BooleanResult denied = FileSystemRouteContract::QueryTransferPeerAllowed(
-            &route, L"/", FILESYSTEM_COPY, FILESYSTEM_TRANSFER_PEER_EXPORT, L"selftest/peer");
-        const FileSystemRouteContract::BooleanResult invalidRole = FileSystemRouteContract::QueryTransferPeerAllowed(
-            &route, L"/", FILESYSTEM_COPY, static_cast<FileSystemTransferPeerRole>(99u), L"selftest/peer");
+        const FileSystemRouteContract::BooleanResult denied =
+            FileSystemRouteContract::QueryTransferPeerAllowed(&route, L"/", FILESYSTEM_COPY, FILESYSTEM_TRANSFER_PEER_EXPORT, L"selftest/peer");
+        const FileSystemRouteContract::BooleanResult invalidRole =
+            FileSystemRouteContract::QueryTransferPeerAllowed(&route, L"/", FILESYSTEM_COPY, static_cast<FileSystemTransferPeerRole>(99u), L"selftest/peer");
         ScriptedRouteCapabilities failedRoute(ScriptedRouteFault::PeerFailure);
-        const FileSystemRouteContract::BooleanResult failed = FileSystemRouteContract::QueryTransferPeerAllowed(
-            &failedRoute, L"/", FILESYSTEM_COPY, FILESYSTEM_TRANSFER_PEER_EXPORT, L"selftest/peer");
+        const FileSystemRouteContract::BooleanResult failed =
+            FileSystemRouteContract::QueryTransferPeerAllowed(&failedRoute, L"/", FILESYSTEM_COPY, FILESYSTEM_TRANSFER_PEER_EXPORT, L"selftest/peer");
         Check(denied.state == FileSystemRouteContract::QueryState::Available && ! denied.value &&
                   invalidRole.state == FileSystemRouteContract::QueryState::ContractViolation &&
                   failed.state == FileSystemRouteContract::QueryState::ContractViolation,
@@ -2088,19 +1933,16 @@ void TestTypedRouteValidatorContracts(bool& success) noexcept
     }
     {
         ScriptedRouteCapabilities route(ScriptedRouteFault::InvalidNameResult);
-        const FileSystemRouteContract::ChildNameResult name =
-            FileSystemRouteContract::ValidateChildName(&route, L"/", L"child.txt", FILESYSTEM_RENAME);
-        Check(name.state == FileSystemRouteContract::QueryState::ContractViolation,
-              L"typed route validator rejects an invalid child-name result enum",
-              success);
+        const FileSystemRouteContract::ChildNameResult name = FileSystemRouteContract::ValidateChildName(&route, L"/", L"child.txt", FILESYSTEM_RENAME);
+        Check(
+            name.state == FileSystemRouteContract::QueryState::ContractViolation, L"typed route validator rejects an invalid child-name result enum", success);
     }
     {
         ScriptedRouteCapabilities route(ScriptedRouteFault::CollisionOutsideArena);
-        const FileSystemRouteContract::StringResult collision = FileSystemRouteContract::QueryChildNameCollisionKey(
-            &route, L"/", L"child.txt", FILESYSTEM_RENAME);
+        const FileSystemRouteContract::StringResult collision =
+            FileSystemRouteContract::QueryChildNameCollisionKey(&route, L"/", L"child.txt", FILESYSTEM_RENAME);
         ScriptedRouteCapabilities joinRoute(ScriptedRouteFault::JoinRequiredMismatch);
-        const FileSystemRouteContract::StringResult joined =
-            FileSystemRouteContract::QueryJoinedPath(&joinRoute, L"/", L"child.txt", FILESYSTEM_RENAME);
+        const FileSystemRouteContract::StringResult joined = FileSystemRouteContract::QueryJoinedPath(&joinRoute, L"/", L"child.txt", FILESYSTEM_RENAME);
         Check(collision.state == FileSystemRouteContract::QueryState::ContractViolation &&
                   joined.state == FileSystemRouteContract::QueryState::ContractViolation,
               L"typed route validator rejects malformed collision-key and joined-path output",
@@ -2108,34 +1950,32 @@ void TestTypedRouteValidatorContracts(bool& success) noexcept
     }
     {
         ScriptedRouteCapabilities route(ScriptedRouteFault::None);
-        const FileSystemRouteContract::ChildNameContractResult name = FileSystemRouteContract::QueryChildNameContract(
-            &route, L"/parent", L"CON", FILESYSTEM_RENAME, L"selftest/typed-route");
-        Check(name.state == FileSystemRouteContract::QueryState::Available && name.status == S_OK &&
-                  name.nameStatus == FILESYSTEM_CHILD_NAME_VALID && name.failureStatus == S_OK &&
-                  name.joinedPath == L"/parent/CON" && name.collisionKey == L"CON" && name.arenaFallbackCount == 0u,
+        const FileSystemRouteContract::ChildNameContractResult name =
+            FileSystemRouteContract::QueryChildNameContract(&route, L"/parent", L"CON", FILESYSTEM_RENAME, L"selftest/typed-route");
+        Check(name.state == FileSystemRouteContract::QueryState::Available && name.status == S_OK && name.nameStatus == FILESYSTEM_CHILD_NAME_VALID &&
+                  name.failureStatus == S_OK && name.joinedPath == L"/parent/CON" && name.collisionKey == L"CON" && name.arenaFallbackCount == 0u,
               L"composite child-name contract accepts provider-valid names without applying Windows reserved-name rules",
               success);
     }
     {
         ScriptedRouteCapabilities route(ScriptedRouteFault::ProviderInvalidName);
-        const FileSystemRouteContract::ChildNameContractResult name = FileSystemRouteContract::QueryChildNameContract(
-            &route, L"/parent", L"ordinary.txt", FILESYSTEM_RENAME, L"selftest/typed-route");
-        Check(name.state == FileSystemRouteContract::QueryState::Available &&
-                  name.nameStatus == FILESYSTEM_CHILD_NAME_INVALID &&
+        const FileSystemRouteContract::ChildNameContractResult name =
+            FileSystemRouteContract::QueryChildNameContract(&route, L"/parent", L"ordinary.txt", FILESYSTEM_RENAME, L"selftest/typed-route");
+        Check(name.state == FileSystemRouteContract::QueryState::Available && name.nameStatus == FILESYSTEM_CHILD_NAME_INVALID &&
                   name.failureStatus == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) && name.joinedPath.empty() && name.collisionKey.empty(),
               L"composite child-name contract preserves provider Invalid HRESULT and returns no executable path/key",
               success);
     }
     {
         ScriptedRouteCapabilities unsupportedRoute(ScriptedRouteFault::UnsupportedName);
-        const FileSystemRouteContract::ChildNameContractResult unsupported = FileSystemRouteContract::QueryChildNameContract(
-            &unsupportedRoute, L"/parent", L"child.txt", FILESYSTEM_RENAME, L"selftest/typed-route");
+        const FileSystemRouteContract::ChildNameContractResult unsupported =
+            FileSystemRouteContract::QueryChildNameContract(&unsupportedRoute, L"/parent", L"child.txt", FILESYSTEM_RENAME, L"selftest/typed-route");
         ScriptedRouteCapabilities joinRoute(ScriptedRouteFault::JoinLeafMismatch);
-        const FileSystemRouteContract::ChildNameContractResult mismatchedJoin = FileSystemRouteContract::QueryChildNameContract(
-            &joinRoute, L"/parent", L"child.txt", FILESYSTEM_RENAME, L"selftest/typed-route");
+        const FileSystemRouteContract::ChildNameContractResult mismatchedJoin =
+            FileSystemRouteContract::QueryChildNameContract(&joinRoute, L"/parent", L"child.txt", FILESYSTEM_RENAME, L"selftest/typed-route");
         ScriptedRouteCapabilities emptyKeyRoute(ScriptedRouteFault::EmptyCollisionKey);
-        const FileSystemRouteContract::ChildNameContractResult emptyKey = FileSystemRouteContract::QueryChildNameContract(
-            &emptyKeyRoute, L"/parent", L"child.txt", FILESYSTEM_RENAME, L"selftest/typed-route");
+        const FileSystemRouteContract::ChildNameContractResult emptyKey =
+            FileSystemRouteContract::QueryChildNameContract(&emptyKeyRoute, L"/parent", L"child.txt", FILESYSTEM_RENAME, L"selftest/typed-route");
         Check(unsupported.state == FileSystemRouteContract::QueryState::Unsupported &&
                   mismatchedJoin.state == FileSystemRouteContract::QueryState::ContractViolation &&
                   emptyKey.state == FileSystemRouteContract::QueryState::ContractViolation,
@@ -2144,8 +1984,8 @@ void TestTypedRouteValidatorContracts(bool& success) noexcept
     }
     {
         ScriptedRouteCapabilities route(ScriptedRouteFault::ChildStringArenaFallback);
-        const FileSystemRouteContract::ChildNameContractResult name = FileSystemRouteContract::QueryChildNameContract(
-            &route, L"/parent", L"child.txt", FILESYSTEM_RENAME, L"selftest/typed-route");
+        const FileSystemRouteContract::ChildNameContractResult name =
+            FileSystemRouteContract::QueryChildNameContract(&route, L"/parent", L"child.txt", FILESYSTEM_RENAME, L"selftest/typed-route");
         Check(name.state == FileSystemRouteContract::QueryState::Available && name.arenaFallbackCount == 1u &&
                   name.collisionKey.size() > FileSystemRouteContract::kNormalArenaBytes / sizeof(wchar_t),
               L"composite child-name contract performs one bounded string-arena fallback and copies the canonical key",
@@ -2154,37 +1994,25 @@ void TestTypedRouteValidatorContracts(bool& success) noexcept
         const FileSystemRouteContract::ChildNameContractResult allocationFailure =
             FileSystemRouteContract::QueryChildNameContractWithAllocationFailureForSelfTest(
                 &route, L"/parent", L"child.txt", FILESYSTEM_RENAME, L"selftest/typed-route");
-        Check(allocationFailure.state == FileSystemRouteContract::QueryState::ContractViolation &&
-                  allocationFailure.status == E_OUTOFMEMORY,
+        Check(allocationFailure.state == FileSystemRouteContract::QueryState::ContractViolation && allocationFailure.status == E_OUTOFMEMORY,
               L"composite child-name contract fails closed on deterministic string-arena allocation failure",
               success);
 #endif
     }
 
-    FileSystemItemMutationResult retryable{
-        sizeof(FileSystemItemMutationResult), TRUE, FALSE, TRUE, FileSystemOwnedStageDisposition::Removed};
-    FileSystemItemMutationResult committed{
-        sizeof(FileSystemItemMutationResult), TRUE, TRUE, FALSE, FileSystemOwnedStageDisposition::Published};
-    FileSystemItemMutationResult unknown{
-        sizeof(FileSystemItemMutationResult), FALSE, FALSE, TRUE, FileSystemOwnedStageDisposition::Unknown};
-    FileSystemItemMutationResult retained{
-        sizeof(FileSystemItemMutationResult), TRUE, FALSE, TRUE, FileSystemOwnedStageDisposition::Retained};
+    FileSystemItemMutationResult retryable{sizeof(FileSystemItemMutationResult), TRUE, FALSE, TRUE, FileSystemOwnedStageDisposition::Removed};
+    FileSystemItemMutationResult committed{sizeof(FileSystemItemMutationResult), TRUE, TRUE, FALSE, FileSystemOwnedStageDisposition::Published};
+    FileSystemItemMutationResult unknown{sizeof(FileSystemItemMutationResult), FALSE, FALSE, TRUE, FileSystemOwnedStageDisposition::Unknown};
+    FileSystemItemMutationResult retained{sizeof(FileSystemItemMutationResult), TRUE, FALSE, TRUE, FileSystemOwnedStageDisposition::Retained};
     FileSystemItemMutationResult malformed = retryable;
-    malformed.outcomeKnown = 2;
-    Check(FileSystemRouteContract::ClassifyFailedMutation(false, E_FAIL, &retryable) ==
-              FileSystemRouteContract::MutationClassification::Unsupported &&
-              FileSystemRouteContract::ClassifyFailedMutation(true, E_FAIL, nullptr) ==
-                  FileSystemRouteContract::MutationClassification::Indeterminate &&
-              FileSystemRouteContract::ClassifyFailedMutation(true, E_FAIL, &retryable) ==
-                  FileSystemRouteContract::MutationClassification::RetryableNoCommit &&
-              FileSystemRouteContract::ClassifyFailedMutation(true, E_FAIL, &committed) ==
-                  FileSystemRouteContract::MutationClassification::FailedKnown &&
-              FileSystemRouteContract::ClassifyFailedMutation(true, E_FAIL, &unknown) ==
-                  FileSystemRouteContract::MutationClassification::Indeterminate &&
-              FileSystemRouteContract::ClassifyFailedMutation(true, E_FAIL, &retained) ==
-                  FileSystemRouteContract::MutationClassification::FailedKnown &&
-              FileSystemRouteContract::ClassifyFailedMutation(true, E_FAIL, &malformed) ==
-                  FileSystemRouteContract::MutationClassification::ContractViolation,
+    malformed.outcomeKnown                 = 2;
+    Check(FileSystemRouteContract::ClassifyFailedMutation(false, E_FAIL, &retryable) == FileSystemRouteContract::MutationClassification::Unsupported &&
+              FileSystemRouteContract::ClassifyFailedMutation(true, E_FAIL, nullptr) == FileSystemRouteContract::MutationClassification::Indeterminate &&
+              FileSystemRouteContract::ClassifyFailedMutation(true, E_FAIL, &retryable) == FileSystemRouteContract::MutationClassification::RetryableNoCommit &&
+              FileSystemRouteContract::ClassifyFailedMutation(true, E_FAIL, &committed) == FileSystemRouteContract::MutationClassification::FailedKnown &&
+              FileSystemRouteContract::ClassifyFailedMutation(true, E_FAIL, &unknown) == FileSystemRouteContract::MutationClassification::Indeterminate &&
+              FileSystemRouteContract::ClassifyFailedMutation(true, E_FAIL, &retained) == FileSystemRouteContract::MutationClassification::FailedKnown &&
+              FileSystemRouteContract::ClassifyFailedMutation(true, E_FAIL, &malformed) == FileSystemRouteContract::MutationClassification::ContractViolation,
           L"typed mutation classifier preserves unsupported, retryable, known, indeterminate, and contract-violation states",
           success);
 }
@@ -2236,8 +2064,7 @@ bool TestCapabilities(std::wstring_view relPath, bool& success) noexcept
         fs.attach(static_cast<IFileSystem*>(raw));
 
         wil::com_ptr_nothrow<IFileSystemRouteCapabilities> routeCapabilities;
-        const HRESULT routeCapabilitiesQi =
-            fs->QueryInterface(__uuidof(IFileSystemRouteCapabilities), routeCapabilities.put_void());
+        const HRESULT routeCapabilitiesQi = fs->QueryInterface(__uuidof(IFileSystemRouteCapabilities), routeCapabilities.put_void());
         Check(routeCapabilitiesQi == S_OK && routeCapabilities != nullptr,
               std::format(L"{}: pluginId={} exposes mandatory IFileSystemRouteCapabilities", relPath, pluginId).c_str(),
               success);
@@ -2250,89 +2077,76 @@ bool TestCapabilities(std::wstring_view relPath, bool& success) noexcept
             Check(routeCapabilities->GetRouteFacts(L"/", FILESYSTEM_COPY, &routeArena, &routeFacts) == E_INVALIDARG,
                   std::format(L"{}: pluginId={} rejects an undersized typed route record", relPath, pluginId).c_str(),
                   success);
-            routeFacts = {};
+            routeFacts           = {};
             routeFacts.sizeBytes = sizeof(routeFacts) + 1u;
             Check(routeCapabilities->GetRouteFacts(L"/", FILESYSTEM_COPY, &routeArena, &routeFacts) == E_INVALIDARG,
                   std::format(L"{}: pluginId={} rejects a caller record from a different ABI generation", relPath, pluginId).c_str(),
                   success);
-            routeFacts = {};
-            routeFacts.sizeBytes = sizeof(routeFacts);
-            routeArena.usedBytes = 0u;
-            const HRESULT currentFactsHr =
-                routeCapabilities->GetRouteFacts(L"/", FILESYSTEM_COPY, &routeArena, &routeFacts);
-            Check(currentFactsHr == S_OK && routeFacts.sizeBytes == sizeof(routeFacts) &&
-                      routeFacts.requiredArenaBytes == routeArena.usedBytes && routeArena.usedBytes != 0u,
+            routeFacts                   = {};
+            routeFacts.sizeBytes         = sizeof(routeFacts);
+            routeArena.usedBytes         = 0u;
+            const HRESULT currentFactsHr = routeCapabilities->GetRouteFacts(L"/", FILESYSTEM_COPY, &routeArena, &routeFacts);
+            Check(currentFactsHr == S_OK && routeFacts.sizeBytes == sizeof(routeFacts) && routeFacts.requiredArenaBytes == routeArena.usedBytes &&
+                      routeArena.usedBytes != 0u,
                   std::format(L"{}: pluginId={} fills the exact current typed route prefix", relPath, pluginId).c_str(),
                   success);
 
             const unsigned long exactArenaBytes = routeFacts.requiredArenaBytes;
             FileSystemArena zeroArena{};
-            routeFacts = {};
-            routeFacts.sizeBytes = sizeof(routeFacts);
-            const HRESULT zeroArenaHr =
-                routeCapabilities->GetRouteFacts(L"/", FILESYSTEM_COPY, &zeroArena, &routeFacts);
-            const bool zeroArenaValid = zeroArenaHr == HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER) &&
-                routeFacts.requiredArenaBytes == exactArenaBytes;
+            routeFacts                = {};
+            routeFacts.sizeBytes      = sizeof(routeFacts);
+            const HRESULT zeroArenaHr = routeCapabilities->GetRouteFacts(L"/", FILESYSTEM_COPY, &zeroArena, &routeFacts);
+            const bool zeroArenaValid = zeroArenaHr == HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER) && routeFacts.requiredArenaBytes == exactArenaBytes;
 
             std::vector<unsigned char> undersizedArenaStorage(exactArenaBytes - 1u);
             FileSystemArena undersizedArena{undersizedArenaStorage.data(), exactArenaBytes - 1u, 0u};
-            routeFacts = {};
-            routeFacts.sizeBytes = sizeof(routeFacts);
-            const HRESULT undersizedArenaHr =
-                routeCapabilities->GetRouteFacts(L"/", FILESYSTEM_COPY, &undersizedArena, &routeFacts);
+            routeFacts                      = {};
+            routeFacts.sizeBytes            = sizeof(routeFacts);
+            const HRESULT undersizedArenaHr = routeCapabilities->GetRouteFacts(L"/", FILESYSTEM_COPY, &undersizedArena, &routeFacts);
 
             std::vector<unsigned char> exactArenaStorage(exactArenaBytes);
             FileSystemArena exactArena{exactArenaStorage.data(), exactArenaBytes, 0u};
-            routeFacts = {};
-            routeFacts.sizeBytes = sizeof(routeFacts);
-            const HRESULT exactArenaHr =
-                routeCapabilities->GetRouteFacts(L"/", FILESYSTEM_COPY, &exactArena, &routeFacts);
+            routeFacts                 = {};
+            routeFacts.sizeBytes       = sizeof(routeFacts);
+            const HRESULT exactArenaHr = routeCapabilities->GetRouteFacts(L"/", FILESYSTEM_COPY, &exactArena, &routeFacts);
 
             std::vector<unsigned char> oversizedArenaStorage(exactArenaBytes + 64u);
             FileSystemArena oversizedArena{oversizedArenaStorage.data(), exactArenaBytes + 64u, 0u};
-            routeFacts = {};
-            routeFacts.sizeBytes = sizeof(routeFacts);
-            const HRESULT oversizedArenaHr =
-                routeCapabilities->GetRouteFacts(L"/", FILESYSTEM_COPY, &oversizedArena, &routeFacts);
-            Check(zeroArenaValid && undersizedArenaHr == HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER) &&
-                      exactArenaHr == S_OK && exactArena.usedBytes == exactArenaBytes &&
-                      oversizedArenaHr == S_OK && oversizedArena.usedBytes == exactArenaBytes,
+            routeFacts                     = {};
+            routeFacts.sizeBytes           = sizeof(routeFacts);
+            const HRESULT oversizedArenaHr = routeCapabilities->GetRouteFacts(L"/", FILESYSTEM_COPY, &oversizedArena, &routeFacts);
+            Check(zeroArenaValid && undersizedArenaHr == HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER) && exactArenaHr == S_OK &&
+                      exactArena.usedBytes == exactArenaBytes && oversizedArenaHr == S_OK && oversizedArena.usedBytes == exactArenaBytes,
                   std::format(L"{}: pluginId={} enforces zero, undersized, exact, and oversized typed arenas", relPath, pluginId).c_str(),
                   success);
 
-            const FileSystemRouteContract::QueryResult typed =
-                FileSystemRouteContract::Query(fs.get(), L"/", FILESYSTEM_COPY, pluginId);
-            const FileSystemRouteContract::QueryState expectedTypedState = routeFacts.pathTextStableIdentity == TRUE
-                ? FileSystemRouteContract::QueryState::Available
-                : FileSystemRouteContract::QueryState::Unsupported;
+            const FileSystemRouteContract::QueryResult typed = FileSystemRouteContract::Query(fs.get(), L"/", FILESYSTEM_COPY, pluginId);
+            const FileSystemRouteContract::QueryState expectedTypedState =
+                routeFacts.pathTextStableIdentity == TRUE ? FileSystemRouteContract::QueryState::Available : FileSystemRouteContract::QueryState::Unsupported;
             Check(typed.state == expectedTypedState && ! typed.usedArenaFallback && typed.snapshot.providerId == pluginId &&
-                      ! typed.snapshot.pathProfileId.empty() && ! typed.snapshot.rootId.empty() &&
-                      typed.snapshot.pathIdentity.has_value(),
+                      ! typed.snapshot.pathProfileId.empty() && ! typed.snapshot.rootId.empty() && typed.snapshot.pathIdentity.has_value(),
                   std::format(L"{}: pluginId={} passes the canonical typed route validator without arena fallback", relPath, pluginId).c_str(),
                   success);
 
             BOOL peerAllowed = 2;
-            const HRESULT peerHr = routeCapabilities->IsTransferPeerAllowed(
-                L"/", FILESYSTEM_COPY, FILESYSTEM_TRANSFER_PEER_EXPORT, L"selftest/peer", &peerAllowed);
+            const HRESULT peerHr =
+                routeCapabilities->IsTransferPeerAllowed(L"/", FILESYSTEM_COPY, FILESYSTEM_TRANSFER_PEER_EXPORT, L"selftest/peer", &peerAllowed);
             Check(peerHr == S_OK && (peerAllowed == FALSE || peerAllowed == TRUE),
                   std::format(L"{}: pluginId={} returns a strict typed export-peer decision", relPath, pluginId).c_str(),
                   success);
 
             FileSystemChildNameValidation nameValidation{.sizeBytes = sizeof(nameValidation)};
-            const HRESULT nameHr = routeCapabilities->ValidateChildName(
-                L"/", L"r2-valid-child.txt", FILESYSTEM_RENAME, &nameValidation);
-            Check(nameHr == S_OK && nameValidation.sizeBytes == sizeof(nameValidation) &&
-                      nameValidation.status == FILESYSTEM_CHILD_NAME_VALID && nameValidation.failureStatus == S_OK,
+            const HRESULT nameHr = routeCapabilities->ValidateChildName(L"/", L"r2-valid-child.txt", FILESYSTEM_RENAME, &nameValidation);
+            Check(nameHr == S_OK && nameValidation.sizeBytes == sizeof(nameValidation) && nameValidation.status == FILESYSTEM_CHILD_NAME_VALID &&
+                      nameValidation.failureStatus == S_OK,
                   std::format(L"{}: pluginId={} validates an ordinary child name through the typed provider surface", relPath, pluginId).c_str(),
                   success);
 
-            routeArena.usedBytes = 0u;
-            const wchar_t* joinedPath = nullptr;
+            routeArena.usedBytes         = 0u;
+            const wchar_t* joinedPath    = nullptr;
             unsigned long joinedRequired = 0u;
-            const HRESULT joinHr = routeCapabilities->JoinPath(
-                L"/", L"r2-valid-child.txt", FILESYSTEM_RENAME, &routeArena, &joinedPath, &joinedRequired);
-            Check(joinHr == S_OK && joinedPath != nullptr && joinedPath[0] != L'\0' &&
-                      joinedRequired == routeArena.usedBytes && joinedRequired != 0u,
+            const HRESULT joinHr = routeCapabilities->JoinPath(L"/", L"r2-valid-child.txt", FILESYSTEM_RENAME, &routeArena, &joinedPath, &joinedRequired);
+            Check(joinHr == S_OK && joinedPath != nullptr && joinedPath[0] != L'\0' && joinedRequired == routeArena.usedBytes && joinedRequired != 0u,
                   std::format(L"{}: pluginId={} returns a bounded typed provider-owned joined path", relPath, pluginId).c_str(),
                   success);
         }
@@ -2353,8 +2167,7 @@ bool TestCapabilities(std::wstring_view relPath, bool& success) noexcept
         }
 
         wil::com_ptr_nothrow<IFileSystemPathCapabilities2> pathCapabilities;
-        const HRESULT pathCapabilitiesQi =
-            fs->QueryInterface(__uuidof(IFileSystemPathCapabilities2), pathCapabilities.put_void());
+        const HRESULT pathCapabilitiesQi = fs->QueryInterface(__uuidof(IFileSystemPathCapabilities2), pathCapabilities.put_void());
         Check(pathCapabilitiesQi == S_OK && pathCapabilities != nullptr,
               std::format(L"{}: pluginId={} exposes mandatory IFileSystemPathCapabilities2", relPath, pluginId).c_str(),
               success);
@@ -2402,13 +2215,11 @@ bool TestCapabilities(std::wstring_view relPath, bool& success) noexcept
         for (const std::string_view required : requiredObjects)
         {
             yyjson_val* value = yyjson_obj_getn(root, required.data(), required.size());
-            Check(value != nullptr && yyjson_is_obj(value),
-                  std::format(L"{}: GetPathCapabilities(pluginId={}) has required '{}' object",
-                              relPath,
-                              pluginId,
-                              std::wstring(required.begin(), required.end()))
-                      .c_str(),
-                  success);
+            Check(
+                value != nullptr && yyjson_is_obj(value),
+                std::format(L"{}: GetPathCapabilities(pluginId={}) has required '{}' object", relPath, pluginId, std::wstring(required.begin(), required.end()))
+                    .c_str(),
+                success);
         }
         yyjson_val* pathProfile = yyjson_obj_get(root, "pathProfile");
         Check(pathProfile != nullptr && yyjson_is_str(pathProfile) && yyjson_get_len(pathProfile) != 0u,
@@ -2442,9 +2253,9 @@ bool TestCapabilities(std::wstring_view relPath, bool& success) noexcept
         // the executable authority. Every route section the JSON repeats must equal the typed facts.
         if (routeCapabilities)
         {
-            const FileSystemRouteContract::QueryResult typed =
-                FileSystemRouteContract::Query(routeCapabilities.get(), L"/", FILESYSTEM_COPY, pluginId);
-            const bool typedFactsCopied = typed.snapshot.pathIdentity.has_value() &&
+            const FileSystemRouteContract::QueryResult typed = FileSystemRouteContract::Query(routeCapabilities.get(), L"/", FILESYSTEM_COPY, pluginId);
+            const bool typedFactsCopied =
+                typed.snapshot.pathIdentity.has_value() &&
                 ((typed.state == FileSystemRouteContract::QueryState::Available && typed.status == S_OK) ||
                  (typed.state == FileSystemRouteContract::QueryState::Unsupported && typed.status == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)));
             Check(typedFactsCopied,
@@ -2458,7 +2269,7 @@ bool TestCapabilities(std::wstring_view relPath, bool& success) noexcept
             if (typedFactsCopied)
             {
                 const FileSystemRouteContract::Snapshot& facts = typed.snapshot;
-                const auto utf8 = [](std::wstring_view text) -> std::string
+                const auto utf8                                = [](std::wstring_view text) -> std::string
                 {
                     if (text.empty())
                     {
@@ -2490,8 +2301,7 @@ bool TestCapabilities(std::wstring_view relPath, bool& success) noexcept
                 const auto jsonString = [](yyjson_val* object, const char* key, std::string_view expected) noexcept -> bool
                 {
                     yyjson_val* value = object != nullptr ? yyjson_obj_get(object, key) : nullptr;
-                    return value != nullptr && yyjson_is_str(value) &&
-                           std::string_view(yyjson_get_str(value), yyjson_get_len(value)) == expected;
+                    return value != nullptr && yyjson_is_str(value) && std::string_view(yyjson_get_str(value), yyjson_get_len(value)) == expected;
                 };
                 const auto checkDrift = [&](bool matches, const wchar_t* section) noexcept
                 {
@@ -2508,11 +2318,10 @@ bool TestCapabilities(std::wstring_view relPath, bool& success) noexcept
                 yyjson_val* const cancellation = jsonObject("cancellation");
                 yyjson_val* const names        = jsonObject("names");
 
-                checkDrift(jsonString(root, "pathProfile", utf8(facts.pathProfileId)) && jsonString(root, "rootId", utf8(facts.rootId)),
-                           L"pathProfile/rootId");
+                checkDrift(jsonString(root, "pathProfile", utf8(facts.pathProfileId)) && jsonString(root, "rootId", utf8(facts.rootId)), L"pathProfile/rootId");
                 checkDrift(jsonBool(operations, "copy", facts.copyOperation) && jsonBool(operations, "move", facts.moveOperation) &&
-                               jsonBool(operations, "nativeMove", facts.nativeMoveOperation) &&
-                               jsonBool(operations, "delete", facts.deleteOperation) && jsonBool(operations, "rename", facts.renameOperation) &&
+                               jsonBool(operations, "nativeMove", facts.nativeMoveOperation) && jsonBool(operations, "delete", facts.deleteOperation) &&
+                               jsonBool(operations, "rename", facts.renameOperation) &&
                                jsonBool(operations, "createDirectory", facts.createDirectoryOperation) &&
                                jsonBool(operations, "properties", facts.properties) && jsonBool(operations, "read", facts.read) &&
                                jsonBool(operations, "write", facts.write) && jsonBool(operations, "recycle", facts.recycleOperation),
@@ -2530,26 +2339,23 @@ bool TestCapabilities(std::wstring_view relPath, bool& success) noexcept
                            L"identity");
                 checkDrift(jsonBool(links, "preserveFileLink", facts.preserveFileLink) &&
                                jsonBool(links, "preserveDirectoryLink", facts.preserveDirectoryLink) &&
-                               jsonBool(links, "retargetInTree", facts.retargetInTree) &&
-                               jsonBool(links, "exactLinkRemoval", facts.exactLinkRemoval),
+                               jsonBool(links, "retargetInTree", facts.retargetInTree) && jsonBool(links, "exactLinkRemoval", facts.exactLinkRemoval),
                            L"links");
                 checkDrift(jsonBool(verification, "hostReadback", (facts.proofFlags & FILESYSTEM_ROUTE_PROOF_HOST_READBACK) != 0u) &&
                                jsonString(verification,
                                           "providerProof",
-                                          (facts.proofFlags & FILESYSTEM_ROUTE_PROOF_PROVIDER_BLAKE3) != 0u  ? "blake3-bound-object"
+                                          (facts.proofFlags & FILESYSTEM_ROUTE_PROOF_PROVIDER_BLAKE3) != 0u ? "blake3-bound-object"
                                           : (facts.proofFlags & FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST) != 0u ? "writer-digest"
-                                                                                                           : "none"),
+                                                                                                            : "none"),
                            L"verification");
-                const std::string_view expectedRouteClass = facts.cancellationRoute == FILESYSTEM_CANCELLATION_BOUNDED ? "bounded"
-                    : facts.cancellationRoute == FILESYSTEM_CANCELLATION_PROVIDER_WATCHDOG            ? "providerWatchdog"
-                                                                                                       : "uncontained";
-                checkDrift(jsonBool(cancellation, "abort", facts.cancellationAbort) &&
-                               jsonBool(cancellation, "deadline", facts.cancellationDeadline) &&
+                const std::string_view expectedRouteClass = facts.cancellationRoute == FILESYSTEM_CANCELLATION_BOUNDED             ? "bounded"
+                                                            : facts.cancellationRoute == FILESYSTEM_CANCELLATION_PROVIDER_WATCHDOG ? "providerWatchdog"
+                                                                                                                                   : "uncontained";
+                checkDrift(jsonBool(cancellation, "abort", facts.cancellationAbort) && jsonBool(cancellation, "deadline", facts.cancellationDeadline) &&
                                jsonString(cancellation, "routeClass", expectedRouteClass) &&
                                jsonUnsigned(cancellation, "providerWatchdogTimeoutMs", facts.providerWatchdogTimeoutMs),
                            L"cancellation");
-                const std::optional<FileSystemPathIdentity> jsonIdentity =
-                    ParseDiagnosticFileSystemPathIdentityContractFromRoot(root, pluginId);
+                const std::optional<FileSystemPathIdentity> jsonIdentity = ParseDiagnosticFileSystemPathIdentityContractFromRoot(root, pluginId);
                 checkDrift(jsonIdentity.has_value() && facts.pathIdentity.has_value() &&
                                jsonIdentity->pathTextStableIdentity == facts.pathIdentity->pathTextStableIdentity &&
                                jsonIdentity->componentComparison == facts.pathIdentity->componentComparison &&
@@ -2570,19 +2376,18 @@ bool TestCapabilities(std::wstring_view relPath, bool& success) noexcept
         };
         const std::wstring_view pluginIdView(pluginId);
         std::optional<ExpectedDestructiveCapabilities> expectedDestructive;
-        if (pluginIdView == L"builtin/file-system-dummy" || pluginIdView == L"builtin/file-system-mtp" ||
-            pluginIdView == L"builtin/file-system-imap" || pluginIdView == L"builtin/file-system-s3table")
+        if (pluginIdView == L"builtin/file-system-dummy" || pluginIdView == L"builtin/file-system-mtp" || pluginIdView == L"builtin/file-system-imap" ||
+            pluginIdView == L"builtin/file-system-s3table")
         {
             expectedDestructive = ExpectedDestructiveCapabilities{};
         }
-        else if (pluginIdView == L"builtin/file-system-ftp" || pluginIdView == L"builtin/file-system-sftp" ||
-                 pluginIdView == L"builtin/file-system-scp")
+        else if (pluginIdView == L"builtin/file-system-ftp" || pluginIdView == L"builtin/file-system-sftp" || pluginIdView == L"builtin/file-system-scp")
         {
             // R0f-Curl: FTP/SFTP/SCP are full file-manager destinations; only Recycle stays absent.
             expectedDestructive = ExpectedDestructiveCapabilities{.deleteOperation = true, .renameOperation = true};
         }
-        else if (pluginIdView == L"builtin/file-system-onedrive-personal" ||
-                 pluginIdView == L"builtin/file-system-onedrive-business" || pluginIdView == L"builtin/file-system-sharepoint")
+        else if (pluginIdView == L"builtin/file-system-onedrive-personal" || pluginIdView == L"builtin/file-system-onedrive-business" ||
+                 pluginIdView == L"builtin/file-system-sharepoint")
         {
             // R0f-Graph: OneDrive/SharePoint rename through Graph; Delete stays Recycle by stable item ID.
             expectedDestructive = ExpectedDestructiveCapabilities{.renameOperation = true, .recycleOperation = true};
@@ -2611,72 +2416,45 @@ bool TestCapabilities(std::wstring_view relPath, bool& success) noexcept
         }
 
         yyjson_val* verification = yyjson_obj_get(root, "verification");
-        yyjson_val* hostReadback = verification && yyjson_is_obj(verification)
-            ? yyjson_obj_get(verification, "hostReadback")
-            : nullptr;
+        yyjson_val* hostReadback = verification && yyjson_is_obj(verification) ? yyjson_obj_get(verification, "hostReadback") : nullptr;
         Check(hostReadback != nullptr && yyjson_is_bool(hostReadback),
               std::format(L"{}: GetPathCapabilities(pluginId={}) verification.hostReadback is a required boolean", relPath, pluginId).c_str(),
               success);
-        yyjson_val* providerProof = verification && yyjson_is_obj(verification)
-            ? yyjson_obj_get(verification, "providerProof")
-            : nullptr;
+        yyjson_val* providerProof                 = verification && yyjson_is_obj(verification) ? yyjson_obj_get(verification, "providerProof") : nullptr;
         const std::string_view providerProofValue = providerProof != nullptr && yyjson_is_str(providerProof)
-            ? std::string_view(yyjson_get_str(providerProof), yyjson_get_len(providerProof))
-            : std::string_view{};
+                                                        ? std::string_view(yyjson_get_str(providerProof), yyjson_get_len(providerProof))
+                                                        : std::string_view{};
         Check(providerProof != nullptr && yyjson_is_str(providerProof) &&
                   (providerProofValue == "none" || providerProofValue == "blake3-bound-object" || providerProofValue == "writer-digest"),
-              std::format(L"{}: GetPathCapabilities(pluginId={}) verification.providerProof is a supported required string",
-                          relPath,
-                          pluginId)
-                  .c_str(),
+              std::format(L"{}: GetPathCapabilities(pluginId={}) verification.providerProof is a supported required string", relPath, pluginId).c_str(),
               success);
 
         yyjson_val* cancellation = yyjson_obj_get(root, "cancellation");
-        yyjson_val* routeClass = cancellation && yyjson_is_obj(cancellation)
-            ? yyjson_obj_get(cancellation, "routeClass")
-            : nullptr;
-        const std::string_view routeClassValue = routeClass && yyjson_is_str(routeClass)
-            ? std::string_view(yyjson_get_str(routeClass), yyjson_get_len(routeClass))
-            : std::string_view{};
+        yyjson_val* routeClass   = cancellation && yyjson_is_obj(cancellation) ? yyjson_obj_get(cancellation, "routeClass") : nullptr;
+        const std::string_view routeClassValue =
+            routeClass && yyjson_is_str(routeClass) ? std::string_view(yyjson_get_str(routeClass), yyjson_get_len(routeClass)) : std::string_view{};
         Check(routeClass != nullptr && yyjson_is_str(routeClass) &&
                   (routeClassValue == "bounded" || routeClassValue == "providerWatchdog" || routeClassValue == "uncontained"),
-              std::format(L"{}: GetPathCapabilities(pluginId={}) cancellation.routeClass is a supported required string",
-                          relPath,
-                          pluginId)
-                  .c_str(),
+              std::format(L"{}: GetPathCapabilities(pluginId={}) cancellation.routeClass is a supported required string", relPath, pluginId).c_str(),
               success);
-        yyjson_val* providerWatchdogTimeout = cancellation && yyjson_is_obj(cancellation)
-            ? yyjson_obj_get(cancellation, "providerWatchdogTimeoutMs")
-            : nullptr;
+        yyjson_val* providerWatchdogTimeout = cancellation && yyjson_is_obj(cancellation) ? yyjson_obj_get(cancellation, "providerWatchdogTimeoutMs") : nullptr;
         Check(providerWatchdogTimeout != nullptr && yyjson_is_uint(providerWatchdogTimeout),
-              std::format(L"{}: GetPathCapabilities(pluginId={}) cancellation.providerWatchdogTimeoutMs is a required unsigned integer",
-                          relPath,
-                          pluginId)
+              std::format(L"{}: GetPathCapabilities(pluginId={}) cancellation.providerWatchdogTimeoutMs is a required unsigned integer", relPath, pluginId)
                   .c_str(),
               success);
-        const uint64_t providerWatchdogTimeoutValue = providerWatchdogTimeout && yyjson_is_uint(providerWatchdogTimeout)
-            ? yyjson_get_uint(providerWatchdogTimeout)
-            : 0u;
+        const uint64_t providerWatchdogTimeoutValue =
+            providerWatchdogTimeout && yyjson_is_uint(providerWatchdogTimeout) ? yyjson_get_uint(providerWatchdogTimeout) : 0u;
         Check((routeClassValue == "providerWatchdog" && providerWatchdogTimeoutValue > 0u &&
                providerWatchdogTimeoutValue <= (std::numeric_limits<uint32_t>::max)()) ||
                   ((routeClassValue == "bounded" || routeClassValue == "uncontained") && providerWatchdogTimeoutValue == 0u),
-              std::format(L"{}: GetPathCapabilities(pluginId={}) cancellation route/watchdog combination is fail-closed",
-                          relPath,
-                          pluginId)
-                  .c_str(),
+              std::format(L"{}: GetPathCapabilities(pluginId={}) cancellation route/watchdog combination is fail-closed", relPath, pluginId).c_str(),
               success);
-        yyjson_val* retiredHostQuietPointTimeout = cancellation && yyjson_is_obj(cancellation)
-            ? yyjson_obj_get(cancellation, "quietPointTimeoutMs")
-            : nullptr;
+        yyjson_val* retiredHostQuietPointTimeout = cancellation && yyjson_is_obj(cancellation) ? yyjson_obj_get(cancellation, "quietPointTimeoutMs") : nullptr;
         Check(retiredHostQuietPointTimeout == nullptr,
-              std::format(L"{}: GetPathCapabilities(pluginId={}) does not advertise the retired unenforced quietPointTimeoutMs",
-                          relPath,
-                          pluginId)
-                  .c_str(),
+              std::format(L"{}: GetPathCapabilities(pluginId={}) does not advertise the retired unenforced quietPointTimeoutMs", relPath, pluginId).c_str(),
               success);
 
-        const std::optional<FileSystemPathIdentity> parsedPathIdentity =
-            ParseDiagnosticFileSystemPathIdentityContract(std::string_view(capJson), {});
+        const std::optional<FileSystemPathIdentity> parsedPathIdentity = ParseDiagnosticFileSystemPathIdentityContract(std::string_view(capJson), {});
         Check(parsedPathIdentity.has_value(),
               std::format(L"{}: GetPathCapabilities(pluginId={}) names contract parses under the host contract", relPath, pluginId).c_str(),
               success);
@@ -2686,9 +2464,8 @@ bool TestCapabilities(std::wstring_view relPath, bool& success) noexcept
               std::format(L"{}: GetPathCapabilities(pluginId={}) rejects null path and clears output", relPath, pluginId).c_str(),
               success);
 
-        const char* createDirectoryJson = nullptr;
-        const HRESULT createDirectoryCapabilityHr =
-            pathCapabilities->GetPathCapabilities(L"/", FILESYSTEM_CREATE_DIRECTORY, &createDirectoryJson);
+        const char* createDirectoryJson           = nullptr;
+        const HRESULT createDirectoryCapabilityHr = pathCapabilities->GetPathCapabilities(L"/", FILESYSTEM_CREATE_DIRECTORY, &createDirectoryJson);
         Check(createDirectoryCapabilityHr == S_OK && createDirectoryJson != nullptr && createDirectoryJson[0] != '\0',
               std::format(L"{}: GetPathCapabilities(pluginId={}) accepts the Create Directory capability operation", relPath, pluginId).c_str(),
               success);
@@ -2754,8 +2531,7 @@ bool TestBogusPluginId(bool& success) noexcept
     return false;
 }
 
-bool TestPluginDebugSelfTests(
-    std::wstring_view relativeDllPath, const char* exportName, std::wstring_view label, bool exportRequired, bool& success) noexcept
+bool TestPluginDebugSelfTests(std::wstring_view relativeDllPath, const char* exportName, std::wstring_view label, bool exportRequired, bool& success) noexcept
 {
     const std::wstring exeDir  = GetExeDir();
     const std::wstring absPath = exeDir + std::wstring(relativeDllPath);
@@ -2781,7 +2557,7 @@ bool TestPluginDebugSelfTests(
         std::format(L"{}: debug selftests pass (passed={}, failed={}, hr=0x{:08X})", label, passed, failed, static_cast<unsigned long>(hr));
     Check(SUCCEEDED(hr) && failed == 0 && passed > 0, passMessage.c_str(), success);
 
-    const auto shutdown = reinterpret_cast<PfnPluginShutdown>(GetProcAddress(mod.get(), "RedSalamanderPluginShutdown"));
+    const auto shutdown  = reinterpret_cast<PfnPluginShutdown>(GetProcAddress(mod.get(), "RedSalamanderPluginShutdown"));
     const auto canUnload = reinterpret_cast<PfnPluginCanUnloadNow>(GetProcAddress(mod.get(), "RedSalamanderPluginCanUnloadNow"));
     if (shutdown && canUnload)
     {
@@ -2816,7 +2592,7 @@ bool RunCapabilitiesPass(std::span<const std::wstring_view> dlls) noexcept
 
 void TestS3RuntimeUnloadContract(bool& success) noexcept
 {
-    const std::wstring absPath = GetExeDir() + L"Plugins\\FileSystemS3.dll";
+    const std::wstring absPath            = GetExeDir() + L"Plugins\\FileSystemS3.dll";
     constexpr unsigned int kRefreshCycles = 8u;
     for (unsigned int cycle = 0u; cycle < kRefreshCycles; ++cycle)
     {
@@ -2827,8 +2603,8 @@ void TestS3RuntimeUnloadContract(bool& success) noexcept
             return;
         }
 
-        const auto create = reinterpret_cast<PfnCreate>(GetProcAddress(module.get(), "RedSalamanderCreate"));
-        const auto shutdown = reinterpret_cast<PfnPluginShutdown>(GetProcAddress(module.get(), "RedSalamanderPluginShutdown"));
+        const auto create    = reinterpret_cast<PfnCreate>(GetProcAddress(module.get(), "RedSalamanderCreate"));
+        const auto shutdown  = reinterpret_cast<PfnPluginShutdown>(GetProcAddress(module.get(), "RedSalamanderPluginShutdown"));
         const auto canUnload = reinterpret_cast<PfnPluginCanUnloadNow>(GetProcAddress(module.get(), "RedSalamanderPluginCanUnloadNow"));
         Check(create != nullptr && shutdown != nullptr && canUnload != nullptr,
               std::format(L"FileSystemS3.dll: refresh cycle {} resolves lifecycle exports", cycle + 1u).c_str(),
@@ -2842,33 +2618,22 @@ void TestS3RuntimeUnloadContract(bool& success) noexcept
         const HRESULT createHr = create(__uuidof(IFileSystem), nullptr, &g_nullHost, L"builtin/file-system-s3", &raw);
         wil::com_ptr_nothrow<IFileSystem> fileSystem;
         fileSystem.attach(static_cast<IFileSystem*>(raw));
-        Check(createHr == S_OK && fileSystem,
-              std::format(L"FileSystemS3.dll: refresh cycle {} creates an initialized owner", cycle + 1u).c_str(),
-              success);
+        Check(createHr == S_OK && fileSystem, std::format(L"FileSystemS3.dll: refresh cycle {} creates an initialized owner", cycle + 1u).c_str(), success);
         if (FAILED(createHr) || ! fileSystem)
         {
             return;
         }
 
-        Check(canUnload() == FALSE,
-              std::format(L"FileSystemS3.dll: refresh cycle {} is closed before the quiet point", cycle + 1u).c_str(),
-              success);
+        Check(canUnload() == FALSE, std::format(L"FileSystemS3.dll: refresh cycle {} is closed before the quiet point", cycle + 1u).c_str(), success);
         shutdown();
-        Check(canUnload() == FALSE,
-              std::format(L"FileSystemS3.dll: refresh cycle {} stays closed while an AWS owner is alive", cycle + 1u).c_str(),
-              success);
+        Check(canUnload() == FALSE, std::format(L"FileSystemS3.dll: refresh cycle {} stays closed while an AWS owner is alive", cycle + 1u).c_str(), success);
         fileSystem.reset();
-        Check(canUnload() == TRUE,
-              std::format(L"FileSystemS3.dll: refresh cycle {} opens after AWS shutdown", cycle + 1u).c_str(),
-              success);
+        Check(canUnload() == TRUE, std::format(L"FileSystemS3.dll: refresh cycle {} opens after AWS shutdown", cycle + 1u).c_str(), success);
         shutdown();
-        Check(canUnload() == TRUE,
-              std::format(L"FileSystemS3.dll: refresh cycle {} keeps shutdown idempotent", cycle + 1u).c_str(),
-              success);
+        Check(canUnload() == TRUE, std::format(L"FileSystemS3.dll: refresh cycle {} keeps shutdown idempotent", cycle + 1u).c_str(), success);
         module.reset();
-        Check(GetModuleHandleW(absPath.c_str()) == nullptr,
-              std::format(L"FileSystemS3.dll: refresh cycle {} releases the module", cycle + 1u).c_str(),
-              success);
+        Check(
+            GetModuleHandleW(absPath.c_str()) == nullptr, std::format(L"FileSystemS3.dll: refresh cycle {} releases the module", cycle + 1u).c_str(), success);
     }
 }
 
@@ -2877,7 +2642,7 @@ void TestCrossPluginCurlRuntimeUnloadContract(bool& success) noexcept
 {
     struct RuntimeModule
     {
-        RuntimeModule() = default;
+        RuntimeModule()                                = default;
         RuntimeModule(const RuntimeModule&)            = delete;
         RuntimeModule& operator=(const RuntimeModule&) = delete;
         RuntimeModule(RuntimeModule&&)                 = default;
@@ -2886,23 +2651,23 @@ void TestCrossPluginCurlRuntimeUnloadContract(bool& success) noexcept
         std::wstring label;
         std::wstring path;
         wil::unique_hmodule module;
-        PfnPluginShutdown shutdown       = nullptr;
-        PfnPluginCanUnloadNow canUnload  = nullptr;
-        PfnDebugCurlRuntimeProbe probe   = nullptr;
+        PfnPluginShutdown shutdown      = nullptr;
+        PfnPluginCanUnloadNow canUnload = nullptr;
+        PfnDebugCurlRuntimeProbe probe  = nullptr;
     };
 
     const auto loadModule = [&](std::wstring_view fileName, std::wstring_view label) -> RuntimeModule
     {
         RuntimeModule loaded;
-        loaded.label  = label;
-        loaded.path   = GetExeDir() + L"Plugins\\" + std::wstring(fileName);
+        loaded.label = label;
+        loaded.path  = GetExeDir() + L"Plugins\\" + std::wstring(fileName);
         loaded.module.reset(LoadLibraryExW(loaded.path.c_str(), nullptr, 0));
         Check(static_cast<bool>(loaded.module), std::format(L"{}: loads for shared libcurl runtime proof", label).c_str(), success);
         if (loaded.module)
         {
-            loaded.shutdown = reinterpret_cast<PfnPluginShutdown>(GetProcAddress(loaded.module.get(), "RedSalamanderPluginShutdown"));
+            loaded.shutdown  = reinterpret_cast<PfnPluginShutdown>(GetProcAddress(loaded.module.get(), "RedSalamanderPluginShutdown"));
             loaded.canUnload = reinterpret_cast<PfnPluginCanUnloadNow>(GetProcAddress(loaded.module.get(), "RedSalamanderPluginCanUnloadNow"));
-            loaded.probe = reinterpret_cast<PfnDebugCurlRuntimeProbe>(GetProcAddress(loaded.module.get(), "RedSalamanderDebugCurlRuntimeProbe"));
+            loaded.probe     = reinterpret_cast<PfnDebugCurlRuntimeProbe>(GetProcAddress(loaded.module.get(), "RedSalamanderDebugCurlRuntimeProbe"));
             Check(loaded.shutdown && loaded.canUnload && loaded.probe,
                   std::format(L"{}: resolves shared libcurl lifecycle and probe exports", label).c_str(),
                   success);
@@ -2917,9 +2682,7 @@ void TestCrossPluginCurlRuntimeUnloadContract(bool& success) noexcept
               std::format(L"{}: refresh cycle {} reaches its quiet point while its peer survives", target.label, cycle).c_str(),
               success);
         target.module.reset();
-        Check(GetModuleHandleW(target.path.c_str()) == nullptr,
-              std::format(L"{}: refresh cycle {} physically unloads", target.label, cycle).c_str(),
-              success);
+        Check(GetModuleHandleW(target.path.c_str()) == nullptr, std::format(L"{}: refresh cycle {} physically unloads", target.label, cycle).c_str(), success);
     };
 
     constexpr unsigned int kRefreshCycles = 8u;
@@ -2988,15 +2751,9 @@ void TestCrossPluginCurlRuntimeUnloadContract(bool& success) noexcept
     {
         switch (character)
         {
-        case '\\':
-            escaped.append("\\\\");
-            break;
-        case '"':
-            escaped.append("\\\"");
-            break;
-        default:
-            escaped.push_back(character);
-            break;
+            case '\\': escaped.append("\\\\"); break;
+            case '"': escaped.append("\\\""); break;
+            default: escaped.push_back(character); break;
         }
     }
     return escaped;
@@ -3004,25 +2761,20 @@ void TestCrossPluginCurlRuntimeUnloadContract(bool& success) noexcept
 
 [[nodiscard]] bool IsLowerHex(std::wstring_view value, size_t length) noexcept
 {
-    return value.size() == length && std::ranges::all_of(value, [](wchar_t character) noexcept
-    { return (character >= L'0' && character <= L'9') || (character >= L'a' && character <= L'f'); });
+    return value.size() == length && std::ranges::all_of(value, [](wchar_t character) noexcept {
+        return (character >= L'0' && character <= L'9') || (character >= L'a' && character <= L'f');
+    });
 }
 
-[[nodiscard]] uint64_t Percentile(
-    const std::array<uint64_t, TerminalVtUpgradeTestContract::kSampleCount>& samples,
-    size_t numerator,
-    size_t denominator)
+[[nodiscard]] uint64_t Percentile(const std::array<uint64_t, TerminalVtUpgradeTestContract::kSampleCount>& samples, size_t numerator, size_t denominator)
 {
     std::array<uint64_t, TerminalVtUpgradeTestContract::kSampleCount> sorted = samples;
     std::ranges::sort(sorted);
-    const size_t index = std::min(
-        sorted.size() - 1u, (sorted.size() * numerator + denominator - 1u) / denominator - 1u);
+    const size_t index = std::min(sorted.size() - 1u, (sorted.size() * numerator + denominator - 1u) / denominator - 1u);
     return sorted[index];
 }
 
-void WriteSamples(
-    std::ofstream& output,
-    const std::array<uint64_t, TerminalVtUpgradeTestContract::kSampleCount>& samples)
+void WriteSamples(std::ofstream& output, const std::array<uint64_t, TerminalVtUpgradeTestContract::kSampleCount>& samples)
 {
     output << '[';
     for (size_t index = 0u; index < samples.size(); ++index)
@@ -3036,33 +2788,28 @@ void WriteSamples(
     output << ']';
 }
 
-[[nodiscard]] bool WriteTerminalVtUpgradeArchive(
-    const std::filesystem::path& outputDirectory,
-    const TerminalVtUpgradeTestContract::Evidence& evidence)
+[[nodiscard]] bool WriteTerminalVtUpgradeArchive(const std::filesystem::path& outputDirectory, const TerminalVtUpgradeTestContract::Evidence& evidence)
 {
     const std::wstring repositoryCommit = GetRequiredEnvironmentValue(L"RS_VT_REPOSITORY_COMMIT");
-    const std::wstring branch = GetRequiredEnvironmentValue(L"RS_VT_BRANCH");
-    const std::wstring machineHash = GetRequiredEnvironmentValue(L"RS_VT_MACHINE_HASH");
-    const std::wstring runId = GetRequiredEnvironmentValue(L"RS_VT_RUN_ID");
-    const std::wstring buildReceipt = GetRequiredEnvironmentValue(L"RS_VT_BUILD_RECEIPT");
-    const std::wstring runtimeIdentity = GetRequiredEnvironmentValue(L"RS_VT_RUNTIME_IDENTITY");
-    const std::wstring windowsBuild = GetRequiredEnvironmentValue(L"RS_VT_WINDOWS_BUILD");
-    const std::wstring cpu = GetRequiredEnvironmentValue(L"RS_VT_CPU");
-    const std::wstring compiler = GetRequiredEnvironmentValue(L"RS_VT_COMPILER");
-    const std::wstring sdk = GetRequiredEnvironmentValue(L"RS_VT_SDK");
-    const std::wstring zig = GetRequiredEnvironmentValue(L"RS_VT_ZIG");
-    const std::wstring vcpkg = GetRequiredEnvironmentValue(L"RS_VT_VCPKG");
-    if (! IsLowerHex(repositoryCommit, 40u) || branch.empty() || ! IsLowerHex(machineHash, 12u) ||
-        runId.empty() || ! IsLowerHex(buildReceipt, 64u) || ! IsLowerHex(runtimeIdentity, 64u) ||
-        windowsBuild.empty() || cpu.empty() || compiler.empty() || sdk.empty() || zig.empty() || vcpkg.empty())
+    const std::wstring branch           = GetRequiredEnvironmentValue(L"RS_VT_BRANCH");
+    const std::wstring machineHash      = GetRequiredEnvironmentValue(L"RS_VT_MACHINE_HASH");
+    const std::wstring runId            = GetRequiredEnvironmentValue(L"RS_VT_RUN_ID");
+    const std::wstring buildReceipt     = GetRequiredEnvironmentValue(L"RS_VT_BUILD_RECEIPT");
+    const std::wstring runtimeIdentity  = GetRequiredEnvironmentValue(L"RS_VT_RUNTIME_IDENTITY");
+    const std::wstring windowsBuild     = GetRequiredEnvironmentValue(L"RS_VT_WINDOWS_BUILD");
+    const std::wstring cpu              = GetRequiredEnvironmentValue(L"RS_VT_CPU");
+    const std::wstring compiler         = GetRequiredEnvironmentValue(L"RS_VT_COMPILER");
+    const std::wstring sdk              = GetRequiredEnvironmentValue(L"RS_VT_SDK");
+    const std::wstring zig              = GetRequiredEnvironmentValue(L"RS_VT_ZIG");
+    const std::wstring vcpkg            = GetRequiredEnvironmentValue(L"RS_VT_VCPKG");
+    if (! IsLowerHex(repositoryCommit, 40u) || branch.empty() || ! IsLowerHex(machineHash, 12u) || runId.empty() || ! IsLowerHex(buildReceipt, 64u) ||
+        ! IsLowerHex(runtimeIdentity, 64u) || windowsBuild.empty() || cpu.empty() || compiler.empty() || sdk.empty() || zig.empty() || vcpkg.empty())
     {
         std::wcerr << L"VT upgrade evidence metadata environment is missing or invalid.\n";
         return false;
     }
-    const std::array<std::wstring_view, 7u> asciiValues{
-        branch, runId, windowsBuild, cpu, compiler, sdk, zig};
-    if (std::ranges::any_of(asciiValues, [](std::wstring_view value) { return NarrowAscii(value).empty(); }) ||
-        NarrowAscii(vcpkg).empty())
+    const std::array<std::wstring_view, 7u> asciiValues{branch, runId, windowsBuild, cpu, compiler, sdk, zig};
+    if (std::ranges::any_of(asciiValues, [](std::wstring_view value) { return NarrowAscii(value).empty(); }) || NarrowAscii(vcpkg).empty())
     {
         std::wcerr << L"VT upgrade evidence metadata must be nonempty printable ASCII.\n";
         return false;
@@ -3077,16 +2824,12 @@ void WriteSamples(
     }
 
     const std::filesystem::path perfPath = outputDirectory / L"perf" / L"perf_metrics.jsonl";
-    Debug::Perf::ConfigureJsonlOutput(
-        perfPath, L"terminal-vt-upgrade-corpus-v1", L"Release", branch, repositoryCommit, machineHash, runId);
+    Debug::Perf::ConfigureJsonlOutput(perfPath, L"terminal-vt-upgrade-corpus-v1", L"Release", branch, repositoryCommit, machineHash, runId);
     for (size_t index = 0u; index < evidence.sampleCount; ++index)
     {
-        Debug::Perf::EmitDurationUs(
-            L"terminal.vt_upgrade.vt_write_us", evidence.vtWriteSamplesUs[index], evidence.inputByteCount, index);
-        Debug::Perf::EmitDurationUs(
-            L"terminal.vt_upgrade.snapshot_us", evidence.snapshotSamplesUs[index], evidence.inputByteCount, index);
-        Debug::Perf::EmitDurationUs(
-            L"terminal.vt_upgrade.hosted_render_us", evidence.hostedRenderSamplesUs[index], 120u * 40u, index);
+        Debug::Perf::EmitDurationUs(L"terminal.vt_upgrade.vt_write_us", evidence.vtWriteSamplesUs[index], evidence.inputByteCount, index);
+        Debug::Perf::EmitDurationUs(L"terminal.vt_upgrade.snapshot_us", evidence.snapshotSamplesUs[index], evidence.inputByteCount, index);
+        Debug::Perf::EmitDurationUs(L"terminal.vt_upgrade.hosted_render_us", evidence.hostedRenderSamplesUs[index], 120u * 40u, index);
     }
     Debug::Perf::EmitValue(L"terminal.vt_upgrade.kitty_placement_count", evidence.kittyPlacementCount);
     Debug::Perf::EmitValue(L"terminal.vt_upgrade.kitty_placement_bytes", evidence.kittyPlacementBytes);
@@ -3097,24 +2840,24 @@ void WriteSamples(
     Debug::Perf::EmitValue(L"terminal.vt_upgrade.peak_working_set_bytes", evidence.peakWorkingSetBytes);
     Debug::Perf::ClearJsonlOutput();
 
-    const uint64_t vtP50 = Percentile(evidence.vtWriteSamplesUs, 50u, 100u);
-    const uint64_t vtP95 = Percentile(evidence.vtWriteSamplesUs, 95u, 100u);
+    const uint64_t vtP50       = Percentile(evidence.vtWriteSamplesUs, 50u, 100u);
+    const uint64_t vtP95       = Percentile(evidence.vtWriteSamplesUs, 95u, 100u);
     const uint64_t snapshotP50 = Percentile(evidence.snapshotSamplesUs, 50u, 100u);
     const uint64_t snapshotP95 = Percentile(evidence.snapshotSamplesUs, 95u, 100u);
-    const uint64_t renderP50 = Percentile(evidence.hostedRenderSamplesUs, 50u, 100u);
-    const uint64_t renderP95 = Percentile(evidence.hostedRenderSamplesUs, 95u, 100u);
-    const auto threshold = [](uint64_t baseline) noexcept { return (baseline * 110u + 99u) / 100u; };
+    const uint64_t renderP50   = Percentile(evidence.hostedRenderSamplesUs, 50u, 100u);
+    const uint64_t renderP95   = Percentile(evidence.hostedRenderSamplesUs, 95u, 100u);
+    const auto threshold       = [](uint64_t baseline) noexcept { return (baseline * 110u + 99u) / 100u; };
 
     SYSTEMTIME created{};
     GetSystemTime(&created);
     const std::string createdUtc = std::format("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
-                                                created.wYear,
-                                                created.wMonth,
-                                                created.wDay,
-                                                created.wHour,
-                                                created.wMinute,
-                                                created.wSecond,
-                                                created.wMilliseconds);
+                                               created.wYear,
+                                               created.wMonth,
+                                               created.wDay,
+                                               created.wHour,
+                                               created.wMinute,
+                                               created.wSecond,
+                                               created.wMilliseconds);
     std::ofstream results(outputDirectory / L"results.json", std::ios::binary | std::ios::trunc);
     if (! results)
     {
@@ -3148,16 +2891,15 @@ void WriteSamples(
             << "  \"behavior\": {\n"
             << "    \"ptyOutputSha256\": \"" << evidence.ptyOutputSha256.data() << "\",\n"
             << "    \"snapshotSha256\": \"" << evidence.snapshotSha256.data() << "\",\n"
-            << "    \"withoutExpectedDeltas\": {\"ptyOutputSha256\": \""
-            << evidence.ptyOutputWithoutExpectedDeltaSha256.data()
-            << "\", \"snapshotSha256\": \"" << evidence.snapshotWithoutExpectedDeltaSha256.data() << "\"},\n"
+            << "    \"withoutExpectedDeltas\": {\"ptyOutputSha256\": \"" << evidence.ptyOutputWithoutExpectedDeltaSha256.data() << "\", \"snapshotSha256\": \""
+            << evidence.snapshotWithoutExpectedDeltaSha256.data() << "\"},\n"
             << "    \"expectedDeltas\": [{\"id\": \"dcs-high-byte-preservation\", \"disposition\": \"candidate-only-if-reviewed\"}]\n"
             << "  },\n"
             << "  \"measurements\": {\n"
             << "    \"sampleCount\": " << evidence.sampleCount << ",\n"
             << "    \"percentileRule\": \"nearest-rank\",\n"
-            << "    \"vtWrite\": {\"unit\": \"us\", \"p50\": " << vtP50 << ", \"p95\": " << vtP95
-            << ", \"candidateMaximumP95\": " << threshold(vtP95) << ", \"samples\": ";
+            << "    \"vtWrite\": {\"unit\": \"us\", \"p50\": " << vtP50 << ", \"p95\": " << vtP95 << ", \"candidateMaximumP95\": " << threshold(vtP95)
+            << ", \"samples\": ";
     WriteSamples(results, evidence.vtWriteSamplesUs);
     results << "},\n"
             << "    \"snapshot\": {\"unit\": \"us\", \"p50\": " << snapshotP50 << ", \"p95\": " << snapshotP95
@@ -3169,22 +2911,14 @@ void WriteSamples(
     WriteSamples(results, evidence.hostedRenderSamplesUs);
     results << "}\n"
             << "  },\n"
-            << "  \"kitty\": {\"pendingProbeCount\": " << evidence.kittyPendingProbeCount
-            << ", \"completedProbeCount\": " << evidence.kittyCompletedProbeCount
-            << ", \"placementCount\": " << evidence.kittyPlacementCount
-            << ", \"placementBytes\": " << evidence.kittyPlacementBytes
-            << ", \"queuedBytes\": " << evidence.kittyQueuedBytes
-            << ", \"activeSourceBytes\": " << evidence.kittyActiveSourceBytes
-            << ", \"activeConvertedBytes\": " << evidence.kittyActiveConvertedBytes
-            << ", \"readyBytes\": " << evidence.kittyReadyBytes
-            << ", \"residentBytes\": " << evidence.kittyResidentBytes
-            << ", \"memoryHighWaterBytes\": " << evidence.kittyMemoryHighWaterBytes
-            << ", \"cacheBytes\": " << evidence.kittyCacheBytes
-            << ", \"pinnedBytes\": " << evidence.kittyPinnedBytes
-            << ", \"frameUploadBytes\": " << evidence.kittyFrameUploadBytes
-            << ", \"frameUploadCount\": " << evidence.kittyFrameUploadCount << "},\n"
-            << "  \"memory\": {\"peakPrivateBytes\": " << evidence.peakPrivateBytes
-            << ", \"peakWorkingSetBytes\": " << evidence.peakWorkingSetBytes << "},\n"
+            << "  \"kitty\": {\"pendingProbeCount\": " << evidence.kittyPendingProbeCount << ", \"completedProbeCount\": " << evidence.kittyCompletedProbeCount
+            << ", \"placementCount\": " << evidence.kittyPlacementCount << ", \"placementBytes\": " << evidence.kittyPlacementBytes
+            << ", \"queuedBytes\": " << evidence.kittyQueuedBytes << ", \"activeSourceBytes\": " << evidence.kittyActiveSourceBytes
+            << ", \"activeConvertedBytes\": " << evidence.kittyActiveConvertedBytes << ", \"readyBytes\": " << evidence.kittyReadyBytes
+            << ", \"residentBytes\": " << evidence.kittyResidentBytes << ", \"memoryHighWaterBytes\": " << evidence.kittyMemoryHighWaterBytes
+            << ", \"cacheBytes\": " << evidence.kittyCacheBytes << ", \"pinnedBytes\": " << evidence.kittyPinnedBytes
+            << ", \"frameUploadBytes\": " << evidence.kittyFrameUploadBytes << ", \"frameUploadCount\": " << evidence.kittyFrameUploadCount << "},\n"
+            << "  \"memory\": {\"peakPrivateBytes\": " << evidence.peakPrivateBytes << ", \"peakWorkingSetBytes\": " << evidence.peakWorkingSetBytes << "},\n"
             << "  \"assertionCount\": " << evidence.assertionCount << ",\n"
             << "  \"outcome\": \"pass\"\n"
             << "}\n";
@@ -3211,9 +2945,7 @@ void WriteSamples(
     return static_cast<bool>(trace) && std::filesystem::is_regular_file(perfPath, error) && ! error;
 }
 
-[[nodiscard]] bool RunTerminalVtUpgradeCorpus(
-    const std::filesystem::path& outputDirectory,
-    bool& success) noexcept
+[[nodiscard]] bool RunTerminalVtUpgradeCorpus(const std::filesystem::path& outputDirectory, bool& success) noexcept
 {
     const std::wstring absPath = GetExeDir() + L"Plugins\\Terminal.dll";
     wil::unique_hmodule module(LoadLibraryExW(absPath.c_str(), nullptr, 0));
@@ -3222,25 +2954,22 @@ void WriteSamples(
     {
         return false;
     }
-    const auto run = reinterpret_cast<PfnRunTerminalVtUpgradeCorpus>(
-        GetProcAddress(module.get(), "RedSalamanderTerminalDebugVtUpgradeCorpus"));
+    const auto run = reinterpret_cast<PfnRunTerminalVtUpgradeCorpus>(GetProcAddress(module.get(), "RedSalamanderTerminalDebugVtUpgradeCorpus"));
     Check(run != nullptr, L"Terminal.dll: resolves the test-enabled VT upgrade corpus export", success);
     if (run == nullptr)
     {
         return false;
     }
     TerminalVtUpgradeTestContract::Evidence evidence;
-    const HRESULT hr = run(&evidence);
+    const HRESULT hr         = run(&evidence);
     const bool evidenceReady = SUCCEEDED(hr) && evidence.version == TerminalVtUpgradeTestContract::kVersion &&
-        evidence.sampleCount == TerminalVtUpgradeTestContract::kSampleCount && evidence.assertionCount != 0u;
+                               evidence.sampleCount == TerminalVtUpgradeTestContract::kSampleCount && evidence.assertionCount != 0u;
     Check(evidenceReady, L"Terminal.dll: VT upgrade corpus behavior and 200-sample measurement pass", success);
     const bool archiveWritten = evidenceReady && WriteTerminalVtUpgradeArchive(outputDirectory, evidence);
     Check(archiveWritten, L"Terminal.dll: writes bounded digest-only VT upgrade evidence", success);
 
-    const auto shutdown = reinterpret_cast<PfnPluginShutdown>(
-        GetProcAddress(module.get(), "RedSalamanderPluginShutdown"));
-    const auto canUnload = reinterpret_cast<PfnPluginCanUnloadNow>(
-        GetProcAddress(module.get(), "RedSalamanderPluginCanUnloadNow"));
+    const auto shutdown  = reinterpret_cast<PfnPluginShutdown>(GetProcAddress(module.get(), "RedSalamanderPluginShutdown"));
+    const auto canUnload = reinterpret_cast<PfnPluginCanUnloadNow>(GetProcAddress(module.get(), "RedSalamanderPluginCanUnloadNow"));
     if (shutdown != nullptr && canUnload != nullptr)
     {
         shutdown();
@@ -3289,19 +3018,18 @@ int wmain(int argc, wchar_t** argv)
     }
 #endif
 
-    const bool hasSingleArgument = argc == 2 && argv != nullptr && argv[1] != nullptr;
-    const bool packageSmoke = hasSingleArgument && std::wstring_view(argv[1]) == L"--package-smoke";
-    const bool terminalSelfTests = hasSingleArgument && std::wstring_view(argv[1]) == L"--terminal-selftests";
-    const bool terminalCommandExperiencePerfSelfTests =
-        hasSingleArgument && std::wstring_view(argv[1]) == L"--terminal-command-experience-perf";
-    const bool terminalVtUpgradeCorpus = argc == 3 && argv != nullptr && argv[1] != nullptr && argv[2] != nullptr &&
-        std::wstring_view(argv[1]) == L"--terminal-vt-upgrade-corpus" && std::wstring_view(argv[2]).size() != 0u;
-    const bool s3DirectoryTransferSelfTests = hasSingleArgument && std::wstring_view(argv[1]) == L"--s3-directory-transfer-selftests";
-    const bool s3R0bDeleteSelfTests = hasSingleArgument && std::wstring_view(argv[1]) == L"--s3-r0b-delete-selftests";
-    const bool s3R0fContainmentSelfTests = hasSingleArgument && std::wstring_view(argv[1]) == L"--s3-r0f-containment-selftests";
-    const bool graphR0fContainmentSelfTests = hasSingleArgument && std::wstring_view(argv[1]) == L"--microsoft-drive-r0f-containment-selftests";
+    const bool hasSingleArgument                      = argc == 2 && argv != nullptr && argv[1] != nullptr;
+    const bool packageSmoke                           = hasSingleArgument && std::wstring_view(argv[1]) == L"--package-smoke";
+    const bool terminalSelfTests                      = hasSingleArgument && std::wstring_view(argv[1]) == L"--terminal-selftests";
+    const bool terminalCommandExperiencePerfSelfTests = hasSingleArgument && std::wstring_view(argv[1]) == L"--terminal-command-experience-perf";
+    const bool terminalVtUpgradeCorpus            = argc == 3 && argv != nullptr && argv[1] != nullptr && argv[2] != nullptr &&
+                                                    std::wstring_view(argv[1]) == L"--terminal-vt-upgrade-corpus" && std::wstring_view(argv[2]).size() != 0u;
+    const bool s3DirectoryTransferSelfTests       = hasSingleArgument && std::wstring_view(argv[1]) == L"--s3-directory-transfer-selftests";
+    const bool s3R0bDeleteSelfTests               = hasSingleArgument && std::wstring_view(argv[1]) == L"--s3-r0b-delete-selftests";
+    const bool s3R0fContainmentSelfTests          = hasSingleArgument && std::wstring_view(argv[1]) == L"--s3-r0f-containment-selftests";
+    const bool graphR0fContainmentSelfTests       = hasSingleArgument && std::wstring_view(argv[1]) == L"--microsoft-drive-r0f-containment-selftests";
     const bool googleDriveR0fContainmentSelfTests = hasSingleArgument && std::wstring_view(argv[1]) == L"--google-drive-r0f-containment-selftests";
-    const bool curlSelfTests = hasSingleArgument && std::wstring_view(argv[1]) == L"--curl-selftests";
+    const bool curlSelfTests                      = hasSingleArgument && std::wstring_view(argv[1]) == L"--curl-selftests";
 
     // Configure the DLL search path so that plugin DLLs find their transitive dependencies:
     // - Plugins\ contains aws-*.dll, libcurl-d.dll, sqlite3.dll, and so on.
@@ -3350,11 +3078,8 @@ int wmain(int argc, wchar_t** argv)
     {
         bool focusedSuccess = true;
         std::wcout << L"[ RUN      ] S3 R0b exact-generation virtual-folder Delete selftests\n";
-        TestPluginDebugSelfTests(L"Plugins\\FileSystemS3.dll",
-                                 "RedSalamanderS3R0bDeleteSelfTests",
-                                 L"FileSystemS3.dll R0b exact-generation Delete",
-                                 true,
-                                 focusedSuccess);
+        TestPluginDebugSelfTests(
+            L"Plugins\\FileSystemS3.dll", "RedSalamanderS3R0bDeleteSelfTests", L"FileSystemS3.dll R0b exact-generation Delete", true, focusedSuccess);
         if (pluginsDirCookie != nullptr)
         {
             RemoveDllDirectory(pluginsDirCookie);
@@ -3368,11 +3093,8 @@ int wmain(int argc, wchar_t** argv)
     {
         bool focusedSuccess = true;
         std::wcout << L"[ RUN      ] S3 R0f containment selftests (fake S3 endpoint: streaming cancel, stalled request, provider bound)\n";
-        TestPluginDebugSelfTests(L"Plugins\\FileSystemS3.dll",
-                                 "RedSalamanderS3R0fContainmentSelfTests",
-                                 L"FileSystemS3.dll R0f containment",
-                                 true,
-                                 focusedSuccess);
+        TestPluginDebugSelfTests(
+            L"Plugins\\FileSystemS3.dll", "RedSalamanderS3R0fContainmentSelfTests", L"FileSystemS3.dll R0f containment", true, focusedSuccess);
         if (pluginsDirCookie != nullptr)
         {
             RemoveDllDirectory(pluginsDirCookie);
@@ -3422,17 +3144,12 @@ int wmain(int argc, wchar_t** argv)
     {
         bool focusedSuccess = true;
         std::wcout << L"[ RUN      ] Curl transfer and reader integrity selftests\n";
-        TestPluginDebugSelfTests(L"Plugins\\FileSystemCurl.dll",
-                                 "RedSalamanderCurlDebugSelfTests",
-                                 L"FileSystemCurl.dll",
-                                 true,
-                                 focusedSuccess);
+        TestPluginDebugSelfTests(L"Plugins\\FileSystemCurl.dll", "RedSalamanderCurlDebugSelfTests", L"FileSystemCurl.dll", true, focusedSuccess);
         if (pluginsDirCookie != nullptr)
         {
             RemoveDllDirectory(pluginsDirCookie);
         }
-        std::wcout << (focusedSuccess ? L"PluginContractTests focused Curl selftests passed.\n"
-                                      : L"PluginContractTests focused Curl selftests failed.\n");
+        std::wcout << (focusedSuccess ? L"PluginContractTests focused Curl selftests passed.\n" : L"PluginContractTests focused Curl selftests failed.\n");
         return focusedSuccess ? 0 : 1;
     }
 
@@ -3444,11 +3161,7 @@ int wmain(int argc, wchar_t** argv)
         std::wcout << L"[ RUN      ] Terminal action ABI and sized-record contracts\n";
         TestTerminalSizedRecords(focusedSuccess);
         std::wcout << L"[ RUN      ] Terminal plugin deterministic selftests\n";
-        TestPluginDebugSelfTests(L"Plugins\\Terminal.dll",
-                                 "RedSalamanderTerminalDebugSelfTests",
-                                 L"Terminal.dll",
-                                 true,
-                                 focusedSuccess);
+        TestPluginDebugSelfTests(L"Plugins\\Terminal.dll", "RedSalamanderTerminalDebugSelfTests", L"Terminal.dll", true, focusedSuccess);
         if (pluginsDirCookie != nullptr)
         {
             RemoveDllDirectory(pluginsDirCookie);
@@ -3501,8 +3214,7 @@ int wmain(int argc, wchar_t** argv)
     const PluginMetaData* enumeratedMetaData = nullptr;
     unsigned int enumeratedCount             = 0u;
     Check(FactoryEnumeratePlugins<IViewer>(validFactoryEntries, __uuidof(IViewer), &enumeratedMetaData, &enumeratedCount) == S_OK &&
-              enumeratedMetaData == g_factoryContractMetaData.data() &&
-              enumeratedCount == static_cast<unsigned int>(std::size(validFactoryEntries)),
+              enumeratedMetaData == g_factoryContractMetaData.data() && enumeratedCount == static_cast<unsigned int>(std::size(validFactoryEntries)),
           L"factory enumeration accepts a valid contiguous bounded metadata array",
           success);
 
@@ -3569,23 +3281,13 @@ int wmain(int argc, wchar_t** argv)
         std::wcout << L"[ RUN      ] Step5: Configuration-gated plugin debug selftests\n";
         {
             bool debugSuccess = true;
-            Check(! IsDebugSelfTestExportPresenceAccepted(false, true),
-                  L"missing required debug selftest export turns the step red",
-                  debugSuccess);
-            Check(IsDebugSelfTestExportPresenceAccepted(false, false),
-                  L"missing configuration-gated debug selftest export is an explicit skip",
-                  debugSuccess);
+            Check(! IsDebugSelfTestExportPresenceAccepted(false, true), L"missing required debug selftest export turns the step red", debugSuccess);
+            Check(IsDebugSelfTestExportPresenceAccepted(false, false), L"missing configuration-gated debug selftest export is an explicit skip", debugSuccess);
 
-            TestPluginDebugSelfTests(L"Plugins\\FileSystem.dll",
-                                     "RedSalamanderFileSystemDebugSelfTests",
-                                     L"FileSystem.dll",
-                                     kDebugSelfTestExportsRequired,
-                                     debugSuccess);
-            TestPluginDebugSelfTests(L"Plugins\\FileSystem7z.dll",
-                                     "RedSalamander7zDebugSelfTests",
-                                     L"FileSystem7z.dll",
-                                     kDebugSelfTestExportsRequired,
-                                     debugSuccess);
+            TestPluginDebugSelfTests(
+                L"Plugins\\FileSystem.dll", "RedSalamanderFileSystemDebugSelfTests", L"FileSystem.dll", kDebugSelfTestExportsRequired, debugSuccess);
+            TestPluginDebugSelfTests(
+                L"Plugins\\FileSystem7z.dll", "RedSalamander7zDebugSelfTests", L"FileSystem7z.dll", kDebugSelfTestExportsRequired, debugSuccess);
             TestPluginDebugSelfTests(L"Plugins\\FileSystemMicrosoftDrive.dll",
                                      "RedSalamanderMicrosoftDriveDebugSelfTests",
                                      L"FileSystemMicrosoftDrive.dll",
@@ -3596,21 +3298,12 @@ int wmain(int argc, wchar_t** argv)
                                      L"FileSystemGoogleDrive.dll",
                                      kDebugSelfTestExportsRequired,
                                      debugSuccess);
-            TestPluginDebugSelfTests(L"Plugins\\FileSystemS3.dll",
-                                     "RedSalamanderS3DebugSelfTests",
-                                     L"FileSystemS3.dll",
-                                     kDebugSelfTestExportsRequired,
-                                     debugSuccess);
-            TestPluginDebugSelfTests(L"Plugins\\FileSystemCurl.dll",
-                                     "RedSalamanderCurlDebugSelfTests",
-                                     L"FileSystemCurl.dll",
-                                     kDebugSelfTestExportsRequired,
-                                     debugSuccess);
-            TestPluginDebugSelfTests(L"Plugins\\Terminal.dll",
-                                     "RedSalamanderTerminalDebugSelfTests",
-                                     L"Terminal.dll",
-                                     kDebugSelfTestExportsRequired,
-                                     debugSuccess);
+            TestPluginDebugSelfTests(
+                L"Plugins\\FileSystemS3.dll", "RedSalamanderS3DebugSelfTests", L"FileSystemS3.dll", kDebugSelfTestExportsRequired, debugSuccess);
+            TestPluginDebugSelfTests(
+                L"Plugins\\FileSystemCurl.dll", "RedSalamanderCurlDebugSelfTests", L"FileSystemCurl.dll", kDebugSelfTestExportsRequired, debugSuccess);
+            TestPluginDebugSelfTests(
+                L"Plugins\\Terminal.dll", "RedSalamanderTerminalDebugSelfTests", L"Terminal.dll", kDebugSelfTestExportsRequired, debugSuccess);
             success = debugSuccess && success;
         }
 
@@ -3618,11 +3311,7 @@ int wmain(int argc, wchar_t** argv)
         std::wcout << L"[ RUN      ] Step5b: S3 multipart performance and teardown selftests\n";
         {
             bool multipartSuccess = true;
-            TestPluginDebugSelfTests(L"Plugins\\FileSystemS3.dll",
-                                     "RedSalamanderS3MultipartSelfTests",
-                                     L"FileSystemS3.dll multipart",
-                                     true,
-                                     multipartSuccess);
+            TestPluginDebugSelfTests(L"Plugins\\FileSystemS3.dll", "RedSalamanderS3MultipartSelfTests", L"FileSystemS3.dll multipart", true, multipartSuccess);
             success = multipartSuccess && success;
         }
 
@@ -3655,6 +3344,6 @@ int wmain(int argc, wchar_t** argv)
     }
 
     std::wcout << (success ? (packageSmoke ? L"PluginContractTests package smoke passed.\n" : L"PluginContractTests passed.\n")
-                            : L"PluginContractTests FAILED.\n");
+                           : L"PluginContractTests FAILED.\n");
     return success ? 0 : 1;
 }

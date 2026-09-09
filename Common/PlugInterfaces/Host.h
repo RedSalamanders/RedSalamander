@@ -108,10 +108,10 @@ enum HostPromptResult : uint32_t
 // operation-specific icon, palette, title fallback, and affirmative label.
 enum HostPromptPresentation : uint32_t
 {
-    HOST_PROMPT_PRESENTATION_DEFAULT = 0,
-    HOST_PROMPT_PRESENTATION_COPY    = 1,
-    HOST_PROMPT_PRESENTATION_MOVE    = 2,
-    HOST_PROMPT_PRESENTATION_DELETE  = 3,
+    HOST_PROMPT_PRESENTATION_DEFAULT        = 0,
+    HOST_PROMPT_PRESENTATION_COPY           = 1,
+    HOST_PROMPT_PRESENTATION_MOVE           = 2,
+    HOST_PROMPT_PRESENTATION_DELETE         = 3,
     HOST_PROMPT_PRESENTATION_ARTIFACT_TOUCH = 4,
 };
 
@@ -129,10 +129,10 @@ enum HostFileOperationExecutionMode : uint32_t
 
 enum HostFileOperationVerificationAvailability : uint32_t
 {
-    HOST_FILE_OPERATION_VERIFICATION_SUPPORTED = 0,
-    HOST_FILE_OPERATION_VERIFICATION_UNSUPPORTED = 1,
+    HOST_FILE_OPERATION_VERIFICATION_SUPPORTED              = 0,
+    HOST_FILE_OPERATION_VERIFICATION_UNSUPPORTED            = 1,
     HOST_FILE_OPERATION_VERIFICATION_CHECK_DURING_OPERATION = 2,
-    HOST_FILE_OPERATION_VERIFICATION_NOT_APPLICABLE = 3,
+    HOST_FILE_OPERATION_VERIFICATION_NOT_APPLICABLE         = 3,
 };
 
 // Optional, operation-specific confirmation state. The caller owns this

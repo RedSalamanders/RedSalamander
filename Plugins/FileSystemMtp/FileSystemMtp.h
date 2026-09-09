@@ -24,13 +24,13 @@
 #pragma warning(pop)
 
 #include "FileSystemMtp.Internal.h"
+#include "FileSystemRouteProviderBase.h"
+#include "PackedFileInfoBuffer.h"
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
-#include "FileSystemRouteProviderBase.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
-#include "PackedFileInfoBuffer.h"
 
 class FilesInformationMtp final : public IFilesInformation
 {
@@ -164,9 +164,7 @@ public:
                                           const FileSystemOptions* options = nullptr,
                                           IFileSystemCallback* callback    = nullptr,
                                           void* cookie                     = nullptr) noexcept override;
-    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
-                                                  FileSystemOperation operation,
-                                                  const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
                                                FileSystemOperation operationType,
                                                FileSystemTransferEndpoint endpoint,
@@ -194,15 +192,15 @@ public:
                              uint64_t transmitHash,
                              std::wstring decidedDestinationPersistentId,
                              std::shared_ptr<void> payloadOwner) noexcept;
-    [[nodiscard]] HRESULT ResolveReplaceOccupant(std::wstring_view normalizedPath, const FileSystemBasicInformation& expected, std::wstring& persistentId) noexcept;
+    [[nodiscard]] HRESULT ResolveReplaceOccupant(std::wstring_view normalizedPath,
+                                                 const FileSystemBasicInformation& expected,
+                                                 std::wstring& persistentId) noexcept;
 
     // IFileSystemAtomicWriter (R3-1 / C9): the overwrite temp-sibling swap is atomic-final.
     HRESULT STDMETHODCALLTYPE SupportsAtomicWriterCommit(const wchar_t* path, FileSystemFlags flags, BOOL* supported) noexcept override;
 
 protected:
-    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path,
-                                           FileSystemOperation operation,
-                                           FileSystemRouteDescriptor& descriptor) noexcept override;
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path, FileSystemOperation operation, FileSystemRouteDescriptor& descriptor) noexcept override;
 
 private:
     friend class MtpBackendReader;
@@ -257,9 +255,9 @@ private:
     [[nodiscard]] HRESULT CreateBackendWorkerLocked() noexcept;
     [[nodiscard]] std::wstring OverwriteJournalIdentityForPath(std::wstring_view normalizedPath) const noexcept;
     HRESULT RunBackendCommand(std::function<HRESULT(FileSystemMtpInternal::IMtpBackend&)> command,
-                              std::wstring recoveryDeviceIdentity = {},
+                              std::wstring recoveryDeviceIdentity               = {},
                               FileSystemMtpInternal::MtpBackendCommandKind kind = FileSystemMtpInternal::MtpBackendCommandKind::ReadOnly,
-                              uint64_t requiredBackendGeneration = 0u) noexcept;
+                              uint64_t requiredBackendGeneration                = 0u) noexcept;
     HRESULT CompleteSingleItem(FileSystemOperation operationType,
                                unsigned long itemIndex,
                                const wchar_t* sourcePath,

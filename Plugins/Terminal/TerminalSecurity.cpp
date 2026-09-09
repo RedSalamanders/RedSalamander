@@ -20,13 +20,13 @@
 #include <utility>
 #include <vector>
 
-#include <windowsx.h>
-#include <wincrypt.h>
-#include <imm.h>
-#include <shlobj.h>
-#include <shellapi.h>
 #include <UIAutomation.h>
+#include <imm.h>
+#include <shellapi.h>
+#include <shlobj.h>
 #include <uxtheme.h>
+#include <wincrypt.h>
+#include <windowsx.h>
 
 #pragma comment(lib, "crypt32")
 #pragma comment(lib, "imm32")
@@ -36,10 +36,10 @@
 
 #include <yyjson.h>
 
-#include "Helpers.h"
 #include "DxUi/DxUi.h"
-#include "PathUtils.h"
+#include "Helpers.h"
 #include "PaneVisualState.h"
+#include "PathUtils.h"
 #include "ProcessCommandLine.h"
 #include "StringConversion.h"
 #include "UnicodeClipboard.h"
@@ -63,16 +63,14 @@ GhosttyClipboardWriteResult Terminal::handleGhosttyClipboardWrite(const ::Ghostt
         return GHOSTTY_CLIPBOARD_WRITE_RESULT_DENIED;
     }
     GhosttyClipboardDataView selected{};
-    const GhosttyClipboardWriteResult validation = ValidateGhosttyClipboardWrite(
-        write, _osc52MaxBytes.load(std::memory_order_acquire), selected);
+    const GhosttyClipboardWriteResult validation = ValidateGhosttyClipboardWrite(write, _osc52MaxBytes.load(std::memory_order_acquire), selected);
     if (validation != GHOSTTY_CLIPBOARD_WRITE_RESULT_SUCCESS)
     {
         return validation;
     }
 
     bool expected = false;
-    if (! _osc52PostPending.compare_exchange_strong(
-            expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
+    if (! _osc52PostPending.compare_exchange_strong(expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
     {
         return GHOSTTY_CLIPBOARD_WRITE_RESULT_BUSY;
     }
@@ -88,8 +86,7 @@ GhosttyClipboardWriteResult Terminal::handleGhosttyClipboardWrite(const ::Ghostt
         payload->utf8.assign(reinterpret_cast<const char*>(selected.data), selected.length);
     }
     const HWND hwnd = _windowHandle.load(std::memory_order_acquire);
-    if (hwnd == nullptr ||
-        ! PostMessagePayload(hwnd, WndMsg::kTerminalClipboardWrite, 0u, std::move(payload)))
+    if (hwnd == nullptr || ! PostMessagePayload(hwnd, WndMsg::kTerminalClipboardWrite, 0u, std::move(payload)))
     {
         _osc52PostPending.store(false, std::memory_order_release);
         return GHOSTTY_CLIPBOARD_WRITE_RESULT_IO_ERROR;
@@ -103,19 +100,14 @@ GhosttyClipboardWriteResult Terminal::handleGhosttyClipboardWrite(const ::Ghostt
     return GHOSTTY_CLIPBOARD_WRITE_RESULT_BUSY;
 }
 
-void Terminal::GhosttyClipboardWrite(
-    GhosttyTerminal /*terminal*/, void* userData, const ::GhosttyClipboardWrite* write) noexcept
+void Terminal::GhosttyClipboardWrite(GhosttyTerminal /*terminal*/, void* userData, const ::GhosttyClipboardWrite* write) noexcept
 {
-    if (write == nullptr ||
-        ! GhosttySizedFieldPresent(write->size, offsetof(::GhosttyClipboardWrite, reply), sizeof(write->reply)) ||
-        write->reply == nullptr)
+    if (write == nullptr || ! GhosttySizedFieldPresent(write->size, offsetof(::GhosttyClipboardWrite, reply), sizeof(write->reply)) || write->reply == nullptr)
     {
         return;
     }
-    auto* self = static_cast<Terminal*>(userData);
-    const GhosttyClipboardWriteResult result = self != nullptr
-        ? self->handleGhosttyClipboardWrite(write)
-        : GHOSTTY_CLIPBOARD_WRITE_RESULT_DENIED;
+    auto* self                               = static_cast<Terminal*>(userData);
+    const GhosttyClipboardWriteResult result = self != nullptr ? self->handleGhosttyClipboardWrite(write) : GHOSTTY_CLIPBOARD_WRITE_RESULT_DENIED;
 #if defined(ENABLE_TESTS)
     if (self != nullptr)
     {
@@ -124,8 +116,8 @@ void Terminal::GhosttyClipboardWrite(
     }
 #endif
     GhosttyClipboardWriteReply reply{};
-    reply.size = sizeof(reply);
-    reply.result = result;
+    reply.size     = sizeof(reply);
+    reply.result   = result;
     reply.remember = false;
     write->reply(write, &reply);
 #if defined(ENABLE_TESTS)
@@ -139,8 +131,7 @@ void Terminal::GhosttyClipboardWrite(
 bool Terminal::pasteClipboard() noexcept
 {
     const HWND hwnd = _windowHandle.load(std::memory_order_acquire);
-    if (hwnd == nullptr || _ghosttyTerminal == nullptr || _runtime.pasteIsSafe == nullptr || _runtime.pasteEncode == nullptr ||
-        _runtime.terminalGet == nullptr)
+    if (hwnd == nullptr || _ghosttyTerminal == nullptr || _runtime.pasteIsSafe == nullptr || _runtime.pasteEncode == nullptr || _runtime.terminalGet == nullptr)
     {
         return false;
     }
@@ -190,7 +181,7 @@ bool Terminal::pasteClipboard() noexcept
             MessageBeep(MB_ICONWARNING);
             return false;
         }
-        _pendingUnsafePaste = std::move(source);
+        _pendingUnsafePaste             = std::move(source);
         _unsafePasteConfirmationVisible = true;
         publishAccessibilitySnapshot();
         InvalidateRect(hwnd, nullptr, FALSE);
@@ -211,8 +202,7 @@ bool Terminal::encodePasteSource(std::string source) noexcept
     bool bracketed = false;
     {
         std::scoped_lock lock(_terminalMutex);
-        if (_ghosttyTerminal == nullptr ||
-            _runtime.GetTerminalMode(_ghosttyTerminal, GHOSTTY_MODE_BRACKETED_PASTE, bracketed) != GHOSTTY_SUCCESS)
+        if (_ghosttyTerminal == nullptr || _runtime.GetTerminalMode(_ghosttyTerminal, GHOSTTY_MODE_BRACKETED_PASTE, bracketed) != GHOSTTY_SUCCESS)
         {
             return false;
         }
@@ -224,11 +214,9 @@ bool Terminal::encodePasteSource(std::string source) noexcept
         return false;
     }
     std::vector<char> encoded(source.size() + kBracketedPasteWrapperBytes);
-    const auto wipeEncoded = wil::scope_exit(
-        [&encoded]() noexcept { SecureZeroMemory(encoded.data(), encoded.size()); });
-    size_t written = 0u;
-    const GhosttyResult result = _runtime.pasteEncode(
-        source.data(), source.size(), bracketed, encoded.data(), encoded.size(), &written);
+    const auto wipeEncoded     = wil::scope_exit([&encoded]() noexcept { SecureZeroMemory(encoded.data(), encoded.size()); });
+    size_t written             = 0u;
+    const GhosttyResult result = _runtime.pasteEncode(source.data(), source.size(), bracketed, encoded.data(), encoded.size(), &written);
     if (result != GHOSTTY_SUCCESS || written == 0u || written > encoded.size() || written > _config.pasteMaxBytes)
     {
         return false;
@@ -252,16 +240,15 @@ std::wstring Terminal::confirmationAccessibilityText() const
     {
         return {};
     }
-    const bool hyperlink = _hyperlinkConfirmationVisible;
-    const bool osc52 = _osc52ConfirmationVisible;
-    const std::wstring& title = osc52 ? _osc52Title : hyperlink ? _hyperlinkTitle : _unsafePasteTitle;
+    const bool hyperlink        = _hyperlinkConfirmationVisible;
+    const bool osc52            = _osc52ConfirmationVisible;
+    const std::wstring& title   = osc52 ? _osc52Title : hyperlink ? _hyperlinkTitle : _unsafePasteTitle;
     const std::wstring& message = osc52 ? _osc52Message : hyperlink ? _hyperlinkMessage : _unsafePasteMessage;
-    const std::wstring& accept = osc52 ? _osc52Accept : hyperlink ? _hyperlinkAccept : _unsafePasteAccept;
-    const std::wstring& cancel = osc52 ? _osc52Cancel : hyperlink ? _hyperlinkCancel : _unsafePasteCancel;
+    const std::wstring& accept  = osc52 ? _osc52Accept : hyperlink ? _hyperlinkAccept : _unsafePasteAccept;
+    const std::wstring& cancel  = osc52 ? _osc52Cancel : hyperlink ? _hyperlinkCancel : _unsafePasteCancel;
     // Never expose pending OSC52 contents. The same visible labels become the
     // document's accessible prompt, including the keyboard actions.
-    return FormatStringResource(
-        g_hInstance, IDS_TERMINAL_CONFIRMATION_ACCESSIBILITY, title, message, accept, cancel);
+    return FormatStringResource(g_hInstance, IDS_TERMINAL_CONFIRMATION_ACCESSIBILITY, title, message, accept, cancel);
 }
 
 void Terminal::resolveConfirmation(bool accept) noexcept
@@ -270,12 +257,12 @@ void Terminal::resolveConfirmation(bool accept) noexcept
     {
         return;
     }
-    const bool paste = _unsafePasteConfirmationVisible;
-    const bool hyperlink = _hyperlinkConfirmationVisible;
-    const bool osc52 = _osc52ConfirmationVisible;
+    const bool paste                = _unsafePasteConfirmationVisible;
+    const bool hyperlink            = _hyperlinkConfirmationVisible;
+    const bool osc52                = _osc52ConfirmationVisible;
     _unsafePasteConfirmationVisible = false;
-    _hyperlinkConfirmationVisible = false;
-    _osc52ConfirmationVisible = false;
+    _hyperlinkConfirmationVisible   = false;
+    _osc52ConfirmationVisible       = false;
     std::string source;
     std::wstring uri;
     std::wstring clipboardText;
@@ -320,18 +307,17 @@ void Terminal::resolveConfirmation(bool accept) noexcept
 
 void Terminal::drawConfirmation(float widthDip, float heightDip) noexcept
 {
-    if (! confirmationVisible() || ! _renderTarget || ! _foregroundBrush || ! _overlayTextFormat ||
-        ! _overlayBoldTextFormat)
+    if (! confirmationVisible() || ! _renderTarget || ! _foregroundBrush || ! _overlayTextFormat || ! _overlayBoldTextFormat)
     {
         return;
     }
-    const bool hyperlink = _hyperlinkConfirmationVisible;
-    const bool osc52 = _osc52ConfirmationVisible;
-    const std::wstring& title = osc52 ? _osc52Title : hyperlink ? _hyperlinkTitle : _unsafePasteTitle;
+    const bool hyperlink            = _hyperlinkConfirmationVisible;
+    const bool osc52                = _osc52ConfirmationVisible;
+    const std::wstring& title       = osc52 ? _osc52Title : hyperlink ? _hyperlinkTitle : _unsafePasteTitle;
     const std::wstring& baseMessage = osc52 ? _osc52Message : hyperlink ? _hyperlinkMessage : _unsafePasteMessage;
-    const std::wstring& acceptText = osc52 ? _osc52Accept : hyperlink ? _hyperlinkAccept : _unsafePasteAccept;
-    const std::wstring& cancelText = osc52 ? _osc52Cancel : hyperlink ? _hyperlinkCancel : _unsafePasteCancel;
-    std::wstring message = baseMessage;
+    const std::wstring& acceptText  = osc52 ? _osc52Accept : hyperlink ? _hyperlinkAccept : _unsafePasteAccept;
+    const std::wstring& cancelText  = osc52 ? _osc52Cancel : hyperlink ? _hyperlinkCancel : _unsafePasteCancel;
+    std::wstring message            = baseMessage;
     if (hyperlink && ! _pendingHyperlink.empty())
     {
         message.append(L"\n");
@@ -341,52 +327,35 @@ void Terminal::drawConfirmation(float widthDip, float heightDip) noexcept
     _foregroundBrush->SetColor(RedSalamander::DxUi::ColorFromArgb(WithAlpha(_backgroundArgb, 0xD0u)));
     _renderTarget->FillRectangle(bounds, _foregroundBrush.get());
 
-    const float panelWidth = std::min(560.0f, std::max(240.0f, widthDip - 32.0f));
-    const float panelHeight = std::min(190.0f, std::max(150.0f, heightDip - 32.0f));
-    const float left = std::max(0.0f, (widthDip - panelWidth) * 0.5f);
-    const float top = std::max(0.0f, (heightDip - panelHeight) * 0.5f);
-    const D2D1_RECT_F panel = D2D1::RectF(left, top, left + panelWidth, top + panelHeight);
-    const uint32_t panelArgb = _themeHighContrast ? _backgroundArgb :
-        (_themeDark ? _backgroundArgb : 0xFFF7F7F7u);
+    const float panelWidth   = std::min(560.0f, std::max(240.0f, widthDip - 32.0f));
+    const float panelHeight  = std::min(190.0f, std::max(150.0f, heightDip - 32.0f));
+    const float left         = std::max(0.0f, (widthDip - panelWidth) * 0.5f);
+    const float top          = std::max(0.0f, (heightDip - panelHeight) * 0.5f);
+    const D2D1_RECT_F panel  = D2D1::RectF(left, top, left + panelWidth, top + panelHeight);
+    const uint32_t panelArgb = _themeHighContrast ? _backgroundArgb : (_themeDark ? _backgroundArgb : 0xFFF7F7F7u);
     _foregroundBrush->SetColor(RedSalamander::DxUi::ColorFromArgb(panelArgb));
     _renderTarget->FillRectangle(panel, _foregroundBrush.get());
     _foregroundBrush->SetColor(RedSalamander::DxUi::ColorFromArgb(_foregroundArgb));
     _renderTarget->DrawRectangle(panel, _foregroundBrush.get(), 1.0f);
 
     const D2D1_RECT_F titleRect = D2D1::RectF(left + 18.0f, top + 14.0f, panel.right - 18.0f, top + 44.0f);
-    _renderTarget->DrawTextW(title.data(),
-                             static_cast<UINT32>(title.size()),
-                             _overlayBoldTextFormat.get(),
-                             titleRect,
-                             _foregroundBrush.get(),
-                             D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    _renderTarget->DrawTextW(
+        title.data(), static_cast<UINT32>(title.size()), _overlayBoldTextFormat.get(), titleRect, _foregroundBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
     const D2D1_RECT_F messageRect = D2D1::RectF(left + 18.0f, top + 48.0f, panel.right - 18.0f, panel.bottom - 58.0f);
-    _renderTarget->DrawTextW(message.data(),
-                             static_cast<UINT32>(message.size()),
-                             _overlayTextFormat.get(),
-                             messageRect,
-                             _foregroundBrush.get(),
-                             D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    _renderTarget->DrawTextW(
+        message.data(), static_cast<UINT32>(message.size()), _overlayTextFormat.get(), messageRect, _foregroundBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
 
     const D2D1_RECT_F accept = D2D1::RectF(panel.right - 274.0f, panel.bottom - 46.0f, panel.right - 146.0f, panel.bottom - 12.0f);
     const D2D1_RECT_F cancel = D2D1::RectF(panel.right - 138.0f, panel.bottom - 46.0f, panel.right - 10.0f, panel.bottom - 12.0f);
     _foregroundBrush->SetColor(RedSalamander::DxUi::ColorFromArgb(_selectionBackgroundArgb));
     _renderTarget->FillRectangle(accept, _foregroundBrush.get());
     _foregroundBrush->SetColor(RedSalamander::DxUi::ColorFromArgb(_selectionForegroundArgb));
-    _renderTarget->DrawTextW(acceptText.data(),
-                             static_cast<UINT32>(acceptText.size()),
-                             _overlayTextFormat.get(),
-                             accept,
-                             _foregroundBrush.get(),
-                             D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    _renderTarget->DrawTextW(
+        acceptText.data(), static_cast<UINT32>(acceptText.size()), _overlayTextFormat.get(), accept, _foregroundBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
     _foregroundBrush->SetColor(RedSalamander::DxUi::ColorFromArgb(_foregroundArgb));
     _renderTarget->DrawRectangle(cancel, _foregroundBrush.get(), 1.0f);
-    _renderTarget->DrawTextW(cancelText.data(),
-                             static_cast<UINT32>(cancelText.size()),
-                             _overlayTextFormat.get(),
-                             cancel,
-                             _foregroundBrush.get(),
-                             D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    _renderTarget->DrawTextW(
+        cancelText.data(), static_cast<UINT32>(cancelText.size()), _overlayTextFormat.get(), cancel, _foregroundBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
 }
 
 bool Terminal::handleConfirmationClick(POINT clientPoint) noexcept
@@ -401,19 +370,16 @@ bool Terminal::handleConfirmationClick(POINT clientPoint) noexcept
     {
         return true;
     }
-    const float scale = 96.0f / static_cast<float>(std::max<UINT>(_dpi, 1u));
-    const float widthDip = static_cast<float>(client.right - client.left) * scale;
-    const float heightDip = static_cast<float>(client.bottom - client.top) * scale;
-    const float panelWidth = std::min(560.0f, std::max(240.0f, widthDip - 32.0f));
+    const float scale       = 96.0f / static_cast<float>(std::max<UINT>(_dpi, 1u));
+    const float widthDip    = static_cast<float>(client.right - client.left) * scale;
+    const float heightDip   = static_cast<float>(client.bottom - client.top) * scale;
+    const float panelWidth  = std::min(560.0f, std::max(240.0f, widthDip - 32.0f));
     const float panelHeight = std::min(190.0f, std::max(150.0f, heightDip - 32.0f));
-    const float left = std::max(0.0f, (widthDip - panelWidth) * 0.5f);
-    const float top = std::max(0.0f, (heightDip - panelHeight) * 0.5f);
-    const D2D1_POINT_2F point{
-        static_cast<float>(clientPoint.x) * scale, static_cast<float>(clientPoint.y) * scale};
-    const D2D1_RECT_F accept = D2D1::RectF(
-        left + panelWidth - 274.0f, top + panelHeight - 46.0f, left + panelWidth - 146.0f, top + panelHeight - 12.0f);
-    const D2D1_RECT_F cancel = D2D1::RectF(
-        left + panelWidth - 138.0f, top + panelHeight - 46.0f, left + panelWidth - 10.0f, top + panelHeight - 12.0f);
+    const float left        = std::max(0.0f, (widthDip - panelWidth) * 0.5f);
+    const float top         = std::max(0.0f, (heightDip - panelHeight) * 0.5f);
+    const D2D1_POINT_2F point{static_cast<float>(clientPoint.x) * scale, static_cast<float>(clientPoint.y) * scale};
+    const D2D1_RECT_F accept = D2D1::RectF(left + panelWidth - 274.0f, top + panelHeight - 46.0f, left + panelWidth - 146.0f, top + panelHeight - 12.0f);
+    const D2D1_RECT_F cancel = D2D1::RectF(left + panelWidth - 138.0f, top + panelHeight - 46.0f, left + panelWidth - 10.0f, top + panelHeight - 12.0f);
     if (point.x >= accept.left && point.x <= accept.right && point.y >= accept.top && point.y <= accept.bottom)
     {
         resolveConfirmation(true);
@@ -428,8 +394,7 @@ bool Terminal::handleConfirmationClick(POINT clientPoint) noexcept
 bool Terminal::openHyperlink(std::wstring_view uri) noexcept
 {
     if (uri.empty() || uri.size() > kMaximumHyperlinkBytes ||
-        (! OrdinalString::StartsWithNoCase(uri, L"http://") &&
-         ! OrdinalString::StartsWithNoCase(uri, L"https://") &&
+        (! OrdinalString::StartsWithNoCase(uri, L"http://") && ! OrdinalString::StartsWithNoCase(uri, L"https://") &&
          ! OrdinalString::StartsWithNoCase(uri, L"mailto:")))
     {
         return false;
@@ -442,7 +407,7 @@ bool Terminal::openHyperlink(std::wstring_view uri) noexcept
         }
     }
     const std::wstring owned(uri);
-    const HWND hwnd = _windowHandle.load(std::memory_order_acquire);
+    const HWND hwnd        = _windowHandle.load(std::memory_order_acquire);
     const HINSTANCE result = ShellExecuteW(hwnd, L"open", owned.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
     return reinterpret_cast<INT_PTR>(result) > 32;
 }
@@ -450,8 +415,7 @@ bool Terminal::openHyperlink(std::wstring_view uri) noexcept
 bool Terminal::commitOsc52Clipboard(std::wstring_view text) noexcept
 {
     const HWND hwnd = _windowHandle.load(std::memory_order_acquire);
-    return hwnd != nullptr && Common::Clipboard::TrySetUnicodeText(
-                                  hwnd, text, Common::Clipboard::EmptyUnicodeTextPolicy::Allow);
+    return hwnd != nullptr && Common::Clipboard::TrySetUnicodeText(hwnd, text, Common::Clipboard::EmptyUnicodeTextPolicy::Allow);
 }
 
 void Terminal::handleOsc52Clipboard(std::unique_ptr<Osc52ClipboardPayload> payload) noexcept
@@ -468,9 +432,8 @@ void Terminal::handleOsc52Clipboard(std::unique_ptr<Osc52ClipboardPayload> paylo
         MessageBeep(MB_ICONWARNING);
         return;
     }
-    std::wstring text = std::move(converted.value());
-    const auto scrubText = wil::scope_exit(
-        [&text]() noexcept { SecureZeroMemory(text.data(), text.size() * sizeof(wchar_t)); });
+    std::wstring text        = std::move(converted.value());
+    const auto scrubText     = wil::scope_exit([&text]() noexcept { SecureZeroMemory(text.data(), text.size() * sizeof(wchar_t)); });
     const Osc52Policy policy = _osc52Policy.load(std::memory_order_acquire);
     if (policy == Osc52Policy::Deny)
     {
@@ -492,7 +455,7 @@ void Terminal::handleOsc52Clipboard(std::unique_ptr<Osc52ClipboardPayload> paylo
         MessageBeep(MB_ICONWARNING);
         return;
     }
-    _pendingOsc52Text = std::move(text);
+    _pendingOsc52Text         = std::move(text);
     _osc52ConfirmationVisible = true;
     if (const HWND hwnd = _windowHandle.load(std::memory_order_acquire); hwnd != nullptr)
     {
@@ -526,16 +489,15 @@ bool Terminal::activateHyperlinkAt(POINT clientPoint) noexcept
         }
         bytes.resize(required);
         size_t written = 0u;
-        if (_runtime.gridRefHyperlinkUri(&cell, bytes.data(), bytes.size(), &written) != GHOSTTY_SUCCESS ||
-            written == 0u || written > bytes.size())
+        if (_runtime.gridRefHyperlinkUri(&cell, bytes.data(), bytes.size(), &written) != GHOSTTY_SUCCESS || written == 0u || written > bytes.size())
         {
             return true;
         }
         bytes.resize(written);
     }
 
-    const std::optional<std::wstring> converted = Common::Strings::TryUtf16FromUtf8Strict(
-        std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+    const std::optional<std::wstring> converted =
+        Common::Strings::TryUtf16FromUtf8Strict(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
     if (! converted.has_value() || converted.value().empty())
     {
         MessageBeep(MB_ICONWARNING);
@@ -554,7 +516,7 @@ bool Terminal::activateHyperlinkAt(POINT clientPoint) noexcept
             MessageBeep(MB_ICONWARNING);
             return true;
         }
-        _pendingHyperlink = uri;
+        _pendingHyperlink             = uri;
         _hyperlinkConfirmationVisible = true;
         if (const HWND hwnd = _windowHandle.load(std::memory_order_acquire); hwnd != nullptr)
         {
@@ -611,11 +573,9 @@ std::wstring Terminal::quotePath(std::wstring_view path) const
 
 HRESULT STDMETHODCALLTYPE Terminal::InsertPath(const TerminalPathInsertion* insertion) noexcept
 {
-    if (insertion == nullptr || insertion->sizeBytes < sizeof(TerminalPathInsertion) ||
-        ! validateLocation(insertion->initiatingSourceLocation) || ! validateLocation(insertion->itemLocation) ||
-        ! validateLocation(insertion->parentLocation) || ! IsSpanWellFormed(insertion->displayLeaf) ||
-        (insertion->mode != TerminalPathInsertionMode::ContextualLeafOrFull &&
-         insertion->mode != TerminalPathInsertionMode::AlwaysFull &&
+    if (insertion == nullptr || insertion->sizeBytes < sizeof(TerminalPathInsertion) || ! validateLocation(insertion->initiatingSourceLocation) ||
+        ! validateLocation(insertion->itemLocation) || ! validateLocation(insertion->parentLocation) || ! IsSpanWellFormed(insertion->displayLeaf) ||
+        (insertion->mode != TerminalPathInsertionMode::ContextualLeafOrFull && insertion->mode != TerminalPathInsertionMode::AlwaysFull &&
          insertion->mode != TerminalPathInsertionMode::CurrentDirectoryFull))
     {
         return E_INVALIDARG;
@@ -629,21 +589,17 @@ HRESULT STDMETHODCALLTYPE Terminal::InsertPath(const TerminalPathInsertion* inse
     {
         std::scoped_lock stateLock(_stateMutex);
         const std::wstring initiatingPath = CopyTerminalLocationPath(insertion->initiatingSourceLocation);
-        const bool sourcePathMatches = _sourceLocationKind == TerminalLocationKind::Wsl
-            ? initiatingPath == _sourceLocationPath
-            : OrdinalString::EqualsNoCase(std::wstring_view(initiatingPath), std::wstring_view(_sourceLocationPath));
+        const bool sourcePathMatches      = _sourceLocationKind == TerminalLocationKind::Wsl
+                                                ? initiatingPath == _sourceLocationPath
+                                                : OrdinalString::EqualsNoCase(std::wstring_view(initiatingPath), std::wstring_view(_sourceLocationPath));
         const bool sourceNamespaceMatches =
             (_sourceLocationKind != TerminalLocationKind::Wsl ||
-             OrdinalString::EqualsNoCase(
-                 copySpan(insertion->initiatingSourceLocation.wslDistribution), _launchWslDistribution)) &&
+             OrdinalString::EqualsNoCase(copySpan(insertion->initiatingSourceLocation.wslDistribution), _launchWslDistribution)) &&
             (_sourceLocationKind != TerminalLocationKind::PluginBacked ||
-             OrdinalString::EqualsNoCase(
-                 copySpan(insertion->initiatingSourceLocation.pluginShortId), _sourcePluginShortId));
+             OrdinalString::EqualsNoCase(copySpan(insertion->initiatingSourceLocation.pluginShortId), _sourcePluginShortId));
         if (insertion->initiatingSource.folderWindowInstanceId != _originalSource.folderWindowInstanceId ||
-            insertion->initiatingSource.paneInstanceId != _originalSource.paneInstanceId ||
-            insertion->initiatingSourceGeneration != _sourceGeneration ||
-            insertion->initiatingSourceLocation.kind != _sourceLocationKind || ! sourcePathMatches ||
-            ! sourceNamespaceMatches)
+            insertion->initiatingSource.paneInstanceId != _originalSource.paneInstanceId || insertion->initiatingSourceGeneration != _sourceGeneration ||
+            insertion->initiatingSourceLocation.kind != _sourceLocationKind || ! sourcePathMatches || ! sourceNamespaceMatches)
         {
             return E_INVALIDARG;
         }
@@ -652,21 +608,18 @@ HRESULT STDMETHODCALLTYPE Terminal::InsertPath(const TerminalPathInsertion* inse
         {
             if (_shellKind == ShellKind::Posix)
             {
-                return location.kind == TerminalLocationKind::Wsl &&
-                    OrdinalString::EqualsNoCase(copySpan(location.wslDistribution), _launchWslDistribution) &&
-                    IsSupportedAbsoluteWslPath(copySpan(location.wslAbsolutePath));
+                return location.kind == TerminalLocationKind::Wsl && OrdinalString::EqualsNoCase(copySpan(location.wslDistribution), _launchWslDistribution) &&
+                       IsSupportedAbsoluteWslPath(copySpan(location.wslAbsolutePath));
             }
-            return (location.kind == TerminalLocationKind::WindowsLocal ||
-                    location.kind == TerminalLocationKind::WindowsUnc) &&
-                IsSupportedAbsoluteWindowsPath(copySpan(location.windowsPath));
+            return (location.kind == TerminalLocationKind::WindowsLocal || location.kind == TerminalLocationKind::WindowsUnc) &&
+                   IsSupportedAbsoluteWindowsPath(copySpan(location.windowsPath));
         };
         if (insertion->mode != TerminalPathInsertionMode::CurrentDirectoryFull &&
             (! compatibleLocation(insertion->itemLocation) || ! compatibleLocation(insertion->parentLocation)))
         {
             return E_INVALIDARG;
         }
-        value = ResolvePathInsertionValue(
-            *insertion, _integrationTrusted, _idleAtPrimaryPrompt, _hasPendingUserInput, _trustedCurrentDirectory);
+        value = ResolvePathInsertionValue(*insertion, _integrationTrusted, _idleAtPrimaryPrompt, _hasPendingUserInput, _trustedCurrentDirectory);
     }
     if (value.empty())
     {
@@ -678,4 +631,3 @@ HRESULT STDMETHODCALLTYPE Terminal::InsertPath(const TerminalPathInsertion* inse
     }
     return writeTextInput(quotePath(value)) ? S_OK : HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY);
 }
-

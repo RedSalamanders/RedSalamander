@@ -50,10 +50,9 @@ namespace PreferencesDialog
 [[nodiscard]] bool DebugSelectKeyboardListRow(size_t rowIndex) noexcept;
 [[nodiscard]] bool DebugFindKeyboardListRowByCommandId(std::wstring_view commandId, size_t& outRowIndex) noexcept;
 [[nodiscard]] bool DebugGetKeyboardVisibleRowChordByCommandId(std::wstring_view commandId, std::wstring& outChordText) noexcept;
-[[nodiscard]] bool DebugGetKeyboardVisibleRowPresentationByCommandId(
-    std::wstring_view commandId,
-    std::wstring& outScopeText,
-    std::wstring& outTooltipText) noexcept;
+[[nodiscard]] bool DebugGetKeyboardVisibleRowPresentationByCommandId(std::wstring_view commandId,
+                                                                     std::wstring& outScopeText,
+                                                                     std::wstring& outTooltipText) noexcept;
 [[nodiscard]] bool DebugGetKeyboardListRowClientRect(size_t rowIndex, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugGetKeyboardListHeaderClientRect(size_t columnIndex, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugHitTestKeyboardListClientPoint(

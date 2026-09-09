@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <array>
 #include <barrier>
-#include <charconv>
 #include <cctype>
+#include <charconv>
 #include <condition_variable>
 #include <cstring>
 #include <format>
@@ -24,9 +24,9 @@
 
 #include <curl/curl.h>
 
+#include "ContentDigest.h"
 #include "CurlProcessRuntime.h"
 #include "DeleteOnCloseTemporaryFile.h"
-#include "ContentDigest.h"
 #include "FileSystemGoogleDriveResources.h"
 #include "Helpers.h"
 #include "PaginationGuard.h"
@@ -132,11 +132,11 @@ std::atomic_bool g_debugDriveSyntheticConnection{false};
     return ApiOriginUrl() + "/drive/v3/drives/";
 }
 
-constexpr char kFolderMimeType[]   = "application/vnd.google-apps.folder";
-constexpr char kShortcutMimeType[] = "application/vnd.google-apps.shortcut";
-constexpr size_t kMaxJsonResponseBytes = 16u * 1024u * 1024u;
+constexpr char kFolderMimeType[]             = "application/vnd.google-apps.folder";
+constexpr char kShortcutMimeType[]           = "application/vnd.google-apps.shortcut";
+constexpr size_t kMaxJsonResponseBytes       = 16u * 1024u * 1024u;
 constexpr unsigned int kMaxAuthorizedRetries = 3u;
-constexpr uint64_t kMaxRetryDelayMs = 5'000u;
+constexpr uint64_t kMaxRetryDelayMs          = 5'000u;
 
 constexpr char kSchemaJson[] = R"json(
 {
@@ -410,22 +410,19 @@ public:
 
 [[nodiscard]] std::optional<std::wstring> TryGetJsonString(yyjson_val* root, const char* key) noexcept
 {
-    const Common::Json::MemberResult<std::string_view> value =
-        Common::Json::GetStringMember(root, key, Common::Json::MemberRequirement::Optional);
+    const Common::Json::MemberResult<std::string_view> value = Common::Json::GetStringMember(root, key, Common::Json::MemberRequirement::Optional);
     return value.HasValue() ? std::optional<std::wstring>{Utf16FromUtf8(value.value)} : std::nullopt;
 }
 
 [[nodiscard]] std::optional<std::string> TryGetJsonUtf8String(yyjson_val* root, const char* key) noexcept
 {
-    const Common::Json::MemberResult<std::string_view> value =
-        Common::Json::GetStringMember(root, key, Common::Json::MemberRequirement::Optional);
+    const Common::Json::MemberResult<std::string_view> value = Common::Json::GetStringMember(root, key, Common::Json::MemberRequirement::Optional);
     return value.HasValue() ? std::optional<std::string>{value.value} : std::nullopt;
 }
 
 [[nodiscard]] std::optional<bool> TryGetJsonBool(yyjson_val* root, const char* key) noexcept
 {
-    const Common::Json::MemberResult<bool> value =
-        Common::Json::GetBoolMember(root, key, Common::Json::MemberRequirement::Optional);
+    const Common::Json::MemberResult<bool> value = Common::Json::GetBoolMember(root, key, Common::Json::MemberRequirement::Optional);
     return value.HasValue() ? std::optional<bool>{value.value} : std::nullopt;
 }
 
@@ -441,8 +438,8 @@ public:
 
 [[nodiscard]] std::optional<uint64_t> TryGetJsonUInt64Flexible(yyjson_val* root, const char* key) noexcept
 {
-    const Common::Json::MemberResult<uint64_t> value = Common::Json::GetUInt64Member(
-        root, key, Common::Json::MemberRequirement::Optional, Common::Json::NumericStringPolicy::Allow);
+    const Common::Json::MemberResult<uint64_t> value =
+        Common::Json::GetUInt64Member(root, key, Common::Json::MemberRequirement::Optional, Common::Json::NumericStringPolicy::Allow);
     return value.HasValue() ? std::optional<uint64_t>{value.value} : std::nullopt;
 }
 
@@ -547,9 +544,8 @@ size_t CurlCaptureResponseHeader(char* data, size_t size, size_t nmemb, void* us
     const auto nameIs           = [&](std::string_view expected) noexcept
     {
         return name.size() == expected.size() && std::equal(expected.begin(), expected.end(), name.begin(), [](char left, char right) noexcept {
-                   return static_cast<char>(std::tolower(static_cast<unsigned char>(left))) ==
-                          static_cast<char>(std::tolower(static_cast<unsigned char>(right)));
-               });
+            return static_cast<char>(std::tolower(static_cast<unsigned char>(left))) == static_cast<char>(std::tolower(static_cast<unsigned char>(right)));
+        });
     };
     std::string* target = nullptr;
     auto* response      = static_cast<HttpResponse*>(userData);
@@ -595,9 +591,9 @@ size_t CurlCaptureResponseHeader(char* data, size_t size, size_t nmemb, void* us
 
 struct CurlTransferDeadline final
 {
-    uint64_t deadlineTickMs              = 0u;
-    HRESULT abortStatus                  = S_OK;
-    const FileSystemOptions* options     = nullptr; // R0f-GDrive: the owning call's operation control
+    uint64_t deadlineTickMs          = 0u;
+    HRESULT abortStatus              = S_OK;
+    const FileSystemOptions* options = nullptr; // R0f-GDrive: the owning call's operation control
 };
 
 int CurlCheckTransferDeadline(void* userData, curl_off_t, curl_off_t, curl_off_t, curl_off_t) noexcept
@@ -1041,9 +1037,9 @@ struct FileSystemGoogleDrive::ResolvedConnection
     {
         SecureWipe::SecureClear(refreshToken);
     }
-    ResolvedConnection(const ResolvedConnection&)            = delete;
-    ResolvedConnection& operator=(const ResolvedConnection&) = delete;
-    ResolvedConnection(ResolvedConnection&&) noexcept        = default;
+    ResolvedConnection(const ResolvedConnection&)                = delete;
+    ResolvedConnection& operator=(const ResolvedConnection&)     = delete;
+    ResolvedConnection(ResolvedConnection&&) noexcept            = default;
     ResolvedConnection& operator=(ResolvedConnection&&) noexcept = default;
 
     std::wstring connectionName;
@@ -1696,7 +1692,9 @@ constexpr uint64_t kDriveUploadChunkBytes   = 8ull * 1024u * 1024u; // a multipl
 
 // Mutation receipt: success and definitive refusals are known outcomes; a transport failure,
 // cancel, or deadline leaves the outcome unknown (no receipt), which the host reports as such.
-[[nodiscard]] const FileSystemItemMutationResult* BuildDriveMutationReceipt(HRESULT itemHr, bool sourceRemovedOnSuccess, FileSystemItemMutationResult& receipt) noexcept
+[[nodiscard]] const FileSystemItemMutationResult* BuildDriveMutationReceipt(HRESULT itemHr,
+                                                                            bool sourceRemovedOnSuccess,
+                                                                            FileSystemItemMutationResult& receipt) noexcept
 {
     const bool notFound          = IsDriveNotFound(itemHr);
     const bool definitiveRefusal = notFound || itemHr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) || itemHr == HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY) ||
@@ -1732,7 +1730,8 @@ constexpr uint64_t kDriveUploadChunkBytes   = 8ull * 1024u * 1024u; // a multipl
     }
     FileSystemItemMutationResult receipt{};
     const FileSystemItemMutationResult* receiptPtr = BuildDriveMutationReceipt(status, sourceRemovedOnSuccess, receipt);
-    return callback->FileSystemItemCompleted(operation, itemIndex, sourcePath, destinationPath, status, receiptPtr, const_cast<FileSystemOptions*>(options), cookie);
+    return callback->FileSystemItemCompleted(
+        operation, itemIndex, sourcePath, destinationPath, status, receiptPtr, const_cast<FileSystemOptions*>(options), cookie);
 }
 
 void ReportDriveProgress(IFileSystemCallback* callback,
@@ -1746,7 +1745,8 @@ void ReportDriveProgress(IFileSystemCallback* callback,
 {
     if (callback != nullptr)
     {
-        static_cast<void>(callback->FileSystemProgress(operation, totalItems, completedItems, 0u, 0u, sourcePath, destinationPath, 0u, 0u, const_cast<FileSystemOptions*>(options), 0u, cookie));
+        static_cast<void>(callback->FileSystemProgress(
+            operation, totalItems, completedItems, 0u, 0u, sourcePath, destinationPath, 0u, 0u, const_cast<FileSystemOptions*>(options), 0u, cookie));
     }
 }
 
@@ -1801,12 +1801,12 @@ struct DriveTransferContext final
     {
         const bool sameParent = sourceParentId == destinationParent.id;
         hr                    = context.fileSystem.UpdateItem(context.connection,
-                                           source.id,
-                                           source.name == destinationName ? std::wstring_view{} : destinationName,
-                                           sameParent ? std::wstring_view{} : std::wstring_view(destinationParent.id),
-                                           sameParent ? std::wstring_view{} : sourceParentId,
-                                           std::nullopt,
-                                           result);
+                                                              source.id,
+                                                              source.name == destinationName ? std::wstring_view{} : destinationName,
+                                                              sameParent ? std::wstring_view{} : std::wstring_view(destinationParent.id),
+                                                              sameParent ? std::wstring_view{} : sourceParentId,
+                                                              std::nullopt,
+                                                              result);
     }
     else
     {
@@ -1859,8 +1859,7 @@ struct DriveTransferContext final
         }
         else
         {
-            RETURN_IF_FAILED(context.fileSystem.CreateFolderItem(
-                context.connection, frameDestinationParent.id, frameDestinationName, frame.target));
+            RETURN_IF_FAILED(context.fileSystem.CreateFolderItem(context.connection, frameDestinationParent.id, frameDestinationName, frame.target));
         }
         RETURN_IF_FAILED(context.fileSystem.ListChildren(context.connection, frame.source.id, frame.children));
         if (frameExisting != nullptr)
@@ -1903,8 +1902,7 @@ struct DriveTransferContext final
                 {
                     frames.back().partial = true;
                 }
-                else if (! context.ContinueOnError() || completedHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) ||
-                         completedHr == HRESULT_FROM_WIN32(ERROR_TIMEOUT))
+                else if (! context.ContinueOnError() || completedHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || completedHr == HRESULT_FROM_WIN32(ERROR_TIMEOUT))
                 {
                     return completedHr;
                 }
@@ -1923,7 +1921,7 @@ struct DriveTransferContext final
 
         const FileSystemGoogleDrive::GoogleItem child = frame.children[frame.nextChild++];
         const auto count                              = frame.exactNameCounts.find(child.name);
-        const std::wstring exposedName = MakeExposedItemName(child.name, child.id, count == frame.exactNameCounts.end() ? 0u : count->second);
+        const std::wstring exposedName                = MakeExposedItemName(child.name, child.id, count == frame.exactNameCounts.end() ? 0u : count->second);
         const FileSystemGoogleDrive::GoogleItem* collision = nullptr;
         if (! frame.targetChildren.empty())
         {
@@ -2013,7 +2011,8 @@ struct DriveTransferContext final
     {
         return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
     }
-    if (sourceConnection.canonicalPath == L"/" || destinationConnection.canonicalPath == L"/" || sourceConnection.canonicalPath == destinationConnection.canonicalPath ||
+    if (sourceConnection.canonicalPath == L"/" || destinationConnection.canonicalPath == L"/" ||
+        sourceConnection.canonicalPath == destinationConnection.canonicalPath ||
         IsPathWithin(destinationConnection.canonicalPath, sourceConnection.canonicalPath))
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_PARAMETER);
@@ -2170,7 +2169,10 @@ struct DriveTransferContext final
 }
 
 // C10: DriveDeletePath, deleting only while the path still names the pinned file id.
-[[nodiscard]] HRESULT DriveDeletePathIfIdentity(FileSystemGoogleDrive& fileSystem, const wchar_t* path, const FileSystemDeleteIdentity& pinned, FileSystemFlags flags)
+[[nodiscard]] HRESULT DriveDeletePathIfIdentity(FileSystemGoogleDrive& fileSystem,
+                                                const wchar_t* path,
+                                                const FileSystemDeleteIdentity& pinned,
+                                                FileSystemFlags flags)
 {
     if (! path || path[0] == L'\0')
     {
@@ -2248,7 +2250,10 @@ HRESULT FileSystemGoogleDrive::GetItemById(const ResolvedConnection& connection,
     return ParseGoogleItemDocument(body, item);
 }
 
-HRESULT FileSystemGoogleDrive::ResolveChildByName(const ResolvedConnection& connection, std::wstring_view parentId, std::wstring_view exposedName, GoogleItem& child)
+HRESULT FileSystemGoogleDrive::ResolveChildByName(const ResolvedConnection& connection,
+                                                  std::wstring_view parentId,
+                                                  std::wstring_view exposedName,
+                                                  GoogleItem& child)
 {
     child = {};
     std::vector<GoogleItem> children;
@@ -2267,7 +2272,10 @@ HRESULT FileSystemGoogleDrive::ResolveChildByName(const ResolvedConnection& conn
     return S_OK;
 }
 
-HRESULT FileSystemGoogleDrive::ResolveParentAndLeaf(const ResolvedConnection& connection, std::wstring_view canonicalPath, GoogleItem& parent, std::wstring& leafName)
+HRESULT FileSystemGoogleDrive::ResolveParentAndLeaf(const ResolvedConnection& connection,
+                                                    std::wstring_view canonicalPath,
+                                                    GoogleItem& parent,
+                                                    std::wstring& leafName)
 {
     parent = {};
     leafName.clear();
@@ -2287,7 +2295,7 @@ HRESULT FileSystemGoogleDrive::ResolveParentAndLeaf(const ResolvedConnection& co
 
 HRESULT FileSystemGoogleDrive::CreateFolderItem(const ResolvedConnection& connection, std::wstring_view parentId, std::wstring_view name, GoogleItem& created)
 {
-    created = {};
+    created         = {};
     std::string url = FilesEndpointUrl();
     AppendQueryParam(url, "supportsAllDrives", "true");
     AppendQueryParam(url, "fields", std::string(kDriveItemFields));
@@ -2393,7 +2401,8 @@ HRESULT FileSystemGoogleDrive::DeleteItemPermanently(const ResolvedConnection& c
     return statusHr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND) ? HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) : statusHr;
 }
 
-HRESULT FileSystemGoogleDrive::CopyFileItem(const ResolvedConnection& connection, std::wstring_view id, std::wstring_view parentId, std::wstring_view name, GoogleItem& copy)
+HRESULT FileSystemGoogleDrive::CopyFileItem(
+    const ResolvedConnection& connection, std::wstring_view id, std::wstring_view parentId, std::wstring_view name, GoogleItem& copy)
 {
     copy = {};
     if (id.empty() || parentId.empty())
@@ -2503,7 +2512,9 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::DeleteItem(
     }
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::ResolveDeleteIdentity(const wchar_t* path, const FileSystemOptions* options, FileSystemDeleteIdentity* identity) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::ResolveDeleteIdentity(const wchar_t* path,
+                                                                       const FileSystemOptions* options,
+                                                                       FileSystemDeleteIdentity* identity) noexcept
 {
     const DriveOperationOptionsScope operationOptionsScope(options);
     if (path == nullptr || identity == nullptr)
@@ -2597,7 +2608,8 @@ namespace
 // Batch entry points share one loop: per item cancel check, the mutation, a completion with its
 // receipt, and CONTINUE_ON_ERROR semantics (first failure wins the batch status).
 template <typename ItemFn>
-[[nodiscard]] HRESULT RunDriveBatch(unsigned long count, FileSystemFlags flags, const FileSystemOptions* options, IFileSystemCallback* callback, void* cookie, ItemFn&& itemFn)
+[[nodiscard]] HRESULT RunDriveBatch(
+    unsigned long count, FileSystemFlags flags, const FileSystemOptions* options, IFileSystemCallback* callback, void* cookie, ItemFn&& itemFn)
 {
     const bool continueOnError = (flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) != 0;
     HRESULT firstFailure       = S_OK;
@@ -2647,7 +2659,13 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::CopyItems(const wchar_t* const*
     }
     try
     {
-        return RunDriveBatch(count, flags, options, callback, cookie, [&](unsigned long index) {
+        return RunDriveBatch(count,
+                             flags,
+                             options,
+                             callback,
+                             cookie,
+                             [&](unsigned long index)
+        {
             const wchar_t* sourcePath = sourcePaths[index];
             std::wstring destination;
             HRESULT hr = sourcePath && sourcePath[0] != L'\0' ? S_OK : E_INVALIDARG;
@@ -2691,7 +2709,13 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::MoveItems(const wchar_t* const*
     }
     try
     {
-        return RunDriveBatch(count, flags, options, callback, cookie, [&](unsigned long index) {
+        return RunDriveBatch(count,
+                             flags,
+                             options,
+                             callback,
+                             cookie,
+                             [&](unsigned long index)
+        {
             const wchar_t* sourcePath = sourcePaths[index];
             std::wstring destination;
             HRESULT hr = sourcePath && sourcePath[0] != L'\0' ? S_OK : E_INVALIDARG;
@@ -2734,7 +2758,13 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::DeleteItems(const wchar_t* cons
     }
     try
     {
-        return RunDriveBatch(count, flags, options, callback, cookie, [&](unsigned long index) {
+        return RunDriveBatch(count,
+                             flags,
+                             options,
+                             callback,
+                             cookie,
+                             [&](unsigned long index)
+        {
             const wchar_t* path      = paths[index];
             const HRESULT hr         = DriveDeletePath(*this, path, flags);
             const HRESULT callbackHr = ReportDriveItemCompleted(callback, FILESYSTEM_DELETE, index, path, nullptr, hr, true, options, cookie);
@@ -2771,7 +2801,13 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::RenameItems(const FileSystemRen
     }
     try
     {
-        return RunDriveBatch(count, flags, options, callback, cookie, [&](unsigned long index) {
+        return RunDriveBatch(count,
+                             flags,
+                             options,
+                             callback,
+                             cookie,
+                             [&](unsigned long index)
+        {
             const FileSystemRenamePair& pair = items[index];
             std::wstring destination;
             HRESULT hr = pair.sizeBytes >= sizeof(FileSystemRenamePair) && pair.sourcePath && pair.sourcePath[0] != L'\0' && pair.newName ? S_OK : E_INVALIDARG;
@@ -2781,7 +2817,8 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::RenameItems(const FileSystemRen
                 destination = JoinDrivePath(DriveParentPath(NormalizePluginPath(pair.sourcePath)), pair.newName);
                 hr          = DriveTransferPath(*this, pair.sourcePath, destination.c_str(), flags, true, options, callback, cookie);
             }
-            const HRESULT callbackHr = ReportDriveItemCompleted(callback, FILESYSTEM_RENAME, index, pair.sourcePath, destination.c_str(), hr, true, options, cookie);
+            const HRESULT callbackHr =
+                ReportDriveItemCompleted(callback, FILESYSTEM_RENAME, index, pair.sourcePath, destination.c_str(), hr, true, options, cookie);
             ReportDriveProgress(callback, FILESYSTEM_RENAME, count, index + 1u, pair.sourcePath, destination.c_str(), options, cookie);
             return FAILED(callbackHr) ? callbackHr : hr;
         });
@@ -2797,9 +2834,7 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::RenameItems(const FileSystemRen
     }
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::GetPathCapabilities(const wchar_t* path,
-                                                                      FileSystemOperation operation,
-                                                                      const char** jsonUtf8) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept
 {
     if (! jsonUtf8)
     {
@@ -2820,9 +2855,7 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::GetPathCapabilities(const wchar
         {
             return resolveHr;
         }
-        rootIdentity = connection.rootKind == L"sharedDrive" && ! connection.sharedDriveId.empty()
-            ? connection.sharedDriveId
-            : connection.connectionName;
+        rootIdentity = connection.rootKind == L"sharedDrive" && ! connection.sharedDriveId.empty() ? connection.sharedDriveId : connection.connectionName;
     }
 
     std::string encodedRoot;
@@ -2834,7 +2867,7 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::GetPathCapabilities(const wchar
     std::lock_guard lock(_stateMutex);
     _capabilitiesJson.assign(kCapabilitiesJson);
     constexpr std::string_view placeholder = "configured-drive-root";
-    const size_t offset = _capabilitiesJson.find(placeholder);
+    const size_t offset                    = _capabilitiesJson.find(placeholder);
     if (offset == std::string::npos)
     {
         _capabilitiesJson.clear();
@@ -2848,16 +2881,17 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::GetPathCapabilities(const wchar
         _capabilitiesJson.clear();
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
-    _capabilitiesJson.replace(watchdogOffset,
-                              watchdogPlaceholder.size(),
-                              std::to_string(FileSystemGoogleDriveInternal::DriveProviderWatchdogTimeoutMs(_settings.connectTimeoutMs, _settings.requestTimeoutMs)));
+    _capabilitiesJson.replace(
+        watchdogOffset,
+        watchdogPlaceholder.size(),
+        std::to_string(FileSystemGoogleDriveInternal::DriveProviderWatchdogTimeoutMs(_settings.connectTimeoutMs, _settings.requestTimeoutMs)));
     *jsonUtf8 = _capabilitiesJson.c_str();
     return S_OK;
 }
 
 HRESULT FileSystemGoogleDrive::BuildFileSystemRouteDescriptor(const wchar_t* path,
-                                                               FileSystemOperation operation,
-                                                               FileSystemRouteDescriptor& descriptor) noexcept
+                                                              FileSystemOperation operation,
+                                                              FileSystemRouteDescriptor& descriptor) noexcept
 {
     static_cast<void>(operation);
     if (path == nullptr || path[0] == L'\0')
@@ -2875,10 +2909,8 @@ HRESULT FileSystemGoogleDrive::BuildFileSystemRouteDescriptor(const wchar_t* pat
         {
             return resolveHr;
         }
-        rootIdentity = connection.rootKind == L"sharedDrive" && ! connection.sharedDriveId.empty()
-            ? connection.sharedDriveId
-            : connection.connectionName;
-        readOnly = connection.readOnly;
+        rootIdentity = connection.rootKind == L"sharedDrive" && ! connection.sharedDriveId.empty() ? connection.sharedDriveId : connection.connectionName;
+        readOnly     = connection.readOnly;
     }
 
     std::string encodedRoot;
@@ -2893,41 +2925,41 @@ HRESULT FileSystemGoogleDrive::BuildFileSystemRouteDescriptor(const wchar_t* pat
         settings = _settings;
     }
 
-    descriptor = {};
-    descriptor.providerId = kPluginId;
+    descriptor               = {};
+    descriptor.providerId    = kPluginId;
     descriptor.pathProfileId = L"google-drive";
-    descriptor.rootId = std::format(L"google-drive:{}", Utf16FromUtf8(encodedRoot));
-    descriptor.availability = FILESYSTEM_ROUTE_AVAILABLE;
+    descriptor.rootId        = std::format(L"google-drive:{}", Utf16FromUtf8(encodedRoot));
+    descriptor.availability  = FILESYSTEM_ROUTE_AVAILABLE;
     // R0f-GDrive: every libcurl transfer under a task polls the operation control from its progress
     // callback and is bounded by the connect and hard request timeouts.
-    descriptor.cancellationRoute = FILESYSTEM_CANCELLATION_PROVIDER_WATCHDOG;
-    descriptor.cancellationDeadline = true;
+    descriptor.cancellationRoute         = FILESYSTEM_CANCELLATION_PROVIDER_WATCHDOG;
+    descriptor.cancellationDeadline      = true;
     descriptor.providerWatchdogTimeoutMs = FileSystemGoogleDriveInternal::DriveProviderWatchdogTimeoutMs(settings.connectTimeoutMs, settings.requestTimeoutMs);
-    descriptor.namespaceKind = FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER;
-    descriptor.componentComparison = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
-    descriptor.caseOnlyRename = FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED;
+    descriptor.namespaceKind             = FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER;
+    descriptor.componentComparison       = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
+    descriptor.caseOnlyRename            = FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED;
     // Exposed names are unique per folder (duplicate Drive names carry the `[id:...]` decoration) and
     // an ambiguous text fails closed with ERROR_DUP_NAME, so the exposed path text names one object.
-    descriptor.pathTextStableIdentity = true;
-    descriptor.proofFlags = FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST; // R3-2: sha256Checksum of the published object
-    descriptor.copyMoveMaxConcurrency = 4u;
-    descriptor.deleteMaxConcurrency = 4u;
+    descriptor.pathTextStableIdentity         = true;
+    descriptor.proofFlags                     = FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST; // R3-2: sha256Checksum of the published object
+    descriptor.copyMoveMaxConcurrency         = 4u;
+    descriptor.deleteMaxConcurrency           = 4u;
     descriptor.deleteRecycleBinMaxConcurrency = 1u;
-    descriptor.maxComponentUtf16 = 255u;
-    const bool writable = ! readOnly;
-    descriptor.copyOperation = writable;
-    descriptor.moveOperation = writable;
-    descriptor.nativeMoveOperation = writable;
-    descriptor.deleteOperation = writable;
-    descriptor.renameOperation = writable;
-    descriptor.createDirectoryOperation = writable;
-    descriptor.propertiesOperation = true;
-    descriptor.readOperation = true;
-    descriptor.writeOperation = writable;
-    descriptor.recycleOperation = writable;
-    descriptor.committedSize = true;
-    descriptor.exportCopyAll = true;
-    descriptor.importCopyAll = writable;
+    descriptor.maxComponentUtf16              = 255u;
+    const bool writable                       = ! readOnly;
+    descriptor.copyOperation                  = writable;
+    descriptor.moveOperation                  = writable;
+    descriptor.nativeMoveOperation            = writable;
+    descriptor.deleteOperation                = writable;
+    descriptor.renameOperation                = writable;
+    descriptor.createDirectoryOperation       = writable;
+    descriptor.propertiesOperation            = true;
+    descriptor.readOperation                  = true;
+    descriptor.writeOperation                 = writable;
+    descriptor.recycleOperation               = writable;
+    descriptor.committedSize                  = true;
+    descriptor.exportCopyAll                  = true;
+    descriptor.importCopyAll                  = writable;
     return descriptor.rootId.empty() ? HRESULT_FROM_WIN32(ERROR_INVALID_DATA) : S_OK;
 }
 
@@ -2980,7 +3012,7 @@ HRESULT FileSystemGoogleDrive::SetConfigurationImpl(const char* configurationJso
 
     if (configurationJsonUtf8 && configurationJsonUtf8[0] != '\0')
     {
-        configuration = configurationJsonUtf8;
+        configuration                       = configurationJsonUtf8;
         Common::Json::ObjectDocument parsed = Common::Json::ParseObjectDocument(configuration, YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
         if (! parsed)
         {
@@ -3048,13 +3080,13 @@ HRESULT FileSystemGoogleDrive::ResolveConnection(const wchar_t* path, bool acqui
             std::scoped_lock lock(_stateMutex);
             defaults = _settings;
         }
-        outConnection                  = {};
-        outConnection.connectionName   = L"google-drive-selftest";
-        outConnection.canonicalPath    = canonical.size() == kDebugPrefix.size() ? std::wstring(L"/") : NormalizePluginPath(canonical.substr(kDebugPrefix.size()));
-        outConnection.clientId         = L"debug-client";
-        outConnection.connectionKey    = ConnectionKeyForCache(outConnection.connectionName, outConnection.clientId);
-        outConnection.rootKind         = L"myDrive";
-        outConnection.pageSize         = defaults.pageSize;
+        outConnection                = {};
+        outConnection.connectionName = L"google-drive-selftest";
+        outConnection.canonicalPath = canonical.size() == kDebugPrefix.size() ? std::wstring(L"/") : NormalizePluginPath(canonical.substr(kDebugPrefix.size()));
+        outConnection.clientId      = L"debug-client";
+        outConnection.connectionKey = ConnectionKeyForCache(outConnection.connectionName, outConnection.clientId);
+        outConnection.rootKind      = L"myDrive";
+        outConnection.pageSize      = defaults.pageSize;
         outConnection.connectTimeoutMs = defaults.connectTimeoutMs;
         outConnection.requestTimeoutMs = defaults.requestTimeoutMs;
         if (acquireSecrets)
@@ -3279,7 +3311,7 @@ HRESULT FileSystemGoogleDrive::GetAccessToken(const ResolvedConnection& connecti
         }
 
         const uint64_t now = GetTickCount64();
-        const auto it = _accessTokensByConnectionKey.find(connection.connectionKey);
+        const auto it      = _accessTokensByConnectionKey.find(connection.connectionKey);
         if (it != _accessTokensByConnectionKey.end() && ! it->second.token.empty() && it->second.expiresAtTickMs > now + 30'000ull)
         {
             accessToken = it->second.token;
@@ -3299,8 +3331,9 @@ HRESULT FileSystemGoogleDrive::GetAccessToken(const ResolvedConnection& connecti
         _tokenRefreshesInFlight.emplace(connection.connectionKey);
     }
 
-    bool refreshCompleted = false;
-    const auto releaseRefresh = wil::scope_exit([&]() noexcept {
+    bool refreshCompleted     = false;
+    const auto releaseRefresh = wil::scope_exit([&]() noexcept
+    {
         if (refreshCompleted)
         {
             return;
@@ -3314,10 +3347,11 @@ HRESULT FileSystemGoogleDrive::GetAccessToken(const ResolvedConnection& connecti
     });
 
     AccessTokenCacheEntry refreshedEntry{};
-    const HRESULT refreshHr = [&]() -> HRESULT {
-        std::string clientIdUtf8     = Utf8FromUtf16(connection.clientId);
-        std::string refreshTokenUtf8 = Utf8FromUtf16(connection.refreshToken);
-    const auto clearConvertedSecrets = wil::scope_exit([&]() noexcept { SecureWipe::SecureClear(refreshTokenUtf8); });
+    const HRESULT refreshHr = [&]() -> HRESULT
+    {
+        std::string clientIdUtf8         = Utf8FromUtf16(connection.clientId);
+        std::string refreshTokenUtf8     = Utf8FromUtf16(connection.refreshToken);
+        const auto clearConvertedSecrets = wil::scope_exit([&]() noexcept { SecureWipe::SecureClear(refreshTokenUtf8); });
         if (clientIdUtf8.empty() || refreshTokenUtf8.empty())
         {
             return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
@@ -3329,7 +3363,7 @@ HRESULT FileSystemGoogleDrive::GetAccessToken(const ResolvedConnection& connecti
         body.append(UrlEncodeUtf8(clientIdUtf8));
         body.append("&grant_type=refresh_token&refresh_token=");
         body.append(UrlEncodeUtf8(refreshTokenUtf8));
-    const auto clearRequestBody = wil::scope_exit([&]() noexcept { SecureWipe::SecureClear(body); });
+        const auto clearRequestBody = wil::scope_exit([&]() noexcept { SecureWipe::SecureClear(body); });
 
         const std::vector<std::string> headers = {
             "Content-Type: application/x-www-form-urlencoded",
@@ -3337,7 +3371,7 @@ HRESULT FileSystemGoogleDrive::GetAccessToken(const ResolvedConnection& connecti
         };
 
         HttpResponse response{};
-    const auto clearResponseBody = wil::scope_exit([&]() noexcept { SecureWipe::SecureClear(response.body); });
+        const auto clearResponseBody = wil::scope_exit([&]() noexcept { SecureWipe::SecureClear(response.body); });
         HRESULT hr = PerformHttpRequest("POST", TokenEndpointUrl(), headers, body, connection.connectTimeoutMs, connection.requestTimeoutMs, response);
         if (FAILED(hr))
         {
@@ -3370,9 +3404,9 @@ HRESULT FileSystemGoogleDrive::GetAccessToken(const ResolvedConnection& connecti
         {
             expiresIn = value.value();
         }
-        const uint64_t validSeconds = expiresIn > 60u ? (std::min)(expiresIn - 60u, (std::numeric_limits<uint64_t>::max)() / 1000u) : 30u;
-        const uint64_t validForMs = validSeconds * 1000u;
-        refreshedEntry.token = token.value();
+        const uint64_t validSeconds    = expiresIn > 60u ? (std::min)(expiresIn - 60u, (std::numeric_limits<uint64_t>::max)() / 1000u) : 30u;
+        const uint64_t validForMs      = validSeconds * 1000u;
+        refreshedEntry.token           = token.value();
         refreshedEntry.expiresAtTickMs = Common::Paging::DeadlineFromNow(GetTickCount64(), validForMs);
         return S_OK;
     }();
@@ -3420,7 +3454,7 @@ HRESULT FileSystemGoogleDrive::ListChildren(const ResolvedConnection& connection
     do
     {
         const HRESULT pageBoundaryHr = firstPage ? pager.BeginFirstPage(GetTickCount64()) : pager.BeginContinuation(pageToken, GetTickCount64());
-        firstPage = false;
+        firstPage                    = false;
         if (FAILED(pageBoundaryHr))
         {
             return pageBoundaryHr;
@@ -3474,9 +3508,9 @@ HRESULT FileSystemGoogleDrive::ListChildren(const ResolvedConnection& connection
             pageToken = nextPage.value();
         }
 
-        yyjson_val* files = yyjson_obj_get(root, "files");
+        yyjson_val* files      = yyjson_obj_get(root, "files");
         const size_t pageItems = files && yyjson_is_arr(files) ? yyjson_arr_size(files) : 0u;
-        const HRESULT pageHr = pager.CompletePage(pageItems, body.size(), ! pageToken.empty(), pageToken, GetTickCount64());
+        const HRESULT pageHr   = pager.CompletePage(pageItems, body.size(), ! pageToken.empty(), pageToken, GetTickCount64());
         if (FAILED(pageHr))
         {
             return pageHr;
@@ -3831,7 +3865,7 @@ enum class GoogleDriveDebugHttpMode
 
 struct GoogleDriveDebugHttpContext final
 {
-    GoogleDriveDebugHttpContext() = default;
+    GoogleDriveDebugHttpContext()                                              = default;
     GoogleDriveDebugHttpContext(const GoogleDriveDebugHttpContext&)            = delete;
     GoogleDriveDebugHttpContext& operator=(const GoogleDriveDebugHttpContext&) = delete;
     GoogleDriveDebugHttpContext(GoogleDriveDebugHttpContext&&)                 = delete;
@@ -3840,10 +3874,10 @@ struct GoogleDriveDebugHttpContext final
     std::mutex mutex;
     std::condition_variable cv;
     GoogleDriveDebugHttpMode mode = GoogleDriveDebugHttpMode::Normal;
-    unsigned int tokenRequests = 0u;
-    unsigned int dataRequests  = 0u;
-    bool tokenRequestEntered   = false;
-    bool releaseTokenRequest   = true;
+    unsigned int tokenRequests    = 0u;
+    unsigned int dataRequests     = 0u;
+    bool tokenRequestEntered      = false;
+    bool releaseTokenRequest      = true;
 };
 
 [[nodiscard]] HRESULT GoogleDriveDebugHttpHook(void* cookie,
@@ -3912,7 +3946,8 @@ struct GoogleDriveDebugHttpContext final
             return S_OK;
         case GoogleDriveDebugHttpMode::IdentityItems:
             response.statusCode = 200;
-            response.body = R"json({"files":[{"id":"AbC","name":"same","mimeType":"application/octet-stream"},{"id":"abc","name":"same","mimeType":"application/octet-stream"},{"id":"literal","name":"same [id:AbC]","mimeType":"application/octet-stream"},{"id":"upper","name":"Case","mimeType":"application/octet-stream"},{"id":"lower","name":"case","mimeType":"application/octet-stream"}]})json";
+            response.body =
+                R"json({"files":[{"id":"AbC","name":"same","mimeType":"application/octet-stream"},{"id":"abc","name":"same","mimeType":"application/octet-stream"},{"id":"literal","name":"same [id:AbC]","mimeType":"application/octet-stream"},{"id":"upper","name":"Case","mimeType":"application/octet-stream"},{"id":"lower","name":"case","mimeType":"application/octet-stream"}]})json";
             return S_OK;
         case GoogleDriveDebugHttpMode::OversizedBody:
             response.statusCode = 200;
@@ -3939,8 +3974,7 @@ HRESULT FileSystemGoogleDrive::RunDebugSelfTests(unsigned int* passed, unsigned 
 
     try
     {
-        check(MakeExposedItemName(L"same", L"AbC", 2u) == L"same [id:AbC]" &&
-                  MakeExposedItemName(L"same", L"abc", 2u) == L"same [id:abc]",
+        check(MakeExposedItemName(L"same", L"AbC", 2u) == L"same [id:AbC]" && MakeExposedItemName(L"same", L"abc", 2u) == L"same [id:abc]",
               L"case-distinct opaque IDs remain distinct in duplicate-name display paths",
               *passed,
               *failed);
@@ -3965,12 +3999,12 @@ HRESULT FileSystemGoogleDrive::RunDebugSelfTests(unsigned int* passed, unsigned 
 
         FileSystemGoogleDrive fs(nullptr);
         ResolvedConnection connection{};
-        connection.connectionName  = L"debug";
-        connection.connectionKey   = L"debug|client";
-        connection.clientId        = L"client";
-        connection.refreshToken    = L"refresh";
+        connection.connectionName   = L"debug";
+        connection.connectionKey    = L"debug|client";
+        connection.clientId         = L"client";
+        connection.refreshToken     = L"refresh";
         connection.requestTimeoutMs = 5'000u;
-        connection.pageSize        = 200u;
+        connection.pageSize         = 200u;
 
         GoogleDriveDebugHttpContext context{};
         context.releaseTokenRequest = false;
@@ -3983,7 +4017,8 @@ HRESULT FileSystemGoogleDrive::RunDebugSelfTests(unsigned int* passed, unsigned 
         workers.reserve(workerCount);
         for (size_t index = 0u; index < workerCount; ++index)
         {
-            workers.emplace_back([&, index]() {
+            workers.emplace_back([&, index]()
+            {
                 start.arrive_and_wait();
                 results[index] = fs.GetAccessToken(connection, tokens[index]);
             });
@@ -4001,10 +4036,7 @@ HRESULT FileSystemGoogleDrive::RunDebugSelfTests(unsigned int* passed, unsigned 
         }
         const bool allSharedOneToken = std::ranges::all_of(results, [](HRESULT hr) noexcept { return hr == S_OK; }) &&
                                        std::ranges::all_of(tokens, [](const std::wstring& token) noexcept { return token == L"debug-access-token"; });
-        check(allSharedOneToken && context.tokenRequests == 1u,
-              L"concurrent callers share one access-token refresh request",
-              *passed,
-              *failed);
+        check(allSharedOneToken && context.tokenRequests == 1u, L"concurrent callers share one access-token refresh request", *passed, *failed);
 
         {
             std::lock_guard lock(context.mutex);
@@ -4061,16 +4093,16 @@ HRESULT FileSystemGoogleDrive::RunDebugSelfTests(unsigned int* passed, unsigned 
             context.dataRequests = 0u;
         }
         GoogleItem item{};
-        const HRESULT upperIdHr = fs.ResolveItemByPath(connection, L"/same [id:AbC]", item);
-        const bool upperId = upperIdHr == S_OK && item.id == L"AbC";
-        const HRESULT lowerIdHr = fs.ResolveItemByPath(connection, L"/same [id:abc]", item);
-        const bool lowerId = lowerIdHr == S_OK && item.id == L"abc";
-        const HRESULT literalHr = fs.ResolveItemByPath(connection, L"/same [id:AbC] [id:literal]", item);
-        const bool literal = literalHr == S_OK && item.id == L"literal";
+        const HRESULT upperIdHr   = fs.ResolveItemByPath(connection, L"/same [id:AbC]", item);
+        const bool upperId        = upperIdHr == S_OK && item.id == L"AbC";
+        const HRESULT lowerIdHr   = fs.ResolveItemByPath(connection, L"/same [id:abc]", item);
+        const bool lowerId        = lowerIdHr == S_OK && item.id == L"abc";
+        const HRESULT literalHr   = fs.ResolveItemByPath(connection, L"/same [id:AbC] [id:literal]", item);
+        const bool literal        = literalHr == S_OK && item.id == L"literal";
         const HRESULT upperNameHr = fs.ResolveItemByPath(connection, L"/Case", item);
-        const bool upperName = upperNameHr == S_OK && item.id == L"upper";
+        const bool upperName      = upperNameHr == S_OK && item.id == L"upper";
         const HRESULT lowerNameHr = fs.ResolveItemByPath(connection, L"/case", item);
-        const bool lowerName = lowerNameHr == S_OK && item.id == L"lower";
+        const bool lowerName      = lowerNameHr == S_OK && item.id == L"lower";
         check(upperId && lowerId && literal && upperName && lowerName,
               L"enumeration identity round-trips literal decorations, case-distinct IDs, and case-distinct names",
               *passed,
@@ -4253,9 +4285,9 @@ HRESULT FileSystemGoogleDrive::PerformAuthorizedRequest(const ResolvedConnection
 
 HRESULT FileSystemGoogleDrive::PerformAuthorizedJsonGet(const ResolvedConnection& connection, std::string_view url, std::string& body)
 {
-    long statusCode  = 0;
-    const HRESULT hr = PerformAuthorizedRequest(
-        connection, "GET", url, {}, {}, kMaxJsonResponseBytes, statusCode, body, nullptr, nullptr, AuthorizedRequestRetry::ReadOnly);
+    long statusCode = 0;
+    const HRESULT hr =
+        PerformAuthorizedRequest(connection, "GET", url, {}, {}, kMaxJsonResponseBytes, statusCode, body, nullptr, nullptr, AuthorizedRequestRetry::ReadOnly);
     if (FAILED(hr))
     {
         body.clear();
@@ -4282,8 +4314,8 @@ HRESULT FileSystemGoogleDrive::DownloadRange(const ResolvedConnection& connectio
     const std::vector<std::string> headers{std::format("Range: bytes={}-{}", offset, offset + bytes - 1u)};
     long statusCode = 0;
     std::string body;
-    const HRESULT hr = PerformAuthorizedRequest(
-        connection, "GET", url, headers, {}, bytes + 1u, statusCode, body, nullptr, nullptr, AuthorizedRequestRetry::ReadOnly);
+    const HRESULT hr =
+        PerformAuthorizedRequest(connection, "GET", url, headers, {}, bytes + 1u, statusCode, body, nullptr, nullptr, AuthorizedRequestRetry::ReadOnly);
     if (FAILED(hr))
     {
         return hr == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) ? HRESULT_FROM_WIN32(ERROR_INVALID_DATA) : hr;
@@ -4387,7 +4419,8 @@ HRESULT FileSystemGoogleDrive::UploadResumable(const ResolvedConnection& connect
             }
             have += read;
         }
-        const std::string contentRange = sizeBytes == 0u ? std::string("Content-Range: bytes */0") : std::format("Content-Range: bytes {}-{}/{}", offset, offset + want - 1u, sizeBytes);
+        const std::string contentRange =
+            sizeBytes == 0u ? std::string("Content-Range: bytes */0") : std::format("Content-Range: bytes {}-{}/{}", offset, offset + want - 1u, sizeBytes);
         const std::vector<std::string> chunkHeaders{"Content-Type: application/octet-stream", contentRange};
         std::string range;
         hr = PerformAuthorizedRequest(connection,
@@ -4442,7 +4475,14 @@ constexpr uint64_t kDriveReadChunkBytes = 4ull * 1024u * 1024u;
     {
         return {};
     }
-    return std::format("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z", systemTime.wYear, systemTime.wMonth, systemTime.wDay, systemTime.wHour, systemTime.wMinute, systemTime.wSecond, systemTime.wMilliseconds);
+    return std::format("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+                       systemTime.wYear,
+                       systemTime.wMonth,
+                       systemTime.wDay,
+                       systemTime.wHour,
+                       systemTime.wMinute,
+                       systemTime.wSecond,
+                       systemTime.wMilliseconds);
 }
 
 // Reads a Drive file through ranged `alt=media` requests. Every chunk fetch re-reads the object's
@@ -4451,8 +4491,13 @@ constexpr uint64_t kDriveReadChunkBytes = 4ull * 1024u * 1024u;
 class GoogleDriveRangedFileReader final : public IFileReader
 {
 public:
-    GoogleDriveRangedFileReader(FileSystemGoogleDrive* owner, FileSystemGoogleDrive::ResolvedConnection&& connection, FileSystemGoogleDrive::GoogleItem item) noexcept
-        : _owner(owner), _connection(std::move(connection)), _item(std::move(item)), _size(_item.sizeBytes)
+    GoogleDriveRangedFileReader(FileSystemGoogleDrive* owner,
+                                FileSystemGoogleDrive::ResolvedConnection&& connection,
+                                FileSystemGoogleDrive::GoogleItem item) noexcept
+        : _owner(owner),
+          _connection(std::move(connection)),
+          _item(std::move(item)),
+          _size(_item.sizeBytes)
     {
     }
     GoogleDriveRangedFileReader(const GoogleDriveRangedFileReader&)            = delete;
@@ -4711,7 +4756,7 @@ public:
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
         }
-        const auto* bytes = static_cast<const std::byte*>(buffer);
+        const auto* bytes  = static_cast<const std::byte*>(buffer);
         unsigned long done = 0u;
         while (done < bytesToWrite)
         {
@@ -4904,11 +4949,11 @@ private:
     wil::unique_hfile _tempFile;
     FileSystemGoogleDrive::GoogleItem _creationOccupant; // R3-1: the object under the name when the writer opened (empty id = none)
     bool _replaceConditional = false;                    // R3-1: the host granted a replacement of that occupant
-    uint64_t _position      = 0u;
-    uint64_t _expectedSize  = 0u;
-    uint64_t _committedSize = 0u;
-    bool _hasExpectedSize   = false;
-    bool _committed         = false;
+    uint64_t _position       = 0u;
+    uint64_t _expectedSize   = 0u;
+    uint64_t _committedSize  = 0u;
+    bool _hasExpectedSize    = false;
+    bool _committed          = false;
     std::string _publishedSha256Hex; // R3-2: Drive's digest of the published object
 };
 
@@ -5062,12 +5107,12 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::CreateFileWriter(const wchar_t*
             return hr;
         }
         auto* instance = new (std::nothrow) GoogleDriveFileWriter(this,
-                                                                   std::move(connection),
-                                                                   std::move(parent.id),
-                                                                   std::move(leafName),
-                                                                   allowOverwrite,
-                                                                   std::move(tempFile),
-                                                                   SUCCEEDED(existingHr) ? std::move(existing) : GoogleItem{});
+                                                                  std::move(connection),
+                                                                  std::move(parent.id),
+                                                                  std::move(leafName),
+                                                                  allowOverwrite,
+                                                                  std::move(tempFile),
+                                                                  SUCCEEDED(existingHr) ? std::move(existing) : GoogleItem{});
         if (! instance)
         {
             return E_OUTOFMEMORY;
@@ -5305,11 +5350,8 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::CreateDirectory(const wchar_t* 
     }
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::GetDirectorySize(const wchar_t* path,
-                                                                  FileSystemFlags flags,
-                                                                  IFileSystemDirectorySizeCallback* callback,
-                                                                  void* cookie,
-                                                                  FileSystemDirectorySizeResult* result) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::GetDirectorySize(
+    const wchar_t* path, FileSystemFlags flags, IFileSystemDirectorySizeCallback* callback, void* cookie, FileSystemDirectorySizeResult* result) noexcept
 {
     if (! path || ! result)
     {
@@ -5394,7 +5436,8 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::GetDirectorySize(const wchar_t*
             }
             if (callback)
             {
-                static_cast<void>(callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, current.path.c_str(), cookie));
+                static_cast<void>(callback->DirectorySizeProgress(
+                    scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, current.path.c_str(), cookie));
             }
         }
         return S_OK;

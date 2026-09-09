@@ -22,14 +22,14 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include "FileSystemRouteProviderBase.h"
+#include "Helpers.h"
+#include "PackedFileInfoBuffer.h"
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
-#include "FileSystemRouteProviderBase.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
-#include "Helpers.h"
-#include "PackedFileInfoBuffer.h"
 
 namespace FileSystemMicrosoftDriveInternal
 {
@@ -186,9 +186,7 @@ public:
                                           const FileSystemOptions* options = nullptr,
                                           IFileSystemCallback* callback    = nullptr,
                                           void* cookie                     = nullptr) noexcept override;
-    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
-                                                  FileSystemOperation operation,
-                                                  const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
                                                FileSystemOperation operationType,
                                                FileSystemTransferEndpoint endpoint,
@@ -250,9 +248,7 @@ public:
                           std::wstring_view webUrl) noexcept;
 
 protected:
-    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path,
-                                           FileSystemOperation operation,
-                                           FileSystemRouteDescriptor& descriptor) noexcept override;
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path, FileSystemOperation operation, FileSystemRouteDescriptor& descriptor) noexcept override;
 
 private:
     ~FileSystemMicrosoftDrive();
@@ -395,7 +391,7 @@ private:
     std::string _configurationJsonStorage[2] = {"{}", "{}"}; // Double-buffer to keep old pointer valid
     size_t _configurationJsonIndex           = 0;
     std::string _capabilitiesJson;
-    std::string _propertiesJson              = "{}";
+    std::string _propertiesJson = "{}";
     std::wstring _driveDisplayName;
     std::wstring _driveVolumeLabel;
     std::wstring _driveFileSystem;

@@ -699,14 +699,13 @@ public:
         {
             const HostFileOperationPromptOptions& options = *request->fileOperationOptions;
             const bool validPresentation = request->presentation == HOST_PROMPT_PRESENTATION_COPY || request->presentation == HOST_PROMPT_PRESENTATION_MOVE;
-            const bool validLinkPolicy = options.linkPolicy == HOST_FILE_OPERATION_LINK_PRESERVE || options.linkPolicy == HOST_FILE_OPERATION_LINK_SKIP;
-            const bool validExecution = options.executionMode == HOST_FILE_OPERATION_EXECUTION_QUEUE ||
-                                        options.executionMode == HOST_FILE_OPERATION_EXECUTION_PARALLEL;
-            const bool validVerificationAvailability =
-                options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_SUPPORTED ||
-                options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_UNSUPPORTED ||
-                options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_CHECK_DURING_OPERATION ||
-                options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_NOT_APPLICABLE;
+            const bool validLinkPolicy   = options.linkPolicy == HOST_FILE_OPERATION_LINK_PRESERVE || options.linkPolicy == HOST_FILE_OPERATION_LINK_SKIP;
+            const bool validExecution =
+                options.executionMode == HOST_FILE_OPERATION_EXECUTION_QUEUE || options.executionMode == HOST_FILE_OPERATION_EXECUTION_PARALLEL;
+            const bool validVerificationAvailability = options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_SUPPORTED ||
+                                                       options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_UNSUPPORTED ||
+                                                       options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_CHECK_DURING_OPERATION ||
+                                                       options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_NOT_APPLICABLE;
             if (options.sizeBytes < sizeof(HostFileOperationPromptOptions) || ! validPresentation || ! validLinkPolicy || ! validExecution ||
                 ! validVerificationAvailability || options.verifyAfterCopy > 1u || options.clipboardMoveConsumesCutList > 1u)
             {
@@ -2145,10 +2144,7 @@ private:
         if (request.fileOperationOptions)
         {
             const HostFileOperationPromptOptions& options = *request.fileOperationOptions;
-            auto addOption = [&model](uint32_t id,
-                                      std::wstring label,
-                                      std::vector<RedSalamander::Ui::AlertOptionChoice> choices,
-                                      uint64_t selectedValue)
+            auto addOption = [&model](uint32_t id, std::wstring label, std::vector<RedSalamander::Ui::AlertOptionChoice> choices, uint64_t selectedValue)
             {
                 RedSalamander::Ui::AlertOption option{};
                 option.id      = id;
@@ -2213,8 +2209,8 @@ private:
                 {500ull << 20u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_500_MIB)},
                 {1ull << 30u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_1_GIB)},
             };
-            const bool hasCurrentBandwidth = std::ranges::any_of(
-                bandwidthChoices, [&options](const auto& choice) noexcept { return choice.value == options.bandwidthLimitBytesPerSecond; });
+            const bool hasCurrentBandwidth =
+                std::ranges::any_of(bandwidthChoices, [&options](const auto& choice) noexcept { return choice.value == options.bandwidthLimitBytesPerSecond; });
             if (! hasCurrentBandwidth)
             {
                 bandwidthChoices.push_back(
@@ -2911,15 +2907,15 @@ HRESULT HostShowPrompt(const HostPromptRequest& request, void* cookie, HostPromp
     };
     {
         std::scoped_lock lock(g_testPromptSnapshotMutex);
-        g_testPromptSnapshot.severity          = request.severity;
-        g_testPromptSnapshot.buttons           = request.buttons;
-        g_testPromptSnapshot.defaultResult     = request.defaultResult;
-        g_testPromptSnapshot.presentation      = request.presentation;
-        g_testPromptSnapshot.title             = request.title ? request.title : L"";
-        g_testPromptSnapshot.message           = request.message ? request.message : L"";
+        g_testPromptSnapshot.severity                = request.severity;
+        g_testPromptSnapshot.buttons                 = request.buttons;
+        g_testPromptSnapshot.defaultResult           = request.defaultResult;
+        g_testPromptSnapshot.presentation            = request.presentation;
+        g_testPromptSnapshot.title                   = request.title ? request.title : L"";
+        g_testPromptSnapshot.message                 = request.message ? request.message : L"";
         g_testPromptSnapshot.hasFileOperationOptions = request.fileOperationOptions != nullptr;
-        g_testPromptSnapshot.fileOperationOptions = request.fileOperationOptions ? *request.fileOperationOptions : HostFileOperationPromptOptions{};
-        g_hasTestPromptSnapshot                = true;
+        g_testPromptSnapshot.fileOperationOptions    = request.fileOperationOptions ? *request.fileOperationOptions : HostFileOperationPromptOptions{};
+        g_hasTestPromptSnapshot                      = true;
     }
     g_testPromptRequestCount.fetch_add(1u, std::memory_order_acq_rel);
     const auto testPromptResultOverride = static_cast<HostPromptResult>(g_testPromptResultOverride.load(std::memory_order_acquire));

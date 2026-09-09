@@ -40,4 +40,4 @@ uint64_t ConsumeCount(Point point) noexcept;
 // - FolderView.FileOps.cpp consumes PasteShortcutAfterSlotProbe after a Paste
 //   Shortcut worker finds a free shortcut filename slot and before it saves the
 //   link, so collision selftests can hold one worker in the probe/save window.
-}
+} // namespace SelfTestLatency

@@ -82,14 +82,13 @@ public:
             Storages,
         };
 
-        ConnectionBrowseWork() = default;
-        ConnectionBrowseWork(const ConnectionBrowseWork&) = delete;
-        ConnectionBrowseWork& operator=(const ConnectionBrowseWork&) = delete;
-        ConnectionBrowseWork(ConnectionBrowseWork&&) noexcept = default;
+        ConnectionBrowseWork()                                           = default;
+        ConnectionBrowseWork(const ConnectionBrowseWork&)                = delete;
+        ConnectionBrowseWork& operator=(const ConnectionBrowseWork&)     = delete;
+        ConnectionBrowseWork(ConnectionBrowseWork&&) noexcept            = default;
         ConnectionBrowseWork& operator=(ConnectionBrowseWork&&) noexcept = default;
 
-        [[nodiscard]] HRESULT Execute(std::vector<ConnectionBrowseDevice>& outDevices,
-                                      std::vector<ConnectionBrowseStorage>& outStorages) noexcept;
+        [[nodiscard]] HRESULT Execute(std::vector<ConnectionBrowseDevice>& outDevices, std::vector<ConnectionBrowseStorage>& outStorages) noexcept;
 
         Kind kind = Kind::Devices;
         std::wstring pluginId;
@@ -126,9 +125,7 @@ public:
     HRESULT GetConfiguration(std::wstring_view pluginId, Common::Settings::Settings& settings, std::string& outConfigurationJsonUtf8) noexcept;
     HRESULT SetConfiguration(std::wstring_view pluginId, std::string_view configurationJsonUtf8, Common::Settings::Settings& settings) noexcept;
     HRESULT PrepareConnectionBrowseDevices(std::wstring_view pluginId, ConnectionBrowseWork& outWork) noexcept;
-    HRESULT PrepareConnectionBrowseStorages(std::wstring_view pluginId,
-                                            std::wstring_view parentDeviceId,
-                                            ConnectionBrowseWork& outWork) noexcept;
+    HRESULT PrepareConnectionBrowseStorages(std::wstring_view pluginId, std::wstring_view parentDeviceId, ConnectionBrowseWork& outWork) noexcept;
 
     HRESULT TestPlugin(std::wstring_view pluginId) noexcept;
 

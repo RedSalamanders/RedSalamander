@@ -4621,9 +4621,7 @@ public:
         return _baseFs ? _baseFs->RenameItems(items, count, flags, options, callback, cookie) : E_POINTER;
     }
 
-    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
-                                                  FileSystemOperation operation,
-                                                  const char** jsonUtf8) noexcept override
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept override
     {
         return _baseFs ? _baseFs->GetPathCapabilities(path, operation, jsonUtf8) : E_POINTER;
     }

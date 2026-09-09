@@ -3,9 +3,9 @@
 namespace
 {
 constexpr HRESULT kMissingFileOperationHostHr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-constexpr uint32_t kMaxDropPathCount           = 65'536u;
-constexpr size_t kMaxDropPathChars             = 32'768u;
-constexpr size_t kMaxDropTotalChars            = 16u * 1024u * 1024u;
+constexpr uint32_t kMaxDropPathCount          = 65'536u;
+constexpr size_t kMaxDropPathChars            = 32'768u;
+constexpr size_t kMaxDropTotalChars           = 16u * 1024u * 1024u;
 
 [[nodiscard]] std::wstring_view TrimTrailingPathSeparators(std::wstring_view path) noexcept
 {
@@ -331,8 +331,7 @@ HRESULT FolderView::DebugPerformFileDropForSelfTest(const std::vector<std::files
     }
     *performedEffect = DROPEFFECT_NONE;
 
-    auto* dataObjectRaw =
-        new (std::nothrow) FolderViewDataObject(paths, L"builtin/file-system", std::wstring{}, effect, true, ! externalSource);
+    auto* dataObjectRaw = new (std::nothrow) FolderViewDataObject(paths, L"builtin/file-system", std::wstring{}, effect, true, ! externalSource);
     if (! dataObjectRaw)
     {
         return E_OUTOFMEMORY;
@@ -344,11 +343,8 @@ HRESULT FolderView::DebugPerformFileDropForSelfTest(const std::vector<std::files
     return PerformDrop(dataObject.get(), keyState, effectiveAllowedEffects, clientPoint, performedEffect);
 }
 
-HRESULT FolderView::DebugPerformDropFromDataObjectForSelfTest(IDataObject* dataObject,
-                                                              DWORD effect,
-                                                              DWORD* performedEffect,
-                                                              POINT clientPoint,
-                                                              DWORD keyState) noexcept
+HRESULT FolderView::DebugPerformDropFromDataObjectForSelfTest(
+    IDataObject* dataObject, DWORD effect, DWORD* performedEffect, POINT clientPoint, DWORD keyState) noexcept
 {
     DWORD localPerformed = DROPEFFECT_NONE;
     if (! performedEffect)
@@ -551,7 +547,7 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
-        const size_t remainingBytes = offset <= bytesAvailable ? bytesAvailable - offset : 0u;
+        const size_t remainingBytes              = offset <= bytesAvailable ? bytesAvailable - offset : 0u;
         constexpr size_t kMinimumPathRecordBytes = sizeof(uint32_t) + sizeof(wchar_t);
         if (header->pathCount > kMaxDropPathCount || static_cast<size_t>(header->pathCount) > remainingBytes / kMinimumPathRecordBytes)
         {
@@ -639,8 +635,7 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
         }
         auto unlock = wil::scope_exit([&]() { GlobalUnlock(medium.hGlobal); });
 
-        if (! dropFiles->fWide || dropFiles->pFiles < sizeof(DROPFILES) || dropFiles->pFiles > bytesAvailable ||
-            (dropFiles->pFiles % alignof(wchar_t)) != 0u)
+        if (! dropFiles->fWide || dropFiles->pFiles < sizeof(DROPFILES) || dropFiles->pFiles > bytesAvailable || (dropFiles->pFiles % alignof(wchar_t)) != 0u)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
@@ -659,8 +654,8 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
 
         // The structural bounds above make the shell parser safe to use while retaining its canonical
         // handling of DROPFILES details.
-        const HDROP drop       = static_cast<HDROP>(medium.hGlobal);
-        const UINT fileCount   = DragQueryFileW(drop, 0xFFFFFFFFu, nullptr, 0u);
+        const HDROP drop     = static_cast<HDROP>(medium.hGlobal);
+        const UINT fileCount = DragQueryFileW(drop, 0xFFFFFFFFu, nullptr, 0u);
         if (fileCount > kMaxDropPathCount)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
@@ -715,7 +710,7 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
         }
     }
 
-    HRESULT operationHr = S_OK;
+    HRESULT operationHr  = S_OK;
     DWORD reportedEffect = effect;
     switch (effect)
     {
@@ -735,8 +730,7 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
             {
                 FileOperationRequest request{};
                 request.operation              = operationType;
-                request.origin                 = internalDrop ? FileOperationRequest::Origin::InternalDrop
-                                                              : FileOperationRequest::Origin::ExternalDrop;
+                request.origin                 = internalDrop ? FileOperationRequest::Origin::InternalDrop : FileOperationRequest::Origin::ExternalDrop;
                 request.sourcePaths            = std::move(paths);
                 request.sourceContextSpecified = internalDrop;
                 request.sourcePluginId         = std::move(sourcePluginId);

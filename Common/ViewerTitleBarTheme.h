@@ -22,10 +22,10 @@ inline constexpr DWORD kDwmColorDefault = 0xFFFFFFFFu;
 
 struct TitleBarAttributes
 {
-    BOOL useDarkMode  = FALSE;
-    DWORD borderColor = kDwmColorDefault;
+    BOOL useDarkMode   = FALSE;
+    DWORD borderColor  = kDwmColorDefault;
     DWORD captionColor = kDwmColorDefault;
-    DWORD textColor   = kDwmColorDefault;
+    DWORD textColor    = kDwmColorDefault;
 };
 
 [[nodiscard]] inline COLORREF ResolveViewerThemeAccent(const ViewerTheme& theme, std::wstring_view seed) noexcept
@@ -35,15 +35,14 @@ struct TitleBarAttributes
         return Common::Colors::ColorRefFromArgb(theme.accentArgb);
     }
 
-    const uint32_t hash = Common::Colors::StableVisualHash32Utf16V1(seed);
-    const float hue     = static_cast<float>(hash % 360u);
+    const uint32_t hash    = Common::Colors::StableVisualHash32Utf16V1(seed);
+    const float hue        = static_cast<float>(hash % 360u);
     const float saturation = theme.darkBase ? 0.70f : 0.55f;
     const float value      = theme.darkBase ? 0.95f : 0.85f;
     return Common::Colors::ColorRefFromHsvClampedNegativeHueToZero(hue, saturation, value);
 }
 
-[[nodiscard]] inline TitleBarAttributes ResolveTitleBarAttributes(
-    const ViewerTheme& theme, bool windowActive, std::wstring_view rainbowSeed) noexcept
+[[nodiscard]] inline TitleBarAttributes ResolveTitleBarAttributes(const ViewerTheme& theme, bool windowActive, std::wstring_view rainbowSeed) noexcept
 {
     TitleBarAttributes attributes;
     attributes.useDarkMode = theme.darkMode && ! theme.highContrast ? TRUE : FALSE;

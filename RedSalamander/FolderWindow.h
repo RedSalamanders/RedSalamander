@@ -21,8 +21,8 @@
 #include "Framework.h"
 #include "FunctionBar.h"
 #include "NavigationView.h"
-#include "PlugInterfaces/Viewer.h"
 #include "PlugInterfaces/Terminal.h"
+#include "PlugInterfaces/Viewer.h"
 
 struct CommandRuntimeState;
 
@@ -228,24 +228,24 @@ class ShortcutManager;
 #ifdef ENABLE_TESTS
 struct ItemPropertiesWindowDebugSnapshot
 {
-    bool usesDxUiHost              = false;
-    size_t visibleChildWindowCount = 0u;
-    size_t sectionCount            = 0u;
-    size_t fieldCount              = 0u;
-    size_t streamCount             = 0u;
-    size_t removableStreamCount    = 0u;
-    size_t viewableStreamCount     = 0u;
-    size_t bodyFirstVisibleLine    = 0u;
-    size_t bodyVisibleLineCount    = 0u;
-    size_t bodyTotalLineCount      = 0u;
-    bool bodyCanScrollVertically   = false;
-    bool loading                   = false;
-    bool loadFailed                = false;
+    bool usesDxUiHost                     = false;
+    size_t visibleChildWindowCount        = 0u;
+    size_t sectionCount                   = 0u;
+    size_t fieldCount                     = 0u;
+    size_t streamCount                    = 0u;
+    size_t removableStreamCount           = 0u;
+    size_t viewableStreamCount            = 0u;
+    size_t bodyFirstVisibleLine           = 0u;
+    size_t bodyVisibleLineCount           = 0u;
+    size_t bodyTotalLineCount             = 0u;
+    bool bodyCanScrollVertically          = false;
+    bool loading                          = false;
+    bool loadFailed                       = false;
     uint32_t artifactClassifierQueryCount = 0u;
-    float layoutOverflowRightDip   = 0.0f;
-    uint64_t renderCount           = 0u;
-    uint64_t resizeCount           = 0u;
-    uint64_t resizeFailureCount    = 0u;
+    float layoutOverflowRightDip          = 0.0f;
+    uint64_t renderCount                  = 0u;
+    uint64_t resizeCount                  = 0u;
+    uint64_t resizeFailureCount           = 0u;
     std::wstring contentText;
 };
 
@@ -404,15 +404,10 @@ public:
     [[nodiscard]] bool IsFocusInNavigationView() const noexcept;
     [[nodiscard]] std::optional<std::filesystem::path> GetActiveTerminalLaunchPath() const;
     [[nodiscard]] bool IsTerminalInputTarget(HWND targetWindow) const noexcept;
-    [[nodiscard]] HRESULT RouteTerminalShortcut(HWND targetWindow,
-                                                std::wstring_view commandId,
-                                                const MSG& message,
-                                                uint32_t normalizedModifiers,
-                                                TerminalShortcutRoute& route) noexcept;
+    [[nodiscard]] HRESULT RouteTerminalShortcut(
+        HWND targetWindow, std::wstring_view commandId, const MSG& message, uint32_t normalizedModifiers, TerminalShortcutRoute& route) noexcept;
     [[nodiscard]] bool ExecuteTerminalHostCommand(std::wstring_view commandId) noexcept;
-    [[nodiscard]] bool QueryTerminalHostCommandState(HWND invocationOrigin,
-                                                     std::wstring_view commandId,
-                                                     CommandRuntimeState& state) noexcept;
+    [[nodiscard]] bool QueryTerminalHostCommandState(HWND invocationOrigin, std::wstring_view commandId, CommandRuntimeState& state) noexcept;
     void STDMETHODCALLTYPE OnTerminalEvent(const TerminalEvent* event, void* cookie) noexcept override;
     void HandleTerminalSessionExited(const TerminalEvent& event) noexcept;
     [[nodiscard]] bool HandlePanePointerFocus(HWND targetWindow) noexcept;
@@ -756,13 +751,13 @@ public:
 
     struct FileOperationItemOutcome
     {
-        size_t sourceIndex = 0;
-        FileOperations::PublicationState publication = FileOperations::PublicationState::NotAttempted;
-        FileOperations::VerificationState verification = FileOperations::VerificationState::NotRequested;
-        FileOperations::SourceDisposition sourceDisposition = FileOperations::SourceDisposition::Retained;
-        FileOperations::ItemCompletion completion = FileOperations::ItemCompletion::Failed;
+        size_t sourceIndex                                          = 0;
+        FileOperations::PublicationState publication                = FileOperations::PublicationState::NotAttempted;
+        FileOperations::VerificationState verification              = FileOperations::VerificationState::NotRequested;
+        FileOperations::SourceDisposition sourceDisposition         = FileOperations::SourceDisposition::Retained;
+        FileOperations::ItemCompletion completion                   = FileOperations::ItemCompletion::Failed;
         FileOperations::OwnedStageDisposition ownedStageDisposition = FileOperations::OwnedStageDisposition::NotApplicable;
-        HRESULT status = E_PENDING;
+        HRESULT status                                              = E_PENDING;
         std::filesystem::path finalSourcePath;
         std::filesystem::path finalDestinationPath;
     };
@@ -945,50 +940,50 @@ public:
 
     struct PaneViewOptionsDebugSnapshot
     {
-        bool fileExtensionsVisible               = true;
-        bool navigationBarVisible                = true;
-        bool navigationViewWindowVisible         = false;
-        bool filterBarVisible                    = false;
-        bool filterBarWindowVisible              = false;
-        bool filterBarUsesDxUiHost               = false;
-        bool filterBarLabelVisible               = false;
-        bool filterBarComboVisible               = false;
-        bool filterBarToggleVisible              = false;
-        bool filterBarToggleChecked              = false;
-        bool filterEnabled                       = false;
-        bool thumbnailsVisible                   = false;
-        float thumbnailTargetDip                 = 16.0f;
-        uint64_t thumbnailQueuedCount            = 0;
-        uint64_t thumbnailCompletedCount         = 0;
-        uint64_t thumbnailFallbackCount          = 0;
-        uint64_t thumbnailStaleDropCount         = 0;
-        uint64_t thumbnailPendingCount           = 0;
-        uint64_t thumbnailCacheHitCount          = 0;
-        uint64_t thumbnailShellSuccessCount      = 0;
-        uint64_t thumbnailShellCacheHitCount     = 0;
-        uint64_t thumbnailShellCacheMissCount    = 0;
+        bool fileExtensionsVisible                  = true;
+        bool navigationBarVisible                   = true;
+        bool navigationViewWindowVisible            = false;
+        bool filterBarVisible                       = false;
+        bool filterBarWindowVisible                 = false;
+        bool filterBarUsesDxUiHost                  = false;
+        bool filterBarLabelVisible                  = false;
+        bool filterBarComboVisible                  = false;
+        bool filterBarToggleVisible                 = false;
+        bool filterBarToggleChecked                 = false;
+        bool filterEnabled                          = false;
+        bool thumbnailsVisible                      = false;
+        float thumbnailTargetDip                    = 16.0f;
+        uint64_t thumbnailQueuedCount               = 0;
+        uint64_t thumbnailCompletedCount            = 0;
+        uint64_t thumbnailFallbackCount             = 0;
+        uint64_t thumbnailStaleDropCount            = 0;
+        uint64_t thumbnailPendingCount              = 0;
+        uint64_t thumbnailCacheHitCount             = 0;
+        uint64_t thumbnailShellSuccessCount         = 0;
+        uint64_t thumbnailShellCacheHitCount        = 0;
+        uint64_t thumbnailShellCacheMissCount       = 0;
         uint64_t thumbnailShellProviderAllowedCount = 0;
         uint64_t thumbnailShellProviderTimeoutCount = 0;
-        uint64_t thumbnailWicSuccessCount        = 0;
-        uint64_t thumbnailWicFactoryCreateCount  = 0;
-        uint64_t thumbnailDecodeFailureCount     = 0;
-        uint64_t thumbnailVisibleApplyCount      = 0;
-        uint64_t thumbnailVisibleItemCount       = 0;
-        uint64_t thumbnailVisibleThumbnailCount  = 0;
-        uint64_t thumbnailTotalThumbnailCount    = 0;
-        uint64_t thumbnailCacheBytes             = 0;
-        uint64_t thumbnailCacheEvictedCount      = 0;
-        uint64_t thumbnailCancelCount            = 0;
-        bool thumbnailLastDrawSawThumbnail       = false;
-        uint32_t thumbnailLastDrawSourceWidthPx  = 0;
-        uint32_t thumbnailLastDrawSourceHeightPx = 0;
-        D2D1_RECT_F thumbnailLastDrawSlotRectDip = D2D1::RectF();
-        D2D1_RECT_F thumbnailLastDrawRectDip     = D2D1::RectF();
-        bool iconLastDrawSawIcon                 = false;
-        uint32_t iconLastDrawSourceWidthPx       = 0;
-        uint32_t iconLastDrawSourceHeightPx      = 0;
-        D2D1_RECT_F iconLastDrawSlotRectDip      = D2D1::RectF();
-        D2D1_RECT_F iconLastDrawRectDip          = D2D1::RectF();
+        uint64_t thumbnailWicSuccessCount           = 0;
+        uint64_t thumbnailWicFactoryCreateCount     = 0;
+        uint64_t thumbnailDecodeFailureCount        = 0;
+        uint64_t thumbnailVisibleApplyCount         = 0;
+        uint64_t thumbnailVisibleItemCount          = 0;
+        uint64_t thumbnailVisibleThumbnailCount     = 0;
+        uint64_t thumbnailTotalThumbnailCount       = 0;
+        uint64_t thumbnailCacheBytes                = 0;
+        uint64_t thumbnailCacheEvictedCount         = 0;
+        uint64_t thumbnailCancelCount               = 0;
+        bool thumbnailLastDrawSawThumbnail          = false;
+        uint32_t thumbnailLastDrawSourceWidthPx     = 0;
+        uint32_t thumbnailLastDrawSourceHeightPx    = 0;
+        D2D1_RECT_F thumbnailLastDrawSlotRectDip    = D2D1::RectF();
+        D2D1_RECT_F thumbnailLastDrawRectDip        = D2D1::RectF();
+        bool iconLastDrawSawIcon                    = false;
+        uint32_t iconLastDrawSourceWidthPx          = 0;
+        uint32_t iconLastDrawSourceHeightPx         = 0;
+        D2D1_RECT_F iconLastDrawSlotRectDip         = D2D1::RectF();
+        D2D1_RECT_F iconLastDrawRectDip             = D2D1::RectF();
         std::wstring filterText;
         std::wstring filterBarText;
         std::wstring filterBarFieldText;
@@ -1000,35 +995,35 @@ public:
 
     struct PreviewPaneDebugSnapshot
     {
-        bool active                           = false;
-        Pane sourcePane                       = Pane::Left;
-        Pane hostPane                         = Pane::Right;
-        bool tabsVisible                      = false;
-        bool tabsUseDxUiHost                  = false;
-        bool previewTabsHasHeaderDivider      = false;
-        bool previewTabSelected               = false;
-        bool folderTabSelected                = true;
-        bool previewContentVisible            = false;
-        bool previewContentUsesDxUiHost       = false;
-        bool previewUsesEmbeddedViewer        = false;
-        bool previewPropertiesCardMode        = false;
-        bool previewPropertiesUsesScrollPanel = false;
-        bool previewPropertiesCanScroll       = false;
-        bool previewPropertiesUsesRainbow     = false;
-        bool folderViewVisible                = true;
-        bool previewCloseButtonVisible        = false;
-        HWND previewTabsHwnd                  = nullptr;
-        HWND previewContentHwnd               = nullptr;
-        HWND previewEmbeddedViewerHwnd        = nullptr;
-        uintptr_t previewViewerInstanceId     = 0;
-        size_t previewDirectChildCount        = 0u;
-        size_t previewVisibleDirectChildCount = 0u;
-        size_t previewOwnVisibleDirectChildCount = 0u;
-        size_t previewLastOpenCreatedChildCount = 0u;
-        size_t previewLastOpenDetectedChildCount = 0u;
+        bool active                                    = false;
+        Pane sourcePane                                = Pane::Left;
+        Pane hostPane                                  = Pane::Right;
+        bool tabsVisible                               = false;
+        bool tabsUseDxUiHost                           = false;
+        bool previewTabsHasHeaderDivider               = false;
+        bool previewTabSelected                        = false;
+        bool folderTabSelected                         = true;
+        bool previewContentVisible                     = false;
+        bool previewContentUsesDxUiHost                = false;
+        bool previewUsesEmbeddedViewer                 = false;
+        bool previewPropertiesCardMode                 = false;
+        bool previewPropertiesUsesScrollPanel          = false;
+        bool previewPropertiesCanScroll                = false;
+        bool previewPropertiesUsesRainbow              = false;
+        bool folderViewVisible                         = true;
+        bool previewCloseButtonVisible                 = false;
+        HWND previewTabsHwnd                           = nullptr;
+        HWND previewContentHwnd                        = nullptr;
+        HWND previewEmbeddedViewerHwnd                 = nullptr;
+        uintptr_t previewViewerInstanceId              = 0;
+        size_t previewDirectChildCount                 = 0u;
+        size_t previewVisibleDirectChildCount          = 0u;
+        size_t previewOwnVisibleDirectChildCount       = 0u;
+        size_t previewLastOpenCreatedChildCount        = 0u;
+        size_t previewLastOpenDetectedChildCount       = 0u;
         size_t previewLastOpenHiddenRejectedChildCount = 0u;
-        bool previewLastOpenRejectedChildCardinality = false;
-        bool previewLastReopenRejectedChildSet = false;
+        bool previewLastOpenRejectedChildCardinality   = false;
+        bool previewLastReopenRejectedChildSet         = false;
         RECT tabRect{};
         RECT folderTabClientRect{};
         RECT previewTabClientRect{};
@@ -1051,24 +1046,24 @@ public:
 
     struct TerminalPaneDebugSnapshot
     {
-        bool open = false;
-        bool selected = false;
-        Pane hostPane = Pane::Right;
-        HWND childHwnd = nullptr;
-        HWND parentHwnd = nullptr;
-        TerminalLifecycleState lifecycle = TerminalLifecycleState::Created;
+        bool open                           = false;
+        bool selected                       = false;
+        Pane hostPane                       = Pane::Right;
+        HWND childHwnd                      = nullptr;
+        HWND parentHwnd                     = nullptr;
+        TerminalLifecycleState lifecycle    = TerminalLifecycleState::Created;
         TerminalActivityTrust activityTrust = TerminalActivityTrust::Untrusted;
-        TerminalFollowState followState = TerminalFollowState::Disabled;
+        TerminalFollowState followState     = TerminalFollowState::Disabled;
         TerminalInstanceId instanceId{};
         uint64_t sessionGeneration = 0u;
-        uint64_t capabilityFlags = TerminalCapabilityNone;
-        bool exitCodePresent = false;
-        uint32_t exitCode = 0u;
+        uint64_t capabilityFlags   = TerminalCapabilityNone;
+        bool exitCodePresent       = false;
+        uint32_t exitCode          = 0u;
         bool finalSnapshotComplete = false;
-        bool idleAtPrimaryPrompt = false;
-        size_t visibleTabCount = 0u;
-        bool previewTabVisible = false;
-        bool terminalTabVisible = false;
+        bool idleAtPrimaryPrompt   = false;
+        size_t visibleTabCount     = 0u;
+        bool previewTabVisible     = false;
+        bool terminalTabVisible    = false;
         std::wstring status;
         TerminalLocationKind sourceLocationKind = TerminalLocationKind::Unsupported;
         std::wstring sourcePluginShortId;
@@ -1152,8 +1147,8 @@ public:
         HRESULT hr = S_OK;
         std::filesystem::path archivePath;
         std::filesystem::path destinationPath;
-        uint64_t entryCount     = 0u;
-        uint64_t bytesProcessed = 0u;
+        uint64_t entryCount           = 0u;
+        uint64_t bytesProcessed       = 0u;
         uint64_t skippedConflictCount = 0u;
         std::vector<std::wstring> entries;
     };
@@ -1200,11 +1195,8 @@ public:
     [[nodiscard]] bool DebugClickSplitterArrow(Pane pane) noexcept;
     [[nodiscard]] bool DebugGetPaneViewOptionsSnapshot(Pane pane, PaneViewOptionsDebugSnapshot& out) const;
     void DebugSetThumbnailProviderMode(Pane pane, FolderView::DebugThumbnailProviderMode mode) noexcept;
-    [[nodiscard]] bool DebugSeedThumbnailPendingAndPostThumbnailBitmapMessagesForTest(Pane pane,
-                                                                                      uint64_t pendingCount,
-                                                                                      uint64_t staleBatchMessageCount,
-                                                                                      uint64_t staleGenerationMessageCount,
-                                                                                      uint64_t unaccountedCurrentMessageCount);
+    [[nodiscard]] bool DebugSeedThumbnailPendingAndPostThumbnailBitmapMessagesForTest(
+        Pane pane, uint64_t pendingCount, uint64_t staleBatchMessageCount, uint64_t staleGenerationMessageCount, uint64_t unaccountedCurrentMessageCount);
     [[nodiscard]] bool DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugGetTerminalPaneSnapshot(Pane hostPane, TerminalPaneDebugSnapshot& out) const noexcept;
     [[nodiscard]] HRESULT DebugGetTerminalScreenText(Pane hostPane, std::wstring& text) const noexcept;
@@ -1243,31 +1235,24 @@ public:
     [[nodiscard]] FolderView::DebugFocusSelectionStateSnapshot DebugGetFocusSelectionStateSnapshot(Pane pane) const noexcept;
     struct DebugSelectionSizeSnapshot
     {
-        uint64_t generation = 0u;
-        uint64_t requestCount = 0u;
-        bool folderBytesPending = false;
-        bool folderBytesValid = false;
-        uint64_t folderBytes = 0u;
-        HRESULT lastCompletionStatus = E_PENDING;
-        bool workerRequestPending = false;
+        uint64_t generation              = 0u;
+        uint64_t requestCount            = 0u;
+        bool folderBytesPending          = false;
+        bool folderBytesValid            = false;
+        uint64_t folderBytes             = 0u;
+        HRESULT lastCompletionStatus     = E_PENDING;
+        bool workerRequestPending        = false;
         uint64_t workerRequestGeneration = 0u;
         std::vector<std::filesystem::path> lastRequestedSelectedPaths;
         std::vector<std::filesystem::path> lastRequestedFolderPaths;
     };
     [[nodiscard]] DebugSelectionSizeSnapshot DebugGetSelectionSizeSnapshot(Pane pane);
-    [[nodiscard]] bool DebugPostSelectionSizeCompletionForSelfTest(Pane pane,
-                                                                   uint64_t generation,
-                                                                   uint64_t folderBytes,
-                                                                   HRESULT status) noexcept;
+    [[nodiscard]] bool DebugPostSelectionSizeCompletionForSelfTest(Pane pane, uint64_t generation, uint64_t folderBytes, HRESULT status) noexcept;
     void DebugRememberPaneFocusedItemForFolder(Pane pane, const std::filesystem::path& folder, std::wstring_view itemDisplayName) noexcept;
     void DebugClearPaneFocusMemoryForSelfTest(Pane pane) noexcept;
-    [[nodiscard]] bool DebugRememberPaneFocusMemoryEntryForSelfTest(Pane pane,
-                                                                   const std::filesystem::path& folder,
-                                                                   std::wstring_view itemDisplayName) noexcept;
+    [[nodiscard]] bool DebugRememberPaneFocusMemoryEntryForSelfTest(Pane pane, const std::filesystem::path& folder, std::wstring_view itemDisplayName) noexcept;
     [[nodiscard]] std::wstring DebugLookupPaneFocusMemoryEntryForSelfTest(Pane pane, const std::filesystem::path& folder) noexcept;
-    void DebugSetPaneFileSystemContextForSelfTest(Pane pane,
-                                                  std::wstring_view pluginId,
-                                                  std::wstring_view instanceContext) noexcept;
+    void DebugSetPaneFileSystemContextForSelfTest(Pane pane, std::wstring_view pluginId, std::wstring_view instanceContext) noexcept;
     void DebugSetPaneSuppressOleDragDropForSelfTest(Pane pane, bool suppress) noexcept;
     [[nodiscard]] std::vector<std::filesystem::path> DebugGetPaneCommandTargetPathsForSelfTest(Pane pane) const;
     [[nodiscard]] std::vector<std::filesystem::path> DebugGetPaneLastDragStartPathsForSelfTest(Pane pane) const;
@@ -1340,7 +1325,7 @@ private:
         explicit FileOperationPromptDispatchScope(FolderWindow& owner) noexcept;
         ~FileOperationPromptDispatchScope() noexcept;
 
-        FileOperationPromptDispatchScope(const FileOperationPromptDispatchScope&) = delete;
+        FileOperationPromptDispatchScope(const FileOperationPromptDispatchScope&)            = delete;
         FileOperationPromptDispatchScope& operator=(const FileOperationPromptDispatchScope&) = delete;
 
     private:
@@ -1760,11 +1745,11 @@ private:
         bool terminalTabSelected           = false;
         bool terminalOpen                  = false;
         wil::com_ptr<ITerminal> terminal;
-        HWND terminalHwnd                  = nullptr;
+        HWND terminalHwnd                               = nullptr;
         TerminalLocationKind terminalSourceLocationKind = TerminalLocationKind::Unsupported;
         std::wstring terminalSourcePluginShortId;
         std::filesystem::path terminalSourcePath;
-        uint64_t terminalSourceGeneration = 0u;
+        uint64_t terminalSourceGeneration             = 0u;
         uint32_t terminalOriginalSourcePaneInstanceId = 0u;
         std::filesystem::path previewedPath;
         std::wstring previewText;
@@ -1801,7 +1786,7 @@ private:
         bool selectionFolderBytesValid   = false;
         uint64_t selectionFolderBytes    = 0;
 #ifdef ENABLE_TESTS
-        uint64_t debugSelectionSizeRequestCount = 0u;
+        uint64_t debugSelectionSizeRequestCount        = 0u;
         HRESULT debugSelectionSizeLastCompletionStatus = E_PENDING;
         std::vector<std::filesystem::path> debugSelectionSizeLastRequestedSelectedPaths;
         std::vector<std::filesystem::path> debugSelectionSizeLastRequestedFolderPaths;
@@ -1918,7 +1903,7 @@ private:
     };
     std::optional<SavedSelection> _savedSelection;
     std::optional<Pane> _previewSourcePane;
-    bool _previewRefreshPending = false;
+    bool _previewRefreshPending          = false;
     bool _suppressEmbeddedTerminalLayout = false;
 
     ViewerCallbackState _viewerCallback;
@@ -1938,11 +1923,11 @@ private:
 
 #ifdef ENABLE_TESTS
     PreviewEmbeddedChildFaultForTest _debugNextPreviewEmbeddedChildFault = PreviewEmbeddedChildFaultForTest::None;
-    size_t _debugPreviewLastOpenCreatedChildCount = 0u;
-    size_t _debugPreviewLastOpenDetectedChildCount = 0u;
-    size_t _debugPreviewLastOpenHiddenRejectedChildCount = 0u;
-    bool _debugPreviewLastOpenRejectedChildCardinality = false;
-    bool _debugPreviewLastReopenRejectedChildSet = false;
+    size_t _debugPreviewLastOpenCreatedChildCount                        = 0u;
+    size_t _debugPreviewLastOpenDetectedChildCount                       = 0u;
+    size_t _debugPreviewLastOpenHiddenRejectedChildCount                 = 0u;
+    bool _debugPreviewLastOpenRejectedChildCardinality                   = false;
+    bool _debugPreviewLastReopenRejectedChildSet                         = false;
 #endif
 
     friend LRESULT CALLBACK FolderWindowDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;

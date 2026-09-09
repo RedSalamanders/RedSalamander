@@ -1,7 +1,7 @@
 #pragma once
 
-#include "framework.h"
 #include "BatchRenameExecutionEngine.h"
+#include "framework.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -40,9 +40,7 @@ struct Options
 [[nodiscard]] std::wstring TransformLeafName(std::wstring_view leafName, const Options& options) noexcept;
 
 #ifdef ENABLE_TESTS
-[[nodiscard]] HRESULT DebugClassifyDirectoryReadResult(HRESULT readHr,
-                                                       bool hasInformation,
-                                                       bool provenDirectory) noexcept;
+[[nodiscard]] HRESULT DebugClassifyDirectoryReadResult(HRESULT readHr, bool hasInformation, bool provenDirectory) noexcept;
 #endif
 
 struct ProgressUpdate final
@@ -74,7 +72,7 @@ using ProgressCallback = void (*)(const ProgressUpdate& update, void* cookie) no
                                             std::vector<BatchRenameExecutionOp>& operationsOut,
                                             std::stop_token stopToken = {},
                                             ProgressCallback progress = nullptr,
-                                            void* progressCookie = nullptr) noexcept;
+                                            void* progressCookie      = nullptr) noexcept;
 
 #ifdef ENABLE_TESTS
 struct MutationGuardCallbacks final
@@ -86,7 +84,7 @@ struct MutationGuardCallbacks final
     // Called immediately before every provider rename batch. A failure prevents that batch and all
     // later batches from mutating.
     HRESULT (*revalidate)(std::span<const std::filesystem::path> paths, void* cookie) noexcept = nullptr;
-    void* cookie = nullptr;
+    void* cookie                                                                               = nullptr;
 };
 
 // Test/compatibility adapter for direct engine characterization. Production command dispatch
@@ -100,9 +98,9 @@ struct MutationGuardCallbacks final
                                                 std::wstring_view pluginId,
                                                 const std::vector<std::filesystem::path>& inputPaths,
                                                 const Options& options,
-                                                std::stop_token stopToken = {},
-                                                ProgressCallback progress = nullptr,
-                                                void* progressCookie      = nullptr,
+                                                std::stop_token stopToken                   = {},
+                                                ProgressCallback progress                   = nullptr,
+                                                void* progressCookie                        = nullptr,
                                                 const MutationGuardCallbacks* mutationGuard = nullptr) noexcept;
 #endif
 } // namespace ChangeCase

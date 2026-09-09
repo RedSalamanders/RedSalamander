@@ -22,8 +22,7 @@ bool ConfirmNonRevertableFileOperation(HWND owner,
         return true;
     }
 
-    auto suffixFor = [](unsigned long long count) noexcept -> std::wstring_view
-    { return count == 1ull ? std::wstring_view(L"") : std::wstring_view(L"s"); };
+    auto suffixFor = [](unsigned long long count) noexcept -> std::wstring_view { return count == 1ull ? std::wstring_view(L"") : std::wstring_view(L"s"); };
 
     const unsigned long long itemCount = static_cast<unsigned long long>(sourcePaths.size());
     std::wstring what;
@@ -122,20 +121,20 @@ bool ConfirmNonRevertableFileOperation(HWND owner,
     const std::wstring message =
         confirmationMessage.empty() ? FormatStringResource(nullptr, messageId, what, fromText, toText) : std::wstring(confirmationMessage);
 
-    const bool isCopy = operation == FILESYSTEM_COPY;
-    const UINT operationLabelId = isCopy ? static_cast<UINT>(IDS_FILEOP_OPERATION_COPY) : static_cast<UINT>(IDS_FILEOP_OPERATION_MOVE);
-    const std::wstring caption = LoadStringResource(nullptr, operationLabelId);
+    const bool isCopy                         = operation == FILESYSTEM_COPY;
+    const UINT operationLabelId               = isCopy ? static_cast<UINT>(IDS_FILEOP_OPERATION_COPY) : static_cast<UINT>(IDS_FILEOP_OPERATION_MOVE);
+    const std::wstring caption                = LoadStringResource(nullptr, operationLabelId);
     const HostPromptPresentation presentation = isCopy ? HOST_PROMPT_PRESENTATION_COPY : HOST_PROMPT_PRESENTATION_MOVE;
     HostPromptRequest prompt{};
-    prompt.sizeBytes     = sizeof(prompt);
-    prompt.scope         = (owner && IsWindow(owner)) ? HOST_ALERT_SCOPE_WINDOW : HOST_ALERT_SCOPE_APPLICATION;
-    prompt.severity      = HOST_ALERT_INFO;
-    prompt.buttons       = HOST_PROMPT_BUTTONS_OK_CANCEL;
-    prompt.targetWindow  = (prompt.scope == HOST_ALERT_SCOPE_WINDOW) ? owner : nullptr;
-    prompt.title         = caption.c_str();
-    prompt.message       = message.c_str();
-    prompt.defaultResult = HOST_PROMPT_RESULT_OK;
-    prompt.presentation  = presentation;
+    prompt.sizeBytes            = sizeof(prompt);
+    prompt.scope                = (owner && IsWindow(owner)) ? HOST_ALERT_SCOPE_WINDOW : HOST_ALERT_SCOPE_APPLICATION;
+    prompt.severity             = HOST_ALERT_INFO;
+    prompt.buttons              = HOST_PROMPT_BUTTONS_OK_CANCEL;
+    prompt.targetWindow         = (prompt.scope == HOST_ALERT_SCOPE_WINDOW) ? owner : nullptr;
+    prompt.title                = caption.c_str();
+    prompt.message              = message.c_str();
+    prompt.defaultResult        = HOST_PROMPT_RESULT_OK;
+    prompt.presentation         = presentation;
     prompt.fileOperationOptions = options;
 
     HostPromptResult promptResult = HOST_PROMPT_RESULT_NONE;
