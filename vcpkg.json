@@ -2,7 +2,7 @@
   "name": "red-salamander",
   "description": "RedSalamander Project",
   "homepage": "https://github.com/Redsalamanderse/RedSalamander",
-  "builtin-baseline": "9e593bb18ea69cc5095e012465dcd675a822ed0d",
+  "builtin-baseline": "11159b9b7eed119f182612c9acdd8c864a21e9c6",
   "dependencies": [
     {
       "name": "7zip",

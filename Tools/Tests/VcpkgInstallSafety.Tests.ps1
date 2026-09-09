@@ -200,6 +200,18 @@ Describe 'Vcpkg install safety helper' {
         $override[0].version | Should Be '1.11.840'
     }
 
+    It 'pairs blake3 and ftxui floors with the registry commit that first published both' {
+        $manifest = Get-Content -LiteralPath (Join-Path $repoRoot 'vcpkg.json') -Raw | ConvertFrom-Json
+        $blake3 = @($manifest.dependencies | Where-Object { $_.name -eq 'blake3' })
+        $ftxui = @($manifest.dependencies | Where-Object { $_.name -eq 'ftxui' })
+
+        $manifest.'builtin-baseline' | Should Be '11159b9b7eed119f182612c9acdd8c864a21e9c6'
+        $blake3.Count | Should Be 1
+        $blake3[0].'version>=' | Should Be '1.8.7'
+        $ftxui.Count | Should Be 1
+        $ftxui[0].'version>=' | Should Be '7.0.3'
+    }
+
     It 'merges a single source file while StrictMode is active' {
         $root = New-RSTemporaryVcpkgInstallSafetyRoot
         try {
