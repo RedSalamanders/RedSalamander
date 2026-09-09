@@ -2959,7 +2959,7 @@ void ViewerPE::PollAsyncParseTerminalFallback() noexcept
 
 HRESULT STDMETHODCALLTYPE ViewerPE::Open(const ViewerOpenContext* context) noexcept
 {
-    if (! context || ! context->focusedPath || ! context->fileSystem)
+    if (! context || context->sizeBytes < sizeof(ViewerOpenContext) || ! context->focusedPath || ! context->fileSystem)
     {
         return E_INVALIDARG;
     }
@@ -3135,7 +3135,7 @@ HRESULT STDMETHODCALLTYPE ViewerPE::Close() noexcept
 
 HRESULT STDMETHODCALLTYPE ViewerPE::SetTheme(const ViewerTheme* theme) noexcept
 {
-    if (! theme || theme->version < 2u || theme->version > 4u)
+    if (! theme || theme->sizeBytes < sizeof(ViewerTheme))
     {
         return E_INVALIDARG;
     }

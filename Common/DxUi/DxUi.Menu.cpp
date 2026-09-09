@@ -102,6 +102,7 @@ constexpr GUID kMenuGaussianBlurEffectId = {0x1feb6d69, 0x2fe6, 0x4ac9, {0x8c, 0
 struct MenuController;
 struct MenuPopup;
 
+#if DXUI_MENU_PERSISTENT_DIAGNOSTICS || defined(ENABLE_TESTS)
 [[nodiscard]] const wchar_t* TraceMenuMessageName(UINT message) noexcept
 {
     switch (message)
@@ -144,6 +145,7 @@ struct MenuPopup;
         default: return L"message";
     }
 }
+#endif
 
 [[nodiscard]] int TracePopupIndex(const MenuController& controller, const MenuPopup* popup) noexcept;
 
@@ -1674,6 +1676,7 @@ struct MenuController
     // waiting behind unrelated owner traffic in the modal thread queue.
     return PeekMenuDebugStateMessage(controller, msg);
 #else
+    static_cast<void>(controller);
     return false;
 #endif
 }
@@ -2480,6 +2483,17 @@ void EnsureMenuWindowClass(HINSTANCE hInstance)
     return D2D1::SizeF(width, totalHeight);
 }
 
+[[nodiscard]] float ResolveVisibleMenuWidthDip(float contentWidthDip, const MenuController* controller, bool isSubmenu) noexcept
+{
+    if (isSubmenu || ! controller)
+    {
+        return contentWidthDip;
+    }
+
+    const float minRootWidthDip = controller->sessionCallbacks.minRootWidthDip;
+    return std::isfinite(minRootWidthDip) && minRootWidthDip > 0.0f ? (std::max)(contentWidthDip, minRootWidthDip) : contentWidthDip;
+}
+
 [[nodiscard]] D2D1_RECT_F GetVisibleItemRect(const MenuPopup& popup, size_t targetIndex) noexcept
 {
     D2D1_RECT_F rect = popup.GetItemRect(targetIndex, popup.GetContentWidthDip());
@@ -2950,6 +2964,19 @@ public:
 // Popup positioning with screen-edge flip
 // ---------------------------------------------------------------------------
 
+[[nodiscard]] RECT ConstrainPopupSurfaceRectToWorkArea(POINT topLeft, int desiredWidthPx, int desiredHeightPx, const RECT& work) noexcept
+{
+    const int workWidthPx  = (std::max)(1, static_cast<int>(work.right - work.left));
+    const int workHeightPx = (std::max)(1, static_cast<int>(work.bottom - work.top));
+    const int widthPx      = (std::min)((std::max)(1, desiredWidthPx), workWidthPx);
+    const int heightPx     = (std::min)((std::max)(1, desiredHeightPx), workHeightPx);
+    const int maxX         = (std::max)(static_cast<int>(work.left), static_cast<int>(work.right - widthPx));
+    const int maxY         = (std::max)(static_cast<int>(work.top), static_cast<int>(work.bottom - heightPx));
+    const int x            = std::clamp(static_cast<int>(topLeft.x), static_cast<int>(work.left), maxX);
+    const int y            = std::clamp(static_cast<int>(topLeft.y), static_cast<int>(work.top), maxY);
+    return RECT{x, y, x + widthPx, y + heightPx};
+}
+
 [[nodiscard]] RECT GetPopupItemScreenRect(const MenuPopup& popup, size_t itemIndex) noexcept
 {
     RECT windowRect{};
@@ -2985,10 +3012,9 @@ public:
     mi.cbSize = sizeof(mi);
     GetMonitorInfoW(monitor, &mi);
     const RECT work        = mi.rcWork;
-    const int workWidthPx  = (std::max)(1, static_cast<int>(work.right - work.left));
-    const int workHeightPx = (std::max)(1, static_cast<int>(work.bottom - work.top));
-    const int widthPx      = (std::min)(desiredWidthPx, workWidthPx);
-    const int heightPx     = (std::min)(desiredHeightPx, workHeightPx);
+    const RECT constrainedSize = ConstrainPopupSurfaceRectToWorkArea(POINT{work.left, work.top}, desiredWidthPx, desiredHeightPx, work);
+    const int widthPx          = constrainedSize.right - constrainedSize.left;
+    const int heightPx         = constrainedSize.bottom - constrainedSize.top;
 
     int x = screenPoint.x;
     int y = screenPoint.y;
@@ -3038,13 +3064,7 @@ public:
         y = work.bottom - heightPx;
     }
 
-    // Clamp to work area
-    const int maxX = (std::max)(static_cast<int>(work.left), static_cast<int>(work.right - widthPx));
-    const int maxY = (std::max)(static_cast<int>(work.top), static_cast<int>(work.bottom - heightPx));
-    x              = std::clamp(x, static_cast<int>(work.left), maxX);
-    y              = std::clamp(y, static_cast<int>(work.top), maxY);
-
-    return RECT{x, y, x + widthPx, y + heightPx};
+    return ConstrainPopupSurfaceRectToWorkArea(POINT{x, y}, widthPx, heightPx, work);
 }
 
 [[nodiscard]] RECT ComputePopupWindowRect(const RECT& surfaceRectPx, const MenuPopupShadowMargins& shadowMargins, UINT dpi) noexcept
@@ -3186,12 +3206,7 @@ void ApplyMenuPopupWindowRegion(HWND hwnd, const MenuPopupShadowMargins& shadowM
                          GetSystemMetrics(SM_YVIRTUALSCREEN) + (std::max)(1, GetSystemMetrics(SM_CYVIRTUALSCREEN))};
     }
 
-    const RECT work = mi.rcWork;
-    const int maxX  = (std::max)(static_cast<int>(work.left), static_cast<int>(work.right - widthPx));
-    const int maxY  = (std::max)(static_cast<int>(work.top), static_cast<int>(work.bottom - heightPx));
-    const int x     = std::clamp(static_cast<int>(topLeft.x), static_cast<int>(work.left), maxX);
-    const int y     = std::clamp(static_cast<int>(topLeft.y), static_cast<int>(work.top), maxY);
-    return RECT{x, y, x + widthPx, y + heightPx};
+    return ConstrainPopupSurfaceRectToWorkArea(topLeft, widthPx, heightPx, mi.rcWork);
 }
 
 void RefreshMenuPopupBackdrop(MenuPopup& popup, const RECT& surfaceRectPx) noexcept
@@ -3238,11 +3253,12 @@ void RelayoutMenuPopupForDpi(MenuPopup& popup, UINT dpi, const RECT* suggestedWi
     }
 
     const D2D1_SIZE_F sizeDip             = ComputeMenuSize(popup.items, popup.itemCount, popup.host, &popup.acceleratorColumnWidthDip, &popup.hasSubmenuItems);
+    const float requestedVisibleWidthDip  = ResolveVisibleMenuWidthDip(sizeDip.width, popup.controller, popup.isSubmenu);
     const float requestedVisibleHeightDip = (! popup.isSubmenu && popup.controller && popup.controller->sessionCallbacks.maxRootHeightDip > 0.0f)
                                                 ? (std::min)(sizeDip.height, popup.controller->sessionCallbacks.maxRootHeightDip)
                                                 : sizeDip.height;
 
-    const RECT surfaceRectPx     = ComputePopupSurfaceRectFromTopLeft(surfaceTopLeft, sizeDip.width, requestedVisibleHeightDip, dpi);
+    const RECT surfaceRectPx     = ComputePopupSurfaceRectFromTopLeft(surfaceTopLeft, requestedVisibleWidthDip, requestedVisibleHeightDip, dpi);
     const RECT windowRect        = ComputePopupWindowRect(surfaceRectPx, popup.shadowMargins, dpi);
     const int windowWidthPx      = windowRect.right - windowRect.left;
     const int windowHeightPx     = windowRect.bottom - windowRect.top;
@@ -3382,13 +3398,14 @@ bool CreateMenuPopupWindow(MenuController& controller,
 
     // Compute menu size
     const D2D1_SIZE_F sizeDip             = ComputeMenuSize(items, itemCount, popup->host, &popup->acceleratorColumnWidthDip, &popup->hasSubmenuItems);
+    const float requestedVisibleWidthDip  = ResolveVisibleMenuWidthDip(sizeDip.width, &controller, isSubmenu);
     const float requestedVisibleHeightDip = (! isSubmenu && controller.sessionCallbacks.maxRootHeightDip > 0.0f)
                                                 ? (std::min)(sizeDip.height, controller.sessionCallbacks.maxRootHeightDip)
                                                 : sizeDip.height;
 
     // Position the window
     const RECT surfaceRectPx     = ComputePopupPosition(screenPoint,
-                                                        sizeDip.width,
+                                                        requestedVisibleWidthDip,
                                                         requestedVisibleHeightDip,
                                                         popup->dpi,
                                                         isSubmenu,
@@ -3945,7 +3962,7 @@ void FinalizeAsyncMenuController(MenuController& controller) noexcept
             ++controller.rootSwitchImmediateRenderCount;
         }
 #endif
-        const HWND previousCapture = GetCapture();
+        [[maybe_unused]] const HWND previousCapture = GetCapture();
         SetCapture(root->hwnd);
         ActivatePopupForKeyboard(*root);
         DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup switch-capture root={:#x} previousCapture={:#x} currentCapture={:#x}",
@@ -4995,7 +5012,7 @@ void RunMenuModalLoop(MenuController& controller)
     if (! root || ! root->hwnd)
         return;
 
-    const HWND previousCapture = GetCapture();
+    [[maybe_unused]] const HWND previousCapture = GetCapture();
     const HWND previousFocus   = GetFocus();
     SetCapture(root->hwnd);
     ActivatePopupForKeyboard(*root);
@@ -5124,7 +5141,7 @@ void RunMenuModalLoop(MenuController& controller)
             }
             if (GetCapture() != currentRoot->hwnd)
             {
-                const HWND previousPopupCapture = GetCapture();
+                [[maybe_unused]] const HWND previousPopupCapture = GetCapture();
                 SetCapture(currentRoot->hwnd);
                 DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup loop-recapture root={:#x} previousCapture={:#x} currentCapture={:#x}",
                                 reinterpret_cast<uintptr_t>(currentRoot->hwnd),

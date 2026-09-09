@@ -1,0 +1,660 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Red Salamander Terminal Engine Candidate Universe Round-4 Transition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "version",
+    "frozenUtc",
+    "authorId",
+    "baseUniverse",
+    "roundCloseout",
+    "conformanceCorrections",
+    "policy",
+    "governanceSchemas",
+    "frozenInputs",
+    "proposalSha256",
+    "approvals"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "red-salamander-terminal-engine-candidate-universe-transition"
+    },
+    "version": {
+      "const": 4
+    },
+    "frozenUtc": {
+      "$ref": "#/$defs/utcSecond"
+    },
+    "authorId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "baseUniverse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relativePath",
+        "sha256",
+        "version"
+      ],
+      "properties": {
+        "relativePath": {
+          "const": "Specs/Terminal/TerminalEngineCandidateUniverse.v3.json"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "version": {
+          "const": 3
+        }
+      }
+    },
+    "roundCloseout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "priorRound",
+        "status",
+        "failureCodes",
+        "reuseAllowed",
+        "reuseForbidden"
+      ],
+      "properties": {
+        "priorRound": {
+          "const": 3
+        },
+        "status": {
+          "const": "invalid-no-selection"
+        },
+        "failureCodes": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "candidate-governance-chronology-unenforced"
+            },
+            {
+              "const": "nomination-before-universe-approval"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "reuseAllowed": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "Byte-identical round-3 universe, protocols, controls, pins, source archives, source-review facts, generated fixtures, and candidate-local implementation bytes may be reused only after their recorded SHA-256 values are reverified under round 4."
+            },
+            {
+              "const": "Round-3 nomination identities carry forward unchanged; their Review, Assessment, Set, approvals, and freeze instants do not."
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "reuseForbidden": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "No round-3 CandidateReview, CandidateAssessment, CandidateSet, approval, freeze instant, result, score, or selection decision is round-4 evidence."
+            },
+            {
+              "const": "No approval at or before the current-universe opening, at or after the common governance freeze, or bound to a different record digest is reusable."
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "conformanceCorrections": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "correctionId",
+            "priorState",
+            "requirement",
+            "currentState",
+            "scoringImpact"
+          ],
+          "properties": {
+            "correctionId": {
+              "const": "cross-repository-adaptation-ledger-closure"
+            },
+            "priorState": {
+              "const": "Round 2 could not represent candidate-specific assets outside the upstream result tree, its provider/driver surface encoded one candidate and dependency closure, and its neutral Harness/Probe could inherit an unbound ambient vcpkg header tree."
+            },
+            "requirement": {
+              "const": "Every candidate-specific byte must be counted in one exact no-renames result-tree ledger, executable host collection semantics must remain candidate-neutral and derive build-wrapper and legal-closure facts instead of trusting candidate claims, and every header byte compiled into the neutral evidence hosts must come from one exact frozen bootstrap input."
+            },
+            "currentState": {
+              "const": "Round 3 freezes a strict JCS candidate descriptor, inline legal closure, closed provider-generic CMake/Zig/Cargo build kinds, an explicitly counted wrapper kind, descriptor-derived wrapper scoring truth, an exact host-neutrality proof, explicit non-ambient host-header closure for Harness/Probe, and focused adversarial tests before any collection."
+            },
+            "scoringImpact": {
+              "const": "Enforces the existing round-2 regardless-of-repository accounting rule before any result collection; no cap, score anchor, weight, threshold, source decision, fixture expectation, or measurement recipe changes."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "correctionId",
+            "priorState",
+            "requirement",
+            "currentState",
+            "scoringImpact"
+          ],
+          "properties": {
+            "correctionId": {
+              "const": "candidate-governance-chronology-closure"
+            },
+            "priorState": {
+              "const": "Round 3 accepted source/adaptation approval instants and CandidateReview/CandidateAssessment/CandidateSet freeze instants without proving that the current universe had already opened, that every approval lay strictly inside one round window, or that direct provider phases consumed the complete governance closure."
+            },
+            "requirement": {
+              "const": "The latest independently approved current-universe instant opens the round. Every source, adaptation-rejection, and admitted-candidate approval must be an exact canonical UTC-second instant strictly after that opening and strictly before one byte-identical CandidateReview/CandidateAssessment/CandidateSet freeze instant; evaluator and provider entry points must reject any incomplete or out-of-window closure before external effects."
+            },
+            "currentState": {
+              "const": "Round 4 freezes strict UTC-second schema/reader validation, artifact-local author independence, one exact three-record freeze, a complete governance-closure reader, and evaluator/provider fail-closed ordering with lexical, equality-boundary, rebinding, and zero-effect tests."
+            },
+            "scoringImpact": {
+              "const": "Closes ordering and provider-consumption proof only; no cap, score anchor, weight, threshold, pin, source decision, control, fixture expectation, or measurement recipe changes. All Round-3 review/assessment/set bytes and approvals are non-reusable."
+            }
+          }
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hardCaps",
+        "nominationCarryForward",
+        "policyChange",
+        "preMeasurementRules"
+      ],
+      "properties": {
+        "hardCaps": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "binaryPatchAllowed",
+            "changedMaintainedFiles",
+            "changedMaintainedLines",
+            "logicalConcerns",
+            "newNonSystemRuntimeLeaves",
+            "newToolchainFamilies",
+            "ownerDays"
+          ],
+          "properties": {
+            "binaryPatchAllowed": {
+              "const": false
+            },
+            "changedMaintainedFiles": {
+              "const": 24
+            },
+            "changedMaintainedLines": {
+              "const": 2500
+            },
+            "logicalConcerns": {
+              "const": 5
+            },
+            "newNonSystemRuntimeLeaves": {
+              "const": 0
+            },
+            "newToolchainFamilies": {
+              "const": 1
+            },
+            "ownerDays": {
+              "const": 60
+            }
+          }
+        },
+        "nominationCarryForward": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/contourCarry"
+            },
+            {
+              "$ref": "#/$defs/ghosttyCarry"
+            },
+            {
+              "$ref": "#/$defs/weztermCarry"
+            }
+          ],
+          "items": false,
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "policyChange": {
+          "const": "No adaptation cap, score anchor, weight, threshold, pin, source decision, control, fixture expectation, or measurement recipe changes. Round 4 carries the round-3 nomination identities unchanged and closes governance chronology and provider-consumption proof before any collection."
+        },
+        "preMeasurementRules": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "Freeze and independently approve every allowed seed outcome, exact patch, result tree, concern map, owner ledger, candidate assessment, provider contract, and candidate set before any round-4 native or performance collection."
+            },
+            {
+              "const": "Candidate-specific adapter, provider, driver, build, generated, test, documentation, legal, dependency, and packaging code counts in that candidate regardless of repository location; moving code cannot improve a rating or evade a cap."
+            },
+            {
+              "const": "Every nomination admitted with collect disposition carries one strict descriptor with its canonical legal manifest inline, and every other candidate-specific asset lives inside its exact result tree so those paths are included by the no-renames patch ledger. Round 4 retains the round-3 closed provider-generic build-kind union for CMake/MSVC, Zig, and Cargo/Rust that forbids a candidate driver and derives maintainedBuildWrapper=false; its optional closed candidate-wrapper kind requires an exact patched driver, counts it in the same ledger, and derives maintainedBuildWrapper=true."
+            },
+            {
+              "const": "Every executable cohort carries exactly one frozen candidate-neutral host-header dependency input assigned to that complete cohort. Harness and Probe disable ambient vcpkg integration, accept only the explicitly materialized non-reparse include root, verify its exact directory identity and wil/resource.h, and cannot consume a developer or repository vcpkg_installed tree."
+            },
+            {
+              "const": "Canonical Collect accepts only Candidate All and rejects any narrowed or static-only selection before repository inspection, bootstrap, clean, subprocess launch, or evidence-root mutation. Candidate-specific diagnostics run below .build through non-archiving provider phases and can never be Finalize inputs."
+            },
+            {
+              "const": "Host executable code, contracts, and focused provider tests are candidate-neutral and contain no candidate, dependency, artifact, or fixture-expectation literals outside frozen governance records and synthetic test fixtures."
+            },
+            {
+              "const": "A changed candidate result tree, descriptor, provider semantics, frozen protocol, or scoring input after collection starts requires a new universe version and a complete rerun; round 4 has no repair-after-result exception."
+            },
+            {
+              "const": "Logical concerns remain independently regressible behaviors and may not be merged, renamed, or omitted to gain admission or a score."
+            },
+            {
+              "const": "A candidate must pass every fixture and native lane; no assertion-count inflation, fixture exception, expected-state lookup, unsupported action, normalized-artifact substitute, or candidate-supplied evidence claim is accepted."
+            },
+            {
+              "const": "The explicit no-winner outcome remains valid; no cap or rating is raised merely to force a selection."
+            },
+            {
+              "const": "Current-universe approval opens the round: every source, adaptation-rejection, and admitted-candidate approval is an exact canonical UTC-second instant strictly after the latest universe approval and strictly before one byte-identical CandidateReview/CandidateAssessment/CandidateSet freeze instant. Equal boundaries, anticipatory approvals, mismatched freezes, and provider paths that skip the complete governance closure are invalid before any collection effect."
+            }
+          ],
+          "items": false,
+          "minItems": 11,
+          "maxItems": 11
+        }
+      }
+    },
+    "governanceSchemas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateAssessment",
+        "candidateReview",
+        "candidateSet",
+        "concernMapping",
+        "driverInput",
+        "driverResult",
+        "hostNeutrality",
+        "providerDescriptor",
+        "round2Transition",
+        "round3Transition",
+        "round4Transition"
+      ],
+      "properties": {
+        "candidateAssessment": {
+          "$ref": "#/$defs/candidateAssessmentSchema"
+        },
+        "candidateReview": {
+          "$ref": "#/$defs/candidateReviewSchema"
+        },
+        "candidateSet": {
+          "$ref": "#/$defs/candidateSetSchema"
+        },
+        "concernMapping": {
+          "$ref": "#/$defs/concernMappingSchema"
+        },
+        "driverInput": {
+          "$ref": "#/$defs/driverInputSchema"
+        },
+        "driverResult": {
+          "$ref": "#/$defs/driverResultSchema"
+        },
+        "hostNeutrality": {
+          "$ref": "#/$defs/hostNeutralitySchema"
+        },
+        "providerDescriptor": {
+          "$ref": "#/$defs/providerDescriptorSchema"
+        },
+        "round2Transition": {
+          "$ref": "#/$defs/round2TransitionSchema"
+        },
+        "round3Transition": {
+          "$ref": "#/$defs/round3TransitionSchema"
+        },
+        "round4Transition": {
+          "$ref": "#/$defs/round4TransitionSchema"
+        }
+      }
+    },
+    "frozenInputs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/fileDigest"
+      },
+      "minItems": 65,
+      "maxItems": 65
+    },
+    "proposalSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "approvals": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/approval"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "utcSecond": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+    },
+    "fileDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relativePath",
+        "sha256"
+      ],
+      "properties": {
+        "relativePath": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/-]+$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approvalId",
+        "decision",
+        "proposalSha256",
+        "reviewedUtc",
+        "reviewerId",
+        "reviewerRole"
+      ],
+      "properties": {
+        "approvalId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "decision": {
+          "const": "approved"
+        },
+        "proposalSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "reviewedUtc": {
+          "$ref": "#/$defs/utcSecond"
+        },
+        "reviewerId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "reviewerRole": {
+          "const": "independent-universe-reviewer"
+        }
+      }
+    },
+    "carry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seedCandidateId",
+        "nominationId"
+      ],
+      "properties": {
+        "seedCandidateId": {
+          "type": "string"
+        },
+        "nominationId": {
+          "type": "string"
+        }
+      }
+    },
+    "contourCarry": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/carry"
+        },
+        {
+          "properties": {
+            "seedCandidateId": {
+              "const": "contour"
+            },
+            "nominationId": {
+              "const": "contour-rs-v3"
+            }
+          }
+        }
+      ]
+    },
+    "ghosttyCarry": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/carry"
+        },
+        {
+          "properties": {
+            "seedCandidateId": {
+              "const": "ghostty-upstream"
+            },
+            "nominationId": {
+              "const": "ghostty-rs-v4"
+            }
+          }
+        }
+      ]
+    },
+    "weztermCarry": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/carry"
+        },
+        {
+          "properties": {
+            "seedCandidateId": {
+              "const": "wezterm"
+            },
+            "nominationId": {
+              "const": "wezterm-rs-v3"
+            }
+          }
+        }
+      ]
+    },
+    "schemaDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relativePath",
+        "sha256"
+      ],
+      "properties": {
+        "relativePath": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "candidateAssessmentSchema": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/schemaDigest"
+        },
+        {
+          "properties": {
+            "relativePath": {
+              "const": "Specs/Terminal/TerminalEngineCandidateAssessment.schema.json"
+            }
+          }
+        }
+      ]
+    },
+    "candidateReviewSchema": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/schemaDigest"
+        },
+        {
+          "properties": {
+            "relativePath": {
+              "const": "Specs/Terminal/TerminalEngineCandidateReview.schema.json"
+            }
+          }
+        }
+      ]
+    },
+    "candidateSetSchema": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/schemaDigest"
+        },
+        {
+          "properties": {
+            "relativePath": {
+              "const": "Specs/Terminal/TerminalEngineCandidateSet.schema.json"
+            }
+          }
+        }
+      ]
+    },
+    "concernMappingSchema": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/schemaDigest"
+        },
+        {
+          "properties": {
+            "relativePath": {
+              "const": "Specs/Terminal/TerminalEngineConcernMapping.schema.json"
+            }
+          }
+        }
+      ]
+    },
+    "driverInputSchema": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/schemaDigest"
+        },
+        {
+          "properties": {
+            "relativePath": {
+              "const": "Tools/TerminalEngine/TerminalEngineCollectionDriverInput.schema.json"
+            }
+          }
+        }
+      ]
+    },
+    "driverResultSchema": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/schemaDigest"
+        },
+        {
+          "properties": {
+            "relativePath": {
+              "const": "Tools/TerminalEngine/TerminalEngineCollectionDriverResult.schema.json"
+            }
+          }
+        }
+      ]
+    },
+    "hostNeutralitySchema": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/schemaDigest"
+        },
+        {
+          "properties": {
+            "relativePath": {
+              "const": "Specs/Terminal/TerminalEngineCollectionNeutrality.schema.json"
+            }
+          }
+        }
+      ]
+    },
+    "providerDescriptorSchema": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/schemaDigest"
+        },
+        {
+          "properties": {
+            "relativePath": {
+              "const": "Specs/Terminal/TerminalEngineCollectionDescriptor.schema.json"
+            }
+          }
+        }
+      ]
+    },
+    "round2TransitionSchema": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/schemaDigest"
+        },
+        {
+          "properties": {
+            "relativePath": {
+              "const": "Specs/Terminal/TerminalEngineCandidateUniverseTransition.schema.json"
+            }
+          }
+        }
+      ]
+    },
+    "round3TransitionSchema": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/schemaDigest"
+        },
+        {
+          "properties": {
+            "relativePath": {
+              "const": "Specs/Terminal/TerminalEngineCandidateUniverseTransition.v3.schema.json"
+            }
+          }
+        }
+      ]
+    },
+    "round4TransitionSchema": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/schemaDigest"
+        },
+        {
+          "properties": {
+            "relativePath": {
+              "const": "Specs/Terminal/TerminalEngineCandidateUniverseTransition.v4.schema.json"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://red-salamander.invalid/schemas/terminal-vt-upgrade-evidence.v1.json",
+  "title": "RedSalamander Terminal VT upgrade evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "runId", "createdUtc", "repositoryCommit", "repositoryBranch", "machineHash", "configuration", "buildReceiptId", "runtimeIdentitySha256", "environment", "corpus", "behavior", "measurements", "kitty", "memory", "assertionCount", "outcome"],
+  "properties": {
+    "schema": {"const": "red-salamander.terminal-vt-upgrade-evidence.v1"},
+    "runId": {"type": "string", "pattern": "^[0-9]{8}_[0-9]{6}_[a-z0-9-]+$", "maxLength": 96},
+    "createdUtc": {"type": "string", "format": "date-time", "maxLength": 32},
+    "repositoryCommit": {"$ref": "#/$defs/sha1"},
+    "repositoryBranch": {"type": "string", "minLength": 1, "maxLength": 160},
+    "machineHash": {"type": "string", "pattern": "^[0-9a-f]{12}$"},
+    "configuration": {"const": "Release"},
+    "buildReceiptId": {"$ref": "#/$defs/sha256"},
+    "runtimeIdentitySha256": {"$ref": "#/$defs/sha256"},
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["windowsBuild", "cpu", "architecture", "compiler", "windowsSdk", "zig", "vcpkgCommit"],
+      "properties": {
+        "windowsBuild": {"type": "string", "minLength": 1, "maxLength": 32},
+        "cpu": {"type": "string", "minLength": 1, "maxLength": 160},
+        "architecture": {"const": "AMD64"},
+        "compiler": {"type": "string", "minLength": 1, "maxLength": 96},
+        "windowsSdk": {"type": "string", "minLength": 1, "maxLength": 64},
+        "zig": {"type": "string", "minLength": 1, "maxLength": 96},
+        "vcpkgCommit": {"$ref": "#/$defs/sha1"}
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["formatId", "version", "sha256", "inputByteCount"],
+      "properties": {
+        "formatId": {"const": "red-salamander-terminal-vt-upgrade-corpus"},
+        "version": {"const": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "inputByteCount": {"type": "integer", "minimum": 1}
+      }
+    },
+    "behavior": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ptyOutputSha256", "snapshotSha256", "expectedDeltas"],
+      "properties": {
+        "ptyOutputSha256": {"$ref": "#/$defs/sha256"},
+        "snapshotSha256": {"$ref": "#/$defs/sha256"},
+        "withoutExpectedDeltas": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ptyOutputSha256", "snapshotSha256"],
+          "properties": {
+            "ptyOutputSha256": {"$ref": "#/$defs/sha256"},
+            "snapshotSha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "expectedDeltas": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "disposition"],
+            "properties": {
+              "id": {"const": "dcs-high-byte-preservation"},
+              "disposition": {"const": "candidate-only-if-reviewed"}
+            }
+          }
+        }
+      }
+    },
+    "measurements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sampleCount", "percentileRule", "vtWrite", "snapshot", "hostedRender"],
+      "properties": {
+        "sampleCount": {"const": 200},
+        "percentileRule": {"const": "nearest-rank"},
+        "vtWrite": {"$ref": "#/$defs/timing"},
+        "snapshot": {"$ref": "#/$defs/timing"},
+        "hostedRender": {"$ref": "#/$defs/timing"}
+      }
+    },
+    "kitty": {"$ref": "#/$defs/nonnegativeCounters"},
+    "memory": {"$ref": "#/$defs/nonnegativeCounters"},
+    "assertionCount": {"type": "integer", "minimum": 1},
+    "outcome": {"const": "pass"}
+  },
+  "$defs": {
+    "sha1": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "p50", "p95", "candidateMaximumP95", "samples"],
+      "properties": {
+        "unit": {"const": "us"},
+        "p50": {"type": "integer", "minimum": 1},
+        "p95": {"type": "integer", "minimum": 1},
+        "candidateMaximumP95": {"type": "integer", "minimum": 1},
+        "samples": {"type": "array", "minItems": 200, "maxItems": 200, "items": {"type": "integer", "minimum": 1}}
+      }
+    },
+    "nonnegativeCounters": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    }
+  }
+}

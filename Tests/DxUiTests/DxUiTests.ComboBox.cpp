@@ -1112,8 +1112,7 @@ void TestComboBoxRainbowPopupUsesAccentDerivedHighlight()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF101513u;
     viewerTheme.textArgb                   = 0xFFF4FBF6u;
     viewerTheme.selectionBackgroundArgb    = 0xFF225E36u;

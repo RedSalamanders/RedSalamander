@@ -11,15 +11,24 @@ namespace FileSystemCurlInternal
 {
 struct ImapMessageSummary
 {
-    uint64_t uid       = 0;
-    uint64_t sizeBytes = 0;
-    bool flagged       = false;
-    bool seen          = false;
-    bool deleted       = false;
-    __int64 sentTime   = 0;
-    __int64 recvTime   = 0;
+    uint64_t uid           = 0;
+    uint64_t sizeBytes     = 0;
+    bool sizeKnown         = false;
+    bool flagsKnown        = false;
+    bool internalDateKnown = false;
+    bool headersKnown      = false;
+    bool flagged           = false;
+    bool seen              = false;
+    bool deleted           = false;
+    __int64 sentTime       = 0;
+    __int64 recvTime       = 0;
     std::wstring subject;
     std::wstring from;
+
+    [[nodiscard]] bool HasCompleteMetadata() const noexcept
+    {
+        return sizeKnown && flagsKnown && internalDateKnown && headersKnown;
+    }
 };
 
 struct ImapMailboxStatus

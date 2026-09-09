@@ -2,4 +2,4 @@
 /.github/workflows/ @eric-jesover
 /.github/dependabot.yml @eric-jesover
 /.github/CODEOWNERS @eric-jesover
-/Tools/ReleaseArtifactPolicy.ps1 @eric-jesover
+/Tools/Modules/Packaging/ReleaseArtifactPolicy.psm1 @eric-jesover

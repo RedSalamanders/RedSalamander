@@ -501,95 +501,6 @@ void AssignRepositoryProgressCounts(
     return OrdinalString::FoldCaseInvariant(text);
 }
 
-[[nodiscard]] bool IsAsciiHex(wchar_t ch) noexcept
-{
-    return (ch >= L'0' && ch <= L'9') || (ch >= L'a' && ch <= L'f') || (ch >= L'A' && ch <= L'F');
-}
-
-[[nodiscard]] bool IsAsciiHexRun(std::wstring_view text) noexcept
-{
-    return std::ranges::all_of(text, IsAsciiHex);
-}
-
-[[nodiscard]] bool IsGeneratedGuidWithBraces(std::wstring_view text) noexcept
-{
-    if (text.size() != 38u || text.front() != L'{' || text.back() != L'}')
-    {
-        return false;
-    }
-
-    for (size_t index = 1u; index + 1u < text.size(); ++index)
-    {
-        const bool mustBeDash = index == 9u || index == 14u || index == 19u || index == 24u;
-        if (mustBeDash)
-        {
-            if (text[index] != L'-')
-            {
-                return false;
-            }
-            continue;
-        }
-
-        if (! IsAsciiHex(text[index]))
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-[[nodiscard]] bool EndsWith(std::wstring_view text, std::wstring_view suffix) noexcept
-{
-    return text.size() >= suffix.size() && text.substr(text.size() - suffix.size()) == suffix;
-}
-
-[[nodiscard]] bool HasGeneratedBridgeTempSuffix(std::wstring_view tail) noexcept
-{
-    constexpr size_t kRandomHexChars = 32u;
-    return tail.size() > kRandomHexChars + 1u && IsAsciiHexRun(tail.substr(0u, kRandomHexChars)) && tail[kRandomHexChars] == L'_' &&
-           IsAsciiHexRun(tail.substr(kRandomHexChars + 1u));
-}
-
-[[nodiscard]] bool HasGeneratedCopyTempSuffix(std::wstring_view tail) noexcept
-{
-    return tail.size() == 8u + 1u + 8u + 1u + 16u && IsAsciiHexRun(tail.substr(0u, 8u)) && tail[8u] == L'_' && IsAsciiHexRun(tail.substr(9u, 8u)) &&
-           tail[17u] == L'_' && IsAsciiHexRun(tail.substr(18u, 16u));
-}
-
-[[nodiscard]] bool HasGeneratedWriterTempSuffix(std::wstring_view tail) noexcept
-{
-    if (! EndsWith(tail, L".tmp"))
-    {
-        return false;
-    }
-
-    tail.remove_suffix(4u);
-    if (tail.size() == 38u)
-    {
-        return IsGeneratedGuidWithBraces(tail);
-    }
-
-    return tail.size() == 8u + 1u + 16u && IsAsciiHexRun(tail.substr(0u, 8u)) && tail[8u] == L'.' && IsAsciiHexRun(tail.substr(9u, 16u));
-}
-
-[[nodiscard]] bool HasGeneratedTempTail(std::wstring_view name, std::wstring_view marker, bool (*tailMatches)(std::wstring_view) noexcept) noexcept
-{
-    const size_t markerPos = name.find(marker);
-    if (markerPos == std::wstring_view::npos)
-    {
-        return false;
-    }
-
-    return tailMatches(name.substr(markerPos + marker.size()));
-}
-
-[[nodiscard]] bool IsRedSalamanderStagedTempName(std::wstring_view name) noexcept
-{
-    return HasGeneratedTempTail(name, L".rs_tmp_", HasGeneratedBridgeTempSuffix) || HasGeneratedTempTail(name, L".rs_copy_tmp_", HasGeneratedCopyTempSuffix) ||
-           HasGeneratedTempTail(name, L".~rs-write-", HasGeneratedWriterTempSuffix);
-}
-
 [[nodiscard]] bool IsDriveRoot(std::wstring_view path) noexcept
 {
     return path.size() == 3u && path[1] == L':' && (path[2] == L'\\' || path[2] == L'/');
@@ -2490,7 +2401,7 @@ HRESULT EnumerateDirectory(std::wstring_view directoryPath, std::vector<Enumerat
         do
         {
             const std::wstring_view name(data.cFileName);
-            if (name == L"." || name == L".." || IsRedSalamanderStagedTempName(name))
+            if (name == L"." || name == L"..")
             {
                 continue;
             }
@@ -2577,7 +2488,7 @@ HRESULT EnumerateDirectory(std::wstring_view directoryPath, std::vector<Enumerat
                 return HRESULT_FROM_WIN32(ERROR_BAD_LENGTH);
             }
 
-            if (entry.name != L"." && entry.name != L".." && ! IsRedSalamanderStagedTempName(entry.name))
+            if (entry.name != L"." && entry.name != L"..")
             {
                 EnumeratedChild child{};
                 child.name           = std::wstring(entry.name);
@@ -3869,16 +3780,6 @@ HRESULT TryEnumerateFromConfiguredSqliteStore(const PersistentStoreInfo& storeIn
         if (outFallbackReason != nullptr)
         {
             *outFallbackReason = ClassifyUninspectableStore(storeInfo);
-        }
-        return S_FALSE;
-    }
-
-    if (storeInfo.inspectionSucceeded && ! storeInfo.readyForQueryCutover)
-    {
-        stats.sqliteCutoverBlocked = true;
-        if (outFallbackReason != nullptr)
-        {
-            *outFallbackReason = FallbackReason::CutoverBlocked;
         }
         return S_FALSE;
     }

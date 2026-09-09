@@ -78,6 +78,10 @@ LRESULT CALLBACK CompareOptionsDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPA
 LRESULT CALLBACK CompareProgressSpinnerWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
 LRESULT CALLBACK CompareDxChromeHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
 
+#pragma warning(push)
+// Owner: Compare Directories. Aligned pane state intentionally adds harmless ARM64 aggregate padding.
+// Review if the embedded FolderWindow/pane ownership changes.
+#pragma warning(disable : 4324)
 class CompareDirectoriesWindow final
 {
 public:
@@ -682,5 +686,6 @@ public:
     [[nodiscard]] bool DebugGetOptionsTargetHostAndClientRect(::CompareDirectoriesOptionsDebugFocusTarget target, HWND& outHost, RECT& outRect) const noexcept;
 #endif
 };
+#pragma warning(pop)
 
 } // namespace CompareDirectoriesWindowInternal

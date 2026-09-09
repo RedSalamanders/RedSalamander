@@ -1,25 +1,44 @@
+<#
+.SYNOPSIS
+    Verifies the classified visible native common-control source surface.
+
+.DESCRIPTION
+    Scans product source for non-report visible native control identifiers, excluding
+    the explicitly test-only or fallback files owned by this command. The command fails
+    when the discovered file set differs from its classification table.
+
+.OUTPUTS
+    Human-readable classification and status text. No supported pipeline objects.
+
+.NOTES
+    Prerequisites: repository product source. Side effects: none; scanning is read-only. Any unclassified or stale visible-native path throws and produces a nonzero exit. Primary consumers: CI and documentation-drift policy tests.
+
+.EXAMPLE
+    .\Tools\Audit-VisibleNativeSurfaces.ps1
+#>
+[CmdletBinding()]
 param()
 
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-Set-Location $repoRoot
+Import-Module (Join-Path $PSScriptRoot 'Modules\Auditing\RepositorySourceScanner.psm1') -Force
 
 $auditedFiles = @()
 
-$actualFiles = @(
-    foreach ($root in @("RedSalamander", "Plugins", "Common"))
-    {
-        Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object {
-            $_.Extension -in @(".cpp", ".h", ".rc")
-        } | Select-String -Pattern "STATUSCLASSNAMEW|msctls_progress32|SysTreeView32|WC_TREEVIEWW|ToolbarWindow32|TOOLBARCLASSNAME|SysHeader32|WC_HEADER|SysTabControl32|WC_TABCONTROL|msctls_trackbar32|TRACKBAR_CLASSW" |
-            Select-Object -ExpandProperty Path -Unique
-    }
-) | ForEach-Object { (Resolve-Path -LiteralPath $_ -Relative).TrimStart('.', '\', '/').Replace('\', '/') } | Where-Object {
-    $_ -ne "RedSalamander/Commands.SelfTest.cpp" -and
-        $_ -ne "RedSalamander/Preferences.Dialog.cpp" -and
-        $_ -ne "RedSalamander/SelfTest/Commands/Commands.SelfTest.Preferences.ChromeAndPlugins.cpp"
-} | Sort-Object -Unique
+$actualFiles = @(Find-RSRepositorySourceMatches `
+        -RepositoryRoot $repoRoot `
+        -SourceRoots @('RedSalamander', 'Plugins', 'Common') `
+        -Extensions @('.cpp', '.h', '.rc') `
+        -Patterns @('STATUSCLASSNAMEW|msctls_progress32|SysTreeView32|WC_TREEVIEWW|ToolbarWindow32|TOOLBARCLASSNAME|SysHeader32|WC_HEADER|SysTabControl32|WC_TABCONTROL|msctls_trackbar32|TRACKBAR_CLASSW') `
+        -ExcludedRelativePaths @(
+            'RedSalamander\Commands.SelfTest.cpp',
+            'RedSalamander\Preferences.Dialog.cpp',
+            'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.ChromeAndPlugins.cpp'
+        ) `
+        -PathSeparator Slash |
+    Select-Object -ExpandProperty Path -Unique |
+    Sort-Object -Unique)
 
 $expectedFiles = $auditedFiles.File | Sort-Object -Unique
 $missingFiles = @($expectedFiles | Where-Object { $_ -notin $actualFiles })

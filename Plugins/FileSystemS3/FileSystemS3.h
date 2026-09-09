@@ -26,6 +26,7 @@
 
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
+#include "FileSystemRouteProviderBase.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PackedFileInfoBuffer.h"
@@ -99,10 +100,12 @@ private:
 };
 
 class FileSystemS3 final : public IFileSystem,
+                           public FileSystemRouteCapabilitiesBase,
                            public IFileSystemIO,
                            public IFileSystemDirectoryOperations,
                            public IFileSystemDirectoryWatch,
                            public IFileSystemAtomicWriter,
+                           public IFileSystemIdentityDelete,
                            public IInformations,
                            public INavigationMenu,
                            public IDriveInfo
@@ -202,7 +205,9 @@ public:
                                           IFileSystemCallback* callback    = nullptr,
                                           void* cookie                     = nullptr) noexcept override;
 
-    HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
+                                                  FileSystemOperation operation,
+                                                  const char** jsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
                                                FileSystemOperation operationType,
                                                FileSystemTransferEndpoint endpoint,
@@ -219,6 +224,22 @@ public:
 
     // IFileSystemAtomicWriter
     HRESULT STDMETHODCALLTYPE SupportsAtomicWriterCommit(const wchar_t* path, FileSystemFlags flags, BOOL* supported) noexcept override;
+
+    // IFileSystemIdentityDelete (C10): a Permanent Delete pins the object revision it confirmed
+    // (version id or ETag) and the conditional delete re-checks it on the server.
+    HRESULT STDMETHODCALLTYPE ResolveDeleteIdentity(const wchar_t* path, const FileSystemOptions* options, FileSystemDeleteIdentity* identity) noexcept override;
+    HRESULT STDMETHODCALLTYPE DeleteIfIdentity(const wchar_t* path,
+                                               const FileSystemDeleteIdentity* identity,
+                                               FileSystemFlags flags,
+                                               const FileSystemOptions* options,
+                                               IFileSystemCallback* callback,
+                                               void* cookie) noexcept override;
+    HRESULT DeleteItemWithPinnedIdentity(const wchar_t* path,
+                                         const FileSystemDeleteIdentity* pinnedIdentity,
+                                         FileSystemFlags flags,
+                                         const FileSystemOptions* options,
+                                         IFileSystemCallback* callback,
+                                         void* cookie) noexcept;
 
     // IFileSystemDirectoryOperations
     HRESULT STDMETHODCALLTYPE CreateDirectory(const wchar_t* path) noexcept override;
@@ -238,11 +259,17 @@ public:
         bool useHttps                 = true;
         bool verifyTls                = true;
         bool useVirtualAddressing     = true;
+        bool anonymous                = false;
         unsigned long maxKeys         = 1000;
         unsigned long maxTableResults = 1000;
         uint32_t connectTimeoutMs     = 10'000;
         uint32_t requestTimeoutMs     = 30'000;
     };
+
+protected:
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                           FileSystemOperation operation,
+                                           FileSystemRouteDescriptor& descriptor) noexcept override;
 
 private:
     ~FileSystemS3();
@@ -304,69 +331,93 @@ private:
 
     static constexpr char kCapabilitiesJsonS3[] = R"json(
 {
-  "version": 1,
+  "version": 2,
+  "pathProfile": "s3-flat-prefix",
+  "rootId": "configured-s3-root",
   "operations": {
     "copy": true,
     "move": true,
+    "nativeMove": true,
     "delete": true,
-    "rename": true,
+    "rename": false,
+    "createDirectory": true,
     "properties": true,
     "read": true,
-    "write": true
+    "write": true,
+    "recycle": false
   },
   "concurrency": {
     "copyMoveMax": 1,
     "deleteMax": 8,
     "deleteRecycleBinMax": 1
   },
-  "crossFileSystem": {
+  "transfer": {
     "export": { "copy": ["*"], "move": ["*"] },
     "import": { "copy": ["*"], "move": ["*"] }
   },
-  "pathIdentity": {
-    "version": 1,
+  "identity": { "object": "objectKey", "revision": "versionIdOrEtag", "boundDelete": false, "conditionalDelete": false },
+  "publication": { "exclusiveStage": false, "conditionalPublish": false, "committedSize": true },
+  "links": { "preserveFileLink": false, "preserveDirectoryLink": false, "retargetInTree": false, "exactLinkRemoval": false },
+  "metadata": { "motw": "reported-loss", "alternateStreams": "reported-loss", "extendedAttributes": "reported-loss", "sparse": "reported-loss", "efs": "reported-loss" },
+  "verification": { "hostReadback": false, "providerProof": "writer-digest" },
+  "cancellation": { "abort": false, "deadline": true, "routeClass": "providerWatchdog", "providerWatchdogTimeoutMs": configured-s3-watchdog-ms },
+  "names": {
     "pathTextStableIdentity": true,
-    "componentComparison": "ordinalCaseSensitive",
+    "comparison": "ordinalCaseSensitive",
     "normalization": "none",
     "preferredSeparator": "/",
     "acceptedSeparators": ["/"],
     "casePreserving": true,
-    "caseOnlyRename": "supported"
-  }
+    "caseOnlyRename": "supported",
+    "maxComponentUtf16": 1024
+  },
+  "directories": { "model": "flatPrefix" }
 }
 )json";
 
     static constexpr char kCapabilitiesJsonS3Table[] = R"json(
 {
-  "version": 1,
+  "version": 2,
+  "pathProfile": "s3-table-read-only",
+  "rootId": "configured-s3-table-root",
   "operations": {
     "copy": false,
     "move": false,
+    "nativeMove": false,
     "delete": false,
     "rename": false,
+    "createDirectory": false,
     "properties": true,
     "read": true,
-    "write": false
+    "write": false,
+    "recycle": false
   },
   "concurrency": {
     "copyMoveMax": 1,
     "deleteMax": 1,
     "deleteRecycleBinMax": 1
   },
-  "crossFileSystem": {
+  "transfer": {
     "export": { "copy": ["*"], "move": [] },
     "import": { "copy": [], "move": [] }
   },
-  "pathIdentity": {
-    "version": 1,
+  "identity": { "object": "none", "revision": "none", "boundDelete": false, "conditionalDelete": false },
+  "publication": { "exclusiveStage": false, "conditionalPublish": false, "committedSize": false },
+  "links": { "preserveFileLink": false, "preserveDirectoryLink": false, "retargetInTree": false, "exactLinkRemoval": false },
+  "metadata": { "motw": "unknown", "alternateStreams": "unknown", "extendedAttributes": "unknown", "sparse": "unknown", "efs": "unknown" },
+  "verification": { "hostReadback": false, "providerProof": "writer-digest" },
+  "cancellation": { "abort": false, "deadline": false, "routeClass": "uncontained", "providerWatchdogTimeoutMs": 0 },
+  "names": {
     "pathTextStableIdentity": true,
-    "componentComparison": "ordinalCaseSensitive",
+    "comparison": "ordinalCaseSensitive",
     "normalization": "none",
     "preferredSeparator": "/",
     "acceptedSeparators": ["/"],
     "casePreserving": true,
-    "caseOnlyRename": "notApplicable"
-  }
+    "caseOnlyRename": "notApplicable",
+    "maxComponentUtf16": 1024
+  },
+  "directories": { "model": "providerVirtual" }
 }
 )json";
 
@@ -425,6 +476,13 @@ private:
       "type": "bool",
       "default": true,
       "description": "When off, path-style addressing is used (often required for some S3-compatible endpoints)."
+    },
+    {
+      "key": "anonymous",
+      "label": "Anonymous access",
+      "type": "bool",
+      "default": false,
+      "description": "Send unsigned requests (public buckets). Connection profiles can set the same switch in their extra fields."
     },
     {
       "key": "maxKeys",
@@ -510,6 +568,7 @@ private:
     std::mutex _stateMutex;
     Settings _settings{};
     std::string _configurationJson = "{}";
+    std::string _capabilitiesJson;
 
     std::mutex _propertiesMutex;
     std::string _lastPropertiesJson;

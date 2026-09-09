@@ -125,6 +125,7 @@
     <ClCompile Include="Factory.cpp" />
     <ClCompile Include="FilesInformationGoogleDrive.cpp" />
     <ClCompile Include="FileSystemGoogleDrive.cpp" />
+    <ClCompile Include="FileSystemGoogleDrive.SelfTest.FakeDrive.cpp" />
     <ClInclude Include="FileSystemGoogleDrive.h" />
     <ClInclude Include="FileSystemGoogleDriveResources.h" />
     <ResourceCompile Include="FileSystemGoogleDriveResources.rc" />

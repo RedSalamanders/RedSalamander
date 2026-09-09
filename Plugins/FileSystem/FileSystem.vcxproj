@@ -135,6 +135,8 @@
     <ClCompile Include="FileSystem.Search.cpp" />
     <ClCompile Include="FileSystem.Watch.cpp" />
     <ClInclude Include="..\..\Common\LocalSearchIndexCore.h" />
+    <ClInclude Include="..\..\Common\Blake3Digest.h" />
+    <ClInclude Include="..\..\Common\FileOperationTraversalPolicy.h" />
     <ClInclude Include="..\..\Common\SearchServiceBroker.h" />
     <ClInclude Include="..\..\Common\SqliteIndexStore.h" />
     <ClInclude Include="..\..\Common\SearchTextHelpers.h" />

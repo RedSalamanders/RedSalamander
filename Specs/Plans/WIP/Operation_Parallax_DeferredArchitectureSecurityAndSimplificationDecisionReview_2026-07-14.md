@@ -1,5 +1,8 @@
 # Operation Parallax — Deferred Architecture, Security, and Simplification Decision Review
 
+> **FILE OPERATIONS CONTRACT (2026-08-21).** `PAR-7` path classification feeds destination containment and name/limit feasibility. Mandatory capability v2 is fail-closed for missing, malformed, or unknown required semantics; future optional fields are ignored only when the owning v2 contract permits it. `PAR-10` remains a provider-concurrency dependency.
+
+
 > **Reviewer instructions:** This is a decision ledger, not an implementation plan. Review one scenario at a
 > time, refresh its evidence against the live tree, record an explicit decision, and route any approved work to
 > a separate executable WIP plan. Do not change production code from this operation. Do not turn a previous
@@ -101,6 +104,12 @@ client impersonation” is stale as a repository-wide statement.
 
 **Evidence required:** enumerate pipe commands to authorization functions; test allowed/denied clients; verify
 reversion on success and every early failure; review new pipe endpoints added since the planned commit.
+
+**2026-07-22 coordination note:** Emberglass R4-SEARCH-01 is closed independently of PAR-1. The predictable
+permissive Global startup event was removed and service, foreground, and offline-compaction writers now retain one
+store-directory exclusive lease with precreation, contention, crash-release, independent-store, and fail-closed
+runtime proof. That startup-ownership repair neither changes nor resolves this scenario's named-pipe client
+impersonation policy, so PAR-1 remains a deferred review rather than a duplicate implementation owner.
 
 ### PAR-2 — ViewerWeb external navigation policy
 

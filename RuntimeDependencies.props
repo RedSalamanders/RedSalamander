@@ -1,10 +1,87 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project>
   <!--
-    Single source of truth for app-local vcpkg runtime DLLs copied by plugin builds
-    and validated by portable packaging. Flavor Debug also applies to ASan Debug.
+    Single source of truth for app-local runtime files copied by product/plugin
+    builds and validated by portable packaging. Flavor Debug also applies to ASan Debug.
+    SourceRoot defaults to VcpkgTriplet; RepoRoot resolves Source relative to the repository root.
+    OutputRoot defaults to Plugins; BuildOutput selects the profile root.
+    OutputName is relative to that selected root and may name a validated child directory.
   -->
   <ItemGroup>
+    <RSRuntimeDependency Include="search-service-sqlite-debug">
+      <Projects>RedSalamanderSearchService</Projects><Flavor>Debug</Flavor><Platform>Any</Platform>
+      <Source>debug\bin\sqlite3.dll</Source><OutputRoot>BuildOutput</OutputRoot><OutputName>sqlite3.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="search-service-sqlite-release">
+      <Projects>RedSalamanderSearchService</Projects><Flavor>Release</Flavor><Platform>Any</Platform>
+      <Source>bin\sqlite3.dll</Source><OutputRoot>BuildOutput</OutputRoot><OutputName>sqlite3.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+
+    <RSRuntimeDependency Include="ghostty-vt-x64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>x64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\x64\bin\ghostty-vt.dll</Source><OutputName>TerminalRuntime\ghostty-vt.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-arm64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>ARM64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\ARM64\bin\ghostty-vt.dll</Source><OutputName>TerminalRuntime\ghostty-vt.dll</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-identity-x64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>x64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\x64\terminal-runtime-identity.json</Source><OutputName>TerminalRuntime\terminal-runtime-identity.json</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-identity-arm64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>ARM64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\ARM64\terminal-runtime-identity.json</Source><OutputName>TerminalRuntime\terminal-runtime-identity.json</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-license-ghostty-x64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>x64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\x64\share\licenses\terminal-runtime\LICENSE-Ghostty.txt</Source><OutputName>TerminalRuntime\LICENSE-Ghostty.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-license-ghostty-arm64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>ARM64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\ARM64\share\licenses\terminal-runtime\LICENSE-Ghostty.txt</Source><OutputName>TerminalRuntime\LICENSE-Ghostty.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-license-uucode-x64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>x64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\x64\share\licenses\terminal-runtime\LICENSE-uucode.txt</Source><OutputName>TerminalRuntime\LICENSE-uucode.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-license-uucode-arm64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>ARM64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\ARM64\share\licenses\terminal-runtime\LICENSE-uucode.txt</Source><OutputName>TerminalRuntime\LICENSE-uucode.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-license-uucode-bjoern-hoehrmann-x64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>x64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\x64\share\licenses\terminal-runtime\LICENSE-uucode-Bjoern-Hoehrmann.txt</Source><OutputName>TerminalRuntime\LICENSE-uucode-Bjoern-Hoehrmann.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-license-uucode-bjoern-hoehrmann-arm64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>ARM64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\ARM64\share\licenses\terminal-runtime\LICENSE-uucode-Bjoern-Hoehrmann.txt</Source><OutputName>TerminalRuntime\LICENSE-uucode-Bjoern-Hoehrmann.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-license-unicode-x64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>x64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\x64\share\licenses\terminal-runtime\LICENSE-Unicode.txt</Source><OutputName>TerminalRuntime\LICENSE-Unicode.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-license-unicode-arm64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>ARM64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\ARM64\share\licenses\terminal-runtime\LICENSE-Unicode.txt</Source><OutputName>TerminalRuntime\LICENSE-Unicode.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-license-wuffs-x64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>x64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\x64\share\licenses\terminal-runtime\LICENSE-Wuffs.txt</Source><OutputName>TerminalRuntime\LICENSE-Wuffs.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-license-wuffs-arm64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>ARM64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\ARM64\share\licenses\terminal-runtime\LICENSE-Wuffs.txt</Source><OutputName>TerminalRuntime\LICENSE-Wuffs.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-license-zig-x64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>x64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\x64\share\licenses\terminal-runtime\LICENSE-Zig.txt</Source><OutputName>TerminalRuntime\LICENSE-Zig.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+    <RSRuntimeDependency Include="ghostty-vt-license-zig-arm64">
+      <Projects>Terminal</Projects><Flavor>Any</Flavor><Platform>ARM64</Platform><SourceRoot>RepoRoot</SourceRoot>
+      <Source>.build\TerminalEngine\Product\ARM64\share\licenses\terminal-runtime\LICENSE-Zig.txt</Source><OutputName>TerminalRuntime\LICENSE-Zig.txt</OutputName><Required>true</Required>
+    </RSRuntimeDependency>
+
     <RSRuntimeDependency Include="7zip">
       <Projects>FileSystem7z</Projects><Flavor>Any</Flavor><Platform>Any</Platform>
       <Source>bin\7zip.dll</Source><OutputName>7zip.dll</OutputName><Required>true</Required>

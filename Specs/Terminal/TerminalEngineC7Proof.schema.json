@@ -1,0 +1,646 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:red-salamander:schema:terminal-engine-c7-proof-contract:v1",
+  "title": "RedSalamander terminal engine C7 proof contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "version",
+    "frozenUtc",
+    "correction",
+    "engineProbe",
+    "authentication",
+    "providerEvidence"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "red-salamander-terminal-engine-c7-proof-contract"
+    },
+    "version": {
+      "const": 1
+    },
+    "frozenUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "correction": {
+      "$ref": "#/$defs/correction"
+    },
+    "engineProbe": {
+      "$ref": "#/$defs/engineProbe"
+    },
+    "authentication": {
+      "$ref": "#/$defs/authentication"
+    },
+    "providerEvidence": {
+      "$ref": "#/$defs/providerEvidence"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "uint64Decimal": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9][0-9]{0,19})$"
+    },
+    "correction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "correctionId",
+        "frozenBeforePerformance",
+        "preservesMandatoryCorpus",
+        "priorCollectionReusable",
+        "priorPerformanceReusable",
+        "restartRequirement"
+      ],
+      "properties": {
+        "correctionId": {
+          "const": "c7-score-proof-v1"
+        },
+        "frozenBeforePerformance": {
+          "const": true
+        },
+        "preservesMandatoryCorpus": {
+          "const": true
+        },
+        "priorCollectionReusable": {
+          "const": false
+        },
+        "priorPerformanceReusable": {
+          "const": false
+        },
+        "restartRequirement": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    },
+    "engineEvent": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "ordinal"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "prompt-start",
+                "input-start"
+              ]
+            },
+            "ordinal": {
+              "$ref": "#/$defs/uint64Decimal"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "commandSha256",
+            "kind",
+            "ordinal"
+          ],
+          "properties": {
+            "commandSha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "kind": {
+              "const": "output-start"
+            },
+            "ordinal": {
+              "$ref": "#/$defs/uint64Decimal"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "exitCode",
+            "kind",
+            "ordinal"
+          ],
+          "properties": {
+            "exitCode": {
+              "type": "string",
+              "pattern": "^-?(?:0|[1-9][0-9]{0,9})$"
+            },
+            "kind": {
+              "const": "command-finished"
+            },
+            "ordinal": {
+              "$ref": "#/$defs/uint64Decimal"
+            }
+          }
+        }
+      ]
+    },
+    "availableSpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "firstLine",
+        "inputBegin",
+        "lastLine",
+        "phase",
+        "status"
+      ],
+      "properties": {
+        "firstLine": {
+          "$ref": "#/$defs/uint64Decimal"
+        },
+        "inputBegin": {
+          "$ref": "#/$defs/uint64Decimal"
+        },
+        "lastLine": {
+          "$ref": "#/$defs/uint64Decimal"
+        },
+        "phase": {
+          "enum": [
+            "after-first-input-start",
+            "after-second-input-start"
+          ]
+        },
+        "status": {
+          "const": "available"
+        }
+      }
+    },
+    "unavailableSpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "error",
+        "phase",
+        "status"
+      ],
+      "properties": {
+        "error": {
+          "enum": [
+            "in-command-output",
+            "no-prompt-mark"
+          ]
+        },
+        "phase": {
+          "enum": [
+            "after-output-start",
+            "alternate-screen"
+          ]
+        },
+        "status": {
+          "const": "unavailable"
+        }
+      }
+    },
+    "expectedState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actionId",
+        "copiedEffects",
+        "eventTrace",
+        "hostParserCount",
+        "livePromptSpanTrace",
+        "stateVersion"
+      ],
+      "properties": {
+        "actionId": {
+          "const": "probe-c7-engine-effects"
+        },
+        "copiedEffects": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cwdSha256",
+            "hyperlinkSha256",
+            "titleSha256"
+          ],
+          "properties": {
+            "cwdSha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "hyperlinkSha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "titleSha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "eventTrace": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "items": {
+            "$ref": "#/$defs/engineEvent"
+          }
+        },
+        "hostParserCount": {
+          "const": "0"
+        },
+        "livePromptSpanTrace": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/availableSpan"
+              },
+              {
+                "$ref": "#/$defs/unavailableSpan"
+              }
+            ]
+          }
+        },
+        "stateVersion": {
+          "const": "1"
+        }
+      }
+    },
+    "engineProbe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractId",
+        "fixtureId",
+        "actionId",
+        "arguments",
+        "schedules",
+        "maxStateBytes",
+        "fixedStreamSha256",
+        "fixedStreamSizeBytes",
+        "expectedState",
+        "requiredOrderingFixture"
+      ],
+      "properties": {
+        "contractId": {
+          "const": "c7-engine-effects-v1"
+        },
+        "fixtureId": {
+          "const": "c7-engine-effects-v1"
+        },
+        "actionId": {
+          "const": "probe-c7-engine-effects"
+        },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "contractId"
+          ],
+          "properties": {
+            "contractId": {
+              "const": "c7-engine-effects-v1"
+            }
+          }
+        },
+        "schedules": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "all-at-once",
+              "bytewise",
+              "terminator-split"
+            ]
+          }
+        },
+        "maxStateBytes": {
+          "$ref": "#/$defs/uint64Decimal"
+        },
+        "fixedStreamSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "fixedStreamSizeBytes": {
+          "$ref": "#/$defs/uint64Decimal"
+        },
+        "expectedState": {
+          "$ref": "#/$defs/expectedState"
+        },
+        "requiredOrderingFixture": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "fixtureId",
+            "scheduleId",
+            "actionId",
+            "stateJcs",
+            "stateSha256",
+            "requiredActionFlags"
+          ],
+          "properties": {
+            "fixtureId": {
+              "const": "write-response-order"
+            },
+            "scheduleId": {
+              "const": "terminator-split"
+            },
+            "actionId": {
+              "const": "admit-external-events"
+            },
+            "stateJcs": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "stateSha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "requiredActionFlags": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "action-observed",
+                  "checked-arithmetic",
+                  "order-preserved"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "authExpected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decisions",
+        "epochStatus",
+        "idleAuthorized"
+      ],
+      "properties": {
+        "decisions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "enum": [
+              "denied-engine-state",
+              "epoch-invalidated",
+              "handshake-accepted",
+              "idle-authorized",
+              "ignored-untrusted-origin",
+              "rejected-authentication",
+              "rejected-no-authenticated-frame"
+            ]
+          }
+        },
+        "epochStatus": {
+          "enum": [
+            "active",
+            "awaiting-handshake",
+            "invalidated"
+          ]
+        },
+        "idleAuthorized": {
+          "type": "boolean"
+        }
+      }
+    },
+    "authCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "caseId",
+        "classification",
+        "scenario",
+        "expected"
+      ],
+      "properties": {
+        "caseId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "classification": {
+          "enum": [
+            "negative-authentication",
+            "negative-composition",
+            "negative-untrusted-origin",
+            "positive"
+          ]
+        },
+        "scenario": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "enum": [
+              "handshake-duplicate",
+              "handshake-malformed",
+              "handshake-missing-nonce",
+              "handshake-oversized",
+              "handshake-protocol-version",
+              "handshake-valid",
+              "handshake-wrong-epoch",
+              "handshake-wrong-nonce",
+              "idle-alt-screen",
+              "idle-auth-no-typed",
+              "idle-duplicate-operation",
+              "idle-gap",
+              "idle-malformed",
+              "idle-missing-nonce",
+              "idle-nested-auth",
+              "idle-nested-output",
+              "idle-no-live-span",
+              "idle-not-primary",
+              "idle-ordinary-osc133",
+              "idle-ordinary-osc7",
+              "idle-out-of-order",
+              "idle-oversized",
+              "idle-protocol-version",
+              "idle-remote-output",
+              "idle-replay",
+              "idle-resume-top-level",
+              "idle-running",
+              "idle-typed-no-auth",
+              "idle-valid",
+              "idle-wrong-epoch",
+              "idle-wrong-nonce"
+            ]
+          }
+        },
+        "expected": {
+          "$ref": "#/$defs/authExpected"
+        }
+      }
+    },
+    "authentication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocolVersion",
+        "nonceBits",
+        "sequenceStartsAt",
+        "sequenceWrapIsFatal",
+        "maxFrameBytes",
+        "authorizationRule",
+        "failureRule",
+        "cases",
+        "boundaryCases"
+      ],
+      "properties": {
+        "protocolVersion": {
+          "const": "1"
+        },
+        "nonceBits": {
+          "const": "128"
+        },
+        "sequenceStartsAt": {
+          "const": "1"
+        },
+        "sequenceWrapIsFatal": {
+          "const": true
+        },
+        "maxFrameBytes": {
+          "$ref": "#/$defs/uint64Decimal"
+        },
+        "authorizationRule": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "failureRule": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "cases": {
+          "type": "array",
+          "minItems": 20,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/authCase"
+          }
+        },
+        "boundaryCases": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "$ref": "#/$defs/authBoundaryCase"
+          }
+        }
+      }
+    },
+    "authBoundaryCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "caseId",
+        "precondition",
+        "inputValue",
+        "expectedDecision",
+        "expectedEpochStatus",
+        "expectedIdleAuthorized"
+      ],
+      "properties": {
+        "caseId": {
+          "enum": [
+            "frame-size-exact-boundary",
+            "frame-size-plus-one",
+            "sequence-max-wrap-fatal"
+          ]
+        },
+        "precondition": {
+          "enum": [
+            "active-after-handshake",
+            "active-with-next-sequence-at-uint64-max"
+          ]
+        },
+        "inputValue": {
+          "$ref": "#/$defs/uint64Decimal"
+        },
+        "expectedDecision": {
+          "enum": [
+            "idle-authorized",
+            "rejected-authentication"
+          ]
+        },
+        "expectedEpochStatus": {
+          "enum": [
+            "active",
+            "invalidated"
+          ]
+        },
+        "expectedIdleAuthorized": {
+          "type": "boolean"
+        }
+      }
+    },
+    "providerEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "proofFormatId",
+        "evidenceId",
+        "resultCategory",
+        "maxProofBytes",
+        "contentPolicy"
+      ],
+      "properties": {
+        "proofFormatId": {
+          "const": "red-salamander-terminal-engine-c7-proof"
+        },
+        "evidenceId": {
+          "const": "score.c7-proof"
+        },
+        "resultCategory": {
+          "const": "verified"
+        },
+        "maxProofBytes": {
+          "$ref": "#/$defs/uint64Decimal"
+        },
+        "contentPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "allowsTerminalText",
+            "allowsPaths",
+            "allowsTitles",
+            "allowsUris",
+            "allowsNonce",
+            "allowsPayload"
+          ],
+          "properties": {
+            "allowsTerminalText": {
+              "const": false
+            },
+            "allowsPaths": {
+              "const": false
+            },
+            "allowsTitles": {
+              "const": false
+            },
+            "allowsUris": {
+              "const": false
+            },
+            "allowsNonce": {
+              "const": false
+            },
+            "allowsPayload": {
+              "const": false
+            }
+          }
+        }
+      }
+    }
+  }
+}

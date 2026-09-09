@@ -16,6 +16,8 @@
 #include <variant>
 #include <vector>
 
+#include "Keyboard.h"
+
 #pragma warning(push)
 // Windows headers: C4710 (not inlined), C4711 (auto inline), C4514 (unreferenced inline)
 #pragma warning(disable : 4710 4711 4514)
@@ -59,6 +61,7 @@ struct WindowPlacement
     WindowState state = WindowState::Normal;
     WindowBounds bounds{};
     std::optional<unsigned int> dpi;
+    std::wstring monitorDeviceName;
 };
 
 enum class FolderDisplayMode : uint8_t
@@ -176,6 +179,19 @@ struct UiSettings
 
     bool operator==(const UiSettings&) const noexcept = default;
 };
+
+struct MouseSettings
+{
+    bool focusFollowsPointer                 = false;
+    bool focusFollowsPointerWhenTerminalOpen = false;
+
+    bool operator==(const MouseSettings&) const noexcept = default;
+};
+
+[[nodiscard]] inline constexpr bool ShouldPaneFocusFollowPointer(const MouseSettings& settings, bool terminalDisplayed) noexcept
+{
+    return settings.focusFollowsPointer || (settings.focusFollowsPointerWhenTerminalOpen && terminalDisplayed);
+}
 
 enum class MonitorFilterPreset : uint8_t
 {
@@ -339,8 +355,7 @@ struct FileOperationsSettings
     bool autoDismissSuccess                      = false;
     bool popupFooterOnly                         = false;
     bool popupCompactDensity                     = false;
-    bool preCalcEnabled                          = true;
-    uint32_t preCalcMaxWorkers                   = 4;
+    bool verifyAfterCopy                         = false;
     uint32_t crossFsBridgeBufferSizeKB           = 4096;
     uint64_t defaultBandwidthLimitBytesPerSecond = 0;
     uint32_t maxDiagnosticsLogFiles              = 14;
@@ -781,17 +796,44 @@ struct ShortcutBinding
     uint32_t vk        = 0; // Win32 virtual-key code (0..255 recommended)
     uint32_t modifiers = 0; // bitmask: 1=Ctrl, 2=Alt, 4=Shift
     std::wstring commandId;
+    Common::Keyboard::KeyPosition keyPosition = Common::Keyboard::KeyPosition::None;
 };
 
 struct ShortcutsSettings
 {
+    uint32_t migrationVersion = 0;
+    std::vector<ShortcutBinding> application;
     std::vector<ShortcutBinding> functionBar;
     std::vector<ShortcutBinding> folderView;
+    std::vector<ShortcutBinding> terminal;
+    bool applicationCollapsed = false;
     bool functionBarCollapsed = false;
     bool folderViewCollapsed  = false;
+    bool terminalCollapsed    = false;
     std::wstring sortColumnId;
     bool sortDescending = false;
     std::vector<GridColumnLayoutEntry> gridLayout;
+};
+
+struct FloatingTerminalTabSettings
+{
+    std::wstring tabId;
+    std::wstring profileId;
+    std::wstring providerId;
+    std::wstring canonicalPath;
+};
+
+struct FloatingTerminalWindowSettings
+{
+    WindowPlacement placement;
+    bool wasOpenAtCleanShutdown = false;
+    std::wstring activeTabId;
+    std::vector<FloatingTerminalTabSettings> tabs;
+};
+
+struct TerminalSettings
+{
+    std::optional<FloatingTerminalWindowSettings> floatingWindow;
 };
 
 enum class SettingsSavePermission : uint8_t
@@ -835,9 +877,11 @@ struct Settings
     std::optional<MakeFileListSettings> makeFileList;
     ExtensionsSettings extensions;
     std::optional<ShortcutsSettings> shortcuts;
+    std::optional<TerminalSettings> terminal;
     std::optional<MainMenuState> mainMenu;
     std::optional<StartupSettings> startup;
     std::optional<UiSettings> ui;
+    std::optional<MouseSettings> mouse;
     std::optional<CacheSettings> cache;
     std::optional<FoldersSettings> folders;
     std::optional<MonitorSettings> monitor;
@@ -864,6 +908,7 @@ enum class SettingsLoadRecoveryReason : uint8_t
     FileActionsInvalid,
     UserMenuInvalid,
     ShortcutsInvalid,
+    TerminalInvalid,
     ConnectionProfileIdsMigrated,
 };
 
@@ -909,6 +954,13 @@ COMMON_API HRESULT LoadSettings(std::wstring_view appId, Settings& out) noexcept
 // settings file was backed up and defaults were restored.
 COMMON_API HRESULT LoadSettingsWithRecoveryInfo(std::wstring_view appId, Settings& out, SettingsLoadRecoveryInfo* recovery) noexcept;
 
+#ifdef ENABLE_TESTS
+// Test-only deterministic barrier between reading an invalid source and attempting its recovery backup.
+COMMON_API void DebugSetSettingsRecoveryBackupStallForTest(HANDLE enteredEvent, HANDLE releaseEvent) noexcept;
+// Test-only fixed timestamp used to force a deterministic backup-name collision.
+COMMON_API void DebugUseFixedSettingsBackupTimestampForTest(bool enabled) noexcept;
+#endif
+
 // Returns:
 // - S_OK: loaded successfully
 // - S_FALSE: file missing
@@ -924,9 +976,11 @@ COMMON_API HRESULT TryLoadSettingsNoRecovery(std::wstring_view appId, Settings& 
 // - failure HRESULT: unexpected I/O error while querying the file
 COMMON_API HRESULT TryGetSettingsFileStamp(std::wstring_view appId, SettingsFileStamp& out) noexcept;
 
-// Moves the current settings file to the standard timestamped backup path. This is the required
-// first step for an explicit replacement of settings written by a newer schema version.
-COMMON_API HRESULT BackupSettingsForExplicitReplacement(std::wstring_view appId, std::filesystem::path& backupPath) noexcept;
+// Moves the exact settings revision presented to the user to the standard timestamped backup path.
+// A changed, created, or deleted target returns ERROR_REVISION_MISMATCH without moving either revision.
+COMMON_API HRESULT BackupSettingsForExplicitReplacement(std::wstring_view appId,
+                                                        const std::optional<SettingsFileStamp>& expectedStamp,
+                                                        std::filesystem::path& backupPath) noexcept;
 
 // On success the snapshot's expectedFileStamp advances to the committed file identity.
 COMMON_API HRESULT SaveSettings(std::wstring_view appId, Settings& settings) noexcept;

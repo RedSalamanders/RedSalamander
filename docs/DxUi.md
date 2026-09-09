@@ -149,7 +149,7 @@ const auto palette = MakeAppThemeDxPalette(theme, theme.windowBackground);
 _host.SetTheme(palette);
 ```
 
-Whole-window or popup backdrops may request a Windows 11 DWM material:
+Whole-window backdrops may request a Windows 11 DWM material; popup HWNDs must not:
 
 ```cpp
 if (! theme.highContrast)
@@ -161,6 +161,40 @@ if (! theme.highContrast)
 Keep high-contrast and reduced-motion behavior in the palette. Avoid ad-hoc
 colors in paint code unless a new named visual token is being introduced in
 `DxUi.Theme.cpp` with focused tests.
+
+Small owned passive status popups use an app-rendered backdrop on a transparent composition HWND:
+
+```cpp
+host.SetSystemBackdrop(WindowHost::BackdropType::None);
+TransientSurfaceBackdrop backdrop;
+CaptureTransientSurfaceBackdrop(surfaceScreenRect, backdrop, L"StatusPopup");
+PaintTransientSurface(host, bounds,
+                      TransientSurfaceOptions{.cornerRadiusDip = 18.0f,
+                                              .drawShadow = true,
+                                              .pressed = pressed,
+                                              .backdrop = &backdrop});
+```
+
+`CaptureTransientSurfaceBackdrop(...)` owns bounded screen capture and
+`PaintTransientSurface(...)` owns clipped app-side blur, overlay fill, contour,
+inner rim, optional shadow, pressed fill, and High Contrast geometry. The caller
+still owns capture timing, placement, opacity/transforms, content, and input.
+Solid, Mica, MicaAlt, and Acrylic have distinct app-rendered treatments; High
+Contrast is opaque, square, shadowless, and backdrop-free. Clear the cached
+snapshot on hide or when geometry changes the captured surface's screen
+rectangle. Do not duplicate this policy in another popup-local painter or apply
+a DWM backdrop to the popup HWND.
+
+For a passive live region, set the retained root's `AccessibilityRole::Status`,
+stable automation ID and accessible name, then publish settled content through
+`RaiseWindowHostAccessibilityNotification(...)`. A non-focusable custom Invoke
+may be used for dismissal; semantic text children remain non-interactive.
+
+`WindowHost::ResetInteractionState()` notifies the captured control through
+`OnCaptureLost(...)` before releasing Win32 capture. This is required for
+pressed/drag state to clear on cancellation. Owners must still detach during
+teardown, and an externally destroyed attached HWND must clear every raw view
+of its retained root in the owner's `WM_NCDESTROY` path.
 
 ## Message routing pattern
 

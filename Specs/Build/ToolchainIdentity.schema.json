@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://red-salamander.local/schemas/toolchain-identity.v1.json",
+  "title": "RedSalamander resolved toolchain identity",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "canonicalization",
+    "platform",
+    "vc_tools_version",
+    "windows_sdk_version",
+    "msbuild",
+    "compiler",
+    "linker",
+    "resource_compiler",
+    "sdk_files"
+  ],
+  "properties": {
+    "schema": { "const": "red-salamander.toolchain-identity.v1" },
+    "canonicalization": { "const": "rs-canonical-json-v1" },
+    "platform": { "enum": ["x64", "ARM64"] },
+    "vc_tools_version": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "windows_sdk_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "msbuild": {
+      "allOf": [
+        { "$ref": "#/$defs/tool" },
+        { "properties": { "role": { "const": "msbuild" } } }
+      ]
+    },
+    "compiler": {
+      "allOf": [
+        { "$ref": "#/$defs/tool" },
+        { "properties": { "role": { "const": "compiler" } } }
+      ]
+    },
+    "linker": {
+      "allOf": [
+        { "$ref": "#/$defs/tool" },
+        { "properties": { "role": { "const": "linker" } } }
+      ]
+    },
+    "resource_compiler": {
+      "allOf": [
+        { "$ref": "#/$defs/tool" },
+        { "properties": { "role": { "const": "resource-compiler" } } }
+      ]
+    },
+    "sdk_files": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        {
+          "allOf": [
+            { "$ref": "#/$defs/sdkFile" },
+            { "properties": { "role": { "const": "windows-header" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/sdkFile" },
+            { "properties": { "role": { "const": "um-import-library" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/$defs/sdkFile" },
+            { "properties": { "role": { "const": "ucrt-import-library" } } }
+          ]
+        }
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "file_name", "file_version", "size_bytes", "sha256"],
+      "properties": {
+        "role": { "enum": ["msbuild", "compiler", "linker", "resource-compiler"] },
+        "file_name": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "file_version": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "size_bytes": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "sdkFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "file_name", "size_bytes", "sha256"],
+      "properties": {
+        "role": { "enum": ["windows-header", "um-import-library", "ucrt-import-library"] },
+        "file_name": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "size_bytes": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/digest" }
+      }
+    }
+  }
+}

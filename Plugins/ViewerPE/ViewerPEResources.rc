@@ -16,8 +16,8 @@ BEGIN
         MENUITEM "&Refresh\tF5", IDM_VIEWERPE_FILE_REFRESH
         POPUP "Other &Files"
         BEGIN
-            MENUITEM "&Next\tSpace, Ctrl+Down", IDM_VIEWERPE_OTHER_NEXT
             MENUITEM "&Previous\tBackspace, Ctrl+Up", IDM_VIEWERPE_OTHER_PREVIOUS
+            MENUITEM "&Next\tSpace, Ctrl+Down", IDM_VIEWERPE_OTHER_NEXT
             MENUITEM "&First\tCtrl+Home", IDM_VIEWERPE_OTHER_FIRST
             MENUITEM "&Last\tCtrl+End", IDM_VIEWERPE_OTHER_LAST
         END

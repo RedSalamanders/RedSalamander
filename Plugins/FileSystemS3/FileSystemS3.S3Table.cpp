@@ -352,10 +352,10 @@ namespace
     const Aws::String readable = json.View().WriteReadable();
     const std::string utf8(readable.c_str(), readable.size());
 
-    wil::unique_hfile file = CreateTemporaryDeleteOnCloseFile();
-    if (! file)
+    wil::unique_hfile file;
+    if (const HRESULT tempHr = Common::Files::CreateDeleteOnCloseTemporaryFile(kS3TemporaryFileOptions, file); FAILED(tempHr))
     {
-        return HRESULT_FROM_WIN32(GetLastError());
+        return tempHr;
     }
 
     HRESULT hr = WriteUtf8ToFile(file.get(), utf8);

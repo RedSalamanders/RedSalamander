@@ -24,11 +24,32 @@
 
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
+#include "FileSystemRouteProviderBase.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
 #include "Helpers.h"
 #include "PackedFileInfoBuffer.h"
+
+namespace FileSystemMicrosoftDriveInternal
+{
+// R0f-Graph provider-owned bound: WinHTTP resolve/connect (connect timeout each) plus send/receive
+// (request timeout each) for one attempt; transport failures are not retried.
+[[nodiscard]] unsigned long GraphProviderWatchdogTimeoutMs(uint32_t connectTimeoutMs, uint32_t requestTimeoutMs) noexcept;
+} // namespace FileSystemMicrosoftDriveInternal
+
+#if defined(ENABLE_TESTS)
+namespace FileSystemMicrosoftDriveSelfTest
+{
+// R0f-Graph fixture seam (test-enabled builds only): redirect Graph to a loopback base URL
+// (`http://127.0.0.1:<port>/v1.0`), bypass the OAuth token, suppress throttle sleeps, and resolve
+// `/@conn:microsoft-drive-selftest/...` to a synthetic drive context; `enable == false` restores
+// the service.
+void ConfigureFakeGraph(const wchar_t* baseUrl, bool enable) noexcept;
+void RunGraphStalledRequestCancelSelfTests(unsigned int& passed, unsigned int& failed) noexcept;
+void RunGraphZeroTimestampReplaceSelfTests(unsigned int& passed, unsigned int& failed) noexcept;
+} // namespace FileSystemMicrosoftDriveSelfTest
+#endif
 
 enum class FileSystemMicrosoftDriveMode
 {
@@ -78,8 +99,10 @@ private:
 };
 
 class FileSystemMicrosoftDrive final : public IFileSystem,
+                                       public FileSystemRouteCapabilitiesBase,
                                        public IFileSystemIO,
                                        public IFileSystemDirectoryOperations,
+                                       public IFileSystemAtomicWriter,
                                        public IInformations,
                                        public INavigationMenu,
                                        public IDriveInfo
@@ -163,7 +186,9 @@ public:
                                           const FileSystemOptions* options = nullptr,
                                           IFileSystemCallback* callback    = nullptr,
                                           void* cookie                     = nullptr) noexcept override;
-    HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
+                                                  FileSystemOperation operation,
+                                                  const char** jsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
                                                FileSystemOperation operationType,
                                                FileSystemTransferEndpoint endpoint,
@@ -178,6 +203,11 @@ public:
     HRESULT STDMETHODCALLTYPE GetItemProperties(const wchar_t* path, const char** jsonUtf8) noexcept override;
 
     HRESULT STDMETHODCALLTYPE CreateDirectory(const wchar_t* path) noexcept override;
+
+    // IFileSystemAtomicWriter (R0f-Graph): the writer publishes the requested name in one
+    // server-side step (simple PUT with If-None-Match, or an upload session whose item appears at
+    // completion under the requested conflict behavior), so the host bridge may publish new names.
+    HRESULT STDMETHODCALLTYPE SupportsAtomicWriterCommit(const wchar_t* path, FileSystemFlags flags, BOOL* supported) noexcept override;
     HRESULT STDMETHODCALLTYPE GetDirectorySize(const wchar_t* path,
                                                FileSystemFlags flags,
                                                IFileSystemDirectorySizeCallback* callback,
@@ -218,6 +248,11 @@ public:
                           std::wstring_view displayName,
                           std::wstring_view volumeLabel,
                           std::wstring_view webUrl) noexcept;
+
+protected:
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                           FileSystemOperation operation,
+                                           FileSystemRouteDescriptor& descriptor) noexcept override;
 
 private:
     ~FileSystemMicrosoftDrive();
@@ -308,35 +343,47 @@ private:
 
     static constexpr char kCapabilitiesJson[] = R"json(
 {
-  "version": 1,
+  "version": 2,
+  "pathProfile": "microsoft-drive-graph",
+  "rootId": "configured-drive-root",
   "operations": {
     "copy": false,
     "move": true,
-    "delete": true,
+    "nativeMove": true,
+    "delete": false,
     "rename": true,
+    "createDirectory": true,
     "properties": true,
     "read": true,
-    "write": true
+    "write": true,
+    "recycle": true
   },
   "concurrency": {
     "copyMoveMax": 1,
     "deleteMax": 4,
     "deleteRecycleBinMax": 1
   },
-  "crossFileSystem": {
+  "transfer": {
     "export": { "copy": ["*"], "move": [] },
     "import": { "copy": ["*"], "move": [] }
   },
-  "pathIdentity": {
-    "version": 1,
+  "identity": { "object": "providerItemId", "revision": "etag", "boundDelete": false, "conditionalDelete": false },
+  "publication": { "exclusiveStage": false, "conditionalPublish": false, "committedSize": true },
+  "links": { "preserveFileLink": false, "preserveDirectoryLink": false, "retargetInTree": false, "exactLinkRemoval": false },
+  "metadata": { "motw": "reported-loss", "alternateStreams": "reported-loss", "extendedAttributes": "reported-loss", "sparse": "reported-loss", "efs": "reported-loss" },
+  "verification": { "hostReadback": false, "providerProof": "writer-digest" },
+  "cancellation": { "abort": false, "deadline": true, "routeClass": "providerWatchdog", "providerWatchdogTimeoutMs": configured-drive-watchdog-ms },
+  "names": {
     "pathTextStableIdentity": true,
-    "componentComparison": "ordinalIgnoreCase",
+    "comparison": "ordinalIgnoreCase",
     "normalization": "none",
     "preferredSeparator": "/",
     "acceptedSeparators": ["/"],
     "casePreserving": true,
-    "caseOnlyRename": "supported"
-  }
+    "caseOnlyRename": "supported",
+    "maxComponentUtf16": 255
+  },
+  "directories": { "model": "providerVirtual" }
 }
 )json";
 
@@ -347,6 +394,7 @@ private:
     Settings _settings{};
     std::string _configurationJsonStorage[2] = {"{}", "{}"}; // Double-buffer to keep old pointer valid
     size_t _configurationJsonIndex           = 0;
+    std::string _capabilitiesJson;
     std::string _propertiesJson              = "{}";
     std::wstring _driveDisplayName;
     std::wstring _driveVolumeLabel;

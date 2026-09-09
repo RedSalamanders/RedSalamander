@@ -61,7 +61,23 @@ enum class EmptyUnicodeTextPolicy
 
     // Prepare the complete payload before changing the system clipboard. WIL retains ownership until
     // SetClipboardData succeeds and Windows takes it.
-    if (OpenClipboard(ownerWindow) == FALSE)
+    constexpr size_t kClipboardOpenAttemptCount = 20u;
+    constexpr DWORD kClipboardOpenRetryDelayMs  = 10u;
+    bool clipboardOpened                        = false;
+    for (size_t attempt = 0u; attempt < kClipboardOpenAttemptCount; ++attempt)
+    {
+        if (OpenClipboard(ownerWindow) != FALSE)
+        {
+            clipboardOpened = true;
+            break;
+        }
+
+        if (attempt + 1u < kClipboardOpenAttemptCount)
+        {
+            Sleep(kClipboardOpenRetryDelayMs);
+        }
+    }
+    if (! clipboardOpened)
     {
         return false;
     }

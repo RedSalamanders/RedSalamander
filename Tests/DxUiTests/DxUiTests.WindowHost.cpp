@@ -832,7 +832,7 @@ void TestWindowHostPointerInputClearsKeyboardFocusVisible()
     Require(! host.IsKeyboardFocusVisible(), "pointer input clears keyboard-only focus visuals");
 }
 
-void TestWindowHostCrossThreadDetachReleasesOwnerThreadAttachmentCount()
+void TestWindowHostRejectsForeignThreadDetachUntilOwnerDetaches()
 {
     using namespace RedSalamander::DxUi;
 
@@ -848,9 +848,69 @@ void TestWindowHostCrossThreadDetachReleasesOwnerThreadAttachmentCount()
     std::thread worker([&window] { window.Host().Detach(); });
     worker.join();
 
-    Require(DebugGetAttachedWindowHostCount() == baselineAttachedHostCount, "cross-thread detach removes the host from the attached-host registry");
+    Require(DebugGetAttachedWindowHostCount() == (baselineAttachedHostCount + 1u),
+            "foreign-thread detach leaves the owner-thread WindowHost registered");
+    Require(DebugGetSharedWindowHostAttachmentCountForThread(ownerThreadId) == (baselineOwnerAttachmentCount + 1u),
+            "foreign-thread detach cannot release owner-thread graphics or TSF state");
+
+    window.Host().Detach();
+    Require(DebugGetAttachedWindowHostCount() == baselineAttachedHostCount, "owner-thread detach removes the host from the registry");
     Require(DebugGetSharedWindowHostAttachmentCountForThread(ownerThreadId) == baselineOwnerAttachmentCount,
-            "cross-thread detach releases the original owner thread graphics attachment count");
+            "owner-thread detach releases its graphics attachment count");
+}
+
+void TestProcessExitShutdownMarshalsForeignWindowHostDetachToOwnerThread()
+{
+    using namespace RedSalamander::DxUi;
+
+    class ThreadRecordingLabel final : public Label
+    {
+    public:
+        explicit ThreadRecordingLabel(std::atomic<DWORD>& destroyedThreadId) : Label(L"Worker host"), _destroyedThreadId(&destroyedThreadId)
+        {
+        }
+
+        ~ThreadRecordingLabel() noexcept override
+        {
+            _destroyedThreadId->store(GetCurrentThreadId(), std::memory_order_release);
+        }
+
+    private:
+        std::atomic<DWORD>* _destroyedThreadId = nullptr;
+    };
+
+    Require(DebugGetAttachedWindowHostCount() == 0u, "owner-thread shutdown marshal test starts at the host-registry quiet point");
+    std::atomic<DWORD> workerThreadId{0u};
+    std::atomic<DWORD> destroyedThreadId{0u};
+    std::promise<void> readyPromise;
+    std::future<void> readyFuture = readyPromise.get_future();
+    std::promise<void> stopPromise;
+    std::shared_future<void> stopFuture = stopPromise.get_future().share();
+
+    std::thread worker([&workerThreadId, &destroyedThreadId, ready = std::move(readyPromise), stopFuture]() mutable
+    {
+        AttachedHostWindow workerWindow;
+        workerThreadId.store(GetCurrentThreadId(), std::memory_order_release);
+        auto root = std::make_unique<Panel>();
+        root->AddChild<ThreadRecordingLabel>(destroyedThreadId)->SetBounds(D2D1::RectF(8.0f, 8.0f, 160.0f, 36.0f));
+        workerWindow.Host().SetRoot(std::move(root));
+        ready.set_value();
+        while (stopFuture.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready)
+        {
+            workerWindow.PumpMessages();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    });
+
+    readyFuture.wait();
+    Require(DebugGetAttachedWindowHostCount() == 1u, "worker UI thread registers one live WindowHost before process-exit shutdown");
+    ShutdownAllWindowHostsForProcessExit();
+    Require(DebugGetAttachedWindowHostCount() == 0u, "process-exit shutdown drains the WindowHost registry before global resource reset");
+    Require(destroyedThreadId.load(std::memory_order_acquire) == workerThreadId.load(std::memory_order_acquire),
+            "process-exit shutdown destroys the retained tree on its attachment thread");
+
+    stopPromise.set_value();
+    worker.join();
 }
 
 void TestWindowHostDetachKeepsSharedGraphicsAttachmentUntilControlTreeDestroyed()
@@ -1226,6 +1286,22 @@ void TestSharedTestSupportPreservesSandboxAndEnvironmentPolicies()
         const std::filesystem::path emptyLeafDirectory     = TestSupport::AcquireTestDirectory(emptyLeafOptions, ec);
         Require(! ec && emptyLeafDirectory.filename() == L"default", "sandbox acquisition preserves the caller's empty-leaf fallback");
 
+        TestSupport::TestDirectoryOptions traversalOptions = cleanOptions;
+        traversalOptions.harnessSegment                    = L"..";
+        traversalOptions.leafSegment                       = L"..";
+        const std::filesystem::path traversalDirectory     = TestSupport::AcquireTestDirectory(traversalOptions, ec);
+        Require(! ec && ! traversalDirectory.empty() &&
+                    Common::Testing::IsSameOrDescendantTestSandboxPath(traversalDirectory, outer) &&
+                    TestSupport::SanitizeTestSandboxSegment(L"..") == L".._",
+                "sandbox acquisition neutralizes traversal-only harness and leaf segments");
+
+        {
+            TestSupport::ScopedEnvironmentVariable invalidRunScope(TestSupport::kTestRunIdEnvironmentVariable, L"..");
+            const std::filesystem::path invalidRunDirectory = TestSupport::AcquireTestDirectory(cleanOptions, ec);
+            Require(invalidRunDirectory.empty() && ec == std::errc::invalid_argument,
+                    "an invalid configured run ID fails closed instead of selecting a fallback path");
+        }
+
         const std::filesystem::path artifacts = TestSupport::AcquireTestDirectory({.harnessSegment      = L"contract-artifacts",
                                                                                     .fallbackRunIdPrefix = L"unused",
                                                                                     .kind = TestSupport::TestDirectoryKind::Artifacts,
@@ -1234,6 +1310,17 @@ void TestSharedTestSupportPreservesSandboxAndEnvironmentPolicies()
                                                                                    ec);
         Require(! ec && artifacts.filename() == L"contract-artifacts" && artifacts.parent_path().filename() == L"artifacts",
                 "artifact acquisition omits the scratch leaf when requested");
+    }
+
+    {
+        TestSupport::ScopedEnvironmentVariable rootScope(TestSupport::kTestRootEnvironmentVariable, L"C:\\Windows");
+        TestSupport::ScopedEnvironmentVariable runScope(TestSupport::kTestRunIdEnvironmentVariable, L"test-support-contract-run");
+        const std::filesystem::path unauthorized = TestSupport::AcquireTestDirectory({.harnessSegment      = L"dxui",
+                                                                                       .leafSegment         = L"unauthorized-root",
+                                                                                       .fallbackRunIdPrefix = L"unused"},
+                                                                                      ec);
+        Require(unauthorized.empty() && ec == std::errc::permission_denied,
+                "an arbitrary absolute test root is rejected before test directories are created");
     }
 
     std::filesystem::remove_all(outer, ec);
@@ -2498,6 +2585,95 @@ void TestWindowHostDetachDeactivatesSecureTextInputBeforeDestroyingRoot()
     Require(! host.DebugGetNativeTextInputState(detachedState), "detach clears the native text-input cache for destroyed secure fields");
 }
 
+void TestWindowHostProcessExitDetachAbandonsRetainedControlObserversBeforeNativeTeardown()
+{
+    using namespace RedSalamander::DxUi;
+
+    struct ProcessExitTextFieldState final
+    {
+        size_t destroyedCount = 0u;
+        size_t focusLossCount = 0u;
+    };
+
+    class ProcessExitTextField final : public TextField
+    {
+    public:
+        explicit ProcessExitTextField(ProcessExitTextFieldState& state) : TextField(L"credential-secret"), _state(&state)
+        {
+            SetMasked(true);
+        }
+
+        ~ProcessExitTextField() noexcept override
+        {
+            ++_state->destroyedCount;
+        }
+
+    protected:
+        void OnFocusChanged(WindowHost& host, bool focused) override
+        {
+            if (! focused)
+            {
+                ++_state->focusLossCount;
+            }
+            TextField::OnFocusChanged(host, focused);
+        }
+
+    private:
+        ProcessExitTextFieldState* _state = nullptr;
+    };
+
+    const DWORD ownerThreadId                   = GetCurrentThreadId();
+    const size_t baselineAttachedHostCount      = DebugGetAttachedWindowHostCount();
+    const uint32_t baselineOwnerAttachmentCount = DebugGetSharedWindowHostAttachmentCountForThread(ownerThreadId);
+
+    AttachedHostWindow window;
+    ProcessExitTextFieldState fieldState;
+    TrackingControlState hoverState;
+    SelfCapturingControlState captureState;
+    auto root          = std::make_unique<Panel>();
+    auto* secretField  = root->AddChild<ProcessExitTextField>(fieldState);
+    auto* hoverControl = root->AddChild<TrackingControl>(hoverState);
+    auto* captureControl = root->AddChild<SelfCapturingControl>(captureState);
+    secretField->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 28.0f));
+    hoverControl->SetBounds(D2D1::RectF(0.0f, 40.0f, 120.0f, 72.0f));
+    captureControl->SetBounds(D2D1::RectF(0.0f, 80.0f, 120.0f, 112.0f));
+
+    size_t focusCallbackCount = 0u;
+    window.Host().SetOnFocusChanged([&](Control*) { ++focusCallbackCount; });
+    window.Host().SetRoot(std::move(root));
+    window.Host().SetFocusControl(secretField);
+    const size_t focusCallbackCountBeforeDetach = focusCallbackCount;
+    bool handled                                = false;
+    static_cast<void>(window.Host().HandleMessage(window.Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(8, 48), handled));
+    window.Host().CaptureMouse(captureControl);
+
+    NativeTextInputState activeState{};
+    Require(window.Host().HasActiveTextInput(), "process-exit detach starts with an active text-input session");
+    Require(window.Host().DebugGetNativeTextInputState(activeState), "process-exit detach starts with a native text-input cache");
+    Require(activeState.text == L"credential-secret", "process-exit detach test cache contains the secret before teardown");
+    Require(hoverState.hoverEnterCount == 1u, "process-exit detach starts with a retained hover observer");
+    Require(window.Host().GetCapturedControl() == captureControl, "process-exit detach starts with a retained capture observer");
+
+    window.Host().DebugDetachForProcessExit();
+
+    NativeTextInputState detachedState{};
+    Require(fieldState.destroyedCount == 1u, "process-exit detach destroys the retained secure text field");
+    Require(fieldState.focusLossCount == 0u, "process-exit detach does not dispatch focus loss through an abandoned control observer");
+    Require(hoverState.hoverLeaveCount == 0u && hoverState.mouseLeaveCount == 0u,
+            "process-exit detach does not dispatch hover callbacks through an abandoned control observer");
+    Require(captureState.captureLostCount == 0u, "process-exit detach clears capture before synchronous capture-change dispatch");
+    Require(focusCallbackCount == focusCallbackCountBeforeDetach, "process-exit detach clears host focus callbacks before retained-tree teardown");
+    Require(window.Host().GetRoot() == nullptr, "process-exit detach releases retained root ownership");
+    Require(window.Host().GetFocusControl() == nullptr && window.Host().GetCapturedControl() == nullptr,
+            "process-exit detach clears retained focus and capture observers");
+    Require(! window.Host().HasActiveTextInput(), "process-exit detach clears the native text-input session");
+    Require(! window.Host().DebugHasActiveNativeTextInputSession(), "process-exit detach clears the native control observer");
+    Require(! window.Host().DebugGetNativeTextInputState(detachedState), "process-exit detach securely clears the native text-input cache");
+    Require(DebugGetAttachedWindowHostCount() == baselineAttachedHostCount, "process-exit detach removes the host from the attached-host registry");
+    Require(DebugGetSharedWindowHostAttachmentCountForThread(ownerThreadId) == baselineOwnerAttachmentCount,
+            "process-exit detach releases the owner-thread graphics attachment");
+}
+
 void TestWindowHostClearChildrenPrunesDestroyedTreeInteractionState()
 {
     using namespace RedSalamander::DxUi;
@@ -2694,6 +2870,29 @@ void TestWindowHostCaptureLossClearsPressedButtonState()
     static_cast<void>(window.Host().HandleMessage(window.Hwnd(), WM_CAPTURECHANGED, 0, 0, handled));
     Require(handled, "capture-loss button test handles capture change");
     Require(! button->IsPressed(), "capture-loss button test clears pressed state when capture is lost");
+}
+
+void TestWindowHostResetInteractionStateNotifiesCapturedControl()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root    = std::make_unique<Panel>();
+    auto* button = root->AddChild<ExposedButton>(L"Apply");
+    button->SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 32.0f));
+    window.Host().SetRoot(std::move(root));
+
+    bool handled = false;
+    static_cast<void>(window.Host().HandleMessage(window.Hwnd(), WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(24, 16), handled));
+    Require(handled, "interaction reset test handles mouse-down");
+    Require(button->IsPressed() && window.Host().GetCapturedControl() == button && GetCapture() == window.Hwnd(),
+            "interaction reset test starts with a pressed captured button");
+
+    window.Host().ResetInteractionState();
+
+    Require(! button->IsPressed(), "interaction reset notifies the captured control so it clears pressed state");
+    Require(window.Host().GetCapturedControl() == nullptr && GetCapture() != window.Hwnd(),
+            "interaction reset clears retained and Win32 mouse capture");
 }
 
 void TestWindowHostRedundantCaptureDoesNotCancelMouseDownCapture()
@@ -3449,6 +3648,38 @@ void TestWindowHostRestoreFromMinimizeRearmsSuspendedAnimation()
     Require(window.Host().DebugHasActiveAnimationSubscription(), "SIZE_RESTORED re-arms a suspended animation for an effectively visible host");
 }
 
+void TestNoninteractiveWindowActivationBlockerRejectsFocusStealing()
+{
+    using RedSalamander::TestSupport::ScopedWindowActivationBlocker;
+
+    ScopedWindowActivationBlocker localBlocker;
+    const bool ownsBlocker = ! ScopedWindowActivationBlocker::IsActiveForCurrentThread();
+    if (ownsBlocker)
+    {
+        Require(localBlocker.Start(), "noninteractive activation blocker installs on the test UI thread");
+    }
+
+    wil::unique_hwnd window(CreateWindowExW(
+        0, L"STATIC", L"DxUi no-activation guard probe", WS_OVERLAPPEDWINDOW, 0, 0, 160, 90, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr));
+    Require(window != nullptr, "no-activation guard probe window is created");
+    Require((GetWindowLongPtrW(window.get(), GWL_EXSTYLE) & WS_EX_NOACTIVATE) != 0,
+            "no-activation guard applies WS_EX_NOACTIVATE to top-level test windows");
+
+    ShowWindow(window.get(), SW_SHOW);
+    static_cast<void>(SetActiveWindow(window.get()));
+    static_cast<void>(SetForegroundWindow(window.get()));
+    static_cast<void>(SetFocus(window.get()));
+
+    Require(GetForegroundWindow() != window.get(), "no-activation guard preserves the user's foreground window");
+    Require(GetActiveWindow() != window.get(), "no-activation guard rejects top-level activation");
+    Require(GetFocus() != window.get(), "no-activation guard rejects keyboard focus");
+    if (ownsBlocker)
+    {
+        Require(localBlocker.ProtectedTopLevelWindowCount() >= 1u, "no-activation guard records protected top-level windows");
+        Require(localBlocker.BlockedActivationCount() >= 1u, "no-activation guard records rejected activation attempts");
+    }
+}
+
 } // namespace
 
 void RunWindowHostTests()
@@ -3469,7 +3700,7 @@ void RunWindowHostTests()
     runTest("TestWindowHostPaintUsesWilBeginPaintRaii", TestWindowHostPaintUsesWilBeginPaintRaii);
     runTest("TestWindowHostKeyboardInputMarksFocusVisible", TestWindowHostKeyboardInputMarksFocusVisible);
     runTest("TestWindowHostPointerInputClearsKeyboardFocusVisible", TestWindowHostPointerInputClearsKeyboardFocusVisible);
-    runTest("TestWindowHostCrossThreadDetachReleasesOwnerThreadAttachmentCount", TestWindowHostCrossThreadDetachReleasesOwnerThreadAttachmentCount);
+    runTest("TestWindowHostRejectsForeignThreadDetachUntilOwnerDetaches", TestWindowHostRejectsForeignThreadDetachUntilOwnerDetaches);
     runTest("TestWindowHostDetachKeepsSharedGraphicsAttachmentUntilControlTreeDestroyed",
             TestWindowHostDetachKeepsSharedGraphicsAttachmentUntilControlTreeDestroyed);
     runTest("TestWindowHostDestructorDetachesBeforeMemberTeardown", TestWindowHostDestructorDetachesBeforeMemberTeardown);
@@ -3517,6 +3748,10 @@ void RunWindowHostTests()
     runTest("TestWindowHostMenuKeyInvokesFocusedComboContextMenu", TestWindowHostMenuKeyInvokesFocusedComboContextMenu);
     runTest("TestWindowHostSetRootClearsDestroyedTreeInteractionState", TestWindowHostSetRootClearsDestroyedTreeInteractionState);
     runTest("TestWindowHostDetachDeactivatesSecureTextInputBeforeDestroyingRoot", TestWindowHostDetachDeactivatesSecureTextInputBeforeDestroyingRoot);
+    runTest("TestWindowHostProcessExitDetachAbandonsRetainedControlObserversBeforeNativeTeardown",
+            TestWindowHostProcessExitDetachAbandonsRetainedControlObserversBeforeNativeTeardown);
+    runTest("TestProcessExitShutdownMarshalsForeignWindowHostDetachToOwnerThread",
+            TestProcessExitShutdownMarshalsForeignWindowHostDetachToOwnerThread);
     runTest("TestWindowHostClearChildrenPrunesDestroyedTreeInteractionState", TestWindowHostClearChildrenPrunesDestroyedTreeInteractionState);
     runTest("TestWindowHostKeyDownCallbackDisablingFocusPrunesBeforePostDispatchSync", TestWindowHostKeyDownCallbackDisablingFocusPrunesBeforePostDispatchSync);
     runTest("TestWindowHostCharCallbackDisablingFocusPrunesBeforePostDispatchSync", TestWindowHostCharCallbackDisablingFocusPrunesBeforePostDispatchSync);
@@ -3524,6 +3759,7 @@ void RunWindowHostTests()
     runTest("TestWindowHostIgnoresObserverButtonsOutsideInstalledRoot", TestWindowHostIgnoresObserverButtonsOutsideInstalledRoot);
     runTest("TestWindowHostIgnoresFocusAndCaptureOutsideInstalledRoot", TestWindowHostIgnoresFocusAndCaptureOutsideInstalledRoot);
     runTest("TestWindowHostCaptureLossClearsPressedButtonState", TestWindowHostCaptureLossClearsPressedButtonState);
+    runTest("TestWindowHostResetInteractionStateNotifiesCapturedControl", TestWindowHostResetInteractionStateNotifiesCapturedControl);
     runTest("TestWindowHostRedundantCaptureDoesNotCancelMouseDownCapture", TestWindowHostRedundantCaptureDoesNotCancelMouseDownCapture);
     runTest("TestWindowHostPointerDispatchDoesNotReuseTargetAfterRootReplacement", TestWindowHostPointerDispatchDoesNotReuseTargetAfterRootReplacement);
     runTest("TestWindowHostHoverEnterDoesNotReuseTargetAfterRootReplacement", TestWindowHostHoverEnterDoesNotReuseTargetAfterRootReplacement);
@@ -3544,4 +3780,5 @@ void RunWindowHostTests()
     runTest("TestWindowHostUnknownMnemonicRemainsUnhandled", TestWindowHostUnknownMnemonicRemainsUnhandled);
     runTest("TestWindowHostHiddenAnimationTickDropsSubscriptionUntilShown", TestWindowHostHiddenAnimationTickDropsSubscriptionUntilShown);
     runTest("TestWindowHostRestoreFromMinimizeRearmsSuspendedAnimation", TestWindowHostRestoreFromMinimizeRearmsSuspendedAnimation);
+    runTest("TestNoninteractiveWindowActivationBlockerRejectsFocusStealing", TestNoninteractiveWindowActivationBlockerRejectsFocusStealing);
 }

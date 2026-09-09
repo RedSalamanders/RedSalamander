@@ -4,20 +4,21 @@
 
 LANGUAGE LANG_FRENCH, SUBLANG_FRENCH
 
-IDR_FOLDERVIEW_CONTEXT MENU
+IDR_FOLDERVIEW_ITEM_CONTEXT MENU
 BEGIN
 	    POPUP ""
 		    BEGIN
 		        MENUITEM "&Ouvrir",                       IDM_FOLDERVIEW_CONTEXT_OPEN
 		        MENUITEM "Ouvrir &avec...",               IDM_FOLDERVIEW_CONTEXT_OPEN_WITH
-		        MENUITEM "Calculer l’&espace",                 IDM_FOLDERVIEW_CONTEXT_VIEW_SPACE
+		        MENUITEM "Calculer l’&espace occupé",      IDM_FOLDERVIEW_CONTEXT_VIEW_SPACE
 		        MENUITEM SEPARATOR
-		        MENUITEM "&Supprimer",                     IDM_FOLDERVIEW_CONTEXT_DELETE
-		        MENUITEM "&Déplacer...",                    IDM_FOLDERVIEW_CONTEXT_MOVE
-		        MENUITEM "Re&nommer",                     IDM_FOLDERVIEW_CONTEXT_RENAME
-	        MENUITEM SEPARATOR
-	        MENUITEM "&Copier",                       IDM_FOLDERVIEW_CONTEXT_COPY
-		        MENUITEM "&Coller",                      IDM_FOLDERVIEW_CONTEXT_PASTE
+		        MENUITEM "Cou&per",                       IDM_FOLDERVIEW_CONTEXT_CUT
+		        MENUITEM "&Copier",                       IDM_FOLDERVIEW_CONTEXT_COPY
+		        MENUITEM "C&oller",                      IDM_FOLDERVIEW_CONTEXT_PASTE
+		        MENUITEM SEPARATOR
+		        MENUITEM "&Déplacer...",                  IDM_FOLDERVIEW_CONTEXT_MOVE
+		        MENUITEM "&Supprimer...",                 IDM_FOLDERVIEW_CONTEXT_DELETE
+		        MENUITEM "Re&nommer...",                  IDM_FOLDERVIEW_CONTEXT_RENAME
 		        MENUITEM SEPARATOR
 		        MENUITEM "&Propriétés",                 IDM_FOLDERVIEW_CONTEXT_PROPERTIES
 #if defined(_DEBUG) || defined(DEBUG)
@@ -30,14 +31,14 @@ BEGIN
 		                MENUITEM "&Avertissement [dbg]",                    IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_WARNING
 		                MENUITEM "&Information [dbg]",                IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_INFORMATION
 		                MENUITEM "&Veuillez patienter [dbg]",                IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_BUSY
-		                MENUITEM "Veuillez patienter (avec bouton &Annuler) [dbg]",  IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL
+		                MENUITEM "Ve&uillez patienter (avec bouton Annuler) [dbg]",  IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL
 		            END
 		            POPUP "&Non modal (ne bloque pas) [dbg]"
 		            BEGIN
 		                MENUITEM "&Erreur [dbg]",                      IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_ERROR_NONMODAL
 		                MENUITEM "&Avertissement [dbg]",                    IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_WARNING_NONMODAL
 		                MENUITEM "&Information [dbg]",                IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_INFORMATION_NONMODAL
-		                MENUITEM "Chargement &annulé (sans fermeture) [dbg]", IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_CANCELED
+		                MENUITEM "&Chargement annulé (sans fermeture) [dbg]", IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_CANCELED
 		            END
 		            MENUITEM SEPARATOR
 		            MENUITEM "&Masquer la superposition [dbg]",               IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_HIDE
@@ -45,6 +46,47 @@ BEGIN
 #endif
 		    END
 		END
+
+IDR_FOLDERVIEW_BACKGROUND_CONTEXT MENU
+BEGIN
+    POPUP ""
+    BEGIN
+        MENUITEM "&Coller",                         IDM_FOLDERVIEW_CONTEXT_PASTE
+        POPUP "&Nouveau"
+        BEGIN
+            MENUITEM "&Dossier...",                 IDM_PANE_CREATE_DIR
+            MENUITEM "&Modifier un nouveau fichier...", IDM_PANE_EDIT_NEW
+            MENUITEM SEPARATOR
+            MENUITEM "(Vide)",                      0, GRAYED
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "&Actualiser",                     IDM_FOLDERVIEW_CONTEXT_REFRESH
+        MENUITEM "Calculer l’&espace occupé",       IDM_FOLDERVIEW_CONTEXT_VIEW_SPACE
+#if defined(_DEBUG) || defined(DEBUG)
+        MENUITEM SEPARATOR
+        POPUP "Exemple de &superposition [dbg]"
+        BEGIN
+            POPUP "&Modal (bloque la saisie) [dbg]"
+            BEGIN
+                MENUITEM "&Erreur [dbg]",                      IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_ERROR
+                MENUITEM "&Avertissement [dbg]",                IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_WARNING
+                MENUITEM "&Information [dbg]",                  IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_INFORMATION
+                MENUITEM "&Veuillez patienter [dbg]",           IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_BUSY
+                MENUITEM "Ve&uillez patienter (avec bouton Annuler) [dbg]", IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL
+            END
+            POPUP "&Non modal (ne bloque pas) [dbg]"
+            BEGIN
+                MENUITEM "&Erreur [dbg]",                      IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_ERROR_NONMODAL
+                MENUITEM "&Avertissement [dbg]",                IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_WARNING_NONMODAL
+                MENUITEM "&Information [dbg]",                  IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_INFORMATION_NONMODAL
+                MENUITEM "&Chargement annulé (sans fermeture) [dbg]", IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_CANCELED
+            END
+            MENUITEM SEPARATOR
+            MENUITEM "&Masquer la superposition [dbg]", IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_HIDE
+        END
+#endif
+    END
+END
 
 	IDC_REDSALAMANDER MENUEX
 BEGIN
@@ -55,8 +97,8 @@ BEGIN
         BEGIN
             MENUITEM "&Précédent",                   IDM_LEFT_GO_TO_BACK,MFT_STRING,MFS_ENABLED
             MENUITEM "&Suivant",                IDM_LEFT_GO_TO_FORWARD,MFT_STRING,MFS_ENABLED
-            MENUITEM "Dossier &parent", IDM_LEFT_GO_TO_PARENT_DIRECTORY,MFT_STRING,MFS_ENABLED
-            MENUITEM "&Dossier racine",                    IDM_LEFT_GO_TO_ROOT_DIRECTORY,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Dossier parent", IDM_LEFT_GO_TO_PARENT_DIRECTORY,MFT_STRING,MFS_ENABLED
+            MENUITEM "D&ossier racine",                    IDM_LEFT_GO_TO_ROOT_DIRECTORY,MFT_STRING,MFS_ENABLED
             MENUITEM "Chemin depuis l’autre &volet",       IDM_LEFT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "Emplacements &favoris...",      IDM_LEFT_HOT_PATHS,MFT_STRING,MFS_ENABLED
@@ -67,9 +109,10 @@ BEGIN
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Bref",               IDM_LEFT_DISPLAY_BRIEF,MFT_STRING,MFS_ENABLED
         MENUITEM "&Détaillé",            IDM_LEFT_DISPLAY_DETAILED,MFT_STRING,MFS_ENABLED
-        MENUITEM "Très &détaillé",      IDM_LEFT_DISPLAY_EXTRA_DETAILED,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Très détaillé",      IDM_LEFT_DISPLAY_EXTRA_DETAILED,MFT_STRING,MFS_ENABLED
         MENUITEM "&Miniatures",          IDM_LEFT_DISPLAY_THUMBNAILS,MFT_STRING,MFS_ENABLED
         MENUITEM "Volet d’&aperçu",      IDM_LEFT_PREVIEW_PANE,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Volet de terminal",   IDM_LEFT_TERMINAL_PANE,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         POPUP "Trier &par",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
@@ -78,7 +121,7 @@ BEGIN
             MENUITEM "&Extension",         IDM_LEFT_SORT_EXTENSION,MFT_STRING,MFS_ENABLED
             MENUITEM "&Date",              IDM_LEFT_SORT_TIME,MFT_STRING,MFS_ENABLED
             MENUITEM "&Taille",              IDM_LEFT_SORT_SIZE,MFT_STRING,MFS_ENABLED
-            MENUITEM "&Attributs",                 IDM_LEFT_SORT_ATTRIBUTES,MFT_STRING,MFS_ENABLED
+            MENUITEM "Att&ributs",                 IDM_LEFT_SORT_ATTRIBUTES,MFT_STRING,MFS_ENABLED
         END
         POPUP "Affic&her",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
@@ -90,12 +133,12 @@ BEGIN
             MENUITEM "Barre de &navigation",     IDM_LEFT_NAVIGATION_BAR,MFT_STRING,MFS_ENABLED
             MENUITEM "Barre d’&état",            IDM_LEFT_STATUSBAR,MFT_STRING,MFS_ENABLED
         END
+        MENUITEM "Ac&tualiser",                IDM_LEFT_REFRESH,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Filtrer...",             IDM_LEFT_FILTER,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Agrandir/restaurer le volet", IDM_LEFT_ZOOM_PANEL,MFT_STRING,MFS_ENABLED
         MENUITEM "Permuter les &volets",              IDM_APP_SWAP_PANES,MFT_STRING,MFS_ENABLED
-        MENUITEM "Chemin depuis l’autre &volet",       IDM_LEFT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
-        MENUITEM "Ac&tualiser",                IDM_LEFT_REFRESH,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Filtrer...",             IDM_LEFT_FILTER,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Chemin depuis l’autre volet",       IDM_LEFT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
 #if defined(_DEBUG) || defined(DEBUG)
 	        MENUITEM MFT_SEPARATOR
 	        POPUP "Exemple de &superposition [dbg]",          65535,MFT_STRING,MFS_ENABLED
@@ -106,14 +149,14 @@ BEGIN
 	                MENUITEM "&Avertissement [dbg]",                    IDM_LEFT_OVERLAY_SAMPLE_WARNING,MFT_STRING,MFS_ENABLED
 	                MENUITEM "&Information [dbg]",                IDM_LEFT_OVERLAY_SAMPLE_INFORMATION,MFT_STRING,MFS_ENABLED
 	                MENUITEM "&Veuillez patienter [dbg]",                IDM_LEFT_OVERLAY_SAMPLE_BUSY,MFT_STRING,MFS_ENABLED
-	                MENUITEM "Veuillez patienter (avec bouton &Annuler) [dbg]",  IDM_LEFT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL,MFT_STRING,MFS_ENABLED
+	                MENUITEM "Ve&uillez patienter (avec bouton Annuler) [dbg]",  IDM_LEFT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL,MFT_STRING,MFS_ENABLED
 	            END
 	            POPUP "&Non modal (ne bloque pas) [dbg]",      65535,MFT_STRING,MFS_ENABLED
 	            BEGIN
 	                MENUITEM "&Erreur [dbg]",                      IDM_LEFT_OVERLAY_SAMPLE_ERROR_NONMODAL,MFT_STRING,MFS_ENABLED
 	                MENUITEM "&Avertissement [dbg]",                    IDM_LEFT_OVERLAY_SAMPLE_WARNING_NONMODAL,MFT_STRING,MFS_ENABLED
 	                MENUITEM "&Information [dbg]",                IDM_LEFT_OVERLAY_SAMPLE_INFORMATION_NONMODAL,MFT_STRING,MFS_ENABLED
-	                MENUITEM "Chargement &annulé (sans fermeture) [dbg]", IDM_LEFT_OVERLAY_SAMPLE_CANCELED,MFT_STRING,MFS_ENABLED
+	                MENUITEM "&Chargement annulé (sans fermeture) [dbg]", IDM_LEFT_OVERLAY_SAMPLE_CANCELED,MFT_STRING,MFS_ENABLED
 	            END
 		            MENUITEM MFT_SEPARATOR
 		            MENUITEM "&Masquer la superposition [dbg]",               IDM_LEFT_OVERLAY_SAMPLE_HIDE,MFT_STRING,MFS_ENABLED
@@ -122,44 +165,51 @@ BEGIN
 	    END
     POPUP "&Fichiers",                         65535,MFT_STRING,MFS_ENABLED
     BEGIN
-        MENUITEM "&Renommer...",               IDM_PANE_RENAME,MFT_STRING,MFS_ENABLED
         MENUITEM "&Ouvrir / exécuter",       IDM_PANE_EXECUTE_OPEN,MFT_STRING,MFS_ENABLED
         MENUITEM "&Affichage",                    IDM_PANE_VIEW,MFT_STRING,MFS_ENABLED
-        MENUITEM "Largeur d’&affichage...", IDM_APP_VIEW_WIDTH,MFT_STRING,MFS_ENABLED
-        MENUITEM "Affichage &alternatif",      IDM_PANE_ALTERNATE_VIEW,MFT_STRING,MFS_ENABLED
-        POPUP "Afficher &avec",                      65535,MFT_STRING,MFS_ENABLED
+        MENUITEM "A&ffichage alternatif",      IDM_PANE_ALTERNATE_VIEW,MFT_STRING,MFS_ENABLED
+        POPUP "Aff&icher avec",                      65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "(Vide)",                      0,MFT_STRING,MFS_GRAYED
         END
         MENUITEM "&Modifier",                    IDM_PANE_EDIT,MFT_STRING,MFS_ENABLED
-        MENUITEM "Modification &alternative", IDM_PANE_ALTERNATE_EDIT,MFT_STRING,MFS_ENABLED
-        POPUP "Modifier &avec",                      65535,MFT_STRING,MFS_ENABLED
+        MENUITEM "Mo&dification alternative", IDM_PANE_ALTERNATE_EDIT,MFT_STRING,MFS_ENABLED
+        POPUP "Modifi&er avec",                      65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "(Vide)",                      0,MFT_STRING,MFS_GRAYED
         END
-        MENUITEM "Modifier un &nouveau fichier...",   IDM_PANE_EDIT_NEW,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Copier...",                  IDM_PANE_COPY_TO_OTHER,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Déplacer/Renommer...",           IDM_PANE_MOVE_TO_OTHER,MFT_STRING,MFS_ENABLED
-        POPUP "&Supprimer",                         65535,MFT_STRING,MFS_ENABLED
-        BEGIN
-            MENUITEM "&Supprimer",                   IDM_PANE_DELETE,MFT_STRING,MFS_ENABLED
-            MENUITEM "Déplacer vers la &corbeille",     IDM_PANE_MOVE_TO_RECYCLE_BIN,MFT_STRING,MFS_ENABLED
-        END
-        MENUITEM "&Supprimer définitivement",   IDM_PANE_PERMANENT_DELETE,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Propriétés",        IDM_PANE_OPEN_PROPERTIES,MFT_STRING,MFS_ENABLED
-        MENUITEM "Menu con&textuel",      IDM_PANE_CONTEXT_MENU,MFT_STRING,MFS_ENABLED
-        MENUITEM "Menu contextuel (&dossier courant)", IDM_PANE_CONTEXT_MENU_CURRENT_DIRECTORY,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Sécurité...",                       IDM_PANE_OPEN_SECURITY,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
-        MENUITEM "Modifier les &attributs...", IDM_PANE_CHANGE_ATTRIBUTES,MFT_STRING,MFS_ENABLED
-        MENUITEM "Changer la &casse...",      IDM_PANE_CHANGE_CASE,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Compresser...",                     IDM_PANE_PACK,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Décompresser...",                   IDM_PANE_UNPACK,MFT_STRING,MFS_ENABLED
         POPUP "&Nouveau",                            65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "&Dossier...",                IDM_PANE_CREATE_DIR,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Modifier un nouveau fichier...", IDM_PANE_EDIT_NEW,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
-            MENUITEM "(Vide)",                      0,MFT_STRING,MFS_GRAYED
+            MENUITEM "(Vide)",                      IDM_PANE_NEW_TEMPLATE_BASE,MFT_STRING,MFS_GRAYED
+        END
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Renommer...",               IDM_PANE_RENAME,MFT_STRING,MFS_ENABLED
+        MENUITEM "Renommage par &lot...",       IDM_PANE_BATCH_RENAME,MFT_STRING,MFS_ENABLED
+        MENUITEM "Changer la &casse...",        IDM_PANE_CHANGE_CASE,MFT_STRING,MFS_ENABLED
+        MENUITEM "Modifier les &attributs...",  IDM_PANE_CHANGE_ATTRIBUTES,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Copier",                     IDM_PANE_COPY_TO_OTHER,MFT_STRING,MFS_ENABLED
+        MENUITEM "Copier avec les &options...", IDM_PANE_COPY_TO_OTHER_WITH_OPTIONS,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Déplacer/Renommer",          IDM_PANE_MOVE_TO_OTHER,MFT_STRING,MFS_ENABLED
+        MENUITEM "Déplacer/Renommer avec les o&ptions...", IDM_PANE_MOVE_TO_OTHER_WITH_OPTIONS,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Compresser...",                     IDM_PANE_PACK,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Décompresser...",                   IDM_PANE_UNPACK,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Supprimer...",                   IDM_PANE_DELETE,MFT_STRING,MFS_ENABLED
+        MENUITEM "Déplacer vers la &corbeille",     IDM_PANE_MOVE_TO_RECYCLE_BIN,MFT_STRING,MFS_ENABLED
+        MENUITEM "Supprimer &définitivement...",    IDM_PANE_PERMANENT_DELETE,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Propriétés",        IDM_PANE_OPEN_PROPERTIES,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Sécurité...",                       IDM_PANE_OPEN_SECURITY,MFT_STRING,MFS_ENABLED
+        POPUP "&Menu contextuel Shell",             65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "Élément &sélectionné...", IDM_PANE_CONTEXT_MENU,MFT_STRING,MFS_ENABLED
+            MENUITEM "Dossier &actuel...", IDM_PANE_CONTEXT_MENU_CURRENT_DIRECTORY,MFT_STRING,MFS_ENABLED
         END
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Quitter",                IDM_EXIT,MFT_STRING,MFS_ENABLED
@@ -168,81 +218,95 @@ BEGIN
     BEGIN
         MENUITEM "Cou&per",                                IDM_PANE_CLIPBOARD_CUT,MFT_STRING,MFS_ENABLED
         MENUITEM "&Copier",           IDM_PANE_CLIPBOARD_COPY,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Coller",         IDM_PANE_CLIPBOARD_PASTE,MFT_STRING,MFS_ENABLED
-        MENUITEM "Coller le raccourci",                      IDM_PANE_CLIPBOARD_PASTE_SHORTCUT,MFT_STRING,MFS_ENABLED
+        MENUITEM "C&oller",         IDM_PANE_CLIPBOARD_PASTE,MFT_STRING,MFS_ENABLED
+        MENUITEM "Coller le &raccourci",                      IDM_PANE_CLIPBOARD_PASTE_SHORTCUT,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
-        MENUITEM "Copier le chemin et le nom comme texte", IDM_PANE_COPY_PATH_AND_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
-        MENUITEM "Copier le nom comme texte",  IDM_PANE_COPY_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
-        MENUITEM "Copier le chemin comme texte",   IDM_PANE_COPY_PATH_AS_TEXT,MFT_STRING,MFS_ENABLED
-        MENUITEM "Copier le chemin UNC et le nom comme texte", IDM_PANE_COPY_PATH_AND_FILE_NAME,MFT_STRING,MFS_ENABLED
+        POPUP "Copier comme &texte",                       65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "Chemin + no&m", IDM_PANE_COPY_PATH_AND_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Nom",  IDM_PANE_COPY_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Chemin",   IDM_PANE_COPY_PATH_AS_TEXT,MFT_STRING,MFS_ENABLED
+            MENUITEM "Chemin &UNC + nom", IDM_PANE_COPY_PATH_AND_FILE_NAME,MFT_STRING,MFS_ENABLED
+        END
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Sélectionner...",                           IDM_PANE_SELECTION_SELECT_DIALOG,MFT_STRING,MFS_ENABLED
         MENUITEM "&Désélectionner...",                         IDM_PANE_SELECTION_UNSELECT_DIALOG,MFT_STRING,MFS_ENABLED
         MENUITEM "&Inverser la sélection",                    IDM_PANE_SELECTION_INVERT,MFT_STRING,MFS_ENABLED
-        MENUITEM "Tout &sélectionner",                          IDM_PANE_SELECTION_SELECT_ALL,MFT_STRING,MFS_ENABLED
-        MENUITEM "Tout &désélectionner",                        IDM_PANE_SELECTION_UNSELECT_ALL,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Restaurer la sélection",                   IDM_PANE_SELECTION_RESTORE,MFT_STRING,MFS_ENABLED
-        MENUITEM "Sélectionner le &suivant",          IDM_PANE_SELECT_NEXT,MFT_STRING,MFS_ENABLED
-        MENUITEM "Sélectionner + calculer la taille du dossier + suivant", IDM_PANE_SELECT_CALC_DIR_SIZE_NEXT,MFT_STRING,MFS_ENABLED
-        POPUP "&Avancé",                       65535,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Tout sélectionner",                          IDM_PANE_SELECTION_SELECT_ALL,MFT_STRING,MFS_ENABLED
+        MENUITEM "T&out désélectionner",                        IDM_PANE_SELECTION_UNSELECT_ALL,MFT_STRING,MFS_ENABLED
+        MENUITEM "S&électionner le suivant",          IDM_PANE_SELECT_NEXT,MFT_STRING,MFS_ENABLED
+        MENUITEM "Sélectionner + &calculer la taille du dossier + suivant", IDM_PANE_SELECT_CALC_DIR_SIZE_NEXT,MFT_STRING,MFS_ENABLED
+        POPUP "Sélection &avancée",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "&Enregistrer la sélection", IDM_PANE_SAVE_SELECTION,MFT_STRING,MFS_ENABLED
-            MENUITEM "&Charger la sélection...", IDM_PANE_SELECTION_RESTORE,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Restaurer la sélection...", IDM_PANE_SELECTION_RESTORE,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "Sélectionner les mêmes e&xtensions",       IDM_PANE_SELECTION_SELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
-            MENUITEM "Désélectionner les mêmes extensions",      IDM_PANE_SELECTION_UNSELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Désélectionner les mêmes extensions",      IDM_PANE_SELECTION_UNSELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "Sélectionner les mêmes &noms",                   IDM_PANE_SELECTION_SELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
-            MENUITEM "Désélectionner les mêmes noms",                  IDM_PANE_SELECTION_UNSELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Désélectionner les mêmes noms",                  IDM_PANE_SELECTION_UNSELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "&Masquer les noms sélectionnés",          IDM_PANE_SELECTION_HIDE_SELECTED_NAMES,MFT_STRING,MFS_ENABLED
-            MENUITEM "Masquer les noms non sélectionnés",         IDM_PANE_SELECTION_HIDE_UNSELECTED_NAMES,MFT_STRING,MFS_ENABLED
-            MENUITEM "Afficher les noms masqués",             IDM_PANE_SELECTION_SHOW_HIDDEN_NAMES,MFT_STRING,MFS_ENABLED
+            MENUITEM "M&asquer les noms non sélectionnés",         IDM_PANE_SELECTION_HIDE_UNSELECTED_NAMES,MFT_STRING,MFS_ENABLED
+            MENUITEM "A&fficher les noms masqués",             IDM_PANE_SELECTION_SHOW_HIDDEN_NAMES,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
-            MENUITEM "Aller au nom sélectionné précédent",         IDM_PANE_SELECTION_GOTO_PREV_SELECTED_NAME,MFT_STRING,MFS_ENABLED
-            MENUITEM "Aller au nom sélectionné suivant",             IDM_PANE_SELECTION_GOTO_NEXT_SELECTED_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Aller au nom sélectionné précédent",         IDM_PANE_SELECTION_GOTO_PREV_SELECTED_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "A&ller au nom sélectionné suivant",             IDM_PANE_SELECTION_GOTO_NEXT_SELECTED_NAME,MFT_STRING,MFS_ENABLED
         END
     END
     POPUP "&Commandes",                      65535,MFT_STRING,MFS_ENABLED
     BEGIN
-        MENUITEM "Créer &Dossier...", IDM_PANE_CREATE_DIR,MFT_STRING,MFS_ENABLED
         MENUITEM "Changer de &dossier...", IDM_PANE_CHANGE_DIRECTORY,MFT_STRING,MFS_ENABLED
-	        MENUITEM "Comparer les &dossiers...", IDM_APP_COMPARE,MFT_STRING,MFS_ENABLED
-	        MENUITEM "Calculer l’&espace occupé", IDM_PANE_VIEW_SPACE,MFT_STRING,MFS_ENABLED
-	        MENUITEM "Rechercher des &fichiers et dossiers...", IDM_PANE_FIND,MFT_STRING,MFS_ENABLED
-	        MENUITEM "Créer une liste de &fichiers...", IDM_PANE_MAKE_FILE_LIST,MFT_STRING,MFS_ENABLED
-	        MENUITEM "Aller vers la cible du raccourci ou du &lien", IDM_PANE_GO_TO_SHORTCUT_OR_LINK_TARGET,MFT_STRING,MFS_ENABLED
+        MENUITEM "Rechercher des &fichiers et dossiers...", IDM_PANE_FIND,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Recherche rapide", IDM_PANE_QUICK_SEARCH,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "Comparer les &dossiers...", IDM_APP_COMPARE,MFT_STRING,MFS_ENABLED
+        MENUITEM "Calculer l’&espace occupé", IDM_PANE_VIEW_SPACE,MFT_STRING,MFS_ENABLED
+        MENUITEM "Créer une &liste de fichiers...", IDM_PANE_MAKE_FILE_LIST,MFT_STRING,MFS_ENABLED
+        MENUITEM "Aller vers la &cible du raccourci ou du lien", IDM_PANE_GO_TO_SHORTCUT_OR_LINK_TARGET,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "Liste des fichiers &ouverts", IDM_PANE_LIST_OPENED_FILES,MFT_STRING,MFS_ENABLED
         MENUITEM "Afficher l’&historique des dossiers", IDM_PANE_SHOW_FOLDERS_HISTORY,MFT_STRING,MFS_ENABLED
+        MENUITEM "Ouvrir le menu du volet &actif", IDM_PANE_MENU,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Palette de commandes...", IDM_APP_COMMAND_PALETTE,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
-        MENUITEM "Connecter un lecteur &réseau...", IDM_PANE_CONNECT,MFT_STRING,MFS_ENABLED
-        MENUITEM "Se dé&connecter...", IDM_PANE_DISCONNECT,MFT_STRING,MFS_ENABLED
-        MENUITEM "Dossiers &partagés...", IDM_PANE_SHARES,MFT_STRING,MFS_ENABLED
-        MENUITEM "Gestionnaire de &connexions...", IDM_PANE_CONNECTION_MANAGER,MFT_STRING,MFS_ENABLED
+        POPUP "&Connexions",                      65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "&Gestionnaire de connexions...", IDM_PANE_CONNECTION_MANAGER,MFT_STRING,MFS_ENABLED
+            MENUITEM "Connecter un lecteur &réseau...", IDM_PANE_CONNECT,MFT_STRING,MFS_ENABLED
+            MENUITEM "Se dé&connecter...", IDM_PANE_DISCONNECT,MFT_STRING,MFS_ENABLED
+            MENUITEM "Dossiers &partagés...", IDM_PANE_SHARES,MFT_STRING,MFS_ENABLED
+        END
         MENUITEM MFT_SEPARATOR
-        MENUITEM "&Invite de commandes", IDM_PANE_OPEN_COMMAND_SHELL,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Recherche rapide", IDM_PANE_QUICK_SEARCH,MFT_STRING,MFS_ENABLED
-        MENUITEM "Envoyer le dossier courant vers la ligne de commande", IDM_PANE_BRING_CURRENT_DIR_TO_COMMAND_LINE,MFT_STRING,MFS_ENABLED
-        MENUITEM "Envoyer le nom de fichier vers la ligne de commande", IDM_PANE_BRING_FILENAME_TO_COMMAND_LINE,MFT_STRING,MFS_ENABLED
-        MENUITEM "Volet &Menu", IDM_PANE_MENU,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Relire les associations", IDM_APP_REREAD_ASSOCIATIONS,MFT_STRING,MFS_ENABLED
+        POPUP "&Terminal",                         65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "Fenêtre d’&invite de commandes", IDM_TERMINAL_OPEN_FLOATING_WINDOW,MFT_STRING,MFS_ENABLED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "Insérer le &dossier actuel", IDM_PANE_BRING_CURRENT_DIR_TO_COMMAND_LINE,MFT_STRING,MFS_ENABLED
+            MENUITEM "Insérer l’élément &actif", IDM_PANE_BRING_FILENAME_TO_COMMAND_LINE,MFT_STRING,MFS_ENABLED
+            MENUITEM "Insérer le chemin &complet", IDM_PANE_BRING_FULL_PATH_TO_TERMINAL,MFT_STRING,MFS_ENABLED
+        END
+        MENUITEM MFT_SEPARATOR
         POPUP "Menu &utilisateur",                          65535,MFT_STRING,MFS_ENABLED
         BEGIN
-            MENUITEM "(Vide)",                     0,MFT_STRING,MFS_GRAYED
+            MENUITEM "(Vide)",                     IDM_PANE_USER_MENU_BASE,MFT_STRING,MFS_GRAYED
         END
         POPUP "Ouvrir dans l’&Explorateur de fichiers",               65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "&Dossier courant", IDM_PANE_OPEN_CURRENT_FOLDER,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
-            MENUITEM "Bureau",                  IDM_APP_OPEN_FILE_EXPLORER_DESKTOP,MFT_STRING,MFS_ENABLED
-            MENUITEM "Documents",                IDM_APP_OPEN_FILE_EXPLORER_DOCUMENTS,MFT_STRING,MFS_ENABLED
-            MENUITEM "Téléchargements",                IDM_APP_OPEN_FILE_EXPLORER_DOWNLOADS,MFT_STRING,MFS_ENABLED
-            MENUITEM "Images",                 IDM_APP_OPEN_FILE_EXPLORER_PICTURES,MFT_STRING,MFS_ENABLED
-            MENUITEM "Musique",                    IDM_APP_OPEN_FILE_EXPLORER_MUSIC,MFT_STRING,MFS_ENABLED
-            MENUITEM "Vidéos",                   IDM_APP_OPEN_FILE_EXPLORER_VIDEOS,MFT_STRING,MFS_ENABLED
-            MENUITEM "OneDrive",                 IDM_APP_OPEN_FILE_EXPLORER_ONEDRIVE,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Bureau",                  IDM_APP_OPEN_FILE_EXPLORER_DESKTOP,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Documents",                IDM_APP_OPEN_FILE_EXPLORER_DOCUMENTS,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Téléchargements",                IDM_APP_OPEN_FILE_EXPLORER_DOWNLOADS,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Images",                 IDM_APP_OPEN_FILE_EXPLORER_PICTURES,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Musique",                    IDM_APP_OPEN_FILE_EXPLORER_MUSIC,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Vidéos",                   IDM_APP_OPEN_FILE_EXPLORER_VIDEOS,MFT_STRING,MFS_ENABLED
+            MENUITEM "&OneDrive",                 IDM_APP_OPEN_FILE_EXPLORER_ONEDRIVE,MFT_STRING,MFS_ENABLED
         END
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Relire les associations", IDM_APP_REREAD_ASSOCIATIONS,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Préférences...", IDM_FILE_PREFERENCES,MFT_STRING,MFS_ENABLED
     END
     POPUP "&Plug-ins",                       65535,MFT_STRING,MFS_ENABLED
     BEGIN
@@ -258,22 +322,24 @@ BEGIN
             MENUITEM MFT_SEPARATOR
             MENUITEM "&Système",                     IDM_VIEW_THEME_SYSTEM,MFT_STRING,MFS_ENABLED
             MENUITEM "&Clair",                      IDM_VIEW_THEME_LIGHT,MFT_STRING,MFS_ENABLED
-            MENUITEM "&Sombre",                       IDM_VIEW_THEME_DARK,MFT_STRING,MFS_ENABLED
+            MENUITEM "S&ombre",                       IDM_VIEW_THEME_DARK,MFT_STRING,MFS_ENABLED
             MENUITEM "&Arc-en-ciel",                    IDM_VIEW_THEME_RAINBOW,MFT_STRING,MFS_ENABLED
             MENUITEM "Contraste &élevé (application)",        IDM_VIEW_THEME_HIGH_CONTRAST_APP,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
-            MENUITEM "Thème précédent",              IDM_VIEW_THEME_PREV,MFT_STRING,MFS_ENABLED
-            MENUITEM "Thème suivant",                  IDM_VIEW_THEME_NEXT,MFT_STRING,MFS_ENABLED
+            MENUITEM "Thème &précédent",              IDM_VIEW_THEME_PREV,MFT_STRING,MFS_ENABLED
+            MENUITEM "Thème &suivant",                  IDM_VIEW_THEME_NEXT,MFT_STRING,MFS_ENABLED
         END
         MENUITEM MFT_SEPARATOR
         MENUITEM "Basculer en plein &écran", IDM_APP_FULL_SCREEN,MFT_STRING,MFS_ENABLED
+        MENUITEM "Largeur d’&affichage...", IDM_APP_VIEW_WIDTH,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
         MENUITEM "Menu &fenêtre",            IDM_VIEW_WINDOW_MENU,MFT_STRING,MFS_ENABLED
         MENUITEM "Changer le &volet actif",            IDM_VIEW_SWITCH_PANE_FOCUS,MFT_STRING,MFS_ENABLED
-        MENUITEM "Éléments en échec des opérations de &fichiers", IDM_VIEW_FILEOPS_FAILED_ITEMS,MFT_STRING,MFS_ENABLED
-        MENUITEM "Barre de &fonctions",                IDM_VIEW_FUNCTIONBAR,MFT_STRING,MFS_ENABLED
-        MENUITEM "Barre de &menus",                    IDM_VIEW_MENUBAR,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
-        MENUITEM "&Préférences...",              IDM_FILE_PREFERENCES,MFT_STRING,MFS_ENABLED
+        MENUITEM "Opérations de fi&chiers", IDM_VIEW_FILE_OPERATIONS,MFT_STRING,MFS_ENABLED
+        MENUITEM "Éléments en échec des opérations de &fichiers", IDM_VIEW_FILEOPS_FAILED_ITEMS,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Barre de fonctions",                IDM_VIEW_FUNCTIONBAR,MFT_STRING,MFS_ENABLED
+        MENUITEM "Barre de &menus",                    IDM_VIEW_MENUBAR,MFT_STRING,MFS_ENABLED
     END
     POPUP "&Droite",                         65535,MFT_STRING,MFS_ENABLED
     BEGIN
@@ -282,8 +348,8 @@ BEGIN
         BEGIN
             MENUITEM "&Précédent",                   IDM_RIGHT_GO_TO_BACK,MFT_STRING,MFS_ENABLED
             MENUITEM "&Suivant",                IDM_RIGHT_GO_TO_FORWARD,MFT_STRING,MFS_ENABLED
-            MENUITEM "Dossier &parent", IDM_RIGHT_GO_TO_PARENT_DIRECTORY,MFT_STRING,MFS_ENABLED
-            MENUITEM "&Dossier racine",                    IDM_RIGHT_GO_TO_ROOT_DIRECTORY,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Dossier parent", IDM_RIGHT_GO_TO_PARENT_DIRECTORY,MFT_STRING,MFS_ENABLED
+            MENUITEM "D&ossier racine",                    IDM_RIGHT_GO_TO_ROOT_DIRECTORY,MFT_STRING,MFS_ENABLED
             MENUITEM "Chemin depuis l’autre &volet",       IDM_RIGHT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "Emplacements &favoris...",      IDM_RIGHT_HOT_PATHS,MFT_STRING,MFS_ENABLED
@@ -294,9 +360,10 @@ BEGIN
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Bref",               IDM_RIGHT_DISPLAY_BRIEF,MFT_STRING,MFS_ENABLED
         MENUITEM "&Détaillé",            IDM_RIGHT_DISPLAY_DETAILED,MFT_STRING,MFS_ENABLED
-        MENUITEM "Très &détaillé",      IDM_RIGHT_DISPLAY_EXTRA_DETAILED,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Très détaillé",      IDM_RIGHT_DISPLAY_EXTRA_DETAILED,MFT_STRING,MFS_ENABLED
         MENUITEM "&Miniatures",          IDM_RIGHT_DISPLAY_THUMBNAILS,MFT_STRING,MFS_ENABLED
         MENUITEM "Volet d’&aperçu",      IDM_RIGHT_PREVIEW_PANE,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Volet de terminal",   IDM_RIGHT_TERMINAL_PANE,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         POPUP "Trier &par",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
@@ -305,7 +372,7 @@ BEGIN
             MENUITEM "&Extension",         IDM_RIGHT_SORT_EXTENSION,MFT_STRING,MFS_ENABLED
             MENUITEM "&Date",              IDM_RIGHT_SORT_TIME,MFT_STRING,MFS_ENABLED
             MENUITEM "&Taille",              IDM_RIGHT_SORT_SIZE,MFT_STRING,MFS_ENABLED
-            MENUITEM "&Attributs",                 IDM_RIGHT_SORT_ATTRIBUTES,MFT_STRING,MFS_ENABLED
+            MENUITEM "Att&ributs",                 IDM_RIGHT_SORT_ATTRIBUTES,MFT_STRING,MFS_ENABLED
         END
         POPUP "Affic&her",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
@@ -317,12 +384,12 @@ BEGIN
             MENUITEM "Barre de &navigation",     IDM_RIGHT_NAVIGATION_BAR,MFT_STRING,MFS_ENABLED
             MENUITEM "Barre d’&état",            IDM_RIGHT_STATUSBAR,MFT_STRING,MFS_ENABLED
         END
+        MENUITEM "Ac&tualiser",                IDM_RIGHT_REFRESH,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Filtrer...",             IDM_RIGHT_FILTER,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Agrandir/restaurer le volet", IDM_RIGHT_ZOOM_PANEL,MFT_STRING,MFS_ENABLED
         MENUITEM "Permuter les &volets",              IDM_APP_SWAP_PANES,MFT_STRING,MFS_ENABLED
-        MENUITEM "Chemin depuis l’autre &volet",       IDM_RIGHT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
-        MENUITEM "Ac&tualiser",                IDM_RIGHT_REFRESH,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Filtrer...",             IDM_RIGHT_FILTER,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Chemin depuis l’autre volet",       IDM_RIGHT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
 #if defined(_DEBUG) || defined(DEBUG)
 	        MENUITEM MFT_SEPARATOR
 	        POPUP "Exemple de &superposition [dbg]",          65535,MFT_STRING,MFS_ENABLED
@@ -333,21 +400,21 @@ BEGIN
 	                MENUITEM "&Avertissement [dbg]",                    IDM_RIGHT_OVERLAY_SAMPLE_WARNING,MFT_STRING,MFS_ENABLED
 	                MENUITEM "&Information [dbg]",                IDM_RIGHT_OVERLAY_SAMPLE_INFORMATION,MFT_STRING,MFS_ENABLED
 	                MENUITEM "&Veuillez patienter [dbg]",                IDM_RIGHT_OVERLAY_SAMPLE_BUSY,MFT_STRING,MFS_ENABLED
-	                MENUITEM "Veuillez patienter (avec bouton &Annuler) [dbg]",  IDM_RIGHT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL,MFT_STRING,MFS_ENABLED
+	                MENUITEM "Ve&uillez patienter (avec bouton Annuler) [dbg]",  IDM_RIGHT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL,MFT_STRING,MFS_ENABLED
 	            END
 	            POPUP "&Non modal (ne bloque pas) [dbg]",      65535,MFT_STRING,MFS_ENABLED
 	            BEGIN
 	                MENUITEM "&Erreur [dbg]",                      IDM_RIGHT_OVERLAY_SAMPLE_ERROR_NONMODAL,MFT_STRING,MFS_ENABLED
 	                MENUITEM "&Avertissement [dbg]",                    IDM_RIGHT_OVERLAY_SAMPLE_WARNING_NONMODAL,MFT_STRING,MFS_ENABLED
 	                MENUITEM "&Information [dbg]",                IDM_RIGHT_OVERLAY_SAMPLE_INFORMATION_NONMODAL,MFT_STRING,MFS_ENABLED
-	                MENUITEM "Chargement &annulé (sans fermeture) [dbg]", IDM_RIGHT_OVERLAY_SAMPLE_CANCELED,MFT_STRING,MFS_ENABLED
+	                MENUITEM "&Chargement annulé (sans fermeture) [dbg]", IDM_RIGHT_OVERLAY_SAMPLE_CANCELED,MFT_STRING,MFS_ENABLED
 	            END
 	            MENUITEM MFT_SEPARATOR
 	            MENUITEM "&Masquer la superposition [dbg]",               IDM_RIGHT_OVERLAY_SAMPLE_HIDE,MFT_STRING,MFS_ENABLED
 	        END
 #endif
 	    END
-	    POPUP "&Aide",                          65535,MFT_STRING | MFT_RIGHTJUSTIFY,MFS_ENABLED
+	    POPUP "A&ide",                          65535,MFT_STRING | MFT_RIGHTJUSTIFY,MFS_ENABLED
     BEGIN
         MENUITEM "Afficher les &raccourcis...", IDM_APP_SHOW_SHORTCUTS,MFT_STRING,MFS_ENABLED
         MENUITEM "Aide &externe",        IDM_APP_EXTERNAL_HELP,MFT_STRING,MFS_ENABLED
@@ -374,7 +441,7 @@ BEGIN
     BEGIN
         MENUITEM "&Bref\tAlt+2",           IDM_PANE_DISPLAY_BRIEF
         MENUITEM "&Détaillé\tAlt+3",        IDM_PANE_DISPLAY_DETAILED
-        MENUITEM "Très &détaillé\tAlt+4",  IDM_PANE_DISPLAY_EXTRA_DETAILED
+        MENUITEM "&Très détaillé\tAlt+4",  IDM_PANE_DISPLAY_EXTRA_DETAILED
     END
 END
 
@@ -445,11 +512,12 @@ BEGIN
     IDS_PREFS_CAT_KEYBOARD  "Clavier"
     IDS_PREFS_CAT_KEYBOARD_DESC "Raccourcis clavier."
     IDS_PREFS_CAT_MOUSE     "Souris"
-    IDS_PREFS_CAT_MOUSE_DESC "Raccourcis souris."
-    IDS_PREFS_MOUSE_PLACEHOLDER "La configuration des gestes de souris est prévue dans une prochaine version."
-    IDS_PREFS_MOUSE_EMPTY_TITLE "Aucun réglage souris"
-    IDS_PREFS_MOUSE_EMPTY_BODY "La configuration des gestes de souris est prévue dans une prochaine version."
-    IDS_PREFS_MOUSE_EMPTY_CAPTION "Le comportement actuel de la souris utilise encore les paramètres intégrés par défaut."
+    IDS_PREFS_CAT_MOUSE_DESC "Focus de panneau et comportement du pointeur."
+    IDS_PREFS_MOUSE_SECTION_PANE_FOCUS "Focus du panneau"
+    IDS_PREFS_MOUSE_LABEL_FOCUS_FOLLOWS_POINTER "Le focus suit le pointeur"
+    IDS_PREFS_MOUSE_DESC_FOCUS_FOLLOWS_POINTER "Déplace toujours le focus clavier vers le panneau sous le pointeur sans cliquer."
+    IDS_PREFS_MOUSE_LABEL_FOCUS_FOLLOWS_POINTER_TERMINAL_OPEN "Le focus suit le pointeur lorsqu’un terminal est affiché"
+    IDS_PREFS_MOUSE_DESC_FOCUS_FOLLOWS_POINTER_TERMINAL_OPEN "Déplace le focus clavier vers le panneau sous le pointeur lorsqu’un onglet Terminal est affiché dans l’un des panneaux."
     IDS_PREFS_CAT_THEMES    "Thèmes"
     IDS_PREFS_CAT_THEMES_DESC "Sélectionnez et modifiez les thèmes."
     IDS_PREFS_CAT_PLUGINS   "Plug-ins"
@@ -757,6 +825,13 @@ BEGIN
     IDS_PREFS_THEMES_BASE_DARK "Sombre"
     IDS_PREFS_THEMES_BASE_RAINBOW "Arc-en-ciel"
     IDS_PREFS_THEMES_BASE_HIGH_CONTRAST "Contraste élevé (application)"
+    IDS_THEME_CYCLE_OVERLAY_UIA_FULL "Thème remplacé par {0}. Précédent : {1}. Suivant : {2}."
+    IDS_THEME_CYCLE_OVERLAY_UIA_CURRENT_ONLY "Thème remplacé par {0}."
+    IDS_THEME_CYCLE_OVERLAY_PREVIOUS_NAME "Thème précédent : {0}"
+    IDS_THEME_CYCLE_OVERLAY_CURRENT_NAME "Thème actuel : {0}"
+    IDS_THEME_CYCLE_OVERLAY_NEXT_NAME "Thème suivant : {0}"
+    IDS_THEME_CYCLE_OVERLAY_DISMISS_ACTION "Masquer la notification de thème"
+    IDS_THEME_CYCLE_OVERLAY_DISMISS_HELP "Cliquez ou appuyez n’importe où sur cette notification pour la masquer."
     IDS_PREFS_THEMES_NEW_THEME_ENTRY "<Nouveau thème>"
     IDS_PREFS_THEMES_DEFAULT_NEW_NAME "Nouveau thème"
     IDS_PREFS_THEMES_FILE_FILTER "Thème fichiers (*.theme.json5)\0*.theme.json5\0JSON5 fichiers (*.json5)\0*.json5\0Tous fichiers (*.*)\0*.*\0\0"
@@ -891,6 +966,9 @@ BEGIN
     IDS_PREFS_PLUGINS_COL_ID "Id"
     IDS_PREFS_PLUGINS_TYPE_FILE_SYSTEM "Système de fichiers"
     IDS_PREFS_PLUGINS_TYPE_VIEWER "Visionneuse"
+    IDS_PREFS_PLUGINS_TYPE_TERMINAL "Terminal"
+    IDS_CMD_BRING_FULL_PATH_TO_TERMINAL "Insérer le chemin complet dans le terminal"
+    IDS_CMD_DESC_BRING_FULL_PATH_TO_TERMINAL "Ouvre ou réutilise le terminal du volet opposé et insère le chemin complet."
     IDS_PREFS_PLUGINS_ORIGIN_EMBEDDED "Intégré"
     IDS_PREFS_PLUGINS_ORIGIN_OPTIONAL "Optionnel"
     IDS_PREFS_PLUGINS_ORIGIN_CUSTOM "Personnalisé"
@@ -1165,9 +1243,9 @@ BEGIN
     IDS_MSG_CLIPBOARD_LOCAL_FOLDER_REQUIRED              "Coller Raccourci est disponible seulement dans les dossiers locaux du système de fichiers."
     IDS_MSG_CLIPBOARD_NO_SHORTCUT_SOURCE                 "Le presse-papiers ne contient pas de chemins de fichiers pour Coller Raccourci."
     IDS_FMT_CLIPBOARD_PASTE_SHORTCUT_FAILED              "Impossible de créer un raccourci pour {0}. HRESULT : 0x{1:08X}."
-    IDS_COMMAND_LINE_LABEL                               "Commande :"
-    IDS_MSG_COMMAND_LINE_LOCAL_FOLDER_REQUIRED           "La ligne de commande nécessite un dossier Windows local dans le volet actif."
-    IDS_MSG_COMMAND_LINE_ITEM_REQUIRED                   "Sélectionnez ou placez le focus sur un fichier ou un dossier d'abord."
+    IDS_MSG_TERMINAL_LOCAL_FOLDER_REQUIRED               "L'insertion dans le terminal nécessite un dossier Windows local dans le volet actif."
+    IDS_MSG_TERMINAL_ITEM_REQUIRED                       "Sélectionnez ou placez le focus sur un fichier ou un dossier d'abord."
+    IDS_MSG_TERMINAL_LOCATION_UNSUPPORTED                "L'emplacement du volet actif ne peut pas être ouvert dans un terminal, car son fournisseur ne possède aucun emplacement Windows ou WSL de sauvegarde validé."
     IDS_FMT_COMMAND_LINE_LAUNCH_FAILED                   "Windows n'a pas pu lancer la ligne de commande. HRESULT : 0x{0:08X}."
     IDS_USER_MENU_UNAVAILABLE_TITLE                      "Élément de menu utilisateur indisponible"
     IDS_FMT_USER_MENU_ITEM_UNAVAILABLE                   "L'élément de menu utilisateur « {0} » n'est pas disponible pour {1}."
@@ -1309,15 +1387,20 @@ BEGIN
     IDS_FILEOPS_BTN_MODE_PARALLEL                         "Parallèle"
     IDS_FILEOPS_MODE_NEW_TASKS                            "Nouvelles tâches :"
     IDS_MSG_FILEOPS_CANCEL_ALL_CONFIRM                    "Annuler toutes les opérations de fichiers ?"
-    IDS_FILEOPS_CALCULATING                               "Calcul..."
-    IDS_FMT_FILEOPS_CALCULATING_TIME                      "Calcul... ({0} écoulé)"
+    IDS_FILEOPS_DISCOVERING                               "Découverte..."
+    IDS_FMT_FILEOPS_DISCOVERING_TIME                      "Découverte... ({0} écoulé)"
+    IDS_FMT_FILEOPS_DISCOVERY_PROGRESS                    "{0} sur {1} pour l'instant, {2:L} sur {3:L} éléments"
+    IDS_FMT_FILEOPS_ETA_PROVISIONAL                       "Restant : {0} (découverte en cours)"
+    IDS_FMT_FILEOPS_KNOWN_WORK                            "Travail connu : {0} %"
+    IDS_FMT_FILEOPS_GLOBAL_DISCOVERING_COUNT              "{0} en découverte, le total peut augmenter"
     IDS_FILEOPS_PREPARING                                 "Préparation..."
     IDS_FMT_FILEOPS_PREPARING_TIME                        "Préparation... ({0} écoulé)"
-    IDS_FILEOPS_BTN_SKIP                                  "Ignorer la pré-vérification"
+    IDS_FILEOPS_BTN_SKIP                                  "Ignorer la découverte"
     IDS_FMT_FILEOPS_FILES_FOLDERS                         "{0:L} éléments ({1:L} fichiers, {2:L} dossiers)"
     IDS_FILEOPS_GRAPH_PAUSED                              "En pause"
     IDS_FILEOPS_GRAPH_WAITING                             "En attente de l’opération précédente"
-    IDS_FILEOPS_GRAPH_CALCULATING                         "Calcul..."
+    IDS_FILEOPS_GRAPH_DISCOVERING                         "Découverte..."
+    IDS_FILEOPS_DISCOVERING_AS_NEEDED                     "Découverte à la demande..."
     IDS_CAPTION_FILEOPS_CANCEL_ALL                        "Annuler toutes les opérations"
     IDS_MSG_FILEOPS_CANCEL_ALL_POPUP                      "Voulez-vous vraiment annuler toutes les opérations de fichiers en attente ?"
     IDS_CAPTION_FILEOPS_EXIT                              "Quitter l’application"
@@ -1327,6 +1410,9 @@ BEGIN
     IDS_FMT_FILEOPS_CONFLICT_EXISTS_NAMED                 "« {0} » existe déjà dans la destination."
     IDS_FILEOPS_CONFLICT_NONEMPTY_DIRECTORY               "Le dossier de destination n’est pas vide."
     IDS_FILEOPS_CONFLICT_REPARSE_POINT                    "La destination est un lien ou un point de réanalyse."
+    IDS_FILEOPS_CONFLICT_TYPE_MISMATCH                    "Les types des éléments source et destination ne correspondent pas."
+    IDS_FILEOPS_CONFLICT_NAME_NOT_REPRESENTABLE           "La destination ne peut pas représenter ce nom d’élément."
+    IDS_FILEOPS_CONFLICT_TARGET                           "Une cible de lien requise n’a pas pu être publiée."
     IDS_FILEOPS_CONFLICT_READONLY                         "L’élément est en lecture seule."
     IDS_FILEOPS_CONFLICT_ACCESS_DENIED                    "Accès refusé."
     IDS_FILEOPS_CONFLICT_SHARING                          "Le fichier est utilisé."
@@ -1336,15 +1422,20 @@ BEGIN
     IDS_FILEOPS_CONFLICT_NETWORK                          "Le réseau est indisponible."
     IDS_FILEOPS_CONFLICT_UNKNOWN                          "Échec de l’opération (erreur inconnue)."
     IDS_FILEOPS_CONFLICT_RETRY_FAILED                     "Nouvelle tentative échouée."
+    IDS_FMT_FILEOPS_CONFLICT_ATTEMPT_FAILED               "La tentative {0} a échoué."
+    IDS_FILEOPS_FAILURE_SURFACE_TEXT                      "La fenêtre des opérations de fichiers n'a pas pu démarrer son affichage graphique. Les opérations continuent en arrière-plan. Utilisez Tout annuler pour les arrêter ou Fermer pour masquer cette fenêtre."
+    IDS_FILEOPS_BTN_CLOSE                                 "Fermer"
+    IDS_FILEOPS_CONSENT_PERMANENT_DELETE_BY_NAME          "Cet emplacement ne peut pas prouver à quel objet un nom fait référence. Ce qui se trouve sous chaque nom sélectionné au moment de la suppression sera supprimé."
     IDS_FILEOPS_CONFLICT_APPLY_TO_ALL                     "Appliquer l’action sélectionnée à tous les conflits similaires"
     IDS_FILEOPS_CONFLICT_APPLY_TO_ALL_SHORT               "Tous similaires"
     IDS_FILEOPS_CONFLICT_BTN_OVERWRITE                    "Écraser"
+    IDS_FILEOPS_CONFLICT_BTN_KEEP_BOTH                    "Conserver les deux"
     IDS_FILEOPS_CONFLICT_BTN_REPLACE_READONLY             "Remplacer la lecture seule"
+    IDS_FILEOPS_CONFLICT_BTN_REPLACE_LINK                 "Remplacer le lien"
     IDS_FILEOPS_CONFLICT_BTN_PERMANENT_DELETE             "Supprimer définitivement"
     IDS_FILEOPS_CONFLICT_BTN_RETRY                        "Réessayer"
     IDS_FILEOPS_CONFLICT_BTN_SKIP                         "Ignorer l’élément"
     IDS_FILEOPS_CONFLICT_BTN_MORE                         "Plus..."
-    IDS_MSG_FILEOPS_REPARSE_FOLLOW_WARNING                "Suivre les cibles de points de réanalyse peut parcourir récursivement des dossiers liés, sortir de l’arborescence sélectionnée ou durer beaucoup plus longtemps que prévu.\r\n\r\nContinuer ?"
     IDS_FILEOPS_CONFLICT_UNSUPPORTED_REPARSE              "Le point de réanalyse du dossier ne peut pas être conservé pour cette opération."
     IDS_FILEOPS_STATUS_COMPLETED                          "Terminé"
     IDS_FILEOPS_STATUS_PARTIAL                            "Terminé avec des éléments ignorés"
@@ -1358,8 +1449,53 @@ BEGIN
     IDS_FILEOPS_BTN_CLEAR_COMPLETED                       "Effacer les opérations terminées"
     IDS_FILEOP_BTN_SHOW_LOG                               "Afficher le journal"
     IDS_FILEOPS_STATUS_CANCELED                           "Annulé"
+    IDS_FMT_FILEOPS_BADGE_COMPLETED_TOOLTIP               "Terminées avec succès : {0:L}"
+    IDS_FMT_FILEOPS_BADGE_PARTIAL_TOOLTIP                 "Terminées avec des résultats partiels ou des avertissements : {0:L}"
+    IDS_FMT_FILEOPS_BADGE_FAILED_TOOLTIP                  "Échecs : {0:L}"
+    IDS_FMT_FILEOPS_BADGE_CANCELED_TOOLTIP                "Annulées : {0:L}"
+    IDS_FMT_FILEOPS_BADGE_INDETERMINATE_TOOLTIP           "Résultat inconnu : {0:L}"
     IDS_FILEOPS_STATUS_NEEDS_ATTENTION                    "Nécessite une attention"
-    IDS_FMT_FILEOPS_GLOBAL_STATUS_SUMMARY                 "{0:L} en cours, {1:L} en attente, {2:L} nécessitent une attention"
+    IDS_FILEOPS_STATUS_WAITING_FOR_DECISION               "En attente de votre décision"
+    IDS_FILEOPS_CONFLICT_READING_DETAILS                  "Chargement des détails pour la décision..."
+    IDS_FILEOPS_OWNED_STAGE_CLEANUP_UNKNOWN               "La destination finale n’a pas été publiée. Le nettoyage d’un élément temporaire n’a pas pu être confirmé ; un artefact possible peut subsister. La nouvelle tentative automatique est bloquée."
+    IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE                   "Artefact possible d’une opération interrompue"
+    IDS_FILEOPS_ARTIFACT_TOUCH_TITLE                      "Avertissement relatif à un artefact d’opération"
+    IDS_FMT_FILEOPS_ARTIFACT_TOUCH_WARNING                "Cette demande touche {0:L} artefact(s) d’opération possible(s). Leurs données peuvent être incomplètes. Continuer peut modifier précisément ces objets actuels."
+    IDS_FMT_FILEOPS_ARTIFACT_TOUCH_BLOCKED                "Cette demande touche {0:L} artefact(s) d’opération, mais Red Salamander ne peut pas vérifier chaque identité actuelle. L’opération n’a pas démarré."
+    IDS_FILEOPS_ARTIFACT_MENU_TITLE                       "Artefact d’opération"
+    IDS_FILEOPS_ARTIFACT_ACTION_INSPECT                   "Inspecter en lecture seule"
+    IDS_FILEOPS_ARTIFACT_ACTION_REVEAL                    "Afficher dans le volet"
+    IDS_ITEM_PROPERTIES_SECTION_FILE_OPERATIONS           "Opérations sur les fichiers"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CLASSIFICATION     "Classification"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_REASON             "Raison"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_OPERATION          "Opération"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_TASK               "Tâche"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_TIME               "Heure"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_KIND               "Type d’artefact"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_PHASE              "Phase durable"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_DESTINATION        "Destination prévue"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_FINAL_NAME         "Nom final"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_PUBLICATION        "Publication"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_SOURCE             "Source"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CLEANUP            "Nettoyage"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_VERIFICATION       "Vérification"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CURRENT_OBJECT     "Objet actuel"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CLAIM_MATCH        "Correspondance de revendication"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_RECOVERY           "Récupération"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_SAFE_ACTIONS       "Actions sûres"
+    IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_UNAVAILABLE        "Indisponible"
+    IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_NAME_REASON        "Le nom correspond à un modèle d’artefact généré par les Opérations sur les fichiers"
+    IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_NO_CLAIM           "Aucun enregistrement d’opération ni aucune revendication de propriété valide n’a été trouvé"
+    IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_SAFE_ACTIONS       "Lecture, ouverture, modification, aperçu, copie et export restent disponibles ; RedSalamander avertit avant une mutation gérée par l’application"
+    IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_PRESENT            "Présent"
+    IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_MISSING            "Manquant"
+    IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_ADMITTED            "admission"
+    IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_EXECUTING           "exécution"
+    IDS_FMT_FILEOPS_INTERRUPTED_MOVE_SUMMARY               "ID d’opération interrompue {0} : le déplacement a été interrompu après la phase durable {1}. Plan admis : {2:L} élément(s) Natif(s), {3:L} Géré(s) et {4:L} Copie seule, répartis sur {5:L} emplacement(s) source qualifié(s). La source et la destination peuvent toutes deux exister. Actualisez ou ouvrez les emplacements indiqués avant d’agir. Red Salamander ne reprendra ni ne supprimera rien automatiquement."
+    IDS_FMT_FILEOPS_GLOBAL_RUNNING_COUNT                  "En cours : {0:L}"
+    IDS_FMT_FILEOPS_GLOBAL_WAITING_COUNT                  "En attente : {0:L}"
+    IDS_FMT_FILEOPS_GLOBAL_ATTENTION_COUNT                "Attention requise : {0:L}"
+    IDS_FILEOPS_GLOBAL_STATUS_SEPARATOR                   ", "
     IDS_FMT_FILEOPS_GLOBAL_STATUS_WITH_SPEED              "{0} · {1}/s"
     IDS_FMT_FILEOPS_GLOBAL_STATUS_WITH_ETA_SPEED          "{0} · {1} · {2}/s"
     IDS_FILEOPS_STATUS_RUNNING                            "En cours"
@@ -1367,6 +1503,80 @@ BEGIN
     IDS_FILEOPS_STATUS_PARTIAL_SHORT                      "Partiel"
     IDS_FILEOPS_STATUS_FAILED_SHORT                       "Échec"
     IDS_FILEOPS_BTN_START_NOW                             "Démarrer"
+    IDS_FILEOPS_QUEUE_MOVE_UP                             "Monter dans la file"
+    IDS_FILEOPS_QUEUE_MOVE_DOWN                           "Descendre dans la file"
+    IDS_FILEOPS_TOGGLE_DETAILS                            "Afficher ou masquer les détails"
+    IDS_FILEOPS_TOGGLE_TASK_DETAILS                       "Développer ou réduire la tâche"
+    IDS_FILEOPS_COMPLETED_GROUP_ACCESSIBLE                "Tâches terminées"
+    IDS_FILEOPS_AGGREGATE_PROGRESS                        "Progression globale des opérations de fichiers"
+    IDS_FILEOPS_THROUGHPUT_GRAPH                          "Historique du débit de transfert"
+    IDS_FILEOPS_FOOTER_OPTIONS                            "Options"
+    IDS_FILEOPS_CONFIRM_LINKS                             "Liens"
+    IDS_FILEOPS_CONFIRM_LINKS_PRESERVE                    "Préserver"
+    IDS_FILEOPS_CONFIRM_LINKS_SKIP                        "Ignorer"
+    IDS_FILEOPS_CONFIRM_VERIFY                            "Vérifier le contenu copié"
+    IDS_FILEOPS_CONFIRM_VERIFY_UNSUPPORTED                "Vérifier le contenu copié — indisponible pour cette destination"
+    IDS_FILEOPS_CONFIRM_VERIFY_NOT_APPLICABLE             "Vérifier le contenu copié — non applicable à un déplacement natif"
+    IDS_FILEOPS_CONFIRM_VERIFY_RUNTIME_CHECK               "Vérifier le contenu copié — la prise en charge sera vérifiée au démarrage"
+    IDS_FILEOPS_CONFIRM_START                             "Démarrage"
+    IDS_FILEOPS_CONFIRM_BANDWIDTH                         "Bande passante"
+    IDS_FILEOPS_CONFIRM_CLIPBOARD_MOVE_WARNING            "Le démarrage de ce déplacement consomme la liste coupée. Si un élément ne peut pas être supprimé, sa source sera conservée et la liste coupée ne sera pas restaurée."
+    IDS_FILEOPS_CONSENT_LOW_SPACE                         "La destination signale un espace libre insuffisant. Continuer peut échouer après la publication d'une partie du travail."
+    IDS_FILEOPS_CONSENT_SPACE_UNKNOWN                     "La destination ne peut pas indiquer l'espace disponible. L'opération peut continuer jusqu'à une erreur d'écriture réelle."
+    IDS_FILEOPS_CONSENT_EFS_PLAINTEXT                     "Les données source chiffrées seraient écrites en clair à la destination."
+    IDS_FILEOPS_CONSENT_SPARSE_INFLATION                  "La destination ne peut pas conserver l'allocation creuse et utilisera la taille logique complète."
+    IDS_FILEOPS_CONSENT_PLACEHOLDER_HYDRATION             "La poursuite nécessite le téléchargement du contenu de l'espace réservé."
+    IDS_FILEOPS_CONSENT_METADATA_LOSS                     "Ce déplacement perdrait des métadonnées de sécurité telles que Mark-of-the-Web, les flux alternatifs ou les attributs étendus."
+    IDS_FILEOPS_CONSENT_BTN_CONTINUE                      "Continuer"
+    IDS_FILEOPS_CONSENT_BTN_PLAINTEXT                     "Copier en clair"
+    IDS_FILEOPS_CONSENT_BTN_DOWNLOAD                      "Télécharger et continuer"
+    IDS_FILEOPS_CONSENT_BTN_MOVE_ANYWAY                   "Déplacer quand même"
+    IDS_FILEOPS_CONSENT_BTN_KEEP_SOURCE                   "Conserver la source"
+    IDS_FMT_FILEOPS_CONSENT_FACTS_ITEMS_BYTES             "Éléments concernés : {0:L}  •  Données : {1}"
+    IDS_FILEOPS_CONSENT_SAME_HOST_OVERLAP                 "Une autre tâche travaille au même endroit"
+    IDS_FILEOPS_CONSENT_BTN_QUEUE_AFTER                   "Mettre en file après ces tâches"
+    IDS_FILEOPS_CONSENT_BTN_DONT_START                    "Ne pas démarrer"
+    IDS_FILEOPS_CONSENT_BTN_RUN_CONCURRENT                "Exécuter en même temps"
+    IDS_FILEOPS_CONSENT_SAME_HOST_LIVE_OUTPUT             "Une autre tâche publie encore ici"
+    IDS_FILEOPS_CONSENT_PERMANENT_DELETE                  "Suppression définitive"
+    IDS_FMT_FILEOPS_LIVE_OUTPUT_QUESTION                  "La tâche nº {0} publie encore des données ici. Modifier cet élément maintenant peut invalider son résultat."
+    IDS_FILEOPS_CONSENT_BTN_QUEUE_UNTIL_FINISHED           "Attendre la fin de l'autre tâche"
+    IDS_FILEOPS_CONSENT_BTN_DELETE_LIVE_OUTPUT             "Supprimer quand même"
+    IDS_FILEOPS_CONSENT_BTN_RENAME_LIVE_OUTPUT             "Renommer quand même"
+    IDS_FILEOPS_CONSENT_BTN_REPLACE_LIVE_OUTPUT            "Remplacer quand même"
+    IDS_FMT_FILEOPS_OVERLAP_REMOVES_READ                  "Cette tâche peut supprimer des éléments que la tâche #{0} lit encore."
+    IDS_FMT_FILEOPS_OVERLAP_SAME_NAMES                    "Cette tâche et la tâche #{0} peuvent créer ou remplacer les mêmes noms."
+    IDS_FMT_FILEOPS_OVERLAP_SAME_MEMBERS                  "Cette tâche et la tâche #{0} peuvent supprimer ou renommer les mêmes éléments."
+    IDS_FMT_FILEOPS_OVERLAP_REMOVES_PUBLISHED             "Cette tâche peut supprimer ou renommer ce que la tâche #{0} publie."
+    IDS_FMT_FILEOPS_OVERLAP_REPLACES_READ                 "Cette tâche peut remplacer des éléments que la tâche #{0} lit encore."
+    IDS_FMT_FILEOPS_CONSENT_FACTS_ITEMS                   "Éléments concernés : {0:L}"
+    IDS_FMT_FILEOPS_CONSENT_FACTS_BYTES                   "Données concernées : {0}"
+    IDS_FILEOPS_RESULT_COPIED                              "Copié"
+    IDS_FILEOPS_RESULT_MOVED                               "Déplacé"
+    IDS_FILEOPS_RESULT_COPIED_SOURCE_KEPT                  "Copié ; source conservée"
+    IDS_FILEOPS_RESULT_MOVED_SOURCE_FOLDER_KEPT            "Déplacé ; dossier source conservé"
+    IDS_FILEOPS_RESULT_SKIPPED                             "Ignoré"
+    IDS_FILEOPS_RESULT_UNKNOWN                             "Résultat inconnu"
+    IDS_FILEOPS_STATUS_VERIFYING                           "Vérification"
+    IDS_FILEOPS_RESULT_VERIFIED                            "Vérifié"
+    IDS_FILEOPS_RESULT_VERIFICATION_FAILED                 "Échec de la vérification"
+    IDS_FILEOPS_RESULT_VERIFICATION_UNAVAILABLE            "Vérification indisponible"
+    IDS_FILEOPS_RESULT_VERIFICATION_CANCELED               "Vérification annulée"
+    IDS_FILEOPS_RESULT_SOURCE_UNKNOWN                      "État de la source inconnu"
+    IDS_FILEOPS_RESULT_COMPLETED_CLEANUP_RETAINED          "Terminé ; élément de nettoyage conservé."
+    IDS_FILEOPS_CLEANUP_ITEM_RETAINED                      "Un élément de nettoyage a été conservé après la fin de l’opération demandée. Aucune nouvelle tentative automatique n’a été effectuée."
+    IDS_FILEOPS_RETAINED_VERIFICATION_CANCELED             "Copié ; source conservée, car la vérification a été annulée."
+    IDS_FILEOPS_RETAINED_VERIFICATION_UNAVAILABLE          "Copié ; source conservée, car la vérification de contenu demandée n’était pas disponible."
+    IDS_FILEOPS_RETAINED_VERIFICATION_FAILED               "Copié ; source conservée, car la vérification du contenu a échoué."
+    IDS_FMT_FILEOPS_PROGRESS_SEGMENTS_ACCESSIBLE            "Transfert terminé à {0} % ; vérification terminée à {1} %."
+    IDS_FILEOPS_CLIPBOARD_MOVE_QUEUED                     "Déplacement en attente — liste coupée effacée."
+    IDS_FILEOPS_CLIPBOARD_MOVE_CLEAR_FAILED               "Le déplacement n’a pas démarré car la liste des éléments coupés n’a pas pu être effacée. La source reste inchangée. RedSalamander n’acceptera pas de nouveau cette même liste."
+    IDS_FILEOPS_CLIPBOARD_SOURCES_REMAIN                  "Certaines sources subsistent. La liste coupée a été consommée au démarrage du déplacement et n’a pas été restaurée."
+    IDS_FILEOP_BTN_OPEN_SOURCE                            "Ouvrir la source"
+    IDS_FILEOP_BTN_SELECT_RETAINED                        "Sélectionner les éléments conservés"
+    IDS_FILEOP_BTN_CUT_RETAINED_AGAIN                     "Couper à nouveau les éléments conservés"
+    IDS_FILEOPS_RETAINED_SOURCE_CHANGED                   "L’ensemble des sources conservées a changé après le déplacement. Aucun élément n’a été sélectionné ni placé dans le Presse-papiers."
+    IDS_FILEOPS_CLIPBOARD_SOURCE_UNKNOWN                  "L’état de certaines sources est inconnu. La liste coupée a été consommée au démarrage du déplacement et n’a pas été restaurée."
     IDS_FILEOPS_CHECK_AUTODISMISS_OFF                     "Fermer automatiquement succès/annulé"
     IDS_FILEOPS_CHECK_AUTODISMISS_ON                      "Fermer automatiquement succès/annulé"
     IDS_FILEOP_BTN_EXPORT_ISSUES                          "Exporter les problèmes"
@@ -1414,9 +1624,11 @@ BEGIN
     IDS_CMD_EDIT_NEW                                      "Modifier un nouveau fichier"
     IDS_CMD_ALTERNATE_EDIT                                "Modification alternative"
     IDS_CMD_COPY                                          "Copier"
+    IDS_CMD_COPY_WITH_OPTIONS                             "Copier avec les options"
     IDS_CMD_SORT_BY_TIME                                  "Trier par date"
     IDS_CMD_PACK                                          "Compresser"
     IDS_CMD_MOVE                                          "Déplacer"
+    IDS_CMD_MOVE_WITH_OPTIONS                             "Déplacer/Renommer avec les options"
     IDS_CMD_SORT_BY_SIZE                                  "Trier par taille"
     IDS_CMD_UNPACK                                        "Extraire"
     IDS_CMD_LOAD_SELECTION                                "Charger la sélection"
@@ -1448,10 +1660,10 @@ BEGIN
 	    IDS_CMD_UP_ONE_DIRECTORY                              "Monter d’un dossier"
 	    IDS_CMD_SWITCH_PANE_FOCUS                             "Changer de volet actif"
 	    IDS_CMD_EXECUTE_OPEN                                  "Exécuter / ouvrir"
-	    IDS_CMD_BRING_FILENAME_TO_COMMAND_LINE                "Insérer le nom du fichier dans la ligne de commande"
+	    IDS_CMD_BRING_FILENAME_TO_COMMAND_LINE                "Insérer l'élément actif dans le terminal"
 	    IDS_CMD_OPEN_PROPERTIES                               "Ouvrir Propriétés"
 	    IDS_CMD_SELECT_CALC_DIR_SIZE_NEXT                     "Sélectionner + calculer la taille du dossier + suivant"
-	    IDS_CMD_BRING_CURRENT_DIR_TO_COMMAND_LINE             "Insérer le dossier actuel dans la ligne de commande"
+	    IDS_CMD_BRING_CURRENT_DIR_TO_COMMAND_LINE             "Insérer le dossier actuel dans le terminal"
 	    IDS_CMD_WINDOW_MENU                                   "Menu Fenêtre"
 	    IDS_CMD_QUICK_SEARCH                                  "Recherche rapide"
 	    IDS_CMD_SELECT_NEXT                                   "Sélectionner le suivant"
@@ -1482,6 +1694,7 @@ BEGIN
 		    IDS_CMD_HISTORY_FORWARD                               "Historique suivant"
 		    IDS_CMD_GO_DRIVE_ROOT                                 "Aller à la racine du lecteur"
 		    IDS_FMT_CMD_GO_DRIVE_ROOT_WITH_LETTER                 "Aller à la racine du lecteur ({0}:\\)"
+		    IDS_CMD_SHOW_FILE_OPERATIONS                          "Afficher les opérations de fichiers"
 		    IDS_CMD_TOGGLE_FILEOPS_FAILED_ITEMS                   "Afficher/masquer les éléments en échec"
 		    IDS_CMD_FOCUS_ADDRESS_BAR                             "Activer la barre d’adresse"
 		    IDS_CMD_GO_ROOT_DIRECTORY                             "Aller au dossier racine"
@@ -1523,6 +1736,7 @@ BEGIN
 		    IDS_CMD_SELECT_FILE_SYSTEM_PLUGIN                      "Sélectionner le plug-in de système de fichiers"
 		    IDS_PREVIEW_TAB_FOLDER                                 "Dossier"
 		    IDS_PREVIEW_TAB_PREVIEW                                "Aperçu"
+		    IDS_PREVIEW_TAB_TERMINAL                               "Terminal"
 		    IDS_PREVIEW_EMPTY                                      "Aucun fichier sélectionné pour l’aperçu."
 		    IDS_PREVIEW_FOLDER_FMT                                 "Dossier : {0}"
 		    IDS_PREVIEW_UNSUPPORTED                                "L’aperçu est disponible pour les fichiers locaux dans cette version."
@@ -1549,14 +1763,16 @@ BEGIN
 		    IDS_CMD_SHORT_THEME_SELECT_NEXT                      "NextTheme"
 		    IDS_CMD_SHORT_THEME_SELECT_PREV                      "PrevTheme"
 		    IDS_CMD_SHORT_THEME_SYSTEM_HIGH_CONTRAST_INDICATOR   "HiContrast"
+		    IDS_CMD_SHORT_SHOW_FILE_OPERATIONS                   "Opérations"
 		    IDS_CMD_SHORT_TOGGLE_FILEOPS_FAILED_ITEMS            "FailedOps"
 		    IDS_CMD_SHORT_TOGGLE_FUNCTION_BAR                    "FuncBar"
 		    IDS_CMD_SHORT_TOGGLE_MENU_BAR                        "MenuBar"
 		    IDS_CMD_SHORT_VIEW_WIDTH                             "VwWidth"
 		    IDS_CMD_SHORT_ALTERNATE_VIEW                         "AltVw"
 		    IDS_CMD_SHORT_BATCH_RENAME                           "BatchRen"
-		    IDS_CMD_SHORT_BRING_CURRENT_DIR_TO_COMMAND_LINE      "DirToCmd"
-		    IDS_CMD_SHORT_BRING_FILENAME_TO_COMMAND_LINE         "NameToCmd"
+		    IDS_CMD_SHORT_BRING_CURRENT_DIR_TO_COMMAND_LINE      "DirToTerm"
+		    IDS_CMD_SHORT_BRING_FILENAME_TO_COMMAND_LINE         "EltTerm"
+		    IDS_CMD_SHORT_BRING_FULL_PATH_TO_TERMINAL             "ChmTerm"
 		    IDS_CMD_SHORT_CHANGE_ATTRIBUTES                      "ChgAttr"
 		    IDS_CMD_SHORT_CHANGE_CASE                            "ChgCase"
 		    IDS_CMD_SHORT_CHANGE_DIRECTORY                       "ChgDir"
@@ -1572,6 +1788,7 @@ BEGIN
 		    IDS_CMD_SHORT_COPY_PATH_AND_NAME_AS_TEXT             "CopyPathNm"
 		    IDS_CMD_SHORT_COPY_PATH_AS_TEXT                      "CopyPath"
 		    IDS_CMD_SHORT_COPY                                   "Copier"
+		    IDS_CMD_SHORT_COPY_WITH_OPTIONS                      "CopOpts"
 		    IDS_CMD_SHORT_COPY_PATH_AND_FILE_NAME                "CopyUNC"
 		    IDS_CMD_SHORT_MAKE_DIRECTORY                         "MakeDir"
 		    IDS_CMD_SHORT_DELETE                                 "Supprimer"
@@ -1599,6 +1816,7 @@ BEGIN
 		    IDS_CMD_SHORT_MAKE_FILE_LIST                         "FileList"
 		    IDS_CMD_SHORT_MENU                                   "Menu"
 		    IDS_CMD_SHORT_MOVE                                   "Déplacer"
+		    IDS_CMD_SHORT_MOVE_WITH_OPTIONS                      "DéplOpts"
 		    IDS_CMD_SHORT_MOVE_TO_RECYCLE_BIN                    "Recycle"
 		    IDS_CMD_SHORT_NAVIGATE_PATH                          "GoPath"
 		    IDS_CMD_SHORT_NEW_FROM_TEMPLATE                      "NewTmpl"
@@ -1677,8 +1895,8 @@ BEGIN
 		    IDS_CMD_DESC_SHORTCUTS                                "Afficher tous les raccourcis configurés."
 		    IDS_CMD_DESC_VIEW_WIDTH                               "Ajuster la largeur d’affichage."
 		    IDS_CMD_DESC_ALTERNATE_VIEW                           "Activer ou désactiver l’autre mode d’affichage."
-		    IDS_CMD_DESC_BRING_CURRENT_DIR_TO_COMMAND_LINE        "Insérer le dossier actuel dans la ligne de commande."
-		    IDS_CMD_DESC_BRING_FILENAME_TO_COMMAND_LINE           "Insérer le nom du fichier actif dans la ligne de commande."
+		    IDS_CMD_DESC_BRING_CURRENT_DIR_TO_COMMAND_LINE        "Insérer le dossier actuel dans le terminal du volet opposé sans envoyer Entrée."
+		    IDS_CMD_DESC_BRING_FILENAME_TO_COMMAND_LINE           "Ouvre ou réutilise le terminal du volet opposé et insère le nom si son dossier suivi correspond, sinon le chemin complet."
 		    IDS_CMD_DESC_CHANGE_ATTRIBUTES                        "Modifier les attributs de fichier pour la sélection."
 		    IDS_CMD_DESC_CHANGE_CASE                              "Changer la casse de la sélection."
 		    IDS_CMD_DESC_CHANGE_DIRECTORY                         "Changer de dossier à l’aide d’une invite de chemin."
@@ -1693,6 +1911,7 @@ BEGIN
 		    IDS_CMD_DESC_COPY_PATH_AND_NAME_AS_TEXT               "Copier le chemin complet et le nom comme texte."
 		    IDS_CMD_DESC_COPY_PATH_AS_TEXT                        "Copier le chemin du dossier contenant comme texte."
 		    IDS_CMD_DESC_COPY                                     "Copier vers l’autre volet."
+		    IDS_CMD_DESC_COPY_WITH_OPTIONS                        "Choisir les options, puis copier vers l’autre volet."
 		    IDS_CMD_DESC_MAKE_DIRECTORY                           "Créer un nouveau dossier."
 		    IDS_CMD_DESC_DELETE                                   "Supprimer la sélection."
 		    IDS_CMD_DESC_DISCONNECT                               "Se déconnecter de l’emplacement actuel."
@@ -1711,6 +1930,7 @@ BEGIN
 		    IDS_CMD_DESC_LOAD_SELECTION                           "Charger une sélection enregistrée."
 		    IDS_CMD_DESC_MENU                                     "Ouvrir le menu principal du volet actif."
 		    IDS_CMD_DESC_MOVE                                     "Déplacer vers l’autre volet."
+		    IDS_CMD_DESC_MOVE_WITH_OPTIONS                        "Choisir les options, puis déplacer ou renommer vers l’autre volet."
 		    IDS_CMD_DESC_MOVE_TO_RECYCLE_BIN                      "Déplacer la sélection vers la corbeille."
 		    IDS_CMD_DESC_OPEN_CURRENT_FOLDER                      "Ouvrir le dossier actuel."
 		    IDS_CMD_DESC_OPEN_PROPERTIES                          "Ouvrir la boîte de dialogue des propriétés de la sélection."
@@ -1787,6 +2007,7 @@ BEGIN
     IDS_BATCH_RENAME_ISSUE_NAME_INVALID_CHARACTER         "Le nom contient un caractère non valide"
     IDS_BATCH_RENAME_ISSUE_NAME_TOO_LONG                  "Le nom est trop long"
     IDS_BATCH_RENAME_ISSUE_NAME_DUPLICATE                 "Nom en double dans le même dossier"
+    IDS_BATCH_RENAME_ISSUE_SOURCE_DUPLICATE               "Cet élément source apparaît plusieurs fois"
     IDS_BATCH_RENAME_ISSUE_NAME_UNCHANGED                 "Le nom est inchangé"
     IDS_BATCH_RENAME_ISSUE_NAME_CASE_ONLY                 "Seule la casse change"
     IDS_BATCH_RENAME_ISSUE_NAME_EDGE_SPACE_OR_DOT         "Le nom commence ou se termine par un espace, ou se termine par un point"
@@ -1800,6 +2021,7 @@ BEGIN
     IDS_BATCH_RENAME_ISSUE_REGEX_INVALID                  "Expression régulière non valide"
     IDS_BATCH_RENAME_ISSUE_REGEX_ERROR                    "Erreur d'expression régulière"
     IDS_BATCH_RENAME_ISSUE_PROVIDER_PATH_IDENTITY_UNKNOWN  "L'identité de chemin du fournisseur n'est pas disponible"
+    IDS_BATCH_RENAME_ISSUE_NAME_DEPENDENCY_CYCLE           "Ces noms forment un cycle de dépendances. Utilisez un nom intermédiaire temporaire, puis exécutez un second passage acyclique."
     IDS_BATCH_RENAME_HELPER_NAME                          "Name"
     IDS_BATCH_RENAME_HELPER_STEM                          "File name without extension"
     IDS_BATCH_RENAME_HELPER_EXT                           "Extension"
@@ -1874,6 +2096,7 @@ BEGIN
 		    IDS_CMD_DESC_HISTORY_BACK                             "Reculer dans l’historique."
 		    IDS_CMD_DESC_HISTORY_FORWARD                          "Avancer dans l’historique."
 		    IDS_CMD_DESC_GO_DRIVE_ROOT                            "Aller à la racine du lecteur sélectionné."
+		    IDS_CMD_DESC_SHOW_FILE_OPERATIONS                     "Afficher la fenêtre des opérations de fichiers."
 		    IDS_CMD_DESC_TOGGLE_FILEOPS_FAILED_ITEMS              "Afficher ou masquer le volet des éléments en échec des opérations de fichiers."
 		    IDS_CMD_DESC_FOCUS_ADDRESS_BAR                        "Activer la barre d’adresse du volet actif."
 		    IDS_CMD_DESC_GO_ROOT_DIRECTORY                        "Aller au dossier racine."
@@ -1931,11 +2154,9 @@ BEGIN
     IDS_PREFS_HOT_PATHS_BROWSE_ELLIPSIS               "Parcourir..."
     IDS_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN          "Ouvrir la page de préférences lors de l’association"
     IDS_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN_DESC     "Ouvrir la page de préférences Emplacements favoris après l’association depuis le volet."
-    IDS_PREFS_FILEOPS_SECTION_PRECALC                 "Pré-calcul"
-    IDS_PREFS_FILEOPS_PRECALC_ENABLED_TITLE           "Activer l’analyse de pré-calcul"
-    IDS_PREFS_FILEOPS_PRECALC_ENABLED_DESC            "Analyser les sélections à copier ou déplacer avant le démarrage afin d’obtenir plus tôt les totaux et l’estimation restante."
-    IDS_PREFS_FILEOPS_PRECALC_WORKERS_TITLE           "Tâches de pré-calcul"
-    IDS_PREFS_FILEOPS_PRECALC_WORKERS_DESC            "Nombre de tâches en arrière-plan utilisées pour parcourir l’arborescence lors du pré-calcul."
+    IDS_PREFS_FILEOPS_SECTION_VERIFICATION            "Vérification"
+    IDS_PREFS_FILEOPS_VERIFY_AFTER_COPY_TITLE          "Vérifier les fichiers copiés"
+    IDS_PREFS_FILEOPS_VERIFY_AFTER_COPY_DESC           "Comparer le contenu des fichiers ordinaires copiés après leur publication. Cette opération peut relire chaque octet copié."
     IDS_PREFS_FILEOPS_SECTION_BANDWIDTH               "Bande passante"
     IDS_PREFS_FILEOPS_BANDWIDTH_PRESET_TITLE          "Limite de vitesse par défaut"
     IDS_PREFS_FILEOPS_BANDWIDTH_PRESET_DESC           "Limite de vitesse par défaut, par tâche, pour les nouvelles copies et déplacements. Sélectionnez Personnalisée pour saisir une valeur précise. Chaque tâche peut encore modifier cette valeur dans la fenêtre de progression."
@@ -2171,4 +2392,123 @@ BEGIN
     IDS_FIND_RESULT_MENU_COPY_TO_DESTINATION          "Copier vers la destination"
     IDS_FIND_RESULT_MENU_MOVE_TO_DESTINATION          "Déplacer vers la destination"
     IDS_FMT_FILEOPS_CONFLICT_DATE_TIME                "{0} {1}"
+    IDS_CMD_COMMAND_PALETTE                           "Palette de commandes RedSalamander"
+    IDS_CMD_OPEN_SETTINGS_FILE                        "Ouvrir le fichier de paramètres"
+    IDS_CMD_TERMINAL_SESSION_MENU                     "Menu de session du terminal"
+    IDS_CMD_TERMINAL_FIND                             "Rechercher dans le terminal"
+    IDS_CMD_TERMINAL_SUGGESTIONS                      "Suggestions de l'historique des commandes"
+    IDS_CMD_TERMINAL_TAB_NEW                          "Nouvel onglet de terminal / autre volet"
+    IDS_CMD_TERMINAL_OPEN_FLOATING_WINDOW             "Ouvrir le terminal flottant / nouvel onglet"
+    IDS_CMD_TERMINAL_TAB_NEXT                         "Onglet de terminal / contenu suivant"
+    IDS_CMD_TERMINAL_TAB_PREVIOUS                     "Onglet de terminal / contenu précédent"
+    IDS_CMD_TERMINAL_TAB_SELECT_1                     "Sélectionner l'onglet de terminal / contenu 1"
+    IDS_CMD_TERMINAL_TAB_SELECT_2                     "Sélectionner l'onglet de terminal / contenu 2"
+    IDS_CMD_TERMINAL_TAB_SELECT_3                     "Sélectionner l'onglet de terminal / contenu 3"
+    IDS_CMD_TERMINAL_TAB_SELECT_4                     "Sélectionner l'onglet flottant de terminal 4"
+    IDS_CMD_TERMINAL_TAB_SELECT_5                     "Sélectionner l'onglet flottant de terminal 5"
+    IDS_CMD_TERMINAL_TAB_SELECT_6                     "Sélectionner l'onglet flottant de terminal 6"
+    IDS_CMD_TERMINAL_TAB_SELECT_7                     "Sélectionner l'onglet flottant de terminal 7"
+    IDS_CMD_TERMINAL_TAB_SELECT_8                     "Sélectionner l'onglet flottant de terminal 8"
+    IDS_CMD_TERMINAL_TAB_LAST                         "Sélectionner le dernier onglet de terminal / contenu"
+    IDS_CMD_TERMINAL_CLOSE                            "Fermer l'onglet de terminal"
+    IDS_CMD_PANE_RESIZE_SPLITTER_LEFT                 "Déplacer le séparateur vers la gauche"
+    IDS_CMD_PANE_RESIZE_SPLITTER_RIGHT                "Déplacer le séparateur vers la droite"
+    IDS_CMD_PANE_FOCUS_LEFT                           "Activer le volet gauche"
+    IDS_CMD_PANE_FOCUS_RIGHT                          "Activer le volet droit"
+    IDS_CMD_TERMINAL_COPY_SELECTION_OR_PASSTHROUGH    "Copier la sélection ou transmettre"
+    IDS_CMD_TERMINAL_SCROLL_LINE_DOWN                 "Faire défiler d'une ligne vers le bas"
+    IDS_CMD_TERMINAL_SCROLL_PAGE_DOWN                 "Faire défiler d'une page vers le bas"
+    IDS_CMD_TERMINAL_SCROLL_LINE_UP                   "Faire défiler d'une ligne vers le haut"
+    IDS_CMD_TERMINAL_SCROLL_PAGE_UP                   "Faire défiler d'une page vers le haut"
+    IDS_CMD_TERMINAL_SCROLL_TOP                       "Faire défiler jusqu'en haut"
+    IDS_CMD_TERMINAL_SCROLL_BOTTOM                    "Faire défiler jusqu'en bas"
+    IDS_CMD_TERMINAL_FONT_INCREASE                    "Augmenter la police du terminal"
+    IDS_CMD_TERMINAL_FONT_DECREASE                    "Réduire la police du terminal"
+    IDS_CMD_TERMINAL_FONT_RESET                       "Réinitialiser la police du terminal"
+    IDS_CMD_CONTENT_TAB_NEXT                          "Contenu de volet suivant"
+    IDS_CMD_CONTENT_TAB_PREVIOUS                      "Contenu de volet précédent"
+    IDS_CMD_CONTENT_TAB_FOLDER                        "Sélectionner le contenu Dossier"
+    IDS_CMD_CONTENT_TAB_PREVIEW                       "Sélectionner le contenu Aperçu"
+    IDS_CMD_CONTENT_TAB_TERMINAL                      "Sélectionner le contenu Terminal"
+    IDS_CMD_CONTENT_TAB_LAST                          "Sélectionner le dernier contenu du volet"
+    IDS_CMD_DESC_COMMAND_PALETTE                       "Rechercher et exécuter des commandes RedSalamander dans le contexte actif de l'application."
+    IDS_CMD_DESC_OPEN_SETTINGS_FILE                    "Ouvre le fichier actif des paramètres globaux de l'application dans son éditeur par défaut."
+    IDS_CMD_DESC_TERMINAL_SESSION_MENU                 "Ouvre le menu de la session et du profil du terminal actif."
+    IDS_CMD_DESC_TERMINAL_FIND                         "Recherche du texte dans le tampon du terminal actif."
+    IDS_CMD_DESC_TERMINAL_SUGGESTIONS                  "Recherche dans l'historique des commandes du shell et insère la suggestion sélectionnée."
+    IDS_CMD_DESC_TERMINAL_TAB_NEW                      "Ouvre un nouvel onglet de terminal dans l'autre volet en mode intégré, ou dans la fenêtre de terminal flottante."
+    IDS_CMD_DESC_TERMINAL_OPEN_FLOATING_WINDOW         "Ouvre l'unique fenêtre de terminal flottante, ou ajoute un onglet si elle est déjà ouverte."
+    IDS_CMD_DESC_TERMINAL_TAB_NEXT                     "Sélectionne l'onglet de terminal suivant ou le contenu intégré suivant du volet."
+    IDS_CMD_DESC_TERMINAL_TAB_PREVIOUS                 "Sélectionne l'onglet de terminal précédent ou le contenu intégré précédent du volet."
+    IDS_CMD_DESC_TERMINAL_TAB_SELECT                   "Sélectionne l'onglet de terminal numéroté ou le contenu intégré correspondant du volet."
+    IDS_CMD_DESC_TERMINAL_TAB_LAST                     "Sélectionne le dernier onglet de terminal ou le dernier contenu intégré du volet."
+    IDS_CMD_DESC_TERMINAL_CLOSE                        "Ferme l'onglet de terminal actif ou la session de terminal intégrée."
+    IDS_CMD_DESC_PANE_RESIZE_SPLITTER_LEFT             "Déplace le séparateur des volets d'un cran vers la gauche."
+    IDS_CMD_DESC_PANE_RESIZE_SPLITTER_RIGHT            "Déplace le séparateur des volets d'un cran vers la droite."
+    IDS_CMD_DESC_PANE_FOCUS_LEFT                       "Déplace le focus clavier vers le volet gauche."
+    IDS_CMD_DESC_PANE_FOCUS_RIGHT                      "Déplace le focus clavier vers le volet droit."
+    IDS_CMD_DESC_TERMINAL_COPY_SELECTION_OR_PASSTHROUGH "Copie et efface la sélection du terminal ; sinon, transmet l'entrée d'origine au shell."
+    IDS_CMD_DESC_TERMINAL_SCROLL_LINE_DOWN             "Fait défiler le tampon principal du terminal actif d'une ligne vers le bas."
+    IDS_CMD_DESC_TERMINAL_SCROLL_PAGE_DOWN             "Fait défiler le tampon principal du terminal actif d'une page visible vers le bas."
+    IDS_CMD_DESC_TERMINAL_SCROLL_LINE_UP               "Fait défiler le tampon principal du terminal actif d'une ligne vers le haut."
+    IDS_CMD_DESC_TERMINAL_SCROLL_PAGE_UP               "Fait défiler le tampon principal du terminal actif d'une page visible vers le haut."
+    IDS_CMD_DESC_TERMINAL_SCROLL_TOP                   "Fait défiler jusqu'au début du tampon principal du terminal actif."
+    IDS_CMD_DESC_TERMINAL_SCROLL_BOTTOM                "Fait défiler jusqu'en bas et reprend le suivi de la sortie du terminal actif."
+    IDS_CMD_DESC_TERMINAL_FONT_INCREASE                "Augmente d'un DIP la taille de police de la session de terminal active."
+    IDS_CMD_DESC_TERMINAL_FONT_DECREASE                "Réduit d'un DIP la taille de police de la session de terminal active."
+    IDS_CMD_DESC_TERMINAL_FONT_RESET                   "Rétablit la taille de police de base configurée pour la session de terminal active."
+    IDS_CMD_DESC_CONTENT_TAB_NEXT                      "Sélectionne l'onglet de contenu disponible suivant dans le volet actif."
+    IDS_CMD_DESC_CONTENT_TAB_PREVIOUS                  "Sélectionne l'onglet de contenu disponible précédent dans le volet actif."
+    IDS_CMD_DESC_CONTENT_TAB_FOLDER                    "Sélectionne le contenu Dossier dans le volet actif."
+    IDS_CMD_DESC_CONTENT_TAB_PREVIEW                   "Sélectionne le contenu Aperçu dans le volet actif lorsqu'il est disponible."
+    IDS_CMD_DESC_CONTENT_TAB_TERMINAL                  "Sélectionne le contenu Terminal dans le volet actif lorsqu'il est disponible."
+    IDS_CMD_DESC_CONTENT_TAB_LAST                      "Sélectionne le dernier onglet de contenu disponible dans le volet actif."
+    IDS_CMD_SHORT_COMMAND_PALETTE                      "PalCommandes"
+    IDS_CMD_SHORT_OPEN_SETTINGS_FILE                   "FichRéglages"
+    IDS_CMD_SHORT_TERMINAL_SESSION_MENU                "MenuTerm"
+    IDS_CMD_SHORT_TERMINAL_FIND                        "ChercheTerm"
+    IDS_CMD_SHORT_TERMINAL_SUGGESTIONS                 "Suggestions"
+    IDS_CMD_SHORT_TERMINAL_TAB_NEW                     "NvOngletTerm"
+    IDS_CMD_SHORT_TERMINAL_OPEN_FLOATING_WINDOW        "TermFlottant"
+    IDS_CMD_SHORT_TERMINAL_TAB_NEXT                    "OngletSuiv"
+    IDS_CMD_SHORT_TERMINAL_TAB_PREVIOUS                "OngletPréc"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_1                "TermOnglet1"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_2                "TermOnglet2"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_3                "TermOnglet3"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_4                "TermOnglet4"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_5                "TermOnglet5"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_6                "TermOnglet6"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_7                "TermOnglet7"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_8                "TermOnglet8"
+    IDS_CMD_SHORT_TERMINAL_TAB_LAST                    "DernierTerm"
+    IDS_CMD_SHORT_TERMINAL_CLOSE                       "FermerTerm"
+    IDS_CMD_SHORT_PANE_RESIZE_SPLITTER_LEFT            "SéparGauche"
+    IDS_CMD_SHORT_PANE_RESIZE_SPLITTER_RIGHT           "SéparDroite"
+    IDS_CMD_SHORT_PANE_FOCUS_LEFT                      "FocusGauche"
+    IDS_CMD_SHORT_PANE_FOCUS_RIGHT                     "FocusDroite"
+    IDS_CMD_SHORT_TERMINAL_COPY_SELECTION_OR_PASSTHROUGH "CopieEntrée"
+    IDS_CMD_SHORT_TERMINAL_SCROLL_LINE_DOWN            "LigneBas"
+    IDS_CMD_SHORT_TERMINAL_SCROLL_PAGE_DOWN            "PageBas"
+    IDS_CMD_SHORT_TERMINAL_SCROLL_LINE_UP              "LigneHaut"
+    IDS_CMD_SHORT_TERMINAL_SCROLL_PAGE_UP              "PageHaut"
+    IDS_CMD_SHORT_TERMINAL_SCROLL_TOP                  "DébutTampon"
+    IDS_CMD_SHORT_TERMINAL_SCROLL_BOTTOM               "FinTampon"
+    IDS_CMD_SHORT_TERMINAL_FONT_INCREASE               "PolicePlus"
+    IDS_CMD_SHORT_TERMINAL_FONT_DECREASE               "PoliceMoins"
+    IDS_CMD_SHORT_TERMINAL_FONT_RESET                  "PoliceDéf"
+    IDS_CMD_SHORT_CONTENT_TAB_NEXT                     "ContSuiv"
+    IDS_CMD_SHORT_CONTENT_TAB_PREVIOUS                 "ContPréc"
+    IDS_CMD_SHORT_CONTENT_TAB_FOLDER                   "OngletDoss"
+    IDS_CMD_SHORT_CONTENT_TAB_PREVIEW                  "OngletAperç"
+    IDS_CMD_SHORT_CONTENT_TAB_TERMINAL                 "OngletTerm"
+    IDS_CMD_SHORT_CONTENT_TAB_LAST                     "ContDernier"
+    IDS_SHORTCUTS_GROUP_APPLICATION                    "Application"
+    IDS_SHORTCUTS_GROUP_TERMINAL                       "Terminal"
+    IDS_PREFS_KEYBOARD_PASS_THROUGH                    "Transmettre au terminal"
+    IDS_PREFS_KEYBOARD_NO_ACTION                       "Aucune action"
+    IDS_PREFS_KEYBOARD_PASS_THROUGH_DESC               "Envoie ce raccourci au terminal sans exécuter de commande RedSalamander."
+    IDS_PREFS_KEYBOARD_OVERRIDES_GLOBAL                "Remplace le raccourci global"
+    IDS_COMMAND_PALETTE_SEARCH_CUE                     "Rechercher des commandes"
+    IDS_COMMAND_PALETTE_DISABLED                       "Désactivé"
+    IDS_PREFS_KEYBOARD_IMPORT_SCOPE_INVALID            "Un raccourci utilise une commande ou une identité de touche physique non valide dans sa portée. Le transfert est réservé au terminal et les raccourcis de la barre de fonctions utilisent des touches virtuelles."
 END

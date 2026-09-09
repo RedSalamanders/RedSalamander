@@ -2,6 +2,7 @@
 
 #include "ConnectionProfileUtils.h"
 #include "DxUi/DxUi.Typography.h"
+#include "FileOperationArtifactRegistry.h"
 #include "FileMetadataFormatting.h"
 #include "FluentIcons.h"
 #include "Helpers.h"
@@ -1102,6 +1103,23 @@ void FolderWindow::UpdatePaneStatusBar(Pane pane)
             focusedItemDetails = state.folderView.GetFocusedItemDetails();
         }
         state.statusSelectionText = BuildSelectionSummaryText(state.selectionStats, selectionSizeText, focusedItemDetails);
+        if (state.selectionStats.selectedFiles == 0 && state.selectionStats.selectedFolders == 0)
+        {
+            const std::shared_ptr<const FileOperationArtifacts::Projection> projection =
+                state.folderView.GetFocusedArtifactProjection();
+            if (projection && projection->classification != FileOperationArtifacts::Classification::Ordinary)
+            {
+                const std::wstring badge = LoadStringResource(nullptr, IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE);
+                if (! badge.empty())
+                {
+                    if (! state.statusSelectionText.empty())
+                    {
+                        state.statusSelectionText.append(L" · ");
+                    }
+                    state.statusSelectionText.append(badge);
+                }
+            }
+        }
     }
     const bool useFluentIcons = StatusBarSupportsFluentIcons(state.hStatusBar.get());
     state.statusSortText      = BuildSortIndicatorText(state.folderView.GetSortBy(), state.folderView.GetSortDirection(), useFluentIcons);

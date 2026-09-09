@@ -3,6 +3,92 @@
 ###############################################################################
 * text=auto
 
+# These curated FileOps archives bind raw bytes, including mixed line endings.
+# Keep their hashes reproducible under core.autocrlf without rewriting old runs.
+# Recognize the preserved CRLF terminator while retaining every default hygiene check.
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c6_shared_runtime_clean/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c6_shared_runtime_clean_debug/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c6_shared_runtime_clean_release/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c6_shared_runtime_clean_incremental_release/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c6_diagnostic_accounting/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c6_production_release_transition/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# Pester's failed assertion message contains an intentional trailing blank;
+# retain the exact diagnostic XML bytes instead of rewriting the failed result.
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c6_shared_runtime_clean/baseline-v2.xml whitespace=-blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# The diagnostic baseline's original Pester stack trace ends in a blank.
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c6_diagnostic_accounting/baseline-results.xml whitespace=-blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-05_c0_curl_framing_*/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-05_c0_curl_connect_diagnostics_*/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-05_c0_curl_loopback_topology_*/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# Preserve required empty-context syntax in this archived, rejected experiment.
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-05_c0_curl_loopback_topology_broad_release/candidate.patch -whitespace
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-05_c0_curl_listing_*/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-05_c0_curl_listing_baseline_debug/baseline.patch -whitespace
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-05_c0_curl_listing_lookup_debug/candidate.patch -whitespace
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-05_c0_curl_allocation_probe_*/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-05_c0_curl_allocation_probe_lookup_release/tested.patch -whitespace
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_curl_connect_probe_*/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_curl_connect_probe_lookup_release/tested.patch -whitespace
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_curl_socket_trace_*/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_curl_socket_trace_lookup_release/tested.patch -whitespace
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_curl_exclusive_*/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_curl_exclusive_lookup_release/tested.patch -whitespace
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_curl_cursor_release_*/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_curl_cursor_release_initial_lookup_release/tested.patch -whitespace
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_curl_cursor_release_lookup_release/tested.patch -whitespace
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_curl_parser_*/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_curl_parser_baseline_debug/tested.patch -whitespace
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_curl_parser_lookup_debug/tested.patch -whitespace
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_curl_movemode_*/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_curl_movemode_*/tested.patch -whitespace
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_imap_listing_*/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# Preserve literal Git patch context, including blank-context marker spaces.
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_imap_listing_attributes_*/tested.patch -whitespace
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_imap_listing_uids_*/tested.patch -whitespace
+# Preserve three pre-existing comment-line trailing blanks in this exact tested input.
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_imap_listing_candidate_debug/tested-.gitattributes.txt whitespace=-blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20260907_205843_beeline_same_endpoint_move_rename/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# BR-4/BR-5/BR-7/Keyboard evidence binds the original result and metric bytes.
+Specs/TestRuns/4cb089111a23/Commands/2026-09-07_205843_br7_original_failure/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Commands/2026-09-08_093136_preferences_baseline/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Commands/2026-09-08_094051_ui_focus_red/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Commands/2026-09-08_095421_ui_focus_green/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Commands/2026-09-08_103757_keyboard_context_green/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-08_095536_wof_fixture_diagnostic/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-08_095645_br5_host_ftp_green/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-08_101441_cloud_fixture_diagnostic/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-08_101634_cloud_tag_diagnostic/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-08_102141_placeholder_parallel_red/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-08_103012_placeholder_consent_diagnostic/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-08_103402_placeholder_parallel_green/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-08_104319_br4_br5_br7_keyboard_fresh_full/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+
+# I12 preserves original result and selected metric bytes for closeout.
+Specs/TestRuns/4cb089111a23/Commands/2026-09-08_180534_i12_terminal_closeout/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+
+# Reproducible Terminal runtime text inputs have semantic LF identity.
+Tools/TerminalEngine/Patches/*.patch text eol=lf
+External/TerminalEngine/Notices/*.txt text eol=lf
+
+# Terminal-engine governance stores raw SHA-256 identities for this exact
+# executable/schema surface. Keep those bytes invariant under core.autocrlf.
+.github/workflows/terminal-engine-gate0.yml text eol=lf
+Directory.Build.props text eol=lf
+Directory.Build.targets text eol=lf
+RuntimeDependencies.props text eol=lf
+vcpkg.json text eol=lf
+Tools/validation-impact.json text eol=lf
+Specs/Testing/*.schema.json text eol=lf
+Specs/Build/*.schema.json text eol=lf
+Specs/Terminal/TerminalEngine* text eol=lf
+Tools/Evaluate-TerminalEngines.ps1 text eol=lf
+Tools/New-TerminalEngineNotices.ps1 text eol=lf
+Tools/TerminalEngineEvaluator.psm1 text eol=lf
+Tools/TerminalEvidence.psm1 text eol=lf
+Tools/TerminalEngine/** text eol=lf
+Tools/Tests/TerminalEngine*.Tests.ps1 text eol=lf
+Tools/Tests/TerminalEvidence.Tests.ps1 text eol=lf
+
 ###############################################################################
 # Set default behavior for command prompt diff.
 #
@@ -61,8 +147,9 @@
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
-# Squad: union merge for append-only team state files
-.squad/decisions.md merge=union
-.squad/agents/*/history.md merge=union
-.squad/log/** merge=union
-.squad/orchestration-log/** merge=union
+# Unified-diff context lines may consist of one required leading space.
+# Do not report those syntax bytes as trailing-whitespace errors.
+Tools/TerminalEngine/Patches/*.patch text eol=lf -whitespace
+
+Specs/TestRuns/4cb089111a23/Commands/2026-09-08_183818_i12_fresh_full/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Commands/2026-09-08_200340_i12_final_full/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

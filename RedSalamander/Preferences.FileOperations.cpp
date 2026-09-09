@@ -83,9 +83,8 @@ struct FileOperationsNoteCardDx
 
 struct FileOperationsDxPage
 {
-    Label* preCalcHeader = nullptr;
-    FileOperationsToggleCardDx preCalcEnabled{};
-    FileOperationsComboCardDx preCalcWorkers{};
+    Label* verificationHeader = nullptr;
+    FileOperationsToggleCardDx verifyAfterCopy{};
 
     Label* bandwidthHeader = nullptr;
     FileOperationsComboCardDx bandwidthPreset{};
@@ -98,9 +97,8 @@ struct FileOperationsDxPage
 
     void Detach() noexcept
     {
-        preCalcHeader      = nullptr;
-        preCalcEnabled     = {};
-        preCalcWorkers     = {};
+        verificationHeader = nullptr;
+        verifyAfterCopy     = {};
         bandwidthHeader    = nullptr;
         bandwidthPreset    = {};
         customBandwidth    = {};
@@ -231,19 +229,19 @@ bool FileOperationsPane::EnsureDxHosts(HWND parent, PreferencesDialogState& stat
 
     auto* root = _pageContentRoot;
 
-    dxState->page.preCalcHeader = root->AddChild<Label>();
-    dxState->page.preCalcHeader->SetFontRole(FontRole::Header);
+    dxState->page.verificationHeader = root->AddChild<Label>();
+    dxState->page.verificationHeader->SetFontRole(FontRole::Header);
 
-    dxState->page.preCalcEnabled.card  = root->AddChild<CardPanel>();
-    dxState->page.preCalcEnabled.title = root->AddChild<Label>();
-    dxState->page.preCalcEnabled.title->SetFontRole(FontRole::Body);
-    dxState->page.preCalcEnabled.description = root->AddChild<Label>();
-    dxState->page.preCalcEnabled.description->SetFontRole(FontRole::Small);
-    dxState->page.preCalcEnabled.description->SetMultiline(true);
-    dxState->page.preCalcEnabled.toggle = root->AddChild<Toggle>();
-    dxState->page.preCalcEnabled.title->SetMnemonicTarget(dxState->page.preCalcEnabled.toggle);
-    dxState->page.preCalcEnabled.toggle->SetStateLabels(LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF), LoadStringResource(nullptr, IDS_PREFS_COMMON_ON));
-    dxState->page.preCalcEnabled.toggle->SetOnToggled([this, host = parent](bool checked) noexcept
+    dxState->page.verifyAfterCopy.card  = root->AddChild<CardPanel>();
+    dxState->page.verifyAfterCopy.title = root->AddChild<Label>();
+    dxState->page.verifyAfterCopy.title->SetFontRole(FontRole::Body);
+    dxState->page.verifyAfterCopy.description = root->AddChild<Label>();
+    dxState->page.verifyAfterCopy.description->SetFontRole(FontRole::Small);
+    dxState->page.verifyAfterCopy.description->SetMultiline(true);
+    dxState->page.verifyAfterCopy.toggle = root->AddChild<Toggle>();
+    dxState->page.verifyAfterCopy.title->SetMnemonicTarget(dxState->page.verifyAfterCopy.toggle);
+    dxState->page.verifyAfterCopy.toggle->SetStateLabels(LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF), LoadStringResource(nullptr, IDS_PREFS_COMMON_ON));
+    dxState->page.verifyAfterCopy.toggle->SetOnToggled([this, host = parent](bool checked) noexcept
     {
         if (! host || IsWindow(host) == FALSE)
         {
@@ -262,61 +260,14 @@ bool FileOperationsPane::EnsureDxHosts(HWND parent, PreferencesDialogState& stat
             return;
         }
 
-        if (fileOperations->preCalcEnabled != checked)
+        if (fileOperations->verifyAfterCopy != checked)
         {
-            fileOperations->preCalcEnabled = checked;
+            fileOperations->verifyAfterCopy = checked;
             MaybeResetWorkingFileOperationsSettingsIfEmpty(dialogState->workingSettings);
             SetDirty(GetParent(host), *dialogState);
         }
 
         Refresh(host, *dialogState);
-    });
-
-    dxState->page.preCalcWorkers.card  = root->AddChild<CardPanel>();
-    dxState->page.preCalcWorkers.title = root->AddChild<Label>();
-    dxState->page.preCalcWorkers.title->SetFontRole(FontRole::Body);
-    dxState->page.preCalcWorkers.description = root->AddChild<Label>();
-    dxState->page.preCalcWorkers.description->SetFontRole(FontRole::Small);
-    dxState->page.preCalcWorkers.description->SetMultiline(true);
-    dxState->page.preCalcWorkers.combo = root->AddChild<ComboBox>();
-    dxState->page.preCalcWorkers.title->SetMnemonicTarget(dxState->page.preCalcWorkers.combo);
-    dxState->page.preCalcWorkers.combo->SetVariant(ComboBoxVariant::Window);
-    {
-        std::vector<ComboBox::Item> items;
-        items.reserve(8u);
-        for (uint32_t value = 1; value <= 8; ++value)
-        {
-            const std::wstring label = std::to_wstring(value);
-            items.push_back({label, label});
-        }
-        dxState->page.preCalcWorkers.combo->SetItems(std::move(items));
-    }
-    dxState->page.preCalcWorkers.combo->SetOnSelectionChanged([this, host = parent](size_t itemIndex) noexcept
-    {
-        if (_syncingDxPreCalcWorkersCombo || ! host || IsWindow(host) == FALSE)
-        {
-            return;
-        }
-
-        auto* dialogState = PrefsUi::GetDialogState(host);
-        if (! dialogState)
-        {
-            return;
-        }
-
-        auto* fileOperations = EnsureWorkingFileOperationsSettings(dialogState->workingSettings);
-        if (! fileOperations)
-        {
-            return;
-        }
-
-        const uint32_t newValue = std::clamp<uint32_t>(static_cast<uint32_t>(itemIndex) + 1u, 1u, 8u);
-        if (fileOperations->preCalcMaxWorkers != newValue)
-        {
-            fileOperations->preCalcMaxWorkers = newValue;
-            MaybeResetWorkingFileOperationsSettingsIfEmpty(dialogState->workingSettings);
-            SetDirty(GetParent(host), *dialogState);
-        }
     });
 
     dxState->page.bandwidthHeader = root->AddChild<Label>();
@@ -577,18 +528,11 @@ void FileOperationsPane::SyncDxControlsFromState(const PreferencesDialogState& s
     const auto& fileOperations = GetFileOperationsSettingsOrDefault(state.workingSettings);
     FileOperationsDxPage& page = _dxState->page;
 
-    page.preCalcHeader->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_SECTION_PRECALC));
-    page.preCalcEnabled.title->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_PRECALC_ENABLED_TITLE));
-    page.preCalcEnabled.description->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_PRECALC_ENABLED_DESC));
-    page.preCalcEnabled.toggle->SetChecked(fileOperations.preCalcEnabled);
-    page.preCalcEnabled.toggle->SetEnabled(true);
-
-    page.preCalcWorkers.title->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_PRECALC_WORKERS_TITLE));
-    page.preCalcWorkers.description->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_PRECALC_WORKERS_DESC));
-    _syncingDxPreCalcWorkersCombo = true;
-    page.preCalcWorkers.combo->SetSelectedIndex(std::clamp<size_t>(static_cast<size_t>(std::max<uint32_t>(1u, fileOperations.preCalcMaxWorkers) - 1u), 0u, 7u));
-    page.preCalcWorkers.combo->SetEnabled(fileOperations.preCalcEnabled);
-    _syncingDxPreCalcWorkersCombo = false;
+    page.verificationHeader->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_SECTION_VERIFICATION));
+    page.verifyAfterCopy.title->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_VERIFY_AFTER_COPY_TITLE));
+    page.verifyAfterCopy.description->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_VERIFY_AFTER_COPY_DESC));
+    page.verifyAfterCopy.toggle->SetChecked(fileOperations.verifyAfterCopy);
+    page.verifyAfterCopy.toggle->SetEnabled(true);
 
     page.bandwidthHeader->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_SECTION_BANDWIDTH));
     page.bandwidthPreset.title->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_PRESET_TITLE));
@@ -720,7 +664,7 @@ void FileOperationsPane::LayoutDxPage(
     const auto pxToDip = [dpi](const int px) noexcept { return static_cast<float>(px) * 96.0f / static_cast<float>(std::max<UINT>(1u, dpi)); };
 
     FileOperationsDxPage& page = _dxState->page;
-    page.preCalcHeader->SetVisible(false);
+    page.verificationHeader->SetVisible(false);
     page.bandwidthHeader->SetVisible(false);
     page.advancedHeader->SetVisible(false);
 
@@ -797,8 +741,7 @@ void FileOperationsPane::LayoutDxPage(
         }
     };
 
-    hideToggleCard(page.preCalcEnabled);
-    hideComboCard(page.preCalcWorkers);
+    hideToggleCard(page.verifyAfterCopy);
     hideComboCard(page.bandwidthPreset);
     hideEditCard(page.customBandwidth);
     hideToggleCard(page.autoDismissSuccess);
@@ -919,9 +862,8 @@ void FileOperationsPane::LayoutDxPage(
         y += cardHeight + cardSpacingY;
     };
 
-    layoutHeader(page.preCalcHeader);
-    layoutToggleCard(page.preCalcEnabled);
-    layoutComboCard(page.preCalcWorkers);
+    layoutHeader(page.verificationHeader);
+    layoutToggleCard(page.verifyAfterCopy);
 
     layoutHeader(page.bandwidthHeader);
     layoutComboCard(page.bandwidthPreset);
@@ -1002,13 +944,9 @@ PreferencesFileOperationsDebugFocusTarget FileOperationsPane::DebugGetFocusTarge
     }
 
     const auto& page = _dxState->page;
-    if (page.preCalcEnabled.toggle == focused)
+    if (page.verifyAfterCopy.toggle == focused)
     {
-        return PreferencesFileOperationsDebugFocusTarget::PreCalcEnabledToggle;
-    }
-    if (page.preCalcWorkers.combo == focused)
-    {
-        return PreferencesFileOperationsDebugFocusTarget::PreCalcWorkersCombo;
+        return PreferencesFileOperationsDebugFocusTarget::VerifyAfterCopyToggle;
     }
     if (page.bandwidthPreset.combo == focused)
     {
@@ -1030,14 +968,14 @@ PreferencesFileOperationsDebugFocusTarget FileOperationsPane::DebugGetFocusTarge
     return PreferencesFileOperationsDebugFocusTarget::None;
 }
 
-bool FileOperationsPane::DebugFocusPreCalcEnabledToggle() noexcept
+bool FileOperationsPane::DebugFocusVerifyAfterCopyToggle() noexcept
 {
     if (! _pageHostDx || ! _dxState)
     {
         return false;
     }
 
-    auto* const toggle = _dxState->page.preCalcEnabled.toggle;
+    auto* const toggle = _dxState->page.verifyAfterCopy.toggle;
     if (! toggle || ! toggle->IsVisible() || ! toggle->IsEnabled())
     {
         return false;
@@ -1047,14 +985,14 @@ bool FileOperationsPane::DebugFocusPreCalcEnabledToggle() noexcept
     return _pageHostDx->GetFocusControl() == toggle;
 }
 
-bool FileOperationsPane::DebugGetPreCalcEnabledToggleChecked(bool& outChecked) const noexcept
+bool FileOperationsPane::DebugGetVerifyAfterCopyToggleChecked(bool& outChecked) const noexcept
 {
     if (! _dxState)
     {
         return false;
     }
 
-    const auto* const toggle = _dxState->page.preCalcEnabled.toggle;
+    const auto* const toggle = _dxState->page.verifyAfterCopy.toggle;
     if (! toggle || ! toggle->IsVisible())
     {
         return false;

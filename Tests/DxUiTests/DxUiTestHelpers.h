@@ -3,6 +3,7 @@
 #include "DxUi/DxUi.Internal.h"
 #include "DxUi/DxUi.h"
 #include "Helpers.h"
+#include "TestWindowActivationGuard.h"
 #include "WindowMessages.h"
 #include "TestSupport/TestSupport.h"
 
@@ -62,6 +63,10 @@ inline void SkipDxUiTest(const char* reason)
 [[nodiscard]] inline bool TryFocusDxUiTestWindow(HWND hwnd, DWORD timeoutMs = 800u) noexcept
 {
     if (hwnd == nullptr || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+    if ((GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_NOACTIVATE) != 0)
     {
         return false;
     }
@@ -192,6 +197,17 @@ inline void SetDxUiWriteBaselines(bool value) noexcept
 inline bool ShouldWriteDxUiBaselines() noexcept
 {
     return DxUiWriteBaselinesFlag();
+}
+
+inline bool& DxUiTestWindowsCanActivateFlag() noexcept
+{
+    static bool value = false;
+    return value;
+}
+
+inline void SetDxUiTestWindowsCanActivate(bool value) noexcept
+{
+    DxUiTestWindowsCanActivateFlag() = value;
 }
 
 inline constexpr std::wstring_view kDxUiHarnessArtifactSegment{L"dxui"};
@@ -762,14 +778,18 @@ public:
     AttachedHostWindow(AttachedHostWindow&&)                 = delete;
     AttachedHostWindow& operator=(AttachedHostWindow&&)      = delete;
 
-    AttachedHostWindow()
+    explicit AttachedHostWindow(
+        RedSalamander::DxUi::WindowHost::PresentationMode presentationMode =
+            RedSalamander::DxUi::WindowHost::PresentationMode::HwndSwapChain)
     {
         static_cast<void>(EnsureWindowClass());
-        HWND hwnd =
-            CreateWindowExW(0, kWindowClassName, L"DxUiTestsHost", WS_OVERLAPPED, -32000, -32000, 320, 200, nullptr, nullptr, GetModuleHandleW(nullptr), this);
+        const DWORD exStyle = DxUiTestWindowsCanActivateFlag() ? 0u : WS_EX_NOACTIVATE;
+        HWND hwnd = CreateWindowExW(
+            exStyle, kWindowClassName, L"DxUiTestsHost", WS_OVERLAPPED, -32000, -32000, 320, 200, nullptr, nullptr, GetModuleHandleW(nullptr), this);
         Require(hwnd != nullptr, "attached host window created");
         _hwnd.reset(hwnd);
-        Require(_host.Attach(_hwnd.get()), "attached host window host attached");
+        Require(_host.Attach(_hwnd.get(), RedSalamander::DxUi::WindowHost::AttachOptions{.presentationMode = presentationMode}),
+                "attached host window host attached");
     }
 
     ~AttachedHostWindow()

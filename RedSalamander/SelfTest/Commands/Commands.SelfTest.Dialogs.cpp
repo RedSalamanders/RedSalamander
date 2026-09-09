@@ -32,34 +32,24 @@ template <typename Task> [[nodiscard]] auto RunDialogUiaTaskWithMessagePump(std:
         SharedState& operator=(SharedState&&)      = delete;
 
         std::optional<Result> result;
-        std::atomic<bool> done = false;
+        UiaOperationLifetime lifetime;
     };
 
-    auto sharedState = std::make_shared<SharedState>();
-    auto sharedTask  = std::make_shared<TaskType>(std::forward<Task>(task));
+    constexpr uint32_t kDialogUiaTimeoutBudgetMs = 7000u;
+    auto sharedState                                = std::make_shared<SharedState>();
+    auto sharedTask                                 = std::make_shared<TaskType>(std::forward<Task>(task));
 
-    std::jthread worker([sharedState, sharedTask](std::stop_token) noexcept
+    std::jthread worker([sharedState, sharedTask](const std::stop_token stopToken) noexcept
     {
-        sharedState->result = (*sharedTask)();
-        sharedState->done.store(true, std::memory_order_release);
+        ExecuteBoundedUiaWorker(sharedState, stopToken, kDialogUiaTimeoutBudgetMs, [&]() noexcept
+        { sharedState->result = (*sharedTask)(); });
     });
 
-    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
-    while (! sharedState->done.load(std::memory_order_acquire))
+    if (! WaitForBoundedUiaWorker(worker, sharedState->lifetime, kDialogUiaTimeoutBudgetMs, L"dialog UIA task", label))
     {
-        if (std::chrono::steady_clock::now() >= deadline)
-        {
-            Trace(std::format(L"Dialog UIA task timed out during '{}'; returning default result and detaching worker.", label));
-            worker.request_stop();
-            worker.detach();
-            return Result{};
-        }
-
-        PumpPendingMessages();
-        std::this_thread::sleep_for(10ms);
+        return Result{};
     }
 
-    worker.join();
     return std::move(sharedState->result).value_or(Result{});
 }
 
@@ -926,7 +916,13 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
                                WPARAM closeKey,
                                HostPromptResult expectedResult,
                                std::wstring_view operationName,
-                               std::wstring_view invokeButtonName = {}) noexcept
+                               std::wstring_view invokeButtonName = {},
+                               HostPromptPresentation presentation = HOST_PROMPT_PRESENTATION_DEFAULT,
+                               RedSalamander::Ui::AlertPresentation expectedPresentation = RedSalamander::Ui::AlertPresentation::Severity,
+                               std::wstring_view expectedPrimaryButtonLabel = {},
+                               HostFileOperationPromptOptions* fileOperationOptions = nullptr,
+                               std::wstring_view invokeOptionName = {},
+                               std::optional<uint64_t> expectedInvokedOptionValue = std::nullopt) noexcept
     {
         PromptAutomationResult promptResult{};
 
@@ -972,6 +968,91 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
                                       overlayChrome.usesSharedButtonChrome ? 1 : 0,
                                       overlayChrome.usesSharedCloseChrome ? 1 : 0,
                                       overlayChrome.paintCount));
+            state.Require(overlayChrome.renderedCloseGlyph == FluentIcons::kClear ||
+                              overlayChrome.renderedCloseGlyph == FluentIcons::kFallbackClear,
+                          std::format(L"Alert overlay close action should render a Segoe Fluent or Unicode fallback glyph during {}; saw U+{:04X}.",
+                                      operationName,
+                                      static_cast<unsigned int>(overlayChrome.renderedCloseGlyph)));
+            state.Require(overlayChrome.presentation == expectedPresentation && overlayChrome.renderedIconPresentation == expectedPresentation,
+                          std::format(L"Alert overlay prompt should render the requested presentation during {}; model={} icon={} expected={}.",
+                                      operationName,
+                                      static_cast<unsigned int>(overlayChrome.presentation),
+                                      static_cast<unsigned int>(overlayChrome.renderedIconPresentation),
+                                      static_cast<unsigned int>(expectedPresentation)));
+            if (expectedPresentation == RedSalamander::Ui::AlertPresentation::Copy)
+            {
+                state.Require(overlayChrome.renderedIconGlyph == FluentIcons::kCopyTo ||
+                                  overlayChrome.renderedIconGlyph == FluentIcons::kFallbackCopyTo,
+                              std::format(L"Copy confirmation should render a Segoe Fluent or Unicode fallback glyph; saw U+{:04X}.",
+                                          static_cast<unsigned int>(overlayChrome.renderedIconGlyph)));
+            }
+            else if (expectedPresentation == RedSalamander::Ui::AlertPresentation::Move)
+            {
+                state.Require(overlayChrome.renderedIconGlyph == FluentIcons::kMoveToFolder ||
+                                  overlayChrome.renderedIconGlyph == FluentIcons::kFallbackMoveToFolder,
+                              std::format(L"Move confirmation should render a Segoe Fluent or Unicode fallback glyph; saw U+{:04X}.",
+                                          static_cast<unsigned int>(overlayChrome.renderedIconGlyph)));
+            }
+            else if (expectedPresentation == RedSalamander::Ui::AlertPresentation::Delete)
+            {
+                state.Require(overlayChrome.renderedIconGlyph == FluentIcons::kDelete ||
+                                  overlayChrome.renderedIconGlyph == FluentIcons::kFallbackDelete,
+                              std::format(L"Delete confirmation should render a Segoe Fluent or Unicode fallback glyph; saw U+{:04X}.",
+                                          static_cast<unsigned int>(overlayChrome.renderedIconGlyph)));
+            }
+            state.Require(overlayChrome.title == title,
+                          std::format(L"Alert overlay prompt title mismatch during {}; saw '{}' expected '{}'.", operationName, overlayChrome.title, title));
+            if (! expectedPrimaryButtonLabel.empty())
+            {
+                state.Require(overlayChrome.primaryButtonLabel == expectedPrimaryButtonLabel,
+                              std::format(L"Alert overlay prompt primary action mismatch during {}; saw '{}' expected '{}'.",
+                                          operationName,
+                                          overlayChrome.primaryButtonLabel,
+                                          expectedPrimaryButtonLabel));
+            }
+            if (fileOperationOptions)
+            {
+                state.Require(overlayChrome.optionValues.size() == 4u,
+                              std::format(L"File-operation confirmation should expose four immutable-snapshot controls during {}; saw {}.",
+                                          operationName,
+                                          overlayChrome.optionValues.size()));
+            }
+
+            if (! invokeOptionName.empty())
+            {
+                const bool invokedOption = InvokeVisibleDescendantByName(overlay, UIA_ButtonControlTypeId, invokeOptionName);
+                state.Require(invokedOption,
+                              std::format(L"Failed to invoke file-operation confirmation option '{}' during {}.", invokeOptionName, operationName));
+                // The overlay's UIA Invoke posts the option message to the overlay window, so the cycled
+                // value appears only after that post is delivered; wait for it with a bound instead of
+                // reading the snapshot after one pump.
+                RedSalamander::Ui::AlertOverlayWindowDebugSnapshot changed{};
+                bool changedRead = false;
+                const auto cycleDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+                while (true)
+                {
+                    PumpPendingMessages();
+                    changed     = {};
+                    changedRead = RedSalamander::Ui::DebugGetAlertOverlayWindowSnapshot(overlay, changed);
+                    if (! changedRead || ! expectedInvokedOptionValue.has_value() ||
+                        (! changed.optionValues.empty() && changed.optionValues.front() == expectedInvokedOptionValue.value()) ||
+                        std::chrono::steady_clock::now() >= cycleDeadline)
+                    {
+                        break;
+                    }
+                    std::this_thread::sleep_for(20ms);
+                }
+                state.Require(changedRead,
+                              std::format(L"Failed to read changed file-operation confirmation option during {}.", operationName));
+                if (expectedInvokedOptionValue.has_value())
+                {
+                    state.Require(! changed.optionValues.empty() && changed.optionValues.front() == expectedInvokedOptionValue.value(),
+                                  std::format(L"File-operation confirmation option did not cycle during {}; saw {} expected {}.",
+                                              operationName,
+                                              changed.optionValues.empty() ? UINT64_MAX : changed.optionValues.front(),
+                                              expectedInvokedOptionValue.value()));
+                }
+            }
 
             if (! state.failure.empty())
             {
@@ -1008,7 +1089,6 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
         });
 
         HostPromptRequest request{};
-        request.version       = 1u;
         request.sizeBytes     = sizeof(request);
         request.scope         = HOST_ALERT_SCOPE_APPLICATION;
         request.severity      = HOST_ALERT_INFO;
@@ -1017,6 +1097,8 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
         request.title         = title.data();
         request.message       = message.data();
         request.defaultResult = HOST_PROMPT_RESULT_OK;
+        request.presentation  = presentation;
+        request.fileOperationOptions = fileOperationOptions;
 
         promptResult.hr = HostShowPrompt(request, nullptr, &promptResult.result);
         automation.join();
@@ -1054,6 +1136,110 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
               HOST_PROMPT_RESULT_OK,
               L"reopened accept",
               L"OK");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring copyLabel = LoadStringResource(nullptr, IDS_FILEOP_OPERATION_COPY);
+    HostFileOperationPromptOptions copyOptions{};
+    copyOptions.sizeBytes = sizeof(copyOptions);
+    copyOptions.linkPolicy = HOST_FILE_OPERATION_LINK_PRESERVE;
+    copyOptions.verifyAfterCopy = 0u;
+    copyOptions.executionMode = HOST_FILE_OPERATION_EXECUTION_QUEUE;
+    copyOptions.bandwidthLimitBytesPerSecond = 5ull << 20u;
+    const std::wstring preserveLinkOptionName = std::format(L"{}: {}",
+                                                            LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_LINKS),
+                                                            LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_LINKS_PRESERVE));
+    runPrompt(copyLabel,
+              L"Verify the Copy confirmation presentation.",
+              VK_RETURN,
+              HOST_PROMPT_RESULT_OK,
+              L"Copy presentation",
+              copyLabel,
+              HOST_PROMPT_PRESENTATION_COPY,
+              RedSalamander::Ui::AlertPresentation::Copy,
+              copyLabel,
+              &copyOptions,
+              preserveLinkOptionName,
+              HOST_FILE_OPERATION_LINK_SKIP);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    state.Require(copyOptions.linkPolicy == HOST_FILE_OPERATION_LINK_SKIP,
+                  L"Accepted Copy confirmation did not write the cycled Links value back to the caller-owned prompt snapshot.");
+
+    const std::wstring moveLabel = LoadStringResource(nullptr, IDS_FILEOP_OPERATION_MOVE);
+    runPrompt(moveLabel,
+              L"Verify the Move confirmation presentation.",
+              VK_RETURN,
+              HOST_PROMPT_RESULT_OK,
+              L"Move presentation",
+              moveLabel,
+              HOST_PROMPT_PRESENTATION_MOVE,
+              RedSalamander::Ui::AlertPresentation::Move,
+              moveLabel);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring deleteLabel = LoadStringResource(nullptr, IDS_FILEOP_OPERATION_DELETE);
+    runPrompt(deleteLabel,
+              L"Verify the Delete confirmation presentation.",
+              VK_RETURN,
+              HOST_PROMPT_RESULT_OK,
+              L"Delete presentation",
+              deleteLabel,
+              HOST_PROMPT_PRESENTATION_DELETE,
+              RedSalamander::Ui::AlertPresentation::Delete,
+              deleteLabel);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    HostResetPromptShutdown();
+    const auto resetPromptShutdown = wil::scope_exit([]() noexcept { HostResetPromptShutdown(); });
+
+    PromptAutomationResult shutdownPromptResult{};
+    std::jthread shutdownAutomation([&](std::stop_token) noexcept
+    {
+        const HWND overlay = WaitForWindow(getOverlayWindow, SelfTest::Scale(5000ms));
+        shutdownPromptResult.overlay = overlay;
+        if (! overlay || IsWindow(overlay) == FALSE)
+        {
+            return;
+        }
+
+        shutdownPromptResult.sawOverlay.store(true, std::memory_order_release);
+        HostBeginPromptShutdown();
+        static_cast<void>(PostMessageW(mainWindow, WM_NULL, 0, 0));
+    });
+
+    HostPromptRequest shutdownRequest{};
+    shutdownRequest.sizeBytes     = sizeof(shutdownRequest);
+    shutdownRequest.scope         = HOST_ALERT_SCOPE_APPLICATION;
+    shutdownRequest.severity      = HOST_ALERT_INFO;
+    shutdownRequest.buttons       = HOST_PROMPT_BUTTONS_OK_CANCEL;
+    shutdownRequest.title         = L"File Operations shutdown prompt self-test";
+    shutdownRequest.message       = L"Verify that shutdown unwinds the active prompt before owner teardown.";
+    shutdownRequest.defaultResult = HOST_PROMPT_RESULT_OK;
+    shutdownPromptResult.hr       = HostShowPrompt(shutdownRequest, nullptr, &shutdownPromptResult.result);
+    shutdownAutomation.join();
+
+    state.Require(shutdownPromptResult.sawOverlay.load(std::memory_order_acquire),
+                  L"Shutdown-unwind validation did not observe the live host prompt overlay.");
+    state.Require(SUCCEEDED(shutdownPromptResult.hr),
+                  std::format(L"Active host prompt shutdown should unwind normally; hr=0x{:08X}.",
+                              static_cast<unsigned int>(shutdownPromptResult.hr)));
+    state.Require(shutdownPromptResult.result == HOST_PROMPT_RESULT_CANCEL,
+                  L"Active host prompt shutdown must return its escape/cancel result.");
+    state.Require(IsWindow(mainWindow) != FALSE,
+                  L"Active host prompt shutdown must return to its caller before owner-window teardown.");
+    state.Require(getOverlayWindow() == nullptr,
+                  L"Shutdown-unwind validation left the host prompt overlay alive after returning to its caller.");
     return state.failure.empty();
 }
 
@@ -1138,7 +1324,6 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
         });
 
         HostPromptRequest request{};
-        request.version       = 1u;
         request.sizeBytes     = sizeof(request);
         request.scope         = HOST_ALERT_SCOPE_APPLICATION;
         request.severity      = HOST_ALERT_INFO;
@@ -1284,7 +1469,6 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
         });
 
         HostPromptRequest request{};
-        request.version       = 1u;
         request.sizeBytes     = sizeof(request);
         request.scope         = HOST_ALERT_SCOPE_APPLICATION;
         request.severity      = HOST_ALERT_INFO;
@@ -3780,7 +3964,7 @@ struct FatalErrorReadableSurfaceProbe final
         cap->completedRenames = update.completedRenames;
     };
 
-    const HRESULT hr = ChangeCase::ApplyToPaths(*fs, {a, b, subdir}, apply, {}, onProgress, &capture);
+    const HRESULT hr = ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {a, b, subdir}, apply, {}, onProgress, &capture);
     state.Require(SUCCEEDED(hr), std::format(L"ApplyToPaths failed (hr=0x{:08X}).", static_cast<unsigned long>(hr)));
     if (FAILED(hr))
     {
@@ -3835,7 +4019,7 @@ struct FatalErrorReadableSurfaceProbe final
     upper.target         = ChangeTarget::WholeFilename;
     upper.includeSubdirs = false;
 
-    const HRESULT upperHr = ChangeCase::ApplyToPaths(*fs, {upperA, upperB}, upper);
+    const HRESULT upperHr = ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {upperA, upperB}, upper);
     state.Require(SUCCEEDED(upperHr), std::format(L"ApplyToPaths upper failed (hr=0x{:08X}).", static_cast<unsigned long>(upperHr)));
     if (FAILED(upperHr))
     {
@@ -3855,6 +4039,551 @@ struct FatalErrorReadableSurfaceProbe final
 
     state.Require(upperNames.contains(L"FOO.TXT"), L"Expected FOO.TXT after change case upper.");
     state.Require(upperNames.contains(L"BAR.BAZ"), L"Expected BAR.BAZ after change case upper.");
+
+    const std::filesystem::path guardRoot = suiteRoot / L"work" / L"change_case_guard";
+    const std::filesystem::path guardNested = guardRoot / L"NestedGuard.TXT";
+    ec.clear();
+    std::filesystem::remove_all(guardRoot, ec);
+    state.Require(SelfTest::EnsureDirectory(guardRoot), L"Failed to create recursive Change Case guard root.");
+    state.Require(SelfTest::WriteTextFile(guardNested, "guard"), L"Failed to create recursive Change Case guard fixture.");
+
+    struct GuardCapture final
+    {
+        std::filesystem::path expectedNested;
+        bool prepareCalled = false;
+        bool prepareSawNested = false;
+        uint64_t revalidateCalls = 0u;
+        HRESULT prepareResult = S_OK;
+        HRESULT revalidateResult = S_OK;
+    };
+    const auto prepareGuard = [](const std::span<const std::filesystem::path> paths, void* cookie) noexcept -> HRESULT
+    {
+        auto* guard = static_cast<GuardCapture*>(cookie);
+        if (guard == nullptr)
+        {
+            return E_POINTER;
+        }
+        guard->prepareCalled = true;
+        guard->prepareSawNested = std::ranges::any_of(paths, [&](const std::filesystem::path& path) noexcept
+        {
+            return OrdinalString::EqualsNoCasePath(path, guard->expectedNested);
+        });
+        return guard->prepareResult;
+    };
+    const auto revalidateGuard = [](const std::span<const std::filesystem::path>, void* cookie) noexcept -> HRESULT
+    {
+        auto* guard = static_cast<GuardCapture*>(cookie);
+        if (guard == nullptr)
+        {
+            return E_POINTER;
+        }
+        ++guard->revalidateCalls;
+        return guard->revalidateResult;
+    };
+
+    GuardCapture canceledGuard{
+        .expectedNested = guardNested,
+        .prepareResult = S_FALSE,
+    };
+    const ChangeCase::MutationGuardCallbacks canceledCallbacks{
+        .prepare = prepareGuard,
+        .revalidate = revalidateGuard,
+        .cookie = &canceledGuard,
+    };
+    ChangeCase::Options guardedRecursive = upper;
+    guardedRecursive.includeSubdirs = true;
+    const HRESULT canceledGuardHr = ChangeCase::DebugApplyToPathsForTests(
+        *fs, L"builtin/file-system", {guardRoot}, guardedRecursive, {}, nullptr, nullptr, &canceledCallbacks);
+    state.Require(canceledGuardHr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                  std::format(L"Recursive Change Case guard Cancel returned 0x{:08X}.", static_cast<unsigned long>(canceledGuardHr)));
+    state.Require(canceledGuard.prepareCalled && canceledGuard.prepareSawNested,
+                  L"Recursive Change Case guard did not receive the discovered nested mutation set.");
+    state.Require(canceledGuard.revalidateCalls == 0u, L"Recursive Change Case revalidated after its preparation guard canceled.");
+    std::unordered_set<std::wstring> guardNames;
+    ec.clear();
+    for (const auto& entry : std::filesystem::directory_iterator(guardRoot, ec))
+    {
+        if (ec)
+        {
+            break;
+        }
+        guardNames.insert(entry.path().filename().wstring());
+    }
+    state.Require(guardNames.contains(L"NestedGuard.TXT"), L"Recursive Change Case mutated after its preparation guard canceled.");
+    state.Require(! guardNames.contains(L"NESTEDGUARD.TXT"), L"Recursive Change Case published a renamed child after guard Cancel.");
+
+    GuardCapture acceptedGuard{
+        .expectedNested = guardNested,
+    };
+    const ChangeCase::MutationGuardCallbacks acceptedCallbacks{
+        .prepare = prepareGuard,
+        .revalidate = revalidateGuard,
+        .cookie = &acceptedGuard,
+    };
+    const HRESULT acceptedGuardHr = ChangeCase::DebugApplyToPathsForTests(
+        *fs, L"builtin/file-system", {guardRoot}, guardedRecursive, {}, nullptr, nullptr, &acceptedCallbacks);
+    state.Require(SUCCEEDED(acceptedGuardHr),
+                  std::format(L"Recursive Change Case accepted guard returned 0x{:08X}.", static_cast<unsigned long>(acceptedGuardHr)));
+    state.Require(acceptedGuard.prepareCalled && acceptedGuard.prepareSawNested,
+                  L"Recursive Change Case accepted guard did not retain the discovered nested mutation set.");
+    state.Require(acceptedGuard.revalidateCalls >= 1u,
+                  L"Recursive Change Case accepted guard was not revalidated before its rename batch.");
+    guardNames.clear();
+    ec.clear();
+    for (const auto& entry : std::filesystem::directory_iterator(guardRoot, ec))
+    {
+        if (ec)
+        {
+            break;
+        }
+        guardNames.insert(entry.path().filename().wstring());
+    }
+    state.Require(guardNames.contains(L"NESTEDGUARD.TXT"),
+                  L"Recursive Change Case did not publish the accepted exact-object rename.");
+    state.Require(! guardNames.contains(L"NestedGuard.TXT"),
+                  L"Recursive Change Case retained the old name after the accepted exact-object rename.");
+
+    const std::filesystem::path raceSource = guardRoot / L"race.txt";
+    state.Require(SelfTest::WriteTextFile(raceSource, "race"), L"Failed to create Change Case revalidation fixture.");
+    GuardCapture racedGuard{
+        .revalidateResult = HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH),
+    };
+    const ChangeCase::MutationGuardCallbacks racedCallbacks{
+        .revalidate = revalidateGuard,
+        .cookie = &racedGuard,
+    };
+    const HRESULT racedGuardHr =
+        ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {raceSource}, upper, {}, nullptr, nullptr, &racedCallbacks);
+    state.Require(racedGuardHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH),
+                  std::format(L"Change Case replacement guard returned 0x{:08X}.", static_cast<unsigned long>(racedGuardHr)));
+    state.Require(racedGuard.revalidateCalls == 1u, L"Change Case did not revalidate immediately before its rename batch.");
+    guardNames.clear();
+    ec.clear();
+    for (const auto& entry : std::filesystem::directory_iterator(guardRoot, ec))
+    {
+        if (ec)
+        {
+            break;
+        }
+        guardNames.insert(entry.path().filename().wstring());
+    }
+    state.Require(guardNames.contains(L"race.txt"), L"Change Case removed the source after replacement revalidation failed.");
+    state.Require(! guardNames.contains(L"RACE.TXT"), L"Change Case mutated a path after replacement revalidation failed.");
+
+    const std::filesystem::path canceledSource = guardRoot / L"cancel.txt";
+    state.Require(SelfTest::WriteTextFile(canceledSource, "cancel"), L"Failed to create Change Case worker-cancellation fixture.");
+    std::stop_source canceledWorker;
+    canceledWorker.request_stop();
+    const HRESULT canceledWorkerHr =
+        ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {canceledSource}, upper, canceledWorker.get_token());
+    state.Require(canceledWorkerHr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                  std::format(L"Change Case pre-canceled worker returned 0x{:08X}.", static_cast<unsigned long>(canceledWorkerHr)));
+    guardNames.clear();
+    ec.clear();
+    for (const auto& entry : std::filesystem::directory_iterator(guardRoot, ec))
+    {
+        if (ec)
+        {
+            break;
+        }
+        guardNames.insert(entry.path().filename().wstring());
+    }
+    state.Require(guardNames.contains(L"cancel.txt"), L"Change Case removed the source after worker cancellation.");
+    state.Require(! guardNames.contains(L"CANCEL.TXT"), L"Change Case mutated a path after worker cancellation.");
+
+    constexpr size_t kScalingFileCount = 1'024u;
+    const std::filesystem::path scalingRoot = suiteRoot / L"work" / L"change_case_scaling";
+    ec.clear();
+    std::filesystem::remove_all(scalingRoot, ec);
+    state.Require(SelfTest::EnsureDirectory(scalingRoot), L"Failed to create Change Case scaling root.");
+    for (size_t index = 0u; index < kScalingFileCount && state.failure.empty(); ++index)
+    {
+        state.Require(SelfTest::WriteTextFile(scalingRoot / std::format(L"MiXeD_{:04}.TXT", index), "scale"),
+                      L"Failed to seed the Change Case scaling tree.");
+    }
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    struct ScalingProgress final
+    {
+        uint64_t scannedEntries = 0u;
+    } scalingProgress;
+    const auto captureScalingProgress = [](const ChangeCase::ProgressUpdate& update, void* cookie) noexcept
+    {
+        if (auto* capture = static_cast<ScalingProgress*>(cookie))
+        {
+            capture->scannedEntries = (std::max)(capture->scannedEntries, update.scannedEntries);
+        }
+    };
+    std::vector<BatchRenameExecutionOp> scalingOperations;
+    const auto scalingStartedAt = std::chrono::steady_clock::now();
+    const HRESULT scalingHr = ChangeCase::BuildRenameOperations(
+        *fs, L"builtin/file-system", {scalingRoot}, apply, scalingOperations, {}, captureScalingProgress, &scalingProgress);
+    const uint64_t scalingUs = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - scalingStartedAt).count());
+    Debug::Perf::Emit(L"Commands.SelfTest.E5.ChangeCaseDiscoveryUs",
+                      L"local-1024",
+                      scalingUs,
+                      scalingProgress.scannedEntries,
+                      static_cast<uint64_t>(scalingOperations.size()),
+                      scalingHr);
+    state.Require(scalingHr == S_OK && scalingOperations.size() == kScalingFileCount &&
+                      scalingProgress.scannedEntries >= kScalingFileCount,
+                  std::format(L"Change Case scaling discovery returned hr=0x{:08X}, scanned={}, operations={}.",
+                              static_cast<unsigned long>(scalingHr),
+                              scalingProgress.scannedEntries,
+                              scalingOperations.size()));
+    state.Require(scalingUs < 5'000'000u,
+                  std::format(L"Change Case scaling discovery exceeded the 5 s invariant ceiling ({} us).", scalingUs));
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestChangeCaseUnreadableDescendantTruth(CaseState& state) noexcept
+{
+    using ChangeCase::CaseStyle;
+    using ChangeCase::ChangeTarget;
+
+    const HRESULT deniedHr = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    state.Require(ChangeCase::DebugClassifyDirectoryReadResult(deniedHr, false, true) == deniedHr,
+                  L"A failed read for a proven directory must retain the exact provider HRESULT.");
+    state.Require(ChangeCase::DebugClassifyDirectoryReadResult(deniedHr, false, false) == deniedHr,
+                  L"A failed read for a selected typed directory must retain the exact provider HRESULT.");
+    state.Require(ChangeCase::DebugClassifyDirectoryReadResult(S_OK, false, true) == E_UNEXPECTED,
+                  L"A successful directory read with no information object must fail closed.");
+
+    wil::com_ptr<IFileSystem> fs = SelfTest::GetFileSystem(L"builtin/file-system");
+    state.Require(static_cast<bool>(fs), L"builtin/file-system plugin not available.");
+    if (! fs)
+    {
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root   = suiteRoot / L"work" / (L"change_case_unreadable_" + NewGuidText());
+    const std::filesystem::path nested = root / L"nested";
+    const std::filesystem::path leaf   = nested / L"MiXeD.TXT";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(nested), L"Failed to create unreadable Change Case directory fixture.");
+    state.Require(SelfTest::WriteTextFile(leaf, "truth"), L"Failed to create unreadable Change Case file fixture.");
+
+    wil::unique_handle denyShare(CreateFileW(nested.c_str(),
+                                             FILE_LIST_DIRECTORY,
+                                             0,
+                                             nullptr,
+                                             OPEN_EXISTING,
+                                             FILE_FLAG_BACKUP_SEMANTICS,
+                                             nullptr));
+    state.Require(static_cast<bool>(denyShare),
+                  std::format(L"Failed to lock nested Change Case directory (error={}).", GetLastError()));
+    if (! denyShare)
+    {
+        return false;
+    }
+
+    wil::com_ptr<IFilesInformation> blockedInfo;
+    const HRESULT expectedReadHr = fs->ReadDirectoryInfo(nested.c_str(), blockedInfo.put());
+    state.Require(FAILED(expectedReadHr),
+                  std::format(L"Locked nested directory unexpectedly remained readable (hr=0x{:08X}).",
+                              static_cast<unsigned long>(expectedReadHr)));
+    if (SUCCEEDED(expectedReadHr))
+    {
+        return false;
+    }
+
+    ChangeCase::Options options{};
+    options.style          = CaseStyle::Lower;
+    options.target         = ChangeTarget::WholeFilename;
+    options.includeSubdirs = true;
+    std::vector<BatchRenameExecutionOp> selectedOperations;
+    const HRESULT selectedHr = ChangeCase::BuildRenameOperations(
+        *fs, L"builtin/file-system", {nested}, options, selectedOperations);
+    state.Require(selectedHr == expectedReadHr && selectedOperations.empty(),
+                  std::format(L"Unreadable selected directory must fail discovery exactly with 0x{:08X}; got 0x{:08X} and {} operations.",
+                              static_cast<unsigned long>(expectedReadHr),
+                              static_cast<unsigned long>(selectedHr),
+                              selectedOperations.size()));
+    const HRESULT hr       = ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {root}, options);
+
+    state.Require(hr == expectedReadHr,
+                  std::format(L"Unreadable descendant must return exact provider failure 0x{:08X}; got 0x{:08X}.",
+                              static_cast<unsigned long>(expectedReadHr),
+                              static_cast<unsigned long>(hr)));
+    denyShare.reset();
+    std::unordered_set<std::wstring> nestedNames;
+    ec.clear();
+    for (const auto& entry : std::filesystem::directory_iterator(nested, ec))
+    {
+        if (ec)
+        {
+            break;
+        }
+        nestedNames.insert(entry.path().filename().wstring());
+    }
+    state.Require(nestedNames.contains(L"MiXeD.TXT"), L"Unreadable-descendant failure removed or renamed the guarded nested source.");
+    state.Require(! nestedNames.contains(L"mixed.txt"), L"Unreadable-descendant failure mutated a child before discovery completed.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestChangeCasePartialCancelTruth(CaseState& state) noexcept
+{
+    wil::com_ptr<IFileSystem> fs = SelfTest::GetFileSystem(L"builtin/file-system");
+    state.Require(static_cast<bool>(fs), L"builtin/file-system plugin not available.");
+    if (! fs)
+    {
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root       = suiteRoot / L"work" / (L"change_case_partial_" + NewGuidText());
+    const std::filesystem::path nested     = root / L"nested";
+    const std::filesystem::path shallow    = root / L"shallow.txt";
+    const std::filesystem::path deepSource = nested / L"deep.txt";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(nested), L"Failed to create partial Change Case directory fixture.");
+    state.Require(SelfTest::WriteTextFile(shallow, "shallow"), L"Failed to create shallow Change Case fixture.");
+    state.Require(SelfTest::WriteTextFile(deepSource, "deep"), L"Failed to create deep Change Case fixture.");
+
+    struct RevalidationFault final
+    {
+        uint32_t calls = 0u;
+        HRESULT failure = HRESULT_FROM_WIN32(ERROR_DISK_FULL);
+    } fault;
+    const auto revalidate = [](std::span<const std::filesystem::path>, void* cookie) noexcept -> HRESULT
+    {
+        auto* value = static_cast<RevalidationFault*>(cookie);
+        if (value == nullptr)
+        {
+            return E_POINTER;
+        }
+        ++value->calls;
+        return value->calls == 1u ? S_OK : value->failure;
+    };
+    const ChangeCase::MutationGuardCallbacks callbacks{
+        .revalidate = revalidate,
+        .cookie = &fault,
+    };
+    ChangeCase::Options options{};
+    options.style          = ChangeCase::CaseStyle::Upper;
+    options.target         = ChangeCase::ChangeTarget::WholeFilename;
+    options.includeSubdirs = true;
+
+    const HRESULT partialHr =
+        ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {root}, options, {}, nullptr, nullptr, &callbacks);
+    state.Require(partialHr == fault.failure,
+                  std::format(L"Partial Change Case must retain exact failure 0x{:08X}; got 0x{:08X}.",
+                              static_cast<unsigned long>(fault.failure),
+                              static_cast<unsigned long>(partialHr)));
+    state.Require(fault.calls == 2u, std::format(L"Expected two depth-gate calls; got {}.", fault.calls));
+    std::unordered_set<std::wstring> nestedNames;
+    ec.clear();
+    for (const auto& entry : std::filesystem::directory_iterator(nested, ec))
+    {
+        if (ec)
+        {
+            break;
+        }
+        nestedNames.insert(entry.path().filename().wstring());
+    }
+    state.Require(nestedNames.contains(L"DEEP.TXT"), L"Completed deep Change Case batch was not observable after later failure.");
+
+    std::unordered_set<std::wstring> rootNames;
+    ec.clear();
+    for (const auto& entry : std::filesystem::directory_iterator(root, ec))
+    {
+        if (ec)
+        {
+            break;
+        }
+        rootNames.insert(entry.path().filename().wstring());
+    }
+    state.Require(rootNames.contains(L"shallow.txt"), L"Later failure should preserve the unattempted shallow source.");
+    state.Require(! rootNames.contains(L"SHALLOW.TXT"), L"Later failure mutated an unattempted shallow source.");
+
+    const std::filesystem::path canceledSource = root / L"cancel.txt";
+    state.Require(SelfTest::WriteTextFile(canceledSource, "cancel"), L"Failed to create Change Case cancel fixture.");
+    std::stop_source cancelSource;
+    cancelSource.request_stop();
+    const HRESULT cancelHr =
+        ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {canceledSource}, options, cancelSource.get_token());
+    state.Require(cancelHr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                  std::format(L"Pre-canceled Change Case returned 0x{:08X}.", static_cast<unsigned long>(cancelHr)));
+    state.Require(std::filesystem::exists(canceledSource, ec), L"Pre-canceled Change Case mutated its source.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestChangeCaseTaskPayloadTruth(HWND mainWindow, CaseState& state) noexcept
+{
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    auto* const fileOps = g_folderWindow.DebugGetFileOperationState();
+    state.Require(fileOps != nullptr, L"File Operations state unavailable for Change Case task payload test.");
+    if (fileOps == nullptr)
+    {
+        return false;
+    }
+    const HWND folderWindowHwnd = g_folderWindow.GetHwnd();
+    state.Require(folderWindowHwnd != nullptr && IsWindow(folderWindowHwnd) != FALSE,
+                  L"Folder window handle unavailable for Change Case task payload test.");
+    if (! folderWindowHwnd || IsWindow(folderWindowHwnd) == FALSE)
+    {
+        return false;
+    }
+
+    {
+        auto failedPostReceipt = std::make_shared<FolderWindowFileSystemInternal::ChangeCaseTaskReceipt>();
+        std::weak_ptr<FolderWindowFileSystemInternal::ChangeCaseTaskReceipt> weakFailedPostReceipt = failedPostReceipt;
+        auto payload = std::make_unique<FolderWindowFileSystemInternal::ChangeCaseTaskPayload>();
+        payload->receipt = failedPostReceipt;
+        state.Require(! PostMessagePayload(nullptr, WndMsg::kChangeCaseTaskUpdate, 0, std::move(payload)),
+                      L"A Change Case payload post with no target unexpectedly succeeded.");
+        failedPostReceipt.reset();
+        state.Require(weakFailedPostReceipt.expired(), L"A failed Change Case payload post retained its shared receipt.");
+    }
+
+    {
+        wil::unique_hwnd drainWindow(CreateWindowExW(
+            0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr));
+        state.Require(static_cast<bool>(drainWindow), L"Failed to create Change Case payload-drain test window.");
+        if (drainWindow)
+        {
+            InitPostedPayloadWindow(drainWindow.get());
+            auto drainedReceipt = std::make_shared<FolderWindowFileSystemInternal::ChangeCaseTaskReceipt>();
+            std::weak_ptr<FolderWindowFileSystemInternal::ChangeCaseTaskReceipt> weakDrainedReceipt = drainedReceipt;
+            auto payload = std::make_unique<FolderWindowFileSystemInternal::ChangeCaseTaskPayload>();
+            payload->receipt = drainedReceipt;
+            state.Require(PostMessagePayload(drainWindow.get(), WndMsg::kChangeCaseTaskUpdate, 0, std::move(payload)),
+                          L"Failed to queue Change Case payload for drain coverage.");
+
+            MSG staleMessage{};
+            state.Require(PeekMessageW(
+                              &staleMessage, drainWindow.get(), WndMsg::kChangeCaseTaskUpdate, WndMsg::kChangeCaseTaskUpdate, PM_REMOVE) != FALSE,
+                          L"Failed to capture queued Change Case payload token before drain.");
+            state.Require(DrainPostedPayloadsForWindow(drainWindow.get()) == 1u,
+                          L"Change Case payload drain did not release exactly one queued payload.");
+            drainedReceipt.reset();
+            state.Require(weakDrainedReceipt.expired(), L"A drained Change Case payload retained its shared receipt.");
+            auto stalePayload = TakeMessagePayload<FolderWindowFileSystemInternal::ChangeCaseTaskPayload>(staleMessage.lParam);
+            state.Require(! stalePayload, L"A stale Change Case payload token remained adoptable after drain.");
+            drainWindow.reset();
+        }
+    }
+
+    constexpr uint64_t kPayloadCount = 4096u;
+    uint64_t taskCreateCount         = 0u;
+    uint64_t taskUpdateCount         = 0u;
+    uint64_t nextTaskId              = 1u;
+    auto perfReceipt = std::make_shared<FolderWindowFileSystemInternal::ChangeCaseTaskReceipt>();
+    std::weak_ptr<FolderWindowFileSystemInternal::ChangeCaseTaskReceipt> weakPerfReceipt = perfReceipt;
+    const auto perfStarted = std::chrono::steady_clock::now();
+    for (uint64_t index = 0u; index < kPayloadCount; ++index)
+    {
+        FolderWindowFileSystemInternal::ChangeCaseTaskPayload payload{};
+        payload.receipt       = perfReceipt;
+        payload.update.taskId = 0u;
+        static_cast<void>(FolderWindowFileSystemInternal::ResolveChangeCaseTaskUpdate(
+            payload,
+            [&](const FolderWindow::InformationalTaskUpdate& update) noexcept
+        {
+            if (update.taskId == 0u)
+            {
+                ++taskCreateCount;
+                return nextTaskId++;
+            }
+            ++taskUpdateCount;
+            return update.taskId;
+        }));
+    }
+    const uint64_t dispatchUs = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - perfStarted).count());
+    perfReceipt.reset();
+    const uint64_t outstandingReceiptCount = weakPerfReceipt.expired() ? 0u : 1u;
+    Debug::Perf::Emit(L"Commands.SelfTest.R1b.ChangeCaseTaskDispatchUs", L"shared-receipt", dispatchUs, kPayloadCount, taskCreateCount, S_OK);
+    Debug::Perf::Emit(L"Commands.SelfTest.R1b.PayloadCount", L"tokenized", 0u, kPayloadCount, kPayloadCount, S_OK);
+    Debug::Perf::Emit(L"Commands.SelfTest.R1b.TaskCreateCount", L"one-operation", 0u, taskCreateCount, 1u, S_OK);
+    Debug::Perf::Emit(L"Commands.SelfTest.R1b.TaskUpdateCount", L"one-operation", 0u, taskUpdateCount, kPayloadCount - 1u, S_OK);
+    Debug::Perf::Emit(L"Commands.SelfTest.R1b.ProviderCallCount", L"no-provider", 0u, 0u, 0u, S_OK);
+    Debug::Perf::Emit(L"Commands.SelfTest.R1b.OutstandingReceiptCount", L"after-drain", 0u, outstandingReceiptCount, 0u, S_OK);
+    state.Require(taskCreateCount == 1u,
+                  std::format(L"Shared Change Case receipt created {} simulated tasks instead of one.", taskCreateCount));
+    state.Require(taskUpdateCount == kPayloadCount - 1u,
+                  std::format(L"Shared Change Case receipt applied {} simulated updates instead of {}.", taskUpdateCount, kPayloadCount - 1u));
+    state.Require(outstandingReceiptCount == 0u, L"Change Case task dispatch retained its receipt after payload drain.");
+
+    std::vector<FolderWindow::InformationalTaskUpdate> existing;
+    fileOps->CollectInformationalTasks(existing);
+    for (const auto& task : existing)
+    {
+        if (task.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeCase)
+        {
+            fileOps->DismissInformationalTask(task.taskId);
+        }
+    }
+
+    const std::wstring title = L"R1b Change Case task payload truth";
+    auto receipt = std::make_shared<FolderWindowFileSystemInternal::ChangeCaseTaskReceipt>();
+    const auto postUpdate = [&](const uint64_t completed, const bool finished) noexcept
+    {
+        auto payload = std::make_unique<FolderWindowFileSystemInternal::ChangeCaseTaskPayload>();
+        payload->receipt                            = receipt;
+        payload->update.kind                        = FolderWindow::InformationalTaskUpdate::Kind::ChangeCase;
+        payload->update.title                       = title;
+        payload->update.changeCaseRenaming          = ! finished;
+        payload->update.changeCasePlannedRenames    = 2u;
+        payload->update.changeCaseCompletedRenames  = completed;
+        payload->update.finished                    = finished;
+        payload->update.resultHr                    = S_OK;
+        return PostMessagePayload(folderWindowHwnd, WndMsg::kChangeCaseTaskUpdate, 0, std::move(payload));
+    };
+
+    state.Require(postUpdate(0u, false), L"Failed to post first tokenized Change Case task payload.");
+    PumpPendingMessages();
+    state.Require(receipt->taskId.load(std::memory_order_acquire) != 0u,
+                  L"UI handler did not publish the created Change Case task ID into the shared receipt.");
+
+    state.Require(postUpdate(2u, true), L"Failed to post terminal tokenized Change Case task payload.");
+    PumpPendingMessages();
+
+    std::vector<FolderWindow::InformationalTaskUpdate> tasks;
+    fileOps->CollectInformationalTasks(tasks);
+    std::vector<FolderWindow::InformationalTaskUpdate> matching;
+    std::ranges::copy_if(tasks, std::back_inserter(matching), [&](const FolderWindow::InformationalTaskUpdate& task) noexcept
+    { return task.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeCase && task.title == title; });
+
+    const uint64_t resolvedTaskId = receipt->taskId.load(std::memory_order_acquire);
+    state.Require(matching.size() == 1u,
+                  std::format(L"One Change Case operation must own one informational task; found {}.", matching.size()));
+    if (matching.size() == 1u)
+    {
+        state.Require(matching.front().taskId == resolvedTaskId,
+                      std::format(L"Task receipt ID {} did not match stored task ID {}.", resolvedTaskId, matching.front().taskId));
+        state.Require(matching.front().finished && matching.front().changeCaseCompletedRenames == 2u,
+                      L"Terminal Change Case update did not replace the original task card.");
+    }
+
+    for (const auto& task : matching)
+    {
+        fileOps->DismissInformationalTask(task.taskId);
+    }
     return state.failure.empty();
 }
 
@@ -7494,6 +8223,7 @@ void AutomateChangeCasePrompt(
         std::optional<UiaDescendantPatternStats> uiaPatternStats;
     } probe{};
 
+    DebugSetNextMakeFileListOutputFile(outputPath);
     RunMakeFileListOptionsPromptModalCycle(mainWindow,
                                            [&](const HWND prompt) noexcept
     {
@@ -9015,7 +9745,7 @@ void AutomateChangeCasePrompt(
 
             for (const std::wstring& createdName : createdNames)
             {
-                state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, createdName),
+                state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {createdName}, SelfTest::Scale(5000ms)),
                               std::format(L"Pane contents should show '{}' after create-directory cycle {}.", createdName, cycle));
             }
         }
@@ -9065,6 +9795,7 @@ void AutomateChangeCasePrompt(
 
     const std::filesystem::path root     = suiteRoot / L"work" / (L"item_properties_" + NewGuidText());
     const std::filesystem::path filePath = root / L"alpha.txt";
+    const std::filesystem::path artifactPath = root / L"payload.rs_ren_0123456789abcdef0123456789abcdef";
     constexpr uint64_t kFileSizeBytes    = 1536u;
     const std::string filePayload(static_cast<size_t>(kFileSizeBytes), 'x');
 
@@ -9072,6 +9803,7 @@ void AutomateChangeCasePrompt(
     std::filesystem::remove_all(root, ec);
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create item-properties test root.");
     state.Require(SelfTest::WriteTextFile(filePath, filePayload), L"Failed to create item-properties test file.");
+    state.Require(SelfTest::WriteTextFile(artifactPath, "name-only-artifact"), L"Failed to create item-properties Possible artifact file.");
     if (! state.failure.empty())
     {
         return false;
@@ -9115,7 +9847,10 @@ void AutomateChangeCasePrompt(
                   L"Failed to set local file-system plugin for item-properties test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for item-properties test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt"}, SelfTest::Scale(3000ms)), L"Pane contents not ready for item-properties test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left,
+                                   {L"alpha.txt", L"payload.rs_ren_0123456789abcdef0123456789abcdef"},
+                                   SelfTest::Scale(3000ms)),
+                  L"Pane contents not ready for item-properties test.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"alpha.txt"), L"Failed to focus alpha.txt.");
     if (! state.failure.empty())
     {
@@ -9142,6 +9877,7 @@ void AutomateChangeCasePrompt(
 
     const auto validatePropertiesWindow = [&](const HWND properties, std::wstring_view context) noexcept
     {
+        SelfTest::AppendSelfTestTrace(std::format(L"Item Properties live DX: snapshot begin during {}.", context));
         ItemPropertiesWindowDebugSnapshot snapshot{};
         state.Require(WaitForItemPropertiesLoadedSnapshot(snapshot, SelfTest::Scale(5000ms)),
                       std::format(L"Failed to capture loaded Item Properties snapshot during {}.", context));
@@ -9151,6 +9887,10 @@ void AutomateChangeCasePrompt(
         }
 
         state.Require(! snapshot.loadFailed, std::format(L"Item Properties load should not fail during {}.", context));
+        state.Require(snapshot.artifactClassifierQueryCount == 0u,
+                      std::format(L"Ordinary Item Properties should perform zero artifact classifier queries during {}; saw {}.",
+                                  context,
+                                  snapshot.artifactClassifierQueryCount));
         state.Require(snapshot.usesDxUiHost, std::format(L"Item Properties window should use the shared DxUi host during {}.", context));
         state.Require(snapshot.visibleChildWindowCount <= 1u,
                       std::format(L"Item Properties window should expose at most the shared DX text-bridge child during {}; saw {}.",
@@ -9234,6 +9974,43 @@ void AutomateChangeCasePrompt(
     }
 
     state.Require(closePropertiesWindow(reopenedProperties, L"reopened baseline surface probe"), L"Reopened Item Properties baseline close validation failed.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, artifactPath.filename().native()),
+                  L"Failed to focus the name-only Possible artifact before opening Properties.");
+    const HWND artifactProperties = openPropertiesWindow(L"name-only Possible artifact explanation");
+    if (! artifactProperties || IsWindow(artifactProperties) == FALSE)
+    {
+        return false;
+    }
+
+    ItemPropertiesWindowDebugSnapshot artifactSnapshot{};
+    state.Require(WaitForItemPropertiesLoadedSnapshot(artifactSnapshot, SelfTest::Scale(5000ms)),
+                  L"Failed to capture the name-only Possible artifact Properties snapshot.");
+    state.Require(! artifactSnapshot.loadFailed && artifactSnapshot.artifactClassifierQueryCount == 1u,
+                  std::format(L"Possible artifact Properties should complete one classifier query; failed={} queries={}.",
+                              artifactSnapshot.loadFailed,
+                              artifactSnapshot.artifactClassifierQueryCount));
+    const std::array<UINT, 7u> requiredArtifactStrings{{
+        static_cast<UINT>(IDS_ITEM_PROPERTIES_SECTION_FILE_OPERATIONS),
+        static_cast<UINT>(IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE),
+        static_cast<UINT>(IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_NAME_REASON),
+        static_cast<UINT>(IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_NO_CLAIM),
+        static_cast<UINT>(IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_UNAVAILABLE),
+        static_cast<UINT>(IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_SAFE_ACTIONS),
+        static_cast<UINT>(IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_PRESENT),
+    }};
+    for (const UINT requiredStringId : requiredArtifactStrings)
+    {
+        const std::wstring required = LoadStringResource(nullptr, requiredStringId);
+        state.Require(! required.empty() && artifactSnapshot.contentText.find(required) != std::wstring::npos,
+                      std::format(L"Possible artifact Properties explanation is missing resource {}.", requiredStringId));
+    }
+    state.Require(closePropertiesWindow(artifactProperties, L"name-only Possible artifact explanation"),
+                  L"Possible artifact Properties close validation failed.");
     return state.failure.empty();
 }
 
@@ -9491,12 +10268,15 @@ void AutomateChangeCasePrompt(
     const std::filesystem::path root     = suiteRoot / L"work" / (L"item_properties_streams_" + NewGuidText());
     const std::filesystem::path filePath = root / L"alpha.txt";
     const std::filesystem::path dirPath  = root / L"beta";
+    const std::filesystem::path artifactPath = root / L"payload.rs_ren_0123456789abcdef0123456789abcdef";
 
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create item-properties streams test root.");
     state.Require(SelfTest::EnsureDirectory(dirPath), L"Failed to create item-properties stream directory.");
     state.Require(SelfTest::WriteTextFile(filePath, "base file for stream properties validation"), L"Failed to create item-properties stream file.");
+    state.Require(SelfTest::WriteTextFile(artifactPath, "base Possible artifact for stream mutation validation"),
+                  L"Failed to create item-properties Possible artifact stream file.");
     if (! state.failure.empty())
     {
         return false;
@@ -9505,21 +10285,24 @@ void AutomateChangeCasePrompt(
     const HRESULT hrFileZone   = WriteAlternateStreamForItemPropertiesTest(filePath, L"Zone.Identifier", "zone-id");
     const HRESULT hrFileNotes  = WriteAlternateStreamForItemPropertiesTest(filePath, L"notes", "stream-notes");
     const HRESULT hrFolderNote = WriteAlternateStreamForItemPropertiesTest(dirPath, L"folder-note", "folder-stream");
-    if (FAILED(hrFileZone) || FAILED(hrFileNotes) || FAILED(hrFolderNote))
+    const HRESULT hrArtifactNote = WriteAlternateStreamForItemPropertiesTest(artifactPath, L"artifact-note", "guarded-stream");
+    if (FAILED(hrFileZone) || FAILED(hrFileNotes) || FAILED(hrFolderNote) || FAILED(hrArtifactNote))
     {
         if (hrFileZone == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) || hrFileZone == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) ||
             hrFileNotes == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) || hrFileNotes == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) ||
-            hrFolderNote == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) || hrFolderNote == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
+            hrFolderNote == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) || hrFolderNote == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) ||
+            hrArtifactNote == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) || hrArtifactNote == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
         {
             return state.Skip(L"Alternate data streams are not supported by the temporary filesystem.");
         }
 
         state.Require(false,
                       std::format(L"Failed to create alternate streams for item-properties validation (fileZone=0x{0:08X}, fileNotes=0x{1:08X}, "
-                                  L"folderNote=0x{2:08X}).",
+                                  L"folderNote=0x{2:08X}, artifactNote=0x{3:08X}).",
                                   static_cast<unsigned long>(hrFileZone),
                                   static_cast<unsigned long>(hrFileNotes),
-                                  static_cast<unsigned long>(hrFolderNote)));
+                                  static_cast<unsigned long>(hrFolderNote),
+                                  static_cast<unsigned long>(hrArtifactNote)));
         return false;
     }
 
@@ -9529,6 +10312,8 @@ void AutomateChangeCasePrompt(
                   L"notes stream should exist with the expected size before properties removal.");
     state.Require(FindAlternateStreamSizeForItemPropertiesTest(dirPath, L"folder-note").value_or(0u) == 13u,
                   L"folder stream should exist with the expected size before properties removal.");
+    state.Require(FindAlternateStreamSizeForItemPropertiesTest(artifactPath, L"artifact-note").value_or(0u) == 14u,
+                  L"Possible artifact stream should exist with the expected size before guarded removal.");
     if (! state.failure.empty())
     {
         return false;
@@ -9561,7 +10346,9 @@ void AutomateChangeCasePrompt(
                   L"Failed to set local file-system plugin for item-properties streams test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for stream properties test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"beta"}, SelfTest::Scale(3000ms)),
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left,
+                                   {L"alpha.txt", L"beta", L"payload.rs_ren_0123456789abcdef0123456789abcdef"},
+                                   SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for stream properties test.");
     if (! state.failure.empty())
     {
@@ -9667,8 +10454,12 @@ void AutomateChangeCasePrompt(
     state.Require(snapshot.viewableStreamCount == 1u,
                   std::format(L"Folder properties should expose one viewable stream; saw {}.", snapshot.viewableStreamCount));
     state.Require(snapshot.contentText.find(L"folder-note: 13 bytes") != std::wstring::npos, L"Folder properties should include folder stream name and size.");
-    state.Require(InvokeVisibleDescendantByName(properties, UIA_ButtonControlTypeId, LoadStringResource(nullptr, IDS_PROPERTIES_STREAM_REMOVE)),
-                  L"Failed to invoke the visible stream Remove button from properties.");
+    const std::wstring removeButtonText = LoadStringResource(nullptr, IDS_PROPERTIES_STREAM_REMOVE);
+    const bool invokedRemoveButton      = RunDialogUiaTaskWithMessagePump(
+        L"Item Properties stream Remove invoke",
+        [properties, removeButtonText]() noexcept
+        { return InvokeVisibleDescendantByName(properties, UIA_ButtonControlTypeId, removeButtonText); });
+    state.Require(invokedRemoveButton, L"Failed to invoke the visible stream Remove button from properties.");
     state.Require(waitForStreamCount(0u, snapshot), L"Folder properties did not refresh to zero streams after invoking the Remove button.");
     state.Require(FindAlternateStreamSizeForItemPropertiesTest(dirPath, L"folder-note") == std::nullopt,
                   L"Folder stream should be gone after properties removal.");
@@ -9679,6 +10470,368 @@ void AutomateChangeCasePrompt(
                   L"Properties text should omit the Streams section after the last stream is removed.");
 
     closeWindow();
+    properties = openPropertiesForItem(artifactPath.filename().native());
+    if (! properties || IsWindow(properties) == FALSE || ! state.failure.empty())
+    {
+        return false;
+    }
+    state.Require(waitForStreamCount(1u, snapshot) && snapshot.artifactClassifierQueryCount == 1u,
+                  L"Possible artifact stream Properties should load one stream with one classifier query.");
+
+    HostResetTestPromptRequestCount();
+    HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_CANCEL);
+    const HRESULT cancelArtifactRemoveHr = DebugRemoveItemPropertiesStream(L"artifact-note");
+    HostClearTestPromptResultOverride();
+    HostPromptDebugSnapshot artifactPrompt{};
+    state.Require(cancelArtifactRemoveHr == S_FALSE && HostGetTestPromptRequestCount() == 1u &&
+                      HostGetTestLastPromptDebugSnapshot(artifactPrompt) &&
+                      artifactPrompt.presentation == HOST_PROMPT_PRESENTATION_ARTIFACT_TOUCH &&
+                      artifactPrompt.defaultResult == HOST_PROMPT_RESULT_CANCEL,
+                  L"Possible artifact stream removal should show one Cancel-default exact-object warning.");
+    state.Require(FindAlternateStreamSizeForItemPropertiesTest(artifactPath, L"artifact-note").value_or(0u) == 14u,
+                  L"Canceling the Possible artifact stream warning removed or changed the stream.");
+
+    HostResetTestPromptRequestCount();
+    HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
+    const HRESULT acceptArtifactRemoveHr = DebugRemoveItemPropertiesStream(L"artifact-note");
+    HostClearTestPromptResultOverride();
+    state.Require(acceptArtifactRemoveHr == S_OK && HostGetTestPromptRequestCount() == 1u,
+                  L"Accepted Possible artifact stream removal should use exactly one warning and succeed.");
+    state.Require(waitForStreamCount(0u, snapshot) && FindAlternateStreamSizeForItemPropertiesTest(artifactPath, L"artifact-note") == std::nullopt,
+                  L"Accepted Possible artifact stream removal did not refresh to the exact terminal state.");
+
+    closeWindow();
+    return state.failure.empty();
+}
+
+namespace
+{
+// Shared shape of the C5 Properties cases: a fresh root under the suite temp, the left pane on the
+// local provider at that root, and a closed Properties window before and after.
+struct ItemPropertiesFailureFixture final
+{
+    explicit ItemPropertiesFailureFixture(CaseState& caseState, HWND mainWindowHandle, std::wstring_view rootPrefix) noexcept
+        : state(caseState), mainWindow(mainWindowHandle)
+    {
+        using namespace std::chrono_literals;
+        const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+        state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+        if (suiteRoot.empty())
+        {
+            return;
+        }
+        root         = suiteRoot / L"work" / (std::wstring(rootPrefix) + NewGuidText());
+        filePath     = root / L"alpha.txt";
+        artifactPath = root / L"payload.rs_ren_0123456789abcdef0123456789abcdef";
+        std::error_code ec;
+        std::filesystem::remove_all(root, ec);
+        state.Require(SelfTest::EnsureDirectory(root), L"Failed to create the Properties failure test root.");
+        state.Require(SelfTest::WriteTextFile(filePath, "ordinary file for properties failure validation"), L"Failed to create alpha.txt.");
+        state.Require(SelfTest::WriteTextFile(artifactPath, "Possible artifact for properties failure validation"), L"Failed to create the artifact file.");
+        leftPluginBefore = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+        leftBefore       = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+        paneCaptured     = true;
+        CloseWindow();
+        state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                      L"Failed to set the local file-system plugin for the Properties failure test.");
+        g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+        state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set the left pane path.");
+        state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", artifactPath.filename().native()}, SelfTest::Scale(3000ms)),
+                      L"Pane contents not ready for the Properties failure test.");
+        ready = state.failure.empty();
+    }
+
+    ~ItemPropertiesFailureFixture()
+    {
+        CloseWindow();
+        DebugSetNextItemPropertiesLoadDelayMs(0u);
+        DebugSetNextItemPropertiesLoadFault(0u);
+        if (paneCaptured)
+        {
+            static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+            if (leftBefore.has_value())
+            {
+                g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+            }
+        }
+        if (! root.empty())
+        {
+            std::error_code ec;
+            std::filesystem::remove_all(root, ec);
+        }
+    }
+
+    ItemPropertiesFailureFixture(const ItemPropertiesFailureFixture&)            = delete;
+    ItemPropertiesFailureFixture& operator=(const ItemPropertiesFailureFixture&) = delete;
+
+    static void CloseWindow() noexcept
+    {
+        using namespace std::chrono_literals;
+        if (const HWND properties = GetItemPropertiesWindowHandle(); properties && IsWindow(properties) != FALSE)
+        {
+            PostMessageW(properties, WM_CLOSE, 0, 0);
+            static_cast<void>(WaitForWindowClosed(properties, SelfTest::Scale(3000ms)));
+        }
+        PumpPendingMessages();
+    }
+
+    [[nodiscard]] HWND Open(std::wstring_view displayName, std::wstring_view context) noexcept
+    {
+        using namespace std::chrono_literals;
+        CloseWindow();
+        state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, displayName),
+                      std::format(L"Failed to focus '{}' for {}.", displayName, context));
+        FocusFolderViewPane(FolderWindow::Pane::Left);
+        state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/openProperties"),
+                      std::format(L"Shortcut dispatch failed for cmd/pane/openProperties during {}.", context));
+        const HWND properties = WaitForWindow([]() noexcept { return GetItemPropertiesWindowHandle(); }, SelfTest::Scale(5000ms));
+        state.Require(properties != nullptr && IsWindow(properties) != FALSE, std::format(L"Item Properties window did not open during {}.", context));
+        return properties;
+    }
+
+    [[nodiscard]] bool WaitLoaded(ItemPropertiesWindowDebugSnapshot& out, std::wstring_view context) noexcept
+    {
+        using namespace std::chrono_literals;
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            if (DebugGetItemPropertiesWindowSnapshot(out) && ! out.loading)
+            {
+                return true;
+            }
+            std::this_thread::sleep_for(20ms);
+        }
+        PumpPendingMessages();
+        const bool loaded = DebugGetItemPropertiesWindowSnapshot(out) && ! out.loading;
+        state.Require(loaded, std::format(L"Item Properties did not finish loading during {}.", context));
+        return loaded;
+    }
+
+    CaseState& state;
+    HWND mainWindow = nullptr;
+    std::filesystem::path root;
+    std::filesystem::path filePath;
+    std::filesystem::path artifactPath;
+    std::wstring leftPluginBefore;
+    std::optional<std::filesystem::path> leftBefore;
+    bool paneCaptured = false;
+    bool ready        = false;
+};
+} // namespace
+
+// C5: ordinary properties can fail (provider error, malformed JSON, missing object); the host's File
+// Operations explanation for a Possible name still renders beside the failure text, and an ordinary
+// name gets no such section and no classifier query.
+[[nodiscard]] bool TestPaneItemPropertiesFailureKeepsArtifactExplanation(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+    ItemPropertiesFailureFixture fixture(state, mainWindow, L"item_properties_failure_");
+    if (! fixture.ready)
+    {
+        return false;
+    }
+
+    const std::wstring sectionTitle = LoadStringResource(nullptr, IDS_ITEM_PROPERTIES_SECTION_FILE_OPERATIONS);
+    const std::wstring presentText  = LoadStringResource(nullptr, IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_PRESENT);
+    const std::wstring missingText  = LoadStringResource(nullptr, IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_MISSING);
+    const auto failureMessage       = [](HRESULT hr) { return FormatStringResource(nullptr, IDS_FMT_PROPERTIES_LOAD_FAILED, static_cast<unsigned long>(hr)); };
+    const std::wstring artifactName = fixture.artifactPath.filename().native();
+
+    const auto expectFailedWithExplanation = [&](std::wstring_view context, HRESULT expectedHr, std::wstring_view objectText) noexcept
+    {
+        ItemPropertiesWindowDebugSnapshot snapshot{};
+        if (! fixture.WaitLoaded(snapshot, context))
+        {
+            return;
+        }
+        state.Require(snapshot.loadFailed, std::format(L"{}: the load should be reported as failed.", context));
+        state.Require(snapshot.sectionCount == 1u && snapshot.artifactClassifierQueryCount == 1u,
+                      std::format(L"{}: the File Operations section should render beside the failure (sections={}, classifierQueries={}).",
+                                  context,
+                                  snapshot.sectionCount,
+                                  snapshot.artifactClassifierQueryCount));
+        state.Require(snapshot.contentText.find(failureMessage(expectedHr)) != std::wstring::npos,
+                      std::format(L"{}: the failure text should carry the provider result 0x{:08X}; text='{}'.", context, static_cast<unsigned long>(expectedHr), snapshot.contentText));
+        state.Require(snapshot.contentText.find(sectionTitle) != std::wstring::npos && snapshot.contentText.find(objectText) != std::wstring::npos,
+                      std::format(L"{}: the explanation should name the section and the object state '{}'; text='{}'.", context, objectText, snapshot.contentText));
+    };
+
+    DebugSetNextItemPropertiesLoadFault(2u);
+    if (fixture.Open(artifactName, L"malformed provider JSON") == nullptr)
+    {
+        return false;
+    }
+    expectFailedWithExplanation(L"malformed provider JSON", HRESULT_FROM_WIN32(ERROR_INVALID_DATA), presentText);
+
+    DebugSetNextItemPropertiesLoadFault(1u);
+    if (fixture.Open(artifactName, L"provider failure") == nullptr)
+    {
+        return false;
+    }
+    expectFailedWithExplanation(L"provider failure", E_FAIL, presentText);
+
+    DebugSetNextItemPropertiesLoadDelayMs(500u);
+    if (fixture.Open(artifactName, L"missing object") == nullptr)
+    {
+        return false;
+    }
+    std::error_code removeEc;
+    state.Require(std::filesystem::remove(fixture.artifactPath, removeEc) && ! removeEc, L"Failed to remove the artifact while its properties load.");
+    expectFailedWithExplanation(L"missing object", HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND), missingText);
+
+    DebugSetNextItemPropertiesLoadFault(2u);
+    if (fixture.Open(L"alpha.txt", L"ordinary name with malformed JSON") == nullptr)
+    {
+        return false;
+    }
+    ItemPropertiesWindowDebugSnapshot ordinary{};
+    if (fixture.WaitLoaded(ordinary, L"ordinary name with malformed JSON"))
+    {
+        state.Require(ordinary.loadFailed && ordinary.sectionCount == 0u && ordinary.artifactClassifierQueryCount == 0u,
+                      std::format(L"An ordinary name must fail without a File Operations section or a classifier query (sections={}, queries={}).",
+                                  ordinary.sectionCount,
+                                  ordinary.artifactClassifierQueryCount));
+        state.Require(ordinary.contentText.find(sectionTitle) == std::wstring::npos, L"An ordinary name must not show the File Operations section.");
+    }
+    return state.failure.empty();
+}
+
+// C5: a stream removal re-reads the object through the worker, so a change made while the refresh is
+// pending shows up in the refreshed document.
+[[nodiscard]] bool TestPaneItemPropertiesRefreshReadsFreshObject(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+    ItemPropertiesFailureFixture fixture(state, mainWindow, L"item_properties_refresh_");
+    if (! fixture.ready)
+    {
+        return false;
+    }
+    const HRESULT hrZone  = WriteAlternateStreamForItemPropertiesTest(fixture.filePath, L"Zone.Identifier", "zone-id");
+    const HRESULT hrNotes = WriteAlternateStreamForItemPropertiesTest(fixture.filePath, L"notes", "stream-notes");
+    if (hrZone == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) || hrZone == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) ||
+        hrNotes == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) || hrNotes == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
+    {
+        return state.Skip(L"Alternate data streams are not supported by the temporary filesystem.");
+    }
+    state.Require(SUCCEEDED(hrZone) && SUCCEEDED(hrNotes), L"Failed to seed the streams for the refresh test.");
+    if (fixture.Open(L"alpha.txt", L"refresh test") == nullptr || ! state.failure.empty())
+    {
+        return false;
+    }
+    ItemPropertiesWindowDebugSnapshot before{};
+    if (! fixture.WaitLoaded(before, L"initial load"))
+    {
+        return false;
+    }
+    state.Require(before.streamCount == 2u && before.artifactClassifierQueryCount == 0u,
+                  std::format(L"The ordinary file should load two streams and no classifier query (streams={}, queries={}).", before.streamCount, before.artifactClassifierQueryCount));
+
+    DebugSetNextItemPropertiesLoadDelayMs(500u);
+    state.Require(SUCCEEDED(DebugRemoveItemPropertiesStream(L"Zone.Identifier")), L"Failed to remove Zone.Identifier from Properties.");
+    state.Require(SUCCEEDED(WriteAlternateStreamForItemPropertiesTest(fixture.filePath, L"extra", "fresh-one")),
+                  L"Failed to add a stream while the refresh is pending.");
+    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    ItemPropertiesWindowDebugSnapshot after{};
+    bool refreshed = false;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        if (DebugGetItemPropertiesWindowSnapshot(after) && ! after.loading && after.streamCount == 2u &&
+            after.contentText.find(L"extra: 9 bytes") != std::wstring::npos)
+        {
+            refreshed = true;
+            break;
+        }
+        std::this_thread::sleep_for(20ms);
+    }
+    state.Require(refreshed, std::format(L"The refresh should read the fresh object: streams={} loading={} text='{}'.", after.streamCount, after.loading ? 1 : 0, after.contentText));
+    state.Require(after.contentText.find(L"Zone.Identifier") == std::wstring::npos && after.contentText.find(L"notes: 12 bytes") != std::wstring::npos,
+                  L"The refreshed document should drop the removed stream and keep the remaining one.");
+    state.Require(FindAlternateStreamSizeForItemPropertiesTest(fixture.filePath, L"Zone.Identifier") == std::nullopt,
+                  L"Zone.Identifier should be gone on disk after the removal.");
+    return state.failure.empty();
+}
+
+// C5: closing the dialog while a load or a refresh is pending discards the result safely.
+[[nodiscard]] bool TestPaneItemPropertiesCloseDuringLoadIsSafe(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+    ItemPropertiesFailureFixture fixture(state, mainWindow, L"item_properties_close_");
+    if (! fixture.ready)
+    {
+        return false;
+    }
+    const auto pumpFor = [](std::chrono::milliseconds duration) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + duration;
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            std::this_thread::sleep_for(20ms);
+        }
+    };
+
+    DebugSetNextItemPropertiesLoadDelayMs(700u);
+    const HWND loading = fixture.Open(L"alpha.txt", L"close during load");
+    if (! loading)
+    {
+        return false;
+    }
+    PostMessageW(loading, WM_CLOSE, 0, 0);
+    state.Require(WaitForWindowClosed(loading, SelfTest::Scale(3000ms)), L"The Properties window should close while its load is pending.");
+    pumpFor(SelfTest::Scale(1200ms));
+    state.Require(GetItemPropertiesWindowHandle() == nullptr, L"No Properties window may reappear after the pending load completes.");
+
+    const HRESULT hrNotes = WriteAlternateStreamForItemPropertiesTest(fixture.filePath, L"notes", "stream-notes");
+    if (hrNotes == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) || hrNotes == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
+    {
+        return state.failure.empty();
+    }
+    state.Require(SUCCEEDED(hrNotes), L"Failed to seed the stream for the close-during-refresh step.");
+    if (fixture.Open(L"alpha.txt", L"close during refresh") == nullptr)
+    {
+        return false;
+    }
+    ItemPropertiesWindowDebugSnapshot loaded{};
+    if (! fixture.WaitLoaded(loaded, L"load before refresh"))
+    {
+        return false;
+    }
+    DebugSetNextItemPropertiesLoadDelayMs(700u);
+    state.Require(SUCCEEDED(DebugRemoveItemPropertiesStream(L"notes")), L"Failed to remove the stream that starts the refresh.");
+    const HWND refreshing = GetItemPropertiesWindowHandle();
+    state.Require(refreshing != nullptr, L"The Properties window should still exist while its refresh is pending.");
+    if (refreshing)
+    {
+        PostMessageW(refreshing, WM_CLOSE, 0, 0);
+        state.Require(WaitForWindowClosed(refreshing, SelfTest::Scale(3000ms)), L"The Properties window should close while its refresh is pending.");
+    }
+    pumpFor(SelfTest::Scale(1200ms));
+    state.Require(GetItemPropertiesWindowHandle() == nullptr, L"No Properties window may reappear after the pending refresh completes.");
+    state.Require(FindAlternateStreamSizeForItemPropertiesTest(fixture.filePath, L"notes") == std::nullopt, L"The stream removal itself must have happened.");
+
+    ItemPropertiesWindowDebugSnapshot reopened{};
+    if (fixture.Open(L"alpha.txt", L"reopen after close") != nullptr && fixture.WaitLoaded(reopened, L"reopen after close"))
+    {
+        state.Require(! reopened.loadFailed && reopened.sectionCount >= 1u && reopened.streamCount == 0u,
+                      std::format(L"A reopened window must load normally (failed={}, sections={}, streams={}).", reopened.loadFailed ? 1 : 0, reopened.sectionCount, reopened.streamCount));
+    }
     return state.failure.empty();
 }
 
@@ -9788,7 +10941,12 @@ void AutomateChangeCasePrompt(
             return false;
         }
 
-        const auto uiaPatternStats = CollectVisibleUiaDescendantPatternStats(properties);
+        Trace(std::format(L"item_properties_live_dx: collecting UIA pattern stats during '{}'", context));
+        const auto uiaPatternStats = RunDialogUiaTaskWithMessagePump(
+            std::format(L"{} pattern stats", context), [properties]() noexcept { return CollectVisibleUiaDescendantPatternStats(properties); });
+        Trace(std::format(L"item_properties_live_dx: collected UIA pattern stats during '{}' hasValue={}",
+                          context,
+                          uiaPatternStats.has_value() ? 1 : 0));
         state.Require(uiaPatternStats.has_value(), std::format(L"Failed to collect live UI Automation stats for Item Properties during {}.", context));
         if (uiaPatternStats.has_value())
         {
@@ -9799,9 +10957,22 @@ void AutomateChangeCasePrompt(
             state.Require(uiaPatternStats->invokePatternCount > 0u, std::format(L"Item Properties window should expose InvokePattern during {}.", context));
         }
 
-        wil::com_ptr<IUIAutomationElement> fileNameElement;
-        state.Require(FindMatchingVisibleDescendantElement(properties, UIA_TextControlTypeId, L"alpha.txt", fileNameElement.put()) && fileNameElement,
+        Trace(std::format(L"item_properties_live_dx: finding file-name UIA element during '{}'", context));
+        wil::com_ptr<IUIAutomationElement> fileNameElement = RunDialogUiaTaskWithMessagePump(
+            std::format(L"{} file-name element", context),
+            [properties]() noexcept
+            {
+                wil::com_ptr<IUIAutomationElement> element;
+                if (! FindMatchingVisibleDescendantElement(properties, UIA_TextControlTypeId, L"alpha.txt", element.put()))
+                {
+                    return wil::com_ptr<IUIAutomationElement>{};
+                }
+                return element;
+            });
+        Trace(std::format(L"item_properties_live_dx: found file-name UIA element during '{}' hasValue={}", context, fileNameElement ? 1 : 0));
+        state.Require(fileNameElement != nullptr,
                       std::format(L"Item Properties visible card rows should include the selected file name during {}.", context));
+        SelfTest::AppendSelfTestTrace(std::format(L"Item Properties live DX: validation complete during {}.", context));
         return state.failure.empty();
     };
 
@@ -9814,10 +10985,17 @@ void AutomateChangeCasePrompt(
 
     const auto closePropertiesWindow = [&](const HWND properties, std::wstring_view context) noexcept
     {
-        state.Require(InvokeVisibleDescendantByName(properties, UIA_ButtonControlTypeId, closeButtonText),
+        Trace(std::format(L"item_properties_live_dx: invoking close UIA element during '{}'", context));
+        const bool invoked = RunDialogUiaTaskWithMessagePump(
+            std::format(L"{} close invoke", context),
+            [properties, closeButtonText]() noexcept
+            { return InvokeVisibleDescendantByName(properties, UIA_ButtonControlTypeId, closeButtonText); });
+        Trace(std::format(L"item_properties_live_dx: invoked close UIA element during '{}' result={}", context, invoked ? 1 : 0));
+        state.Require(invoked,
                       std::format(L"Failed to invoke the visible DX close button on Item Properties during {}.", context));
         state.Require(WaitForWindowClosed(properties, SelfTest::Scale(3000ms)),
                       std::format(L"Item Properties window did not close after live UIA InvokePattern interaction during {}.", context));
+        SelfTest::AppendSelfTestTrace(std::format(L"Item Properties live DX: close complete during {}.", context));
         return state.failure.empty();
     };
 
@@ -10724,7 +11902,6 @@ void AutomateChangeCasePrompt(
     g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
 
     HostAlertRequest rightRequest{};
-    rightRequest.version   = 1;
     rightRequest.sizeBytes = sizeof(rightRequest);
     rightRequest.scope     = HOST_ALERT_SCOPE_PANE_CONTENT;
     rightRequest.modality  = HOST_ALERT_MODELESS;
@@ -10830,6 +12007,15 @@ void RunDialogsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOp
     SelfTest::RunCase(
         options, suite, L"cmd_pane_changeCase_dialog", [=](CaseState& state) noexcept { return TestChangeCaseDialogAndMultiSelection(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_changeCase", [](CaseState& state) noexcept { return TestChangeCaseCore(state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_changeCase_unreadable_descendant_truth", [](CaseState& state) noexcept {
+        return TestChangeCaseUnreadableDescendantTruth(state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_changeCase_partial_cancel_truth", [](CaseState& state) noexcept {
+        return TestChangeCasePartialCancelTruth(state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_changeCase_task_payload_truth", [=](CaseState& state) noexcept {
+        return TestChangeCaseTaskPayloadTruth(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"mask_syntax_wildcards", [](CaseState& state) noexcept { return TestMaskSyntaxWildcardMatching(state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_filter_prompt_uses_dxui_surface", [=](CaseState& state) noexcept {
         return TestPaneFilterPromptUsesDxUiSurface(mainWindow, state);
@@ -10920,6 +12106,15 @@ void RunDialogsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOp
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_itemProperties_window_streams_can_remove", [=](CaseState& state) noexcept {
         return TestPaneItemPropertiesStreamsCanRemove(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_itemProperties_window_failure_keeps_artifact_explanation", [=](CaseState& state) noexcept {
+        return TestPaneItemPropertiesFailureKeepsArtifactExplanation(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_itemProperties_window_refresh_reads_fresh_object", [=](CaseState& state) noexcept {
+        return TestPaneItemPropertiesRefreshReadsFreshObject(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_itemProperties_window_close_during_load_is_safe", [=](CaseState& state) noexcept {
+        return TestPaneItemPropertiesCloseDuringLoadIsSafe(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_itemProperties_window_ctrlA_copy_exports_full_text", [=](CaseState& state) noexcept {
         return TestPaneItemPropertiesCtrlAAndCopyExportsFullText(mainWindow, state);

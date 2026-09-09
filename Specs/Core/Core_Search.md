@@ -131,6 +131,7 @@ The normalization step for result identity MUST use the shared invariant search-
 - Double-clicking a directory navigates the pane to that directory.
 - The secondary parent action navigates to the parent directory and focuses the matched item when possible.
 - Result-grid copy/move-to-other-pane commands must show the resolved destination folder in the Find status line after the shared File Operations task is accepted.
+- Find result Copy/Move commands submit qualified resolved paths and the immutable File Operations options snapshot. After Move/Delete, the host applies exact per-item `SourceDisposition` to local index notifications. Unknown outcomes invalidate affected roots and request a watcher/index resync; they are never treated as successful removal. FolderWatcher overflow keeps its full-root resync authority.
 - Result-grid viewer/editor commands must use the Find window as the action owner and must not steal focus by routing through a main-pane folder-view command post.
 - Recursive results MUST display the containing subfolder relative to the search root in the Path column, including when a backend reports only a leaf relative path but provides a full path under the requested root.
 - One-line result rows MUST shrink when compact mode is active and align to the FolderView brief-row visual contract; snippet rows may remain taller to preserve preview readability.
@@ -220,7 +221,19 @@ The local index core is responsible for:
 - journal replay,
 - tracked-root traversal rebuilds when direct journal access is unavailable.
 
-Local index rebuild/enumeration MUST ignore RedSalamander staged sibling names (`.rs_tmp_*`, `.~rs-write-*`, and `.rs_copy_tmp_*`) so aborted, crashed, or in-flight local and cross-filesystem staging temps do not become searchable user documents. The filter MUST recognize only generated RedSalamander temp-name shapes, such as bridge `.rs_tmp_` plus generated hex suffixes, copy `.rs_copy_tmp_<pid>_<tid>_<counter>` hex suffixes, and writer `.~rs-write-<guid-or-hex-id>.tmp` suffixes. It MUST NOT suppress arbitrary user files merely because a marker substring appears in the middle of an otherwise normal name.
+Local index rebuild/enumeration MUST NOT suppress RedSalamander artifact names. Current names such as
+`.rs_tmp_*`, `.rs_bak_*`, `.rs_ren_*`, `.rs_copy_tmp_*`, and `.~rs-write-*`, plus recognized legacy
+shapes, participate in the same path and content candidate rules as other items. The exact generated
+shape is only a `Possible` classification hint; arbitrary user files are not classified merely
+because a marker substring occurs inside a normal name.
+
+Search result materialization asks the shared File Operations artifact classifier for an orthogonal
+`Ordinary` / `Possible` presentation value. The search index may retain a cached
+classification hint for performance, but it is neither provenance nor mutation authority and MUST NOT filter candidates.
+Find/Search always return matching artifacts, with `Possible interrupted-operation artifact`
+badge/status metadata for recognized name shapes. Any action that uses
+the result follows the touch guard in `Specs/FileSystem/FileSystem_FileOperations.md` and rechecks
+classification/identity at action time.
 
 Snapshot persistence MUST write a sibling temporary file, validate every write byte count, flush the temporary handle, and replace the final snapshot with a write-through atomic rename only after the full snapshot has been written. Directory creation, size inspection, final and temporary opens, cleanup, atomic replacement, reload, deletion, and test corruption MUST retain extended-length path support; the generated sibling name can cross `MAX_PATH` even when the configured snapshot root and final filename do not. Failed, partial, or crashed snapshot saves MUST leave the previous final snapshot intact. Snapshot persistence `noexcept` helpers that translate non-allocation C++ exceptions to `HRESULT` MUST document the boundary, log once with `Debug::Error(...)`, and keep `std::bad_alloc` fatal.
 
@@ -258,6 +271,7 @@ Service rules:
 - use build-specific default storage roots:
   - Debug: `%ProgramData%\\RedSalamander\\SearchIndex.Debug`
   - Release: `%ProgramData%\\RedSalamander\\SearchIndex`
+- resolve that same build-specific ProgramData root for SCM service mode, foreground mode, and offline `--compact` whenever no explicit store override is supplied; mode selection must not silently redirect one writer to LocalAppData,
 - persist the default SQLite store as `index-v2.sqlite3` under the active storage root unless `--sqlite-path` overrides it,
 - keep those default SQLite roots behaviorally isolated on disk: starting a Debug service under the default SQLite configuration must not create or mutate the Release root, and vice versa,
 - when a build-specific default SQLite store already exists at that default root, reuse it in place without migration, rename, or sibling-root creation,
@@ -269,6 +283,7 @@ Service rules:
 - treat the SQLite store as the authoritative persisted current state plus journal cursor for service-managed roots,
 - accept status and query requests before startup warm-up, rebuild, repair, or SQLite mirroring completes,
 - derive query cutover readiness from every persisted volume state: only `Ready` volumes are query-ready. `ImportedLegacySnapshot` remains the separate legacy-migration counter, while `CurrentnessUnproven` blocks query cutover without being reported as legacy-import work,
+- inspect the requested volume before making its direct-query decision. The store-wide readiness summary informs status but cannot replace requested-volume classification: currentness-unproven roots report `StoreStale`, and an unrelated unready volume does not suppress a safe ready-volume query,
 - choose the fastest no-wait query path per request:
   - direct SQLite only when the configured store is valid and current for the requested root,
   - live filesystem scan fallback otherwise,
@@ -297,6 +312,9 @@ Service rules:
 - keep client named-pipe operations cancelable and bounded. Status, query, rebuild, compact, and foreground-shutdown requests MUST use overlapped client I/O with per-frame and per-operation deadlines; query I/O MUST poll the request cancellation callback while waiting, including missing-pipe connection retries, and call `CancelIoEx` on cancellation or timeout. A stalled or absent service must produce a prompt cancellation or fallback-eligible failure instead of pinning a search worker indefinitely.
 
 Service trust-boundary and pipe protocol rules:
+- writer serialization is resource-scoped, not process-name-scoped. SCM serializes the installed service instance, while SCM service mode, foreground mode, and offline `--compact` must all retain a non-inheritable, share-none WIL file handle to `.red-salamander-search-writer.lock` in the resolved store directory for the complete writer lifetime,
+- the store directory ACL is the writer-authorization boundary. A predictable permissive `Global\\...` kernel event must not participate in startup ownership. A pre-existing closed ownership file is harmless because liveness is represented only by the retained exclusive handle; a live same-store owner blocks another writer, independent store directories do not block one another, and abrupt process termination releases ownership through handle teardown,
+- inability to resolve/create the store directory or open the ownership file must fail closed before the server or offline maintenance mutates the store. Foreground/CLI diagnostics must name the intended ownership path and HRESULT; SCM mode must record the same path and HRESULT through diagnostics before reporting stopped status,
 - the pipe is local-machine only (`PIPE_REJECT_REMOTE_CLIENTS`) and its ACL must grant full access only to LocalSystem and Builtin Administrators, with non-admin interactive clients limited to read/write pipe access,
 - the service must treat every client-supplied root as untrusted input. Query and rebuild roots MUST be rejected when empty, relative, UNC, generic device namespace (`\\.\`, `\??\`), `\\?\UNC`, `\\?\GLOBALROOT`, or otherwise not a canonical drive-rooted path accepted by the local index contract,
 - accepted client roots MUST be normalized before use. The service may strip a `\\?\` prefix only for drive-rooted paths, must collapse `.`/`..` through the Win32 full-path resolver, and must preserve drive-root spelling without widening the request to a device namespace,
@@ -320,7 +338,7 @@ Service executable CLI:
   - support keyboard navigation for page switching and history browsing (`1`, `2`, `f`, arrows, `PgUp/PgDn`, `Home/End`).
   Redirected foreground-mode logs are part of the same diagnostics surface and must still report database state, synchronization state, and query execution mode for active searches when the interactive dashboard cannot render.
   `Ctrl+C` requests a clean shutdown.
-- `--compact` performs offline SQLite maintenance for the selected store, acquires the single-instance guard, truncates WAL, runs `VACUUM`, records `last_checkpoint_utc` / `last_compaction_utc`, prints a before/after summary, and exits.
+- `--compact` performs offline SQLite maintenance for the selected store, acquires the same store writer ownership used by service/foreground mode, truncates WAL, runs `VACUUM`, records `last_checkpoint_utc` / `last_compaction_utc`, prints a before/after summary, and exits.
 - `--request-compact` asks the running service to compact its live SQLite store through the named-pipe control channel, then prints refreshed DB/WAL/free-page state from `GetStatus(...)`.
 - `--register` registers the current executable as the build-specific Windows service.
 - `--unregister` removes the build-specific Windows service registration.
@@ -401,6 +419,13 @@ Search changes must be validated through:
 - Compare self-tests that verify corrupt or unqueryable SQLite stores still start the service, report derived pre-query database state, and fall back to live search without blocking for repair,
 - Compare self-tests that verify mid-query SQLite failure restarts the request as a live scan without duplicating already emitted hits,
 - Compare self-tests that verify redirected foreground-mode logs still expose database state, synchronization progress, and query execution mode when the interactive dashboard is unavailable,
+- Compare self-test `search_service_store_writer_ownership_is_resource_scoped`, which holds a precreated legacy Global event and a stale closed ownership file while proving isolated startup, live foreground and offline-compact same-store exclusion, different-store coexistence, abrupt-owner release/restart, and fail-closed diagnostics for an unusable ownership directory,
+- Store-writer ownership directory creation and lock-file acquisition use extended-length
+  Win32 paths while diagnostics retain the ordinary display path. Canonical TestSandbox,
+  redirected ProgramData, and production store roots therefore keep the same resource-
+  scoped ownership semantics beyond `MAX_PATH`; a long path must not be misreported as a
+  competing writer or missing store.
+- Compare self-test `search_service_foreground_rejects_second_instance`, which preserves build-specific service-name diagnostics while proving a live same-store foreground owner rejects another writer,
 - Compare self-tests that verify corrupt snapshot counts rebuild without process termination, malformed service `QueryBatch` counts fail with a fallback-eligible protocol HRESULT and fall back cleanly, and malformed USN name bounds are rejected before OOB reads,
 - Compare self-test `sqlite_index_store_root_lookup_case_insensitive`, which verifies direct SQLite `InspectVolume`, `LoadVolume`, and `EnumerateVolume` find a stored root through differently-cased caller text,
 - Compare self-test `search_service_sqlite_external_rotation_refreshes_without_retry`, which rotates the configured SQLite store externally mid-service-session and verifies the next query observes the refreshed generation/currentness before querying, uses SQLite for the rotated contents, and does not rely on a post-rotation `search.backend.sqlite.retry_query_ms` retry,
@@ -426,6 +451,14 @@ Search changes must be validated through:
 - Commands self-test `filesystem_local_watch_unwatch_drains_inflight_callback`, which verifies built-in local watch teardown drains a blocked in-flight callback before `UnwatchDirectory(...)` returns,
 - packaged Release validation for MSI and MSIX when service packaging changes.
 
+Writer-ownership acquisition emits `search.service.writer_ownership.acquire_us` with `detail=store-file`, `value0=0`
+for an acquired lease or `value0=1` for live-owner contention, and the failing HRESULT when ownership cannot be
+established. The protected Release/local-NTFS startup scenario has an advisory 15 ms median budget over at least five
+same-machine samples. This is a startup-only budget; it makes no steady-state search-throughput claim. The 2026-07-22
+baseline/candidate evidence is archived under
+`Specs/TestRuns/7d3a1247382a/CompareDirectories/2026-07-22_115034/` and
+`Specs/TestRuns/7d3a1247382a/CompareDirectories/2026-07-22_121358/`.
+
 Machine-dependent coverage remains part of the suite and must skip with a reason when preconditions are absent. Example:
 - the ReFS indexed probe remains declared and records `skipped` when no fixed ReFS volume exists.
 
@@ -436,6 +469,7 @@ Machine-dependent coverage remains part of the suite and must skip with a reason
 - `IFileSystemSearch` is the native plugin contract; the host must provide scan fallback when native search is unavailable.
 - The built-in local plugin prefers `service -> local-index -> scan`.
 - Debug and Release service builds use different default ProgramData roots so they can run side by side without sharing SQLite state.
+- Service, foreground, and offline-compaction writers must share one exclusive store-directory ownership lease; only a live authorized same-store owner may block startup.
 - SQLite bootstrap or inspection failures must be fail-open at service startup so status polling and degraded live-search queries still work.
 - SQLite-backed service queries must choose the fastest no-wait path per request and degrade to live filesystem search when currentness is not proven.
 - SQLite-backed service queries must validate cached store generation before direct SQLite use, and retry/dedupe stale-store fallbacks without duplicating hits that already reached the client.

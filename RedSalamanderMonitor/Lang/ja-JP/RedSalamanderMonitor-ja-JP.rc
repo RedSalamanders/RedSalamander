@@ -41,24 +41,23 @@ BEGIN
     END
     POPUP "オプション(&O)"
     BEGIN
-        MENUITEM "常にトップに(&A)",              IDM_OPTION_TOP
-        MENUITEM "自動スクロール(&S)\tEnd",           IDM_OPTION_AUTO_SCROLL
-        MENUITEM SEPARATOR
-        MENUITEM "プロセスID/スレッドIDを表示(&P)",  IDM_OPTION_ID
+        MENUITEM "自動スクロール(&S)\tEnd", IDM_OPTION_AUTO_SCROLL
+        MENUITEM "プロセスID/スレッドIDを表示(&I)", IDM_OPTION_ID
+        MENUITEM "常に手前に表示(&T)", IDM_OPTION_TOP
         MENUITEM SEPARATOR
         POPUP "アクティブフィルター(&F)"
         BEGIN
-            MENUITEM "テキストを表示(&T)",              IDM_FILTER_TEXT, CHECKED
-            MENUITEM "エラーを表示(&E)",            IDM_FILTER_ERROR, CHECKED
-            MENUITEM "警告を表示する(&W)",          IDM_FILTER_WARNING, CHECKED
-            MENUITEM "番組情報(&I)",              IDM_FILTER_INFO, CHECKED
-            MENUITEM "パフォーマンスの表示(&P)",              IDM_FILTER_PERF, CHECKED
-            MENUITEM "デバッグを表示(&D)",             IDM_FILTER_DEBUG, CHECKED
+            MENUITEM "エラー(&E)", IDM_FILTER_ERROR, CHECKED
+            MENUITEM "警告(&W)", IDM_FILTER_WARNING, CHECKED
+            MENUITEM "情報(&I)", IDM_FILTER_INFO, CHECKED
+            MENUITEM "パフォーマンス(&P)", IDM_FILTER_PERF, CHECKED
+            MENUITEM "デバッグ(&D)", IDM_FILTER_DEBUG, CHECKED
+            MENUITEM "トレース(&T)", IDM_FILTER_TEXT, CHECKED
             MENUITEM SEPARATOR
-            MENUITEM "プリセット: エラーのみ",     IDM_FILTER_PRESET_ERRORS_ONLY
-            MENUITEM "プリセット: エラー+警告", IDM_FILTER_PRESET_ERRORS_WARNINGS
-            MENUITEM "プリセット: エラー+パフォーマンス+デバッグ", IDM_FILTER_PRESET_ERRORS_DEBUG
-            MENUITEM "プリセット: すべてのタイプ",       IDM_FILTER_PRESET_ALL
+            MENUITEM "エラーのみ(&O)", IDM_FILTER_PRESET_ERRORS_ONLY
+            MENUITEM "エラーと警告(&W)", IDM_FILTER_PRESET_ERRORS_WARNINGS
+            MENUITEM "エラー、パフォーマンス、デバッグ(&D)", IDM_FILTER_PRESET_ERRORS_DEBUG
+            MENUITEM "すべてのメッセージタイプ(&A)", IDM_FILTER_PRESET_ALL
         END
     END
     POPUP "ヘルプ(&H)"
@@ -104,6 +103,7 @@ BEGIN
     IDS_NOT_RUNNING         "RedSalamander Bug Reporter (RedSalamanderMonitor.exe) が実行されていません。 RedSalamander は潜在的なクラッシュに対処できません。 RedSalamander を再起動してください。"
     IDS_CAPTION_ERROR "エラー"
     IDS_CAPTION_OPEN "開く"
+    IDS_CAPTION_SAVE "保存"
     IDS_CAPTION_PRINT "印刷する"
     IDS_CAPTION_ETW_WARNING "ETW リスナーの警告"
     IDS_BTN_OK              "OK"
@@ -123,6 +123,10 @@ BEGIN
     IDS_MSG_ETW_ELEVATE_PROMPT "RedSalamander Monitor は、現在の権限で ETW リスナーを開始できませんでした。\r\n\r\n今すぐ管理者として再起動しますか?\r\n\r\n(リアルタイムの ETW 監視を行わずに続行するには、[いいえ] を選択してください。UAC プロンプトを回避するには、ユーザーを Performance Log Users グループに追加してサインアウト/サインインします。)"
     IDS_MSG_OPEN_CANCEL_REQUESTED "ファイルを開く処理をキャンセルしています..."
     IDS_STATUS_OPEN_PROGRESS_FMT "開いています: {0:L} / {1:L} バイト"
+    IDS_MSG_SAVE_FAILED "ファイルを保存できませんでした。"
+    IDS_MSG_FILE_WORKER_START_FAILED "バックグラウンドのファイル操作を開始できませんでした。"
+    IDS_MSG_SAVE_CANCEL_REQUESTED "ファイルの保存をキャンセルしています..."
+    IDS_STATUS_SAVE_PROGRESS_FMT "保存中: {0:L} バイト / {1:L} 行"
     IDS_FATAL_ERROR_CAPTION "RedSalamander Monitor - 致命的なエラー"
     IDS_FATAL_EXCEPTION_FMT "RedSalamanderMonitor\r\n\r\n例外での致命的な例外: {0} (0x{1:08X})\r\n\r\nアプリケーションは終了します。"
     IDS_FILE_FILTER_OPEN "テキスト ファイル (*.txt;*.log)\0*.txt;*.log\0すべてのファイル (*.*)\0*.*\0\0"

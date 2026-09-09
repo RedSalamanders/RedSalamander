@@ -51,9 +51,11 @@ constexpr GUID kD2DShadowEffectId = {0xC67EA361, 0x1863, 0x4e69, {0x89, 0xDB, 0x
     {
         case ButtonVariant::Standard: return L"Standard";
         case ButtonVariant::DropDown: return L"DropDown";
+        case ButtonVariant::Selector: return L"Selector";
         case ButtonVariant::Split: return L"Split";
         case ButtonVariant::Hyperlink: return L"Hyperlink";
         case ButtonVariant::IconOnly: return L"IconOnly";
+        case ButtonVariant::Disclosure: return L"Disclosure";
         case ButtonVariant::Repeat: return L"Repeat";
         default: return L"Unknown";
     }
@@ -781,10 +783,12 @@ float GetButtonChromeDropDownSegmentWidthDip(ButtonVariant variant) noexcept
     switch (variant)
     {
         case ButtonVariant::DropDown: return kButtonDropDownChevronWidthDip;
+        case ButtonVariant::Selector: return kButtonSelectorChevronWidthDip;
         case ButtonVariant::Split: return kButtonSplitDropDownSegmentDip;
         case ButtonVariant::Standard:
         case ButtonVariant::Hyperlink:
         case ButtonVariant::IconOnly:
+        case ButtonVariant::Disclosure:
         case ButtonVariant::Repeat: return 0.0f;
     }
 
@@ -806,6 +810,13 @@ ButtonChromeLayout ComputeButtonChromeLayout(const D2D1_RECT_F& bounds, ButtonVa
     layout.hasChevron       = true;
     layout.chevronRect      = D2D1::RectF(segmentLeft, bounds.top, bounds.right, bounds.bottom);
     layout.textRect.right   = segmentLeft;
+
+    if (variant == ButtonVariant::Selector)
+    {
+        // Balance the trailing chevron with an empty leading lane so the current
+        // value remains optically centered across the complete selector.
+        layout.textRect.left = (std::min)(segmentLeft, bounds.left + segmentWidth);
+    }
 
     if (variant == ButtonVariant::Split)
     {
@@ -829,6 +840,7 @@ ButtonChromeResolvedStyle ResolveButtonChromeResolvedStyle(const ThemePalette& t
         resolved.border          = custom.border;
         resolved.focus           = custom.focus;
         resolved.text            = custom.text;
+        resolved.chevron         = custom.text;
         resolved.showFill        = custom.showFill && custom.fill.a > 0.0f;
         resolved.showBorder      = custom.showBorder && custom.border.a > 0.0f;
         resolved.showFocus       = custom.showFocus && custom.focus.a > 0.0f;
@@ -849,6 +861,7 @@ ButtonChromeResolvedStyle ResolveButtonChromeResolvedStyle(const ThemePalette& t
     resolved.border          = style.border;
     resolved.focus           = style.focus;
     resolved.text            = style.text;
+    resolved.chevron         = style.text;
     resolved.showFill        = true;
     resolved.showBorder      = style.showBorder && style.border.a > 0.0f;
     resolved.showFocus       = style.showFocus;
@@ -859,6 +872,15 @@ ButtonChromeResolvedStyle ResolveButtonChromeResolvedStyle(const ThemePalette& t
     resolved.textOffsetXDip  = style.textOffsetXDip;
     resolved.textOffsetYDip  = style.textOffsetYDip;
     resolved.focusRing       = ButtonChromeFocusRing::Standard;
+
+    if (spec.variant == ButtonVariant::Selector)
+    {
+        const float chevronEmphasis = spec.pressed ? 1.0f : (std::clamp)(hoverStrength, 0.0f, 1.0f);
+        resolved.chevron             = BlendColor(spec.enabled ? theme.subduedText : theme.disabledText, resolved.text, chevronEmphasis);
+        resolved.cornerRadiusDip     = 6.0f;
+        resolved.textOffsetXDip      = 0.0f;
+        resolved.textOffsetYDip      = 0.0f;
+    }
     return resolved;
 }
 
@@ -935,7 +957,7 @@ void DrawButtonChrome(ID2D1RenderTarget* target,
     if (layout.hasChevron)
     {
         const wchar_t chevronText[2]{spec.chevronGlyph != L'\0' ? spec.chevronGlyph : kButtonDropDownChevronGlyph, L'\0'};
-        DrawRawCenteredText(target, brush, iconFormat ? iconFormat : textFormat, std::wstring_view(chevronText, 1u), layout.chevronRect, style.text);
+        DrawRawCenteredText(target, brush, iconFormat ? iconFormat : textFormat, std::wstring_view(chevronText, 1u), layout.chevronRect, style.chevron);
     }
 }
 
@@ -960,6 +982,84 @@ void DrawCenteredText(WindowHost& host,
     {
         dc->DrawTextW(text.data(), static_cast<UINT32>(text.size()), format, rect, brush, kTextDrawOptions, DWRITE_MEASURING_MODE_NATURAL);
     }
+}
+
+void DrawChevronGlyph(WindowHost& host,
+                      const D2D1_RECT_F& rect,
+                      ChevronDirection direction,
+                      const D2D1_COLOR_F& color) noexcept
+{
+    if (! host.GetDeviceContext() || rect.right <= rect.left || rect.bottom <= rect.top)
+    {
+        return;
+    }
+
+    constexpr wchar_t kFluentChevronLeft  = L'\uE76B';
+    constexpr wchar_t kFluentChevronUp    = L'\uE70E';
+    constexpr wchar_t kFluentChevronRight = L'\uE76C';
+    constexpr wchar_t kFluentChevronDown  = L'\uE70D';
+    constexpr wchar_t kFallbackChevronLeft  = L'\u2039';
+    constexpr wchar_t kFallbackChevronUp    = L'\u25B4';
+    constexpr wchar_t kFallbackChevronRight = L'\u203A';
+    constexpr wchar_t kFallbackChevronDown  = L'\u25BE';
+
+    const bool useFluent = host.HasFluentIconFont();
+    wchar_t glyph        = useFluent ? kFluentChevronDown : kFallbackChevronDown;
+    switch (direction)
+    {
+        case ChevronDirection::Left: glyph = useFluent ? kFluentChevronLeft : kFallbackChevronLeft; break;
+        case ChevronDirection::Up: glyph = useFluent ? kFluentChevronUp : kFallbackChevronUp; break;
+        case ChevronDirection::Right: glyph = useFluent ? kFluentChevronRight : kFallbackChevronRight; break;
+        case ChevronDirection::Down: break;
+        default: break;
+    }
+
+    DrawCenteredText(host, std::wstring_view(&glyph, 1u), rect, useFluent ? FontRole::Icon : FontRole::Small, color);
+}
+
+void DrawDisclosureChevron(WindowHost& host,
+                           const D2D1_RECT_F& rect,
+                           float expandedProgress,
+                           const D2D1_COLOR_F& color,
+                           ChevronDirection collapsedDirection) noexcept
+{
+    auto* context = host.GetDeviceContext();
+    if (! context || rect.right <= rect.left || rect.bottom <= rect.top)
+    {
+        return;
+    }
+
+    const DisclosureChevronVisualState visual = ResolveDisclosureChevronVisualState(expandedProgress, collapsedDirection);
+    if (visual.rotationDegrees == 0.0f)
+    {
+        DrawChevronGlyph(host, rect, visual.direction, color);
+        return;
+    }
+
+    D2D1_MATRIX_3X2_F previousTransform{};
+    context->GetTransform(&previousTransform);
+    const D2D1_POINT_2F center = D2D1::Point2F((rect.left + rect.right) * 0.5f, (rect.top + rect.bottom) * 0.5f);
+    context->SetTransform(D2D1::Matrix3x2F::Rotation(visual.rotationDegrees, center) * previousTransform);
+    auto restoreTransform = wil::scope_exit([&] { context->SetTransform(previousTransform); });
+
+    DrawChevronGlyph(host, rect, visual.direction, color);
+}
+
+DisclosureChevronVisualState ResolveDisclosureChevronVisualState(float expandedProgress, ChevronDirection collapsedDirection) noexcept
+{
+    collapsedDirection = collapsedDirection == ChevronDirection::Left ? ChevronDirection::Left : ChevronDirection::Right;
+    const float progress = std::clamp(expandedProgress, 0.0f, 1.0f);
+    if (progress <= 0.0f)
+    {
+        return {.direction = collapsedDirection};
+    }
+    if (progress >= 1.0f)
+    {
+        return {.direction = ChevronDirection::Down};
+    }
+
+    const float rotationDegrees = collapsedDirection == ChevronDirection::Left ? -90.0f * progress : 90.0f * progress;
+    return {.direction = collapsedDirection, .rotationDegrees = rotationDegrees};
 }
 
 void DrawTextWithMnemonic(WindowHost& host,
@@ -1879,14 +1979,63 @@ ButtonVariant Button::GetVariant() const noexcept
     return _variant;
 }
 
-void Button::SetTooltipText(std::wstring tooltipText)
+void Button::SetDisclosureCollapsedDirection(ChevronDirection direction) noexcept
 {
-    _tooltipText = std::move(tooltipText);
+    const ChevronDirection collapsedDirection = direction == ChevronDirection::Left ? ChevronDirection::Left : ChevronDirection::Right;
+    if (_disclosureCollapsedDirection != collapsedDirection)
+    {
+        _disclosureCollapsedDirection = collapsedDirection;
+        RequestInvalidate();
+    }
 }
 
-std::wstring_view Button::GetTooltipText() const noexcept
+void Button::SetDisclosureExpanded(bool expanded) noexcept
 {
-    return _tooltipText;
+    const float target = expanded ? 1.0f : 0.0f;
+    if (! _disclosureExpanded.has_value())
+    {
+        _disclosureExpanded                 = expanded;
+        _disclosureTransition.progress      = target;
+        _disclosureTransition.startProgress = target;
+        _disclosureTransition.target        = target;
+        _disclosureTransition.startTickMs   = 0u;
+        _disclosureTransition.initialized   = true;
+        _disclosureTransition.active        = false;
+        RequestInvalidate();
+        return;
+    }
+
+    if (_disclosureExpanded.value() == expanded)
+    {
+        return;
+    }
+
+    _disclosureExpanded                    = expanded;
+    _disclosureTransition.startProgress    = _disclosureTransition.progress;
+    _disclosureTransition.target           = target;
+    _disclosureTransition.startTickMs      = GetTickCount64();
+    _disclosureTransition.initialized      = true;
+    WindowHost* const host                 = GetHost();
+    _disclosureTransition.active           = host && ! host->GetTheme().reducedMotion;
+    if (_disclosureTransition.active)
+    {
+        host->RequestAnimation();
+    }
+    else
+    {
+        _disclosureTransition.progress = target;
+    }
+    RequestInvalidate();
+}
+
+void Button::ClearDisclosureState() noexcept
+{
+    if (_disclosureExpanded.has_value())
+    {
+        _disclosureExpanded.reset();
+        _disclosureTransition = {};
+        RequestInvalidate();
+    }
 }
 
 void Button::SetOnClick(std::function<void()> onClick)
@@ -1925,7 +2074,7 @@ bool Button::Invoke(WindowHost& host, bool focusSelf)
         host.SetFocusControl(this);
     }
 
-    if (_variant == ButtonVariant::DropDown && _onDropDownClick)
+    if ((_variant == ButtonVariant::DropDown || _variant == ButtonVariant::Selector) && _onDropDownClick)
     {
         return InvokeDropDown(host);
     }
@@ -1978,13 +2127,58 @@ void Button::Paint(WindowHost& host) const
         return;
     }
 
+    if (_variant == ButtonVariant::Selector)
+    {
+        ButtonChromeDrawSpec spec{};
+        spec.bounds          = GetBounds();
+        spec.text            = _text;
+        spec.variant         = _variant;
+        spec.enabled         = IsEnabled();
+        spec.hovered         = IsHovered();
+        spec.pressed         = IsPressed();
+        spec.focused         = HasFocus();
+        spec.keyboardFocused = HasFocus() && host.IsKeyboardFocusVisible();
+        spec.hoverStrength   = ResolveHoverAnimationProgress(host);
+        spec.focusStrength   = ResolveFocusAnimationProgress(host);
+
+        IDWriteTextFormat* const textFormat = host.GetTextFormat(
+            FontRole::Body, DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, false, ResolveReadingDirection(flowDirection));
+        IDWriteTextFormat* const iconFormat = host.GetTextFormat(
+            FontRole::Icon, DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, false, ResolveReadingDirection(flowDirection));
+        DrawButtonChrome(host.GetDeviceContext(), host.GetSolidBrush(style.text), textFormat, iconFormat, host.GetTheme(), spec);
+        return;
+    }
+
+    if (_variant == ButtonVariant::Disclosure)
+    {
+        if (style.showFocus)
+        {
+            PaintFocusRing(host, GetBounds(), kButtonCornerRadiusDip);
+        }
+        if (_disclosureExpanded.has_value())
+        {
+            const float progress = host.GetTheme().reducedMotion ? (_disclosureExpanded.value() ? 1.0f : 0.0f) : _disclosureTransition.progress;
+            DrawDisclosureChevron(host, GetBounds(), progress, style.text, _disclosureCollapsedDirection);
+        }
+        else
+        {
+            DrawCenteredText(host, _text, GetBounds(), FontRole::Icon, style.text);
+        }
+        return;
+    }
+
     DrawRoundedRect(host, GetBounds(), style.fill, style.showBorder ? style.border : transparent, kButtonCornerRadiusDip);
     if (style.showFocus)
     {
         PaintFocusRing(host, GetBounds(), kButtonCornerRadiusDip);
     }
 
-    if (_variant == ButtonVariant::DropDown)
+    if (_disclosureExpanded.has_value())
+    {
+        const float progress = host.GetTheme().reducedMotion ? (_disclosureExpanded.value() ? 1.0f : 0.0f) : _disclosureTransition.progress;
+        DrawDisclosureChevron(host, GetBounds(), progress, style.text, _disclosureCollapsedDirection);
+    }
+    else if (_variant == ButtonVariant::DropDown)
     {
         const ButtonChromeLayout layout = ComputeButtonChromeLayout(GetBounds(), _variant);
         const D2D1_RECT_F textRect      = D2D1::RectF(layout.textRect.left + style.textOffsetXDip,
@@ -2157,21 +2351,33 @@ float Button::DebugGetFocusAnimationProgress() const noexcept
     return _focusTransition.progress;
 }
 
+float Button::DebugGetDisclosureAnimationProgress() const noexcept
+{
+    return _disclosureTransition.progress;
+}
+
+bool Button::DebugIsDisclosureAnimationActive() const noexcept
+{
+    return _disclosureTransition.active;
+}
+
 bool Button::Tick(WindowHost& host, uint64_t nowTickMs)
 {
     const bool hoverAnimating = AdvanceInteractionTransition(host, _hoverTransition, nowTickMs);
     const bool focusAnimating = AdvanceInteractionTransition(host, _focusTransition, nowTickMs);
-    return hoverAnimating || focusAnimating;
+    const bool disclosureAnimating = AdvanceDisclosureTransition(host, nowTickMs);
+    return hoverAnimating || focusAnimating || disclosureAnimating;
 }
 
 bool Button::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT modifiers)
 {
-    const bool handled = Control::OnMouseMove(host, point, modifiers);
-    if (! _tooltipText.empty() && PointInRect(GetHitBounds(), point))
+    const std::wstring_view tooltipText = GetTooltipText();
+    if (! tooltipText.empty() && tooltipText == _text)
     {
-        static_cast<void>(host.SetTooltip(_tooltipText, point));
+        static_cast<void>(host.ClearTooltip());
+        return false;
     }
-    return handled;
+    return Control::OnMouseMove(host, point, modifiers);
 }
 
 bool Button::OnMouseLeave(WindowHost& host)
@@ -2251,7 +2457,7 @@ bool Button::IsDropDownInvocationPoint(D2D1_POINT_2F point) const noexcept
     }
 
     const D2D1_RECT_F bounds = GetBounds();
-    if (_variant == ButtonVariant::DropDown)
+    if (_variant == ButtonVariant::DropDown || _variant == ButtonVariant::Selector)
     {
         return PointInRect(bounds, point);
     }
@@ -2384,6 +2590,36 @@ bool Button::AdvanceInteractionTransition(const WindowHost& host, InteractionTra
     }
 
     return transition.active || changedThisTick;
+}
+
+bool Button::AdvanceDisclosureTransition(WindowHost& host, uint64_t nowTickMs) noexcept
+{
+    if (! _disclosureExpanded.has_value() || ! _disclosureTransition.initialized)
+    {
+        return false;
+    }
+    if (host.GetTheme().reducedMotion)
+    {
+        _disclosureTransition.progress = _disclosureTransition.target;
+        _disclosureTransition.active   = false;
+        return false;
+    }
+    if (! _disclosureTransition.active)
+    {
+        return false;
+    }
+
+    const uint64_t elapsedMs = nowTickMs > _disclosureTransition.startTickMs ? nowTickMs - _disclosureTransition.startTickMs : 0u;
+    const float linearProgress = std::clamp(static_cast<float>(elapsedMs) / static_cast<float>(_disclosureAnimationDurationMs), 0.0f, 1.0f);
+    const float easedProgress  = EvaluateEasing(EasingCurve::PointToPoint, linearProgress);
+    _disclosureTransition.progress = std::lerp(_disclosureTransition.startProgress, _disclosureTransition.target, easedProgress);
+    if (linearProgress >= 1.0f)
+    {
+        _disclosureTransition.progress = _disclosureTransition.target;
+        _disclosureTransition.active   = false;
+    }
+    Invalidate(host);
+    return _disclosureTransition.active;
 }
 
 float Button::ResolveHoverAnimationProgress(const WindowHost& host) const noexcept
@@ -2994,6 +3230,45 @@ bool ProgressBar::IsIndeterminate() const noexcept
     return _indeterminate;
 }
 
+void ProgressBar::SetTrackHeightDip(float heightDip) noexcept
+{
+    const float next = std::max(0.0f, heightDip);
+    if (_trackHeightDip != next)
+    {
+        _trackHeightDip = next;
+        RequestInvalidate();
+    }
+}
+
+float ProgressBar::GetTrackHeightDip() const noexcept
+{
+    return _trackHeightDip;
+}
+
+void ProgressBar::SetSegmentedValues(double primaryValue, double secondaryValue, D2D1_COLOR_F secondaryColor) noexcept
+{
+    _primarySegmentValue   = primaryValue;
+    _secondarySegmentValue = secondaryValue;
+    _secondarySegmentColor = secondaryColor;
+    _segmented             = true;
+    RequestInvalidate();
+}
+
+void ProgressBar::ClearSegmentedValues() noexcept
+{
+    if (! _segmented)
+    {
+        return;
+    }
+    _segmented = false;
+    RequestInvalidate();
+}
+
+bool ProgressBar::HasSegmentedValues() const noexcept
+{
+    return _segmented;
+}
+
 void ProgressBar::Paint(WindowHost& host) const
 {
     const ProgressBarVisualStyle style = ResolveProgressBarVisualStyle(host.GetTheme());
@@ -3005,7 +3280,9 @@ void ProgressBar::Paint(WindowHost& host) const
     }
 
     // Track: 2 DIP rest, 4 DIP indeterminate (spec §3.8)
-    const float trackHeight = _indeterminate ? 4.0f : 2.0f;
+    const float availableHeight = std::max(0.0f, bounds.bottom - bounds.top);
+    const float defaultTrackHeight = _indeterminate ? 4.0f : 2.0f;
+    const float trackHeight = std::min(availableHeight, _trackHeightDip > 0.0f ? _trackHeightDip : defaultTrackHeight);
     const float trackTop    = bounds.top + ((bounds.bottom - bounds.top - trackHeight) * 0.5f);
     const D2D1_RECT_F track = D2D1::RectF(bounds.left, trackTop, bounds.right, trackTop + trackHeight);
     const float radius      = trackHeight * 0.5f;
@@ -3025,6 +3302,50 @@ void ProgressBar::Paint(WindowHost& host) const
         {
             const D2D1_RECT_F seg = D2D1::RectF(segLeft, trackTop, segRight, trackTop + trackHeight);
             DrawRoundedRect(host, seg, style.progressFill, style.progressFill, radius);
+        }
+    }
+    else if (_segmented)
+    {
+        const double range = (_maximum > _minimum) ? (_maximum - _minimum) : 1.0;
+        const double primaryFraction = std::clamp((_primarySegmentValue - _minimum) / range, 0.0, 1.0);
+        const double secondaryFraction = std::clamp((_secondarySegmentValue - _minimum) / range, 0.0, 1.0);
+        const float midpoint = bounds.left + (bounds.right - bounds.left) * 0.5f;
+        const float primaryWidth = static_cast<float>(primaryFraction) * (midpoint - bounds.left);
+        if (primaryWidth > 0.5f)
+        {
+            const D2D1_RECT_F primaryFill =
+                D2D1::RectF(bounds.left, trackTop, bounds.left + primaryWidth, trackTop + trackHeight);
+            DrawRoundedRect(host, primaryFill, style.progressFill, style.progressFill, radius);
+        }
+
+        const float secondaryWidth = static_cast<float>(secondaryFraction) * (bounds.right - midpoint);
+        if (secondaryWidth > 0.5f)
+        {
+            const D2D1_RECT_F secondaryFill =
+                D2D1::RectF(midpoint, trackTop, midpoint + secondaryWidth, trackTop + trackHeight);
+            DrawRoundedRect(host, secondaryFill, _secondarySegmentColor, _secondarySegmentColor, radius);
+
+            auto* const context = host.GetDeviceContext();
+            auto* const hatchBrush = host.GetSolidBrush(style.progressFill);
+            if (context && hatchBrush)
+            {
+                context->PushAxisAlignedClip(secondaryFill, D2D1_ANTIALIAS_MODE_ALIASED);
+                constexpr float hatchStep = 5.0f;
+                for (float x = secondaryFill.left - trackHeight; x < secondaryFill.right; x += hatchStep)
+                {
+                    context->DrawLine(D2D1::Point2F(x, secondaryFill.bottom),
+                                      D2D1::Point2F(x + trackHeight, secondaryFill.top),
+                                      hatchBrush,
+                                      1.0f);
+                }
+                context->PopAxisAlignedClip();
+            }
+        }
+
+        if (auto* dividerBrush = host.GetSolidBrush(style.trackFill); dividerBrush && host.GetDeviceContext())
+        {
+            host.GetDeviceContext()->DrawLine(
+                D2D1::Point2F(midpoint, trackTop), D2D1::Point2F(midpoint, trackTop + trackHeight), dividerBrush, 1.0f);
         }
     }
     else
@@ -3071,6 +3392,704 @@ bool ProgressBar::Tick(WindowHost& host, uint64_t nowTickMs)
 Slider::Slider()
 {
     SetFocusable(true);
+}
+
+D2D1_COLOR_F ThroughputGraphColorFromHue(float hueDegrees, bool dark) noexcept
+{
+    float hue = std::fmod(hueDegrees, 360.0f);
+    if (hue < 0.0f)
+    {
+        hue += 360.0f;
+    }
+    const float saturation = dark ? 0.78f : 0.86f;
+    const float value      = dark ? 0.92f : 0.76f;
+    const float chroma     = value * saturation;
+    const float section    = hue / 60.0f;
+    const float x          = chroma * (1.0f - std::abs(std::fmod(section, 2.0f) - 1.0f));
+    float red = 0.0f;
+    float green = 0.0f;
+    float blue = 0.0f;
+    if (section < 1.0f)
+    {
+        red = chroma;
+        green = x;
+    }
+    else if (section < 2.0f)
+    {
+        red = x;
+        green = chroma;
+    }
+    else if (section < 3.0f)
+    {
+        green = chroma;
+        blue = x;
+    }
+    else if (section < 4.0f)
+    {
+        green = x;
+        blue = chroma;
+    }
+    else if (section < 5.0f)
+    {
+        red = x;
+        blue = chroma;
+    }
+    else
+    {
+        red = chroma;
+        blue = x;
+    }
+    const float match = value - chroma;
+    return D2D1::ColorF(red + match, green + match, blue + match, 1.0f);
+}
+
+namespace
+{
+[[nodiscard]] wil::com_ptr<ID2D1PathGeometry> CreateThroughputGraphAreaGeometry(ID2D1RenderTarget* context,
+                                                                                const D2D1_RECT_F& bounds,
+                                                                                std::span<const ThroughputGraphSample> samples,
+                                                                                double displayedLatestValue,
+                                                                                double maximum) noexcept
+{
+    wil::com_ptr<ID2D1PathGeometry> geometry;
+    if (! context || samples.size() < 2u || maximum <= 0.0)
+    {
+        return geometry;
+    }
+
+    wil::com_ptr<ID2D1Factory> factory;
+    context->GetFactory(factory.addressof());
+    if (! factory || FAILED(factory->CreatePathGeometry(geometry.addressof())) || ! geometry)
+    {
+        geometry.reset();
+        return geometry;
+    }
+
+    wil::com_ptr<ID2D1GeometrySink> sink;
+    if (FAILED(geometry->Open(sink.addressof())) || ! sink)
+    {
+        geometry.reset();
+        return geometry;
+    }
+
+    const float width  = bounds.right - bounds.left;
+    const float height = bounds.bottom - bounds.top;
+    const float step   = width / static_cast<float>(samples.size() - 1u);
+
+    sink->BeginFigure(D2D1::Point2F(bounds.left, bounds.bottom), D2D1_FIGURE_BEGIN_FILLED);
+    for (size_t index = 0u; index < samples.size(); ++index)
+    {
+        const double value       = index + 1u == samples.size() ? displayedLatestValue : samples[index].value;
+        const double finiteValue = std::isfinite(value) ? std::max(0.0, value) : 0.0;
+        const float x            = bounds.left + step * static_cast<float>(index);
+        const float y            = bounds.bottom - static_cast<float>(finiteValue / maximum) * height;
+        sink->AddLine(D2D1::Point2F(x, std::clamp(y, bounds.top, bounds.bottom)));
+    }
+    sink->AddLine(D2D1::Point2F(bounds.right, bounds.bottom));
+    sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+    if (FAILED(sink->Close()))
+    {
+        geometry.reset();
+    }
+    return geometry;
+}
+
+[[nodiscard]] size_t MaximumConcurrentThroughputGraphColorSlots(std::span<const ThroughputGraphSample> samples) noexcept
+{
+    size_t maximum = 0u;
+    for (const auto& sample : samples)
+    {
+        std::array<bool, ThroughputGraphSample::kMaxHueWeights> present{};
+        size_t count = 0u;
+        const size_t weightCount = std::min(sample.hueWeightCount, sample.hueWeights.size());
+        for (size_t weightIndex = 0u; weightIndex < weightCount; ++weightIndex)
+        {
+            const auto& weight = sample.hueWeights[weightIndex];
+            if (weight.weight <= 0.0 || weight.colorSlot >= present.size() || present[weight.colorSlot])
+            {
+                continue;
+            }
+            present[weight.colorSlot] = true;
+            ++count;
+        }
+        maximum = std::max(maximum, count);
+    }
+    return maximum;
+}
+} // namespace
+
+bool ShouldRenderThroughputGraphBands(bool rainbowMode,
+                                      bool perStreamBands,
+                                      bool highContrast,
+                                      size_t maximumConcurrentColorSlots) noexcept
+{
+    if (highContrast || maximumConcurrentColorSlots == 0u)
+    {
+        return false;
+    }
+    return rainbowMode || (perStreamBands && maximumConcurrentColorSlots >= 2u);
+}
+
+ThroughputGraphBandPaintMetrics PaintThroughputGraphBands(ID2D1RenderTarget* target,
+                                                           const D2D1_RECT_F& bounds,
+                                                           std::span<const ThroughputGraphSample> samples,
+                                                           double displayedLatestValue,
+                                                           double maximum,
+                                                           const ThroughputGraphBandPaintOptions& options) noexcept
+{
+    ThroughputGraphBandPaintMetrics metrics{};
+    metrics.sampleCount = samples.size();
+    metrics.fillAlpha   = std::clamp(options.baseFillColor.a, 0.0f, 1.0f);
+    const auto startedAt = std::chrono::steady_clock::now();
+    const auto finish = [&]() noexcept
+    {
+        metrics.renderDurationUs = Debug::Perf::ElapsedUs(startedAt);
+        return metrics;
+    };
+
+    if (! target || samples.size() < 2u || bounds.right <= bounds.left || bounds.bottom <= bounds.top || ! std::isfinite(maximum) || maximum <= 0.0)
+    {
+        return finish();
+    }
+
+    const size_t maximumConcurrentColorSlots = MaximumConcurrentThroughputGraphColorSlots(samples);
+    metrics.bandsActive = ShouldRenderThroughputGraphBands(
+        options.rainbowMode, options.perStreamBands, options.highContrast, maximumConcurrentColorSlots);
+
+    wil::com_ptr<ID2D1SolidColorBrush> brush;
+    if (FAILED(target->CreateSolidColorBrush(options.baseFillColor, brush.addressof())) || ! brush)
+    {
+        return finish();
+    }
+
+    if (! metrics.bandsActive)
+    {
+        const wil::com_ptr<ID2D1PathGeometry> areaGeometry =
+            CreateThroughputGraphAreaGeometry(target, bounds, samples, displayedLatestValue, maximum);
+        if (areaGeometry)
+        {
+            target->FillGeometry(areaGeometry.get(), brush.get());
+            metrics.geometryCount = 1u;
+        }
+        return finish();
+    }
+
+    constexpr size_t kFallbackBatch = ThroughputGraphSample::kMaxHueWeights;
+    constexpr size_t kBatchCount    = kFallbackBatch + 1u;
+    struct BandBatch final
+    {
+        std::array<float, ThroughputGraphSample::kMaxSamples> lowerShares{};
+        std::array<float, ThroughputGraphSample::kMaxSamples> upperShares{};
+        float hueDegrees = -1.0f;
+        bool active = false;
+    };
+    std::array<BandBatch, kBatchCount> batches{};
+    std::array<bool, ThroughputGraphSample::kMaxHueWeights> activeSlots{};
+
+    const size_t sampleCount = std::min(samples.size(), ThroughputGraphSample::kMaxSamples);
+    for (size_t index = 0u; index < sampleCount; ++index)
+    {
+        const auto& sample = samples[index];
+        std::array<double, ThroughputGraphSample::kMaxHueWeights> weightsBySlot{};
+        std::array<float, ThroughputGraphSample::kMaxHueWeights> huesBySlot{};
+        huesBySlot.fill(-1.0f);
+        double totalWeight = 0.0;
+        const size_t weightCount = std::min(sample.hueWeightCount, sample.hueWeights.size());
+        for (size_t weightIndex = 0u; weightIndex < weightCount; ++weightIndex)
+        {
+            const auto& weight = sample.hueWeights[weightIndex];
+            if (weight.weight <= 0.0 || weight.colorSlot >= weightsBySlot.size())
+            {
+                continue;
+            }
+            weightsBySlot[weight.colorSlot] += weight.weight;
+            totalWeight += weight.weight;
+            if (huesBySlot[weight.colorSlot] < 0.0f && weight.hueDegrees >= 0.0f)
+            {
+                huesBySlot[weight.colorSlot] = weight.hueDegrees;
+            }
+        }
+
+        double lowerShare          = 0.0;
+
+        const auto setBandColumn = [&](size_t batchIndex, float hueDegrees, double requestedUpperShare, bool active) noexcept
+        {
+            const float lower = std::clamp(static_cast<float>(lowerShare), 0.0f, 1.0f);
+            const float upper = std::clamp(static_cast<float>(requestedUpperShare), 0.0f, 1.0f);
+            lowerShare        = requestedUpperShare;
+            BandBatch& batch  = batches[batchIndex];
+            if (batch.hueDegrees < 0.0f && hueDegrees >= 0.0f)
+            {
+                batch.hueDegrees = hueDegrees;
+            }
+            batch.lowerShares[index] = lower;
+            batch.upperShares[index] = upper;
+            batch.active             = batch.active || active;
+        };
+
+        if (totalWeight <= 0.0)
+        {
+            for (size_t colorSlot = 0u; colorSlot < weightsBySlot.size(); ++colorSlot)
+            {
+                setBandColumn(colorSlot, -1.0f, 0.0, false);
+            }
+            setBandColumn(kFallbackBatch, -1.0f, 1.0, true);
+            continue;
+        }
+
+        for (size_t colorSlot = 0u; colorSlot < weightsBySlot.size(); ++colorSlot)
+        {
+            const bool active       = weightsBySlot[colorSlot] > 0.0;
+            activeSlots[colorSlot]  = activeSlots[colorSlot] || active;
+            const double upperShare = lowerShare + weightsBySlot[colorSlot] / totalWeight;
+            setBandColumn(colorSlot, huesBySlot[colorSlot], upperShare, active);
+        }
+        setBandColumn(kFallbackBatch, -1.0f, lowerShare, false);
+    }
+
+    metrics.activeColorSlotCount = static_cast<size_t>(std::ranges::count(activeSlots, true));
+    constexpr size_t kRasterRows = ThroughputGraphSample::kMaxHueWeights * 4u;
+    std::array<uint32_t, ThroughputGraphSample::kMaxSamples * kRasterRows> pixels{};
+    const auto packPremultipliedBgra = [](D2D1_COLOR_F color) noexcept
+    {
+        const float alpha = std::clamp(color.a, 0.0f, 1.0f);
+        const auto channel = [alpha](float value) noexcept
+        {
+            return static_cast<uint32_t>(std::lround(std::clamp(value, 0.0f, 1.0f) * alpha * 255.0f));
+        };
+        const uint32_t a = static_cast<uint32_t>(std::lround(alpha * 255.0f));
+        return channel(color.b) | (channel(color.g) << 8u) | (channel(color.r) << 16u) | (a << 24u);
+    };
+    const uint32_t basePixel = packPremultipliedBgra(options.baseFillColor);
+    std::fill_n(pixels.begin(), sampleCount * kRasterRows, basePixel);
+    for (size_t batchIndex = 0u; batchIndex < batches.size(); ++batchIndex)
+    {
+        const BandBatch& batch = batches[batchIndex];
+        if (! batch.active)
+        {
+            continue;
+        }
+        D2D1_COLOR_F color = options.baseFillColor;
+        if (batchIndex < ThroughputGraphSample::kMaxHueWeights && batch.hueDegrees >= 0.0f)
+        {
+            color = ThroughputGraphColorFromHue(batch.hueDegrees, options.dark);
+            color.a = metrics.fillAlpha;
+        }
+        const uint32_t colorPixel = packPremultipliedBgra(color);
+        for (size_t sampleIndex = 0u; sampleIndex < sampleCount; ++sampleIndex)
+        {
+            const float lower = batch.lowerShares[sampleIndex];
+            const float upper = batch.upperShares[sampleIndex];
+            if (upper <= lower)
+            {
+                continue;
+            }
+            const size_t topRow = std::min(kRasterRows,
+                                           static_cast<size_t>(std::floor((1.0f - std::clamp(upper, 0.0f, 1.0f)) * kRasterRows)));
+            const size_t bottomRow = std::min(kRasterRows,
+                                              static_cast<size_t>(std::ceil((1.0f - std::clamp(lower, 0.0f, 1.0f)) * kRasterRows)));
+            for (size_t row = topRow; row < bottomRow; ++row)
+            {
+                pixels[row * sampleCount + sampleIndex] = colorPixel;
+            }
+        }
+        metrics.quadCount += sampleCount - 1u;
+    }
+
+    const D2D1_BITMAP_PROPERTIES bitmapProperties =
+        D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96.0f, 96.0f);
+    wil::com_ptr<ID2D1Bitmap> bandBitmap;
+    if (FAILED(target->CreateBitmap(D2D1::SizeU(static_cast<UINT32>(sampleCount), static_cast<UINT32>(kRasterRows)),
+                                    pixels.data(),
+                                    static_cast<UINT32>(sampleCount * sizeof(uint32_t)),
+                                    &bitmapProperties,
+                                    bandBitmap.addressof())) ||
+        ! bandBitmap)
+    {
+        return finish();
+    }
+    const wil::com_ptr<ID2D1PathGeometry> areaGeometry =
+        CreateThroughputGraphAreaGeometry(target, bounds, samples.first(sampleCount), displayedLatestValue, maximum);
+    if (! areaGeometry)
+    {
+        return finish();
+    }
+    wil::com_ptr<ID2D1Layer> layer;
+    if (FAILED(target->CreateLayer(layer.addressof())) || ! layer)
+    {
+        return finish();
+    }
+    const D2D1_LAYER_PARAMETERS layerParameters = D2D1::LayerParameters(bounds, areaGeometry.get());
+    target->PushLayer(layerParameters, layer.get());
+    target->DrawBitmap(bandBitmap.get(), bounds, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR);
+    target->PopLayer();
+    metrics.geometryCount = 1u;
+    return finish();
+}
+
+void ThroughputGraph::SetSamples(std::span<const ThroughputGraphSample> samples)
+{
+    const double previousTarget = _targetLatestValue;
+    const size_t retainedCount = std::min(samples.size(), ThroughputGraphSample::kMaxSamples);
+    _samples.assign(samples.end() - static_cast<std::ptrdiff_t>(retainedCount), samples.end());
+    _targetLatestValue = _samples.empty() ? 0.0 : std::max(0.0, _samples.back().value);
+
+    WindowHost* const host = GetHost();
+    const bool targetChanged = previousTarget != _targetLatestValue;
+    if (host && ! host->GetTheme().reducedMotion && !_samples.empty() && targetChanged)
+    {
+        _transitionStartValue  = _displayedLatestValue;
+        _transitionStartTickMs = 0u;
+        _transitionActive      = true;
+        host->RequestAnimation();
+    }
+    else if (! _transitionActive || ! host || host->GetTheme().reducedMotion || _samples.empty())
+    {
+        _displayedLatestValue = _targetLatestValue;
+        _transitionActive     = false;
+    }
+    RequestInvalidate();
+}
+
+void ThroughputGraph::SetSecondarySamples(std::span<const double> samples)
+{
+    const size_t retainedCount = std::min(samples.size(), ThroughputGraphSample::kMaxSamples);
+    _secondarySamples.assign(samples.end() - static_cast<std::ptrdiff_t>(retainedCount), samples.end());
+    for (double& sample : _secondarySamples)
+    {
+        sample = std::max(0.0, sample);
+    }
+    RequestInvalidate();
+}
+
+void ThroughputGraph::SetSecondarySeriesColor(D2D1_COLOR_F color) noexcept
+{
+    _secondarySeriesColor = color;
+    RequestInvalidate();
+}
+
+void ThroughputGraph::SetLimit(double value) noexcept
+{
+    _limit = std::max(0.0, value);
+    RequestInvalidate();
+}
+
+void ThroughputGraph::SetCurrentValueMarker(double value, std::wstring label, std::wstring trailingLabel)
+{
+    const double nextTarget          = std::max(0.0, value);
+    _currentValueLabel               = std::move(label);
+    _currentValueTrailingLabel       = std::move(trailingLabel);
+
+    WindowHost* const host   = GetHost();
+    const bool targetChanged = _targetCurrentValue != nextTarget;
+    _targetCurrentValue      = nextTarget;
+    if (host && ! host->GetTheme().reducedMotion && targetChanged)
+    {
+        _currentValueTransitionStart       = _displayedCurrentValue;
+        _currentValueTransitionStartTickMs = 0u;
+        _currentValueTransitionActive      = true;
+        host->RequestAnimation();
+    }
+    else if (! _currentValueTransitionActive || ! host || host->GetTheme().reducedMotion)
+    {
+        _displayedCurrentValue        = _targetCurrentValue;
+        _currentValueTransitionActive = false;
+    }
+    RequestInvalidate();
+}
+
+void ThroughputGraph::SetOverlayText(std::wstring text)
+{
+    _overlayText = std::move(text);
+    RequestInvalidate();
+}
+
+void ThroughputGraph::SetRainbowMode(bool enabled) noexcept
+{
+    _rainbowMode = enabled;
+    RequestInvalidate();
+}
+
+void ThroughputGraph::SetPerStreamBands(bool enabled) noexcept
+{
+    _perStreamBands = enabled;
+    RequestInvalidate();
+}
+
+void ThroughputGraph::SetTransitionDuration(uint64_t durationMs) noexcept
+{
+    _transitionDurationMs = std::max<uint64_t>(1u, durationMs);
+}
+
+ThroughputGraphDebugState ThroughputGraph::GetDebugState() const noexcept
+{
+    ThroughputGraphDebugState state{};
+    state.sampleCount          = _samples.size();
+    state.usesRainbowStroke    = _rainbowMode && ! _lastHighContrast;
+    state.renderedQuadCount     = _lastBandPaintMetrics.quadCount;
+    state.renderedGeometryCount = _lastBandPaintMetrics.geometryCount;
+    state.activeColorSlotCount  = _lastBandPaintMetrics.activeColorSlotCount;
+    state.bandsActive           = _lastBandPaintMetrics.bandsActive;
+    state.transitionActive     = _transitionActive;
+    state.reducedMotion        = _lastReducedMotion;
+    state.highContrast         = _lastHighContrast;
+    state.bandRenderDurationUs = _lastBandPaintMetrics.renderDurationUs;
+    state.bandFillAlpha        = _lastBandPaintMetrics.fillAlpha;
+    state.displayedLatestValue = _displayedLatestValue;
+    state.targetLatestValue    = _targetLatestValue;
+    state.currentValueMarkerVisible        = _displayedCurrentValue > 0.0 || _targetCurrentValue > 0.0;
+    state.secondarySeriesVisible           = std::ranges::any_of(_secondarySamples, [](double value) noexcept { return value > 0.0; });
+    state.secondarySeriesColorCustomized   = _secondarySeriesColor.has_value();
+    state.currentValueTrailingLabelVisible = !_currentValueTrailingLabel.empty();
+    state.displayedCurrentValue            = _displayedCurrentValue;
+    state.targetCurrentValue               = _targetCurrentValue;
+    for (const auto& sample : _samples)
+    {
+        state.hueBandCount += std::min(sample.hueWeightCount, sample.hueWeights.size());
+    }
+    return state;
+}
+
+void ThroughputGraph::Paint(WindowHost& host) const
+{
+    const ThemePalette& palette = host.GetTheme();
+    _lastReducedMotion          = palette.reducedMotion;
+    _lastHighContrast           = palette.highContrast;
+    _lastBandPaintMetrics       = {};
+
+    auto* context = host.GetDeviceContext();
+    if (! context)
+    {
+        return;
+    }
+
+    const D2D1_RECT_F bounds    = GetBounds();
+    if (bounds.right <= bounds.left || bounds.bottom <= bounds.top)
+    {
+        return;
+    }
+
+    if (auto* background = host.GetSolidBrush(palette.surfaceBackground))
+    {
+        context->FillRectangle(bounds, background);
+    }
+    if (auto* grid = host.GetSolidBrush(palette.gridLine))
+    {
+        for (int line = 1; line < 4; ++line)
+        {
+            const float y = bounds.top + (bounds.bottom - bounds.top) * static_cast<float>(line) / 4.0f;
+            context->DrawLine(D2D1::Point2F(bounds.left, y), D2D1::Point2F(bounds.right, y), grid, 0.75f);
+        }
+    }
+
+    double observedMaximum = 0.0;
+    for (const auto& sample : _samples)
+    {
+        observedMaximum = std::max(observedMaximum, std::max(0.0, sample.value));
+    }
+    for (const double sample : _secondarySamples)
+    {
+        observedMaximum = std::max(observedMaximum, sample);
+    }
+    observedMaximum = std::max(observedMaximum, _displayedLatestValue);
+    observedMaximum = std::max(observedMaximum, _displayedCurrentValue);
+    observedMaximum = std::max(observedMaximum, _targetCurrentValue);
+    const bool currentValueMarkerVisible = _displayedCurrentValue > 0.0 || _targetCurrentValue > 0.0;
+    const double graphMaximum            = currentValueMarkerVisible ? observedMaximum * 1.10 : observedMaximum;
+    const double maximum                 = std::max({1.0, _limit, graphMaximum});
+
+    if (_limit > 0.0 && _limit <= maximum)
+    {
+        const float y = bounds.bottom - static_cast<float>(_limit / maximum) * (bounds.bottom - bounds.top);
+        if (auto* limitBrush = host.GetSolidBrush(palette.warningText))
+        {
+            context->DrawLine(D2D1::Point2F(bounds.left, y), D2D1::Point2F(bounds.right, y), limitBrush, 1.0f);
+        }
+    }
+
+    if (!_samples.empty())
+    {
+        const float step = _samples.size() > 1u ? (bounds.right - bounds.left) / static_cast<float>(_samples.size() - 1u) : 0.0f;
+        if (_perStreamBands || _rainbowMode)
+        {
+            D2D1_COLOR_F bandFillColor = palette.accent;
+            bandFillColor.a = palette.highContrast ? 0.32f : (palette.dark ? 0.22f : 0.18f);
+            _lastBandPaintMetrics = PaintThroughputGraphBands(context,
+                                                              bounds,
+                                                              _samples,
+                                                              _displayedLatestValue,
+                                                              maximum,
+                                                              ThroughputGraphBandPaintOptions{
+                                                                  .baseFillColor = bandFillColor,
+                                                                  .rainbowMode = _rainbowMode,
+                                                                  .perStreamBands = _perStreamBands,
+                                                                  .highContrast = palette.highContrast,
+                                                                  .dark = palette.dark,
+                                                              });
+        }
+
+        if (_samples.size() > 1u)
+        {
+            for (size_t index = 1u; index < _samples.size(); ++index)
+            {
+                const auto& previous = _samples[index - 1u];
+                const auto& current  = _samples[index];
+                const double previousValue = std::max(0.0, previous.value);
+                const double currentValue  = index + 1u == _samples.size() ? _displayedLatestValue : std::max(0.0, current.value);
+                const D2D1_POINT_2F from = D2D1::Point2F(bounds.left + step * static_cast<float>(index - 1u),
+                                                         bounds.bottom - static_cast<float>(previousValue / maximum) * (bounds.bottom - bounds.top));
+                const D2D1_POINT_2F to = D2D1::Point2F(bounds.left + step * static_cast<float>(index),
+                                                       bounds.bottom - static_cast<float>(currentValue / maximum) * (bounds.bottom - bounds.top));
+                const bool useRainbow = _rainbowMode && ! palette.highContrast && current.hueDegrees >= 0.0f;
+                const D2D1_COLOR_F color = useRainbow ? ThroughputGraphColorFromHue(current.hueDegrees, palette.dark) : palette.accent;
+                if (auto* brush = host.GetSolidBrush(color))
+                {
+                    context->DrawLine(from, to, brush, 2.0f);
+                }
+            }
+        }
+    }
+
+    if (_secondarySamples.size() > 1u)
+    {
+        const float secondaryStep = (bounds.right - bounds.left) / static_cast<float>(_secondarySamples.size() - 1u);
+        const D2D1_COLOR_F secondaryColor = _secondarySeriesColor.value_or(palette.warningText);
+        if (auto* secondaryBrush = host.GetSolidBrush(secondaryColor))
+        {
+            for (size_t index = 1u; index < _secondarySamples.size(); ++index)
+            {
+                const double previousValue = _secondarySamples[index - 1u];
+                const double currentValue = _secondarySamples[index];
+                const D2D1_POINT_2F from = D2D1::Point2F(
+                    bounds.left + secondaryStep * static_cast<float>(index - 1u),
+                    bounds.bottom - static_cast<float>(previousValue / maximum) * (bounds.bottom - bounds.top));
+                const D2D1_POINT_2F to = D2D1::Point2F(
+                    bounds.left + secondaryStep * static_cast<float>(index),
+                    bounds.bottom - static_cast<float>(currentValue / maximum) * (bounds.bottom - bounds.top));
+                context->DrawLine(from, to, secondaryBrush, 1.5f);
+            }
+        }
+    }
+
+    if (currentValueMarkerVisible && maximum > 0.0)
+    {
+        const float y = bounds.bottom - static_cast<float>(_displayedCurrentValue / maximum) * (bounds.bottom - bounds.top);
+        if (auto* markerBrush = host.GetSolidBrush(palette.disabledText))
+        {
+            context->DrawLine(D2D1::Point2F(bounds.left, y), D2D1::Point2F(bounds.right, y), markerBrush, 1.0f);
+        }
+
+        if (!_currentValueLabel.empty())
+        {
+            constexpr float kLabelInsetDip = 6.0f;
+            constexpr float kLabelGapDip   = 8.0f;
+            const float labelCenter         = (bounds.left + bounds.right) * 0.5f;
+            const bool hasTrailingLabel     = !_currentValueTrailingLabel.empty();
+            const D2D1_RECT_F leadingBounds = D2D1::RectF(bounds.left + kLabelInsetDip,
+                                                          bounds.top + 3.0f,
+                                                          hasTrailingLabel ? labelCenter - kLabelGapDip * 0.5f : bounds.right - kLabelInsetDip,
+                                                          bounds.bottom);
+            if (auto* format = host.GetTextFormat(FontRole::Small,
+                                                  DWRITE_TEXT_ALIGNMENT_LEADING,
+                                                  DWRITE_PARAGRAPH_ALIGNMENT_NEAR,
+                                                  false))
+            {
+                if (auto* textBrush = host.GetSolidBrush(palette.text))
+                {
+                    context->DrawTextW(_currentValueLabel.data(),
+                                       static_cast<UINT32>(_currentValueLabel.size()),
+                                       format,
+                                       leadingBounds,
+                                       textBrush,
+                                       D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                }
+            }
+
+            if (hasTrailingLabel)
+            {
+                if (auto* format = host.GetTextFormat(FontRole::Small,
+                                                      DWRITE_TEXT_ALIGNMENT_TRAILING,
+                                                      DWRITE_PARAGRAPH_ALIGNMENT_NEAR,
+                                                      false))
+                {
+                    if (auto* textBrush = host.GetSolidBrush(palette.text))
+                    {
+                        const D2D1_RECT_F trailingBounds = D2D1::RectF(labelCenter + kLabelGapDip * 0.5f,
+                                                                      bounds.top + 3.0f,
+                                                                      bounds.right - kLabelInsetDip,
+                                                                      bounds.bottom);
+                        context->DrawTextW(_currentValueTrailingLabel.data(),
+                                           static_cast<UINT32>(_currentValueTrailingLabel.size()),
+                                           format,
+                                           trailingBounds,
+                                           textBrush,
+                                           D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                    }
+                }
+            }
+        }
+    }
+
+    if (!_overlayText.empty())
+    {
+        if (auto* format = host.GetTextFormat(FontRole::Small,
+                                              DWRITE_TEXT_ALIGNMENT_CENTER,
+                                              DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
+                                              false))
+        {
+            if (auto* textBrush = host.GetSolidBrush(palette.text))
+            {
+                context->DrawTextW(_overlayText.data(), static_cast<UINT32>(_overlayText.size()), format, bounds, textBrush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+            }
+        }
+    }
+}
+
+bool ThroughputGraph::Tick(WindowHost& host, uint64_t nowTickMs)
+{
+    if (!_transitionActive && !_currentValueTransitionActive)
+    {
+        return false;
+    }
+    if (host.GetTheme().reducedMotion)
+    {
+        _displayedLatestValue          = _targetLatestValue;
+        _displayedCurrentValue         = _targetCurrentValue;
+        _transitionActive              = false;
+        _currentValueTransitionActive = false;
+        Invalidate(host);
+        return false;
+    }
+
+    const auto advanceTransition = [nowTickMs, this](double startValue,
+                                                     double targetValue,
+                                                     uint64_t& startTickMs,
+                                                     double& displayedValue,
+                                                     bool& active) noexcept
+    {
+        if (! active)
+        {
+            return;
+        }
+        if (startTickMs == 0u)
+        {
+            startTickMs = nowTickMs;
+        }
+        const uint64_t elapsed = nowTickMs >= startTickMs ? nowTickMs - startTickMs : 0u;
+        const double linear    = std::clamp(static_cast<double>(elapsed) / static_cast<double>(_transitionDurationMs), 0.0, 1.0);
+        const double eased     = 1.0 - std::pow(1.0 - linear, 3.0);
+        displayedValue         = startValue + (targetValue - startValue) * eased;
+        active                 = linear < 1.0;
+    };
+
+    advanceTransition(_transitionStartValue, _targetLatestValue, _transitionStartTickMs, _displayedLatestValue, _transitionActive);
+    advanceTransition(_currentValueTransitionStart,
+                      _targetCurrentValue,
+                      _currentValueTransitionStartTickMs,
+                      _displayedCurrentValue,
+                      _currentValueTransitionActive);
+    Invalidate(host);
+    return _transitionActive || _currentValueTransitionActive;
 }
 
 void Slider::SetOrientation(SliderOrientation orientation) noexcept
@@ -4844,6 +5863,19 @@ void TabControl::RemoveTab(size_t index) noexcept
         {
             _selectedIndex = _tabs.size() - 1u;
         }
+
+        if (! _tabs[_selectedIndex.value()].visible)
+        {
+            _selectedIndex.reset();
+            for (size_t candidate = 0u; candidate < _tabs.size(); ++candidate)
+            {
+                if (_tabs[candidate].visible)
+                {
+                    _selectedIndex = candidate;
+                    break;
+                }
+            }
+        }
     }
 
     SyncLayout();
@@ -4905,16 +5937,103 @@ bool TabControl::IsTabClosable(size_t index) const noexcept
     return index < _tabs.size() && _tabs[index].closable;
 }
 
+void TabControl::SetTabVisible(size_t index, bool visible) noexcept
+{
+    if (index >= _tabs.size() || _tabs[index].visible == visible)
+    {
+        return;
+    }
+
+    _tabs[index].visible = visible;
+    if (! visible)
+    {
+        if (_hoveredTabIndex == index)
+        {
+            _hoveredTabIndex.reset();
+        }
+        if (_pressedTabIndex == index)
+        {
+            _pressedTabIndex.reset();
+        }
+        if (_closePressedIndex == index)
+        {
+            _closePressedIndex.reset();
+        }
+        if (_draggingTabIndex == index)
+        {
+            _draggingTabIndex.reset();
+            _dragReordering = false;
+        }
+    }
+
+    if (_selectedIndex == index && ! visible)
+    {
+        _selectedIndex.reset();
+        for (size_t candidate = 0u; candidate < _tabs.size(); ++candidate)
+        {
+            if (_tabs[candidate].visible)
+            {
+                _selectedIndex = candidate;
+                break;
+            }
+        }
+    }
+    else if (! _selectedIndex.has_value() && visible)
+    {
+        _selectedIndex = index;
+    }
+
+    InvalidateTabHeaderLayoutCache();
+    SyncLayout();
+}
+
+bool TabControl::IsTabVisible(size_t index) const noexcept
+{
+    return index < _tabs.size() && _tabs[index].visible;
+}
+
+void TabControl::SetTabReorderingEnabled(bool enabled) noexcept
+{
+    if (_tabReorderingEnabled == enabled)
+    {
+        return;
+    }
+    _tabReorderingEnabled = enabled;
+    if (! enabled)
+    {
+        _draggingTabIndex.reset();
+        _dragReordering = false;
+    }
+}
+
+bool TabControl::IsTabReorderingEnabled() const noexcept
+{
+    return _tabReorderingEnabled;
+}
+
 size_t TabControl::GetTabCount() const noexcept
 {
     return _tabs.size();
 }
 
+size_t TabControl::GetVisibleTabCount() const noexcept
+{
+    return static_cast<size_t>(std::count_if(_tabs.begin(), _tabs.end(), [](const TabItem& tab) noexcept { return tab.visible; }));
+}
+
 void TabControl::SetSelectedIndex(std::optional<size_t> index) noexcept
 {
-    if (index.has_value() && index.value() >= _tabs.size())
+    if (index.has_value() && (index.value() >= _tabs.size() || ! _tabs[index.value()].visible))
     {
-        index = _tabs.empty() ? std::nullopt : std::optional<size_t>{_tabs.size() - 1u};
+        index.reset();
+        for (size_t candidate = _tabs.size(); candidate > 0u; --candidate)
+        {
+            if (_tabs[candidate - 1u].visible)
+            {
+                index = candidate - 1u;
+                break;
+            }
+        }
     }
 
     if (_selectedIndex == index)
@@ -4958,6 +6077,11 @@ void TabControl::SetOnTabClosed(std::function<void(size_t)> onTabClosed)
     _onTabClosed = std::move(onTabClosed);
 }
 
+void TabControl::SetOnTabReordered(std::function<void(size_t, size_t)> onTabReordered)
+{
+    _onTabReordered = std::move(onTabReordered);
+}
+
 D2D1_RECT_F TabControl::GetHeaderRect() const noexcept
 {
     const D2D1_RECT_F bounds = GetBounds();
@@ -4995,7 +6119,7 @@ bool TabControl::NeedsOverflowButtons() const noexcept
 D2D1_RECT_F TabControl::GetHeaderDividerRect() const noexcept
 {
     const D2D1_RECT_F contentRect = GetContentRect();
-    if (_tabs.empty() || contentRect.right <= contentRect.left)
+    if (GetVisibleTabCount() == 0u || contentRect.right <= contentRect.left)
     {
         return D2D1::RectF();
     }
@@ -5089,14 +6213,19 @@ const TabControl::TabHeaderLayoutCache& TabControl::EnsureTabHeaderLayoutCache()
     layout.tabWidthsDip.reserve(_tabs.size());
     layout.tabRects.reserve(_tabs.size());
 
+    size_t visibleTabCount = 0u;
     for (size_t index = 0u; index < _tabs.size(); ++index)
     {
-        const float widthDip = MeasureTabWidthDip(index);
+        const float widthDip = _tabs[index].visible ? MeasureTabWidthDip(index) : 0.0f;
         layout.tabWidthsDip.push_back(widthDip);
-        layout.totalTabWidthDip += widthDip;
-        if (index + 1u < _tabs.size())
+        if (widthDip > 0.0f)
         {
-            layout.totalTabWidthDip += kTabHeaderGapDip;
+            if (visibleTabCount != 0u)
+            {
+                layout.totalTabWidthDip += kTabHeaderGapDip;
+            }
+            layout.totalTabWidthDip += widthDip;
+            ++visibleTabCount;
         }
     }
 
@@ -5126,6 +6255,11 @@ const TabControl::TabHeaderLayoutCache& TabControl::EnsureTabHeaderLayoutCache()
             float cursor = layout.viewportRightDip + _headerScrollOffsetDip;
             for (float widthDip : layout.tabWidthsDip)
             {
+                if (widthDip <= 0.0f)
+                {
+                    layout.tabRects.push_back(D2D1::RectF());
+                    continue;
+                }
                 const D2D1_RECT_F rect = D2D1::RectF(cursor - widthDip, top, cursor, bottom);
                 layout.tabRects.push_back(rect);
                 cursor = rect.left - kTabHeaderGapDip;
@@ -5136,6 +6270,11 @@ const TabControl::TabHeaderLayoutCache& TabControl::EnsureTabHeaderLayoutCache()
             float cursor = layout.viewportLeftDip - _headerScrollOffsetDip;
             for (float widthDip : layout.tabWidthsDip)
             {
+                if (widthDip <= 0.0f)
+                {
+                    layout.tabRects.push_back(D2D1::RectF());
+                    continue;
+                }
                 const D2D1_RECT_F rect = D2D1::RectF(cursor, top, cursor + widthDip, bottom);
                 layout.tabRects.push_back(rect);
                 cursor = rect.right + kTabHeaderGapDip;
@@ -5154,9 +6293,9 @@ const TabControl::TabHeaderLayoutCache& TabControl::EnsureTabHeaderLayoutCache()
 
 float TabControl::MeasureTabWidthDip(size_t index) const noexcept
 {
-    if (index >= _tabs.size())
+    if (index >= _tabs.size() || ! _tabs[index].visible)
     {
-        return kTabHeaderMinWidthDip;
+        return 0.0f;
     }
 
     const WindowHost* host   = GetHost();
@@ -5193,7 +6332,7 @@ D2D1_RECT_F TabControl::GetTabRect(size_t index) const noexcept
 
 D2D1_RECT_F TabControl::GetCloseButtonRect(size_t index) const noexcept
 {
-    if (index >= _tabs.size() || ! _tabs[index].closable)
+    if (index >= _tabs.size() || ! _tabs[index].visible || ! _tabs[index].closable)
     {
         return D2D1::RectF();
     }
@@ -5206,7 +6345,7 @@ D2D1_RECT_F TabControl::GetCloseButtonRect(size_t index) const noexcept
 
 bool TabControl::IsCloseButtonVisible(size_t index) const noexcept
 {
-    if (index >= _tabs.size() || ! _tabs[index].closable)
+    if (index >= _tabs.size() || ! _tabs[index].visible || ! _tabs[index].closable)
     {
         return false;
     }
@@ -5305,7 +6444,7 @@ void TabControl::UpdateVisiblePageBounds() noexcept
             continue;
         }
 
-        const bool visible = _selectedIndex.has_value() && _selectedIndex.value() == index;
+        const bool visible = index < _tabs.size() && _tabs[index].visible && _selectedIndex.has_value() && _selectedIndex.value() == index;
         if (visible)
         {
             children[index]->SetBounds(contentRect);
@@ -5334,7 +6473,7 @@ void TabControl::SyncLayout() noexcept
 
 void TabControl::SelectTab(WindowHost& host, size_t index, bool focusSelf) noexcept
 {
-    if (index >= _tabs.size())
+    if (index >= _tabs.size() || ! _tabs[index].visible)
     {
         return;
     }
@@ -5441,7 +6580,7 @@ void TabControl::ReorderTab(size_t fromIndex, size_t toIndex) noexcept
 
 void TabControl::UpdateDragReorder(WindowHost& host, D2D1_POINT_2F point) noexcept
 {
-    if (! _draggingTabIndex.has_value())
+    if (! _tabReorderingEnabled || ! _draggingTabIndex.has_value())
     {
         return;
     }
@@ -5449,7 +6588,7 @@ void TabControl::UpdateDragReorder(WindowHost& host, D2D1_POINT_2F point) noexce
     const size_t dragIndex = _draggingTabIndex.value();
     for (size_t index = 0u; index < _tabs.size(); ++index)
     {
-        if (index == dragIndex)
+        if (index == dragIndex || ! _tabs[index].visible)
         {
             continue;
         }
@@ -5462,6 +6601,11 @@ void TabControl::UpdateDragReorder(WindowHost& host, D2D1_POINT_2F point) noexce
             _draggingTabIndex = index;
             SyncLayout();
             Invalidate(host);
+            const std::function<void(size_t, size_t)> onTabReordered = _onTabReordered;
+            if (onTabReordered)
+            {
+                onTabReordered(dragIndex, index);
+            }
             return;
         }
     }
@@ -5583,6 +6727,10 @@ void TabControl::Paint(WindowHost& host) const
     dc->PushAxisAlignedClip(clipRect, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     for (size_t index = 0u; index < _tabs.size(); ++index)
     {
+        if (! _tabs[index].visible)
+        {
+            continue;
+        }
         const D2D1_RECT_F tabRect         = GetTabRect(index);
         const bool selected               = _selectedIndex.has_value() && _selectedIndex.value() == index;
         const bool hovered                = _hoveredTabIndex.has_value() && _hoveredTabIndex.value() == index;
@@ -5675,10 +6823,13 @@ bool TabControl::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightBu
         case HeaderPart::Tab:
             SelectTab(host, hit.index, IsFocusable());
             host.CaptureMouse(this);
-            _pressedTabIndex  = hit.index;
-            _draggingTabIndex = hit.index;
-            _dragStartPoint   = point;
-            _dragReordering   = false;
+            _pressedTabIndex = hit.index;
+            if (_tabReorderingEnabled)
+            {
+                _draggingTabIndex = hit.index;
+                _dragStartPoint   = point;
+                _dragReordering   = false;
+            }
             return true;
     }
 
@@ -5709,7 +6860,7 @@ bool TabControl::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modif
         Invalidate(host);
     }
 
-    if (_draggingTabIndex.has_value())
+    if (_tabReorderingEnabled && _draggingTabIndex.has_value())
     {
         if (! _dragReordering && std::fabs(point.x - _dragStartPoint.x) >= 6.0f)
         {
@@ -5800,19 +6951,54 @@ bool TabControl::OnMouseWheel(WindowHost& host, D2D1_POINT_2F point, float wheel
 
 bool TabControl::OnKeyDown(WindowHost& host, UINT virtualKey, UINT /*modifiers*/)
 {
-    if (_tabs.empty())
+    if (GetVisibleTabCount() == 0u)
     {
         return false;
     }
 
     const bool rightToLeft = IsRightToLeft();
-    const auto current     = _selectedIndex.value_or(0u);
+    const size_t current   = _selectedIndex.value_or(0u);
+    const auto findVisible = [this](size_t start, int direction) noexcept -> size_t
+    {
+        size_t candidate = start;
+        do
+        {
+            candidate = direction > 0 ? ((candidate + 1u) % _tabs.size()) : ((candidate + _tabs.size() - 1u) % _tabs.size());
+            if (_tabs[candidate].visible)
+            {
+                return candidate;
+            }
+        } while (candidate != start);
+        return start;
+    };
+    const auto firstVisible = [this]() noexcept -> size_t
+    {
+        for (size_t index = 0u; index < _tabs.size(); ++index)
+        {
+            if (_tabs[index].visible)
+            {
+                return index;
+            }
+        }
+        return 0u;
+    };
+    const auto lastVisible = [this]() noexcept -> size_t
+    {
+        for (size_t index = _tabs.size(); index > 0u; --index)
+        {
+            if (_tabs[index - 1u].visible)
+            {
+                return index - 1u;
+            }
+        }
+        return 0u;
+    };
     switch (virtualKey)
     {
-        case VK_HOME: SelectTab(host, 0u, true); return true;
-        case VK_END: SelectTab(host, _tabs.size() - 1u, true); return true;
-        case VK_LEFT: SelectTab(host, rightToLeft ? ((current + 1u) % _tabs.size()) : ((current + _tabs.size() - 1u) % _tabs.size()), true); return true;
-        case VK_RIGHT: SelectTab(host, rightToLeft ? ((current + _tabs.size() - 1u) % _tabs.size()) : ((current + 1u) % _tabs.size()), true); return true;
+        case VK_HOME: SelectTab(host, firstVisible(), true); return true;
+        case VK_END: SelectTab(host, lastVisible(), true); return true;
+        case VK_LEFT: SelectTab(host, findVisible(current, rightToLeft ? 1 : -1), true); return true;
+        case VK_RIGHT: SelectTab(host, findVisible(current, rightToLeft ? -1 : 1), true); return true;
         default: return false;
     }
 }
@@ -7216,12 +8402,20 @@ bool TooltipLayer::SetTooltipDelayed(std::wstring text, const D2D1_POINT_2F& ori
         return Clear();
     }
 
-    if (HasTooltip() && _text == text && TooltipPointsMatch(_originDip, originDip) && ! _hideScheduled)
+    if (HasTooltip() && _text == text)
     {
-        return false;
+        if (TooltipPointsMatch(_originDip, originDip))
+        {
+            return false;
+        }
+        _originDip = originDip;
+        InvalidateLayoutCache();
+        return true;
     }
 
-    const uint64_t nextShowTickMs = nowTickMs + delayMs;
+    const uint64_t nextShowTickMs = delayMs > (std::numeric_limits<uint64_t>::max)() - nowTickMs
+                                        ? (std::numeric_limits<uint64_t>::max)()
+                                        : nowTickMs + delayMs;
     if (_showScheduled && _pendingText == text)
     {
         if (! TooltipPointsMatch(_pendingOriginDip, originDip))
@@ -7338,7 +8532,13 @@ bool TooltipLayer::Tick(WindowHost& host, uint64_t nowTickMs)
         _pendingText.clear();
         _showScheduled = false;
         _showTickMs    = 0u;
-        return SetTooltip(std::move(text), originDip);
+        const bool changed = SetTooltip(std::move(text), originDip);
+        constexpr uint64_t kTooltipDisplayDurationMs = 5000u;
+        _hideScheduled = true;
+        _hideTickMs    = kTooltipDisplayDurationMs > (std::numeric_limits<uint64_t>::max)() - nowTickMs
+                             ? (std::numeric_limits<uint64_t>::max)()
+                             : nowTickMs + kTooltipDisplayDurationMs;
+        return changed;
     }
 
     if (! _hideScheduled)

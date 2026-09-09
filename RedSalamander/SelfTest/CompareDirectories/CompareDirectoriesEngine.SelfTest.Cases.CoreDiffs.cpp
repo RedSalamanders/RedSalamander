@@ -1,5 +1,91 @@
 SelfTest::RunCase(options,
                   suite,
+                  L"host_services_startup_selection",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    const auto started                                      = std::chrono::steady_clock::now();
+    constexpr std::pair<std::wstring_view, bool> selections[] = {
+        {L"", true},
+        {L"unique", false},
+        {L"host_services_startup_selection", false},
+        {L"host_services_startup_context", true},
+        {L"remote_file_smb", false},
+        {L"remote_file_ftp", true},
+        {L"REMOTE_FILE_SFTP", true},
+        {L"remote_file_scp", true},
+        {L"remote_file_imap", true},
+        {L"remote_file_s3", true},
+        {L"remote_", true},
+        {L"host_fallback_search_remote_ftp_name_only", true},
+        {L"windows_hello_cache", true},
+        {L"oauth_refresh_token_storage", true},
+        {L"google_drive_cleared_client_id_requires_configuration", true},
+        {L"google_drive_connection_requires_refresh_token", true},
+        {L"onedrive_personal_cleared_client_id_requires_configuration", true},
+        {L"unique, remote_file_sftp", true},
+        {L"unique, remote_file_smb", false},
+        {L"unique, remote_", false}, // Comma-separated filters contain exact names.
+        {L"remote_file_nonexistent", false},
+    };
+    for (const auto& [filter, expected] : selections)
+    {
+        SelfTest::SelfTestOptions selected{};
+        selected.caseFilter = filter;
+        state.Require(CompareDirectoriesSelfTest::RequiresHostServices(selected) == expected,
+                      std::format(L"Unexpected host startup policy for filter '{}'.", filter));
+    }
+    SelfTest::CaseState missingHost;
+    state.Require(FailIfHostConnectionUiUnavailable(missingHost, HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE), L"host policy control") &&
+                      ! missingHost.failure.empty() && missingHost.skipped.empty(),
+                  L"Missing required host must fail, never skip.");
+    SelfTest::CaseState availableHost;
+    state.Require(! FailIfHostConnectionUiUnavailable(availableHost, S_OK, L"host policy control") && availableHost.failure.empty() &&
+                      availableHost.skipped.empty(),
+                  L"Available host must not be classified as a failure or skip.");
+    Debug::Perf::Emit(L"compare.selftest.host_selection",
+                      L"declared-case-filter-policy",
+                      Debug::Perf::ElapsedUs(started),
+                      std::size(selections),
+                      2u,
+                      state.failure.empty() ? S_OK : E_FAIL);
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"host_services_startup_context",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    const auto started = std::chrono::steady_clock::now();
+    wil::com_ptr<IHostConnections> connections;
+    const HRESULT queryHr = GetHostServices()->QueryInterface(IID_PPV_ARGS(connections.put()));
+    state.Require(SUCCEEDED(queryHr) && connections, L"Required connection host interface is unavailable.");
+    if (! connections)
+    {
+        return false;
+    }
+
+    // A unique missing profile proves the real host dispatch reached profile
+    // lookup. It performs no credential access, prompt, or network operation.
+    const std::wstring absentProfile = std::format(L"SelfTest Host Context {}", MakeGuidText());
+#pragma warning(push)
+#pragma warning(disable : 4625 4626) // WIL's first ANSI owner instantiation intentionally deletes copying.
+    wil::unique_cotaskmem_ansistring json;
+#pragma warning(pop)
+    const HRESULT hostHr = connections->GetConnectionJsonUtf8(absentProfile.c_str(), json.put());
+    state.Require(hostHr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND) && ! json,
+                  std::format(L"Required host context did not reach profile lookup. hr=0x{:08X}", static_cast<unsigned long>(hostHr)));
+    Debug::Perf::Emit(L"compare.selftest.host_context",
+                      L"missing-profile;no-secret-or-network",
+                      Debug::Perf::ElapsedUs(started),
+                      1u,
+                      0u,
+                      state.failure.empty() ? S_OK : E_FAIL);
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
                   L"windows_hello_cache",
                   [&](SelfTest::CaseState& state) noexcept
 {
@@ -79,7 +165,7 @@ SelfTest::RunCase(options,
 
     wil::unique_cotaskmem_string secret;
     HRESULT hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_PASSWORD, nullptr, secret.put());
-    if (SkipIfHostConnectionUiUnavailable(state, hr, L"Windows Hello cache"))
+    if (FailIfHostConnectionUiUnavailable(state, hr, L"Windows Hello cache"))
     {
         return true;
     }
@@ -90,7 +176,7 @@ SelfTest::RunCase(options,
 
     wil::unique_cotaskmem_string secret2;
     hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_PASSWORD, nullptr, secret2.put());
-    if (SkipIfHostConnectionUiUnavailable(state, hr, L"Windows Hello cache second read"))
+    if (FailIfHostConnectionUiUnavailable(state, hr, L"Windows Hello cache second read"))
     {
         return true;
     }
@@ -107,7 +193,7 @@ SelfTest::RunCase(options,
 
     wil::unique_cotaskmem_string secretExpired;
     hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_PASSWORD, nullptr, secretExpired.put());
-    if (SkipIfHostConnectionUiUnavailable(state, hr, L"Windows Hello cache expired-auth read"))
+    if (FailIfHostConnectionUiUnavailable(state, hr, L"Windows Hello cache expired-auth read"))
     {
         return true;
     }
@@ -122,7 +208,7 @@ SelfTest::RunCase(options,
 
     wil::unique_cotaskmem_string secret3;
     hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_PASSWORD, nullptr, secret3.put());
-    if (SkipIfHostConnectionUiUnavailable(state, hr, L"Windows Hello cache manual-auth read"))
+    if (FailIfHostConnectionUiUnavailable(state, hr, L"Windows Hello cache manual-auth read"))
     {
         return true;
     }
@@ -204,14 +290,14 @@ SelfTest::RunCase(options,
 
     const std::wstring refreshToken = L"refresh-token-selftest";
     HRESULT hr = hostConnections->SetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, refreshToken.c_str(), TRUE);
-    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token persisted store"))
+    if (FailIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token persisted store"))
     {
         return true;
     }
     state.Require(SUCCEEDED(hr), std::format(L"SetConnectionSecret failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
 
     hr = hostConnections->ClearCachedConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN);
-    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token persisted cache clear"))
+    if (FailIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token persisted cache clear"))
     {
         return true;
     }
@@ -219,7 +305,7 @@ SelfTest::RunCase(options,
 
     wil::unique_cotaskmem_string secret;
     hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, nullptr, secret.put());
-    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token persisted read"))
+    if (FailIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token persisted read"))
     {
         return true;
     }
@@ -229,14 +315,14 @@ SelfTest::RunCase(options,
     state.Require(g_windowsHelloVerifierCalls.load(std::memory_order_relaxed) == 1u, L"Expected Windows Hello to guard persisted refresh tokens.");
 
     hr = hostConnections->DeleteConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, TRUE);
-    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token persisted delete"))
+    if (FailIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token persisted delete"))
     {
         return true;
     }
     state.Require(SUCCEEDED(hr), std::format(L"DeleteConnectionSecret failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
 
     hr = hostConnections->ClearCachedConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN);
-    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token post-delete cache clear"))
+    if (FailIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token post-delete cache clear"))
     {
         return true;
     }
@@ -244,7 +330,7 @@ SelfTest::RunCase(options,
 
     wil::unique_cotaskmem_string missingSecret;
     hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, nullptr, missingSecret.put());
-    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token post-delete read"))
+    if (FailIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token post-delete read"))
     {
         return true;
     }
@@ -253,7 +339,7 @@ SelfTest::RunCase(options,
 
     const std::wstring sessionRefreshToken = L"session-refresh-token";
     hr = hostConnections->SetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, sessionRefreshToken.c_str(), FALSE);
-    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token session store"))
+    if (FailIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token session store"))
     {
         return true;
     }
@@ -261,7 +347,7 @@ SelfTest::RunCase(options,
 
     wil::unique_cotaskmem_string sessionSecret;
     hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, nullptr, sessionSecret.put());
-    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token session read"))
+    if (FailIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token session read"))
     {
         return true;
     }
@@ -270,7 +356,7 @@ SelfTest::RunCase(options,
     SecureClearAndFreeSecret(sessionSecret);
 
     hr = hostConnections->ClearCachedConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN);
-    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token session cache clear"))
+    if (FailIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token session cache clear"))
     {
         return true;
     }
@@ -278,7 +364,7 @@ SelfTest::RunCase(options,
 
     wil::unique_cotaskmem_string sessionMissing;
     hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, nullptr, sessionMissing.put());
-    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token session missing read"))
+    if (FailIfHostConnectionUiUnavailable(state, hr, L"OAuth refresh token session missing read"))
     {
         return true;
     }
@@ -451,7 +537,7 @@ SelfTest::RunCase(options,
     state.Require(configurationView.find("\"pageSize\":321") != std::string_view::npos, L"Google Drive plugin: configuration missing pageSize.");
 
     const char* capabilities = nullptr;
-    hr                       = created.fileSystem->GetCapabilities(&capabilities);
+    hr = created.fileSystem->GetPathCapabilities(L"/", FILESYSTEM_COPY, &capabilities);
     state.Require(SUCCEEDED(hr) && capabilities, std::format(L"Google Drive plugin: GetCapabilities failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     if (FAILED(hr) || ! capabilities)
     {
@@ -459,8 +545,11 @@ SelfTest::RunCase(options,
     }
 
     const std::string_view capabilitiesView(capabilities);
-    state.Require(capabilitiesView.find("\"copy\": false") != std::string_view::npos, L"Google Drive plugin: capabilities should report copy=false.");
-    state.Require(capabilitiesView.find("\"delete\": false") != std::string_view::npos, L"Google Drive plugin: capabilities should report delete=false.");
+    // R0f-GDrive: Google Drive is a full destination (copy, move, delete, rename, recycle, read, write).
+    state.Require(capabilitiesView.find("\"copy\": true") != std::string_view::npos, L"Google Drive plugin: capabilities should report copy=true.");
+    state.Require(capabilitiesView.find("\"delete\": true") != std::string_view::npos, L"Google Drive plugin: capabilities should report delete=true.");
+    state.Require(capabilitiesView.find("\"routeClass\": \"providerWatchdog\"") != std::string_view::npos,
+                  L"Google Drive plugin: capabilities should report the providerWatchdog route class.");
 
     wil::com_ptr<INavigationMenu> navigationMenu;
     hr = created.fileSystem->QueryInterface(IID_PPV_ARGS(navigationMenu.put()));
@@ -516,7 +605,7 @@ SelfTest::RunCase(options,
 
     wil::com_ptr<IFileSystemIO> io;
     const HRESULT ioHr = created.fileSystem->QueryInterface(IID_PPV_ARGS(io.put()));
-    state.Require(ioHr == E_NOINTERFACE && ! io, L"Google Drive plugin: IFileSystemIO should be absent in the current read-only milestone.");
+    state.Require(SUCCEEDED(ioHr) && io, L"Google Drive plugin: IFileSystemIO should be present (R0f-GDrive full destination).");
 
     wil::com_ptr<IFilesInformation> filesInformation;
     hr = created.fileSystem->ReadDirectoryInfo(L"/", filesInformation.put());
@@ -767,7 +856,7 @@ SelfTest::RunCase(options,
     const std::wstring connectionRoot = std::format(L"/@conn:{}/", profile.name);
     wil::com_ptr<IFilesInformation> filesInformation;
     hr = created.fileSystem->ReadDirectoryInfo(connectionRoot.c_str(), filesInformation.put());
-    if (SkipIfHostConnectionUiUnavailable(state, hr, L"Google Drive clientId gate"))
+    if (FailIfHostConnectionUiUnavailable(state, hr, L"Google Drive clientId gate"))
     {
         return true;
     }
@@ -851,7 +940,7 @@ SelfTest::RunCase(options,
     const std::wstring connectionRoot = std::format(L"/@conn:{}/", profile.name);
     wil::com_ptr<IFilesInformation> filesInformation;
     hr = created.fileSystem->ReadDirectoryInfo(connectionRoot.c_str(), filesInformation.put());
-    if (SkipIfHostConnectionUiUnavailable(state, hr, L"Google Drive refresh-token gate"))
+    if (FailIfHostConnectionUiUnavailable(state, hr, L"Google Drive refresh-token gate"))
     {
         return true;
     }
@@ -961,7 +1050,7 @@ SelfTest::RunCase(options,
     const std::wstring connectionRoot = std::format(L"/@conn:{}/", profile.name);
     wil::com_ptr<IFilesInformation> filesInformation;
     hr = created.fileSystem->ReadDirectoryInfo(connectionRoot.c_str(), filesInformation.put());
-    if (SkipIfHostConnectionUiUnavailable(state, hr, L"OneDrive Personal clientId gate"))
+    if (FailIfHostConnectionUiUnavailable(state, hr, L"OneDrive Personal clientId gate"))
     {
         return true;
     }

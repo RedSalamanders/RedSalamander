@@ -343,7 +343,6 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
     }
 
     HostAlertRequest request{};
-    request.version      = 1;
     request.sizeBytes    = sizeof(request);
     request.scope        = HOST_ALERT_SCOPE_WINDOW;
     request.modality     = HOST_ALERT_MODELESS;
@@ -963,7 +962,7 @@ struct MonitorTextViewTheme
                                                                     const std::unordered_map<std::wstring, uint32_t>* overrides,
                                                                     std::wstring_view key) noexcept;
 
-constexpr std::array<std::wstring_view, 65> kKnownColorKeys = {{
+constexpr std::array<std::wstring_view, 67> kKnownColorKeys = {{
     L"app.accent",
     L"window.background",
 
@@ -1021,10 +1020,12 @@ constexpr std::array<std::wstring_view, 65> kKnownColorKeys = {{
     L"fileOps.progressBackground",
     L"fileOps.progressTotal",
     L"fileOps.progressItem",
+    L"fileOps.progressVerify",
     L"fileOps.graphBackground",
     L"fileOps.graphGrid",
     L"fileOps.graphLimit",
     L"fileOps.graphLine",
+    L"fileOps.graphVerify",
     L"fileOps.scrollbarTrack",
     L"fileOps.scrollbarThumb",
 
@@ -1517,6 +1518,10 @@ void RefreshThemesPage(HWND host, PreferencesDialogState& state) noexcept
     {
         return ArgbFromD2DColorF(appTheme.fileOperations.progressItem);
     }
+    if (key == L"fileOps.progressVerify")
+    {
+        return ArgbFromD2DColorF(appTheme.fileOperations.progressVerify);
+    }
     if (key == L"fileOps.graphBackground")
     {
         return ArgbFromD2DColorF(appTheme.fileOperations.graphBackground);
@@ -1532,6 +1537,10 @@ void RefreshThemesPage(HWND host, PreferencesDialogState& state) noexcept
     if (key == L"fileOps.graphLine")
     {
         return ArgbFromD2DColorF(appTheme.fileOperations.graphLine);
+    }
+    if (key == L"fileOps.graphVerify")
+    {
+        return ArgbFromD2DColorF(appTheme.fileOperations.graphVerify);
     }
     if (key == L"fileOps.scrollbarTrack")
     {

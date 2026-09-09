@@ -19,6 +19,7 @@ namespace SettingsHotReload
 struct SettingsFileChangedPayload
 {
     ULONGLONG tickCount = 0;
+    uint64_t sessionGeneration = 0;
 };
 
 enum class ChangedSettingsStatus : uint8_t
@@ -84,6 +85,7 @@ HRESULT QueueSettingsSave(std::wstring_view appId,
 bool FlushQueuedSettingsSaves(DWORD timeoutMs) noexcept;
 
 ChangedSettingsLoadResult TryLoadChangedSettings() noexcept;
+ChangedSettingsLoadResult TryLoadChangedSettingsForNotification(const SettingsFileChangedPayload& notification) noexcept;
 void MarkAppliedStamp(const Common::Settings::SettingsFileStamp& stamp) noexcept;
 void MarkRejectedStamp(const Common::Settings::SettingsFileStamp& stamp) noexcept;
 
@@ -121,5 +123,6 @@ void DebugSetSettingsSavePostWriteDelayForSelfTest(DWORD delayMs) noexcept;
 void DebugSetSettingsReloadPostStampDelayForSelfTest(DWORD delayMs) noexcept;
 bool DebugIsSettingsReloadPostStampDelayActiveForSelfTest() noexcept;
 SettingsSaveDebugSnapshot DebugGetSettingsSaveSnapshotForSelfTest() noexcept;
+bool DebugResetSettingsSaveLineageForSelfTest(std::wstring_view appId) noexcept;
 #endif
 } // namespace SettingsHotReload

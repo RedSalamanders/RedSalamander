@@ -400,32 +400,6 @@ void RunDebugAwsSdkLifetimeContractSelfTest(unsigned int& passed, unsigned int& 
     return UnixMsToFileTime64(ms);
 }
 
-[[nodiscard]] wil::unique_hfile CreateTemporaryDeleteOnCloseFile() noexcept
-{
-    wchar_t path[MAX_PATH + 1] = {};
-    const DWORD len            = GetTempPathW(static_cast<DWORD>(std::size(path)), path);
-    if (len == 0 || len >= std::size(path))
-    {
-        return {};
-    }
-
-    wchar_t name[MAX_PATH + 1] = {};
-    if (GetTempFileNameW(path, L"rs3", 0, name) == 0)
-    {
-        return {};
-    }
-
-    wil::unique_hfile file(CreateFileW(
-        name, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, nullptr));
-    if (! file)
-    {
-        DeleteFileW(name);
-        return {};
-    }
-
-    return file;
-}
-
 [[nodiscard]] HRESULT GetFileSizeBytes(HANDLE file, uint64_t& out) noexcept
 {
     return Common::HandleIo::GetFileSizeBounded(file, (std::numeric_limits<uint64_t>::max)(), out);
@@ -565,6 +539,7 @@ namespace
     out.useHttps             = defaults.useHttps;
     out.verifyTls            = defaults.verifyTls;
     out.useVirtualAddressing = defaults.useVirtualAddressing;
+    out.anonymous            = defaults.anonymous;
     out.maxKeys              = defaults.maxKeys;
     out.maxTableResults      = defaults.maxTableResults;
     out.connectTimeoutMs     = defaults.connectTimeoutMs;
@@ -588,6 +563,10 @@ namespace
         if (const auto v = TryGetJsonBool(extra, "useVirtualAddressing"); v.has_value())
         {
             out.useVirtualAddressing = v.value();
+        }
+        if (const auto v = TryGetJsonBool(extra, "anonymous"); v.has_value())
+        {
+            out.anonymous = v.value();
         }
     }
 
@@ -746,6 +725,7 @@ namespace
     outContext.useHttps             = defaults.useHttps;
     outContext.verifyTls            = defaults.verifyTls;
     outContext.useVirtualAddressing = defaults.useVirtualAddressing;
+    outContext.anonymous            = defaults.anonymous;
     outContext.maxKeys              = defaults.maxKeys;
     outContext.maxTableResults      = defaults.maxTableResults;
     outContext.connectTimeoutMs     = defaults.connectTimeoutMs;
@@ -823,6 +803,20 @@ namespace
     Aws::S3Crt::ClientConfiguration s3cfg(
         legacy, Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never, ctx.useVirtualAddressing, Aws::S3Crt::US_EAST_1_REGIONAL_ENDPOINT_OPTION::NOT_SET);
 
+    // R0f-S3: a bounded retry policy is part of the provider-owned watchdog (see
+    // S3ProviderWatchdogTimeoutMs); the SDK default would retry a silent server many times.
+    using CrtRetryStrategyType                        = decltype(s3cfg.crtRetryStrategyConfig)::CrtRetryStrategyType;
+    s3cfg.crtRetryStrategyConfig.crtRetryStrategyType = CrtRetryStrategyType::EXPONENTIAL_BACKOFF;
+    s3cfg.crtRetryStrategyConfig.config.maxRetries    = static_cast<size_t>(kS3RetryMaxRetries);
+    s3cfg.crtRetryStrategyConfig.config.scaleFactorMs = kS3RetryBackoffScaleMs;
+    s3cfg.crtRetryStrategyConfig.config.maxBackoffSecs = kS3RetryMaxBackoffSecs;
+
+    if (ctx.anonymous)
+    {
+        // Empty credentials make the CRT sign nothing: public buckets and loopback fixtures.
+        return std::make_shared<Aws::S3Crt::S3CrtClient>(Aws::Auth::AWSCredentials(), s3cfg);
+    }
+
     if (ctx.accessKeyId.has_value() && ctx.secretAccessKey.has_value())
     {
         Aws::Auth::AWSCredentials creds(ctx.accessKeyId.value(), ctx.secretAccessKey.value());
@@ -865,6 +859,7 @@ void AppendHexU64(std::string& out, uint64_t value) noexcept
     key.push_back(ctx.useHttps ? 'H' : 'h');
     key.push_back(ctx.verifyTls ? '1' : '0');
     key.push_back(ctx.useVirtualAddressing ? '1' : '0');
+    key.push_back(ctx.anonymous ? 'A' : 'a');
     key.push_back('|');
     if (ctx.accessKeyId.has_value())
     {
@@ -876,6 +871,42 @@ void AppendHexU64(std::string& out, uint64_t value) noexcept
     return key;
 }
 } // namespace
+
+namespace
+{
+thread_local const FileSystemOptions* t_s3OperationOptions = nullptr;
+} // namespace
+
+const FileSystemOptions* S3CurrentOperationOptions() noexcept
+{
+    return t_s3OperationOptions;
+}
+
+S3OperationOptionsScope::S3OperationOptionsScope(const FileSystemOptions* options) noexcept : _previous(t_s3OperationOptions)
+{
+    if (options != nullptr)
+    {
+        t_s3OperationOptions = options;
+    }
+}
+
+S3OperationOptionsScope::~S3OperationOptionsScope()
+{
+    t_s3OperationOptions = _previous;
+}
+
+unsigned long S3ProviderWatchdogTimeoutMs(uint32_t connectTimeoutMs, uint32_t requestTimeoutMs) noexcept
+{
+    // Per attempt: TCP connect bound plus the CRT stall monitor, which closes a connection that
+    // moved no bytes for max(3 s, requestTimeoutMs), evaluates once per second, and in practice
+    // needs about two intervals before it fires (measured 12-16 s for two attempts at a 3 s
+    // interval); the client retries once with bounded backoff.
+    const uint64_t intervalMs = (std::max)(static_cast<uint64_t>(kS3CrtStallMonitorMinMs), static_cast<uint64_t>(requestTimeoutMs));
+    const uint64_t stallMs    = kS3CrtStallMonitorIntervalsPerAttempt * intervalMs + kS3CrtStallMonitorTickMs;
+    const uint64_t perAttempt = static_cast<uint64_t>(connectTimeoutMs) + stallMs;
+    const uint64_t bound      = perAttempt * (kS3RetryMaxRetries + 1u) + static_cast<uint64_t>(kS3RetryMaxBackoffSecs) * 1000u * kS3RetryMaxRetries;
+    return static_cast<unsigned long>((std::min)(bound, static_cast<uint64_t>((std::numeric_limits<unsigned long>::max)())));
+}
 
 std::shared_ptr<Aws::S3Crt::S3CrtClient> GetS3Client(FileSystemS3& fs, const ResolvedAwsContext& ctx) noexcept
 {

@@ -66,12 +66,24 @@ struct SelfTestPausePoint final
 
 extern std::atomic<unsigned int> g_fileOpsBridgePipelineMode;
 extern std::atomic<unsigned int> g_fileOpsBridgeProducerDelayMs;
+extern std::atomic<uint64_t> g_fileOpsBridgeTraversalDepthLimitOverride;
 extern std::atomic<unsigned long> g_fileOpsBridgeFailNextFileCopyCount;
 extern std::atomic<unsigned long> g_fileOpsBridgeFailNextFileCopyAttempts;
 extern std::atomic<unsigned long> g_fileOpsBridgeFailNextSourceGetSizeCount;
 extern std::atomic<unsigned long> g_fileOpsBridgeFailNextSourceGetSizeAttempts;
 extern std::atomic<unsigned long> g_fileOpsBridgeFailNextDestinationGetSizeCount;
 extern std::atomic<unsigned long> g_fileOpsBridgeFailNextDestinationGetSizeAttempts;
+extern std::atomic<unsigned long> g_fileOpsBridgeFailNextDestinationOpenCount;
+extern std::atomic<unsigned long> g_fileOpsBridgeFailNextDestinationOpenAttempts;
+extern std::atomic<HRESULT> g_fileOpsBridgeFailNextDestinationOpenStatus;
+extern std::atomic<unsigned long> g_fileOpsBridgeFailNextDestinationBasicInfoCount;
+extern std::atomic<unsigned long> g_fileOpsBridgeFailNextDestinationBasicInfoAttempts;
+extern std::atomic<unsigned long> g_fileOpsBridgeNullNextSourceReaderCount;
+extern std::atomic<unsigned long> g_fileOpsBridgeNullNextSourceReaderAttempts;
+extern std::atomic<unsigned long> g_fileOpsBridgeReportWrongDestinationSizeCount;
+extern std::atomic<unsigned long> g_fileOpsBridgeReportWrongDestinationSizeAttempts;
+extern std::atomic<unsigned long> g_fileOpsBridgeFailNextStageEntropyCount;
+extern std::atomic<unsigned long> g_fileOpsBridgeFailNextStageEntropyAttempts;
 extern std::atomic<unsigned long> g_fileOpsBridgeOverReportNextReadCount;
 extern std::atomic<unsigned long> g_fileOpsBridgeOverReportNextReadAttempts;
 extern std::atomic<unsigned long> g_fileOpsBridgePrematureEofNextReadCount;
@@ -85,23 +97,60 @@ extern std::atomic<unsigned long> g_fileOpsBridgeInjectHostileChildNameAttempts;
 extern std::atomic<unsigned long> g_fileOpsBridgeInjectFileReparseCount;
 extern std::atomic<unsigned long> g_fileOpsBridgeInjectFileReparseAttempts;
 extern std::atomic<int> g_fileOpsBridgeReparsePolicyOverride;
-extern std::atomic<unsigned long> g_fileOpsBridgeMutateDestinationBeforeMoveCleanupAttempts;
-extern std::atomic<bool> g_fileOpsPreCalcThreadStartFailure;
-extern std::atomic<unsigned long> g_fileOpsPreCalcThreadStartAttempts;
+extern std::atomic<unsigned long> g_fileOpsBridgeReplacePublishedDestinationAttempts;
+extern std::atomic<unsigned long> g_fileOpsManagedCleanupKnownNonCommitCount;
+extern std::atomic<unsigned long> g_fileOpsManagedCleanupKnownNonCommitAttempts;
+extern std::atomic<HRESULT> g_fileOpsManagedCleanupKnownNonCommitStatus;
+extern std::atomic<unsigned long> g_fileOpsPermanentDeleteKnownNonCommitCount;
+extern std::atomic<unsigned long> g_fileOpsPermanentDeleteKnownNonCommitAttempts;
+extern std::atomic<HRESULT> g_fileOpsPermanentDeleteKnownNonCommitStatus;
+extern std::atomic<unsigned long> g_fileOpsManagedCleanupUnknownOutcomeCount;
+extern std::atomic<unsigned long> g_fileOpsManagedCleanupUnknownOutcomeAttempts;
+extern std::atomic<unsigned long> g_fileOpsVerificationForceHostReadbackCount;
+extern std::atomic<unsigned long> g_fileOpsVerificationForceHostReadbackAttempts;
+extern std::atomic<unsigned long> g_fileOpsVerificationForceUnavailableCount;
+extern std::atomic<unsigned long> g_fileOpsVerificationForceUnavailableAttempts;
+extern std::atomic<unsigned long> g_fileOpsVerificationForceMismatchCount;
+extern std::atomic<unsigned long> g_fileOpsVerificationForceMismatchAttempts;
 extern std::atomic<bool> g_fileOpsAutoConcurrencyOverrideEnabled;
 extern std::atomic<unsigned int> g_fileOpsAutoConcurrencyOverridePreferred;
 extern std::atomic<uint32_t> g_fileOpsAutoConcurrencyOverrideStorageKind;
 extern SelfTestPausePoint g_fileOpsPostFinishedCompletionPausePoint;
 extern SelfTestPausePoint g_fileOpsBridgeMoveSourceCleanupPausePoint;
-extern SelfTestPausePoint g_fileOpsBridgeMoveManifestTakePausePoint;
+extern SelfTestPausePoint g_fileOpsBridgePublishedDestinationRetryPausePoint;
 extern SelfTestPausePoint g_fileOpsConflictMetadataPausePoint;
+extern SelfTestPausePoint g_fileOpsKeepBothNestedConflictPausePoint;
+extern SelfTestPausePoint g_fileOpsInlineRenameBeforeMutationPausePoint;
+extern SelfTestPausePoint g_fileOpsBatchRenameBeforeExecutionPausePoint;
+extern SelfTestPausePoint g_fileOpsRecycleEscalationBeforeBindPausePoint;
+extern SelfTestPausePoint g_fileOpsPermanentDeleteBeforeBindPausePoint;
+extern SelfTestPausePoint g_fileOpsPermanentDeleteBeforeRecheckPausePoint;
+extern SelfTestPausePoint g_fileOpsPermanentDeleteBeforeLiveOutputGuardPausePoint;
+extern SelfTestPausePoint g_fileOpsLiveOutputPublishedPausePoint;
+extern SelfTestPausePoint g_fileOpsVerificationReadbackPausePoint;
+extern std::atomic<unsigned long> g_fileOpsNativeMoveCreateDirectoryRaceCount;
+extern std::atomic<unsigned long> g_fileOpsNativeMoveCreateDirectoryRaceAttempts;
+extern std::atomic<DWORD> g_fileOpsInlineRenameAdmissionThreadId;
+extern std::atomic<DWORD> g_fileOpsInlineRenameExecutionThreadId;
+extern std::atomic<unsigned long> g_fileOpsInlineRenameExecutionAttempts;
 extern std::atomic<ULONGLONG> g_fileOpsConflictMetadataPauseBailoutMs;
-extern std::atomic<uint64_t> g_fileOpsBridgeMoveManifestCurrentEntries;
-extern std::atomic<uint64_t> g_fileOpsBridgeMoveManifestPeakEntries;
 
 [[nodiscard]] FileOpsBridgePipelineMode GetBridgePipelineModeOverride() noexcept;
 [[nodiscard]] unsigned int GetBridgeProducerDelayMsForSelfTest() noexcept;
 void MaybePauseAfterTaskFinishedBeforeSummaryForSelfTest() noexcept;
+// C1: the strategy each task's first transfer plan holds once Preparing has qualified its shapes,
+// kept per task id in a small ring so a case can assert a Preparing fact after the task is gone.
+struct PreparedTransferRecordForSelfTest final
+{
+    uint64_t taskId       = 0u;
+    uint8_t firstStrategy = 0u;
+    uint32_t strategyMask = 0u; // one bit per FileOperations::OperationStrategy value
+    uint32_t planCount    = 0u;
+};
+extern std::mutex g_fileOpsPreparedTransferStrategyMutex;
+extern std::array<PreparedTransferRecordForSelfTest, 64> g_fileOpsPreparedTransferStrategies;
+extern size_t g_fileOpsPreparedTransferStrategyNext;
+void RecordPreparedTransferStrategyForSelfTest(const FolderWindow::FileOperationState::Task& task) noexcept;
 #endif
 
 [[nodiscard]] uint64_t PerfNowUs() noexcept;
@@ -169,14 +218,11 @@ enum class FileSystemConcurrencyMode : unsigned char
 
 enum class ReparsePointPolicy : unsigned char
 {
-    CopyReparse,
-    FollowTargets,
+    Preserve,
     Skip,
 };
 
 [[nodiscard]] DiagnosticsSettings GetDiagnosticsSettingsFromSettings(const Common::Settings::Settings* settings) noexcept;
-[[nodiscard]] bool GetPreCalcEnabledFromSettings(const Common::Settings::Settings* settings) noexcept;
-[[nodiscard]] unsigned int GetPreCalcMaxWorkersFromSettings(const Common::Settings::Settings* settings) noexcept;
 [[nodiscard]] unsigned long GetCrossFsBridgeBufferBytesFromSettings(const Common::Settings::Settings* settings) noexcept;
 [[nodiscard]] uint64_t GetDefaultBandwidthLimitBytesPerSecondFromSettings(const Common::Settings::Settings* settings) noexcept;
 [[nodiscard]] ReparsePointPolicy GetReparsePointPolicyFromSettings(const Common::Settings::Settings& settings, const std::wstring& pluginId) noexcept;

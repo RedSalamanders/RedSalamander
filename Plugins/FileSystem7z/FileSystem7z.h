@@ -26,6 +26,7 @@
 
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
+#include "FileSystemRouteProviderBase.h"
 #include "PlugInterfaces/Informations.h"
 #include "PackedFileInfoBuffer.h"
 
@@ -66,6 +67,7 @@ private:
 };
 
 class FileSystem7z final : public IFileSystem,
+                           public FileSystemRouteCapabilitiesBase,
                            public IFileSystemCancellableDirectoryEnumeration,
                            public IFileSystemIO,
                            public IFileSystemDirectoryOperations,
@@ -158,7 +160,9 @@ public:
                                           IFileSystemCallback* callback    = nullptr,
                                           void* cookie                     = nullptr) noexcept override;
 
-    HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
+                                                  FileSystemOperation operation,
+                                                  const char** jsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
                                                FileSystemOperation operationType,
                                                FileSystemTransferEndpoint endpoint,
@@ -179,6 +183,11 @@ public:
                                                void* cookie,
                                                FileSystemDirectorySizeResult* result) noexcept override;
 
+protected:
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                           FileSystemOperation operation,
+                                           FileSystemRouteDescriptor& descriptor) noexcept override;
+
 private:
     ~FileSystem7z();
 
@@ -189,35 +198,47 @@ private:
 
     static constexpr char kCapabilitiesJson[] = R"json(
 {
-  "version": 1,
+  "version": 2,
+  "pathProfile": "7z-archive",
+  "rootId": "archive-root",
   "operations": {
     "copy": false,
     "move": false,
+    "nativeMove": false,
     "delete": false,
     "rename": false,
+    "createDirectory": false,
     "properties": true,
     "read": true,
-    "write": false
+    "write": false,
+    "recycle": false
   },
   "concurrency": {
     "copyMoveMax": 1,
     "deleteMax": 1,
     "deleteRecycleBinMax": 1
   },
-  "crossFileSystem": {
+  "transfer": {
     "export": { "copy": ["*"], "move": [] },
     "import": { "copy": [], "move": [] }
   },
-  "pathIdentity": {
-    "version": 1,
+  "identity": { "object": "none", "revision": "none", "boundDelete": false, "conditionalDelete": false },
+  "publication": { "exclusiveStage": false, "conditionalPublish": false, "committedSize": false },
+  "links": { "preserveFileLink": false, "preserveDirectoryLink": false, "retargetInTree": false, "exactLinkRemoval": false },
+  "metadata": { "motw": "unknown", "alternateStreams": "unknown", "extendedAttributes": "unknown", "sparse": "unknown", "efs": "unknown" },
+  "verification": { "hostReadback": false, "providerProof": "none" },
+  "cancellation": { "abort": false, "deadline": false, "routeClass": "bounded", "providerWatchdogTimeoutMs": 0 },
+  "names": {
     "pathTextStableIdentity": true,
-    "componentComparison": "ordinalCaseSensitive",
+    "comparison": "ordinalCaseSensitive",
     "normalization": "none",
     "preferredSeparator": "/",
     "acceptedSeparators": ["/"],
     "casePreserving": true,
-    "caseOnlyRename": "notApplicable"
-  }
+    "caseOnlyRename": "notApplicable",
+    "maxComponentUtf16": 255
+  },
+  "directories": { "model": "virtual" }
 }
 )json";
 

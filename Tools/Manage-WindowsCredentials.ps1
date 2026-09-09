@@ -1,4 +1,3 @@
-#Requires -Version 5.1
 <#
 .SYNOPSIS
     Lists Windows Credential Manager entries and optionally removes them by regex.
@@ -48,6 +47,15 @@
     Emit the matched credentials as objects to the pipeline in addition to the
     on-screen table, so they can be filtered or counted by the caller.
 
+.PARAMETER Help
+    Prints the command's detailed usage and safety guidance without enumerating credentials.
+
+.OUTPUTS
+    With -PassThru, credential metadata objects for the matched entries. Otherwise the command writes a formatted table only. Secret credential blobs are never returned.
+
+.NOTES
+    Prerequisites: Windows Credential Manager access in the current user context. Side effects: listing is read-only; -Remove deletes only matched credentials through ShouldProcess. Deletion failures produce a nonzero exit. Primary use is manual diagnosis and cleanup of RedSalamander test credentials.
+
 .EXAMPLE
     .\Tools\Manage-WindowsCredentials.ps1
     Lists every generic credential whose target starts with "RedSalamander/".
@@ -68,6 +76,7 @@
     .\Tools\Manage-WindowsCredentials.ps1 -All -Pattern 'sftp-test' -Remove -Confirm:$false
     Removes every credential whose target contains "sftp-test", no prompt.
 #>
+#Requires -Version 5.1
 
 [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 param(

@@ -342,6 +342,42 @@ struct CompareOptionsEditDiagnosticState
     return CollectNamedCompareOptionsEditValueState(hwnd, name, label);
 }
 
+[[nodiscard]] bool FocusCompareDirectoriesOptionsTargetAndWait(
+    HWND compare,
+    const CompareDirectoriesOptionsDebugFocusTarget target,
+    std::chrono::milliseconds timeout,
+    CompareDirectoriesOptionsDebugSnapshot& outSnapshot) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        if (! compare || IsWindow(compare) == FALSE)
+        {
+            return false;
+        }
+
+        ShowWindow(compare, SW_SHOWNORMAL);
+        static_cast<void>(BringWindowToTop(compare));
+        static_cast<void>(SetActiveWindow(compare));
+        static_cast<void>(SetForegroundWindow(compare));
+        static_cast<void>(DebugFocusCompareDirectoriesOptionsTargetForWindow(compare, target));
+        PumpPendingMessages();
+
+        outSnapshot = {};
+        if (DebugGetCompareDirectoriesOptionsSnapshot(outSnapshot) && outSnapshot.optionsDialogVisible && outSnapshot.focusTarget == target)
+        {
+            return true;
+        }
+        std::this_thread::sleep_for(20ms);
+    }
+
+    outSnapshot = {};
+    return DebugGetCompareDirectoriesOptionsSnapshot(outSnapshot) && outSnapshot.optionsDialogVisible && outSnapshot.focusTarget == target;
+}
+
 [[nodiscard]] std::wstring DescribeCompareOptionsControlValueDiagnostics(const std::vector<UiaControlValueState>& states) noexcept
 {
     if (states.empty())
@@ -1801,21 +1837,14 @@ struct CompareOptionsEditDiagnosticState
 
     state.Require(DebugSetCompareDirectoriesOptionsIgnoreFilesEnabled(true),
                   L"Compare Directories options did not reveal the ignore-files edit before theme-cycle validation.");
-    state.Require(DebugFocusCompareDirectoriesOptionsTarget(CompareDirectoriesOptionsDebugFocusTarget::IgnoreFilesEdit),
-                  L"Compare Directories options did not focus the ignore-files edit before theme-cycle validation.");
     const std::wstring ignoreFilesEditName = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE);
     state.Require(! ignoreFilesEditName.empty(),
                   L"Compare Directories options Ignore files title should resolve before theme-cycle validation.");
-    state.Require(waitForOptionsSnapshot(
-                      [](const CompareDirectoriesOptionsDebugSnapshot& value) noexcept
-    {
-        return value.focusTarget == CompareDirectoriesOptionsDebugFocusTarget::IgnoreFilesEdit && value.optionsDialogVisible && value.optionsUsesDxUiStatics &&
-               value.optionsUsesDxUiButtons && value.optionsUsesDxUiToggles && value.optionsUsesDxUiEdits && value.visibleLegacyStaticCount == 0u &&
-               value.visibleLegacyFooterButtonCount == 0u && value.visibleLegacyToggleCount == 0u && value.visibleLegacyEditCount == 0u &&
-               value.visibleBodyRenderedDxHostCount == 1u && value.bodyDxHostResizeFailureCount == 0u && value.bodyDxHostPresentFailureCount == 0u &&
-               value.visibleDxBodyHeaderCount == 4u && value.visibleDxBodyCardCount == 10u && value.bodyDxHostWidth > 200 && value.bodyDxHostHeight > 120;
-    },
-                      snapshot),
+    state.Require(FocusCompareDirectoriesOptionsTargetAndWait(compare,
+                                                              CompareDirectoriesOptionsDebugFocusTarget::IgnoreFilesEdit,
+                                                              SelfTest::Scale(3000ms),
+                                                              snapshot) &&
+                      hasSettledDxShell(snapshot),
                   L"Compare Directories options ignore-files edit did not take focus before theme-cycle validation.");
     if (! state.failure.empty())
     {
@@ -2998,6 +3027,11 @@ struct CompareOptionsEditDiagnosticState
         return false;
     }
 
+    if (! PrepareMainWindowForIsolatedUiCase(mainWindow, state, L"Compare Directories options Enter/Escape routing validation"))
+    {
+        return false;
+    }
+
     const auto closeCompareWindow = [&]() noexcept
     {
         if (const HWND existing = GetCompareDirectoriesWindowHandle(); existing && IsWindow(existing) != FALSE)
@@ -3159,16 +3193,13 @@ struct CompareOptionsEditDiagnosticState
             return;
         }
 
-        state.Require(DebugFocusCompareDirectoriesOptionsFirstControl(),
-                      std::format(L"Failed to focus the first Compare Directories options DX control before {}.", label));
-        state.Require(waitForOptionsSnapshot(
-                          [](const CompareDirectoriesOptionsDebugSnapshot& value) noexcept
-        {
-            return value.focusTarget == CompareDirectoriesOptionsDebugFocusTarget::CompareSubdirectoriesToggle && value.optionsDialogVisible &&
-                   value.visibleLegacyStaticCount == 0u && value.visibleLegacyFooterButtonCount == 0u && value.visibleLegacyToggleCount == 0u &&
-                   value.visibleLegacyEditCount == 0u && value.visibleBodyRenderedDxHostCount == 1u && value.bodyDxHostResizeFailureCount == 0u;
-        },
-                          snapshot),
+        state.Require(FocusCompareDirectoriesOptionsTargetAndWait(compare,
+                                                                  CompareDirectoriesOptionsDebugFocusTarget::CompareSubdirectoriesToggle,
+                                                                  SelfTest::Scale(3000ms),
+                                                                  snapshot) &&
+                          snapshot.visibleLegacyStaticCount == 0u && snapshot.visibleLegacyFooterButtonCount == 0u &&
+                          snapshot.visibleLegacyToggleCount == 0u && snapshot.visibleLegacyEditCount == 0u &&
+                          snapshot.visibleBodyRenderedDxHostCount == 1u && snapshot.bodyDxHostResizeFailureCount == 0u,
                       std::format(L"Compare Directories options first DX toggle did not take focus before {}.", label));
         if (! state.failure.empty())
         {
@@ -5110,6 +5141,14 @@ struct CompareOptionsEditDiagnosticState
 
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     if (! WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)))
+    {
+        return false;
+    }
+
+    // These fixtures recreate files outside the provider between repetitions.
+    // Re-entering the same path can reuse its previous enumeration snapshot;
+    // invalidate it before requiring the newly created fixture contents.
+    if (! ForceRefreshPaneForCommandSelfTest(mainWindow, FolderWindow::Pane::Left, SelfTest::Scale(3000ms)))
     {
         return false;
     }

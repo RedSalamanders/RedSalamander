@@ -579,6 +579,7 @@ private:
     void SetDisplayEncodingMenuSelection(HWND hwnd, UINT commandId, bool reload) noexcept;
     void SetSaveEncodingMenuSelection(HWND hwnd, UINT commandId) noexcept;
     void CommandCycleDisplayEncoding(HWND hwnd, bool backward) noexcept;
+    void CommandChooseDisplayEncoding(HWND hwnd) noexcept;
     bool IsEncodingMenuSelectionValid(UINT commandId) const noexcept;
     bool IsSaveEncodingMenuSelectionValid(UINT commandId) const noexcept;
     UINT EffectiveDisplayEncodingMenuSelection() const noexcept;
@@ -588,6 +589,9 @@ private:
     FileEncoding DisplayEncodingFileEncoding() const noexcept;
     UINT DisplayEncodingCodePage() const noexcept;
     UINT CodePageForMenuSelection(UINT commandId) const noexcept;
+    static FileEncoding DisplayEncodingFileEncodingForSelection(UINT selection) noexcept;
+    static UINT CodePageForDisplayEncodingSelection(UINT selection) noexcept;
+    static uint64_t BytesToSkipForDisplayEncodingSelection(UINT selection, FileEncoding encoding, uint64_t bomBytes) noexcept;
 
     bool HandleShortcutKey(HWND hwnd, WPARAM vk) noexcept;
     bool EnsureDirect2D(HWND hwnd) noexcept;

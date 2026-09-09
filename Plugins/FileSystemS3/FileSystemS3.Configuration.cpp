@@ -47,6 +47,11 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::SetConfiguration(const char* configurati
             nextSettings.useVirtualAddressing = value.value();
         }
 
+        if (const auto value = FsS3::TryGetJsonBool(root, "anonymous"); value.has_value())
+        {
+            nextSettings.anonymous = value.value();
+        }
+
         if (const auto value = FsS3::TryGetJsonUInt(root, "maxKeys"); value.has_value() && value.value() >= 1u)
         {
             nextSettings.maxKeys = static_cast<unsigned long>((std::min)(value.value(), 1000ull));

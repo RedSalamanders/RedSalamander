@@ -12,10 +12,10 @@ BEGIN
         MENUITEM "&Obnoviť\tF5", IDM_VIEWERWEB_FILE_REFRESH
         POPUP "&Iné súbory"
         BEGIN
-            MENUITEM "&Ďalej\tSpace, Ctrl+Down", IDM_VIEWERWEB_OTHER_NEXT
-            MENUITEM "&Predchádzajúce\tBackspace, Ctrl+Up", IDM_VIEWERWEB_OTHER_PREVIOUS
-            MENUITEM "&Po prvé\tCtrl+Home", IDM_VIEWERWEB_OTHER_FIRST
-            MENUITEM "&Posledný\tCtrl+End", IDM_VIEWERWEB_OTHER_LAST
+            MENUITEM "&Predchádzajúci súbor\tBackspace, Ctrl+Up", IDM_VIEWERWEB_OTHER_PREVIOUS
+            MENUITEM "Ď&alší súbor\tSpace, Ctrl+Down", IDM_VIEWERWEB_OTHER_NEXT
+            MENUITEM "P&rvý súbor\tCtrl+Home", IDM_VIEWERWEB_OTHER_FIRST
+            MENUITEM "P&osledný súbor\tCtrl+End", IDM_VIEWERWEB_OTHER_LAST
         END
         MENUITEM SEPARATOR
         MENUITEM "&Koniec\tEsc", IDM_VIEWERWEB_FILE_EXIT
@@ -23,21 +23,20 @@ BEGIN
     POPUP "&Hľadať"
     BEGIN
         MENUITEM "&Nájsť...\tCtrl+F", IDM_VIEWERWEB_SEARCH_FIND
-        MENUITEM "&Nájsť ďalší\tF3", IDM_VIEWERWEB_SEARCH_FIND_NEXT
-        MENUITEM "&Nájsť predchádzajúci\tShift+F3", IDM_VIEWERWEB_SEARCH_FIND_PREVIOUS
+        MENUITEM "N&ájsť ďalší\tF3", IDM_VIEWERWEB_SEARCH_FIND_NEXT
+        MENUITEM "Ná&jsť predchádzajúci\tShift+F3", IDM_VIEWERWEB_SEARCH_FIND_PREVIOUS
     END
     POPUP "&Zobrazenie"
     BEGIN
         MENUITEM "&Priblížiť\tCtrl++", IDM_VIEWERWEB_VIEW_ZOOM_IN
         MENUITEM "&Oddialiť\tCtrl+-", IDM_VIEWERWEB_VIEW_ZOOM_OUT
         MENUITEM "&Resetovať priblíženie\tCtrl+0", IDM_VIEWERWEB_VIEW_ZOOM_RESET
-        MENUITEM SEPARATOR
-        MENUITEM "&Prepnúť DevTools\tF12", IDM_VIEWERWEB_VIEW_DEVTOOLS
     END
     POPUP "&Nástroje"
     BEGIN
         MENUITEM "&Kopírovať URL\tCtrl+L", IDM_VIEWERWEB_TOOLS_COPY_URL
         MENUITEM "&Otvoriť v prehliadači\tCtrl+Enter", IDM_VIEWERWEB_TOOLS_OPEN_EXTERNAL
+        MENUITEM "Prepnúť &DevTools\tF12", IDM_VIEWERWEB_VIEW_DEVTOOLS
         MENUITEM SEPARATOR
         MENUITEM "&Rozbaliť všetko (JSON/JSONL)", IDM_VIEWERWEB_TOOLS_JSON_EXPAND_ALL
         MENUITEM "&Zbaliť všetko (JSON/JSONL)", IDM_VIEWERWEB_TOOLS_JSON_COLLAPSE_ALL

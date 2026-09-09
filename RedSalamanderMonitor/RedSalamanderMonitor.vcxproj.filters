@@ -51,6 +51,12 @@
     <ClInclude Include="MonitorFileReader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+      <ClInclude Include="MonitorFileExporter.h">
+        <Filter>Header Files</Filter>
+      </ClInclude>
+      <ClInclude Include="MonitorTextSnapshot.h">
+        <Filter>Header Files</Filter>
+      </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="RedSalamanderMonitor.cpp">
@@ -69,6 +75,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="MonitorFileReader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MonitorFileExporter.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

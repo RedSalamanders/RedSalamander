@@ -1,5 +1,8 @@
 # Google Drive Filesystem Plugin Plan
 
+> **FILE OPERATIONS CONTRACT (2026-08-21).** Mutation and write milestones require mandatory path-scoped capability v2 and an executing `PluginContractTests` row for every advertised `true`. Read-only enumeration, PKCE sign-in, and download milestones are unaffected.
+
+
 Last updated: 2026-07-17
 
 Status: WIP - read-only directory-listing milestone landed; file IO, write operations, and remote validation remain.

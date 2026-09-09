@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <vector>
 
 #include "AlertOverlay.h"
 
@@ -32,6 +33,13 @@ struct AlertOverlayWindowDebugSnapshot
     POINT lastMouseUpPointPx{};
     int lastMouseDownHitPart = -1;
     int lastMouseUpHitPart   = -1;
+    AlertPresentation presentation             = AlertPresentation::Severity;
+    AlertPresentation renderedIconPresentation = AlertPresentation::Severity;
+    wchar_t renderedIconGlyph                  = L'\0';
+    wchar_t renderedCloseGlyph                 = L'\0';
+    std::wstring title;
+    std::wstring primaryButtonLabel;
+    std::vector<uint64_t> optionValues;
 };
 
 [[nodiscard]] bool DebugGetAlertOverlayWindowSnapshot(HWND hwnd, AlertOverlayWindowDebugSnapshot& out) noexcept;
@@ -76,6 +84,11 @@ public:
         return _visible;
     }
 
+    [[nodiscard]] std::optional<uint64_t> GetOptionValue(uint32_t optionId) const noexcept
+    {
+        return _overlay.GetOptionValue(optionId);
+    }
+
 private:
     static LRESULT CALLBACK WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
     LRESULT WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
@@ -92,6 +105,7 @@ private:
     LRESULT OnSetCursor(HWND cursorWindow, UINT hitTest, UINT mouseMsg) noexcept;
 
     void InvokeButton(uint32_t buttonId) noexcept;
+    void InvokeOption(uint32_t optionId, bool reverse = false) noexcept;
     void InvokeDismiss() noexcept;
 
     void StartAnimationTimer() noexcept;

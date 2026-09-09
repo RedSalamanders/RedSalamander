@@ -648,7 +648,6 @@ void ViewerImgRaw::BeginExportImpl(HWND hwnd, const wchar_t* outputPathOverride)
         {
             const std::wstring message = LoadStringResource(g_hInstance, IDS_VIEWERRAW_EXPORT_NO_IMAGE);
             HostAlertRequest req{};
-            req.version      = 1;
             req.sizeBytes    = sizeof(req);
             req.scope        = HOST_ALERT_SCOPE_WINDOW;
             req.modality     = HOST_ALERT_MODELESS;
@@ -681,7 +680,6 @@ void ViewerImgRaw::BeginExportImpl(HWND hwnd, const wchar_t* outputPathOverride)
         {
             const std::wstring message = LoadStringResource(g_hInstance, IDS_VIEWERRAW_EXPORT_NO_IMAGE);
             HostAlertRequest req{};
-            req.version      = 1;
             req.sizeBytes    = sizeof(req);
             req.scope        = HOST_ALERT_SCOPE_WINDOW;
             req.modality     = HOST_ALERT_MODELESS;
@@ -751,7 +749,6 @@ void ViewerImgRaw::BeginExportImpl(HWND hwnd, const wchar_t* outputPathOverride)
             {
                 const std::wstring message = LoadStringResource(g_hInstance, IDS_VIEWERRAW_EXPORT_UNSUPPORTED_EXTENSION);
                 HostAlertRequest req{};
-                req.version      = 1;
                 req.sizeBytes    = sizeof(req);
                 req.scope        = HOST_ALERT_SCOPE_WINDOW;
                 req.modality     = HOST_ALERT_MODELESS;
@@ -907,7 +904,6 @@ void ViewerImgRaw::OnAsyncExportComplete(std::unique_ptr<AsyncExportResult> resu
         }
 
         HostAlertRequest req{};
-        req.version      = 1;
         req.sizeBytes    = sizeof(req);
         req.scope        = HOST_ALERT_SCOPE_WINDOW;
         req.modality     = HOST_ALERT_MODELESS;

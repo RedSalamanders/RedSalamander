@@ -1,4 +1,5 @@
 #include "DxUiTestHelpers.h"
+#include "Ui/AnimationDispatcher.h"
 
 #include <chrono>
 #include <thread>
@@ -155,6 +156,34 @@ void TestTooltipLayerHideDelayExpiresAfterTimerTicks()
     Require(! window.Host().HasTooltip(), "tracking tooltip clears after the hide delay elapses");
 }
 
+void TestTooltipDeadlinesUseCurrentDispatcherClockAfterIdleHostTick()
+{
+    using namespace RedSalamander::DxUi;
+
+    constexpr uint64_t staleTickGapMs = 3'000u;
+    constexpr uint64_t hideDelayMs    = 1'000u;
+    const uint64_t currentTickMs      = RedSalamander::Ui::AnimationDispatcher::GetInstance().GetCurrentTickMs();
+    Require(currentTickMs > staleTickGapMs, "tooltip stale-tick regression requires a valid dispatcher clock epoch");
+    const uint64_t staleTickMs = currentTickMs - staleTickGapMs;
+
+    WindowHost host;
+    static_cast<void>(host.DebugAnimationTickForTest(staleTickMs));
+    Require(host.SetTooltip(L"Tracking tooltip", D2D1::Point2F(24.0f, 24.0f)),
+            "tooltip stale-tick regression starts with a visible tracking tooltip");
+    Require(host.BeginTooltipHideDelay(hideDelayMs), "tooltip stale-tick regression schedules a long hide delay");
+    static_cast<void>(host.DebugAnimationTickForTest(currentTickMs));
+    Require(host.HasTooltip(), "tracking tooltip hide delay is based on the current dispatcher clock instead of the host's stale last tick");
+
+    static_cast<void>(host.ClearTooltip());
+    static_cast<void>(host.DebugAnimationTickForTest(staleTickMs));
+    Require(host.SetTooltipDelayed(L"Supplemental tooltip", D2D1::Point2F(48.0f, 36.0f)),
+            "tooltip stale-tick regression schedules a delayed supplemental tooltip");
+    static_cast<void>(host.DebugAnimationTickForTest(currentTickMs));
+    Require(! host.HasTooltip(), "supplemental tooltip show delay does not expire from the host's stale last tick");
+    Require(host.DebugGetPendingTooltipText() == L"Supplemental tooltip",
+            "supplemental tooltip remains pending until the current dispatcher-clock deadline");
+}
+
 void TestTooltipLayerTrackingMoveCancelsPendingHideDelay()
 {
     using namespace RedSalamander::DxUi;
@@ -212,6 +241,34 @@ void TestGridTooltipTracksPointerWithinSameCell()
     RequireRectHasArea(secondBounds, "grid tooltip tracking keeps tooltip bounds after pointer movement");
     Require(secondBounds.left > firstBounds.left, "grid tooltip tracking moves the tooltip when the pointer moves within the same cell");
     Require(host.GetTooltipText() == firstTooltipText, "grid tooltip tracking keeps the same tooltip text within the same hovered cell");
+}
+
+void TestInteractiveTooltipSurvivesEmptySupplementalTargetPass()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root  = std::make_unique<Panel>();
+    auto* grid = root->AddChild<Grid>();
+    grid->SetBounds(D2D1::RectF(0.0f, 0.0f, 280.0f, 140.0f));
+    window.Host().SetRoot(std::move(root));
+
+    const std::wstring tooltipText = L"Interactive grid tooltip";
+    GridCellData cellData;
+    cellData.kind        = GridCellKind::Text;
+    cellData.text        = L"Tracked";
+    cellData.tooltipText = tooltipText;
+    SingleCellGridModel model(std::move(cellData));
+    grid->SetModel(&model);
+
+    const GridCellLayoutMetrics metrics = grid->GetCellLayoutMetrics(window.Host(), 0u, 0u);
+    const int dpi = static_cast<int>(GetDpiForWindow(window.Hwnd()));
+    const LONG x = MulDiv(static_cast<int>((metrics.cellRect.left + metrics.cellRect.right) * 0.5f), dpi, USER_DEFAULT_SCREEN_DPI);
+    const LONG y = MulDiv(static_cast<int>((metrics.cellRect.top + metrics.cellRect.bottom) * 0.5f), dpi, USER_DEFAULT_SCREEN_DPI);
+
+    SendMessageW(window.Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
+    Require(window.Host().HasTooltip() && window.Host().GetTooltipText() == tooltipText,
+            "an interactive control tooltip remains visible when the supplemental hit-test has no target");
 }
 
 void TestTreeTooltipTracksPointerWithinSameRow()
@@ -292,6 +349,55 @@ void TestTreeTooltipFallsBackToClippedItemText()
     Require(host.HasTooltip(), "tree clipped-text tooltip begins a delayed hide on mouse leave");
 }
 
+void TestPassiveSupplementalTooltipUsesHostHitTestingDelayLifetimeAndClickThrough()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    uint32_t clickCount = 0u;
+    auto root           = std::make_unique<Panel>();
+    auto* button        = root->AddChild<Button>(L"Open details");
+    button->SetBounds(D2D1::RectF(16.0f, 12.0f, 176.0f, 52.0f));
+    button->SetOnClick([&clickCount] { ++clickCount; });
+    auto* passiveRegion = root->AddChild<Label>(L"3");
+    passiveRegion->SetBounds(D2D1::RectF(24.0f, 18.0f, 72.0f, 46.0f));
+    passiveRegion->SetTooltipText(L"Completed with partial results or warnings: 3");
+    passiveRegion->SetAccessibleHelpText(L"Completed with partial results or warnings: 3");
+    window.Host().SetRoot(std::move(root));
+
+    SendMessageW(window.Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(40, 28));
+    Require(! window.Host().HasTooltip(), "passive tooltip remains hidden before the shared show delay elapses");
+    Require(window.Host().DebugGetPendingTooltipText() == L"Completed with partial results or warnings: 3",
+            "real host hit testing reaches the deepest passive supplemental-tooltip region");
+    static_cast<void>(window.Host().DebugAdvanceTooltipDelayForTest());
+    Require(window.Host().HasTooltip() && window.Host().GetTooltipText() == passiveRegion->GetAccessibleHelpText(),
+            "passive pointer tooltip matches the region's accessibility HelpText after the show delay");
+
+    SendMessageW(window.Hwnd(), WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(40, 28));
+    SendMessageW(window.Hwnd(), WM_LBUTTONUP, 0, MAKELPARAM(40, 28));
+    Require(clickCount == 1u, "passive tooltip region remains click-through to the underlying interactive control");
+
+    const uint64_t lifetimeExpiryTickMs = GetTickCount64() + 6000u;
+    static_cast<void>(window.Host().DebugAnimationTickForTest(lifetimeExpiryTickMs));
+    Require(! window.Host().HasTooltip(), "stationary passive tooltip auto-hides after the five-second display lifetime");
+
+    SendMessageW(window.Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(40, 28));
+    Require(! window.Host().DebugGetPendingTooltipText().empty(), "pointer movement can schedule the passive tooltip again after auto-hide");
+    passiveRegion->SetTooltipText(L"Updated warning details: 3");
+    SendMessageW(window.Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(40, 28));
+    Require(window.Host().DebugGetPendingTooltipText() == L"Updated warning details: 3",
+            "the next retained-tree hit test invalidates and replaces a pending passive-tooltip request after its text changes");
+
+    auto replacementRoot = std::make_unique<Panel>();
+    replacementRoot->AddChild<Button>(L"Replacement")->SetBounds(D2D1::RectF(16.0f, 12.0f, 176.0f, 52.0f));
+    window.Host().SetRoot(std::move(replacementRoot));
+    Require(window.Host().DebugGetPendingTooltipText().empty() && ! window.Host().HasTooltip(),
+            "retained-tree rebuild cancels a pending passive tooltip without dereferencing the retired target");
+
+    SendMessageW(window.Hwnd(), WM_MOUSELEAVE, 0, 0);
+    Require(! window.Host().HasTooltip(), "host mouse-leave clears passive tooltip state");
+}
+
 } // namespace
 
 void RunTooltipTests()
@@ -302,8 +408,11 @@ void RunTooltipTests()
     TestTooltipLayerFlipsLeftNearRightEdge();
     TestTooltipLayerWrapsLongTextAndStaysClamped();
     TestTooltipLayerHideDelayExpiresAfterTimerTicks();
+    TestTooltipDeadlinesUseCurrentDispatcherClockAfterIdleHostTick();
     TestTooltipLayerTrackingMoveCancelsPendingHideDelay();
     TestGridTooltipTracksPointerWithinSameCell();
+    TestInteractiveTooltipSurvivesEmptySupplementalTargetPass();
     TestTreeTooltipTracksPointerWithinSameRow();
     TestTreeTooltipFallsBackToClippedItemText();
+    TestPassiveSupplementalTooltipUsesHostHitTestingDelayLifetimeAndClickThrough();
 }

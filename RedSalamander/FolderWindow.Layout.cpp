@@ -2,6 +2,7 @@
 
 #include "D2DHdcPaint.h"
 #include "DxUiThemePalette.h"
+#include "FluentIcons.h"
 #include "Helpers.h"
 
 #include <fstream>
@@ -136,36 +137,21 @@ void FolderWindow::OnPaint()
                     return;
                 }
 
-                const int chevronSize = std::min(GetSplitterArrowChevronSizePx(), maxSize);
-                const int halfSize    = std::max(1, chevronSize / 2);
-                const int centerX     = arrowRect.left + (width / 2);
-                const int centerY     = arrowRect.top + (height / 2);
-
                 const bool pointsLeft = GetSplitterArrowTargetPane(zone) == Pane::Right;
-                const POINT apex{centerX + (pointsLeft ? -halfSize : halfSize), centerY};
-                const POINT upper{centerX + (pointsLeft ? halfSize : -halfSize), centerY - halfSize};
-                const POINT lower{upper.x, centerY + halfSize};
-
-                const int dpi         = std::max(1, static_cast<int>(_dpi));
-                const int strokeWidth = std::max(1, MulDiv(kSplitterArrowStrokeWidthDip, dpi, USER_DEFAULT_SCREEN_DPI));
                 RECT client{};
                 GetClientRect(_hWnd.get(), &client);
                 D2DHdcPaint::Session chevronPaint;
                 if (chevronPaint.Begin(hdc.get(), client))
                 {
                     const COLORREF color = GetSplitterArrowColor();
-                    chevronPaint.DrawLine(static_cast<float>(upper.x),
-                                          static_cast<float>(upper.y),
-                                          static_cast<float>(apex.x),
-                                          static_cast<float>(apex.y),
-                                          color,
-                                          static_cast<float>(strokeWidth));
-                    chevronPaint.DrawLine(static_cast<float>(apex.x),
-                                          static_cast<float>(apex.y),
-                                          static_cast<float>(lower.x),
-                                          static_cast<float>(lower.y),
-                                          color,
-                                          static_cast<float>(strokeWidth));
+                    const float fontSizePx = static_cast<float>(std::max(8, GetSplitterArrowChevronSizePx() * 2));
+                    static_cast<void>(chevronPaint.DrawCenteredGlyph(arrowRect,
+                                                                      pointsLeft ? FluentIcons::kChevronLeftSmall
+                                                                                 : FluentIcons::kChevronRightSmall,
+                                                                      pointsLeft ? FluentIcons::kFallbackChevronLeft
+                                                                                 : FluentIcons::kFallbackChevronRight,
+                                                                      color,
+                                                                      fontSizePx));
                 }
             };
 
@@ -279,12 +265,6 @@ void FolderWindow::ApplyTheme(const AppTheme& theme)
         _functionBar.SetTheme(_theme);
     }
 
-    if (_hCommandLineHost)
-    {
-        _commandLineHost.SetTheme(MakeAppThemeDxPalette(_theme, _theme.windowBackground));
-        _commandLineHost.Invalidate();
-    }
-
     ApplyFileOperationsTheme();
     ApplyViewerTheme();
     ApplyOpenedFilesDialogTheme();
@@ -318,9 +298,6 @@ void FolderWindow::CalculateLayout()
         _rightStatusBarRect      = {0, 0, 0, 0};
         _rightPreviewTabsRect    = {0, 0, 0, 0};
         _rightPreviewContentRect = {0, 0, 0, 0};
-        _commandLineRect         = {0, 0, 0, 0};
-        _commandLineLabelRect    = {0, 0, 0, 0};
-        _commandLineEditRect     = {0, 0, 0, 0};
         _functionBarRect         = {0, 0, 0, 0};
         return;
     }
@@ -333,8 +310,7 @@ void FolderWindow::CalculateLayout()
     const int statusBarHeight   = MulDiv(kStatusBarHeightDip, dpi, USER_DEFAULT_SCREEN_DPI);
     const int previewTabHeight  = MulDiv(kPreviewTabHeightDip, dpi, USER_DEFAULT_SCREEN_DPI);
     const int functionBarHeight = _functionBarVisible ? MulDiv(kFunctionBarHeightDip, dpi, USER_DEFAULT_SCREEN_DPI) : 0;
-    const int commandLineHeight = _commandLineVisible ? MulDiv(kCommandLineHeightDip, dpi, USER_DEFAULT_SCREEN_DPI) : 0;
-    const int paneHeight        = std::max(0, height - functionBarHeight - commandLineHeight);
+    const int paneHeight        = std::max(0, height - functionBarHeight);
 
     const int availableWidth = std::max(0, width - splitterWidth);
     int leftWidth            = 0;
@@ -383,7 +359,7 @@ void FolderWindow::CalculateLayout()
         }
 
         previewContentRect = {paneRect.left, top, paneRect.right, paneBottom};
-        if (paneState.previewTabsVisible && paneState.previewTabSelected)
+        if (paneState.previewTabsVisible && (paneState.previewTabSelected || paneState.terminalTabSelected))
         {
             navRect    = {paneRect.left, top, paneRect.right, top};
             filterRect = {paneRect.left, top, paneRect.right, top};
@@ -436,30 +412,7 @@ void FolderWindow::CalculateLayout()
                _rightPreviewTabsRect,
                _rightPreviewContentRect);
 
-    _commandLineRect = {0, paneHeight, width, paneHeight + commandLineHeight};
-    if (commandLineHeight > 0)
-    {
-        const int padX        = MulDiv(kCommandLinePaddingXDip, dpi, USER_DEFAULT_SCREEN_DPI);
-        const int padY        = MulDiv(kCommandLinePaddingYDip, dpi, USER_DEFAULT_SCREEN_DPI);
-        const int labelWidth  = MulDiv(kCommandLineLabelWidthDip, dpi, USER_DEFAULT_SCREEN_DPI);
-        const int lineGap     = MulDiv(kCommandLineGapDip, dpi, USER_DEFAULT_SCREEN_DPI);
-        const LONG lineTop    = _commandLineRect.top + static_cast<LONG>(padY);
-        const LONG lineBottom = std::max<LONG>(lineTop, _commandLineRect.bottom - static_cast<LONG>(padY));
-        const LONG labelLeft  = _commandLineRect.left + static_cast<LONG>(padX);
-        const LONG labelRight = std::min<LONG>(_commandLineRect.right, labelLeft + static_cast<LONG>(labelWidth));
-        const LONG editLeft   = std::min<LONG>(_commandLineRect.right, labelRight + static_cast<LONG>(lineGap));
-        const LONG editRight  = std::max<LONG>(editLeft, _commandLineRect.right - static_cast<LONG>(padX));
-
-        _commandLineLabelRect = {labelLeft, lineTop, labelRight, lineBottom};
-        _commandLineEditRect  = {editLeft, lineTop, editRight, lineBottom};
-    }
-    else
-    {
-        _commandLineLabelRect = {0, 0, 0, 0};
-        _commandLineEditRect  = {0, 0, 0, 0};
-    }
-
-    _functionBarRect = {0, paneHeight + commandLineHeight, width, height};
+    _functionBarRect = {0, paneHeight, width, height};
 }
 
 void FolderWindow::AdjustChildWindows()
@@ -480,52 +433,49 @@ void FolderWindow::AdjustChildWindows()
         bool visible = true;
     };
 
-    const bool leftPreviewSelected  = _leftPane.previewTabsVisible && _leftPane.previewTabSelected;
-    const bool rightPreviewSelected = _rightPane.previewTabsVisible && _rightPane.previewTabSelected;
+    const bool leftAlternateSelected  = _leftPane.previewTabsVisible && (_leftPane.previewTabSelected || _leftPane.terminalTabSelected);
+    const bool rightAlternateSelected = _rightPane.previewTabsVisible && (_rightPane.previewTabSelected || _rightPane.terminalTabSelected);
 
-    std::array<MoveItem, 15> items{};
+    std::array<MoveItem, 13> items{};
     items[0].hwnd     = _leftPane.hNavigationView.get();
     items[0].rect     = _leftNavigationRect;
-    items[0].visible  = _leftPane.navigationBarVisible && ! leftPreviewSelected;
+    items[0].visible  = _leftPane.navigationBarVisible && ! leftAlternateSelected;
     items[1].hwnd     = _leftPane.hFolderView.get();
     items[1].rect     = _leftFolderViewRect;
-    items[1].visible  = ! leftPreviewSelected;
+    items[1].visible  = ! leftAlternateSelected;
     items[2].hwnd     = _leftPane.hFilterBar.get();
     items[2].rect     = _leftFilterBarRect;
-    items[2].visible  = _leftPane.filterBarVisible && ! leftPreviewSelected;
+    items[2].visible  = _leftPane.filterBarVisible && ! leftAlternateSelected;
     items[3].hwnd     = _leftPane.hStatusBar.get();
     items[3].rect     = _leftStatusBarRect;
-    items[3].visible  = _leftPane.statusBarVisible && ! leftPreviewSelected;
+    items[3].visible  = _leftPane.statusBarVisible && ! leftAlternateSelected;
     items[4].hwnd     = _leftPane.hPreviewTabs.get();
     items[4].rect     = _leftPreviewTabsRect;
     items[4].visible  = _leftPane.previewTabsVisible;
     items[5].hwnd     = _leftPane.hPreviewContent.get();
     items[5].rect     = _leftPreviewContentRect;
-    items[5].visible  = leftPreviewSelected;
+    items[5].visible  = leftAlternateSelected;
     items[6].hwnd     = _rightPane.hNavigationView.get();
     items[6].rect     = _rightNavigationRect;
-    items[6].visible  = _rightPane.navigationBarVisible && ! rightPreviewSelected;
+    items[6].visible  = _rightPane.navigationBarVisible && ! rightAlternateSelected;
     items[7].hwnd     = _rightPane.hFolderView.get();
     items[7].rect     = _rightFolderViewRect;
-    items[7].visible  = ! rightPreviewSelected;
+    items[7].visible  = ! rightAlternateSelected;
     items[8].hwnd     = _rightPane.hFilterBar.get();
     items[8].rect     = _rightFilterBarRect;
-    items[8].visible  = _rightPane.filterBarVisible && ! rightPreviewSelected;
+    items[8].visible  = _rightPane.filterBarVisible && ! rightAlternateSelected;
     items[9].hwnd     = _rightPane.hStatusBar.get();
     items[9].rect     = _rightStatusBarRect;
-    items[9].visible  = _rightPane.statusBarVisible && ! rightPreviewSelected;
+    items[9].visible  = _rightPane.statusBarVisible && ! rightAlternateSelected;
     items[10].hwnd    = _rightPane.hPreviewTabs.get();
     items[10].rect    = _rightPreviewTabsRect;
     items[10].visible = _rightPane.previewTabsVisible;
     items[11].hwnd    = _rightPane.hPreviewContent.get();
     items[11].rect    = _rightPreviewContentRect;
-    items[11].visible = rightPreviewSelected;
-    items[12].hwnd    = _hCommandLineHost.get();
-    items[12].rect    = _commandLineRect;
-    items[12].visible = _commandLineVisible;
-    items[13].hwnd    = _functionBar.GetHwnd();
-    items[13].rect    = _functionBarRect;
-    items[13].visible = _functionBarVisible;
+    items[11].visible = rightAlternateSelected;
+    items[12].hwnd    = _functionBar.GetHwnd();
+    items[12].rect    = _functionBarRect;
+    items[12].visible = _functionBarVisible;
 
     int moveCount = 0;
     for (const auto& item : items)
@@ -573,6 +523,8 @@ void FolderWindow::AdjustChildWindows()
     if (hdwp)
     {
         EndDeferWindowPos(hdwp);
+        LayoutEmbeddedTerminal(Pane::Left);
+        LayoutEmbeddedTerminal(Pane::Right);
         return;
     }
 
@@ -589,29 +541,8 @@ void FolderWindow::AdjustChildWindows()
         MoveWindow(item.hwnd, rect.left, rect.top, w, h, TRUE);
         ShowWindow(item.hwnd, item.visible ? SW_SHOWNA : SW_HIDE);
     }
-}
-
-void FolderWindow::UpdateCommandLineHostLayout() noexcept
-{
-    if (! _hCommandLineHost || ! _commandLineLabel || ! _commandLineField)
-    {
-        return;
-    }
-
-    const auto toDip = [this](LONG valuePx) noexcept { return _commandLineHost.PixelsToDip(static_cast<float>(valuePx)); };
-
-    const LONG hostLeft = _commandLineRect.left;
-    const LONG hostTop  = _commandLineRect.top;
-
-    _commandLineLabel->SetBounds(D2D1::RectF(toDip(_commandLineLabelRect.left - hostLeft),
-                                             toDip(_commandLineLabelRect.top - hostTop),
-                                             toDip(_commandLineLabelRect.right - hostLeft),
-                                             toDip(_commandLineLabelRect.bottom - hostTop)));
-    _commandLineField->SetBounds(D2D1::RectF(toDip(_commandLineEditRect.left - hostLeft),
-                                             toDip(_commandLineEditRect.top - hostTop),
-                                             toDip(_commandLineEditRect.right - hostLeft),
-                                             toDip(_commandLineEditRect.bottom - hostTop)));
-    _commandLineHost.Invalidate();
+    LayoutEmbeddedTerminal(Pane::Left);
+    LayoutEmbeddedTerminal(Pane::Right);
 }
 
 void FolderWindow::UpdateFilterBarLayout(Pane pane) noexcept
@@ -995,6 +926,7 @@ void FolderWindow::TogglePreviewPane(Pane sourcePane)
     _previewSourcePane      = sourcePane;
     host.previewTabsVisible = true;
     host.previewTabSelected = true;
+    host.terminalTabSelected = false;
     UpdatePreviewTabSelection(hostPane);
     RefreshPreviewPane();
 
@@ -1014,30 +946,49 @@ bool FolderWindow::IsPreviewPaneOpenForSource(Pane sourcePane) const noexcept
 
 void FolderWindow::SetPreviewPaneTab(Pane hostPane, bool previewTab) noexcept
 {
-    if (! _previewSourcePane.has_value() || OppositePane(_previewSourcePane.value()) != hostPane)
-    {
-        return;
-    }
+    SetPaneContentTab(hostPane, previewTab ? 1u : 0u);
+}
 
+void FolderWindow::SetPaneContentTab(Pane hostPane, size_t tabIndex) noexcept
+{
     PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
-    if (! host.previewTabsVisible)
+    const bool previewAvailable = _previewSourcePane.has_value() && OppositePane(_previewSourcePane.value()) == hostPane;
+    if (! host.previewTabsVisible || (tabIndex == 1u && ! previewAvailable) || (tabIndex == 2u && ! host.terminalOpen) || tabIndex > 2u)
     {
+        UpdatePreviewTabSelection(hostPane);
         return;
     }
 
-    host.previewTabSelected = previewTab;
+    host.previewTabSelected  = tabIndex == 1u;
+    host.terminalTabSelected = tabIndex == 2u;
     UpdatePreviewTabSelection(hostPane);
-    if (previewTab)
+    if (host.previewTabSelected)
     {
         RefreshPreviewPane();
     }
 
     CalculateLayout();
     AdjustChildWindows();
-
     if (_hWnd)
     {
         InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+
+    if (host.previewTabSelected)
+    {
+        // RefreshPreviewPane already restored source FolderView focus. Do not steal it.
+        return;
+    }
+
+    FocusPanePreferredTarget(hostPane);
+    if (host.terminalTabSelected && host.terminalHwnd && IsWindow(host.terminalHwnd) != FALSE)
+    {
+        const HWND focused = GetFocus();
+        if (focused == host.terminalHwnd || IsChild(host.terminalHwnd, focused) != FALSE)
+        {
+            // Terminal WM_SETFOCUS does not post kPaneFocusChanged.
+            SetActivePane(hostPane);
+        }
     }
 }
 
@@ -1053,8 +1004,9 @@ void FolderWindow::ClosePreviewPane() noexcept
     const Pane hostPane = OppositePane(_previewSourcePane.value());
     PaneState& host     = hostPane == Pane::Left ? _leftPane : _rightPane;
 
-    host.previewTabsVisible = false;
+    host.previewTabsVisible = host.terminalOpen;
     host.previewTabSelected = false;
+    host.terminalTabSelected = host.terminalOpen;
     host.previewedPath.clear();
     host.previewViewerPluginId.clear();
     host.previewBytes = 0;
@@ -1183,10 +1135,73 @@ void FolderWindow::UpdatePreviewTabSelection(Pane hostPane) noexcept
     if (host.previewTabsControl)
     {
         UpdatePreviewFolderTabTooltip(hostPane);
-        host.previewTabsControl->SetSelectedIndex(host.previewTabSelected ? std::optional<size_t>{1u} : std::optional<size_t>{0u});
+        const bool previewAvailable = _previewSourcePane.has_value() && OppositePane(_previewSourcePane.value()) == hostPane;
+        host.previewTabsControl->SetTabVisible(1u, previewAvailable);
+        host.previewTabsControl->SetTabVisible(2u, host.terminalOpen);
+        const size_t selectedIndex = host.terminalTabSelected ? 2u : (host.previewTabSelected ? 1u : 0u);
+        host.previewTabsControl->SetSelectedIndex(selectedIndex);
         host.previewTabsHost.Invalidate();
     }
     LayoutEmbeddedPreviewViewer(hostPane);
+    LayoutEmbeddedTerminal(hostPane);
+}
+
+void FolderWindow::LayoutEmbeddedTerminal(Pane hostPane) noexcept
+{
+    if (_suppressEmbeddedTerminalLayout)
+    {
+        return;
+    }
+    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    if (! _hWnd || ! host.hPreviewContent || ! host.terminalHwnd || IsWindow(host.terminalHwnd) == FALSE)
+    {
+        return;
+    }
+
+    const HWND frame = _hWnd.get();
+    const HWND currentParent = GetParent(host.terminalHwnd);
+    if (currentParent != frame && currentParent != host.hPreviewContent.get())
+    {
+        return;
+    }
+
+    if (! host.terminalTabSelected)
+    {
+        ShowWindow(host.terminalHwnd, SW_HIDE);
+        return;
+    }
+
+    RECT dest{};
+    if (currentParent == frame)
+    {
+        // Preview GetClientRect is 0 while the host is still hidden/unsized. The
+        // pane layout rects are already in FolderWindow client coordinates.
+        dest = hostPane == Pane::Left ? _leftPreviewContentRect : _rightPreviewContentRect;
+    }
+    else
+    {
+        GetClientRect(host.hPreviewContent.get(), &dest);
+    }
+    const int width = std::max(0L, dest.right - dest.left);
+    const int height = std::max(0L, dest.bottom - dest.top);
+    if (width <= 0 || height <= 0)
+    {
+        SetWindowPos(host.terminalHwnd,
+                     nullptr,
+                     dest.left,
+                     dest.top,
+                     width,
+                     height,
+                     SWP_NOZORDER | SWP_NOACTIVATE | SWP_HIDEWINDOW);
+        return;
+    }
+
+    UINT flags = SWP_NOACTIVATE;
+    if (IsWindowVisible(host.terminalHwnd) == FALSE)
+    {
+        flags |= SWP_SHOWWINDOW;
+    }
+    SetWindowPos(host.terminalHwnd, HWND_TOP, dest.left, dest.top, width, height, flags);
 }
 
 std::wstring FolderWindow::BuildPreviewTextForPath(Pane sourcePane, const std::filesystem::path& path, uint64_t& outBytes) noexcept

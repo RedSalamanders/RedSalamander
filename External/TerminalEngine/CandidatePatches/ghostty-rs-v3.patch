@@ -1,0 +1,3372 @@
+diff --git a/include/ghostty/vt/allocator.h b/include/ghostty/vt/allocator.h
+index 2e8685e8445431edb1efdd32d9e2788ac795f8b7..509f1fa1ef34f936d0c1452824d1a510d46a5665 100644
+--- a/include/ghostty/vt/allocator.h
++++ b/include/ghostty/vt/allocator.h
+@@ -101,13 +101,14 @@
+  */
+ typedef struct {
+     /**
+-     * Return a pointer to `len` bytes with specified `alignment`, or return
+-     * `NULL` indicating the allocation failed.
++     * Return a pointer to `len` bytes with the byte alignment encoded by
++     * `alignment`, or return `NULL` indicating the allocation failed.
+      *
+      * @param ctx The allocator context
+      * @param len Number of bytes to allocate
+-     * @param alignment Required alignment for the allocation. Guaranteed to
+-     *   be a power of two between 1 and 16 inclusive.
++     * @param alignment Base-2 logarithm of the required byte alignment:
++     *   0 means 1-byte alignment, 1 means 2-byte alignment, and so on.
++     *   Guaranteed to be between 0 and 4 inclusive (1 to 16 bytes).
+      * @param ret_addr First return address of the allocation call stack (0 if not provided)
+      * @return Pointer to allocated memory, or NULL if allocation failed
+      */
+@@ -126,7 +127,8 @@ typedef struct {
+      * @param ctx The allocator context
+      * @param memory Pointer to the memory block to resize
+      * @param memory_len Current size of the memory block
+-     * @param alignment Alignment (must match original allocation)
++     * @param alignment Base-2 logarithm of the byte alignment (must match the
++     *   original allocation)
+      * @param new_len New requested size
+      * @param ret_addr First return address of the allocation call stack (0 if not provided)
+      * @return true if resize was successful in-place, false if relocation would be required
+@@ -153,7 +155,8 @@ typedef struct {
+      * @param ctx The allocator context
+      * @param memory Pointer to the memory block to remap
+      * @param memory_len Current size of the memory block
+-     * @param alignment Alignment (must match original allocation)
++     * @param alignment Base-2 logarithm of the byte alignment (must match the
++     *   original allocation)
+      * @param new_len New requested size
+      * @param ret_addr First return address of the allocation call stack (0 if not provided)
+      * @return Pointer to resized memory (may be relocated), or NULL if manual copy is needed
+@@ -171,7 +174,8 @@ typedef struct {
+      * @param ctx The allocator context
+      * @param memory Pointer to the memory block to free
+      * @param memory_len Size of the memory block
+-     * @param alignment Alignment (must match original allocation)
++     * @param alignment Base-2 logarithm of the byte alignment (must match the
++     *   original allocation)
+      * @param ret_addr First return address of the allocation call stack (0 if not provided)
+      */
+     void (*free)(void *ctx, void *memory, size_t memory_len, uint8_t alignment, uintptr_t ret_addr);
+diff --git a/include/ghostty/vt/build_info.h b/include/ghostty/vt/build_info.h
+index 8573556f7f8843bcc2426d84aed269d63bec9b4f..f7f74f18217f7ae6b8237a32fe37547b5070ae52 100644
+--- a/include/ghostty/vt/build_info.h
++++ b/include/ghostty/vt/build_info.h
+@@ -25,6 +25,7 @@
+ 
+ #include <stddef.h>
+ #include <stdbool.h>
++#include <stdint.h>
+ 
+ #include <ghostty/vt/types.h>
+ 
+@@ -141,6 +142,70 @@ typedef enum GHOSTTY_ENUM_TYPED {
+  */
+ GHOSTTY_API GhosttyResult ghostty_build_info(GhosttyBuildInfo data, void *out);
+ 
++/** Architecture of the loaded runtime. */
++typedef enum GHOSTTY_ENUM_TYPED {
++  GHOSTTY_RUNTIME_ARCHITECTURE_UNKNOWN = 0,
++  GHOSTTY_RUNTIME_ARCHITECTURE_X86_64 = 1,
++  GHOSTTY_RUNTIME_ARCHITECTURE_AARCH64 = 2,
++  GHOSTTY_RUNTIME_ARCHITECTURE_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
++} GhosttyRuntimeArchitecture;
++
++/** Calling convention used by every public function and callback. */
++typedef enum GHOSTTY_ENUM_TYPED {
++  GHOSTTY_RUNTIME_CALLING_CONVENTION_UNKNOWN = 0,
++  GHOSTTY_RUNTIME_CALLING_CONVENTION_C = 1,
++  GHOSTTY_RUNTIME_CALLING_CONVENTION_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
++} GhosttyRuntimeCallingConvention;
++
++/** Runtime capability bits returned in GhosttyRuntimeIdentity.capabilities. */
++#define GHOSTTY_RUNTIME_CAP_VT_PARSER UINT64_C(1)
++#define GHOSTTY_RUNTIME_CAP_TERMINAL_MODEL UINT64_C(2)
++#define GHOSTTY_RUNTIME_CAP_RENDER_STATE UINT64_C(4)
++#define GHOSTTY_RUNTIME_CAP_KITTY_GRAPHICS UINT64_C(8)
++#define GHOSTTY_RUNTIME_CAP_SCROLLBACK_COMPRESSION UINT64_C(16)
++#define GHOSTTY_RUNTIME_CAP_RESOURCE_LIMITS UINT64_C(32)
++#define GHOSTTY_RUNTIME_CAP_SELECTION UINT64_C(64)
++
++/**
++ * Exact identity of the loaded patched runtime.
++ *
++ * Set `size` to `sizeof(GhosttyRuntimeIdentity)`. The query rejects every
++ * other size rather than returning a partial identity. Strings are immutable,
++ * owned by the library, and remain valid for the process lifetime.
++ *
++ * `public_header_sha256` is the lowercase SHA-256 of the public libghostty-vt
++ * header set shipped with the patch: lexicographically sorted slash-normalized
++ * paths relative to `include`, each followed by a NUL byte and then its raw
++ * file bytes. `enum_identity` deterministically covers the patch ABI's
++ * resource, terminal-option, architecture, calling-convention, and capability
++ * assignments. `type_layout_identity` covers GhosttyTerminalResourceLimits
++ * and GhosttyRuntimeIdentity sizes, alignments, fields, and offsets. The full
++ * header digest remains the identity for every other public declaration.
++ */
++typedef struct {
++  size_t size;
++  GhosttyString upstream_commit;
++  uint32_t red_salamander_patch_abi;
++  GhosttyString public_header_sha256;
++  GhosttyString build_identity;
++  GhosttyRuntimeArchitecture architecture;
++  GhosttyRuntimeCallingConvention calling_convention;
++  uint64_t capabilities;
++  uint64_t enum_identity;
++  uint64_t type_layout_identity;
++  uint32_t pointer_size;
++  uint32_t terminal_resource_limits_size;
++} GhosttyRuntimeIdentity;
++
++/**
++ * Query the complete runtime identity.
++ *
++ * @return GHOSTTY_SUCCESS only when `out` is non-NULL and `out->size` exactly
++ *         matches the loaded ABI; otherwise GHOSTTY_INVALID_VALUE.
++ */
++GHOSTTY_API GhosttyResult ghostty_runtime_identity(
++    GhosttyRuntimeIdentity *out);
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/include/ghostty/vt/kitty_graphics.h b/include/ghostty/vt/kitty_graphics.h
+index dda8b836e1e7b87ff95038e970f1b57be2d9808a..7be2e2c20fa00b91fe0a716865b27022f6900230 100644
+--- a/include/ghostty/vt/kitty_graphics.h
++++ b/include/ghostty/vt/kitty_graphics.h
+@@ -96,6 +96,12 @@ extern "C" {
+  *   geometry can still change independently (scrolling moves
+  *   placements), so ghostty_kitty_graphics_placement_render_info()
+  *   should still be recomputed on dirty frames.
++ * - @ref GHOSTTY_KITTY_GRAPHICS_DATA_IMAGE_GENERATION and
++ *   @ref GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_GENERATION are independent
++ *   storage-wide stamps. An image-only mutation changes only the former;
++ *   a placement-only mutation changes only the latter. A mutation that
++ *   affects both assigns two distinct stamps and leaves the aggregate
++ *   generation equal to the later one.
+  * - @ref GHOSTTY_KITTY_IMAGE_DATA_GENERATION is a per-image stamp
+  *   changed on every add/replace of that image ID. Texture caches
+  *   should treat a cached texture as stale when this differs from the
+@@ -164,6 +170,22 @@ typedef enum GHOSTTY_ENUM_TYPED {
+    * Output type: uint64_t *
+    */
+   GHOSTTY_KITTY_GRAPHICS_DATA_GENERATION = 2,
++
++  /**
++   * Generation stamp of the last image-set or image-content mutation.
++   * Placement-only mutations do not change this value.
++   *
++   * Output type: uint64_t *
++   */
++  GHOSTTY_KITTY_GRAPHICS_DATA_IMAGE_GENERATION = 3,
++
++  /**
++   * Generation stamp of the last placement-set mutation. Image-only
++   * mutations do not change this value.
++   *
++   * Output type: uint64_t *
++   */
++  GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_GENERATION = 4,
+   GHOSTTY_KITTY_GRAPHICS_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
+ } GhosttyKittyGraphicsData;
+ 
+@@ -260,6 +282,16 @@ typedef enum GHOSTTY_ENUM_TYPED {
+    */
+   GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_Z = 12,
+ 
++  /**
++   * Generation stamp assigned when this placement was added or replaced.
++   * It is process-global, monotonically increasing, and never zero for a
++   * stored placement. Delete and re-add of the same image/placement key
++   * therefore cannot alias a cached placement.
++   *
++   * Output type: uint64_t *
++   */
++  GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_GENERATION = 13,
++
+   GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
+ } GhosttyKittyGraphicsPlacementData;
+ 
+diff --git a/include/ghostty/vt/terminal.h b/include/ghostty/vt/terminal.h
+index 9480d37a399b4111fc96840b0cba500b2fe3b4e9..0d85cbaff43afeb99d58598b319032ef6be9ff0d 100644
+--- a/include/ghostty/vt/terminal.h
++++ b/include/ghostty/vt/terminal.h
+@@ -694,6 +694,100 @@ typedef void (*GhosttyTerminalWritePtyFn)(GhosttyTerminal terminal,
+ typedef GhosttyString (*GhosttyTerminalXtversionFn)(GhosttyTerminal terminal,
+                                                      void* userdata);
+ 
++/**
++ * Resource category passed to reservation callbacks.
++ *
++ * New categories may be added only with a RedSalamander patch ABI version
++ * change, allowing embedders to fail closed on an unknown contract.
++ */
++typedef enum GHOSTTY_ENUM_TYPED {
++  /** Kitty parser/storage/map/decoder heap extents, including PNG scratch. */
++  GHOSTTY_TERMINAL_RESOURCE_KITTY_IMAGE_CPU = 0,
++  /** Grid, scrollback, reflow, compression, and retained terminal-state extents. */
++  GHOSTTY_TERMINAL_RESOURCE_TERMINAL_TEXT_CPU = 1,
++  /** OSC/APC/DCS payloads and synchronous effect/response scratch extents. */
++  GHOSTTY_TERMINAL_RESOURCE_PENDING_EFFECT = 2,
++  GHOSTTY_TERMINAL_RESOURCE_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
++} GhosttyTerminalResourceKind;
++
++/**
++ * Reserve bytes before an engine-owned heap extent is allocated. `bytes` is
++ * the exact payload extent requested from the configured child allocator;
++ * allocator-private metadata and platform allocation rounding are outside this
++ * ledger. Returning false rejects the operation before allocation. Every true
++ * result is paired with exactly one release callback for the same category and
++ * byte count, including error and terminal teardown paths.
++ *
++ * A growing extent reserves its complete replacement while the old extent is
++ * still reserved, then releases the old extent only after replacement
++ * succeeds. Checked arithmetic precedes every callback and allocation.
++ *
++ * The callbacks execute synchronously on the thread making the terminal API
++ * call and must not reenter the same terminal. They may atomically aggregate
++ * session and process ledgers in userdata.
++ */
++typedef bool (*GhosttyTerminalResourceReserveFn)(
++    void* userdata,
++    GhosttyTerminalResourceKind kind,
++    size_t bytes);
++
++/** Release a successful resource reservation. */
++typedef void (*GhosttyTerminalResourceReleaseFn)(
++    void* userdata,
++    GhosttyTerminalResourceKind kind,
++    size_t bytes);
++
++/**
++ * Fail-closed limits for allocations derived from untrusted terminal input.
++ *
++ * Set `size` to `sizeof(GhosttyTerminalResourceLimits)`. The library rejects
++ * any other size, a callback pair with only one function, or a value above
++ * the built-in ceiling. Zero is a valid value and disables the corresponding
++ * payload. Installing or replacing a callback identity atomically reserves
++ * every already-live category balance with the prospective callbacks before
++ * releasing any old balance or publishing the new identity. If any prospective
++ * reservation fails, all prospective reservations are rolled back and the old
++ * identity and limits remain unchanged.
++ *
++ * The callbacks and userdata must remain valid until a successful later
++ * identity migration or terminal destruction has emitted every matching
++ * release. Initial grid allocations are adopted during the first successful
++ * callback installation.
++ *
++ * OSC/APC/DCS and effect callback arguments are borrowed. Their
++ * PENDING_EFFECT heap reservations are released before
++ * ghostty_terminal_vt_write() returns unless parser state remains incomplete
++ * across writes. A consumer that queues an effect must copy it into and charge
++ * its own queue ledger; it must not retain or charge the borrowed engine bytes.
++ *
++ * Kitty zlib decode uses exactly 96 KiB of fixed stack scratch (32 KiB window
++ * plus 64 KiB output chunk). This bounded non-owning stack frame is explicitly
++ * outside the heap callback ledger. All Kitty heap storage, including
++ * embedder-PNG-decoder allocations made through the supplied allocator, is
++ * KITTY_IMAGE_CPU.
++ */
++typedef struct {
++  size_t size;
++  void* userdata;
++  GhosttyTerminalResourceReserveFn reserve;
++  GhosttyTerminalResourceReleaseFn release;
++  size_t kitty_max_input_bytes;
++  size_t kitty_max_decoded_bytes;
++  uint64_t kitty_max_pixels;
++  uint32_t kitty_max_dimension;
++  size_t osc_generic_max_bytes;
++  size_t osc_title_max_bytes;
++  size_t osc_hyperlink_max_bytes;
++  size_t osc_hyperlink_uri_max_bytes;
++  size_t osc_hyperlink_params_max_bytes;
++  size_t osc_clipboard_encoded_max_bytes;
++  size_t osc_clipboard_decoded_max_bytes;
++  size_t osc_pwd_max_bytes;
++  size_t osc_shell_integration_max_bytes;
++  size_t apc_generic_max_bytes;
++  size_t apc_kitty_max_bytes;
++} GhosttyTerminalResourceLimits;
++
+ /**
+  * Terminal option identifiers.
+  *
+@@ -1027,6 +1121,18 @@ typedef enum GHOSTTY_ENUM_TYPED {
+    * Input type: GhosttyTerminalProgressReportFn
+    */
+   GHOSTTY_TERMINAL_OPT_PROGRESS_REPORT = 30,
++
++  /**
++   * Set all untrusted-input resource ceilings and optional typed accounting
++   * callbacks atomically. Passing NULL restores built-in ceilings and clears
++   * callbacks. Callback identity migration first reserves every complete live
++   * category balance with the prospective callbacks. Failure rolls that prefix
++   * back and changes neither callbacks nor ceilings; success then releases the
++   * old balances and publishes the new identity and ceilings.
++   *
++   * Input type: GhosttyTerminalResourceLimits*
++   */
++  GHOSTTY_TERMINAL_OPT_RESOURCE_LIMITS = 31,
+   GHOSTTY_TERMINAL_OPT_MAX_VALUE = GHOSTTY_ENUM_MAX_VALUE,
+ } GhosttyTerminalOption;
+ 
+diff --git a/src/build/GhosttyZig.zig b/src/build/GhosttyZig.zig
+index 4671219e0837b4f09c6c6a280f329ff7b3d6a1fc..85ea33abf8297064acbf6ddfddfed802155aaa55 100644
+--- a/src/build/GhosttyZig.zig
++++ b/src/build/GhosttyZig.zig
+@@ -118,6 +118,7 @@ fn initVt(
+         .root_source_file = b.path("src/lib_vt.zig"),
+         .target = cfg.target,
+         .optimize = cfg.optimize,
++        .strip = cfg.strip,
+ 
+         // SIMD requires libc. Vendored C++ dependencies are built with
+         // no-libcxx mode (HWY_NO_LIBCXX / SIMDUTF_NO_LIBCXX) so we
+@@ -130,6 +131,7 @@ fn initVt(
+     });
+     vt.addOptions("build_options", general_options);
+     vt_options.add(b, vt);
++    vt.addIncludePath(b.path("include"));
+ 
+     // We always need unicode tables
+     deps.unicode_tables.addModuleImport(vt);
+diff --git a/src/lib_vt.zig b/src/lib_vt.zig
+index 0d9fda7c670ac93d8f00be1ee2b11fe6787f21d5..2a5dc76a18f0a12a39ddbe156c7540cb8b43b699 100644
+--- a/src/lib_vt.zig
++++ b/src/lib_vt.zig
+@@ -337,6 +337,7 @@ comptime {
+         @export(&c.tracked_grid_ref_set, .{ .name = "ghostty_tracked_grid_ref_set" });
+         @export(&c.tracked_grid_ref_snapshot, .{ .name = "ghostty_tracked_grid_ref_snapshot" });
+         @export(&c.build_info, .{ .name = "ghostty_build_info" });
++        @export(&c.runtime_identity, .{ .name = "ghostty_runtime_identity" });
+         @export(&c.type_json, .{ .name = "ghostty_type_json" });
+         @export(&c.alloc_alloc, .{ .name = "ghostty_alloc" });
+         @export(&c.alloc_free, .{ .name = "ghostty_free" });
+diff --git a/src/terminal/PageList.zig b/src/terminal/PageList.zig
+index e6fd48bb83249e7e1195a19a95c353677bb56528..8efe697ac840e060fa78fac6fdb0529a27e205cd 100644
+--- a/src/terminal/PageList.zig
++++ b/src/terminal/PageList.zig
+@@ -517,7 +517,7 @@ fn initialCapacity(cols: size.CellCountInt) Capacity {
+ 
+ /// This is the page allocator we'll use for all our underlying
+ /// VM page allocations.
+-inline fn pageAllocator() Allocator {
++pub inline fn pageAllocator() Allocator {
+     // In tests we use our testing allocator so we can detect leaks.
+     if (builtin.is_test) return std.testing.allocator;
+ 
+@@ -554,6 +554,11 @@ pub const Options = struct {
+     ///
+     /// Null is unlimited.
+     max_lines: ?usize = null,
++
++    /// Allocator for terminal page mappings. Null selects the platform
++    /// default. Embedders can provide a typed accounting allocator without
++    /// routing non-page terminal metadata through the VM allocator.
++    page_allocator: ?Allocator = null,
+ };
+ 
+ /// Initialize the page. The top of the first page in the list is always the
+@@ -591,7 +596,7 @@ pub fn init(
+     try tw.check(.init_memory_pool);
+     var pool = try MemoryPool.init(
+         alloc,
+-        pageAllocator(),
++        opts.page_allocator orelse pageAllocator(),
+         page_preheat,
+     );
+     errdefer pool.deinit();
+@@ -1074,7 +1079,7 @@ pub fn clone(
+     // Setup our pool
+     var pool: MemoryPool = try .init(
+         alloc,
+-        pageAllocator(),
++        self.pool.pages.allocator,
+         page_count,
+     );
+     errdefer pool.deinit();
+diff --git a/src/terminal/Screen.zig b/src/terminal/Screen.zig
+index 1acb30c16ddaff945f4908c3ef11a14d0693b9f5..c8c7abb20a93bbaa3ec7566a2ba1033e90c1787e 100644
+--- a/src/terminal/Screen.zig
++++ b/src/terminal/Screen.zig
+@@ -39,6 +39,13 @@ io: std.Io,
+ /// Unfortunately some screen operations do require allocation.
+ alloc: Allocator,
+ 
++/// Allocator reserved for Kitty graphics ownership. It is separate from
++/// alloc so terminal text and image storage can use disjoint ledgers.
++kitty_alloc: Allocator,
++
++/// Allocator used for VM-backed terminal page mappings.
++page_alloc: Allocator,
++
+ /// The list of pages in the screen.
+ pages: PageList,
+ 
+@@ -263,6 +270,13 @@ pub const Options = struct {
+     /// standard page and only complete historical pages are pruned.
+     max_scrollback_lines: ?usize = null,
+ 
++    /// Optional allocator for VM-backed terminal pages.
++    page_allocator: ?Allocator = null,
++
++    /// Optional allocator for Kitty graphics state and image buffers.
++    /// Null preserves the historical behavior of using `alloc`.
++    kitty_allocator: ?Allocator = null,
++
+     /// The total storage limit for Kitty images in bytes for this
+     /// screen. Kitty image storage is per-screen.
+     kitty_image_storage_limit: usize = switch (build_options.artifact) {
+@@ -298,12 +312,15 @@ pub fn init(
+     alloc: Allocator,
+     opts: Options,
+ ) Allocator.Error!Screen {
++    const page_alloc = opts.page_allocator orelse PageList.pageAllocator();
++
+     // Initialize our backing pages.
+     var pages = try PageList.init(alloc, .{
+         .cols = opts.cols,
+         .rows = opts.rows,
+         .max_size = opts.max_scrollback_bytes,
+         .max_lines = opts.max_scrollback_lines,
++        .page_allocator = page_alloc,
+     });
+     errdefer pages.deinit();
+ 
+@@ -315,6 +332,8 @@ pub fn init(
+     var result: Screen = .{
+         .io = io,
+         .alloc = alloc,
++        .kitty_alloc = opts.kitty_allocator orelse alloc,
++        .page_alloc = page_alloc,
+         .pages = pages,
+         .no_scrollback = opts.max_scrollback_bytes == 0,
+         .cursor = .{
+@@ -331,7 +350,7 @@ pub fn init(
+         // and the only fail-able case is that we have to evict images.
+         result.kitty_images.setLimit(
+             io,
+-            alloc,
++            result.kitty_alloc,
+             &result,
+             opts.kitty_image_storage_limit,
+         ) catch unreachable;
+@@ -343,7 +362,7 @@ pub fn init(
+ 
+ pub fn deinit(self: *Screen) void {
+     if (comptime build_options.kitty_graphics) {
+-        self.kitty_images.deinit(self.alloc, self);
++        self.kitty_images.deinit(self.kitty_alloc, self);
+     }
+     self.cursor.deinit(self.alloc);
+     self.pages.deinit();
+@@ -407,7 +426,7 @@ pub fn reset(self: *Screen) void {
+ 
+     if (comptime build_options.kitty_graphics) {
+         // Reset kitty graphics storage
+-        self.kitty_images.deinit(self.alloc, self);
++        self.kitty_images.deinit(self.kitty_alloc, self);
+         self.kitty_images = .{ .dirty = true };
+     }
+ 
+@@ -580,6 +599,8 @@ pub fn clone(
+     const result: Screen = .{
+         .io = io,
+         .alloc = alloc,
++        .kitty_alloc = self.kitty_alloc,
++        .page_alloc = self.page_alloc,
+         .pages = pages,
+         .no_scrollback = self.no_scrollback,
+         .cursor = cursor,
+diff --git a/src/terminal/Terminal.zig b/src/terminal/Terminal.zig
+index d47fd474f86e60857ab3e8c6a0b858bb765b7c3e..e36412b5bc8ccb132745e795c1e2643b8ef44111 100644
+--- a/src/terminal/Terminal.zig
++++ b/src/terminal/Terminal.zig
+@@ -270,6 +270,12 @@ pub const Options = struct {
+     /// standard page and only complete historical pages are pruned.
+     max_scrollback_lines: ?usize = null,
+ 
++    /// Optional allocator for VM-backed terminal pages.
++    page_allocator: ?Allocator = null,
++
++    /// Optional allocator for Kitty graphics ownership.
++    kitty_allocator: ?Allocator = null,
++
+     colors: Colors = .default,
+ 
+     /// The default mode state. When the terminal gets a reset, it
+@@ -315,6 +321,8 @@ pub fn init(
+         .rows = rows,
+         .max_scrollback_bytes = opts.max_scrollback_bytes,
+         .max_scrollback_lines = opts.max_scrollback_lines,
++        .page_allocator = opts.page_allocator,
++        .kitty_allocator = opts.kitty_allocator,
+         .kitty_image_storage_limit = opts.kitty_image_storage_limit,
+         .kitty_image_loading_limits = opts.kitty_image_loading_limits,
+     });
+@@ -446,6 +454,11 @@ pub fn gpa(self: *Terminal) Allocator {
+     return self.screens.active.alloc;
+ }
+ 
++/// The allocator reserved for Kitty graphics ownership.
++pub fn kittyAllocator(self: *Terminal) Allocator {
++    return self.screens.active.kitty_alloc;
++}
++
+ /// Change the primary screen's maximum scrollback allocation in bytes.
+ ///
+ /// Null removes the byte limit and zero disables scrollback. Disabling
+@@ -3330,7 +3343,7 @@ pub fn eraseDisplay(
+                 // Clear all Kitty graphics state for this screen
+                 self.screens.active.kitty_images.delete(
+                     self.io(),
+-                    self.screens.active.alloc,
++                    self.screens.active.kitty_alloc,
+                     self,
+                     .{ .all = true },
+                 );
+@@ -3388,7 +3401,7 @@ pub fn eraseDisplay(
+                 // Clear all Kitty graphics state for this screen
+                 self.screens.active.kitty_images.delete(
+                     self.io(),
+-                    self.screens.active.alloc,
++                    self.screens.active.kitty_alloc,
+                     self,
+                     .{ .all = true },
+                 );
+@@ -3547,11 +3560,17 @@ pub fn setKittyGraphicsSizeLimit(
+     alloc: Allocator,
+     limit: usize,
+ ) !void {
++    _ = alloc;
+     if (comptime !build_options.kitty_graphics) return;
+     var it = self.screens.all.iterator();
+     while (it.next()) |entry| {
+         const screen: *Screen = entry.value.*;
+-        try screen.kitty_images.setLimit(self.io(), alloc, screen, limit);
++        try screen.kitty_images.setLimit(
++            self.io(),
++            screen.kitty_alloc,
++            screen,
++            limit,
++        );
+     }
+ }
+ 
+@@ -3868,6 +3887,8 @@ pub fn resize(
+                 .cols = opts.cols,
+                 .rows = opts.rows,
+                 .max_scrollback_bytes = 0,
++                .page_allocator = primary.page_alloc,
++                .kitty_allocator = primary.kitty_alloc,
+                 .kitty_image_storage_limit = if (comptime build_options.kitty_graphics)
+                     primary.kitty_images.total_limit
+                 else
+@@ -4479,6 +4500,8 @@ pub fn switchScreen(self: *Terminal, key: ScreenSet.Key) !?*Screen {
+                     .primary => primary.pages.limits.bytes.explicit,
+                     .alternate => 0,
+                 },
++                .page_allocator = primary.page_alloc,
++                .kitty_allocator = primary.kitty_alloc,
+ 
+                 // Inherit our Kitty image settings from the primary
+                 // screen if we have to initialize.
+diff --git a/src/terminal/apc.zig b/src/terminal/apc.zig
+index 121f906a0cd4e6c8760830c15a77c658cfc6c966..d018c4c7f7c45cb62bf4f459a34118ad4d330e05 100644
+--- a/src/terminal/apc.zig
++++ b/src/terminal/apc.zig
+@@ -239,13 +239,11 @@ pub const Protocol = enum {
+     /// Returns the default maximum bytes for the given protocol.
+     pub fn defaultMaxBytes(self: Protocol) usize {
+         return switch (self) {
+-            // Kitty graphics payloads can be very large (e.g. full images
+-            // encoded as base64), so the default is set to 65 MiB.
+-            .kitty => 65 * 1024 * 1024,
+-            // Glyph protocol messages carry single glyf outlines which
+-            // are small, but base64 encoding inflates them. 1 MiB is
+-            // generous for any single simple-glyph record.
+-            .glyph => 1 * 1024 * 1024,
++            // This is only the encoded bytes for one APC command. Decoded
++            // image accumulation has its own separate 64 MiB ceiling.
++            .kitty => 1 * 1024 * 1024,
++            // All non-Kitty APC protocols share the generic ceiling.
++            .glyph => 64 * 1024,
+         };
+     }
+ };
+@@ -271,6 +269,27 @@ pub const Command = union(Protocol) {
+     }
+ };
+ 
++test "frozen APC encoded byte ceilings" {
++    try std.testing.expectEqual(
++        @as(usize, 64 * 1024),
++        Protocol.defaultMaxBytes(.glyph),
++    );
++    try std.testing.expectEqual(
++        @as(usize, 1024 * 1024),
++        Protocol.defaultMaxBytes(.kitty),
++    );
++
++    const handler: Handler = .{};
++    try std.testing.expectEqual(
++        @as(usize, 64 * 1024),
++        handler.max_bytes.get(.glyph).?,
++    );
++    try std.testing.expectEqual(
++        @as(usize, 1024 * 1024),
++        handler.max_bytes.get(.kitty).?,
++    );
++}
++
+ test "unknown APC command" {
+     const testing = std.testing;
+     const alloc = testing.allocator;
+diff --git a/src/terminal/build_options.zig b/src/terminal/build_options.zig
+index 136e0f101f290b3337f5afd0492d64be31e72f37..5fe9095f411c7e71f462e05a570247dbf5f23426 100644
+--- a/src/terminal/build_options.zig
++++ b/src/terminal/build_options.zig
+@@ -88,7 +88,84 @@ pub const Options = struct {
+         opts.addOption(usize, "version_patch", self.version.patch);
+         opts.addOption(?[]const u8, "version_pre", self.version.pre);
+         opts.addOption(?[]const u8, "version_build", self.version.build);
++        opts.addOption(
++            []const u8,
++            "public_header_sha256",
++            publicHeaderSha256(b) catch |err| std.debug.panic(
++                "failed to hash public libghostty-vt headers: {s}",
++                .{@errorName(err)},
++            ),
++        );
+ 
+         m.addOptions("terminal_options", opts);
+     }
+ };
++
++/// Hash the exact public libghostty-vt header set on every build.
++///
++/// The canonical byte stream is the slash-normalized path relative to
++/// `include`, a NUL byte, and the raw file contents for every matching header
++/// in lexicographic path order.
++fn publicHeaderSha256(b: *std.Build) ![]const u8 {
++    var include_dir = try b.build_root.handle.openDir(
++        b.graph.io,
++        "include",
++        .{ .iterate = true },
++    );
++    defer include_dir.close(b.graph.io);
++
++    var paths: std.ArrayListUnmanaged([]u8) = .empty;
++    defer {
++        for (paths.items) |path| b.allocator.free(path);
++        paths.deinit(b.allocator);
++    }
++
++    var walk = try include_dir.walk(b.allocator);
++    defer walk.deinit();
++    while (try walk.next(b.graph.io)) |entry| {
++        if (entry.kind != .file or
++            !std.mem.endsWith(u8, entry.path, ".h"))
++        {
++            continue;
++        }
++
++        const canonical = try b.allocator.dupe(u8, entry.path);
++        errdefer b.allocator.free(canonical);
++        std.mem.replaceScalar(u8, canonical, '\\', '/');
++        if (!std.mem.eql(u8, canonical, "ghostty/vt.h") and
++            !std.mem.startsWith(u8, canonical, "ghostty/vt/"))
++        {
++            b.allocator.free(canonical);
++            continue;
++        }
++        try paths.append(b.allocator, canonical);
++    }
++
++    std.mem.sort([]u8, paths.items, {}, struct {
++        fn lessThan(_: void, lhs: []u8, rhs: []u8) bool {
++            return std.mem.order(u8, lhs, rhs) == .lt;
++        }
++    }.lessThan);
++
++    var hasher = std.crypto.hash.sha2.Sha256.init(.{});
++    for (paths.items) |path| {
++        hasher.update(path);
++        hasher.update(&.{0});
++
++        const contents = try include_dir.readFileAlloc(
++            b.graph.io,
++            path,
++            b.allocator,
++            .limited(16 * 1024 * 1024),
++        );
++        defer b.allocator.free(contents);
++        hasher.update(contents);
++    }
++
++    var digest: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
++    hasher.final(&digest);
++    return b.allocator.dupe(
++        u8,
++        &std.fmt.bytesToHex(digest, .lower),
++    );
++}
+diff --git a/src/terminal/c/build_info.zig b/src/terminal/c/build_info.zig
+index a186163a5092a88b250192e932eeb9e0181807f6..c90a8d61cbe47bd55069c72eab22c10f9c6bf624 100644
+--- a/src/terminal/c/build_info.zig
++++ b/src/terminal/c/build_info.zig
+@@ -3,6 +3,7 @@ const builtin = @import("builtin");
+ const lib = @import("../lib.zig");
+ const build_options = @import("terminal_options");
+ const Result = @import("result.zig").Result;
++const terminal_c = @import("terminal.zig");
+ 
+ const log = std.log.scoped(.build_info_c);
+ 
+@@ -40,6 +41,172 @@ pub const BuildInfo = enum(c_int) {
+     }
+ };
+ 
++/// C: GhosttyRuntimeArchitecture
++pub const RuntimeArchitecture = enum(c_int) {
++    unknown = 0,
++    x86_64 = 1,
++    aarch64 = 2,
++};
++
++/// C: GhosttyRuntimeCallingConvention
++pub const RuntimeCallingConvention = enum(c_int) {
++    unknown = 0,
++    c = 1,
++};
++
++/// C: GhosttyRuntimeIdentity
++pub const RuntimeIdentity = extern struct {
++    size: usize,
++    upstream_commit: lib.String,
++    red_salamander_patch_abi: u32,
++    public_header_sha256: lib.String,
++    build_identity: lib.String,
++    architecture: RuntimeArchitecture,
++    calling_convention: RuntimeCallingConvention,
++    capabilities: u64,
++    enum_identity: u64,
++    type_layout_identity: u64,
++    pointer_size: u32,
++    terminal_resource_limits_size: u32,
++};
++
++const upstream_commit = "70c498ac3273661aebf6cce9904c0d42b2e5d299";
++const public_header_sha256 = build_options.public_header_sha256;
++const red_salamander_patch_abi: u32 = 1;
++
++fn identityHashBytes(hash: *u64, bytes: []const u8) void {
++    for (bytes) |byte| {
++        hash.* ^= byte;
++        hash.* *%= 0x100000001b3;
++    }
++}
++
++fn identityHashU64(hash: *u64, value_: u64) void {
++    var value = value_;
++    inline for (0..8) |_| {
++        identityHashBytes(hash, &.{@truncate(value)});
++        value >>= 8;
++    }
++}
++
++fn identityHashEnum(
++    hash: *u64,
++    comptime name: []const u8,
++    comptime T: type,
++) void {
++    identityHashBytes(hash, name);
++    identityHashBytes(hash, &.{0});
++    inline for (@typeInfo(T).@"enum".fields) |field| {
++        identityHashBytes(hash, field.name);
++        identityHashBytes(hash, &.{0});
++        identityHashU64(hash, @intCast(field.value));
++    }
++}
++
++fn identityHashStruct(
++    hash: *u64,
++    comptime name: []const u8,
++    comptime T: type,
++) void {
++    identityHashBytes(hash, name);
++    identityHashBytes(hash, &.{0});
++    identityHashU64(hash, @sizeOf(T));
++    identityHashU64(hash, @alignOf(T));
++    inline for (@typeInfo(T).@"struct".fields) |field| {
++        identityHashBytes(hash, field.name);
++        identityHashBytes(hash, &.{0});
++        identityHashU64(hash, @offsetOf(T, field.name));
++        identityHashU64(hash, @sizeOf(field.type));
++        identityHashU64(hash, @alignOf(field.type));
++    }
++}
++
++fn computeEnumIdentity() u64 {
++    @setEvalBranchQuota(10_000);
++    var hash: u64 = 0xcbf29ce484222325;
++    identityHashEnum(
++        &hash,
++        "GhosttyTerminalResourceKind",
++        terminal_c.ResourceKind,
++    );
++    identityHashEnum(
++        &hash,
++        "GhosttyTerminalOption",
++        terminal_c.Option,
++    );
++    identityHashEnum(
++        &hash,
++        "GhosttyRuntimeArchitecture",
++        RuntimeArchitecture,
++    );
++    identityHashEnum(
++        &hash,
++        "GhosttyRuntimeCallingConvention",
++        RuntimeCallingConvention,
++    );
++    inline for ([_]u64{ 1, 2, 4, 8, 16, 32, 64 }) |capability| {
++        identityHashU64(&hash, capability);
++    }
++    return hash;
++}
++
++fn computeTypeLayoutIdentity() u64 {
++    @setEvalBranchQuota(10_000);
++    var hash: u64 = 0xcbf29ce484222325;
++    identityHashStruct(
++        &hash,
++        "GhosttyTerminalResourceLimits",
++        terminal_c.ResourceLimits,
++    );
++    identityHashStruct(
++        &hash,
++        "GhosttyRuntimeIdentity",
++        RuntimeIdentity,
++    );
++    return hash;
++}
++
++const enum_identity = computeEnumIdentity();
++const type_layout_identity = computeTypeLayoutIdentity();
++
++pub fn runtimeIdentity(
++    out_: ?*RuntimeIdentity,
++) callconv(lib.calling_conv) Result {
++    const out = out_ orelse return .invalid_value;
++    if (out.size != @sizeOf(RuntimeIdentity)) return .invalid_value;
++
++    out.* = .{
++        .size = @sizeOf(RuntimeIdentity),
++        .upstream_commit = .{
++            .ptr = upstream_commit.ptr,
++            .len = upstream_commit.len,
++        },
++        .red_salamander_patch_abi = red_salamander_patch_abi,
++        .public_header_sha256 = .{
++            .ptr = public_header_sha256.ptr,
++            .len = public_header_sha256.len,
++        },
++        .build_identity = .{
++            .ptr = build_options.version_string.ptr,
++            .len = build_options.version_string.len,
++        },
++        .architecture = switch (builtin.target.cpu.arch) {
++            .x86_64 => .x86_64,
++            .aarch64 => .aarch64,
++            else => .unknown,
++        },
++        .calling_convention = .c,
++        .capabilities = 0x01 | 0x02 | 0x04 |
++            (if (build_options.kitty_graphics) @as(u64, 0x08) else 0) |
++            0x10 | 0x20 | 0x40,
++        .enum_identity = enum_identity,
++        .type_layout_identity = type_layout_identity,
++        .pointer_size = @sizeOf(usize),
++        .terminal_resource_limits_size = @intCast(@sizeOf(terminal_c.ResourceLimits)),
++    };
++    return .success;
++}
++
+ pub fn get(
+     data: BuildInfo,
+     out: ?*anyopaque,
+@@ -174,3 +341,22 @@ test "get version_build" {
+ test "get invalid" {
+     try std.testing.expectEqual(Result.invalid_value, get(.invalid, null));
+ }
++
++test "runtime identity is sized and fail closed" {
++    var identity: RuntimeIdentity = undefined;
++    identity.size = @sizeOf(RuntimeIdentity) - 1;
++    try std.testing.expectEqual(Result.invalid_value, runtimeIdentity(&identity));
++
++    identity.size = @sizeOf(RuntimeIdentity);
++    try std.testing.expectEqual(Result.success, runtimeIdentity(&identity));
++    try std.testing.expectEqual(red_salamander_patch_abi, identity.red_salamander_patch_abi);
++    try std.testing.expectEqual(@as(u32, @sizeOf(usize)), identity.pointer_size);
++    try std.testing.expectEqual(
++        @as(u32, @sizeOf(terminal_c.ResourceLimits)),
++        identity.terminal_resource_limits_size,
++    );
++    // Frozen values force an explicit ABI review whenever an enumerator,
++    // field offset, field size, or field alignment changes.
++    try std.testing.expectEqual(@as(u64, 0x6ffac19873b6aef1), identity.enum_identity);
++    try std.testing.expectEqual(@as(u64, 0x9c23e8f046363f5d), identity.type_layout_identity);
++}
+diff --git a/src/terminal/c/kitty_graphics.zig b/src/terminal/c/kitty_graphics.zig
+index 310b79cff6c5bcff528f7e5ffcd1baa5f10f8a1d..9f39bdd0ff08f6da2fac8a942461c149b16dbd0a 100644
+--- a/src/terminal/c/kitty_graphics.zig
++++ b/src/terminal/c/kitty_graphics.zig
+@@ -53,12 +53,17 @@ pub const Data = enum(c_int) {
+     invalid = 0,
+     placement_iterator = 1,
+     generation = 2,
++    image_generation = 3,
++    placement_generation = 4,
+ 
+     pub fn OutType(comptime self: Data) type {
+         return switch (self) {
+             .invalid => void,
+             .placement_iterator => PlacementIterator,
+-            .generation => u64,
++            .generation,
++            .image_generation,
++            .placement_generation,
++            => u64,
+         };
+     }
+ };
+@@ -78,6 +83,7 @@ pub const PlacementData = enum(c_int) {
+     columns = 10,
+     rows = 11,
+     z = 12,
++    generation = 13,
+ 
+     pub fn OutType(comptime self: PlacementData) type {
+         return switch (self) {
+@@ -94,6 +100,7 @@ pub const PlacementData = enum(c_int) {
+             .rows,
+             => u32,
+             .z => i32,
++            .generation => u64,
+         };
+     }
+ };
+@@ -132,6 +139,8 @@ fn getTyped(
+             };
+         },
+         .generation => out.* = storage.generation,
++        .image_generation => out.* = storage.image_generation,
++        .placement_generation => out.* = storage.placement_generation,
+     }
+     return .success;
+ }
+@@ -405,6 +414,7 @@ fn placementGetTyped(
+         .columns => out.* = val.columns,
+         .rows => out.* = val.rows,
+         .z => out.* = val.z,
++        .generation => out.* = val.generation,
+     }
+ 
+     return .success;
+diff --git a/src/terminal/c/main.zig b/src/terminal/c/main.zig
+index 37dc57684aa5e6edea164acb3d4faa37955667b3..66be4ecb5dff787c8be06ab76f93a4ef8f3cda68 100644
+--- a/src/terminal/c/main.zig
++++ b/src/terminal/c/main.zig
+@@ -48,6 +48,7 @@ pub const unicode = @import("unicode.zig");
+ 
+ // The full C API, unexported.
+ pub const build_info = buildpkg.get;
++pub const runtime_identity = buildpkg.runtimeIdentity;
+ 
+ pub const osc_new = osc.new;
+ pub const osc_free = osc.free;
+diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
+index 85f4dbcf4e2b33950c4b9449261fe8f5c6928180..698bfb9f14f009d4e97cb3c79cd5e911b5f6fd9a 100644
+--- a/src/terminal/c/terminal.zig
++++ b/src/terminal/c/terminal.zig
+@@ -28,6 +28,8 @@ const selection_c = @import("selection.zig");
+ const style_c = @import("style.zig");
+ const color = @import("../color.zig");
+ const clipboard = @import("../clipboard.zig");
++const graphics_image = @import("../kitty/graphics_image.zig");
++const resource_accounting = @import("../resource_accounting.zig");
+ const Result = @import("result.zig").Result;
+ const assert = @import("../../quirks.zig").inlineAssert;
+ 
+@@ -44,6 +46,11 @@ const TerminalWrapper = struct {
+     const IoImpl = if (builtin.os.tag != .freestanding) *std.Io.Threaded else void;
+ 
+     terminal: *ZigTerminal,
++    base_alloc: std.mem.Allocator,
++    text_alloc: resource_accounting.AccountingAllocator,
++    page_alloc: resource_accounting.AccountingAllocator,
++    kitty_alloc: resource_accounting.AccountingAllocator,
++    pending_alloc: resource_accounting.AccountingAllocator,
+     /// We need to keep an I/O instance here as part of the terminal since we
+     /// have no way of taking it in the C API. This is set up in `new` and
+     /// destroyed on `free`.
+@@ -224,10 +231,13 @@ const Effects = struct {
+         const contents: []ClipboardContent = if (write.contents.len <= stack_contents.len)
+             stack_contents[0..write.contents.len]
+         else
+-            wrapper.terminal.gpa().alloc(ClipboardContent, write.contents.len) catch
++            wrapper.pending_alloc.allocator().alloc(
++                ClipboardContent,
++                write.contents.len,
++            ) catch
+                 return .io_error;
+         defer if (write.contents.len > stack_contents.len)
+-            wrapper.terminal.gpa().free(contents);
++            wrapper.pending_alloc.allocator().free(contents);
+ 
+         for (contents, write.contents) |*c_content, content| {
+             c_content.* = .{
+@@ -369,6 +379,109 @@ pub const CompressionMode = ZigTerminal.CompressionMode;
+ /// C: GhosttyTerminalCompressionResult
+ pub const CompressionResult = ZigTerminal.CompressionResult;
+ 
++/// C: GhosttyTerminalResourceKind
++pub const ResourceKind = graphics_image.ResourceKind;
++
++/// C: GhosttyTerminalResourceReserveFn
++pub const ResourceReserveFn = *const fn (
++    ?*anyopaque,
++    ResourceKind,
++    usize,
++) callconv(lib.calling_conv) bool;
++
++/// C: GhosttyTerminalResourceReleaseFn
++pub const ResourceReleaseFn = *const fn (
++    ?*anyopaque,
++    ResourceKind,
++    usize,
++) callconv(lib.calling_conv) void;
++
++/// Fail-closed ceilings for allocations derived from untrusted terminal
++/// input. Callers may lower, but not raise, any built-in ceiling.
++///
++/// C: GhosttyTerminalResourceLimits
++pub const ResourceLimits = extern struct {
++    size: usize,
++    userdata: ?*anyopaque,
++    reserve: ?ResourceReserveFn,
++    release: ?ResourceReleaseFn,
++    kitty_max_input_bytes: usize,
++    kitty_max_decoded_bytes: usize,
++    kitty_max_pixels: u64,
++    kitty_max_dimension: u32,
++    osc_generic_max_bytes: usize,
++    osc_title_max_bytes: usize,
++    osc_hyperlink_max_bytes: usize,
++    osc_hyperlink_uri_max_bytes: usize,
++    osc_hyperlink_params_max_bytes: usize,
++    osc_clipboard_encoded_max_bytes: usize,
++    osc_clipboard_decoded_max_bytes: usize,
++    osc_pwd_max_bytes: usize,
++    osc_shell_integration_max_bytes: usize,
++    apc_generic_max_bytes: usize,
++    apc_kitty_max_bytes: usize,
++
++    pub const defaults: ResourceLimits = .{
++        .size = @sizeOf(ResourceLimits),
++        .userdata = null,
++        .reserve = null,
++        .release = null,
++        .kitty_max_input_bytes = 64 * 1024 * 1024,
++        .kitty_max_decoded_bytes = 64 * 1024 * 1024,
++        .kitty_max_pixels = 16_000_000,
++        .kitty_max_dimension = 10_000,
++        .osc_generic_max_bytes = 64 * 1024,
++        .osc_title_max_bytes = 4 * 1024,
++        .osc_hyperlink_max_bytes = 16 * 1024,
++        .osc_hyperlink_uri_max_bytes = 8 * 1024,
++        .osc_hyperlink_params_max_bytes = 1024,
++        .osc_clipboard_encoded_max_bytes = 1024 * 1024,
++        .osc_clipboard_decoded_max_bytes = 768 * 1024,
++        .osc_pwd_max_bytes = 128 * 1024,
++        .osc_shell_integration_max_bytes = 2 * 1024 * 1024,
++        .apc_generic_max_bytes = 64 * 1024,
++        .apc_kitty_max_bytes = 1024 * 1024,
++    };
++};
++
++fn migrateResourceAccountant(
++    wrapper: *TerminalWrapper,
++    accountant: graphics_image.ResourceAccountant,
++) error{OutOfMemory}!void {
++    const AccountingAllocator = resource_accounting.AccountingAllocator;
++    const contexts = [_]*AccountingAllocator{
++        &wrapper.text_alloc,
++        &wrapper.page_alloc,
++        &wrapper.kitty_alloc,
++        &wrapper.pending_alloc,
++    };
++
++    var unchanged = true;
++    for (contexts) |context| {
++        if (!context.sameAccountant(accountant)) {
++            unchanged = false;
++            break;
++        }
++    }
++    if (unchanged) return;
++
++    // Reserve every complete live balance with the prospective callback
++    // identity before publishing any change. A failure releases the exact
++    // prospective prefix and leaves every old identity/balance untouched.
++    var reserved_count: usize = 0;
++    errdefer for (contexts[0..reserved_count]) |context|
++        accountant.release(context.kind, context.bytes);
++    for (contexts) |context| {
++        try context.reserveExisting(accountant);
++        reserved_count += 1;
++    }
++
++    // All prospective reservations succeeded. Release old balances before
++    // switching contexts; no allocation can interleave in this serialized API.
++    for (contexts) |context| context.releaseExisting(context.accountant);
++    for (contexts) |context| context.accountant = accountant;
++}
++
+ pub fn zigTerminal(terminal_: Terminal) ?*ZigTerminal {
+     return (terminal_ orelse return null).terminal;
+ }
+@@ -419,16 +532,34 @@ fn new_(
+     } else {};
+     errdefer if (has_nonfailing_io) alloc.destroy(io_impl);
+ 
++    wrapper.* = .{
++        .terminal = t,
++        .base_alloc = alloc,
++        .text_alloc = .init(alloc, .terminal_text_cpu),
++        .page_alloc = .init(PageList.pageAllocator(), .terminal_text_cpu),
++        .kitty_alloc = .init(alloc, .kitty_image_cpu),
++        .pending_alloc = .init(alloc, .pending_effect),
++        .io_impl = io_impl,
++        .tmp_dir_path = undefined,
++        .stream = undefined,
++    };
++    const text_alloc = wrapper.text_alloc.allocator();
++    const page_alloc = wrapper.page_alloc.allocator();
++    const kitty_alloc = wrapper.kitty_alloc.allocator();
++    const pending_alloc = wrapper.pending_alloc.allocator();
++
+     // Setup our terminal
+     t.* = try .init(
+         if (has_nonfailing_io) io_impl.io() else std.Io.failing,
+-        alloc,
++        text_alloc,
+         .{
+             .cols = cols,
+             .rows = rows,
++            .page_allocator = page_alloc,
++            .kitty_allocator = kitty_alloc,
+         },
+     );
+-    errdefer t.deinit(alloc);
++    errdefer t.deinit(text_alloc);
+ 
+     // libghostty-vt embedders don't necessarily install Ghostty's shell
+     // integration, so don't assume OSC 133 prompts can be redrawn on resize.
+@@ -438,6 +569,8 @@ fn new_(
+     // Setup our stream with trampolines always installed so that
+     // setting C callbacks at any time takes effect immediately.
+     var handler: Stream.Handler = t.vtHandler();
++    handler.pending_alloc = pending_alloc;
++    handler.kitty_alloc = kitty_alloc;
+     handler.effects = .{
+         .write_pty = &Effects.writePtyTrampoline,
+         .bell = &Effects.bellTrampoline,
+@@ -453,12 +586,7 @@ fn new_(
+         .clipboard_write = &Effects.clipboardWriteTrampoline,
+     };
+ 
+-    wrapper.* = .{
+-        .terminal = t,
+-        .io_impl = io_impl,
+-        .tmp_dir_path = undefined, // Only used if temporary directory is set with API calls
+-        .stream = .initAlloc(alloc, handler),
+-    };
++    wrapper.stream = .initAlloc(pending_alloc, handler);
+ 
+     return wrapper;
+ }
+@@ -527,6 +655,7 @@ pub const Option = enum(c_int) {
+     scrollback_max_lines = 28,
+     desktop_notification = 29,
+     progress_report = 30,
++    resource_limits = 31,
+ 
+     /// Input type expected for setting the option.
+     pub fn InType(comptime self: Option) type {
+@@ -561,6 +690,7 @@ pub const Option = enum(c_int) {
+             .selection => ?*const selection_c.CSelection,
+             .default_cursor_style => ?*const TerminalCursorStyle,
+             .default_cursor_blink => ?*const bool,
++            .resource_limits => ?*const ResourceLimits,
+         };
+     }
+ };
+@@ -639,7 +769,12 @@ fn setTyped(
+             var it = wrapper.terminal.screens.all.iterator();
+             while (it.next()) |entry| {
+                 const screen = entry.value.*;
+-                screen.kitty_images.setLimit(screen.io, screen.alloc, screen, limit) catch return .out_of_memory;
++                screen.kitty_images.setLimit(
++                    screen.io,
++                    screen.kitty_alloc,
++                    screen,
++                    limit,
++                ) catch return .out_of_memory;
+             }
+         },
+         .kitty_image_medium_file,
+@@ -717,6 +852,76 @@ fn setTyped(
+         .scrollback_max_lines => wrapper.terminal.setScrollbackMaxLines(
+             if (value) |ptr| ptr.* else null,
+         ),
++        .resource_limits => {
++            const limits = if (value) |ptr| ptr.* else ResourceLimits.defaults;
++            if (limits.size != @sizeOf(ResourceLimits) or
++                (limits.reserve == null) != (limits.release == null) or
++                limits.kitty_max_input_bytes > ResourceLimits.defaults.kitty_max_input_bytes or
++                limits.kitty_max_decoded_bytes > ResourceLimits.defaults.kitty_max_decoded_bytes or
++                limits.kitty_max_pixels > ResourceLimits.defaults.kitty_max_pixels or
++                limits.kitty_max_dimension > ResourceLimits.defaults.kitty_max_dimension or
++                limits.osc_generic_max_bytes > ResourceLimits.defaults.osc_generic_max_bytes or
++                limits.osc_title_max_bytes > ResourceLimits.defaults.osc_title_max_bytes or
++                limits.osc_hyperlink_max_bytes > ResourceLimits.defaults.osc_hyperlink_max_bytes or
++                limits.osc_hyperlink_uri_max_bytes > ResourceLimits.defaults.osc_hyperlink_uri_max_bytes or
++                limits.osc_hyperlink_params_max_bytes > ResourceLimits.defaults.osc_hyperlink_params_max_bytes or
++                limits.osc_clipboard_encoded_max_bytes > ResourceLimits.defaults.osc_clipboard_encoded_max_bytes or
++                limits.osc_clipboard_decoded_max_bytes > ResourceLimits.defaults.osc_clipboard_decoded_max_bytes or
++                limits.osc_pwd_max_bytes > ResourceLimits.defaults.osc_pwd_max_bytes or
++                limits.osc_shell_integration_max_bytes > ResourceLimits.defaults.osc_shell_integration_max_bytes or
++                limits.apc_generic_max_bytes > ResourceLimits.defaults.apc_generic_max_bytes or
++                limits.apc_kitty_max_bytes > ResourceLimits.defaults.apc_kitty_max_bytes)
++            {
++                return .invalid_value;
++            }
++
++            if (comptime build_options.kitty_graphics) {
++                const accountant: graphics_image.ResourceAccountant = .{
++                    .userdata = limits.userdata,
++                    .reserve_fn = limits.reserve,
++                    .release_fn = limits.release,
++                };
++
++                migrateResourceAccountant(wrapper, accountant) catch
++                    return .out_of_memory;
++
++                var it = wrapper.terminal.screens.all.iterator();
++                while (it.next()) |entry| {
++                    const image_limits = &entry.value.*.kitty_images.image_limits;
++                    image_limits.max_input_bytes = limits.kitty_max_input_bytes;
++                    image_limits.max_decoded_bytes = limits.kitty_max_decoded_bytes;
++                    image_limits.max_pixels = limits.kitty_max_pixels;
++                    image_limits.max_dimension = limits.kitty_max_dimension;
++                    // The C boundary routes the entire Kitty allocator through
++                    // the typed accountant, including decoder scratch and map
++                    // metadata. Explicit image reservations would double count.
++                    image_limits.accountant = .{};
++                }
++            } else migrateResourceAccountant(wrapper, .{
++                .userdata = limits.userdata,
++                .reserve_fn = limits.reserve,
++                .release_fn = limits.release,
++            }) catch return .out_of_memory;
++
++            wrapper.stream.parser.osc_parser.limits = .{
++                .generic = limits.osc_generic_max_bytes,
++                .title = limits.osc_title_max_bytes,
++                .hyperlink = limits.osc_hyperlink_max_bytes,
++                .hyperlink_uri = limits.osc_hyperlink_uri_max_bytes,
++                .hyperlink_params = limits.osc_hyperlink_params_max_bytes,
++                .clipboard_encoded = limits.osc_clipboard_encoded_max_bytes,
++                .pwd = limits.osc_pwd_max_bytes,
++                .shell_integration = limits.osc_shell_integration_max_bytes,
++            };
++            wrapper.stream.handler.clipboard_max_decoded_bytes =
++                limits.osc_clipboard_decoded_max_bytes;
++            wrapper.stream.handler.apc_handler.max_bytes =
++                .initFull(limits.apc_generic_max_bytes);
++            wrapper.stream.handler.apc_handler.max_bytes.put(
++                .kitty,
++                limits.apc_kitty_max_bytes,
++            );
++        },
+     }
+     return .success;
+ }
+@@ -1057,7 +1262,7 @@ pub fn grid_ref_track(
+     const p = list.pin(.fromC(pt)) orelse return .invalid_value;
+     const tracked_pin = list.trackPin(p) catch return .out_of_memory;
+ 
+-    const alloc = t.gpa();
++    const alloc = wrapper.base_alloc;
+     const ref = alloc.create(grid_ref_tracked_c.TrackedGridRef) catch {
+         list.untrackPin(tracked_pin);
+         return .out_of_memory;
+@@ -1103,12 +1308,17 @@ pub fn point_from_grid_ref(
+ pub fn free(terminal_: Terminal) callconv(lib.calling_conv) void {
+     const wrapper = terminal_ orelse return;
+     const t = wrapper.terminal;
+-    const alloc = t.gpa();
++    const alloc = wrapper.base_alloc;
++    const text_alloc = wrapper.text_alloc.allocator();
+ 
+     for (wrapper.tracked_grid_refs.keys()) |ref| ref.terminal = null;
+     wrapper.tracked_grid_refs.deinit(alloc);
+     wrapper.stream.deinit();
+-    t.deinit(alloc);
++    t.deinit(text_alloc);
++    assert(wrapper.text_alloc.bytes == 0);
++    assert(wrapper.page_alloc.bytes == 0);
++    assert(wrapper.kitty_alloc.bytes == 0);
++    assert(wrapper.pending_alloc.bytes == 0);
+     if (builtin.os.tag != .freestanding) {
+         // Deinit is always safe to call, even for single-threaded instances
+         wrapper.io_impl.deinit();
+@@ -1204,6 +1414,171 @@ test "set scrollback limits" {
+     );
+ }
+ 
++test "set resource limits validates and applies one atomic contract" {
++    try testing.expectEqual(
++        @as(usize, 64 * 1024),
++        ResourceLimits.defaults.apc_generic_max_bytes,
++    );
++    try testing.expectEqual(
++        @as(usize, 1024 * 1024),
++        ResourceLimits.defaults.apc_kitty_max_bytes,
++    );
++
++    var t: Terminal = null;
++    try testing.expectEqual(Result.success, new(
++        &lib.alloc.test_allocator,
++        &t,
++        80,
++        24,
++    ));
++    defer free(t);
++
++    const Callbacks = struct {
++        fn reserve(
++            _: ?*anyopaque,
++            _: ResourceKind,
++            _: usize,
++        ) callconv(lib.calling_conv) bool {
++            return true;
++        }
++    };
++
++    var limits = ResourceLimits.defaults;
++    limits.osc_generic_max_bytes = 1234;
++    limits.osc_title_max_bytes = 234;
++    limits.osc_clipboard_decoded_max_bytes = 345;
++    limits.apc_generic_max_bytes = 456;
++    limits.apc_kitty_max_bytes = 567;
++    try testing.expectEqual(
++        Result.success,
++        set(t, .resource_limits, &limits),
++    );
++    try testing.expectEqual(
++        limits.osc_generic_max_bytes,
++        t.?.stream.parser.osc_parser.limits.generic,
++    );
++    try testing.expectEqual(
++        limits.osc_title_max_bytes,
++        t.?.stream.parser.osc_parser.limits.title,
++    );
++    try testing.expectEqual(
++        limits.osc_clipboard_decoded_max_bytes,
++        t.?.stream.handler.clipboard_max_decoded_bytes,
++    );
++    try testing.expectEqual(
++        limits.apc_generic_max_bytes,
++        t.?.stream.handler.apc_handler.max_bytes.get(.glyph).?,
++    );
++    try testing.expectEqual(
++        limits.apc_kitty_max_bytes,
++        t.?.stream.handler.apc_handler.max_bytes.get(.kitty).?,
++    );
++    if (comptime build_options.kitty_graphics) {
++        try testing.expectEqual(
++            limits.kitty_max_pixels,
++            t.?.terminal.screens.active.kitty_images.image_limits.max_pixels,
++        );
++    }
++
++    var wrong_size = limits;
++    wrong_size.size -= 1;
++    try testing.expectEqual(
++        Result.invalid_value,
++        set(t, .resource_limits, &wrong_size),
++    );
++
++    var unpaired = limits;
++    unpaired.reserve = &Callbacks.reserve;
++    try testing.expectEqual(
++        Result.invalid_value,
++        set(t, .resource_limits, &unpaired),
++    );
++
++    var above_hard_ceiling = limits;
++    above_hard_ceiling.osc_title_max_bytes =
++        ResourceLimits.defaults.osc_title_max_bytes + 1;
++    try testing.expectEqual(
++        Result.invalid_value,
++        set(t, .resource_limits, &above_hard_ceiling),
++    );
++
++    try testing.expectEqual(Result.success, set(t, .resource_limits, null));
++    try testing.expectEqual(
++        ResourceLimits.defaults.osc_title_max_bytes,
++        t.?.stream.parser.osc_parser.limits.title,
++    );
++}
++
++test "resource accountant identity migrates all live typed balances atomically" {
++    if (comptime !build_options.kitty_graphics) return error.SkipZigTest;
++
++    var t: Terminal = null;
++    try testing.expectEqual(Result.success, new(
++        &lib.alloc.test_allocator,
++        &t,
++        80,
++        24,
++    ));
++    defer free(t);
++
++    const Ledger = struct {
++        balances: [3]usize = .{ 0, 0, 0 },
++
++        fn reserve(
++            userdata: ?*anyopaque,
++            kind: ResourceKind,
++            bytes: usize,
++        ) callconv(lib.calling_conv) bool {
++            const self: *@This() = @ptrCast(@alignCast(userdata.?));
++            const i: usize = @intCast(@intFromEnum(kind));
++            self.balances[i] = std.math.add(
++                usize,
++                self.balances[i],
++                bytes,
++            ) catch return false;
++            return true;
++        }
++
++        fn release(
++            userdata: ?*anyopaque,
++            kind: ResourceKind,
++            bytes: usize,
++        ) callconv(lib.calling_conv) void {
++            const self: *@This() = @ptrCast(@alignCast(userdata.?));
++            const i: usize = @intCast(@intFromEnum(kind));
++            assert(bytes <= self.balances[i]);
++            self.balances[i] -= bytes;
++        }
++    };
++
++    var first: Ledger = .{};
++    var second: Ledger = .{};
++    var limits = ResourceLimits.defaults;
++    limits.userdata = &first;
++    limits.reserve = &Ledger.reserve;
++    limits.release = &Ledger.release;
++    try testing.expectEqual(Result.success, set(t, .resource_limits, &limits));
++    try testing.expect(first.balances[@intFromEnum(ResourceKind.terminal_text_cpu)] > 0);
++
++    const screen = t.?.terminal.screens.active;
++    try screen.kitty_images.addImage(
++        screen.io,
++        screen.kitty_alloc,
++        .{ .id = 42 },
++    );
++    try testing.expect(first.balances[@intFromEnum(ResourceKind.kitty_image_cpu)] > 0);
++
++    var changed = limits;
++    changed.userdata = &second;
++    try testing.expectEqual(Result.success, set(t, .resource_limits, &changed));
++    try testing.expectEqual([_]usize{ 0, 0, 0 }, first.balances);
++    try testing.expect(second.balances[@intFromEnum(ResourceKind.terminal_text_cpu)] > 0);
++    try testing.expect(second.balances[@intFromEnum(ResourceKind.kitty_image_cpu)] > 0);
++
++    try testing.expectEqual(Result.success, set(t, .resource_limits, null));
++    try testing.expectEqual([_]usize{ 0, 0, 0 }, second.balances);
++}
++
+ test "free null" {
+     free(null);
+ }
+diff --git a/src/terminal/kitty/graphics_image.zig b/src/terminal/kitty/graphics_image.zig
+index ef584c09aca60191d9f27fe59315bc0fbecfe24e..150f425ec1bfe9af018c9cceb45b6f5d64098a73 100644
+--- a/src/terminal/kitty/graphics_image.zig
++++ b/src/terminal/kitty/graphics_image.zig
+@@ -12,11 +12,64 @@ const sys = @import("../sys.zig");
+ 
+ const log = std.log.scoped(.kitty_gfx);
+ 
+-/// Maximum width or height of an image. Taken directly from Kitty.
+-const max_dimension = 10000;
++const default_max_dimension = 10_000;
++const default_max_pixels = 16_000_000;
++const default_max_bytes = 64 * 1024 * 1024;
++
++/// Resource class reported to an embedder before an untrusted allocation.
++/// More classes can be added without changing the callback shape.
++pub const ResourceKind = enum(c_int) {
++    kitty_image_cpu = 0,
++    terminal_text_cpu = 1,
++    pending_effect = 2,
++};
++
++/// Optional accounting callbacks. `reserve` is called before allocation and
++/// can reject it. Every successful reservation is paired with `release`.
++pub const ResourceAccountant = struct {
++    userdata: ?*anyopaque = null,
++    reserve_fn: ?*const fn (?*anyopaque, ResourceKind, usize) callconv(.c) bool = null,
++    release_fn: ?*const fn (?*anyopaque, ResourceKind, usize) callconv(.c) void = null,
++
++    pub fn valid(self: ResourceAccountant) bool {
++        return (self.reserve_fn == null) == (self.release_fn == null);
++    }
++
++    pub fn reserve(self: ResourceAccountant, kind: ResourceKind, bytes: usize) error{OutOfMemory}!void {
++        if (bytes == 0) return;
++        const reserve_fn = self.reserve_fn orelse return;
++        if (!reserve_fn(self.userdata, kind, bytes)) return error.OutOfMemory;
++    }
+ 
+-/// Maximum size in bytes, taken from Kitty.
+-const max_size = 400 * 1024 * 1024; // 400MB
++    pub fn release(self: ResourceAccountant, kind: ResourceKind, bytes: usize) void {
++        if (bytes == 0) return;
++        const release_fn = self.release_fn orelse return;
++        release_fn(self.userdata, kind, bytes);
++    }
++};
++
++const Reservation = struct {
++    accountant: ResourceAccountant = .{},
++    kind: ResourceKind = .kitty_image_cpu,
++    bytes: usize = 0,
++
++    fn add(self: *Reservation, bytes: usize) error{OutOfMemory}!void {
++        if (bytes == 0) return;
++        _ = std.math.add(usize, self.bytes, bytes) catch return error.OutOfMemory;
++        try self.accountant.reserve(self.kind, bytes);
++        self.bytes += bytes;
++    }
++
++    fn remove(self: *Reservation, bytes: usize) void {
++        assert(bytes <= self.bytes);
++        self.bytes -= bytes;
++        self.accountant.release(self.kind, bytes);
++    }
++
++    fn deinit(self: *Reservation) void {
++        self.remove(self.bytes);
++    }
++};
+ 
+ /// An image that is still being loaded. The image should be initialized
+ /// using init on the first chunk and then addData for each subsequent
+@@ -30,6 +83,10 @@ pub const LoadingImage = struct {
+     /// The data that is being built up.
+     data: std.ArrayListUnmanaged(u8) = .empty,
+ 
++    /// Limits and accounting attached to this upload for its full lifetime.
++    limits: Limits,
++    reservation: Reservation,
++
+     /// This is non-null when a transmit and display command is given
+     /// so that we display the image after it is fully loaded.
+     display: ?command.Display = null,
+@@ -58,6 +115,11 @@ pub const LoadingImage = struct {
+             disabled: void,
+         },
+         shared_memory: bool,
++        max_input_bytes: usize = default_max_bytes,
++        max_decoded_bytes: usize = default_max_bytes,
++        max_pixels: u64 = default_max_pixels,
++        max_dimension: u32 = default_max_dimension,
++        accountant: ResourceAccountant = .{},
+ 
+         /// Enables all filesystem-related image transmission mediums. `path`
+         /// is the temporary directory to expect files in when files are
+@@ -107,7 +169,11 @@ pub const LoadingImage = struct {
+                 .enabled => |d| d.directory,
+                 .disabled => null,
+             },
++            .limits = limits,
++            .reservation = .{ .accountant = limits.accountant },
+         };
++        if (!limits.accountant.valid()) return error.InvalidData;
++        errdefer result.deinit(alloc);
+ 
+         // Special case for the direct medium, we just add the chunk directly.
+         if (t.medium == .direct) {
+@@ -228,13 +294,17 @@ pub const LoadingImage = struct {
+         const expected_size: usize = switch (self.image.format) {
+             // Png we decode the full data size because later decoding will
+             // get the proper dimensions and assert validity.
+-            .png => stat_size,
++            .png => size: {
++                if (stat_size > self.limits.max_input_bytes) return error.InvalidData;
++                break :size stat_size;
++            },
+ 
+             // For these formats we have a size we must have.
+-            .gray, .gray_alpha, .rgb, .rgba => size: {
+-                const bpp = command.Transmission.formatBpp(self.image.format);
+-                break :size self.image.width * self.image.height * bpp;
+-            },
++            .gray, .gray_alpha, .rgb, .rgba => try self.expectedDataLen(
++                self.image.format,
++                self.image.width,
++                self.image.height,
++            ),
+         };
+ 
+         // Our stat size must be at least the expected size otherwise
+@@ -249,7 +319,7 @@ pub const LoadingImage = struct {
+ 
+         const map = std.posix.mmap(
+             null,
+-            stat_size, // mmap always uses the stat size
++            expected_size,
+             .{ .READ = true },
+             std.c.MAP{ .TYPE = .SHARED },
+             fd,
+@@ -263,13 +333,18 @@ pub const LoadingImage = struct {
+         // Our end size always uses the expected size so we cut off the
+         // padding for mmap alignment.
+         const start: usize = @intCast(t.offset);
++        if (start > expected_size) return error.InvalidData;
+         const end: usize = if (t.size > 0) @min(
+-            @as(usize, @intCast(t.offset)) + @as(usize, @intCast(t.size)),
++            std.math.add(
++                usize,
++                start,
++                @as(usize, @intCast(t.size)),
++            ) catch return error.InvalidData,
+             expected_size,
+         ) else expected_size;
+ 
+         assert(self.data.items.len == 0);
+-        try self.data.appendSlice(alloc, map[start..end]);
++        try self.addData(alloc, map[start..end]);
+     }
+ 
+     /// Reads the data from a temporary file and returns it. This allocates
+@@ -340,18 +415,35 @@ pub const LoadingImage = struct {
+         }
+         const reader = &buf_reader.interface;
+ 
+-        // Read the file
+-        var managed: std.ArrayList(u8) = .empty;
+-        errdefer managed.deinit(alloc);
+-        const size: usize = if (t.size > 0) @min(t.size, max_size) else max_size;
+-        reader.appendRemaining(alloc, &managed, .limited(size)) catch {
+-            log.warn("failed to read temporary file: {?}", .{buf_reader.err});
+-            return error.InvalidData;
+-        };
+-
+-        // Set our data
++        // Read through addData so the byte cap and reservation are applied
++        // before every buffer growth.
+         assert(self.data.items.len == 0);
+-        self.data = .{ .items = managed.items, .capacity = managed.capacity };
++        if (t.size > self.limits.max_input_bytes) return error.InvalidData;
++        var remaining: usize = if (t.size > 0)
++            @intCast(t.size)
++        else
++            self.limits.max_input_bytes;
++        while (remaining > 0) {
++            const read_buf = buf[0..@min(buf.len, remaining)];
++            const len = reader.readSliceShort(read_buf) catch {
++                log.warn("failed to read temporary file: {?}", .{buf_reader.err});
++                return error.InvalidData;
++            };
++            if (len == 0) break;
++            try self.addData(alloc, read_buf[0..len]);
++            remaining -= len;
++        }
++
++        // A transmission without an explicit size must fail closed rather
++        // than silently truncate a file at the configured cap.
++        if (t.size == 0 and remaining == 0) {
++            var extra: [1]u8 = undefined;
++            const len = reader.readSliceShort(&extra) catch {
++                log.warn("failed to read temporary file: {?}", .{buf_reader.err});
++                return error.InvalidData;
++            };
++            if (len != 0) return error.InvalidData;
++        }
+     }
+ 
+     /// Returns true if path appears to be in a temporary directory.
+@@ -377,6 +469,7 @@ pub const LoadingImage = struct {
+     pub fn deinit(self: *LoadingImage, alloc: Allocator) void {
+         self.image.deinit(alloc);
+         self.data.deinit(alloc);
++        self.reservation.deinit();
+     }
+ 
+     pub fn destroy(self: *LoadingImage, alloc: Allocator) void {
+@@ -391,50 +484,93 @@ pub const LoadingImage = struct {
+         if (data.len == 0) return;
+ 
+         // If our data would get too big, return an error
+-        if (self.data.items.len + data.len > max_size) {
+-            log.warn("image data too large max_size={}", .{max_size});
++        const required = std.math.add(usize, self.data.items.len, data.len) catch
++            return error.InvalidData;
++        if (required > self.limits.max_input_bytes) {
++            log.warn("image data too large max_input_bytes={}", .{self.limits.max_input_bytes});
+             return error.InvalidData;
+         }
+ 
+-        // Ensure we have enough room to add the data
+-        // to the end of the ArrayList before doing so.
+-        try self.data.ensureUnusedCapacity(alloc, data.len);
++        // Reserve the exact physical capacity before asking the allocator to
++        // grow. Capping the normal super-linear growth keeps spare capacity
++        // inside the configured byte limit.
++        if (required > self.data.capacity) {
++            const new_capacity = @min(
++                std.ArrayListUnmanaged(u8).growCapacity(required),
++                self.limits.max_input_bytes,
++            );
++            const old_capacity = self.data.capacity;
++
++            // A realloc is allowed to hold both blocks until the copy
++            // succeeds. Conservatively reserve the entire replacement while
++            // the old reservation remains live, then release the old block.
++            try self.reservation.add(new_capacity);
++            errdefer self.reservation.remove(new_capacity);
++            try self.data.ensureTotalCapacityPrecise(alloc, new_capacity);
++            self.reservation.remove(old_capacity);
++        }
+ 
+         const start_i = self.data.items.len;
+-        self.data.items.len = start_i + data.len;
++        self.data.items.len = required;
+         fastmem.copy(u8, self.data.items[start_i..], data);
+     }
+ 
++    fn expectedDataLen(
++        self: *const LoadingImage,
++        format: command.Transmission.Format,
++        width: u32,
++        height: u32,
++    ) !usize {
++        if (width == 0 or height == 0) return error.DimensionsRequired;
++        if (width > self.limits.max_dimension or height > self.limits.max_dimension)
++            return error.DimensionsTooLarge;
++
++        const pixels = std.math.mul(u64, width, height) catch
++            return error.DimensionsTooLarge;
++        if (pixels > self.limits.max_pixels) return error.DimensionsTooLarge;
++
++        const bpp: u64 = command.Transmission.formatBpp(format);
++        const bytes = std.math.mul(u64, pixels, bpp) catch return error.InvalidData;
++        if (bytes > self.limits.max_decoded_bytes or bytes > std.math.maxInt(usize))
++            return error.InvalidData;
++        return @intCast(bytes);
++    }
++
+     /// Complete the chunked image, returning a completed image.
+     pub fn complete(self: *LoadingImage, alloc: Allocator) !Image {
+         const img = &self.image;
+ 
++        // Raw formats carry dimensions in the control data, so validate all
++        // multiplication and byte limits before decompression can allocate.
++        const raw_expected_len: ?usize = if (img.format == .png)
++            null
++        else
++            try self.expectedDataLen(img.format, img.width, img.height);
++
+         // Decompress the data if it is compressed.
+-        try self.decompress(alloc);
++        try self.decompress(alloc, raw_expected_len);
+ 
+         // Decode the png if we have to
+         if (img.format == .png) try self.decodePng(alloc);
+ 
+-        // Validate our dimensions.
+-        if (img.width == 0 or img.height == 0) return error.DimensionsRequired;
+-        if (img.width > max_dimension or img.height > max_dimension) return error.DimensionsTooLarge;
+-
+         // Data length must be what we expect
+-        const bpp = command.Transmission.formatBpp(img.format);
+-        const expected_len = img.width * img.height * bpp;
++        const expected_len = try self.expectedDataLen(img.format, img.width, img.height);
+         const actual_len = self.data.items.len;
+         if (actual_len != expected_len) {
+             std.log.warn(
+-                "unexpected length image id={} width={} height={} bpp={} expected_len={} actual_len={}",
+-                .{ img.id, img.width, img.height, bpp, expected_len, actual_len },
++                "unexpected length image id={} width={} height={} expected_len={} actual_len={}",
++                .{ img.id, img.width, img.height, expected_len, actual_len },
+             );
+             return error.InvalidData;
+         }
+ 
+-        // Everything looks good, copy the image data over.
++        // Move the allocation and its reservation into the stored image.
+         var result = self.image;
+-        result.data = try self.data.toOwnedSlice(alloc);
+-        errdefer result.deinit(alloc);
++        result.data = self.data.items;
++        result.data_capacity = self.data.capacity;
++        result.reservation = self.reservation;
++        self.data = .empty;
++        self.reservation = .{};
+         self.image = .{};
+         return result;
+     }
+@@ -465,39 +601,112 @@ pub const LoadingImage = struct {
+     }
+ 
+     /// Decompress the data in-place.
+-    fn decompress(self: *LoadingImage, alloc: Allocator) !void {
++    fn decompress(
++        self: *LoadingImage,
++        alloc: Allocator,
++        raw_expected_len: ?usize,
++    ) !void {
+         return switch (self.image.compression) {
+             .none => {},
+-            .zlib_deflate => self.decompressZlib(alloc),
++            .zlib_deflate => self.decompressZlib(
++                alloc,
++                raw_expected_len orelse self.limits.max_input_bytes,
++            ),
+         };
+     }
+ 
+-    fn decompressZlib(self: *LoadingImage, alloc: Allocator) !void {
++    fn decompressZlib(
++        self: *LoadingImage,
++        alloc: Allocator,
++        output_limit: usize,
++    ) !void {
+         // Open our zlib stream
+         var buf: [std.compress.flate.max_window_len]u8 = undefined;
+         var reader: std.Io.Reader = .fixed(self.data.items);
+         var stream: std.compress.flate.Decompress = .init(&reader, .zlib, &buf);
+ 
+-        // Write it to an array list
+-        var list: std.ArrayList(u8) = .empty;
++        // Grow a separately reserved output. A decompression bomb is rejected
++        // before the growth that would cross output_limit.
++        var list: std.ArrayListUnmanaged(u8) = .empty;
+         errdefer list.deinit(alloc);
+-        stream.reader.appendRemaining(alloc, &list, .limited(max_size)) catch {
+-            log.warn("failed to read decompressed data: {?}", .{stream.err});
+-            return error.DecompressionFailed;
++        var output_reservation: Reservation = .{
++            .accountant = self.limits.accountant,
+         };
++        errdefer output_reservation.deinit();
++
++        var output_buf: [64 * 1024]u8 = undefined;
++        while (true) {
++            const len = stream.reader.readSliceShort(&output_buf) catch {
++                log.warn("failed to read decompressed data: {?}", .{stream.err});
++                return error.DecompressionFailed;
++            };
++            if (len == 0) break;
++            try appendReserved(
++                &list,
++                &output_reservation,
++                alloc,
++                output_buf[0..len],
++                output_limit,
++            );
++        }
+ 
+-        // Empty our current data list, take ownership over managed array list
++        // Empty our current data list, take ownership over the reserved output.
+         self.data.deinit(alloc);
+-        self.data = .{ .items = list.items, .capacity = list.capacity };
++        self.reservation.deinit();
++        self.data = list;
++        self.reservation = output_reservation;
+ 
+         // Make sure we note that our image is no longer compressed
+         self.image.compression = .none;
+     }
+ 
++    fn appendReserved(
++        list: *std.ArrayListUnmanaged(u8),
++        reservation: *Reservation,
++        alloc: Allocator,
++        bytes: []const u8,
++        limit: usize,
++    ) !void {
++        const required = std.math.add(usize, list.items.len, bytes.len) catch
++            return error.InvalidData;
++        if (required > limit) return error.InvalidData;
++        if (required > list.capacity) {
++            const new_capacity = @min(
++                std.ArrayListUnmanaged(u8).growCapacity(required),
++                limit,
++            );
++            const old_capacity = list.capacity;
++            try reservation.add(new_capacity);
++            errdefer reservation.remove(new_capacity);
++            try list.ensureTotalCapacityPrecise(alloc, new_capacity);
++            reservation.remove(old_capacity);
++        }
++        const old_len = list.items.len;
++        list.items.len = required;
++        @memcpy(list.items[old_len..], bytes);
++    }
++
+     /// Decode the data as PNG. This will also updated the image dimensions.
+     fn decodePng(self: *LoadingImage, alloc: Allocator) !void {
+         assert(self.image.format == .png);
+ 
++        // PNG requires IHDR to be the first chunk. Inspecting those fixed
++        // bytes gives us a trustworthy allocation ceiling before invoking a
++        // decoder supplied by the embedder.
++        const dimensions = pngDimensions(self.data.items) orelse
++            return error.InvalidData;
++        const expected_len = try self.expectedDataLen(
++            .rgba,
++            dimensions.width,
++            dimensions.height,
++        );
++
++        var output_reservation: Reservation = .{
++            .accountant = self.limits.accountant,
++        };
++        try output_reservation.add(expected_len);
++        errdefer output_reservation.deinit();
++
+         const decode_png_fn = sys.decode_png orelse
+             return error.UnsupportedFormat;
+         const result = decode_png_fn(
+@@ -507,24 +716,52 @@ pub const LoadingImage = struct {
+             error.InvalidData => return error.InvalidData,
+             error.OutOfMemory => return error.OutOfMemory,
+         };
+-        defer alloc.free(result.data);
++        errdefer alloc.free(result.data);
+ 
+-        if (result.data.len > max_size) {
+-            log.warn("png image too large size={} max_size={}", .{ result.data.len, max_size });
++        if (result.width != dimensions.width or
++            result.height != dimensions.height or
++            result.data.len != expected_len)
++        {
++            log.warn(
++                "png decoder returned unexpected dimensions or length width={} height={} len={} expected_width={} expected_height={} expected_len={}",
++                .{
++                    result.width,
++                    result.height,
++                    result.data.len,
++                    dimensions.width,
++                    dimensions.height,
++                    expected_len,
++                },
++            );
+             return error.InvalidData;
+         }
+ 
+-        // Replace our data
++        // Replace our data without a second decoded-pixel copy.
+         self.data.deinit(alloc);
+-        self.data = .empty;
+-        try self.data.ensureUnusedCapacity(alloc, result.data.len);
+-        try self.data.appendSlice(alloc, result.data[0..result.data.len]);
++        self.reservation.deinit();
++        self.data = .{
++            .items = result.data,
++            .capacity = result.data.len,
++        };
++        self.reservation = output_reservation;
+ 
+         // Store updated image dimensions
+         self.image.width = result.width;
+         self.image.height = result.height;
+         self.image.format = .rgba;
+     }
++
++    fn pngDimensions(data: []const u8) ?struct { width: u32, height: u32 } {
++        const signature = "\x89PNG\r\n\x1a\n";
++        if (data.len < 24 or !std.mem.eql(u8, data[0..8], signature)) return null;
++        if (!std.mem.eql(u8, data[12..16], "IHDR")) return null;
++        if (std.mem.readInt(u32, data[8..12], .big) != 13) return null;
++
++        const width = std.mem.readInt(u32, data[16..20], .big);
++        const height = std.mem.readInt(u32, data[20..24], .big);
++        if (width == 0 or height == 0) return null;
++        return .{ .width = width, .height = height };
++    }
+ };
+ 
+ /// Image represents a single fully loaded image.
+@@ -542,6 +779,8 @@ pub const Image = struct {
+     format: command.Transmission.Format = .rgb,
+     compression: command.Transmission.Compression = .none,
+     data: []const u8 = "",
++    data_capacity: usize = 0,
++    reservation: Reservation = .{},
+     usage: command.Transmission.Usage = .default,
+ 
+     /// Unique, monotonically increasing stamp assigned each time an
+@@ -572,13 +811,26 @@ pub const Image = struct {
+     };
+ 
+     pub fn deinit(self: *Image, alloc: Allocator) void {
+-        if (self.data.len > 0) alloc.free(self.data);
++        if (self.data.len > 0) {
++            const capacity = if (self.data_capacity > 0)
++                self.data_capacity
++            else
++                self.data.len;
++            alloc.free(self.data.ptr[0..capacity]);
++        }
++        self.reservation.deinit();
++    }
++
++    pub fn allocatedBytes(self: *const Image) usize {
++        return if (self.data_capacity > 0) self.data_capacity else self.data.len;
+     }
+ 
+     /// Mostly for logging
+     pub fn withoutData(self: *const Image) Image {
+         var copy = self.*;
+         copy.data = "";
++        copy.data_capacity = 0;
++        copy.reservation = .{};
+         return copy;
+     }
+ };
+@@ -591,6 +843,50 @@ pub const Rect = struct {
+     bottom_right: PageList.Pin,
+ };
+ 
++const TestAccountant = struct {
++    reserved: usize = 0,
++    peak: usize = 0,
++    reserve_calls: usize = 0,
++    release_calls: usize = 0,
++    last_kind: ?ResourceKind = null,
++    reject: bool = false,
++
++    fn reserve(
++        userdata: ?*anyopaque,
++        kind: ResourceKind,
++        bytes: usize,
++    ) callconv(.c) bool {
++        const self: *TestAccountant = @ptrCast(@alignCast(userdata.?));
++        self.reserve_calls += 1;
++        self.last_kind = kind;
++        if (self.reject) return false;
++        self.reserved = std.math.add(usize, self.reserved, bytes) catch
++            return false;
++        self.peak = @max(self.peak, self.reserved);
++        return true;
++    }
++
++    fn release(
++        userdata: ?*anyopaque,
++        kind: ResourceKind,
++        bytes: usize,
++    ) callconv(.c) void {
++        const self: *TestAccountant = @ptrCast(@alignCast(userdata.?));
++        assert(kind == .kitty_image_cpu);
++        assert(bytes <= self.reserved);
++        self.reserved -= bytes;
++        self.release_calls += 1;
++    }
++
++    fn callbacks(self: *TestAccountant) ResourceAccountant {
++        return .{
++            .userdata = self,
++            .reserve_fn = &reserve,
++            .release_fn = &release,
++        };
++    }
++};
++
+ // This specifically tests we ALLOW invalid RGB data because Kitty
+ // documents that this should work.
+ test "image load with invalid RGB data" {
+@@ -613,6 +909,192 @@ test "image load with invalid RGB data" {
+     defer loading.deinit(alloc);
+ }
+ 
++test "image input reservation is typed, paired, and fail closed" {
++    const testing = std.testing;
++    const alloc = testing.allocator;
++
++    var accounting: TestAccountant = .{};
++    var cmd: command.Command = .{
++        .control = .{ .transmit = .{
++            .format = .rgb,
++            .width = 1,
++            .height = 1,
++            .image_id = 31,
++        } },
++        .data = try alloc.dupe(u8, "abc"),
++    };
++    defer cmd.deinit(alloc);
++
++    var limits: LoadingImage.Limits = .direct;
++    limits.accountant = accounting.callbacks();
++    limits.max_input_bytes = 3;
++    var loading = try LoadingImage.init(testing.io, alloc, &cmd, limits);
++    defer loading.deinit(alloc);
++    try testing.expectEqual(ResourceKind.kitty_image_cpu, accounting.last_kind.?);
++    try testing.expectEqual(@as(usize, 3), accounting.reserved);
++
++    var image = try loading.complete(alloc);
++    defer image.deinit(alloc);
++    try testing.expectEqual(@as(usize, 3), accounting.reserved);
++    image.deinit(alloc);
++    image = .{};
++    try testing.expectEqual(@as(usize, 0), accounting.reserved);
++    try testing.expectEqual(accounting.reserve_calls, accounting.release_calls);
++
++    accounting.reject = true;
++    try testing.expectError(error.OutOfMemory, LoadingImage.init(
++        testing.io,
++        alloc,
++        &cmd,
++        limits,
++    ));
++    try testing.expectEqual(@as(usize, 0), accounting.reserved);
++}
++
++test "image growth reserves old and replacement capacity concurrently" {
++    const testing = std.testing;
++    const alloc = testing.allocator;
++
++    var accounting: TestAccountant = .{};
++    var cmd: command.Command = .{
++        .control = .{ .transmit = .{
++            .format = .rgb,
++            .width = 1,
++            .height = 1,
++            .image_id = 31,
++            .more_chunks = true,
++        } },
++        .data = try alloc.dupe(u8, "a"),
++    };
++    defer cmd.deinit(alloc);
++
++    var limits: LoadingImage.Limits = .direct;
++    limits.accountant = accounting.callbacks();
++    limits.max_input_bytes = 1024;
++    var loading = try LoadingImage.init(testing.io, alloc, &cmd, limits);
++    defer loading.deinit(alloc);
++
++    const old_capacity = loading.data.capacity;
++    try testing.expect(old_capacity > 0 and old_capacity < 1024);
++    try loading.addData(alloc, ("x" ** 1024)[0..old_capacity]);
++    const new_capacity = loading.data.capacity;
++
++    try testing.expect(new_capacity > old_capacity);
++    try testing.expectEqual(old_capacity + new_capacity, accounting.peak);
++    try testing.expectEqual(new_capacity, accounting.reserved);
++}
++
++test "image input cap rejects before allocator growth" {
++    const testing = std.testing;
++    const alloc = testing.allocator;
++
++    var accounting: TestAccountant = .{};
++    var cmd: command.Command = .{
++        .control = .{ .transmit = .{
++            .format = .rgb,
++            .width = 1,
++            .height = 1,
++            .image_id = 31,
++        } },
++        .data = try alloc.dupe(u8, "abc"),
++    };
++    defer cmd.deinit(alloc);
++
++    var limits: LoadingImage.Limits = .direct;
++    limits.accountant = accounting.callbacks();
++    limits.max_input_bytes = 2;
++    try testing.expectError(error.InvalidData, LoadingImage.init(
++        testing.io,
++        alloc,
++        &cmd,
++        limits,
++    ));
++    try testing.expectEqual(@as(usize, 0), accounting.reserve_calls);
++}
++
++test "zlib pixel cap rejects before decompression allocation" {
++    const testing = std.testing;
++    const alloc = testing.allocator;
++
++    var accounting: TestAccountant = .{};
++    var cmd: command.Command = .{
++        .control = .{ .transmit = .{
++            .format = .rgb,
++            .compression = .zlib_deflate,
++            .width = 128,
++            .height = 96,
++            .image_id = 31,
++        } },
++        .data = try alloc.dupe(
++            u8,
++            @embedFile("testdata/image-rgb-zlib_deflate-128x96-2147483647-raw.data"),
++        ),
++    };
++    defer cmd.deinit(alloc);
++
++    var limits: LoadingImage.Limits = .direct;
++    limits.accountant = accounting.callbacks();
++    limits.max_pixels = 1;
++    var loading = try LoadingImage.init(testing.io, alloc, &cmd, limits);
++    defer loading.deinit(alloc);
++    const reserve_calls = accounting.reserve_calls;
++    try testing.expectError(error.DimensionsTooLarge, loading.complete(alloc));
++    try testing.expectEqual(reserve_calls, accounting.reserve_calls);
++}
++
++test "PNG output is reserved before decoder allocation" {
++    const testing = std.testing;
++    const alloc = testing.allocator;
++
++    const Decoder = struct {
++        var accounting: ?*TestAccountant = null;
++        var saw_reservation: bool = false;
++
++        fn decode(
++            allocator: Allocator,
++            _: []const u8,
++        ) sys.DecodeError!sys.Image {
++            const state = accounting orelse return error.InvalidData;
++            if (state.reserved < 4) return error.InvalidData;
++            saw_reservation = true;
++            const data = try allocator.alloc(u8, 4);
++            @memset(data, 0);
++            return .{ .width = 1, .height = 1, .data = data };
++        }
++    };
++
++    const original_decoder = sys.decode_png;
++    defer sys.decode_png = original_decoder;
++    sys.decode_png = &Decoder.decode;
++
++    var accounting: TestAccountant = .{};
++    Decoder.accounting = &accounting;
++    Decoder.saw_reservation = false;
++    const png_header =
++        "\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR" ++
++        "\x00\x00\x00\x01\x00\x00\x00\x01";
++    var cmd: command.Command = .{
++        .control = .{ .transmit = .{
++            .format = .png,
++            .width = 0,
++            .height = 0,
++            .image_id = 31,
++        } },
++        .data = try alloc.dupe(u8, png_header),
++    };
++    defer cmd.deinit(alloc);
++
++    var limits: LoadingImage.Limits = .direct;
++    limits.accountant = accounting.callbacks();
++    var loading = try LoadingImage.init(testing.io, alloc, &cmd, limits);
++    defer loading.deinit(alloc);
++    var image = try loading.complete(alloc);
++    defer image.deinit(alloc);
++
++    try testing.expect(Decoder.saw_reservation);
++    try testing.expectEqual(@as(usize, 4), accounting.reserved);
++}
++
+ test "image load with image too wide" {
+     const testing = std.testing;
+     const alloc = testing.allocator;
+@@ -621,7 +1103,7 @@ test "image load with image too wide" {
+     var cmd: command.Command = .{
+         .control = .{ .transmit = .{
+             .format = .rgb,
+-            .width = max_dimension + 1,
++            .width = default_max_dimension + 1,
+             .height = 1,
+             .image_id = 31,
+         } },
+@@ -641,7 +1123,7 @@ test "image load with image too tall" {
+     var cmd: command.Command = .{
+         .control = .{ .transmit = .{
+             .format = .rgb,
+-            .height = max_dimension + 1,
++            .height = default_max_dimension + 1,
+             .width = 1,
+             .image_id = 31,
+         } },
+diff --git a/src/terminal/kitty/graphics_storage.zig b/src/terminal/kitty/graphics_storage.zig
+index 2a9ad7f5600f342ab4c3b77b8d025d6dd2cab51c..5d2d4d9fca2685f288dca25f7c8f0e86fa5f4a29 100644
+--- a/src/terminal/kitty/graphics_storage.zig
++++ b/src/terminal/kitty/graphics_storage.zig
+@@ -17,7 +17,7 @@ const Command = command.Command;
+ const log = std.log.scoped(.kitty_gfx);
+ 
+ /// Process-global counter backing all generation stamps (see
+-/// ImageStorage.generation and Image.generation). This is global rather
++/// ImageStorage generation fields and per-object generations). This is global rather
+ /// than per-storage so that stamps are unique across every storage in
+ /// the process: two mutation events never produce the same value, even
+ /// across separate screens (main vs. alt), storage resets, or separate
+@@ -70,6 +70,10 @@ const GenerationCounter = if (@bitSizeOf(usize) >= 64) struct {
+ pub const ImageStorage = struct {
+     const ImageMap = std.AutoHashMapUnmanaged(u32, Image);
+     const PlacementMap = std.AutoHashMapUnmanaged(PlacementKey, Placement);
++    const MutationStamps = struct {
++        image: u64 = 0,
++        placement: u64 = 0,
++    };
+ 
+     /// Dirty is set to true if placements or images change. This is
+     /// purely informational for the renderer and doesn't affect the
+@@ -101,6 +105,14 @@ pub const ImageStorage = struct {
+     /// This field must only be written via markMutated.
+     generation: u64 = 0,
+ 
++    /// Generation stamp of the last image-set or image-content mutation.
++    /// Placement-only mutations do not change this field.
++    image_generation: u64 = 0,
++
++    /// Generation stamp of the last placement-set mutation. Image-only
++    /// mutations do not change this field.
++    placement_generation: u64 = 0,
++
+     /// This is the next automatically assigned image ID. We start mid-way
+     /// through the u32 range to avoid collisions with buggy programs.
+     /// TODO: This isn't good enough, it's perfectly legal for programs
+@@ -152,17 +164,36 @@ pub const ImageStorage = struct {
+         return self.total_limit != 0;
+     }
+ 
+-    /// Record a content mutation: marks the storage dirty and assigns a
+-    /// fresh generation stamp. Must be called by anything that changes
+-    /// the set of images or placements (or image contents).
++    /// Record one atomic content mutation. Image and placement generations
++    /// are intentionally independent so consumers can avoid rebuilding an
++    /// unchanged snapshot class. A mutation affecting both classes receives
++    /// two distinct process-global stamps; the aggregate generation is the
++    /// later stamp.
+     ///
+     /// Do NOT call this for geometry-only events (scrolling, resizing,
+     /// screen switches); those must set only the dirty flag directly.
+     /// Bumping the generation for geometry changes would break the
+     /// contract that an unchanged generation means unchanged contents.
+-    fn markMutated(self: *ImageStorage, io: std.Io) void {
++    fn markMutated(
++        self: *ImageStorage,
++        io: std.Io,
++        images: bool,
++        placements: bool,
++    ) MutationStamps {
++        assert(images or placements);
+         self.dirty = true;
+-        self.generation = nextGeneration(io);
++        var result: MutationStamps = .{};
++        if (images) {
++            result.image = nextGeneration(io);
++            self.image_generation = result.image;
++            self.generation = result.image;
++        }
++        if (placements) {
++            result.placement = nextGeneration(io);
++            self.placement_generation = result.placement;
++            self.generation = result.placement;
++        }
++        return result;
+     }
+ 
+     /// Sets the limit in bytes for the total amount of image data that
+@@ -178,10 +209,23 @@ pub const ImageStorage = struct {
+     ) !void {
+         // Special case disabling by quickly deleting all
+         if (limit == 0) {
++            const had_images = self.images.count() != 0;
++            const had_placements = self.placements.count() != 0;
+             const image_limits = self.image_limits;
++            const old_generation = self.generation;
++            const old_image_generation = self.image_generation;
++            const old_placement_generation = self.placement_generation;
++            const old_dirty = self.dirty;
+             self.deinit(alloc, s);
+             self.* = .{ .image_limits = image_limits };
+-            self.markMutated(io);
++            if (had_images or had_placements) {
++                _ = self.markMutated(io, had_images, had_placements);
++            } else {
++                self.generation = old_generation;
++                self.image_generation = old_image_generation;
++                self.placement_generation = old_placement_generation;
++                self.dirty = old_dirty;
++            }
+         }
+ 
+         // If we re lowering our limit, check if we need to evict.
+@@ -200,10 +244,14 @@ pub const ImageStorage = struct {
+     /// free any existing image with the same ID.
+     pub fn addImage(self: *ImageStorage, io: std.Io, alloc: Allocator, img: Image) Allocator.Error!void {
+         // If the image itself is over the limit, then error immediately
+-        if (img.data.len > self.total_limit) return error.OutOfMemory;
++        if (img.allocatedBytes() > self.total_limit) return error.OutOfMemory;
+ 
+         // If this would put us over the limit, then evict.
+-        const total_bytes = self.total_bytes + img.data.len;
++        const total_bytes = std.math.add(
++            usize,
++            self.total_bytes,
++            img.allocatedBytes(),
++        ) catch return error.OutOfMemory;
+         if (total_bytes > self.total_limit) {
+             const req_bytes = total_bytes - self.total_limit;
+             log.info("evicting images to make space for {} bytes", .{req_bytes});
+@@ -224,19 +272,19 @@ pub const ImageStorage = struct {
+ 
+         // Write our new image
+         if (gop.found_existing) {
+-            self.total_bytes -= gop.value_ptr.data.len;
++            self.total_bytes -= gop.value_ptr.allocatedBytes();
+             gop.value_ptr.deinit(alloc);
+         }
+ 
+         gop.value_ptr.* = img;
+-        self.total_bytes += img.data.len;
++        self.total_bytes += img.allocatedBytes();
+ 
+         // Stamp the stored image with a fresh generation. This gives
+         // every add/replace a unique stamp even when the same image ID
+         // is retransmitted with identical dimensions, so consumers
+         // (e.g. renderer texture caches) can detect content changes.
+-        self.markMutated(io);
+-        gop.value_ptr.generation = self.generation;
++        const stamps = self.markMutated(io, true, false);
++        gop.value_ptr.generation = stamps.image;
+     }
+ 
+     /// Add a placement for a given image. The caller must verify in advance
+@@ -276,9 +324,10 @@ pub const ImageStorage = struct {
+         };
+ 
+         const gop = try self.placements.getOrPut(alloc, key);
+-        gop.value_ptr.* = p;
+-
+-        self.markMutated(io);
++        var stored = p;
++        const stamps = self.markMutated(io, false, true);
++        stored.generation = stamps.placement;
++        gop.value_ptr.* = stored;
+     }
+ 
+     fn clearPlacements(self: *ImageStorage, s: *terminal.Screen) void {
+@@ -326,8 +375,12 @@ pub const ImageStorage = struct {
+         // the generation.
+         const placements_before = self.placements.count();
+         const images_before = self.images.count();
+-        defer if (self.placements.count() != placements_before or
+-            self.images.count() != images_before) self.markMutated(io);
++        defer {
++            const placements_changed = self.placements.count() != placements_before;
++            const images_changed = self.images.count() != images_before;
++            if (images_changed or placements_changed)
++                _ = self.markMutated(io, images_changed, placements_changed);
++        }
+ 
+         switch (cmd) {
+             .all => |delete_images| {
+@@ -565,7 +618,7 @@ pub const ImageStorage = struct {
+ 
+         // If we get here, we can delete the image.
+         if (self.images.getEntry(image_id)) |entry| {
+-            self.total_bytes -= entry.value_ptr.data.len;
++            self.total_bytes -= entry.value_ptr.allocatedBytes();
+             entry.value_ptr.deinit(alloc);
+             self.images.removeByPtr(entry.key_ptr);
+         }
+@@ -690,8 +743,14 @@ pub const ImageStorage = struct {
+ 
+         // Evicting anything is a content mutation. This matters for the
+         // setLimit path in particular, which doesn't otherwise mark it.
+-        var any_evicted = false;
+-        defer if (any_evicted) self.markMutated(io);
++        const placements_before = self.placements.count();
++        const images_before = self.images.count();
++        defer {
++            const placements_changed = self.placements.count() != placements_before;
++            const images_changed = self.images.count() != images_before;
++            if (images_changed or placements_changed)
++                _ = self.markMutated(io, images_changed, placements_changed);
++        }
+ 
+         // They're in order of best to evict.
+         var evicted: usize = 0;
+@@ -701,19 +760,17 @@ pub const ImageStorage = struct {
+             while (p_it.next()) |entry| {
+                 if (entry.key_ptr.image_id == c.id) {
+                     self.placements.removeByPtr(entry.key_ptr);
+-                    any_evicted = true;
+                 }
+             }
+ 
+             if (self.images.getEntry(c.id)) |entry| {
+-                log.info("evicting image id={} bytes={}", .{ c.id, entry.value_ptr.data.len });
++                log.info("evicting image id={} bytes={}", .{ c.id, entry.value_ptr.allocatedBytes() });
+ 
+-                evicted += entry.value_ptr.data.len;
+-                self.total_bytes -= entry.value_ptr.data.len;
++                evicted += entry.value_ptr.allocatedBytes();
++                self.total_bytes -= entry.value_ptr.allocatedBytes();
+ 
+                 entry.value_ptr.deinit(alloc);
+                 self.images.removeByPtr(entry.key_ptr);
+-                any_evicted = true;
+ 
+                 if (evicted > req) return true;
+             }
+@@ -734,6 +791,10 @@ pub const ImageStorage = struct {
+     };
+ 
+     pub const Placement = struct {
++        /// Generation stamp assigned when this placement was added or
++        /// replaced. Never zero for a stored placement.
++        generation: u64 = 0,
++
+         /// The location where this placement should be drawn.
+         location: Location,
+ 
+@@ -1508,6 +1569,8 @@ test "storage: generation stamps on image add and replace" {
+     try s.addImage(io, alloc, .{ .id = 1, .width = 1, .height = 1 });
+     const gen1 = s.generation;
+     try testing.expect(gen1 > 0);
++    try testing.expectEqual(gen1, s.image_generation);
++    try testing.expectEqual(@as(u64, 0), s.placement_generation);
+ 
+     const img1 = s.imageById(1).?;
+     try testing.expectEqual(gen1, img1.generation);
+@@ -1541,10 +1604,15 @@ test "storage: generation bumps on placement and delete" {
+     defer s.deinit(alloc, t.screens.active);
+     try s.addImage(io, alloc, .{ .id = 1 });
+     const gen_add = s.generation;
++    const image_gen_add = s.image_generation;
+ 
+     try s.addPlacement(io, alloc, 1, 1, .{ .location = .{ .pin = try trackPin(&t, .{ .x = 1, .y = 1 }) } });
+     const gen_place = s.generation;
+     try testing.expect(gen_place > gen_add);
++    try testing.expectEqual(image_gen_add, s.image_generation);
++    try testing.expectEqual(gen_place, s.placement_generation);
++    var placement_it = s.placements.iterator();
++    try testing.expectEqual(gen_place, placement_it.next().?.value_ptr.generation);
+ 
+     // Reads don't change the generation.
+     _ = s.imageById(1);
+@@ -1553,6 +1621,10 @@ test "storage: generation bumps on placement and delete" {
+ 
+     s.delete(io, alloc, &t, .{ .all = true });
+     try testing.expect(s.generation > gen_place);
++    try testing.expect(s.image_generation > image_gen_add);
++    try testing.expect(s.placement_generation > gen_place);
++    try testing.expect(s.image_generation != s.placement_generation);
++    try testing.expectEqual(s.placement_generation, s.generation);
+ }
+ 
+ test "storage: generation bumps when setLimit evicts or disables" {
+@@ -1577,11 +1649,11 @@ test "storage: generation bumps when setLimit evicts or disables" {
+     try testing.expectEqual(@as(usize, 0), s.images.count());
+     const gen_evict = s.generation;
+ 
+-    // Disabling (limit=0) resets the storage and must mark a mutation.
++    // Disabling an already-empty storage changes no image or placement set.
+     s.dirty = false;
+     try s.setLimit(io, alloc, t.screens.active, 0);
+-    try testing.expect(s.dirty);
+-    try testing.expect(s.generation > gen_evict);
++    try testing.expect(!s.dirty);
++    try testing.expectEqual(gen_evict, s.generation);
+ }
+ 
+ test "storage: imageByNumber returns most recently transmitted" {
+diff --git a/src/terminal/osc.zig b/src/terminal/osc.zig
+index e3d323915bac9070b0c8900430134eeed634733f..b40fc39feeed1de93e22f768837524fa6bd6c368 100644
+--- a/src/terminal/osc.zig
++++ b/src/terminal/osc.zig
+@@ -300,11 +300,28 @@ pub const Parser = struct {
+     /// Maximum size of a "normal" OSC.
+     pub const MAX_BUF = 2048;
+ 
++    pub const Limits = struct {
++        generic: usize = 64 * 1024,
++        title: usize = 4 * 1024,
++        hyperlink: usize = 16 * 1024,
++        hyperlink_uri: usize = 8 * 1024,
++        hyperlink_params: usize = 1024,
++        clipboard_encoded: usize = 1024 * 1024,
++        pwd: usize = 128 * 1024,
++        shell_integration: usize = 2 * 1024 * 1024,
++    };
++
+     /// Optional allocator used to accept data longer than MAX_BUF.
+     /// This only applies to some commands (e.g. OSC 52) that can
+     /// reasonably exceed MAX_BUF.
+     alloc: ?Allocator,
+ 
++    /// Encoded byte ceilings, counted after the OSC introducer and before the
++    /// terminator. Named protocol limits replace the generic limit.
++    limits: Limits = .{},
++    sequence_bytes: usize = 0,
++    active_limit: usize = 64 * 1024,
++
+     /// Current state of the parser.
+     state: State,
+ 
+@@ -379,6 +396,9 @@ pub const Parser = struct {
+             .state = .start,
+             .capture = null,
+             .command = .invalid,
++            .limits = .{},
++            .sequence_bytes = 0,
++            .active_limit = (Limits{}).generic,
+ 
+             // Keeping all our undefined values together so we can
+             // visually easily duplicate them in the Valgrind check below.
+@@ -441,6 +461,8 @@ pub const Parser = struct {
+         self.state = .start;
+         self.capture = null;
+         self.command = .invalid;
++        self.sequence_bytes = 0;
++        self.active_limit = self.limits.generic;
+ 
+         if (std.valgrind.runningOnValgrind() > 0) {
+             // Initialize our undefined fields so Valgrind can catch it.
+@@ -467,14 +489,9 @@ pub const Parser = struct {
+             allocating: std.Io.Writer.Allocating,
+         };
+ 
+-        const Mode = enum {
+-            fixed,
+-            allocating,
+-        };
+-
+-        pub inline fn fixed(new: *?Capture, buf: []u8) void {
++        pub inline fn fixed(new: *?Capture, buf: []u8, capacity: usize) void {
+             new.* = .{
+-                .backing = .{ .fixed = .fixed(buf) },
++                .backing = .{ .fixed = .fixed(buf[0..@min(buf.len, capacity)]) },
+                 .writer = &new.*.?.backing.fixed,
+             };
+         }
+@@ -482,11 +499,12 @@ pub const Parser = struct {
+         pub inline fn allocating(
+             new: *?Capture,
+             alloc: Allocator,
++            capacity: usize,
+         ) error{OutOfMemory}!void {
+             new.* = .{
+                 .backing = .{ .allocating = try std.Io.Writer.Allocating.initCapacity(
+                     alloc,
+-                    2048,
++                    @min(2048, capacity),
+                 ) },
+                 .writer = &new.*.?.backing.allocating.writer,
+             };
+@@ -513,36 +531,33 @@ pub const Parser = struct {
+     ///
+     /// Get the trailing data using `capture.trailing()`. Do not access
+     /// the writer directly.
+-    inline fn captureTrailing(
+-        self: *Parser,
+-        comptime mode: Capture.Mode,
+-    ) void {
++    inline fn captureTrailing(self: *Parser, limit: usize) void {
+         assert(self.capture == null);
+-        switch (mode) {
+-            .fixed => Capture.fixed(
+-                &self.capture,
+-                &self.buffer,
+-            ),
+-
+-            .allocating => {
+-                const alloc = self.alloc orelse {
+-                    // We don't have an allocator - fall back to a fixed buffer and hope
+-                    // that it's big enough.
+-                    self.captureTrailing(.fixed);
+-                    return;
+-                };
+-
+-                Capture.allocating(
+-                    &self.capture,
+-                    alloc,
+-                ) catch {
+-                    // The allocator failed for some reason, fall back to a fixed buffer
+-                    // and hope that it's big enough.
+-                    self.captureTrailing(.fixed);
+-                    return;
+-                };
+-            },
++        self.active_limit = limit;
++        if (self.sequence_bytes > limit) {
++            self.state = .invalid;
++            return;
+         }
++
++        // One additional byte is reserved for parser-owned NUL termination.
++        const capacity = std.math.add(
++            usize,
++            limit - self.sequence_bytes,
++            1,
++        ) catch {
++            self.state = .invalid;
++            return;
++        };
++
++        if (capacity <= self.buffer.len or self.alloc == null) {
++            Capture.fixed(&self.capture, &self.buffer, capacity);
++            return;
++        }
++
++        Capture.allocating(&self.capture, self.alloc.?, capacity) catch {
++            // Allocation failure falls back to the bounded fixed buffer.
++            Capture.fixed(&self.capture, &self.buffer, capacity);
++        };
+     }
+ 
+     /// Consume the next character c and advance the parser state.
+@@ -551,9 +566,18 @@ pub const Parser = struct {
+         // any further input.
+         if (self.state == .invalid) return;
+ 
++        self.sequence_bytes = std.math.add(usize, self.sequence_bytes, 1) catch {
++            self.state = .invalid;
++            return;
++        };
++
+         // If a writer has been initialized, we just accumulate the rest of the
+         // OSC sequence in the writer's buffer and skip the state machine.
+         if (self.capture) |*cap| {
++            if (self.sequence_bytes > self.active_limit) {
++                self.state = .invalid;
++                return;
++            }
+             cap.writer.writeByte(c) catch |err| switch (err) {
+                 // We have overflowed our buffer or had some other error, set the
+                 // state to invalid so that we discard any further input.
+@@ -596,12 +620,12 @@ pub const Parser = struct {
+             },
+ 
+             .@"3008" => switch (c) {
+-                ';' => self.captureTrailing(.fixed),
++                ';' => self.captureTrailing(self.limits.generic),
+                 else => self.state = .invalid,
+             },
+ 
+             .@"1" => switch (c) {
+-                ';' => self.captureTrailing(.fixed),
++                ';' => self.captureTrailing(self.limits.generic),
+                 '0' => self.state = .@"10",
+                 '1' => self.state = .@"11",
+                 '2' => self.state = .@"12",
+@@ -616,18 +640,18 @@ pub const Parser = struct {
+             },
+ 
+             .@"10" => switch (c) {
+-                ';' => if (self.ensureAllocator()) self.captureTrailing(.fixed),
++                ';' => if (self.ensureAllocator()) self.captureTrailing(self.limits.generic),
+                 '4' => self.state = .@"104",
+                 else => self.state = .invalid,
+             },
+ 
+             .@"104" => switch (c) {
+-                ';' => if (self.ensureAllocator()) self.captureTrailing(.fixed),
++                ';' => if (self.ensureAllocator()) self.captureTrailing(self.limits.generic),
+                 else => self.state = .invalid,
+             },
+ 
+             .@"11" => switch (c) {
+-                ';' => if (self.ensureAllocator()) self.captureTrailing(.fixed),
++                ';' => if (self.ensureAllocator()) self.captureTrailing(self.limits.generic),
+                 '0' => self.state = .@"110",
+                 '1' => self.state = .@"111",
+                 '2' => self.state = .@"112",
+@@ -661,25 +685,25 @@ pub const Parser = struct {
+             .@"118",
+             .@"119",
+             => switch (c) {
+-                ';' => if (self.ensureAllocator()) self.captureTrailing(.fixed),
++                ';' => if (self.ensureAllocator()) self.captureTrailing(self.limits.generic),
+                 else => self.state = .invalid,
+             },
+ 
+             .@"13" => switch (c) {
+-                ';' => if (self.ensureAllocator()) self.captureTrailing(.fixed),
++                ';' => if (self.ensureAllocator()) self.captureTrailing(self.limits.generic),
+                 '3' => self.state = .@"133",
+                 else => self.state = .invalid,
+             },
+ 
+             .@"2" => switch (c) {
+-                ';' => self.captureTrailing(.fixed),
++                ';' => self.captureTrailing(self.limits.title),
+                 '1' => self.state = .@"21",
+                 '2' => self.state = .@"22",
+                 else => self.state = .invalid,
+             },
+ 
+             .@"5" => switch (c) {
+-                ';' => if (self.ensureAllocator()) self.captureTrailing(.fixed),
++                ';' => if (self.ensureAllocator()) self.captureTrailing(self.limits.generic),
+                 '2' => self.state = .@"52",
+                 '5' => self.state = .@"55",
+                 else => self.state = .invalid,
+@@ -690,10 +714,13 @@ pub const Parser = struct {
+                 else => self.state = .invalid,
+             },
+ 
+-            .@"52",
+-            .@"66",
+-            => switch (c) {
+-                ';' => self.captureTrailing(.allocating),
++            .@"52" => switch (c) {
++                ';' => self.captureTrailing(self.limits.clipboard_encoded),
++                else => self.state = .invalid,
++            },
++
++            .@"66" => switch (c) {
++                ';' => self.captureTrailing(self.limits.generic),
+                 else => self.state = .invalid,
+             },
+ 
+@@ -703,14 +730,14 @@ pub const Parser = struct {
+             },
+ 
+             .@"7" => switch (c) {
+-                ';' => self.captureTrailing(.fixed),
++                ';' => self.captureTrailing(self.limits.pwd),
+                 '2' => self.state = .@"72",
+                 '7' => self.state = .@"77",
+                 else => self.state = .invalid,
+             },
+ 
+             .@"72" => switch (c) {
+-                ';' => self.captureTrailing(.allocating),
++                ';' => self.captureTrailing(self.limits.generic),
+                 else => self.state = .invalid,
+             },
+ 
+@@ -721,7 +748,7 @@ pub const Parser = struct {
+ 
+             .@"133",
+             => switch (c) {
+-                ';' => self.captureTrailing(.fixed),
++                ';' => self.captureTrailing(self.limits.shell_integration),
+                 '7' => self.state = .@"1337",
+                 else => self.state = .invalid,
+             },
+@@ -733,23 +760,32 @@ pub const Parser = struct {
+ 
+             .@"1337",
+             => switch (c) {
+-                ';' => self.captureTrailing(.fixed),
++                ';' => self.captureTrailing(self.limits.shell_integration),
+                 else => self.state = .invalid,
+             },
+ 
+             .@"5522",
+             => switch (c) {
+-                ';' => self.captureTrailing(.allocating),
++                ';' => self.captureTrailing(self.limits.clipboard_encoded),
+                 else => self.state = .invalid,
+             },
+ 
+             .@"0",
++            .@"9",
++            => switch (c) {
++                ';' => self.captureTrailing(self.limits.title),
++                else => self.state = .invalid,
++            },
++
++            .@"8" => switch (c) {
++                ';' => self.captureTrailing(self.limits.hyperlink),
++                else => self.state = .invalid,
++            },
++
+             .@"22",
+             .@"777",
+-            .@"8",
+-            .@"9",
+             => switch (c) {
+-                ';' => self.captureTrailing(.fixed),
++                ';' => self.captureTrailing(self.limits.generic),
+                 else => self.state = .invalid,
+             },
+         }
+@@ -845,3 +881,46 @@ test {
+     _ = parsers;
+     _ = encoding;
+ }
++
++test "OSC named byte limits are exact and reset after rejection" {
++    const testing = std.testing;
++
++    var parser: Parser = .init(testing.allocator);
++    defer parser.deinit();
++    parser.limits.title = 4;
++
++    for ("2;ab") |byte| parser.next(byte);
++    const exact = parser.end(null) orelse return error.TestUnexpectedResult;
++    try testing.expectEqualStrings("ab", exact.change_window_title);
++
++    parser.reset();
++    for ("2;abc") |byte| parser.next(byte);
++    try testing.expect(parser.end(null) == null);
++
++    parser.reset();
++    for ("2;a") |byte| parser.next(byte);
++    const recovered = parser.end(null) orelse return error.TestUnexpectedResult;
++    try testing.expectEqualStrings("a", recovered.change_window_title);
++}
++
++test "OSC generic and clipboard encoded limits count the routed prefix" {
++    const testing = std.testing;
++
++    var parser: Parser = .init(testing.allocator);
++    defer parser.deinit();
++    parser.limits.generic = 4;
++
++    for ("22;a") |byte| parser.next(byte);
++    try testing.expect(parser.state != .invalid);
++    parser.reset();
++    for ("22;ab") |byte| parser.next(byte);
++    try testing.expectEqual(Parser.State.invalid, parser.state);
++
++    parser.reset();
++    parser.limits.clipboard_encoded = 7;
++    for ("52;c;YQ") |byte| parser.next(byte);
++    try testing.expect(parser.end(null) != null);
++    parser.reset();
++    for ("52;c;YWI") |byte| parser.next(byte);
++    try testing.expect(parser.end(null) == null);
++}
+diff --git a/src/terminal/osc/parsers/hyperlink.zig b/src/terminal/osc/parsers/hyperlink.zig
+index d8e84b63c6a1ab16f0a54c3b685a30e77aec0882..23143d16ca0197f9bdba11eb27f308f8de129bb4 100644
+--- a/src/terminal/osc/parsers/hyperlink.zig
++++ b/src/terminal/osc/parsers/hyperlink.zig
+@@ -20,6 +20,13 @@ pub fn parse(parser: *Parser, _: ?u8) ?*Command {
+         parser.state = .invalid;
+         return null;
+     };
++    const uri_len = data.len - s - 2;
++    if (s > parser.limits.hyperlink_params or
++        uri_len > parser.limits.hyperlink_uri)
++    {
++        parser.state = .invalid;
++        return null;
++    }
+ 
+     parser.command = .{
+         .hyperlink_start = .{
+@@ -162,3 +169,24 @@ test "OSC 8: hyperlink end" {
+     const cmd = p.end('\x1b').?.*;
+     try testing.expect(cmd == .hyperlink_end);
+ }
++
++test "OSC 8: conjunctive parameter and URI limits" {
++    const testing = std.testing;
++
++    var p: Parser = .init(testing.allocator);
++    defer p.deinit();
++    p.limits.hyperlink = 64;
++    p.limits.hyperlink_params = 2;
++    p.limits.hyperlink_uri = 3;
++
++    for ("8;id;abc") |ch| p.next(ch);
++    try testing.expect(p.end(null) != null);
++
++    p.reset();
++    for ("8;id;abcd") |ch| p.next(ch);
++    try testing.expect(p.end(null) == null);
++
++    p.reset();
++    for ("8;id=x;abc") |ch| p.next(ch);
++    try testing.expect(p.end(null) == null);
++}
+diff --git a/src/terminal/resource_accounting.zig b/src/terminal/resource_accounting.zig
+new file mode 100644
+index 0000000000000000000000000000000000000000..4e6a484f6241a48e903c4e32a745a67e6dc75beb
+--- /dev/null
++++ b/src/terminal/resource_accounting.zig
+@@ -0,0 +1,178 @@
++const std = @import("std");
++const Allocator = std.mem.Allocator;
++const graphics_image = @import("kitty/graphics_image.zig");
++
++pub const ResourceAccountant = graphics_image.ResourceAccountant;
++pub const ResourceKind = graphics_image.ResourceKind;
++
++/// Allocator adapter used by the C terminal boundary to account every owned
++/// heap extent by subsystem. The reported byte count is the exact payload
++/// extent requested from the child allocator; allocator-private metadata and
++/// platform rounding are intentionally outside the engine-owned ledger.
++///
++/// Growth is deliberately not performed through resize/remap. Returning
++/// failure makes std.mem.Allocator allocate and reserve the complete
++/// replacement before it releases the old extent, preserving the real peak
++/// ownership order and atomic rejection semantics.
++pub const AccountingAllocator = struct {
++    child: Allocator,
++    kind: ResourceKind,
++    accountant: ResourceAccountant = .{},
++    bytes: usize = 0,
++
++    const Self = @This();
++
++    pub fn init(child: Allocator, kind: ResourceKind) Self {
++        return .{
++            .child = child,
++            .kind = kind,
++        };
++    }
++
++    pub fn allocator(self: *Self) Allocator {
++        return .{
++            .ptr = self,
++            .vtable = &vtable,
++        };
++    }
++
++    pub fn sameAccountant(self: *const Self, other: ResourceAccountant) bool {
++        return self.accountant.userdata == other.userdata and
++            self.accountant.reserve_fn == other.reserve_fn and
++            self.accountant.release_fn == other.release_fn;
++    }
++
++    /// Reserve this allocator's complete existing balance with a prospective
++    /// accountant. The caller performs this for every subsystem before
++    /// publishing any accountant change.
++    pub fn reserveExisting(
++        self: *const Self,
++        prospective: ResourceAccountant,
++    ) error{OutOfMemory}!void {
++        try prospective.reserve(self.kind, self.bytes);
++    }
++
++    pub fn releaseExisting(
++        self: *const Self,
++        previous: ResourceAccountant,
++    ) void {
++        previous.release(self.kind, self.bytes);
++    }
++
++    const vtable: Allocator.VTable = .{
++        .alloc = alloc,
++        .resize = resize,
++        .remap = remap,
++        .free = free,
++    };
++
++    fn alloc(
++        ctx: *anyopaque,
++        len: usize,
++        alignment: std.mem.Alignment,
++        ret_addr: usize,
++    ) ?[*]u8 {
++        const self: *Self = @ptrCast(@alignCast(ctx));
++        const new_total = std.math.add(usize, self.bytes, len) catch return null;
++        self.accountant.reserve(self.kind, len) catch return null;
++        const result = self.child.rawAlloc(len, alignment, ret_addr) orelse {
++            self.accountant.release(self.kind, len);
++            return null;
++        };
++        self.bytes = new_total;
++        return result;
++    }
++
++    fn resize(
++        ctx: *anyopaque,
++        old_mem: []u8,
++        alignment: std.mem.Alignment,
++        new_len: usize,
++        ret_addr: usize,
++    ) bool {
++        const self: *Self = @ptrCast(@alignCast(ctx));
++        if (new_len > old_mem.len) return false;
++        if (!self.child.rawResize(old_mem, alignment, new_len, ret_addr))
++            return false;
++
++        const released = old_mem.len - new_len;
++        std.debug.assert(released <= self.bytes);
++        self.bytes -= released;
++        self.accountant.release(self.kind, released);
++        return true;
++    }
++
++    fn remap(
++        _: *anyopaque,
++        _: []u8,
++        _: std.mem.Alignment,
++        _: usize,
++        _: usize,
++    ) ?[*]u8 {
++        // Force the generic realloc path so replacement capacity is reserved
++        // before the old extent is freed.
++        return null;
++    }
++
++    fn free(
++        ctx: *anyopaque,
++        old_mem: []u8,
++        alignment: std.mem.Alignment,
++        ret_addr: usize,
++    ) void {
++        const self: *Self = @ptrCast(@alignCast(ctx));
++        self.child.rawFree(old_mem, alignment, ret_addr);
++        std.debug.assert(old_mem.len <= self.bytes);
++        self.bytes -= old_mem.len;
++        self.accountant.release(self.kind, old_mem.len);
++    }
++};
++
++test "accounting allocator reserves replacement before release" {
++    const testing = std.testing;
++    const State = struct {
++        current: usize = 0,
++        peak: usize = 0,
++
++        fn reserve(
++            userdata: ?*anyopaque,
++            _: ResourceKind,
++            bytes: usize,
++        ) callconv(.c) bool {
++            const self: *@This() = @ptrCast(@alignCast(userdata.?));
++            self.current = std.math.add(usize, self.current, bytes) catch
++                return false;
++            self.peak = @max(self.peak, self.current);
++            return true;
++        }
++
++        fn release(
++            userdata: ?*anyopaque,
++            _: ResourceKind,
++            bytes: usize,
++        ) callconv(.c) void {
++            const self: *@This() = @ptrCast(@alignCast(userdata.?));
++            testing.expect(bytes <= self.current) catch unreachable;
++            self.current -= bytes;
++        }
++    };
++
++    var state: State = .{};
++    var accounting: AccountingAllocator = .init(
++        testing.allocator,
++        .terminal_text_cpu,
++    );
++    accounting.accountant = .{
++        .userdata = &state,
++        .reserve_fn = &State.reserve,
++        .release_fn = &State.release,
++    };
++    const alloc_impl = accounting.allocator();
++    var bytes = try alloc_impl.alloc(u8, 16);
++    bytes = try alloc_impl.realloc(bytes, 32);
++    try testing.expectEqual(@as(usize, 48), state.peak);
++    try testing.expectEqual(@as(usize, 32), state.current);
++    alloc_impl.free(bytes);
++    try testing.expectEqual(@as(usize, 0), state.current);
++    try testing.expectEqual(@as(usize, 0), accounting.bytes);
++}
+diff --git a/src/terminal/stream_terminal.zig b/src/terminal/stream_terminal.zig
+index 7586711a45214298988abaaddb03a224e65a4e5a..70408b0d18dec36e81892b7e1f4e0e5f12a21414 100644
+--- a/src/terminal/stream_terminal.zig
++++ b/src/terminal/stream_terminal.zig
+@@ -32,9 +32,21 @@ pub const Stream = stream.Stream(Handler);
+ /// You can manually set various effects callbacks in the `effects` field
+ /// to implement certain effects such as bells, titles, clipboard, etc.
+ pub const Handler = struct {
++    /// Maximum decoded clipboard bytes accepted from one OSC command. The
++    /// encoded OSC byte ceiling is enforced by the parser separately.
++    clipboard_max_decoded_bytes: usize = 768 * 1024,
++
+     /// The terminal state to modify.
+     terminal: *Terminal,
+ 
++    /// Allocator for parser payloads and synchronous effect scratch. Null
++    /// preserves the historical terminal allocator behavior.
++    pending_alloc: ?std.mem.Allocator = null,
++
++    /// Allocator for Kitty image/storage ownership. Null uses the allocator
++    /// configured on the active screen.
++    kitty_alloc: ?std.mem.Allocator = null,
++
+     /// True after an error prevented a terminal-owned semantic update.
+     ///
+     /// When an error happens during terminal processing, streams continue
+@@ -157,6 +169,14 @@ pub const Handler = struct {
+         };
+     }
+ 
++    fn pendingAllocator(self: *Handler) std.mem.Allocator {
++        return self.pending_alloc orelse self.terminal.gpa();
++    }
++
++    fn kittyAllocator(self: *Handler) std.mem.Allocator {
++        return self.kitty_alloc orelse self.terminal.kittyAllocator();
++    }
++
+     pub fn deinit(self: *Handler) void {
+         self.apc_handler.deinit();
+         self.dcs_handler.deinit();
+@@ -318,8 +338,8 @@ pub const Handler = struct {
+ 
+             // APC
+             .apc_start => self.apc_handler.start(),
+-            .apc_put => self.apc_handler.feed(self.terminal.gpa(), value),
+-            .apc_put_slice => self.apc_handler.feedSlice(self.terminal.gpa(), value.bytes),
++            .apc_put => self.apc_handler.feed(self.pendingAllocator(), value),
++            .apc_put_slice => self.apc_handler.feedSlice(self.pendingAllocator(), value.bytes),
+             .apc_end => self.apcEnd(),
+ 
+             // Effect-based handlers
+@@ -362,7 +382,7 @@ pub const Handler = struct {
+ 
+     fn dcsHook(self: *Handler, value: Action.Value(.dcs_hook)) !void {
+         var cmd = self.dcs_handler.hook(
+-            self.terminal.gpa(),
++            self.pendingAllocator(),
+             value,
+         ) orelse return;
+         defer cmd.deinit();
+@@ -442,7 +462,9 @@ pub const Handler = struct {
+ 
+         const decoder = std.base64.standard.Decoder;
+         const decoded_len = try decoder.calcSizeForSlice(data);
+-        const alloc = self.terminal.gpa();
++        if (decoded_len > self.clipboard_max_decoded_bytes)
++            return error.InvalidData;
++        const alloc = self.pendingAllocator();
+         const decoded = try alloc.alloc(u8, decoded_len);
+         defer alloc.free(decoded);
+         try decoder.decode(decoded, data);
+@@ -461,7 +483,7 @@ pub const Handler = struct {
+         const func = self.effects.device_attributes orelse return;
+         const attrs = func(self);
+ 
+-        var stack = std.heap.stackFallback(128, self.terminal.gpa());
++        var stack = std.heap.stackFallback(128, self.pendingAllocator());
+         const alloc = stack.get();
+ 
+         var aw: std.Io.Writer.Allocating = .init(alloc);
+@@ -552,7 +574,7 @@ pub const Handler = struct {
+         // on the stack before falling back to a heap allocation.
+         var stack = std.heap.stackFallback(
+             256,
+-            self.terminal.gpa(),
++            self.pendingAllocator(),
+         );
+         const alloc = stack.get();
+ 
+@@ -766,7 +788,7 @@ pub const Handler = struct {
+     ) !void {
+         if (requests.count() == 0) return;
+ 
+-        var stack = std.heap.stackFallback(1024, self.terminal.gpa());
++        var stack = std.heap.stackFallback(1024, self.pendingAllocator());
+         const alloc = stack.get();
+         var response: std.Io.Writer.Allocating = .init(alloc);
+         defer response.deinit();
+@@ -884,7 +906,7 @@ pub const Handler = struct {
+         self: *Handler,
+         request: kitty_color.OSC,
+     ) !void {
+-        var stack = std.heap.stackFallback(1024, self.terminal.gpa());
++        var stack = std.heap.stackFallback(1024, self.pendingAllocator());
+         const alloc = stack.get();
+         var response: std.Io.Writer.Allocating = .init(alloc);
+         defer response.deinit();
+@@ -942,7 +964,7 @@ pub const Handler = struct {
+ 
+     fn apcEnd(self: *Handler) void {
+         const io = self.terminal.io();
+-        const alloc = self.terminal.gpa();
++        const alloc = self.pendingAllocator();
+         var cmd = self.apc_handler.end() orelse return;
+         defer cmd.deinit(alloc);
+ 
+@@ -950,7 +972,7 @@ pub const Handler = struct {
+             .kitty => |*kitty_cmd| if (comptime build_options.kitty_graphics) {
+                 if (self.terminal.kittyGraphics(
+                     io,
+-                    alloc,
++                    self.kittyAllocator(),
+                     kitty_cmd,
+                 )) |resp| resp: {
+                     // Don't waste time encoding if we can't write responses
+@@ -968,7 +990,10 @@ pub const Handler = struct {
+             },
+ 
+             .glyph => |*glyph_req| {
+-                const resp = self.terminal.glyphProtocol(alloc, glyph_req);
++                const resp = self.terminal.glyphProtocol(
++                    self.terminal.gpa(),
++                    glyph_req,
++                );
+                 if (resp) |r| resp_block: {
+                     // Don't waste time encoding if we can't write responses
+                     // anyways.
+@@ -2338,6 +2363,36 @@ test "clipboard_write allocation failure is ignored" {
+     try testing.expect(!s.handler.semantic_failure);
+ }
+ 
++test "clipboard decoded cap rejects before scratch allocation" {
++    var t: Terminal = try .init(testing.io, testing.allocator, .{ .cols = 80, .rows = 24 });
++    defer t.deinit(testing.allocator);
++
++    const S = struct {
++        var count: usize = 0;
++
++        fn clipboardWrite(_: *Handler, _: clipboard.Write) clipboard.WriteResult {
++            count += 1;
++            return .success;
++        }
++    };
++    S.count = 0;
++
++    var handler: Handler = .init(&t);
++    handler.clipboard_max_decoded_bytes = 4;
++    handler.effects.clipboard_write = &S.clipboardWrite;
++    var s: Stream = .initAlloc(testing.allocator, handler);
++    defer s.deinit();
++
++    // "hello" decodes to five bytes and is rejected before alloc().
++    s.nextSlice("\x1B]52;c;aGVsbG8=\x1B\\");
++    try testing.expectEqual(@as(usize, 0), S.count);
++    try testing.expect(!s.handler.semantic_failure);
++
++    s.handler.clipboard_max_decoded_bytes = 5;
++    s.nextSlice("\x1B]52;c;aGVsbG8=\x1B\\");
++    try testing.expectEqual(@as(usize, 1), S.count);
++}
++
+ test "request mode DECRQM with write_pty callback" {
+     var t: Terminal = try .init(testing.io, testing.allocator, .{ .cols = 80, .rows = 24 });
+     defer t.deinit(testing.allocator);

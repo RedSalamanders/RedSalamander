@@ -72,8 +72,10 @@ struct PreferencesTypographyContext
 
 enum class ShortcutScope : uint8_t
 {
-    FunctionBar,
-    FolderView,
+    FunctionBar = 0,
+    FolderView  = 1,
+    Application = 2,
+    Terminal    = 3,
 };
 
 enum class ThemeSchemaSource : uint8_t
@@ -203,6 +205,7 @@ enum class PrefsPluginType : uint8_t
 {
     FileSystem,
     Viewer,
+    Terminal,
 };
 
 struct PrefsPluginListItem
@@ -278,8 +281,10 @@ struct KeyboardShortcutRow
     std::optional<size_t> bindingIndex;
     uint32_t vk        = 0;
     uint32_t modifiers = 0;
+    Common::Keyboard::KeyPosition keyPosition = Common::Keyboard::KeyPosition::None;
     bool placeholder   = false;
     bool hasConflict   = false;
+    bool overridesGlobal = false;
 };
 
 struct PreferencesDialogState
@@ -404,6 +409,7 @@ struct PreferencesDialogState
     std::optional<size_t> keyboardCaptureBindingIndex;
     std::optional<uint32_t> keyboardCapturePendingVk;
     uint32_t keyboardCapturePendingModifiers = 0;
+    Common::Keyboard::KeyPosition keyboardCapturePendingKeyPosition = Common::Keyboard::KeyPosition::None;
     std::wstring keyboardCaptureConflictCommandId;
     std::optional<size_t> keyboardCaptureConflictBindingIndex;
     bool keyboardCaptureConflictMultiple = false;

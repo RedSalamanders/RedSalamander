@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tooling Governance"
+  short_description: "Keep repository scripts classified and maintainable"
+  default_prompt: "Use $tooling-governance to add or modify a RedSalamander tool without creating inventory, compatibility, or documentation drift."

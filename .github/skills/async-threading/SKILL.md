@@ -189,6 +189,60 @@ When scheduling background work from a **plugin DLL** (viewers/file systems):
 
 Do not let the callback context destroy its last `wil::unique_hmodule` while the callback body is returning. `FreeLibrary` can otherwise unmap the plugin's callback code before Windows crosses the callback return boundary. This transfer rule is specific to Windows threadpool callbacks; other callback/thread systems must retain their documented module ownership until their own quiet point.
 
+## Callback Teardown Guard
+
+Async callbacks (threadpool, I/O completion) can fire after the host object that registered them has begun teardown. Checking a `_stopping` flag is insufficient when it's set concurrently with cleanup — there's a window where the callback passes the check but the host is already partially destroyed.
+
+```cpp
+// 1. Define guard (non-copyable because of std::atomic)
+struct CallbackGuard
+{
+    CallbackGuard()                                = default;
+    CallbackGuard(const CallbackGuard&)            = delete;
+    CallbackGuard(CallbackGuard&&)                 = delete;
+    CallbackGuard& operator=(const CallbackGuard&) = delete;
+    CallbackGuard& operator=(CallbackGuard&&)      = delete;
+
+    std::atomic<bool> valid{true};
+};
+
+// 2. Owner holds shared_ptr
+std::shared_ptr<CallbackGuard> _callbackGuard = std::make_shared<CallbackGuard>();
+
+// 3. On teardown — invalidate FIRST, before any other cleanup
+void Stop() noexcept
+{
+    _callbackGuard->valid.store(false, std::memory_order_release);
+    _stopping.store(true, std::memory_order_release);
+    // ... CancelIo, WaitForThreadpoolCallbacks, resource cleanup ...
+}
+
+// 4. In every callback — check guard before invoking host
+void NotifyHost() noexcept
+{
+    if (_stopping.load(std::memory_order_acquire)) return;
+    if (!_callbackGuard->valid.load(std::memory_order_acquire)) return;
+    if (!_callback) return;
+
+    _callback->OnEvent(&data, _cookie);
+}
+
+// 5. On restart — re-enable the guard
+void Start() noexcept
+{
+    _callbackGuard->valid.store(true, std::memory_order_release);
+    // ...
+}
+```
+
+Rules:
+
+- Guard invalidation must be the **first** operation in teardown; `store(false, release)` in `Stop()` pairs with `load(acquire)` in the callback, so a callback that sees `valid == false` also sees all prior teardown writes.
+- Check both `_stopping` and the guard (defense in depth).
+- Explicit deleted copy/move satisfies MSVC /W4 warnings (C4625, C4626, C5026, C5027).
+- Use when any plugin async callback could outlive the host reference, e.g. threadpool I/O callbacks (`ReadDirectoryChangesW`), background workers invoking registered callbacks, or wherever `SetCallback(nullptr)` must be a hard barrier.
+- Reference implementation: `Plugins/FileSystem/FileSystem.Watch.cpp` (DirectoryWatch).
+
 ## Best Practices
 
 1. Use message queues for cross-thread communication

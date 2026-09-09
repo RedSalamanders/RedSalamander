@@ -69,7 +69,7 @@ protected:
 
     wil::unique_hwnd _hWnd;
     bool _embeddedMode = false;
-    ViewerTheme _theme{};
+    ViewerTheme _theme{.sizeBytes = sizeof(ViewerTheme)};
     bool _hasTheme = false;
     RegistrationCallbackState<IViewerCallback> _callbackState;
 };

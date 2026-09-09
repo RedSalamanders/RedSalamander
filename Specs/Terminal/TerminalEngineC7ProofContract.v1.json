@@ -1,0 +1,650 @@
+{
+  "formatId": "red-salamander-terminal-engine-c7-proof-contract",
+  "version": 1,
+  "frozenUtc": "2026-07-30T00:00:00Z",
+  "correction": {
+    "correctionId": "c7-score-proof-v1",
+    "frozenBeforePerformance": true,
+    "preservesMandatoryCorpus": true,
+    "priorCollectionReusable": false,
+    "priorPerformanceReusable": false,
+    "restartRequirement": "Freeze this correction before collection. Keep the existing mandatory fixture corpus unchanged, discard or quarantine every earlier collection and performance record, and rerun all required lanes before finalization."
+  },
+  "engineProbe": {
+    "contractId": "c7-engine-effects-v1",
+    "fixtureId": "c7-engine-effects-v1",
+    "actionId": "probe-c7-engine-effects",
+    "arguments": {
+      "contractId": "c7-engine-effects-v1"
+    },
+    "schedules": [
+      "all-at-once",
+      "bytewise",
+      "terminator-split"
+    ],
+    "maxStateBytes": "8192",
+    "fixedStreamSha256": "c52a8932860a92d8b51f96bd807a15b01ae49e870bdc7541cec0e1bd8e141688",
+    "fixedStreamSizeBytes": "192",
+    "expectedState": {
+      "actionId": "probe-c7-engine-effects",
+      "copiedEffects": {
+        "cwdSha256": "3db1d0bc15752c29c20649d40badfb60c715e20d76add7511d650dbec0de2cdd",
+        "hyperlinkSha256": "884e6d1c2a2f10c462d993fd26c45c53019e130909d8b481c211882cc43f739c",
+        "titleSha256": "57a0a0a97e8d41a00c3f409765a7453adc4d3d1d44a0f07f67f52244f95c68bb"
+      },
+      "eventTrace": [
+        {
+          "kind": "prompt-start",
+          "ordinal": "1"
+        },
+        {
+          "kind": "input-start",
+          "ordinal": "2"
+        },
+        {
+          "commandSha256": "ad7dd46248e57e5c10aa5b72397b3a560b4bf9d6fa432c041a6a8721596bb673",
+          "kind": "output-start",
+          "ordinal": "3"
+        },
+        {
+          "exitCode": "23",
+          "kind": "command-finished",
+          "ordinal": "4"
+        },
+        {
+          "kind": "prompt-start",
+          "ordinal": "5"
+        },
+        {
+          "kind": "input-start",
+          "ordinal": "6"
+        }
+      ],
+      "hostParserCount": "0",
+      "livePromptSpanTrace": [
+        {
+          "firstLine": "0",
+          "inputBegin": "2",
+          "lastLine": "0",
+          "phase": "after-first-input-start",
+          "status": "available"
+        },
+        {
+          "error": "in-command-output",
+          "phase": "after-output-start",
+          "status": "unavailable"
+        },
+        {
+          "firstLine": "2",
+          "inputBegin": "2",
+          "lastLine": "2",
+          "phase": "after-second-input-start",
+          "status": "available"
+        },
+        {
+          "error": "no-prompt-mark",
+          "phase": "alternate-screen",
+          "status": "unavailable"
+        }
+      ],
+      "stateVersion": "1"
+    },
+    "requiredOrderingFixture": {
+      "fixtureId": "write-response-order",
+      "scheduleId": "terminator-split",
+      "actionId": "admit-external-events",
+      "stateJcs": "{\"admittedOrder\":\"protocol-reply,input,resize,side-channel\",\"reordered\":false}",
+      "stateSha256": "e005aefd07b0aac008f6fe282090b3391d5b2deacc6a7674e8f251323a2a85b4",
+      "requiredActionFlags": [
+        "action-observed",
+        "checked-arithmetic",
+        "order-preserved"
+      ]
+    }
+  },
+  "authentication": {
+    "protocolVersion": "1",
+    "nonceBits": "128",
+    "sequenceStartsAt": "1",
+    "sequenceWrapIsFatal": true,
+    "maxFrameBytes": "2097152",
+    "authorizationRule": "IdleAtPrimaryPrompt is true only when one nonce-, epoch-, sequence-, operation-, framing-, and bounds-valid authenticated side-channel frame composes with the matching typed input-start event, an available livePromptSpan, primary-screen ownership, and not-running state.",
+    "failureRule": "Authentication, framing, bounds, replay, duplicate, gap, or order failure invalidates the epoch and clears all authority. Ordinary or nested terminal output is ignored, cannot authorize, and does not invalidate; a valid authenticated frame with a non-authorizing engine observation consumes sequence but leaves the epoch active.",
+    "cases": [
+      {
+        "caseId": "valid-idle-composition",
+        "classification": "positive",
+        "scenario": [
+          "handshake-valid",
+          "idle-valid"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "idle-authorized"
+          ],
+          "epochStatus": "active",
+          "idleAuthorized": true
+        }
+      },
+      {
+        "caseId": "typed-event-without-auth",
+        "classification": "negative-composition",
+        "scenario": [
+          "idle-typed-no-auth"
+        ],
+        "expected": {
+          "decisions": [
+            "rejected-no-authenticated-frame"
+          ],
+          "epochStatus": "awaiting-handshake",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "auth-without-typed-event",
+        "classification": "negative-composition",
+        "scenario": [
+          "handshake-valid",
+          "idle-auth-no-typed"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "denied-engine-state"
+          ],
+          "epochStatus": "active",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "ordinary-osc133-cannot-authorize",
+        "classification": "negative-untrusted-origin",
+        "scenario": [
+          "handshake-valid",
+          "idle-ordinary-osc133"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "ignored-untrusted-origin"
+          ],
+          "epochStatus": "active",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "ordinary-osc7-cannot-authorize",
+        "classification": "negative-untrusted-origin",
+        "scenario": [
+          "handshake-valid",
+          "idle-ordinary-osc7"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "ignored-untrusted-origin"
+          ],
+          "epochStatus": "active",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "remote-output-cannot-authorize",
+        "classification": "negative-untrusted-origin",
+        "scenario": [
+          "handshake-valid",
+          "idle-remote-output"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "ignored-untrusted-origin"
+          ],
+          "epochStatus": "active",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "nested-output-does-not-invalidate",
+        "classification": "positive",
+        "scenario": [
+          "handshake-valid",
+          "idle-nested-output",
+          "idle-valid"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "ignored-untrusted-origin",
+            "idle-authorized"
+          ],
+          "epochStatus": "active",
+          "idleAuthorized": true
+        }
+      },
+      {
+        "caseId": "nested-owner-pauses-then-resumes",
+        "classification": "positive",
+        "scenario": [
+          "handshake-valid",
+          "idle-nested-auth",
+          "idle-resume-top-level"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "denied-engine-state",
+            "idle-authorized"
+          ],
+          "epochStatus": "active",
+          "idleAuthorized": true
+        }
+      },
+      {
+        "caseId": "running-command-denied",
+        "classification": "negative-composition",
+        "scenario": [
+          "handshake-valid",
+          "idle-running"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "denied-engine-state"
+          ],
+          "epochStatus": "active",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "alternate-screen-denied",
+        "classification": "negative-composition",
+        "scenario": [
+          "handshake-valid",
+          "idle-alt-screen"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "denied-engine-state"
+          ],
+          "epochStatus": "active",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "non-primary-screen-denied",
+        "classification": "negative-composition",
+        "scenario": [
+          "handshake-valid",
+          "idle-not-primary"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "denied-engine-state"
+          ],
+          "epochStatus": "active",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "missing-live-prompt-denied",
+        "classification": "negative-composition",
+        "scenario": [
+          "handshake-valid",
+          "idle-no-live-span"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "denied-engine-state"
+          ],
+          "epochStatus": "active",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "wrong-nonce-invalidates",
+        "classification": "negative-authentication",
+        "scenario": [
+          "handshake-wrong-nonce"
+        ],
+        "expected": {
+          "decisions": [
+            "rejected-authentication"
+          ],
+          "epochStatus": "invalidated",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "missing-nonce-invalidates",
+        "classification": "negative-authentication",
+        "scenario": [
+          "handshake-missing-nonce"
+        ],
+        "expected": {
+          "decisions": [
+            "rejected-authentication"
+          ],
+          "epochStatus": "invalidated",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "wrong-epoch-invalidates",
+        "classification": "negative-authentication",
+        "scenario": [
+          "handshake-wrong-epoch"
+        ],
+        "expected": {
+          "decisions": [
+            "rejected-authentication"
+          ],
+          "epochStatus": "invalidated",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "malformed-frame-invalidates",
+        "classification": "negative-authentication",
+        "scenario": [
+          "handshake-malformed"
+        ],
+        "expected": {
+          "decisions": [
+            "rejected-authentication"
+          ],
+          "epochStatus": "invalidated",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "oversized-frame-invalidates",
+        "classification": "negative-authentication",
+        "scenario": [
+          "handshake-oversized"
+        ],
+        "expected": {
+          "decisions": [
+            "rejected-authentication"
+          ],
+          "epochStatus": "invalidated",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "protocol-version-invalidates",
+        "classification": "negative-authentication",
+        "scenario": [
+          "handshake-protocol-version"
+        ],
+        "expected": {
+          "decisions": [
+            "rejected-authentication"
+          ],
+          "epochStatus": "invalidated",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "replay-invalidates",
+        "classification": "negative-authentication",
+        "scenario": [
+          "handshake-valid",
+          "idle-valid",
+          "idle-replay"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "idle-authorized",
+            "rejected-authentication"
+          ],
+          "epochStatus": "invalidated",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "duplicate-operation-invalidates",
+        "classification": "negative-authentication",
+        "scenario": [
+          "handshake-valid",
+          "idle-valid",
+          "idle-duplicate-operation"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "idle-authorized",
+            "rejected-authentication"
+          ],
+          "epochStatus": "invalidated",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "sequence-gap-invalidates",
+        "classification": "negative-authentication",
+        "scenario": [
+          "handshake-valid",
+          "idle-gap"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "rejected-authentication"
+          ],
+          "epochStatus": "invalidated",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "out-of-order-invalidates",
+        "classification": "negative-authentication",
+        "scenario": [
+          "handshake-valid",
+          "idle-out-of-order",
+          "idle-valid"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "rejected-authentication",
+            "epoch-invalidated"
+          ],
+          "epochStatus": "invalidated",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "later-marker-cannot-recover-invalid-epoch",
+        "classification": "negative-authentication",
+        "scenario": [
+          "handshake-wrong-nonce",
+          "idle-valid"
+        ],
+        "expected": {
+          "decisions": [
+            "rejected-authentication",
+            "epoch-invalidated"
+          ],
+          "epochStatus": "invalidated",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "duplicate-handshake-invalidates",
+        "classification": "negative-authentication",
+        "scenario": [
+          "handshake-valid",
+          "handshake-duplicate"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "rejected-authentication"
+          ],
+          "epochStatus": "invalidated",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "valid-engine-mismatch-consumes-then-recovers",
+        "classification": "positive",
+        "scenario": [
+          "handshake-valid",
+          "idle-running",
+          "idle-valid"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "denied-engine-state",
+            "idle-authorized"
+          ],
+          "epochStatus": "active",
+          "idleAuthorized": true
+        }
+      },
+      {
+        "caseId": "post-handshake-wrong-nonce-invalidates",
+        "classification": "negative-authentication",
+        "scenario": [
+          "handshake-valid",
+          "idle-wrong-nonce"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "rejected-authentication"
+          ],
+          "epochStatus": "invalidated",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "post-handshake-missing-nonce-invalidates",
+        "classification": "negative-authentication",
+        "scenario": [
+          "handshake-valid",
+          "idle-missing-nonce"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "rejected-authentication"
+          ],
+          "epochStatus": "invalidated",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "post-handshake-wrong-epoch-invalidates",
+        "classification": "negative-authentication",
+        "scenario": [
+          "handshake-valid",
+          "idle-wrong-epoch"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "rejected-authentication"
+          ],
+          "epochStatus": "invalidated",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "post-handshake-malformed-invalidates",
+        "classification": "negative-authentication",
+        "scenario": [
+          "handshake-valid",
+          "idle-malformed"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "rejected-authentication"
+          ],
+          "epochStatus": "invalidated",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "post-handshake-oversized-invalidates",
+        "classification": "negative-authentication",
+        "scenario": [
+          "handshake-valid",
+          "idle-oversized"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "rejected-authentication"
+          ],
+          "epochStatus": "invalidated",
+          "idleAuthorized": false
+        }
+      },
+      {
+        "caseId": "post-handshake-protocol-version-invalidates",
+        "classification": "negative-authentication",
+        "scenario": [
+          "handshake-valid",
+          "idle-protocol-version"
+        ],
+        "expected": {
+          "decisions": [
+            "handshake-accepted",
+            "rejected-authentication"
+          ],
+          "epochStatus": "invalidated",
+          "idleAuthorized": false
+        }
+      }
+    ],
+    "boundaryCases": [
+      {
+        "caseId": "frame-size-exact-boundary",
+        "precondition": "active-after-handshake",
+        "inputValue": "2097152",
+        "expectedDecision": "idle-authorized",
+        "expectedEpochStatus": "active",
+        "expectedIdleAuthorized": true
+      },
+      {
+        "caseId": "frame-size-plus-one",
+        "precondition": "active-after-handshake",
+        "inputValue": "2097153",
+        "expectedDecision": "rejected-authentication",
+        "expectedEpochStatus": "invalidated",
+        "expectedIdleAuthorized": false
+      },
+      {
+        "caseId": "sequence-max-wrap-fatal",
+        "precondition": "active-with-next-sequence-at-uint64-max",
+        "inputValue": "18446744073709551615",
+        "expectedDecision": "rejected-authentication",
+        "expectedEpochStatus": "invalidated",
+        "expectedIdleAuthorized": false
+      }
+    ]
+  },
+  "providerEvidence": {
+    "proofFormatId": "red-salamander-terminal-engine-c7-proof",
+    "evidenceId": "score.c7-proof",
+    "resultCategory": "verified",
+    "maxProofBytes": "32768",
+    "contentPolicy": {
+      "allowsTerminalText": false,
+      "allowsPaths": false,
+      "allowsTitles": false,
+      "allowsUris": false,
+      "allowsNonce": false,
+      "allowsPayload": false
+    }
+  }
+}

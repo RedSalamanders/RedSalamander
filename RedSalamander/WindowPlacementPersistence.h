@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -8,18 +9,18 @@
 
 namespace WindowPlacementPersistence
 {
-inline void Save(Common::Settings::Settings& settings, std::wstring_view windowId, HWND hwnd) noexcept
+[[nodiscard]] inline std::optional<Common::Settings::WindowPlacement> Capture(HWND hwnd) noexcept
 {
-    if (windowId.empty() || ! hwnd)
+    if (! hwnd)
     {
-        return;
+        return std::nullopt;
     }
 
     WINDOWPLACEMENT placement{};
     placement.length = sizeof(placement);
     if (GetWindowPlacement(hwnd, &placement) == 0)
     {
-        return;
+        return std::nullopt;
     }
 
     Common::Settings::WindowPlacement wp;
@@ -36,10 +37,64 @@ inline void Save(Common::Settings::Settings& settings, std::wstring_view windowI
 
     wp.dpi = GetDpiForWindow(hwnd);
 
-    settings.windows[std::wstring(windowId)] = std::move(wp);
+    const HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFOEXW monitorInfo{};
+    monitorInfo.cbSize = sizeof(monitorInfo);
+    if (monitor != nullptr && GetMonitorInfoW(monitor, &monitorInfo) != FALSE)
+    {
+        wp.monitorDeviceName = monitorInfo.szDevice;
+    }
+
+    return wp;
 }
 
-[[nodiscard]] inline int Restore(const Common::Settings::Settings& settings, std::wstring_view windowId, HWND hwnd) noexcept
+inline void Save(Common::Settings::Settings& settings, std::wstring_view windowId, HWND hwnd) noexcept
+{
+    if (windowId.empty())
+    {
+        return;
+    }
+    std::optional<Common::Settings::WindowPlacement> placement = Capture(hwnd);
+    if (! placement.has_value())
+    {
+        return;
+    }
+
+    settings.windows[std::wstring(windowId)] = std::move(placement.value());
+}
+
+[[nodiscard]] inline int Restore(const Common::Settings::WindowPlacement& placement, HWND hwnd, const SIZE minimumSizePx) noexcept
+{
+    if (! hwnd)
+    {
+        return SW_SHOWNORMAL;
+    }
+
+    const UINT dpi = GetDpiForWindow(hwnd);
+    Common::Settings::WindowPlacement normalized = Common::Settings::NormalizeWindowPlacement(placement, dpi);
+
+    const int minimumWidth  = std::max(1, static_cast<int>(minimumSizePx.cx));
+    const int minimumHeight = std::max(1, static_cast<int>(minimumSizePx.cy));
+    normalized.bounds.width  = std::max(normalized.bounds.width, minimumWidth);
+    normalized.bounds.height = std::max(normalized.bounds.height, minimumHeight);
+    normalized.dpi           = dpi;
+
+    // Enforcing a window-specific minimum can make an otherwise normalized
+    // rectangle extend beyond the work area. Normalize once more in current-DPI
+    // coordinates so visibility remains the final restore invariant.
+    normalized = Common::Settings::NormalizeWindowPlacement(normalized, dpi);
+
+    SetWindowPos(hwnd, nullptr, normalized.bounds.x, normalized.bounds.y, normalized.bounds.width, normalized.bounds.height, SWP_NOZORDER | SWP_NOACTIVATE);
+
+    return normalized.state == Common::Settings::WindowState::Maximized ? SW_MAXIMIZE : SW_SHOWNORMAL;
+}
+
+[[nodiscard]] inline int Restore(const Common::Settings::WindowPlacement& placement, HWND hwnd) noexcept
+{
+    return Restore(placement, hwnd, SIZE{1, 1});
+}
+
+[[nodiscard]] inline int Restore(const Common::Settings::Settings& settings, std::wstring_view windowId, HWND hwnd, const SIZE minimumSizePx) noexcept
 {
     if (windowId.empty() || ! hwnd)
     {
@@ -52,11 +107,11 @@ inline void Save(Common::Settings::Settings& settings, std::wstring_view windowI
         return SW_SHOWNORMAL;
     }
 
-    const UINT dpi                                     = GetDpiForWindow(hwnd);
-    const Common::Settings::WindowPlacement normalized = Common::Settings::NormalizeWindowPlacement(it->second, dpi);
+    return Restore(it->second, hwnd, minimumSizePx);
+}
 
-    SetWindowPos(hwnd, nullptr, normalized.bounds.x, normalized.bounds.y, normalized.bounds.width, normalized.bounds.height, SWP_NOZORDER | SWP_NOACTIVATE);
-
-    return normalized.state == Common::Settings::WindowState::Maximized ? SW_MAXIMIZE : SW_SHOWNORMAL;
+[[nodiscard]] inline int Restore(const Common::Settings::Settings& settings, std::wstring_view windowId, HWND hwnd) noexcept
+{
+    return Restore(settings, windowId, hwnd, SIZE{1, 1});
 }
 } // namespace WindowPlacementPersistence

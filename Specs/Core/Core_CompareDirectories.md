@@ -67,7 +67,7 @@ The Compare Directories window uses an embedded `FolderWindow`:
 
 - Two panes with `NavigationView` + `FolderView` + per-pane status bars.
 - A themed vertical splitter between panes (same interaction model as `FolderWindow`).
-- Both panes use a compare-specific display mode (see [Display Modes](#display-modes-verbosity-levels)).
+- Both panes use a compare-specific display mode (see [Display Modes](#display-modes)).
 - Status bars are forced visible for both panes.
 - On the first start of the compare view, the split ratio is set to **50%**.
 
@@ -316,6 +316,23 @@ For each relative folder, the engine computes an item decision per (normalized) 
 - **Existence**: only in left, only in right, both
 - **Type mismatch**: file vs directory with the same name
 - **Criteria differences** (when both exist and are the same type): size, time, attributes, content
+
+### File Operations artifact projection
+
+Compare never filters an item because it is a File Operations artifact. Possible and
+Ordinary items participate in name matching, difference bits, identical-item retention, selection,
+and user-visible filtering exactly like other items. Artifact classification is an orthogonal badge
+and does not create, clear, or replace a `CompareDirectoriesDiffBit`.
+
+Each visible side queries the shared artifact classifier and renders a
+`Possible interrupted-operation artifact` badge/status alongside the ordinary difference details.
+A cached compare/search classification is display-only and never proves ownership.
+
+Sync, Copy, Move, Rename, Delete, external Open/Edit, and any other touch of a Possible side require
+the exact-set artifact warning owned by File Operations before admission. Compare may submit the
+explicit per-item destinations after that grant, but it never converts a filename pattern or stale
+badge into recovery/cleanup authority. Possible items remain visible; Inspect/Reveal stay read-only,
+while an explicitly initiated ordinary command follows the Possible warning contract.
 
 ### Difference bits (`CompareDirectoriesDiffBit`)
 
@@ -632,11 +649,12 @@ When compare mode is active, Copy/Move to other pane acts as a **sync** operatio
 - The compare window gathers selected plugin paths, converts them to compare-relative paths, and asks the session for a cache-only `CompareSyncManifest`.
 - The session-owned manifest planner is the only component that interprets compare decisions. It respects current compare settings, ignore patterns, side selection, `compareSubdirectories`, and the current session version.
 - The planner fails closed: missing/stale decisions, failed decisions, `ContentPending`, `SubdirPending`, and incomplete pending-content counts return a blocker instead of a partial manifest. The UI requests high-priority scan work for the blocker path/parent, shows a localized "comparison still in progress" status, and does not fall back to generic recursive copy/move.
-- Mixed directories that exist on both sides are expanded into a `DirectoryShell` item plus explicit changed/source-selected children. Identical descendants are not represented, copied, moved, or deleted.
+- Mixed directories that exist on both sides are expanded into a `DirectoryShell` item plus explicit changed/source-selected children. Identical descendants are not represented, copied, moved, or deleted. A `DirectoryShell` completes as Published with its source Retained: the host ensures the destination folder and touches no source object, so the completed-task summary counts it as neither a removed nor a kept source.
 - A source-only directory is the only recursive exception. It is represented as one `WholeSubtree` item with `FILESYSTEM_FLAG_RECURSIVE` because the whole tree is new on the destination side.
 - Manifest items carry exact `sourceAbsolutePath`, `destinationAbsolutePath`, relative path, kind, and per-item flags. The file-operation layer executes resolved items against those exact destinations instead of recomputing `destinationFolder / sourceLeaf`.
+- Compare submits these pairs as `TransferPlan::explicitMappings` with one immutable verification/link-policy snapshot. The destination root is bound before any directory creation or publication, and each explicit destination must remain contained by that bound root.
 - Destructive Move uses sync-specific confirmation text with the manifest item count and one-sided whole-subtree count. Move deletes only manifest items, and only after their destination operation succeeds.
-- After completion, exact resolved destination paths are invalidated alongside source paths so the compare view converges without a full rescan.
+- After completion, exact resolved destination paths are invalidated alongside source paths so the compare view converges without a full rescan. Row removal and refresh use per-item publication and source-disposition axes; `Copied; source kept` retains the source row.
 
 ### Cache invalidation after operations
 

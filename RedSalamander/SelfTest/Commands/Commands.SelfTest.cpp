@@ -26,6 +26,7 @@
 #include <iterator>
 #include <limits>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -67,6 +68,9 @@ struct ForceWilTemplateInstantiations
 #include "ChangeCase.h"
 #include "CommandDispatch.Debug.h"
 #include "CommandRegistry.h"
+#include "CommandRuntimeState.h"
+#include "CommandPaletteWindow.h"
+#include "CommandVisuals.h"
 #include "CompareDirectoriesWindow.h"
 #include "ConnectionCredentialPromptDialog.h"
 #include "ConnectionManagerWindow.h"
@@ -77,22 +81,33 @@ struct ForceWilTemplateInstantiations
 #include "DxUiThemePalette.h"
 #include "FileActionLauncher.h"
 #include "FileActionResolver.h"
+#include "FileOperationArtifactRegistry.h"
+#include "FileOperationDurableStore.h"
+#include "FileOperationMoveBreadcrumb.h"
+#include "FileSystemRouteContract.h"
+#include "FileSystemRouteProviderBase.h"
 #include "FileSystemPluginManager.h"
 #include "FindFilesWindow.h"
+#include "FloatingTerminalWindow.h"
+#include "TerminalHostSupport.h"
 #include "FluentIcons.h"
 #include "FolderViewEmptyStateLayout.h"
+#include "FolderWindow.FileSystem.Private.h"
 #include "FolderWindow.FileOperations.IssuesPane.h"
 #include "FolderWindow.FileOperations.Popup.h"
 #include "FolderWindow.FileOperationsInternal.h"
 #include "FolderWindow.h"
 #include "Helpers.h"
+#include "HandleIo.h"
 #include "HostServices.h"
 #include "IconCache.h"
 #include "LocalSearchIndexCore.h"
+#include "LocalFileTransaction.h"
 #include "ManagePluginsDialog.h"
 #include "NavigationLocation.h"
 #include "NavigationView.h"
 #include "PlugInterfaces/Factory.h"
+#include "ProcessCommandLine.h"
 #include "Preferences.Internal.h"
 #include "Preferences.h"
 #include "RedSalamander.h"
@@ -100,9 +115,13 @@ struct ForceWilTemplateInstantiations
 #include "SettingsHotReload.h"
 #include "SettingsSave.h"
 #include "SelfTest/Common/SelfTestLatencyHooks.h"
+#include "TestSupport/TestSupport.h"
+#include "TestSupport/DirectedSelfTestInputWarning.h"
 #include "ShortcutDefaults.h"
+#include "ShortcutCommandCatalog.h"
 #include "ShortcutManager.h"
 #include "ShortcutText.h"
+#include "StringConversion.h"
 #include "ShortcutsWindow.h"
 #include "SplashScreen.h"
 #include "Ui/AlertOverlayWindow.h"
@@ -118,6 +137,23 @@ static Common::Settings::Settings& g_settings = GetApplicationSettingsForSelfTes
 
 namespace
 {
+constexpr std::array<std::wstring_view, 14> kCommandsSelfTestFamilies{{
+    L"settings",
+    L"theme-overlay",
+    L"batch-rename",
+    L"plugin-config",
+    L"connections",
+    L"preferences",
+    L"search",
+    L"shell-commands",
+    L"shortcuts",
+    L"compare-options",
+    L"file-operations",
+    L"navigation",
+    L"dialogs",
+    L"view-commands",
+}};
+
 constexpr PrefCategory kPrefCategoryGeneral            = static_cast<PrefCategory>(0);
 constexpr PrefCategory kPrefCategoryPanes              = static_cast<PrefCategory>(1);
 constexpr PrefCategory kPrefCategoryViewers            = static_cast<PrefCategory>(2);
@@ -184,92 +220,7 @@ void PumpPendingMessages() noexcept
     }
 }
 
-// Canonical Commands self-test guard for the rare probes that must sample real
-// desktop input. Keep this in the shared Commands translation unit so every
-// included test family uses the same warning lifetime and RAII ownership.
-class DirectedSelfTestInputWarning
-{
-public:
-    DirectedSelfTestInputWarning() noexcept
-    {
-        const int screenW = GetSystemMetrics(SM_CXSCREEN);
-        const int screenH = GetSystemMetrics(SM_CYSCREEN);
-        if (screenW <= 0 || screenH <= 0)
-        {
-            return;
-        }
-
-        const int width  = std::min(screenW, 900);
-        const int height = std::min(screenH, 220);
-        const int left   = (std::max)(0, (screenW - width) / 2);
-        const int top    = (std::max)(0, (screenH - height) / 3);
-
-        _font.reset(CreateFontW(-56,
-                                0,
-                                0,
-                                0,
-                                FW_BOLD,
-                                FALSE,
-                                FALSE,
-                                FALSE,
-                                DEFAULT_CHARSET,
-                                OUT_DEFAULT_PRECIS,
-                                CLIP_DEFAULT_PRECIS,
-                                CLEARTYPE_QUALITY,
-                                DEFAULT_PITCH | FF_SWISS,
-                                L"Segoe UI"));
-
-        HWND hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TRANSPARENT,
-                                    L"STATIC",
-                                    L"don't touch the mouse",
-                                    WS_POPUP | WS_VISIBLE | WS_BORDER | SS_CENTER | SS_CENTERIMAGE,
-                                    left,
-                                    top,
-                                    width,
-                                    height,
-                                    nullptr,
-                                    nullptr,
-                                    GetModuleHandleW(nullptr),
-                                    nullptr);
-        if (! hwnd)
-        {
-            return;
-        }
-
-        _hwnd.reset(hwnd);
-        if (_font)
-        {
-            SendMessageW(_hwnd.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_font.get()), TRUE);
-        }
-        static_cast<void>(SetLayeredWindowAttributes(_hwnd.get(), 0, 230, LWA_ALPHA));
-        SetWindowPos(_hwnd.get(), HWND_TOPMOST, left, top, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
-        UpdateWindow(_hwnd.get());
-        PumpPendingMessages();
-        _shownAt = GetTickCount64();
-    }
-
-    ~DirectedSelfTestInputWarning() noexcept
-    {
-        if (_hwnd)
-        {
-            const ULONGLONG elapsedMs = GetTickCount64() - _shownAt;
-            if (elapsedMs < 250u)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(250u - elapsedMs));
-                PumpPendingMessages();
-            }
-            _hwnd.reset();
-        }
-    }
-
-    DirectedSelfTestInputWarning(const DirectedSelfTestInputWarning&)            = delete;
-    DirectedSelfTestInputWarning& operator=(const DirectedSelfTestInputWarning&) = delete;
-
-private:
-    wil::unique_hwnd _hwnd;
-    wil::unique_hfont _font;
-    ULONGLONG _shownAt = 0;
-};
+using RedSalamander::TestSupport::DirectedSelfTestInputWarning;
 
 using CaseState = SelfTest::CaseState;
 
@@ -277,6 +228,7 @@ struct SettingsHotReloadTestWindowState
 {
     std::atomic<uint32_t> changeCount{0};
     std::atomic<ULONGLONG> lastTickCount{0};
+    std::atomic<uint64_t> lastSessionGeneration{0u};
 
     SettingsHotReloadTestWindowState()                                                   = default;
     SettingsHotReloadTestWindowState(const SettingsHotReloadTestWindowState&)            = delete;
@@ -308,6 +260,7 @@ LRESULT CALLBACK SettingsHotReloadTestWindowProc(HWND hwnd, UINT message, WPARAM
             if (state && payload)
             {
                 state->lastTickCount.store(payload->tickCount, std::memory_order_release);
+                state->lastSessionGeneration.store(payload->sessionGeneration, std::memory_order_release);
                 state->changeCount.fetch_add(1u, std::memory_order_acq_rel);
             }
             return 0;
@@ -560,20 +513,29 @@ template <typename WorkerFunc> void RunChangeCasePromptModalCycle(HWND mainWindo
 // the other command selftest families.
 
 #include "Commands.SelfTest.Settings.cpp"
+#include "Commands.SelfTest.ThemeOverlay.cpp"
 #include "Commands.SelfTest.BatchRename.cpp"
 #include "Commands.SelfTest.CompareOptions.cpp"
 #include "Commands.SelfTest.Connections.cpp"
 #include "Commands.SelfTest.Dialogs.cpp"
 #include "Commands.SelfTest.FileOps.cpp"
-#include "Commands.SelfTest.Navigation.cpp"
 #include "Commands.SelfTest.PluginConfig.cpp"
 #include "Commands.SelfTest.Preferences.cpp"
+#include "Commands.SelfTest.Navigation.cpp"
 #include "Commands.SelfTest.Search.cpp"
 #include "Commands.SelfTest.ShellCommands.cpp"
 #include "Commands.SelfTest.Shortcuts.cpp"
 #include "Commands.SelfTest.ViewCommands.cpp"
 
 } // namespace
+
+bool CommandsSelfTest::IsKnownFamily(const std::wstring_view family) noexcept
+{
+    return std::ranges::any_of(kCommandsSelfTestFamilies, [family](const std::wstring_view candidate) noexcept
+    {
+        return SelfTest::SelfTestCaseNameEquals(candidate, family);
+    });
+}
 
 std::vector<std::wstring> CommandsSelfTest::ListCases(const SelfTest::SelfTestOptions& options) noexcept
 {
@@ -611,29 +573,38 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
 
     const auto runRegisteredCases = [&](const SelfTest::SelfTestOptions& runOptions) noexcept
     {
-        RunSettingsCommandsSelfTestCases(mainWindow, runOptions, suite);
-        RunBatchRenameCommandsSelfTestCases(mainWindow, runOptions, suite);
-        RunPluginConfigCommandsSelfTestCases(mainWindow, runOptions, suite);
-        RunConnectionsCommandsSelfTestCases(mainWindow, runOptions, suite);
-        RunPreferencesCommandsSelfTestCases(mainWindow, runOptions, suite);
-        RunSearchCommandsSelfTestCases(mainWindow, runOptions, suite);
-        RunShellCommandsSelfTestCases(mainWindow, runOptions, suite);
-        RunShortcutsCommandsSelfTestCases(mainWindow, runOptions, suite);
-        RunCompareOptionsCommandsSelfTestCases(mainWindow, runOptions, suite);
-        RunFileOpsCommandsSelfTestCases(mainWindow, runOptions, suite);
-        RunNavigationCommandsSelfTestCases(mainWindow, runOptions, suite);
-        RunDialogsCommandsSelfTestCases(mainWindow, runOptions, suite);
-        RunViewCommandsCommandsSelfTestCases(mainWindow, runOptions, suite);
+        const auto runFamily = [&](const std::wstring_view family, auto&& callback) noexcept
+        {
+            if (runOptions.commandsFamily.empty() || SelfTest::SelfTestCaseNameEquals(runOptions.commandsFamily, family))
+            {
+                callback();
+            }
+        };
+        runFamily(L"settings", [&] { RunSettingsCommandsSelfTestCases(mainWindow, runOptions, suite); });
+        runFamily(L"theme-overlay", [&] { RunThemeCycleOverlayCommandsSelfTestCases(mainWindow, runOptions, suite); });
+        runFamily(L"batch-rename", [&] { RunBatchRenameCommandsSelfTestCases(mainWindow, runOptions, suite); });
+        runFamily(L"plugin-config", [&] { RunPluginConfigCommandsSelfTestCases(mainWindow, runOptions, suite); });
+        runFamily(L"connections", [&] { RunConnectionsCommandsSelfTestCases(mainWindow, runOptions, suite); });
+        runFamily(L"preferences", [&] { RunPreferencesCommandsSelfTestCases(mainWindow, runOptions, suite); });
+        runFamily(L"search", [&] { RunSearchCommandsSelfTestCases(mainWindow, runOptions, suite); });
+        runFamily(L"shell-commands", [&] { RunShellCommandsSelfTestCases(mainWindow, runOptions, suite); });
+        runFamily(L"shortcuts", [&] { RunShortcutsCommandsSelfTestCases(mainWindow, runOptions, suite); });
+        runFamily(L"compare-options", [&] { RunCompareOptionsCommandsSelfTestCases(mainWindow, runOptions, suite); });
+        runFamily(L"file-operations", [&] { RunFileOpsCommandsSelfTestCases(mainWindow, runOptions, suite); });
+        runFamily(L"navigation", [&] { RunNavigationCommandsSelfTestCases(mainWindow, runOptions, suite); });
+        runFamily(L"dialogs", [&] { RunDialogsCommandsSelfTestCases(mainWindow, runOptions, suite); });
+        runFamily(L"view-commands", [&] { RunViewCommandsCommandsSelfTestCases(mainWindow, runOptions, suite); });
     };
 
-    if (SelfTest::ShouldUseExplicitCaseExecutionOrder(options))
+    if (! options.listCasesOnly)
     {
         const std::vector<std::wstring> declaredCases = ListCases(options);
         const std::vector<SelfTest::SelfTestCaseExecution> executionOrder = SelfTest::BuildSelfTestCaseExecutionOrder(options, declaredCases);
-        Trace(std::format(L"CommandsSelfTest: explicit execution order count={} repeat={} shuffleSeed={}",
+        Trace(std::format(L"CommandsSelfTest: isolated execution order count={} repeat={} shuffleSeed={}",
                           executionOrder.size(),
                           options.repeatCount,
                           options.shuffleSeed.has_value() ? std::format(L"{}", options.shuffleSeed.value()) : std::wstring(L"none")));
+        const DirectedSelfTestInputWarning inputWarning(mainWindow);
         for (const SelfTest::SelfTestCaseExecution& execution : executionOrder)
         {
             SelfTest::SelfTestOptions caseOptions = options;
@@ -650,8 +621,9 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
             }
 
             CaseState isolationState{};
-            const std::wstring isolationContext = std::format(L"Commands explicit-order case '{}'", execution.name);
-            if (! PrepareMainWindowForIsolatedUiCase(mainWindow, isolationState, isolationContext))
+            const std::wstring isolationContext = std::format(L"Commands case '{}'", execution.name);
+            isolationState.Require(inputWarning.IsVisible(), L"The foreground-input warning is unavailable.");
+            if (! isolationState.failure.empty() || ! PrepareMainWindowForIsolatedUiCase(mainWindow, isolationState, isolationContext))
             {
                 const std::wstring failure = isolationState.failure.empty()
                                                  ? std::format(L"Failed to isolate the main window before {}.", isolationContext)

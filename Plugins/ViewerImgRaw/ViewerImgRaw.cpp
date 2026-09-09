@@ -3658,7 +3658,8 @@ void ViewerImgRaw::OnPaint()
 
 HRESULT STDMETHODCALLTYPE ViewerImgRaw::Open(const ViewerOpenContext* context) noexcept
 {
-    if (context == nullptr || context->fileSystem == nullptr || context->focusedPath == nullptr || context->focusedPath[0] == L'\0')
+    if (context == nullptr || context->sizeBytes < sizeof(ViewerOpenContext) || context->fileSystem == nullptr ||
+        context->focusedPath == nullptr || context->focusedPath[0] == L'\0')
     {
         return E_INVALIDARG;
     }
@@ -3959,7 +3960,7 @@ HRESULT STDMETHODCALLTYPE ViewerImgRaw::Close() noexcept
 
 HRESULT STDMETHODCALLTYPE ViewerImgRaw::SetTheme(const ViewerTheme* theme) noexcept
 {
-    if (theme == nullptr || theme->version < 2u || theme->version > 4u)
+    if (theme == nullptr || theme->sizeBytes < sizeof(ViewerTheme))
     {
         return E_INVALIDARG;
     }

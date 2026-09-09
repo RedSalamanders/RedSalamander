@@ -87,13 +87,36 @@ public:
     virtual HRESULT CreateFileReader(std::wstring_view path, std::shared_ptr<IMtpBackendFileReader>& reader) noexcept        = 0;
     virtual HRESULT ReadFile(std::wstring_view path, std::vector<std::byte>& bytes) noexcept                                  = 0;
     virtual HRESULT WriteFile(std::wstring_view path, std::span<const std::byte> bytes, bool allowOverwrite) noexcept         = 0;
+    virtual HRESULT WriteFileFromHandle(std::wstring_view path,
+                                        HANDLE sourceFile,
+                                        uint64_t sizeBytes,
+                                        bool allowOverwrite) noexcept                                                        = 0;
+    virtual HRESULT CompareFileWithHandle(std::wstring_view path, HANDLE sourceFile, uint64_t sizeBytes) noexcept             = 0;
     virtual HRESULT CreateDirectory(std::wstring_view path) noexcept                                                          = 0;
     virtual HRESULT DeleteItem(std::wstring_view path, bool recursive) noexcept                                               = 0;
+    // R0c-OR3: delete the object at `path` only when its live persistent id (re-resolved, never taken
+    // from a path cache) equals `expectedPersistentId`; otherwise ERROR_REVISION_MISMATCH and nothing
+    // is deleted. The overwrite commits and journal replay use this instead of a path delete.
+    virtual HRESULT DeleteItemByIdentity(std::wstring_view path, std::wstring_view expectedPersistentId, bool recursive) noexcept = 0;
     virtual HRESULT RenameItem(std::wstring_view sourcePath, std::wstring_view destinationPath, bool allowOverwrite) noexcept = 0;
     virtual HRESULT CopyItem(std::wstring_view sourcePath, std::wstring_view destinationPath, bool allowOverwrite) noexcept   = 0;
     virtual HRESULT MoveItem(std::wstring_view sourcePath, std::wstring_view destinationPath, bool allowOverwrite) noexcept   = 0;
     virtual HRESULT GetItemProperties(std::wstring_view path, std::string& jsonUtf8) noexcept                                 = 0;
     virtual void RequestCancel() noexcept
+    {
+    }
+
+    // A connection profile names the device root by friendly name and keeps the device identity
+    // as metadata; the plugin hands both here so the backend can resolve that root component by
+    // identity first (renamed or same-named devices) and by name otherwise.
+    virtual void SetConnectionDevice(std::wstring_view /*rootName*/, std::wstring_view /*pnpId*/) noexcept
+    {
+    }
+
+    // R0c-OR2: an overwrite commit decides destination occupancy live. A backend with a path cache
+    // forgets what it holds for this path so the next resolve of the leaf goes to the device (the
+    // parent stays cached); a backend without a cache has nothing to forget.
+    virtual void RefreshPathOccupancy(std::wstring_view /*path*/) noexcept
     {
     }
 
@@ -118,7 +141,7 @@ enum class MtpBackendCommandKind : uint8_t
 
 [[nodiscard]] std::unique_ptr<IMtpBackend> CreateWpdMtpBackend() noexcept;
 [[nodiscard]] std::unique_ptr<IMtpBackend> CreateFakeMtpBackend(std::string_view optionsJsonUtf8) noexcept;
-#ifdef _DEBUG
+#if defined(ENABLE_TESTS)
 [[nodiscard]] HRESULT CreateSelfTestWpdMtpBackend(std::string_view optionsJsonUtf8, std::unique_ptr<IMtpBackend>& backend) noexcept;
 [[nodiscard]] bool RunOverwriteJournalGenerationSelfTest() noexcept;
 [[nodiscard]] uint64_t ResetOverwriteJournalProbeCountForSelfTest() noexcept;
@@ -143,7 +166,7 @@ void NotifyOverwriteJournalInjectedForSelfTest(std::wstring_view deviceIdentity)
 [[nodiscard]] std::uint64_t StableMtpIdentityHash(std::wstring_view value) noexcept;
 [[nodiscard]] std::wstring FormatMtpIdentityHash(std::wstring_view value);
 [[nodiscard]] std::wstring SanitizeMtpPathComponent(std::wstring value);
-[[nodiscard]] std::wstring MtpDeviceIdentitySuffix(std::wstring_view pnpId);
+[[nodiscard]] std::wstring MtpDeviceRootComponent(std::wstring_view friendlyName);
 [[nodiscard]] std::wstring MtpPersistentObjectIdentitySuffix(std::wstring_view persistentId);
 [[nodiscard]] std::wstring MtpObjectIdentitySuffix(std::wstring_view objectId);
 [[nodiscard]] std::wstring MtpDuplicateObjectSuffix(const MtpItem& item);

@@ -37,10 +37,12 @@
     "mainMenu": { "$ref": "#/$defs/mainMenuSettings" },
     "startup": { "$ref": "#/$defs/startupSettings" },
     "ui": { "$ref": "#/$defs/uiSettings" },
+    "mouse": { "$ref": "#/$defs/mouseSettings" },
     "cache": { "$ref": "#/$defs/cacheSettings" },
     "folders": { "$ref": "#/$defs/foldersSettings" },
     "monitor": { "$ref": "#/$defs/monitorSettings" },
     "shortcuts": { "$ref": "#/$defs/shortcutsSettings" },
+    "terminal": { "$ref": "#/$defs/terminalSettings" },
     "extensions": { "$ref": "#/$defs/extensionsSettings" },
     "connections": { "$ref": "#/$defs/connectionsSettings" },
     "fileOperations": { "$ref": "#/$defs/fileOperationsSettings" },
@@ -82,7 +84,11 @@
             "Down",
             "Insert",
             "Delete",
-            "Escape"
+            "Escape",
+            "NumpadPlus",
+            "NumpadMinus",
+            "Numpad0",
+            "Menu"
           ]
         },
         { "pattern": "^VK_[0-9A-Fa-f]{2}$" }
@@ -92,16 +98,26 @@
       "type": "object",
       "title": "Shortcut Binding",
       "description": "Defines a single keyboard shortcut binding.",
-      "required": ["vk", "commandId"],
+      "required": ["commandId"],
+      "oneOf": [
+        { "required": ["vk"] },
+        { "required": ["keyPosition"] }
+      ],
       "properties": {
         "vk": { "$ref": "#/$defs/shortcutKey", "title": "Key", "description": "The key name (e.g. F1, Tab, VK_2E)." },
+        "keyPosition": {
+          "type": "string",
+          "enum": ["numberRowMinus", "numberRowPlus"],
+          "title": "Physical Key Position",
+          "description": "A layout-independent physical key position; mutually exclusive with vk."
+        },
         "ctrl": { "type": "boolean", "title": "Ctrl", "description": "Whether Ctrl is required." },
         "alt": { "type": "boolean", "title": "Alt", "description": "Whether Alt is required." },
         "shift": { "type": "boolean", "title": "Shift", "description": "Whether Shift is required." },
         "commandId": {
           "$ref": "#/$defs/commandId",
           "title": "Command",
-          "description": "The command identifier (cmd/...). Use cmd/shortcut/unassigned only as the internal sentinel for an intentionally unassigned shortcut chord."
+          "description": "The command identifier (cmd/...). cmd/shortcut/unassigned intentionally consumes a chord as no action; terminal-only cmd/shortcut/passthrough yields the original chord to the Terminal child."
         }
       },
       "additionalProperties": false
@@ -298,24 +314,68 @@
       "type": "object",
       "default": {},
       "title": "Keyboard Shortcuts",
-      "description": "Keyboard shortcuts configuration (Function bar and Folder view). Missing default chords are restored at startup; cmd/shortcut/unassigned persists an intentional no-op removal.",
+      "description": "Keyboard shortcuts configuration for Application, Function Bar, Folder View, and Terminal scopes. Missing default chords are restored at startup; cmd/shortcut/unassigned persists an intentional no-op removal and cmd/shortcut/passthrough explicitly yields a Terminal chord to the child.",
       "x-ui-pane": "Keyboard",
       "x-ui-control": "custom",
       "x-ui-order": 0,
       "properties": {
+        "migrationVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "default": 0,
+          "title": "Shortcut Migration Version",
+          "description": "Highest completed one-shot shortcut migration. This prevents later user rebindings from being mistaken for legacy defaults."
+        },
+        "application": {
+          "type": "array",
+          "default": [],
+          "title": "Application Shortcuts",
+          "description": "Global application shortcut bindings evaluated below an active context override.",
+          "items": {
+            "allOf": [
+              { "$ref": "#/$defs/shortcutBinding" },
+              { "not": { "properties": { "commandId": { "const": "cmd/shortcut/passthrough" } }, "required": ["commandId"] } }
+            ]
+          }
+        },
         "functionBar": {
           "type": "array",
           "default": [],
           "title": "Function Bar Shortcuts",
-          "description": "Shortcut bindings active when using the function bar.",
-          "items": { "$ref": "#/$defs/shortcutBinding" }
+          "description": "Shortcut bindings active when using the function bar. This scope uses virtual keys because pointer and synthesized function-bar dispatch carry no physical scan-code identity.",
+          "items": {
+            "allOf": [
+              { "$ref": "#/$defs/shortcutBinding" },
+              { "not": { "required": ["keyPosition"] } },
+              { "not": { "properties": { "commandId": { "const": "cmd/shortcut/passthrough" } }, "required": ["commandId"] } }
+            ]
+          }
         },
         "folderView": {
           "type": "array",
           "default": [],
           "title": "Folder View Shortcuts",
           "description": "Shortcut bindings active when interacting with the folder view.",
+          "items": {
+            "allOf": [
+              { "$ref": "#/$defs/shortcutBinding" },
+              { "not": { "properties": { "commandId": { "const": "cmd/shortcut/passthrough" } }, "required": ["commandId"] } }
+            ]
+          }
+        },
+        "terminal": {
+          "type": "array",
+          "default": [],
+          "title": "Terminal Shortcuts",
+          "description": "Shortcut bindings evaluated while an embedded or floating Terminal child owns input.",
           "items": { "$ref": "#/$defs/shortcutBinding" }
+        },
+        "applicationCollapsed": {
+          "type": "boolean",
+          "default": false,
+          "title": "Application Collapsed",
+          "description": "Whether the Application shortcuts group is collapsed."
         },
         "functionBarCollapsed": {
           "type": "boolean",
@@ -328,6 +388,12 @@
           "default": false,
           "title": "Folder View Collapsed",
           "description": "Whether the Folder View shortcuts group is collapsed."
+        },
+        "terminalCollapsed": {
+          "type": "boolean",
+          "default": false,
+          "title": "Terminal Collapsed",
+          "description": "Whether the Terminal shortcuts group is collapsed."
         },
         "sortColumnId": {
           "type": "string",
@@ -348,6 +414,55 @@
           "description": "Persisted shortcuts-grid column order and widths.",
           "items": { "$ref": "#/$defs/gridColumnLayoutEntry" }
         }
+      },
+      "additionalProperties": false
+    },
+    "terminalSettings": {
+      "type": "object",
+      "default": {},
+      "title": "Terminal",
+      "description": "Application-owned Terminal window state. This persists placement and fresh-shell restore records only, never live process or screen state.",
+      "properties": {
+        "floatingWindow": { "$ref": "#/$defs/floatingTerminalWindowSettings" }
+      },
+      "additionalProperties": false
+    },
+    "floatingTerminalWindowSettings": {
+      "type": "object",
+      "title": "Floating Terminal Window",
+      "description": "Singleton floating Terminal placement and ordered live-tab restore records.",
+      "required": ["placement", "wasOpenAtCleanShutdown", "tabs"],
+      "properties": {
+        "placement": { "$ref": "#/$defs/windowPlacement" },
+        "wasOpenAtCleanShutdown": {
+          "type": "boolean",
+          "default": false,
+          "description": "Restore the singleton automatically after the next clean startup."
+        },
+        "activeTabId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Stable ID of the selected remembered tab."
+        },
+        "tabs": {
+          "type": "array",
+          "default": [],
+          "description": "Ordered current tab restore records; closed tabs are removed.",
+          "items": { "$ref": "#/$defs/floatingTerminalTabSettings" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "floatingTerminalTabSettings": {
+      "type": "object",
+      "title": "Floating Terminal Tab",
+      "required": ["tabId", "profileId", "providerId", "canonicalPath"],
+      "properties": {
+        "tabId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "profileId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "providerId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "canonicalPath": { "type": "string", "minLength": 1, "maxLength": 32767 }
       },
       "additionalProperties": false
     },
@@ -687,7 +802,7 @@
           "type": "object",
           "default": {},
           "title": "Plugin Configuration",
-          "description": "Per-plugin configuration objects keyed by plugin ID.",
+          "description": "Per-plugin configuration objects keyed by plugin ID. Each plugin's own schema owns its option vocabulary and migration; provider-owned settings are not duplicated as top-level or fileOperations properties.",
           "patternProperties": {
             "^[A-Za-z0-9][A-Za-z0-9_.\\-/]{0,127}$": { "type": "object", "additionalProperties": true }
           },
@@ -732,12 +847,13 @@
     "windowPlacement": {
       "type": "object",
       "title": "Window Placement",
-      "description": "Saved window placement (state, bounds, DPI).",
+      "description": "Saved window placement (state, bounds, DPI, and optional monitor identity).",
       "required": ["state", "bounds"],
       "properties": {
         "state": { "type": "string", "enum": ["normal", "maximized"], "title": "State", "description": "Normal or maximized." },
         "bounds": { "$ref": "#/$defs/windowBounds", "title": "Bounds", "description": "Saved bounds for the window." },
-        "dpi": { "type": "integer", "minimum": 1, "title": "DPI", "description": "DPI used when saving bounds." }
+        "dpi": { "type": "integer", "minimum": 1, "title": "DPI", "description": "DPI used when saving bounds." },
+        "monitorDeviceName": { "type": "string", "minLength": 1, "maxLength": 128, "title": "Monitor Device", "description": "Display device identity used to prefer the saved monitor when it is still connected." }
       },
       "additionalProperties": false
     },
@@ -843,10 +959,12 @@
             "fileOps.progressBackground": { "$ref": "#/$defs/themeColorSource" },
             "fileOps.progressTotal": { "$ref": "#/$defs/themeColorSource" },
             "fileOps.progressItem": { "$ref": "#/$defs/themeColorSource" },
+            "fileOps.progressVerify": { "$ref": "#/$defs/themeColorSource" },
             "fileOps.graphBackground": { "$ref": "#/$defs/themeColorSource" },
             "fileOps.graphGrid": { "$ref": "#/$defs/themeColorSource" },
             "fileOps.graphLimit": { "$ref": "#/$defs/themeColorSource" },
             "fileOps.graphLine": { "$ref": "#/$defs/themeColorSource" },
+            "fileOps.graphVerify": { "$ref": "#/$defs/themeColorSource" },
             "fileOps.scrollbarTrack": { "$ref": "#/$defs/themeColorSource" },
             "fileOps.scrollbarThumb": { "$ref": "#/$defs/themeColorSource" },
 
@@ -1086,19 +1204,11 @@
           "title": "Compact Popup Density",
           "description": "Render file-operation popup cards as compact one-line rows until expanded density is restored."
         },
-        "preCalcEnabled": {
+        "verifyAfterCopy": {
           "type": "boolean",
-          "default": true,
-          "title": "Enable Pre-calculation",
-          "description": "Run the recursive pre-calculation pass before copy, move, and permanent delete operations when that operation type supports it."
-        },
-        "preCalcMaxWorkers": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 8,
-          "default": 4,
-          "title": "Pre-calculation Workers",
-          "description": "Maximum worker count for the pre-calculation tree walk. Higher values can improve throughput when many top-level sources are scanned in parallel."
+          "default": false,
+          "title": "Verify Copied Files",
+          "description": "Verify destination content against the source after copied regular files are published."
         },
         "crossFsBridgeBufferSizeKB": {
           "type": "integer",
@@ -1457,6 +1567,38 @@
           "x-ui-order": 5,
           "x-ui-control": "custom",
           "x-ui-section": "Display"
+        }
+      },
+      "additionalProperties": false
+    },
+    "mouseSettings": {
+      "type": "object",
+      "default": {},
+      "title": "Mouse",
+      "description": "Mouse-driven pane focus behavior.",
+      "x-ui-pane": "Mouse",
+      "x-ui-control": "custom",
+      "x-ui-order": 0,
+      "properties": {
+        "focusFollowsPointer": {
+          "type": "boolean",
+          "default": false,
+          "title": "Focus follows pointer",
+          "description": "Always move keyboard focus to the pane under the pointer without a click.",
+          "x-ui-pane": "Mouse",
+          "x-ui-order": 10,
+          "x-ui-control": "toggle",
+          "x-ui-section": "Pane focus"
+        },
+        "focusFollowsPointerWhenTerminalOpen": {
+          "type": "boolean",
+          "default": false,
+          "title": "Focus follows pointer while a terminal is displayed",
+          "description": "Move keyboard focus to the pane under the pointer without a click while either pane displays its selected Terminal tab.",
+          "x-ui-pane": "Mouse",
+          "x-ui-order": 20,
+          "x-ui-control": "toggle",
+          "x-ui-section": "Pane focus"
         }
       },
       "additionalProperties": false

@@ -15,6 +15,8 @@ approval state, typed theme-origin routing, and validation resource routing. `Re
 layout, shared command routing, and control lifetime; it does not retain a second copy of batch-approval policy or
 infer user theme origin from output-path spelling.
 
+The main window retains the localized `IDR_REDCONFIGURE_MAINMENU` File/Exit surface. Its menu command dispatches through `WM_CLOSE`, the same lifecycle used by caption Close and `Alt+F4`; it must not maintain a separate teardown path.
+
 Theme catalog entries carry a typed `BuiltIn`, `File`, or `User` origin. Duplicate creation marks the new entry as
 `User`; file loading derives built-in origin from the durable built-in ID namespace and otherwise records `File`.
 Presentation consumes this origin and never guesses it from a directory name.
@@ -112,7 +114,7 @@ Placeholder validation is export-blocking for:
 
 Localization review export writes target-language satellite `.rc` files only for dirty owner/culture pairs and must never rewrite embedded English source resources. Each changed owner/culture export contains the complete generated satellite string table for that owner/culture so existing unchanged translations are preserved. By design, cells without an existing translation export the English fallback text; the `Missing translation` review status is a review-time signal only and does not change export behavior. Writers must preserve deterministic ordering so output diffs remain reviewable.
 
-Language columns have an explicit ordered state. Users can add, remove, reorder, and pin cultures; pinned cultures remain before unpinned cultures. Grid activation opens the corresponding target editor, and rectangular clipboard paste applies tab/newline-separated cells from the selected row/culture as one undoable operation. Batch localization changes are previewed before application and cover copy-English, copy-culture, clear, find/replace, placeholder-whitespace normalization, accelerator preservation, and reviewed state. Sibling command/menu accelerators are checked for duplicates.
+Language columns have an explicit ordered state. Users can add, remove, reorder, and pin cultures; pinned cultures remain before unpinned cultures. Grid activation opens the corresponding target editor. Rectangular clipboard paste derives an ordered destination-row sequence from the current filtered/sorted review projection using stable `(owner name, resource ID)` identities and derives destination cultures from the current visible/pinned column order. The session resolves the complete rectangle by those identities, rejects missing/duplicate rows or cultures, ragged or out-of-bounds matrices, and any placeholder-invalid cell before mutation, then applies the whole TSV rectangle as exactly one Undo unit. A hidden row/culture is never reached through raw storage adjacency, and a rejected paste changes neither cells nor Undo/Redo history. Batch localization changes are previewed before application and cover copy-English, copy-culture, clear, find/replace, placeholder-whitespace normalization, accelerator preservation, and reviewed state. Sibling command/menu accelerators are checked for duplicates.
 
 Generated `.rc` output must compile with the Windows SDK resource compiler. `RedConfigureTests` invokes `rc.exe` when the SDK is installed and fails if the generated file is rejected. Placeholder validation also rejects unbalanced braces and non-positional named fields. A satellite ID absent from the English source records a warning that the target-only entry will not be exported.
 

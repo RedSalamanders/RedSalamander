@@ -1,11 +1,108 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project>
+  <!--
+    MSVC materializes LibraryPath as the process-wide LIB variable before
+    RoslynCodeTaskFactory compiles inline build tasks. Optional ATL/.NET SDK
+    components can leave nonexistent entries in that default,
+    producing one CS1668 warning per project. Missing directories cannot satisfy
+    the linker, so remove them before MSBuild publishes LIB to child tasks.
+  -->
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)'=='.vcxproj'">
+    <SetBuildDefaultEnvironmentVariablesDependsOn>RSNormalizeLibraryPathForBuildEnvironment;$(SetBuildDefaultEnvironmentVariablesDependsOn)</SetBuildDefaultEnvironmentVariablesDependsOn>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(RSBuildCompilerDebugInformation)'=='Embedded'">
+    <ClCompile>
+      <!-- /Z7 avoids MSVC's process-global compiler-PDB service for a governed
+           full-profile repair while preserving the final linker PDB. -->
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(RSBuildCompilerDebugInformation)'=='Embedded'">
+    <!-- MSVC 14.51 can ICE in mre.cpp when this template-heavy shared TU is
+         compiled with /Z7 under /MP. Isolate only this TU; project and solution
+         parallelism remain available to the rest of the validation build. -->
+    <ClCompile Update="..\Common\SearchTextHelpers.cpp;..\..\Common\SearchTextHelpers.cpp">
+      <MultiProcessorCompilation>false</MultiProcessorCompilation>
+    </ClCompile>
+  </ItemGroup>
+  <Target Name="RSNormalizeLibraryPathForBuildEnvironment"
+          Condition="'$(MSBuildProjectExtension)'=='.vcxproj' and '$(LibraryPath)'!=''">
+    <ItemGroup>
+      <_RSLibraryPathCandidate Include="$(LibraryPath)" />
+      <_RSLibraryPathForBuildEnvironment
+        Include="@(_RSLibraryPathCandidate)"
+        Condition="Exists('%(Identity)')" />
+    </ItemGroup>
+    <PropertyGroup>
+      <LibraryPath>@(_RSLibraryPathForBuildEnvironment)</LibraryPath>
+    </PropertyGroup>
+  </Target>
+
   <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true'">
     <RSVcpkgRuntimeBinDir Condition="'$(Configuration)'=='Release'">bin\</RSVcpkgRuntimeBinDir>
     <RSVcpkgRuntimeBinDir Condition="'$(RSVcpkgRuntimeBinDir)'==''">debug\bin\</RSVcpkgRuntimeBinDir>
   </PropertyGroup>
   <Import Project="$(MSBuildThisFileDirectory)RuntimeDependencies.props"
           Condition="'$(RSIsFirstPartyProject)'=='true' and Exists('$(MSBuildThisFileDirectory)RuntimeDependencies.props')" />
+
+  <!-- OutDir is shared by many projects. A deployed dependency DLL is not a
+       consumer-owned output: that consumer's Clean may run after another
+       project's Build. Keep the exact TargetPath and private intermediates
+       cleanable; obsolete shared runtimes belong to RuntimeDependencies.props.
+       Migrate existing histories before CoreClean reads/deletes them. -->
+  <Target Name="RSMigrateSharedRuntimeCleanHistory"
+          BeforeTargets="CoreClean"
+          Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(OutDir)'!='' and '$(TargetPath)'!='' and '$(IntermediateOutputPath)'!='' and '$(CleanFile)'!='' and Exists('$(IntermediateOutputPath)$(CleanFile)')">
+    <PropertyGroup>
+      <_RSRuntimeCleanTargetPath>$([MSBuild]::NormalizePath('$(TargetPath)'))</_RSRuntimeCleanTargetPath>
+    </PropertyGroup>
+    <ReadLinesFromFile File="$(IntermediateOutputPath)$(CleanFile)">
+      <Output TaskParameter="Lines" ItemName="_RSRuntimeCleanHistory" />
+    </ReadLinesFromFile>
+    <FindUnderPath Path="$(OutDir)" Files="@(_RSRuntimeCleanHistory)" UpdateToAbsolutePaths="true">
+      <Output TaskParameter="InPath" ItemName="_RSRuntimeCleanHistoryInOutput" />
+    </FindUnderPath>
+    <FindUnderPath Path="$(IntermediateOutputPath)" Files="@(_RSRuntimeCleanHistoryInOutput)" UpdateToAbsolutePaths="true">
+      <Output TaskParameter="InPath" ItemName="_RSRuntimeCleanHistoryInIntermediate" />
+    </FindUnderPath>
+    <ItemGroup>
+      <_RSSharedRuntimeCleanHistory Include="@(_RSRuntimeCleanHistoryInOutput)"
+        Condition="'%(Extension)'=='.dll' and '%(FullPath)'!='$(_RSRuntimeCleanTargetPath)'" />
+      <_RSSharedRuntimeCleanHistory Remove="@(_RSRuntimeCleanHistoryInIntermediate)" MatchOnMetadata="FullPath" MatchOnMetadataOptions="PathLike" />
+      <_RSRuntimeCleanHistory Remove="@(_RSSharedRuntimeCleanHistory)" MatchOnMetadata="FullPath" MatchOnMetadataOptions="PathLike" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(IntermediateOutputPath)$(CleanFile)" Lines="@(_RSRuntimeCleanHistory)"
+                      Overwrite="true" WriteOnlyWhenDifferent="true" Condition="'@(_RSSharedRuntimeCleanHistory)'!=''" />
+  </Target>
+
+  <!-- Classify after common MSBuild gathers writes, not before: vcpkg's
+       link-skipped preservation target can append FileWrites in a late Before
+       hook. Both IncrementalClean and _CleanRecordFileWrites consume these two
+       common item lists. Filtering both also migrates a pre-fix incremental
+       history without deleting a newly staged dependency as an orphan. -->
+  <Target Name="RSClassifySharedRuntimeCleanWrites"
+          AfterTargets="_CleanGetCurrentAndPriorFileWrites"
+          Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(OutDir)'!='' and '$(TargetPath)'!='' and '$(IntermediateOutputPath)'!=''">
+    <PropertyGroup>
+      <_RSRuntimeCleanTargetPath>$([MSBuild]::NormalizePath('$(TargetPath)'))</_RSRuntimeCleanTargetPath>
+    </PropertyGroup>
+    <FindUnderPath Path="$(OutDir)" Files="@(_CleanPriorFileWrites);@(_CleanCurrentFileWrites)" UpdateToAbsolutePaths="true">
+      <Output TaskParameter="InPath" ItemName="_RSRuntimeCleanWritesInOutput" />
+    </FindUnderPath>
+    <FindUnderPath Path="$(IntermediateOutputPath)" Files="@(_RSRuntimeCleanWritesInOutput)" UpdateToAbsolutePaths="true">
+      <Output TaskParameter="InPath" ItemName="_RSRuntimeCleanWritesInIntermediate" />
+    </FindUnderPath>
+    <ItemGroup>
+      <_RSSharedRuntimeCleanWrite Include="@(_RSRuntimeCleanWritesInOutput)"
+        Condition="'%(Extension)'=='.dll' and '%(FullPath)'!='$(_RSRuntimeCleanTargetPath)'" />
+      <_RSSharedRuntimeCleanWrite Remove="@(_RSRuntimeCleanWritesInIntermediate)" MatchOnMetadata="FullPath" MatchOnMetadataOptions="PathLike" />
+      <FileWritesShareable Include="@(_RSSharedRuntimeCleanWrite)" />
+      <FileWrites Remove="@(_RSSharedRuntimeCleanWrite)" MatchOnMetadata="FullPath" MatchOnMetadataOptions="PathLike" />
+      <_CleanPriorFileWrites Remove="@(_RSSharedRuntimeCleanWrite)" MatchOnMetadata="FullPath" MatchOnMetadataOptions="PathLike" />
+      <_CleanCurrentFileWrites Remove="@(_RSSharedRuntimeCleanWrite)" MatchOnMetadata="FullPath" MatchOnMetadataOptions="PathLike" />
+    </ItemGroup>
+  </Target>
+
   <PropertyGroup Condition="'$(MSBuildProjectExtension)'=='.vcxproj'">
     <RSVersioningEnabled Condition="'$(RSVersioningEnabled)'=='' and '$(RSIsFirstPartyProject)'=='true' and ('$(ConfigurationType)'=='Application' or '$(ConfigurationType)'=='DynamicLibrary')">true</RSVersioningEnabled>
     <RSVersioningEnabled Condition="'$(RSVersioningEnabled)'==''">false</RSVersioningEnabled>
@@ -102,6 +199,12 @@
     <Warning Text="AddressSanitizer runtime '$(RSAsanRuntimeFileName)' was not found under '$(VCToolsInstallDir)bin'. ASan executables in '$(TargetDir)' may fail to launch until the runtime DLL is available on PATH." />
   </Target>
 
+  <Target Name="RSPrepareTerminalRuntime"
+          BeforeTargets="ClCompile;RSCopyRuntimeDependencies"
+          Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectName)'=='Terminal'">
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)Tools\Build-GhosttyTerminalRuntime.ps1&quot; -Platform &quot;$(Platform)&quot;" />
+  </Target>
+
   <Target Name="RSCopyRuntimeDependencies"
           AfterTargets="Build"
           Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '@(RSRuntimeDependency)'!=''">
@@ -110,8 +213,13 @@
         Condition="$([System.String]::Copy(';%(RSRuntimeDependency.Projects);').Contains(';$(MSBuildProjectName);')) and
                    ('%(RSRuntimeDependency.Flavor)'=='Any' or ('%(RSRuntimeDependency.Flavor)'=='Debug' and '$(Configuration)'!='Release') or ('%(RSRuntimeDependency.Flavor)'=='Release' and '$(Configuration)'=='Release')) and
                    ('%(RSRuntimeDependency.Platform)'=='Any' or '%(RSRuntimeDependency.Platform)'=='$(Platform)')" />
+      <_RSRuntimeDependencySource Include="$(MSBuildThisFileDirectory)%(_RSRuntimeDependency.Source)"
+        Condition="'@(_RSRuntimeDependency)'!='' and '%(_RSRuntimeDependency.SourceRoot)'=='RepoRoot'">
+        <OutputName>%(_RSRuntimeDependency.OutputName)</OutputName>
+        <Required>%(_RSRuntimeDependency.Required)</Required>
+      </_RSRuntimeDependencySource>
       <_RSRuntimeDependencySource Include="$(VcpkgInstalledDir)$(RSVcpkgTriplet)\%(_RSRuntimeDependency.Source)"
-        Condition="'@(_RSRuntimeDependency)'!=''">
+        Condition="'@(_RSRuntimeDependency)'!='' and '%(_RSRuntimeDependency.SourceRoot)'!='RepoRoot'">
         <OutputName>%(_RSRuntimeDependency.OutputName)</OutputName>
         <Required>%(_RSRuntimeDependency.Required)</Required>
       </_RSRuntimeDependencySource>
@@ -134,5 +242,26 @@
     <Copy SourceFiles="@(_RSPresentRuntimeDependency)"
           DestinationFiles="@(_RSPresentRuntimeDependency->'$(OutDir)%(OutputName)')"
           SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="RSWriteBuildArtifactManifest"
+          AfterTargets="Build"
+          DependsOnTargets="RSCopyAsanRuntime"
+          Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(RSBuildArtifactManifestRoot)'!='' and Exists('$(TargetPath)') and ('$(ConfigurationType)'=='Application' or '$(ConfigurationType)'=='DynamicLibrary')">
+    <MakeDir Directories="$(RSBuildArtifactManifestRoot)" />
+    <ItemGroup>
+      <_RSBuildArtifactManifestLine Include="project=$(MSBuildProjectName)" />
+      <_RSBuildArtifactManifestLine Include="target=$(TargetPath)" />
+      <_RSBuildArtifactManifestLine Include="tests_enabled=$(RSBuildEnableTests)" />
+      <_RSBuildArtifactManifestLine Include="vcpkg_tlog=$(TLogLocation)$(ProjectName).write.1u.tlog" />
+      <_RSBuildArtifactManifestLine Include="@(NativeReferenceCopyLocalPaths->'runtime=%(FullDestinationPath)')"
+                                    Condition="'%(NativeReferenceCopyLocalPaths.FullDestinationPath)'!=''" />
+      <_RSBuildArtifactManifestLine Include="runtime=$(TargetDir)$(RSAsanRuntimeFileName)"
+                                    Condition="'$(EnableASAN)'=='true' and '$(ConfigurationType)'=='Application' and '$(RSAsanRuntimeSourcePath)'!='' and Exists('$(TargetDir)$(RSAsanRuntimeFileName)')" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(RSBuildArtifactManifestRoot)$(MSBuildProjectName).manifest"
+                      Lines="@(_RSBuildArtifactManifestLine)"
+                      Overwrite="true"
+                      Encoding="UTF-8" />
   </Target>
 </Project>

@@ -1,4 +1,4 @@
-# Winget Integration Guide for RedSalamander
+# Winget Publication Contract
 
 This document defines the supported Windows Package Manager publication flow for RedSalamander.
 
@@ -22,14 +22,16 @@ RedSalamander-7.0.183-x64-Portable.zip
 PackageVersion: 7.0.183
 ```
 
-The Winget workflow starts with the x64 and ARM64 portable ZIPs. Both assets are required for publication so Winget can select the native installer for the user's machine.
+The Winget workflow starts with the x64 and ARM64 portable ZIPs. Both assets are required for publication so Winget can select the native installer for the user's machine. An explicitly x64-only GitHub release remains supported, but `.github/workflows/release.yml` skips its Winget handoff before invoking the publication workflow; it must not publish a dual-architecture manifest whose ARM64 asset does not exist.
 
 The upstream GitHub release is fail closed. `.github/workflows/release.yml` derives the exact package set from
 `build_arm64` and `build_msix`; every requested portable leg is mandatory, while MSIX omission is allowed only when
-that explicit input disables MSIX. `Tools/ReleaseArtifactPolicy.ps1` requires exact deterministic filenames,
+that explicit input disables MSIX. `Tools/Modules/Packaging/ReleaseArtifactPolicy.psm1` requires exact deterministic filenames,
 nonempty files, matching x64/ARM64 PE or MSIX architecture, matching MSIX identity metadata, and an exact verified
 SHA256 manifest before release creation. A failed build, package, artifact upload/download, validation, or checksum
 step prevents publication; a partial requested matrix is never a valid release.
+The release workflow is serialized by its generated build/version identity. The Winget handoff runs only after the
+requested release matrix and checksum file have been validated and the GitHub release has been created.
 
 All active third-party GitHub Actions are pinned to reviewed full commit SHAs with exact version comments.
 Dependabot owns the `github-actions` ecosystem update feed, and CODEOWNERS requires repository-owner review for
@@ -94,10 +96,32 @@ Generate a manifest from an existing portable ZIP:
 ```powershell
 .\Installer\winget\generate-manifest.ps1 `
   -Version 7.0.183 `
-  -ZipPath .\RedSalamander-x64.zip `
-  -Arm64ZipPath .\RedSalamander-ARM64.zip `
+  -ZipPath .\.build\AppPackages\RedSalamander-7.0.183-x64-Portable.zip `
+  -Arm64ZipPath .\.build\AppPackages\RedSalamander-7.0.183-ARM64-Portable.zip `
   -OutputDir .build\AppPackages\winget-manifest
 ```
+
+Standalone manifest generation requires either the complete three-part `Version`
+or `BuildNumber 1..65535`. It never reads saved repository context or allocates a
+local counter; `build.ps1 -GenerateWingetManifest` passes its resolved build number,
+while publication automation supplies the release version explicitly.
+Both archive inputs are mandatory existing files whose basenames exactly match
+`RedSalamander-<version>-x64-Portable.zip` and
+`RedSalamander-<version>-ARM64-Portable.zip`; stale or mixed-version archives fail
+before any manifest is written.
+
+The standalone generator holds the repository-wide packaging coordination
+scope from the first package hash through the last manifest write. It uses
+`Release|x64` as required diagnostic evidence; the packaging key itself is
+repository-wide because the manifest consumes both architectures. Calls nested
+under `build.ps1 -GenerateWingetManifest` reenter safely. Abandoned ownership
+records contamination and fails closed with the marker path; the generator does
+not clear it automatically.
+`OutputDir` is normalized and accepted only beneath this repository's
+`.build\AppPackages`. Every existing component from the repository through the
+destination must be non-reparse, including after directory creation, so lexical
+containment cannot redirect writes outside the guarded root. The repository-wide
+lease therefore covers every generated manifest destination.
 
 Generate after a local release ZIP build:
 
@@ -120,7 +144,35 @@ winget uninstall RedSalamanders.RedSalamander
 
 ## GitHub Actions Flow
 
-`.github/workflows/winget-release.yml` runs on `release.published` and manual dispatch. Manual runs validate and install-test by default; set the `submit` input to `true` only when the run should open a `microsoft/winget-pkgs` pull request.
+`.github/workflows/winget-release.yml` is a reusable publication workflow. The release
+workflow invokes it directly after the complete GitHub release has been published;
+`workflow_dispatch` remains available for validation and recovery. This direct edge is
+required because a release created with the repository `GITHUB_TOKEN` does not start a
+second workflow from the resulting `release.published` event. Manual runs validate and
+install-test by default; set the `submit` input to `true` only when the run should open
+a `microsoft/winget-pkgs` pull request.
+
+Submission is serialized per package version with a normalized workflow concurrency group. Release events and
+direct/manual calls therefore use the same `v<major>.<minor>.<build>` key. Direct/manual inputs are unprefixed
+three-part versions; release events require the lowercase `v` tag. Two automation attempts for the same package
+version cannot run concurrently.
+
+`Tools/Modules/Packaging/WingetPrPublication.psm1` owns the fail-closed publication state machine. It computes a stable publication
+identity from the package, version, exact three manifest paths, and their SHA256 hashes. WingetCreate 1.12.8.0
+chooses a GUID-suffixed branch, so the workflow supplies an initial title containing the stable identity marker;
+the shared PATCH path moves that marker into the finalized body. A PR is adoptable only when all of these match:
+
+- the token owner's exact GitHub login and `<login>/winget-pkgs` fork;
+- WingetCreate's reviewed exact `<package>-<version>-<GUID>` head-branch shape;
+- the open state and the stable publication marker in the initial title or finalized body;
+- exactly the three expected upstream manifest paths, with only added/modified statuses;
+- byte-exact SHA256 content for every generated local manifest.
+
+The state machine creates only when the bounded direct upstream list proves there is no exact-version PR. Exactly
+one automation-owned open match resumes through the same idempotent PATCH-and-verify path. External, ambiguous,
+multiple, closed, extra-file, or content-mismatched candidates stop without mutation. A submit failure or malformed
+WingetCreate output is not authoritative: bounded direct-list retries recover a newly created exact PR after GitHub
+eventual consistency. If stable ownership cannot be proven, publication stops; titles are never fuzzy-searched.
 
 The workflow:
 
@@ -130,12 +182,20 @@ The workflow:
 4. Fails with the available asset names if either `RedSalamander-<version>-x64-Portable.zip` or `RedSalamander-<version>-ARM64-Portable.zip` is missing.
 5. Downloads both ZIPs and computes their SHA256 values through `Installer/winget/generate-manifest.ps1`.
 6. Runs a self-contained `winget validate --manifest` wrapper in the workflow. It is intentionally inline because the workflow checks out the release tag before generating the manifest, and older release tags may not contain helper scripts added later. The wrapper treats the known `winget.exe v1.11.x` schema-header warning for `ManifestVersion: 1.12.0` as non-fatal, but only when the manifest otherwise reports validation success and all warnings are that exact legacy schema-header warning.
-7. Enables Winget `LocalManifestFiles`, runs `winget install --manifest winget-manifest` on the disposable runner, checks that `RedSalamander` appears in `winget list`, and then uninstalls it with `winget uninstall --id RedSalamanders.RedSalamander --purge`.
-8. For `release.published` runs or manual runs where `submit=true`, searches for an existing open PR for the same RedSalamander version and stops on a duplicate.
-9. Submits the generated manifest directory with `wingetcreate submit` using Winget's `Update: RedSalamanders.RedSalamander to <version>` title format, extracts the created PR URL from WingetCreate's output, and updates the PR through the GitHub API.
-10. Replaces WingetCreate's blank template body with a completed Winget checklist plus the release URL, installer type, architectures, commands, minimum OS, manifest schema, and the validation/install/list/uninstall evidence produced earlier in the same run.
+7. Enables Winget `LocalManifestFiles`, runs `winget install --manifest .build\AppPackages\winget-manifest` on the disposable runner, checks that `RedSalamander` appears in `winget list`, and then uninstalls it with `winget uninstall --id RedSalamanders.RedSalamander --purge`.
+8. For direct release calls or manual runs where `submit=true`, resolves the token owner, computes the manifest-bound publication marker, and directly lists upstream PRs and changed files to classify the exact-version state.
+9. Installs the reviewed WingetCreate package version `1.12.8.0`, resolves its absolute
+   executable path, and verifies the executable version before the publication secret
+   is exposed. It then submits the generated manifest directory with
+   `wingetcreate submit` using Winget's
+   `Update: RedSalamanders.RedSalamander to <version>` title format plus the stable creation marker. It does not
+   trust or log WingetCreate's PR URL output; the bounded direct-list state machine finds and verifies the PR.
+10. Creates or resumes exactly one automation-owned PR, then uses the same idempotent PATCH-and-verify path to set
+    the normal title and a marker-bearing completed Winget checklist plus the release URL, installer type,
+    architectures, commands, minimum OS, manifest schema, and validation/install/list/uninstall evidence. The
+    workflow emits the one verified PR URL returned by this path.
 
-`WINGET_TOKEN` must be a GitHub personal access token with the permissions required by WingetCreate to open a pull request against `microsoft/winget-pkgs` and update that PR's title and body.
+`WINGET_TOKEN` must be a GitHub personal access token with the permissions required by WingetCreate to open a pull request against `microsoft/winget-pkgs` and update that PR's title and body. The workflow exposes it only to the verified submit step as `WINGET_CREATE_GITHUB_TOKEN`; it must never appear in a command-line argument, generated script, log, summary, or artifact. Publication recovery tests use injected repository and submit operations and never use a production token.
 
 ## Reintroducing MSI
 

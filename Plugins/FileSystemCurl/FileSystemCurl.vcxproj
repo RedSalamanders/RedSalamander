@@ -120,6 +120,11 @@
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;FILESYSTEMCURL_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup>
+    <Link>
+      <AdditionalDependencies>Ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="Factory.cpp" />
@@ -128,6 +133,7 @@
     <ClCompile Include="FileSystemCurl.Imap.cpp" />
     <ClCompile Include="FileSystemCurl.ImapHelpers.cpp" />
     <ClCompile Include="FileSystemCurl.Shared.cpp" />
+    <ClCompile Include="FileSystemCurl.SelfTest.Ftp.cpp" />
     <ClInclude Include="FileSystemCurl.h" />
     <ClInclude Include="FileSystemCurl.ImapHelpers.h" />
     <ClInclude Include="FileSystemCurl.Internal.h" />

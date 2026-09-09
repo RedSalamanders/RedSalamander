@@ -34,34 +34,33 @@ BEGIN
             MENUITEM SEPARATOR
             MENUITEM "&Système",                     IDM_VIEW_THEME_SYSTEM
             MENUITEM "&Clair",                      IDM_VIEW_THEME_LIGHT
-            MENUITEM "&Sombre",                       IDM_VIEW_THEME_DARK
+            MENUITEM "S&ombre",                       IDM_VIEW_THEME_DARK
             MENUITEM "&Arc-en-ciel",                    IDM_VIEW_THEME_RAINBOW
             MENUITEM "Contraste &élevé (application)",        IDM_VIEW_THEME_HIGH_CONTRAST_APP
         END
     END
     POPUP "&Options"
     BEGIN
-        MENUITEM "&Toujours au premier plan",              IDM_OPTION_TOP
-        MENUITEM "&Défilement automatique\tEnd",           IDM_OPTION_AUTO_SCROLL
-        MENUITEM SEPARATOR
-        MENUITEM "Afficher l’ID de &processus/thread",  IDM_OPTION_ID
+        MENUITEM "&Défilement automatique\tEnd", IDM_OPTION_AUTO_SCROLL
+        MENUITEM "Afficher les &ID de processus/thread", IDM_OPTION_ID
+        MENUITEM "Toujours au &premier plan", IDM_OPTION_TOP
         MENUITEM SEPARATOR
         POPUP "&Filtre actif"
         BEGIN
-            MENUITEM "Afficher le &texte",              IDM_FILTER_TEXT, CHECKED
-            MENUITEM "Afficher les &erreurs",            IDM_FILTER_ERROR, CHECKED
-            MENUITEM "Afficher les &avertissements",          IDM_FILTER_WARNING, CHECKED
-            MENUITEM "Afficher les &infos",              IDM_FILTER_INFO, CHECKED
-            MENUITEM "Afficher la &perf",              IDM_FILTER_PERF, CHECKED
-            MENUITEM "Afficher le &debug",             IDM_FILTER_DEBUG, CHECKED
+            MENUITEM "&Erreur", IDM_FILTER_ERROR, CHECKED
+            MENUITEM "A&vertissement", IDM_FILTER_WARNING, CHECKED
+            MENUITEM "&Information", IDM_FILTER_INFO, CHECKED
+            MENUITEM "&Performance", IDM_FILTER_PERF, CHECKED
+            MENUITEM "&Débogage", IDM_FILTER_DEBUG, CHECKED
+            MENUITEM "&Trace", IDM_FILTER_TEXT, CHECKED
             MENUITEM SEPARATOR
-            MENUITEM "Préréglage : erreurs seulement",     IDM_FILTER_PRESET_ERRORS_ONLY
-            MENUITEM "Préréglage : erreurs + avertissements", IDM_FILTER_PRESET_ERRORS_WARNINGS
-            MENUITEM "Préréglage : erreurs + perf + debug", IDM_FILTER_PRESET_ERRORS_DEBUG
-            MENUITEM "Préréglage : tous les types",       IDM_FILTER_PRESET_ALL
+            MENUITEM "Erreurs &uniquement", IDM_FILTER_PRESET_ERRORS_ONLY
+            MENUITEM "Erreurs et &avertissements", IDM_FILTER_PRESET_ERRORS_WARNINGS
+            MENUITEM "Erreurs, performance et &débogage", IDM_FILTER_PRESET_ERRORS_DEBUG
+            MENUITEM "&Tous les types de messages", IDM_FILTER_PRESET_ALL
         END
     END
-    POPUP "&Aide"
+    POPUP "A&ide"
     BEGIN
         MENUITEM "À &propos...",                  IDM_ABOUT
     END
@@ -104,6 +103,7 @@ BEGIN
     IDS_NOT_RUNNING         "RedSalamander Bug Reporter (RedSalamanderMonitor.exe) n’est pas en cours d’exécution. RedSalamander ne pourra pas gérer les crashs éventuels. Veuillez redémarrer RedSalamander."
     IDS_CAPTION_ERROR "Erreur"
     IDS_CAPTION_OPEN "Ouvrir"
+    IDS_CAPTION_SAVE "Enregistrer"
     IDS_CAPTION_PRINT "Imprimer"
     IDS_CAPTION_ETW_WARNING "Avertissement de l’écouteur ETW"
     IDS_BTN_OK              "OK"
@@ -123,6 +123,10 @@ BEGIN
     IDS_MSG_ETW_ELEVATE_PROMPT "RedSalamander Monitor n’a pas pu démarrer son écouteur ETW avec les privilèges actuels.\n\nRedémarrer en tant qu’administrateur maintenant ?\n\n(Sélectionnez Non pour continuer sans surveillance ETW en temps réel. Pour éviter les invites UAC, ajoutez votre utilisateur au groupe Utilisateurs du journal de performances puis déconnectez-vous/reconnectez-vous.)"
     IDS_MSG_OPEN_CANCEL_REQUESTED "Annulation de l’ouverture du fichier..."
     IDS_STATUS_OPEN_PROGRESS_FMT "Ouverture : {0:L} / {1:L} octets"
+    IDS_MSG_SAVE_FAILED "Échec de l’enregistrement du fichier."
+    IDS_MSG_FILE_WORKER_START_FAILED "Impossible de démarrer l’opération de fichier en arrière-plan."
+    IDS_MSG_SAVE_CANCEL_REQUESTED "Annulation de l’enregistrement du fichier..."
+    IDS_STATUS_SAVE_PROGRESS_FMT "Enregistrement : {0:L} octets / {1:L} lignes"
     IDS_FATAL_ERROR_CAPTION "RedSalamander Monitor - Erreur fatale"
     IDS_FATAL_EXCEPTION_FMT "Exception fatale dans RedSalamanderMonitor\n\nException : {0} (0x{1:08X})\n\nL’application va maintenant se fermer."
     IDS_FILE_FILTER_OPEN "Fichiers texte (*.txt;*.log)\0*.txt;*.log\0Tous les fichiers (*.*)\0*.*\0\0"

@@ -111,6 +111,13 @@ Behavior:
 
 The deterministic `ViewerPETests` case `TestViewerTextSaveAsPreservesDataOnFailures` is the regression proof. It verifies same-path keep-original, successful keep-original and UTF-8 re-encode, loading and actual streamed-re-encode refusal, injected source-open/read/encode/write/flush/commit failures, a successful-but-short source read, byte-identical source and pre-existing destination files after every failure, and absence of sibling temp remnants.
 
+Display decoding and save conversion are separate choices. The Encoding menu's
+display rows change only the active decoder. Its `Save Encoding` submenu changes
+only the later Save As conversion policy and offers Keep Original, UTF-8,
+UTF-8 with BOM, UTF-16 LE, and UTF-16 BE. Applying a display encoding never
+silently changes the save policy, and opening the encoding picker never changes
+either choice until the user commits a row.
+
 ## Open And Decode Reliability
 
 - Each current, non-cancelled async open request reaches exactly one terminal result. Allocation/submit failures complete on the UI path; worker failures share one scope-owned terminal dispatcher; and a payload-post failure uses a bounded no-payload failure dispatch so the loading state cannot remain active indefinitely. Results for an older request or a destroyed/reused window are stale and are ignored.
@@ -159,8 +166,11 @@ ViewerText diff mode treats these as protected performance scenarios:
 - first visible paint and scrolling for a multi-million-code-unit logical line under a tiny layout-cache budget,
 - exact sparse line/page navigation round trips and independent left/right checkpointing for an unequal-width side-by-side diff row,
 - rapid streamed-window navigation, including worker decode/index time, latest-window UI apply time, stale completion count, and bounded cache/sparse-metadata growth.
+- opening and filtering the full searchable encoding catalog, including a query
+  that produces no matches and one that matches by codepage number.
+- repeated F8 display-encoding cycling, including one process-local catalog-cache build followed by cache-only cycles.
 
-The authoritative Commands selftest entrypoint is `viewer_text_diff_perf`. The baseline metric family emitted by that case is `viewer.diff.*`, including `viewer.diff.open_to_first_visible_us`, `viewer.diff.visible_rows`, `viewer.diff.semantic_row_paint_us`, `viewer.diff.visible_styled_rows`, `viewer.diff.visible_context_rows`, `viewer.diff.visible_banner_rows`, `viewer.diff.theme_switch_repaint_us`, `viewer.diff.scroll_repaint_us`, `viewer.diff.hunk_jump_to_visible_us`, `viewer.diff.expand_context_us`, `viewer.diff.viewport_rehydrate_us`, `viewer.diff.viewport_backtrack_us`, `viewer.diff.deferred_rows`, `viewer.diff.referenced_bytes_read`, `viewer.diff.viewport_referenced_bytes_read`, `viewer.diff.viewport_referenced_bytes_delta`, `viewer.diff.viewport_backtrack_referenced_bytes_delta`, `viewer.diff.placeholder_rows`, and `viewer.diff.placeholder_bands`. The protected expand-context path should exercise clickable hidden-banner reveal when that banner is visible, while scroll repaint plus viewport rehydrate/backtrack evidence remains the review surface for combo-sync and bounded rebuild work.
+The authoritative Commands selftest entrypoint is `viewer_text_diff_perf`. The baseline metric family emitted by that case is `viewer.diff.*`, including `viewer.diff.open_to_first_visible_us`, `viewer.diff.visible_rows`, `viewer.diff.semantic_row_paint_us`, `viewer.diff.visible_styled_rows`, `viewer.diff.visible_context_rows`, `viewer.diff.visible_banner_rows`, `viewer.diff.theme_switch_repaint_us`, `viewer.diff.scroll_repaint_us`, `viewer.diff.hunk_jump_to_visible_us`, `viewer.diff.expand_context_us`, `viewer.diff.viewport_rehydrate_us`, `viewer.diff.viewport_backtrack_us`, `viewer.diff.deferred_rows`, `viewer.diff.referenced_bytes_read`, `viewer.diff.viewport_referenced_bytes_read`, `viewer.diff.viewport_referenced_bytes_delta`, `viewer.diff.viewport_backtrack_referenced_bytes_delta`, `viewer.diff.placeholder_rows`, and `viewer.diff.placeholder_bands`. The protected expand-context path should exercise clickable hidden-banner reveal when that banner is visible, while scroll repaint plus viewport rehydrate/backtrack evidence remains the review surface for combo-sync and bounded rebuild work. The encoding-picker scenario emits `viewer.encoding_picker.catalog_load_us`, `viewer.encoding_picker.open_to_ready_us`, `viewer.encoding_picker.filter_us`, `viewer.encoding_picker.catalog_items`, `viewer.encoding_picker.filtered_items`, `viewer.encoding_cycle.catalog_cache_build_us`, `viewer.encoding_cycle.catalog_cache_items`, and `viewer.encoding_cycle.command_us`. Its exact test-enabled x64 Release command is `.build\x64\Release\ViewerPETests.exe viewer_text_encoding_picker_open_and_filter_full_catalog`; accepted evidence uses at least five independent processes and the full catalog.
 
 ## Hex Byte Colors
 
@@ -183,6 +193,30 @@ If a byte color would be unreadable over the effective background, the glyph fal
 ## In-Viewer Menu
 
 The visible top menu bar is rendered through the shared `RedSalamander.DxNativeMenuBar` host while the underlying command model continues to come from the hidden native viewer menu. `Alt`, `F10`, and menu mnemonics continue to work through that DxUi surface.
+
+The File menu follows Open, Save As, Refresh, Other Files, separator, Exit. The
+View menu is ordered as Text/Hex, parsed-diff presentation and navigation,
+Line Numbers/Wrap, then Go to Top/Bottom/Offset. Repetitive `Diff /` prefixes
+are not part of the labels; F7 and Shift+F7 remain the navigation shortcuts.
+
+The Encoding menu exposes Next/Previous, the common UTF-8, UTF-16, Windows-1252,
+and system-ANSI choices, `More Encodings...`, and the separate Save Encoding
+submenu. `More Encodings...` loads the localized canonical codepage catalog into
+one searchable picker. Filtering is case-insensitive across the displayed name,
+common/localized alias text, and decimal codepage number. The current display
+encoding is selected and scrolled into view. Arrow/page navigation, Enter, and
+Escape use standard dialog behavior; filtering and canceling do not reload the
+document, and accepting one row applies exactly one decoder change.
+
+`IDR_VIEWERTEXT_ENCODING_CATALOG` is an encoding-only resource; it MUST NOT
+duplicate the viewer's File/Search/View menu trees. Picker codepage prefixes use
+the localized `IDS_VIEWERTEXT_CODEPAGE_FORMAT`, and every locale gives Cancel an
+access key. The picker and F8 share one immutable process-local localized catalog;
+F8 additionally reuses its cached ID vector and does not load/walk the menu
+resource on every key press. Picker filtering reuses preformatted row text and
+batches ListBox updates without per-row redraw. Display-encoding-to-decoder/
+codepage/BOM mapping has one canonical implementation shared by synchronous and
+asynchronous open paths.
 
 ## Viewer Shell And Keyboard
 

@@ -39,7 +39,7 @@ content, captured window-only via GDI `CopyFromScreen` of each window's rectangl
 > **Dropped as empty/default states** (sparse capture profile) — re-capture with real content before re-adding: `opened-files.png` (open a couple of files in viewers first) and `pane-filter.png` (apply an actual filter). (`preferences-hot-paths.png`, `preferences-editors.png`, and `preferences-user-menu.png` have been re-captured with example content configured and re-added.)
 >
 > **Re-capture should also vary the theme.** The new 2026-06-18 captures are all Light theme. The next pass should spread surfaces across Light, Dark, Rainbow, and High Contrast App for visual diversity (this relaxes the older "Light for neutral workflow" guideline below).
-- `quick-search.png`: Quick Search active (prefix match highlighted, `search:` status), and `command-line.png`: the command-line input with the current directory inserted.
+- `quick-search.png`: Quick Search active (prefix match highlighted, `search:` status).
 
 ## Orphaned screenshots
 
@@ -47,6 +47,7 @@ These PNGs exist on disk but are not referenced by any `docs/*.md` page (verifie
 
 - `file-operations-popup-2.png` and `file-operations-popup-3.png`: secondary File Operations popup states. Wire into [FileOperations.md](../FileOperations.md) (for example, the conflict prompt or parallel-mode states) or remove.
 - `preferences-plugins-2.png`: a second Preferences -> Plugins capture. Wire into [Preferences.md](../Preferences.md) / [Plugins.md](../Plugins.md) or remove.
+- `command-line.png`: historical screenshot of the retired bottom command-line input; do not re-add it to current UI documentation.
 
 (`plugins.png` is **not** orphaned: it is referenced by Plugins.md, UserGuide.md, and Preferences.md.)
 

@@ -10,13 +10,13 @@ BEGIN
     BEGIN
         MENUITEM "&Otvoriť...\tCtrl+O", IDM_VIEWER_FILE_OPEN
         MENUITEM "&Uložiť ako...\tCtrl+S", IDM_VIEWER_FILE_SAVE_AS
-        MENUITEM "&Obnoviť\tF5", IDM_VIEWER_FILE_REFRESH
+        MENUITEM "O&bnoviť\tF5", IDM_VIEWER_FILE_REFRESH
         POPUP "&Iné súbory"
         BEGIN
-            MENUITEM "&Ďalej\tSpace, Ctrl+Down", IDM_VIEWER_OTHER_NEXT
-            MENUITEM "&Predchádzajúce\tBackspace, Ctrl+Up", IDM_VIEWER_OTHER_PREVIOUS
-            MENUITEM "&Po prvé\tCtrl+Home", IDM_VIEWER_OTHER_FIRST
-            MENUITEM "&Posledný\tCtrl+End", IDM_VIEWER_OTHER_LAST
+            MENUITEM "&Predchádzajúci súbor\tBackspace, Ctrl+Up", IDM_VIEWER_OTHER_PREVIOUS
+            MENUITEM "Ď&alší súbor\tSpace, Ctrl+Down", IDM_VIEWER_OTHER_NEXT
+            MENUITEM "P&rvý súbor\tCtrl+Home", IDM_VIEWER_OTHER_FIRST
+            MENUITEM "P&osledný súbor\tCtrl+End", IDM_VIEWER_OTHER_LAST
         END
         MENUITEM SEPARATOR
         MENUITEM "&Koniec\tEsc", IDM_VIEWER_FILE_EXIT
@@ -24,35 +24,61 @@ BEGIN
     POPUP "&Hľadať"
     BEGIN
         MENUITEM "&Nájsť...\tCtrl+F", IDM_VIEWER_SEARCH_FIND
-        MENUITEM "&Nájsť ďalší\tF3", IDM_VIEWER_SEARCH_FIND_NEXT
-        MENUITEM "&Nájsť predchádzajúci\tShift+F3", IDM_VIEWER_SEARCH_FIND_PREVIOUS
+        MENUITEM "Nájsť ď&alší\tF3", IDM_VIEWER_SEARCH_FIND_NEXT
+        MENUITEM "Nájsť &predchádzajúci\tShift+F3", IDM_VIEWER_SEARCH_FIND_PREVIOUS
     END
     POPUP "&Zobrazenie"
     BEGIN
         MENUITEM "&Text", IDM_VIEWER_VIEW_TEXT
-        MENUITEM "&Rozdiel / Vedľa seba", IDM_VIEWER_VIEW_DIFF_SIDE_BY_SIDE
-        MENUITEM "&Rozdiel / Inline", IDM_VIEWER_VIEW_DIFF_INLINE
-        MENUITEM "&Rozdiel / Zobraziť nezmenený text", IDM_VIEWER_VIEW_DIFF_SHOW_UNCHANGED
-        MENUITEM "&Rozdiel / Ďalší kus\tF7", IDM_VIEWER_VIEW_DIFF_NEXT_HUNK
-        MENUITEM "&Rozdiel / Predchádzajúca časť\tShift+F7", IDM_VIEWER_VIEW_DIFF_PREVIOUS_HUNK
         MENUITEM "&Hex", IDM_VIEWER_VIEW_HEX
         POPUP "&Farby hexadecimálnych bajtov"
         BEGIN
             MENUITEM "&Vedúce okusovanie (zvýraznené 00/FF)", IDM_VIEWER_VIEW_HEX_BYTE_COLORS_LEADING_NIBBLE
-            MENUITEM "&Vypnuté", IDM_VIEWER_VIEW_HEX_BYTE_COLORS_OFF
+            MENUITEM "V&ypnuté", IDM_VIEWER_VIEW_HEX_BYTE_COLORS_OFF
         END
         MENUITEM SEPARATOR
-        MENUITEM "&Prejsť na začiatok\tHome", IDM_VIEWER_VIEW_GOTO_TOP
-        MENUITEM "&Prejdite nadol\tEnd", IDM_VIEWER_VIEW_GOTO_BOTTOM
-        MENUITEM "&Prejsť na offset...\tCtrl+G", IDM_VIEWER_VIEW_GOTO_OFFSET
-        MENUITEM "&Čísla riadkov", IDM_VIEWER_VIEW_LINE_NUMBERS
-        MENUITEM "&Zabaliť", IDM_VIEWER_VIEW_WRAP
+        MENUITEM "Vedľa &seba", IDM_VIEWER_VIEW_DIFF_SIDE_BY_SIDE
+        MENUITEM "&Inline", IDM_VIEWER_VIEW_DIFF_INLINE
+        MENUITEM "Zobraziť &nezmenený text", IDM_VIEWER_VIEW_DIFF_SHOW_UNCHANGED
+        MENUITEM "Ď&alší rozdiel\tF7", IDM_VIEWER_VIEW_DIFF_NEXT_HUNK
+        MENUITEM "&Predchádzajúci rozdiel\tShift+F7", IDM_VIEWER_VIEW_DIFF_PREVIOUS_HUNK
+        MENUITEM SEPARATOR
+        MENUITEM "Čísla &riadkov", IDM_VIEWER_VIEW_LINE_NUMBERS
+        MENUITEM "&Zalomiť", IDM_VIEWER_VIEW_WRAP
+        MENUITEM SEPARATOR
+        MENUITEM "Prejsť na &začiatok\tHome", IDM_VIEWER_VIEW_GOTO_TOP
+        MENUITEM "Prejsť na &koniec\tEnd", IDM_VIEWER_VIEW_GOTO_BOTTOM
+        MENUITEM "Prejsť na &offset...\tCtrl+G", IDM_VIEWER_VIEW_GOTO_OFFSET
     END
     POPUP "&Kódovanie"
     BEGIN
-        MENUITEM "&Ďalšie kódovanie\tF8", IDM_VIEWER_ENCODING_NEXT
+        MENUITEM "Ď&alšie kódovanie\tF8", IDM_VIEWER_ENCODING_NEXT
         MENUITEM "&Predchádzajúce kódovanie\tShift+F8", IDM_VIEWER_ENCODING_PREVIOUS
         MENUITEM SEPARATOR
+        MENUITEM "UTF-&8", IDM_VIEWER_ENCODING_DISPLAY_UTF8
+        MENUITEM "UTF-8 s &BOM", IDM_VIEWER_ENCODING_DISPLAY_UTF8_BOM
+        MENUITEM "UTF-16 &LE", IDM_VIEWER_ENCODING_DISPLAY_UTF16LE_BOM
+        MENUITEM "UTF-16 B&E", IDM_VIEWER_ENCODING_DISPLAY_UTF16BE_BOM
+        MENUITEM "&Windows-1252", 1252
+        MENUITEM "Systémové &ANSI", IDM_VIEWER_ENCODING_DISPLAY_ANSI
+        MENUITEM SEPARATOR
+        MENUITEM "Ď&alšie kódovania...", IDM_VIEWER_ENCODING_MORE
+        MENUITEM SEPARATOR
+        POPUP "&Kódovanie pri uložení"
+        BEGIN
+            MENUITEM "Zachovať &pôvodné kódovanie", IDM_VIEWER_ENCODING_SAVE_KEEP_ORIGINAL
+            MENUITEM "UTF-&8", IDM_VIEWER_ENCODING_SAVE_UTF8
+            MENUITEM "UTF-8 s &BOM", IDM_VIEWER_ENCODING_SAVE_UTF8_BOM
+            MENUITEM "UTF-16 &LE", IDM_VIEWER_ENCODING_SAVE_UTF16LE_BOM
+            MENUITEM "UTF-16 B&E", IDM_VIEWER_ENCODING_SAVE_UTF16BE_BOM
+        END
+    END
+END
+
+IDR_VIEWERTEXT_ENCODING_CATALOG MENU
+BEGIN
+    POPUP "&Kódovanie"
+    BEGIN
         MENUITEM "&ANSI", IDM_VIEWER_ENCODING_DISPLAY_ANSI
         MENUITEM "UTF-&7", IDM_VIEWER_ENCODING_DISPLAY_UTF7
         MENUITEM "UTF-&8", IDM_VIEWER_ENCODING_DISPLAY_UTF8
@@ -297,14 +323,19 @@ BEGIN
                 END
             END
         END
-        MENUITEM SEPARATOR
-        MENUITEM "&Ponechajte pôvodné kódovanie", IDM_VIEWER_ENCODING_SAVE_KEEP_ORIGINAL
-        MENUITEM "&Konvertovať na Uložiť kusovník UTF-8", IDM_VIEWER_ENCODING_SAVE_UTF8_BOM
-        MENUITEM "&Konvertovať na Uložiť UTF-8", IDM_VIEWER_ENCODING_SAVE_UTF8
-        MENUITEM "&Konvertovať na Uložiť ANSI", IDM_VIEWER_ENCODING_SAVE_ANSI
-        MENUITEM "&Konvertovať na Uložiť UTF-16 BE BOM", IDM_VIEWER_ENCODING_SAVE_UTF16BE_BOM
-        MENUITEM "&Konvertovať na UTF-16 LE BOM", IDM_VIEWER_ENCODING_SAVE_UTF16LE_BOM
     END
+END
+
+IDD_VIEWERTEXT_ENCODING_PICKER DIALOGEX 0, 0, 312, 250
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Ďalšie kódovania"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "&Hľadať podľa názvu alebo kódovej stránky:", -1, 8, 8, 296, 10
+    EDITTEXT        IDC_VIEWERTEXT_ENCODING_FILTER, 8, 21, 296, 14, ES_AUTOHSCROLL
+    LISTBOX         IDC_VIEWERTEXT_ENCODING_LIST, 8, 41, 296, 181, LBS_NOTIFY | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    DEFPUSHBUTTON   "&OK", IDOK, 198, 230, 50, 14
+    PUSHBUTTON      "&Zrušiť", IDCANCEL, 254, 230, 50, 14
 END
 
 STRINGTABLE

@@ -790,14 +790,8 @@ void ComboBox::Paint(WindowHost& host) const
         }
     }
 
-    auto* dc       = host.GetDeviceContext();
-    const float cx = (buttonRect.left + buttonRect.right) * 0.5f;
-    const float cy = (bounds.top + bounds.bottom) * 0.5f + 1.0f;
-    if (dc)
-    {
-        dc->DrawLine(D2D1::Point2F(cx - 4.0f, cy - 2.0f), D2D1::Point2F(cx, cy + 2.0f), host.GetSolidBrush(style.glyph), 1.2f);
-        dc->DrawLine(D2D1::Point2F(cx, cy + 2.0f), D2D1::Point2F(cx + 4.0f, cy - 2.0f), host.GetSolidBrush(style.glyph), 1.2f);
-    }
+    const D2D1_RECT_F glyphRect = D2D1::RectF(buttonRect.left, buttonRect.top + 1.0f, buttonRect.right, buttonRect.bottom + 1.0f);
+    DrawChevronGlyph(host, glyphRect, ChevronDirection::Down, style.glyph);
 }
 
 void ComboBox::PaintOverlay(WindowHost& host) const

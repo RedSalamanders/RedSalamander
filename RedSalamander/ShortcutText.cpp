@@ -164,4 +164,21 @@ std::wstring FormatChordText(uint32_t vk, uint32_t modifiers) noexcept
     }
     return result;
 }
+
+std::wstring FormatChordText(Common::Keyboard::KeyPosition keyPosition, uint32_t vk, uint32_t modifiers) noexcept
+{
+    if (keyPosition == Common::Keyboard::KeyPosition::None)
+    {
+        return FormatChordText(vk, modifiers);
+    }
+
+    const UINT layoutVk = Common::Keyboard::VirtualKeyForPosition(keyPosition, GetKeyboardLayout(0));
+    if (layoutVk != 0u)
+    {
+        return FormatChordText(layoutVk, modifiers);
+    }
+
+    return FormatChordText(
+        keyPosition == Common::Keyboard::KeyPosition::NumberRowPlus ? static_cast<uint32_t>(VK_OEM_PLUS) : static_cast<uint32_t>(VK_OEM_MINUS), modifiers);
+}
 } // namespace ShortcutText

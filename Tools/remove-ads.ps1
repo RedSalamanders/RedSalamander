@@ -1,100 +1,135 @@
-#Requires -Version 5.1
 <#
 .SYNOPSIS
     Removes NTFS alternate data streams (ADS) from files.
 
 .DESCRIPTION
-    Scans files under the specified path and removes all alternate data streams
-    (e.g. Zone.Identifier, SmartScreen, mark-of-the-web) that Windows attaches
-    to files downloaded from the internet or copied from network shares.
+    Canonical repository command for removing named alternate data streams.
+    It reports matched, previewed, removed, skipped, and failed streams
+    separately and exits nonzero after any resolution, enumeration, or removal
+    failure.
 
 .PARAMETER Path
-    Root path to scan. Defaults to the current directory.
+    File or directory to scan. Defaults to the current directory.
 
 .PARAMETER Recurse
-    Scan subdirectories recursively.
+    Scan subdirectories recursively when Path names a directory.
 
 .PARAMETER StreamName
-    Remove only streams with this name (e.g. "Zone.Identifier").
-    When omitted, ALL alternate streams are removed.
+    Remove only the named stream, such as Zone.Identifier. When omitted, remove
+    every named stream while preserving the primary :$DATA stream.
 
-.PARAMETER WhatIf
-    Show what would be done without making any changes.
+.OUTPUTS
+    One summary string reporting matched, previewed, removed, skipped, and failed stream counts.
 
-.EXAMPLE
-    .\remove-ads.ps1 -Path . -Recurse
-    Removes all ADS from every file under the current directory.
-
-.EXAMPLE
-    .\remove-ads.ps1 -Path C:\Downloads -Recurse -StreamName Zone.Identifier
-    Removes only the Zone.Identifier stream (unblocks downloaded files).
+.NOTES
+    Prerequisites: an NTFS path and permission to enumerate/remove its named streams. Side effects: removes matching alternate data streams only after ShouldProcess approval; -WhatIf is read-only. Exit code is 1 after any resolution, enumeration, or removal failure and 0 otherwise. This is the sole supported ADS-removal command.
 
 .EXAMPLE
-    .\remove-ads.ps1 -Path . -Recurse -WhatIf
-    Preview what would be removed without making changes.
+    .\Tools\remove-ads.ps1 -Path . -Recurse
+    Removes every named stream below the current directory.
+
+.EXAMPLE
+    .\Tools\remove-ads.ps1 -Path C:\Downloads -Recurse -StreamName Zone.Identifier
+    Removes only Zone.Identifier streams.
+
+.EXAMPLE
+    .\Tools\remove-ads.ps1 -Path . -Recurse -WhatIf
+    Reports matching streams without changing them.
 #>
+#Requires -Version 5.1
 
-[CmdletBinding(SupportsShouldProcess)]
+[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Medium')]
 param(
     [Parameter(Position = 0)]
     [string] $Path = '.',
 
     [switch] $Recurse,
 
-    [string] $StreamName,
-
-    [switch] $WhatIf
+    [string] $StreamName
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$resolvedPath = Resolve-Path -LiteralPath $Path
+$matched = 0
+$wouldRemove = 0
+$removed = 0
+$skipped = 0
+$failed = 0
 
-$getChildItemArgs = @{
-    LiteralPath = $resolvedPath
-    File        = $true
-    Recurse     = $Recurse.IsPresent
-    Force       = $true   # include hidden/system files
-    ErrorAction = 'SilentlyContinue'
+function Write-RSAdsSummary {
+    Write-Output "Matched: $matched. Would remove: $wouldRemove. Removed: $removed. Skipped: $skipped. Failed: $failed."
 }
 
-$removed  = 0
-$skipped  = 0
-$errors   = 0
+try {
+    $resolvedPath = Resolve-Path -LiteralPath $Path -ErrorAction Stop
+    $rootItem = Get-Item -LiteralPath $resolvedPath.Path -Force -ErrorAction Stop
+} catch {
+    Write-Warning "Cannot resolve ADS scan path '$Path': $($_.Exception.Message)"
+    $failed++
+    Write-RSAdsSummary
+    exit 1
+}
 
-Get-ChildItem @getChildItemArgs | ForEach-Object {
-    $file = $_
+try {
+    $files = if ($rootItem.PSIsContainer) {
+        @(Get-ChildItem `
+            -LiteralPath $rootItem.FullName `
+            -File `
+            -Recurse:$Recurse.IsPresent `
+            -Force `
+            -ErrorAction Stop)
+    } else {
+        @($rootItem)
+    }
+} catch {
+    Write-Warning "Cannot enumerate ADS scan path '$($rootItem.FullName)': $($_.Exception.Message)"
+    $failed++
+    Write-RSAdsSummary
+    exit 1
+}
 
+foreach ($file in $files) {
     try {
-        $getStreamArgs = @{ LiteralPath = $file.FullName }
-        if ($StreamName) {
-            $getStreamArgs['Stream'] = $StreamName
-        }
+        $streams = @(
+            Get-Item -LiteralPath $file.FullName -Stream * -Force -ErrorAction Stop |
+                Where-Object {
+                    $_.Stream -ne ':$DATA' -and
+                    ([string]::IsNullOrEmpty($StreamName) -or
+                     [string]::Equals($_.Stream, $StreamName, [StringComparison]::OrdinalIgnoreCase))
+                }
+        )
+    } catch {
+        Write-Warning "Cannot enumerate streams for '$($file.FullName)': $($_.Exception.Message)"
+        $failed++
+        continue
+    }
 
-        $streams = Get-Item @getStreamArgs -Stream * -ErrorAction SilentlyContinue |
-                   Where-Object { $_.Stream -ne ':$DATA' }   # skip the primary stream
-
-        if ($StreamName) {
-            $streams = $streams | Where-Object { $_.Stream -eq $StreamName }
-        }
-
-        foreach ($stream in $streams) {
-            $displayName = "$($file.FullName):$($stream.Stream)"
-
-            if ($PSCmdlet.ShouldProcess($displayName, 'Remove-Item')) {
-                Remove-Item -LiteralPath $file.FullName -Stream $stream.Stream -ErrorAction Stop
-                Write-Verbose "Removed: $displayName"
-                $removed++
+    foreach ($stream in $streams) {
+        $matched++
+        $displayName = "$($file.FullName):$($stream.Stream)"
+        if (-not $PSCmdlet.ShouldProcess($displayName, 'Remove alternate data stream')) {
+            if ([bool]$WhatIfPreference) {
+                $wouldRemove++
             } else {
                 $skipped++
             }
+            continue
         }
-    } catch {
-        Write-Warning "Error processing '$($file.FullName)': $_"
-        $errors++
+
+        try {
+            Remove-Item -LiteralPath $file.FullName -Stream $stream.Stream -ErrorAction Stop
+            Write-Verbose "Removed: $displayName"
+            $removed++
+        } catch {
+            Write-Warning "Cannot remove '$displayName': $($_.Exception.Message)"
+            $failed++
+        }
     }
 }
 
-$action = if ($WhatIf) { 'Would remove' } else { 'Removed' }
-Write-Host "$action $removed stream(s). Skipped: $skipped. Errors: $errors."
+Write-RSAdsSummary
+if ($failed -ne 0) {
+    exit 1
+}
+exit 0

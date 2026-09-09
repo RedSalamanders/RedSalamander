@@ -1,4 +1,5 @@
 #include "ColorTextView.h"
+#include "MonitorFileReader.h"
 #include "ColorTextScrollBars.h"
 #include "UnicodeClipboard.h"
 #include "resource.h"
@@ -298,11 +299,10 @@ void ColorTextView::EnableLineNumbers(bool enable)
 void ColorTextView::EnableShowIds(bool enable)
 {
     _document.EnableShowIds(enable);
-
-    const UINT32 totalLen = static_cast<UINT32>(_document.TotalLength());
-    _selStart             = std::min(_selStart, totalLen);
-    _selEnd               = std::min(_selEnd, totalLen);
-    _caretPos             = std::min(_caretPos, totalLen);
+    _selStart = 0u;
+    _selEnd   = 0u;
+    _caretPos = 0u;
+    RebuildMatches();
 
     // Prefix text changed for every line: invalidate all layouts and caches.
     _textLayout.reset();
@@ -476,6 +476,19 @@ void ColorTextView::SetText(const std::wstring& text)
     ++_layoutSeq;
     ++_widthSeq;
     _document.SetText(text);
+    ResetAfterDocumentReplacement();
+}
+
+void ColorTextView::SetTextSnapshot(RedSalamanderMonitor::MonitorTextSnapshot&& snapshot)
+{
+    ++_layoutSeq;
+    ++_widthSeq;
+    _document.SetTextSnapshot(std::move(snapshot));
+    ResetAfterDocumentReplacement();
+}
+
+void ColorTextView::ResetAfterDocumentReplacement()
+{
     _lineWidthCache.assign(_document.TotalLineCount(), 0.f);
     _maxMeasuredWidth = 0.f;
     _maxMeasuredIndex = 0;
@@ -551,6 +564,29 @@ void ColorTextView::SetRetentionLimits(const RetentionLimits& limits) noexcept
     _maxRetainedTextBytes = std::max<uint64_t>(sizeof(wchar_t), limits.maxRetainedTextBytes);
     _maxSearchMatches     = std::max<size_t>(1u, limits.maxSearchMatches);
 }
+
+#if defined(ENABLE_TESTS)
+void ColorTextView::DebugAppendRetainedLine(const Debug::InfoParam& info, std::wstring text)
+{
+    const size_t oldLineCount = _document.TotalLineCount();
+    _document.AppendInfoLine(text, info);
+    const Document::RetentionResult eviction = _document.EnforceRetentionLimits(_maxRetainedLines, _maxRetainedTextBytes);
+    HandleDocumentEviction(eviction);
+    const size_t firstAppendedLine = eviction.linesEvicted >= oldLineCount ? 0u : oldLineCount - eviction.linesEvicted;
+    AppendMatchesForRange(firstAppendedLine);
+}
+
+std::vector<UINT32> ColorTextView::DebugGetMatchStarts() const
+{
+    std::vector<UINT32> starts;
+    starts.reserve(_matches.size());
+    for (const Line::ColorSpan& match : _matches)
+    {
+        starts.push_back(match.start);
+    }
+    return starts;
+}
+#endif
 
 void ColorTextView::QueueEtwEvent(const Debug::InfoParam& info, std::wstring message)
 {
@@ -680,6 +716,8 @@ void ColorTextView::ClearText()
     _maxMeasuredIndex = 0;
     _matches.clear();
     _matchIndex = -1;
+    _searchScanLine   = 0u;
+    _searchScanOffset = 0u;
     _selStart   = 0;
     _selEnd     = 0;
     _caretPos   = 0;
@@ -743,6 +781,15 @@ void ColorTextView::HandleDocumentEviction(const Document::RetentionResult& evic
                                   }),
                    _matches.end());
     _matchIndex = -1;
+    if (_searchScanLine >= eviction.linesEvicted)
+    {
+        _searchScanLine -= eviction.linesEvicted;
+    }
+    else
+    {
+        _searchScanLine   = 0u;
+        _searchScanOffset = 0u;
+    }
     _lineWidthCache.assign(_document.TotalLineCount(), 0.0f);
     _maxMeasuredWidth = 0.0f;
     _maxMeasuredIndex = 0u;
@@ -842,9 +889,9 @@ bool ColorTextView::GetAutoScroll() const
     return _renderMode == RenderMode::AUTO_SCROLL;
 }
 
-bool ColorTextView::SaveTextToFile(const std::wstring& path) const
+RedSalamanderMonitor::MonitorTextSnapshot ColorTextView::CaptureTextSnapshot() const
 {
-    return _document.SaveTextToFile(path);
+    return _document.CaptureTextSnapshot();
 }
 
 void ColorTextView::CopySelection()
@@ -4757,6 +4804,8 @@ void ColorTextView::RebuildMatches()
 {
     _matches.clear();
     _matchIndex = -1;
+    _searchScanLine   = 0u;
+    _searchScanOffset = 0u;
 
     if (_search.empty() || _document.TotalLineCount() == 0)
         return;
@@ -4770,45 +4819,41 @@ void ColorTextView::RebuildMatches()
                                 S_OK);
 }
 
-void ColorTextView::AppendMatchesForRange(size_t firstSourceLine)
+void ColorTextView::AppendMatchesForRange(size_t /*firstSourceLine*/)
 {
     if (_search.empty())
     {
         return;
     }
 
-    const auto addMatchesForLine = [&](size_t sourceIndex, const Line& line)
-    {
-        const UINT32 lineStart = _document.GetLineStartOffset(sourceIndex);
-        const UINT32 plen      = _document.PrefixLength(line);
-        size_t pos             = 0;
-        while (true)
-        {
-            if (_matches.size() >= _maxSearchMatches)
-            {
-                return false;
-            }
-            pos = _searchCaseSensitive ? line.text.find(_search, pos) : FindCaseIncensitive(line.text, _search, pos);
-            if (pos == std::wstring::npos)
-                return true;
-            _matches.push_back(Line::ColorSpan{lineStart + plen + static_cast<UINT32>(pos), static_cast<UINT32>(_search.size()), _theme.searchHighlight});
-            pos += _search.size();
-        }
-    };
-
     const bool filterActive = _document.GetFilterMask() != Debug::InfoParam::Type::All;
     const size_t totalLineCount = _document.TotalLineCount();
-    for (size_t i = std::min(firstSourceLine, totalLineCount); i < totalLineCount; ++i)
+    _searchScanLine = std::min(_searchScanLine, totalLineCount);
+
+    while (_searchScanLine < totalLineCount && _matches.size() < _maxSearchMatches)
     {
-        if (filterActive && ! _document.IsLineVisible(i))
+        if (filterActive && ! _document.IsLineVisible(_searchScanLine))
         {
+            ++_searchScanLine;
+            _searchScanOffset = 0u;
             continue;
         }
-        const auto& line = _document.GetSourceLine(i);
-        if (! addMatchesForLine(i, line))
+
+        const Line line       = _document.GetSourceLine(_searchScanLine);
+        const size_t position = _searchCaseSensitive ? line.text.find(_search, _searchScanOffset)
+                                                     : FindCaseIncensitive(line.text, _search, _searchScanOffset);
+        if (position == std::wstring::npos)
         {
-            break;
+            ++_searchScanLine;
+            _searchScanOffset = 0u;
+            continue;
         }
+
+        const UINT32 lineStart = _document.GetLineStartOffset(_searchScanLine);
+        const UINT32 prefixLen = _document.PrefixLength(line);
+        _matches.push_back(Line::ColorSpan{
+            lineStart + prefixLen + static_cast<UINT32>(position), static_cast<UINT32>(_search.size()), _theme.searchHighlight});
+        _searchScanOffset = position + _search.size();
     }
 }
 

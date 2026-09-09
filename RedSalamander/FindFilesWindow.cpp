@@ -39,6 +39,7 @@
 #include "CommandRegistry.h"
 #include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
+#include "FileOperationArtifactRegistry.h"
 #include "FileSystemPluginManager.h"
 #include "FluentIcons.h"
 #include "FolderWindow.h"
@@ -107,14 +108,7 @@ constexpr uint64_t kPendingResultRemovalMaxAgeMs      = 24ull * 60ull * 60ull * 
 constexpr uint32_t kFindShortcutCtrl                  = 0x1u;
 constexpr uint32_t kFindShortcutShift                 = 0x2u;
 constexpr uint32_t kFindShortcutAlt                   = 0x4u;
-constexpr int kFindResultMenuClickedCommandBase       = 0x5200;
-constexpr int kFindResultMenuSelectionCommandBase     = 0x5300;
-
-enum class FindResultMenuTarget : uint8_t
-{
-    ClickedItem,
-    Selection,
-};
+constexpr int kFindResultMenuCommandBase              = 0x5300;
 
 enum class FindResultMenuAction : uint8_t
 {
@@ -132,29 +126,17 @@ enum class FindResultMenuAction : uint8_t
     PermanentDelete,
 };
 
-struct FindResultMenuCommand final
+[[nodiscard]] int EncodeFindResultMenuCommand(FindResultMenuAction action) noexcept
 {
-    FindResultMenuTarget target = FindResultMenuTarget::ClickedItem;
-    FindResultMenuAction action = FindResultMenuAction::Open;
-};
-
-[[nodiscard]] int EncodeFindResultMenuCommand(FindResultMenuTarget target, FindResultMenuAction action) noexcept
-{
-    const int base = target == FindResultMenuTarget::ClickedItem ? kFindResultMenuClickedCommandBase : kFindResultMenuSelectionCommandBase;
-    return base + static_cast<int>(action);
+    return kFindResultMenuCommandBase + static_cast<int>(action);
 }
 
-[[nodiscard]] std::optional<FindResultMenuCommand> DecodeFindResultMenuCommand(int commandId) noexcept
+[[nodiscard]] std::optional<FindResultMenuAction> DecodeFindResultMenuCommand(int commandId) noexcept
 {
-    if (commandId > kFindResultMenuClickedCommandBase && commandId < kFindResultMenuClickedCommandBase + 100)
+    const int action = commandId - kFindResultMenuCommandBase;
+    if (action >= static_cast<int>(FindResultMenuAction::Open) && action <= static_cast<int>(FindResultMenuAction::PermanentDelete))
     {
-        return FindResultMenuCommand{.target = FindResultMenuTarget::ClickedItem,
-                                     .action = static_cast<FindResultMenuAction>(commandId - kFindResultMenuClickedCommandBase)};
-    }
-    if (commandId > kFindResultMenuSelectionCommandBase && commandId < kFindResultMenuSelectionCommandBase + 100)
-    {
-        return FindResultMenuCommand{.target = FindResultMenuTarget::Selection,
-                                     .action = static_cast<FindResultMenuAction>(commandId - kFindResultMenuSelectionCommandBase)};
+        return static_cast<FindResultMenuAction>(action);
     }
     return std::nullopt;
 }
@@ -497,7 +479,7 @@ enum class SearchOperation : uint8_t
     }
 }
 
-[[nodiscard]] bool IsNextThreadQueueMessage(HWND targetHwnd, UINT targetMessage, MSG* queuedMessage = nullptr) noexcept
+[[maybe_unused]] [[nodiscard]] bool IsNextThreadQueueMessage(HWND targetHwnd, UINT targetMessage, MSG* queuedMessage = nullptr) noexcept
 {
     MSG nextMessage{};
     if (PeekMessageW(&nextMessage, nullptr, 0, 0, PM_NOREMOVE) == 0)
@@ -618,6 +600,7 @@ struct FindResultRecord
     int64_t lastWriteTime            = 0;
     int64_t endOfFile                = 0;
     uint32_t matchedBy               = 0;
+    std::shared_ptr<const FileOperationArtifacts::Projection> artifactProjection;
 };
 
 struct FindSearchResultsPayload
@@ -994,6 +977,12 @@ public:
                 outCell.iconText  = BuildResultIconText(record);
                 outCell.iconIndex = record.iconIndex;
                 outCell.text      = record.displayName;
+                if (record.artifactProjection)
+                {
+                    outCell.badgeText = LoadStringResource(nullptr, IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE);
+                    outCell.badgeTone = RedSalamander::DxUi::AdornmentTone::Warning;
+                    outCell.tooltipText = outCell.badgeText;
+                }
                 break;
             case kColumnPath: outCell.text = record.displayPath; break;
             case kColumnSize:
@@ -1744,16 +1733,17 @@ private:
     void UpdateActionButtons() noexcept;
     void ShowFindActionMenu(POINT screenPoint) noexcept;
     [[nodiscard]] std::wstring ResolveResultMenuShortcutText(std::wstring_view commandId) const noexcept;
-    [[nodiscard]] MenuFlyoutItem BuildResultMenuItem(FindResultMenuTarget target, FindResultMenuAction action, bool enabled) const;
-    void AppendResultMenuActions(std::vector<MenuFlyoutItem>& items, FindResultMenuTarget target, bool includeOpenActions, bool enabled) const;
+    [[nodiscard]] MenuFlyoutItem BuildResultMenuItem(FindResultMenuAction action, bool enabled) const;
+    void AppendResultMenuActions(std::vector<MenuFlyoutItem>& items, std::span<const size_t> selectedIndices, bool includeOpenActions) const;
+    [[nodiscard]] bool IsResultMenuActionEnabled(FindResultMenuAction action, std::span<const size_t> selectedIndices) const noexcept;
     void ShowResultContextMenu(size_t clickedRowIndex, POINT screenPoint) noexcept;
-    [[nodiscard]] bool DispatchResultContextMenuCommand(const FindResultMenuCommand& command, size_t clickedRowIndex) noexcept;
+    [[nodiscard]] bool DispatchResultContextMenuCommand(FindResultMenuAction action) noexcept;
     void ShowResultActionsHelp() noexcept;
     void PersistUiState(bool updateHistory) noexcept;
     [[nodiscard]] bool IsIndexedPreferenceAvailableForCurrentRoot() const noexcept;
     [[nodiscard]] bool CanHandleResultCommands() const noexcept;
-    [[nodiscard]] std::optional<std::wstring> ResolveResultShortcutCommand(UINT message, WPARAM wParam) const noexcept;
-    [[nodiscard]] bool HandleResultShortcut(UINT message, WPARAM wParam) noexcept;
+    [[nodiscard]] std::optional<std::wstring> ResolveResultShortcutCommand(UINT message, WPARAM wParam, LPARAM lParam) const noexcept;
+    [[nodiscard]] bool HandleResultShortcut(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     [[nodiscard]] bool HandleResultCommandId(unsigned int commandId) noexcept;
     [[nodiscard]] bool HandleResultCommand(std::wstring_view commandId) noexcept;
     [[nodiscard]] bool FocusRootNavigation(bool editMode) noexcept;
@@ -1904,7 +1894,6 @@ private:
     GridSortSpec _resultSortSpec{};
     uint64_t _nextResultOrdinal = 1u;
     std::optional<POINT> _pendingFindActionMenuPoint;
-    std::optional<std::vector<size_t>> _resultCommandIndexOverride;
     uint32_t _keyboardModifiers = 0u;
 #ifdef ENABLE_TESTS
     uint64_t _debugResultActionFocusRestoreRequestCount = 0u;
@@ -2020,10 +2009,22 @@ struct SearchCallbacks final : IFileSystemSearchCallback
           _epoch(epoch)
     {
         _hostExtensions.sizeBytes             = sizeof(_hostExtensions);
-        _hostExtensions.version               = FILESYSTEM_SEARCH_HOST_EXTENSIONS_V1;
         _hostExtensions.callbackCookie        = nullptr;
         _hostExtensions.serviceStatusCallback = &SearchCallbacks::FileSystemSearchServiceStatus;
         _hostExtensions.serviceStatusCookie   = this;
+    }
+
+    ~SearchCallbacks() noexcept
+    {
+        const uint64_t lookupUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+            _artifactLookupDuration).count());
+        Debug::Perf::Emit(L"fileops.artifact.find_projection.us",
+                          L"name-shape-only",
+                          lookupUs,
+                          _artifactProjectedCount,
+                          _artifactProbeCandidateCount,
+                          S_OK);
+        Debug::Perf::EmitValue(L"fileops.artifact.find_projection.lookup_rows", _artifactLookupRowCount, S_OK);
     }
 
     SearchCallbacks(const SearchCallbacks&)            = delete;
@@ -2176,6 +2177,25 @@ struct SearchCallbacks final : IFileSystemSearchCallback
         record.folderViewRainbowHash32 = MakeFindResultFolderViewRainbowHash32(record);
         record.stableRowId             = MakeResultStableId(record);
 
+        const auto artifactLookupStartedAt = SteadyClock::now();
+        const bool artifactCandidate = FileOperationArtifacts::HasPossibleArtifactName(record.displayName);
+        _artifactLookupDuration += SteadyClock::now() - artifactLookupStartedAt;
+        ++_artifactLookupRowCount;
+        if (artifactCandidate)
+        {
+            ++_artifactProbeCandidateCount;
+            FileOperationArtifacts::Projection projection{};
+            if (FileOperationArtifacts::ProjectProviderObject(_request.context.fileSystem.get(),
+                                                              record.fullPath,
+                                                              record.pluginId,
+                                                              record.instanceContext,
+                                                              projection) == S_OK)
+            {
+                record.artifactProjection = std::make_shared<FileOperationArtifacts::Projection>(std::move(projection));
+                ++_artifactProjectedCount;
+            }
+        }
+
         if (_batch.empty())
         {
             _batchFirstQueuedAt = SteadyClock::now();
@@ -2279,6 +2299,10 @@ struct SearchCallbacks final : IFileSystemSearchCallback
     SteadyClock::time_point _batchFirstQueuedAt{};
     SearchServiceStatusSnapshot _latestServiceStatus;
     FindSearchProgressPayload _latestProgress;
+    SteadyClock::duration _artifactLookupDuration{};
+    uint64_t _artifactLookupRowCount = 0u;
+    uint64_t _artifactProbeCandidateCount = 0u;
+    uint64_t _artifactProjectedCount = 0u;
 };
 
 SearchSessionController::~SearchSessionController() noexcept
@@ -2411,7 +2435,7 @@ void SearchSessionController::Run(SearchRequest request, uint64_t epoch) noexcep
                 request.context.pluginId.c_str(), -1, kBuiltinLocalFileSystemId.data(), static_cast<int>(kBuiltinLocalFileSystemId.size()), TRUE) == CSTR_EQUAL;
         if (isBuiltinLocalFileSystem)
         {
-            query.reserved = FILESYSTEM_SEARCH_HOST_EXTENSIONS_V1;
+            query.reserved = FILESYSTEM_SEARCH_HOST_EXTENSIONS_MARKER;
             searchCookie   = const_cast<FileSystemSearchHostExtensions*>(callbacks.GetHostExtensions());
 
             SearchServiceBroker::ServiceStatus status{};
@@ -3097,19 +3121,6 @@ uint32_t FindFilesWindow::GetEffectiveKeyboardModifiers() const noexcept
 std::vector<size_t> FindFilesWindow::CollectSelectedResultIndices() const
 {
     std::vector<size_t> indices;
-    if (_resultCommandIndexOverride.has_value())
-    {
-        indices.reserve(_resultCommandIndexOverride->size());
-        for (const size_t index : _resultCommandIndexOverride.value())
-        {
-            if (index < _results.size() && std::ranges::find(indices, index) == indices.end())
-            {
-                indices.push_back(index);
-            }
-        }
-        return indices;
-    }
-
     if (! _resultsList)
     {
         return indices;
@@ -3326,15 +3337,22 @@ template <typename OutcomeRange>
     std::unordered_set<std::wstring> completedKeys;
     completedKeys.reserve(resultKeys.size());
 
-    if (outcomes.empty() && overallStatus == S_OK)
-    {
-        completedKeys.insert(resultKeys.begin(), resultKeys.end());
-        return completedKeys;
-    }
+    static_cast<void>(overallStatus);
 
     for (const auto& outcome : outcomes)
     {
-        if (outcome.status == S_OK && outcome.sourceIndex < resultKeys.size())
+        const bool removed = [&]() noexcept
+        {
+            if constexpr (requires { outcome.sourceDisposition; })
+            {
+                return outcome.sourceDisposition == FileOperations::SourceDisposition::Removed;
+            }
+            else
+            {
+                return outcome.removed;
+            }
+        }();
+        if (removed && outcome.sourceIndex < resultKeys.size())
         {
             completedKeys.insert(resultKeys[outcome.sourceIndex]);
         }
@@ -3468,7 +3486,7 @@ void FindFilesWindow::OnFolderWindowFileOperationCompleted(const FolderWindow::F
     }
 }
 
-std::optional<std::wstring> FindFilesWindow::ResolveResultShortcutCommand(UINT message, WPARAM wParam) const noexcept
+std::optional<std::wstring> FindFilesWindow::ResolveResultShortcutCommand(UINT message, WPARAM wParam, LPARAM lParam) const noexcept
 {
     if (message != WM_KEYDOWN && message != WM_SYSKEYDOWN)
     {
@@ -3490,8 +3508,12 @@ std::optional<std::wstring> FindFilesWindow::ResolveResultShortcutCommand(UINT m
         shortcuts.Load(defaultShortcuts);
     }
 
-    const std::optional<std::wstring_view> command =
-        (vk >= VK_F1 && vk <= VK_F12) ? shortcuts.FindFunctionBarCommand(vk, modifiers) : shortcuts.FindFolderViewCommand(vk, modifiers);
+    const std::optional<std::wstring_view> command = (vk >= VK_F1 && vk <= VK_F12)
+                                                        ? shortcuts.FindFunctionBarCommand(vk, modifiers)
+                                                        : shortcuts.FindFolderViewCommand(vk,
+                                                                                          modifiers,
+                                                                                          Common::Keyboard::ScanCodeFromKeyMessageLParam(lParam),
+                                                                                          Common::Keyboard::IsExtendedKeyMessageLParam(lParam));
     if (! command.has_value())
     {
         return std::nullopt;
@@ -3543,7 +3565,7 @@ bool FindFilesWindow::HandleResultCommand(std::wstring_view commandId) noexcept
     return HandleResultCommandId(wmCommandId.value());
 }
 
-bool FindFilesWindow::HandleResultShortcut(UINT message, WPARAM wParam) noexcept
+bool FindFilesWindow::HandleResultShortcut(UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
     if (message != WM_KEYDOWN && message != WM_SYSKEYDOWN)
     {
@@ -3555,7 +3577,7 @@ bool FindFilesWindow::HandleResultShortcut(UINT message, WPARAM wParam) noexcept
         return false;
     }
 
-    const std::optional<std::wstring> commandId = ResolveResultShortcutCommand(message, wParam);
+    const std::optional<std::wstring> commandId = ResolveResultShortcutCommand(message, wParam, lParam);
     if (! commandId.has_value())
     {
         return false;
@@ -3784,7 +3806,7 @@ std::wstring FindFilesWindow::ResolveResultMenuShortcutText(std::wstring_view co
     return FormatFindMenuChordText(chord->vk, chord->modifiers);
 }
 
-MenuFlyoutItem FindFilesWindow::BuildResultMenuItem(FindResultMenuTarget target, FindResultMenuAction action, bool enabled) const
+MenuFlyoutItem FindFilesWindow::BuildResultMenuItem(FindResultMenuAction action, bool enabled) const
 {
     UINT textResourceId = 0u;
     std::wstring_view commandId;
@@ -3841,31 +3863,90 @@ MenuFlyoutItem FindFilesWindow::BuildResultMenuItem(FindResultMenuTarget target,
         .text            = textResourceId != 0u ? LoadStringResource(nullptr, textResourceId) : std::wstring{},
         .acceleratorText = ResolveResultMenuShortcutText(commandId),
         .enabled         = enabled,
-        .commandId       = EncodeFindResultMenuCommand(target, action),
+        .commandId       = EncodeFindResultMenuCommand(action),
     };
 }
 
-void FindFilesWindow::AppendResultMenuActions(std::vector<MenuFlyoutItem>& items, FindResultMenuTarget target, bool includeOpenActions, bool enabled) const
+bool FindFilesWindow::IsResultMenuActionEnabled(FindResultMenuAction action, std::span<const size_t> selectedIndices) const noexcept
 {
+    if (selectedIndices.empty())
+    {
+        return false;
+    }
+
+    bool allWindowsPaths = true;
+    bool oneProviderContext = true;
+    bool firstProviderContext = true;
+    std::wstring_view pluginId;
+    std::wstring_view instanceContext;
+    for (const size_t index : selectedIndices)
+    {
+        if (index >= _results.size())
+        {
+            return false;
+        }
+
+        const FindResultRecord& result = _results[index];
+        allWindowsPaths = allWindowsPaths && NavigationLocation::LooksLikeWindowsAbsolutePath(result.fullPath);
+        if (firstProviderContext)
+        {
+            firstProviderContext = false;
+            pluginId        = result.pluginId;
+            instanceContext = result.instanceContext;
+        }
+        else if (CompareStringOrdinal(pluginId.data(), static_cast<int>(pluginId.size()), result.pluginId.c_str(), -1, TRUE) != CSTR_EQUAL ||
+                 ! NavigationLocation::EqualsNoCase(instanceContext, result.instanceContext))
+        {
+            oneProviderContext = false;
+        }
+    }
+
+    switch (action)
+    {
+        case FindResultMenuAction::Open:
+        case FindResultMenuAction::GoToFolder:
+        case FindResultMenuAction::View:
+        case FindResultMenuAction::AlternateView:
+        case FindResultMenuAction::Edit:
+        case FindResultMenuAction::AlternateEdit: return true;
+        case FindResultMenuAction::ClipboardCopy:
+        case FindResultMenuAction::ClipboardCut: return allWindowsPaths;
+        case FindResultMenuAction::CopyToDestination:
+        case FindResultMenuAction::MoveToDestination:
+            return oneProviderContext && _applicationFolderWindow != nullptr && ResolveDestinationFolderForDisplay().has_value();
+        case FindResultMenuAction::Delete:
+        case FindResultMenuAction::PermanentDelete: return oneProviderContext && _applicationFolderWindow != nullptr;
+    }
+
+    return false;
+}
+
+void FindFilesWindow::AppendResultMenuActions(std::vector<MenuFlyoutItem>& items,
+                                              std::span<const size_t> selectedIndices,
+                                              bool includeOpenActions) const
+{
+    const auto appendAction = [&](FindResultMenuAction action)
+    { items.push_back(BuildResultMenuItem(action, IsResultMenuActionEnabled(action, selectedIndices))); };
+
     if (includeOpenActions)
     {
-        items.push_back(BuildResultMenuItem(target, FindResultMenuAction::Open, enabled));
-        items.push_back(BuildResultMenuItem(target, FindResultMenuAction::GoToFolder, enabled));
+        appendAction(FindResultMenuAction::Open);
+        appendAction(FindResultMenuAction::GoToFolder);
         items.push_back(MenuFlyoutItem{.kind = RedSalamander::DxUi::MenuItemKind::Separator});
     }
 
-    items.push_back(BuildResultMenuItem(target, FindResultMenuAction::View, enabled));
-    items.push_back(BuildResultMenuItem(target, FindResultMenuAction::AlternateView, enabled));
-    items.push_back(BuildResultMenuItem(target, FindResultMenuAction::Edit, enabled));
-    items.push_back(BuildResultMenuItem(target, FindResultMenuAction::AlternateEdit, enabled));
+    appendAction(FindResultMenuAction::View);
+    appendAction(FindResultMenuAction::AlternateView);
+    appendAction(FindResultMenuAction::Edit);
+    appendAction(FindResultMenuAction::AlternateEdit);
     items.push_back(MenuFlyoutItem{.kind = RedSalamander::DxUi::MenuItemKind::Separator});
-    items.push_back(BuildResultMenuItem(target, FindResultMenuAction::ClipboardCopy, enabled));
-    items.push_back(BuildResultMenuItem(target, FindResultMenuAction::ClipboardCut, enabled));
-    items.push_back(BuildResultMenuItem(target, FindResultMenuAction::CopyToDestination, enabled));
-    items.push_back(BuildResultMenuItem(target, FindResultMenuAction::MoveToDestination, enabled));
+    appendAction(FindResultMenuAction::ClipboardCopy);
+    appendAction(FindResultMenuAction::ClipboardCut);
+    appendAction(FindResultMenuAction::CopyToDestination);
+    appendAction(FindResultMenuAction::MoveToDestination);
     items.push_back(MenuFlyoutItem{.kind = RedSalamander::DxUi::MenuItemKind::Separator});
-    items.push_back(BuildResultMenuItem(target, FindResultMenuAction::Delete, enabled));
-    items.push_back(BuildResultMenuItem(target, FindResultMenuAction::PermanentDelete, enabled));
+    appendAction(FindResultMenuAction::Delete);
+    appendAction(FindResultMenuAction::PermanentDelete);
 }
 
 void FindFilesWindow::ShowFindActionMenu(POINT screenPoint) noexcept
@@ -3967,28 +4048,19 @@ void FindFilesWindow::ShowResultContextMenu(size_t clickedRowIndex, POINT screen
     }
 
     const std::vector<size_t> selectedIndices = CollectSelectedResultIndices();
-    const bool clickedIsSelected              = std::ranges::find(selectedIndices, clickedRowIndex) != selectedIndices.end();
-    const bool hasMultiSelection              = clickedIsSelected && selectedIndices.size() > 1u;
-    const bool hasSelection                   = ! selectedIndices.empty();
+    const bool clickedIsSelected = std::ranges::find(selectedIndices, clickedRowIndex) != selectedIndices.end();
+    if (! clickedIsSelected && _resultsList)
+    {
+        _resultsList->GetSelectionModel().SetSingle(_resultsModel.GetStableRowId(clickedRowIndex));
+        _resultsList->NotifyDataChanged();
+        UpdateActionButtons();
+        _dxHost.Invalidate();
+    }
 
+    const std::vector<size_t> menuTargetIndices = CollectSelectedResultIndices();
     std::vector<MenuFlyoutItem> items;
-    if (hasMultiSelection)
-    {
-        items.reserve(30u);
-        items.push_back(MenuFlyoutItem{
-            .kind = RedSalamander::DxUi::MenuItemKind::Header, .text = LoadStringResource(nullptr, IDS_FIND_RESULT_MENU_THIS_ITEM), .enabled = false});
-        AppendResultMenuActions(items, FindResultMenuTarget::ClickedItem, true, true);
-        items.push_back(MenuFlyoutItem{.kind = RedSalamander::DxUi::MenuItemKind::Separator});
-        items.push_back(MenuFlyoutItem{.kind    = RedSalamander::DxUi::MenuItemKind::Header,
-                                       .text    = FormatStringResource(nullptr, IDS_FIND_RESULT_MENU_SELECTION_FMT, selectedIndices.size()),
-                                       .enabled = false});
-        AppendResultMenuActions(items, FindResultMenuTarget::Selection, false, hasSelection);
-    }
-    else
-    {
-        items.reserve(14u);
-        AppendResultMenuActions(items, FindResultMenuTarget::ClickedItem, true, true);
-    }
+    items.reserve(14u);
+    AppendResultMenuActions(items, menuTargetIndices, true);
 
     const std::optional<int> command = ContextMenu::Show(_hWnd.get(), screenPoint, items, _dxHost.GetTheme());
     if (! command.has_value())
@@ -3996,34 +4068,18 @@ void FindFilesWindow::ShowResultContextMenu(size_t clickedRowIndex, POINT screen
         return;
     }
 
-    const std::optional<FindResultMenuCommand> resultCommand = DecodeFindResultMenuCommand(command.value());
+    const std::optional<FindResultMenuAction> resultCommand = DecodeFindResultMenuCommand(command.value());
     if (! resultCommand.has_value())
     {
         return;
     }
 
-    static_cast<void>(DispatchResultContextMenuCommand(resultCommand.value(), clickedRowIndex));
+    static_cast<void>(DispatchResultContextMenuCommand(resultCommand.value()));
 }
 
-bool FindFilesWindow::DispatchResultContextMenuCommand(const FindResultMenuCommand& command, size_t clickedRowIndex) noexcept
+bool FindFilesWindow::DispatchResultContextMenuCommand(FindResultMenuAction action) noexcept
 {
-    if (clickedRowIndex >= _results.size())
-    {
-        return false;
-    }
-
-    std::optional<std::vector<size_t>> previousOverride = std::move(_resultCommandIndexOverride);
-    if (command.target == FindResultMenuTarget::ClickedItem)
-    {
-        _resultCommandIndexOverride = std::vector<size_t>{clickedRowIndex};
-    }
-    else
-    {
-        _resultCommandIndexOverride.reset();
-    }
-    const auto restoreOverride = wil::scope_exit([&]() noexcept { _resultCommandIndexOverride = std::move(previousOverride); });
-
-    switch (command.action)
+    switch (action)
     {
         case FindResultMenuAction::Open: OpenSelectedResult(false); return true;
         case FindResultMenuAction::GoToFolder: OpenSelectedResult(true); return true;
@@ -4070,7 +4126,6 @@ void FindFilesWindow::ShowResultActionsHelp() noexcept
     }
 
     HostAlertRequest request{};
-    request.version      = 1u;
     request.sizeBytes    = sizeof(request);
     request.scope        = HOST_ALERT_SCOPE_WINDOW;
     request.modality     = HOST_ALERT_MODAL;
@@ -4637,18 +4692,6 @@ void FindFilesWindow::KeepOnlyKeysInResults(const std::unordered_set<std::wstrin
 
 std::optional<size_t> FindFilesWindow::GetSelectedResultIndex() const noexcept
 {
-    if (_resultCommandIndexOverride.has_value())
-    {
-        for (const size_t index : _resultCommandIndexOverride.value())
-        {
-            if (index < _results.size())
-            {
-                return index;
-            }
-        }
-        return std::nullopt;
-    }
-
     if (! _resultsList)
     {
         return std::nullopt;
@@ -7284,7 +7327,7 @@ LRESULT FindFilesWindow::WindowProc(UINT message, WPARAM wParam, LPARAM lParam) 
     }
     UpdateKeyboardModifierState(message, wParam);
     TraceRawWindowMessage(message, wParam, lParam, L"enter");
-    if (HandleResultShortcut(message, wParam))
+    if (HandleResultShortcut(message, wParam, lParam))
     {
         return 0;
     }
@@ -7852,7 +7895,8 @@ bool DebugScrollFindFilesWindowResultsByWheelDetents(int detents) noexcept
 
 bool DebugWaitForFindFilesWindowIdle(uint32_t timeoutMs) noexcept
 {
-    return g_findFilesWindow ? g_findFilesWindow->DebugWaitForIdle(timeoutMs) : true;
+    const HWND findWindow = GetFindFilesWindowHandle();
+    return g_findFilesWindow && findWindow && IsWindow(findWindow) != FALSE && g_findFilesWindow->DebugWaitForIdle(timeoutMs);
 }
 
 bool DebugFindFilesIsNextQueuedMessage(HWND targetHwnd, UINT targetMessage) noexcept

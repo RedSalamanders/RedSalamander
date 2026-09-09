@@ -181,43 +181,15 @@ private:
 
     HRESULT LocateEntry(unsigned long index, FileInfo** result) noexcept
     {
-        size_t offset = 0;
-        for (unsigned long current = 0; current < _count; ++current)
+        const FileInfo* located = nullptr;
+        const HRESULT hr = LocatePackedFileInfoRecord(
+            reinterpret_cast<const FileInfo*>(_buffer.data()), _usedBytes, _count, index, &located);
+        if (FAILED(hr))
         {
-            if (offset > _buffer.size() || _buffer.size() - offset < sizeof(FileInfo))
-            {
-                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-            }
-
-            auto* entry = reinterpret_cast<FileInfo*>(_buffer.data() + offset);
-            if ((entry->FileNameSize % sizeof(wchar_t)) != 0u)
-            {
-                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-            }
-
-            size_t entrySize = 0;
-            const HRESULT sizeHr = TryComputeEntrySize(
-                std::wstring_view(entry->FileName, static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t)), entrySize);
-            if (FAILED(sizeHr) || entrySize > _buffer.size() - offset)
-            {
-                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-            }
-
-            if (current == index)
-            {
-                *result = entry;
-                return S_OK;
-            }
-
-            const size_t advance = static_cast<size_t>(entry->NextEntryOffset);
-            if (advance < entrySize || (advance % kEntryAlignment) != 0u || advance > _buffer.size() - offset)
-            {
-                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-            }
-            offset += advance;
+            return hr;
         }
-
-        return HRESULT_FROM_WIN32(ERROR_NO_MORE_FILES);
+        *result = const_cast<FileInfo*>(located);
+        return S_OK;
     }
 
     void Reset() noexcept

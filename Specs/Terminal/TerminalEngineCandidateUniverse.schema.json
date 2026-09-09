@@ -1,0 +1,444 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:red-salamander:schema:terminal-engine-candidate-universe:v1",
+  "title": "RedSalamander TerminalEngine candidate universe and equal-adaptation policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "version",
+    "frozenUtc",
+    "authorId",
+    "nominationRule",
+    "adaptationPolicy",
+    "seedCandidates",
+    "controls",
+    "proposalSha256",
+    "approvals"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "red-salamander-terminal-engine-candidate-universe"
+    },
+    "version": {
+      "const": 1
+    },
+    "frozenUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "authorId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "nominationRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selectionSource",
+        "opensAfterUniverseApproval",
+        "closesOnlyAfterEveryAllowedSeedHasOutcome",
+        "performanceBeforeCloseForbidden",
+        "nominationsPerAllowedSeed"
+      ],
+      "properties": {
+        "selectionSource": {
+          "const": "master-plan-candidate-list"
+        },
+        "opensAfterUniverseApproval": {
+          "const": true
+        },
+        "closesOnlyAfterEveryAllowedSeedHasOutcome": {
+          "const": true
+        },
+        "performanceBeforeCloseForbidden": {
+          "const": true
+        },
+        "nominationsPerAllowedSeed": {
+          "const": 1
+        }
+      }
+    },
+    "adaptationPolicy": {
+      "$ref": "#/$defs/adaptationPolicy"
+    },
+    "seedCandidates": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/seedCandidate"
+      }
+    },
+    "controls": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/control"
+      }
+    },
+    "proposalSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "approvals": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/approval"
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "nonemptyString": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "adaptationPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateNeutral",
+        "allowedScope",
+        "forbiddenScope",
+        "hardCaps",
+        "logicalConcernTaxonomy",
+        "patchMetricAlgorithm",
+        "ownerDayMethod"
+      ],
+      "properties": {
+        "candidateNeutral": {
+          "const": true
+        },
+        "allowedScope": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/nonemptyString"
+          }
+        },
+        "forbiddenScope": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/nonemptyString"
+          }
+        },
+        "hardCaps": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ownerDays",
+            "changedMaintainedLines",
+            "changedMaintainedFiles",
+            "logicalConcerns",
+            "newToolchainFamilies",
+            "newNonSystemRuntimeLeaves",
+            "binaryPatchAllowed"
+          ],
+          "properties": {
+            "ownerDays": {
+              "const": 60
+            },
+            "changedMaintainedLines": {
+              "const": 2500
+            },
+            "changedMaintainedFiles": {
+              "const": 24
+            },
+            "logicalConcerns": {
+              "const": 5
+            },
+            "newToolchainFamilies": {
+              "const": 1
+            },
+            "newNonSystemRuntimeLeaves": {
+              "const": 0
+            },
+            "binaryPatchAllowed": {
+              "const": false
+            }
+          }
+        },
+        "logicalConcernTaxonomy": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "abi-snapshot-identity",
+              "build-reproducibility-packaging",
+              "kitty-image-placement-model",
+              "parser-side-effect-bounds",
+              "renderer-ui",
+              "terminal-grid-history-model",
+              "teardown-concurrency",
+              "typed-resource-accounting-admission"
+            ]
+          }
+        },
+        "patchMetricAlgorithm": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "diffCommand",
+            "patchCommand",
+            "lineCountRule",
+            "fileCountRule",
+            "binaryRule",
+            "resultTreeRule",
+            "concernMappingRule",
+            "requiredIndependentApprovals"
+          ],
+          "properties": {
+            "diffCommand": {
+              "const": "git -c core.autocrlf=false diff --binary --full-index --no-renames <upstream-tree> <result-tree>"
+            },
+            "patchCommand": {
+              "const": "git -c core.autocrlf=false diff --binary --full-index --no-renames <upstream-tree> <result-tree>"
+            },
+            "lineCountRule": {
+              "const": "Sum additions plus deletions from git diff --no-renames --numstat over every changed source, build, test, documentation, generated-glue, and adapter file; no exclusion."
+            },
+            "fileCountRule": {
+              "const": "Count every touched source, build, test, documentation, generated-glue, and adapter path record from git diff --no-renames --name-status; rename detection is disabled so a move counts as delete plus add."
+            },
+            "binaryRule": {
+              "const": "Any binary numstat '-' field or GIT binary patch rejects the nomination."
+            },
+            "resultTreeRule": {
+              "const": "Apply the exact raw patch to the exact upstream tree with core.autocrlf=false and require the resulting git write-tree identity to equal resultTree."
+            },
+            "concernMappingRule": {
+              "const": "Every changed path maps to at least one closed-taxonomy concern; the unique concern count is cap-enforced and two reviewers approve the complete mapping."
+            },
+            "requiredIndependentApprovals": {
+              "const": 2
+            }
+          }
+        },
+        "ownerDayMethod": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "formula",
+            "adapterFloorSameLanguageOrExistingCAbi",
+            "adapterFloorNewCrossLanguageFfi",
+            "patchFloor",
+            "perUpgradeFloor",
+            "securityResponseFloorParserDecoderAccounting",
+            "securityResponseFloorOther",
+            "releaseNoticeFloor",
+            "plannedUpgrades",
+            "securityResponseEvents",
+            "contingencyPercent",
+            "estimateRule",
+            "newToolchainDefinition",
+            "runtimeLeafEvidenceRule"
+          ],
+          "properties": {
+            "formula": {
+              "const": "ceil((initialAdapterDays + initialPatchDays + 9 * perUpgradeDays + 3 * annualSecurityResponseDays + releaseNoticeDays) * 1.20)"
+            },
+            "adapterFloorSameLanguageOrExistingCAbi": {
+              "const": 3
+            },
+            "adapterFloorNewCrossLanguageFfi": {
+              "const": 5
+            },
+            "patchFloor": {
+              "const": "max(declaredInitialPatchDays,2*logicalConcerns,ceil(changedMaintainedLines/256))"
+            },
+            "perUpgradeFloor": {
+              "const": "1+ceil(changedMaintainedFiles/8)+newToolchainFamilies+newNonSystemRuntimeLeaves"
+            },
+            "securityResponseFloorParserDecoderAccounting": {
+              "const": 2
+            },
+            "securityResponseFloorOther": {
+              "const": 1
+            },
+            "releaseNoticeFloor": {
+              "const": 1
+            },
+            "plannedUpgrades": {
+              "const": 9
+            },
+            "securityResponseEvents": {
+              "const": 3
+            },
+            "contingencyPercent": {
+              "const": 20
+            },
+            "estimateRule": {
+              "const": "Use a reviewer-approved upper-bound estimate that includes x64 and ARM64 build, tests, packaging, upgrade, security, notice, and rollback maintenance."
+            },
+            "newToolchainDefinition": {
+              "const": "A compiler or language tool family not already required by the RedSalamander product build and CI at the frozen baseline."
+            },
+            "runtimeLeafEvidenceRule": {
+              "const": "Count the recursively resolved non-system PE/load closure from the clean portable package; a source-static dependency is not a runtime leaf."
+            }
+          }
+        }
+      }
+    },
+    "seedCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "repositoryUrl",
+        "retrievalUrl",
+        "pin",
+        "pinSha256",
+        "sourceArchiveSha256",
+        "languageFamily",
+        "kittySubsystem",
+        "adaptationPermission",
+        "allowedNominationId",
+        "selectionReason"
+      ],
+      "properties": {
+        "candidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "repositoryUrl": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2048
+        },
+        "retrievalUrl": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2048
+        },
+        "pin": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "pinSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sourceArchiveSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "languageFamily": {
+          "enum": [
+            "c",
+            "cpp",
+            "rust",
+            "zig"
+          ]
+        },
+        "kittySubsystem": {
+          "enum": [
+            "absent",
+            "partial",
+            "present"
+          ]
+        },
+        "adaptationPermission": {
+          "enum": [
+            "allowed-existing-subsystem",
+            "forbidden-absent-subsystem"
+          ]
+        },
+        "allowedNominationId": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/identifier"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selectionReason": {
+          "$ref": "#/$defs/nonemptyString"
+        }
+      }
+    },
+    "control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "pin",
+        "pinSha256",
+        "constraintId"
+      ],
+      "properties": {
+        "candidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "pin": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "pinSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "constraintId": {
+          "enum": [
+            "candidate-owned-control",
+            "new-parser-maintenance",
+            "web-runtime-second-stack"
+          ]
+        }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approvalId",
+        "reviewerId",
+        "reviewerRole",
+        "proposalSha256",
+        "decision",
+        "reviewedUtc"
+      ],
+      "properties": {
+        "approvalId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "reviewerId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "reviewerRole": {
+          "const": "independent-universe-reviewer"
+        },
+        "proposalSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "decision": {
+          "const": "approved"
+        },
+        "reviewedUtc": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

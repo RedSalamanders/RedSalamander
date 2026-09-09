@@ -3,7 +3,7 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 30'000ull))
     {
-        const HWND popup = FindWindowW(kPopupClassName.data(), nullptr);
+        const HWND popup = FindCurrentProcessPopupWindow();
         Fail(std::format(L"Phase14_PopupHostLifetimeGuard timed out. stepState={} popup={} shutdownDone={}",
                          state.stepState,
                          popup != nullptr,
@@ -42,7 +42,7 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
         return false;
     }
 
-    const HWND popup = FindWindowW(kPopupClassName.data(), nullptr);
+    const HWND popup = FindCurrentProcessPopupWindow();
 
     if (state.stepState == 1)
     {
@@ -127,7 +127,7 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
             return true;
         }
 
-        if (! FindWindowW(kPopupClassName.data(), nullptr))
+        if (! FindCurrentProcessPopupWindow())
         {
             Fail(L"Phase14_PopupHostLifetimeGuard did not recreate the popup after it was destroyed during ShowWindow.");
             return true;
@@ -161,7 +161,7 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
             return false;
         }
 
-        const HWND popupAfterShutdown = FindWindowW(kPopupClassName.data(), nullptr);
+        const HWND popupAfterShutdown = FindCurrentProcessPopupWindow();
         if (! popupAfterShutdown)
         {
             // Popup already self-closed after host lifetime ended; that's acceptable as long as we didn't crash.
@@ -181,7 +181,7 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
 
     if (state.stepState == 5)
     {
-        if (FindWindowW(kPopupClassName.data(), nullptr))
+        if (FindCurrentProcessPopupWindow())
         {
             return false;
         }

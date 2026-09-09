@@ -8,14 +8,31 @@ $ErrorActionPreference = 'Stop'
 # schema. See Specs/Plans/Done/Operation_Codex_DocumentationCompleteness_2026-06-18.md.
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+Import-Module (Join-Path $repoRoot 'Tools\Modules\Tooling\SpecInformationArchitecture.psm1') -Force -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
 
-function Get-RSText {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Path
-    )
+Describe 'Specification information architecture integration' {
+    It 'keeps every approved post-Terminal Done history blob unchanged' {
+        $history = Test-RSProtectedDoneHistory -RepositoryRoot $repoRoot -BaseCommit '6aecfde8e'
 
-    return Get-Content -LiteralPath (Join-Path $repoRoot $Path) -Raw
+        $history.Available | Should Be $true
+        $history.BaselineCount | Should Be 133
+        $history.IsValid | Should Be $true
+    }
+}
+
+Describe 'Visible native audit contracts' {
+    It 'keeps dependency trees outside the product scan and classifies every current residual' {
+        $audit = Get-RSText -Path 'Tools\Audit-RemainingWin32UiDependencies.ps1'
+
+        $audit | Should Match '\\vcpkg_installed\\'
+        $audit | Should Match 'Common\\DxUi\\DxUi\.cpp'
+        $audit | Should Match 'Tests\\TestSupport\\DirectedSelfTestInputWarning\.h'
+        $audit | Should Match 'Tests\\DxUiTests\\DxUiTests\.WindowHost\.cpp'
+        { & (Join-Path $repoRoot 'Tools\Audit-ComctlReportSurfaces.ps1') | Out-Null } | Should Not Throw
+        { & (Join-Path $repoRoot 'Tools\Audit-VisibleNativeSurfaces.ps1') | Out-Null } | Should Not Throw
+        { & (Join-Path $repoRoot 'Tools\Audit-RemainingWin32UiDependencies.ps1') -FailOnFindings | Out-Null } | Should Not Throw
+    }
 }
 
 Describe 'Keyboard shortcut documentation drift contracts' {
@@ -110,10 +127,11 @@ Describe 'Settings schema vs code key-coverage contracts' {
 }
 
 Describe 'File Operations popup documentation drift contracts' {
-    It 'tracks the split popup cases and completed remediation under Done' {
+    It 'tracks split popup cases in source and domain specs without freezing them in coverage policy' {
         $coverage = Get-RSText -Path 'Specs\Testing\Testing_TestCoverage.md'
         $fileOperations = Get-RSText -Path 'Specs\FileSystem\FileSystem_FileOperations.md'
-        $uxPlan = Get-RSText -Path 'Specs\Plans\WIP\UI_FileOperationsPopupUxRefinementPlan_2026-07-07.md'
+        $caseSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.FileOps.cpp'
+        $uxPlan = Get-RSText -Path 'Specs\Plans\Done\UI_FileOperationsPopupUxRefinementPlan_2026-07-07.md'
         $splitCases = @(
             'cmd_pane_fileops_popup_progress_contracts',
             'cmd_pane_fileops_conflict_metadata_uses_single_provider_roundtrip',
@@ -123,13 +141,17 @@ Describe 'File Operations popup documentation drift contracts' {
         )
 
         foreach ($caseName in $splitCases) {
-            $coverage | Should Match ([Regex]::Escape($caseName))
-            $fileOperations | Should Match ([Regex]::Escape($caseName))
+            $caseSource | Should Match ([Regex]::Escape($caseName))
+            $coverage | Should Not Match ([Regex]::Escape($caseName))
         }
-        $coverage | Should Not Match 'cmd_pane_fileops_conflict_prompt_compacts_actions'
+        $coverage | Should Match 'Get-TestInventory\.ps1'
+        $coverage | Should Match '\.build/SpecInventory/test-inventory\.json'
+        $fileOperations | Should Match 'Get-TestInventory\.ps1'
+        $fileOperations | Should Match 'File Operations selftest'
+        $caseSource | Should Not Match 'cmd_pane_fileops_conflict_prompt_compacts_actions'
         $fileOperations | Should Not Match 'cmd_pane_fileops_conflict_prompt_compacts_actions'
         $uxPlan | Should Match '\[UI_FileOperationsPopupCodeReviewRemediation_2026-07-10\.md\]\(\.\./Done/UI_FileOperationsPopupCodeReviewRemediation_2026-07-10\.md\)'
-        $uxPlan | Should Match 'review-remediation evidence gate is complete'
+        $uxPlan | Should Match 'scoped correctness/architecture review is complete'
         $uxPlan | Should Not Match 'review-remediation evidence gate keep the plan in WIP'
     }
 }
@@ -149,16 +171,79 @@ Describe 'Historical audit governance contracts' {
         }
     }
 
-    It 'marks the legacy root plans index historical and routes its remaining decisions' {
-        $plans = Get-RSText -Path 'plans\README.md'
+    It 'records that the legacy root plans queue was archived to Done and deleted' {
+        Test-Path -LiteralPath (Join-Path $repoRoot 'plans') | Should Be $false
 
-        $plans | Should Match 'Historical snapshot — not a live work queue'
-        $plans | Should Match '012-format-autocommit-race[\s\S]{0,300}separate live owner indexed by `Specs/Plans/WIP/README\.md`'
-        $plans | Should Match '013-undo-file-operations-spike[\s\S]{0,300}routed to WhimFiles G2'
+        $index = Get-RSText -Path 'Specs\Plans\Done\AdvisorPlan_Index_2026-06-11.md'
+        $index | Should Match 'No remaining action'
+        $index | Should Match 'Frozen history: do not resume'
+        $index | Should Match 'AdvisorPlan_012-format-autocommit-race_2026-06-11\.md'
+        $index | Should Match 'AdvisorPlan_013-undo-file-operations-spike_2026-06-11\.md'
+        $index | Should Match 'RETIRED \(archived 2026-08-25; no remaining action; live owner is I9\)'
+        $index | Should Match 'routed to WhimFiles G2'
+        $index | Should Not Match '(?m)^\s*[-*]\s+\[ \]'
+
+        Get-ChildItem -LiteralPath (Join-Path $repoRoot 'Specs\Plans\Done') -File -Filter 'AdvisorPlan_*.md' | ForEach-Object {
+            $archived = Get-Content -LiteralPath $_.FullName -Raw
+            $archived | Should Match 'No remaining action'
+            $archived | Should Match 'Frozen history: do not resume'
+            $archived | Should Not Match '(?m)^\s*[-*]\s+\[ \]'
+        }
 
         $wipIndex = Get-RSText -Path 'Specs\Plans\WIP\README.md'
-        $wipIndex | Should Match 'plans/012-format-autocommit-race\.md'
-        $wipIndex | Should Match 'Observatory deliberately coordinated but did not absorb'
+        $wipIndex | Should Match 'CI_FormatAutocommitRace_2026-08-25\.md'
+        $wipIndex | Should Match 'CI_FormatAutocommitRace_2026-08-04\.md'
+        $wipIndex | Should Match 'AdvisorPlan_012-format-autocommit-race_2026-06-11\.md'
+        $wipIndex | Should Match 'only live owner'
+        $wipIndex | Should Match '(?i)do not recreate `plans/`'
+        $wipIndex | Should Match 'Operation_FolderView_WarpDrive_RemainingCloseout_2026-08-25\.md'
+        $wipIndex | Should Match 'Product_WhimFilesRemainingDecisions_2026-08-25\.md'
+        $wipIndex | Should Not Match 'path-preserving shim'
+        $wipIndex | Should Not Match 'DxUi_Uia_ContinuationBaton_2026-06-29\.md'
+        $wipIndex | Should Not Match 'FolderView_WarpDrive_ContinuationBaton_2026-06-29\.md'
+
+        Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\Plans\WIP\CI_FormatAutocommitRace_2026-08-04.md') | Should Be $false
+        Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\Plans\WIP\Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md') | Should Be $false
+        Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\Plans\WIP\Product_WhimFilesGapAnalysisAndImprovementPlan_2026-07-08.md') | Should Be $false
+        Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\Plans\WIP\DxUi_Uia_ContinuationBaton_2026-06-29.md') | Should Be $false
+        Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\Plans\WIP\FolderView_WarpDrive_ContinuationBaton_2026-06-29.md') | Should Be $false
+
+        @(
+            'Specs\Plans\Done\CI_FormatAutocommitRace_2026-08-04.md',
+            'Specs\Plans\Done\Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md',
+            'Specs\Plans\Done\Product_WhimFilesGapAnalysisAndImprovementPlan_2026-07-08.md',
+            'Specs\Plans\Done\DxUi_Uia_ContinuationBaton_2026-06-29.md',
+            'Specs\Plans\Done\FolderView_WarpDrive_ContinuationBaton_2026-06-29.md'
+        ) | ForEach-Object {
+            $archived = Get-Content -LiteralPath (Join-Path $repoRoot $_) -Raw
+            $archived | Should Match 'No remaining action'
+            $archived | Should Match 'Frozen history: do not resume'
+            $archived | Should Not Match '(?m)^\s*[-*]\s+\[ \]'
+        }
+    }
+
+    It 'resolves reviewed Markdown links and backticked repository paths' {
+        $reviewReadmePath = Join-Path $repoRoot 'Specs\Reviews\README.md'
+        $reviewReadme = Get-Content -LiteralPath $reviewReadmePath -Raw
+        $references = @()
+        $references += [regex]::Matches($reviewReadme, '\]\((?<path>[^)#]+\.md)(?:#[^)]+)?\)') |
+            ForEach-Object { $_.Groups['path'].Value }
+        $references += [regex]::Matches($reviewReadme, '`(?<path>Specs/[A-Za-z0-9_./-]+\.md)`') |
+            ForEach-Object { $_.Groups['path'].Value }
+        $references.Count | Should BeGreaterThan 0
+
+        foreach ($reference in $references | Select-Object -Unique) {
+            $normalized = $reference.Replace('/', [IO.Path]::DirectorySeparatorChar)
+            $candidate = if ($normalized.StartsWith("Specs$([IO.Path]::DirectorySeparatorChar)")) {
+                Join-Path $repoRoot $normalized
+            } else {
+                Join-Path (Split-Path -Parent $reviewReadmePath) $normalized
+            }
+            (Test-Path -LiteralPath $candidate -PathType Leaf) | Should Be $true
+        }
+
+        (Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\Plans\WIP\Operation_Curl_Short2xxStagedUploadProof_2026-07-21.md')) |
+            Should Be $false
     }
 
     It 'keeps the completed Observatory ledger internally consistent' {

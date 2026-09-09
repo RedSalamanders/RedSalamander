@@ -20,6 +20,12 @@ enum ViewerOpenFlags : uint32_t
 
 struct ViewerOpenContext
 {
+    // Current support is source-tree/release lockstep: this full record is the
+    // required prefix. sizeBytes is not a mixed-release compatibility promise.
+    // Caller-provided byte size. Compatible additions are optional tail fields;
+    // incompatible changes require a new interface IID/method.
+    uint32_t sizeBytes;
+
     // Lifetime/ownership:
     // - All pointer fields (including `focusedPath`, `selectionPaths`/elements, and `otherFiles`/elements) are caller-owned.
     // - Callers MAY free/modify these buffers immediately after Open() returns.
@@ -58,9 +64,10 @@ struct ViewerOpenContext
 
 struct ViewerTheme
 {
-    // ABI version for forward compatibility.
-    // Current version: 4
-    uint32_t version;
+    // Current support is source-tree/release lockstep: this full record is the
+    // required prefix. sizeBytes is not a mixed-release compatibility promise.
+    // Caller-provided byte size. Consumers ignore unknown tail fields.
+    uint32_t sizeBytes;
 
     // DPI of the host window at the time of notification.
     unsigned int dpi;

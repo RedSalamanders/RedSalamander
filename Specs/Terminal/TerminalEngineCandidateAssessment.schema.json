@@ -1,0 +1,791 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:red-salamander:schema:terminal-engine-candidate-assessment:v1",
+  "title": "RedSalamander TerminalEngine reviewed raw candidate assessment v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "version",
+    "frozenUtc",
+    "authorId",
+    "candidateUniverseSha256",
+    "scoreAnchorsSha256",
+    "candidates"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "red-salamander-terminal-engine-candidate-assessment"
+    },
+    "version": {
+      "const": 1
+    },
+    "frozenUtc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+    },
+    "authorId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "candidateUniverseSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "scoreAnchorsSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "candidates": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/candidate"
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "gitObjectId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "seedCandidateId",
+        "pin",
+        "pinSha256",
+        "sourceArchiveSha256",
+        "rawLedger",
+        "ledgerSha256",
+        "glueAuthorIds",
+        "approvals"
+      ],
+      "properties": {
+        "candidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "seedCandidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "pin": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "pinSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sourceArchiveSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "rawLedger": {
+          "$ref": "#/$defs/rawLedger"
+        },
+        "ledgerSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "glueAuthorIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "approvals": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/approval"
+          }
+        }
+      }
+    },
+    "rawLedger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "patch",
+        "boundary",
+        "functional",
+        "resources",
+        "build",
+        "kitty",
+        "integration",
+        "effects",
+        "maintenance",
+        "legal",
+        "testability"
+      ],
+      "properties": {
+        "patch": {
+          "$ref": "#/$defs/patch"
+        },
+        "boundary": {
+          "$ref": "#/$defs/boundary"
+        },
+        "functional": {
+          "$ref": "#/$defs/functional"
+        },
+        "resources": {
+          "$ref": "#/$defs/resources"
+        },
+        "build": {
+          "$ref": "#/$defs/build"
+        },
+        "kitty": {
+          "$ref": "#/$defs/kitty"
+        },
+        "integration": {
+          "$ref": "#/$defs/integration"
+        },
+        "effects": {
+          "$ref": "#/$defs/effects"
+        },
+        "maintenance": {
+          "$ref": "#/$defs/maintenance"
+        },
+        "legal": {
+          "$ref": "#/$defs/legal"
+        },
+        "testability": {
+          "$ref": "#/$defs/testability"
+        }
+      }
+    },
+    "patch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "upstreamTree",
+        "patchRelativePath",
+        "patchSha256",
+        "patchSizeBytes",
+        "resultTree",
+        "changedMaintainedLines",
+        "changedMaintainedFiles",
+        "binaryFiles",
+        "logicalConcerns",
+        "concernMappingRelativePath",
+        "concernMappingSha256",
+        "collectionDescriptorRelativePath",
+        "collectionDescriptorSha256",
+        "buildKind",
+        "maintainedBuildWrapper"
+      ],
+      "properties": {
+        "upstreamTree": {
+          "$ref": "#/$defs/gitObjectId"
+        },
+        "patchRelativePath": {
+          "type": "string",
+          "pattern": "^External/TerminalEngine/CandidatePatches/[a-z0-9][a-z0-9._-]{0,63}\\.patch$",
+          "maxLength": 256
+        },
+        "patchSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "patchSizeBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "resultTree": {
+          "$ref": "#/$defs/gitObjectId"
+        },
+        "changedMaintainedLines": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "changedMaintainedFiles": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "binaryFiles": {
+          "const": 0
+        },
+        "logicalConcerns": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "abi-snapshot-identity",
+              "build-reproducibility-packaging",
+              "kitty-image-placement-model",
+              "parser-side-effect-bounds",
+              "renderer-ui",
+              "terminal-grid-history-model",
+              "teardown-concurrency",
+              "typed-resource-accounting-admission"
+            ]
+          }
+        },
+        "concernMappingRelativePath": {
+          "type": "string",
+          "pattern": "^External/TerminalEngine/CandidatePatches/[a-z0-9][a-z0-9._-]{0,63}\\.concerns\\.json$",
+          "maxLength": 256
+        },
+        "concernMappingSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "collectionDescriptorRelativePath": {
+          "const": "red-salamander/collection-descriptor.v1.json"
+        },
+        "collectionDescriptorSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "buildKind": {
+          "enum": [
+            "provider-generic-cmake-msvc-v1",
+            "provider-generic-zig-msvc-v1",
+            "provider-generic-cargo-msvc-v1",
+            "candidate-wrapper-v1"
+          ]
+        },
+        "maintainedBuildWrapper": {
+          "type": "boolean"
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "boundaryKind",
+        "crossedAbiElements",
+        "generatedIdentityComplete",
+        "immutableSnapshotTransaction",
+        "borrowedLifetimeExplicit",
+        "ownedCopyAdapter",
+        "maintainedPublicSurfaceConcerns",
+        "maintainedPrivateTypePatch",
+        "recurringInternalAdaptation",
+        "extensiveMaintainedGlue",
+        "embeddable"
+      ],
+      "properties": {
+        "boundaryKind": {
+          "enum": [
+            "versioned-stable-c-abi",
+            "public-c-abi",
+            "fully-source-vendored",
+            "source-boundary",
+            "undocumented"
+          ]
+        },
+        "crossedAbiElements": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "generatedIdentityComplete": {
+          "type": "boolean"
+        },
+        "immutableSnapshotTransaction": {
+          "type": "boolean"
+        },
+        "borrowedLifetimeExplicit": {
+          "type": "boolean"
+        },
+        "ownedCopyAdapter": {
+          "enum": [
+            "none",
+            "thin",
+            "conservative",
+            "broad"
+          ]
+        },
+        "maintainedPublicSurfaceConcerns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8
+        },
+        "maintainedPrivateTypePatch": {
+          "type": "boolean"
+        },
+        "recurringInternalAdaptation": {
+          "type": "boolean"
+        },
+        "extensiveMaintainedGlue": {
+          "type": "boolean"
+        },
+        "embeddable": {
+          "type": "boolean"
+        }
+      }
+    },
+    "functional": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "upstreamAssertionCount",
+        "compatibilityDifferences",
+        "requiredNormalizationBehaviors"
+      ],
+      "properties": {
+        "upstreamAssertionCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "compatibilityDifferences": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "requiredNormalizationBehaviors": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allLimitsTypedAtOwningSites",
+        "allHardLimitsPrebounded",
+        "borrowedLifetimesExplicit",
+        "callbackReentrancyExplicit",
+        "conservativeChargeCount",
+        "maintainedResourceConcerns",
+        "nonAdversarialTransientUsesEnclosingCap",
+        "measuredCapacityReduced",
+        "mostAllocationsPrebounded",
+        "coarseAllocatorCaps",
+        "requiresSubstantialDefensiveSerialization",
+        "anyMandatoryAllocationUnboundedBeforeWork",
+        "lifetimeTeardownSafetyProved"
+      ],
+      "properties": {
+        "allLimitsTypedAtOwningSites": {
+          "type": "boolean"
+        },
+        "allHardLimitsPrebounded": {
+          "type": "boolean"
+        },
+        "borrowedLifetimesExplicit": {
+          "type": "boolean"
+        },
+        "callbackReentrancyExplicit": {
+          "type": "boolean"
+        },
+        "conservativeChargeCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "maintainedResourceConcerns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8
+        },
+        "nonAdversarialTransientUsesEnclosingCap": {
+          "type": "boolean"
+        },
+        "measuredCapacityReduced": {
+          "type": "boolean"
+        },
+        "mostAllocationsPrebounded": {
+          "type": "boolean"
+        },
+        "coarseAllocatorCaps": {
+          "type": "boolean"
+        },
+        "requiresSubstantialDefensiveSerialization": {
+          "type": "boolean"
+        },
+        "anyMandatoryAllocationUnboundedBeforeWork": {
+          "type": "boolean"
+        },
+        "lifetimeTeardownSafetyProved": {
+          "type": "boolean"
+        }
+      }
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repositoryMsvcOnly",
+        "additionalToolchainFamilies",
+        "exactRawReproducible",
+        "maintainedBuildWrapper",
+        "offline",
+        "x64",
+        "arm64",
+        "x64AsanConsumer"
+      ],
+      "properties": {
+        "repositoryMsvcOnly": {
+          "type": "boolean"
+        },
+        "additionalToolchainFamilies": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8
+        },
+        "exactRawReproducible": {
+          "type": "boolean"
+        },
+        "maintainedBuildWrapper": {
+          "type": "boolean"
+        },
+        "offline": {
+          "type": "boolean"
+        },
+        "x64": {
+          "type": "boolean"
+        },
+        "arm64": {
+          "type": "boolean"
+        },
+        "x64AsanConsumer": {
+          "type": "boolean"
+        }
+      }
+    },
+    "kitty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "publicImmutableRepresentation",
+        "maintainedPreallocationOrExposureConcerns",
+        "conservativeCopies",
+        "embedderPngCallbacks",
+        "substantialAuthoritativeParserWork",
+        "preDecodeTypedAccounting",
+        "requiredStaticStateRepresentable",
+        "basicDirectImagesOnly"
+      ],
+      "properties": {
+        "publicImmutableRepresentation": {
+          "type": "boolean"
+        },
+        "maintainedPreallocationOrExposureConcerns": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8
+        },
+        "conservativeCopies": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "embedderPngCallbacks": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8
+        },
+        "substantialAuthoritativeParserWork": {
+          "type": "boolean"
+        },
+        "preDecodeTypedAccounting": {
+          "type": "boolean"
+        },
+        "requiredStaticStateRepresentable": {
+          "type": "boolean"
+        },
+        "basicDirectImagesOnly": {
+          "type": "boolean"
+        }
+      }
+    },
+    "integration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "modelKind",
+        "candidateOwnsUi",
+        "rendererReadyState",
+        "repositoryRuntime",
+        "nonSystemRuntimeDependencies",
+        "foreignEventLoop",
+        "substantialShapingAccessibilityAdaptation",
+        "candidateUiAssumptionsRemoved"
+      ],
+      "properties": {
+        "modelKind": {
+          "enum": [
+            "native-c-cpp",
+            "source-static-foreign",
+            "private-runtime-foreign",
+            "foreign-control"
+          ]
+        },
+        "candidateOwnsUi": {
+          "type": "boolean"
+        },
+        "rendererReadyState": {
+          "type": "boolean"
+        },
+        "repositoryRuntime": {
+          "type": "boolean"
+        },
+        "nonSystemRuntimeDependencies": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "foreignEventLoop": {
+          "type": "boolean"
+        },
+        "substantialShapingAccessibilityAdaptation": {
+          "type": "boolean"
+        },
+        "candidateUiAssumptionsRemoved": {
+          "type": "boolean"
+        }
+      }
+    },
+    "effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "typedPromptInputOutput",
+        "pwdTitleHyperlink",
+        "writeResponseOrdering",
+        "authenticatedSideChannelComposes",
+        "idleTruthSideChannelOnly",
+        "boundedCopiedCallbacks",
+        "optionalSemanticClassesAbsent",
+        "titlePwdOnly",
+        "requiresTrustingTerminalOutput",
+        "requiresShellPolicyChange"
+      ],
+      "properties": {
+        "typedPromptInputOutput": {
+          "type": "boolean"
+        },
+        "pwdTitleHyperlink": {
+          "type": "boolean"
+        },
+        "writeResponseOrdering": {
+          "type": "boolean"
+        },
+        "authenticatedSideChannelComposes": {
+          "type": "boolean"
+        },
+        "idleTruthSideChannelOnly": {
+          "type": "boolean"
+        },
+        "boundedCopiedCallbacks": {
+          "type": "boolean"
+        },
+        "optionalSemanticClassesAbsent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "titlePwdOnly": {
+          "type": "boolean"
+        },
+        "requiresTrustingTerminalOutput": {
+          "type": "boolean"
+        },
+        "requiresShellPolicyChange": {
+          "type": "boolean"
+        }
+      }
+    },
+    "maintenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "initialAdapterDays",
+        "adapterClass",
+        "declaredInitialPatchDays",
+        "initialPatchDays",
+        "perUpgradeDays",
+        "annualSecurityResponseDays",
+        "releaseNoticeDays",
+        "ownerDays",
+        "patchTouchesParserDecoderAccounting"
+      ],
+      "properties": {
+        "initialAdapterDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "adapterClass": {
+          "enum": [
+            "same-language-or-existing-c-abi",
+            "new-cross-language-ffi"
+          ]
+        },
+        "declaredInitialPatchDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "initialPatchDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "perUpgradeDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "annualSecurityResponseDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "releaseNoticeDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "ownerDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "patchTouchesParserDecoderAccounting": {
+          "type": "boolean"
+        }
+      }
+    },
+    "legal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "distributableClosureComplete",
+        "permissiveClosure",
+        "automatedNotices",
+        "verifiedProvenance",
+        "manualNoticeWork",
+        "copyleftReviewComplexity"
+      ],
+      "properties": {
+        "distributableClosureComplete": {
+          "type": "boolean"
+        },
+        "permissiveClosure": {
+          "type": "boolean"
+        },
+        "automatedNotices": {
+          "type": "boolean"
+        },
+        "verifiedProvenance": {
+          "type": "boolean"
+        },
+        "manualNoticeWork": {
+          "enum": [
+            "none",
+            "bounded",
+            "recurring",
+            "unresolved"
+          ]
+        },
+        "copyleftReviewComplexity": {
+          "type": "boolean"
+        }
+      }
+    },
+    "testability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "publicDeterministicFuzzSeam",
+        "deterministicFuzzSeam",
+        "deterministicParserSeam",
+        "deterministicUnitSeam",
+        "upstreamAssertionCount",
+        "windowsExecution",
+        "allocationFailureInjection",
+        "diagnostics"
+      ],
+      "properties": {
+        "publicDeterministicFuzzSeam": {
+          "type": "boolean"
+        },
+        "deterministicFuzzSeam": {
+          "type": "boolean"
+        },
+        "deterministicParserSeam": {
+          "type": "boolean"
+        },
+        "deterministicUnitSeam": {
+          "type": "boolean"
+        },
+        "upstreamAssertionCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "windowsExecution": {
+          "type": "boolean"
+        },
+        "allocationFailureInjection": {
+          "type": "boolean"
+        },
+        "diagnostics": {
+          "enum": [
+            "bounded-structured",
+            "actionable",
+            "harness-supplied",
+            "integration-only",
+            "none"
+          ]
+        }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approvalId",
+        "reviewerId",
+        "reviewerRole",
+        "ledgerSha256",
+        "decision",
+        "reviewedUtc"
+      ],
+      "properties": {
+        "approvalId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "reviewerId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "reviewerRole": {
+          "const": "independent-candidate-assessor"
+        },
+        "ledgerSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "decision": {
+          "const": "approved"
+        },
+        "reviewedUtc": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+        }
+      }
+    }
+  }
+}

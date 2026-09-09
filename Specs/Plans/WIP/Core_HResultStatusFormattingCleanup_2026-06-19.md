@@ -1,5 +1,8 @@
 # Core HRESULT/Status Formatting Cleanup
 
+> **FILE OPERATIONS COORDINATION (2026-08-21).** `WI-1` must preserve the typed publication/verification/source-disposition rows and link outcomes owned by the File Operations contract. Sequence overlapping Issues-pane edits.
+
+
 Last updated: 2026-07-02 (folder review)
 
 Status: WIP — verified 2026-07-02: zero implementation work has landed since creation; the audit snapshot

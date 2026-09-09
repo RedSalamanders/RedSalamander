@@ -134,12 +134,16 @@
     <ClCompile Include="FileSystemS3.S3.cpp" />
     <ClCompile Include="FileSystemS3.S3Table.cpp" />
     <ClCompile Include="FileSystemS3.Shared.cpp" />
+    <ClCompile Include="FileSystemS3.SelfTest.FakeS3.cpp" />
     <ClInclude Include="FileSystemS3.Internal.h" />
     <ClInclude Include="FileSystemS3.h" />
     <ClInclude Include="FileSystemS3Resources.h" />
     <ResourceCompile Include="FileSystemS3Resources.rc" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\Common\Common\Common.vcxproj">
+      <Project>{87fb9a11-83cc-44d8-9fec-9aa9d72667ef}</Project>
+    </ProjectReference>
     <ProjectReference Include="Lang\ja-JP\FileSystemS3-ja-JP.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
       <Project>{fa2125e0-aaf0-54d4-bc1a-e53b33ac8739}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>

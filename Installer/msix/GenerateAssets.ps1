@@ -4,13 +4,30 @@
 .DESCRIPTION
     Resizes `RedSalamander\res\logo.png` into the set of PNG assets referenced by
     `Installer\msix\Package.appxmanifest` (Square44x44, Square150x150, Wide310x150,
-    Square310x310, StoreLogo).
+    Square310x310, StoreLogo). The configuration and platform parameters are lock
+    diagnostics; every packaging scope still serializes repository-wide.
+.PARAMETER Configuration
+    Build configuration associated with the packaging operation. Default: Release.
+.PARAMETER Platform
+    Target platform associated with the packaging operation. Default: x64.
 .EXAMPLE
-    .\Installer\msix\GenerateAssets.ps1
+    .\Installer\msix\GenerateAssets.ps1 -Configuration Release -Platform x64
+.OUTPUTS
+    None. Rewrites the five tracked PNG assets beneath Installer\msix\Assets.
+.NOTES
+    Mutates shared Installer inputs while holding the repository-wide packaging
+    coordination lock. Interrupted packaging fails closed until a reviewer restores
+    Installer inputs and .build\AppPackages and removes the reported marker.
 #>
 
 [CmdletBinding()]
-param()
+param(
+    [ValidateSet('Release')]
+    [string]$Configuration = 'Release',
+
+    [ValidateSet('x64', 'ARM64')]
+    [string]$Platform = 'x64'
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -19,10 +36,46 @@ Add-Type -AssemblyName System.Drawing
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\\..")).Path
 $sourceLogo = Join-Path $repoRoot "RedSalamander\\res\\logo.png"
 $assetsDir = Join-Path $PSScriptRoot "Assets"
+$artifactOperationLockModule = Join-Path $repoRoot "Tools\Modules\Build\ArtifactOperationLock.psm1"
+
+if (-not (Test-Path $artifactOperationLockModule)) {
+    throw "Artifact-operation lock module not found: $artifactOperationLockModule"
+}
 
 if (-not (Test-Path $sourceLogo)) {
     throw "Source logo not found: $sourceLogo"
 }
+
+Import-Module $artifactOperationLockModule -Force -ErrorAction Stop
+$packagingScope = @{
+    kind = 'packaging'
+    target = 'msix-assets'
+    configuration = $Configuration
+    platform = $Platform
+    coordination = 'packaging'
+}
+$packagingLock = $null
+try {
+    $packagingLock = Enter-RSArtifactOperationLock `
+        -RepoRoot $repoRoot `
+        -Operation "standalone MSIX asset generation $Configuration|$Platform" `
+        -Scope $packagingScope
+    if ($packagingLock.WasAbandoned) {
+        [void](Set-RSArtifactOperationContaminated `
+                -RepoRoot $repoRoot `
+                -Reason 'The previous packaging owner exited while mutating shared installer inputs or AppPackages outputs.' `
+                -AbandonedOwner $packagingLock.AbandonedOwner `
+                -Scope $packagingScope)
+    }
+    $packagingContamination = Read-RSArtifactOperationContamination `
+        -RepoRoot $repoRoot `
+        -Scope $packagingScope
+    if ($null -ne $packagingContamination) {
+        $markerPath = Get-RSArtifactContaminationMarkerPath `
+            -RepoRoot $repoRoot `
+            -Scope $packagingScope
+        throw "Shared packaging state may be incomplete after an interrupted operation. Review and restore Installer inputs and .build\AppPackages, then remove the marker explicitly. Marker: $markerPath"
+    }
 
 New-Item -ItemType Directory -Path $assetsDir -Force | Out-Null
 
@@ -93,4 +146,8 @@ try {
 }
 finally {
     $sourceImage.Dispose()
+}
+}
+finally {
+    Exit-RSArtifactOperationLock -Lock $packagingLock
 }

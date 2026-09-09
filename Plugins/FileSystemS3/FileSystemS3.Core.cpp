@@ -1,5 +1,6 @@
 #include "FileSystemS3.Internal.h"
 #include "FileSystemS3Resources.h"
+#include "UriEncoding.h"
 
 namespace FsS3 = FileSystemS3Internal;
 
@@ -7,6 +8,35 @@ extern HINSTANCE g_hInstance;
 
 namespace
 {
+[[nodiscard]] std::string BuildCapabilityRootId(FileSystemS3Mode mode, std::wstring_view path) noexcept
+{
+    const std::wstring normalized = FsS3::NormalizePluginPath(path);
+    const std::vector<std::wstring_view> segments = FsS3::SplitPathSegments(normalized);
+    if (segments.empty())
+    {
+        return mode == FileSystemS3Mode::S3 ? "s3-account-root" : "s3-table-account-root";
+    }
+
+    std::string encoded;
+    if (! Common::Uri::TryPercentEncodeUtf8(segments.front(), Common::Uri::SlashPolicy::Encode, encoded) || encoded.empty())
+    {
+        return {};
+    }
+    return std::format("{}:{}", mode == FileSystemS3Mode::S3 ? "s3-bucket" : "s3-table-bucket", encoded);
+}
+
+[[nodiscard]] std::string MaterializeCapabilityRoot(std::string_view capabilities, std::string_view placeholder, std::string_view rootId)
+{
+    std::string result(capabilities);
+    const size_t offset = result.find(placeholder);
+    if (offset == std::string::npos)
+    {
+        return {};
+    }
+    result.replace(offset, placeholder.size(), rootId);
+    return result;
+}
+
 [[nodiscard]] const wchar_t* LocalizedPluginName(FileSystemS3Mode mode) noexcept
 {
     switch (mode)
@@ -109,6 +139,20 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::QueryInterface(REFIID riid, void** ppvOb
         return S_OK;
     }
 
+    if (riid == __uuidof(IFileSystemPathCapabilities2))
+    {
+        *ppvObject = static_cast<IFileSystemPathCapabilities2*>(static_cast<IFileSystem*>(this));
+        AddRef();
+        return S_OK;
+    }
+
+    if (riid == __uuidof(IFileSystemRouteCapabilities))
+    {
+        *ppvObject = static_cast<IFileSystemRouteCapabilities*>(static_cast<FileSystemRouteCapabilitiesBase*>(this));
+        AddRef();
+        return S_OK;
+    }
+
     if (riid == __uuidof(IFileSystemIO))
     {
         *ppvObject = static_cast<IFileSystemIO*>(this);
@@ -133,6 +177,13 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::QueryInterface(REFIID riid, void** ppvOb
     if (riid == __uuidof(IFileSystemAtomicWriter))
     {
         *ppvObject = static_cast<IFileSystemAtomicWriter*>(this);
+        AddRef();
+        return S_OK;
+    }
+
+    if (riid == __uuidof(IFileSystemIdentityDelete))
+    {
+        *ppvObject = static_cast<IFileSystemIdentityDelete*>(this);
         AddRef();
         return S_OK;
     }
@@ -506,14 +557,103 @@ const char* FileSystemS3::StaticConfigurationSchema(FileSystemS3Mode mode) noexc
     return (mode == FileSystemS3Mode::S3) ? kSchemaJsonS3 : kSchemaJsonS3Table;
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemS3::GetCapabilities(const char** jsonUtf8) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemS3::GetPathCapabilities(const wchar_t* path,
+                                                             FileSystemOperation operation,
+                                                             const char** jsonUtf8) noexcept
 {
     if (jsonUtf8 == nullptr)
     {
         return E_POINTER;
     }
+    *jsonUtf8 = nullptr;
+    if (path == nullptr || path[0] == L'\0' || operation < FILESYSTEM_COPY || operation > FILESYSTEM_CREATE_DIRECTORY)
+    {
+        return E_INVALIDARG;
+    }
 
-    *jsonUtf8 = (_mode == FileSystemS3Mode::S3) ? kCapabilitiesJsonS3 : kCapabilitiesJsonS3Table;
+    const std::string rootId = BuildCapabilityRootId(_mode, path);
+    if (rootId.empty())
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+
+    const std::string_view templateJson = (_mode == FileSystemS3Mode::S3) ? std::string_view(kCapabilitiesJsonS3) : std::string_view(kCapabilitiesJsonS3Table);
+    const std::string_view placeholder  = (_mode == FileSystemS3Mode::S3) ? std::string_view("configured-s3-root")
+                                                                         : std::string_view("configured-s3-table-root");
+    std::lock_guard lock(_stateMutex);
+    _capabilitiesJson = MaterializeCapabilityRoot(templateJson, placeholder, rootId);
+    if (_mode == FileSystemS3Mode::S3 && ! _capabilitiesJson.empty())
+    {
+        _capabilitiesJson = MaterializeCapabilityRoot(
+            _capabilitiesJson, "configured-s3-watchdog-ms", std::to_string(FsS3::S3ProviderWatchdogTimeoutMs(_settings.connectTimeoutMs, _settings.requestTimeoutMs)));
+    }
+    if (_capabilitiesJson.empty())
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+    *jsonUtf8 = _capabilitiesJson.c_str();
+    return S_OK;
+}
+
+HRESULT FileSystemS3::BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                                      FileSystemOperation operation,
+                                                      FileSystemRouteDescriptor& descriptor) noexcept
+{
+    static_cast<void>(operation);
+    if (path == nullptr || path[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    const std::string rootId = BuildCapabilityRootId(_mode, path);
+    const std::wstring rootIdWide = Common::Strings::Utf16FromUtf8StrictOrEmpty(rootId);
+    if (rootIdWide.empty())
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+
+    const bool standardS3 = _mode == FileSystemS3Mode::S3;
+    descriptor = {};
+    descriptor.providerId = _metaData.id != nullptr ? _metaData.id : L"";
+    descriptor.pathProfileId = standardS3 ? L"s3-flat-prefix" : L"s3-table-read-only";
+    descriptor.rootId = rootIdWide;
+    descriptor.availability = FILESYSTEM_ROUTE_AVAILABLE;
+    descriptor.cancellationRoute = standardS3 ? FILESYSTEM_CANCELLATION_PROVIDER_WATCHDOG : FILESYSTEM_CANCELLATION_UNCONTAINED;
+    descriptor.namespaceKind = FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER;
+    descriptor.componentComparison = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
+    descriptor.caseOnlyRename = standardS3 ? FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED : FILESYSTEM_ROUTE_CASE_ONLY_NOT_APPLICABLE;
+    descriptor.copyMoveMaxConcurrency = 1u;
+    descriptor.deleteMaxConcurrency = standardS3 ? 8u : 1u;
+    descriptor.deleteRecycleBinMaxConcurrency = 1u;
+    descriptor.maxComponentUtf16 = 1024u;
+    descriptor.propertiesOperation = true;
+    descriptor.readOperation = true;
+    descriptor.exportCopyAll = true;
+    if (standardS3)
+    {
+        descriptor.copyOperation = true;
+        descriptor.moveOperation = true;
+        descriptor.nativeMoveOperation = true;
+        descriptor.deleteOperation = true;
+        descriptor.createDirectoryOperation = true;
+        descriptor.writeOperation = true;
+        descriptor.committedSize = true;
+        descriptor.exportMoveAll = true;
+        descriptor.importCopyAll = true;
+        descriptor.importMoveAll = true;
+        // R0f-S3: every request under a task polls the operation control from the CRT callbacks and
+        // is bounded by the provider-owned watchdog (connect + stall monitor, one bounded retry).
+        descriptor.cancellationDeadline = true;
+        uint32_t connectTimeoutMs       = 0u;
+        uint32_t requestTimeoutMs       = 0u;
+        {
+            std::lock_guard lock(_stateMutex);
+            connectTimeoutMs = _settings.connectTimeoutMs;
+            requestTimeoutMs = _settings.requestTimeoutMs;
+        }
+        descriptor.providerWatchdogTimeoutMs = FsS3::S3ProviderWatchdogTimeoutMs(connectTimeoutMs, requestTimeoutMs);
+    }
+    descriptor.proofFlags = FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST; // R3-2: full-object CRC-64/NVME of the published object
     return S_OK;
 }
 

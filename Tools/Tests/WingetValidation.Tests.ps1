@@ -2,9 +2,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$testRunPlanScript = Join-Path $repoRoot 'Tools\TestRunPlan.ps1'
+$testRunPlanModule = Join-Path $repoRoot 'Tools\Modules\Testing\TestRunPlan.psm1'
 $helperScript = Join-Path $repoRoot 'Installer\winget\WingetValidation.ps1'
-. $testRunPlanScript
+Import-Module $testRunPlanModule -Force -ErrorAction Stop
 
 Describe 'Winget validation helper' {
     BeforeAll {
@@ -128,11 +128,13 @@ Describe 'Winget release workflow' {
     BeforeAll {
         $workflowPath = Join-Path $repoRoot '.github\workflows\winget-release.yml'
         $workflow = Get-Content -Path $workflowPath -Raw
+        $publicationModulePath = Join-Path $repoRoot 'Tools\Modules\Packaging\WingetPrPublication.psm1'
+        $publicationModule = Get-Content -LiteralPath $publicationModulePath -Raw
     }
 
     It 'enables local manifest installs before testing the generated manifest' {
         $enableIndex = $workflow.IndexOf('winget settings --enable LocalManifestFiles')
-        $installMatch = [regex]::Match($workflow, '(?ms)winget install\s+`\r?\n\s+--manifest "winget-manifest"')
+        $installMatch = [regex]::Match($workflow, '(?ms)winget install\s+`\r?\n\s+--manifest \$env:WINGET_MANIFEST_ROOT')
 
         if ($enableIndex -lt 0) {
             throw 'winget-release.yml must enable LocalManifestFiles before winget install --manifest.'
@@ -145,19 +147,68 @@ Describe 'Winget release workflow' {
         ($enableIndex -lt $installMatch.Index) | Should Be $true
     }
 
+    It 'uses one guarded manifest root and exact versioned portable inputs end to end' {
+        $workflow | Should Match '(?m)^\s+WINGET_MANIFEST_ROOT: \.build\\AppPackages\\winget-manifest\r?$'
+        $workflow | Should Match '-OutputDir \$env:WINGET_MANIFEST_ROOT'
+        $workflow | Should Match 'Get-ChildItem \$env:WINGET_MANIFEST_ROOT'
+        $workflow | Should Match 'winget validate --manifest \$env:WINGET_MANIFEST_ROOT'
+        $workflow | Should Match 'winget install[\s\S]+?--manifest \$env:WINGET_MANIFEST_ROOT'
+        $workflow | Should Match 'Join-Path \$env:GITHUB_WORKSPACE \$env:WINGET_MANIFEST_ROOT'
+        $workflow | Should Match '(?s)WINGETCREATE_PATH submit.+?\$env:WINGET_MANIFEST_ROOT'
+        $workflow | Should Match '\$outFile = \$assetName'
+        $workflow | Should Match 'RedSalamander-\$version-x64-Portable\.zip'
+        $workflow | Should Match 'RedSalamander-\$version-ARM64-Portable\.zip'
+        $workflow | Should Not Match 'RedSalamander-(x64|ARM64)\.zip'
+
+        $buildScript = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
+        $buildScript | Should Match 'RedSalamander-\$packageVersion-x64-Portable\.zip'
+        $buildScript | Should Match 'RedSalamander-\$packageVersion-ARM64-Portable\.zip'
+        $buildScript | Should Not Match 'Get-ChildItem.+?RedSalamander-\*-x64-Portable\.zip'
+    }
+
     It 'submits a detailed checklist-aligned pull request after validation and install testing' {
         $workflow | Should Match ([regex]::Escape('$pullRequestTitle = "Update: RedSalamanders.RedSalamander to $version"'))
-        $workflow | Should Match 'repo:microsoft/winget-pkgs is:pr is:open in:title RedSalamander \$version'
-        $workflow | Should Match 'wingetcreate submit[\s\S]{0,260}--prtitle \$pullRequestTitle'
-        $workflow | Should Match ([regex]::Escape("'https://github\.com/microsoft/winget-pkgs/pull/(?<number>\d+)'"))
-        $workflow | Should Match 'Invoke-RestMethod\s+`[\s\S]{0,220}-Method Patch'
+        $workflow | Should Not Match 'search/issues|in:title'
+        $workflow | Should Match 'Import-Module \$env:PUBLICATION_MODULE -Force'
+        $workflow | Should Match 'Invoke-RSWingetPublication'
+        $workflow | Should Match '\$env:WINGETCREATE_PATH submit[\s\S]{0,260}--prtitle \$InitialTitle'
+        $publicationModule | Should Match 'RS-WINGET-PUBLICATION:'
+        $publicationModule | Should Match 'ExpectedAuthor'
+        $publicationModule | Should Match 'ExpectedHeadRepository'
+        $publicationModule | Should Match 'ManifestHashes'
+        $publicationModule | Should Match 'BranchPattern'
+        $publicationModule | Should Match "Kind = 'Conflict'"
+        $publicationModule | Should Match "Kind = 'Owned'"
+        $publicationModule | Should Match 'PatchPullRequest'
         $workflow | Should Match '## 🧪 Automated validation'
-        $workflow | Should Match 'winget validate --manifest winget-manifest'
-        $workflow | Should Match 'winget install --manifest winget-manifest'
+        $workflow | Should Match 'winget validate --manifest \.build\\AppPackages\\winget-manifest'
+        $workflow | Should Match 'winget install --manifest \.build\\AppPackages\\winget-manifest'
         $workflow | Should Match 'winget list --exact --id RedSalamanders\.RedSalamander'
         $workflow | Should Match 'Manifest conforms to the \[1\.12 schema\]'
-        $workflow | Should Match '\$pullRequest\.body -notmatch \[regex\]::Escape'
-        $workflow | Should Match 'pull_request_url=\$\(\$pullRequest\.html_url\)'
+        $workflow | Should Match 'pull_request_url=\$\(\$publication\.Url\)'
+    }
+
+    It 'keeps event data inert and verifies one pinned publisher before exposing its token' {
+        $workflow | Should Match 'REQUESTED_VERSION:\s*\$\{\{ inputs\.version \|\| github\.event\.inputs\.version \}\}'
+        $workflow | Should Match 'RELEASE_TAG:\s*\$\{\{ github\.event\.release\.tag_name \}\}'
+        $workflow | Should Not Match '\$rawVersion\s*=\s*"\$\{\{'
+        $workflow | Should Match 'Microsoft\.WingetCreate --version \$expectedVersion'
+        $workflow | Should Match '\$expectedVersion = "1\.12\.8\.0"'
+        $workflow | Should Match 'WINGET_CREATE_GITHUB_TOKEN:\s*\$\{\{ secrets\.WINGET_TOKEN \}\}'
+        $workflow | Should Not Match '--token \$env:'
+        $workflow | Should Not Match '\$output\s*\|\s*ForEach-Object\s*\{\s*Write-Host'
+
+        $verifyIndex = $workflow.IndexOf('Resolved winget-create version')
+        $secretIndex = $workflow.IndexOf('WINGET_CREATE_GITHUB_TOKEN:')
+        ($verifyIndex -ge 0 -and $verifyIndex -lt $secretIndex) | Should Be $true
+    }
+
+    It 'supports a serialized direct release handoff' {
+        $workflow | Should Match '(?ms)workflow_call:\s+inputs:\s+version:'
+        $workflow | Should Match "(?ms)concurrency:\s+group:\s+winget-RedSalamanders\.RedSalamander-\$\{\{ github\.event_name == 'release'.*?format\('v\{0\}', inputs\.version \|\| github\.event\.inputs\.version\) \}\}"
+        $workflow | Should Match 'cancel-in-progress:\s*false'
+        $workflow | Should Match 'ref:\s*\$\{\{ github\.workflow_sha \}\}'
+        $workflow | Should Match 'Tools/Modules/Packaging/WingetPrPublication\.psm1'
     }
 }
 

@@ -9,9 +9,11 @@ inline constexpr int kDefaultSizeDip           = 15;
 
 // Segoe Fluent Icons PUA glyphs (see https://learn.microsoft.com/windows/apps/design/style/segoe-fluent-icons-font)
 inline constexpr wchar_t kChevronRight      = L'\uE76C';
+inline constexpr wchar_t kChevronLeft       = L'\uE76B';
 inline constexpr wchar_t kChevronDown       = L'\uE70D';
 inline constexpr wchar_t kChevronUp         = L'\uE70E';
 inline constexpr wchar_t kChevronRightSmall = L'\uE970';
+inline constexpr wchar_t kChevronLeftSmall  = L'\uE96F';
 inline constexpr wchar_t kChevronDownSmall  = L'\uE96E';
 inline constexpr wchar_t kChevronUpSmall    = L'\uE96D';
 inline constexpr wchar_t kCheckMark         = L'\uE73E';
@@ -21,6 +23,7 @@ inline constexpr wchar_t kSort              = L'\uE8CB';
 inline constexpr wchar_t kSettings          = L'\uE713';
 inline constexpr wchar_t kPuzzle            = L'\uEA86';
 inline constexpr wchar_t kCopy              = L'\uE8C8';
+inline constexpr wchar_t kCopyTo            = L'\uF413';
 inline constexpr wchar_t kPaste             = L'\uE77F';
 inline constexpr wchar_t kCut               = L'\uE8C6';
 inline constexpr wchar_t kDelete            = L'\uE74D';
@@ -44,14 +47,25 @@ inline constexpr wchar_t kFind              = L'\uE721';
 inline constexpr wchar_t kFilter            = L'\uE71C';
 inline constexpr wchar_t kCommandPrompt     = L'\uE756';
 inline constexpr wchar_t kBulletedList      = L'\uE8FD';
+inline constexpr wchar_t kMore              = L'\uE712';
+inline constexpr wchar_t kForward           = L'\uE72A';
+inline constexpr wchar_t kMoveToFolder      = L'\uE8DE';
 
 // Fallback glyphs (standard Unicode) when Segoe Fluent Icons isn't installed.
 inline constexpr wchar_t kFallbackChevronRight = L'\u203A'; // ›
+inline constexpr wchar_t kFallbackChevronLeft  = L'\u2039'; // ‹
 inline constexpr wchar_t kFallbackChevronDown  = L'\u25BE'; // ▾
 inline constexpr wchar_t kFallbackChevronUp    = L'\u25B4';
 inline constexpr wchar_t kFallbackCheckMark    = L'\u2713'; // ✓
 inline constexpr wchar_t kFallbackWarning      = L'\u26A0'; // ⚠
 inline constexpr wchar_t kFallbackError        = L'\u2716'; // ✖
 inline constexpr wchar_t kFallbackSort         = L'\u21C5'; // ⇅
+inline constexpr wchar_t kFallbackCopy         = L'\u29C9'; // ⧉
+inline constexpr wchar_t kFallbackCopyTo       = L'\u29C9'; // ⧉
+inline constexpr wchar_t kFallbackDelete       = L'\u2716'; // ✖
 inline constexpr wchar_t kFallbackBulletedList = L'\u2630'; // ☰
+inline constexpr wchar_t kFallbackMore         = L'\u2026'; // …
+inline constexpr wchar_t kFallbackForward      = L'\u2192'; // →
+inline constexpr wchar_t kFallbackMoveToFolder = L'\u21AA'; // ↪
+inline constexpr wchar_t kFallbackClear        = L'\u00D7'; // ×
 } // namespace FluentIcons

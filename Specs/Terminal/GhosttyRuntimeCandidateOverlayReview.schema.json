@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://red-salamander.invalid/schemas/terminal/GhosttyRuntimeCandidateOverlayReview.schema.json",
+  "title": "RedSalamander Ghostty Runtime Candidate Overlay Review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "generatedUtc",
+    "candidateCommit",
+    "candidateTree",
+    "baseDescriptorSha256",
+    "patch",
+    "concerns",
+    "currentConcernDispositions",
+    "abi",
+    "verification"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "generatedUtc": { "type": "string", "format": "date-time" },
+    "candidateCommit": { "$ref": "#/$defs/sha1" },
+    "candidateTree": { "$ref": "#/$defs/sha1" },
+    "baseDescriptorSha256": { "$ref": "#/$defs/sha256" },
+    "patch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "normalizedTextSha256", "fileCount", "insertions", "deletions", "files"],
+      "properties": {
+        "path": { "$ref": "#/$defs/relativePath" },
+        "normalizedTextSha256": { "$ref": "#/$defs/sha256" },
+        "fileCount": { "type": "integer", "minimum": 1, "maximum": 16 },
+        "insertions": { "type": "integer", "minimum": 0, "maximum": 2500 },
+        "deletions": { "type": "integer", "minimum": 0, "maximum": 2500 },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "insertions", "deletions"],
+            "properties": {
+              "path": { "$ref": "#/$defs/sourcePath" },
+              "insertions": { "type": "integer", "minimum": 0, "maximum": 2500 },
+              "deletions": { "type": "integer", "minimum": 0, "maximum": 2500 }
+            }
+          }
+        }
+      }
+    },
+    "concerns": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "summary", "sourceEvidence", "focusedTests"],
+        "properties": {
+          "id": { "$ref": "#/$defs/concernId" },
+          "summary": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "sourceEvidence": { "$ref": "#/$defs/nonEmptyStrings" },
+          "focusedTests": { "$ref": "#/$defs/nonEmptyStrings" }
+        }
+      }
+    },
+    "currentConcernDispositions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "disposition", "candidateConcernIds", "rationale"],
+        "properties": {
+          "id": { "$ref": "#/$defs/concernId" },
+          "disposition": { "enum": ["retained", "replaced", "removed"] },
+          "candidateConcernIds": {
+            "type": "array",
+            "maxItems": 5,
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/concernId" }
+          },
+          "rationale": { "type": "string", "minLength": 1, "maxLength": 1000 }
+        }
+      }
+    },
+    "abi": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "publicTerminalOptionMaximum",
+        "privateTerminalOptions",
+        "publicKittyDataMaximum",
+        "privateKittyDataValues"
+      ],
+      "properties": {
+        "publicTerminalOptionMaximum": { "type": "integer", "minimum": 0 },
+        "privateTerminalOptions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["cName", "zigName", "cValue", "zigValue"],
+            "properties": {
+              "cName": { "type": "string", "pattern": "^GHOSTTY_TERMINAL_OPT_[A-Z0-9_]+$" },
+              "zigName": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+              "cValue": { "type": "integer", "minimum": 0 },
+              "zigValue": { "type": "integer", "minimum": 0 }
+            }
+          }
+        },
+        "publicKittyDataMaximum": { "type": "integer", "minimum": 0 },
+        "privateKittyDataValues": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["cName", "zigName", "cValue", "zigValue"],
+            "properties": {
+              "cName": { "type": "string", "pattern": "^GHOSTTY_KITTY_GRAPHICS_DATA_[A-Z0-9_]+$" },
+              "zigName": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+              "cValue": { "type": "integer", "minimum": 0 },
+              "zigValue": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pristineSourceClean", "applyCheckPassed", "appliedDiffCheckPassed", "regeneratedPatchSha256", "regeneratedPatchMatches"],
+      "properties": {
+        "pristineSourceClean": { "const": true },
+        "applyCheckPassed": { "const": true },
+        "appliedDiffCheckPassed": { "const": true },
+        "regeneratedPatchSha256": { "$ref": "#/$defs/sha256" },
+        "regeneratedPatchMatches": { "const": true }
+      }
+    }
+  },
+  "$defs": {
+    "sha1": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "relativePath": { "type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\r\\n]+$", "maxLength": 1024 },
+    "sourcePath": { "type": "string", "pattern": "^(?:build\\.zig|include/ghostty/vt/[^\\r\\n]+|src/build/GhosttyLibVt\\.zig|src/terminal/[^\\r\\n]+)$", "maxLength": 1024 },
+    "concernId": { "type": "string", "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$", "maxLength": 120 },
+    "nonEmptyStrings": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 1024 }
+    }
+  }
+}

@@ -10,4 +10,6 @@ BEGIN
     IDS_FILESYSTEMCURL_SFTP_DESCRIPTION "SFTP 仮想ファイル システム (SSH ファイル転送プロトコル)。"
     IDS_FILESYSTEMCURL_SCP_DESCRIPTION "SCP 仮想ファイル システム (SSH 経由の安全なコピー)。"
     IDS_FILESYSTEMCURL_IMAP_DESCRIPTION "IMAP 仮想メール ファイル システム。"
+    IDS_FILESYSTEMCURL_CLEANUP_DEBT_TITLE "リモート クリーンアップが必要です"
+    IDS_FILESYSTEMCURL_CLEANUP_DEBT_MESSAGE "操作は終了しましたが、復旧項目 {0} 個を安全に削除できませんでした。識別できるバックアップ項目またはステージング項目だけを確認して削除してください。"
 END

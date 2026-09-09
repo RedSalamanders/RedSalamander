@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Operation Chordforge global RedSalamander Command Palette</title>
+  <desc id="desc">A dark RedSalamander terminal invocation context with the global searchable RedSalamander command palette. Rows contain icons, titles, descriptions, and multiple shortcut key chips.</desc>
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#000000" flood-opacity="0.55"/>
+    </filter>
+    <linearGradient id="selected" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#173f5c"/>
+      <stop offset="1" stop-color="#20384b"/>
+    </linearGradient>
+  </defs>
+
+  <!-- RedSalamander terminal context behind the transient palette. -->
+  <rect width="1200" height="760" fill="#101317"/>
+  <rect x="28" y="24" width="1144" height="52" rx="8" fill="#20252b"/>
+  <circle cx="58" cy="50" r="8" fill="#ff6b6b"/>
+  <circle cx="84" cy="50" r="8" fill="#ffd166"/>
+  <circle cx="110" cy="50" r="8" fill="#58d68d"/>
+  <text x="142" y="56" fill="#edf2f7" font-family="Segoe UI, sans-serif" font-size="18" font-weight="600">RedSalamander — Terminal</text>
+  <rect x="28" y="88" width="380" height="644" fill="#171b20"/>
+  <rect x="420" y="88" width="752" height="644" fill="#0c1014"/>
+  <text x="54" y="126" fill="#9da7b3" font-family="Segoe UI, sans-serif" font-size="14">Folder</text>
+  <text x="448" y="126" fill="#78dce8" font-family="Cascadia Mono, Consolas, monospace" font-size="15">PS Z:\src\RedSalamander&gt;</text>
+  <text x="448" y="158" fill="#91a0ae" font-family="Cascadia Mono, Consolas, monospace" font-size="14">git status --short</text>
+  <text x="448" y="188" fill="#7bd88f" font-family="Cascadia Mono, Consolas, monospace" font-size="14">M  Specs/Plans/WIP/Operation_Chordforge...</text>
+  <rect width="1200" height="760" fill="#080a0d" opacity="0.64"/>
+
+  <!-- Palette shell. -->
+  <rect x="176" y="54" width="848" height="652" rx="18" fill="#20252b" stroke="#46515d" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="176" y="54" width="5" height="652" rx="2.5" fill="#60cdff"/>
+
+  <text x="218" y="101" fill="#f5f7fa" font-family="Segoe UI, sans-serif" font-size="22" font-weight="650">Command Palette</text>
+  <rect x="395" y="77" width="142" height="30" rx="15" fill="#18394e" stroke="#2e617f"/>
+  <text x="466" y="97" text-anchor="middle" fill="#8bdcff" font-family="Segoe UI, sans-serif" font-size="10.5" font-weight="700" letter-spacing="0.65">REDSALAMANDER</text>
+  <rect x="840" y="75" width="144" height="34" rx="8" fill="#2b3138" stroke="#515b66"/>
+  <text x="912" y="97" text-anchor="middle" fill="#d9e0e7" font-family="Segoe UI, sans-serif" font-size="12">Ctrl  +  Shift  +  P</text>
+
+  <!-- Search field. -->
+  <rect x="214" y="126" width="772" height="52" rx="10" fill="#15191e" stroke="#60cdff" stroke-width="2"/>
+  <circle cx="242" cy="152" r="8.5" fill="none" stroke="#8bdcff" stroke-width="2"/>
+  <path d="M248 158 L255 165" stroke="#8bdcff" stroke-width="2" stroke-linecap="round"/>
+  <text x="270" y="159" fill="#aeb8c2" font-family="Segoe UI, sans-serif" font-size="15">Search RedSalamander commands</text>
+
+  <!-- Selected result. -->
+  <rect x="198" y="196" width="804" height="82" rx="10" fill="url(#selected)" stroke="#60cdff" stroke-width="1.5"/>
+  <rect x="198" y="206" width="4" height="62" rx="2" fill="#60cdff"/>
+  <rect x="222" y="216" width="38" height="34" rx="6" fill="#122b3d" stroke="#68c7ef"/>
+  <text x="241" y="239" text-anchor="middle" fill="#8bdcff" font-family="Cascadia Mono, Consolas, monospace" font-size="16" font-weight="700">&gt;_</text>
+  <text x="278" y="225" fill="#ffffff" font-family="Segoe UI, sans-serif" font-size="16" font-weight="650">Open/Focus Terminal in Other Pane</text>
+  <text x="278" y="249" fill="#bfccd7" font-family="Segoe UI, sans-serif" font-size="13">Open or reuse the embedded terminal across the divider</text>
+  <rect x="824" y="218" width="148" height="34" rx="8" fill="#16232c" stroke="#54728a"/>
+  <text x="898" y="240" text-anchor="middle" fill="#e7f5ff" font-family="Segoe UI, sans-serif" font-size="12">Ctrl  +  Shift  +  T</text>
+
+  <!-- Copy result with two bindings. -->
+  <rect x="198" y="286" width="804" height="72" rx="8" fill="#252b32"/>
+  <rect x="226" y="306" width="22" height="25" rx="3" fill="none" stroke="#b9c6d2" stroke-width="2"/>
+  <rect x="232" y="300" width="22" height="25" rx="3" fill="#252b32" stroke="#b9c6d2" stroke-width="2"/>
+  <text x="278" y="310" fill="#f2f5f8" font-family="Segoe UI, sans-serif" font-size="15" font-weight="600">Copy Terminal Selection</text>
+  <text x="278" y="334" fill="#9eabb7" font-family="Segoe UI, sans-serif" font-size="12.5">Copy selected terminal text to the clipboard</text>
+  <rect x="691" y="304" width="150" height="32" rx="7" fill="#303740" stroke="#56616d"/>
+  <text x="766" y="325" text-anchor="middle" fill="#e1e7ed" font-family="Segoe UI, sans-serif" font-size="11.5">Ctrl  +  Shift  +  C</text>
+  <rect x="849" y="304" width="123" height="32" rx="7" fill="#303740" stroke="#56616d"/>
+  <text x="910.5" y="325" text-anchor="middle" fill="#e1e7ed" font-family="Segoe UI, sans-serif" font-size="11.5">Ctrl  +  Insert</text>
+
+  <!-- Full screen result. F11 remains Salamander Connect. -->
+  <rect x="198" y="366" width="804" height="72" rx="8" fill="#252b32"/>
+  <path d="M224 388 v-8 h8 M254 388 v-8 h-8 M224 416 v8 h8 M254 416 v8 h-8" fill="none" stroke="#b9c6d2" stroke-width="2.2" stroke-linecap="round"/>
+  <text x="278" y="390" fill="#f2f5f8" font-family="Segoe UI, sans-serif" font-size="15" font-weight="600">Toggle Full Screen</text>
+  <text x="278" y="414" fill="#9eabb7" font-family="Segoe UI, sans-serif" font-size="12.5">Expand RedSalamander across the current monitor</text>
+  <rect x="858" y="384" width="114" height="32" rx="7" fill="#303740" stroke="#56616d"/>
+  <text x="915" y="405" text-anchor="middle" fill="#e1e7ed" font-family="Segoe UI, sans-serif" font-size="11.5">Alt  +  Enter</text>
+
+  <!-- Scroll result. -->
+  <rect x="198" y="446" width="804" height="72" rx="8" fill="#252b32"/>
+  <path d="M240 465 v24 M230 481 l10 10 10-10 M226 498 h28" fill="none" stroke="#b9c6d2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="278" y="470" fill="#f2f5f8" font-family="Segoe UI, sans-serif" font-size="15" font-weight="600">Scroll to Bottom</text>
+  <text x="278" y="494" fill="#9eabb7" font-family="Segoe UI, sans-serif" font-size="12.5">Follow the newest terminal output</text>
+  <rect x="801" y="464" width="171" height="32" rx="7" fill="#303740" stroke="#56616d"/>
+  <text x="886.5" y="485" text-anchor="middle" fill="#e1e7ed" font-family="Segoe UI, sans-serif" font-size="11.5">Ctrl  +  Shift  +  End</text>
+
+  <!-- Settings result. -->
+  <rect x="198" y="526" width="804" height="72" rx="8" fill="#252b32"/>
+  <circle cx="240" cy="562" r="11" fill="none" stroke="#b9c6d2" stroke-width="2"/>
+  <circle cx="240" cy="562" r="4" fill="none" stroke="#b9c6d2" stroke-width="2"/>
+  <path d="M240 546 v5 M240 573 v5 M224 562 h5 M251 562 h5 M229 551 l4 4 M247 569 l4 4 M251 551 l-4 4 M233 569 l-4 4" stroke="#b9c6d2" stroke-width="2" stroke-linecap="round"/>
+  <text x="278" y="550" fill="#f2f5f8" font-family="Segoe UI, sans-serif" font-size="15" font-weight="600">Settings</text>
+  <text x="278" y="574" fill="#9eabb7" font-family="Segoe UI, sans-serif" font-size="12.5">Open global RedSalamander Preferences</text>
+  <rect x="871" y="544" width="101" height="32" rx="7" fill="#303740" stroke="#56616d"/>
+  <text x="921.5" y="565" text-anchor="middle" fill="#e1e7ed" font-family="Segoe UI, sans-serif" font-size="11.5">Ctrl  +  ,</text>
+
+  <!-- Footer. -->
+  <line x1="198" y1="618" x2="1002" y2="618" stroke="#3a424b"/>
+  <text x="218" y="653" fill="#8f9aa5" font-family="Segoe UI, sans-serif" font-size="12.5">All commands  •  Terminal invocation context</text>
+  <text x="982" y="653" text-anchor="end" fill="#aab4be" font-family="Segoe UI, sans-serif" font-size="12.5">↑↓ Navigate    Enter Run    Esc Close</text>
+  <text x="600" y="685" text-anchor="middle" fill="#68737e" font-family="Segoe UI, sans-serif" font-size="11">Illustrative DxUi mockup — colors follow the active RedSalamander theme</text>
+</svg>

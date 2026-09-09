@@ -3,7 +3,7 @@
 #include "DxUiTestHelpers.h"
 #include "FolderViewEmptyStateLayout.h"
 #include "FolderViewIncrementalSearch.h"
-#include "FolderViewVisualState.h"
+#include "PaneVisualState.h"
 #include "Ui/AnimationDispatcher.h"
 
 #include <array>
@@ -70,7 +70,7 @@ void TestFolderViewIncrementalSearchKeepsContainsHighlightButUsesPrefixFocus()
 
 void TestFolderViewInactiveVisualStateDimsNormalTextAndIcons()
 {
-    using namespace FolderViewVisualState;
+    using namespace Common::PaneVisualState;
 
     const auto same = [](float left, float right) noexcept { return std::fabs(left - right) <= 0.0001f; };
 
@@ -82,6 +82,12 @@ void TestFolderViewInactiveVisualStateDimsNormalTextAndIcons()
     Require(same(ResolveNormalIconOpacity(0.5f, false), 0.5f * kUnfocusedPaneIconOpacity), "hidden icons keep their hidden dim and get pane dimming");
     Require(same(ResolvePlaceholderIconOpacity(false), 0.4f * kUnfocusedPaneIconOpacity), "placeholder icons also dim in an unfocused pane");
     Require(same(ResolveFocusBorderAlpha(1.0f, false), kFocusBorderOpacityUnfocused), "unfocused current item keeps a dim focus border");
+    Require(same(ResolveInactiveContentOverlayAlpha(true, false), 0.0f),
+            "focused pane does not apply an inactive-content overlay");
+    Require(same(ResolveInactiveContentOverlayAlpha(false, false), 1.0f - kUnfocusedPaneTextOpacity),
+            "unfocused pane overlay matches the standard text dimming opacity");
+    Require(same(ResolveInactiveContentOverlayAlpha(false, true), 0.0f),
+            "High Contrast suppresses the inactive-content overlay");
 }
 
 void TestFolderViewEmptyPlaceholderMetricsUseCurrentEmptyLayout()
@@ -5374,6 +5380,65 @@ void TestLargeMenuPaintsOnlyVisibleRowsWithCachedOffsets()
     Require(WaitForWindowDestroyed(popupHwnd), "large context menu popup is destroyed after Escape");
 }
 
+void TestContextMenuRootMinimumWidthUsesAnchorAndAllowsContentExpansion()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow ownerWindow;
+    SetWindowPos(ownerWindow.Hwnd(), nullptr, 180, 180, 420, 280, SWP_NOZORDER | SWP_NOACTIVATE);
+    ShowWindow(ownerWindow.Hwnd(), SW_SHOWNOACTIVATE);
+    ownerWindow.PumpMessages();
+
+    constexpr float kAnchorWidthDip = 260.0f;
+    ContextMenuSessionCallbacks callbacks{};
+    callbacks.minRootWidthDip = kAnchorWidthDip;
+
+    const auto measureMenuWidth = [&](std::wstring firstItemText, int commandId)
+    {
+        const std::vector<MenuFlyoutItem> items = {
+            {.text = std::move(firstItemText), .commandId = commandId},
+        };
+        bool callbackInvoked = false;
+        const POINT menuPoint = ClientScreenPointForTest(ownerWindow.Hwnd(), 320, 72, "minimum-width context menu anchor maps to screen coordinates");
+        Require(ContextMenu::ShowAsync(ownerWindow.Hwnd(),
+                                       menuPoint,
+                                       items,
+                                       ownerWindow.Host().GetTheme(),
+                                       [&](std::optional<int>) noexcept { callbackInvoked = true; },
+                                       callbacks),
+                "minimum-width async context menu opens");
+
+        const HWND popupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), items[0].text);
+        Require(popupHwnd != nullptr, "minimum-width context menu popup window appears");
+        const auto dismissPopup = wil::scope_exit([&]() noexcept
+        {
+            if (IsWindow(popupHwnd) != FALSE)
+            {
+                SendMessageW(popupHwnd, WM_KEYDOWN, VK_ESCAPE, 0);
+            }
+        });
+
+        ContextMenuPopupDebugState popupState{};
+        Require(WaitForContextMenuPopupState(popupHwnd,
+                                             [](const ContextMenuPopupDebugState& state) noexcept { return state.visibleWidthDip > 0.0f; },
+                                             popupState),
+                "minimum-width context menu exposes its visible width");
+
+        SendMessageW(popupHwnd, WM_KEYDOWN, VK_ESCAPE, 0);
+        ownerWindow.PumpMessages();
+        Require(callbackInvoked, "minimum-width context menu closes through Escape");
+        Require(WaitForWindowDestroyed(popupHwnd), "minimum-width context menu window is destroyed after Escape");
+        return popupState.visibleWidthDip;
+    };
+
+    const float shortMenuWidthDip = measureMenuWidth(L"Queue", 83'001);
+    Require(shortMenuWidthDip >= kAnchorWidthDip - 1.0f, "short flyout is at least as wide as its invoking button");
+
+    const float longMenuWidthDip =
+        measureMenuWidth(L"A translated menu item that is substantially wider than the invoking selector button", 83'002);
+    Require(longMenuWidthDip > kAnchorWidthDip + 1.0f, "long flyout content expands beyond the invoking button width");
+}
+
 void TestContextMenuShowAsyncSubmenuCloseKeepsSessionAlive()
 {
     using namespace RedSalamander::DxUi;
@@ -5662,6 +5727,90 @@ void TestContextMenuPopupRelayoutsOnDpiChanged()
     Require(WaitForWindowDestroyed(popupHwnd), "DPI relayout async popup window is destroyed after Escape");
 }
 
+void TestContextMenuDpiRelayoutConstrainsOversizedContentToWorkArea()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow ownerWindow;
+    std::vector<MenuFlyoutItem> items;
+    constexpr size_t kItemCount = 128u;
+    items.reserve(kItemCount);
+    for (size_t index = 0u; index < kItemCount; ++index)
+    {
+        items.push_back(MenuFlyoutItem{.text = std::format(L"Oversized localized command label {} with deliberately wide content", index),
+                                       .commandId = 7900 + static_cast<int>(index)});
+    }
+
+    ContextMenuSessionCallbacks callbacks{};
+    callbacks.minRootWidthDip = 100000.0f;
+    bool callbackInvoked      = false;
+    const POINT menuPoint     = ClientScreenPointForTest(ownerWindow.Hwnd(), 40, 40, "oversized DPI menu anchor maps to screen coordinates");
+    Require(ContextMenu::ShowAsync(ownerWindow.Hwnd(),
+                                   menuPoint,
+                                   items,
+                                   ownerWindow.Host().GetTheme(),
+                                   [&](std::optional<int>) noexcept { callbackInvoked = true; },
+                                   callbacks),
+            "oversized DPI context menu opens");
+
+    const HWND popupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), items.front().text);
+    Require(popupHwnd != nullptr, "oversized DPI context menu popup appears");
+    const auto dismissPopup = wil::scope_exit([&]() noexcept
+    {
+        if (IsWindow(popupHwnd) != FALSE)
+        {
+            SendMessageW(popupHwnd, WM_KEYDOWN, VK_ESCAPE, 0);
+        }
+    });
+
+    ContextMenuPopupDebugState before{};
+    Require(WaitForContextMenuPopupState(popupHwnd,
+                                         [](const ContextMenuPopupDebugState& state) noexcept
+    { return state.visibleWidthDip > 0.0f && state.visibleHeightDip > 0.0f && state.hasScrollbar; },
+                                         before),
+            "oversized DPI menu exposes bounded scrolling geometry");
+
+    MONITORINFO monitorInfo{};
+    monitorInfo.cbSize = sizeof(monitorInfo);
+    Require(GetMonitorInfoW(MonitorFromWindow(popupHwnd, MONITOR_DEFAULTTONEAREST), &monitorInfo) != FALSE,
+            "oversized DPI menu resolves its destination monitor work area");
+    const UINT targetDpi = before.dpi == 192u ? 144u : 192u;
+    RECT suggestedRect{monitorInfo.rcWork.left - 200,
+                       monitorInfo.rcWork.top - 200,
+                       monitorInfo.rcWork.right + 200,
+                       monitorInfo.rcWork.bottom + 200};
+    SendMessageW(
+        popupHwnd, WM_DPICHANGED, MAKEWPARAM(static_cast<WORD>(targetDpi), static_cast<WORD>(targetDpi)), reinterpret_cast<LPARAM>(&suggestedRect));
+
+    ContextMenuPopupDebugState after{};
+    Require(WaitForContextMenuPopupState(popupHwnd,
+                                         [targetDpi](const ContextMenuPopupDebugState& state) noexcept
+    { return state.dpi == targetDpi && state.hasScrollbar && state.visibleWidthDip > 0.0f && state.visibleHeightDip > 0.0f; },
+                                         after),
+            "oversized DPI menu relayout completes with a scrolling viewport");
+    Require(after.surfaceRectPx.left >= monitorInfo.rcWork.left && after.surfaceRectPx.top >= monitorInfo.rcWork.top &&
+                after.surfaceRectPx.right <= monitorInfo.rcWork.right && after.surfaceRectPx.bottom <= monitorInfo.rcWork.bottom,
+            "DPI relayout caps both oversized extents and position to the destination work area");
+
+    SendMessageW(popupHwnd, WM_KEYDOWN, VK_END, 0);
+    ContextMenuPopupDebugState endState{};
+    Require(WaitForContextMenuPopupState(popupHwnd,
+                                         [](const ContextMenuPopupDebugState& state) noexcept
+    { return state.keyboardIndex == std::optional<size_t>{kItemCount - 1u}; },
+                                         endState),
+            "oversized DPI menu keeps the final command keyboard-reachable");
+    D2D1_RECT_F lastItemRect{};
+    Require(WaitForContextMenuPopupItemRect(popupHwnd, kItemCount - 1u, lastItemRect),
+            "oversized DPI menu exposes the final command layout after End navigation");
+    Require(lastItemRect.top >= endState.viewportRectDip.top - 0.5f && lastItemRect.bottom <= endState.viewportRectDip.bottom + 0.5f,
+            "oversized DPI menu scrolls the final command fully into the bounded viewport");
+
+    SendMessageW(popupHwnd, WM_KEYDOWN, VK_ESCAPE, 0);
+    ownerWindow.PumpMessages();
+    Require(callbackInvoked, "oversized DPI menu closes through Escape");
+    Require(WaitForWindowDestroyed(popupHwnd), "oversized DPI menu window is destroyed after Escape");
+}
+
 } // namespace
 
 void RunMenuTests()
@@ -5688,6 +5837,7 @@ void RunMenuTests()
     runTest("TestContextMenuModalLoopDismissesWhenRootPopupDisappearsBeforeWaiting", TestContextMenuModalLoopDismissesWhenRootPopupDisappearsBeforeWaiting);
     runTest("TestContextMenuDebugStateProbeBoundsWedgedWindowThread", TestContextMenuDebugStateProbeBoundsWedgedWindowThread);
     runTest("TestContextMenuShowAsyncKeepsOwnerPaintableWhileOpen", TestContextMenuShowAsyncKeepsOwnerPaintableWhileOpen);
+    runTest("TestContextMenuRootMinimumWidthUsesAnchorAndAllowsContentExpansion", TestContextMenuRootMinimumWidthUsesAnchorAndAllowsContentExpansion);
     runTest("TestLargeMenuPaintsOnlyVisibleRowsWithCachedOffsets", TestLargeMenuPaintsOnlyVisibleRowsWithCachedOffsets);
     runTest("TestContextMenuShowAsyncSubmenuCloseKeepsSessionAlive", TestContextMenuShowAsyncSubmenuCloseKeepsSessionAlive);
     runTest("TestMenuGraphicalSliderSupportsClickDragAndAnimation", TestMenuGraphicalSliderSupportsClickDragAndAnimation);
@@ -5738,4 +5888,6 @@ void RunMenuTests()
     runTest("TestMenuAcrylicBackdropScenarioEmitsMetrics", TestMenuAcrylicBackdropScenarioEmitsMetrics);
     runTest("TestSplitButtonContextMenuSentMouseMessagesHoverAndOutsideDismiss", TestSplitButtonContextMenuSentMouseMessagesHoverAndOutsideDismiss);
     runTest("TestContextMenuPopupRelayoutsOnDpiChanged", TestContextMenuPopupRelayoutsOnDpiChanged);
+    runTest("TestContextMenuDpiRelayoutConstrainsOversizedContentToWorkArea",
+            TestContextMenuDpiRelayoutConstrainsOversizedContentToWorkArea);
 }

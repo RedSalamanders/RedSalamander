@@ -62,7 +62,26 @@ Versioning:
 - The source manifest keeps a neutral `7.0.0.0` identity version.
 - Before packaging, `Installer/msix/UpdateManifestVersion.ps1` stamps the identity as `<major>.<minor>.<build>.0`, for example `7.0.183.0`.
 - The same script stamps `ProcessorArchitecture` from the target platform.
-- The build number comes from `Tools/Versioning.ps1`, using `GITHUB_RUN_NUMBER` in CI.
+- Integrated builds resolve the build number through `Tools/Modules/Build/Versioning.psm1`, using `GITHUB_RUN_NUMBER` in CI.
+- The standalone `build-msix.ps1` wrapper requires the complete three-part `Version`; it never reads or allocates repository version state while packaging.
+
+`GenerateAssets.ps1` and `UpdateManifestVersion.ps1` are also supported direct
+maintenance entrypoints. Each takes explicit Release/platform diagnostics and
+holds the repository-wide packaging coordination scope for its complete source
+mutation. They are safe same-thread nested participants when called by
+`build.ps1 -Msix`. An abandoned owner records contamination and both scripts
+fail closed with the marker path; neither clears it automatically. A reviewer
+must restore `Installer\msix` and `.build\AppPackages` before removing the marker.
+The stamper normalizes `ManifestPath` and rejects paths outside this repository's
+`Installer\msix` tree, which is the source root covered by packaging coordination.
+
+`Installer/msix/build-msix.ps1` is the complete standalone package transaction.
+It acquires the selected artifact profile, then repository-wide packaging, then
+the platform `shared-dependency` lease immediately around the contained MSBuild
+phase because project references may touch
+`.build\vcpkg_installed\<platform>\<triplet>` and that platform root's metadata.
+The leases are released in exact reverse order. Existing contamination in any
+scope blocks this wrapper; it cannot authorize repair or clear a marker.
 
 ## Build
 
@@ -74,6 +93,12 @@ Versioning:
 Or build/package separately:
 - `build.ps1 -Configuration Release`
 - `msbuild Installer\msix\RedSalamanderInstaller.wapproj /p:Configuration=Release /p:Platform=x64`
+
+Raw MSBuild does not stamp, regenerate, or coordinate shared MSIX state. Use
+`Installer\msix\build-msix.ps1 -Version <major.minor.build> -Platform <x64|ARM64>`
+for a standalone package. Official Release matrix legs invoke that wrapper, so
+asset generation, version stamping, and contained MSBuild share one transaction;
+local integrated packaging uses `build.ps1 -Msix`, which holds the same scopes.
 
 The MSIX output is written to:
 - `.build\AppPackages\`
@@ -91,7 +116,7 @@ The GitHub workflow in `.github/workflows/release.yml`:
   ZIP/MSIX set is not present, or if any package is empty, duplicated, unexpectedly named, or for the wrong
   architecture.
 - Validates MSIX identity `Name`, `Publisher`, four-part `Version`, and `ProcessorArchitecture` through
-  `Tools/ReleaseArtifactPolicy.ps1`, then generates and revalidates the exact `checksums.sha256` entries.
+  `Tools/Modules/Packaging/ReleaseArtifactPolicy.psm1`, then generates and revalidates the exact `checksums.sha256` entries.
 
 The package identity contract is `Name="RedSalamander"`, `Publisher="CN=RedSalmanders"`, version
 `<major>.<minor>.<build>.0`, and architecture `x64` or `arm64` matching the artifact filename. The workflow uses

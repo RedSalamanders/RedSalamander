@@ -149,6 +149,15 @@ namespace SettingsSave
         }
     }
 
+    if (result.mouse.has_value())
+    {
+        const Common::Settings::MouseSettings defaults{};
+        if (result.mouse.value() == defaults)
+        {
+            result.mouse.reset();
+        }
+    }
+
     return result;
 }
 } // namespace SettingsSave

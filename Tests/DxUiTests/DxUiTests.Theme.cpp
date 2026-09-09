@@ -165,7 +165,7 @@ void TestViewerTitleBarThemeGoldenValues()
 {
     using namespace RedSalamander::ViewerChrome;
 
-    ViewerTheme theme{};
+    ViewerTheme theme{.sizeBytes = sizeof(ViewerTheme)};
     theme.darkMode       = TRUE;
     theme.darkBase       = TRUE;
     theme.rainbowMode    = TRUE;
@@ -234,10 +234,12 @@ void TestUtfConversionPoliciesRemainExplicitAndPreserveEmbeddedNulls()
     using namespace Common::Strings;
 
     const std::string malformedUtf8{"\xC3\x28", 2u};
+    Require(! IsValidUtf8Strict(malformedUtf8), "strict UTF-8 validation rejects an invalid continuation byte without conversion");
     Require(! TryUtf16FromUtf8Strict(malformedUtf8).has_value(), "strict UTF-8 conversion rejects an invalid continuation byte");
     Require(Utf16FromUtf8ReplacingInvalid(malformedUtf8) == std::wstring{L"\uFFFD("},
             "replacement UTF-8 conversion retains displayable text after an invalid sequence");
     Require(! TryUtf16FromUtf8Strict(std::string{"\xF0\x9F\x98", 3u}).has_value(), "strict UTF-8 conversion rejects a truncated sequence");
+    Require(! IsValidUtf8Strict(std::string{"\xF0\x9F\x98", 3u}), "strict UTF-8 validation rejects a truncated sequence");
 
     const std::string utf8WithNull{"A\0\xF0\x9F\x98\x80", 6u};
     const std::optional<std::wstring> utf16WithNull = TryUtf16FromUtf8Strict(utf8WithNull);
@@ -253,6 +255,28 @@ void TestUtfConversionPoliciesRemainExplicitAndPreserveEmbeddedNulls()
             "replacement UTF-16 conversion emits U+FFFD for an unpaired surrogate");
     Require(TryUtf16FromUtf8Strict({}).has_value() && TryUtf16FromUtf8Strict({}).value().empty(),
             "strict UTF conversion distinguishes valid empty input from malformed input");
+    Require(IsValidUtf8Strict({}) && IsValidUtf8Strict("ASCII \xE7\xAB\xAF\xE6\x9C\xAB"),
+            "strict UTF-8 validation accepts empty, ASCII, and multibyte input");
+
+    std::wstring reusable(512u, L'x');
+    const wchar_t* const storage = reusable.data();
+    const size_t capacity        = reusable.capacity();
+    for (const std::string_view text : {std::string_view{"long-enough-to-need-heap-storage.bin"},
+                                       std::string_view{utf8WithNull},
+                                       std::string_view{"short"},
+                                       std::string_view{"\xE7\xAB\xAF\xE6\x9C\xAB"}})
+    {
+        const auto expected = TryUtf16FromUtf8Strict(text);
+        Require(TryUtf16FromUtf8Strict(text, reusable) && expected.has_value() && reusable == expected.value(),
+                "reusable strict conversion preserves complete ASCII, embedded NUL, supplementary and multibyte values");
+        Require(reusable.data() == storage && reusable.capacity() == capacity, "strict conversion reuses sufficient caller storage");
+    }
+    Require(! TryUtf16FromUtf8Strict(malformedUtf8, reusable) && reusable.empty(), "failed reusable conversion clears stale output");
+    Require(! TryUtf16FromUtf8Strict(std::string_view{"\xF0\x9F\x98", 3u}, reusable) && reusable.empty(),
+            "reusable conversion rejects truncated supplementary input");
+    Require(TryUtf16FromUtf8Strict({}, reusable) && reusable.empty(), "reusable conversion distinguishes valid empty input from failure");
+    Require(TryUtf16FromUtf8Strict("recovered", reusable) && reusable == L"recovered" && reusable.data() == storage,
+            "invalid and empty conversions do not poison subsequent storage reuse");
 }
 
 void TestOrdinalTrimAndEnvironmentPoliciesRemainExplicit()
@@ -647,8 +671,7 @@ void TestViewerThemePaletteDerivesDarkControlChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF101214u;
     viewerTheme.textArgb                   = 0xFFE7E9EDu;
     viewerTheme.selectionBackgroundArgb    = 0xFF2A6DB2u;
@@ -735,8 +758,7 @@ void TestViewerThemePaletteDerivesLightControlChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFFF7F4EEu;
     viewerTheme.textArgb                   = 0xFF24292Fu;
     viewerTheme.selectionBackgroundArgb    = 0xFFD9E8FFu;
@@ -820,8 +842,7 @@ void TestViewerThemePaletteDerivesDarkHighContrastChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF101214u;
     viewerTheme.textArgb                   = 0xFFE7E9EDu;
     viewerTheme.selectionBackgroundArgb    = 0xFF2A6DB2u;
@@ -869,8 +890,7 @@ void TestListIconColorUsesViewerDerivedSelectionFillChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;
@@ -914,8 +934,7 @@ void TestGridBusyColorUsesViewerDerivedSelectionFillChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;
@@ -966,8 +985,7 @@ void TestGridProgressVisualStyleUsesViewerDerivedTrackAndFillChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;
@@ -1048,8 +1066,7 @@ void TestGridCheckboxVisualStyleUsesViewerDerivedSelectionTextChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;
@@ -1109,8 +1126,7 @@ void TestGridSwatchVisualStyleUsesViewerDerivedRowChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;
@@ -1196,8 +1212,7 @@ void TestGridBadgeVisualStyleUsesViewerDerivedRowChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;
@@ -1265,8 +1280,7 @@ void TestTreeBadgeVisualStyleUsesViewerDerivedAdornmentChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;
@@ -1481,8 +1495,7 @@ void TestPrimaryButtonVisualStyleUsesViewerDerivedSelectionTextChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;
@@ -1532,8 +1545,7 @@ void TestButtonVisualStyleUsesViewerDerivedPressedBorderChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;
@@ -1562,8 +1574,7 @@ void TestButtonVisualStyleUsesViewerDerivedHotAndPressedFillChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;
@@ -1622,8 +1633,7 @@ void TestAdornmentColorsUseViewerDerivedSelectionAndAlertChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;
@@ -1727,8 +1737,7 @@ void TestToggleVisualStyleUsesViewerDerivedKnobChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;
@@ -1879,8 +1888,7 @@ void TestColorSwatchUsesViewerDerivedOverlayChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;
@@ -1957,8 +1965,7 @@ void TestCardPanelUsesViewerDerivedSurfaceChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFFF7F4EEu;
     viewerTheme.textArgb                   = 0xFF24292Fu;
     viewerTheme.selectionBackgroundArgb    = 0xFFD9E8FFu;
@@ -2016,8 +2023,7 @@ void TestGridSurfaceVisualStyleUsesViewerDerivedGridChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF10151Bu;
     viewerTheme.textArgb                   = 0xFFE8EEF9u;
     viewerTheme.selectionBackgroundArgb    = 0xFF3F74C7u;
@@ -2083,8 +2089,7 @@ void TestTreeSurfaceVisualStyleUsesViewerDerivedTreeChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFFF4F0E7u;
     viewerTheme.textArgb                   = 0xFF252B31u;
     viewerTheme.selectionBackgroundArgb    = 0xFFDDE9FFu;
@@ -2150,8 +2155,7 @@ void TestGridHeaderVisualStyleUsesViewerDerivedHeaderChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF12171Eu;
     viewerTheme.textArgb                   = 0xFFE6ECF8u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4C7FD0u;
@@ -2228,8 +2232,7 @@ void TestTooltipUsesViewerDerivedTooltipChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;
@@ -2348,8 +2351,7 @@ void TestLabelVisualStyleUsesViewerDerivedTextChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;
@@ -2406,8 +2408,7 @@ void TestCheckboxVisualStyleUsesViewerDerivedSelectionTextChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;
@@ -2566,8 +2567,7 @@ void TestComboBoxModernPopupUsesViewerDerivedPressedChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;
@@ -2598,8 +2598,7 @@ void TestComboBoxUsesViewerDerivedInputBorderChrome()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF13161Bu;
     viewerTheme.textArgb                   = 0xFFE7EBF3u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4F8EDCu;
@@ -2738,8 +2737,7 @@ void TestGridRowIconChromeFollowsViewerDerivedRowVisuals()
     grid.SetModel(&model);
     host.SetFocusControl(&grid);
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF12171Eu;
     viewerTheme.textArgb                   = 0xFFE6ECF8u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4C7FD0u;
@@ -2864,8 +2862,7 @@ void TestGridCellChromeFollowsViewerDerivedResolvedCellVisuals()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF12171Eu;
     viewerTheme.textArgb                   = 0xFFE6ECF8u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4C7FD0u;
@@ -3087,8 +3084,7 @@ void TestViewerThemeAccentPressedUsesBaseThemePolarity()
 {
     using namespace RedSalamander::DxUi;
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                 = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb          = 0xFFF2F2F2u;
     viewerTheme.textArgb                = 0xFF202020u;
     viewerTheme.selectionBackgroundArgb = 0xFFD8E8FFu;

@@ -10,4 +10,6 @@ BEGIN
     IDS_FILESYSTEMCURL_SFTP_DESCRIPTION "Virtuálny súborový systém SFTP (SSH File Transfer Protocol)."
     IDS_FILESYSTEMCURL_SCP_DESCRIPTION "Virtuálny súborový systém SCP (zabezpečená kópia cez SSH)."
     IDS_FILESYSTEMCURL_IMAP_DESCRIPTION "Systém súborov virtuálnej pošty IMAP."
+    IDS_FILESYSTEMCURL_CLEANUP_DEBT_TITLE "Vyžaduje sa vzdialené vyčistenie"
+    IDS_FILESYSTEMCURL_CLEANUP_DEBT_MESSAGE "Operácia sa skončila, ale {0} položiek obnovy nebolo možné bezpečne odstrániť. Skontrolujte a odstráňte iba záložné alebo pracovné položky, ktoré dokážete identifikovať."
 END

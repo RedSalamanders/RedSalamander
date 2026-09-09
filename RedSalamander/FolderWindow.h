@@ -22,6 +22,73 @@
 #include "FunctionBar.h"
 #include "NavigationView.h"
 #include "PlugInterfaces/Viewer.h"
+#include "PlugInterfaces/Terminal.h"
+
+struct CommandRuntimeState;
+
+namespace FileOperationArtifacts
+{
+struct TouchGuardReceipt;
+}
+
+namespace FileOperationsPopupInternal
+{
+class FileOperationsPopupState;
+}
+
+namespace FolderWindowFileOperationsStateInternal
+{
+struct CrossFileSystemBridge;
+}
+
+namespace FileOperations
+{
+enum class PublicationState : uint8_t
+{
+    NotAttempted,
+    NotPublished,
+    Published,
+    Unknown,
+};
+
+enum class VerificationState : uint8_t
+{
+    NotRequested,
+    NotApplicable,
+    Verified,
+    Failed,
+    Unavailable,
+    Canceled,
+};
+
+enum class SourceDisposition : uint8_t
+{
+    Removed,
+    Retained,
+    Unknown,
+};
+
+enum class ItemCompletion : uint8_t
+{
+    Completed,
+    Skipped,
+    Canceled,
+    Failed,
+    Indeterminate,
+};
+
+enum class OwnedStageDisposition : uint8_t
+{
+    NotApplicable,
+    NotCreated,
+    Owned,
+    Removed,
+    Published,
+    Retained,
+    Unknown,
+    RetainedIncomplete,
+};
+} // namespace FileOperations
 
 namespace Common::Settings
 {
@@ -33,6 +100,7 @@ LRESULT CALLBACK FolderWindowDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARA
 
 #ifdef ENABLE_TESTS
 void DebugSetMakeFileListAutomation(const Common::Settings::MakeFileListSettings& options) noexcept;
+void DebugSetNextMakeFileListOutputFile(const std::filesystem::path& outputFile) noexcept;
 void DebugClearMakeFileListAutomation() noexcept;
 void DebugSetMakeFileListWorkerDelay(uint32_t delayMs) noexcept;
 [[nodiscard]] bool DebugIsMakeFileListWorkerActive() noexcept;
@@ -173,6 +241,7 @@ struct ItemPropertiesWindowDebugSnapshot
     bool bodyCanScrollVertically   = false;
     bool loading                   = false;
     bool loadFailed                = false;
+    uint32_t artifactClassifierQueryCount = 0u;
     float layoutOverflowRightDip   = 0.0f;
     uint64_t renderCount           = 0u;
     uint64_t resizeCount           = 0u;
@@ -187,6 +256,7 @@ struct ItemPropertiesWindowDebugSnapshot
 [[nodiscard]] HRESULT DebugOpenItemPropertiesStream(std::wstring_view streamName) noexcept;
 [[nodiscard]] std::wstring DebugBuildItemPropertiesContentTextFromJson(std::string_view jsonUtf8) noexcept;
 void DebugSetNextItemPropertiesLoadDelayMs(uint32_t delayMs) noexcept;
+void DebugSetNextItemPropertiesLoadFault(uint32_t fault) noexcept; // 1 = provider failure, 2 = malformed JSON
 
 struct FolderViewPaneFilterPromptDebugSnapshot
 {
@@ -286,11 +356,13 @@ struct FolderViewChangeCasePromptDebugSnapshot
 [[nodiscard]] bool DebugCancelFolderViewChangeCasePrompt() noexcept;
 #endif
 
-class FolderWindow
+class FolderWindow : public ITerminalEventCallback
 {
 public:
+    static constexpr UINT_PTR kFileOperationPresentationTimerId = 0x7251;
+
     FolderWindow();
-    ~FolderWindow();
+    virtual ~FolderWindow();
 
     // Disable copy and move
     FolderWindow(const FolderWindow&)            = delete;
@@ -330,6 +402,20 @@ public:
     [[nodiscard]] HWND GetFocusedFolderViewHwnd() const noexcept;
     [[nodiscard]] HWND GetFolderViewHwnd(Pane pane) const noexcept;
     [[nodiscard]] bool IsFocusInNavigationView() const noexcept;
+    [[nodiscard]] std::optional<std::filesystem::path> GetActiveTerminalLaunchPath() const;
+    [[nodiscard]] bool IsTerminalInputTarget(HWND targetWindow) const noexcept;
+    [[nodiscard]] HRESULT RouteTerminalShortcut(HWND targetWindow,
+                                                std::wstring_view commandId,
+                                                const MSG& message,
+                                                uint32_t normalizedModifiers,
+                                                TerminalShortcutRoute& route) noexcept;
+    [[nodiscard]] bool ExecuteTerminalHostCommand(std::wstring_view commandId) noexcept;
+    [[nodiscard]] bool QueryTerminalHostCommandState(HWND invocationOrigin,
+                                                     std::wstring_view commandId,
+                                                     CommandRuntimeState& state) noexcept;
+    void STDMETHODCALLTYPE OnTerminalEvent(const TerminalEvent* event, void* cookie) noexcept override;
+    void HandleTerminalSessionExited(const TerminalEvent& event) noexcept;
+    [[nodiscard]] bool HandlePanePointerFocus(HWND targetWindow) noexcept;
     [[nodiscard]] bool TryRestoreActivePaneFolderViewFocus() noexcept;
     void RequestRestoreFolderViewFocus(HWND folderView) noexcept;
 
@@ -517,8 +603,14 @@ public:
                                                    std::vector<std::filesystem::path> displayedFilePaths,
                                                    unsigned int commandId,
                                                    HWND ownerWindow) noexcept;
-    void CommandCopyToOtherPane(Pane sourcePane);
-    void CommandMoveToOtherPane(Pane sourcePane);
+    [[nodiscard]] HRESULT ConfirmExternalArtifactTouchForProvider(IFileSystem* fileSystem,
+                                                                  std::wstring_view pluginId,
+                                                                  std::wstring_view instanceContext,
+                                                                  std::span<const std::filesystem::path> providerPaths,
+                                                                  FileOperationArtifacts::TouchGuardReceipt* receiptOut = nullptr) noexcept;
+    void CommandCopyToOtherPane(Pane sourcePane, bool withOptions = false);
+    void CommandMoveToOtherPane(Pane sourcePane, bool withOptions = false);
+    void CommandShowFileOperations();
     void CommandToggleFileOperationsIssuesPane();
     bool IsFileOperationsIssuesPaneVisible() noexcept;
     void CommandCreateDirectory(Pane pane);
@@ -530,6 +622,7 @@ public:
     void CommandQuickSearch(Pane pane);
     void CommandBringCurrentDirToCommandLine(Pane pane);
     void CommandBringFilenameToCommandLine(Pane pane);
+    void CommandInsertFocusedPathInTerminal(Pane pane, bool fullPath);
     void CommandMakeFileList(Pane pane);
     void CommandPack(Pane pane);
     void CommandUnpack(Pane pane);
@@ -595,6 +688,10 @@ public:
     void SwapPanes();
 
     bool ConfirmCancelAllFileOperations(HWND ownerWindow) noexcept;
+    // The non-prompt half of the exit path: cancels every File Operations task and reports whether
+    // the caller may close now. false means the close is deferred until every task has been reaped,
+    // when WM_CLOSE is posted to closeTarget.
+    bool CancelAllFileOperationsThenClose(HWND closeTarget) noexcept;
     void CloseAllViewers() noexcept;
 
     using ShowSortMenuCallback = std::function<void(Pane pane, POINT screenPoint)>;
@@ -660,7 +757,14 @@ public:
     struct FileOperationItemOutcome
     {
         size_t sourceIndex = 0;
-        HRESULT status     = E_PENDING;
+        FileOperations::PublicationState publication = FileOperations::PublicationState::NotAttempted;
+        FileOperations::VerificationState verification = FileOperations::VerificationState::NotRequested;
+        FileOperations::SourceDisposition sourceDisposition = FileOperations::SourceDisposition::Retained;
+        FileOperations::ItemCompletion completion = FileOperations::ItemCompletion::Failed;
+        FileOperations::OwnedStageDisposition ownedStageDisposition = FileOperations::OwnedStageDisposition::NotApplicable;
+        HRESULT status = E_PENDING;
+        std::filesystem::path finalSourcePath;
+        std::filesystem::path finalDestinationPath;
     };
 
     struct FileOperationCompletedEvent
@@ -945,6 +1049,33 @@ public:
         std::wstring sourceFocusedDisplayName;
     };
 
+    struct TerminalPaneDebugSnapshot
+    {
+        bool open = false;
+        bool selected = false;
+        Pane hostPane = Pane::Right;
+        HWND childHwnd = nullptr;
+        HWND parentHwnd = nullptr;
+        TerminalLifecycleState lifecycle = TerminalLifecycleState::Created;
+        TerminalActivityTrust activityTrust = TerminalActivityTrust::Untrusted;
+        TerminalFollowState followState = TerminalFollowState::Disabled;
+        TerminalInstanceId instanceId{};
+        uint64_t sessionGeneration = 0u;
+        uint64_t capabilityFlags = TerminalCapabilityNone;
+        bool exitCodePresent = false;
+        uint32_t exitCode = 0u;
+        bool finalSnapshotComplete = false;
+        bool idleAtPrimaryPrompt = false;
+        size_t visibleTabCount = 0u;
+        bool previewTabVisible = false;
+        bool terminalTabVisible = false;
+        std::wstring status;
+        TerminalLocationKind sourceLocationKind = TerminalLocationKind::Unsupported;
+        std::wstring sourcePluginShortId;
+        std::filesystem::path sourcePath;
+        uint64_t sourceGeneration = 0u;
+    };
+
     enum class PreviewEmbeddedChildFaultForTest : uint8_t
     {
         None,
@@ -1030,6 +1161,7 @@ public:
     // Debug/testing hook: access the file-operations state for automation/self-tests.
     // This will initialize file operations if they are not yet created.
     FileOperationState* DebugGetFileOperationState() noexcept;
+    [[nodiscard]] bool DebugWasFileOperationStateRetainedDuringNestedPromptShutdown() const noexcept;
     void DebugSetFileOperationRequestCallbackEnabled(Pane pane, bool enabled) noexcept;
 
     enum class DebugShellActionKind : uint8_t
@@ -1074,6 +1206,13 @@ public:
                                                                                       uint64_t staleGenerationMessageCount,
                                                                                       uint64_t unaccountedCurrentMessageCount);
     [[nodiscard]] bool DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) const noexcept;
+    [[nodiscard]] bool DebugGetTerminalPaneSnapshot(Pane hostPane, TerminalPaneDebugSnapshot& out) const noexcept;
+    [[nodiscard]] HRESULT DebugGetTerminalScreenText(Pane hostPane, std::wstring& text) const noexcept;
+    [[nodiscard]] HRESULT DebugSetTerminalConfiguration(Pane hostPane, const char* configurationJsonUtf8) noexcept;
+    [[nodiscard]] HRESULT DebugTerminateTerminalRootProcess(Pane hostPane, uint32_t exitCode) noexcept;
+    void DebugCloseTerminalPane(Pane hostPane) noexcept;
+    [[nodiscard]] bool DebugSetPaneContentTab(Pane hostPane, size_t tabIndex) noexcept;
+    [[nodiscard]] size_t DebugGetPaneContentTab(Pane hostPane) const noexcept;
     void DebugSetNextPreviewEmbeddedChildFaultForTest(PreviewEmbeddedChildFaultForTest fault) noexcept;
     [[nodiscard]] bool DebugSetPreviewPaneTab(Pane hostPane, bool previewTab) noexcept;
     [[nodiscard]] bool DebugScrollPreviewPropertiesByWheelDetents(Pane hostPane, int detents) noexcept;
@@ -1100,6 +1239,43 @@ public:
     [[nodiscard]] size_t DebugGetPaneBitmapIconCount(Pane pane) const noexcept;
     [[nodiscard]] bool DebugIsItemSelected(Pane pane, std::wstring_view displayName) const noexcept;
     [[nodiscard]] size_t DebugGetSelectedCount(Pane pane) const noexcept;
+    [[nodiscard]] FolderView::SelectionStats DebugGetCachedPaneSelectionStatsForSelfTest(Pane pane) const noexcept;
+    [[nodiscard]] FolderView::DebugFocusSelectionStateSnapshot DebugGetFocusSelectionStateSnapshot(Pane pane) const noexcept;
+    struct DebugSelectionSizeSnapshot
+    {
+        uint64_t generation = 0u;
+        uint64_t requestCount = 0u;
+        bool folderBytesPending = false;
+        bool folderBytesValid = false;
+        uint64_t folderBytes = 0u;
+        HRESULT lastCompletionStatus = E_PENDING;
+        bool workerRequestPending = false;
+        uint64_t workerRequestGeneration = 0u;
+        std::vector<std::filesystem::path> lastRequestedSelectedPaths;
+        std::vector<std::filesystem::path> lastRequestedFolderPaths;
+    };
+    [[nodiscard]] DebugSelectionSizeSnapshot DebugGetSelectionSizeSnapshot(Pane pane);
+    [[nodiscard]] bool DebugPostSelectionSizeCompletionForSelfTest(Pane pane,
+                                                                   uint64_t generation,
+                                                                   uint64_t folderBytes,
+                                                                   HRESULT status) noexcept;
+    void DebugRememberPaneFocusedItemForFolder(Pane pane, const std::filesystem::path& folder, std::wstring_view itemDisplayName) noexcept;
+    void DebugClearPaneFocusMemoryForSelfTest(Pane pane) noexcept;
+    [[nodiscard]] bool DebugRememberPaneFocusMemoryEntryForSelfTest(Pane pane,
+                                                                   const std::filesystem::path& folder,
+                                                                   std::wstring_view itemDisplayName) noexcept;
+    [[nodiscard]] std::wstring DebugLookupPaneFocusMemoryEntryForSelfTest(Pane pane, const std::filesystem::path& folder) noexcept;
+    void DebugSetPaneFileSystemContextForSelfTest(Pane pane,
+                                                  std::wstring_view pluginId,
+                                                  std::wstring_view instanceContext) noexcept;
+    void DebugSetPaneSuppressOleDragDropForSelfTest(Pane pane, bool suppress) noexcept;
+    [[nodiscard]] std::vector<std::filesystem::path> DebugGetPaneCommandTargetPathsForSelfTest(Pane pane) const;
+    [[nodiscard]] std::vector<std::filesystem::path> DebugGetPaneLastDragStartPathsForSelfTest(Pane pane) const;
+    [[nodiscard]] uint64_t DebugGetPaneDragStartCountForSelfTest(Pane pane) const noexcept;
+    void DebugClearPaneSelectionAnchorForSelfTest(Pane pane) noexcept;
+    void DebugSendPaneKeyForSelfTest(Pane pane, WPARAM key, bool ctrl, bool shift);
+    [[nodiscard]] std::optional<POINT> DebugGetPaneItemCenterClientPointForSelfTest(Pane pane, std::wstring_view displayName) const noexcept;
+    [[nodiscard]] std::optional<POINT> DebugGetPaneEmptyBackgroundClientPointForSelfTest(Pane pane) const noexcept;
     [[nodiscard]] uint64_t DebugGetWarmPaneRenderingCallCount(Pane pane) const noexcept;
     [[nodiscard]] FolderView::DebugWarmPerfSnapshot DebugGetWarmPanePerfSnapshot(Pane pane) const noexcept;
     [[nodiscard]] bool DebugWarmPaneRendering(Pane pane) noexcept;
@@ -1110,23 +1286,12 @@ public:
     [[nodiscard]] FolderView::DebugEmptyFolderItemMetrics DebugGetEmptyFolderItemMetrics(Pane pane) const noexcept;
     [[nodiscard]] HWND DebugGetNavigationViewHwnd(Pane pane) const noexcept;
     [[nodiscard]] bool DebugGetNavigationViewSnapshot(Pane pane, NavigationViewDebugSnapshot& out) const noexcept;
+    void DebugSetNavigationFullPathPopupDestroyProbe(Pane pane, std::function<void()> probe);
     [[nodiscard]] bool DebugFocusNavigationViewRegion(Pane pane, NavigationView::FocusRegion region) noexcept;
     [[nodiscard]] bool DebugPostCurrentNavigationEditSuggestResult(Pane pane);
     [[nodiscard]] bool DebugFocusItemByDisplayName(Pane pane, std::wstring_view displayName) noexcept;
     [[nodiscard]] bool DebugGetIncrementalSearchSnapshot(Pane pane, FolderView::IncrementalSearchDebugSnapshot& out) const noexcept;
-    struct CommandLineDebugSnapshot
-    {
-        bool visible                          = false;
-        bool hasKeyboardFocus                 = false;
-        bool usesDxUiHost                     = false;
-        bool usesNativeTextInput              = false;
-        size_t visibleNativeChildControlCount = 0u;
-        Pane pane                             = Pane::Left;
-        HWND editHwnd                         = nullptr;
-        std::wstring text;
-        std::filesystem::path workingDirectory;
-    };
-    using CommandLineLaunchCallback = std::function<HRESULT(std::wstring_view commandLine, const std::filesystem::path& workingDirectory)>;
+    void DebugExitIncrementalSearch(Pane pane) noexcept;
     struct CommandShellLaunchDebugPlan
     {
         std::wstring executable;
@@ -1136,9 +1301,6 @@ public:
         bool usesWindowsTerminal = false;
     };
     using CommandShellLaunchCallback = std::function<HRESULT(const CommandShellLaunchDebugPlan& plan)>;
-    [[nodiscard]] bool DebugGetCommandLineSnapshot(CommandLineDebugSnapshot& out) const noexcept;
-    void DebugSetCommandLineTextForTest(std::wstring_view text);
-    void DebugSetCommandLineLaunchCallback(CommandLineLaunchCallback callback);
     void DebugSetCommandShellLaunchCallback(CommandShellLaunchCallback callback);
     void DebugSetCommandShellTerminalOverrideForTest(std::optional<std::wstring> executable);
     [[nodiscard]] FolderView::NameFilterState DebugGetNameFilterState(Pane pane) const;
@@ -1172,6 +1334,19 @@ public:
     };
 
 private:
+    class FileOperationPromptDispatchScope final
+    {
+    public:
+        explicit FileOperationPromptDispatchScope(FolderWindow& owner) noexcept;
+        ~FileOperationPromptDispatchScope() noexcept;
+
+        FileOperationPromptDispatchScope(const FileOperationPromptDispatchScope&) = delete;
+        FileOperationPromptDispatchScope& operator=(const FileOperationPromptDispatchScope&) = delete;
+
+    private:
+        FolderWindow& _owner;
+    };
+
     enum class CopySelectionTextMode : uint8_t
     {
         PathAndName,
@@ -1228,7 +1403,11 @@ private:
     void CopySelectionText(Pane pane, CopySelectionTextMode mode, UINT titleStringId);
     LRESULT OnPaneSelectionSizeComputed(LPARAM lp) noexcept;
     LRESULT OnPaneSelectionSizeProgress(LPARAM lp) noexcept;
-    LRESULT OnFileOperationCompleted(LPARAM lp) noexcept;
+    LRESULT OnFileOperationCompleted(WPARAM wp, LPARAM lp) noexcept;
+    LRESULT OnFileOperationBatchRenameArtifactPrompt(WPARAM wp, LPARAM lp) noexcept;
+    LRESULT OnFileOperationClipboardMoveReady(WPARAM wp, LPARAM lp) noexcept;
+    void OnFileOperationPresentationChanged() noexcept;
+    void ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, unsigned long warningCount, unsigned long errorCount) noexcept;
     LRESULT OnChangeCaseTaskUpdate(LPARAM lp) noexcept;
     LRESULT OnChangeCaseCompleted(LPARAM lp) noexcept;
     LRESULT OnChangeAttributesTaskUpdate(LPARAM lp) noexcept;
@@ -1241,12 +1420,12 @@ private:
     HRESULT StartFileOperationFromFolderView(Pane pane, FolderView::FileOperationRequest request) noexcept;
     HRESULT ShowItemPropertiesFromFolderView(Pane pane, std::filesystem::path path) noexcept;
     void ShutdownFileOperations() noexcept;
+    void ResumeDeferredCloseIfFileOperationsQuiet() noexcept;
     void ApplyFileOperationsTheme() noexcept;
 
     // Layout
     void CalculateLayout();
     void AdjustChildWindows();
-    void UpdateCommandLineHostLayout() noexcept;
     void UpdatePaneStatusBar(Pane pane);
     void UpdatePaneFilterBar(Pane pane);
     void RefreshFilterBarHistoryItems(Pane pane) noexcept;
@@ -1269,16 +1448,8 @@ private:
     [[nodiscard]] SplitterArrowZone HitTestSplitterArrow(POINT pt) const noexcept;
     void SetHoveredSplitterArrowZone(SplitterArrowZone zone) noexcept;
     void TrackSplitterMouseLeave() noexcept;
-    [[nodiscard]] bool CreateCommandLineControls(HWND parent) noexcept;
-    void DestroyCommandLineControls() noexcept;
-    void ShowCommandLine(Pane pane, const std::filesystem::path& workingDirectory);
-    void HideCommandLine(bool restoreFocus) noexcept;
-    [[nodiscard]] std::wstring GetCommandLineText() const;
-    void SetCommandLineText(std::wstring_view text);
-    void InsertCommandLineText(std::wstring_view text);
     [[nodiscard]] std::optional<std::filesystem::path> ResolveCommandLineWorkingDirectory(Pane pane) const;
-    [[nodiscard]] HRESULT LaunchCommandLine(std::wstring_view commandLine, const std::filesystem::path& workingDirectory);
-    void ExecuteCommandLineFromEdit();
+    [[nodiscard]] std::optional<std::filesystem::path> ResolveTerminalCommandWorkingDirectory(Pane pane) const;
     void StartSelectionSizeWorker(Pane pane) noexcept;
     void CancelSelectionSizeComputation(Pane pane) noexcept;
     void RequestSelectionSizeComputation(Pane pane);
@@ -1299,6 +1470,9 @@ private:
     HRESULT EnsurePaneFileSystem(Pane pane, std::wstring_view pluginId) noexcept;
     Pane GetPaneFromChild(HWND child) const noexcept;
     bool TryOpenFileAsVirtualFileSystem(Pane pane, const std::filesystem::path& path) noexcept;
+    [[nodiscard]] HRESULT ConfirmExternalArtifactTouch(Pane pane,
+                                                       std::span<const std::filesystem::path> providerPaths,
+                                                       FileOperationArtifacts::TouchGuardReceipt* receiptOut = nullptr) noexcept;
     enum class FileActionFailureKind : uint8_t
     {
         LaunchFailed,
@@ -1320,6 +1494,11 @@ private:
         return pane == Pane::Left ? Pane::Right : Pane::Left;
     }
     void SetPreviewPaneTab(Pane hostPane, bool previewTab) noexcept;
+    void SetPaneContentTab(Pane hostPane, size_t tabIndex) noexcept;
+    HRESULT OpenTerminalPane(Pane sourcePane, const std::filesystem::path& workingDirectory) noexcept;
+    void PublishTerminalSourceLocation(Pane sourcePane, const std::optional<std::filesystem::path>& path) noexcept;
+    void CloseTerminalPane(Pane hostPane) noexcept;
+    void LayoutEmbeddedTerminal(Pane hostPane) noexcept;
     void ClosePreviewPane() noexcept;
     void RequestPreviewPaneRefresh() noexcept;
     void CancelPendingPreviewPaneRefresh() noexcept;
@@ -1362,7 +1541,7 @@ private:
         OpenedFileSourceKind source = OpenedFileSourceKind::Viewer;
         Pane pane                   = Pane::Left;
         wil::com_ptr<IViewer> viewer;
-        ViewerOpenContext openContext{};
+        ViewerOpenContext openContext{.sizeBytes = sizeof(ViewerOpenContext)};
         bool hasInitialConfigurationJson = false;
         std::string initialConfigurationJson;
         wil::com_ptr<IFileSystem> fileSystem;
@@ -1400,6 +1579,7 @@ private:
     void ShutdownViewers() noexcept;
     void ApplyViewerTheme() noexcept;
     ViewerTheme BuildViewerTheme() const noexcept;
+    TerminalTheme BuildTerminalTheme() const noexcept;
     HRESULT OnViewerClosed(ViewerInstance* instance) noexcept;
     struct OpenedFileRow final
     {
@@ -1538,6 +1718,10 @@ private:
     UINT _dpi            = USER_DEFAULT_SCREEN_DPI;
 
     // Child components
+#pragma warning(push)
+// Owner: FolderWindow. mutex/jthread alignment makes this harmless ARM64 padding unavoidable.
+// Review if PaneState's synchronization ownership or aggregate layout changes.
+#pragma warning(disable : 4324)
     struct PaneState
     {
         PaneState() = default;
@@ -1573,6 +1757,15 @@ private:
         bool statusBarVisible              = true;
         bool previewTabsVisible            = false;
         bool previewTabSelected            = false;
+        bool terminalTabSelected           = false;
+        bool terminalOpen                  = false;
+        wil::com_ptr<ITerminal> terminal;
+        HWND terminalHwnd                  = nullptr;
+        TerminalLocationKind terminalSourceLocationKind = TerminalLocationKind::Unsupported;
+        std::wstring terminalSourcePluginShortId;
+        std::filesystem::path terminalSourcePath;
+        uint64_t terminalSourceGeneration = 0u;
+        uint32_t terminalOriginalSourcePaneInstanceId = 0u;
         std::filesystem::path previewedPath;
         std::wstring previewText;
         std::wstring previewViewerPluginId;
@@ -1607,6 +1800,12 @@ private:
         bool selectionFolderBytesPending = false;
         bool selectionFolderBytesValid   = false;
         uint64_t selectionFolderBytes    = 0;
+#ifdef ENABLE_TESTS
+        uint64_t debugSelectionSizeRequestCount = 0u;
+        HRESULT debugSelectionSizeLastCompletionStatus = E_PENDING;
+        std::vector<std::filesystem::path> debugSelectionSizeLastRequestedSelectedPaths;
+        std::vector<std::filesystem::path> debugSelectionSizeLastRequestedFolderPaths;
+#endif
         std::wstring statusSelectionText;
         std::wstring statusSortText;
         std::wstring statusSecurityText;
@@ -1628,6 +1827,7 @@ private:
         size_t navigationHistoryIndex       = 0;
         bool navigationHistorySuspendRecord = false;
     };
+#pragma warning(pop)
 
     bool SanityCheckBothPanes(PaneState& src, PaneState& dest, FileSystemOperation operation);
 
@@ -1657,9 +1857,6 @@ private:
     RECT _rightStatusBarRect{};
     RECT _rightPreviewTabsRect{};
     RECT _rightPreviewContentRect{};
-    RECT _commandLineRect{};
-    RECT _commandLineLabelRect{};
-    RECT _commandLineEditRect{};
     RECT _functionBarRect{};
     float _splitRatio                  = 0.5f;
     bool _viewWidthAdjustActive        = false;
@@ -1674,14 +1871,6 @@ private:
     wil::unique_hbrush _splitterBrush;
     wil::unique_hbrush _splitterGripBrush;
     wil::unique_hbrush _splitterArrowHoverBrush;
-    wil::unique_hwnd _hCommandLineHost;
-    RedSalamander::DxUi::WindowHost _commandLineHost;
-    RedSalamander::DxUi::Label* _commandLineLabel     = nullptr;
-    RedSalamander::DxUi::TextField* _commandLineField = nullptr;
-    bool _commandLineVisible                          = false;
-    Pane _commandLinePane                             = Pane::Left;
-    std::filesystem::path _commandLineWorkingDirectory;
-
     AppTheme _theme;
     uint32_t _statusBarRainbowHueDegrees = 0;
     ShowSortMenuCallback _showSortMenuCallback;
@@ -1696,16 +1885,19 @@ private:
     };
     std::vector<FileOperationCompletedSubscription> _fileOperationCompletedCallbacks;
     uint64_t _nextFileOperationCompletedCallbackToken = 1;
-    std::unordered_map<uint64_t, std::function<void(HRESULT)>> _fileOperationRequestCompletionCallbacks;
+    std::unordered_map<uint64_t, FileOperationCompletedCallback> _fileOperationRequestCompletionCallbacks;
 
     std::unique_ptr<FileOperationState, FileOperationStateDeleter> _fileOperations;
+    size_t _fileOperationPromptDispatchDepth = 0u;
+    bool _fileOperationResetDeferred         = false;
+    HWND _fileOperationsDeferredCloseTarget  = nullptr;
 #ifdef ENABLE_TESTS
+    bool _debugFileOperationStateRetainedDuringNestedPromptShutdown = false;
     DebugShellActionCallback _debugShellActionCallback;
     std::optional<ChangeAttributesOptions> _debugNextChangeAttributesOptions;
     std::optional<ChangeAttributesReport> _debugLastChangeAttributesReport;
     std::optional<std::vector<ShellNewTemplateDefinition>> _debugShellNewTemplates;
     std::optional<std::wstring> _debugNextShellNewFileName;
-    CommandLineLaunchCallback _debugCommandLineLaunchCallback;
     CommandShellLaunchCallback _debugCommandShellLaunchCallback;
     std::optional<std::wstring> _debugCommandShellTerminalOverride;
 #endif
@@ -1727,6 +1919,7 @@ private:
     std::optional<SavedSelection> _savedSelection;
     std::optional<Pane> _previewSourcePane;
     bool _previewRefreshPending = false;
+    bool _suppressEmbeddedTerminalLayout = false;
 
     ViewerCallbackState _viewerCallback;
     std::vector<std::unique_ptr<ViewerInstance>> _viewerInstances;
@@ -1753,6 +1946,8 @@ private:
 #endif
 
     friend LRESULT CALLBACK FolderWindowDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+    friend class FileOperationsPopupInternal::FileOperationsPopupState;
+    friend struct FolderWindowFileOperationsStateInternal::CrossFileSystemBridge;
 };
 
 #ifdef ENABLE_TESTS

@@ -83,9 +83,11 @@ void TestButtonVariantRoundtripsAllValues()
     constexpr ButtonVariant variants[] = {
         ButtonVariant::Standard,
         ButtonVariant::DropDown,
+        ButtonVariant::Selector,
         ButtonVariant::Split,
         ButtonVariant::Hyperlink,
         ButtonVariant::IconOnly,
+        ButtonVariant::Disclosure,
         ButtonVariant::Repeat,
     };
 
@@ -105,9 +107,11 @@ void TestButtonVariantPaintPathsHandleMissingDeviceContext()
     constexpr ButtonVariant variants[] = {
         ButtonVariant::Standard,
         ButtonVariant::DropDown,
+        ButtonVariant::Selector,
         ButtonVariant::Split,
         ButtonVariant::Hyperlink,
         ButtonVariant::IconOnly,
+        ButtonVariant::Disclosure,
         ButtonVariant::Repeat,
     };
 
@@ -129,7 +133,68 @@ void TestButtonVariantPaintPathsHandleMissingDeviceContext()
     Require(true, "button variant paint paths tolerate a missing device context");
 }
 
-void TestButtonChromeLayoutDifferentiatesDropDownAndSplit()
+void TestButtonDisclosureChevronAnimatesAndHonorsReducedMotion()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    ThemePalette palette{};
+    palette.reducedMotion = false;
+    host.SetTheme(palette);
+
+    auto root   = std::make_unique<Panel>();
+    auto* button = root->AddChild<Button>();
+    button->SetBounds(D2D1::RectF(0.0f, 0.0f, 32.0f, 28.0f));
+    button->SetDisclosureExpanded(false);
+    host.SetRoot(std::move(root));
+
+    const DisclosureChevronVisualState collapsedVisual = ResolveDisclosureChevronVisualState(button->DebugGetDisclosureAnimationProgress());
+    Require(collapsedVisual.direction == ChevronDirection::Right && collapsedVisual.rotationDegrees == 0.0f,
+            "collapsed disclosure button starts with a crisp right-facing Fluent chevron");
+    Require(button->DebugGetDisclosureAnimationProgress() == 0.0f,
+            "collapsed disclosure button starts at the collapsed animation endpoint");
+    const uint64_t animationStart = GetTickCount64();
+    button->SetDisclosureExpanded(true);
+    Require(button->DebugIsDisclosureAnimationActive(), "disclosure button starts a bounded expand rotation");
+    static_cast<void>(button->Tick(host, animationStart + 120u));
+    Require(button->DebugGetDisclosureAnimationProgress() > 0.0f && button->DebugGetDisclosureAnimationProgress() < 1.0f,
+            "disclosure button exposes an intermediate right-to-down rotation");
+    const DisclosureChevronVisualState intermediateVisual = ResolveDisclosureChevronVisualState(0.5f);
+    Require(intermediateVisual.direction == ChevronDirection::Right && intermediateVisual.rotationDegrees == 45.0f,
+            "disclosure animation rotates the right glyph clockwise toward down");
+    static_cast<void>(button->Tick(host, animationStart + 300u));
+    Require(! button->DebugIsDisclosureAnimationActive() && button->DebugGetDisclosureAnimationProgress() == 1.0f,
+            "expanded disclosure button completes with its Fluent chevron pointing down");
+    const DisclosureChevronVisualState expandedVisual = ResolveDisclosureChevronVisualState(button->DebugGetDisclosureAnimationProgress());
+    Require(expandedVisual.direction == ChevronDirection::Down && expandedVisual.rotationDegrees == 0.0f,
+            "expanded disclosure button uses the native down glyph without a residual transform");
+
+    const DisclosureChevronVisualState leftCollapsedVisual =
+        ResolveDisclosureChevronVisualState(0.0f, ChevronDirection::Left);
+    const DisclosureChevronVisualState leftIntermediateVisual =
+        ResolveDisclosureChevronVisualState(0.5f, ChevronDirection::Left);
+    const DisclosureChevronVisualState leftExpandedVisual =
+        ResolveDisclosureChevronVisualState(1.0f, ChevronDirection::Left);
+    Require(leftCollapsedVisual.direction == ChevronDirection::Left && leftCollapsedVisual.rotationDegrees == 0.0f,
+            "trailing-edge disclosures can rest as a crisp left-facing chevron");
+    Require(leftIntermediateVisual.direction == ChevronDirection::Left && leftIntermediateVisual.rotationDegrees == -45.0f,
+            "trailing-edge disclosures take the short counter-clockwise path from left to down");
+    Require(leftExpandedVisual.direction == ChevronDirection::Down && leftExpandedVisual.rotationDegrees == 0.0f,
+            "both collapsed orientations converge on the same crisp expanded down glyph");
+
+    const DisclosureChevronVisualState unsupportedCollapsedVisual =
+        ResolveDisclosureChevronVisualState(0.0f, ChevronDirection::Down);
+    Require(unsupportedCollapsedVisual.direction == ChevronDirection::Right && unsupportedCollapsedVisual.rotationDegrees == 0.0f,
+            "disclosure collapsed direction is constrained to the supported left/right choices");
+
+    palette.reducedMotion = true;
+    host.SetTheme(palette);
+    button->SetDisclosureExpanded(false);
+    Require(! button->DebugIsDisclosureAnimationActive() && button->DebugGetDisclosureAnimationProgress() == 0.0f,
+            "reduced motion snaps disclosure chevrons directly to the collapsed state");
+}
+
+void TestButtonChromeLayoutDifferentiatesSelectorDropDownAndSplit()
 {
     using namespace RedSalamander::DxUi;
 
@@ -141,6 +206,13 @@ void TestButtonChromeLayoutDifferentiatesDropDownAndSplit()
     RequireFloatNear(dropDown.chevronRect.left, 110.0f, 0.001f, "drop-down button chrome uses the standard 20-DIP chevron slot");
     RequireFloatNear(dropDown.textRect.right, 110.0f, 0.001f, "drop-down button text ends before the chevron slot");
 
+    const ButtonChromeLayout selector = ComputeButtonChromeLayout(bounds, ButtonVariant::Selector, 1.0f);
+    Require(selector.hasChevron, "selector button chrome exposes a chevron slot");
+    Require(! selector.hasDivider, "selector button chrome keeps one whole-surface action without a divider");
+    RequireFloatNear(selector.chevronRect.left, 106.0f, 0.001f, "selector button chrome uses a relaxed 24-DIP chevron lane");
+    RequireFloatNear(selector.textRect.left, 34.0f, 0.001f, "selector button balances the chevron with an equal leading lane");
+    RequireFloatNear(selector.textRect.right, 106.0f, 0.001f, "selector button current value ends before the chevron lane");
+
     const ButtonChromeLayout split = ComputeButtonChromeLayout(bounds, ButtonVariant::Split, 1.0f);
     Require(split.hasChevron, "split button chrome exposes a chevron slot");
     Require(split.hasDivider, "split button chrome draws a split divider");
@@ -149,6 +221,41 @@ void TestButtonChromeLayoutDifferentiatesDropDownAndSplit()
 
     const ButtonChromeLayout scaledDropDown = ComputeButtonChromeLayout(bounds, ButtonVariant::DropDown, 1.5f);
     RequireFloatNear(scaledDropDown.chevronRect.left, 100.0f, 0.001f, "drop-down chrome scales the chevron slot with DPI");
+
+    const ButtonChromeLayout scaledSelector = ComputeButtonChromeLayout(bounds, ButtonVariant::Selector, 1.5f);
+    RequireFloatNear(scaledSelector.chevronRect.left, 94.0f, 0.001f, "selector chrome scales its chevron lane with DPI");
+    RequireFloatNear(scaledSelector.textRect.left, 46.0f, 0.001f, "selector chrome keeps its value optically centered at scaled DPI");
+}
+
+void TestSelectorButtonChromeUsesStableCurrentValueTreatment()
+{
+    using namespace RedSalamander::DxUi;
+
+    const ThemePalette theme = MakeDefaultThemePalette(true);
+    ButtonChromeDrawSpec spec{};
+    spec.variant = ButtonVariant::Selector;
+    spec.enabled = true;
+
+    const ButtonChromeResolvedStyle idle = ResolveButtonChromeResolvedStyle(theme, spec);
+    Require(! idle.showBorder, "selector chrome stays flat at rest instead of looking like a combo box or nested chevron button");
+    RequireFloatNear(idle.cornerRadiusDip, 6.0f, 0.001f, "selector chrome uses the shared relaxed corner radius");
+    RequireFloatNear(idle.textOffsetXDip, 0.0f, 0.001f, "selector value does not shift horizontally at rest");
+    RequireFloatNear(idle.chevron.r, theme.subduedText.r, 0.001f, "selector chevron is quieter than the current value at rest");
+
+    spec.hovered       = true;
+    spec.hoverStrength = 0.5f;
+    const ButtonChromeResolvedStyle halfHover = ResolveButtonChromeResolvedStyle(theme, spec);
+    Require(halfHover.showBorder, "selector hover animation introduces shared button feedback across the whole click target");
+    RequireFloatNear(halfHover.chevron.r,
+                     theme.subduedText.r + ((halfHover.text.r - theme.subduedText.r) * 0.5f),
+                     0.001f,
+                     "selector hover animation gradually emphasizes the chevron glyph");
+
+    spec.pressed = true;
+    const ButtonChromeResolvedStyle pressed = ResolveButtonChromeResolvedStyle(theme, spec);
+    RequireFloatNear(pressed.textOffsetXDip, 0.0f, 0.001f, "selector value remains stable while pressed");
+    RequireFloatNear(pressed.textOffsetYDip, 0.0f, 0.001f, "selector value does not jump vertically while pressed");
+    RequireFloatNear(pressed.chevron.r, pressed.text.r, 0.001f, "selector chevron gains full emphasis while its choices are invoked");
 }
 
 void TestButtonChromeCustomStylePreservesOverlayMetrics()
@@ -221,6 +328,74 @@ void TestDropDownButtonKeyboardActivationInvokesDropDownCallback()
     Require(dropDownOpenCount == 1u, "drop-down button Enter activation opens the drop-down callback");
     Require(button->OnKeyDown(host, VK_SPACE, 0), "drop-down button handles Space activation");
     Require(dropDownOpenCount == 2u, "drop-down button Space activation opens the drop-down callback");
+}
+
+void TestSelectorButtonUsesOneWholeSurfaceFlyoutAction()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root    = std::make_unique<Panel>();
+    auto* button = root->AddChild<Button>(L"Parallel");
+    button->SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 28.0f));
+    button->SetVariant(ButtonVariant::Selector);
+
+    size_t clickCount    = 0u;
+    size_t flyoutCount   = 0u;
+    button->SetOnClick([&] { ++clickCount; });
+    button->SetOnDropDownClick([&] { ++flyoutCount; });
+    host.SetRoot(std::move(root));
+
+    Require(button->OnMouseDown(host, D2D1::Point2F(8.0f, 14.0f), false, 0), "selector handles mouse-down on its value area");
+    Require(button->OnMouseUp(host, D2D1::Point2F(8.0f, 14.0f), false, 0), "selector handles mouse-up on its value area");
+    Require(button->OnMouseDown(host, D2D1::Point2F(112.0f, 14.0f), false, 0), "selector handles mouse-down on its chevron area");
+    Require(button->OnMouseUp(host, D2D1::Point2F(112.0f, 14.0f), false, 0), "selector handles mouse-up on its chevron area");
+    Require(flyoutCount == 2u, "selector opens the same flyout from both the value and chevron areas");
+    Require(clickCount == 0u, "selector never exposes a separate primary button action");
+}
+
+void TestButtonSuppressesTooltipThatRepeatsVisibleLabel()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root    = std::make_unique<Panel>();
+    auto* button = root->AddChild<Button>(L"Clear completed");
+    button->SetBounds(D2D1::RectF(0.0f, 0.0f, 140.0f, 32.0f));
+    button->SetTooltipText(L"Clear completed");
+    host.SetRoot(std::move(root));
+
+    Require(! button->OnMouseMove(host, D2D1::Point2F(70.0f, 16.0f), 0), "button tooltip hover does not consume pointer input");
+    Require(! host.HasTooltip(), "button suppresses a tooltip that only repeats its visible label");
+
+    button->SetTooltipText(L"Remove every finished operation from this list");
+    Require(! button->OnMouseMove(host, D2D1::Point2F(70.0f, 16.0f), 0), "supplemental button tooltip hover does not consume pointer input");
+    Require(host.DebugGetPendingTooltipText() == L"Remove every finished operation from this list",
+            "supplemental button tooltip uses the shared delayed-show path");
+    static_cast<void>(host.DebugAdvanceTooltipDelayForTest());
+    Require(host.GetTooltipText() == L"Remove every finished operation from this list",
+            "button retains a tooltip when it provides information beyond the visible label");
+}
+
+void TestNonInteractiveControlCanHostSupplementalTooltip()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root    = std::make_unique<Panel>();
+    auto* region = root->AddChild<Label>();
+    region->SetBounds(D2D1::RectF(0.0f, 0.0f, 48.0f, 22.0f));
+    region->SetTooltipText(L"Completed with partial results or warnings: 3");
+    host.SetRoot(std::move(root));
+
+    Require(! region->OnMouseMove(host, D2D1::Point2F(24.0f, 11.0f), 0), "noninteractive tooltip region does not consume pointer input");
+    Require(host.DebugGetPendingTooltipText() == L"Completed with partial results or warnings: 3",
+            "noninteractive tooltip region uses the shared delayed-show path");
+    static_cast<void>(host.DebugAdvanceTooltipDelayForTest());
+    Require(host.GetTooltipText() == L"Completed with partial results or warnings: 3",
+            "any retained control can expose supplemental tooltip information without becoming a button");
+    Require(! region->OnMouseLeave(host), "noninteractive tooltip region leave does not consume pointer input");
+    Require(! host.HasTooltip(), "noninteractive tooltip region clears its tooltip on pointer leave");
 }
 
 void TestDropDownButtonMnemonicInvokesDropDownCallback()
@@ -560,6 +735,17 @@ void TestProgressBarIndeterminateRoundtrips()
     Require(! bar.IsIndeterminate(), "progress bar indeterminate roundtrips back to false");
 }
 
+void TestProgressBarExplicitTrackHeightRoundtrips()
+{
+    using namespace RedSalamander::DxUi;
+    ProgressBar bar;
+    Require(bar.GetTrackHeightDip() == 0.0f, "progress bar uses its default determinate/indeterminate track heights initially");
+    bar.SetTrackHeightDip(10.0f);
+    Require(bar.GetTrackHeightDip() == 10.0f, "progress bar accepts an emphasized host-owned track height");
+    bar.SetTrackHeightDip(-1.0f);
+    Require(bar.GetTrackHeightDip() == 0.0f, "negative progress track height restores the default policy");
+}
+
 void TestProgressBarIndeterminateRequestsAnimationWhenAttached()
 {
     using namespace RedSalamander::DxUi;
@@ -748,6 +934,8 @@ void TestToolbarButtonHoverShowsTooltip()
 
     Require(! host.HasTooltip(), "toolbar button hover test starts without an active tooltip");
     Require(! btn->OnMouseMove(host, D2D1::Point2F(20.0f, 20.0f), 0), "toolbar button hover handling does not consume the pointer event");
+    Require(host.DebugGetPendingTooltipText() == L"Copy", "toolbar button hover schedules the configured tooltip through the shared delay");
+    static_cast<void>(host.DebugAdvanceTooltipDelayForTest());
     Require(host.HasTooltip(), "toolbar button hover shows the configured tooltip");
     Require(host.GetTooltipText() == L"Copy", "toolbar button hover uses the toolbar tooltip text");
     Require(! btn->OnMouseLeave(host), "toolbar button mouse-leave does not need to consume the event");
@@ -1055,6 +1243,52 @@ void TestTabControlSelectionShowsOnlyTheActivePage()
     Require(tabControl->GetSelectedPage() == secondPage, "tab control updates the selected page when the selected index changes");
     Require(! firstPage->IsVisible() && secondPage->IsVisible(), "tab control hides the old page and shows the newly selected page");
     Require(secondPage->GetBounds().top > tabControl->GetBounds().top, "tab control places the selected page below the header strip");
+}
+
+void TestTabControlHiddenTabsKeepStableIndicesAndLeaveTheHeader()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root        = std::make_unique<Panel>();
+    auto* tabControl = root->AddChild<TabControl>();
+    tabControl->SetBounds(D2D1::RectF(0.0f, 0.0f, 360.0f, 200.0f));
+
+    auto* folderPage   = tabControl->AddTab<Label>(L"Folder", L"Folder page");
+    auto* previewPage  = tabControl->AddTab<Label>(L"Preview", L"Preview page");
+    auto* terminalPage = tabControl->AddTab<Label>(L"Terminal", L"Terminal page");
+    tabControl->SetTabClosable(1u, true);
+    tabControl->SetTabClosable(2u, true);
+    host.SetRoot(std::move(root));
+
+    tabControl->SetTabVisible(1u, false);
+    const auto hasArea = [](const D2D1_RECT_F& rect) noexcept { return rect.right > rect.left && rect.bottom > rect.top; };
+    Require(tabControl->GetTabCount() == 3u && tabControl->GetVisibleTabCount() == 2u,
+            "hiding a tab preserves stable model indices while reducing the visible header count");
+    Require(! tabControl->IsTabVisible(1u) && tabControl->IsTabVisible(2u), "tab visibility is reported by stable model index");
+    Require(! hasArea(tabControl->DebugGetTabRect(1u)) && hasArea(tabControl->DebugGetTabRect(2u)),
+            "a hidden tab has no interactive header geometry while later visible tabs retain geometry");
+    Require(! previewPage->IsVisible(), "a hidden tab page cannot remain visible");
+
+    tabControl->SetSelectedIndex(2u);
+    Require(tabControl->GetSelectedPage() == terminalPage && terminalPage->IsVisible() && ! folderPage->IsVisible(),
+            "a visible tab after a hidden stable index remains directly selectable");
+    Require(tabControl->OnKeyDown(host, VK_LEFT, 0), "keyboard navigation handles a visible set containing a hidden tab");
+    Require(tabControl->GetSelectedIndex().has_value() && tabControl->GetSelectedIndex().value() == 0u,
+            "keyboard navigation skips a hidden tab");
+
+    tabControl->SetTabVisible(0u, false);
+    Require(tabControl->GetSelectedIndex().has_value() && tabControl->GetSelectedIndex().value() == 2u && terminalPage->IsVisible(),
+            "hiding the selected tab falls back to another visible stable index");
+
+    tabControl->RemoveTab(2u);
+    Require(! tabControl->GetSelectedIndex().has_value() && tabControl->GetSelectedPage() == nullptr,
+            "removing the last visible tab clears selection instead of selecting a hidden page");
+
+    auto* searchPage = tabControl->AddTab<Label>(L"Search", L"Search page");
+    Require(tabControl->GetSelectedIndex().has_value() && tabControl->GetSelectedIndex().value() == 2u &&
+                tabControl->GetSelectedPage() == searchPage,
+            "adding a visible tab after hidden pages selects the new stable index");
 }
 
 void TestTabControlCloseButtonRemovesTabsAndInvokesCallback()
@@ -1558,10 +1792,15 @@ void RunNewControlTests()
     TestButtonVariantDefaultIsStandard();
     TestButtonVariantRoundtripsAllValues();
     TestButtonVariantPaintPathsHandleMissingDeviceContext();
-    TestButtonChromeLayoutDifferentiatesDropDownAndSplit();
+    TestButtonDisclosureChevronAnimatesAndHonorsReducedMotion();
+    TestButtonChromeLayoutDifferentiatesSelectorDropDownAndSplit();
+    TestSelectorButtonChromeUsesStableCurrentValueTreatment();
     TestButtonChromeCustomStylePreservesOverlayMetrics();
     TestHyperlinkButtonClickInvokesCallback();
     TestDropDownButtonKeyboardActivationInvokesDropDownCallback();
+    TestSelectorButtonUsesOneWholeSurfaceFlyoutAction();
+    TestButtonSuppressesTooltipThatRepeatsVisibleLabel();
+    TestNonInteractiveControlCanHostSupplementalTooltip();
     TestDropDownButtonMnemonicInvokesDropDownCallback();
     TestDropDownButtonCallbackCanReplaceRootSafely();
     TestButtonMouseClickReleasesHostCaptureBeforeCallback();
@@ -1585,6 +1824,7 @@ void RunNewControlTests()
     TestProgressBarValueRoundtrips();
     TestProgressBarRangeRoundtrips();
     TestProgressBarIndeterminateRoundtrips();
+    TestProgressBarExplicitTrackHeightRoundtrips();
     TestProgressBarIndeterminateRequestsAnimationWhenAttached();
     TestProgressBarPaintHandlesMissingDeviceContext();
     TestProgressBarDisabledIndeterminateStateDoesNotAnimateUntilReenabled();
@@ -1614,6 +1854,7 @@ void RunNewControlTests()
 
     // TabControl
     TestTabControlSelectionShowsOnlyTheActivePage();
+    TestTabControlHiddenTabsKeepStableIndicesAndLeaveTheHeader();
     TestTabControlCloseButtonRemovesTabsAndInvokesCallback();
     TestTabControlCloseCallbacksCanReplaceRootSafely();
     TestTabControlOverflowButtonsAndWheelScroll();

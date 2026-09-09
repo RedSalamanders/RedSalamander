@@ -49,7 +49,11 @@
 #include "resource.h"
 
 [[nodiscard]] uint32_t GetCurrentModifierMask() noexcept;
-void ApplyCapturedShortcut(HWND host, PreferencesDialogState& state, uint32_t vk, uint32_t modifiers) noexcept;
+void ApplyCapturedShortcut(HWND host,
+                           PreferencesDialogState& state,
+                           uint32_t vk,
+                           uint32_t modifiers,
+                           Common::Keyboard::KeyPosition keyPosition) noexcept;
 [[nodiscard]] std::optional<size_t> TryGetSelectedKeyboardRowIndex(const PreferencesDialogState& state) noexcept;
 [[nodiscard]] bool PrefsKeyboardCaptureWantsAllKeys(const PreferencesDialogState* state) noexcept;
 [[nodiscard]] bool PrefsHandleKeyboardCaptureMessage(HWND hostHwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
@@ -88,10 +92,11 @@ std::mutex g_debugKeyboardBrowseResultMutex;
 std::optional<DebugKeyboardBrowseResult> g_debugNextKeyboardBrowseResult;
 #endif
 
-// Scope combo item data values: index 0 = All (data=2), index 1 = FunctionBar (data=0), index 2 = FolderView (data=1)
 constexpr size_t kScopeComboIndexAll         = 0u;
-constexpr size_t kScopeComboIndexFunctionBar = 1u;
-constexpr size_t kScopeComboIndexFolderView  = 2u;
+constexpr size_t kScopeComboIndexApplication = 1u;
+constexpr size_t kScopeComboIndexFunctionBar = 2u;
+constexpr size_t kScopeComboIndexFolderView  = 3u;
+constexpr size_t kScopeComboIndexTerminal    = 4u;
 
 [[nodiscard]] const std::wstring& GetKeyboardConflictMark() noexcept
 {
@@ -121,23 +126,57 @@ constexpr size_t kScopeComboIndexFolderView  = 2u;
 {
     switch (scope)
     {
+        case ShortcutScope::Application: return ShortcutDefaults::IsDefaultApplicationBinding(binding);
         case ShortcutScope::FunctionBar: return ShortcutDefaults::IsDefaultFunctionBarBinding(binding);
         case ShortcutScope::FolderView: return ShortcutDefaults::IsDefaultFolderViewBinding(binding);
+        case ShortcutScope::Terminal: return ShortcutDefaults::IsDefaultTerminalBinding(binding);
     }
     return false;
 }
 
-[[nodiscard]] bool HasShortcutChord(const std::vector<Common::Settings::ShortcutBinding>& bindings, uint32_t vk, uint32_t modifiers) noexcept
+[[nodiscard]] std::vector<Common::Settings::ShortcutBinding>* GetBindingsForScope(
+    Common::Settings::ShortcutsSettings& shortcuts, ShortcutScope scope) noexcept
 {
-    const uint32_t chordKey = ShortcutManager::MakeChordKey(vk, modifiers);
+    switch (scope)
+    {
+        case ShortcutScope::Application: return &shortcuts.application;
+        case ShortcutScope::FunctionBar: return &shortcuts.functionBar;
+        case ShortcutScope::FolderView: return &shortcuts.folderView;
+        case ShortcutScope::Terminal: return &shortcuts.terminal;
+    }
+    return nullptr;
+}
+
+[[nodiscard]] CommandShortcutScope GetCommandShortcutScope(ShortcutScope scope) noexcept
+{
+    switch (scope)
+    {
+        case ShortcutScope::Application: return CommandShortcutScope::Application;
+        case ShortcutScope::FunctionBar: return CommandShortcutScope::FunctionBar;
+        case ShortcutScope::FolderView: return CommandShortcutScope::FolderView;
+        case ShortcutScope::Terminal: return CommandShortcutScope::Terminal;
+    }
+    return CommandShortcutScope::FolderView;
+}
+
+[[nodiscard]] bool HasShortcutChord(const std::vector<Common::Settings::ShortcutBinding>& bindings,
+                                    Common::Keyboard::KeyPosition keyPosition,
+                                    uint32_t vk,
+                                    uint32_t modifiers) noexcept
+{
+    const uint32_t chordKey = keyPosition == Common::Keyboard::KeyPosition::None ? ShortcutManager::MakeChordKey(vk, modifiers)
+                                                                                 : ShortcutManager::MakeChordKey(keyPosition, modifiers);
     return std::any_of(bindings.begin(), bindings.end(), [=](const Common::Settings::ShortcutBinding& binding) noexcept {
-        return ShortcutManager::MakeChordKey(binding.vk, binding.modifiers) == chordKey;
+        return ShortcutManager::MakeChordKey(binding) == chordKey;
     });
 }
 
-void AddUnassignedShortcutIfMissing(std::vector<Common::Settings::ShortcutBinding>& bindings, uint32_t vk, uint32_t modifiers)
+void AddUnassignedShortcutIfMissing(std::vector<Common::Settings::ShortcutBinding>& bindings,
+                                    Common::Keyboard::KeyPosition keyPosition,
+                                    uint32_t vk,
+                                    uint32_t modifiers)
 {
-    if (HasShortcutChord(bindings, vk, modifiers))
+    if (HasShortcutChord(bindings, keyPosition, vk, modifiers))
     {
         return;
     }
@@ -145,6 +184,7 @@ void AddUnassignedShortcutIfMissing(std::vector<Common::Settings::ShortcutBindin
     Common::Settings::ShortcutBinding binding;
     binding.vk        = vk;
     binding.modifiers = modifiers & 0x7u;
+    binding.keyPosition = keyPosition;
     binding.commandId = ShortcutIds::kUnassignedCommandId;
     bindings.push_back(std::move(binding));
 }
@@ -307,6 +347,7 @@ public:
             case kKeyboardListColumnScope:
                 outCell.text        = row.scopeText;
                 outCell.tooltipText = row.tooltipText;
+                outCell.multiline   = true;
                 break;
         }
     }
@@ -363,7 +404,7 @@ bool PrefsKeyboardCaptureWantsAllKeys(const PreferencesDialogState* state) noexc
     return state && state->currentCategory == PrefCategory::Keyboard && state->keyboardCaptureActive;
 }
 
-bool PrefsHandleKeyboardCaptureMessage(HWND hostHwnd, UINT msg, WPARAM wp, LPARAM /*lp*/) noexcept
+bool PrefsHandleKeyboardCaptureMessage(HWND hostHwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
     auto* state = PrefsUi::GetDialogState(hostHwnd);
     if (! PrefsKeyboardCaptureWantsAllKeys(state))
@@ -374,7 +415,14 @@ bool PrefsHandleKeyboardCaptureMessage(HWND hostHwnd, UINT msg, WPARAM wp, LPARA
     switch (msg)
     {
         case WM_SYSKEYDOWN:
-        case WM_KEYDOWN: ApplyCapturedShortcut(hostHwnd, *state, static_cast<uint32_t>(wp), GetCurrentModifierMask()); return true;
+        case WM_KEYDOWN:
+            ApplyCapturedShortcut(hostHwnd,
+                                  *state,
+                                  static_cast<uint32_t>(wp),
+                                  GetCurrentModifierMask(),
+                                  Common::Keyboard::PositionFromScanCode(Common::Keyboard::ScanCodeFromKeyMessageLParam(lp),
+                                                                         Common::Keyboard::IsExtendedKeyMessageLParam(lp)));
+            return true;
         case WM_SYSCHAR:
         case WM_CHAR: return true;
         default: return false;
@@ -417,6 +465,10 @@ std::optional<ShortcutScope> KeyboardPane::GetScopeFilter() const noexcept
         return std::nullopt;
     }
 
+    if (selectedIndex.value() == kScopeComboIndexApplication)
+    {
+        return ShortcutScope::Application;
+    }
     if (selectedIndex.value() == kScopeComboIndexFunctionBar)
     {
         return ShortcutScope::FunctionBar;
@@ -424,6 +476,10 @@ std::optional<ShortcutScope> KeyboardPane::GetScopeFilter() const noexcept
     if (selectedIndex.value() == kScopeComboIndexFolderView)
     {
         return ShortcutScope::FolderView;
+    }
+    if (selectedIndex.value() == kScopeComboIndexTerminal)
+    {
+        return ShortcutScope::Terminal;
     }
     return std::nullopt;
 }
@@ -686,12 +742,16 @@ bool KeyboardPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noe
     {
         const std::wstring allText = LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_SCOPE_ALL);
         std::vector<ComboBox::Item> scopeItems;
-        scopeItems.reserve(3u);
+        scopeItems.reserve(5u);
         scopeItems.push_back(ComboBox::Item{std::wstring(allText), std::wstring(allText)});
+        scopeItems.push_back(ComboBox::Item{std::wstring(GetShortcutScopeDisplayName(ShortcutScope::Application)),
+                                            std::wstring(GetShortcutScopeDisplayName(ShortcutScope::Application))});
         scopeItems.push_back(ComboBox::Item{std::wstring(GetShortcutScopeDisplayName(ShortcutScope::FunctionBar)),
                                             std::wstring(GetShortcutScopeDisplayName(ShortcutScope::FunctionBar))});
         scopeItems.push_back(ComboBox::Item{std::wstring(GetShortcutScopeDisplayName(ShortcutScope::FolderView)),
                                             std::wstring(GetShortcutScopeDisplayName(ShortcutScope::FolderView))});
+        scopeItems.push_back(ComboBox::Item{std::wstring(GetShortcutScopeDisplayName(ShortcutScope::Terminal)),
+                                            std::wstring(GetShortcutScopeDisplayName(ShortcutScope::Terminal))});
         dxState->page.scopeCombo->SetItems(std::move(scopeItems));
         dxState->page.scopeCombo->SetSelectedIndex(kScopeComboIndexAll);
     }
@@ -786,6 +846,11 @@ void KeyboardPane::SyncDxControlsFromState(const PreferencesDialogState& state) 
             row.tooltipText = legacyRow.commandId;
             row.hasConflict = legacyRow.hasConflict;
             row.chordText   = legacyRow.chordText;
+            if (legacyRow.overridesGlobal)
+            {
+                row.scopeText.append(L"\n");
+                row.scopeText.append(LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_OVERRIDES_GLOBAL));
+            }
 
             std::wstring description;
             if (! legacyRow.commandId.empty())
@@ -801,6 +866,11 @@ void KeyboardPane::SyncDxControlsFromState(const PreferencesDialogState& state) 
             {
                 row.commandText.append(L"\n");
                 row.commandText.append(description);
+            }
+            if (legacyRow.overridesGlobal)
+            {
+                row.tooltipText.append(L"\n");
+                row.tooltipText.append(LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_OVERRIDES_GLOBAL));
             }
 
             if (! selectedStableId.has_value() && MatchesRetainedKeyboardSelection(state, legacyRow))
@@ -987,7 +1057,7 @@ bool KeyboardPane::DebugApplyCapturedShortcut(HWND host, PreferencesDialogState&
         return false;
     }
 
-    ApplyCapturedShortcut(host, state, vk, modifiers);
+    ApplyCapturedShortcut(host, state, vk, modifiers, Common::Keyboard::KeyPosition::None);
     return true;
 }
 
@@ -1273,6 +1343,30 @@ bool KeyboardPane::DebugGetVisibleRowChordByCommandId(std::wstring_view commandI
     return false;
 }
 
+bool KeyboardPane::DebugGetVisibleRowPresentationByCommandId(
+    std::wstring_view commandId,
+    std::wstring& outScopeText,
+    std::wstring& outTooltipText) const noexcept
+{
+    outScopeText.clear();
+    outTooltipText.clear();
+    if (! _dxState || ! _dxState->page.listModel || commandId.empty())
+    {
+        return false;
+    }
+    for (const KeyboardGridRow& row : _dxState->page.listModel->GetRows())
+    {
+        if (row.tooltipText.starts_with(commandId) &&
+            (row.tooltipText.size() == commandId.size() || row.tooltipText[commandId.size()] == L'\n'))
+        {
+            outScopeText = row.scopeText;
+            outTooltipText = row.tooltipText;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool KeyboardPane::DebugSelectListRow(const size_t rowIndex) noexcept
 {
     if (! _dxState || ! _dxState->page.listControl || ! _dxState->page.listModel)
@@ -1354,6 +1448,31 @@ bool KeyboardPane::DebugSetFunctionBarScope() noexcept
     return false;
 }
 
+bool KeyboardPane::DebugSetTerminalScope() noexcept
+{
+    if (! _dxState || ! _dxState->page.scopeCombo)
+    {
+        return false;
+    }
+    const std::optional<size_t> terminalIndex = kScopeComboIndexTerminal;
+    if (_dxState->page.scopeCombo->GetSelectedIndex() == terminalIndex)
+    {
+        return true;
+    }
+    _dxState->page.scopeCombo->SetSelectedIndex(terminalIndex);
+    if (_hostWindow && IsWindow(_hostWindow) != FALSE)
+    {
+        static_cast<void>(PrefsUi::PostDeferredAction(
+            _hostWindow, PreferencesDeferredActionKind::KeyboardScopeChanged));
+        if (_pageHostDx)
+        {
+            _pageHostDx->Invalidate();
+        }
+        return true;
+    }
+    return false;
+}
+
 bool KeyboardPane::DebugFocusSearchField() noexcept
 {
     if (! _dxState || ! _dxState->page.searchEdit || ! _pageHostDx)
@@ -1416,7 +1535,6 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
     }
 
     HostAlertRequest request{};
-    request.version      = 1;
     request.sizeBytes    = sizeof(request);
     request.scope        = HOST_ALERT_SCOPE_WINDOW;
     request.modality     = HOST_ALERT_MODELESS;
@@ -1650,10 +1768,16 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
 
 [[nodiscard]] std::wstring_view GetShortcutScopeDisplayName(ShortcutScope scope) noexcept
 {
+    static const std::wstring application = LoadStringResource(nullptr, IDS_SHORTCUTS_GROUP_APPLICATION);
+    static const std::wstring functionBar = LoadStringResource(nullptr, IDS_SHORTCUTS_GROUP_FUNCTION_BAR);
+    static const std::wstring folderView  = LoadStringResource(nullptr, IDS_SHORTCUTS_GROUP_FOLDER_VIEW);
+    static const std::wstring terminal    = LoadStringResource(nullptr, IDS_SHORTCUTS_GROUP_TERMINAL);
     switch (scope)
     {
-        case ShortcutScope::FunctionBar: return L"Function bar";
-        case ShortcutScope::FolderView: return L"Folder view";
+        case ShortcutScope::Application: return application;
+        case ShortcutScope::FunctionBar: return functionBar;
+        case ShortcutScope::FolderView: return folderView;
+        case ShortcutScope::Terminal: return terminal;
     }
     return {};
 }
@@ -1778,8 +1902,11 @@ void KeyboardPane::UpdateHint(HWND host, PreferencesDialogState& state) noexcept
         const std::wstring commandName = ShortcutText::GetCommandDisplayName(state.keyboardCaptureCommandId);
         const bool hasPendingVk        = state.keyboardCapturePendingVk.has_value();
         const uint32_t modifiers       = state.keyboardCapturePendingModifiers;
-        const std::wstring pressedText =
-            hasPendingVk ? ShortcutText::FormatChordText(state.keyboardCapturePendingVk.value(), modifiers) : FormatModifiersOnlyText(modifiers);
+        const std::wstring pressedText = hasPendingVk
+                                             ? ShortcutText::FormatChordText(state.keyboardCapturePendingKeyPosition,
+                                                                             state.keyboardCapturePendingVk.value(),
+                                                                             modifiers)
+                                             : FormatModifiersOnlyText(modifiers);
 
         std::wstring conflictName;
         if (! state.keyboardCaptureConflictCommandId.empty())
@@ -1838,6 +1965,14 @@ void KeyboardPane::UpdateHint(HWND host, PreferencesDialogState& state) noexcept
     if (const std::optional<unsigned int> descId = TryGetCommandDescriptionStringId(row.commandId); descId.has_value())
     {
         description = LoadStringResource(nullptr, descId.value());
+    }
+    if (row.overridesGlobal)
+    {
+        if (!description.empty())
+        {
+            description.append(L"\n");
+        }
+        description.append(LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_OVERRIDES_GLOBAL));
     }
 
     if (! description.empty())
@@ -2019,43 +2154,59 @@ void KeyboardPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
 
     const Common::Settings::ShortcutsSettings& shortcuts = state.workingSettings.shortcuts.value();
 
+    std::unordered_set<uint32_t> applicationChordKeys;
+    applicationChordKeys.reserve(shortcuts.application.size());
+    for (const Common::Settings::ShortcutBinding& binding : shortcuts.application)
+    {
+        if (! binding.commandId.empty() && ! ShortcutIds::IsUnassignedCommandId(binding.commandId))
+        {
+            applicationChordKeys.emplace(ShortcutManager::MakeChordKey(binding));
+        }
+    }
+
     ShortcutManager manager;
     manager.Load(shortcuts);
 
-    const auto& functionConflicts = manager.GetFunctionBarConflicts();
-    const auto& folderConflicts   = manager.GetFolderViewConflicts();
+    const auto& applicationConflicts = manager.GetApplicationConflicts();
+    const auto& functionConflicts    = manager.GetFunctionBarConflicts();
+    const auto& folderConflicts      = manager.GetFolderViewConflicts();
+    const auto& terminalConflicts    = manager.GetTerminalConflicts();
 
+    std::unordered_map<std::wstring, std::vector<size_t>> applicationByCommand;
     std::unordered_map<std::wstring, std::vector<size_t>> functionByCommand;
     std::unordered_map<std::wstring, std::vector<size_t>> folderByCommand;
+    std::unordered_map<std::wstring, std::vector<size_t>> terminalByCommand;
 
+    applicationByCommand.reserve(shortcuts.application.size());
     functionByCommand.reserve(shortcuts.functionBar.size());
     folderByCommand.reserve(shortcuts.folderView.size());
+    terminalByCommand.reserve(shortcuts.terminal.size());
 
-    for (size_t i = 0; i < shortcuts.functionBar.size(); ++i)
+    const auto indexBindings = [](const std::vector<Common::Settings::ShortcutBinding>& bindings,
+                                  std::unordered_map<std::wstring, std::vector<size_t>>& byCommand)
     {
-        const auto& binding = shortcuts.functionBar[i];
-        if (binding.commandId.empty() || ShortcutIds::IsUnassignedCommandId(binding.commandId))
+        for (size_t i = 0; i < bindings.size(); ++i)
         {
-            continue;
+            const auto& binding = bindings[i];
+            if (binding.commandId.empty())
+            {
+                continue;
+            }
+            byCommand[binding.commandId].push_back(i);
         }
-        functionByCommand[binding.commandId].push_back(i);
-    }
+    };
 
-    for (size_t i = 0; i < shortcuts.folderView.size(); ++i)
-    {
-        const auto& binding = shortcuts.folderView[i];
-        if (binding.commandId.empty() || ShortcutIds::IsUnassignedCommandId(binding.commandId))
-        {
-            continue;
-        }
-        folderByCommand[binding.commandId].push_back(i);
-    }
+    indexBindings(shortcuts.application, applicationByCommand);
+    indexBindings(shortcuts.functionBar, functionByCommand);
+    indexBindings(shortcuts.folderView, folderByCommand);
+    indexBindings(shortcuts.terminal, terminalByCommand);
 
     struct CommandEntry
     {
         std::wstring id;
         std::wstring displayName;
         bool known = false;
+        uint8_t shortcutScopeMask = 0u;
     };
 
     std::vector<CommandEntry> commands;
@@ -2076,35 +2227,64 @@ void KeyboardPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
         entry.id          = std::move(id);
         entry.displayName = ShortcutText::GetCommandDisplayName(entry.id);
         entry.known       = true;
+        entry.shortcutScopeMask = cmd.shortcutScopeMask;
         commands.push_back(std::move(entry));
     }
 
-    auto ensureCommand = [&](const std::wstring& commandId)
+    auto ensureCommand = [&](const std::wstring& commandId, ShortcutScope scope)
     {
-        if (commandId.empty() || ShortcutIds::IsUnassignedCommandId(commandId))
+        if (commandId.empty())
         {
             return;
         }
 
         if (! seen.emplace(commandId).second)
         {
+            if (const auto existing = std::find_if(commands.begin(), commands.end(), [&](const CommandEntry& entry) noexcept { return entry.id == commandId; });
+                existing != commands.end())
+            {
+                existing->shortcutScopeMask = static_cast<uint8_t>(
+                    existing->shortcutScopeMask | CommandShortcutScopeMask(GetCommandShortcutScope(scope)));
+            }
             return;
         }
 
         CommandEntry entry;
         entry.id          = commandId;
-        entry.displayName = ShortcutText::GetCommandDisplayName(entry.id);
-        entry.known       = FindCommandInfo(entry.id) != nullptr;
+        if (ShortcutIds::IsPassThroughCommandId(commandId))
+        {
+            entry.displayName = LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_PASS_THROUGH);
+        }
+        else if (ShortcutIds::IsUnassignedCommandId(commandId))
+        {
+            entry.displayName = LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_NO_ACTION);
+        }
+        else
+        {
+            entry.displayName = ShortcutText::GetCommandDisplayName(entry.id);
+        }
+        entry.known = FindCommandInfo(entry.id) != nullptr || ShortcutIds::IsPseudoCommandId(commandId);
+        entry.shortcutScopeMask = CommandShortcutScopeMask(GetCommandShortcutScope(scope));
         commands.push_back(std::move(entry));
     };
 
+    ensureCommand(std::wstring(ShortcutIds::kPassThroughCommandId), ShortcutScope::Terminal);
+    ensureCommand(std::wstring(ShortcutIds::kUnassignedCommandId), ShortcutScope::Terminal);
+    for (const auto& binding : shortcuts.application)
+    {
+        ensureCommand(binding.commandId, ShortcutScope::Application);
+    }
     for (const auto& binding : shortcuts.functionBar)
     {
-        ensureCommand(binding.commandId);
+        ensureCommand(binding.commandId, ShortcutScope::FunctionBar);
     }
     for (const auto& binding : shortcuts.folderView)
     {
-        ensureCommand(binding.commandId);
+        ensureCommand(binding.commandId, ShortcutScope::FolderView);
+    }
+    for (const auto& binding : shortcuts.terminal)
+    {
+        ensureCommand(binding.commandId, ShortcutScope::Terminal);
     }
 
     std::sort(commands.begin(),
@@ -2146,6 +2326,10 @@ void KeyboardPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
 
         for (const auto& command : commands)
         {
+            if ((command.shortcutScopeMask & CommandShortcutScopeMask(GetCommandShortcutScope(scope))) == 0u)
+            {
+                continue;
+            }
             auto it = byCommand.find(command.id);
             if (it == byCommand.end())
             {
@@ -2183,10 +2367,12 @@ void KeyboardPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
                 row.bindingIndex        = index;
                 row.vk                  = binding.vk;
                 row.modifiers           = binding.modifiers & 0x7u;
-                row.chordText           = ShortcutText::FormatChordText(row.vk, row.modifiers);
+                row.keyPosition         = binding.keyPosition;
+                row.chordText           = ShortcutText::FormatChordText(row.keyPosition, row.vk, row.modifiers);
                 row.placeholder         = false;
-                const uint32_t chordKey = ShortcutManager::MakeChordKey(row.vk, row.modifiers);
+                const uint32_t chordKey = ShortcutManager::MakeChordKey(binding);
                 row.hasConflict         = IsConflictChord(chordKey, conflicts);
+                row.overridesGlobal     = scope == ShortcutScope::Terminal && applicationChordKeys.contains(chordKey);
                 if (matchesSearch(row))
                 {
                     rows.push_back(std::move(row));
@@ -2195,8 +2381,10 @@ void KeyboardPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
         }
     };
 
+    addRowsForScope(ShortcutScope::Application, shortcuts.application, applicationConflicts, applicationByCommand);
     addRowsForScope(ShortcutScope::FunctionBar, shortcuts.functionBar, functionConflicts, functionByCommand);
     addRowsForScope(ShortcutScope::FolderView, shortcuts.folderView, folderConflicts, folderByCommand);
+    addRowsForScope(ShortcutScope::Terminal, shortcuts.terminal, terminalConflicts, terminalByCommand);
 
     state.keyboardRows = std::move(rows);
 
@@ -2222,6 +2410,8 @@ void KeyboardPane::EndCapture(HWND host, PreferencesDialogState& state) noexcept
     state.keyboardCaptureBindingIndex.reset();
     state.keyboardCapturePendingVk.reset();
     state.keyboardCapturePendingModifiers = 0;
+    state.keyboardCapturePendingKeyPosition = Common::Keyboard::KeyPosition::None;
+    state.keyboardCapturePendingKeyPosition = Common::Keyboard::KeyPosition::None;
     state.keyboardCaptureConflictCommandId.clear();
     state.keyboardCaptureConflictBindingIndex.reset();
     state.keyboardCaptureConflictMultiple = false;
@@ -2259,6 +2449,7 @@ void KeyboardPane::BeginCapture(HWND host, PreferencesDialogState& state) noexce
     state.keyboardCaptureBindingIndex = row.bindingIndex;
     state.keyboardCapturePendingVk.reset();
     state.keyboardCapturePendingModifiers = 0;
+    state.keyboardCapturePendingKeyPosition = Common::Keyboard::KeyPosition::None;
     state.keyboardCaptureConflictCommandId.clear();
     state.keyboardCaptureConflictBindingIndex.reset();
     state.keyboardCaptureConflictMultiple = false;
@@ -2324,11 +2515,22 @@ void KeyboardPane::BeginCapture(HWND host, PreferencesDialogState& state) noexce
     return result;
 }
 
-void ApplyCapturedShortcut(HWND host, PreferencesDialogState& state, uint32_t vk, uint32_t modifiers) noexcept
+void ApplyCapturedShortcut(HWND host,
+                           PreferencesDialogState& state,
+                           uint32_t vk,
+                           uint32_t modifiers,
+                           Common::Keyboard::KeyPosition keyPosition) noexcept
 {
     if (! host || ! state.keyboardCaptureActive)
     {
         return;
+    }
+
+    if (state.keyboardCaptureScope == ShortcutScope::FunctionBar)
+    {
+        // Function Bar dispatch is also driven by pointer/F-key commands that
+        // carry no scan code, so its persisted identity must remain virtual-key based.
+        keyPosition = Common::Keyboard::KeyPosition::None;
     }
 
     if (vk == VK_ESCAPE)
@@ -2342,6 +2544,7 @@ void ApplyCapturedShortcut(HWND host, PreferencesDialogState& state, uint32_t vk
     {
         state.keyboardCapturePendingVk.reset();
         state.keyboardCapturePendingModifiers = GetCurrentModifierMask();
+        state.keyboardCapturePendingKeyPosition = Common::Keyboard::KeyPosition::None;
         state.keyboardCaptureConflictCommandId.clear();
         state.keyboardCaptureConflictBindingIndex.reset();
         state.keyboardCaptureConflictMultiple = false;
@@ -2361,12 +2564,7 @@ void ApplyCapturedShortcut(HWND host, PreferencesDialogState& state, uint32_t vk
     }
 
     Common::Settings::ShortcutsSettings& shortcuts           = state.workingSettings.shortcuts.value();
-    std::vector<Common::Settings::ShortcutBinding>* bindings = nullptr;
-    switch (state.keyboardCaptureScope)
-    {
-        case ShortcutScope::FunctionBar: bindings = &shortcuts.functionBar; break;
-        case ShortcutScope::FolderView: bindings = &shortcuts.folderView; break;
-    }
+    std::vector<Common::Settings::ShortcutBinding>* bindings = GetBindingsForScope(shortcuts, state.keyboardCaptureScope);
     if (! bindings)
     {
         return;
@@ -2382,10 +2580,12 @@ void ApplyCapturedShortcut(HWND host, PreferencesDialogState& state, uint32_t vk
         }
     }
 
-    const uint32_t chordKey = ShortcutManager::MakeChordKey(vk, modifiers);
+    const uint32_t chordKey = keyPosition == Common::Keyboard::KeyPosition::None ? ShortcutManager::MakeChordKey(vk, modifiers)
+                                                                                 : ShortcutManager::MakeChordKey(keyPosition, modifiers);
 
     state.keyboardCapturePendingVk        = vk;
     state.keyboardCapturePendingModifiers = modifiers;
+    state.keyboardCapturePendingKeyPosition = keyPosition;
     state.keyboardCaptureConflictCommandId.clear();
     state.keyboardCaptureConflictBindingIndex.reset();
     state.keyboardCaptureConflictMultiple = false;
@@ -2403,7 +2603,7 @@ void ApplyCapturedShortcut(HWND host, PreferencesDialogState& state, uint32_t vk
             continue;
         }
 
-        if (ShortcutManager::MakeChordKey(binding.vk, binding.modifiers) != chordKey)
+        if (ShortcutManager::MakeChordKey(binding) != chordKey)
         {
             continue;
         }
@@ -2432,6 +2632,8 @@ void KeyboardPane::CommitCapturedShortcut(HWND host, PreferencesDialogState& sta
 
     const uint32_t vk        = state.keyboardCapturePendingVk.value();
     const uint32_t modifiers = state.keyboardCapturePendingModifiers;
+    const Common::Keyboard::KeyPosition keyPosition = state.keyboardCapturePendingKeyPosition;
+    const uint32_t storedVk = keyPosition == Common::Keyboard::KeyPosition::None ? vk : 0u;
 
     if (! EnsureWorkingShortcuts(state))
     {
@@ -2444,12 +2646,7 @@ void KeyboardPane::CommitCapturedShortcut(HWND host, PreferencesDialogState& sta
     }
 
     Common::Settings::ShortcutsSettings& shortcuts           = state.workingSettings.shortcuts.value();
-    std::vector<Common::Settings::ShortcutBinding>* bindings = nullptr;
-    switch (state.keyboardCaptureScope)
-    {
-        case ShortcutScope::FunctionBar: bindings = &shortcuts.functionBar; break;
-        case ShortcutScope::FolderView: bindings = &shortcuts.folderView; break;
-    }
+    std::vector<Common::Settings::ShortcutBinding>* bindings = GetBindingsForScope(shortcuts, state.keyboardCaptureScope);
     if (! bindings)
     {
         return;
@@ -2465,17 +2662,21 @@ void KeyboardPane::CommitCapturedShortcut(HWND host, PreferencesDialogState& sta
         }
     }
 
-    const uint32_t chordKey                       = ShortcutManager::MakeChordKey(vk, modifiers);
+    const uint32_t chordKey                       = keyPosition == Common::Keyboard::KeyPosition::None
+                                                        ? ShortcutManager::MakeChordKey(vk, modifiers)
+                                                        : ShortcutManager::MakeChordKey(keyPosition, modifiers);
     uint32_t previousTargetVk                     = 0u;
     uint32_t previousTargetModifiers              = 0u;
+    Common::Keyboard::KeyPosition previousTargetKeyPosition = Common::Keyboard::KeyPosition::None;
     bool preservePreviousDefaultChordAsUnassigned = false;
     if (targetIndex != std::numeric_limits<size_t>::max())
     {
         const Common::Settings::ShortcutBinding& targetBinding = (*bindings)[targetIndex];
         previousTargetVk                                       = targetBinding.vk;
         previousTargetModifiers                                = targetBinding.modifiers;
+        previousTargetKeyPosition                              = targetBinding.keyPosition;
         preservePreviousDefaultChordAsUnassigned               = IsDefaultBindingForScope(state.keyboardCaptureScope, targetBinding) &&
-                                                                 ShortcutManager::MakeChordKey(previousTargetVk, previousTargetModifiers) != chordKey;
+                                                                 ShortcutManager::MakeChordKey(targetBinding) != chordKey;
     }
 
     std::vector<size_t> conflictIndices;
@@ -2492,7 +2693,7 @@ void KeyboardPane::CommitCapturedShortcut(HWND host, PreferencesDialogState& sta
             continue;
         }
 
-        if (ShortcutManager::MakeChordKey(binding.vk, binding.modifiers) != chordKey)
+        if (ShortcutManager::MakeChordKey(binding) != chordKey)
         {
             continue;
         }
@@ -2519,19 +2720,21 @@ void KeyboardPane::CommitCapturedShortcut(HWND host, PreferencesDialogState& sta
 
     if (targetIndex != std::numeric_limits<size_t>::max())
     {
-        (*bindings)[targetIndex].vk        = vk;
+        (*bindings)[targetIndex].vk        = storedVk;
         (*bindings)[targetIndex].modifiers = modifiers;
+        (*bindings)[targetIndex].keyPosition = keyPosition;
         (*bindings)[targetIndex].commandId = state.keyboardCaptureCommandId;
         if (preservePreviousDefaultChordAsUnassigned)
         {
-            AddUnassignedShortcutIfMissing(*bindings, previousTargetVk, previousTargetModifiers);
+            AddUnassignedShortcutIfMissing(*bindings, previousTargetKeyPosition, previousTargetVk, previousTargetModifiers);
         }
     }
     else
     {
         Common::Settings::ShortcutBinding binding;
-        binding.vk        = vk;
+        binding.vk        = storedVk;
         binding.modifiers = modifiers;
+        binding.keyPosition = keyPosition;
         binding.commandId = state.keyboardCaptureCommandId;
         bindings->push_back(std::move(binding));
     }
@@ -2551,6 +2754,7 @@ void KeyboardPane::SwapCapturedShortcut(HWND host, PreferencesDialogState& state
 
     const uint32_t vk        = state.keyboardCapturePendingVk.value();
     const uint32_t modifiers = state.keyboardCapturePendingModifiers;
+    const Common::Keyboard::KeyPosition keyPosition = state.keyboardCapturePendingKeyPosition;
 
     if (! EnsureWorkingShortcuts(state))
     {
@@ -2563,12 +2767,7 @@ void KeyboardPane::SwapCapturedShortcut(HWND host, PreferencesDialogState& state
     }
 
     Common::Settings::ShortcutsSettings& shortcuts           = state.workingSettings.shortcuts.value();
-    std::vector<Common::Settings::ShortcutBinding>* bindings = nullptr;
-    switch (state.keyboardCaptureScope)
-    {
-        case ShortcutScope::FunctionBar: bindings = &shortcuts.functionBar; break;
-        case ShortcutScope::FolderView: bindings = &shortcuts.folderView; break;
-    }
+    std::vector<Common::Settings::ShortcutBinding>* bindings = GetBindingsForScope(shortcuts, state.keyboardCaptureScope);
     if (! bindings)
     {
         return;
@@ -2583,12 +2782,15 @@ void KeyboardPane::SwapCapturedShortcut(HWND host, PreferencesDialogState& state
 
     const uint32_t oldVk        = (*bindings)[targetIndex].vk;
     const uint32_t oldModifiers = (*bindings)[targetIndex].modifiers;
+    const Common::Keyboard::KeyPosition oldKeyPosition = (*bindings)[targetIndex].keyPosition;
 
-    (*bindings)[targetIndex].vk        = vk;
+    (*bindings)[targetIndex].vk        = keyPosition == Common::Keyboard::KeyPosition::None ? vk : 0u;
     (*bindings)[targetIndex].modifiers = modifiers;
+    (*bindings)[targetIndex].keyPosition = keyPosition;
 
     (*bindings)[conflictIndex].vk        = oldVk;
     (*bindings)[conflictIndex].modifiers = oldModifiers;
+    (*bindings)[conflictIndex].keyPosition = oldKeyPosition;
 
     EndCapture(host, state);
 
@@ -2631,12 +2833,7 @@ void KeyboardPane::RemoveSelectedShortcut(HWND host, PreferencesDialogState& sta
     }
 
     Common::Settings::ShortcutsSettings& shortcuts           = state.workingSettings.shortcuts.value();
-    std::vector<Common::Settings::ShortcutBinding>* bindings = nullptr;
-    switch (row.scope)
-    {
-        case ShortcutScope::FunctionBar: bindings = &shortcuts.functionBar; break;
-        case ShortcutScope::FolderView: bindings = &shortcuts.folderView; break;
-    }
+    std::vector<Common::Settings::ShortcutBinding>* bindings = GetBindingsForScope(shortcuts, row.scope);
     if (! bindings)
     {
         return;
@@ -2760,7 +2957,7 @@ bool DebugCancelPreferencesKeyboardNextBrowseImpl() noexcept
     }
 
     yyjson_mut_doc_set_root(doc.get(), root);
-    if (! yyjson_mut_obj_add_uint(doc.get(), root, "version", 1u))
+    if (! yyjson_mut_obj_add_uint(doc.get(), root, "version", 2u))
     {
         return false;
     }
@@ -2802,6 +2999,10 @@ bool DebugCancelPreferencesKeyboardNextBrowseImpl() noexcept
                   items.end(),
                   [](const Common::Settings::ShortcutBinding* a, const Common::Settings::ShortcutBinding* b)
         {
+            if (a->keyPosition != b->keyPosition)
+            {
+                return a->keyPosition < b->keyPosition;
+            }
             if (a->vk != b->vk)
             {
                 return a->vk < b->vk;
@@ -2820,9 +3021,11 @@ bool DebugCancelPreferencesKeyboardNextBrowseImpl() noexcept
                 continue;
             }
 
-            const std::string vkText        = VkToStableName(binding->vk);
+            const std::string identityText = binding->keyPosition == Common::Keyboard::KeyPosition::None
+                                                 ? VkToStableName(binding->vk)
+                                                 : std::string(Common::Keyboard::TokenForPosition(binding->keyPosition));
             const std::string commandIdUtf8 = Utf8FromUtf16(binding->commandId);
-            if (vkText.empty() || commandIdUtf8.empty())
+            if (identityText.empty() || commandIdUtf8.empty())
             {
                 continue;
             }
@@ -2833,12 +3036,13 @@ bool DebugCancelPreferencesKeyboardNextBrowseImpl() noexcept
                 return false;
             }
 
-            yyjson_mut_val* vkVal = yyjson_mut_strncpy(doc.get(), vkText.data(), vkText.size());
-            if (! vkVal)
+            yyjson_mut_val* identityVal = yyjson_mut_strncpy(doc.get(), identityText.data(), identityText.size());
+            if (! identityVal)
             {
                 return false;
             }
-            if (! yyjson_mut_obj_add_val(doc.get(), obj, "vk", vkVal))
+            const char* identityName = binding->keyPosition == Common::Keyboard::KeyPosition::None ? "vk" : "keyPosition";
+            if (! yyjson_mut_obj_add_val(doc.get(), obj, identityName, identityVal))
             {
                 return false;
             }
@@ -2875,11 +3079,19 @@ bool DebugCancelPreferencesKeyboardNextBrowseImpl() noexcept
         return true;
     };
 
+    if (! addBindings("application", shortcuts.application))
+    {
+        return false;
+    }
     if (! addBindings("functionBar", shortcuts.functionBar))
     {
         return false;
     }
     if (! addBindings("folderView", shortcuts.folderView))
+    {
+        return false;
+    }
+    if (! addBindings("terminal", shortcuts.terminal))
     {
         return false;
     }
@@ -2974,8 +3186,16 @@ bool DebugCancelPreferencesKeyboardNextBrowseImpl() noexcept
 
             uint32_t vk        = 0;
             uint32_t modifiers = 0;
+            Common::Keyboard::KeyPosition keyPosition = Common::Keyboard::KeyPosition::None;
 
-            if (yyjson_val* vkVal = yyjson_obj_get(binding, "vk"))
+            yyjson_val* vkVal = yyjson_obj_get(binding, "vk");
+            yyjson_val* keyPositionVal = yyjson_obj_get(binding, "keyPosition");
+            if ((vkVal != nullptr) == (keyPositionVal != nullptr))
+            {
+                continue;
+            }
+
+            if (vkVal)
             {
                 if (yyjson_is_str(vkVal))
                 {
@@ -2990,6 +3210,19 @@ bool DebugCancelPreferencesKeyboardNextBrowseImpl() noexcept
                     vk = static_cast<uint32_t>(yyjson_get_uint(vkVal));
                 }
                 else
+                {
+                    continue;
+                }
+            }
+            else if (keyPositionVal && yyjson_is_str(keyPositionVal))
+            {
+                const char* positionText = yyjson_get_str(keyPositionVal);
+                if (! positionText)
+                {
+                    continue;
+                }
+                keyPosition = Common::Keyboard::PositionFromToken(positionText);
+                if (keyPosition == Common::Keyboard::KeyPosition::None)
                 {
                     continue;
                 }
@@ -3034,10 +3267,17 @@ bool DebugCancelPreferencesKeyboardNextBrowseImpl() noexcept
             {
                 continue;
             }
+            if ((commandId == ShortcutIds::kPassThroughCommandId && std::string_view(name) != "terminal") ||
+                (keyPosition != Common::Keyboard::KeyPosition::None && std::string_view(name) == "functionBar"))
+            {
+                outError = LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_IMPORT_SCOPE_INVALID);
+                return false;
+            }
 
             Common::Settings::ShortcutBinding entry;
             entry.vk        = vk;
             entry.modifiers = modifiers;
+            entry.keyPosition = keyPosition;
             entry.commandId = commandId;
             dest.push_back(std::move(entry));
         }
@@ -3045,11 +3285,19 @@ bool DebugCancelPreferencesKeyboardNextBrowseImpl() noexcept
         return true;
     };
 
+    if (! parseBindings("application", outShortcuts.application))
+    {
+        return false;
+    }
     if (! parseBindings("functionBar", outShortcuts.functionBar))
     {
         return false;
     }
     if (! parseBindings("folderView", outShortcuts.folderView))
+    {
+        return false;
+    }
+    if (! parseBindings("terminal", outShortcuts.terminal))
     {
         return false;
     }
@@ -3137,7 +3385,10 @@ void KeyboardPane::ImportShortcuts(HWND host, PreferencesDialogState& state) noe
         return;
     }
 
-    state.workingSettings.shortcuts = std::move(imported);
+    Common::Settings::Settings importedSettings{};
+    importedSettings.shortcuts = std::move(imported);
+    ShortcutDefaults::EnsureShortcutsInitialized(importedSettings);
+    state.workingSettings.shortcuts = std::move(importedSettings.shortcuts);
 
     SetDirty(dlg, state);
     Refresh(host, state);
@@ -3152,5 +3403,12 @@ bool DebugSetPreferencesKeyboardNextBrowsePath(const std::wstring_view path) noe
 bool DebugCancelPreferencesKeyboardNextBrowse() noexcept
 {
     return DebugCancelPreferencesKeyboardNextBrowseImpl();
+}
+
+bool DebugParsePreferencesShortcutImport(std::string_view jsonText,
+                                         Common::Settings::ShortcutsSettings& shortcuts,
+                                         std::wstring& error) noexcept
+{
+    return ParseShortcutsImportJson(jsonText, shortcuts, error);
 }
 #endif

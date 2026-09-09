@@ -1,9 +1,12 @@
 #include "Framework.h"
 
 #include "D2DHdcPaint.h"
+#include "DxUi/DxUi.Typography.h"
 #include "Helpers.h"
 
 #include <algorithm>
+#include <cmath>
+#include <map>
 #include <mutex>
 
 namespace
@@ -11,15 +14,30 @@ namespace
 struct SharedFactoryState
 {
     wil::com_ptr<ID2D1Factory> factory;
+    wil::com_ptr<IDWriteFactory> dwriteFactory;
+    std::map<int, wil::com_ptr<IDWriteTextFormat>> fluentIconFormats;
+    std::map<int, wil::com_ptr<IDWriteTextFormat>> fallbackIconFormats;
     DWORD ownerThreadId = 0;
+    bool fluentIconAvailabilityChecked = false;
+    bool fluentIconAvailable           = false;
 };
+
+[[nodiscard]] SharedFactoryState& SharedState() noexcept
+{
+    static SharedFactoryState state;
+    return state;
+}
+
+[[nodiscard]] std::mutex& SharedStateMutex() noexcept
+{
+    static std::mutex mutex;
+    return mutex;
+}
 
 [[nodiscard]] ID2D1Factory* SharedFactory() noexcept
 {
-    static std::mutex mutex;
-    static SharedFactoryState state;
-
-    std::lock_guard lock(mutex);
+    std::lock_guard lock(SharedStateMutex());
+    SharedFactoryState& state = SharedState();
     const DWORD currentThreadId = GetCurrentThreadId();
     if (state.factory && state.ownerThreadId != currentThreadId)
     {
@@ -41,6 +59,55 @@ struct SharedFactoryState
         }
     }
     return state.factory.get();
+}
+
+[[nodiscard]] wil::com_ptr<IDWriteTextFormat>
+SharedGlyphFormat(float fontSizePx, bool& useFluent, wil::com_ptr<IDWriteFactory>& dwriteFactory) noexcept
+{
+    std::lock_guard lock(SharedStateMutex());
+    SharedFactoryState& state = SharedState();
+    useFluent                 = false;
+
+    if (! state.dwriteFactory)
+    {
+        static_cast<void>(
+            DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(state.dwriteFactory.put())));
+    }
+    if (! state.dwriteFactory)
+    {
+        return {};
+    }
+    dwriteFactory = state.dwriteFactory;
+
+    if (! state.fluentIconAvailabilityChecked)
+    {
+        state.fluentIconAvailable = RedSalamander::DxUi::Typography::IsFontFamilyAvailable(
+            state.dwriteFactory.get(), RedSalamander::DxUi::Typography::kSegoeFluentIconsFamily);
+        state.fluentIconAvailabilityChecked = true;
+    }
+
+    const float normalizedSizePx = std::clamp(fontSizePx, 6.0f, 64.0f);
+    const int sizeKey            = static_cast<int>(std::lround(normalizedSizePx * 10.0f));
+    auto& formats                = state.fluentIconAvailable ? state.fluentIconFormats : state.fallbackIconFormats;
+    if (const auto it = formats.find(sizeKey); it != formats.end())
+    {
+        useFluent = state.fluentIconAvailable;
+        return it->second;
+    }
+
+    wil::com_ptr<IDWriteTextFormat> format;
+    const RedSalamander::DxUi::Typography::TypographySpec spec = state.fluentIconAvailable
+                                                                     ? RedSalamander::DxUi::Typography::MakeUiIconSpec(normalizedSizePx)
+                                                                     : RedSalamander::DxUi::Typography::MakeUiTextSpec(normalizedSizePx);
+    if (FAILED(RedSalamander::DxUi::Typography::CreateTextFormat(state.dwriteFactory.get(), spec, format.put(), L"")) || ! format)
+    {
+        return {};
+    }
+
+    static_cast<void>(format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP));
+    formats.emplace(sizeKey, format);
+    useFluent = state.fluentIconAvailable;
+    return format;
 }
 
 } // namespace
@@ -195,5 +262,38 @@ void Session::DrawLine(float x1, float y1, float x2, float y2, COLORREF color, f
     }
 
     _target->DrawLine(ToLocalPoint(x1, y1), ToLocalPoint(x2, y2), _brush.get(), std::max(1.0f, strokeWidthPx));
+}
+
+wchar_t Session::DrawCenteredGlyph(const RECT& rectPx, wchar_t fluentGlyph, wchar_t fallbackGlyph, COLORREF color, float fontSizePx) noexcept
+{
+    if (! _target || rectPx.right <= rectPx.left || rectPx.bottom <= rectPx.top || ! SetBrush(color))
+    {
+        return L'\0';
+    }
+
+    bool useFluent = false;
+    wil::com_ptr<IDWriteFactory> factory;
+    wil::com_ptr<IDWriteTextFormat> format = SharedGlyphFormat(fontSizePx, useFluent, factory);
+    if (! factory || ! format)
+    {
+        return L'\0';
+    }
+
+    const wchar_t glyph = useFluent ? fluentGlyph : fallbackGlyph;
+    const float width    = static_cast<float>(rectPx.right - rectPx.left);
+    const float height   = static_cast<float>(rectPx.bottom - rectPx.top);
+    wil::com_ptr<IDWriteTextLayout> layout;
+    if (FAILED(factory->CreateTextLayout(&glyph, 1u, format.get(), width, height, layout.put())) || ! layout)
+    {
+        return L'\0';
+    }
+
+    static_cast<void>(layout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER));
+    static_cast<void>(layout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
+    _target->DrawTextLayout(ToLocalPoint(static_cast<float>(rectPx.left), static_cast<float>(rectPx.top)),
+                            layout.get(),
+                            _brush.get(),
+                            D2D1_DRAW_TEXT_OPTIONS_NO_SNAP);
+    return glyph;
 }
 } // namespace D2DHdcPaint

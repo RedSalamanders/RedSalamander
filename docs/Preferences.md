@@ -32,7 +32,7 @@ The left tree contains:
 - **Viewers**: viewer Actions and Associations for `F3`, `Alt+F3`, and View With.
 - **Editors**: editor Actions and Associations for `F4`, `Ctrl+Shift+F4`, `Shift+F4`, and Edit With.
 - **User Menu**: external command entries shown by `F9` and the Commands -> User Menu popup.
-- **Keyboard**: shortcut bindings for Function Bar and FolderView commands.
+- **Keyboard**: Application, Function Bar, Folder View, and Terminal shortcut bindings.
 - **Mouse**: placeholder (not implemented yet).
 - **Themes**: theme selection, user-theme editing, and theme file management.
 - **Plugins**: enable/disable plugins, configure plugins, and run plugin tests.
@@ -87,11 +87,13 @@ Viewers and Editors have the same mental model:
 
 ### Keyboard
 
-- **Scope** filters the command list by command family; **All** shows every known command.
+- **Scope** filters the command list by Application, Function Bar, Folder View, or Terminal; **All** shows every known command. Terminal scope includes all 39 customizable Terminal-context command definitions and all factory aliases.
 - Columns show command name, shortcut, and scope.
 - **Assign...** records the next pressed shortcut. `Esc` cancels capture.
 - Conflicts are handled in-place with **Replace** or **Swap** when both commands can exchange shortcuts.
 - **Remove**, **Reset to Defaults**, **Import...**, and **Export...** manage bindings as JSON.
+- Terminal bindings can explicitly choose **Pass through to terminal** (the shell/TUI receives the original key) or **No action** (the chord is consumed). A Terminal binding that shadows an Application chord is labeled **Overrides global shortcut** in the Scope cell and tooltip.
+- Main-keyboard `Ctrl++` and `Ctrl+-` are stored by physical key position, so assigning or importing them is independent of the active keyboard-layout character. Numpad plus/minus remain separate keys.
 
 ### Mouse
 
@@ -175,7 +177,8 @@ The page is present as a placeholder. Mouse behavior is currently the built-in f
 ### Keyboard
 
 - Search bindings by command name or shortcut text.
-- Assign or remove shortcuts.
+- Assign or remove shortcuts in Application, Function Bar, Folder View, and Terminal scopes.
+- Use **Pass through to terminal** to yield a Terminal chord, or **No action** to reserve and consume it.
 - Import/export shortcut bindings as JSON.
 - Reset shortcuts to defaults.
 - Resolve conflicts directly in the page by replacing or swapping bindings when prompted.

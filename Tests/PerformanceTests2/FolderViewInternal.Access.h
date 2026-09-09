@@ -244,9 +244,11 @@ bool ConfirmNonRevertableFileOperation(HWND owner,
     const UINT messageId = operation == FILESYSTEM_COPY ? static_cast<UINT>(IDS_FMT_FILEOPS_CONFIRM_COPY) : static_cast<UINT>(IDS_FMT_FILEOPS_CONFIRM_MOVE);
     const std::wstring message = FormatStringResource(nullptr, messageId, what, fromText, toText);
 
-    const std::wstring caption = LoadStringResource(nullptr, IDS_CAPTION_CONFIRM);
+    const bool isCopy = operation == FILESYSTEM_COPY;
+    const UINT operationLabelId = isCopy ? static_cast<UINT>(IDS_FILEOP_OPERATION_COPY) : static_cast<UINT>(IDS_FILEOP_OPERATION_MOVE);
+    const std::wstring caption = LoadStringResource(nullptr, operationLabelId);
+    const HostPromptPresentation presentation = isCopy ? HOST_PROMPT_PRESENTATION_COPY : HOST_PROMPT_PRESENTATION_MOVE;
     HostPromptRequest prompt{};
-    prompt.version       = 1;
     prompt.sizeBytes     = sizeof(prompt);
     prompt.scope         = (owner && IsWindow(owner)) ? HOST_ALERT_SCOPE_WINDOW : HOST_ALERT_SCOPE_APPLICATION;
     prompt.severity      = HOST_ALERT_INFO;
@@ -255,6 +257,7 @@ bool ConfirmNonRevertableFileOperation(HWND owner,
     prompt.title         = caption.c_str();
     prompt.message       = message.c_str();
     prompt.defaultResult = HOST_PROMPT_RESULT_OK;
+    prompt.presentation  = presentation;
 
     HostPromptResult promptResult = HOST_PROMPT_RESULT_NONE;
     const HRESULT hr              = HostShowPrompt(prompt, nullptr, &promptResult);

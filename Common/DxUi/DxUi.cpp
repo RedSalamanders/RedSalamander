@@ -4,6 +4,9 @@
 #include <cstdint>
 #include <cwctype>
 #include <limits>
+#include <utility>
+
+#include <d2d1effects.h>
 
 #include "Helpers.h"
 
@@ -11,6 +14,8 @@ namespace RedSalamander::DxUi
 {
 namespace
 {
+constexpr GUID kTransientSurfaceGaussianBlurEffectId = {0x1feb6d69, 0x2fe6, 0x4ac9, {0x8c, 0x58, 0x1d, 0x7f, 0x93, 0xe7, 0xa6, 0xa5}};
+
 [[nodiscard]] wchar_t NormalizeMnemonicChar(wchar_t ch) noexcept
 {
     return static_cast<wchar_t>(std::towupper(static_cast<wint_t>(ch)));
@@ -57,6 +62,229 @@ DxUiModalLoopResult RunDxUiModalLoop(HWND hwnd, const DxUiModalLoopOptions& opti
     }
 
     return DxUiModalLoopResult::Completed;
+}
+
+void TransientSurfaceBackdrop::SetCapture(WindowHostBitmapCapture value) noexcept
+{
+    capture = std::move(value);
+    cachedBitmap.reset();
+    cachedDevice.reset();
+}
+
+void TransientSurfaceBackdrop::Reset() noexcept
+{
+    capture = {};
+    cachedBitmap.reset();
+    cachedDevice.reset();
+}
+
+bool TransientSurfaceBackdrop::HasCapture() const noexcept
+{
+    const uint64_t expectedBytes = static_cast<uint64_t>(capture.widthPx) * static_cast<uint64_t>(capture.heightPx) * 4u;
+    return capture.widthPx != 0u && capture.heightPx != 0u && expectedBytes == capture.bgraPixels.size();
+}
+
+bool CaptureTransientSurfaceBackdrop(const RECT& surfaceScreenRect,
+                                     TransientSurfaceBackdrop& outBackdrop,
+                                     std::wstring_view componentName) noexcept
+{
+    WindowHostBitmapCapture capture;
+    if (! CaptureBackdropScreenRegion(surfaceScreenRect, capture, componentName))
+    {
+        outBackdrop.Reset();
+        return false;
+    }
+
+    outBackdrop.SetCapture(std::move(capture));
+    return true;
+}
+
+namespace
+{
+[[nodiscard]] ID2D1Bitmap1* EnsureTransientSurfaceBackdropBitmap(WindowHost& host, TransientSurfaceBackdrop& backdrop) noexcept
+{
+    if (! backdrop.HasCapture())
+    {
+        return nullptr;
+    }
+
+    ID2D1DeviceContext* const dc = host.GetDeviceContext();
+    if (! dc)
+    {
+        return nullptr;
+    }
+
+    wil::com_ptr<ID2D1Device> device;
+    dc->GetDevice(device.put());
+    if (! device)
+    {
+        return nullptr;
+    }
+
+    if (backdrop.cachedBitmap && backdrop.cachedDevice && backdrop.cachedDevice.get() == device.get())
+    {
+        return backdrop.cachedBitmap.get();
+    }
+
+    const D2D1_BITMAP_PROPERTIES1 bitmapProperties = D2D1::BitmapProperties1(
+        D2D1_BITMAP_OPTIONS_NONE, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), host.GetDpi(), host.GetDpi());
+    wil::com_ptr<ID2D1Bitmap1> bitmap;
+    const UINT32 pitch = backdrop.capture.widthPx * 4u;
+    const HRESULT hr   = dc->CreateBitmap(D2D1::SizeU(backdrop.capture.widthPx, backdrop.capture.heightPx),
+                                        backdrop.capture.bgraPixels.data(),
+                                        pitch,
+                                        &bitmapProperties,
+                                        bitmap.put());
+    if (FAILED(hr) || ! bitmap)
+    {
+        Debug::Warning(L"DxUi::PaintTransientSurface: failed to create backdrop bitmap: 0x{:08X}", hr);
+        return nullptr;
+    }
+
+    backdrop.cachedDevice = std::move(device);
+    backdrop.cachedBitmap = std::move(bitmap);
+    return backdrop.cachedBitmap.get();
+}
+
+void PaintTransientSurfaceBackdrop(WindowHost& host,
+                                   const D2D1_RECT_F& surfaceRect,
+                                   float cornerRadiusDip,
+                                   TransientSurfaceBackdrop* backdrop) noexcept
+{
+    const ThemePalette& theme = host.GetTheme();
+    const float opacity       = ResolveOverlayBackdropOpacity(theme);
+    const float blurDip       = ResolveOverlayBackdropBlurDip(theme);
+    if (theme.highContrast || ! backdrop || opacity <= 0.0f || blurDip <= 0.0f)
+    {
+        return;
+    }
+
+    ID2D1DeviceContext* const dc = host.GetDeviceContext();
+    ID2D1Bitmap1* const bitmap   = EnsureTransientSurfaceBackdropBitmap(host, *backdrop);
+    if (! dc || ! bitmap)
+    {
+        return;
+    }
+
+    wil::com_ptr<ID2D1Factory> factory;
+    dc->GetFactory(factory.put());
+    wil::com_ptr<ID2D1RoundedRectangleGeometry> roundedGeometry;
+    if (! factory || FAILED(factory->CreateRoundedRectangleGeometry(
+                        D2D1::RoundedRect(surfaceRect, cornerRadiusDip, cornerRadiusDip), roundedGeometry.put())) ||
+        ! roundedGeometry)
+    {
+        return;
+    }
+
+    wil::com_ptr<ID2D1Effect> blurEffect;
+    if (FAILED(dc->CreateEffect(kTransientSurfaceGaussianBlurEffectId, blurEffect.put())) || ! blurEffect)
+    {
+        return;
+    }
+    blurEffect->SetInput(0u, bitmap);
+    blurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, blurDip);
+    blurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_OPTIMIZATION, D2D1_GAUSSIANBLUR_OPTIMIZATION_BALANCED);
+    blurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_BORDER_MODE, D2D1_BORDER_MODE_HARD);
+
+    const D2D1_RECT_F sourceRect = D2D1::RectF(0.0f,
+                                               0.0f,
+                                               host.PixelsToDip(static_cast<float>(backdrop->capture.widthPx)),
+                                               host.PixelsToDip(static_cast<float>(backdrop->capture.heightPx)));
+    const D2D1_LAYER_PARAMETERS1 layerParameters = D2D1::LayerParameters1(surfaceRect,
+                                                                          roundedGeometry.get(),
+                                                                          D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                                                                          D2D1::Matrix3x2F::Identity(),
+                                                                          std::clamp(opacity, 0.0f, 1.0f),
+                                                                          nullptr,
+                                                                          D2D1_LAYER_OPTIONS1_NONE);
+    const D2D1_POINT_2F targetOffset = D2D1::Point2F(surfaceRect.left, surfaceRect.top);
+    dc->PushLayer(layerParameters, nullptr);
+    dc->DrawImage(blurEffect.get(), &targetOffset, &sourceRect, D2D1_INTERPOLATION_MODE_LINEAR, D2D1_COMPOSITE_MODE_SOURCE_OVER);
+    dc->PopLayer();
+}
+} // namespace
+
+void PaintTransientSurface(WindowHost& host,
+                           const D2D1_RECT_F& surfaceRect,
+                           const TransientSurfaceOptions& options) noexcept
+{
+    ID2D1DeviceContext* const dc = host.GetDeviceContext();
+    if (! dc)
+    {
+        return;
+    }
+
+    const ThemePalette& theme = host.GetTheme();
+    const float radius         = theme.highContrast ? 0.0f : std::max(0.0f, options.cornerRadiusDip);
+    if (options.drawShadow && ! theme.highContrast)
+    {
+        for (int ring = 3; ring >= 1; --ring)
+        {
+            const float spread = static_cast<float>(ring) * 2.0f;
+            const float alpha  = 0.025f * static_cast<float>(4 - ring);
+            const D2D1_RECT_F shadowRect = D2D1::RectF(surfaceRect.left - spread,
+                                                       surfaceRect.top - spread + 2.0f,
+                                                       surfaceRect.right + spread,
+                                                       surfaceRect.bottom + spread + 2.0f);
+            if (ID2D1SolidColorBrush* const shadow = host.GetSolidBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, alpha)))
+            {
+                dc->FillRoundedRectangle(D2D1::RoundedRect(shadowRect, radius + spread, radius + spread), shadow);
+            }
+        }
+    }
+
+    PaintTransientSurfaceBackdrop(host, surfaceRect, radius, options.backdrop);
+
+    D2D1_COLOR_F fillColor = theme.overlayBackground;
+    if (theme.highContrast)
+    {
+        fillColor.a = 1.0f;
+    }
+    else
+    {
+        switch (theme.overlayMaterial)
+        {
+            case OverlayMaterial::Solid: break;
+            case OverlayMaterial::Mica: fillColor.a = std::min(fillColor.a, 0.86f); break;
+            case OverlayMaterial::MicaAlt: fillColor.a = std::min(fillColor.a, 0.80f); break;
+            case OverlayMaterial::Acrylic: fillColor.a = std::min(fillColor.a, 0.72f); break;
+        }
+    }
+    if (ID2D1SolidColorBrush* const fill = host.GetSolidBrush(fillColor))
+    {
+        dc->FillRoundedRectangle(D2D1::RoundedRect(surfaceRect, radius, radius), fill);
+    }
+    D2D1_COLOR_F borderColor = theme.overlayBorder;
+    if (theme.highContrast)
+    {
+        borderColor.a = 1.0f;
+    }
+    if (ID2D1SolidColorBrush* const border = host.GetSolidBrush(borderColor))
+    {
+        dc->DrawRoundedRectangle(D2D1::RoundedRect(surfaceRect, radius, radius), border, theme.highContrast ? 2.0f : 1.0f);
+    }
+    if (! theme.highContrast && surfaceRect.right - surfaceRect.left > 2.0f && surfaceRect.bottom - surfaceRect.top > 2.0f)
+    {
+        D2D1_COLOR_F innerRimColor = borderColor;
+        innerRimColor.a *= 0.45f;
+        if (ID2D1SolidColorBrush* const innerRim = host.GetSolidBrush(innerRimColor))
+        {
+            const D2D1_RECT_F innerRect = D2D1::RectF(surfaceRect.left + 1.0f,
+                                                      surfaceRect.top + 1.0f,
+                                                      surfaceRect.right - 1.0f,
+                                                      surfaceRect.bottom - 1.0f);
+            dc->DrawRoundedRectangle(D2D1::RoundedRect(innerRect, std::max(0.0f, radius - 1.0f), std::max(0.0f, radius - 1.0f)),
+                                     innerRim,
+                                     1.0f);
+        }
+    }
+    if (options.pressed)
+    {
+        if (ID2D1SolidColorBrush* const pressed = host.GetSolidBrush(theme.pressedFill))
+        {
+            dc->FillRoundedRectangle(D2D1::RoundedRect(surfaceRect, radius, radius), pressed);
+        }
+    }
 }
 
 bool CaptureBackdropScreenRegion(const RECT& screenRect, WindowHostBitmapCapture& outCapture, std::wstring_view componentName) noexcept
@@ -240,6 +468,16 @@ bool Control::IsHovered() const noexcept
     return _hovered;
 }
 
+void Control::SetTooltipText(std::wstring tooltipText)
+{
+    _tooltipText = std::move(tooltipText);
+}
+
+std::wstring_view Control::GetTooltipText() const noexcept
+{
+    return _tooltipText;
+}
+
 void Control::PaintOverlay(WindowHost& /*host*/) const
 {
 }
@@ -249,13 +487,18 @@ bool Control::Tick(WindowHost& /*host*/, uint64_t /*nowTickMs*/)
     return false;
 }
 
-bool Control::OnMouseMove(WindowHost& /*host*/, D2D1_POINT_2F /*point*/, UINT /*modifiers*/)
+bool Control::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modifiers*/)
 {
+    if (! _tooltipText.empty() && PointInRect(GetHitBounds(), point))
+    {
+        static_cast<void>(host.SetTooltipDelayed(_tooltipText, point));
+    }
     return false;
 }
 
-bool Control::OnMouseLeave(WindowHost& /*host*/)
+bool Control::OnMouseLeave(WindowHost& host)
 {
+    static_cast<void>(host.ClearTooltip());
     return false;
 }
 
@@ -506,6 +749,66 @@ void Control::SetAccessibleHelpText(std::wstring helpText)
 std::wstring_view Control::GetAccessibleHelpText() const noexcept
 {
     return _accessibleHelpText;
+}
+
+void Control::SetAccessibleAutomationId(std::wstring automationId)
+{
+    if (_accessibleAutomationId != automationId)
+    {
+        _accessibleAutomationId = std::move(automationId);
+        if (WindowHost* const host = GetHost())
+        {
+            RefreshWindowHostAccessibilitySnapshot(host->GetHwnd(), host);
+        }
+    }
+}
+
+std::wstring_view Control::GetAccessibleAutomationId() const noexcept
+{
+    return _accessibleAutomationId;
+}
+
+void Control::SetAccessibilityRole(AccessibilityRole role) noexcept
+{
+    if (_accessibilityRole != role)
+    {
+        _accessibilityRole = role;
+        RequestInvalidate();
+        if (WindowHost* const host = GetHost())
+        {
+            RefreshWindowHostAccessibilitySnapshot(host->GetHwnd(), host);
+        }
+    }
+}
+
+AccessibilityRole Control::GetAccessibilityRole() const noexcept
+{
+    return _accessibilityRole;
+}
+
+void Control::SetAccessibleInvoke(std::function<void(WindowHost&)> onInvoke)
+{
+    _onAccessibleInvoke = std::move(onInvoke);
+    if (WindowHost* const host = GetHost())
+    {
+        RefreshWindowHostAccessibilitySnapshot(host->GetHwnd(), host);
+    }
+}
+
+bool Control::SupportsAccessibleInvoke() const noexcept
+{
+    return static_cast<bool>(_onAccessibleInvoke);
+}
+
+bool Control::InvokeAccessible(WindowHost& host)
+{
+    if (! _onAccessibleInvoke || ! IsVisible() || ! IsEnabled())
+    {
+        return false;
+    }
+
+    _onAccessibleInvoke(host);
+    return true;
 }
 
 void Control::SetOnContextMenu(std::function<void(POINT screenPoint, bool keyboardInvocation)> onContextMenu)

@@ -2,12 +2,12 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$helperScript = Join-Path $repoRoot 'Tools\BuildProjectSelection.ps1'
+$helperModule = Join-Path $repoRoot 'Tools\Modules\Build\BuildProjectSelection.psm1'
 $solutionPath = Join-Path $repoRoot 'RedSalamander.sln'
 
 Describe 'Build project selection helper' {
     BeforeAll {
-        . $helperScript
+        Import-Module $helperModule -Force -ErrorAction Stop
     }
 
     It 'builds plugin projects directly from their vcxproj files' {

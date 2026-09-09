@@ -316,9 +316,11 @@ void EmitWindowHostFrameMetrics(
     {
         case ButtonVariant::Standard: return L"Standard";
         case ButtonVariant::DropDown: return L"DropDown";
+        case ButtonVariant::Selector: return L"Selector";
         case ButtonVariant::Split: return L"Split";
         case ButtonVariant::Hyperlink: return L"Hyperlink";
         case ButtonVariant::IconOnly: return L"IconOnly";
+        case ButtonVariant::Disclosure: return L"Disclosure";
         case ButtonVariant::Repeat: return L"Repeat";
         default: return L"Unknown";
     }
@@ -478,6 +480,24 @@ template <typename... Args> void TraceWindowHostDiagnostics(std::wstring_view ev
     const int halfWidthPx  = std::max(1, GetSystemMetrics(SM_CXDOUBLECLK) / 2);
     const int halfHeightPx = std::max(1, GetSystemMetrics(SM_CYDOUBLECLK) / 2);
     return std::abs(secondPointPx.x - firstPointPx.x) <= halfWidthPx && std::abs(secondPointPx.y - firstPointPx.y) <= halfHeightPx;
+}
+
+[[nodiscard]] Control* FindSupplementalTooltipTarget(Control* root, D2D1_POINT_2F pointDip) noexcept
+{
+    if (! root || ! root->IsVisible() || ! root->IsEnabled() || ! PointInRect(root->GetHitBounds(), pointDip))
+    {
+        return nullptr;
+    }
+
+    for (size_t childIndex = root->GetLogicalChildCount(); childIndex > 0u; --childIndex)
+    {
+        if (Control* const target = FindSupplementalTooltipTarget(root->GetLogicalChild(childIndex - 1u), pointDip))
+        {
+            return target;
+        }
+    }
+
+    return root->GetTooltipText().empty() ? nullptr : root;
 }
 
 [[nodiscard]] std::map<DWORD, SharedWindowHostGraphicsResources>& GetSharedWindowHostGraphicsResourcesByThread() noexcept
@@ -1186,18 +1206,67 @@ struct ControlInteractionState
 
 void ShutdownAllWindowHostsForProcessExit() noexcept
 {
-    std::vector<WindowHost*> attachedHosts;
+    struct ShutdownTarget final
+    {
+        WindowHost* host = nullptr;
+        HWND hwnd        = nullptr;
+        DWORD ownerThreadId = 0u;
+    };
+
+    std::vector<ShutdownTarget> attachedHosts;
     {
         const std::scoped_lock lock(GetAttachedWindowHostsMutex());
-        attachedHosts = GetAttachedWindowHosts();
+        attachedHosts.reserve(GetAttachedWindowHosts().size());
+        for (WindowHost* const host : GetAttachedWindowHosts())
+        {
+            if (host)
+            {
+                attachedHosts.push_back(ShutdownTarget{host, host->_hwnd, host->_attachmentOwnerThreadId});
+            }
+        }
     }
 
-    for (WindowHost* const host : attachedHosts)
+    const DWORD currentThreadId = GetCurrentThreadId();
+    for (const ShutdownTarget& target : attachedHosts)
     {
-        if (host)
+        if (! target.host)
         {
-            host->Detach();
+            continue;
         }
+        if (target.ownerThreadId == 0u || target.ownerThreadId == currentThreadId)
+        {
+            target.host->DetachForProcessExit();
+            continue;
+        }
+        if (! target.hwnd || IsWindow(target.hwnd) == FALSE || GetWindowThreadProcessId(target.hwnd, nullptr) != target.ownerThreadId)
+        {
+            Debug::Error(L"DxUi::WindowHost: cannot marshal process-exit detach for foreign owner thread {}.", target.ownerThreadId);
+            continue;
+        }
+
+        DWORD_PTR detachResult = 0u;
+        if (SendMessageTimeoutW(target.hwnd,
+                                WndMsg::kDxUiWindowHostProcessExitDetach,
+                                0u,
+                                0,
+                                SMTO_ABORTIFHUNG | SMTO_BLOCK,
+                                5000u,
+                                &detachResult) == 0)
+        {
+            Debug::ErrorWithLastError(L"DxUi::WindowHost: owner-thread process-exit detach timed out for thread {}.", target.ownerThreadId);
+        }
+    }
+
+    size_t remainingHostCount = 0u;
+    {
+        const std::scoped_lock lock(GetAttachedWindowHostsMutex());
+        remainingHostCount = GetAttachedWindowHosts().size();
+    }
+    if (remainingHostCount != 0u)
+    {
+        Debug::Error(L"DxUi::WindowHost: process-exit host registry is not empty after owner-thread teardown ({} host(s)).", remainingHostCount);
+        ShutdownNativeTextInputForCurrentThread();
+        return;
     }
 
     ResetAllSharedWindowHostGraphicsResourcesForProcessExit();
@@ -1261,6 +1330,52 @@ bool WindowHost::Attach(HWND hwnd, const AttachOptions& options) noexcept
 
 void WindowHost::Detach() noexcept
 {
+    Detach(false);
+}
+
+void WindowHost::DetachForProcessExit() noexcept
+{
+    Detach(true);
+}
+
+#if defined(ENABLE_TESTS)
+void WindowHost::DebugDetachForProcessExit() noexcept
+{
+    DetachForProcessExit();
+}
+#endif
+
+void WindowHost::AbandonRetainedControlObserversForProcessExit() noexcept
+{
+    // The process-exit sweep is a quiet-point teardown, not an interactive state
+    // transition. Clear every non-owning observer before ReleaseCapture or TSF can
+    // synchronously re-enter the host and before any retained-tree membership walk.
+    ClearPendingPointerDoubleClick();
+    _capturedControl = nullptr;
+    _hoveredControl  = nullptr;
+    _focusedControl  = nullptr;
+    _defaultButton   = nullptr;
+    _cancelButton    = nullptr;
+    _onTabBoundary   = {};
+    _onEscape        = {};
+    _onFocusChanged  = {};
+
+    // Keep the pointer until DeactivateNativeTextInputSession accounts for the active
+    // session and destroys the native caret, but make it provably non-live so TSF
+    // disconnects its store without traversing a tree that is being abandoned.
+    _nativeTextInputControlLifetime.reset();
+    ClearNativeTextInputCompositionState();
+}
+
+void WindowHost::Detach(bool processExit) noexcept
+{
+    if (_attachmentOwnerThreadId != 0u && _attachmentOwnerThreadId != GetCurrentThreadId())
+    {
+        Debug::Error(L"DxUi::WindowHost: refusing foreign-thread detach owner={} current={}.",
+                     _attachmentOwnerThreadId,
+                     GetCurrentThreadId());
+        return;
+    }
     if (_detachInProgress.exchange(true, std::memory_order_acq_rel))
     {
         return;
@@ -1269,6 +1384,10 @@ void WindowHost::Detach() noexcept
 
     const HWND attachedHwnd  = _hwnd;
     const bool hadAttachment = attachedHwnd != nullptr;
+    if (processExit)
+    {
+        AbandonRetainedControlObserversForProcessExit();
+    }
     if (attachedHwnd && GetCapture() == attachedHwnd)
     {
         ReleaseCapture();
@@ -1383,7 +1502,7 @@ bool WindowHost::SetTooltip(std::wstring text, const D2D1_POINT_2F& originDip)
 
 bool WindowHost::SetTooltipDelayed(std::wstring text, const D2D1_POINT_2F& originDip)
 {
-    const uint64_t nowTickMs = _lastAnimationTickMs != 0u ? _lastAnimationTickMs : GetTickCount64();
+    const uint64_t nowTickMs = Ui::AnimationDispatcher::GetInstance().GetCurrentTickMs();
     const bool changed       = _tooltipLayer.SetTooltipDelayed(std::move(text), originDip, nowTickMs, ResolveTooltipShowDelayMs());
     if (changed)
     {
@@ -1395,7 +1514,7 @@ bool WindowHost::SetTooltipDelayed(std::wstring text, const D2D1_POINT_2F& origi
 
 bool WindowHost::BeginTooltipHideDelay(uint64_t delayMs) noexcept
 {
-    const uint64_t nowTickMs = _lastAnimationTickMs != 0u ? _lastAnimationTickMs : GetTickCount64();
+    const uint64_t nowTickMs = Ui::AnimationDispatcher::GetInstance().GetCurrentTickMs();
     const bool changed       = _tooltipLayer.BeginHideDelay(nowTickMs, delayMs);
     if (changed)
     {
@@ -1432,7 +1551,7 @@ std::wstring_view WindowHost::DebugGetPendingTooltipText() const noexcept
 
 bool WindowHost::DebugAdvanceTooltipDelayForTest() noexcept
 {
-    const uint64_t nowTickMs = _lastAnimationTickMs != 0u ? _lastAnimationTickMs : GetTickCount64();
+    const uint64_t nowTickMs = Ui::AnimationDispatcher::GetInstance().GetCurrentTickMs();
     const bool changed       = _tooltipLayer.Tick(*this, nowTickMs + ResolveTooltipShowDelayMs() + 1u);
     if (changed)
     {
@@ -2279,6 +2398,13 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
         return 0;
     }
 
+    if (msg == WndMsg::kDxUiWindowHostProcessExitDetach)
+    {
+        handled = true;
+        DetachForProcessExit();
+        return TRUE;
+    }
+
     PruneStaleInteractionState();
 
     LRESULT accessibilityResult = 0;
@@ -2480,6 +2606,9 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
                     liveOldHover->OnMouseLeave(*this);
                 }
             }
+            _supplementalTooltipControl = nullptr;
+            _supplementalTooltipLifetime.reset();
+            _supplementalTooltipText.clear();
             ClearTooltip();
             Invalidate();
             return 0;
@@ -3921,6 +4050,16 @@ void WindowHost::PruneStaleInteractionState() noexcept
 void WindowHost::ResetRootInteractionState() noexcept
 {
     ClearPendingPointerDoubleClick();
+    if (_capturedControl && ControlBelongsToTree(_root.get(), _capturedControl))
+    {
+        Control* const capturedControl = _capturedControl;
+        _capturedControl               = nullptr;
+        capturedControl->OnCaptureLost(*this);
+    }
+    else
+    {
+        _capturedControl = nullptr;
+    }
     ReleaseMouseCapture();
     DeactivateTextInput(true);
     _modifierState = 0u;
@@ -3949,6 +4088,9 @@ void WindowHost::ResetRootInteractionState() noexcept
     {
         _focusedControl = nullptr;
     }
+    _supplementalTooltipControl = nullptr;
+    _supplementalTooltipLifetime.reset();
+    _supplementalTooltipText.clear();
     ClearTooltip();
 }
 
@@ -3981,10 +4123,12 @@ HCURSOR WindowHost::ResolveCursorHandle(WindowHostCursorKind cursorKind) const n
 {
     static const HCURSOR arrowCursor      = LoadCursorW(nullptr, IDC_ARROW);
     static const HCURSOR horizontalCursor = LoadCursorW(nullptr, IDC_SIZEWE);
+    static const HCURSOR handCursor       = LoadCursorW(nullptr, IDC_HAND);
 
     switch (cursorKind)
     {
         case WindowHostCursorKind::HorizontalResize: return horizontalCursor ? horizontalCursor : arrowCursor;
+        case WindowHostCursorKind::Hand: return handCursor ? handCursor : arrowCursor;
         case WindowHostCursorKind::Default:
         default: return arrowCursor;
     }
@@ -4029,9 +4173,47 @@ void WindowHost::UpdateHover(D2D1_POINT_2F pointDip, UINT modifiers) noexcept
         moveTarget->OnMouseMove(*this, pointDip, modifiers);
         _hoveredControl = RevalidateInteractiveDispatchedControl(moveTargetLifetime, _root.get(), moveTarget);
     }
+    UpdateSupplementalTooltipTarget(pointDip);
     if (hoverChanged)
     {
         Invalidate();
+    }
+}
+
+void WindowHost::UpdateSupplementalTooltipTarget(D2D1_POINT_2F pointDip) noexcept
+{
+    Control* const target = FindSupplementalTooltipTarget(_root.get(), pointDip);
+    const std::wstring targetText = target ? std::wstring(target->GetTooltipText()) : std::wstring{};
+    const bool targetLifetimeExpired = _supplementalTooltipControl && _supplementalTooltipLifetime.expired();
+    const bool targetChanged =
+        target != _supplementalTooltipControl || targetLifetimeExpired || targetText != _supplementalTooltipText;
+    _supplementalTooltipPointDip = pointDip;
+    if (targetChanged)
+    {
+        static_cast<void>(ClearTooltip());
+        _supplementalTooltipControl = target;
+        _supplementalTooltipLifetime = target ? target->GetLifetimeToken() : std::weak_ptr<int>{};
+        _supplementalTooltipText = targetText;
+    }
+
+    if (target && ! targetText.empty())
+    {
+        static_cast<void>(SetTooltipDelayed(targetText, pointDip));
+    }
+}
+
+void WindowHost::ValidateSupplementalTooltipTarget() noexcept
+{
+    if (! _supplementalTooltipControl)
+    {
+        return;
+    }
+
+    if (_supplementalTooltipLifetime.expired() ||
+        FindSupplementalTooltipTarget(_root.get(), _supplementalTooltipPointDip) != _supplementalTooltipControl ||
+        _supplementalTooltipControl->GetTooltipText() != _supplementalTooltipText)
+    {
+        UpdateSupplementalTooltipTarget(_supplementalTooltipPointDip);
     }
 }
 
@@ -4102,6 +4284,7 @@ bool WindowHost::OnAnimationTick(uint64_t nowTickMs) noexcept
         return false;
     }
 
+    ValidateSupplementalTooltipTarget();
     if (! _root)
     {
         const bool tooltipTicking = _tooltipLayer.Tick(*this, nowTickMs);

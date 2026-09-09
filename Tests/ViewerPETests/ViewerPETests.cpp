@@ -13,6 +13,7 @@
 #include <mutex>
 #include <new>
 #include <optional>
+#include <tuple>
 #include <span>
 #include <string>
 #include <string_view>
@@ -33,10 +34,12 @@
 #pragma warning(pop)
 
 #include "PlugInterfaces/Factory.h"
+#include "FileSystemRouteProviderBase.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Viewer.h"
+#include "TestWindowActivationGuard.h"
 #include "ViewerImgRaw/ViewerImgRaw.AsyncProtocol.h"
 #include "ViewerImgRaw/ViewerImgRaw.ResourcePolicy.h"
 #include "ViewerSpace/ViewerSpace.ScanPolicy.h"
@@ -47,6 +50,7 @@
 #include "ViewerWeb/ViewerWebSecurity.h"
 #include "WindowMessages.h"
 #include "TestSupport/TestSupport.h"
+#include "TestSupport/DirectedSelfTestInputWarning.h"
 
 #pragma comment(lib, "windowscodecs")
 #pragma comment(lib, "shlwapi")
@@ -64,7 +68,9 @@ constexpr wchar_t kViewerVLCWindowClassName[]        = L"RedSalamander.ViewerVLC
 constexpr wchar_t kViewerVLCVideoWindowClassName[]   = L"RedSalamander.ViewerVLC.Video";
 constexpr wchar_t kViewerVLCHudWindowClassName[]     = L"RedSalamander.ViewerVLC.Hud";
 constexpr wchar_t kViewerTextWindowClassName[]       = L"RedSalamander.ViewerText";
-constexpr wchar_t kViewerTextViewWindowClassName[]   = L"RedSalamander.ViewerText.TextView";
+#ifdef _DEBUG
+constexpr wchar_t kViewerTextViewWindowClassName[] = L"RedSalamander.ViewerText.TextView";
+#endif
 constexpr wchar_t kViewerTextPromptWindowClassName[] = L"RedSalamander.ViewerText.Prompt";
 constexpr wchar_t kDxNativeMenuBarWindowClassName[]  = L"RedSalamander.DxNativeMenuBar";
 constexpr wchar_t kNativeTooltipWindowClassName[]    = L"tooltips_class32";
@@ -84,30 +90,49 @@ constexpr UINT kViewerTextGotoCommandId              = 40203u;
 constexpr std::wstring_view kViewerPEHarnessSegment{L"viewer-pe"};
 constexpr char kReadOnlyFileSystemCapabilitiesJson[] = R"json(
 {
-  "version": 1,
+  "version": 2,
+  "pathProfile": "test-read-only",
+  "rootId": "test-root",
   "operations": {
     "copy": false,
     "move": false,
+    "nativeMove": false,
     "delete": false,
     "rename": false,
     "properties": false,
     "read": true,
-    "write": false
+    "write": false,
+    "recycle": false,
+    "createDirectory": false
   },
   "concurrency": {
     "copyMoveMax": 1,
     "deleteMax": 1,
-    "deleteRecycleBinMax": 1
+    "deleteRecycleBinMax": 0
   },
-  "crossFileSystem": {
+  "transfer": {
     "export": { "copy": [], "move": [] },
     "import": { "copy": [], "move": [] }
-  }
+  },
+  "identity": { "object": "none", "revision": "none", "boundDelete": false, "conditionalDelete": false },
+  "publication": { "exclusiveStage": false, "conditionalPublish": false, "committedSize": false },
+  "verification": { "hostReadback": false, "providerProof": "none" },
+  "links": { "preserveFileLink": false, "preserveDirectoryLink": false, "retargetInTree": false, "exactLinkRemoval": false },
+  "metadata": { "motw": "unknown", "alternateStreams": "unknown", "extendedAttributes": "unknown", "sparse": "unknown", "efs": "unknown" },
+  "cancellation": { "abort": false, "deadline": false, "routeClass": "uncontained", "providerWatchdogTimeoutMs": 0 },
+  "names": { "pathTextStableIdentity": true, "comparison": "ordinalIgnoreCase", "normalization": "none", "preferredSeparator": "\\", "acceptedSeparators": ["\\", "/"], "casePreserving": true, "caseOnlyRename": "notApplicable", "maxComponentUtf16": 255 },
+  "directories": { "model": "native" }
 }
 )json";
 constexpr auto kViewerHarnessDefaultTimeout          = 120000ms;
 constexpr auto kViewerShellComboLongRunTimeout       = 600000ms;
 static_assert(kViewerShellComboLongRunTimeout > kViewerHarnessDefaultTimeout);
+
+enum class TestDesktopInteraction
+{
+    Noninteractive,
+    RequiresActivation,
+};
 
 struct UiaHostPatternStats
 {
@@ -125,11 +150,32 @@ struct IsolatedViewerTest
 {
     std::wstring_view name;
     std::chrono::milliseconds timeout;
+    TestDesktopInteraction desktopInteraction;
 };
 
 [[nodiscard]] std::wstring GetEnvironmentString(std::wstring_view name)
 {
     return RedSalamander::TestSupport::GetEnvironmentString(name);
+}
+
+[[maybe_unused]] [[nodiscard]] bool IsSystemClipboardAvailableForViewerTest() noexcept
+{
+    constexpr size_t kAttemptCount = 25u;
+    for (size_t attempt = 0u; attempt < kAttemptCount; ++attempt)
+    {
+        if (OpenClipboard(nullptr) != FALSE)
+        {
+            static_cast<void>(CloseClipboard());
+            return true;
+        }
+
+        if (attempt + 1u < kAttemptCount)
+        {
+            std::this_thread::sleep_for(10ms);
+        }
+    }
+
+    return false;
 }
 
 [[nodiscard]] std::optional<std::filesystem::path> FindInstalledVlcForLoaderTest() noexcept
@@ -191,7 +237,7 @@ struct IsolatedViewerTest
         {.harnessSegment = kViewerPEHarnessSegment, .leafSegment = caseName, .fallbackRunIdPrefix = L"viewer-pe"}, ec);
 }
 
-void PumpPendingMessages() noexcept
+[[maybe_unused]] void PumpPendingMessages() noexcept
 {
     static_cast<void>(RedSalamander::TestSupport::PumpPendingMessages());
 }
@@ -363,8 +409,7 @@ template <typename Predicate>
 #ifdef _DEBUG
 ViewerTheme MakeViewerTextTestTheme(bool highContrast, bool rainbowMode = false) noexcept
 {
-    ViewerTheme theme{};
-    theme.version                    = 4u;
+    ViewerTheme theme{.sizeBytes = sizeof(ViewerTheme)};
     theme.dpi                        = 96u;
     theme.backgroundArgb             = 0xFFF7F4EEu;
     theme.textArgb                   = 0xFF1D1D1Du;
@@ -555,7 +600,7 @@ ViewerTheme MakeViewerTextTestTheme(bool highContrast, bool rainbowMode = false)
     return state.found;
 }
 
-[[nodiscard]] HWND FindFirstVisibleChildWindowWithStyle(HWND hwnd, LONG_PTR requiredStyle) noexcept
+[[maybe_unused]] [[nodiscard]] HWND FindFirstVisibleChildWindowWithStyle(HWND hwnd, LONG_PTR requiredStyle) noexcept
 {
     if (! hwnd || IsWindow(hwnd) == FALSE)
     {
@@ -760,7 +805,10 @@ bool Check(bool condition, std::wstring_view message, bool& success)
     return false;
 }
 
-[[nodiscard]] bool RunFilteredSelfExecutable(std::wstring_view testName, std::chrono::milliseconds timeout, bool& success) noexcept
+[[nodiscard]] bool RunFilteredSelfExecutable(std::wstring_view testName,
+                                             std::chrono::milliseconds timeout,
+                                             TestDesktopInteraction desktopInteraction,
+                                             bool& success) noexcept
 {
     std::array<wchar_t, MAX_PATH + 1> modulePath{};
     const DWORD pathLength = GetModuleFileNameW(nullptr, modulePath.data(), static_cast<DWORD>(modulePath.size()));
@@ -771,6 +819,10 @@ bool Check(bool condition, std::wstring_view message, bool& success)
     }
 
     std::wstring commandLine = std::format(L"\"{}\" \"{}\"", modulePath.data(), testName);
+    if (desktopInteraction == TestDesktopInteraction::Noninteractive)
+    {
+        commandLine.append(L" --no-activate");
+    }
     STARTUPINFOW startupInfo{};
     startupInfo.cb = sizeof(startupInfo);
     PROCESS_INFORMATION processInfo{};
@@ -1312,7 +1364,7 @@ void CheckViewerTextPromptAccessibility(
     return path;
 }
 
-[[nodiscard]] std::optional<std::vector<std::byte>> ReadBinaryFile(const std::filesystem::path& path)
+[[maybe_unused]] [[nodiscard]] std::optional<std::vector<std::byte>> ReadBinaryFile(const std::filesystem::path& path)
 {
     std::ifstream stream(path, std::ios::binary | std::ios::ate);
     const std::streampos end = stream.tellg();
@@ -1334,7 +1386,7 @@ void CheckViewerTextPromptAccessibility(
     return bytes;
 }
 
-[[nodiscard]] size_t CountViewerTextSaveTemps(const std::filesystem::path& directory, std::error_code& ec) noexcept
+[[maybe_unused]] [[nodiscard]] size_t CountViewerTextSaveTemps(const std::filesystem::path& directory, std::error_code& ec) noexcept
 {
     constexpr std::wstring_view kPrefix = L".redsalamander-viewertext-save-";
     size_t count                        = 0u;
@@ -1351,7 +1403,7 @@ void CheckViewerTextPromptAccessibility(
     return count;
 }
 
-[[nodiscard]] size_t CountViewerWebSaveTemps(const std::filesystem::path& directory, std::error_code& ec) noexcept
+[[maybe_unused]] [[nodiscard]] size_t CountViewerWebSaveTemps(const std::filesystem::path& directory, std::error_code& ec) noexcept
 {
     constexpr std::wstring_view kPrefix = L".rsw-save-";
     constexpr std::wstring_view kSuffix = L".tmp";
@@ -2027,7 +2079,10 @@ private:
     std::atomic_bool _blocked{false};
 };
 
-class BuiltinFileSystemStub final : public IFileSystem, public IInformations, public IFileSystemIO
+class BuiltinFileSystemStub final : public IFileSystem,
+                                    public IInformations,
+                                    public IFileSystemIO,
+                                    public FileSystemRouteCapabilitiesBase
 {
 public:
     using DirectoryReadCallback = HRESULT (*)(void* context, const wchar_t* path, IFilesInformation** filesInformation) noexcept;
@@ -2148,6 +2203,14 @@ public:
         if (riid == __uuidof(IUnknown) || riid == __uuidof(IFileSystem))
         {
             *ppvObject = static_cast<IFileSystem*>(this);
+        }
+        else if (riid == __uuidof(IFileSystemPathCapabilities2))
+        {
+            *ppvObject = static_cast<IFileSystemPathCapabilities2*>(this);
+        }
+        else if (riid == __uuidof(IFileSystemRouteCapabilities))
+        {
+            *ppvObject = static_cast<IFileSystemRouteCapabilities*>(static_cast<FileSystemRouteCapabilitiesBase*>(this));
         }
         else if (riid == __uuidof(IInformations))
         {
@@ -2345,7 +2408,9 @@ public:
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
-    HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* /*path*/,
+                                                  FileSystemOperation /*operation*/,
+                                                  const char** jsonUtf8) noexcept override
     {
         if (! jsonUtf8)
         {
@@ -2353,6 +2418,26 @@ public:
         }
 
         *jsonUtf8 = kReadOnlyFileSystemCapabilitiesJson;
+        return S_OK;
+    }
+
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t*,
+                                           FileSystemOperation,
+                                           FileSystemRouteDescriptor& descriptor) noexcept override
+    {
+        descriptor.providerId = _useSyntheticFileSystemMetadata ? kSyntheticMetaData.id : kMetaData.id;
+        descriptor.pathProfileId = L"viewer-pe-test-read-only";
+        descriptor.rootId = L"viewer-pe-test-root";
+        descriptor.acceptedSeparators = L"\\/";
+        descriptor.availability = FILESYSTEM_ROUTE_AVAILABLE;
+        descriptor.namespaceKind = FILESYSTEM_NAMESPACE_REAL_CONTAINER;
+        descriptor.componentComparison = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE;
+        descriptor.caseOnlyRename = FILESYSTEM_ROUTE_CASE_ONLY_NOT_APPLICABLE;
+        descriptor.readOperation = true;
+        descriptor.pathTextStableIdentity = true;
+        descriptor.casePreserving = true;
+        descriptor.windowsChildNames = true;
+        descriptor.preferredSeparator = L'\\';
         return S_OK;
     }
 
@@ -2628,7 +2713,7 @@ private:
     const std::wstring pluginPathText = pluginPath.wstring();
     const std::wstring appPathText    = appPath.wstring();
     const wchar_t* otherFiles[]       = {pluginPathText.c_str(), appPathText.c_str()};
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName        = L"File System";
     context.focusedPath           = pluginPathText.c_str();
@@ -2748,7 +2833,7 @@ private:
     const std::wstring middleText   = middlePath.wstring();
     const std::wstring latestText   = latestPath.wstring();
     const wchar_t* otherFiles[]     = {oversizeText.c_str(), activeText.c_str(), middleText.c_str(), latestText.c_str()};
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName        = L"File System";
     context.otherFiles            = otherFiles;
@@ -3022,7 +3107,7 @@ private:
     const std::wstring firstPathText  = firstPath.wstring();
     const std::wstring secondPathText = secondPath.wstring();
     const wchar_t* otherFiles[]       = {firstPathText.c_str(), secondPathText.c_str()};
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName        = L"File System";
     context.focusedPath           = firstPathText.c_str();
@@ -3405,7 +3490,7 @@ private:
 
     const std::vector<HWND> acceptedExistingWindows = CollectVisibleWindowsByClass(kViewerWebWindowClassName);
     const wchar_t* acceptedFiles[]                   = {hostileVirtualPath.c_str()};
-    ViewerOpenContext acceptedContext{};
+    ViewerOpenContext acceptedContext{.sizeBytes = sizeof(ViewerOpenContext)};
     acceptedContext.fileSystem            = static_cast<IFileSystem*>(&acceptedFileSystem);
     acceptedContext.fileSystemName        = L"Virtual File System";
     acceptedContext.focusedPath           = hostileVirtualPath.c_str();
@@ -3476,7 +3561,7 @@ private:
 
         const std::vector<HWND> existingWindows = CollectVisibleWindowsByClass(kViewerWebWindowClassName);
         const wchar_t* files[]                  = {focusedPath.c_str()};
-        ViewerOpenContext context{};
+        ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
         context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
         context.fileSystemName        = virtualFileSystem ? L"Virtual File System" : L"File System";
         context.focusedPath           = focusedPath.c_str();
@@ -3587,7 +3672,7 @@ private:
 
         const std::vector<HWND> existingWindows = CollectVisibleWindowsByClass(kViewerWebWindowClassName);
         const wchar_t* files[]                  = {virtualPath.c_str()};
-        ViewerOpenContext context{};
+        ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
         context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
         context.fileSystemName        = L"Virtual File System";
         context.focusedPath           = virtualPath.c_str();
@@ -3662,7 +3747,7 @@ private:
     return success;
 }
 
-[[nodiscard]] bool TestViewerWebTransactionalSaveAsAndCloseSafety() noexcept
+[[maybe_unused]] [[nodiscard]] bool TestViewerWebTransactionalSaveAsAndCloseSafety() noexcept
 {
 #ifndef _DEBUG
     std::wcout << L"[SKIP] ViewerWeb transactional Save As validation requires ENABLE_TESTS hooks.\n";
@@ -3794,7 +3879,7 @@ private:
     });
     const std::vector<HWND> existingWindows = CollectVisibleWindowsByClass(kViewerWebWindowClassName);
     const std::wstring sourcePathText       = sourcePath.wstring();
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem     = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName = L"File System";
     context.focusedPath    = sourcePathText.c_str();
@@ -4180,7 +4265,7 @@ private:
     const std::wstring firstPathText  = firstPath.wstring();
     const std::wstring secondPathText = secondPath.wstring();
     const wchar_t* otherFiles[]       = {firstPathText.c_str(), secondPathText.c_str()};
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName        = L"File System";
     context.focusedPath           = firstPathText.c_str();
@@ -4439,7 +4524,7 @@ private:
         BuiltinFileSystemStub fileSystem;
         const std::wstring pathText = path.wstring();
         const wchar_t* otherFiles[] = {pathText.c_str()};
-        ViewerOpenContext context{};
+        ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
         context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
         context.fileSystemName        = L"File System";
         context.focusedPath           = pathText.c_str();
@@ -4735,7 +4820,7 @@ private:
             otherFiles.push_back(path.c_str());
         }
 
-        ViewerOpenContext context{};
+        ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
         context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
         context.fileSystemName        = L"File System";
         context.focusedPath           = paths[focusedIndex].c_str();
@@ -4967,7 +5052,7 @@ private:
     return success;
 }
 
-[[nodiscard]] bool TestViewerImgRawLatestWinsExactReaderAndCloseSafety() noexcept
+[[maybe_unused]] [[nodiscard]] bool TestViewerImgRawLatestWinsExactReaderAndCloseSafety() noexcept
 {
 #ifndef _DEBUG
     std::wcout << L"[SKIP] ViewerImgRaw scheduler safety requires ENABLE_TESTS hooks.\n";
@@ -5128,7 +5213,7 @@ private:
     const std::wstring middleText = middlePath.wstring();
     const std::wstring latestText = latestPath.wstring();
     const wchar_t* otherFiles[]   = {activeText.c_str(), middleText.c_str(), latestText.c_str()};
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem     = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName = L"File System";
     context.otherFiles     = otherFiles;
@@ -5219,11 +5304,23 @@ private:
     Check(SUCCEEDED(viewer->Open(&context)), L"ViewerImgRaw accepts the latest decode request", success);
 
     WndMsg::ViewerImgRawResourceDebugSnapshot pendingSnapshot{};
-    Check(viewerWindow &&
-              SendMessageW(viewerWindow, WndMsg::kViewerImgRawDebugGetResourceSnapshot, 0u, reinterpret_cast<LPARAM>(&pendingSnapshot)) == TRUE &&
-              pendingSnapshot.activeMainDecodeCount == 1u && pendingSnapshot.pendingMainDecodeCount == 1u &&
-              pendingSnapshot.replacedMainDecodeCount == 1u,
-          L"ViewerImgRaw bounds main scheduling to one active and one replaceable pending decode",
+    Check(PumpUntil([&]() noexcept
+    {
+        pendingSnapshot = {};
+        return viewerWindow &&
+               SendMessageW(viewerWindow, WndMsg::kViewerImgRawDebugGetResourceSnapshot, 0u, reinterpret_cast<LPARAM>(&pendingSnapshot)) == TRUE &&
+               pendingSnapshot.activeMainDecodeCount == 1u && pendingSnapshot.pendingMainDecodeCount == 1u &&
+               pendingSnapshot.replacedMainDecodeCount == 1u;
+    },
+                    5000ms),
+          std::format(L"ViewerImgRaw bounds main scheduling to one active and one replaceable pending decode "
+                      L"(active={}, pending={}, replaced={}, current={}, middleReaders={}, latestReaders={})",
+                      pendingSnapshot.activeMainDecodeCount,
+                      pendingSnapshot.pendingMainDecodeCount,
+                      pendingSnapshot.replacedMainDecodeCount,
+                      pendingSnapshot.currentRequestId,
+                      fileSystem.GetCreateFileReaderCount(middlePath),
+                      fileSystem.GetCreateFileReaderCount(latestPath)),
           success);
     Check(fileSystem.GetCreateFileReaderCount(middlePath) == 0u && fileSystem.GetCreateFileReaderCount(latestPath) == 0u,
           L"ViewerImgRaw does not start pending providers while the active Read is blocked",
@@ -5248,7 +5345,17 @@ private:
                latestResource.pendingMainDecodeCount == 0u && ! latestResource.loading && latestDecode.hasImage;
     },
                     10000ms),
-          L"ViewerImgRaw runs the latest pending request to one successful terminal result",
+          std::format(L"ViewerImgRaw runs the latest pending request to one successful terminal result "
+                      L"(success={}, failure={}, active={}, pending={}, loading={}, hasImage={}, middleReaders={}, latestReaders={}, warnings={})",
+                      latestResource.finalSuccessCount,
+                      latestResource.finalFailureCount,
+                      latestResource.activeMainDecodeCount,
+                      latestResource.pendingMainDecodeCount,
+                      latestResource.loading,
+                      latestDecode.hasImage,
+                      fileSystem.GetCreateFileReaderCount(middlePath),
+                      fileSystem.GetCreateFileReaderCount(latestPath),
+                      host.WarningAlertCount()),
           success);
     Check(fileSystem.GetCreateFileReaderCount(middlePath) == 0u && fileSystem.GetCreateFileReaderCount(latestPath) == 1u,
           L"ViewerImgRaw permanently drops the superseded middle request and reads only the latest",
@@ -5411,7 +5518,7 @@ private:
     }
 
     const wchar_t* blockedFiles[] = {activeText.c_str()};
-    ViewerOpenContext blockedContext{};
+    ViewerOpenContext blockedContext{.sizeBytes = sizeof(ViewerOpenContext)};
     blockedContext.fileSystem            = static_cast<IFileSystem*>(&blockedFileSystem);
     blockedContext.fileSystemName        = L"File System";
     blockedContext.focusedPath           = activeText.c_str();
@@ -5480,7 +5587,7 @@ private:
 #endif
 }
 
-[[nodiscard]] bool TestViewerImgRawEmbeddedThumbnailTerminalSequencing() noexcept
+[[maybe_unused]] [[nodiscard]] bool TestViewerImgRawEmbeddedThumbnailTerminalSequencing() noexcept
 {
 #ifndef _DEBUG
     std::wcout << L"[SKIP] ViewerImgRaw embedded-thumbnail sequencing requires ENABLE_TESTS hooks.\n";
@@ -5613,7 +5720,7 @@ private:
               std::format(L"{} accepts deterministic configuration", label),
               success);
 
-        ViewerOpenContext context{};
+        ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
         context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
         context.fileSystemName        = L"File System";
         context.focusedPath           = embeddedText.c_str();
@@ -5773,7 +5880,7 @@ private:
     BuiltinFileSystemStub fileSystem;
     const std::wstring pngPathText = pngPath.wstring();
     const wchar_t* otherFiles[]    = {pngPathText.c_str()};
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName        = L"File System";
     context.focusedPath           = pngPathText.c_str();
@@ -5819,7 +5926,7 @@ private:
     return success;
 }
 
-[[nodiscard]] bool TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo() noexcept
+[[nodiscard]] bool TestViewerTextWindowRuntime(bool exerciseEncodingPicker) noexcept
 {
     bool success = true;
 
@@ -5903,7 +6010,7 @@ private:
     const std::wstring firstPathText  = firstPath.wstring();
     const std::wstring secondPathText = secondPath.wstring();
     const wchar_t* otherFiles[]       = {firstPathText.c_str(), secondPathText.c_str()};
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName        = L"File System";
     context.focusedPath           = firstPathText.c_str();
@@ -5952,6 +6059,226 @@ private:
     }, 5000ms, &snapshot);
     Check(snapshotReady, L"ViewerText exposes no visible legacy GDI or HFONT text surfaces in the active shell", success);
 #endif
+
+    if (exerciseEncodingPicker)
+    {
+        const auto encodingIsChecked = [&](UINT commandId) noexcept
+        {
+            WndMsg::ViewerNativeMenuModelDebugSnapshot menuSnapshot{};
+            menuSnapshot.queryCommandId = commandId;
+            return SendMessageW(viewerWindow,
+                                WndMsg::kViewerDebugGetNativeMenuModelSnapshot,
+                                0,
+                                reinterpret_cast<LPARAM>(&menuSnapshot)) != FALSE &&
+                   menuSnapshot.queryCommandPresent && menuSnapshot.queryCommandChecked;
+        };
+        static_cast<void>(SendMessageW(viewerWindow, WM_KEYDOWN, VK_F8, 0));
+        static_cast<void>(SendMessageW(viewerWindow, WM_KEYUP, VK_F8, 0));
+        Check(PumpUntil([&]() noexcept { return encodingIsChecked(IDM_VIEWER_ENCODING_DISPLAY_UTF8_BOM); }, 3000ms),
+              L"ViewerText first F8 encoding cycle advances from UTF-8 to UTF-8 BOM",
+              success);
+        static_cast<void>(SendMessageW(viewerWindow, WM_KEYDOWN, VK_F8, 0));
+        static_cast<void>(SendMessageW(viewerWindow, WM_KEYUP, VK_F8, 0));
+        Check(PumpUntil([&]() noexcept { return encodingIsChecked(IDM_VIEWER_ENCODING_DISPLAY_UTF16BE_BOM); }, 3000ms),
+              L"ViewerText repeated F8 encoding cycle reuses the catalog and advances to UTF-16 BE BOM",
+              success);
+        static_cast<void>(SendMessageW(viewerWindow, WM_COMMAND, IDM_VIEWER_ENCODING_DISPLAY_UTF8, 0));
+        Check(PumpUntil([&]() noexcept { return encodingIsChecked(IDM_VIEWER_ENCODING_DISPLAY_UTF8); }, 3000ms),
+              L"ViewerText encoding-cycle fixture restores UTF-8 before picker validation",
+              success);
+
+        const auto findEncodingPicker = [viewerWindow]() noexcept
+        {
+            for (size_t attempt = 0u; attempt < 500u; ++attempt)
+            {
+                struct PickerSearch final
+                {
+                    HWND owner = nullptr;
+                    HWND result = nullptr;
+                } search{viewerWindow, nullptr};
+                static_cast<void>(EnumWindows(
+                    [](HWND candidate, LPARAM lParam) noexcept -> BOOL
+                    {
+                        auto& value = *reinterpret_cast<PickerSearch*>(lParam);
+                        if (GetWindow(candidate, GW_OWNER) != value.owner || IsWindowVisible(candidate) == FALSE)
+                        {
+                            return TRUE;
+                        }
+                        wchar_t className[32]{};
+                        if (GetClassNameW(candidate, className, static_cast<int>(std::size(className))) > 0 && std::wstring_view(className) == L"#32770")
+                        {
+                            value.result = candidate;
+                            return FALSE;
+                        }
+                        return TRUE;
+                    },
+                    reinterpret_cast<LPARAM>(&search)));
+                if (search.result)
+                {
+                    return search.result;
+                }
+                std::this_thread::sleep_for(10ms);
+            }
+            return static_cast<HWND>(nullptr);
+        };
+
+        std::atomic_bool currentRowSelectedAndVisible{false};
+        std::atomic_bool escapeCanceled{false};
+        std::jthread escapeDriver([&](std::stop_token) noexcept
+        {
+            const HWND picker = findEncodingPicker();
+            const HWND list   = picker ? GetDlgItem(picker, IDC_VIEWERTEXT_ENCODING_LIST) : nullptr;
+            if (! picker || ! list)
+            {
+                return;
+            }
+            const LRESULT selected = SendMessageW(list, LB_GETCURSEL, 0, 0);
+            const LRESULT top      = SendMessageW(list, LB_GETTOPINDEX, 0, 0);
+            const LRESULT command  = selected != LB_ERR ? SendMessageW(list, LB_GETITEMDATA, static_cast<WPARAM>(selected), 0) : LB_ERR;
+            currentRowSelectedAndVisible = selected != LB_ERR && command == IDM_VIEWER_ENCODING_DISPLAY_UTF8 && top <= selected;
+
+            static_cast<void>(PostMessageW(picker, WM_KEYDOWN, VK_ESCAPE, 0));
+            static_cast<void>(PostMessageW(picker, WM_KEYUP, VK_ESCAPE, 0));
+            for (size_t attempt = 0u; attempt < 100u && IsWindow(picker) != FALSE; ++attempt)
+            {
+                std::this_thread::sleep_for(10ms);
+            }
+            escapeCanceled = IsWindow(picker) == FALSE;
+            if (! escapeCanceled.load(std::memory_order_acquire))
+            {
+                static_cast<void>(PostMessageW(picker, WM_COMMAND, IDCANCEL, 0));
+            }
+        });
+        static_cast<void>(SendMessageW(viewerWindow, WM_COMMAND, static_cast<WPARAM>(IDM_VIEWER_ENCODING_MORE), 0));
+        escapeDriver.join();
+        Check(currentRowSelectedAndVisible, L"ViewerText encoding picker selects and reveals the current encoding on open", success);
+        Check(escapeCanceled, L"ViewerText encoding picker closes through Escape without committing", success);
+
+        WndMsg::ViewerNativeMenuModelDebugSnapshot canceledEncodingSnapshot{};
+        canceledEncodingSnapshot.queryCommandId = IDM_VIEWER_ENCODING_DISPLAY_UTF8;
+        Check(SendMessageW(viewerWindow,
+                           WndMsg::kViewerDebugGetNativeMenuModelSnapshot,
+                           0,
+                           reinterpret_cast<LPARAM>(&canceledEncodingSnapshot)) != FALSE &&
+                  canceledEncodingSnapshot.queryCommandPresent && canceledEncodingSnapshot.queryCommandChecked,
+              L"ViewerText Escape cancellation preserves the active encoding",
+              success);
+
+        std::atomic_bool closeDuringFilter{false};
+        std::jthread closeDriver([&](std::stop_token) noexcept
+        {
+            const HWND picker = findEncodingPicker();
+            const HWND filter = picker ? GetDlgItem(picker, IDC_VIEWERTEXT_ENCODING_FILTER) : nullptr;
+            if (! picker || ! filter)
+            {
+                return;
+            }
+            for (const wchar_t* query : {L"arab", L"65001", L"1252", L"utf"})
+            {
+                static_cast<void>(SetWindowTextW(filter, query));
+            }
+            static_cast<void>(PostMessageW(picker, WM_CLOSE, 0, 0));
+            for (size_t attempt = 0u; attempt < 100u && IsWindow(picker) != FALSE; ++attempt)
+            {
+                std::this_thread::sleep_for(10ms);
+            }
+            closeDuringFilter = IsWindow(picker) == FALSE;
+            if (! closeDuringFilter.load(std::memory_order_acquire))
+            {
+                static_cast<void>(PostMessageW(picker, WM_COMMAND, IDCANCEL, 0));
+            }
+        });
+        static_cast<void>(SendMessageW(viewerWindow, WM_COMMAND, static_cast<WPARAM>(IDM_VIEWER_ENCODING_MORE), 0));
+        closeDriver.join();
+        Check(closeDuringFilter, L"ViewerText encoding picker closes safely while filtering", success);
+
+        std::atomic_bool pickerOpened{false};
+        std::atomic_bool fullCatalogVisible{false};
+        std::atomic_bool emptyFilterWorks{false};
+        std::atomic_bool codePageFilterWorks{false};
+        std::atomic_bool rapidFilterReplacementWorks{false};
+        std::atomic_bool pickerAccepted{false};
+
+        std::jthread pickerDriver([&](std::stop_token) noexcept
+        {
+            const HWND picker = findEncodingPicker();
+
+            if (! picker)
+            {
+                return;
+            }
+
+            pickerOpened = true;
+            HWND filter = GetDlgItem(picker, IDC_VIEWERTEXT_ENCODING_FILTER);
+            HWND list   = GetDlgItem(picker, IDC_VIEWERTEXT_ENCODING_LIST);
+            if (! filter || ! list)
+            {
+                static_cast<void>(PostMessageW(picker, WM_COMMAND, IDCANCEL, 0));
+                return;
+            }
+
+            const LRESULT fullCount = SendMessageW(list, LB_GETCOUNT, 0, 0);
+            fullCatalogVisible = fullCount >= 100;
+
+            static_cast<void>(SetWindowTextW(filter, L"no-such-codepage-name"));
+            static_cast<void>(SendMessageW(picker, WM_COMMAND, MAKEWPARAM(IDC_VIEWERTEXT_ENCODING_FILTER, EN_CHANGE), reinterpret_cast<LPARAM>(filter)));
+            emptyFilterWorks = SendMessageW(list, LB_GETCOUNT, 0, 0) == 0 && IsWindowEnabled(GetDlgItem(picker, IDOK)) == FALSE;
+
+            for (const wchar_t* query : {L"arab", L"65001", L"1252"})
+            {
+                static_cast<void>(SetWindowTextW(filter, query));
+            }
+            static_cast<void>(SendMessageW(picker, WM_COMMAND, MAKEWPARAM(IDC_VIEWERTEXT_ENCODING_FILTER, EN_CHANGE), reinterpret_cast<LPARAM>(filter)));
+            const LRESULT filteredCount = SendMessageW(list, LB_GETCOUNT, 0, 0);
+            int codePageRow = -1;
+            for (int row = 0; row < filteredCount; ++row)
+            {
+                if (SendMessageW(list, LB_GETITEMDATA, static_cast<WPARAM>(row), 0) == 1252)
+                {
+                    codePageRow = row;
+                    break;
+                }
+            }
+            codePageFilterWorks = codePageRow >= 0 && filteredCount < fullCount;
+            rapidFilterReplacementWorks = codePageRow >= 0;
+            if (codePageRow < 0)
+            {
+                static_cast<void>(PostMessageW(picker, WM_COMMAND, IDCANCEL, 0));
+                return;
+            }
+
+            static_cast<void>(SendMessageW(list, LB_SETCURSEL, static_cast<WPARAM>(codePageRow), 0));
+            pickerAccepted = PostMessageW(picker, WM_COMMAND, IDOK, 0) != FALSE;
+        });
+
+        static_cast<void>(SendMessageW(viewerWindow, WM_COMMAND, static_cast<WPARAM>(IDM_VIEWER_ENCODING_MORE), 0));
+        pickerDriver.join();
+
+        Check(pickerOpened, L"ViewerText More Encodings opens a modal searchable picker", success);
+        Check(fullCatalogVisible, L"ViewerText encoding picker exposes the full canonical catalog", success);
+        Check(emptyFilterWorks, L"ViewerText encoding picker handles a zero-result query and disables commit", success);
+        Check(codePageFilterWorks, L"ViewerText encoding picker filters by decimal codepage number", success);
+        Check(rapidFilterReplacementWorks, L"ViewerText encoding picker applies the final rapid replacement query", success);
+        Check(pickerAccepted, L"ViewerText encoding picker accepts the selected codepage", success);
+
+        WndMsg::ViewerNativeMenuModelDebugSnapshot selectedEncodingSnapshot{};
+        const bool selectionApplied = PumpUntil(
+            [&]() noexcept
+        {
+            selectedEncodingSnapshot                = {};
+            selectedEncodingSnapshot.queryCommandId = 1252u;
+            return SendMessageW(viewerWindow,
+                                WndMsg::kViewerDebugGetNativeMenuModelSnapshot,
+                                0,
+                                reinterpret_cast<LPARAM>(&selectedEncodingSnapshot)) != FALSE &&
+                   selectedEncodingSnapshot.queryCommandPresent && selectedEncodingSnapshot.queryCommandChecked;
+        },
+            8000ms);
+        Check(selectionApplied,
+              L"ViewerText encoding picker applies exactly the committed codepage",
+              success);
+    }
+
     static_cast<void>(PumpUntil([]() noexcept { return false; }, 250ms));
     const HRESULT closeHr = viewer->Close();
     Check(SUCCEEDED(closeHr), L"ViewerText window close succeeds", success);
@@ -5959,6 +6286,16 @@ private:
     CheckEmbeddedViewerHidesStandaloneFileCombo(
         createFn, kViewerTextPluginId, context, kViewerTextWindowClassName, kViewerTextFileComboId, L"ViewerText", success);
     return success;
+}
+
+[[nodiscard]] bool TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo() noexcept
+{
+    return TestViewerTextWindowRuntime(false);
+}
+
+[[nodiscard]] bool TestViewerTextEncodingPickerOpenAndFilterFullCatalog() noexcept
+{
+    return TestViewerTextWindowRuntime(true);
 }
 
 #ifdef _DEBUG
@@ -6082,7 +6419,7 @@ private:
 
     BuiltinFileSystemStub fileSystem;
     const std::wstring samplePathText = samplePath.wstring();
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem     = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName = L"File System";
     context.focusedPath    = samplePathText.c_str();
@@ -6355,7 +6692,7 @@ private:
     fileSystem.EnableShortRead(kReadableSize);
 
     const std::wstring samplePathText = samplePath.wstring();
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem     = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName = L"File System";
     context.focusedPath    = samplePathText.c_str();
@@ -6626,7 +6963,7 @@ private:
 
     BuiltinFileSystemStub fileSystem;
     const std::wstring samplePathText = samplePath.wstring();
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem     = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName = L"File System";
     context.focusedPath    = samplePathText.c_str();
@@ -7211,30 +7548,37 @@ private:
               success);
     }
 
-    const unsigned int warningsBeforeCopy = hostStub.WarningAlertCount();
-    WndMsg::ViewerTextDebugHexCopyRequest acceptedCopyRequest{};
-    acceptedCopyRequest.anchorOffset = 0u;
-    acceptedCopyRequest.activeOffset = ViewerTextSafety::kMaxHexClipboardBytes - 1u;
-    const bool acceptedCopyDispatched =
-        SendMessageW(viewerWindow, WndMsg::kViewerTextDebugCopyHexSelection, 0u, reinterpret_cast<LPARAM>(&acceptedCopyRequest)) != FALSE;
-    Check(acceptedCopyDispatched && acceptedCopyRequest.dispatched,
-          L"ViewerText dispatches the real hex clipboard path at the exact source-byte cap",
-          success);
-    Check(hostStub.WarningAlertCount() == warningsBeforeCopy,
-          L"ViewerText does not warn when a hex clipboard selection is exactly at the cap",
-          success);
+    if (IsSystemClipboardAvailableForViewerTest())
+    {
+        const unsigned int warningsBeforeCopy = hostStub.WarningAlertCount();
+        WndMsg::ViewerTextDebugHexCopyRequest acceptedCopyRequest{};
+        acceptedCopyRequest.anchorOffset = 0u;
+        acceptedCopyRequest.activeOffset = ViewerTextSafety::kMaxHexClipboardBytes - 1u;
+        const bool acceptedCopyDispatched =
+            SendMessageW(viewerWindow, WndMsg::kViewerTextDebugCopyHexSelection, 0u, reinterpret_cast<LPARAM>(&acceptedCopyRequest)) != FALSE;
+        Check(acceptedCopyDispatched && acceptedCopyRequest.dispatched,
+              L"ViewerText dispatches the real hex clipboard path at the exact source-byte cap",
+              success);
+        Check(hostStub.WarningAlertCount() == warningsBeforeCopy,
+              L"ViewerText does not warn when a hex clipboard selection is exactly at the cap",
+              success);
 
-    WndMsg::ViewerTextDebugHexCopyRequest copyRequest{};
-    copyRequest.anchorOffset = 0u;
-    copyRequest.activeOffset = static_cast<uint64_t>(fixture.size() - 1u);
-    const bool copyDispatched =
-        SendMessageW(viewerWindow, WndMsg::kViewerTextDebugCopyHexSelection, 0u, reinterpret_cast<LPARAM>(&copyRequest)) != FALSE;
-    Check(copyDispatched && copyRequest.dispatched,
-          L"ViewerText dispatches the real bounded hex clipboard path for an over-cap selection",
-          success);
-    Check(hostStub.WarningAlertCount() == warningsBeforeCopy + 1u,
-          L"ViewerText shows one localized warning after truncating an over-cap hex clipboard selection",
-          success);
+        WndMsg::ViewerTextDebugHexCopyRequest copyRequest{};
+        copyRequest.anchorOffset = 0u;
+        copyRequest.activeOffset = static_cast<uint64_t>(fixture.size() - 1u);
+        const bool copyDispatched =
+            SendMessageW(viewerWindow, WndMsg::kViewerTextDebugCopyHexSelection, 0u, reinterpret_cast<LPARAM>(&copyRequest)) != FALSE;
+        Check(copyDispatched && copyRequest.dispatched,
+              L"ViewerText dispatches the real bounded hex clipboard path for an over-cap selection",
+              success);
+        Check(hostStub.WarningAlertCount() == warningsBeforeCopy + 1u,
+              L"ViewerText shows one localized warning after truncating an over-cap hex clipboard selection",
+              success);
+    }
+    else
+    {
+        std::wcout << L"[SKIP] ViewerText real clipboard integration: Windows denied OpenClipboard and exposed no available clipboard.\n";
+    }
 
     const std::array faults{
         WndMsg::ViewerTextDebugAsyncOpenFault::FileSystemIo,
@@ -7487,7 +7831,7 @@ private:
 
         const std::vector<HWND> existingWindows = CollectVisibleWindowsByClass(kViewerTextWindowClassName);
         const std::wstring pathText              = path.wstring();
-        ViewerOpenContext context{};
+        ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
         context.fileSystem     = static_cast<IFileSystem*>(&fileSystem);
         context.fileSystemName = L"File System";
         context.focusedPath    = pathText.c_str();
@@ -7989,7 +8333,7 @@ private:
         const std::vector<HWND> existingWindows = CollectVisibleWindowsByClass(kViewerTextWindowClassName);
 
         const std::wstring pathText = path.wstring();
-        ViewerOpenContext context{};
+        ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
         context.fileSystem     = static_cast<IFileSystem*>(&fileSystem);
         context.fileSystemName = L"File System";
         context.focusedPath    = pathText.c_str();
@@ -9451,7 +9795,7 @@ private:
             Check(SUCCEEDED(configHr), std::format(L"{} accepts deterministic scan configuration", label), success);
         }
 
-        ViewerOpenContext context{};
+        ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
         context.fileSystem     = static_cast<IFileSystem*>(&fileSystem);
         context.fileSystemName = L"Synthetic";
         context.focusedPath    = rootPath.c_str();
@@ -9480,6 +9824,8 @@ private:
         }
 
         WndMsg::ViewerSpacePerfDebugSnapshot snapshot{};
+        std::optional<std::tuple<uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t>> stableTerminalSnapshot;
+        std::chrono::steady_clock::time_point stableTerminalSince{};
         const bool settled = PumpUntil(
             [&]() noexcept
         {
@@ -9488,8 +9834,35 @@ private:
             {
                 return false;
             }
-            return snapshot.scanState == expectedState && snapshot.pendingQueueCount == 0u && snapshot.modelTraversedDirectories > 0u &&
-                   (expectedState != WndMsg::ViewerSpacePerfScanState::Done || snapshot.drawItemCount > 0u);
+
+            const bool terminal = snapshot.scanState == expectedState && snapshot.pendingQueueCount == 0u && snapshot.modelTraversedDirectories > 0u &&
+                                  (expectedState != WndMsg::ViewerSpacePerfScanState::Done || snapshot.drawItemCount > 0u);
+            if (! terminal)
+            {
+                stableTerminalSnapshot.reset();
+                stableTerminalSince = {};
+                return false;
+            }
+
+            const auto currentTerminalSnapshot = std::tuple{snapshot.rootTotalBytes,
+                                                            snapshot.scannedFolders,
+                                                            snapshot.scannedFiles,
+                                                            snapshot.realDirectoryCount,
+                                                            snapshot.fileCandidateCount,
+                                                            snapshot.aggregateBytes,
+                                                            snapshot.aggregateFolders,
+                                                            snapshot.aggregateFiles};
+            const auto now = std::chrono::steady_clock::now();
+            if (! stableTerminalSnapshot.has_value() || stableTerminalSnapshot.value() != currentTerminalSnapshot)
+            {
+                stableTerminalSnapshot = currentTerminalSnapshot;
+                stableTerminalSince    = now;
+                return false;
+            }
+
+            // Completion and progress packets are posted independently. Under a loaded Full run,
+            // the first empty-queue Done snapshot can precede a late progress packet.
+            return (now - stableTerminalSince) >= 250ms;
         },
             10'000ms);
         Check(settled, std::format(L"{} reaches a stable terminal model", label), success);
@@ -9533,7 +9906,10 @@ private:
                 [&](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot, HWND window) noexcept
     {
         Check(snapshot.rootTotalBytes == 210u && snapshot.scannedFolders == 6u && snapshot.scannedFiles == 6u,
-              L"Wide capped scan preserves exact rolled-up totals and counts",
+              std::format(L"Wide capped scan preserves exact rolled-up totals and counts (bytes={}, folders={}, files={})",
+                          snapshot.rootTotalBytes,
+                          snapshot.scannedFolders,
+                          snapshot.scannedFiles),
               success);
         Check(snapshot.realDirectoryCount == 4u && snapshot.fileCandidateCount == 3u && snapshot.aggregateFolders == 3u &&
                   snapshot.aggregateFiles == 3u && snapshot.aggregateBytes == 150u,
@@ -9819,7 +10195,7 @@ struct ViewerSpaceBlockingDirectoryControl final
     std::atomic_uint32_t calls{0u};
 };
 
-HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/, IFilesInformation** filesInformation) noexcept
+[[maybe_unused]] HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/, IFilesInformation** filesInformation) noexcept
 {
     auto* control = static_cast<ViewerSpaceBlockingDirectoryControl*>(context);
     if (! control || ! filesInformation)
@@ -9934,7 +10310,7 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
         }
 
         const std::wstring rootPath = L"V:\\race";
-        ViewerOpenContext context{};
+        ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
         context.fileSystem     = static_cast<IFileSystem*>(&fileSystem);
         context.fileSystemName = L"Synthetic";
         context.focusedPath    = rootPath.c_str();
@@ -10019,7 +10395,7 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
     static_cast<void>(blockedViewer->SetCallback(&closeCounter, &closeCounter));
 
     const std::wstring blockedPath = L"V:\\blocked";
-    ViewerOpenContext blockedContext{};
+    ViewerOpenContext blockedContext{.sizeBytes = sizeof(ViewerOpenContext)};
     blockedContext.fileSystem     = static_cast<IFileSystem*>(&blockedFileSystem);
     blockedContext.fileSystemName = L"Synthetic";
     blockedContext.focusedPath    = blockedPath.c_str();
@@ -10151,7 +10527,7 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
 
     BuiltinFileSystemStub fileSystem;
     const std::wstring tempDirText = tempDir.wstring();
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem     = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName = L"File System";
     context.focusedPath    = tempDirText.c_str();
@@ -10272,7 +10648,7 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
     });
 
     const std::wstring samplePathText = samplePath.wstring();
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.focusedPath = samplePathText.c_str();
 
     const auto installedVlc                    = FindInstalledVlcForLoaderTest();
@@ -10664,7 +11040,7 @@ HRESULT ViewerSpaceBlockingDirectoryRead(void* context, const wchar_t* /*path*/,
     });
 
     const std::wstring samplePathText = samplePath.wstring();
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.focusedPath = samplePathText.c_str();
 
     const HRESULT openHr = viewer->Open(&context);
@@ -11029,6 +11405,7 @@ void CheckViewerSpaceTooltipOverlay(HWND viewerWindow, bool& success) noexcept
     Check(before.hasTooltipFormat, L"ViewerSpace has a DirectWrite tooltip format before tooltip overlay validation", success);
     Check(std::abs(before.tooltipMaxWidthDip - 420.0f) <= 0.01f, L"ViewerSpace tooltip overlay uses a 420 DIP maximum text width", success);
 
+    Check(PostMessageW(viewerWindow, WM_MOUSELEAVE, 0, 0) != FALSE, L"ViewerSpace tooltip paint witness queues an adversarial hover dismissal", success);
     const LRESULT showResult = SendMessageW(viewerWindow, WndMsg::kViewerSpaceDebugShowTooltipOverlay, 0, 0);
     Check(showResult != FALSE, L"ViewerSpace debug hook shows the Direct2D tooltip overlay", success);
     if (showResult == FALSE)
@@ -11037,14 +11414,11 @@ void CheckViewerSpaceTooltipOverlay(HWND viewerWindow, bool& success) noexcept
     }
 
     WndMsg::ViewerSpaceTooltipDebugSnapshot after{};
-    const bool painted = PumpUntil(
-        [&]() noexcept
-    {
-        static_cast<void>(UpdateWindow(viewerWindow));
-        const LRESULT queryResult = SendMessageW(viewerWindow, WndMsg::kViewerSpaceDebugGetTooltipSnapshot, 0, reinterpret_cast<LPARAM>(&after));
-        return queryResult != FALSE && after.tooltipNodeId != 0u && after.tooltipTextLength > 0u && after.tooltipPaintCount > before.tooltipPaintCount;
-    },
-        5000ms);
+    // The show hook calls UpdateWindow synchronously. Capture that frame before
+    // pumping mouse events that may legitimately dismiss the painted tooltip.
+    const LRESULT queryResult = SendMessageW(viewerWindow, WndMsg::kViewerSpaceDebugGetTooltipSnapshot, 0, reinterpret_cast<LPARAM>(&after));
+    const bool painted =
+        queryResult != FALSE && after.tooltipNodeId != 0u && after.tooltipTextLength > 0u && after.tooltipPaintCount > before.tooltipPaintCount;
     Check(painted, L"ViewerSpace Direct2D tooltip overlay paints after it is shown", success);
     if (painted)
     {
@@ -11171,7 +11545,7 @@ void CheckViewerSpaceTooltipOverlay(HWND viewerWindow, bool& success) noexcept
     const std::wstring firstPathText  = firstPath.wstring();
     const std::wstring secondPathText = secondPath.wstring();
     const wchar_t* otherFiles[]       = {firstPathText.c_str(), secondPathText.c_str()};
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName        = L"File System";
     context.focusedPath           = firstPathText.c_str();
@@ -11352,63 +11726,110 @@ constexpr std::wstring_view kViewerTextGotoPromptInternalTestName = L"__Internal
     for (size_t cycleIndex = 0; cycleIndex < 6u; ++cycleIndex)
     {
         std::wcout << std::format(L"[INFO] Viewer shell churn cycle {}/6\n", cycleIndex + 1u);
-        success = RunFilteredSelfExecutable(L"TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, success) && success;
-        success = RunFilteredSelfExecutable(L"TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, success) && success;
-        success = RunFilteredSelfExecutable(L"TestViewerImgRawUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, success) && success;
-        success = RunFilteredSelfExecutable(L"TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, success) && success;
-        success = RunFilteredSelfExecutable(L"TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses", kViewerHarnessDefaultTimeout, success) &&
+        success = RunFilteredSelfExecutable(L"TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo",
+                                            kViewerHarnessDefaultTimeout,
+                                            TestDesktopInteraction::RequiresActivation,
+                                            success) &&
                   success;
-        success = RunFilteredSelfExecutable(L"TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly", kViewerHarnessDefaultTimeout, success) && success;
-        success = RunFilteredSelfExecutable(L"TestViewerVlcConfigurationPersistsLastVolumeAndMute", kViewerHarnessDefaultTimeout, success) && success;
+        success = RunFilteredSelfExecutable(L"TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo",
+                                            kViewerHarnessDefaultTimeout,
+                                            TestDesktopInteraction::RequiresActivation,
+                                            success) &&
+                  success;
+        success = RunFilteredSelfExecutable(L"TestViewerImgRawUsesDxUiComboHostWithoutVisibleLegacyCombo",
+                                            kViewerHarnessDefaultTimeout,
+                                            TestDesktopInteraction::RequiresActivation,
+                                            success) &&
+                  success;
+        success = RunFilteredSelfExecutable(L"TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo",
+                                            kViewerHarnessDefaultTimeout,
+                                            TestDesktopInteraction::RequiresActivation,
+                                            success) &&
+                  success;
+        success = RunFilteredSelfExecutable(L"TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses",
+                                            kViewerHarnessDefaultTimeout,
+                                            TestDesktopInteraction::RequiresActivation,
+                                            success) &&
+                  success;
+        success = RunFilteredSelfExecutable(L"TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly",
+                                            kViewerHarnessDefaultTimeout,
+                                            TestDesktopInteraction::RequiresActivation,
+                                            success) &&
+                  success;
+        success = RunFilteredSelfExecutable(L"TestViewerVlcConfigurationPersistsLastVolumeAndMute",
+                                            kViewerHarnessDefaultTimeout,
+                                            TestDesktopInteraction::Noninteractive,
+                                            success) &&
+                  success;
 #ifdef _DEBUG
-        success = RunFilteredSelfExecutable(L"TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts", kViewerHarnessDefaultTimeout, success) && success;
+        success = RunFilteredSelfExecutable(L"TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts",
+                                            kViewerHarnessDefaultTimeout,
+                                            TestDesktopInteraction::Noninteractive,
+                                            success) &&
+                  success;
 #endif
     }
 
     return success;
 }
 
-[[nodiscard]] bool RunFullSuiteInFreshProcesses() noexcept
+[[nodiscard]] bool RunFullSuiteInFreshProcesses(std::optional<TestDesktopInteraction> requestedInteraction = std::nullopt) noexcept
 {
     bool success = true;
 
     std::vector<IsolatedViewerTest> isolatedTests{
-        {L"TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout},
-        {L"TestViewerPELatestWinsAndCloseDoesNotWaitForBlockedRead", kViewerHarnessDefaultTimeout},
-        {L"TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout},
-        {L"TestViewerWebEscapesScriptBreakoutInGeneratedDocuments", kViewerHarnessDefaultTimeout},
-        {L"TestViewerWebSecurityPolicyAndBounds", kViewerHarnessDefaultTimeout},
-        {L"TestViewerWebVirtualHtmlUsesPrivateOriginAndEnforcesByteCaps", kViewerHarnessDefaultTimeout},
-        {L"TestViewerImgRawUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout},
-        {L"TestViewerImgRawDecodesPngThroughWicWithoutErrorAlert", kViewerHarnessDefaultTimeout},
-        {L"TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards", kViewerHarnessDefaultTimeout},
-        {L"TestViewerImgRawResourcePolicyHelpers", kViewerHarnessDefaultTimeout},
-        {L"TestViewerImgRawResourceBudgetAndLongPathExport", kViewerHarnessDefaultTimeout},
-        {L"TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout},
-        {L"TestViewerSpaceScanPolicyHelpers", kViewerHarnessDefaultTimeout},
-        {L"TestViewerSpaceBoundedHostileProviderScanning", 120000ms},
-        {L"TestViewerSpaceBlockedProviderCloseAndPostUpdateRace", kViewerHarnessDefaultTimeout},
-        {L"TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses", kViewerHarnessDefaultTimeout},
-        {L"TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly", kViewerHarnessDefaultTimeout},
-        {L"TestViewerVlcConfigurationPersistsLastVolumeAndMute", kViewerHarnessDefaultTimeout},
-        {L"TestViewerShellComboHostsLongRunOpenCloseStayStable", kViewerShellComboLongRunTimeout},
+        {L"TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, TestDesktopInteraction::RequiresActivation},
+        {L"TestViewerPELatestWinsAndCloseDoesNotWaitForBlockedRead", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive},
+        {L"TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, TestDesktopInteraction::RequiresActivation},
+        {L"TestViewerWebEscapesScriptBreakoutInGeneratedDocuments", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive},
+        {L"TestViewerWebSecurityPolicyAndBounds", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive},
+        {L"TestViewerWebVirtualHtmlUsesPrivateOriginAndEnforcesByteCaps", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive},
+        {L"TestViewerImgRawUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, TestDesktopInteraction::RequiresActivation},
+        {L"TestViewerImgRawDecodesPngThroughWicWithoutErrorAlert", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive},
+        {L"TestViewerImgRawMenuOwnershipOrientationAndExifScalarGuards", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive},
+        {L"TestViewerImgRawResourcePolicyHelpers", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive},
+        {L"TestViewerImgRawResourceBudgetAndLongPathExport", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive},
+        {L"TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, TestDesktopInteraction::RequiresActivation},
+        {L"viewer_text_encoding_picker_open_and_filter_full_catalog", kViewerHarnessDefaultTimeout, TestDesktopInteraction::RequiresActivation},
+        {L"TestViewerSpaceScanPolicyHelpers", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive},
+        {L"TestViewerSpaceBoundedHostileProviderScanning", 120000ms, TestDesktopInteraction::Noninteractive},
+        {L"TestViewerSpaceBlockedProviderCloseAndPostUpdateRace", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive},
+        {L"TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses",
+         kViewerHarnessDefaultTimeout,
+         TestDesktopInteraction::RequiresActivation},
+        {L"TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly", kViewerHarnessDefaultTimeout, TestDesktopInteraction::RequiresActivation},
+        {L"TestViewerVlcConfigurationPersistsLastVolumeAndMute", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive},
+        {L"TestViewerShellComboHostsLongRunOpenCloseStayStable", kViewerShellComboLongRunTimeout, TestDesktopInteraction::RequiresActivation},
     };
 #ifdef _DEBUG
-    isolatedTests.push_back({L"TestViewerWebTransactionalSaveAsAndCloseSafety", kViewerHarnessDefaultTimeout});
-    isolatedTests.push_back({L"TestViewerImgRawLatestWinsExactReaderAndCloseSafety", kViewerHarnessDefaultTimeout});
-    isolatedTests.push_back({L"TestViewerImgRawEmbeddedThumbnailTerminalSequencing", kViewerHarnessDefaultTimeout});
-    isolatedTests.push_back({L"TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts", kViewerHarnessDefaultTimeout});
-    isolatedTests.push_back({L"TestViewerTextHexByteColorsFollowConfigAndHighContrastFallback", kViewerHarnessDefaultTimeout});
-    isolatedTests.push_back({L"TestViewerTextHexShortReadDropsPhantomTailBytes", kViewerHarnessDefaultTimeout});
-    isolatedTests.push_back({L"TestViewerTextDecodeAndClipboardSafetyHelpers", kViewerHarnessDefaultTimeout});
-    isolatedTests.push_back({L"TestViewerTextAsyncOpenAndUtf8HexTerminalContracts", kViewerHarnessDefaultTimeout});
-    isolatedTests.push_back({L"TestViewerTextSaveAsPreservesDataOnFailures", kViewerHarnessDefaultTimeout});
-    isolatedTests.push_back({L"TestViewerTextDiffModesAndPlaceholders", kViewerHarnessDefaultTimeout});
+    isolatedTests.push_back(
+        {L"TestViewerWebTransactionalSaveAsAndCloseSafety", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive});
+    isolatedTests.push_back(
+        {L"TestViewerImgRawLatestWinsExactReaderAndCloseSafety", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive});
+    isolatedTests.push_back(
+        {L"TestViewerImgRawEmbeddedThumbnailTerminalSequencing", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive});
+    isolatedTests.push_back(
+        {L"TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive});
+    isolatedTests.push_back(
+        {L"TestViewerTextHexByteColorsFollowConfigAndHighContrastFallback", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive});
+    isolatedTests.push_back(
+        {L"TestViewerTextHexShortReadDropsPhantomTailBytes", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive});
+    isolatedTests.push_back(
+        {L"TestViewerTextDecodeAndClipboardSafetyHelpers", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive});
+    isolatedTests.push_back(
+        {L"TestViewerTextAsyncOpenAndUtf8HexTerminalContracts", kViewerHarnessDefaultTimeout, TestDesktopInteraction::RequiresActivation});
+    isolatedTests.push_back(
+        {L"TestViewerTextSaveAsPreservesDataOnFailures", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive});
+    isolatedTests.push_back({L"TestViewerTextDiffModesAndPlaceholders", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive});
 #endif
 
     for (const IsolatedViewerTest& test : isolatedTests)
     {
-        success = RunFilteredSelfExecutable(test.name, test.timeout, success) && success;
+        if (requestedInteraction.has_value() && test.desktopInteraction != requestedInteraction.value())
+        {
+            continue;
+        }
+        success = RunFilteredSelfExecutable(test.name, test.timeout, test.desktopInteraction, success) && success;
     }
 
     return success;
@@ -11417,6 +11838,49 @@ constexpr std::wstring_view kViewerTextGotoPromptInternalTestName = L"__Internal
 
 int wmain(int argc, wchar_t** argv)
 {
+    std::wstring filter;
+    std::optional<TestDesktopInteraction> requestedInteraction;
+    bool explicitNoActivate = false;
+    constexpr std::wstring_view kGroupPrefix{L"--group="};
+    for (int argIndex = 1; argIndex < argc; ++argIndex)
+    {
+        const std::wstring_view argument = argv[argIndex] ? std::wstring_view(argv[argIndex]) : std::wstring_view{};
+        if (argument == L"--no-activate")
+        {
+            explicitNoActivate = true;
+            continue;
+        }
+        if (argument.rfind(kGroupPrefix, 0u) == 0u)
+        {
+            const std::wstring_view group = argument.substr(kGroupPrefix.size());
+            if (group == L"noninteractive")
+            {
+                requestedInteraction = TestDesktopInteraction::Noninteractive;
+            }
+            else if (group == L"interactive")
+            {
+                requestedInteraction = TestDesktopInteraction::RequiresActivation;
+            }
+            else
+            {
+                std::wcerr << L"--group requires 'noninteractive' or 'interactive'.\n";
+                return 2;
+            }
+            continue;
+        }
+        if (argument.empty() || argument.front() == L'-' || ! filter.empty())
+        {
+            std::wcerr << L"Unknown or duplicate ViewerPETests argument: " << argument << L'\n';
+            return 2;
+        }
+        filter = argument;
+    }
+    if ((! filter.empty() && requestedInteraction.has_value()) || (filter.empty() && explicitNoActivate))
+    {
+        std::wcerr << L"ViewerPETests --group is a parent-suite option; --no-activate is an exact noninteractive-case option.\n";
+        return 2;
+    }
+
     const HRESULT coHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     if (FAILED(coHr) && coHr != RPC_E_CHANGED_MODE)
     {
@@ -11431,17 +11895,56 @@ int wmain(int argc, wchar_t** argv)
         }
     });
 
-    const std::wstring filter = (argc >= 2 && argv != nullptr && argv[1] != nullptr) ? std::wstring(argv[1]) : std::wstring{};
-
     bool success = true;
     if (filter.empty())
     {
-        success = RunFullSuiteInFreshProcesses();
+        success = RunFullSuiteInFreshProcesses(requestedInteraction);
         std::wcout << (success ? L"ViewerPETests passed.\n" : L"ViewerPETests failed.\n");
         return success ? 0 : 1;
     }
 
-    const auto shouldRun = [&](std::wstring_view testName) noexcept { return filter.empty() || filter == testName; };
+    const auto requiresActivation = [](std::wstring_view testName) noexcept
+    {
+        return testName == L"TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo" ||
+               testName == L"TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo" ||
+               testName == L"TestViewerImgRawUsesDxUiComboHostWithoutVisibleLegacyCombo" ||
+               testName == L"TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo" ||
+               testName == L"viewer_text_encoding_picker_open_and_filter_full_catalog" ||
+               testName == L"TestViewerTextAsyncOpenAndUtf8HexTerminalContracts" ||
+               testName == L"TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses" ||
+               testName == L"TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly" ||
+               testName == kViewerTextFindPromptExplicitTestName || testName == kViewerTextGotoPromptExplicitTestName ||
+               testName == kViewerTextFindPromptInternalTestName || testName == kViewerTextGotoPromptInternalTestName ||
+               testName == L"TestViewerShellComboHostsLongRunOpenCloseStayStable";
+    };
+    const bool selectedTestRequiresActivation = requiresActivation(filter);
+    if (explicitNoActivate && selectedTestRequiresActivation)
+    {
+        std::wcerr << L"--no-activate cannot run a ViewerPETests case whose contract requires real focus.\n";
+        return 2;
+    }
+
+    RedSalamander::TestSupport::ScopedWindowActivationBlocker activationBlocker;
+    if (! selectedTestRequiresActivation && ! activationBlocker.Start())
+    {
+        std::wcerr << L"Failed to install the ViewerPETests no-activation guard.\n";
+        return 2;
+    }
+
+    const RedSalamander::TestSupport::DirectedSelfTestInputWarning inputWarning(nullptr, selectedTestRequiresActivation);
+    if (selectedTestRequiresActivation && ! inputWarning.IsVisible())
+    {
+        std::wcerr << L"Failed to display the foreground-input warning.\n";
+        return 2;
+    }
+
+    bool ranAnyTest = false;
+    const auto shouldRun = [&](std::wstring_view testName) noexcept
+    {
+        const bool selected = filter == testName;
+        ranAnyTest          = ranAnyTest || selected;
+        return selected;
+    };
 
     if (shouldRun(L"TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo"))
     {
@@ -11507,6 +12010,10 @@ int wmain(int argc, wchar_t** argv)
     {
         success = TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo() && success;
     }
+    if (shouldRun(L"viewer_text_encoding_picker_open_and_filter_full_catalog"))
+    {
+        success = TestViewerTextEncodingPickerOpenAndFilterFullCatalog() && success;
+    }
 #ifdef _DEBUG
     if (shouldRun(L"TestViewerTextHexByteColorsFollowConfigAndHighContrastFallback"))
     {
@@ -11563,11 +12070,15 @@ int wmain(int argc, wchar_t** argv)
     }
     if (shouldRun(kViewerTextFindPromptExplicitTestName))
     {
-        success = RunFilteredSelfExecutable(kViewerTextFindPromptInternalTestName, 30000ms, success) && success;
+        success = RunFilteredSelfExecutable(
+                      kViewerTextFindPromptInternalTestName, 30000ms, TestDesktopInteraction::RequiresActivation, success) &&
+                  success;
     }
     if (shouldRun(kViewerTextGotoPromptExplicitTestName))
     {
-        success = RunFilteredSelfExecutable(kViewerTextGotoPromptInternalTestName, 30000ms, success) && success;
+        success = RunFilteredSelfExecutable(
+                      kViewerTextGotoPromptInternalTestName, 30000ms, TestDesktopInteraction::RequiresActivation, success) &&
+                  success;
     }
     if (shouldRun(kViewerTextFindPromptInternalTestName))
     {
@@ -11580,6 +12091,11 @@ int wmain(int argc, wchar_t** argv)
     if (shouldRun(L"TestViewerShellComboHostsLongRunOpenCloseStayStable"))
     {
         success = TestViewerShellComboHostsLongRunOpenCloseStayStable() && success;
+    }
+    if (! ranAnyTest)
+    {
+        std::wcerr << L"Unknown ViewerPETests case: " << filter << L'\n';
+        return 2;
     }
     std::wcout << (success ? L"ViewerPETests passed.\n" : L"ViewerPETests failed.\n");
     return success ? 0 : 1;

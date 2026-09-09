@@ -21,17 +21,29 @@ name: Build (reusable)
       run_asan_plugin_contracts:
         type: boolean
         default: false
+    outputs:
+      portable_attestation_id:
+        description: Content identity for the uploaded same-workflow build attestation.
+        value: ${{ jobs.build.outputs.portable_attestation_id }}
+      portable_toolchain_identity_digest:
+        description: Toolchain identity bound by the uploaded build attestation.
+        value: ${{ jobs.build.outputs.portable_toolchain_identity_digest }}
 
 jobs:
   build:
+    outputs:
+      portable_attestation_id: ${{ steps.portable_attestation.outputs.attestation_id }}
+      portable_toolchain_identity_digest: ${{ steps.portable_attestation.outputs.toolchain_identity_digest }}
     runs-on: windows-latest
     env:
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg
-      VCPKG_INSTALLED_DIR: ${{ github.workspace }}\.build\vcpkg_installed
+      VCPKG_INSTALLED_DIR: ${{ github.workspace }}\.build\vcpkg_installed\${{ inputs.platform == 'ARM64' && 'arm64' || 'x64' }}
       VCPKG_DEFAULT_TRIPLET: ${{ inputs.platform == 'ARM64' && 'arm64-windows' || 'x64-windows' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # ── Setup toolchain ──────────────────────────────────────────────
 
@@ -45,13 +57,15 @@ jobs:
               [string] $PackageName,
               [Parameter(Mandatory = $true)]
               [string] $FailureMessage,
+              [Parameter(Mandatory = $true)]
+              [string] $PackageVersion,
               [string[]] $ExtraArguments = @()
             )
 
             $oldNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
             try {
               $PSNativeCommandUseErrorActionPreference = $false
-              & choco install $PackageName -y --no-progress --ignore-detected-reboot --ignore-package-exit-codes @ExtraArguments
+              & choco install $PackageName --version $PackageVersion -y --no-progress --ignore-detected-reboot --ignore-package-exit-codes @ExtraArguments
               $exitCode = $LASTEXITCODE
             } finally {
               $PSNativeCommandUseErrorActionPreference = $oldNativeErrorPreference
@@ -62,14 +76,14 @@ jobs:
             $global:LASTEXITCODE = 0
           }
 
-          Invoke-ChocoInstall -PackageName visualstudio2026buildtools -FailureMessage "VS Build Tools install failed"
+          Invoke-ChocoInstall -PackageName visualstudio2026buildtools -PackageVersion 118.8.1 -FailureMessage "VS Build Tools install failed"
 
           $vcPackageParameters = "--includeRecommended"
           if ("${{ inputs.platform }}" -eq "ARM64") {
             $vcPackageParameters += " --add Microsoft.VisualStudio.Component.VC.Tools.ARM64"
           }
 
-          Invoke-ChocoInstall -PackageName visualstudio2026-workload-vctools -FailureMessage "VC workload install failed" -ExtraArguments @("--package-parameters", $vcPackageParameters)
+          Invoke-ChocoInstall -PackageName visualstudio2026-workload-vctools -PackageVersion 1.0.0 -FailureMessage "VC workload install failed" -ExtraArguments @("--package-parameters", $vcPackageParameters)
 
       - name: Verify ARM64 MSVC target tools
         if: ${{ inputs.platform == 'ARM64' }}
@@ -148,15 +162,37 @@ jobs:
           "MSBUILD_EXE_PATH=$msbuild" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           & $msbuild -version
 
+      - name: Resolve canonical toolchain identity
+        id: toolchain_identity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Import-Module .\Tools\Modules\Build\BuildEvidence.psm1 -Force
+          $identity = Get-RSBuildToolchainIdentity `
+            -RepoRoot $env:GITHUB_WORKSPACE `
+            -MSBuildPath $env:MSBUILD_EXE_PATH `
+            -Platform "${{ inputs.platform }}" `
+            -Configuration "${{ inputs.configuration }}"
+          "digest=$($identity.Digest)" >> $env:GITHUB_OUTPUT
+          Write-Host "Canonical toolchain identity: $($identity.Digest)"
+
       # ── Restore dependencies ─────────────────────────────────────────
 
       - name: Cache vcpkg
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
-            .build/vcpkg_installed
+            ${{ env.VCPKG_INSTALLED_DIR }}
             vcpkg/downloads
-          key: ${{ runner.os }}-vcpkg-${{ env.VCPKG_DEFAULT_TRIPLET }}-${{ hashFiles('vcpkg.json', 'vcpkg-tool.json') }}
+          key: ${{ runner.os }}-vcpkg-${{ env.VCPKG_DEFAULT_TRIPLET }}-${{ steps.toolchain_identity.outputs.digest }}-${{ hashFiles('vcpkg.json', 'vcpkg-tool.json') }}
+
+      - name: Cache pinned Terminal runtime inputs and product
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build/TerminalEngine
+          # Keep this list equal to the active builder, its direct module imports,
+          # the private-runtime overlay, and the notices copied into the product.
+          key: ${{ runner.os }}-terminal-runtime-${{ inputs.platform }}-${{ steps.toolchain_identity.outputs.digest }}-${{ hashFiles('Tools/Build-GhosttyTerminalRuntime.ps1', 'Tools/TerminalEngine/GhosttyRuntimeLifecycle.psm1', 'Tools/TerminalEngine/TerminalEngineTextIdentity.psm1', 'Tools/Modules/Build/SanitizedEnvironment.psm1', 'Tools/TerminalEngine/TerminalEngineArchive.psm1', 'Tools/TerminalEngine/TerminalEnginePeIdentity.psm1', 'Tools/TerminalEngine/TerminalRuntimeImportPolicy.psm1', 'Tools/TerminalEngine/TerminalRuntimeExportIdentity.psm1', 'External/TerminalEngine/GhosttyRuntimeLock.v1.json', 'Specs/Terminal/GhosttyRuntimeLock.schema.json', 'Tools/Modules/Testing/ValidationFingerprint.psm1', 'Tools/TerminalEngine/Patches/Ghostty-WindowsPrivateRuntime.patch', 'External/TerminalEngine/Notices/*', 'RuntimeDependencies.props') }}
 
       - name: Bootstrap vcpkg
         shell: pwsh
@@ -253,6 +289,24 @@ jobs:
             throw "vcpkg.json builtin-baseline '$baseline' is invalid: versions/baseline.json missing at that commit. Update vcpkg.json builtin-baseline."
           }
 
+          $toolMetadata = git show "${toolCommit}:scripts/vcpkg-tools.json" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to read scripts/vcpkg-tools.json from vcpkg tool commit '$toolCommit'."
+          }
+          $baselineMetadata = git show "${baseline}:scripts/vcpkg-tools.json" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to read scripts/vcpkg-tools.json from vcpkg baseline '$baseline'."
+          }
+          $toolSchemaVersion = [int]$toolMetadata.'schema-version'
+          $baselineSchemaVersion = [int]$baselineMetadata.'schema-version'
+          if ($toolSchemaVersion -lt 1 -or $baselineSchemaVersion -lt 1) {
+            throw "vcpkg tool metadata schema versions must be positive integers; tool=$toolSchemaVersion baseline=$baselineSchemaVersion."
+          }
+          if ($toolSchemaVersion -lt $baselineSchemaVersion) {
+            throw "vcpkg tool commit '$toolCommit' supports tools schema $toolSchemaVersion, older than baseline '$baseline' schema $baselineSchemaVersion. Update vcpkg-tool.json with the baseline."
+          }
+          Write-Host "vcpkg tools schema: tool=$toolSchemaVersion baseline=$baselineSchemaVersion"
+
           git checkout --detach $toolCommit
           if ($LASTEXITCODE -ne 0) { throw "Unable to check out pinned vcpkg tool commit '$toolCommit'." }
           $actualToolCommit = (git rev-parse HEAD).Trim().ToLowerInvariant()
@@ -268,17 +322,17 @@ jobs:
       - name: Install dependencies
         shell: pwsh
         run: |
-          .\vcpkg\vcpkg.exe install --triplet $env:VCPKG_DEFAULT_TRIPLET --x-manifest-root $env:GITHUB_WORKSPACE --x-install-root "$env:GITHUB_WORKSPACE\.build\vcpkg_installed"
+          .\vcpkg\vcpkg.exe install --triplet $env:VCPKG_DEFAULT_TRIPLET --x-manifest-root $env:GITHUB_WORKSPACE --x-install-root $env:VCPKG_INSTALLED_DIR
 
       - name: Normalize vcpkg install root
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           $triplet = $env:VCPKG_DEFAULT_TRIPLET
-          $dest = Join-Path $env:GITHUB_WORKSPACE ".build\vcpkg_installed\$triplet"
+          $dest = Join-Path $env:VCPKG_INSTALLED_DIR $triplet
           $expected = Join-Path $dest "include\wil\com.h"
           if (Test-Path $expected) {
-            Write-Host ".build\vcpkg_installed\$triplet already contains WIL headers."
+            Write-Host "$dest already contains WIL headers."
             exit 0
           }
 
@@ -292,8 +346,8 @@ jobs:
             Write-Host "Expected WIL header not found at: $expected" -ForegroundColor Yellow
             Write-Host "Searched install roots:" -ForegroundColor Yellow
             $candidates | ForEach-Object { Write-Host "  - $_" }
-            Write-Host ".build\vcpkg_installed contents:" -ForegroundColor Yellow
-            Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE ".build\vcpkg_installed") -ErrorAction SilentlyContinue | Select-Object Name
+            Write-Host "$env:VCPKG_INSTALLED_DIR contents:" -ForegroundColor Yellow
+            Get-ChildItem -Path $env:VCPKG_INSTALLED_DIR -ErrorAction SilentlyContinue | Select-Object Name
             Write-Host "vcpkg contents:" -ForegroundColor Yellow
             Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE "vcpkg") -ErrorAction SilentlyContinue | Select-Object Name
             throw "vcpkg install root not found to normalize."
@@ -320,7 +374,7 @@ jobs:
           # CI runners don't always include Visual Studio's vcpkg MSBuild integration component.
           # Provide vcpkg include/lib paths explicitly so compilation and linking can resolve dependencies.
           $triplet = $env:VCPKG_DEFAULT_TRIPLET
-          $vcpkgRoot = Join-Path $env:GITHUB_WORKSPACE ".build\vcpkg_installed\$triplet"
+          $vcpkgRoot = Join-Path $env:VCPKG_INSTALLED_DIR $triplet
           $incRoot = Join-Path $vcpkgRoot "include"
           $isDebugConfiguration = "${{ inputs.configuration }}" -like "*Debug*"
           $vcpkgConfiguration = if ($isDebugConfiguration) { "Debug" } else { "Release" }
@@ -344,6 +398,10 @@ jobs:
           $env:VcpkgRoot = Join-Path $env:GITHUB_WORKSPACE "vcpkg"
           $env:VcpkgConfiguration = $vcpkgConfiguration
           $env:VcpkgManifestInstall = "false"
+          # BuildEvidence consumes the vcpkg tlog as an output declaration.
+          # The built-in copier records source paths there; the pinned
+          # PowerShell copier records the copied destination paths.
+          $env:VcpkgXUseBuiltInApplocalDeps = "false"
           $env:VCPkgLocalAppDataDisabled = "true"
 
           $env:CL = "/I`"$incRoot`" $env:CL"
@@ -371,6 +429,36 @@ jobs:
           }
 
           & $buildScript @buildArgs
+
+      - name: Create portable same-workflow build attestation
+        id: portable_attestation
+        if: ${{ inputs.upload_build_output }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $outputDirectory = Join-Path $env:GITHUB_WORKSPACE ".build\${{ inputs.platform }}\${{ inputs.configuration }}"
+          $module = Join-Path $env:GITHUB_WORKSPACE "Tools\Modules\Build\BuildEvidence.psm1"
+          $receiptSchema = Join-Path $env:GITHUB_WORKSPACE "Specs\Build\BuildReceipt.schema.json"
+          $portableSchema = Join-Path $env:GITHUB_WORKSPACE "Specs\Build\PortableBuildAttestation.schema.json"
+          $toolchainSchema = Join-Path $env:GITHUB_WORKSPACE "Specs\Build\ToolchainIdentity.schema.json"
+          Import-Module $module -Force
+          $receipt = Read-RSBuildReceipt -BuildOutputDir $outputDirectory -SchemaPath $receiptSchema
+          if ($null -eq $receipt -or $receipt.target -ne 'solution') {
+            throw "A full-solution build receipt is required before portable publication."
+          }
+          $attestation = New-RSPortableBuildAttestation -Receipt $receipt `
+            -RepoRoot $env:GITHUB_WORKSPACE -BuildOutputDir $outputDirectory `
+            -ToolchainSchemaPath $toolchainSchema `
+            -ProducerRepository $env:GITHUB_REPOSITORY -ProducerWorkflow $env:GITHUB_WORKFLOW `
+            -ProducerRunId $env:GITHUB_RUN_ID -ProducerRunAttempt ([int]$env:GITHUB_RUN_ATTEMPT) `
+            -ProducerJob $env:GITHUB_JOB
+          $payloadPath = Publish-RSPortableBuildPayload `
+            -RepoRoot $env:GITHUB_WORKSPACE -BuildOutputDir $outputDirectory `
+            -Receipt $receipt -Attestation $attestation -PortableSchemaPath $portableSchema
+          "attestation_id=$($attestation.attestation_id)" >> $env:GITHUB_OUTPUT
+          "toolchain_identity_digest=$($attestation.toolchain_identity_digest)" >> $env:GITHUB_OUTPUT
+          "payload_path=$payloadPath" >> $env:GITHUB_OUTPUT
+          Write-Host "Portable build payload: $payloadPath"
 
       - name: Run ASan plugin contracts
         if: ${{ inputs.run_asan_plugin_contracts }}
@@ -403,5 +491,5 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: build-output-${{ inputs.platform }}
-          path: .build/${{ inputs.platform }}/${{ inputs.configuration }}/
+          path: ${{ steps.portable_attestation.outputs.payload_path }}/
           retention-days: 1

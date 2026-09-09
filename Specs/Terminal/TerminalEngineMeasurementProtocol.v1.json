@@ -1,0 +1,67 @@
+{
+  "formatId": "red-salamander-terminal-engine-measurement-protocol",
+  "version": 1,
+  "frozenUtc": "2026-07-30T00:00:00Z",
+  "clock": {
+    "windowsApi": "QueryPerformanceCounter",
+    "frequencyApi": "QueryPerformanceFrequency",
+    "sampleUnit": "microseconds",
+    "rounding": "integer-nearest-ties-to-even"
+  },
+  "common": {
+    "columns": "120",
+    "rows": "40",
+    "scrollbackLines": "10000",
+    "parsePayloadBytes": "8388608",
+    "sessionCount": "8",
+    "pinProcessToSingleNumaNode": false,
+    "backgroundPriority": false,
+    "networkAllowedAfterBootstrap": false,
+    "sampleOrder": "candidate-id-ordinal-within-lane",
+    "aggregate": "median",
+    "medianRule": "Sort raw uint64 samples ascending. For an odd count use the middle sample; for an even count use the exact arithmetic mean of the two middle samples with no rounding before threshold comparison.",
+    "rawSamplesRequired": true
+  },
+  "portablePackageRecipe": {
+    "recipeId": "terminal-engine-contribution-zip-v1",
+    "container": "zip",
+    "implementation": "System.IO.Compression.ZipArchive",
+    "compressionLevel": "Optimal",
+    "entryOrder": [
+      "Plugins/TerminalRuntime/gate0-candidate.dll",
+      "THIRD-PARTY-NOTICES.txt"
+    ],
+    "lastWriteTimeUtc": "1980-01-01T00:00:00Z",
+    "externalAttributes": "0",
+    "measurement": "Create the two-entry evidence-only normalized contribution archive twice and require byte-identical SHA-256. Subtract the byte length of an empty archive made by the same recipe so only entry-local, compressed-data, and central-directory bytes attributable to the candidate are counted.",
+    "productTopologyRule": "The normalized adapter entry measures candidate code without asserting that a source-static winner ships a separate runtime DLL; the final lock still controls source-static versus private-dynamic product topology."
+  },
+  "measurements": [
+    {"metricId": "create-destroy-us", "unit": "microseconds", "warmupCount": 10, "sampleCount": 50, "scenario": "Create a configured 120x40 terminal, begin and end one empty render snapshot, then reach the callback-free destruction quiet point."},
+    {"metricId": "parse-8mib-us", "unit": "microseconds", "warmupCount": 5, "sampleCount": 30, "scenario": "Feed the exact deterministic 8 MiB mixed UTF-8 and VT payload in the corpus chunk schedule without snapshot work."},
+    {"metricId": "full-snapshot-us", "unit": "microseconds", "warmupCount": 10, "sampleCount": 50, "scenario": "Copy one complete immutable 120x40 cell and static-image snapshot under the proven begin/end sequence."},
+    {"metricId": "dirty-snapshot-us", "unit": "microseconds", "warmupCount": 10, "sampleCount": 50, "scenario": "Mutate exactly two rows and one cursor state, then copy the minimal immutable changed generation."},
+    {"metricId": "resize-reflow-us", "unit": "microseconds", "warmupCount": 5, "sampleCount": 30, "scenario": "Reflow 10000 deterministic wrapped lines from 120x40 to 80x50 and back."},
+    {"metricId": "kitty-1024-rgba-us", "unit": "microseconds", "warmupCount": 3, "sampleCount": 20, "scenario": "Admit, decode if required, snapshot, and delete one generated 1024x1024 RGBA image while retaining exact reservation telemetry."},
+    {"metricId": "eight-session-storm-us", "unit": "microseconds", "warmupCount": 3, "sampleCount": 20, "scenario": "Feed 1 MiB to each of eight sessions in round-robin 4096-byte chunks, publish one snapshot each, and tear all sessions down."},
+    {"metricId": "eight-session-retained-bytes", "unit": "bytes", "warmupCount": 1, "sampleCount": 5, "scenario": "Measure engine plus adapter-owned retained CPU bytes after the eight-session storm has quiesced and before teardown."},
+    {"metricId": "added-release-package-bytes", "unit": "bytes", "warmupCount": 0, "sampleCount": 1, "scenario": "Measure the exact portable-package contribution using the frozen clean Release package recipe."},
+    {"metricId": "crossed-abi-elements", "unit": "count", "warmupCount": 0, "sampleCount": 1, "scenario": "Count the generated public-boundary identity records using the frozen anchor rule."},
+    {"metricId": "non-system-runtime-dependencies", "unit": "count", "warmupCount": 0, "sampleCount": 1, "scenario": "Count distinct app-local runtime leaves from the verified recursive load closure."}
+  ],
+  "asan": {
+    "scoredPerformance": false,
+    "requiredScenarios": [
+      "allocation-failure",
+      "borrowed-lifetime",
+      "malformed-input",
+      "snapshot-failed-publication",
+      "teardown"
+    ]
+  },
+  "crossLane": {
+    "functionalRule": "Every mandatory fixture must pass x64 Release, x64 ASan Debug, and native ARM64 Release unless a fixture is explicitly architecture-identity-only.",
+    "performanceRule": "Scores use native x64 Release samples. ARM64 Release samples are retained as regression evidence and must remain bounded but are not cross-machine score inputs.",
+    "artifactRule": "Architecture, imports, exports, public headers, capabilities, licenses, and source/tool/dependency locks must match their platform-specific frozen records."
+  }
+}

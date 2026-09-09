@@ -48,6 +48,8 @@ Common interactions:
 - Type-to-search: pressing printable keys jumps focus to the first item whose name starts with what you have typed and highlights the matching prefix. `Backspace` edits the typed text (and clearing it exits the search), `Up`/`Down` step between matches, and `Esc` exits the search.
 - Mouse: multi-select, drag & drop
 
+The bordered **current item** is the pane's persistent cursor and is independent from selection. Arrow keys move current without changing selection. Clicking empty background or pressing `Esc` clears selection while retaining current; a background context menu therefore has no item target, while the keyboard context-menu key uses the selected items or current-item fallback.
+
 Display and sort (defaults):
 
 - `Alt+2`: Brief mode
@@ -64,6 +66,8 @@ Brief keeps the pane dense for keyboard work, Detailed adds common metadata,
 Extra Detailed gives each item a second metadata line, and Thumbnails uses
 larger visuals for image-heavy folders.
 
+An actual empty folder exposes a separate **Go to parent** action for `Enter`, double-click, and `Backspace`. It is not a file or a selected/current item. A filter with no matches does not expose that action.
+
 ![Brief and Detailed folder views](res/folder-view-brief-detailed.png)
 
 ![Extra Detailed and Thumbnails folder views](res/folder-view-extra-thumbnails.png)
@@ -79,7 +83,7 @@ The properties dialog can show local or plugin-provided fields: general identity
 ### Selection helpers
 
 - `Ctrl+A`: select all items in the focused pane.
-- `Esc`: clear the current selection.
+- `Esc`: clear the current selection while retaining the current item.
 - `Ctrl` + the key left of `Backspace`: open the select-by-mask dialog.
 - `Ctrl` + the key right of `0`: open the unselect-by-mask dialog.
 - `Ctrl+Shift` + those same keys: select/unselect same extension.
@@ -188,8 +192,9 @@ The **Edit** menu covers clipboard and selection workflows.
 
 Notes on the selection entries:
 
-- **Select + Calculate Directory Size + Next** selects the focused item, calculates the occupied size of selected directories, and advances to the next item, so you can sweep down a list while accumulating folder sizes.
-- **Save Selection** records the current selection so you can return to it later, while **Restore Selection** and **Load Selection** are the same command and reapply that saved selection (the same pair reached by `Ctrl+Shift+F5` / `Ctrl+Shift+F6`).
+- **Select + Calculate Directory Size + Next** (`Space`) toggles the current item, updates size work from the post-toggle selected set, and advances without wrapping. Toggling an already-selected folder off removes it from size work. `Insert` toggles and advances without starting folder-size work.
+- **Save Selection** records the selected displayed items, or the current item when selection is empty. **Restore Selection** and **Load Selection** are the same command and select saved identities visible when restore runs (the same pair reached by `Ctrl+Shift+F5` / `Ctrl+Shift+F6`). Clearing a filter does not restore previously hidden selection automatically; invoke Restore again.
+- Folder navigation, including Back/Forward, restores the remembered current item when available but starts with no restored selection.
 
 ### Commands menu
 
@@ -197,7 +202,7 @@ The **Commands** menu contains multi-step tools and integration commands.
 
 - Navigation and search: Change Directory, Find Files and Directories, Show Folders History, Quick Search, and Hot Paths through the Change Drive menu.
 - Comparison and reporting: Compare Directories, Calculate Occupied Space, Make File List, List of Opened Files, and Shared Directories.
-- Shell and external integration: Connect/Disconnect Network Drive, Connections Manager, Command Shell, Bring Current Directory/Filename to Command Line, Pane Menu, Reread Associations, User Menu, and Open File Explorer for the current folder or known folders.
+- Shell and external integration: Connect/Disconnect Network Drive, Connections Manager, Command Shell, terminal path-insertion commands, Pane Menu, Reread Associations, User Menu, and Open File Explorer for the current folder or known folders.
 - Link handling: Go to Shortcut or Link Target follows local `.lnk`, local `file:` `.url`, junction, mount point, and directory symlink targets where pane navigation can represent the target.
 
 **Pane Menu** here opens the application's pane/main menu from the keyboard, the same action bound to `F10` in the function bar.
@@ -224,8 +229,8 @@ The folder-view context menu mirrors the most common item commands: Open, Open W
 - **Commands → Find Files and Directories…** (`Alt+F7`) opens the modeless search window for the focused pane. See: [Find Files and Directories](FindFiles.md)
 - **Commands → List of Opened Files** (`Alt+F11`) shows viewer, editor, and Preview pane entries and can focus the source item from the list.
 - **Commands → Shared Directories…** (`Ctrl+Shift+F9`) lists local Windows disk shares, opens reachable share paths in the focused pane, and links to Windows Shared Folders management.
-- **Commands → Command Shell**: opens a shell in the current location when possible
-- **Commands → Bring Current Directory/Filename to Command Line**: opens the pane command-line input and inserts quoted local paths for execution
+- **Commands → Command Shell** (`Ctrl+Alt+T`, `Alt+7`): opens or reuses the embedded Terminal in the opposite pane at the focused folder
+- **Commands → Insert Current Directory/Focused Item/Full Path in Terminal**: inserts the requested quoted path without sending Enter (`Ctrl+Space`, `Ctrl+Enter`, or `Ctrl+Shift+Enter`)
 - **Commands → Open File Explorer → Current Folder** (`Shift+F3`)
 
 ## Dialog and command screenshots
@@ -246,6 +251,9 @@ Type a prefix to highlight and jump to matching names; the match query and `sear
 
 ![Quick Search active in a pane](res/quick-search.png)
 
-### Command line (`Ctrl+Space` / `Ctrl+Enter`)
+### Embedded Terminal
 
-![Command-line input with the current directory inserted](res/command-line.png)
+Open Command Shell, directory Edit, and path insertion use a Terminal tab in
+the opposite pane. A live Starting/Running Terminal is reused instead of
+replacing its process; the former bottom command-line input is no longer part
+of the main window.

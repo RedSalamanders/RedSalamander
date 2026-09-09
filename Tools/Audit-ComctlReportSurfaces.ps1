@@ -1,9 +1,28 @@
+<#
+.SYNOPSIS
+    Verifies the classified list-view and tooltip common-control source surface.
+
+.DESCRIPTION
+    Scans the product source roots for report-surface common-control identifiers and
+    fails when the discovered file set differs from the command-owned classification.
+    A successful run prints the classification table and audited roots.
+
+.OUTPUTS
+    Human-readable classification and status text. No supported pipeline objects.
+
+.NOTES
+    Prerequisites: repository product source. Side effects: none; scanning is read-only. Any unclassified or stale report-surface path throws and produces a nonzero exit. Primary consumers: CI and documentation-drift policy tests.
+
+.EXAMPLE
+    .\Tools\Audit-ComctlReportSurfaces.ps1
+#>
+[CmdletBinding()]
 param()
 
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-Set-Location $repoRoot
+Import-Module (Join-Path $PSScriptRoot 'Modules\Auditing\RepositorySourceScanner.psm1') -Force
 
 $auditedFiles = @()
 
@@ -18,14 +37,14 @@ $sourceRoots = @(
 $sourceExtensions = @(".cpp", ".h", ".rc", ".rc2", ".vcxproj", ".props", ".targets", ".manifest")
 $reportSurfacePattern = "SysListView32|WC_LISTVIEWW|TOOLTIPS_CLASSW|TOOLINFOW|NMTTDISPINFOW|TTM_|TTN_|TTS_|TTF_|ListView_|LVS_|LVN_|LVIF_|LVIS_|LVNI_"
 
-$actualFiles = @(
-    foreach ($root in $sourceRoots)
-    {
-        Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object {
-            $_.Extension -in $sourceExtensions
-        } | Select-String -Pattern $reportSurfacePattern | Select-Object -ExpandProperty Path -Unique
-    }
-) | ForEach-Object { (Resolve-Path -LiteralPath $_ -Relative).TrimStart('.', '\', '/').Replace('\', '/') } | Sort-Object -Unique
+$actualFiles = @(Find-RSRepositorySourceMatches `
+        -RepositoryRoot $repoRoot `
+        -SourceRoots $sourceRoots `
+        -Extensions $sourceExtensions `
+        -Patterns @($reportSurfacePattern) `
+        -PathSeparator Slash |
+    Select-Object -ExpandProperty Path -Unique |
+    Sort-Object -Unique)
 
 $expectedFiles = $auditedFiles.File | Sort-Object -Unique
 $missingFiles = @($expectedFiles | Where-Object { $_ -notin $actualFiles })

@@ -1,0 +1,263 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:red-salamander:schema:terminal-engine-candidate-review:v1",
+  "title": "RedSalamander TerminalEngine source-pin candidate review v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "version",
+    "frozenUtc",
+    "authorId",
+    "reviewRule",
+    "candidates",
+    "approvals"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "red-salamander-terminal-engine-candidate-review"
+    },
+    "version": {
+      "const": 1
+    },
+    "frozenUtc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+    },
+    "authorId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "reviewRule": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "candidates": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/candidate"
+      }
+    },
+    "approvals": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/approval"
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "pin",
+        "pinSha256",
+        "sourceArchiveSha256",
+        "disposition",
+        "glueAuthorIds",
+        "blockers"
+      ],
+      "properties": {
+        "candidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "pin": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "pinSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sourceArchiveSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "archiveRelativePath": {
+          "type": "string",
+          "pattern": "^\\.build/terminal-engine-spike/bootstrap/codeload/[A-Za-z0-9._+-]+\\.tar\\.gz$",
+          "maxLength": 256
+        },
+        "disposition": {
+          "enum": [
+            "collect",
+            "source-rejected"
+          ]
+        },
+        "glueAuthorIds": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "blockers": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/blocker"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "disposition": {
+                "const": "collect"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "blockers": {
+                "maxItems": 0
+              }
+            }
+          },
+          "else": {
+            "required": [
+              "archiveRelativePath"
+            ],
+            "properties": {
+              "blockers": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "blockerId",
+        "gateId",
+        "failureCode",
+        "claim",
+        "source"
+      ],
+      "properties": {
+        "blockerId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "gateId": {
+          "enum": [
+            "G6",
+            "G7",
+            "G9"
+          ]
+        },
+        "failureCode": {
+          "$ref": "#/$defs/identifier"
+        },
+        "claim": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repositoryUrl",
+        "relativePath",
+        "fileSha256",
+        "lineStart",
+        "lineEnd",
+        "lineRangeSha256",
+        "permalink"
+      ],
+      "properties": {
+        "repositoryUrl": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2048
+        },
+        "relativePath": {
+          "type": "string",
+          "pattern": "^(?![A-Za-z]:)(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._+/@ -]+(?:/[A-Za-z0-9._+/@ -]+)*$",
+          "maxLength": 512
+        },
+        "fileSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "lineStart": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "lineEnd": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "lineRangeSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "permalink": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2048
+        }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approvalId",
+        "reviewerId",
+        "reviewerRole",
+        "blockerSha256",
+        "decision",
+        "reviewedUtc"
+      ],
+      "properties": {
+        "approvalId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "reviewerId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "reviewerRole": {
+          "const": "independent-source-reviewer"
+        },
+        "blockerSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "decision": {
+          "const": "approved"
+        },
+        "reviewedUtc": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+        }
+      }
+    }
+  }
+}

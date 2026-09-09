@@ -5,7 +5,8 @@
 #include <filesystem>
 #include <functional>
 #include <stop_token>
-#include <string>
+
+#include "MonitorTextSnapshot.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -15,17 +16,19 @@ namespace RedSalamanderMonitor
 {
 struct MonitorFileReadLimits
 {
-    uint64_t maxBytes = 64u * 1024u * 1024u;
-    size_t maxLines   = 100'000u;
+    uint64_t maxEncodedBytes      = 64u * 1024u * 1024u;
+    uint64_t maxRetainedTextBytes = 64u * 1024u * 1024u;
+    size_t maxLines               = 100'000u;
 };
 
 struct MonitorFileReadResult
 {
     HRESULT hr = E_FAIL;
-    std::wstring text;
+    MonitorTextSnapshot snapshot;
     uint64_t bytesRead  = 0u;
     uint64_t totalBytes = 0u;
     size_t lineCount    = 0u;
+    uint64_t peakRetainedTextBytes = 0u;
 };
 
 using MonitorFileReadProgress = std::function<void(uint64_t bytesRead, uint64_t totalBytes)>;

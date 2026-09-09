@@ -19,6 +19,9 @@ void RunPreferencesCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTe
     SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_escape_prompts_before_dirty_close", [=](CaseState& state) noexcept {
         return TestPreferencesDialogEscapePromptsBeforeDirtyClose(mainWindow, state);
     });
+    SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_placement_roundtrip_and_visible_restore", [=](CaseState& state) noexcept {
+        return TestPreferencesDialogPlacementRoundTripAndVisibleRestore(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_page_host_uses_dxui_surface", [=](CaseState& state) noexcept {
         return TestPreferencesDialogPageHostUsesDxUiSurface(mainWindow, state);
     });
@@ -220,6 +223,9 @@ void RunPreferencesCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTe
                       L"cmd_preferences_dialog_keyboard_reordered_resized_copy_follows_visible_columns_after_search_roundtrip",
                       [=](CaseState& state) noexcept
     { return TestPreferencesDialogKeyboardReorderedResizedCopyFollowsVisibleColumnsAfterSearchRoundTrip(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_reliability_preferences_keyboard_search_reacquires_input", [=](CaseState& state) noexcept {
+        return TestPreferencesDialogKeyboardReorderedResizedCopyFollowsVisibleColumnsAfterSearchRoundTrip(mainWindow, state, true);
+    });
     SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_keyboard_copy_follows_reordered_columns", [=](CaseState& state) noexcept {
         return TestPreferencesDialogKeyboardCopyFollowsReorderedColumns(mainWindow, state);
     });
@@ -513,8 +519,11 @@ void RunPreferencesCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTe
     SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_editors_mouse_live_dx_notes", [=](CaseState& state) noexcept {
         return TestPreferencesDialogEditorsAndMouseLiveDxNotes(mainWindow, state);
     });
-    SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_editors_mouse_tab_skips_note_surface", [=](CaseState& state) noexcept {
+    SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_user_menu_tab_skips_note_surface", [=](CaseState& state) noexcept {
         return TestPreferencesDialogEditorsAndMouseTabSkipNoteSurface(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_mouse_focus_follows_pointer_settings", [=](CaseState& state) noexcept {
+        return TestPreferencesDialogMouseFocusFollowsPointerSettings(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_viewers_editors_file_action_settings_apply", [=](CaseState& state) noexcept {
         return TestPreferencesDialogViewersEditorsFileActionSettingsApply(mainWindow, state);

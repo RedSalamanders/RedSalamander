@@ -35,6 +35,7 @@
 #include "Helpers.h"
 #include "WindowMessages.h"
 #include "WindowSizing.h"
+#include "FolderViewMenuIds.h"
 #include "resource.h"
 
 #pragma comment(lib, "d3d11.lib")
@@ -49,23 +50,51 @@ namespace
 constexpr UINT_PTR kTimerAnimationId = 1;
 constexpr UINT kAnimationIntervalMs  = 16;
 
-constexpr int kHostFolderViewContextMenuResourceId = 138;
+constexpr int kHostFolderViewItemContextMenuResourceId = IDR_FOLDERVIEW_ITEM_CONTEXT;
 
 constexpr UINT kCmdTreemapContextFocusInPane = 0xC100u;
 constexpr UINT kCmdTreemapContextZoomIn      = 0xC101u;
 constexpr UINT kCmdTreemapContextZoomOut     = 0xC102u;
 
-constexpr UINT kCmdFolderViewContextOpen       = 33280u;
-constexpr UINT kCmdFolderViewContextOpenWith   = 33281u;
-constexpr UINT kCmdFolderViewContextDelete     = 33282u;
-constexpr UINT kCmdFolderViewContextRename     = 33283u;
-constexpr UINT kCmdFolderViewContextCopy       = 33284u;
-constexpr UINT kCmdFolderViewContextPaste      = 33285u;
-constexpr UINT kCmdFolderViewContextProperties = 33286u;
-constexpr UINT kCmdFolderViewContextMove       = 33287u;
-constexpr UINT kCmdFolderViewContextViewSpace  = 33288u;
+constexpr UINT kCmdFolderViewContextOpen       = IDM_FOLDERVIEW_CONTEXT_OPEN;
+constexpr UINT kCmdFolderViewContextOpenWith   = IDM_FOLDERVIEW_CONTEXT_OPEN_WITH;
+constexpr UINT kCmdFolderViewContextDelete     = IDM_FOLDERVIEW_CONTEXT_DELETE;
+constexpr UINT kCmdFolderViewContextRename     = IDM_FOLDERVIEW_CONTEXT_RENAME;
+constexpr UINT kCmdFolderViewContextCopy       = IDM_FOLDERVIEW_CONTEXT_COPY;
+constexpr UINT kCmdFolderViewContextPaste      = IDM_FOLDERVIEW_CONTEXT_PASTE;
+constexpr UINT kCmdFolderViewContextProperties = IDM_FOLDERVIEW_CONTEXT_PROPERTIES;
+constexpr UINT kCmdFolderViewContextMove       = IDM_FOLDERVIEW_CONTEXT_MOVE;
+constexpr UINT kCmdFolderViewContextViewSpace  = IDM_FOLDERVIEW_CONTEXT_VIEW_SPACE;
+constexpr UINT kCmdFolderViewContextCut        = IDM_FOLDERVIEW_CONTEXT_CUT;
 
 constexpr UINT kFolderViewDebugCommandIdBase = 60000u;
+
+void UpdateHostFolderViewContextCommandState(HMENU menu,
+                                             const bool canExecuteLeafCommands,
+                                             const bool isDirectory,
+                                             const bool canExecutePaste) noexcept
+{
+    if (! menu)
+    {
+        return;
+    }
+
+    const auto setEnabled = [menu](const UINT commandId, const bool enabled) noexcept
+    {
+        static_cast<void>(
+            EnableMenuItem(menu, commandId, static_cast<UINT>(MF_BYCOMMAND | (enabled ? MF_ENABLED : MF_GRAYED))));
+    };
+
+    setEnabled(kCmdFolderViewContextOpen, canExecuteLeafCommands);
+    setEnabled(kCmdFolderViewContextOpenWith, canExecuteLeafCommands && ! isDirectory);
+    setEnabled(kCmdFolderViewContextDelete, canExecuteLeafCommands);
+    setEnabled(kCmdFolderViewContextMove, canExecuteLeafCommands);
+    setEnabled(kCmdFolderViewContextRename, canExecuteLeafCommands);
+    setEnabled(kCmdFolderViewContextCut, canExecuteLeafCommands);
+    setEnabled(kCmdFolderViewContextCopy, canExecuteLeafCommands);
+    setEnabled(kCmdFolderViewContextProperties, canExecuteLeafCommands);
+    setEnabled(kCmdFolderViewContextPaste, canExecutePaste);
+}
 
 constexpr float kHeaderHeightDip      = 72.0f;
 constexpr float kHeaderButtonWidthDip = 52.0f;
@@ -318,6 +347,7 @@ uint64_t SaturatingAtomicAdd(std::atomic_uint64_t& value, uint64_t delta) noexce
     switch (commandId)
     {
         case kCmdFolderViewContextOpen: return std::wstring(1u, FluentIcons::kOpenFile);
+        case kCmdFolderViewContextCut: return std::wstring(1u, FluentIcons::kCut);
         case kCmdFolderViewContextCopy: return std::wstring(1u, FluentIcons::kCopy);
         case kCmdFolderViewContextPaste: return std::wstring(1u, FluentIcons::kPaste);
         case kCmdFolderViewContextDelete: return std::wstring(1u, FluentIcons::kDelete);
@@ -2185,9 +2215,28 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 return FALSE;
             }
 
-            *snapshot                    = {};
+            const UINT queryCommandId = snapshot->queryCommandId;
+            *snapshot                 = {};
+            snapshot->queryCommandId  = queryCommandId;
             snapshot->hasHiddenMenuModel = _menuHandle != nullptr;
             snapshot->ownerDrawItemCount = CountOwnerDrawMenuItems(_menuHandle.get());
+            if (queryCommandId != 0u)
+            {
+                wil::unique_hmenu rootMenu(
+                    Localization::LoadMenuResource(GetModuleHandleW(nullptr), kHostFolderViewItemContextMenuResourceId));
+                HMENU menu = rootMenu ? GetSubMenu(rootMenu.get(), 0) : nullptr;
+                UpdateHostFolderViewContextCommandState(menu, false, false, false);
+
+                MENUITEMINFOW itemInfo{};
+                itemInfo.cbSize = sizeof(itemInfo);
+                itemInfo.fMask  = MIIM_STATE;
+                if (menu && GetMenuItemInfoW(menu, queryCommandId, FALSE, &itemInfo) != FALSE)
+                {
+                    snapshot->queryCommandPresent = true;
+                    snapshot->queryCommandEnabled = (itemInfo.fState & MFS_DISABLED) == 0u;
+                    snapshot->queryCommandChecked = (itemInfo.fState & MFS_CHECKED) != 0u;
+                }
+            }
             return TRUE;
         }
         case WndMsg::kViewerSpaceDebugGetTooltipSnapshot:
@@ -4463,7 +4512,7 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
     const std::wstring zoomInText  = LoadStringResource(g_hInstance, IDS_VIEWERSPACE_CONTEXT_ZOOM_IN);
     const std::wstring zoomOutText = LoadStringResource(g_hInstance, IDS_VIEWERSPACE_CONTEXT_ZOOM_OUT);
 
-    HMENU rootMenu = Localization::LoadMenuResource(GetModuleHandleW(nullptr), kHostFolderViewContextMenuResourceId);
+    HMENU rootMenu = Localization::LoadMenuResource(GetModuleHandleW(nullptr), kHostFolderViewItemContextMenuResourceId);
     if (! rootMenu)
     {
         return;
@@ -4620,17 +4669,7 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
 
     const bool isDirectory = node->isDirectory;
 
-    auto enableFolderCmd = [&](UINT commandId, bool enabled) noexcept
-    { EnableMenuItem(menu, commandId, static_cast<UINT>(MF_BYCOMMAND | (enabled ? MF_ENABLED : MF_GRAYED))); };
-
-    enableFolderCmd(kCmdFolderViewContextOpen, canExecuteLeafCmds);
-    enableFolderCmd(kCmdFolderViewContextOpenWith, canExecuteLeafCmds && ! isDirectory);
-    enableFolderCmd(kCmdFolderViewContextDelete, canExecuteLeafCmds);
-    enableFolderCmd(kCmdFolderViewContextMove, canExecuteLeafCmds);
-    enableFolderCmd(kCmdFolderViewContextRename, canExecuteLeafCmds);
-    enableFolderCmd(kCmdFolderViewContextCopy, canExecuteLeafCmds);
-    enableFolderCmd(kCmdFolderViewContextProperties, canExecuteLeafCmds);
-    enableFolderCmd(kCmdFolderViewContextPaste, canExecutePaste);
+    UpdateHostFolderViewContextCommandState(menu, canExecuteLeafCmds, isDirectory, canExecutePaste);
 
     std::vector<RedSalamander::DxUi::MenuFlyoutItem> popupItems = ConvertHMenuToDxFlyoutItems(menu);
     if (viewerMenu)
@@ -4694,7 +4733,6 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
         }
 
         HostPaneExecuteRequest request{};
-        request.version              = 1;
         request.sizeBytes            = sizeof(request);
         request.flags                = HOST_PANE_EXECUTE_FLAG_ACTIVATE_WINDOW;
         request.folderPath           = folderPath.c_str();
@@ -4729,7 +4767,6 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
     }
 
     HostPaneExecuteRequest request{};
-    request.version              = 1;
     request.sizeBytes            = sizeof(request);
     request.flags                = HOST_PANE_EXECUTE_FLAG_ACTIVATE_WINDOW;
     request.folderPath           = (commandId == kCmdFolderViewContextPaste) ? folderPath.c_str() : folderPathForCommand.c_str();
@@ -7224,6 +7261,18 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
                 }
             }
 
+            if (completedRoot)
+            {
+                PendingUpdate finalProgress;
+                finalProgress.kind           = PendingUpdate::Kind::Progress;
+                finalProgress.generation     = generation;
+                finalProgress.nodeId         = rootNodeId;
+                finalProgress.bytes          = scannedBytes.load(std::memory_order_relaxed);
+                finalProgress.scannedFolders = scannedFolders.load(std::memory_order_relaxed);
+                finalProgress.scannedFiles   = scannedFiles.load(std::memory_order_relaxed);
+                PostUpdate(std::move(finalProgress));
+            }
+
             postDirectoryCompletion(modelNodeId, bytes, displayError ? ScanState::Error : ScanState::Done);
 
             if (aggregateRoot && ! failed && aggregateOwner != 0u)
@@ -7817,7 +7866,9 @@ void ViewerSpace::DrainUpdates() noexcept
                 Node* node = TryGetRealNode(update.nodeId);
                 if (node != nullptr)
                 {
-                    node->totalBytes = update.bytes;
+                    // Sibling completions publish parent sizes after releasing the completion lock.
+                    // A delayed smaller packet must not reduce a newer authoritative total or a Done node.
+                    node->totalBytes = std::max(node->totalBytes, update.bytes);
                     layoutChanged    = true;
                 }
                 break;
@@ -10015,7 +10066,8 @@ double ViewerSpace::NowSeconds() const noexcept
 
 HRESULT STDMETHODCALLTYPE ViewerSpace::Open(const ViewerOpenContext* context) noexcept
 {
-    if (context == nullptr || context->fileSystem == nullptr || context->focusedPath == nullptr || context->focusedPath[0] == L'\0')
+    if (context == nullptr || context->sizeBytes < sizeof(ViewerOpenContext) || context->fileSystem == nullptr ||
+        context->focusedPath == nullptr || context->focusedPath[0] == L'\0')
     {
         return E_INVALIDARG;
     }
@@ -10147,7 +10199,7 @@ HRESULT STDMETHODCALLTYPE ViewerSpace::Close() noexcept
 
 HRESULT STDMETHODCALLTYPE ViewerSpace::SetTheme(const ViewerTheme* theme) noexcept
 {
-    if (theme == nullptr || theme->version < 2u || theme->version > 4u)
+    if (theme == nullptr || theme->sizeBytes < sizeof(ViewerTheme))
     {
         return E_INVALIDARG;
     }

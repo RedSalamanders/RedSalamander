@@ -1,0 +1,50 @@
+{
+  "formatId": "red-salamander-terminal-engine-evidence",
+  "schemaVersion": 1,
+  "recordKind": "finalization",
+  "runId": "2026-07-30_140003",
+  "createdUtc": "2026-07-30T14:00:03Z",
+  "repositoryCommit": "1111111111111111111111111111111111111111",
+  "repositoryClean": true,
+  "machineHash": "0123456789ab",
+  "schemaSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "harness": {
+    "version": "1.0.0",
+    "sourceSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "frozen": {
+    "requirementsSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "scoreAnchorsSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "fixtureCorpusSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "measurementProtocolSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "candidateUniverseSha256": "abababababababababababababababababababababababababababababababab",
+    "candidateSetSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "candidateReviewSha256": "1010101010101010101010101010101010101010101010101010101010101010",
+    "candidateAssessmentSha256": "1212121212121212121212121212121212121212121212121212121212121212"
+  },
+  "inputManifests": [
+    {
+      "platform": "x64",
+      "configuration": "Release",
+      "manifestSha256": "3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    {
+      "platform": "x64",
+      "configuration": "ASan Debug",
+      "manifestSha256": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "platform": "ARM64",
+      "configuration": "Release",
+      "manifestSha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  ],
+  "candidateResults": [],
+  "controlResults": [],
+  "selection": {
+    "status": "no-scored-candidate",
+    "rawLeaderScore": null,
+    "cohort": [],
+    "winnerCandidateId": null
+  }
+}

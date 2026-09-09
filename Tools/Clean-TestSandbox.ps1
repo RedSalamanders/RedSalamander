@@ -1,60 +1,99 @@
 <#
 .SYNOPSIS
-    Lists or removes legacy RedSalamander test scratch roots that predate REDSALAMANDER_TEST_ROOT.
+    Lists or removes one exact RedSalamander test run directory.
 
 .DESCRIPTION
-    Dry-run is the default. Pass -Apply to remove resolved targets. Each removal still goes through
-    ShouldProcess, so callers can combine -Apply with -WhatIf or -Confirm.
+    Resolves only X:\RedSalamander.Perf\runs\<RunId> beneath the selected marked
+    test root. Dry-run is the default. Pass -Apply to remove that exact run;
+    ShouldProcess still honors -WhatIf and -Confirm. The command never enumerates,
+    writes, or removes historical test locations outside the selected root.
+
+.PARAMETER RunId
+    Exact direct-child run identifier below X:\RedSalamander.Perf\runs.
+
+.PARAMETER TestRoot
+    Exact marked X:\RedSalamander.Perf root. The repository drive is used when
+    neither this parameter nor REDSALAMANDER_TEST_ROOT selects another fixed drive.
+
+.PARAMETER Apply
+    Removes the exact resolved run directory. Without this switch the command only
+    reports the target.
+
+.OUTPUTS
+    One PSCustomObject target record when the selected run exists.
+
+.NOTES
+    Prerequisites: an initialized root with a valid ownership marker. Side effects:
+    -Apply recursively removes only the exact selected run below the marked root and
+    honors ShouldProcess. It never cleans legacy paths outside X:\RedSalamander.Perf.
+
+.EXAMPLE
+    .\Tools\Clean-TestSandbox.ps1 -RunId 20260830T120000Z-1234-abcdef
+    Reports the exact run directory without removing it.
+
+.EXAMPLE
+    .\Tools\Clean-TestSandbox.ps1 -RunId 20260830T120000Z-1234-abcdef -Apply -Confirm:$false
+    Removes only the exact selected run directory.
 #>
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
 param(
-    [switch]$Apply,
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string]$RunId,
 
-    [string]$LocalAppDataRoot = $env:LOCALAPPDATA,
+    [string]$TestRoot = $env:REDSALAMANDER_TEST_ROOT,
 
-    [string]$TempRoot = [System.IO.Path]::GetTempPath(),
-
-    [string[]]$DriveRoots = @()
+    [switch]$Apply
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-. (Join-Path $scriptRoot 'TestRunPlan.ps1')
+$repoRoot = Split-Path -Parent $scriptRoot
+Import-Module (Join-Path $scriptRoot 'Modules\Testing\TestRunPlan.psm1') -Force -ErrorAction Stop
 
-if (@($DriveRoots).Count -eq 0) {
-    $DriveRoots = @(Get-RSFixedDriveRoots)
-}
+$context = New-RSTestRunContext `
+    -RepoRoot $repoRoot `
+    -RunId $RunId `
+    -TestRootOverride $TestRoot `
+    -SelfTestRootOverride ''
+$runRoot = Assert-RSTestSandboxContainedPath `
+    -TestRoot $context.TestRoot `
+    -Path $context.RunRoot `
+    -RequireDescendant
 
-$plan = @(Get-RSTestSandboxLegacyCleanupPlan `
-        -LocalAppDataRoot $LocalAppDataRoot `
-        -TempRoot $TempRoot `
-        -DriveRoots $DriveRoots)
-$targets = @(Resolve-RSTestSandboxCleanupTargets -Plan $plan)
-
-if (-not $Apply) {
-    Write-Host "Dry run: pass -Apply to remove the resolved legacy test sandbox targets." -ForegroundColor Yellow
-    $targets
+if (-not (Test-Path -LiteralPath $runRoot -PathType Container)) {
     return
 }
 
-foreach ($target in $targets) {
-    if ($PSCmdlet.ShouldProcess($target.Path, "Remove legacy RedSalamander test artifact ($($target.Category))")) {
-        try {
-            Remove-Item -LiteralPath $target.Path -Recurse -Force -ErrorAction Stop
-            $target | Add-Member -NotePropertyName Status -NotePropertyValue 'Removed' -Force
-            $target | Add-Member -NotePropertyName Error -NotePropertyValue $null -Force
-        } catch {
-            $message = $_.Exception.Message
-            Write-Warning "Failed to remove legacy RedSalamander test artifact '$($target.Path)': $message"
-            $target | Add-Member -NotePropertyName Status -NotePropertyValue 'Failed' -Force
-            $target | Add-Member -NotePropertyName Error -NotePropertyValue $message -Force
-        }
-    } else {
-        $target | Add-Member -NotePropertyName Status -NotePropertyValue 'Skipped' -Force
-        $target | Add-Member -NotePropertyName Error -NotePropertyValue $null -Force
-    }
+$result = [pscustomobject]@{
+    Path = $runRoot
+    RunId = $context.RunId
+    Category = 'exact-test-run-dir'
+    Status = 'Planned'
+    Error = $null
 }
 
-$targets
+if (-not $Apply) {
+    Write-Host 'Dry run: pass -Apply to remove this exact test run directory.' -ForegroundColor Yellow
+    $result
+    return
+}
+
+if (-not $PSCmdlet.ShouldProcess($runRoot, 'Remove exact RedSalamander test run')) {
+    $result.Status = 'Skipped'
+    $result
+    return
+}
+
+try {
+    Remove-RSTestSandboxExactRunDirectory -TestRoot $context.TestRoot -RunId $context.RunId
+    $result.Status = 'Removed'
+} catch {
+    $result.Status = 'Failed'
+    $result.Error = $_.Exception.Message
+    Write-Warning "Failed to remove exact RedSalamander test run '$runRoot': $($result.Error)"
+}
+
+$result

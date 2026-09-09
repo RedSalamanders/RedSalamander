@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <deque>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -58,6 +59,7 @@
 #include "LocalizationManager.h"
 #include "MinimumOsVersion.h"
 #include "MonitorDiagnostics.h"
+#include "MonitorFileExporter.h"
 #include "MonitorFileReader.h"
 #include "RedSalamanderMonitor.h"
 #include "SettingsStore.h"
@@ -122,6 +124,8 @@ constexpr std::wstring_view kMonitorScenarioName          = L"monitor.chrome.dxu
 constexpr UINT kMsgRunMonitorChromeSelfTest               = WM_APP + 0x61C;
 constexpr UINT kMsgMonitorFileOpenProgress                 = WM_APP + 0x61D;
 constexpr UINT kMsgMonitorFileOpenCompleted                = WM_APP + 0x61E;
+constexpr UINT kMsgMonitorFileSaveProgress                 = WM_APP + 0x61F;
+constexpr UINT kMsgMonitorFileSaveCompleted                = WM_APP + 0x620;
 
 #if defined(_DEBUG)
 constexpr std::wstring_view kMonitorBuildFlavor = L"Debug";
@@ -285,6 +289,43 @@ std::jthread g_monitorFileOpenThread;
 std::atomic<bool> g_monitorFileOpenActive{false};
 uint64_t g_monitorFileOpenGeneration = 0u;
 
+struct MonitorFileSaveProgress final
+{
+    uint64_t generation   = 0u;
+    uint64_t bytesWritten = 0u;
+    size_t completedLines = 0u;
+};
+
+struct MonitorFileSaveCompletion final
+{
+    RedSalamanderMonitor::MonitorFileExportResult result;
+    uint64_t generation = 0u;
+    uint64_t durationUs = 0u;
+};
+
+struct MonitorFileSaveWorkerState final
+{
+    MonitorFileSaveWorkerState() = default;
+    MonitorFileSaveWorkerState(const MonitorFileSaveWorkerState&)            = delete;
+    MonitorFileSaveWorkerState& operator=(const MonitorFileSaveWorkerState&) = delete;
+    MonitorFileSaveWorkerState(MonitorFileSaveWorkerState&&)                 = delete;
+    MonitorFileSaveWorkerState& operator=(MonitorFileSaveWorkerState&&)      = delete;
+
+    std::stop_source stopSource;
+    std::atomic<bool> active{true};
+};
+
+std::thread g_monitorFileSaveThread;
+std::shared_ptr<MonitorFileSaveWorkerState> g_monitorFileSaveState;
+uint64_t g_monitorFileSaveGeneration = 0u;
+
+#if defined(ENABLE_TESTS)
+std::atomic<bool> g_failNextMonitorFileOpenThreadStart{false};
+std::atomic<bool> g_failNextMonitorFileSaveThreadStart{false};
+std::atomic<uint64_t> g_monitorFileOpenCompletionPostCount{0u};
+std::atomic<uint64_t> g_monitorFileSaveCompletionPostCount{0u};
+#endif
+
 constexpr std::array<std::wstring_view, 6> kRequiredMonitorFrameMetrics{{
     L"monitor.frame.total_us",
     L"monitor.frame.present_us",
@@ -292,6 +333,29 @@ constexpr std::array<std::wstring_view, 6> kRequiredMonitorFrameMetrics{{
     L"monitor.frame.tail_layout_us",
     L"monitor.frame.mode",
     L"monitor.etw.batch_drain_us",
+}};
+
+constexpr std::array<std::wstring_view, 20> kRequiredMonitorRetainedStateMetrics{{
+    L"monitor.file_open.total_us",
+    L"monitor.file_open.peak_retained_text_bytes",
+    L"monitor.file_open.publish_us",
+    L"monitor.file_open.cancel_us",
+    L"monitor.file_open.close_us",
+    L"monitor.file_save.snapshot_us",
+    L"monitor.file_save.snapshot_lock_us",
+    L"monitor.file_save.ui_return_us",
+    L"monitor.file_save.total_us",
+    L"monitor.file_save.retained_text_bytes",
+    L"monitor.file_save.retained_line_count",
+    L"monitor.file_save.shared_block_count",
+    L"monitor.file_save.shared_block_bytes",
+    L"monitor.file_save.copied_text_bytes",
+    L"monitor.file_save.active_tail_copied_bytes",
+    L"monitor.file_save.peak_additional_snapshot_bytes",
+    L"monitor.file_save.throughput_bytes_per_sec",
+    L"monitor.file_save.cancel_us",
+    L"monitor.file_save.close_us",
+    L"monitor.file_save.baseline_deep_copy_us",
 }};
 
 constexpr std::array<std::wstring_view, 8> kRequiredMonitorEtwBurstLatencyMetrics{{
@@ -922,6 +986,18 @@ bool WriteUtf8TextFile(const std::filesystem::path& path, std::string_view text,
     return ::WriteFile(file.get(), text.data(), static_cast<DWORD>(text.size()), &written, nullptr) && written == text.size();
 }
 
+#if defined(ENABLE_TESTS)
+std::string ReadBinaryFile(const std::filesystem::path& path) noexcept
+{
+    std::ifstream input(path, std::ios::binary);
+    if (! input)
+    {
+        return {};
+    }
+    return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+}
+#endif
+
 std::string EscapeJsonUtf8(std::string_view text)
 {
     std::string escaped;
@@ -1299,6 +1375,9 @@ void FinalizeMonitorChromeSelfTest(bool passed, std::wstring_view summary) noexc
     const std::string perfJsonl                                        = ReadMonitorPerfJsonl();
     const std::vector<MonitorChromeMetricPresence> metricPresence      = BuildMetricPresence(perfJsonl, kRequiredMonitorFrameMetrics);
     const bool allRequiredMetricsPresent                               = AreAllMetricsPresent(metricPresence);
+    const std::vector<MonitorChromeMetricPresence> retainedStateMetricPresence =
+        BuildMetricPresence(perfJsonl, kRequiredMonitorRetainedStateMetrics);
+    const bool allRetainedStateMetricsPresent = AreAllMetricsPresent(retainedStateMetricPresence);
     const std::vector<MonitorChromeMetricPresence> burstMetricPresence = g_monitorEtwBurstOptions.latencyMode
                                                                              ? BuildMetricPresence(perfJsonl, kRequiredMonitorEtwBurstLatencyMetrics)
                                                                              : std::vector<MonitorChromeMetricPresence>{};
@@ -1316,6 +1395,9 @@ void FinalizeMonitorChromeSelfTest(bool passed, std::wstring_view summary) noexc
 
     RecordMonitorChromeSelfTestCheck(
         L"required monitor frame metrics", allRequiredMetricsPresent, allRequiredMetricsPresent ? L"" : L"one or more required monitor frame metrics missing");
+    RecordMonitorChromeSelfTestCheck(L"monitor retained-state metrics",
+                                     allRetainedStateMetricsPresent,
+                                     allRetainedStateMetricsPresent ? L"" : L"one or more retained-state metrics missing");
     if (g_monitorEtwBurstOptions.latencyMode)
     {
         RecordMonitorChromeSelfTestCheck(
@@ -1328,16 +1410,25 @@ void FinalizeMonitorChromeSelfTest(bool passed, std::wstring_view summary) noexc
                                          allScrollbackMetricsPresent ? L"" : L"one or more scrollback frame metrics missing");
     }
 
-    const bool finalPassed = passed && allRequiredMetricsPresent && allBurstMetricsPresent && allScrollbackMetricsPresent;
-    const std::wstring finalSummary =
-        finalPassed
-            ? std::wstring(summary)
-            : (passed && ! allRequiredMetricsPresent
-                   ? L"Monitor chrome selftest passed functionally, but required frame metrics were missing."
-                   : (passed && ! allBurstMetricsPresent ? L"Monitor chrome selftest passed functionally, but ETW burst latency metrics were missing."
-                                                         : (passed && ! allScrollbackMetricsPresent
-                                                                ? L"Monitor chrome selftest passed functionally, but scrollback frame metrics were missing."
-                                                                : std::wstring(summary))));
+    const bool finalPassed =
+        passed && allRequiredMetricsPresent && allRetainedStateMetricsPresent && allBurstMetricsPresent && allScrollbackMetricsPresent;
+    std::wstring finalSummary(summary);
+    if (passed && ! allRequiredMetricsPresent)
+    {
+        finalSummary = L"Monitor chrome selftest passed functionally, but required frame metrics were missing.";
+    }
+    else if (passed && ! allRetainedStateMetricsPresent)
+    {
+        finalSummary = L"Monitor chrome selftest passed functionally, but retained-state metrics were missing.";
+    }
+    else if (passed && ! allBurstMetricsPresent)
+    {
+        finalSummary = L"Monitor chrome selftest passed functionally, but ETW burst latency metrics were missing.";
+    }
+    else if (passed && ! allScrollbackMetricsPresent)
+    {
+        finalSummary = L"Monitor chrome selftest passed functionally, but scrollback frame metrics were missing.";
+    }
 
     g_monitorChromeSelfTest.completed = true;
     g_monitorChromeSelfTest.exitCode  = finalPassed ? 0 : 1;
@@ -1373,6 +1464,20 @@ void FinalizeMonitorChromeSelfTest(bool passed, std::wstring_view summary) noexc
                             metric.count > 0u ? "true" : "false",
                             metric.count,
                             (index + 1u) == metricPresence.size() ? "" : ",");
+    }
+    json += "    ]\n";
+    json += "  },\n";
+    json += "  \"monitorRetainedStateMetricPresence\": {\n";
+    json += std::format("    \"allPresent\": {},\n", allRetainedStateMetricsPresent ? "true" : "false");
+    json += "    \"metrics\": [\n";
+    for (size_t index = 0; index < retainedStateMetricPresence.size(); ++index)
+    {
+        const MonitorChromeMetricPresence& metric = retainedStateMetricPresence[index];
+        json += std::format("      {{\"metric\": \"{}\", \"present\": {}, \"count\": {}}}{}\n",
+                            EscapeJsonWide(metric.metric),
+                            metric.count > 0u ? "true" : "false",
+                            metric.count,
+                            (index + 1u) == retainedStateMetricPresence.size() ? "" : ",");
     }
     json += "    ]\n";
     json += "  },\n";
@@ -1480,7 +1585,13 @@ bool InitializeMonitorChromeSelfTestArtifacts() noexcept
     AppendMonitorChromeSelfTestTrace(std::format(L"ArchiveToRepo: {}", g_monitorChromeSelfTest.runRoot.native()));
 
     Debug::Perf::ConfigureJsonlOutput(
-        g_monitorChromeSelfTest.perfPath, L"MonitorChromeSelfTest", L"Debug", {}, {}, g_monitorChromeSelfTest.machineHash, g_monitorChromeSelfTest.runId);
+        g_monitorChromeSelfTest.perfPath,
+        L"MonitorChromeSelfTest",
+        kMonitorBuildFlavor,
+        {},
+        {},
+        g_monitorChromeSelfTest.machineHash,
+        g_monitorChromeSelfTest.runId);
 
     return true;
 }
@@ -2502,14 +2613,117 @@ void RequestMonitorFileOpenCancellation() noexcept
         return;
     }
 
+    const auto cancelStarted = std::chrono::steady_clock::now();
     g_monitorFileOpenThread.request_stop();
+    HRESULT cancelHr = S_OK;
     if (CancelSynchronousIo(g_monitorFileOpenThread.native_handle()) == FALSE)
     {
         const DWORD error = GetLastError();
         if (error != ERROR_NOT_FOUND)
         {
+            cancelHr = HRESULT_FROM_WIN32(error);
             Debug::Warning(L"Monitor file open: CancelSynchronousIo failed (gle=0x{:08X})", error);
         }
+    }
+    Debug::Perf::EmitDurationUs(L"monitor.file_open.cancel_us", Debug::Perf::ElapsedUs(cancelStarted), 0u, 0u, cancelHr);
+}
+
+void CloseMonitorFileOpenWorker() noexcept
+{
+    if (! g_monitorFileOpenThread.joinable())
+    {
+        return;
+    }
+
+    const auto closeStarted = std::chrono::steady_clock::now();
+    RequestMonitorFileOpenCancellation();
+    constexpr DWORD kCloseWaitMs = 2'000u;
+    const DWORD waitResult = WaitForSingleObject(g_monitorFileOpenThread.native_handle(), kCloseWaitMs);
+    const DWORD waitError = waitResult == WAIT_FAILED ? GetLastError() : ERROR_SUCCESS;
+    if (waitResult == WAIT_OBJECT_0)
+    {
+        g_monitorFileOpenThread.join();
+    }
+    else
+    {
+        // The detached worker owns its path/limits/decoder state and posts only through the registered payload
+        // helper. WM_NCDESTROY drains and closes that registry, so late progress/completion cannot outlive the HWND.
+        g_monitorFileOpenThread.detach();
+        Debug::Warning(L"Monitor file open did not stop within {} ms; allowing owned worker teardown to finish independently.", kCloseWaitMs);
+    }
+    const HRESULT closeHr = waitResult == WAIT_OBJECT_0 ? S_OK : HRESULT_FROM_WIN32(waitResult == WAIT_TIMEOUT ? ERROR_TIMEOUT : waitError);
+    Debug::Perf::EmitDurationUs(L"monitor.file_open.close_us", Debug::Perf::ElapsedUs(closeStarted), 0u, 0u, closeHr);
+}
+
+[[nodiscard]] HRESULT MonitorThreadStartFailureHresult(const std::system_error& error) noexcept
+{
+    const std::error_code code = error.code();
+    if (code.category() == std::system_category() && code.value() > 0)
+    {
+        return HRESULT_FROM_WIN32(static_cast<DWORD>(code.value()));
+    }
+    return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY);
+}
+
+[[nodiscard]] HRESULT StartMonitorFileOpenWorker(HWND owner,
+                                                 std::filesystem::path path,
+                                                 RedSalamanderMonitor::MonitorFileReadLimits limits) noexcept
+{
+    const uint64_t generation = ++g_monitorFileOpenGeneration;
+    g_monitorFileOpenActive.store(true, std::memory_order_release);
+    try
+    {
+#if defined(ENABLE_TESTS)
+        if (g_failNextMonitorFileOpenThreadStart.exchange(false, std::memory_order_acq_rel))
+        {
+            throw std::system_error(
+                std::error_code(ERROR_NOT_ENOUGH_MEMORY, std::system_category()), "injected Monitor open thread-start failure");
+        }
+#endif
+        g_monitorFileOpenThread = std::jthread([owner, path = std::move(path), limits, generation](std::stop_token stopToken)
+        {
+            const auto started = std::chrono::steady_clock::now();
+            uint64_t lastPostedBytes = 0u;
+            RedSalamanderMonitor::MonitorFileReadResult result = RedSalamanderMonitor::ReadMonitorTextFile(
+                path,
+                stopToken,
+                limits,
+                [owner, generation, &lastPostedBytes](uint64_t bytesRead, uint64_t totalBytes)
+                {
+                    constexpr uint64_t kProgressStepBytes = 1u * 1024u * 1024u;
+                    if (bytesRead != totalBytes && bytesRead - lastPostedBytes < kProgressStepBytes)
+                    {
+                        return;
+                    }
+                    lastPostedBytes = bytesRead;
+                    auto progress = std::make_unique<MonitorFileOpenProgress>(MonitorFileOpenProgress{
+                        .generation = generation,
+                        .bytesRead  = bytesRead,
+                        .totalBytes = totalBytes,
+                    });
+                    static_cast<void>(PostMessagePayload(owner, kMsgMonitorFileOpenProgress, 0, std::move(progress)));
+                });
+
+            auto completion = std::make_unique<MonitorFileOpenCompletion>(MonitorFileOpenCompletion{
+                .result     = std::move(result),
+                .generation = generation,
+                .durationUs = Debug::Perf::ElapsedUs(started),
+            });
+            g_monitorFileOpenActive.store(false, std::memory_order_release);
+#if defined(ENABLE_TESTS)
+            g_monitorFileOpenCompletionPostCount.fetch_add(1u, std::memory_order_relaxed);
+#endif
+            static_cast<void>(PostMessagePayload(owner, kMsgMonitorFileOpenCompleted, 0, std::move(completion)));
+        });
+        return S_OK;
+    }
+    catch (const std::system_error& error)
+    {
+        // Thread admission is the only recoverable throwing boundary here. Allocation failure remains fatal.
+        const HRESULT hr = MonitorThreadStartFailureHresult(error);
+        g_monitorFileOpenActive.store(false, std::memory_order_release);
+        Debug::Error(L"Monitor file open worker start failed: 0x{:08X}", static_cast<uint32_t>(hr));
+        return hr;
     }
 }
 
@@ -2547,45 +2761,19 @@ bool DoFileOpen(HWND owner)
     const Common::Settings::MonitorRetentionSettings retention =
         g_settings.monitor.value_or(Common::Settings::MonitorSettings{}).retention;
     const RedSalamanderMonitor::MonitorFileReadLimits limits{
-        .maxBytes = retention.maxRetainedTextBytes,
-        .maxLines = retention.maxRetainedLines,
+        .maxEncodedBytes      = retention.maxRetainedTextBytes,
+        .maxRetainedTextBytes = retention.maxRetainedTextBytes,
+        .maxLines             = retention.maxRetainedLines,
     };
-    const std::filesystem::path path(file);
-    const uint64_t generation = ++g_monitorFileOpenGeneration;
-    g_monitorFileOpenActive.store(true, std::memory_order_release);
-    g_monitorFileOpenThread = std::jthread([owner, path, limits, generation](std::stop_token stopToken)
+    const HRESULT startHr = StartMonitorFileOpenWorker(owner, std::filesystem::path(file), limits);
+    if (FAILED(startHr))
     {
-        const auto started = std::chrono::steady_clock::now();
-        uint64_t lastPostedBytes = 0u;
-        RedSalamanderMonitor::MonitorFileReadResult result = RedSalamanderMonitor::ReadMonitorTextFile(
-            path,
-            stopToken,
-            limits,
-            [owner, generation, &lastPostedBytes](uint64_t bytesRead, uint64_t totalBytes)
-            {
-                constexpr uint64_t kProgressStepBytes = 1u * 1024u * 1024u;
-                if (bytesRead != totalBytes && bytesRead - lastPostedBytes < kProgressStepBytes)
-                {
-                    return;
-                }
-                lastPostedBytes = bytesRead;
-                auto progress = std::make_unique<MonitorFileOpenProgress>(MonitorFileOpenProgress{
-                    .generation = generation,
-                    .bytesRead  = bytesRead,
-                    .totalBytes = totalBytes,
-                });
-                static_cast<void>(PostMessagePayload(owner, kMsgMonitorFileOpenProgress, 0, std::move(progress)));
-            });
-
-        auto completion = std::make_unique<MonitorFileOpenCompletion>(MonitorFileOpenCompletion{
-            .result     = std::move(result),
-            .generation = generation,
-            .durationUs = Debug::Perf::ElapsedUs(started),
-        });
-        g_monitorFileOpenActive.store(false, std::memory_order_release);
-        static_cast<void>(PostMessagePayload(owner, kMsgMonitorFileOpenCompleted, 0, std::move(completion)));
-    });
-    return true;
+        const std::wstring caption = LoadStringResource(g_hInstance, IDS_CAPTION_OPEN);
+        const std::wstring message = LoadStringResource(g_hInstance, IDS_MSG_FILE_WORKER_START_FAILED);
+        ShowModalMessageDialog(g_hInstance, owner, caption.c_str(), message.c_str());
+        UpdateStatusBar();
+    }
+    return SUCCEEDED(startHr);
 }
 
 LRESULT OnMonitorFileOpenProgress(LPARAM lParam)
@@ -2616,6 +2804,7 @@ LRESULT OnMonitorFileOpenCompleted(HWND owner, LPARAM lParam)
                                 completion->result.bytesRead,
                                 static_cast<uint64_t>(completion->result.lineCount),
                                 completion->result.hr);
+    Debug::Perf::EmitValue(L"monitor.file_open.peak_retained_text_bytes", completion->result.peakRetainedTextBytes, completion->result.hr);
     if (completion->result.hr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
     {
         UpdateStatusBar();
@@ -2631,14 +2820,212 @@ LRESULT OnMonitorFileOpenCompleted(HWND owner, LPARAM lParam)
         return 0;
     }
 
+    const auto publishStarted = std::chrono::steady_clock::now();
     g_colorView.ClearColoring();
-    g_colorView.SetText(completion->result.text);
+    g_colorView.SetTextSnapshot(std::move(completion->result.snapshot));
+    Debug::Perf::EmitDurationUs(L"monitor.file_open.publish_us",
+                                Debug::Perf::ElapsedUs(publishStarted),
+                                static_cast<uint64_t>(completion->result.lineCount),
+                                completion->result.peakRetainedTextBytes,
+                                S_OK);
     UpdateStatusBar();
     return 0;
 }
 
+void RequestMonitorFileSaveCancellation() noexcept
+{
+    if (! g_monitorFileSaveThread.joinable() || ! g_monitorFileSaveState)
+    {
+        return;
+    }
+
+    const auto cancelStarted = std::chrono::steady_clock::now();
+    g_monitorFileSaveState->stopSource.request_stop();
+    HRESULT cancelHr = S_OK;
+    if (CancelSynchronousIo(g_monitorFileSaveThread.native_handle()) == FALSE)
+    {
+        const DWORD error = GetLastError();
+        if (error != ERROR_NOT_FOUND)
+        {
+            cancelHr = HRESULT_FROM_WIN32(error);
+            Debug::Warning(L"Monitor file save: CancelSynchronousIo failed (gle=0x{:08X})", error);
+        }
+    }
+    Debug::Perf::EmitDurationUs(L"monitor.file_save.cancel_us", Debug::Perf::ElapsedUs(cancelStarted), 0u, 0u, cancelHr);
+}
+
+void CloseMonitorFileSaveWorker() noexcept
+{
+    if (! g_monitorFileSaveThread.joinable())
+    {
+        g_monitorFileSaveState.reset();
+        return;
+    }
+
+    const auto closeStarted = std::chrono::steady_clock::now();
+    RequestMonitorFileSaveCancellation();
+    constexpr DWORD kCloseWaitMs = 2'000u;
+    const DWORD waitResult = WaitForSingleObject(g_monitorFileSaveThread.native_handle(), kCloseWaitMs);
+    const DWORD waitError = waitResult == WAIT_FAILED ? GetLastError() : ERROR_SUCCESS;
+    if (waitResult == WAIT_OBJECT_0)
+    {
+        g_monitorFileSaveThread.join();
+    }
+    else
+    {
+        // The worker owns its snapshot and state and posts through the registered payload helper, so it can safely
+        // finish after the window's payload registry is drained without extending UI shutdown indefinitely.
+        g_monitorFileSaveThread.detach();
+        Debug::Warning(L"Monitor file save did not stop within {} ms; allowing owned worker teardown to finish independently.", kCloseWaitMs);
+    }
+    const HRESULT closeHr = waitResult == WAIT_OBJECT_0 ? S_OK : HRESULT_FROM_WIN32(waitResult == WAIT_TIMEOUT ? ERROR_TIMEOUT : waitError);
+    Debug::Perf::EmitDurationUs(L"monitor.file_save.close_us", Debug::Perf::ElapsedUs(closeStarted), 0u, 0u, closeHr);
+    g_monitorFileSaveState.reset();
+}
+
+LRESULT OnMonitorFileSaveProgress(LPARAM lParam)
+{
+    auto progress = TakeMessagePayload<MonitorFileSaveProgress>(lParam);
+    if (progress && progress->generation == g_monitorFileSaveGeneration && g_statusStrip)
+    {
+        g_statusStrip->SetSectionText(
+            4u, FormatStringResource(g_hInstance, IDS_STATUS_SAVE_PROGRESS_FMT, progress->bytesWritten, progress->completedLines));
+    }
+    return 0;
+}
+
+LRESULT OnMonitorFileSaveCompleted(HWND owner, LPARAM lParam)
+{
+    auto completion = TakeMessagePayload<MonitorFileSaveCompletion>(lParam);
+    if (! completion || completion->generation != g_monitorFileSaveGeneration)
+    {
+        return 0;
+    }
+
+    Debug::Perf::EmitDurationUs(L"monitor.file_save.total_us",
+                                completion->durationUs,
+                                completion->result.bytesWritten,
+                                static_cast<uint64_t>(completion->result.lineCount),
+                                completion->result.hr);
+    const uint64_t throughput = completion->durationUs == 0u
+                                    ? completion->result.bytesWritten
+                                    : (completion->result.bytesWritten * 1'000'000u) / completion->durationUs;
+    Debug::Perf::EmitValue(L"monitor.file_save.throughput_bytes_per_sec", throughput, completion->result.hr);
+    if (completion->result.hr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+    {
+        UpdateStatusBar();
+        return 0;
+    }
+    if (FAILED(completion->result.hr))
+    {
+        Debug::Warning(L"Monitor file save failed before publication: 0x{:08X}", static_cast<uint32_t>(completion->result.hr));
+        const std::wstring caption = LoadStringResource(g_hInstance, IDS_CAPTION_SAVE);
+        const std::wstring message = LoadStringResource(g_hInstance, IDS_MSG_SAVE_FAILED);
+        ShowModalMessageDialog(g_hInstance, owner, caption.c_str(), message.c_str());
+    }
+    UpdateStatusBar();
+    return 0;
+}
+
+void EmitMonitorFileSaveSnapshotMetrics(const RedSalamanderMonitor::MonitorTextSnapshot& snapshot, uint64_t captureUs, HRESULT hr) noexcept
+{
+    Debug::Perf::EmitDurationUs(
+        L"monitor.file_save.snapshot_us", captureUs, static_cast<uint64_t>(snapshot.lines.size()), snapshot.retainedTextBytes, hr);
+    Debug::Perf::EmitDurationUs(L"monitor.file_save.snapshot_lock_us",
+                                snapshot.lockHoldUs,
+                                static_cast<uint64_t>(snapshot.lines.size()),
+                                snapshot.retainedTextBytes,
+                                hr);
+    Debug::Perf::EmitValue(L"monitor.file_save.retained_text_bytes", snapshot.retainedTextBytes, hr);
+    Debug::Perf::EmitValue(L"monitor.file_save.retained_line_count", static_cast<uint64_t>(snapshot.lines.size()), hr);
+    Debug::Perf::EmitValue(L"monitor.file_save.shared_block_count", snapshot.sharedBlockCount, hr);
+    Debug::Perf::EmitValue(L"monitor.file_save.shared_block_bytes", snapshot.sharedBlockBytes, hr);
+    Debug::Perf::EmitValue(L"monitor.file_save.copied_text_bytes", snapshot.copiedTextBytes, hr);
+    Debug::Perf::EmitValue(L"monitor.file_save.active_tail_copied_bytes", snapshot.activeTailCopiedBytes, hr);
+    Debug::Perf::EmitValue(L"monitor.file_save.peak_additional_snapshot_bytes", snapshot.peakAdditionalSnapshotBytes, hr);
+}
+
+[[nodiscard]] HRESULT StartMonitorFileSaveWorker(HWND owner,
+                                                 std::filesystem::path path,
+                                                 RedSalamanderMonitor::MonitorTextSnapshot snapshot) noexcept
+{
+    const uint64_t generation = ++g_monitorFileSaveGeneration;
+    auto state = std::make_shared<MonitorFileSaveWorkerState>();
+    g_monitorFileSaveState = state;
+    try
+    {
+#if defined(ENABLE_TESTS)
+        if (g_failNextMonitorFileSaveThreadStart.exchange(false, std::memory_order_acq_rel))
+        {
+            throw std::system_error(
+                std::error_code(ERROR_NOT_ENOUGH_MEMORY, std::system_category()), "injected Monitor save thread-start failure");
+        }
+#endif
+        g_monitorFileSaveThread = std::thread([owner, path = std::move(path), snapshot = std::move(snapshot), state, generation]()
+        {
+            const auto started = std::chrono::steady_clock::now();
+            uint64_t lastPostedBytes = 0u;
+            RedSalamanderMonitor::MonitorFileExportResult result = RedSalamanderMonitor::WriteMonitorTextSnapshot(
+                path,
+                snapshot,
+                state->stopSource.get_token(),
+                [owner, generation, &lastPostedBytes](uint64_t bytesWritten, size_t completedLines)
+                {
+                    constexpr uint64_t kProgressStepBytes = 1u * 1024u * 1024u;
+                    if (bytesWritten - lastPostedBytes < kProgressStepBytes)
+                    {
+                        return;
+                    }
+                    lastPostedBytes = bytesWritten;
+                    auto progress = std::make_unique<MonitorFileSaveProgress>(MonitorFileSaveProgress{
+                        .generation     = generation,
+                        .bytesWritten   = bytesWritten,
+                        .completedLines = completedLines,
+                    });
+                    static_cast<void>(PostMessagePayload(owner, kMsgMonitorFileSaveProgress, 0, std::move(progress)));
+                });
+
+            auto completion = std::make_unique<MonitorFileSaveCompletion>(MonitorFileSaveCompletion{
+                .result     = result,
+                .generation = generation,
+                .durationUs = Debug::Perf::ElapsedUs(started),
+            });
+            state->active.store(false, std::memory_order_release);
+#if defined(ENABLE_TESTS)
+            g_monitorFileSaveCompletionPostCount.fetch_add(1u, std::memory_order_relaxed);
+#endif
+            static_cast<void>(PostMessagePayload(owner, kMsgMonitorFileSaveCompleted, 0, std::move(completion)));
+        });
+        return S_OK;
+    }
+    catch (const std::system_error& error)
+    {
+        // Thread admission is the only recoverable throwing boundary here. Allocation failure remains fatal.
+        const HRESULT hr = MonitorThreadStartFailureHresult(error);
+        state->active.store(false, std::memory_order_release);
+        g_monitorFileSaveState.reset();
+        Debug::Error(L"Monitor file save worker start failed: 0x{:08X}", static_cast<uint32_t>(hr));
+        return hr;
+    }
+}
+
 bool DoFileSaveAs(HWND owner)
 {
+    if (g_monitorFileSaveState && g_monitorFileSaveState->active.load(std::memory_order_acquire))
+    {
+        RequestMonitorFileSaveCancellation();
+        if (g_statusStrip)
+        {
+            g_statusStrip->SetSectionText(4u, LoadStringResource(g_hInstance, IDS_MSG_SAVE_CANCEL_REQUESTED));
+        }
+        return false;
+    }
+    if (g_monitorFileSaveThread.joinable())
+    {
+        g_monitorFileSaveThread.join();
+        g_monitorFileSaveState.reset();
+    }
+
     wchar_t file[MAX_PATH]        = L"";
     const std::wstring filter     = LoadStringResource(g_hInstance, IDS_FILE_FILTER_SAVE);
     const std::wstring defaultExt = LoadStringResource(g_hInstance, IDS_FILE_DEFAULT_EXT_TXT);
@@ -2654,7 +3041,25 @@ bool DoFileSaveAs(HWND owner)
     if (! GetSaveFileNameW(&ofn))
         return false;
 
-    return g_colorView.SaveTextToFile(file);
+    const auto uiStarted       = std::chrono::steady_clock::now();
+    const auto snapshotStarted = std::chrono::steady_clock::now();
+    RedSalamanderMonitor::MonitorTextSnapshot snapshot = g_colorView.CaptureTextSnapshot();
+    EmitMonitorFileSaveSnapshotMetrics(snapshot, Debug::Perf::ElapsedUs(snapshotStarted), S_OK);
+
+    const HRESULT startHr = StartMonitorFileSaveWorker(owner, std::filesystem::path(file), std::move(snapshot));
+    Debug::Perf::EmitDurationUs(L"monitor.file_save.ui_return_us",
+                                Debug::Perf::ElapsedUs(uiStarted),
+                                static_cast<uint64_t>(g_colorView.GetTotalLineCount()),
+                                g_colorView.GetRetainedTextBytes(),
+                                startHr);
+    if (FAILED(startHr))
+    {
+        const std::wstring caption = LoadStringResource(g_hInstance, IDS_CAPTION_SAVE);
+        const std::wstring message = LoadStringResource(g_hInstance, IDS_MSG_FILE_WORKER_START_FAILED);
+        ShowModalMessageDialog(g_hInstance, owner, caption.c_str(), message.c_str());
+        UpdateStatusBar();
+    }
+    return SUCCEEDED(startHr);
 }
 
 void AdjustLayout(HWND hWnd)
@@ -2837,6 +3242,239 @@ bool PumpMonitorColorViewUntilLineCount(size_t targetLineCount, int maxPumpCount
 
     return g_colorView.GetTotalLineCount() >= targetLineCount;
 }
+
+bool RunMonitorSnapshotScalingSelfTest()
+{
+    constexpr std::array<size_t, 3u> kLineCounts{{512u, 4'096u, 16'384u}};
+    constexpr size_t kRepeats = 5u;
+    const std::wstring payload(240u, L's');
+    bool passed = true;
+
+    for (const size_t lineCount : kLineCounts)
+    {
+        Document document;
+        std::vector<Document::InfoLineInput> lines;
+        lines.reserve(lineCount);
+        const auto appendStarted = std::chrono::steady_clock::now();
+        for (size_t index = 0u; index < lineCount; ++index)
+        {
+            Debug::InfoParam info{};
+            info.processID = ::GetCurrentProcessId();
+            info.threadID  = ::GetCurrentThreadId();
+            info.type      = Debug::InfoParam::Type::Text;
+            lines.push_back(Document::InfoLineInput{.info = info, .text = std::format(L"{:05} {}", index, payload)});
+        }
+        document.AppendInfoLines(std::move(lines));
+        Debug::Perf::EmitDurationUs(L"monitor.snapshot_scale.append_us",
+                                    Debug::Perf::ElapsedUs(appendStarted),
+                                    static_cast<uint64_t>(lineCount),
+                                    document.RetainedTextBytes(),
+                                    S_OK);
+
+        for (size_t repeat = 0u; repeat < kRepeats; ++repeat)
+        {
+            RedSalamanderMonitor::MonitorTextSnapshot source = document.CaptureTextSnapshot();
+            const auto baselineStarted = std::chrono::steady_clock::now();
+            std::deque<std::wstring> legacyDeepCopy;
+            for (const RedSalamanderMonitor::MonitorTextBlock& block : source.lines)
+            {
+                legacyDeepCopy.push_back(block.Text());
+            }
+            const uint64_t baselineUs = Debug::Perf::ElapsedUs(baselineStarted);
+            Debug::Perf::EmitDurationUs(L"monitor.file_save.baseline_deep_copy_us",
+                                        baselineUs,
+                                        source.retainedTextBytes,
+                                        static_cast<uint64_t>(lineCount),
+                                        S_OK);
+            passed = passed && legacyDeepCopy.size() == lineCount;
+
+            const auto snapshotStarted = std::chrono::steady_clock::now();
+            RedSalamanderMonitor::MonitorTextSnapshot snapshot = document.CaptureTextSnapshot();
+            const uint64_t captureUs = Debug::Perf::ElapsedUs(snapshotStarted);
+            EmitMonitorFileSaveSnapshotMetrics(snapshot, captureUs, S_OK);
+            Debug::Perf::EmitDurationUs(L"monitor.file_save.ui_return_us",
+                                        captureUs,
+                                        static_cast<uint64_t>(lineCount),
+                                        snapshot.retainedTextBytes,
+                                        S_OK);
+
+            const std::filesystem::path outputPath =
+                g_monitorChromeSelfTest.runRoot / std::format(L"snapshot_scale_{}_{}.txt", lineCount, repeat);
+            const auto saveStarted = std::chrono::steady_clock::now();
+            const RedSalamanderMonitor::MonitorFileExportResult result =
+                RedSalamanderMonitor::WriteMonitorTextSnapshot(outputPath, snapshot, {});
+            const uint64_t saveUs = Debug::Perf::ElapsedUs(saveStarted);
+            Debug::Perf::EmitDurationUs(
+                L"monitor.file_save.total_us", saveUs, result.bytesWritten, static_cast<uint64_t>(result.lineCount), result.hr);
+            const uint64_t throughput = saveUs == 0u ? result.bytesWritten : (result.bytesWritten * 1'000'000u) / saveUs;
+            Debug::Perf::EmitValue(L"monitor.file_save.throughput_bytes_per_sec", throughput, result.hr);
+
+            passed = passed && SUCCEEDED(result.hr) && result.lineCount == lineCount && snapshot.copiedTextBytes == 0u &&
+                     snapshot.activeTailCopiedBytes <= RedSalamanderMonitor::kMonitorSnapshotMaxActiveTailBytes &&
+                     snapshot.sharedBlockCount == lineCount &&
+                     snapshot.sharedBlockBytes == snapshot.retainedTextBytes &&
+                     snapshot.peakAdditionalSnapshotBytes <= lineCount * sizeof(RedSalamanderMonitor::MonitorTextBlock);
+            std::error_code cleanupError;
+            static_cast<void>(std::filesystem::remove(outputPath, cleanupError));
+            passed = passed && ! PathExists(outputPath);
+        }
+    }
+    return passed;
+}
+
+struct MonitorRetainedStateIoSelfTestResult final
+{
+    bool inputWritten = false;
+    bool openSucceeded = false;
+    bool published = false;
+    bool saveSucceeded = false;
+    bool cancellationObserved = false;
+    bool workerStartFailureRecovered = false;
+    bool cleanupSucceeded = false;
+    size_t openedLineCount = 0u;
+    uint64_t retainedTextBytes = 0u;
+    uint64_t savedBytes = 0u;
+    HRESULT openHr = E_FAIL;
+    HRESULT saveHr = E_FAIL;
+    HRESULT cancellationHr = E_FAIL;
+};
+
+MonitorRetainedStateIoSelfTestResult RunMonitorRetainedStateIoSelfTest()
+{
+    MonitorRetainedStateIoSelfTestResult selfTest;
+    const std::filesystem::path inputPath = g_monitorChromeSelfTest.runRoot / L"retained_state_input.txt";
+    const std::filesystem::path outputPath = g_monitorChromeSelfTest.runRoot / L"retained_state_output.txt";
+    std::error_code cleanupError;
+    static_cast<void>(std::filesystem::remove(inputPath, cleanupError));
+    cleanupError.clear();
+    static_cast<void>(std::filesystem::remove(outputPath, cleanupError));
+
+    constexpr size_t kInputLineCount = 8'192u;
+    std::string encodedInput;
+    encodedInput.reserve(kInputLineCount * 64u);
+    for (size_t index = 0u; index < kInputLineCount; ++index)
+    {
+        encodedInput.append(std::format("retained-state line {:05} hit payload payload payload\n", index));
+    }
+    selfTest.inputWritten = WriteUtf8TextFile(inputPath, encodedInput, false);
+
+    const RedSalamanderMonitor::MonitorFileReadLimits limits{
+        .maxEncodedBytes      = 4u * 1024u * 1024u,
+        .maxRetainedTextBytes = 8u * 1024u * 1024u,
+        .maxLines             = 20'000u,
+    };
+    const auto openStarted = std::chrono::steady_clock::now();
+    RedSalamanderMonitor::MonitorFileReadResult openResult;
+    if (selfTest.inputWritten)
+    {
+        openResult = RedSalamanderMonitor::ReadMonitorTextFile(inputPath, {}, limits);
+    }
+    Debug::Perf::EmitDurationUs(
+        L"monitor.file_open.total_us", Debug::Perf::ElapsedUs(openStarted), openResult.bytesRead, openResult.lineCount, openResult.hr);
+    Debug::Perf::EmitValue(L"monitor.file_open.peak_retained_text_bytes", openResult.peakRetainedTextBytes, openResult.hr);
+    selfTest.openHr            = openResult.hr;
+    selfTest.openedLineCount   = openResult.lineCount;
+    selfTest.retainedTextBytes = openResult.peakRetainedTextBytes;
+    selfTest.openSucceeded     = SUCCEEDED(openResult.hr) && openResult.lineCount == kInputLineCount;
+
+    const auto publishStarted = std::chrono::steady_clock::now();
+    if (selfTest.openSucceeded)
+    {
+        g_colorView.SetTextSnapshot(std::move(openResult.snapshot));
+    }
+    Debug::Perf::EmitDurationUs(L"monitor.file_open.publish_us",
+                                Debug::Perf::ElapsedUs(publishStarted),
+                                static_cast<uint64_t>(selfTest.openedLineCount),
+                                selfTest.retainedTextBytes,
+                                selfTest.openSucceeded ? S_OK : selfTest.openHr);
+    selfTest.published = selfTest.openSucceeded && g_colorView.GetTotalLineCount() == selfTest.openedLineCount;
+
+    const auto snapshotStarted = std::chrono::steady_clock::now();
+    RedSalamanderMonitor::MonitorTextSnapshot saveSnapshot = g_colorView.CaptureTextSnapshot();
+    EmitMonitorFileSaveSnapshotMetrics(
+        saveSnapshot, Debug::Perf::ElapsedUs(snapshotStarted), selfTest.published ? S_OK : E_FAIL);
+
+    auto saveResult = std::make_shared<RedSalamanderMonitor::MonitorFileExportResult>();
+    const auto saveStarted = std::chrono::steady_clock::now();
+    const auto uiReturnStarted = std::chrono::steady_clock::now();
+    std::thread saveThread([outputPath, snapshot = std::move(saveSnapshot), saveResult]()
+    {
+        *saveResult = RedSalamanderMonitor::WriteMonitorTextSnapshot(outputPath, snapshot, {});
+    });
+    Debug::Perf::EmitDurationUs(L"monitor.file_save.ui_return_us",
+                                Debug::Perf::ElapsedUs(uiReturnStarted),
+                                static_cast<uint64_t>(selfTest.openedLineCount),
+                                selfTest.retainedTextBytes,
+                                S_OK);
+    saveThread.join();
+    const uint64_t saveDurationUs = Debug::Perf::ElapsedUs(saveStarted);
+    Debug::Perf::EmitDurationUs(L"monitor.file_save.total_us",
+                                saveDurationUs,
+                                saveResult->bytesWritten,
+                                static_cast<uint64_t>(saveResult->lineCount),
+                                saveResult->hr);
+    const uint64_t saveThroughput =
+        saveDurationUs == 0u ? saveResult->bytesWritten : (saveResult->bytesWritten * 1'000'000u) / saveDurationUs;
+    Debug::Perf::EmitValue(L"monitor.file_save.throughput_bytes_per_sec", saveThroughput, saveResult->hr);
+    selfTest.saveHr        = saveResult->hr;
+    selfTest.savedBytes    = saveResult->bytesWritten;
+    const std::string canonicalOutput = std::string("\xEF\xBB\xBF", 3u) + encodedInput;
+    selfTest.saveSucceeded = selfTest.published && SUCCEEDED(saveResult->hr) && ReadBinaryFile(outputPath) == canonicalOutput;
+
+    const std::filesystem::path failedSavePath = g_monitorChromeSelfTest.runRoot / L"worker_start_failure_output.txt";
+    cleanupError.clear();
+    static_cast<void>(std::filesystem::remove(failedSavePath, cleanupError));
+    const uint64_t openPostsBeforeFailure = g_monitorFileOpenCompletionPostCount.load(std::memory_order_acquire);
+    g_failNextMonitorFileOpenThreadStart.store(true, std::memory_order_release);
+    const HRESULT failedOpenStart = StartMonitorFileOpenWorker(g_hMainWindow, inputPath, limits);
+    const bool openRolledBack = FAILED(failedOpenStart) && ! g_monitorFileOpenActive.load(std::memory_order_acquire) &&
+                                ! g_monitorFileOpenThread.joinable() &&
+                                g_monitorFileOpenCompletionPostCount.load(std::memory_order_acquire) == openPostsBeforeFailure;
+    const HRESULT retryOpenStart = StartMonitorFileOpenWorker(g_hMainWindow, inputPath, limits);
+    const bool openRetryStarted = SUCCEEDED(retryOpenStart) && g_monitorFileOpenThread.joinable();
+    CloseMonitorFileOpenWorker();
+
+    RedSalamanderMonitor::MonitorTextSnapshot failedSaveSnapshot = g_colorView.CaptureTextSnapshot();
+    const uint64_t savePostsBeforeFailure = g_monitorFileSaveCompletionPostCount.load(std::memory_order_acquire);
+    g_failNextMonitorFileSaveThreadStart.store(true, std::memory_order_release);
+    const HRESULT failedSaveStart = StartMonitorFileSaveWorker(g_hMainWindow, failedSavePath, failedSaveSnapshot);
+    const bool saveRolledBack = FAILED(failedSaveStart) && ! g_monitorFileSaveState && ! g_monitorFileSaveThread.joinable() &&
+                                ! PathExists(failedSavePath) &&
+                                g_monitorFileSaveCompletionPostCount.load(std::memory_order_acquire) == savePostsBeforeFailure;
+    const HRESULT retrySaveStart = StartMonitorFileSaveWorker(g_hMainWindow, failedSavePath, std::move(failedSaveSnapshot));
+    const bool saveRetryStarted = SUCCEEDED(retrySaveStart) && g_monitorFileSaveThread.joinable();
+    if (saveRetryStarted)
+    {
+        static_cast<void>(::WaitForSingleObject(g_monitorFileSaveThread.native_handle(), 2'000u));
+        CloseMonitorFileSaveWorker();
+    }
+    selfTest.workerStartFailureRecovered = openRolledBack && openRetryStarted && saveRolledBack && saveRetryStarted && PathExists(failedSavePath);
+
+    auto cancellationResult = std::make_shared<std::atomic<HRESULT>>(E_PENDING);
+    g_monitorFileOpenActive.store(true, std::memory_order_release);
+    g_monitorFileOpenThread = std::jthread([inputPath, limits, cancellationResult](std::stop_token stopToken)
+    {
+        while (! stopToken.stop_requested())
+        {
+            std::this_thread::yield();
+        }
+        const RedSalamanderMonitor::MonitorFileReadResult result = RedSalamanderMonitor::ReadMonitorTextFile(inputPath, stopToken, limits);
+        cancellationResult->store(result.hr, std::memory_order_release);
+        g_monitorFileOpenActive.store(false, std::memory_order_release);
+    });
+    CloseMonitorFileOpenWorker();
+    selfTest.cancellationHr       = cancellationResult->load(std::memory_order_acquire);
+    selfTest.cancellationObserved = selfTest.cancellationHr == HRESULT_FROM_WIN32(ERROR_CANCELLED);
+
+    cleanupError.clear();
+    static_cast<void>(std::filesystem::remove(inputPath, cleanupError));
+    cleanupError.clear();
+    static_cast<void>(std::filesystem::remove(outputPath, cleanupError));
+    cleanupError.clear();
+    static_cast<void>(std::filesystem::remove(failedSavePath, cleanupError));
+    selfTest.cleanupSucceeded = ! PathExists(inputPath) && ! PathExists(outputPath) && ! PathExists(failedSavePath);
+    return selfTest;
+}
 #endif
 
 LRESULT RunMonitorChromeSelfTest(HWND hWnd)
@@ -2943,6 +3581,72 @@ LRESULT RunMonitorChromeSelfTest(HWND hWnd)
                                   g_colorView.DebugGetQueuedEventCount(),
                                   g_colorView.GetTotalLineCount(),
                                   overloadDropped));
+
+    g_colorView.ClearText();
+    g_colorView.SetRetentionLimits(ColorTextView::RetentionLimits{
+        .maxQueuedEvents       = 32u,
+        .maxRetainedLines      = 3u,
+        .maxRetainedTextBytes  = 1u * 1024u * 1024u,
+        .maxSearchMatches      = 2u,
+    });
+    g_colorView.SetSearchQuery(L"hit", true);
+    Debug::InfoParam searchInfo{};
+    searchInfo.processID = ::GetCurrentProcessId();
+    searchInfo.threadID  = ::GetCurrentThreadId();
+    searchInfo.type      = Debug::InfoParam::Type::Info;
+    for (size_t ordinal = 0u; ordinal < 5u; ++ordinal)
+    {
+        g_colorView.DebugAppendRetainedLine(searchInfo, std::format(L"hit {}", ordinal));
+    }
+    const RedSalamanderMonitor::MonitorTextSnapshot firstSearchSnapshot = g_colorView.CaptureTextSnapshot();
+    const std::vector<UINT32> firstMatchStarts = g_colorView.DebugGetMatchStarts();
+    const auto firstFrontier = g_colorView.DebugGetSearchFrontier();
+    passed &= require(L"search cap refill scans oldest retained frontier",
+                      firstSearchSnapshot.lines.size() == 3u && firstSearchSnapshot.lines[0] == L"hit 2" &&
+                          firstSearchSnapshot.lines[1] == L"hit 3" && firstSearchSnapshot.lines[2] == L"hit 4" &&
+                          firstMatchStarts.size() == 2u && firstMatchStarts[0] < firstMatchStarts[1] && firstFrontier.first == 1u,
+                      std::format(L"lines={} matches={} frontier={}:{}",
+                                  firstSearchSnapshot.lines.size(),
+                                  firstMatchStarts.size(),
+                                  firstFrontier.first,
+                                  firstFrontier.second));
+    g_colorView.DebugAppendRetainedLine(searchInfo, L"hit 5");
+    const RedSalamanderMonitor::MonitorTextSnapshot secondSearchSnapshot = g_colorView.CaptureTextSnapshot();
+    const std::vector<UINT32> secondMatchStarts = g_colorView.DebugGetMatchStarts();
+    passed &= require(L"search cap refill remains ordered across repeated eviction",
+                      secondSearchSnapshot.lines.size() == 3u && secondSearchSnapshot.lines[0] == L"hit 3" &&
+                          secondSearchSnapshot.lines[1] == L"hit 4" && secondSearchSnapshot.lines[2] == L"hit 5" &&
+                          secondMatchStarts.size() == 2u && secondMatchStarts[0] < secondMatchStarts[1]);
+    g_colorView.DebugSetSelectionState(0u, 0u, 0u);
+    g_colorView.FindNext();
+    const auto firstFindSelection = g_colorView.DebugGetSelectionState();
+    g_colorView.FindNext();
+    const auto secondFindSelection = g_colorView.DebugGetSelectionState();
+    g_colorView.FindNext();
+    const auto wrappedFindSelection = g_colorView.DebugGetSelectionState();
+    passed &= require(L"F3 follows retained match order and wraps",
+                      std::get<0>(firstFindSelection) == secondMatchStarts[0] && std::get<0>(secondFindSelection) == secondMatchStarts[1] &&
+                          std::get<0>(wrappedFindSelection) == secondMatchStarts[0]);
+
+    g_colorView.SetRetentionLimits(ColorTextView::RetentionLimits{
+        .maxQueuedEvents       = 32u,
+        .maxRetainedLines      = 10u,
+        .maxRetainedTextBytes  = 1u * 1024u * 1024u,
+        .maxSearchMatches      = 10u,
+    });
+    g_colorView.SetText(L"ordinary hit");
+    g_colorView.DebugAppendRetainedLine(searchInfo, L"metadata hit");
+    g_colorView.SetSearchQuery(L"hit", true);
+    const std::vector<UINT32> showIdsBeforeMatches = g_colorView.DebugGetMatchStarts();
+    g_colorView.DebugSetSelectionState(1u, 4u, 3u);
+    g_colorView.EnableShowIds(! g_showIds);
+    const std::vector<UINT32> showIdsAfterMatches = g_colorView.DebugGetMatchStarts();
+    const auto [showIdsSelectionStart, showIdsSelectionEnd, showIdsCaret] = g_colorView.DebugGetSelectionState();
+    passed &= require(L"Show IDs rebuilds offsets and resets interaction state",
+                      showIdsBeforeMatches.size() == 2u && showIdsAfterMatches.size() == 2u &&
+                          showIdsBeforeMatches[0] == showIdsAfterMatches[0] && showIdsBeforeMatches[1] != showIdsAfterMatches[1] &&
+                          showIdsSelectionStart == 0u && showIdsSelectionEnd == 0u && showIdsCaret == 0u);
+    g_colorView.EnableShowIds(g_showIds);
     g_colorView.ClearText();
     const Common::Settings::MonitorRetentionSettings configuredRetention =
         g_settings.monitor.value_or(Common::Settings::MonitorSettings{}).retention;
@@ -2952,6 +3656,25 @@ LRESULT RunMonitorChromeSelfTest(HWND hWnd)
         .maxRetainedTextBytes  = configuredRetention.maxRetainedTextBytes,
         .maxSearchMatches      = configuredRetention.maxSearchMatches,
     });
+
+    const MonitorRetainedStateIoSelfTestResult retainedStateIo = RunMonitorRetainedStateIoSelfTest();
+    passed &= require(L"streaming file-open workload",
+                      retainedStateIo.inputWritten && retainedStateIo.openSucceeded,
+                      std::format(L"hr=0x{:08X} lines={} retainedBytes={}",
+                                  static_cast<uint32_t>(retainedStateIo.openHr),
+                                  retainedStateIo.openedLineCount,
+                                  retainedStateIo.retainedTextBytes));
+    passed &= require(L"snapshot publishes without UI reparse", retainedStateIo.published);
+    passed &= require(L"asynchronous transactional file-save workload",
+                      retainedStateIo.saveSucceeded,
+                      std::format(L"hr=0x{:08X} bytes={}", static_cast<uint32_t>(retainedStateIo.saveHr), retainedStateIo.savedBytes));
+    passed &= require(L"file-open close observes cancellation",
+                      retainedStateIo.cancellationObserved,
+                      std::format(L"hr=0x{:08X}", static_cast<uint32_t>(retainedStateIo.cancellationHr)));
+    passed &= require(L"retained-state I/O selftest cleanup", retainedStateIo.cleanupSucceeded);
+    passed &= require(L"file worker start failure rolls back and retry succeeds", retainedStateIo.workerStartFailureRecovered);
+    passed &= require(L"immutable snapshot scaling matrix", RunMonitorSnapshotScalingSelfTest());
+    g_colorView.ClearText();
 
     if (passed)
     {
@@ -3652,8 +4375,10 @@ std::optional<HWND> InitInstance(HINSTANCE hInstance, int nCmdShow)
         return std::nullopt;
     }
 
-    // Remove WS_EX_NOACTIVATE after creation
-    SetWindowLongPtr(hWnd.get(), GWL_EXSTYLE, GetWindowLongPtr(hWnd.get(), GWL_EXSTYLE) & ~WS_EX_NOACTIVATE);
+    if (! g_monitorChromeSelfTest.enabled)
+    {
+        SetWindowLongPtrW(hWnd.get(), GWL_EXSTYLE, GetWindowLongPtrW(hWnd.get(), GWL_EXSTYLE) & ~WS_EX_NOACTIVATE);
+    }
     g_hMainWindow = hWnd.get();
 
     wil::unique_hmenu menu(Localization::LoadMenuResource(hInstance, IDC_REDSALAMANDERMONITOR));
@@ -3675,7 +4400,7 @@ std::optional<HWND> InitInstance(HINSTANCE hInstance, int nCmdShow)
         showCmd = normalized.state == Common::Settings::WindowState::Maximized ? SW_MAXIMIZE : SW_SHOWNORMAL;
     }
 
-    ShowWindow(hWnd.get(), showCmd);
+    ShowWindow(hWnd.get(), g_monitorChromeSelfTest.enabled ? SW_SHOWNOACTIVATE : showCmd);
     UpdateWindow(hWnd.get());
 
     return hWnd.release();
@@ -4160,11 +4885,13 @@ LRESULT OnDestroyMainWindow(HWND hWnd)
 
     if (g_monitorFileOpenThread.joinable())
     {
-        RequestMonitorFileOpenCancellation();
-        g_monitorFileOpenThread = std::jthread{};
+        CloseMonitorFileOpenWorker();
     }
     ++g_monitorFileOpenGeneration;
     g_monitorFileOpenActive.store(false, std::memory_order_release);
+
+    CloseMonitorFileSaveWorker();
+    ++g_monitorFileSaveGeneration;
 
     g_hColorView.reset();
     if (g_hToolbar)
@@ -4214,6 +4941,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case kMsgRunMonitorChromeSelfTest: return RunMonitorChromeSelfTest(hWnd);
         case kMsgMonitorFileOpenProgress: return OnMonitorFileOpenProgress(lParam);
         case kMsgMonitorFileOpenCompleted: return OnMonitorFileOpenCompleted(hWnd, lParam);
+        case kMsgMonitorFileSaveProgress: return OnMonitorFileSaveProgress(lParam);
+        case kMsgMonitorFileSaveCompleted: return OnMonitorFileSaveCompleted(hWnd, lParam);
         case WM_COMMAND: return OnCommandMainWindow(hWnd, LOWORD(wParam), HIWORD(wParam), reinterpret_cast<HWND>(lParam));
         case WM_PAINT: return OnPaintMainWindow(hWnd);
         case WM_DESTROY: return OnDestroyMainWindow(hWnd);

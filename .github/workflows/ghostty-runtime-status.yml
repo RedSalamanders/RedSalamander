@@ -1,0 +1,104 @@
+name: Ghostty runtime status
+
+"on":
+  schedule:
+    - cron: "17 03 * * *"
+    - cron: "41 04 1 * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Locked, Online, or exact Candidate observation."
+        required: true
+        type: choice
+        options: [Locked, Online, Candidate]
+        default: Locked
+      candidate_commit:
+        description: "Required lowercase full commit only when mode=Candidate."
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  observe:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Observe locked Ghostty runtime
+        id: status
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $dailySchedule = "17 03 * * *"
+          $monthlySchedule = "41 04 1 * *"
+          $mode = if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            "${{ inputs.mode }}"
+          } else {
+            "Online"
+          }
+          $candidate = if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            "${{ inputs.candidate_commit }}"
+          } else {
+            ""
+          }
+          if ($mode -eq "Candidate" -and $candidate -cnotmatch '^[0-9a-f]{40}$') {
+            throw "Candidate mode requires one lowercase full commit; found '$candidate'."
+          }
+          if ($mode -ne "Candidate" -and -not [string]::IsNullOrWhiteSpace($candidate)) {
+            throw "candidate_commit is valid only when mode=Candidate."
+          }
+          $advisoryOnly = "${{ github.event.schedule }}" -eq $dailySchedule
+          if ("${{ github.event.schedule }}" -eq $monthlySchedule) {
+            $advisoryOnly = $false
+          }
+
+          $outputPath = ".build\TerminalEngineStatus\workflow\status.json"
+          $parameters = @{
+            Mode = $mode
+            OutputPath = $outputPath
+            PassThru = $true
+          }
+          if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+            $parameters.CandidateCommit = $candidate
+          }
+          if ($advisoryOnly) {
+            $parameters.AdvisoryOnly = $true
+          }
+          $report = & .\Tools\Get-GhosttyTerminalRuntimeStatus.ps1 @parameters
+          "result=$($report.result)" >> $env:GITHUB_OUTPUT
+          "report_path=$outputPath" >> $env:GITHUB_OUTPUT
+          $gateFailure = $report.result -in @("security-review", "required-manual", "unreachable") -and
+            "${{ github.event_name }}" -eq "schedule"
+          "gate_failure=$($gateFailure.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+          "## Ghostty runtime status" >> $env:GITHUB_STEP_SUMMARY
+          "- Mode: $($report.mode)$(if ($advisoryOnly) { ' (advisory-only)' })" >> $env:GITHUB_STEP_SUMMARY
+          "- Result: $($report.result)" >> $env:GITHUB_STEP_SUMMARY
+          "- Locked commit: $($report.canonicalLock.commit)" >> $env:GITHUB_STEP_SUMMARY
+          "- Observed commit: $($report.observation.commit)" >> $env:GITHUB_STEP_SUMMARY
+          "- Next action: $($report.nextAction)" >> $env:GITHUB_STEP_SUMMARY
+
+          if ($report.result -eq "update-observed") {
+            Write-Warning "A Ghostty update was observed; no lock or branch was changed."
+          }
+      - name: Upload status report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ghostty-runtime-status-${{ github.run_id }}
+          path: .build/TerminalEngineStatus/workflow/status.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce scheduled observation result
+        if: always() && steps.status.outcome == 'success' && steps.status.outputs.gate_failure == 'true'
+        shell: pwsh
+        run: |
+          throw "Scheduled Ghostty observation failed closed with result '${{ steps.status.outputs.result }}'."

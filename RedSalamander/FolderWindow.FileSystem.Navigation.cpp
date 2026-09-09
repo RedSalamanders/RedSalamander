@@ -10,7 +10,10 @@
 #include "HostServices.h"
 #include "MaskSyntax.h"
 #include "NavigationLocation.h"
+#include "PathUtils.h"
+#include "ProcessCommandLine.h"
 #include "SettingsStore.h"
+#include "TerminalHostSupport.h"
 #include "ViewerPluginManager.h"
 #include "Win32CallbackHelpers.h"
 #include "WindowMessages.h"
@@ -56,51 +59,71 @@ using OrdinalString::StartsWithNoCase;
 
 namespace
 {
-[[nodiscard]] std::wstring QuoteCommandLineArgument(std::wstring_view text)
+using TerminalHostSupport::MakeTerminalLocation;
+using TerminalHostSupport::OwnedTerminalLocation;
+using TerminalHostSupport::TerminalSpan;
+
+[[nodiscard]] OwnedTerminalLocation MakePluginBackedTerminalLocation(
+    std::wstring_view pluginShortId, const std::filesystem::path& backingWindowsPath)
 {
-    std::wstring quoted;
-    quoted.reserve(text.size() + 2u);
-    quoted.push_back(L'"');
-
-    size_t pendingBackslashes = 0u;
-    for (const wchar_t ch : text)
+    OwnedTerminalLocation result;
+    const OwnedTerminalLocation backing = MakeTerminalLocation(backingWindowsPath);
+    if (pluginShortId.empty() || (backing.kind != TerminalLocationKind::WindowsLocal && backing.kind != TerminalLocationKind::WindowsUnc))
     {
-        if (ch == L'\\')
-        {
-            ++pendingBackslashes;
-            continue;
-        }
-
-        if (ch == L'"')
-        {
-            quoted.append(pendingBackslashes * 2u + 1u, L'\\');
-            quoted.push_back(L'"');
-            pendingBackslashes = 0u;
-            continue;
-        }
-
-        quoted.append(pendingBackslashes, L'\\');
-        pendingBackslashes = 0u;
-        quoted.push_back(ch);
+        return result;
     }
-
-    quoted.append(pendingBackslashes * 2u, L'\\');
-    quoted.push_back(L'"');
-    return quoted;
+    result.kind = TerminalLocationKind::PluginBacked;
+    result.pluginShortId.assign(pluginShortId);
+    result.pluginBackingWindowsPath = backingWindowsPath.wstring();
+    return result;
 }
 
-[[nodiscard]] std::wstring JoinQuotedCommandLineArguments(const std::vector<std::wstring>& arguments)
+[[nodiscard]] std::optional<std::filesystem::path> ResolveTerminalBackingDirectory(
+    std::wstring_view instanceContext) noexcept
 {
-    std::wstring joined;
-    for (const std::wstring& argument : arguments)
+    const std::optional<std::filesystem::path> contextPath = TryResolveInstanceContextToWindowsPath(instanceContext);
+    if (! contextPath.has_value())
     {
-        if (! joined.empty())
-        {
-            joined.push_back(L' ');
-        }
-        joined.append(QuoteCommandLineArgument(argument));
+        return std::nullopt;
     }
-    return joined;
+
+    const OwnedTerminalLocation classified = MakeTerminalLocation(contextPath.value());
+    if (classified.kind != TerminalLocationKind::WindowsLocal && classified.kind != TerminalLocationKind::WindowsUnc)
+    {
+        return std::nullopt;
+    }
+
+    const DWORD attributes = GetFileAttributesW(contextPath->c_str());
+    if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u)
+    {
+        return contextPath;
+    }
+
+    const std::filesystem::path parent = contextPath->parent_path();
+    return parent.empty() ? std::nullopt : std::optional<std::filesystem::path>(parent);
+}
+
+[[nodiscard]] OwnedTerminalLocation MakePaneTerminalSourceLocation(
+    bool localFileSystem,
+    std::wstring_view pluginShortId,
+    std::wstring_view instanceContext,
+    const std::optional<std::filesystem::path>& providerPath)
+{
+    if (localFileSystem)
+    {
+        return providerPath.has_value() ? MakeTerminalLocation(providerPath.value()) : OwnedTerminalLocation{};
+    }
+
+    const std::optional<std::filesystem::path> backingPath = ResolveTerminalBackingDirectory(instanceContext);
+    return backingPath.has_value()
+        ? MakePluginBackedTerminalLocation(pluginShortId, backingPath.value())
+        : OwnedTerminalLocation{};
+}
+
+[[nodiscard]] bool EqualTerminalWindowsPaths(
+    const std::filesystem::path& left, const std::filesystem::path& right) noexcept
+{
+    return wil::compare_string_ordinal(left.native(), right.native(), true) == wistd::weak_ordering::equivalent;
 }
 
 [[nodiscard]] std::wstring NormalizeShellDirectoryText(const std::filesystem::path& path)
@@ -188,7 +211,7 @@ struct CommandShellLaunchPlan final
 {
     CommandShellLaunchPlan plan{};
     plan.executable          = std::move(terminalExecutable);
-    plan.parameters          = std::wstring(L"-d ") + QuoteCommandLineArgument(workingDirText);
+    plan.parameters          = std::wstring(L"-d ") + Common::Process::QuoteWindowsCommandLineArgument(workingDirText);
     plan.workingDirectory    = std::wstring(workingDirText);
     plan.usesWindowsTerminal = true;
     return plan;
@@ -203,7 +226,7 @@ struct CommandShellLaunchPlan final
     if (Common::Paths::ClassifyWindowsPath(workingDirText) == Common::Paths::WindowsPathClass::Unc && IsCmdExecutable(plan.executable))
     {
         plan.directory  = GetDefaultFileSystemRoot().wstring();
-        plan.parameters = std::wstring(L"/K pushd ") + QuoteCommandLineArgument(workingDirText);
+        plan.parameters = std::wstring(L"/K pushd ") + Common::Process::QuoteWindowsCommandLineArgument(workingDirText);
     }
     else
     {
@@ -224,9 +247,9 @@ struct CommandShellLaunchPlan final
     return reinterpret_cast<INT_PTR>(result) > 32 ? S_OK : E_FAIL;
 }
 
-void ShowCommandLineFeedbackOverlay(FolderWindow& window, FolderWindow::Pane pane, UINT titleStringId, UINT messageStringId, HRESULT hr = S_OK) noexcept
+void ShowShellFeedbackOverlay(FolderWindow& window, FolderWindow::Pane pane, UINT titleStringId, UINT messageStringId, HRESULT hr = S_OK) noexcept
 {
-    Debug::Perf::Scope perf(L"commandline.feedback_us");
+    Debug::Perf::Scope perf(L"shell.feedback_us");
     perf.SetHr(hr);
 
     std::wstring title = LoadStringResource(nullptr, titleStringId);
@@ -245,9 +268,9 @@ void ShowCommandLineFeedbackOverlay(FolderWindow& window, FolderWindow::Pane pan
         pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Warning, std::move(title), std::move(message), hr, true, false);
 }
 
-void ShowCommandLineLaunchFailureOverlay(FolderWindow& window, FolderWindow::Pane pane, HRESULT hr) noexcept
+void ShowShellLaunchFailureOverlay(FolderWindow& window, FolderWindow::Pane pane, HRESULT hr) noexcept
 {
-    Debug::Perf::Scope perf(L"commandline.feedback_us");
+    Debug::Perf::Scope perf(L"shell.feedback_us");
     perf.SetDetail(L"launch-failed");
     perf.SetHr(hr);
 
@@ -327,208 +350,6 @@ void FolderWindow::CommandQuickSearch(Pane pane)
     }
 }
 
-bool FolderWindow::CreateCommandLineControls(HWND parent) noexcept
-{
-    if (_hCommandLineHost && _commandLineField)
-    {
-        return true;
-    }
-
-    if (! parent)
-    {
-        return false;
-    }
-
-    const std::wstring labelText = LoadStringResource(nullptr, IDS_COMMAND_LINE_LABEL);
-    const DWORD hostStyle        = WS_CHILD | WS_TABSTOP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
-
-    _hCommandLineHost.reset(CreateWindowExW(0,
-                                            kFolderWindowDxHostClassName,
-                                            nullptr,
-                                            hostStyle,
-                                            _commandLineRect.left,
-                                            _commandLineRect.top,
-                                            std::max(0L, _commandLineRect.right - _commandLineRect.left),
-                                            std::max(0L, _commandLineRect.bottom - _commandLineRect.top),
-                                            parent,
-                                            reinterpret_cast<HMENU>(kCommandLineHostId),
-                                            _hInstance,
-                                            this));
-    if (! _hCommandLineHost || ! _commandLineHost.Attach(_hCommandLineHost.get()))
-    {
-        _hCommandLineHost.reset();
-        return false;
-    }
-
-    auto root = std::make_unique<RedSalamander::DxUi::Panel>();
-
-    const std::wstring resolvedLabel = labelText.empty() ? std::wstring(L"Command:") : labelText;
-    _commandLineLabel                = root->AddChild<RedSalamander::DxUi::Label>(resolvedLabel);
-    _commandLineLabel->SetFontRole(RedSalamander::DxUi::FontRole::Body);
-
-    _commandLineField = root->AddChild<RedSalamander::DxUi::TextField>();
-    _commandLineField->SetMultiline(false);
-    _commandLineField->SetClearButtonEnabled(false);
-    _commandLineField->SetAccessibleName(resolvedLabel);
-    _commandLineField->SetOnSubmitted([this]() { ExecuteCommandLineFromEdit(); });
-    _commandLineLabel->SetMnemonicTarget(_commandLineField);
-
-    _commandLineHost.SetTextInputBackend(RedSalamander::DxUi::TextInputBackend::Native);
-    _commandLineHost.SetOnEscape([this]() -> bool
-    {
-        HideCommandLine(true);
-        return true;
-    });
-    _commandLineHost.SetRoot(std::move(root));
-    _commandLineHost.SetTheme(MakeAppThemeDxPalette(_theme, _theme.windowBackground));
-    UpdateCommandLineHostLayout();
-
-    ShowWindow(_hCommandLineHost.get(), SW_HIDE);
-    return true;
-}
-
-void FolderWindow::DestroyCommandLineControls() noexcept
-{
-    if (_hCommandLineHost)
-    {
-        _commandLineHost.ReleaseMouseCapture();
-        _commandLineHost.Detach();
-        _hCommandLineHost.reset();
-    }
-
-    _commandLineLabel   = nullptr;
-    _commandLineField   = nullptr;
-    _commandLineVisible = false;
-    _commandLineWorkingDirectory.clear();
-}
-
-void FolderWindow::ShowCommandLine(Pane pane, const std::filesystem::path& workingDirectory)
-{
-    Debug::Perf::Scope perf(L"commandline.focus_to_visible_us");
-    perf.SetDetail(pane == Pane::Left ? L"left" : L"right");
-
-    _commandLinePane             = pane;
-    _commandLineWorkingDirectory = workingDirectory;
-    _commandLineVisible          = true;
-    SetActivePane(pane);
-
-    CalculateLayout();
-    AdjustChildWindows();
-
-    if (_hCommandLineHost)
-    {
-        ShowWindow(_hCommandLineHost.get(), SW_SHOW);
-        SetFocus(_hCommandLineHost.get());
-        if (_commandLineField)
-        {
-            _commandLineHost.SetFocusControl(_commandLineField);
-        }
-    }
-
-    if (_hWnd)
-    {
-        InvalidateRect(_hWnd.get(), nullptr, FALSE);
-    }
-}
-
-void FolderWindow::HideCommandLine(bool restoreFocus) noexcept
-{
-    if (! _commandLineVisible)
-    {
-        return;
-    }
-
-    const Pane pane     = _commandLinePane;
-    _commandLineVisible = false;
-
-    if (_hCommandLineHost)
-    {
-        _commandLineHost.SetFocusControl(nullptr);
-        ShowWindow(_hCommandLineHost.get(), SW_HIDE);
-    }
-
-    CalculateLayout();
-    AdjustChildWindows();
-
-    if (restoreFocus)
-    {
-        FocusPaneFolderView(pane);
-    }
-
-    if (_hWnd)
-    {
-        InvalidateRect(_hWnd.get(), nullptr, FALSE);
-    }
-}
-
-std::wstring FolderWindow::GetCommandLineText() const
-{
-    if (! _commandLineField)
-    {
-        return {};
-    }
-
-    return std::wstring(_commandLineField->GetText());
-}
-
-void FolderWindow::SetCommandLineText(std::wstring_view text)
-{
-    if (! _commandLineField)
-    {
-        return;
-    }
-
-    std::wstring owned(text);
-    const size_t end = owned.size();
-    _commandLineField->SetText(std::move(owned));
-    _commandLineField->SetSelectionRange(end, end);
-    _commandLineHost.SyncTextInput(_commandLineField);
-}
-
-void FolderWindow::InsertCommandLineText(std::wstring_view text)
-{
-    if (! _commandLineField || text.empty())
-    {
-        return;
-    }
-
-    const std::wstring current = GetCommandLineText();
-    size_t start               = _commandLineField->GetCaretIndex();
-    size_t end                 = start;
-    if (const std::optional<std::pair<size_t, size_t>> selection = _commandLineField->GetSelectionRange(); selection.has_value())
-    {
-        start = selection.value().first;
-        end   = selection.value().second;
-    }
-
-    const size_t maxIndex = current.size();
-    start                 = std::min(start, maxIndex);
-    end                   = std::min(end, maxIndex);
-    if (start > end)
-    {
-        std::swap(start, end);
-    }
-
-    std::wstring replacement;
-    replacement.reserve(text.size() + 2u);
-    const bool needsLeadingSpace  = start > 0 && ! std::iswspace(current[static_cast<size_t>(start) - 1u]) && ! std::iswspace(text.front());
-    const bool needsTrailingSpace = end < maxIndex && ! std::iswspace(current[static_cast<size_t>(end)]) && ! std::iswspace(text.back());
-
-    if (needsLeadingSpace)
-    {
-        replacement.push_back(L' ');
-    }
-    replacement.append(text);
-    if (needsTrailingSpace)
-    {
-        replacement.push_back(L' ');
-    }
-
-    _commandLineField->SetSelectionRange(start, end);
-    _commandLineField->ReplaceSelectionAndNotify(replacement);
-    _commandLineHost.SyncTextInput(_commandLineField);
-}
-
 std::optional<std::filesystem::path> FolderWindow::ResolveCommandLineWorkingDirectory(Pane pane) const
 {
     const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
@@ -538,7 +359,8 @@ std::optional<std::filesystem::path> FolderWindow::ResolveCommandLineWorkingDire
     }
 
     const std::optional<std::filesystem::path> folderPath = state.folderView.GetFolderPath();
-    if (! folderPath.has_value() || folderPath.value().empty() || ! LooksLikeWindowsAbsolutePath(folderPath.value().wstring()))
+    if (! folderPath.has_value() || folderPath.value().empty() ||
+        MakeTerminalLocation(folderPath.value()).kind == TerminalLocationKind::Unsupported)
     {
         return std::nullopt;
     }
@@ -546,201 +368,70 @@ std::optional<std::filesystem::path> FolderWindow::ResolveCommandLineWorkingDire
     return folderPath.value();
 }
 
-HRESULT FolderWindow::LaunchCommandLine(std::wstring_view commandLine, const std::filesystem::path& workingDirectory)
+std::optional<std::filesystem::path> FolderWindow::GetActiveTerminalLaunchPath() const
 {
-    if (commandLine.empty())
-    {
-        return S_FALSE;
-    }
-
-#ifdef ENABLE_TESTS
-    if (_debugCommandLineLaunchCallback)
-    {
-        return _debugCommandLineLaunchCallback(commandLine, workingDirectory);
-    }
-#endif
-
-    const std::wstring comSpec        = GetCommandProcessorPath();
-    const std::wstring workingDirText = NormalizeShellDirectoryText(workingDirectory);
-
-    std::wstring directory  = workingDirText;
-    std::wstring parameters = L"/D /S /C ";
-    if (Common::Paths::ClassifyWindowsPath(workingDirText) == Common::Paths::WindowsPathClass::Unc && IsCmdExecutable(comSpec))
-    {
-        directory = GetDefaultFileSystemRoot().wstring();
-        parameters.append(L"pushd ");
-        parameters.append(QuoteCommandLineArgument(workingDirText));
-        parameters.append(L" && ");
-    }
-    parameters.append(commandLine);
-
-    HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
-    if (! ownerWindow)
-    {
-        ownerWindow = _hWnd.get();
-    }
-
-    SHELLEXECUTEINFOW sei{};
-    sei.cbSize       = sizeof(sei);
-    sei.fMask        = SEE_MASK_FLAG_NO_UI | SEE_MASK_NOASYNC;
-    sei.hwnd         = ownerWindow;
-    sei.lpVerb       = L"open";
-    sei.lpFile       = comSpec.c_str();
-    sei.lpParameters = parameters.c_str();
-    sei.lpDirectory  = directory.empty() ? nullptr : directory.c_str();
-    sei.nShow        = SW_SHOWNORMAL;
-
-    if (ShellExecuteExW(&sei) == FALSE)
-    {
-        const DWORD error = GetLastError();
-        return error == ERROR_SUCCESS ? E_FAIL : HRESULT_FROM_WIN32(error);
-    }
-
-    return S_OK;
+    return ResolveTerminalCommandWorkingDirectory(_activePane);
 }
 
-void FolderWindow::ExecuteCommandLineFromEdit()
+std::optional<std::filesystem::path> FolderWindow::ResolveTerminalCommandWorkingDirectory(Pane pane) const
 {
-    Debug::Perf::Scope perf(L"commandline.launch_us");
-
-    const std::wstring commandLine = GetCommandLineText();
-    perf.SetValue0(static_cast<uint64_t>(commandLine.size()));
-
-    if (commandLine.empty())
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    if (state.terminalOpen && state.terminal != nullptr &&
+        state.terminalSourceLocationKind != TerminalLocationKind::Unsupported && ! state.terminalSourcePath.empty())
     {
-        return;
+        return state.terminalSourcePath;
     }
-
-    HRESULT hr = LaunchCommandLine(commandLine, _commandLineWorkingDirectory);
-    perf.SetHr(hr);
-    if (SUCCEEDED(hr))
-    {
-        SetCommandLineText({});
-        HideCommandLine(true);
-        return;
-    }
-
-    ShowCommandLineLaunchFailureOverlay(*this, _commandLinePane, hr);
+    return ResolveCommandLineWorkingDirectory(pane);
 }
 
 void FolderWindow::CommandBringCurrentDirToCommandLine(Pane pane)
 {
-    Debug::Perf::Scope perf(L"commandline.insert_current_dir_us");
-    perf.SetDetail(pane == Pane::Left ? L"left" : L"right");
-
+    Debug::Perf::Scope perf(L"terminal.insert_current_dir_us");
     SetActivePane(pane);
     const std::optional<std::filesystem::path> workingDirectory = ResolveCommandLineWorkingDirectory(pane);
     if (! workingDirectory.has_value())
     {
-        ShowCommandLineFeedbackOverlay(*this, pane, IDS_CMD_BRING_CURRENT_DIR_TO_COMMAND_LINE, IDS_MSG_COMMAND_LINE_LOCAL_FOLDER_REQUIRED);
+        ShowShellFeedbackOverlay(*this, pane, IDS_CMD_BRING_CURRENT_DIR_TO_COMMAND_LINE, IDS_MSG_TERMINAL_LOCAL_FOLDER_REQUIRED);
         return;
     }
 
-    ShowCommandLine(pane, workingDirectory.value());
-    const std::wstring inserted = QuoteCommandLineArgument(workingDirectory.value().wstring());
-    perf.SetValue0(static_cast<uint64_t>(inserted.size()));
-    InsertCommandLineText(inserted);
+    const HRESULT openHr = OpenTerminalPane(pane, workingDirectory.value());
+    if (FAILED(openHr))
+    {
+        perf.SetHr(openHr);
+        ShowShellLaunchFailureOverlay(*this, pane, openHr);
+        return;
+    }
+
+    const Pane hostPane = OppositePane(pane);
+    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    const OwnedTerminalLocation sourceLocation = MakeTerminalLocation(workingDirectory.value());
+    TerminalPathInsertion insertion{};
+    insertion.sizeBytes = sizeof(insertion);
+    insertion.initiatingSource.folderWindowInstanceId = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this));
+    insertion.initiatingSource.paneInstanceId = host.terminalOriginalSourcePaneInstanceId;
+    insertion.initiatingSourceGeneration = host.terminalSourceGeneration;
+    insertion.initiatingSourceLocation = sourceLocation.View();
+    insertion.mode = TerminalPathInsertionMode::CurrentDirectoryFull;
+    insertion.itemLocation.sizeBytes = sizeof(insertion.itemLocation);
+    insertion.itemLocation.kind = TerminalLocationKind::Unsupported;
+    insertion.parentLocation.sizeBytes = sizeof(insertion.parentLocation);
+    insertion.parentLocation.kind = TerminalLocationKind::Unsupported;
+
+    const HRESULT insertHr = host.terminal ? host.terminal->InsertPath(&insertion) : E_HANDLE;
+    perf.SetHr(insertHr);
+    if (FAILED(insertHr))
+    {
+        ShowShellLaunchFailureOverlay(*this, pane, insertHr);
+    }
 }
 
 void FolderWindow::CommandBringFilenameToCommandLine(Pane pane)
 {
-    Debug::Perf::Scope perf(L"commandline.insert_filename_us");
-    perf.SetDetail(pane == Pane::Left ? L"left" : L"right");
-
-    SetActivePane(pane);
-    const std::optional<std::filesystem::path> workingDirectory = ResolveCommandLineWorkingDirectory(pane);
-    if (! workingDirectory.has_value())
-    {
-        ShowCommandLineFeedbackOverlay(*this, pane, IDS_CMD_BRING_FILENAME_TO_COMMAND_LINE, IDS_MSG_COMMAND_LINE_LOCAL_FOLDER_REQUIRED);
-        return;
-    }
-
-    PaneState& state                                 = pane == Pane::Left ? _leftPane : _rightPane;
-    std::vector<std::filesystem::path> selectedPaths = state.folderView.GetSelectedPaths();
-    if (! selectedPaths.empty())
-    {
-        if (const std::optional<std::filesystem::path> focusedPath = state.folderView.GetFocusedPath(); focusedPath.has_value())
-        {
-            const auto focusedIt = std::find_if(selectedPaths.begin(), selectedPaths.end(), [&](const std::filesystem::path& selected) {
-                return OrdinalString::EqualsNoCasePath(selected, focusedPath.value());
-            });
-            if (focusedIt != selectedPaths.end())
-            {
-                std::vector<std::filesystem::path> ordered;
-                ordered.reserve(selectedPaths.size());
-                ordered.push_back(focusedPath.value());
-                for (const std::filesystem::path& selected : selectedPaths)
-                {
-                    if (! OrdinalString::EqualsNoCasePath(selected, focusedPath.value()))
-                    {
-                        ordered.push_back(selected);
-                    }
-                }
-                selectedPaths = std::move(ordered);
-            }
-        }
-
-        std::vector<std::wstring> arguments;
-        arguments.reserve(selectedPaths.size());
-        for (const std::filesystem::path& path : selectedPaths)
-        {
-            arguments.push_back(path.wstring());
-        }
-
-        ShowCommandLine(pane, workingDirectory.value());
-        const std::wstring inserted = JoinQuotedCommandLineArguments(arguments);
-        perf.SetValue0(static_cast<uint64_t>(arguments.size()));
-        perf.SetValue1(static_cast<uint64_t>(inserted.size()));
-        InsertCommandLineText(inserted);
-        return;
-    }
-
-    const std::vector<std::wstring> displayNames = state.folderView.GetSelectedOrFocusedDisplayNames();
-    if (displayNames.empty())
-    {
-        ShowCommandLineFeedbackOverlay(*this, pane, IDS_CMD_BRING_FILENAME_TO_COMMAND_LINE, IDS_MSG_COMMAND_LINE_ITEM_REQUIRED);
-        return;
-    }
-
-    ShowCommandLine(pane, workingDirectory.value());
-    const std::wstring inserted = JoinQuotedCommandLineArguments(displayNames);
-    perf.SetValue0(static_cast<uint64_t>(displayNames.size()));
-    perf.SetValue1(static_cast<uint64_t>(inserted.size()));
-    InsertCommandLineText(inserted);
+    CommandInsertFocusedPathInTerminal(pane, false);
 }
 
 #ifdef ENABLE_TESTS
-bool FolderWindow::DebugGetCommandLineSnapshot(CommandLineDebugSnapshot& out) const noexcept
-{
-    out = {};
-    if (! _hCommandLineHost || ! _commandLineField)
-    {
-        return false;
-    }
-
-    out.visible          = _commandLineVisible;
-    out.hasKeyboardFocus = GetFocus() == _hCommandLineHost.get() && _commandLineHost.GetFocusControl() == _commandLineField;
-    out.usesDxUiHost     = true;
-    out.usesNativeTextInput =
-        _commandLineHost.GetTextInputBackend() == RedSalamander::DxUi::TextInputBackend::Native && _commandLineHost.HasActiveNativeTextInputSession();
-    out.visibleNativeChildControlCount = 0u;
-    out.pane                           = _commandLinePane;
-    out.editHwnd                       = _commandLineHost.GetTextInputHwnd() ? _commandLineHost.GetTextInputHwnd() : _hCommandLineHost.get();
-    out.text                           = GetCommandLineText();
-    out.workingDirectory               = _commandLineWorkingDirectory;
-    return true;
-}
-
-void FolderWindow::DebugSetCommandLineTextForTest(std::wstring_view text)
-{
-    SetCommandLineText(text);
-}
-
-void FolderWindow::DebugSetCommandLineLaunchCallback(CommandLineLaunchCallback callback)
-{
-    _debugCommandLineLaunchCallback = std::move(callback);
-}
-
 void FolderWindow::DebugSetCommandShellLaunchCallback(CommandShellLaunchCallback callback)
 {
     _debugCommandShellLaunchCallback = std::move(callback);
@@ -1089,35 +780,46 @@ void FolderWindow::CommandOpenCommandShell(Pane pane)
     SetActivePane(pane);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
 
-    std::filesystem::path workingDir;
+    std::optional<std::filesystem::path> workingDir;
     if (IsFilePluginShortId(state.pluginShortId))
     {
         const std::optional<std::filesystem::path> folderPath = state.folderView.GetFolderPath();
-        if (folderPath.has_value() && LooksLikeWindowsAbsolutePath(folderPath.value().wstring()))
+        if (folderPath.has_value())
         {
-            workingDir = folderPath.value();
+            const OwnedTerminalLocation location = MakeTerminalLocation(folderPath.value());
+            if (location.kind != TerminalLocationKind::Unsupported)
+            {
+                workingDir = folderPath;
+            }
         }
     }
-    else if (! state.instanceContext.empty() && LooksLikeWindowsAbsolutePath(state.instanceContext))
+    else
     {
-        std::filesystem::path contextPath(state.instanceContext);
-        DWORD attrs = GetFileAttributesW(contextPath.c_str());
-        if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0)
-        {
-            workingDir = std::move(contextPath);
-        }
-        else
-        {
-            workingDir = contextPath.parent_path();
-        }
+        workingDir = ResolveTerminalBackingDirectory(state.instanceContext);
     }
 
-    if (workingDir.empty())
+    if (! workingDir.has_value() || workingDir->empty())
     {
-        workingDir = GetDefaultFileSystemRoot();
+        ShowShellFeedbackOverlay(*this, pane, IDS_CMD_OPEN_COMMAND_SHELL, IDS_MSG_TERMINAL_LOCATION_UNSUPPORTED);
+        return;
     }
 
-    const std::wstring workingDirText = NormalizeShellDirectoryText(workingDir);
+    const std::wstring workingDirText = NormalizeShellDirectoryText(workingDir.value());
+
+#ifdef ENABLE_TESTS
+    const bool useEmbeddedTerminal = ! _debugCommandShellTerminalOverride.has_value() && ! _debugCommandShellLaunchCallback;
+#else
+    constexpr bool useEmbeddedTerminal = true;
+#endif
+    if (useEmbeddedTerminal)
+    {
+        const HRESULT openHr = OpenTerminalPane(pane, workingDir.value());
+        if (FAILED(openHr))
+        {
+            ShowShellLaunchFailureOverlay(*this, pane, openHr);
+        }
+        return;
+    }
 
     std::optional<std::wstring> terminalExecutable;
 #ifdef ENABLE_TESTS
@@ -1164,8 +866,260 @@ void FolderWindow::CommandOpenCommandShell(Pane pane)
 
     if (FAILED(launchHr))
     {
-        ShowCommandLineLaunchFailureOverlay(*this, pane, launchHr);
+        ShowShellLaunchFailureOverlay(*this, pane, launchHr);
     }
+}
+
+void FolderWindow::CommandInsertFocusedPathInTerminal(Pane pane, bool fullPath)
+{
+    Debug::Perf::Scope perf(fullPath ? L"terminal.insert_full_path_us" : L"terminal.insert_context_path_us");
+    SetActivePane(pane);
+    const std::optional<std::filesystem::path> workingDirectory = ResolveCommandLineWorkingDirectory(pane);
+    PaneState& source = pane == Pane::Left ? _leftPane : _rightPane;
+    const std::optional<std::filesystem::path> focusedPath = source.folderView.GetFocusedPath();
+    if (! workingDirectory.has_value() || ! focusedPath.has_value() || focusedPath.value().empty())
+    {
+        ShowShellFeedbackOverlay(*this, pane, IDS_CMD_BRING_FILENAME_TO_COMMAND_LINE, IDS_MSG_TERMINAL_ITEM_REQUIRED);
+        return;
+    }
+
+    const HRESULT openHr = OpenTerminalPane(pane, workingDirectory.value());
+    if (FAILED(openHr))
+    {
+        perf.SetHr(openHr);
+        ShowShellLaunchFailureOverlay(*this, pane, openHr);
+        return;
+    }
+
+    const Pane hostPane = OppositePane(pane);
+    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    const OwnedTerminalLocation itemLocation = MakeTerminalLocation(focusedPath.value());
+    const OwnedTerminalLocation parentLocation = MakeTerminalLocation(workingDirectory.value());
+    const std::wstring displayLeaf = focusedPath.value().filename().wstring();
+
+    TerminalPathInsertion insertion{};
+    insertion.sizeBytes = sizeof(insertion);
+    insertion.initiatingSource.folderWindowInstanceId = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this));
+    insertion.initiatingSource.paneInstanceId = host.terminalOriginalSourcePaneInstanceId;
+    insertion.initiatingSourceGeneration = host.terminalSourceGeneration;
+    insertion.initiatingSourceLocation = parentLocation.View();
+    insertion.itemGeneration = 1u;
+    insertion.mode = fullPath ? TerminalPathInsertionMode::AlwaysFull : TerminalPathInsertionMode::ContextualLeafOrFull;
+    insertion.itemLocation = itemLocation.View();
+    insertion.parentLocation = parentLocation.View();
+    insertion.displayLeaf = fullPath ? TerminalUtf16Span{} : TerminalSpan(displayLeaf);
+
+    const HRESULT insertHr = host.terminal->InsertPath(&insertion);
+    perf.SetHr(insertHr);
+    if (FAILED(insertHr))
+    {
+        ShowShellLaunchFailureOverlay(*this, pane, insertHr);
+    }
+}
+
+HRESULT FolderWindow::OpenTerminalPane(Pane sourcePane, const std::filesystem::path& workingDirectory) noexcept
+{
+    Debug::Perf::Scope perf(L"terminal.open_to_visible_us");
+    perf.SetDetail(workingDirectory.wstring());
+    if (! _settings || workingDirectory.empty())
+    {
+        perf.SetHr(E_INVALIDARG);
+        return E_INVALIDARG;
+    }
+
+    PaneState& source = sourcePane == Pane::Left ? _leftPane : _rightPane;
+    const OwnedTerminalLocation launchLocation = MakeTerminalLocation(workingDirectory);
+    const bool localFileSystem = IsFilePluginShortId(source.pluginShortId);
+    const OwnedTerminalLocation sourceLocation = MakePaneTerminalSourceLocation(
+        localFileSystem,
+        source.pluginShortId,
+        source.instanceContext,
+        localFileSystem ? std::optional<std::filesystem::path>(workingDirectory) : std::nullopt);
+    if (launchLocation.kind == TerminalLocationKind::Unsupported || sourceLocation.kind == TerminalLocationKind::Unsupported)
+    {
+        perf.SetHr(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+    if (! localFileSystem && ! EqualTerminalWindowsPaths(sourceLocation.IdentityPath(), workingDirectory))
+    {
+        perf.SetHr(E_INVALIDARG);
+        return E_INVALIDARG;
+    }
+
+    const Pane hostPane = OppositePane(sourcePane);
+    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    if (! host.hPreviewContent || IsWindow(host.hPreviewContent.get()) == FALSE)
+    {
+        perf.SetHr(E_HANDLE);
+        return E_HANDLE;
+    }
+
+    if (host.terminal)
+    {
+        TerminalViewState state{};
+        state.sizeBytes = sizeof(state);
+        const HRESULT stateHr = host.terminal->GetViewState(&state);
+        const bool reusable = SUCCEEDED(stateHr) &&
+            (state.activity.lifecycleState == TerminalLifecycleState::Starting ||
+             state.activity.lifecycleState == TerminalLifecycleState::Running);
+        CoTaskMemFree(state.title.data);
+        CoTaskMemFree(state.status.data);
+        if (reusable)
+        {
+            PublishTerminalSourceLocation(sourcePane, workingDirectory);
+            host.previewTabsVisible = true;
+            host.previewTabSelected = false;
+            host.terminalTabSelected = true;
+            UpdatePreviewTabSelection(hostPane);
+            CalculateLayout();
+            AdjustChildWindows();
+            SetActivePane(hostPane);
+            SetFocus(host.terminalHwnd);
+            perf.SetHr(S_OK);
+            return S_OK;
+        }
+    }
+
+    CloseTerminalPane(hostPane);
+
+    wil::com_ptr<ITerminal> terminal;
+    HRESULT hr = ViewerPluginManager::GetInstance().CreateTerminalInstance(L"builtin/terminal", *_settings, terminal);
+    if (FAILED(hr) || ! terminal)
+    {
+        perf.SetHr(FAILED(hr) ? hr : E_NOINTERFACE);
+        return FAILED(hr) ? hr : E_NOINTERFACE;
+    }
+
+    GUID guid{};
+    hr = CoCreateGuid(&guid);
+    if (FAILED(hr))
+    {
+        perf.SetHr(hr);
+        return hr;
+    }
+    static_assert(sizeof(guid) == sizeof(TerminalInstanceId));
+
+    TerminalOpenContext context{};
+    context.sizeBytes = sizeof(context);
+    context.parentWindow = _hWnd.get();
+    memcpy(context.instanceId.bytes, &guid, sizeof(guid));
+    context.originalSource.folderWindowInstanceId = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this));
+    context.originalSource.paneInstanceId = sourcePane == Pane::Left ? 1u : 2u;
+    context.sourceGeneration = 1u;
+    context.sourceLocation   = sourceLocation.View();
+    context.launchLocation   = launchLocation.View();
+
+    const TerminalTheme theme = BuildTerminalTheme();
+    static_cast<void>(terminal->SetTheme(&theme));
+    hr = terminal->Open(&context);
+    if (FAILED(hr))
+    {
+        static_cast<void>(terminal->Close());
+        perf.SetHr(hr);
+        return hr;
+    }
+
+    HWND terminalHwnd = nullptr;
+    hr = terminal->GetChildWindow(&terminalHwnd);
+    if (FAILED(hr) || ! terminalHwnd || IsWindow(terminalHwnd) == FALSE || GetParent(terminalHwnd) != _hWnd.get())
+    {
+        static_cast<void>(terminal->Close());
+        const HRESULT result = FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
+        perf.SetHr(result);
+        return result;
+    }
+
+    hr = terminal->SetCallback(this, this);
+    if (FAILED(hr))
+    {
+        static_cast<void>(terminal->Close());
+        perf.SetHr(hr);
+        return hr;
+    }
+
+    host.terminal            = std::move(terminal);
+    host.terminalHwnd        = terminalHwnd;
+    host.terminalOpen        = true;
+    host.terminalSourceLocationKind = sourceLocation.kind;
+    host.terminalSourcePluginShortId = sourceLocation.pluginShortId;
+    host.terminalSourcePath  = sourceLocation.IdentityPath();
+    host.terminalSourceGeneration = context.sourceGeneration;
+    host.terminalOriginalSourcePaneInstanceId = sourcePane == Pane::Left ? 1u : 2u;
+    host.previewTabsVisible  = true;
+    host.previewTabSelected  = false;
+    host.terminalTabSelected = true;
+    UpdatePreviewTabSelection(hostPane);
+    CalculateLayout();
+    AdjustChildWindows();
+    SetActivePane(hostPane);
+    SetFocus(terminalHwnd);
+    perf.SetHr(S_OK);
+    return S_OK;
+}
+
+void FolderWindow::PublishTerminalSourceLocation(
+    Pane sourcePane, const std::optional<std::filesystem::path>& path) noexcept
+{
+    PaneState& host = OppositePane(sourcePane) == Pane::Left ? _leftPane : _rightPane;
+    if (! host.terminal)
+    {
+        return;
+    }
+
+    TerminalSourceUpdate update{};
+    update.sizeBytes = sizeof(update);
+    update.originalSource.folderWindowInstanceId = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this));
+    update.originalSource.paneInstanceId = host.terminalOriginalSourcePaneInstanceId != 0u
+        ? host.terminalOriginalSourcePaneInstanceId
+        : (sourcePane == Pane::Left ? 1u : 2u);
+    if (host.terminalSourceGeneration == (std::numeric_limits<uint64_t>::max)())
+    {
+        return;
+    }
+    update.sourceGeneration = host.terminalSourceGeneration + 1u;
+    PaneState& source = sourcePane == Pane::Left ? _leftPane : _rightPane;
+    const bool localFileSystem = IsFilePluginShortId(source.pluginShortId);
+    const OwnedTerminalLocation location = MakePaneTerminalSourceLocation(
+        localFileSystem, source.pluginShortId, source.instanceContext, localFileSystem ? path : std::nullopt);
+    update.disposition = location.kind == TerminalLocationKind::Unsupported
+        ? TerminalSourceDisposition::Detached
+        : TerminalSourceDisposition::Active;
+    update.sourceLocation = location.View();
+    const HRESULT updateHr = host.terminal->UpdateSourceLocation(&update);
+    if (SUCCEEDED(updateHr))
+    {
+        host.terminalSourceGeneration = update.sourceGeneration;
+        host.terminalSourceLocationKind = location.kind;
+        host.terminalSourcePluginShortId = location.pluginShortId;
+        host.terminalSourcePath = update.disposition == TerminalSourceDisposition::Active
+            ? location.IdentityPath()
+            : std::filesystem::path{};
+    }
+}
+
+void FolderWindow::CloseTerminalPane(Pane hostPane) noexcept
+{
+    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    if (host.terminal)
+    {
+        static_cast<void>(host.terminal->SetCallback(nullptr, nullptr));
+        static_cast<void>(host.terminal->Close());
+        host.terminal.reset();
+    }
+    host.terminalHwnd = nullptr;
+    host.terminalOpen = false;
+    host.terminalSourceLocationKind = TerminalLocationKind::Unsupported;
+    host.terminalSourcePluginShortId.clear();
+    host.terminalSourcePath.clear();
+    host.terminalSourceGeneration = 0u;
+    host.terminalOriginalSourcePaneInstanceId = 0u;
+    host.terminalTabSelected = false;
+    const bool previewAvailable = _previewSourcePane.has_value() && OppositePane(_previewSourcePane.value()) == hostPane;
+    host.previewTabsVisible = previewAvailable;
+    host.previewTabSelected = previewAvailable;
+    UpdatePreviewTabSelection(hostPane);
+    CalculateLayout();
+    AdjustChildWindows();
 }
 
 void FolderWindow::SwapPanes()
@@ -1217,8 +1171,98 @@ void FolderWindow::SwapPanes()
         state.updatingPath = false;
     };
 
-    applyPaneState(Pane::Left, _leftPane, rightPluginPath);
-    applyPaneState(Pane::Right, _rightPane, leftPluginPath);
+    std::swap(_leftPane.terminal, _rightPane.terminal);
+    std::swap(_leftPane.terminalHwnd, _rightPane.terminalHwnd);
+    std::swap(_leftPane.terminalOpen, _rightPane.terminalOpen);
+    std::swap(_leftPane.terminalTabSelected, _rightPane.terminalTabSelected);
+    std::swap(_leftPane.terminalSourceLocationKind, _rightPane.terminalSourceLocationKind);
+    std::swap(_leftPane.terminalSourcePluginShortId, _rightPane.terminalSourcePluginShortId);
+    std::swap(_leftPane.terminalSourcePath, _rightPane.terminalSourcePath);
+    std::swap(_leftPane.terminalSourceGeneration, _rightPane.terminalSourceGeneration);
+    std::swap(_leftPane.terminalOriginalSourcePaneInstanceId, _rightPane.terminalOriginalSourcePaneInstanceId);
+
+    const auto previewHostedOn = [this](Pane pane) noexcept
+    { return _previewSourcePane.has_value() && OppositePane(_previewSourcePane.value()) == pane; };
+    const auto normalizeExclusiveContentTab = [](PaneState& state, bool previewAvailable) noexcept
+    {
+        if (! state.terminalOpen)
+        {
+            state.terminalTabSelected = false;
+        }
+        if (! previewAvailable)
+        {
+            state.previewTabSelected = false;
+        }
+        if (state.terminalTabSelected && state.previewTabSelected)
+        {
+            // Terminal selection traveled with the swapped terminal record.
+            state.previewTabSelected = false;
+        }
+        if (state.terminalTabSelected)
+        {
+            state.previewTabSelected = false;
+        }
+        else if (state.previewTabSelected)
+        {
+            state.terminalTabSelected = false;
+        }
+        state.previewTabsVisible = state.terminalOpen || previewAvailable;
+    };
+
+    {
+        _suppressEmbeddedTerminalLayout = true;
+        const auto restoreTerminalLayout = wil::scope_exit([&]() noexcept { _suppressEmbeddedTerminalLayout = false; });
+        applyPaneState(Pane::Left, _leftPane, rightPluginPath);
+        applyPaneState(Pane::Right, _rightPane, leftPluginPath);
+        normalizeExclusiveContentTab(_leftPane, previewHostedOn(Pane::Left));
+        normalizeExclusiveContentTab(_rightPane, previewHostedOn(Pane::Right));
+    }
+
+    CalculateLayout();
+    const auto realizePreviewHost = [this](Pane pane) noexcept
+    {
+        PaneState& host = pane == Pane::Left ? _leftPane : _rightPane;
+        if (! host.hPreviewContent)
+        {
+            return;
+        }
+        const RECT& rect = pane == Pane::Left ? _leftPreviewContentRect : _rightPreviewContentRect;
+        const int width = std::max(0L, rect.right - rect.left);
+        const int height = std::max(0L, rect.bottom - rect.top);
+        SetWindowPos(host.hPreviewContent.get(),
+                     HWND_BOTTOM,
+                     rect.left,
+                     rect.top,
+                     width,
+                     height,
+                     SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER);
+    };
+    if (_leftPane.terminalTabSelected)
+    {
+        realizePreviewHost(Pane::Left);
+    }
+    if (_rightPane.terminalTabSelected)
+    {
+        realizePreviewHost(Pane::Right);
+    }
+    {
+        LayoutEmbeddedTerminal(Pane::Left);
+        LayoutEmbeddedTerminal(Pane::Right);
+    }
+    {
+        _suppressEmbeddedTerminalLayout = true;
+        const auto restoreTerminalLayout = wil::scope_exit([&]() noexcept { _suppressEmbeddedTerminalLayout = false; });
+        AdjustChildWindows();
+        UpdatePreviewTabSelection(Pane::Left);
+        UpdatePreviewTabSelection(Pane::Right);
+    }
+    // AdjustChildWindows realizes the final pane/content rectangles. Apply the
+    // terminal child geometry once more after suppression ends so the live
+    // frame-parented HWND cannot retain its pre-swap physical-pane rectangle.
+    LayoutEmbeddedTerminal(Pane::Left);
+    LayoutEmbeddedTerminal(Pane::Right);
+    PublishTerminalSourceLocation(Pane::Left, _leftPane.currentPath);
+    PublishTerminalSourceLocation(Pane::Right, _rightPane.currentPath);
 
     _leftPane.selectionStats  = {};
     _rightPane.selectionStats = {};
@@ -1251,6 +1295,7 @@ void FolderWindow::OnNavigationPathChanged(Pane pane, const std::optional<std::f
         {
             _panePathChangedCallback(pane, std::nullopt);
         }
+        PublishTerminalSourceLocation(pane, std::nullopt);
         return;
     }
 
@@ -1275,6 +1320,7 @@ void FolderWindow::OnFolderViewPathChanged(Pane pane, const std::optional<std::f
         {
             _panePathChangedCallback(pane, std::nullopt);
         }
+        PublishTerminalSourceLocation(pane, std::nullopt);
         return;
     }
 
@@ -1319,6 +1365,7 @@ void FolderWindow::OnFolderViewPathChanged(Pane pane, const std::optional<std::f
     {
         _panePathChangedCallback(pane, path);
     }
+    PublishTerminalSourceLocation(pane, path);
 }
 
 void FolderWindow::OnFolderViewNavigateUpFromRoot(Pane pane) noexcept

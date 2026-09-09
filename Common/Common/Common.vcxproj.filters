@@ -18,6 +18,9 @@
     <ClInclude Include="Common.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\DeleteOnCloseTemporaryFile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\EmbeddedViewerBase.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -27,13 +30,31 @@
     <ClInclude Include="..\LocalFileTransaction.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\PaneVisualState.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\PluginConfiguration.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ProcessCommandLine.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\RegistryUtils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TestSandboxPath.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\TestWindowActivationGuard.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\ThemeDefinitionIo.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\ThemeExpression.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\WslDistributionCatalog.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -63,6 +84,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ThemeExpression.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\RegistryUtils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\WslDistributionCatalog.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

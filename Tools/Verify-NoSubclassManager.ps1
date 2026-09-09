@@ -1,3 +1,19 @@
+<#
+.SYNOPSIS
+Rejects forbidden comctl32 subclass-manager calls in migrated product code.
+
+.DESCRIPTION
+Scans Common, Plugins, and RedSalamander for SetWindowSubclass, DefSubclassProc, and RemoveWindowSubclass. It uses ripgrep when available and a PowerShell source-file scan otherwise.
+
+.OUTPUTS
+Writes matched source locations on failure or one success message. It does not emit pipeline objects.
+
+.NOTES
+Prerequisites: a repository checkout; ripgrep is optional. Side effects: changes the current location to the repository root and performs read-only source scans. Exit code is 1 when forbidden calls remain and nonzero when scanning fails. Primary consumer: .github/workflows/ci.yml and the DxUi migration contract.
+
+.EXAMPLE
+.\Tools\Verify-NoSubclassManager.ps1
+#>
 [CmdletBinding()]
 param()
 

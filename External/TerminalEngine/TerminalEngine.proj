@@ -1,0 +1,45 @@
+<Project DefaultTargets="BuildTerminalEngine" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <TerminalRepositoryRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..'))</TerminalRepositoryRoot>
+    <TerminalPowerShell Condition="'$(TerminalPowerShell)' == ''">pwsh.exe</TerminalPowerShell>
+    <TerminalEngineLock Condition="'$(TerminalEngineLock)' == ''">$(TerminalRepositoryRoot)\External\terminal-engine.lock.json</TerminalEngineLock>
+    <TerminalEngineOutputRoot Condition="'$(TerminalEngineOutputRoot)' == ''">$(TerminalRepositoryRoot)\.build\TerminalEngine</TerminalEngineOutputRoot>
+    <Platform Condition="'$(Platform)' == ''">x64</Platform>
+    <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
+    <TerminalCleanArg Condition="'$(TerminalClean)' == 'true'">-Clean</TerminalCleanArg>
+    <TerminalOfflineArg Condition="'$(TerminalOffline)' == 'true'">-Offline -ExclusiveDisposableRunner</TerminalOfflineArg>
+    <TerminalSmokeArg Condition="'$(TerminalRunSmoke)' == 'true'">-RunSmoke</TerminalSmokeArg>
+  </PropertyGroup>
+
+  <Target Name="ValidateTerminalEngineProperties">
+    <Error
+      Condition="'$(Platform)' != 'x64' and '$(Platform)' != 'ARM64'"
+      Text="Terminal engine Platform must be x64 or ARM64." />
+    <Error
+      Condition="'$(Configuration)' != 'Debug' and '$(Configuration)' != 'Release' and '$(Configuration)' != 'ASan Debug'"
+      Text="Terminal engine Configuration must be Debug, Release, or ASan Debug." />
+    <Error
+      Condition="'$(TerminalOffline)' == 'true' and '$(TerminalExclusiveDisposableRunner)' != 'true'"
+      Text="TerminalOffline=true requires TerminalExclusiveDisposableRunner=true because isolation is host-wide." />
+  </Target>
+
+  <Target Name="BuildTerminalEngine" DependsOnTargets="ValidateTerminalEngineProperties">
+    <Exec
+      WorkingDirectory="$(TerminalRepositoryRoot)"
+      Command="&quot;$(TerminalPowerShell)&quot; -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(TerminalRepositoryRoot)\Tools\Build-TerminalEngine.ps1&quot; -Platform &quot;$(Platform)&quot; -Configuration &quot;$(Configuration)&quot; -LockFile &quot;$(TerminalEngineLock)&quot; -OutputRoot &quot;$(TerminalEngineOutputRoot)&quot; $(TerminalCleanArg) $(TerminalOfflineArg)" />
+  </Target>
+
+  <Target Name="VerifyTerminalEngine" DependsOnTargets="ValidateTerminalEngineProperties">
+    <Exec
+      WorkingDirectory="$(TerminalRepositoryRoot)"
+      Command="&quot;$(TerminalPowerShell)&quot; -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(TerminalRepositoryRoot)\Tools\Verify-TerminalEngine.ps1&quot; -Platform &quot;$(Platform)&quot; -Configuration &quot;$(Configuration)&quot; -LockFile &quot;$(TerminalEngineLock)&quot; -OutputRoot &quot;$(TerminalEngineOutputRoot)&quot; $(TerminalSmokeArg) $(TerminalOfflineArg)" />
+  </Target>
+
+  <Target Name="BuildAndVerifyTerminalEngine" DependsOnTargets="BuildTerminalEngine;VerifyTerminalEngine" />
+
+  <Target Name="CheckTerminalEngineLock">
+    <Exec
+      WorkingDirectory="$(TerminalRepositoryRoot)"
+      Command="&quot;$(TerminalPowerShell)&quot; -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(TerminalRepositoryRoot)\Tools\Get-TerminalDependencyStatus.ps1&quot; -Mode Locked -EngineLock &quot;$(TerminalEngineLock)&quot;" />
+  </Target>
+</Project>

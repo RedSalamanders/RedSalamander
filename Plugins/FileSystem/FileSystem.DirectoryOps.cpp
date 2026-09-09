@@ -1,4 +1,5 @@
 #include "FileSystem.Internal.h"
+#include "PathUtils.h"
 
 #include <algorithm>
 #include <chrono>
@@ -60,7 +61,7 @@ namespace
 {
 constexpr size_t kDefaultBufferSize = 512 * 1024;
 
-#if defined(_DEBUG)
+#if defined(ENABLE_TESTS)
 constexpr std::wstring_view kDirectorySizeFailChildPathEnvVar  = L"REDSALAMANDER_DIRECTORY_SIZE_FAIL_CHILD_PATH";
 constexpr std::wstring_view kDirectorySizeFailChildFiredEnvVar = L"REDSALAMANDER_DIRECTORY_SIZE_FAIL_CHILD_FIRED";
 
@@ -604,6 +605,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateDirectory(const wchar_t* path) noexc
         return E_INVALIDARG;
     }
 
+    if (! Common::Paths::IsSupportedLocalFileOperationPath(path))
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+    }
+
     const std::wstring extendedPath = ToExtendedPath(path);
     if (::CreateDirectoryW(extendedPath.c_str(), nullptr) == 0)
     {
@@ -795,7 +801,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
 
         WIN32_FIND_DATAW findData{};
         wil::unique_hfind findHandle;
-#if defined(_DEBUG)
+#if defined(ENABLE_TESTS)
         const bool injectedFailure = ! rootDirectory && ShouldFailDirectorySizeChildForSelfTest(directoryPath);
 #else
         constexpr bool injectedFailure = false;

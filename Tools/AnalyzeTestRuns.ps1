@@ -12,8 +12,8 @@
         and long-term case timing deltas (first -> last).
 
     Notes:
-      - Archived run folders are created automatically by the selftest harness (Debug build from a repo checkout),
-        or by manually copying %LOCALAPPDATA%\RedSalamander\SelfTest\last_run\ artifacts.
+      - The selftest harness writes only beneath X:\RedSalamander.Perf and never creates checked-in archives.
+        RunsRoot therefore names evidence that an operator explicitly promoted into Specs\TestRuns.
       - This script is intentionally "read-only" and does not modify any run folders.
 
 .PARAMETER RunsRoot
@@ -31,6 +31,12 @@
 
 .PARAMETER OutMarkdown
     Optional path to write a markdown report (UTF-8). If omitted, prints to the console only.
+
+.OUTPUTS
+    Human-readable console output and, when requested, a UTF-8 Markdown report. No supported pipeline objects.
+
+.NOTES
+    Prerequisites: archived self-test result JSON using the current result schema. Side effects: read-only except for replacing OutMarkdown when supplied. Missing per-run artifacts are skipped explicitly; malformed selected artifacts fail the command. Primary use is manual timing and regression review.
 
 .EXAMPLE
     .\Tools\AnalyzeTestRuns.ps1 Specs\TestRuns\<ComputerHashName>\FileOps
@@ -55,11 +61,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-
-function Resolve-ExistingPath([string]$PathText) {
-    $resolved = Resolve-Path -LiteralPath $PathText -ErrorAction Stop
-    return $resolved.Path
-}
+Import-Module (Join-Path $PSScriptRoot 'Modules\Reporting\TestRunReporting.psm1') -Force
 
 function TryParse-TimestampFromFolderName([string]$FolderName) {
     if ([string]::IsNullOrWhiteSpace($FolderName) -or $FolderName.Length -lt 17) {
@@ -72,11 +74,6 @@ function TryParse-TimestampFromFolderName([string]$FolderName) {
     } catch {
         return $null
     }
-}
-
-function Load-Json([string]$PathText) {
-    $raw = Get-Content -LiteralPath $PathText -Raw
-    return $raw | ConvertFrom-Json -Depth 64
 }
 
 function Load-EnvMap([string]$RunRoot) {
@@ -103,33 +100,6 @@ function Load-EnvMap([string]$RunRoot) {
     }
 
     return $map
-}
-
-function Find-ResultsJson([string]$RunRoot, [string]$SuiteName) {
-    $autoCandidates = @(
-        (Join-Path $RunRoot 'fileops_results.json'),
-        (Join-Path $RunRoot 'compare_results.json'),
-        (Join-Path $RunRoot 'commands_results.json'),
-        (Join-Path $RunRoot 'selftest_run_results.json'),
-        (Join-Path $RunRoot 'results.json')
-    )
-
-    $candidates = switch ($SuiteName) {
-        'FileOps' { @((Join-Path $RunRoot 'fileops_results.json')) }
-        'CompareDirectories' { @((Join-Path $RunRoot 'compare_results.json')) }
-        'Commands' { @((Join-Path $RunRoot 'commands_results.json')) }
-        'SelfTest' { @((Join-Path $RunRoot 'selftest_run_results.json'), (Join-Path $RunRoot 'results.json')) }
-        'Auto' { $autoCandidates }
-        default { $autoCandidates }
-    }
-
-    foreach ($p in $candidates) {
-        if (Test-Path -LiteralPath $p) {
-            return $p
-        }
-    }
-
-    return $null
 }
 
 function Get-ShortCommit([string]$Commit) {
@@ -167,24 +137,6 @@ function Sum-CaseDurationsMs([hashtable]$CasesByName, [string[]]$CaseNames) {
     return $sum
 }
 
-function Get-TotalCases([int]$Passed, [int]$Failed, [int]$Skipped, [int]$FallbackCaseCount) {
-    $total = $Passed + $Failed + $Skipped
-    if ($total -gt 0) {
-        return $total
-    }
-    return $FallbackCaseCount
-}
-
-function Format-Percent([int]$Numerator, [int]$Denominator, [int]$Decimals = 1) {
-    if ($Denominator -le 0) {
-        return ''
-    }
-
-    $pct = 100.0 * $Numerator / [double]$Denominator
-    $fmt = '0.' + ('0' * $Decimals)
-    return ($pct.ToString($fmt, [System.Globalization.CultureInfo]::InvariantCulture) + '%')
-}
-
 function Format-SignedInt([Nullable[int]]$Value) {
     if ($null -eq $Value) {
         return ''
@@ -196,38 +148,6 @@ function Format-SignedInt([Nullable[int]]$Value) {
         return "+$Value"
     }
     return "$Value"
-}
-
-function Format-DeltaPercent([Nullable[int]]$OldValue, [Nullable[int]]$NewValue, [int]$Decimals = 1) {
-    if ($null -eq $OldValue -or $null -eq $NewValue) {
-        return $null
-    }
-    if ($OldValue -le 0) {
-        return $null
-    }
-
-    $delta = $NewValue - $OldValue
-    if ($delta -eq 0) {
-        return '0%'
-    }
-
-    $pct = 100.0 * $delta / [double]$OldValue
-    $fmt = '0.' + ('0' * $Decimals)
-    $text = $pct.ToString($fmt, [System.Globalization.CultureInfo]::InvariantCulture) + '%'
-    if ($pct -gt 0) {
-        return "+$text"
-    }
-    return $text
-}
-
-function Get-RunSummaryColor([int]$Failed, [int]$Skipped) {
-    if ($Failed -gt 0) {
-        return 'Red'
-    }
-    if ($Skipped -gt 0) {
-        return 'Yellow'
-    }
-    return 'Green'
 }
 
 function Get-DeltaColor([Nullable[int]]$DeltaMs) {
@@ -392,7 +312,7 @@ function Write-MarkdownTable([string]$Title, $Rows, [string[]]$Columns) {
     return $lines
 }
 
-$runsRootResolved = Resolve-ExistingPath $RunsRoot
+$runsRootResolved = Resolve-RSExistingPath -Path $RunsRoot
 
 $runDirs = Get-ChildItem -LiteralPath $runsRootResolved -Directory | ForEach-Object { $_ }
 if (-not $runDirs -or $runDirs.Count -eq 0) {
@@ -401,12 +321,15 @@ if (-not $runDirs -or $runDirs.Count -eq 0) {
 
 $runs = @()
 foreach ($dir in $runDirs) {
-    $resultsPath = Find-ResultsJson $dir.FullName $Suite
+    $resultsPath = Find-RSTestRunResultsJson `
+        -RunRoot $dir.FullName `
+        -Suite $Suite `
+        -MissingPolicy ReturnNull
     if (-not $resultsPath) {
         continue
     }
 
-    $results = Load-Json $resultsPath
+    $results = Read-RSJsonFile -Path $resultsPath
     $env = Load-EnvMap $dir.FullName
 
     $ts = TryParse-TimestampFromFolderName $dir.Name
@@ -443,15 +366,19 @@ for ($i = 0; $i -lt $runs.Count; $i++) {
     $r = $runs[$i]
     $casesByName = Get-CasesByName $r.Results
     $baseMs = Sum-CaseDurationsMs $casesByName $baseCaseNames
-    $totalCases = Get-TotalCases $r.Passed $r.Failed $r.Skipped $r.Cases
+    $totalCases = Get-RSTestRunTotalCases `
+        -Passed $r.Passed `
+        -Failed $r.Failed `
+        -Skipped $r.Skipped `
+        -FallbackCaseCount $r.Cases
 
     $newCaseNames = @($casesByName.Keys | Where-Object { -not $baseCases.ContainsKey($_) } | Sort-Object)
     $newCasesMs = Sum-CaseDurationsMs $casesByName $newCaseNames
     $newCasesText = ''
     if ($newCaseNames.Count -gt 0) {
-        $newCasesText = ("{0} ({1})" -f $newCasesMs, (Format-Percent $newCasesMs $r.Ms))
+        $newCasesText = ("{0} ({1})" -f $newCasesMs, (Format-RSPercent $newCasesMs $r.Ms))
     } else {
-        $newCasesText = ("0 ({0})" -f (Format-Percent 0 $r.Ms))
+        $newCasesText = ("0 ({0})" -f (Format-RSPercent 0 $r.Ms))
     }
 
     $prevSuiteDelta = $null
@@ -466,8 +393,8 @@ for ($i = 0; $i -lt $runs.Count; $i++) {
         $prevSuiteDelta = $r.Ms - $prev.Ms
         $prevBaseDelta = $baseMs - $prevBaseMs
 
-        $prevSuiteDeltaText = ("{0} ({1})" -f (Format-SignedInt $prevSuiteDelta), (Format-DeltaPercent $prev.Ms $r.Ms))
-        $prevBaseDeltaText = ("{0} ({1})" -f (Format-SignedInt $prevBaseDelta), (Format-DeltaPercent $prevBaseMs $baseMs))
+        $prevSuiteDeltaText = ("{0} ({1})" -f (Format-SignedInt $prevSuiteDelta), (Format-RSDeltaPercent $prev.Ms $r.Ms))
+        $prevBaseDeltaText = ("{0} ({1})" -f (Format-SignedInt $prevBaseDelta), (Format-RSDeltaPercent $prevBaseMs $baseMs))
     }
 
     $timeline += [pscustomobject]@{
@@ -476,7 +403,7 @@ for ($i = 0; $i -lt $runs.Count; $i++) {
         SuiteMs    = $r.Ms
         BaseMs     = $baseMs
         NewCases   = $newCasesText
-        PassPct    = (Format-Percent $r.Passed $totalCases)
+        PassPct    = (Format-RSPercent $r.Passed $totalCases)
         DeltaSuiteMs = $prevSuiteDelta
         DeltaSuite = $prevSuiteDeltaText
         DeltaBaseMs  = $prevBaseDelta
@@ -507,7 +434,7 @@ $timelineColumns = @(
     [pscustomobject]@{ Header = 'SuiteMs'; Align = 'Right'; GetText = { param($r) $r.SuiteMs } }
     [pscustomobject]@{ Header = 'BaseMs'; Align = 'Right'; GetText = { param($r) $r.BaseMs } }
     [pscustomobject]@{ Header = 'NewCases'; Align = 'Right'; GetText = { param($r) $r.NewCases } }
-    [pscustomobject]@{ Header = 'PassPct'; Align = 'Right'; GetText = { param($r) $r.PassPct }; GetColor = { param($r) Get-RunSummaryColor ([int]$r.Failed) ([int]$r.Skipped) } }
+    [pscustomobject]@{ Header = 'PassPct'; Align = 'Right'; GetText = { param($r) $r.PassPct }; GetColor = { param($r) Get-RSTestRunSummaryColor ([int]$r.Failed) ([int]$r.Skipped) } }
     [pscustomobject]@{ Header = 'ΔSuite'; Align = 'Right'; GetText = { param($r) $r.DeltaSuite }; GetColor = { param($r) Get-DeltaColor $r.DeltaSuiteMs } }
     [pscustomobject]@{ Header = 'ΔBase'; Align = 'Right'; GetText = { param($r) $r.DeltaBase }; GetColor = { param($r) Get-DeltaColor $r.DeltaBaseMs } }
     [pscustomobject]@{ Header = 'Cases'; Align = 'Right'; GetText = { param($r) $r.Cases } }
@@ -518,17 +445,21 @@ $timelineColumns = @(
 Write-ColorTable $timeline $timelineColumns
 
 Write-SectionHeader "Last run"
-$lastTotalCases = Get-TotalCases $last.Passed $last.Failed $last.Skipped $last.Cases
-$lastColor = Get-RunSummaryColor $last.Failed $last.Skipped
+$lastTotalCases = Get-RSTestRunTotalCases `
+    -Passed $last.Passed `
+    -Failed $last.Failed `
+    -Skipped $last.Skipped `
+    -FallbackCaseCount $last.Cases
+$lastColor = Get-RSTestRunSummaryColor $last.Failed $last.Skipped
 Write-Host ("Folder: {0}" -f $last.Folder)
 Write-Host ("Commit: {0}" -f $last.Commit)
-Write-Host ("Passed/Failed/Skipped: {0}/{1}/{2} (pass {3})" -f $last.Passed, $last.Failed, $last.Skipped, (Format-Percent $last.Passed $lastTotalCases)) -ForegroundColor $lastColor
+Write-Host ("Passed/Failed/Skipped: {0}/{1}/{2} (pass {3})" -f $last.Passed, $last.Failed, $last.Skipped, (Format-RSPercent $last.Passed $lastTotalCases)) -ForegroundColor $lastColor
 Write-Host ("SuiteMs: {0}" -f $last.Ms)
 
 $lastCases = $last.Results.cases | ForEach-Object { $_ }
 Write-SectionHeader ("Slowest cases (Top {0})" -f $TopN)
 $lastCases | Sort-Object duration_ms -Descending | Select-Object -First $TopN `
-    name, status, duration_ms, @{ n = 'pct_of_suite'; e = { Format-Percent ([int]$_.duration_ms) $last.Ms } }, reason `
+    name, status, duration_ms, @{ n = 'pct_of_suite'; e = { Format-RSPercent ([int]$_.duration_ms) $last.Ms } }, reason `
     | Format-Table -AutoSize
 
 if ($prev) {
@@ -572,19 +503,19 @@ if ($prev) {
                 OldMs     = $oldMs
                 NewMs     = $newMs
                 DeltaMs   = $delta
-                DeltaPct  = Format-DeltaPercent $oldMs $newMs
+                DeltaPct  = Format-RSDeltaPercent $oldMs $newMs
             }
         }
     }
 
     Write-SectionHeader ("Δ vs previous run ({0} -> {1})" -f $prev.Folder, $last.Folder)
     $suiteDeltaMs = ($last.Ms - $prev.Ms)
-    Write-Host ("SuiteMs: {0} -> {1} (Δ {2} / {3})" -f $prev.Ms, $last.Ms, (Format-SignedInt $suiteDeltaMs), (Format-DeltaPercent $prev.Ms $last.Ms)) -ForegroundColor (Get-DeltaColor $suiteDeltaMs)
+    Write-Host ("SuiteMs: {0} -> {1} (Δ {2} / {3})" -f $prev.Ms, $last.Ms, (Format-SignedInt $suiteDeltaMs), (Format-RSDeltaPercent $prev.Ms $last.Ms)) -ForegroundColor (Get-DeltaColor $suiteDeltaMs)
     Write-Host ("Cases:   {0} -> {1} (Added {2}, Removed {3})" -f $prev.Cases, $last.Cases, $addedNames.Count, $removedNames.Count)
     $commonDeltaMs = ($commonLastMs - $commonPrevMs)
-    Write-Host ("Common-case sum: {0} -> {1} (Δ {2} / {3})" -f $commonPrevMs, $commonLastMs, (Format-SignedInt $commonDeltaMs), (Format-DeltaPercent $commonPrevMs $commonLastMs)) -ForegroundColor (Get-DeltaColor $commonDeltaMs)
+    Write-Host ("Common-case sum: {0} -> {1} (Δ {2} / {3})" -f $commonPrevMs, $commonLastMs, (Format-SignedInt $commonDeltaMs), (Format-RSDeltaPercent $commonPrevMs $commonLastMs)) -ForegroundColor (Get-DeltaColor $commonDeltaMs)
     if ($addedNames.Count -gt 0) {
-        Write-Host ("Added-case sum (new only): {0} ({1} of SuiteMs)" -f $addedLastMs, (Format-Percent $addedLastMs $last.Ms)) -ForegroundColor 'Yellow'
+        Write-Host ("Added-case sum (new only): {0} ({1} of SuiteMs)" -f $addedLastMs, (Format-RSPercent $addedLastMs $last.Ms)) -ForegroundColor 'Yellow'
     }
     if ($removedNames.Count -gt 0) {
         Write-Host ("Removed-case sum (prev only): {0}" -f $removedPrevMs)
@@ -667,7 +598,7 @@ foreach ($name in $allCaseNames) {
         FirstMs = $firstMs
         LastMs  = $lastMs
         DeltaMs = $deltaMs
-        DeltaPct = Format-DeltaPercent $firstMs $lastMs
+        DeltaPct = Format-RSDeltaPercent $firstMs $lastMs
         MinMs   = $minMs
         MaxMs   = $maxMs
         Durations = $durations
@@ -725,7 +656,7 @@ if (-not [string]::IsNullOrWhiteSpace($OutMarkdown)) {
             Name       = $_.name
             Status     = $_.status
             DurationMs = $_.duration_ms
-            PctOfSuite = (Format-Percent ([int]$_.duration_ms) $last.Ms)
+            PctOfSuite = (Format-RSPercent ([int]$_.duration_ms) $last.Ms)
         }
     }
     $mdLines += Write-MarkdownTable ("Last run slowest cases ({0})" -f $last.Folder) $slowRows @('Name', 'Status', 'DurationMs', 'PctOfSuite')

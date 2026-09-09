@@ -2,6 +2,7 @@
 
 #include "SelfTestCommon.h"
 #include "Helpers.h"
+#include "TestSandboxPath.h"
 
 #include <algorithm>
 #include <array>
@@ -17,6 +18,7 @@
 #include <random>
 #include <span>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "AppDataPaths.h"
@@ -51,8 +53,6 @@ namespace SelfTest
 {
 namespace
 {
-constexpr std::wstring_view kRootDirName{L"SelfTest"};
-constexpr std::wstring_view kRedSalamanderDirName{L"RedSalamander"};
 constexpr std::wstring_view kLastRunDirName{L"last_run"};
 constexpr std::wstring_view kPreviousRunDirName{L"previous_run"};
 constexpr std::wstring_view kCompareDirName{L"compare"};
@@ -68,10 +68,10 @@ constexpr std::wstring_view kRunsDirName{L"runs"};
 constexpr std::wstring_view kArtifactsDirName{L"artifacts"};
 constexpr std::wstring_view kScratchDirName{L"scratch"};
 constexpr std::wstring_view kSelfTestArtifactDirName{L"selftest"};
-constexpr std::wstring_view kAlternateVolumeTestSandboxDirName{L"RedSalamanderTestSandbox"};
 constexpr std::wstring_view kUnifiedTestRootEnvVar{L"REDSALAMANDER_TEST_ROOT"};
 constexpr std::wstring_view kUnifiedTestRunIdEnvVar{L"REDSALAMANDER_TEST_RUN_ID"};
 constexpr std::wstring_view kSelfTestRootOverrideEnvVar{L"REDSALAMANDER_SELFTEST_ROOT"};
+constexpr std::wstring_view kAllowAlternateVolumeTestRootEnvVar{L"REDSALAMANDER_TEST_ALLOW_ALTERNATE_VOLUME"};
 #if defined(RS_ASAN_DEBUG_BUILD)
 constexpr std::wstring_view kSelfTestBuildFlavor{L"ASan Debug"};
 #elif defined(_DEBUG)
@@ -101,6 +101,92 @@ struct InFlightSelfTestCase
 
 std::optional<InFlightSelfTestCase> g_inFlightSelfTestCase;
 
+[[nodiscard]] std::filesystem::path ExtendSelfTestPathForIo(const std::filesystem::path& path) noexcept;
+
+[[nodiscard]] bool RemovePathTreeNoFollow(const std::filesystem::path& path) noexcept
+{
+    const std::filesystem::path extendedPath = ExtendSelfTestPathForIo(path);
+    DWORD attributes                         = ::GetFileAttributesW(extendedPath.c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES)
+    {
+        const DWORD error = ::GetLastError();
+        return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND;
+    }
+
+    const bool isDirectory = (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u;
+    const bool isReparse   = (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u;
+    if (isReparse)
+    {
+        if ((attributes & FILE_ATTRIBUTE_READONLY) != 0u)
+        {
+            attributes &= ~FILE_ATTRIBUTE_READONLY;
+            if (::SetFileAttributesW(extendedPath.c_str(), attributes) == 0)
+            {
+                return false;
+            }
+        }
+        return isDirectory ? (::RemoveDirectoryW(extendedPath.c_str()) != 0) : (::DeleteFileW(extendedPath.c_str()) != 0);
+    }
+
+    if (! isDirectory)
+    {
+        if ((attributes & FILE_ATTRIBUTE_READONLY) != 0u)
+        {
+            attributes &= ~FILE_ATTRIBUTE_READONLY;
+            if (::SetFileAttributesW(extendedPath.c_str(), attributes) == 0)
+            {
+                return false;
+            }
+        }
+        return ::DeleteFileW(extendedPath.c_str()) != 0;
+    }
+
+    WIN32_FIND_DATAW findData{};
+    const std::filesystem::path searchPattern = ExtendSelfTestPathForIo(path / L"*");
+#pragma warning(push)
+#pragma warning(disable : 4625 4626) // WIL unique_hfind is intentionally non-copyable.
+    wil::unique_hfind findHandle(::FindFirstFileW(searchPattern.c_str(), &findData));
+#pragma warning(pop)
+    if (findHandle)
+    {
+        do
+        {
+            const std::wstring_view name(findData.cFileName);
+            if (name == L"." || name == L"..")
+            {
+                continue;
+            }
+            if (! RemovePathTreeNoFollow(path / name))
+            {
+                return false;
+            }
+        } while (::FindNextFileW(findHandle.get(), &findData) != 0);
+
+        if (::GetLastError() != ERROR_NO_MORE_FILES)
+        {
+            return false;
+        }
+    }
+    else
+    {
+        const DWORD error = ::GetLastError();
+        if (error != ERROR_FILE_NOT_FOUND)
+        {
+            return false;
+        }
+    }
+
+    if ((attributes & FILE_ATTRIBUTE_READONLY) != 0u)
+    {
+        attributes &= ~FILE_ATTRIBUTE_READONLY;
+        if (::SetFileAttributesW(extendedPath.c_str(), attributes) == 0)
+        {
+            return false;
+        }
+    }
+    return ::RemoveDirectoryW(extendedPath.c_str()) != 0;
+}
+
 [[nodiscard]] const char* SuiteName(SelfTestSuite suite) noexcept
 {
     switch (suite)
@@ -122,6 +208,19 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
         case SelfTestCaseResult::Status::crashed: return "crashed";
     }
     return "unknown";
+}
+
+[[nodiscard]] const char* CaseSkipClassName(const SelfTestCaseResult& testCase) noexcept
+{
+    if (testCase.reason == L"listed only")
+    {
+        return "static-declaration";
+    }
+    if (testCase.reason.starts_with(L"not executed"))
+    {
+        return "unexpected";
+    }
+    return "declared-capability";
 }
 
 [[nodiscard]] std::wstring_view SuiteArtifactPrefix(SelfTestSuite suite) noexcept
@@ -239,7 +338,9 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
     }
 
     const std::filesystem::path root = NormalizeSelfTestRootPath(std::filesystem::path(rootText));
-    if (root.empty())
+    std::error_code ec;
+    const std::filesystem::path repositoryRoot = Common::Testing::FindTestRepositoryRoot(ec);
+    if (root.empty() || ec || repositoryRoot.empty() || ! Common::Testing::IsAuthorizedTestSandboxPath(root, repositoryRoot, false, ec))
     {
         return {};
     }
@@ -257,7 +358,9 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
     }
 
     const std::filesystem::path root = NormalizeSelfTestRootPath(std::filesystem::path(rootText));
-    if (root.empty())
+    std::error_code ec;
+    const std::filesystem::path repositoryRoot = Common::Testing::FindTestRepositoryRoot(ec);
+    if (root.empty() || ec || repositoryRoot.empty() || ! Common::Testing::IsAuthorizedTestSandboxPath(root, repositoryRoot, false, ec))
     {
         return {};
     }
@@ -265,8 +368,87 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
     return root / std::wstring(kRunsDirName) / runId / std::wstring(kScratchDirName);
 }
 
+[[nodiscard]] bool InitializeAlternateVolumeTestSandboxRoot(const std::filesystem::path& alternateBase) noexcept
+{
+    try
+    {
+        if (Common::Testing::HasValidTestSandboxMarker(alternateBase))
+        {
+            return true;
+        }
+
+        std::error_code ec;
+        if (std::filesystem::exists(alternateBase, ec))
+        {
+            if (ec || ! std::filesystem::is_directory(alternateBase, ec) || ec || ! std::filesystem::is_empty(alternateBase, ec) || ec)
+            {
+                return false;
+            }
+        }
+        else
+        {
+            ec.clear();
+            if (! std::filesystem::create_directory(alternateBase, ec) || ec)
+            {
+                return false;
+            }
+        }
+
+        if (! Common::Testing::IsExistingTestSandboxPathReparseFree(alternateBase, ec) || ec)
+        {
+            return false;
+        }
+
+        const std::filesystem::path markerPath = alternateBase / std::wstring(Common::Testing::kTestSandboxMarkerFileName);
+#pragma warning(push)
+#pragma warning(disable : 4625 4626) // WIL unique_hfile is intentionally non-copyable.
+        wil::unique_hfile markerFile(CreateFileW(markerPath.c_str(),
+                                                 GENERIC_WRITE,
+                                                 0u,
+                                                 nullptr,
+                                                 CREATE_NEW,
+                                                 FILE_ATTRIBUTE_HIDDEN | FILE_FLAG_WRITE_THROUGH,
+                                                 nullptr));
+#pragma warning(pop)
+        if (! markerFile)
+        {
+            return Common::Testing::HasValidTestSandboxMarker(alternateBase);
+        }
+
+        const std::string_view markerContents = Common::Testing::kTestSandboxMarkerContents;
+        DWORD bytesWritten                    = 0u;
+        const bool written = WriteFile(markerFile.get(),
+                                       markerContents.data(),
+                                       static_cast<DWORD>(markerContents.size()),
+                                       &bytesWritten,
+                                       nullptr) != FALSE &&
+                             bytesWritten == static_cast<DWORD>(markerContents.size());
+        markerFile.reset();
+        if (! written)
+        {
+            static_cast<void>(DeleteFileW(markerPath.c_str()));
+            return false;
+        }
+        return Common::Testing::HasValidTestSandboxMarker(alternateBase);
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        // Mandatory: alternate-volume authorization is called from noexcept self-test setup; reject the volume on path failures.
+        return false;
+    }
+}
+
 [[nodiscard]] std::filesystem::path GetUnifiedTestRunScratchRootForVolume(const std::filesystem::path& volumeRoot) noexcept
 {
+    if (GetEnvironmentString(kAllowAlternateVolumeTestRootEnvVar) != L"1")
+    {
+        return {};
+    }
+
     const std::wstring runId = GetEnvironmentString(kUnifiedTestRunIdEnvVar);
     if (! IsSafeSelfTestRunId(runId))
     {
@@ -279,7 +461,18 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
         return {};
     }
 
-    return normalizedVolumeRoot / std::wstring(kAlternateVolumeTestSandboxDirName) / std::wstring(kRunsDirName) / runId / std::wstring(kScratchDirName);
+    const std::filesystem::path alternateBase = normalizedVolumeRoot / std::wstring(Common::Testing::kTestSandboxDirectoryName);
+    const std::optional<std::filesystem::path> authorizedBase =
+        Common::Testing::GetDedicatedExternalTestSandboxBase(alternateBase, Common::Testing::kTestSandboxDirectoryName);
+    std::error_code ec;
+    if (! authorizedBase.has_value() || ! Common::Testing::TestSandboxPathEquals(alternateBase, authorizedBase.value()) ||
+        ! Common::Testing::IsExistingTestSandboxPathReparseFree(alternateBase, ec) ||
+        ! InitializeAlternateVolumeTestSandboxRoot(alternateBase))
+    {
+        return {};
+    }
+
+    return alternateBase / std::wstring(kRunsDirName) / runId / std::wstring(kScratchDirName);
 }
 
 [[nodiscard]] std::filesystem::path GetSelfTestRootOverrideFromEnvironment() noexcept
@@ -290,7 +483,14 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
         return {};
     }
 
-    return NormalizeSelfTestRootPath(std::filesystem::path(value));
+    const std::filesystem::path root = NormalizeSelfTestRootPath(std::filesystem::path(value));
+    std::error_code ec;
+    const std::filesystem::path repositoryRoot = Common::Testing::FindTestRepositoryRoot(ec);
+    if (root.empty() || ec || repositoryRoot.empty() || ! Common::Testing::IsAuthorizedTestSandboxPath(root, repositoryRoot, false, ec))
+    {
+        return {};
+    }
+    return root;
 }
 
 [[nodiscard]] std::wstring SanitizeTestSandboxSegment(std::wstring_view value)
@@ -307,18 +507,30 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
     {
         segment = L"unnamed";
     }
+    if (segment.back() == L'.')
+    {
+        segment.push_back(L'_');
+    }
     return segment;
 }
 
-[[nodiscard]] std::filesystem::path GetLegacyTestRunScratchRoot(SelfTestSuite suite)
+[[nodiscard]] std::filesystem::path GetAdHocTestRunRoot()
 {
-    const std::filesystem::path root = SelfTestRoot();
-    if (root.empty())
+    std::error_code ec;
+    const std::filesystem::path repositoryRoot = Common::Testing::FindTestRepositoryRoot(ec);
+    if (ec || repositoryRoot.empty())
     {
         return {};
     }
 
-    return root / kLastRunDirName / std::filesystem::path(SuiteArtifactPrefix(suite)) / kScratchDirName;
+    const std::filesystem::path root =
+        repositoryRoot.root_path() / std::wstring(Common::Testing::kTestSandboxDirectoryName);
+    if (! Common::Testing::IsAuthorizedTestSandboxPath(root, repositoryRoot, true, ec))
+    {
+        return {};
+    }
+
+    return root / std::wstring(kRunsDirName) / std::format(L"adhoc-{}", GetCurrentProcessId());
 }
 
 [[nodiscard]] TestSandbox CreateTestSandboxAtScratchRoot(SelfTestSuite suite,
@@ -339,6 +551,13 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
     sandboxRoot                       = sandboxRoot.lexically_normal();
 
     std::error_code ec;
+    if (! Common::Testing::IsSameOrDescendantTestSandboxPath(sandboxRoot, scratchRoot) ||
+        ! Common::Testing::IsExistingTestSandboxPathReparseFree(sandboxRoot, ec))
+    {
+        AppendSelfTestTrace(std::format(L"{}: suite={} case={} rejected unsafe path='{}'", traceKind, suiteSegment, caseSegment, sandboxRoot.wstring()));
+        return {};
+    }
+
     std::filesystem::create_directories(sandboxRoot, ec);
     if (ec)
     {
@@ -1147,6 +1366,11 @@ void AddCaseJson(yyjson_mut_doc* doc, yyjson_mut_val* casesArray, const SelfTest
     yyjson_mut_obj_add_uint(doc, caseObj, "duration_ms", testCase.durationMs);
     yyjson_mut_obj_add_uint(doc, caseObj, "repeat_index", testCase.repeatIndex);
 
+    if (testCase.status == SelfTestCaseResult::Status::skipped)
+    {
+        yyjson_mut_obj_add_str(doc, caseObj, "skip_class", CaseSkipClassName(testCase));
+    }
+
     if (! testCase.reason.empty())
     {
         std::string reason;
@@ -1307,10 +1531,10 @@ uint64_t StableDeviceHash(std::wstring_view value) noexcept
     uint64_t hash = 1469598103934665603ull;
     for (const wchar_t ch : value)
     {
-        const auto lower = static_cast<uint64_t>(::towlower(static_cast<wint_t>(ch)));
-        hash ^= lower & 0xFFu;
+        const auto codeUnit = static_cast<uint64_t>(static_cast<std::make_unsigned_t<wchar_t>>(ch));
+        hash ^= codeUnit & 0xFFu;
         hash *= 1099511628211ull;
-        hash ^= (lower >> 8u) & 0xFFu;
+        hash ^= (codeUnit >> 8u) & 0xFFu;
         hash *= 1099511628211ull;
     }
     return hash;
@@ -1366,9 +1590,14 @@ std::optional<uint64_t> ExtractJsonUInt(std::string_view json, std::string_view 
 
 HRESULT LoadMtpPluginSelfTestExport(std::string_view exportName, wil::unique_hmodule& module, FARPROC& exportAddress) noexcept
 {
+    return LoadPluginSelfTestExport(L"builtin/file-system-mtp", exportName, module, exportAddress);
+}
+
+HRESULT LoadPluginSelfTestExport(std::wstring_view pluginId, std::string_view exportName, wil::unique_hmodule& module, FARPROC& exportAddress) noexcept
+{
     module.reset();
     exportAddress = nullptr;
-    if (exportName.empty() || exportName.size() >= 128u || exportName.find('\0') != std::string_view::npos)
+    if (pluginId.empty() || exportName.empty() || exportName.size() >= 128u || exportName.find('\0') != std::string_view::npos)
     {
         return E_INVALIDARG;
     }
@@ -1377,7 +1606,7 @@ HRESULT LoadMtpPluginSelfTestExport(std::string_view exportName, wil::unique_hmo
     const FileSystemPluginManager::PluginEntry* mtpEntry = nullptr;
     for (const FileSystemPluginManager::PluginEntry& entry : pluginManager.GetPlugins())
     {
-        if (CompareStringOrdinal(entry.id.data(), static_cast<int>(entry.id.size()), L"builtin/file-system-mtp", -1, TRUE) == CSTR_EQUAL)
+        if (CompareStringOrdinal(entry.id.data(), static_cast<int>(entry.id.size()), pluginId.data(), static_cast<int>(pluginId.size()), TRUE) == CSTR_EQUAL)
         {
             mtpEntry = &entry;
             break;
@@ -1462,25 +1691,24 @@ const std::filesystem::path& SelfTestRoot() noexcept
 {
     static const std::filesystem::path root = []
     {
-        const std::filesystem::path overrideRoot = GetSelfTestRootOverrideFromEnvironment();
-        if (! overrideRoot.empty())
+        const std::wstring unifiedRootText = GetEnvironmentString(kUnifiedTestRootEnvVar);
+        if (! unifiedRootText.empty())
         {
-            return overrideRoot;
+            return GetUnifiedSelfTestRootFromEnvironment();
         }
 
-        const std::filesystem::path unifiedRoot = GetUnifiedSelfTestRootFromEnvironment();
-        if (! unifiedRoot.empty())
+        const std::wstring overrideRootText = GetEnvironmentString(kSelfTestRootOverrideEnvVar);
+        if (! overrideRootText.empty())
         {
-            return unifiedRoot;
+            return GetSelfTestRootOverrideFromEnvironment();
         }
 
-        const std::filesystem::path base = AppDataPaths::GetLocalAppDataPath();
-        if (base.empty())
+        const std::filesystem::path runRoot = GetAdHocTestRunRoot();
+        if (runRoot.empty())
         {
             return std::filesystem::path{};
         }
-
-        return base / kRedSalamanderDirName / kRootDirName;
+        return runRoot / std::wstring(kArtifactsDirName) / std::wstring(kSelfTestArtifactDirName);
     }();
     return root;
 }
@@ -1559,9 +1787,13 @@ TestSandbox AcquireTestSandbox(SelfTestSuite suite, std::wstring_view caseName) 
     try
     {
         std::filesystem::path scratchRoot = GetUnifiedTestRunScratchRootFromEnvironment();
-        if (scratchRoot.empty())
+        if (scratchRoot.empty() && GetEnvironmentString(kUnifiedTestRootEnvVar).empty())
         {
-            scratchRoot = GetLegacyTestRunScratchRoot(suite);
+            const std::filesystem::path runRoot = GetAdHocTestRunRoot();
+            if (! runRoot.empty())
+            {
+                scratchRoot = runRoot / std::wstring(kScratchDirName);
+            }
         }
 
         return CreateTestSandboxAtScratchRoot(suite, caseName, scratchRoot, L"TestSandbox");
@@ -1884,9 +2116,7 @@ bool RemoveAll(const std::filesystem::path& path) noexcept
         return false;
     }
 
-    std::error_code ec;
-    static_cast<void>(std::filesystem::remove_all(ExtendSelfTestPathForIo(path), ec));
-    return ! ec;
+    return RemovePathTreeNoFollow(path);
 }
 
 bool WriteBinaryFile(const std::filesystem::path& path, std::span<const std::byte> bytes) noexcept
@@ -2170,31 +2400,28 @@ void TryArchiveLastRunToRepo(std::wstring_view area, int exitCode, uint64_t dura
         area = L"SelfTest";
     }
 
-    const std::filesystem::path testRunsRoot = TryFindTestRunsRoot();
-    if (testRunsRoot.empty())
+    const std::filesystem::path selfTestRoot = SelfTestRoot();
+    if (selfTestRoot.empty())
     {
-        AppendSelfTestTrace(L"ArchiveToRepo: repo root not found; skipping.");
+        AppendSelfTestTrace(L"Archive: authorized test root unavailable; skipping.");
         return;
     }
 
     const std::wstring profile = GetComputerHashName();
 
-    std::filesystem::path repoRoot = testRunsRoot;
-    if (repoRoot.has_parent_path())
-    {
-        repoRoot = repoRoot.parent_path();
-    }
-    if (repoRoot.has_parent_path())
-    {
-        repoRoot = repoRoot.parent_path();
-    }
+    std::error_code repositoryError;
+    const std::filesystem::path repoRoot = Common::Testing::FindTestRepositoryRoot(repositoryError);
 
     std::wstring gitBranch;
     std::wstring gitCommit;
-    static_cast<void>(TryReadGitHeadInfo(repoRoot, gitBranch, gitCommit));
+    if (! repositoryError && ! repoRoot.empty())
+    {
+        static_cast<void>(TryReadGitHeadInfo(repoRoot, gitBranch, gitCommit));
+    }
 
     std::error_code ec;
-    const std::filesystem::path areaRoot = testRunsRoot / profile / std::filesystem::path(area);
+    const std::filesystem::path archiveRoot = selfTestRoot.parent_path() / L"archive";
+    const std::filesystem::path areaRoot = archiveRoot / profile / std::filesystem::path(area);
     std::filesystem::create_directories(areaRoot, ec);
 
     const std::filesystem::path runRoot = CreateUniqueRunFolder(areaRoot);
@@ -2205,7 +2432,7 @@ void TryArchiveLastRunToRepo(std::wstring_view area, int exitCode, uint64_t dura
     }
 
     // Log before copying so the archived trace includes the archive destination.
-    AppendSelfTestTrace(std::format(L"ArchiveToRepo: {}", runRoot.wstring()));
+    AppendSelfTestTrace(std::format(L"Archive: {}", runRoot.wstring()));
 
     std::wstring archiveNotes;
 
@@ -2284,7 +2511,10 @@ void TryArchiveLastRunToRepo(std::wstring_view area, int exitCode, uint64_t dura
         {
             envText.append(std::format(L"exe_dir: {}\n", exeDir));
         }
-        envText.append(std::format(L"repo_root: {}\n", repoRoot.wstring()));
+        if (! repoRoot.empty())
+        {
+            envText.append(std::format(L"repo_root: {}\n", repoRoot.wstring()));
+        }
         envText.append(std::format(L"selftest_root: {}\n", lastRunRoot.wstring()));
         if (! cmdLine.empty())
         {

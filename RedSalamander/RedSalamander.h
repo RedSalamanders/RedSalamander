@@ -18,6 +18,7 @@ class FolderWindow;
 
 [[nodiscard]] HWND GetAboutDialogHandle() noexcept;
 [[nodiscard]] HWND GetFatalErrorDialogHandle() noexcept;
+void PopulateShellNewTemplateMenuForFolderView(HMENU menu, HWND folderViewHwnd) noexcept;
 
 #ifdef ENABLE_TESTS
 [[nodiscard]] FolderWindow& GetApplicationFolderWindowForSelfTest() noexcept;

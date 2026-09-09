@@ -314,6 +314,29 @@ std::wstring MakeAbsolutePath(const std::wstring& path)
     return input;
 }
 
+namespace
+{
+// A UNC share root opens only with its trailing separator (`\\?\UNC\server\share\`); without it
+// CreateFileW and GetFileAttributesW report ERROR_BAD_PATHNAME. Deeper paths are left untouched.
+void AppendUncShareRootSeparator(std::wstring& extendedUnc)
+{
+    constexpr std::wstring_view kPrefix = L"\\\\?\\UNC\\";
+    if (extendedUnc.size() <= kPrefix.size() || extendedUnc.compare(0u, kPrefix.size(), kPrefix) != 0)
+    {
+        return;
+    }
+    const size_t serverEnd = extendedUnc.find(L'\\', kPrefix.size());
+    if (serverEnd == std::wstring::npos || serverEnd + 1u >= extendedUnc.size())
+    {
+        return;
+    }
+    if (extendedUnc.find(L'\\', serverEnd + 1u) == std::wstring::npos)
+    {
+        extendedUnc.push_back(L'\\');
+    }
+}
+} // namespace
+
 std::wstring ToExtendedPath(const std::wstring& path)
 {
     std::wstring normalized = path;
@@ -327,7 +350,9 @@ std::wstring ToExtendedPath(const std::wstring& path)
     {
         if (IsDriveExtendedPath(normalized) || IsUncExtendedPath(normalized))
         {
-            return MakeAbsolutePath(normalized);
+            std::wstring absolute = MakeAbsolutePath(normalized);
+            AppendUncShareRootSeparator(absolute);
+            return absolute;
         }
         return normalized;
     }
@@ -335,7 +360,9 @@ std::wstring ToExtendedPath(const std::wstring& path)
     normalized = MakeAbsolutePath(normalized);
     if (normalized.rfind(L"\\\\", 0) == 0)
     {
-        return L"\\\\?\\UNC\\" + normalized.substr(2);
+        std::wstring extended = L"\\\\?\\UNC\\" + normalized.substr(2);
+        AppendUncShareRootSeparator(extended);
+        return extended;
     }
 
     return L"\\\\?\\" + normalized;
@@ -400,6 +427,16 @@ void RunDebugPathNormalizationSelfTest(unsigned int& passed, unsigned int& faile
           L"MakeAbsolutePath should preserve a literal trailing space in drive-rooted extended paths");
     check(ToExtendedPath(trailingSpaceInput) == expectedTrailingSpace,
           L"ToExtendedPath should preserve a literal trailing space in drive-rooted extended paths");
+
+    // R0f-SMB: a share root opens only with its trailing separator; deeper UNC paths are untouched.
+    check(ToExtendedPath(L"\\\\server\\share") == L"\\\\?\\UNC\\server\\share\\",
+          L"ToExtendedPath should append the trailing separator a UNC share root needs to open");
+    check(ToExtendedPath(L"\\\\server\\share\\") == L"\\\\?\\UNC\\server\\share\\",
+          L"ToExtendedPath should keep a UNC share root's existing trailing separator");
+    check(ToExtendedPath(L"\\\\?\\UNC\\server\\share") == L"\\\\?\\UNC\\server\\share\\",
+          L"ToExtendedPath should append the trailing separator to an extended UNC share root");
+    check(ToExtendedPath(L"\\\\server\\share\\dir") == L"\\\\?\\UNC\\server\\share\\dir",
+          L"ToExtendedPath should not add a trailing separator below a UNC share root");
 
     constexpr std::wstring_view kExtendedUncInput    = L"\\\\?\\UNC\\server\\share\\folder\\..\\leaf";
     constexpr std::wstring_view kExpectedExtendedUnc = L"\\\\?\\UNC\\server\\share\\leaf";

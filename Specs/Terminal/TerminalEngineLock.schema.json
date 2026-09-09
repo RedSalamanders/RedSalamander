@@ -1,0 +1,613 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://red-salamander.invalid/schemas/terminal-engine-lock-v1.json",
+  "title": "Red Salamander terminal-engine dependency lock",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "schemaVersion",
+    "engine",
+    "inputs",
+    "build",
+    "sourceAdaptation",
+    "derivedInputs",
+    "installedToolchains",
+    "lanes",
+    "outputs",
+    "dependencies",
+    "abi",
+    "runtimeClosure",
+    "qualification",
+    "upgrade"
+  ],
+  "properties": {
+    "formatId": { "const": "red-salamander-terminal-engine-lock" },
+    "schemaVersion": { "const": 1 },
+    "engine": { "$ref": "#/$defs/engine" },
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/input" }
+    },
+    "build": { "$ref": "#/$defs/build" },
+    "sourceAdaptation": { "$ref": "#/$defs/sourceAdaptation" },
+    "derivedInputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/derivedInput" }
+    },
+    "installedToolchains": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/installedToolchain" }
+    },
+    "lanes": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": { "$ref": "#/$defs/lane" }
+    },
+    "outputs": {
+      "type": "array",
+      "minItems": 5,
+      "items": { "$ref": "#/$defs/output" }
+    },
+    "dependencies": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/dependency" }
+    },
+    "abi": { "$ref": "#/$defs/abi" },
+    "runtimeClosure": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/runtimeClosureEntry" }
+    },
+    "qualification": { "$ref": "#/$defs/qualification" },
+    "upgrade": { "$ref": "#/$defs/upgrade" }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "decimal": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "positiveDecimal": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "anyOf": [
+          { "pattern": "^[A-Za-z]:" },
+          { "pattern": "^[/\\\\]" },
+          { "pattern": "(^|[/\\\\])\\.\\.($|[/\\\\])" }
+        ]
+      }
+    },
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "pin",
+        "pluginLinkage",
+        "privateRuntimePath"
+      ],
+      "properties": {
+        "candidateId": { "$ref": "#/$defs/id" },
+        "pin": { "type": "string", "minLength": 1 },
+        "pluginLinkage": {
+          "enum": [ "private-dynamic", "source-static" ]
+        },
+        "privateRuntimePath": {
+          "type": [ "string", "null" ]
+        }
+      }
+    },
+    "repositorySource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "type", "path" ],
+      "properties": {
+        "type": { "const": "repository-file" },
+        "path": { "$ref": "#/$defs/relativePath" }
+      }
+    },
+    "httpsSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "type", "uri" ],
+      "properties": {
+        "type": { "const": "https" },
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://[^/?#]+/[^?#]*$"
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "category",
+        "kind",
+        "source",
+        "sha256",
+        "sizeBytes"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "category": { "$ref": "#/$defs/id" },
+        "kind": { "enum": [ "file", "zip" ] },
+        "source": {
+          "oneOf": [
+            { "$ref": "#/$defs/repositorySource" },
+            { "$ref": "#/$defs/httpsSource" }
+          ]
+        },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "sizeBytes": { "$ref": "#/$defs/decimal" }
+      }
+    },
+    "materialization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "inputId", "mode", "destination" ],
+      "properties": {
+        "inputId": { "$ref": "#/$defs/id" },
+        "mode": { "enum": [ "copy-file", "extract-zip" ] },
+        "destination": { "$ref": "#/$defs/relativePath" },
+        "derivedInputId": { "$ref": "#/$defs/id" },
+        "contentRoot": { "$ref": "#/$defs/relativePath" },
+        "contentSha256": { "$ref": "#/$defs/sha256" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "mode": { "const": "extract-zip" } }
+          },
+          "then": {
+            "required": [ "derivedInputId", "contentSha256" ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                { "required": [ "derivedInputId" ] },
+                { "required": [ "contentRoot" ] },
+                { "required": [ "contentSha256" ] }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceInputId",
+        "materializations",
+        "workingDirectoryRelativePath",
+        "environment"
+      ],
+      "properties": {
+        "sourceInputId": { "$ref": "#/$defs/id" },
+        "materializations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/materialization" }
+        },
+        "executableRelativePath": { "$ref": "#/$defs/relativePath" },
+        "workingDirectoryRelativePath": { "$ref": "#/$defs/relativePath" },
+        "environment": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[A-Z][A-Z0-9_]*$" },
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "sourceAdaptation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "upstreamTree",
+        "patchSha256",
+        "resultTree",
+        "adaptedLineCount",
+        "adaptedFileCount",
+        "concernMappingSha256"
+      ],
+      "properties": {
+        "upstreamTree": { "$ref": "#/$defs/gitObjectIdentity" },
+        "patchSha256": { "$ref": "#/$defs/sha256" },
+        "resultTree": { "$ref": "#/$defs/gitObjectIdentity" },
+        "adaptedLineCount": {
+          "type": "string",
+          "pattern": "^([1-9]|[1-9][0-9]|[1-9][0-9]{2}|1[0-9]{3}|2[0-4][0-9]{2}|2500)$"
+        },
+        "adaptedFileCount": {
+          "type": "string",
+          "pattern": "^([1-9]|1[0-6])$"
+        },
+        "concernMappingSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "gitObjectIdentity": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [ "algorithm", "digest" ],
+          "properties": {
+            "algorithm": { "const": "git-sha1" },
+            "digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [ "algorithm", "digest" ],
+          "properties": {
+            "algorithm": { "const": "git-sha256" },
+            "digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      ]
+    },
+    "derivedInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "id", "kind", "inputIds", "sha256", "fileCount" ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "extracted-file-set" },
+        "inputIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "fileCount": { "$ref": "#/$defs/positiveDecimal" }
+      }
+    },
+    "installedToolchain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "id", "kind", "version", "identitySha256", "platforms" ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "identitySha256": { "$ref": "#/$defs/sha256" },
+        "platforms": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": [ "x64", "ARM64" ] }
+        }
+      }
+    },
+    "reuseFrom": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "platform", "configuration" ],
+      "properties": {
+        "platform": { "enum": [ "x64", "ARM64" ] },
+        "configuration": { "enum": [ "Debug", "Release", "ASan Debug" ] }
+      }
+    },
+    "lane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "configuration",
+        "reuseFrom",
+        "outputIds"
+      ],
+      "properties": {
+        "platform": { "enum": [ "x64", "ARM64" ] },
+        "configuration": { "enum": [ "Debug", "Release", "ASan Debug" ] },
+        "reuseFrom": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/reuseFrom" }
+          ]
+        },
+        "materializations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/materialization" }
+        },
+        "executableRelativePath": { "$ref": "#/$defs/relativePath" },
+        "workingDirectoryRelativePath": { "$ref": "#/$defs/relativePath" },
+        "arguments": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400
+        },
+        "environment": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[A-Z][A-Z0-9_]*$" },
+          "additionalProperties": { "type": "string" }
+        },
+        "outputIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/id" }
+        }
+      }
+    },
+    "smoke": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "executableInputId", "arguments", "timeoutSeconds" ],
+      "properties": {
+        "executableInputId": { "$ref": "#/$defs/id" },
+        "arguments": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 3600 },
+        "expectedStdoutSha256": { "$ref": "#/$defs/sha256" },
+        "expectedStderrSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "runtimeIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "upstreamCommit",
+        "patchAbi",
+        "architecture",
+        "callingConvention",
+        "capabilitiesHex",
+        "pointerSize",
+        "terminalResourceLimitsSize"
+      ],
+      "properties": {
+        "upstreamCommit": { "type": "string", "minLength": 1 },
+        "patchAbi": { "$ref": "#/$defs/decimal" },
+        "buildIdentity": { "type": "string", "minLength": 1 },
+        "architecture": { "$ref": "#/$defs/decimal" },
+        "callingConvention": { "$ref": "#/$defs/decimal" },
+        "capabilitiesHex": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "pointerSize": { "$ref": "#/$defs/decimal" },
+        "terminalResourceLimitsSize": { "$ref": "#/$defs/decimal" }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "platform",
+        "configuration",
+        "kind",
+        "relativePath",
+        "rawSha256Policy",
+        "sha256"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "platform": { "enum": [ "x64", "ARM64" ] },
+        "configuration": { "enum": [ "Debug", "Release", "ASan Debug" ] },
+        "kind": { "enum": [ "pe", "file" ] },
+        "builtRelativePath": { "$ref": "#/$defs/relativePath" },
+        "sourceOutputId": { "$ref": "#/$defs/id" },
+        "relativePath": { "$ref": "#/$defs/relativePath" },
+        "rawSha256Policy": { "const": "exact" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "semanticSha256": { "$ref": "#/$defs/sha256" },
+        "machine": { "enum": [ "AMD64", "ARM64" ] },
+        "requiredExports": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "runtimeIdentity": { "$ref": "#/$defs/runtimeIdentity" },
+        "smoke": { "$ref": "#/$defs/smoke" }
+      }
+    },
+    "license": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "spdx", "licenseInputIds", "noticeInputIds" ],
+      "properties": {
+        "spdx": { "type": "string", "minLength": 1 },
+        "licenseInputIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "noticeInputIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" }
+        }
+      }
+    },
+    "discovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "id", "kind", "uri", "currentValue" ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": {
+          "enum": [
+            "manual",
+            "file-text",
+            "file-json",
+            "https-text",
+            "https-json"
+          ]
+        },
+        "uri": { "type": "string" },
+        "currentValue": { "type": "string" },
+        "jsonProperty": { "type": "string", "minLength": 1 },
+        "securityAdvisory": { "type": "boolean" }
+      }
+    },
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "id", "pin", "inputIds", "license", "updateDiscovery" ],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "pin": { "type": "string", "minLength": 1 },
+        "inputIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "license": { "$ref": "#/$defs/license" },
+        "updateDiscovery": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/discovery" }
+        }
+      }
+    },
+    "abi": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "headerSetSha256",
+        "enumIdentity",
+        "typeLayoutIdentity",
+        "callingConvention",
+        "capabilities"
+      ],
+      "properties": {
+        "headerSetSha256": { "$ref": "#/$defs/sha256" },
+        "enumIdentity": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "typeLayoutIdentity": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "callingConvention": { "type": "string", "minLength": 1 },
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "runtimeClosureEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "configuration",
+        "module",
+        "system",
+        "loadSource",
+        "loadedBy"
+      ],
+      "properties": {
+        "platform": { "enum": [ "x64", "ARM64" ] },
+        "configuration": { "enum": [ "Debug", "Release", "ASan Debug" ] },
+        "module": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.+-]+\\.dll$"
+        },
+        "system": { "type": "boolean" },
+        "loadSource": {
+          "enum": [ "normal-import", "delay-import", "explicit-load" ]
+        },
+        "loadedBy": { "type": "string", "minLength": 1 },
+        "outputId": { "$ref": "#/$defs/id" },
+        "inputId": { "$ref": "#/$defs/id" }
+      }
+    },
+    "qualificationRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "status" ],
+      "properties": {
+        "status": { "const": "pass" },
+        "evidenceSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "qualification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "security",
+        "conformance",
+        "fuzz",
+        "performance",
+        "memory",
+        "packageSize"
+      ],
+      "properties": {
+        "security": { "$ref": "#/$defs/qualificationRecord" },
+        "conformance": { "$ref": "#/$defs/qualificationRecord" },
+        "fuzz": { "$ref": "#/$defs/qualificationRecord" },
+        "performance": { "$ref": "#/$defs/qualificationRecord" },
+        "memory": { "$ref": "#/$defs/qualificationRecord" },
+        "packageSize": { "$ref": "#/$defs/qualificationRecord" }
+      }
+    },
+    "upgrade": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basedOnLockSha256",
+        "targetSourceSha256",
+        "persistedStateSchemaChanged",
+        "requiredChanges"
+      ],
+      "properties": {
+        "basedOnLockSha256": { "$ref": "#/$defs/sha256" },
+        "targetSourceSha256": { "$ref": "#/$defs/sha256" },
+        "persistedStateSchemaChanged": { "type": "boolean" },
+        "requiredChanges": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "source",
+              "submodules",
+              "tools",
+              "dependencySbom",
+              "runtimeClosure",
+              "licensesAndNotices",
+              "abi",
+              "capabilities",
+              "security",
+              "conformance",
+              "fuzz",
+              "performance",
+              "memory",
+              "packageSize"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

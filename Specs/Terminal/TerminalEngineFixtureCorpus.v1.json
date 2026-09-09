@@ -1,0 +1,51 @@
+{
+  "formatId": "red-salamander-terminal-engine-fixture-corpus",
+  "version": 1,
+  "frozenUtc": "2026-07-30T00:00:00Z",
+  "generatorVersion": "1.0.0",
+  "generatorSourceSha256": "ede50e5c8fdd1bc3f076c6fa401676932bacdf948dc0c89c58a0085eb8136d1d",
+  "generatedHeaderSha256": "cd113174f188eef71acbaaebf38a178d76d3662e802136223ecef77404d5e141",
+  "fixtureManifestSha256": "af7277b42f6e74d147bb5df5781b4e4df03bddfcd28738330dd2403da22b9b44",
+  "chunkSchedules": [
+    {"scheduleId": "all-at-once", "algorithm": "one chunk containing all bytes"},
+    {"scheduleId": "bytewise", "algorithm": "one byte per chunk"},
+    {"scheduleId": "fibonacci", "algorithm": "repeat chunk sizes 1,2,3,5,8,13,21,34,55,89 until complete"},
+    {"scheduleId": "terminator-split", "algorithm": "Use strictly increasing interior byte cut offsets. Add a cut before every BEL or ESC byte, after every ESC byte, before every UTF-8 continuation byte, and both before and after every CSI final byte in 0x40..0x7E after ESC '['. The final input-size boundary is implicit and forbidden in cutOffsets. Duplicate offsets collapse."}
+  ],
+  "fixtures": [
+    {"fixtureId": "alternate-screen-roundtrip", "category": "screen", "generator": "alternate-screen", "schedules": ["all-at-once", "bytewise"], "expectation": "primary state survives and alternate state is discarded on exit"},
+    {"fixtureId": "bracketed-paste-modes", "category": "input", "generator": "bracketed-paste", "schedules": ["all-at-once"], "expectation": "encoded output follows current mode and preserves global input order"},
+    {"fixtureId": "color-style-matrix", "category": "cells", "generator": "sgr-color-style-matrix", "schedules": ["fibonacci"], "expectation": "16, 256, truecolor, underline styles, inverse, faint, blink, strike, and reset are represented"},
+    {"fixtureId": "cursor-and-palette", "category": "screen", "generator": "cursor-palette", "schedules": ["terminator-split"], "expectation": "cursor modes and palette/default overrides are copied without borrowed lifetime"},
+    {"fixtureId": "focus-and-mouse-matrix", "category": "input", "generator": "focus-mouse", "schedules": ["all-at-once"], "expectation": "X10, normal, button, any-event, UTF-8, SGR, URxvt, SGR-pixel, and focus modes encode correctly"},
+    {"fixtureId": "hyperlink-boundaries", "category": "non-kitty-limit", "generator": "osc8-boundaries", "schedules": ["all-at-once", "bytewise", "terminator-split"], "expectation": "1KiB parameter and 8KiB URI caps each pass and discard at plus one in isolated OSC 8 records; a direct owning-parser preflight proves the redundant 16KiB total-record cap without violating either lower conjunctive cap"},
+    {"fixtureId": "kitty-delete-generation", "category": "kitty", "generator": "kitty-delete-generation", "schedules": ["all-at-once", "terminator-split"], "expectation": "image and placement deletion produce distinct monotonically changed generations"},
+    {"fixtureId": "kitty-dimension-overflow", "category": "kitty-limit", "generator": "kitty-dimension-overflow", "schedules": ["all-at-once"], "expectation": "checked width, height, stride, pixel, and byte overflow reject before reservation or allocation"},
+    {"fixtureId": "kitty-direct-png", "category": "kitty", "generator": "kitty-direct-png", "schedules": ["fibonacci", "terminator-split"], "expectation": "a valid direct PNG decodes to exact RGBA pixels and an owned immutable image and placement snapshot remains stable after the live state is deleted"},
+    {"fixtureId": "kitty-direct-rgb", "category": "kitty", "generator": "kitty-direct-rgb", "schedules": ["all-at-once", "fibonacci"], "expectation": "direct RGB image pixels and placement are exposed immutably"},
+    {"fixtureId": "kitty-direct-rgba-chunked", "category": "kitty", "generator": "kitty-direct-rgba-chunked", "schedules": ["terminator-split"], "expectation": "chunked RGBA produces one atomic image generation"},
+    {"fixtureId": "kitty-pixel-boundary", "category": "kitty-limit", "generator": "kitty-pixel-boundary", "schedules": ["all-at-once"], "expectation": "16000000 pixels passes when all byte ledgers fit and 16000001 rejects before decode"},
+    {"fixtureId": "kitty-png-bomb", "category": "kitty-limit", "generator": "kitty-png-header-bomb", "schedules": ["all-at-once", "terminator-split"], "expectation": "PNG dimensions and decoded reservation reject before decoded allocation"},
+    {"fixtureId": "kitty-replacement-transient", "category": "kitty-limit", "generator": "kitty-replacement-transient", "schedules": ["all-at-once"], "expectation": "old, new, compressed, decoded, conversion, and publication bytes are all simultaneously reserved before replacement work"},
+    {"fixtureId": "kitty-three-layers-crop", "category": "kitty", "generator": "kitty-three-layers-crop", "schedules": ["fibonacci"], "expectation": "cropped placements retain below-background, below-text, and above-text order"},
+    {"fixtureId": "kitty-zlib-bomb", "category": "kitty-limit", "generator": "kitty-zlib-bomb", "schedules": ["all-at-once", "bytewise"], "expectation": "a 512x512 RGBA declaration remains below the pixel cap while its compressed stream expands to 1048577 bytes; the bounded inflater stops before output exceeds the exact 1048576-byte decoded reservation"},
+    {"fixtureId": "malformed-utf8-vt", "category": "robustness", "generator": "malformed-utf8-vt", "schedules": ["all-at-once", "bytewise", "fibonacci"], "expectation": "replacement and discard behavior is deterministic and the process remains alive"},
+    {"fixtureId": "nonkitty-generic-boundary", "category": "non-kitty-limit", "generator": "generic-escape-boundaries", "schedules": ["all-at-once", "bytewise"], "expectation": "64KiB passes and plus one discards through the terminator without growth"},
+    {"fixtureId": "osc52-boundaries", "category": "non-kitty-limit", "generator": "osc52-boundaries", "schedules": ["all-at-once", "terminator-split"], "expectation": "1MiB encoded and 768KiB decoded are conjunctive and plus one has no partial clipboard effect"},
+    {"fixtureId": "pending-effects-boundary", "category": "effect-limit", "generator": "pending-effects-boundaries", "schedules": ["all-at-once"], "expectation": "256 descriptors and 2MiB pass; plus one atomically rejects or replaces by frozen policy"},
+    {"fixtureId": "resize-reflow-selection", "category": "screen", "generator": "resize-reflow-selection", "schedules": ["fibonacci"], "expectation": "wide/grapheme cells, selection, and logical lines survive deterministic resize and reflow"},
+    {"fixtureId": "scrollback-byte-boundary", "category": "resource", "generator": "scrollback-byte-boundaries", "schedules": ["all-at-once"], "expectation": "67108865 LF bytes force actual scrollback line growth while the typed terminal-text ledger proves 64MiB session reservation passes at boundary and rejects or evicts before plus-one allocation"},
+    {"fixtureId": "snapshot-dirty-retry", "category": "snapshot", "generator": "snapshot-dirty-retry", "schedules": ["all-at-once"], "expectation": "failed post-begin copy forces a later complete snapshot without lost notification"},
+    {"fixtureId": "snapshot-mutation-barrier", "category": "snapshot", "generator": "snapshot-mutation-barrier", "schedules": ["all-at-once"], "expectation": "no borrowed cell or image pointer remains usable after end and mutation"},
+    {"fixtureId": "synchronized-output", "category": "screen", "generator": "synchronized-output", "schedules": ["terminator-split"], "expectation": "publication is withheld and released atomically with correct dirty state"},
+    {"fixtureId": "teardown-callback-quiet", "category": "lifecycle", "generator": "teardown-callback-quiet", "schedules": ["all-at-once"], "expectation": "stop producers, detach callback, release instances, and unload only after callback and worker quiet"},
+    {"fixtureId": "title-cwd-boundaries", "category": "non-kitty-limit", "generator": "title-cwd-boundaries", "schedules": ["all-at-once", "bytewise"], "expectation": "4KiB title and 128KiB cwd pass at boundary; plus one discards before effect allocation"},
+    {"fixtureId": "unicode-grapheme-wide", "category": "cells", "generator": "unicode-grapheme-wide", "schedules": ["bytewise", "fibonacci"], "expectation": "combining sequences, emoji ZWJ, variation selectors, ambiguous width, and double-width continuations are immutable"},
+    {"fixtureId": "write-response-order", "category": "ordering", "generator": "write-response-order", "schedules": ["terminator-split"], "expectation": "protocol replies, input, resize, and authenticated side-channel effects retain strict admitted order"}
+  ],
+  "generatedPerformancePayload": {
+    "fixtureId": "mixed-8mib-performance",
+    "algorithm": "Cycle fixture input payloads in this exact order: alternate-screen-roundtrip, color-style-matrix, synchronized-output, unicode-grapheme-wide, write-response-order. After each complete payload append ASCII '#' plus the zero-based unsigned 64-bit record counter as exactly 16 lowercase hexadecimal digits plus LF. Append a complete payload+suffix only when it fits. Fill the final remainder, if any, only with ASCII 'x' bytes. The result is exactly 8388608 bytes and never truncates a fixture escape or UTF-8 sequence.",
+    "sizeBytes": "8388608"
+  }
+}

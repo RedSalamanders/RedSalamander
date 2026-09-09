@@ -56,6 +56,11 @@ public:
         return *instance;
     }
 
+    [[nodiscard]] uint64_t GetCurrentTickMs() const noexcept
+    {
+        return _hasTickTimestamp ? _lastTickMs : GetTickCount64();
+    }
+
     void Shutdown() noexcept
     {
         StopTimer();

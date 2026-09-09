@@ -34,12 +34,15 @@
 #include "Helpers.h"
 
 #include "PlugInterfaces/Factory.h"
+#include "FileSystemRouteProviderBase.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Viewer.h"
+#include "TestWindowActivationGuard.h"
 #include "ViewerSqlite.Engine.h"
 #include "WindowMessages.h"
 #include "TestSupport/TestSupport.h"
+#include "TestSupport/DirectedSelfTestInputWarning.h"
 
 namespace
 {
@@ -51,27 +54,45 @@ constexpr wchar_t kViewerSqliteWindowClassName[] = L"RedSalamander.ViewerSqlite"
 using RedSalamanderCreateFn = HRESULT(__stdcall*)(REFIID riid, const FactoryOptions* factoryOptions, IHost* host, const wchar_t* pluginId, void** result);
 constexpr wchar_t kViewerSqlitePluginId[]            = L"builtin/viewer-sqlite";
 constexpr std::wstring_view kViewerSqliteHarnessSegment{L"viewer-sqlite"};
+enum class TestDesktopInteraction
+{
+    Noninteractive,
+    RequiresActivation,
+};
 constexpr char kReadOnlyFileSystemCapabilitiesJson[] = R"json(
 {
-  "version": 1,
+  "version": 2,
+  "pathProfile": "test-read-only",
+  "rootId": "test-root",
   "operations": {
     "copy": false,
     "move": false,
+    "nativeMove": false,
     "delete": false,
     "rename": false,
     "properties": false,
     "read": false,
-    "write": false
+    "write": false,
+    "recycle": false,
+    "createDirectory": false
   },
   "concurrency": {
     "copyMoveMax": 1,
     "deleteMax": 1,
-    "deleteRecycleBinMax": 1
+    "deleteRecycleBinMax": 0
   },
-  "crossFileSystem": {
+  "transfer": {
     "export": { "copy": [], "move": [] },
     "import": { "copy": [], "move": [] }
-  }
+  },
+  "identity": { "object": "none", "revision": "none", "boundDelete": false, "conditionalDelete": false },
+  "publication": { "exclusiveStage": false, "conditionalPublish": false, "committedSize": false },
+  "verification": { "hostReadback": false, "providerProof": "none" },
+  "links": { "preserveFileLink": false, "preserveDirectoryLink": false, "retargetInTree": false, "exactLinkRemoval": false },
+  "metadata": { "motw": "unknown", "alternateStreams": "unknown", "extendedAttributes": "unknown", "sparse": "unknown", "efs": "unknown" },
+  "cancellation": { "abort": false, "deadline": false, "routeClass": "uncontained", "providerWatchdogTimeoutMs": 0 },
+  "names": { "pathTextStableIdentity": true, "comparison": "ordinalIgnoreCase", "normalization": "none", "preferredSeparator": "\\", "acceptedSeparators": ["\\", "/"], "casePreserving": true, "caseOnlyRename": "notApplicable", "maxComponentUtf16": 255 },
+  "directories": { "model": "native" }
 }
 )json";
 
@@ -209,8 +230,7 @@ struct ViewerClosedCounter final : IViewerCallback
                                           uint32_t selectionTextArgb,
                                           uint32_t accentArgb) noexcept
 {
-    ViewerTheme theme{};
-    theme.version                    = 2u;
+    ViewerTheme theme{.sizeBytes = sizeof(ViewerTheme)};
     theme.dpi                        = USER_DEFAULT_SCREEN_DPI;
     theme.backgroundArgb             = backgroundArgb;
     theme.textArgb                   = textArgb;
@@ -774,7 +794,10 @@ private:
     FileReaderFault _fault = FileReaderFault::None;
 };
 
-class BuiltinFileSystemStub final : public IFileSystem, public IInformations, public IFileSystemIO
+class BuiltinFileSystemStub final : public IFileSystem,
+                                    public IInformations,
+                                    public IFileSystemIO,
+                                    public FileSystemRouteCapabilitiesBase
 {
 public:
     explicit BuiltinFileSystemStub(std::filesystem::path backingPath = {},
@@ -802,6 +825,14 @@ public:
         if (riid == __uuidof(IUnknown) || riid == __uuidof(IFileSystem))
         {
             *ppvObject = static_cast<IFileSystem*>(this);
+        }
+        else if (riid == __uuidof(IFileSystemPathCapabilities2))
+        {
+            *ppvObject = static_cast<IFileSystemPathCapabilities2*>(this);
+        }
+        else if (riid == __uuidof(IFileSystemRouteCapabilities))
+        {
+            *ppvObject = static_cast<IFileSystemRouteCapabilities*>(static_cast<FileSystemRouteCapabilitiesBase*>(this));
         }
         else if (riid == __uuidof(IInformations))
         {
@@ -1004,7 +1035,9 @@ public:
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
-    HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* /*path*/,
+                                                  FileSystemOperation /*operation*/,
+                                                  const char** jsonUtf8) noexcept override
     {
         if (! jsonUtf8)
         {
@@ -1012,6 +1045,26 @@ public:
         }
 
         *jsonUtf8 = kReadOnlyFileSystemCapabilitiesJson;
+        return S_OK;
+    }
+
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t*,
+                                           FileSystemOperation,
+                                           FileSystemRouteDescriptor& descriptor) noexcept override
+    {
+        descriptor.providerId = _metaId;
+        descriptor.pathProfileId = L"viewer-sqlite-test-read-only";
+        descriptor.rootId = L"viewer-sqlite-test-root";
+        descriptor.acceptedSeparators = L"\\/";
+        descriptor.availability = FILESYSTEM_ROUTE_AVAILABLE;
+        descriptor.namespaceKind = FILESYSTEM_NAMESPACE_REAL_CONTAINER;
+        descriptor.componentComparison = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE;
+        descriptor.caseOnlyRename = FILESYSTEM_ROUTE_CASE_ONLY_NOT_APPLICABLE;
+        descriptor.readOperation = true;
+        descriptor.pathTextStableIdentity = true;
+        descriptor.casePreserving = true;
+        descriptor.windowsChildNames = true;
+        descriptor.preferredSeparator = L'\\';
         return S_OK;
     }
 
@@ -1624,7 +1677,7 @@ bool Check(bool condition, std::wstring_view message, bool& success)
 
     BuiltinFileSystemStub fileSystem;
     const wchar_t* otherFiles[] = {databasePath.c_str()};
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName        = L"File System";
     context.focusedPath           = databasePath.c_str();
@@ -1818,7 +1871,7 @@ bool Check(bool condition, std::wstring_view message, bool& success)
 
     BuiltinFileSystemStub fileSystem;
     const wchar_t* otherFiles[] = {databasePath.c_str()};
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName        = L"File System";
     context.focusedPath           = databasePath.c_str();
@@ -2043,7 +2096,7 @@ bool Check(bool condition, std::wstring_view message, bool& success)
 
         const std::vector<HWND> existingWindows = CollectVisibleWindowsByClass(kViewerSqliteWindowClassName);
 
-        ViewerOpenContext context{};
+        ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
         context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
         context.fileSystemName        = L"File System";
         context.focusedPath           = databasePath.c_str();
@@ -2194,7 +2247,7 @@ bool Check(bool condition, std::wstring_view message, bool& success)
 
     BuiltinFileSystemStub fileSystem;
     const wchar_t* otherFiles[] = {databasePath.c_str()};
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName        = L"File System";
     context.focusedPath           = databasePath.c_str();
@@ -2395,7 +2448,7 @@ bool Check(bool condition, std::wstring_view message, bool& success)
 
     BuiltinFileSystemStub fileSystem;
     const wchar_t* otherFiles[] = {databasePath.c_str()};
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName        = L"File System";
     context.focusedPath           = databasePath.c_str();
@@ -2676,7 +2729,7 @@ bool Check(bool condition, std::wstring_view message, bool& success)
     const std::wstring primaryPathText   = databasePath.wstring();
     const std::wstring alternatePathText = alternatePath.wstring();
     const wchar_t* otherFiles[]          = {primaryPathText.c_str(), alternatePathText.c_str()};
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName        = L"File System";
     context.focusedPath           = primaryPathText.c_str();
@@ -2948,7 +3001,7 @@ bool Check(bool condition, std::wstring_view message, bool& success)
 
     BuiltinFileSystemStub fileSystem;
     const wchar_t* otherFiles[] = {databasePath.c_str()};
-    ViewerOpenContext context{};
+    ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
     context.fileSystem            = static_cast<IFileSystem*>(&fileSystem);
     context.fileSystemName        = L"File System";
     context.focusedPath           = databasePath.c_str();
@@ -3171,6 +3224,50 @@ bool Check(bool condition, std::wstring_view message, bool& success)
 
 int wmain(int argc, wchar_t** argv)
 {
+    enum class RequestedTestGroup
+    {
+        All,
+        Noninteractive,
+        Interactive,
+    };
+
+    std::wstring filter;
+    RequestedTestGroup requestedGroup = RequestedTestGroup::All;
+    constexpr std::wstring_view kGroupPrefix{L"--group="};
+    for (int argIndex = 1; argIndex < argc; ++argIndex)
+    {
+        const std::wstring_view argument = argv[argIndex] ? std::wstring_view(argv[argIndex]) : std::wstring_view{};
+        if (argument.rfind(kGroupPrefix, 0u) == 0u)
+        {
+            const std::wstring_view group = argument.substr(kGroupPrefix.size());
+            if (group == L"noninteractive")
+            {
+                requestedGroup = RequestedTestGroup::Noninteractive;
+            }
+            else if (group == L"interactive")
+            {
+                requestedGroup = RequestedTestGroup::Interactive;
+            }
+            else
+            {
+                std::wcerr << L"--group requires 'noninteractive' or 'interactive'.\n";
+                return 2;
+            }
+            continue;
+        }
+        if (argument.empty() || argument.front() == L'-' || ! filter.empty())
+        {
+            std::wcerr << L"Unknown or duplicate ViewerSqliteTests argument: " << argument << L'\n';
+            return 2;
+        }
+        filter = argument;
+    }
+    if (! filter.empty() && requestedGroup != RequestedTestGroup::All)
+    {
+        std::wcerr << L"An exact ViewerSqliteTests filter cannot be combined with --group.\n";
+        return 2;
+    }
+
     std::wstring errorText;
     TempDatabase tempDb = CreateDatabase(errorText);
     if (tempDb.path.empty())
@@ -3200,72 +3297,122 @@ int wmain(int argc, wchar_t** argv)
     const auto runNamedViewerTest = [&](const wchar_t* name, const auto& test) noexcept
     { return runSourceTest(name, [&]() noexcept { return test(tempDb.path); }); };
 
-    const std::wstring filter = (argc >= 2 && argv != nullptr && argv[1] != nullptr) ? std::wstring(argv[1]) : std::wstring{};
+    constexpr std::wstring_view kTabTraversalTestName{L"TestViewerWindowTabTraversalMatchesExpectedOrder"};
+    const bool exactInteractiveFilter = filter == kTabTraversalTestName;
+    RedSalamander::TestSupport::ScopedWindowActivationBlocker activationBlocker;
+    if (requestedGroup != RequestedTestGroup::Interactive && ! exactInteractiveFilter && ! activationBlocker.Start())
+    {
+        std::wcerr << L"Failed to install the ViewerSqliteTests no-activation guard.\n";
+        return 2;
+    }
 
-    bool success         = true;
-    const auto shouldRun = [&](std::wstring_view testName) noexcept { return filter.empty() || filter == testName; };
+    const bool needsInputWarning = requestedGroup == RequestedTestGroup::Interactive || exactInteractiveFilter;
+    const RedSalamander::TestSupport::DirectedSelfTestInputWarning inputWarning(nullptr, needsInputWarning);
+    if (needsInputWarning && ! inputWarning.IsVisible())
+    {
+        std::wcerr << L"Failed to display the foreground-input warning.\n";
+        return 2;
+    }
 
-    if (shouldRun(L"TestListTables"))
+    bool success    = true;
+    bool ranAnyTest = false;
+    const auto shouldRun = [&](std::wstring_view testName, TestDesktopInteraction interaction) noexcept
+    {
+        bool selected = false;
+        if (! filter.empty())
+        {
+            selected = filter == testName;
+        }
+        else if (requestedGroup == RequestedTestGroup::Noninteractive)
+        {
+            selected = interaction == TestDesktopInteraction::Noninteractive;
+        }
+        else if (requestedGroup == RequestedTestGroup::Interactive)
+        {
+            selected = interaction == TestDesktopInteraction::RequiresActivation;
+        }
+        else
+        {
+            selected = true;
+        }
+        ranAnyTest = ranAnyTest || selected;
+        return selected;
+    };
+
+    if (shouldRun(L"TestListTables", TestDesktopInteraction::Noninteractive))
     {
         success = runNamedSourceTest(L"TestListTables", TestListTables) && success;
     }
-    if (shouldRun(L"TestPagedReads"))
+    if (shouldRun(L"TestPagedReads", TestDesktopInteraction::Noninteractive))
     {
         success = runNamedSourceTest(L"TestPagedReads", TestPagedReads) && success;
     }
-    if (shouldRun(L"TestSortedPagedReads"))
+    if (shouldRun(L"TestSortedPagedReads", TestDesktopInteraction::Noninteractive))
     {
         success = runNamedSourceTest(L"TestSortedPagedReads", TestSortedPagedReads) && success;
     }
-    if (shouldRun(L"TestReadOnlyQueries"))
+    if (shouldRun(L"TestReadOnlyQueries", TestDesktopInteraction::Noninteractive))
     {
         success = runNamedSourceTest(L"TestReadOnlyQueries", TestReadOnlyQueries) && success;
     }
-    if (shouldRun(L"TestSnapshotConnectionBoundsCancellationAndSanitization"))
+    if (shouldRun(L"TestSnapshotConnectionBoundsCancellationAndSanitization", TestDesktopInteraction::Noninteractive))
     {
         success = runNamedSourceTest(L"TestSnapshotConnectionBoundsCancellationAndSanitization",
                                      TestSnapshotConnectionBoundsCancellationAndSanitization) &&
                   success;
     }
-    if (shouldRun(L"TestLocalWalSnapshotVirtualLimitsAndStaleScavenging"))
+    if (shouldRun(L"TestLocalWalSnapshotVirtualLimitsAndStaleScavenging", TestDesktopInteraction::Noninteractive))
     {
         success = runNamedViewerTest(L"TestLocalWalSnapshotVirtualLimitsAndStaleScavenging", TestLocalWalSnapshotVirtualLimitsAndStaleScavenging) && success;
     }
-    if (shouldRun(L"TestViewerWindowUsesDxUiHostWithNoVisibleChildControls"))
+    if (shouldRun(L"TestViewerWindowUsesDxUiHostWithNoVisibleChildControls", TestDesktopInteraction::Noninteractive))
     {
         success =
             runNamedViewerTest(L"TestViewerWindowUsesDxUiHostWithNoVisibleChildControls", TestViewerWindowUsesDxUiHostWithNoVisibleChildControls) && success;
     }
 #ifdef _DEBUG
-    if (shouldRun(L"TestViewerWindowLongRunScrollingStaysBounded"))
+    if (shouldRun(L"TestViewerWindowLongRunScrollingStaysBounded", TestDesktopInteraction::Noninteractive))
     {
         success = runNamedViewerTest(L"TestViewerWindowLongRunScrollingStaysBounded", TestViewerWindowLongRunScrollingStaysBounded) && success;
     }
-    if (shouldRun(L"TestViewerWindowLongRunOpenCloseStaysStable"))
+    if (shouldRun(L"TestViewerWindowLongRunOpenCloseStaysStable", TestDesktopInteraction::Noninteractive))
     {
         success = runNamedViewerTest(L"TestViewerWindowLongRunOpenCloseStaysStable", TestViewerWindowLongRunOpenCloseStaysStable) && success;
     }
-    if (shouldRun(L"TestViewerWindowPagingAndSortFlows"))
+    if (shouldRun(L"TestViewerWindowPagingAndSortFlows", TestDesktopInteraction::Noninteractive))
     {
         success = runNamedViewerTest(L"TestViewerWindowPagingAndSortFlows", TestViewerWindowPagingAndSortFlows) && success;
     }
 #if ! defined(__SANITIZE_ADDRESS__)
-    if (shouldRun(L"TestViewerWindowSelectionPatternSurvivesPagingAndSortFlows"))
+    if (shouldRun(L"TestViewerWindowSelectionPatternSurvivesPagingAndSortFlows", TestDesktopInteraction::Noninteractive))
     {
         success =
             runNamedViewerTest(L"TestViewerWindowSelectionPatternSurvivesPagingAndSortFlows", TestViewerWindowSelectionPatternSurvivesPagingAndSortFlows) &&
             success;
     }
 #endif
-    if (shouldRun(L"TestViewerWindowTabTraversalMatchesExpectedOrder"))
-    {
-        success = runNamedViewerTest(L"TestViewerWindowTabTraversalMatchesExpectedOrder", TestViewerWindowTabTraversalMatchesExpectedOrder) && success;
-    }
-    if (shouldRun(L"TestViewerWindowThemeCycleKeepsGridLegible"))
+    if (shouldRun(L"TestViewerWindowThemeCycleKeepsGridLegible", TestDesktopInteraction::Noninteractive))
     {
         success = runNamedViewerTest(L"TestViewerWindowThemeCycleKeepsGridLegible", TestViewerWindowThemeCycleKeepsGridLegible) && success;
     }
+    if (shouldRun(kTabTraversalTestName, TestDesktopInteraction::RequiresActivation))
+    {
+        activationBlocker.Stop();
+        success = runNamedViewerTest(L"TestViewerWindowTabTraversalMatchesExpectedOrder", TestViewerWindowTabTraversalMatchesExpectedOrder) && success;
+    }
 #endif
+
+    if (! ranAnyTest)
+    {
+        if (filter.empty() && requestedGroup == RequestedTestGroup::Interactive)
+        {
+            std::wcout << L"ViewerSqliteTests has no compiled interactive cases in this build.\n";
+            tempDb.Reset();
+            return 0;
+        }
+        std::wcerr << L"No ViewerSqliteTests cases matched the requested selection.\n";
+        return 2;
+    }
 
     std::wcout << (success ? L"ViewerSqliteTests passed.\n" : L"ViewerSqliteTests failed.\n") << std::flush;
 

@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="560" viewBox="0 0 920 560" role="img" aria-labelledby="title desc">
+  <title id="title">Operation Chordforge Terminal command-history Suggestions mockup</title>
+  <desc id="desc">A compact history popup over a terminal, with recent commands, a selected-row accent, and a search field containing buil.</desc>
+  <defs>
+    <linearGradient id="terminalBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0f151c"/>
+      <stop offset="1" stop-color="#090d12"/>
+    </linearGradient>
+    <linearGradient id="popupBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#302936" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="#302415" stop-opacity="0.98"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000000" flood-opacity="0.58"/>
+    </filter>
+    <clipPath id="terminalClip">
+      <rect x="24" y="24" width="872" height="512" rx="12"/>
+    </clipPath>
+  </defs>
+
+  <rect width="920" height="560" fill="#080b0f"/>
+  <rect x="24" y="24" width="872" height="512" rx="12" fill="url(#terminalBg)" stroke="#26313c"/>
+
+  <g clip-path="url(#terminalClip)" font-family="Cascadia Mono, Consolas, monospace" font-size="17">
+    <rect x="24" y="24" width="872" height="42" fill="#151c24"/>
+    <circle cx="48" cy="45" r="6" fill="#ad4d4d"/>
+    <circle cx="70" cy="45" r="6" fill="#a78343"/>
+    <circle cx="92" cy="45" r="6" fill="#3f865f"/>
+    <text x="122" y="51" fill="#9eabb8" font-family="Segoe UI, sans-serif" font-size="14">RedSalamander — Terminal</text>
+
+    <text x="48" y="105" fill="#7dd3fc">PS Z:\src\RedSalamander&gt;</text>
+    <text x="300" y="105" fill="#c8d0d9">.\build.ps1 -Configuration Debug</text>
+    <text x="48" y="139" fill="#7dd3fc">PS Z:\src\RedSalamander&gt;</text>
+    <text x="300" y="139" fill="#c8d0d9">.\.build\x64\Debug\RedSalamander.exe</text>
+    <text x="48" y="173" fill="#65717d">Build succeeded in 18.4 seconds</text>
+    <text x="48" y="207" fill="#7dd3fc">PS Z:\src\RedSalamander&gt;</text>
+    <text x="300" y="207" fill="#c8d0d9">git status --short</text>
+    <text x="48" y="469" fill="#7dd3fc">PS Z:\src\RedSalamander&gt;</text>
+    <text x="300" y="469" fill="#d8dee6">buil</text>
+    <rect x="342" y="451" width="2" height="23" fill="#f5f7fa"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="154" y="112" width="612" height="326" rx="14" fill="url(#popupBg)" stroke="#655568" stroke-width="1.5"/>
+    <rect x="166" y="124" width="588" height="70" rx="9" fill="#4a3b4f"/>
+    <rect x="166" y="124" width="4" height="70" rx="2" fill="#42c7ff"/>
+
+    <g stroke="#d6d0da" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="198" cy="159" r="10"/>
+      <path d="M198 153v7l5 3M190 151l-2 6 6-1"/>
+      <circle cx="198" cy="229" r="10"/>
+      <path d="M198 223v7l5 3M190 221l-2 6 6-1"/>
+      <circle cx="198" cy="299" r="10"/>
+      <path d="M198 293v7l5 3M190 291l-2 6 6-1"/>
+    </g>
+
+    <g font-family="Cascadia Mono, Consolas, monospace" font-size="17">
+      <text x="224" y="165" fill="#f4f1f5" font-weight="600">.\build.ps1</text>
+      <text x="350" y="165" fill="#d8d0dc"> -Configuration Debug</text>
+      <text x="224" y="235" fill="#f4f1f5" font-weight="600">.\build.ps1</text>
+      <text x="350" y="235" fill="#d8d0dc"> -ProjectName RedSalamander</text>
+      <text x="224" y="305" fill="#f4f1f5" font-weight="600">.\.build\x64\Debug\</text>
+      <text x="466" y="305" fill="#d8d0dc">RedSalamander.exe</text>
+    </g>
+
+    <line x1="174" y1="336" x2="746" y2="336" stroke="#66586a"/>
+    <rect x="174" y="350" width="572" height="64" rx="9" fill="#241e27" stroke="#8a6f3a" stroke-width="1.5"/>
+    <g stroke="#d8d0dc" stroke-width="1.8" fill="none" stroke-linecap="round">
+      <circle cx="202" cy="382" r="9"/>
+      <path d="M208 389l7 7"/>
+    </g>
+    <text x="228" y="389" fill="#f5f2f6" font-family="Cascadia Mono, Consolas, monospace" font-size="19">buil</text>
+    <g stroke="#cfc7d1" stroke-width="1.8" stroke-linecap="round">
+      <path d="M712 376l12 12M724 376l-12 12"/>
+    </g>
+  </g>
+
+  <text x="460" y="506" text-anchor="middle" fill="#83909d" font-family="Segoe UI, sans-serif" font-size="12.5">History Suggestions • Enter inserts without executing • Esc closes</text>
+</svg>

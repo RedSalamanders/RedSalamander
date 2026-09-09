@@ -3,27 +3,61 @@
     Counts lines of code across the RedSalamander solution and displays a categorised report.
 
 .DESCRIPTION
-    Uses cloc (Count Lines of Code) to measure every active source file in the repository,
-    splitting results into three categories:
+    Canonical source-line measurement command for the repository. In Repository scope,
+    uses cloc (Count Lines of Code) to measure every active source file and splits results
+    into three categories:
 
         Production   – shipping application and plugin code
         Test         – unit tests, integration tests, self-tests, performance tests
         DevEnv       – proof-of-concept projects, build scripts, installer tooling
 
-    Only compiled / executed source files are counted (C/C++, PowerShell, MSBuild props).
+    Only compiled or executed source files are counted (C/C++, PowerShell, MSBuild props).
     Data files, documentation, archived test runs, and third-party packages are excluded.
+    Solution scope emits raw cloc output for the minimal directory set represented by the
+    selected Visual Studio solution.
 
 .PARAMETER Detailed
     When specified, prints per-project breakdowns inside each category.
 
+.PARAMETER Scope
+    Repository emits the categorized report. Solution invokes cloc directly against the
+    minimal directory set represented by SolutionPath.
+
+.PARAMETER SolutionPath
+    Solution parsed in Solution scope. Defaults to RedSalamander.sln at the repository root.
+
+.PARAMETER ClocPath
+    cloc executable name or full path. Defaults to cloc.
+
+.PARAMETER ClocArgs
+    Additional arguments passed directly to cloc in Solution scope.
+
+.OUTPUTS
+    Human-readable categorized output in Repository scope; raw cloc output in Solution scope. No stable pipeline object schema.
+
+.NOTES
+    Prerequisites: Git and cloc (installable with winget install AlDanial.Cloc). Side effects: none; repository and solution discovery are read-only. A missing cloc executable or failed child invocation produces a nonzero exit. This is the sole supported source-line command.
+
 .EXAMPLE
     .\Tools\Measure-SourceLines.ps1
     .\Tools\Measure-SourceLines.ps1 -Detailed
+
+.EXAMPLE
+    .\Tools\Measure-SourceLines.ps1 -Scope Solution -ClocArgs @('--by-file', '--xml')
 #>
 
 [CmdletBinding()]
 param(
-    [switch]$Detailed
+    [switch]$Detailed,
+
+    [ValidateSet('Repository', 'Solution')]
+    [string]$Scope = 'Repository',
+
+    [string]$SolutionPath = (Join-Path $PSScriptRoot '..\RedSalamander.sln'),
+
+    [string]$ClocPath = 'cloc',
+
+    [string[]]$ClocArgs = @()
 )
 
 Set-StrictMode -Version Latest
@@ -36,15 +70,38 @@ if (-not $repoRoot) {
     $repoRoot = Split-Path $PSScriptRoot -Parent
 }
 $repoRoot = (Resolve-Path $repoRoot).Path
+Import-Module (Join-Path $PSScriptRoot 'Modules\Reporting\SourceLineMeasurement.psm1') -Force
 
 # ── Verify cloc is available ──────────────────────────────────────────────────
 
-$clocCmd = Get-Command cloc -ErrorAction SilentlyContinue
+$clocCmd = Get-Command -Name $ClocPath -ErrorAction SilentlyContinue
 if (-not $clocCmd) {
-    Write-Error "cloc is not installed or not on PATH.  Install via:  winget install AlDanial.Cloc"
+    Write-Error "Unable to find cloc executable '$ClocPath'. Install via 'winget install AlDanial.Cloc' or pass -ClocPath."
     exit 1
 }
-$clocVersion = & cloc --version 2>&1 | Select-Object -First 1
+$clocVersion = & $clocCmd.Source --version 2>&1 | Select-Object -First 1
+
+if ($Scope -eq 'Solution') {
+    $resolvedSolutionPath = (Resolve-Path -LiteralPath $SolutionPath -ErrorAction Stop).Path
+    $solutionDirectories = @(Get-RSSolutionSourceDirectories `
+        -SolutionPath $resolvedSolutionPath `
+        -RepositoryRoot $repoRoot)
+    if ($solutionDirectories.Count -eq 0) {
+        throw "No solution-backed directories were found in $resolvedSolutionPath."
+    }
+
+    $clocTargets = @($solutionDirectories | ForEach-Object { Join-Path $repoRoot $_ })
+    Write-Host 'Running cloc on solution-backed directories:' -ForegroundColor Cyan
+    foreach ($target in $solutionDirectories) {
+        Write-Host "  $target"
+    }
+
+    & $clocCmd.Source @ClocArgs @clocTargets
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
+    return
+}
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -66,7 +123,7 @@ function Get-SourceFiles {
         $ext = [System.IO.Path]::GetExtension($_).ToLowerInvariant()
         $extensions -contains $ext
     } | Where-Object {
-        $_ -notmatch '^(vcpkg_installed|\.build|\.vs|x64|ARM64|\.git|\.copilot|\.squad|Specs/TestRuns)[\\/]'
+        $_ -notmatch '^(vcpkg_installed|\.build|\.vs|x64|ARM64|\.git|Specs/TestRuns)[\\/]'
     }
 }
 
@@ -141,7 +198,7 @@ Write-Host "  Found $($allAbsPaths.Count) source files.  Running cloc $clocVersi
 $listFile = [System.IO.Path]::GetTempFileName()
 try {
     $allAbsPaths | Set-Content -Path $listFile -Encoding UTF8
-    $rawCsv = & cloc --list-file="$listFile" --by-file --csv --quiet 2>$null
+    $rawCsv = & $clocCmd.Source --list-file="$listFile" --by-file --csv --quiet 2>$null
 }
 finally {
     Remove-Item $listFile -Force -ErrorAction SilentlyContinue

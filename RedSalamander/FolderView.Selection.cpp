@@ -6,6 +6,10 @@ void FolderView::SelectSingle(size_t index)
         return;
 
     const size_t previousFocusedIndex = _focusedIndex;
+    if (previousFocusedIndex != index)
+    {
+        ++_removalFocusOwnershipEpoch;
+    }
     const int marginPx                = std::max(1, PxFromDip(kFocusStrokeThicknessDip));
     auto invalidateItem               = [&](size_t itemIndex) noexcept
     {
@@ -57,6 +61,10 @@ void FolderView::SelectSingle(size_t index)
     EnsureVisible(index);
     UpdateIncrementalSearchHighlightForFocusedItem();
     RememberFocusedItemForDisplayedFolder();
+    if (previousFocusedIndex != _focusedIndex)
+    {
+        NotifyFocusedItemChanged();
+    }
 }
 
 void FolderView::ToggleSelection(size_t index)
@@ -65,6 +73,11 @@ void FolderView::ToggleSelection(size_t index)
         return;
 
     const auto invalidIndex = static_cast<size_t>(-1);
+    const size_t previousFocusedIndex = _focusedIndex;
+    if (previousFocusedIndex != index)
+    {
+        ++_removalFocusOwnershipEpoch;
+    }
     const int marginPx      = std::max(1, PxFromDip(kFocusStrokeThicknessDip));
     auto invalidateItem     = [&](size_t itemIndex) noexcept
     {
@@ -95,14 +108,22 @@ void FolderView::ToggleSelection(size_t index)
     invalidateItem(index);
     UpdateIncrementalSearchHighlightForFocusedItem();
     RememberFocusedItemForDisplayedFolder();
+    if (previousFocusedIndex != _focusedIndex)
+    {
+        NotifyFocusedItemChanged();
+    }
 }
 
-void FolderView::RangeSelect(size_t index)
+void FolderView::RangeSelect(size_t index, const bool additive)
 {
     if (index >= _items.size() || _anchorIndex >= _items.size())
         return;
 
     const size_t previousFocusedIndex = _focusedIndex;
+    if (previousFocusedIndex != index)
+    {
+        ++_removalFocusOwnershipEpoch;
+    }
     const int marginPx                = std::max(1, PxFromDip(kFocusStrokeThicknessDip));
     auto invalidateItem               = [&](size_t itemIndex) noexcept
     {
@@ -124,7 +145,7 @@ void FolderView::RangeSelect(size_t index)
     uint32_t selectedTotal           = 0;
     for (size_t i = 0; i < _items.size(); ++i)
     {
-        bool shouldSelect = (i >= minIndex && i <= maxIndex);
+        const bool shouldSelect = additive ? (_items[i].selected || (i >= minIndex && i <= maxIndex)) : (i >= minIndex && i <= maxIndex);
         if (_items[i].selected != shouldSelect)
         {
             _items[i].selected = shouldSelect;
@@ -170,6 +191,10 @@ void FolderView::RangeSelect(size_t index)
     EnsureVisible(index);
     UpdateIncrementalSearchHighlightForFocusedItem();
     RememberFocusedItemForDisplayedFolder();
+    if (previousFocusedIndex != _focusedIndex)
+    {
+        NotifyFocusedItemChanged();
+    }
 }
 
 void FolderView::ClearSelection()
@@ -683,11 +708,11 @@ void FolderView::RecomputeSelectionStats() noexcept
     _selectionStats = stats;
 }
 
-void FolderView::NotifySelectionChanged() const noexcept
+void FolderView::NotifySelectionChanged(SelectionChangeKind kind) const noexcept
 {
     if (_selectionChangedCallback)
     {
-        _selectionChangedCallback(_selectionStats);
+        _selectionChangedCallback(_selectionStats, kind);
     }
 }
 
@@ -708,6 +733,16 @@ std::optional<FolderView::SelectionStats::SelectedItemDetails> FolderView::GetFo
     return details;
 }
 
+std::shared_ptr<const FileOperationArtifacts::Projection> FolderView::GetFocusedArtifactProjection() const noexcept
+{
+    const auto invalidIndex = static_cast<size_t>(-1);
+    if (_focusedIndex == invalidIndex || _focusedIndex >= _items.size())
+    {
+        return {};
+    }
+    return _items[_focusedIndex].artifactProjection;
+}
+
 void FolderView::NotifyFocusedItemChanged() const noexcept
 {
     if (_focusedItemChangedCallback)
@@ -723,6 +758,10 @@ void FolderView::FocusItem(size_t index, bool ensureVisible)
 
     const auto invalidIndex           = static_cast<size_t>(-1);
     const size_t previousFocusedIndex = _focusedIndex;
+    if (previousFocusedIndex != index)
+    {
+        ++_removalFocusOwnershipEpoch;
+    }
     const int marginPx                = std::max(1, PxFromDip(kFocusStrokeThicknessDip));
     auto invalidateItem               = [&](size_t itemIndex) noexcept
     {
@@ -1154,6 +1193,124 @@ size_t FolderView::DebugGetSelectedItemCount() const noexcept
     }
 
     return count;
+}
+
+FolderView::DebugFocusSelectionStateSnapshot FolderView::DebugGetFocusSelectionStateSnapshot() const noexcept
+{
+    constexpr uint64_t kFnvOffset = 14695981039346656037ull;
+    constexpr uint64_t kFnvPrime  = 1099511628211ull;
+    const auto appendDigest = [](uint64_t& digest, std::wstring_view text) noexcept
+    {
+        for (const wchar_t ch : text)
+        {
+            digest ^= static_cast<uint16_t>(ch);
+            digest *= kFnvPrime;
+        }
+        digest ^= 0xffffu;
+        digest *= kFnvPrime;
+    };
+
+    DebugFocusSelectionStateSnapshot snapshot{};
+    snapshot.itemCount = _items.size();
+    snapshot.currentIndex = _focusedIndex;
+    snapshot.anchorIndex = _anchorIndex;
+    snapshot.resolutionReason = _lastCurrentResolutionReason;
+    snapshot.focusOwnershipEpoch = _removalFocusOwnershipEpoch;
+    snapshot.selectedFileCount = _selectionStats.selectedFiles;
+    snapshot.selectedFolderCount = _selectionStats.selectedFolders;
+    snapshot.selectedFileBytes = _selectionStats.selectedFileBytes;
+    snapshot.emptyParentActionActive = CanShowEmptyFolderState() && _emptyFolderState.has_value();
+    snapshot.selectionDigest = kFnvOffset;
+    snapshot.potentialDragSourceDigest = kFnvOffset;
+
+    if (_focusedIndex < _items.size())
+    {
+        snapshot.currentDisplayName.assign(_items[_focusedIndex].displayName);
+    }
+
+    for (const FolderItem& item : _items)
+    {
+        if (item.focused)
+        {
+            ++snapshot.focusedFlagCount;
+        }
+        if (item.selected)
+        {
+            ++snapshot.selectedCount;
+            appendDigest(snapshot.selectionDigest, item.displayName);
+        }
+    }
+
+    if (_drag.potential)
+    {
+        snapshot.potentialDragSourceCount = _drag.sourceDisplayNames.size();
+        for (const std::wstring& displayName : _drag.sourceDisplayNames)
+        {
+            appendDigest(snapshot.potentialDragSourceDigest, displayName);
+        }
+    }
+
+    snapshot.focusMemoryEntryCount = _focusMemory.size();
+    snapshot.focusMemoryPayloadBytes = _focusMemoryPayloadBytes;
+    snapshot.focusMemoryEvictionCount = _focusMemoryEvictionCount;
+    snapshot.focusMemoryHitCount = _focusMemoryHitCount;
+    snapshot.focusMemoryMissCount = _focusMemoryMissCount;
+    snapshot.focusMemoryNoCacheCount = _focusMemoryNoCacheCount;
+    snapshot.focusMemoryLocationIdentityNoCacheCount = _focusMemoryLocationIdentityNoCacheCount;
+    snapshot.focusMemoryItemIdentityNoCacheCount = _focusMemoryItemIdentityNoCacheCount;
+    snapshot.focusMemoryOversizedEntryNoCacheCount = _focusMemoryOversizedEntryNoCacheCount;
+    snapshot.focusMemoryLastNoCacheReason = _focusMemoryLastNoCacheReason;
+    return snapshot;
+}
+
+void FolderView::DebugClearFocusMemoryForSelfTest() noexcept
+{
+    ClearFocusMemory();
+    _focusMemoryEvictionCount = 0u;
+    _focusMemoryHitCount = 0u;
+    _focusMemoryMissCount = 0u;
+    _focusMemoryNoCacheCount = 0u;
+    _focusMemoryLocationIdentityNoCacheCount = 0u;
+    _focusMemoryItemIdentityNoCacheCount = 0u;
+    _focusMemoryOversizedEntryNoCacheCount = 0u;
+    _focusMemoryLastNoCacheReason = FocusMemoryNoCacheReason::None;
+}
+
+bool FolderView::DebugRememberFocusMemoryEntryForSelfTest(const std::filesystem::path& folder,
+                                                          const std::wstring_view itemDisplayName) noexcept
+{
+    return RecordFocusMemoryEntry(folder, itemDisplayName);
+}
+
+std::wstring FolderView::DebugLookupFocusMemoryEntryForSelfTest(const std::filesystem::path& folder) noexcept
+{
+    return GetRememberedFocusedItemPathForFolder(folder);
+}
+
+std::optional<POINT> FolderView::DebugGetEmptyBackgroundClientPointForSelfTest() const noexcept
+{
+    if (! _hWnd)
+    {
+        return std::nullopt;
+    }
+
+    RECT client{};
+    if (GetClientRect(_hWnd.get(), &client) == FALSE)
+    {
+        return std::nullopt;
+    }
+    for (int y = client.bottom - 2; y >= client.top; y -= 4)
+    {
+        for (int x = client.right - 2; x >= client.left; x -= 4)
+        {
+            const POINT candidate{x, y};
+            if (! HitTest(candidate).has_value())
+            {
+                return candidate;
+            }
+        }
+    }
+    return std::nullopt;
 }
 
 bool FolderView::DebugIsEmptyFolderStateActive() const noexcept

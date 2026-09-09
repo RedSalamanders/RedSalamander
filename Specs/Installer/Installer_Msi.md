@@ -30,7 +30,9 @@ Primary files:
 ## Tooling
 
 - WiX Toolset CLI v6+ (provides `wix.exe`).
-- WiX UI extension (`WixToolset.UI.wixext`) is installed on-demand by `Installer/msi/build-msi.ps1`.
+- WiX UI extension (`WixToolset.UI.wixext`) must be installed explicitly at a
+  version matching the WiX CLI before packaging. MSI scripts do not run the
+  machine-global `wix extension add -g` mutation.
 
 Typical install:
 - `winget install --exact --id WiXToolset.WiXCLI`
@@ -46,6 +48,22 @@ Or build/package separately:
 - `build.ps1 -Configuration Release`
 - `Installer\msi\build-msi.ps1 -Configuration Release -Platform x64`
 - `Installer\msi\build-msi-symbols.ps1 -Configuration Release -Platform x64`
+
+Both standalone MSI entrypoints first hold the `Release|x64` artifact-profile
+lease while reading compiled inputs, then enter the repository-wide packaging
+coordination scope before publishing. `robocopy.exe` and WiX run as contained
+children so interruption cannot leave an unowned packager continuing after the
+leases close. Same-thread calls from `build.ps1 -Msi` reenter both locks with
+balanced child leases.
+
+An abandoned packaging owner records repository-wide contamination and the MSI
+scripts fail closed with the marker path. Packaging does not clear this marker:
+a reviewer must restore shared `Installer` inputs and `.build\AppPackages`, then
+remove the marker explicitly.
+
+`OutputDirectory` is normalized and accepted only at or beneath this
+repository's `.build\AppPackages`; a repository-local lock must not imply
+coordination for an arbitrary external path or another worktree.
 
 MSI output is written to:
 - `.build\AppPackages\`
@@ -68,7 +86,12 @@ The symbols MSI includes:
 MSI uses a 3-part version (`major.minor.build`) derived from `Common/Version.h`:
 - `major` = `VERSINFO_MAJOR`
 - `minor` = `VERSINFO_MINOR`
-- `build` = the shared build number resolved by `Tools/Versioning.ps1`
+- `build` = the shared build number resolved by `Tools/Modules/Build/Versioning.psm1`
+
+Both standalone MSI entrypoints require `-BuildNumber 1..65535`. They use the
+pure `New-RSVersionContext` operation for their requested Release/x64 profile and
+never read saved repository state or allocate a counter during packaging.
+`build.ps1 -Msi` passes the build number that stamped the compiled profile.
 
 Example:
 - `7.0.183`

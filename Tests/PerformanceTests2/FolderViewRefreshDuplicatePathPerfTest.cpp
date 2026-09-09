@@ -3,6 +3,7 @@
 #include "DirectoryInfoCache.h"
 #include "FolderViewInternal.Access.h"
 #include "FolderWatcher.h"
+#include "FileSystemRouteProviderBase.h"
 #include "IconCache.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "WSLDistro.h"
@@ -23,25 +24,38 @@ namespace
 {
 constexpr char kReadOnlyFileSystemCapabilitiesJson[] = R"json(
 {
-  "version": 1,
+  "version": 2,
+  "pathProfile": "test-read-only",
+  "rootId": "test-root",
   "operations": {
     "copy": false,
     "move": false,
+    "nativeMove": false,
     "delete": false,
     "rename": false,
     "properties": false,
     "read": false,
-    "write": false
+    "write": false,
+    "recycle": false,
+    "createDirectory": false
   },
   "concurrency": {
     "copyMoveMax": 1,
     "deleteMax": 1,
-    "deleteRecycleBinMax": 1
+    "deleteRecycleBinMax": 0
   },
-  "crossFileSystem": {
+  "transfer": {
     "export": { "copy": [], "move": [] },
     "import": { "copy": [], "move": [] }
-  }
+  },
+  "identity": { "object": "none", "revision": "none", "boundDelete": false, "conditionalDelete": false },
+  "publication": { "exclusiveStage": false, "conditionalPublish": false, "committedSize": false },
+  "verification": { "hostReadback": false, "providerProof": "none" },
+  "links": { "preserveFileLink": false, "preserveDirectoryLink": false, "retargetInTree": false, "exactLinkRemoval": false },
+  "metadata": { "motw": "unknown", "alternateStreams": "unknown", "extendedAttributes": "unknown", "sparse": "unknown", "efs": "unknown" },
+  "cancellation": { "abort": false, "deadline": false, "routeClass": "uncontained", "providerWatchdogTimeoutMs": 0 },
+  "names": { "pathTextStableIdentity": true, "comparison": "ordinalIgnoreCase", "normalization": "none", "preferredSeparator": "\\", "acceptedSeparators": ["\\", "/"], "casePreserving": true, "caseOnlyRename": "notApplicable", "maxComponentUtf16": 255 },
+  "directories": { "model": "native" }
 }
 )json";
 
@@ -170,7 +184,7 @@ private:
     unsigned long _usedBytes = 0;
 };
 
-class DuplicatePathFileSystem final : public IFileSystem
+class DuplicatePathFileSystem final : public IFileSystem, public FileSystemRouteCapabilitiesBase
 {
 public:
     struct Entry
@@ -198,6 +212,18 @@ public:
         if (riid == __uuidof(IUnknown) || riid == __uuidof(IFileSystem))
         {
             *ppvObject = static_cast<IFileSystem*>(this);
+            AddRef();
+            return S_OK;
+        }
+        if (riid == __uuidof(IFileSystemPathCapabilities2))
+        {
+            *ppvObject = static_cast<IFileSystemPathCapabilities2*>(this);
+            AddRef();
+            return S_OK;
+        }
+        if (riid == __uuidof(IFileSystemRouteCapabilities))
+        {
+            *ppvObject = static_cast<IFileSystemRouteCapabilities*>(static_cast<FileSystemRouteCapabilitiesBase*>(this));
             AddRef();
             return S_OK;
         }
@@ -297,7 +323,9 @@ public:
     {
         return E_NOTIMPL;
     }
-    HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* /*path*/,
+                                                  FileSystemOperation /*operation*/,
+                                                  const char** jsonUtf8) noexcept override
     {
         if (! jsonUtf8)
         {
@@ -334,6 +362,25 @@ public:
             return E_INVALIDARG;
         }
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t*,
+                                           FileSystemOperation,
+                                           FileSystemRouteDescriptor& descriptor) noexcept override
+    {
+        descriptor.providerId = L"builtin/file-system";
+        descriptor.pathProfileId = L"performance-test-read-only";
+        descriptor.rootId = L"performance-test-duplicate-path-root";
+        descriptor.acceptedSeparators = L"\\/";
+        descriptor.availability = FILESYSTEM_ROUTE_AVAILABLE;
+        descriptor.namespaceKind = FILESYSTEM_NAMESPACE_REAL_CONTAINER;
+        descriptor.componentComparison = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE;
+        descriptor.caseOnlyRename = FILESYSTEM_ROUTE_CASE_ONLY_NOT_APPLICABLE;
+        descriptor.pathTextStableIdentity = true;
+        descriptor.casePreserving = true;
+        descriptor.windowsChildNames = true;
+        descriptor.preferredSeparator = L'\\';
+        return S_OK;
     }
 
 private:

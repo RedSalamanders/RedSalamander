@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://red-salamander.invalid/schemas/build-receipt-v1.json",
+  "title": "RedSalamander local build receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "canonicalization", "receipt_id", "trust_scope", "repo_identity", "source_snapshot_id", "git_head", "platform", "configuration", "target", "project_selection", "build_arguments", "tests_enabled", "official_release", "toolchain_identity_digest", "vcpkg_identity_digest", "ghostty_runtime_identity", "project_graph_digest", "runtime_dependency_digest", "started_utc", "ended_utc", "duration_ms", "exit_code", "outputs"],
+  "properties": {
+    "schema": { "const": "red-salamander.build-receipt.v1" },
+    "canonicalization": { "const": "rs-canonical-json-v1" },
+    "receipt_id": { "$ref": "#/definitions/digest" },
+    "trust_scope": { "const": "local-checkout" },
+    "repo_identity": { "$ref": "#/definitions/digest" },
+    "source_snapshot_id": { "$ref": "#/definitions/digest" },
+    "git_head": { "$ref": "#/definitions/gitObject" },
+    "platform": { "enum": ["x64", "ARM64"] },
+    "configuration": { "enum": ["Debug", "Release", "ASan Debug"] },
+    "target": { "$ref": "#/definitions/id" },
+    "project_selection": { "$ref": "#/definitions/relativePathSet" },
+    "build_arguments": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 4096 } },
+    "tests_enabled": { "type": "boolean" },
+    "official_release": { "type": "boolean" },
+    "toolchain_identity_digest": { "$ref": "#/definitions/digest" },
+    "vcpkg_identity_digest": { "$ref": "#/definitions/digest" },
+    "ghostty_runtime_identity": { "anyOf": [{ "$ref": "#/definitions/digest" }, { "type": "null" }] },
+    "project_graph_digest": { "$ref": "#/definitions/digest" },
+    "runtime_dependency_digest": { "$ref": "#/definitions/digest" },
+    "started_utc": { "$ref": "#/definitions/timestamp" },
+    "ended_utc": { "$ref": "#/definitions/timestamp" },
+    "duration_ms": { "type": "integer", "minimum": 0 },
+    "exit_code": { "const": 0 },
+    "outputs": { "type": "array", "minItems": 1, "maxItems": 4096, "items": { "$ref": "#/definitions/output" } }
+  },
+  "definitions": {
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "gitObject": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+    "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$" },
+    "relativePath": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//)(?!.*\\\\)[^\\u0000-\\u001f]+$" },
+    "relativePathSet": { "type": "array", "maxItems": 4096, "uniqueItems": true, "items": { "$ref": "#/definitions/relativePath" } },
+    "timestamp": { "type": "string", "format": "date-time", "maxLength": 64 },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "role", "relative_path", "absolute_path_diagnostic", "size_bytes", "sha256", "runtime_closure"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "role": { "enum": ["launchable", "test", "library", "plugin", "runtime-data", "package", "symbols"] },
+        "relative_path": { "$ref": "#/definitions/relativePath" },
+        "absolute_path_diagnostic": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/definitions/digest" },
+        "runtime_closure": { "$ref": "#/definitions/relativePathSet" }
+      }
+    }
+  }
+}

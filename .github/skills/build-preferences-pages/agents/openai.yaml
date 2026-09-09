@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Preferences Pages"
+  short_description: "Create settings-backed Preferences pages safely"
+  default_prompt: "Use $build-preferences-pages to add or update a RedSalamander Preferences page with persistence and tests."

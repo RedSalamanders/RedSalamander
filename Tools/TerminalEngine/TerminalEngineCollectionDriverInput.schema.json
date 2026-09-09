@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:red-salamander:schema:terminal-engine-collection-wrapper-input:v1",
+  "title": "RedSalamander candidate-wrapper collection input v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatId",
+    "version",
+    "candidate",
+    "lane",
+    "paths",
+    "pathBindings",
+    "artifacts",
+    "gate0"
+  ],
+  "properties": {
+    "formatId": {
+      "const": "red-salamander-terminal-engine-wrapper-input"
+    },
+    "version": {
+      "const": 1
+    },
+    "candidate": {
+      "$ref": "#/$defs/candidate"
+    },
+    "lane": {
+      "$ref": "#/$defs/lane"
+    },
+    "paths": {
+      "$ref": "#/$defs/paths"
+    },
+    "pathBindings": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/resolvedBinding"
+      }
+    },
+    "artifacts": {
+      "$ref": "#/$defs/artifacts"
+    },
+    "gate0": {
+      "$ref": "#/$defs/gate0"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "safeLeaf": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$"
+    },
+    "absolutePath": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 1024,
+      "pattern": "^[A-Za-z]:\\\\"
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "pin",
+        "pinSha256",
+        "sourceArchiveSha256",
+        "patchSha256",
+        "resultTree",
+        "collectionDescriptorSha256",
+        "buildKind"
+      ],
+      "properties": {
+        "candidateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "pin": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "pinSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sourceArchiveSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "patchSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "resultTree": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "collectionDescriptorSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "buildKind": {
+          "const": "candidate-wrapper-v1"
+        }
+      }
+    },
+    "lane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "configuration"
+      ],
+      "properties": {
+        "platform": {
+          "enum": [
+            "ARM64",
+            "x64"
+          ]
+        },
+        "configuration": {
+          "enum": [
+            "ASan Debug",
+            "Release"
+          ]
+        }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceRoot",
+        "buildRoot",
+        "noticeOutputPath",
+        "adapterHeaderPath",
+        "layoutHeaderPath",
+        "hostHeaderIncludeRoot",
+        "msbuildPath",
+        "buildReceiptPath",
+        "sourceDependenciesPath"
+      ],
+      "properties": {
+        "sourceRoot": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "buildRoot": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "noticeOutputPath": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "adapterHeaderPath": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "layoutHeaderPath": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "hostHeaderIncludeRoot": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "msbuildPath": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "buildReceiptPath": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "sourceDependenciesPath": {
+          "$ref": "#/$defs/absolutePath"
+        }
+      }
+    },
+    "resolvedBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bindingKey",
+        "valueKind",
+        "path",
+        "identitySha256"
+      ],
+      "properties": {
+        "bindingKey": {
+          "type": "string",
+          "pattern": "^RS_GATE0_[A-Z][A-Z0-9_]{0,63}$"
+        },
+        "valueKind": {
+          "enum": [
+            "frozen-input-file",
+            "header-package-root",
+            "provider-path"
+          ]
+        },
+        "path": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "identitySha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adapterDllLeaf",
+        "privateRuntimeLibraries"
+      ],
+      "properties": {
+        "adapterDllLeaf": {
+          "$ref": "#/$defs/safeLeaf"
+        },
+        "privateRuntimeLibraries": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/safeLeaf"
+          }
+        }
+      }
+    },
+    "gate0": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adapterHeaderSha256",
+        "layoutHeaderSha256",
+        "hostHeaderTreeSha256",
+        "capabilities"
+      ],
+      "properties": {
+        "adapterHeaderSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "layoutHeaderSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "hostHeaderTreeSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "capabilities": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        }
+      }
+    }
+  }
+}

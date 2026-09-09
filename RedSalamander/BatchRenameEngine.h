@@ -77,6 +77,10 @@ struct PreviewRow final
     std::filesystem::path sourcePath;
     std::wstring originalName;
     std::wstring newName;
+    std::wstring providerParentKey;
+    std::wstring providerSourceCollisionKey;
+    std::filesystem::path providerJoinedPath;
+    std::wstring providerCollisionKey;
     bool isDirectory     = false;
     bool metadataUnknown = false;
     uint64_t sizeBytes   = 0;

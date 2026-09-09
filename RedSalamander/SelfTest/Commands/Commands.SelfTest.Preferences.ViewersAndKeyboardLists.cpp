@@ -67,7 +67,9 @@ namespace
         return false;
     }
 
-    g_settings.plugins.customPluginPaths = {customPathA.wstring(), customPathB.wstring()};
+    const std::wstring customPathAText = customPathA.wstring();
+    const std::wstring customPathBText = customPathB.wstring();
+    g_settings.plugins.customPluginPaths = {customPathAText, customPathBText};
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
     const HWND prefs = WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms));
@@ -119,15 +121,37 @@ namespace
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    PreferencesDebugSnapshot snapshot{};
-    state.Require(waitForSnapshot(
-                      [](const PreferencesDebugSnapshot& value) noexcept
+    const auto hasPluginsCustomPathsSurface = [](const PreferencesDebugSnapshot& value) noexcept
     {
-        return value.currentCategory == kPrefCategoryPlugins && ! value.pluginItemSelected && true /* Phase 8: removed field */
-               && value.pluginsCustomPathsListRowCount >= 2u;
-    },
-                      snapshot),
-                  L"Preferences Plugins page did not expose its custom-paths DX grid surface for UIA selection validation.");
+        return value.currentCategory == kPrefCategoryPlugins && ! value.pluginItemSelected && ! value.pluginsDetailsActive &&
+               value.pluginsPaneVisible && value.pluginsCustomPathsListRowCount >= 2u;
+    };
+
+    PreferencesDebugSnapshot snapshot{};
+    if (DebugGetPreferencesDialogSnapshot(snapshot) && snapshot.currentCategory == kPrefCategoryPlugins &&
+        (snapshot.pluginItemSelected || snapshot.pluginsDetailsActive))
+    {
+        for (int attempt = 0; attempt < 3; ++attempt)
+        {
+            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_LEFT, 0);
+            SendMessageW(categoryTreeHost, WM_KEYUP, VK_LEFT, 0);
+            PumpPendingMessages();
+            if (waitForSnapshot(hasPluginsCustomPathsSurface, snapshot))
+            {
+                break;
+            }
+        }
+    }
+
+    state.Require(waitForSnapshot(hasPluginsCustomPathsSurface, snapshot),
+                  std::format(L"Preferences Plugins page did not expose its custom-paths DX grid surface for UIA selection validation; category={} "
+                              L"pluginItemSelected={} detailsActive={} pluginsPaneVisible={} rows={} selectedPath='{}'.",
+                              static_cast<int>(snapshot.currentCategory),
+                              snapshot.pluginItemSelected,
+                              snapshot.pluginsDetailsActive,
+                              snapshot.pluginsPaneVisible,
+                              snapshot.pluginsCustomPathsListRowCount,
+                              snapshot.pluginsSelectedCustomPathText));
     if (! state.failure.empty())
     {
         return false;
@@ -139,11 +163,22 @@ namespace
                value.selectedControlType == UIA_DataItemControlTypeId && value.selectedHasSelectionItemPattern && value.selectedName == expectedName;
     };
 
+    const HWND activePage = DebugGetPreferencesActivePageHandle();
+    state.Require(activePage != nullptr && IsWindow(activePage) != FALSE,
+                  L"Preferences Plugins active page handle was unavailable for custom-paths UIA selection validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     UiaSelectionPatternState selectionState{};
     state.Require(DebugSelectPreferencesPluginsCustomPathsListRow(0u), L"Failed to select the first Preferences Plugins custom-paths DX grid row.");
+    state.Require(waitForSnapshot([&](const PreferencesDebugSnapshot& value) noexcept
+    { return value.pluginsSelectedCustomPathText == customPathAText; }, snapshot),
+                  L"Preferences Plugins custom-paths model did not settle on the first selected path.");
     state.Require(
         WaitForAnyVisibleGridSelectionState(
-            prefs, [&](const UiaSelectionPatternState& value) noexcept { return hasExpectedSelection(value, customPathA.wstring()); }, selectionState),
+            activePage, [&](const UiaSelectionPatternState& value) noexcept { return hasExpectedSelection(value, customPathAText); }, selectionState),
         L"Preferences Plugins custom-paths DX grid did not expose the first selected path through UI Automation.");
     if (! state.failure.empty())
     {
@@ -151,9 +186,12 @@ namespace
     }
 
     state.Require(DebugSelectPreferencesPluginsCustomPathsListRow(1u), L"Failed to select the second Preferences Plugins custom-paths DX grid row.");
+    state.Require(waitForSnapshot([&](const PreferencesDebugSnapshot& value) noexcept
+    { return value.pluginsSelectedCustomPathText == customPathBText; }, snapshot),
+                  L"Preferences Plugins custom-paths model did not settle on the second selected path.");
     state.Require(
         WaitForAnyVisibleGridSelectionState(
-            prefs, [&](const UiaSelectionPatternState& value) noexcept { return hasExpectedSelection(value, customPathB.wstring()); }, selectionState),
+            activePage, [&](const UiaSelectionPatternState& value) noexcept { return hasExpectedSelection(value, customPathBText); }, selectionState),
         L"Preferences Plugins custom-paths DX grid did not update the selected path through UI Automation after selection moved.");
     return state.failure.empty();
 }
@@ -1162,14 +1200,6 @@ enum : size_t
 
     state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(1000ms)),
                   L"Failed to focus the Preferences category host before Viewers long-run scrolling validation.");
-    state.Require(DebugSelectPreferencesCategory(kPrefCategoryViewers),
-                  L"Failed to select the Preferences Viewers category before Viewers long-run scrolling validation.");
-    PumpPendingMessages();
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
     const auto waitForSnapshot = [&](const auto& predicate, PreferencesDebugSnapshot& outSnapshot) noexcept
     {
         const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
@@ -1189,9 +1219,11 @@ enum : size_t
     };
 
     PreferencesDebugSnapshot snapshot{};
-    const bool viewersPageReady = waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept {
-        return value.currentCategory == kPrefCategoryViewers && true /* Phase 8: removed field */ && value.viewersListRowCount > 0u;
-    }, snapshot);
+    const bool viewersPageReady = SelectPreferencesCategoryAndWaitForStableSurface(
+        kPrefCategoryViewers,
+        [](const PreferencesDebugSnapshot& value) noexcept
+    { return true /* Phase 8: removed field */ && value.viewersListRowCount > 0u && value.currentPageDxHostResizeFailureCount == 0u; },
+        snapshot);
     state.Require(viewersPageReady,
                   std::format(L"Preferences Viewers page did not expose its stabilized DxUi list surface for long-run scrolling validation; {}.",
                               DescribePreferencesViewersLongRunStateForSelfTest(snapshot)));
@@ -1219,6 +1251,11 @@ enum : size_t
                   std::format(L"Preferences Viewers DxUi list should start with zero DX resize failures; saw {}.", snapshot.viewersListResizeFailureCount));
     state.Require(WaitForPreferencesCategoryTreeRenderCountToSettle(snapshot),
                   L"Preferences category tree host did not settle before Viewers list long-run scrolling baseline.");
+    state.Require(DebugSelectPreferencesViewersListRow(0u),
+                  L"Failed to move focus from the category tree to the Viewers grid before long-run scrolling validation.");
+    PumpPendingMessages();
+    state.Require(WaitForPreferencesCategoryTreeRenderCountToSettle(snapshot),
+                  L"Preferences category tree host did not settle after focus moved to the Viewers grid for long-run scrolling validation.");
     if (! state.failure.empty())
     {
         return false;
@@ -2207,15 +2244,12 @@ enum : size_t
                       L"Failed to focus the Preferences category host for Themes theme-cycle validation.");
         PumpPendingMessages();
 
-        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
-                      L"Failed to select the Preferences Themes category for Themes theme-cycle validation.");
-        PumpPendingMessages();
-
-        state.Require(waitForSnapshot(
+        state.Require(SelectPreferencesCategoryAndWaitForStableSurface(
+                          kPrefCategoryThemes,
                           [&](const PreferencesDebugSnapshot& value) noexcept
         {
-            return value.currentCategory == kPrefCategoryThemes && value.themesListRowCount > 0u && value.themesSelectedThemeIdText == kThemeId &&
-                   value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u && value.currentPageDxHostResizeFailureCount == 0u &&
+            return value.themesListRowCount > 0u && value.themesSelectedThemeIdText == kThemeId && value.createdPaneWindowCount == 0u &&
+                   value.visiblePaneWindowCount == 0u && value.currentPageDxHostResizeFailureCount == 0u &&
                    value.visibleCurrentPageChildWindowCount <= 1u;
         },
                           outSnapshot),
@@ -6430,6 +6464,15 @@ enum : size_t
 
     const auto navigateToViewersPage = [&](PreferencesDebugSnapshot& outSnapshot) noexcept
     {
+        const auto hasViewersPageSurfaceState = [](const PreferencesDebugSnapshot& value) noexcept
+        {
+            return value.currentCategory == kPrefCategoryViewers && value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u &&
+                   value.visibleCurrentPageChildWindowCount >= 1u && value.currentPageDxHostResizeFailureCount == 0u;
+        };
+
+        const auto hasStableViewersPageState = [&](const PreferencesDebugSnapshot& value) noexcept
+        { return hasViewersPageSurfaceState(value) && value.viewersSearchText.empty() && value.viewersListRowCount == 3u; };
+
         const HWND categoryTreeHost = GetDlgItem(prefs, IDC_PREFS_CATEGORY_LIST);
         state.Require(categoryTreeHost != nullptr && IsWindow(categoryTreeHost) != FALSE,
                       L"Preferences category host control missing for Viewers reordered-resized-copy/search validation.");
@@ -6440,24 +6483,56 @@ enum : size_t
 
         state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host for Viewers reordered-resized-copy/search validation.");
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
-        PumpPendingMessages();
-        for (int i = 0; i < 2; ++i)
+        if (waitForSnapshot(hasViewersPageSurfaceState, outSnapshot))
         {
-            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
+            if (! hasStableViewersPageState(outSnapshot))
+            {
+                state.Require(DebugSetPreferencesViewersSearchText(L""),
+                              L"Failed to clear the Viewers search field before establishing the reordered-resized-copy/search baseline.");
+                state.Require(waitForSnapshot(hasStableViewersPageState, outSnapshot),
+                              L"Preferences Viewers page did not restore a cleared three-row baseline before reordered-resized-copy/search validation.");
+            }
+            return state.failure.empty();
         }
 
-        state.Require(waitForSnapshot(
-                          [](const PreferencesDebugSnapshot& value) noexcept
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryViewers),
+                      L"Failed to select the Preferences Viewers category before reordered-resized-copy/search validation.");
+        PumpPendingMessages();
+        if (! waitForSnapshot(hasViewersPageSurfaceState, outSnapshot))
         {
-            return value.currentCategory == kPrefCategoryViewers && value.viewersListRowCount == 3u && value.createdPaneWindowCount == 0u &&
-                   value.visiblePaneWindowCount == 0u && value.visibleCurrentPageChildWindowCount == 1u && value.currentPageDxHostResizeFailureCount == 0u;
-        },
-                          outSnapshot),
-                      L"Preferences Viewers page did not settle before reordered-resized-copy/search validation.");
+            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
+            SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+            PumpPendingMessages();
+            for (int i = 0; i < 2; ++i)
+            {
+                SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
+                SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
+                PumpPendingMessages();
+            }
+
+            state.Require(waitForSnapshot(hasViewersPageSurfaceState, outSnapshot),
+                          std::format(L"Preferences Viewers page did not settle before reordered-resized-copy/search validation; category={}, "
+                                      L"search='{}', rows={}, createdPane={}, visiblePane={}, visiblePageChildren={}, resizeFailures={}.",
+                                      static_cast<int>(outSnapshot.currentCategory),
+                                      outSnapshot.viewersSearchText,
+                                      outSnapshot.viewersListRowCount,
+                                      outSnapshot.createdPaneWindowCount,
+                                      outSnapshot.visiblePaneWindowCount,
+                                      outSnapshot.visibleCurrentPageChildWindowCount,
+                                      outSnapshot.currentPageDxHostResizeFailureCount));
+        }
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
+        if (! hasStableViewersPageState(outSnapshot))
+        {
+            state.Require(DebugSetPreferencesViewersSearchText(L""),
+                          L"Failed to clear the Viewers search field before establishing the reordered-resized-copy/search baseline.");
+            state.Require(waitForSnapshot(hasStableViewersPageState, outSnapshot),
+                          L"Preferences Viewers page did not restore a cleared three-row baseline before reordered-resized-copy/search validation.");
+        }
         return state.failure.empty();
     };
 
@@ -8455,7 +8530,8 @@ enum : size_t
     return state.failure.empty();
 }
 
-[[nodiscard]] bool TestPreferencesDialogKeyboardReorderedResizedCopyFollowsVisibleColumnsAfterSearchRoundTrip(HWND mainWindow, CaseState& state) noexcept
+[[nodiscard]] bool TestPreferencesDialogKeyboardReorderedResizedCopyFollowsVisibleColumnsAfterSearchRoundTrip(
+    HWND mainWindow, CaseState& state, bool displaceNativeFocus = false) noexcept
 {
     using namespace std::chrono_literals;
     constexpr auto kSuite = SelfTest::SelfTestSuite::Commands;
@@ -8808,6 +8884,13 @@ enum : size_t
         return false;
     }
 
+    if (displaceNativeFocus)
+    {
+        // Logical DxUi focus survives native focus moving to another live Preferences HWND.
+        SetFocus(categoryTreeHost);
+        state.Require(GetFocus() == categoryTreeHost, L"Keyboard input regression could not displace native focus to the category host.");
+    }
+    const ULONGLONG focusStarted = GetTickCount64();
     HWND focusedWindow = WaitForPreferencesKeyboardSearchInputTarget(SelfTest::Scale(1000ms), snapshot);
     state.Require(focusedWindow != nullptr,
                   std::format(L"Preferences Keyboard search field did not expose a focused Win32 input target before live no-match search validation; "
@@ -8820,12 +8903,33 @@ enum : size_t
         return false;
     }
 
+    if (displaceNativeFocus)
+    {
+        const bool correctTarget = focusedWindow == activePage;
+        Debug::Perf::Emit(L"selftest.preferences.keyboard.input_target",
+                          L"displaced-native-focus",
+                          (GetTickCount64() - focusStarted) * 1000u,
+                          correctTarget ? 1u : 0u,
+                          0u,
+                          correctTarget ? S_OK : E_FAIL);
+        state.Require(correctTarget, L"Keyboard search wait accepted a different live HWND instead of the native search input host.");
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+    }
+
     SendMessageW(focusedWindow, EM_SETSEL, static_cast<WPARAM>(0), static_cast<LPARAM>(-1));
     SendMessageW(focusedWindow, EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(kSearchText));
-    state.Require(waitForKeyboardSnapshot([&](const PreferencesKeyboardDebugSnapshot& value) noexcept
-    { return value.currentCategory == kPrefCategoryKeyboard && value.keyboardSearchText == kSearchText && value.keyboardListRowCount == 0u; },
-                                          keyboardSnapshot),
-                  L"Preferences Keyboard filtered no-match search rebuild did not settle during reordered-resized-copy/search validation.");
+    const bool noMatchSettled = waitForKeyboardSnapshot([&](const PreferencesKeyboardDebugSnapshot& value) noexcept
+    { return value.currentCategory == kPrefCategoryKeyboard && value.keyboardSearchText == kSearchText && value.keyboardListRowCount == 0u; }, keyboardSnapshot);
+    state.Require(noMatchSettled,
+                  std::format(L"Preferences Keyboard filtered no-match search rebuild did not settle during reordered-resized-copy/search validation; "
+                              L"category={}, search='{}', rows={}, input={}, focus={}, active={}, foreground={}.",
+                              static_cast<unsigned int>(keyboardSnapshot.currentCategory), keyboardSnapshot.keyboardSearchText,
+                              keyboardSnapshot.keyboardListRowCount, DescribeKeyboardSearchWindowForSelfTest(focusedWindow),
+                              DescribeKeyboardSearchWindowForSelfTest(GetFocus()), DescribeKeyboardSearchWindowForSelfTest(GetActiveWindow()),
+                              DescribeKeyboardSearchWindowForSelfTest(GetForegroundWindow())));
     if (! state.failure.empty())
     {
         return false;

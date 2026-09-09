@@ -13,8 +13,8 @@ BEGIN
         MENUITEM "更新(&R)\tF5", IDM_VIEWERPE_FILE_REFRESH
         POPUP "その他のファイル(&F)"
         BEGIN
-            MENUITEM "次へ(&N)\tSpace, Ctrl+Down", IDM_VIEWERPE_OTHER_NEXT
             MENUITEM "前へ(&P)\tBackspace, Ctrl+Up", IDM_VIEWERPE_OTHER_PREVIOUS
+            MENUITEM "次へ(&N)\tSpace, Ctrl+Down", IDM_VIEWERPE_OTHER_NEXT
             MENUITEM "最初(&F)\tCtrl+Home", IDM_VIEWERPE_OTHER_FIRST
             MENUITEM "最後(&L)\tCtrl+End", IDM_VIEWERPE_OTHER_LAST
         END

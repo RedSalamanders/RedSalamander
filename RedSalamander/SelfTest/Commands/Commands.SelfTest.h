@@ -37,6 +37,7 @@ void DebugSetSessionEndSettingsWriterForSelfTest(SessionEndSettingsWriterForSelf
 
 namespace CommandsSelfTest
 {
+[[nodiscard]] bool IsKnownFamily(std::wstring_view family) noexcept;
 std::vector<std::wstring> ListCases(const SelfTest::SelfTestOptions& options = {}) noexcept;
 [[nodiscard]] bool Run(HWND mainWindow, const SelfTest::SelfTestOptions& options = {}, SelfTest::SelfTestSuiteResult* outResult = nullptr) noexcept;
 } // namespace CommandsSelfTest

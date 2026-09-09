@@ -3,7 +3,7 @@
 > **Executor instructions:** This plan owns the correctness, responsiveness, persistence, test, and
 > architecture findings discovered while reviewing the File Operations popup implementation at
 > `78366858d`. The product behavior remains owned by
-> `../WIP/UI_FileOperationsPopupUxRefinementPlan_2026-07-07.md`; do not create a second UI contract here.
+> `UI_FileOperationsPopupUxRefinementPlan_2026-07-07.md`; do not create a second UI contract here.
 > Re-anchor every symbol before editing because line numbers will drift. Preserve concurrent WIP
 > documents and unrelated working-tree changes. Complete and verify one track at a time.
 
@@ -17,7 +17,7 @@
 - **Planned at:** `78366858d` on 2026-07-10
 - **Scope:** File Operations state, popup rendering/input, completed-task navigation, settings,
   deterministic self-tests, performance evidence, and the checked-in HTML mockup
-- **Closeout owner:** `../WIP/UI_FileOperationsPopupUxRefinementPlan_2026-07-07.md`
+- **Closeout owner:** `UI_FileOperationsPopupUxRefinementPlan_2026-07-07.md`
 
 ## Goal
 

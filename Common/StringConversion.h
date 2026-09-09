@@ -15,6 +15,23 @@
 
 namespace Common::Strings
 {
+// Strict validation for protocol paths that retain UTF-8 bytes and defer
+// UTF-16 allocation/conversion to another thread or ownership boundary.
+[[nodiscard]] inline bool IsValidUtf8Strict(std::string_view text) noexcept
+{
+    if (text.empty())
+    {
+        return true;
+    }
+    if (text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
+    {
+        return false;
+    }
+
+    return MultiByteToWideChar(
+               CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0) > 0;
+}
+
 // Converts UTF-8 using the Windows replacement-character policy (flags 0): malformed byte
 // sequences are represented by U+FFFD rather than rejecting the entire value.
 [[nodiscard]] inline std::wstring Utf16FromUtf8ReplacingInvalid(std::string_view text) noexcept
@@ -35,28 +52,42 @@ namespace Common::Strings
     return written == required ? result : std::wstring{};
 }
 
-// Strict protocol/settings conversion. An engaged empty value represents valid empty input;
-// nullopt represents malformed UTF-8, an oversized input, or a conversion failure.
-[[nodiscard]] inline std::optional<std::wstring> TryUtf16FromUtf8Strict(std::string_view text) noexcept
+// Strict conversion into reusable caller-owned storage. Failure clears the output;
+// valid empty input succeeds. Input bytes must not alias the output's storage.
+[[nodiscard]] inline bool TryUtf16FromUtf8Strict(std::string_view text, std::wstring& result) noexcept
 {
+    result.clear();
     if (text.empty())
     {
-        return std::wstring{};
+        return true;
     }
     if (text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
     {
-        return std::nullopt;
+        return false;
     }
 
     const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
     if (required <= 0)
     {
-        return std::nullopt;
+        return false;
     }
 
-    std::wstring result(static_cast<size_t>(required), L'\0');
+    result.resize(static_cast<size_t>(required));
     const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
     if (written != required)
+    {
+        result.clear();
+        return false;
+    }
+    return true;
+}
+
+// Strict protocol/settings conversion. An engaged empty value represents valid empty input;
+// nullopt represents malformed UTF-8, an oversized input, or a conversion failure.
+[[nodiscard]] inline std::optional<std::wstring> TryUtf16FromUtf8Strict(std::string_view text) noexcept
+{
+    std::wstring result;
+    if (! TryUtf16FromUtf8Strict(text, result))
     {
         return std::nullopt;
     }

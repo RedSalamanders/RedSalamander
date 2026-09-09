@@ -93,6 +93,7 @@ struct NavigationViewDebugSnapshot
     int hoveredSegmentIndex                       = -1;
     int hoveredSeparatorIndex                     = -1;
     bool menuIconBitmapLoaded                     = false;
+    wchar_t menuFallbackGlyph                     = L'\0';
     size_t visibleChildWindowCount                = 0u;
     size_t historyCount                           = 0u;
     size_t historyDropdownItemCount               = 0u;
@@ -229,6 +230,7 @@ public:
     [[nodiscard]] bool DebugGetSnapshot(NavigationViewDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugFocusRegion(FocusRegion region) noexcept;
     [[nodiscard]] bool DebugPostCurrentEditSuggestResultForSelfTest();
+    void DebugSetFullPathPopupDestroyProbe(std::function<void()> probe) { _debugFullPathPopupDestroyProbe = std::move(probe); }
 #endif
 
 private:
@@ -715,6 +717,7 @@ private:
     FocusRegion _focusedRegion = FocusRegion::Path;
 
 #ifdef ENABLE_TESTS
+    std::function<void()> _debugFullPathPopupDestroyProbe;
     uint64_t _debugEnterEditAttemptCount    = 0;
     uint64_t _debugEnterEditSuccessCount    = 0;
     uint64_t _debugEnterEditAbortCount      = 0;
@@ -812,6 +815,7 @@ private:
 
     wchar_t _breadcrumbSeparatorGlyph = L'\u203A'; // › (fallback when Segoe Fluent Icons isn't available)
     wchar_t _historyChevronGlyph      = L'\u25BE'; // ▾ (fallback when Segoe Fluent Icons isn't available)
+    wchar_t _menuFallbackGlyph        = L'\u2630'; // ☰ (fallback until the icon font is resolved)
     bool _dwriteFluentIconsValid      = false;
 
     wil::com_ptr<ID2D1SolidColorBrush> _textBrush;      // RGB(32,32,32)

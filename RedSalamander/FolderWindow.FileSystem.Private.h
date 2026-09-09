@@ -1,17 +1,32 @@
 #pragma once
 
+#include <atomic>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "AppTheme.h"
+#include "BatchRenameExecutionEngine.h"
 #include "FileSystemPluginManager.h"
 #include "FolderWindowInternal.h"
 #include "SettingsStore.h"
 
 namespace FolderWindowFileSystemInternal
 {
+struct ChangeCaseTaskReceipt final
+{
+    ChangeCaseTaskReceipt()                                       = default;
+    ChangeCaseTaskReceipt(const ChangeCaseTaskReceipt&)            = delete;
+    ChangeCaseTaskReceipt& operator=(const ChangeCaseTaskReceipt&) = delete;
+    ChangeCaseTaskReceipt(ChangeCaseTaskReceipt&&)                 = delete;
+    ChangeCaseTaskReceipt& operator=(ChangeCaseTaskReceipt&&)      = delete;
+
+    std::atomic<uint64_t> taskId{0u};
+};
+
 struct EditNewPromptResult final
 {
     std::wstring fileName;
@@ -21,12 +36,44 @@ struct EditNewPromptResult final
 struct ChangeCaseTaskPayload final
 {
     FolderWindow::InformationalTaskUpdate update{};
+    std::shared_ptr<ChangeCaseTaskReceipt> receipt;
 };
+
+template <typename CreateOrUpdate>
+[[nodiscard]] uint64_t ResolveChangeCaseTaskUpdate(ChangeCaseTaskPayload& payload, CreateOrUpdate&& createOrUpdate) noexcept
+{
+    if (payload.receipt)
+    {
+        const uint64_t existingTaskId = payload.receipt->taskId.load(std::memory_order_acquire);
+        if (existingTaskId != 0u)
+        {
+            payload.update.taskId = existingTaskId;
+        }
+    }
+
+    const uint64_t resolvedTaskId = std::forward<CreateOrUpdate>(createOrUpdate)(payload.update);
+    if (! payload.receipt || resolvedTaskId == 0u)
+    {
+        return resolvedTaskId;
+    }
+
+    uint64_t expectedTaskId = 0u;
+    if (payload.receipt->taskId.compare_exchange_strong(
+            expectedTaskId, resolvedTaskId, std::memory_order_acq_rel, std::memory_order_acquire))
+    {
+        return resolvedTaskId;
+    }
+    return expectedTaskId;
+}
 
 struct ChangeCaseCompletedPayload final
 {
     FolderWindow::Pane pane = FolderWindow::Pane::Left;
     HRESULT hr              = S_OK;
+    wil::com_ptr<IFileSystem> fileSystem;
+    std::vector<BatchRenameExecutionOp> operations;
+    std::filesystem::path focusFolder;
+    std::wstring focusDisplayName;
 };
 
 [[nodiscard]] bool IsFilePluginShortId(std::wstring_view pluginShortId) noexcept;
@@ -35,6 +82,11 @@ struct ChangeCaseCompletedPayload final
 #ifdef ENABLE_TESTS
 [[nodiscard]] std::wstring GetWindowClassNameLocal(HWND hwnd);
 [[nodiscard]] size_t CountVisibleNativeChildControlWindowsLocal(HWND hwnd) noexcept;
+[[nodiscard]] HRESULT DebugResolveInitialCreateDirectoryNameForTests(const wil::com_ptr<IFileSystem>& fileSystem,
+                                                                     const std::filesystem::path& folder,
+                                                                     std::wstring_view defaultName,
+                                                                     std::wstring_view pluginId,
+                                                                     std::wstring& nameOut) noexcept;
 #endif
 [[nodiscard]] int ScalePanePromptForDpi(UINT dpi, int dip) noexcept;
 [[nodiscard]] HWND GetClipboardOwnerWindow(HWND window) noexcept;

@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://red-salamander.invalid/schemas/validation-entry-evidence-v1.json",
+  "title": "RedSalamander immutable validation entry evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "canonicalization", "evidence_digest", "run_id", "entry_id", "entry_fingerprint", "fingerprint_component_version", "fingerprint_components", "plan_digest", "coverage_plan_digest", "terminal_result_digest", "pre_snapshot_id", "post_snapshot_id", "build_receipt_id", "artifact_epoch", "artifact_digests", "coverage_digest", "outcome_digest", "status", "result_artifacts", "started_utc", "ended_utc", "duration_ms"],
+  "properties": {
+    "schema": { "const": "red-salamander.validation-entry-evidence.v1" },
+    "canonicalization": { "const": "rs-canonical-json-v1" },
+    "evidence_digest": { "$ref": "#/definitions/digest" },
+    "run_id": { "$ref": "#/definitions/runId" },
+    "entry_id": { "$ref": "#/definitions/id" },
+    "entry_fingerprint": { "$ref": "#/definitions/digest" },
+    "fingerprint_component_version": { "const": "validation-entry-components.v1" },
+    "fingerprint_components": { "$ref": "#/definitions/componentDigests" },
+    "plan_digest": { "$ref": "#/definitions/digest" },
+    "coverage_plan_digest": { "$ref": "#/definitions/digest" },
+    "terminal_result_digest": { "$ref": "#/definitions/digest" },
+    "pre_snapshot_id": { "$ref": "#/definitions/digest" },
+    "post_snapshot_id": { "$ref": "#/definitions/digest" },
+    "build_receipt_id": { "$ref": "#/definitions/digest" },
+    "artifact_epoch": { "type": "integer", "minimum": 0 },
+    "artifact_digests": { "type": "object", "maxProperties": 4096, "additionalProperties": { "$ref": "#/definitions/digest" }, "propertyNames": { "$ref": "#/definitions/id" } },
+    "coverage_digest": { "$ref": "#/definitions/digest" },
+    "outcome_digest": { "$ref": "#/definitions/digest" },
+    "status": { "enum": ["provisional-passed", "failed", "interrupted", "invalidated"] },
+    "result_artifacts": { "type": "array", "maxItems": 4096, "uniqueItems": true, "items": { "$ref": "#/definitions/resultArtifact" } },
+    "started_utc": { "$ref": "#/definitions/timestamp" },
+    "ended_utc": { "$ref": "#/definitions/timestamp" },
+    "duration_ms": { "type": "integer", "minimum": 0 }
+  },
+  "definitions": {
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$" },
+    "runId": { "type": "string", "maxLength": 128, "pattern": "^[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{32}$" },
+    "relativePath": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//)(?!.*\\\\)[^\\u0000-\\u001f]+$" },
+    "resultArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "size_bytes", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/definitions/relativePath" },
+        "size_bytes": { "type": "integer", "minimum": 0, "maximum": 67108864 },
+        "sha256": { "$ref": "#/definitions/digest" }
+      }
+    },
+    "componentDigests": {
+      "type": "object",
+      "minProperties": 11,
+      "maxProperties": 64,
+      "additionalProperties": { "$ref": "#/definitions/digest" },
+      "propertyNames": { "$ref": "#/definitions/id" }
+    },
+    "timestamp": { "type": "string", "format": "date-time", "maxLength": 64 }
+  }
+}

@@ -4,20 +4,21 @@
 
 LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
 
-IDR_FOLDERVIEW_CONTEXT MENU
+IDR_FOLDERVIEW_ITEM_CONTEXT MENU
 BEGIN
 	    POPUP ""
 		    BEGIN
 		        MENUITEM "開く(&O)",                       IDM_FOLDERVIEW_CONTEXT_OPEN
-		        MENUITEM "開く(&W)...",               IDM_FOLDERVIEW_CONTEXT_OPEN_WITH
-		        MENUITEM "使用容量を表示(&S)",                 IDM_FOLDERVIEW_CONTEXT_VIEW_SPACE
+		        MENUITEM "プログラムから開く(&W)...",         IDM_FOLDERVIEW_CONTEXT_OPEN_WITH
+		        MENUITEM "使用領域を計算(&S)",                 IDM_FOLDERVIEW_CONTEXT_VIEW_SPACE
 		        MENUITEM SEPARATOR
-		        MENUITEM "削除(&D)",                     IDM_FOLDERVIEW_CONTEXT_DELETE
-		        MENUITEM "移動(&M)...",                    IDM_FOLDERVIEW_CONTEXT_MOVE
-		        MENUITEM "名前の変更(&N)",                     IDM_FOLDERVIEW_CONTEXT_RENAME
-	        MENUITEM SEPARATOR
-	        MENUITEM "コピー(&C)",                       IDM_FOLDERVIEW_CONTEXT_COPY
+		        MENUITEM "切り取り(&T)",                   IDM_FOLDERVIEW_CONTEXT_CUT
+		        MENUITEM "コピー(&C)",                     IDM_FOLDERVIEW_CONTEXT_COPY
 		        MENUITEM "貼り付け(&P)",                      IDM_FOLDERVIEW_CONTEXT_PASTE
+		        MENUITEM SEPARATOR
+		        MENUITEM "移動(&M)...",                    IDM_FOLDERVIEW_CONTEXT_MOVE
+		        MENUITEM "削除(&D)...",                    IDM_FOLDERVIEW_CONTEXT_DELETE
+		        MENUITEM "名前の変更(&N)...",              IDM_FOLDERVIEW_CONTEXT_RENAME
 		        MENUITEM SEPARATOR
 		        MENUITEM "プロパティ(&P)",                 IDM_FOLDERVIEW_CONTEXT_PROPERTIES
 #if defined(_DEBUG) || defined(DEBUG)
@@ -46,6 +47,47 @@ BEGIN
 		    END
 		END
 
+IDR_FOLDERVIEW_BACKGROUND_CONTEXT MENU
+BEGIN
+    POPUP ""
+    BEGIN
+        MENUITEM "貼り付け(&P)",                      IDM_FOLDERVIEW_CONTEXT_PASTE
+        POPUP "新規(&N)"
+        BEGIN
+            MENUITEM "フォルダー(&F)...",             IDM_PANE_CREATE_DIR
+            MENUITEM "新しいファイルを編集(&E)...",   IDM_PANE_EDIT_NEW
+            MENUITEM SEPARATOR
+            MENUITEM "(空)",                          0, GRAYED
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "更新(&R)",                          IDM_FOLDERVIEW_CONTEXT_REFRESH
+        MENUITEM "使用領域を計算(&S)",                IDM_FOLDERVIEW_CONTEXT_VIEW_SPACE
+#if defined(_DEBUG) || defined(DEBUG)
+        MENUITEM SEPARATOR
+        POPUP "オーバーレイ サンプル [dbg](&S)"
+        BEGIN
+            POPUP "モーダル (入力をブロック) [dbg](&M)"
+            BEGIN
+                MENUITEM "エラー [dbg](&E)",                      IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_ERROR
+                MENUITEM "警告 [dbg](&W)",                        IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_WARNING
+                MENUITEM "情報 [dbg](&I)",                        IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_INFORMATION
+                MENUITEM "お待ちください [dbg](&P)",              IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_BUSY
+                MENUITEM "お待ちください（キャンセル） [dbg](&C)", IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL
+            END
+            POPUP "非モーダル (ブロックしない) [dbg](&N)"
+            BEGIN
+                MENUITEM "エラー [dbg](&E)",                      IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_ERROR_NONMODAL
+                MENUITEM "警告 [dbg](&W)",                        IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_WARNING_NONMODAL
+                MENUITEM "情報 [dbg](&I)",                        IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_INFORMATION_NONMODAL
+                MENUITEM "ロードがキャンセルされました (クローズなし) [dbg](&C)", IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_CANCELED
+            END
+            MENUITEM SEPARATOR
+            MENUITEM "オーバーレイを非表示 [dbg](&H)", IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_HIDE
+        END
+#endif
+    END
+END
+
 	IDC_REDSALAMANDER MENUEX
 BEGIN
     POPUP "左(&L)",                          65535,MFT_STRING,MFS_ENABLED
@@ -70,15 +112,16 @@ BEGIN
         MENUITEM "非常に詳細な(&X)",      IDM_LEFT_DISPLAY_EXTRA_DETAILED,MFT_STRING,MFS_ENABLED
         MENUITEM "サムネイル(&T)",          IDM_LEFT_DISPLAY_THUMBNAILS,MFT_STRING,MFS_ENABLED
         MENUITEM "プレビュー ペイン(&P)",      IDM_LEFT_PREVIEW_PANE,MFT_STRING,MFS_ENABLED
+        MENUITEM "ターミナル ペイン(&M)",      IDM_LEFT_TERMINAL_PANE,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         POPUP "並べ替え基準(&B)",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "なし(&N)",              IDM_LEFT_SORT_NONE,MFT_STRING,MFS_ENABLED
-            MENUITEM "名前(&N)",              IDM_LEFT_SORT_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "名前(&A)",              IDM_LEFT_SORT_NAME,MFT_STRING,MFS_ENABLED
             MENUITEM "拡張子(&X)",         IDM_LEFT_SORT_EXTENSION,MFT_STRING,MFS_ENABLED
             MENUITEM "時間(&T)",              IDM_LEFT_SORT_TIME,MFT_STRING,MFS_ENABLED
             MENUITEM "サイズ(&S)",              IDM_LEFT_SORT_SIZE,MFT_STRING,MFS_ENABLED
-            MENUITEM "属性(&A)",                 IDM_LEFT_SORT_ATTRIBUTES,MFT_STRING,MFS_ENABLED
+            MENUITEM "属性(&B)",                 IDM_LEFT_SORT_ATTRIBUTES,MFT_STRING,MFS_ENABLED
         END
         POPUP "表示する(&S)",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
@@ -90,12 +133,12 @@ BEGIN
             MENUITEM "ナビゲーション バー(&N)",     IDM_LEFT_NAVIGATION_BAR,MFT_STRING,MFS_ENABLED
             MENUITEM "ステータス バー(&S)",            IDM_LEFT_STATUSBAR,MFT_STRING,MFS_ENABLED
         END
+        MENUITEM "更新(&F)",                IDM_LEFT_REFRESH,MFT_STRING,MFS_ENABLED
+        MENUITEM "フィルター...(&A)",             IDM_LEFT_FILTER,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "ペインの最大化/復元(&M)", IDM_LEFT_ZOOM_PANEL,MFT_STRING,MFS_ENABLED
         MENUITEM "ペインを入れ替える(&S)",              IDM_APP_SWAP_PANES,MFT_STRING,MFS_ENABLED
         MENUITEM "他のパネルからのパス(&O)",       IDM_LEFT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
-        MENUITEM "更新(&F)",                IDM_LEFT_REFRESH,MFT_STRING,MFS_ENABLED
-        MENUITEM "フィルター(&F)...",             IDM_LEFT_FILTER,MFT_STRING,MFS_ENABLED
 #if defined(_DEBUG) || defined(DEBUG)
 	        MENUITEM MFT_SEPARATOR
 	        POPUP "オーバーレイ サンプル [dbg](&S)",          65535,MFT_STRING,MFS_ENABLED
@@ -122,10 +165,8 @@ BEGIN
 	    END
     POPUP "ファイル(&F)",                         65535,MFT_STRING,MFS_ENABLED
     BEGIN
-        MENUITEM "名前の変更(&R)...",               IDM_PANE_RENAME,MFT_STRING,MFS_ENABLED
         MENUITEM "開く/実行(&O)",       IDM_PANE_EXECUTE_OPEN,MFT_STRING,MFS_ENABLED
         MENUITEM "表示(&V)",                    IDM_PANE_VIEW,MFT_STRING,MFS_ENABLED
-        MENUITEM "ビューの幅(&W)...", IDM_APP_VIEW_WIDTH,MFT_STRING,MFS_ENABLED
         MENUITEM "代替ビュー(&A)",      IDM_PANE_ALTERNATE_VIEW,MFT_STRING,MFS_ENABLED
         POPUP "表示に使用(&W)",                      65535,MFT_STRING,MFS_ENABLED
         BEGIN
@@ -133,33 +174,42 @@ BEGIN
         END
         MENUITEM "編集(&E)",                    IDM_PANE_EDIT,MFT_STRING,MFS_ENABLED
         MENUITEM "代替編集(&D)", IDM_PANE_ALTERNATE_EDIT,MFT_STRING,MFS_ENABLED
-        POPUP "編集に使用(&W)",                      65535,MFT_STRING,MFS_ENABLED
+        POPUP "編集に使用(&B)",                      65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "(空)",                      0,MFT_STRING,MFS_GRAYED
         END
-        MENUITEM "新しいファイルを編集する(&N)...",   IDM_PANE_EDIT_NEW,MFT_STRING,MFS_ENABLED
-        MENUITEM "コピー(&C)...",                  IDM_PANE_COPY_TO_OTHER,MFT_STRING,MFS_ENABLED
-        MENUITEM "移動/名前変更(&M)...",           IDM_PANE_MOVE_TO_OTHER,MFT_STRING,MFS_ENABLED
-        POPUP "削除(&D)",                         65535,MFT_STRING,MFS_ENABLED
-        BEGIN
-            MENUITEM "削除(&D)",                   IDM_PANE_DELETE,MFT_STRING,MFS_ENABLED
-            MENUITEM "ごみ箱に移動(&M)",     IDM_PANE_MOVE_TO_RECYCLE_BIN,MFT_STRING,MFS_ENABLED
-        END
-        MENUITEM "完全に削除(&D)",   IDM_PANE_PERMANENT_DELETE,MFT_STRING,MFS_ENABLED
-        MENUITEM "プロパティ(&P)",        IDM_PANE_OPEN_PROPERTIES,MFT_STRING,MFS_ENABLED
-        MENUITEM "コンテキスト メニュー(&T)",      IDM_PANE_CONTEXT_MENU,MFT_STRING,MFS_ENABLED
-        MENUITEM "コンテキスト メニュー (現在のディレクトリ)(&D)", IDM_PANE_CONTEXT_MENU_CURRENT_DIRECTORY,MFT_STRING,MFS_ENABLED
-        MENUITEM "セキュリティ(&S)...",                       IDM_PANE_OPEN_SECURITY,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
-        MENUITEM "属性の変更(&A)...", IDM_PANE_CHANGE_ATTRIBUTES,MFT_STRING,MFS_ENABLED
-        MENUITEM "大文字と小文字を変更する(&S)...",      IDM_PANE_CHANGE_CASE,MFT_STRING,MFS_ENABLED
-        MENUITEM "パック(&P)...",                     IDM_PANE_PACK,MFT_STRING,MFS_ENABLED
-        MENUITEM "開梱(&U)...",                   IDM_PANE_UNPACK,MFT_STRING,MFS_ENABLED
-        POPUP "新しい(&N)",                            65535,MFT_STRING,MFS_ENABLED
+        POPUP "新規(&N)",                            65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "フォルダー(&F)...",                IDM_PANE_CREATE_DIR,MFT_STRING,MFS_ENABLED
+            MENUITEM "新しいファイルを編集(&E)...",   IDM_PANE_EDIT_NEW,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
-            MENUITEM "(空)",                      0,MFT_STRING,MFS_GRAYED
+            MENUITEM "(空)",                      IDM_PANE_NEW_TEMPLATE_BASE,MFT_STRING,MFS_GRAYED
+        END
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "名前の変更(&R)...",               IDM_PANE_RENAME,MFT_STRING,MFS_ENABLED
+        MENUITEM "一括名前変更(&B)...",               IDM_PANE_BATCH_RENAME,MFT_STRING,MFS_ENABLED
+        MENUITEM "大文字/小文字の変更(&C)...",      IDM_PANE_CHANGE_CASE,MFT_STRING,MFS_ENABLED
+        MENUITEM "属性の変更(&A)...", IDM_PANE_CHANGE_ATTRIBUTES,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "コピー(&C)",                     IDM_PANE_COPY_TO_OTHER,MFT_STRING,MFS_ENABLED
+        MENUITEM "オプション付きでコピー(&O)...", IDM_PANE_COPY_TO_OTHER_WITH_OPTIONS,MFT_STRING,MFS_ENABLED
+        MENUITEM "移動/名前変更(&M)",              IDM_PANE_MOVE_TO_OTHER,MFT_STRING,MFS_ENABLED
+        MENUITEM "オプション付きで移動/名前変更(&P)...", IDM_PANE_MOVE_TO_OTHER_WITH_OPTIONS,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "パック(&P)...",                     IDM_PANE_PACK,MFT_STRING,MFS_ENABLED
+        MENUITEM "開梱(&U)...",                   IDM_PANE_UNPACK,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "削除(&D)...",                   IDM_PANE_DELETE,MFT_STRING,MFS_ENABLED
+        MENUITEM "ごみ箱に移動(&M)",     IDM_PANE_MOVE_TO_RECYCLE_BIN,MFT_STRING,MFS_ENABLED
+        MENUITEM "完全に削除(&P)...",   IDM_PANE_PERMANENT_DELETE,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "プロパティ(&P)",        IDM_PANE_OPEN_PROPERTIES,MFT_STRING,MFS_ENABLED
+        MENUITEM "セキュリティ(&S)...",                       IDM_PANE_OPEN_SECURITY,MFT_STRING,MFS_ENABLED
+        POPUP "シェル コンテキスト メニュー(&C)",      65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "選択項目(&I)...", IDM_PANE_CONTEXT_MENU,MFT_STRING,MFS_ENABLED
+            MENUITEM "現在のフォルダー(&F)...", IDM_PANE_CONTEXT_MENU_CURRENT_DIRECTORY,MFT_STRING,MFS_ENABLED
         END
         MENUITEM MFT_SEPARATOR
         MENUITEM "終了(&X)",                IDM_EXIT,MFT_STRING,MFS_ENABLED
@@ -169,80 +219,94 @@ BEGIN
         MENUITEM "カット(&T)",                                IDM_PANE_CLIPBOARD_CUT,MFT_STRING,MFS_ENABLED
         MENUITEM "コピー(&C)",           IDM_PANE_CLIPBOARD_COPY,MFT_STRING,MFS_ENABLED
         MENUITEM "貼り付け(&P)",         IDM_PANE_CLIPBOARD_PASTE,MFT_STRING,MFS_ENABLED
-        MENUITEM "ショートカットを貼り付け",                      IDM_PANE_CLIPBOARD_PASTE_SHORTCUT,MFT_STRING,MFS_ENABLED
+        MENUITEM "ショートカットを貼り付け(&H)",                      IDM_PANE_CLIPBOARD_PASTE_SHORTCUT,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
-        MENUITEM "パスと名前をテキストとしてコピー", IDM_PANE_COPY_PATH_AND_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
-        MENUITEM "名前をテキストとしてコピー",  IDM_PANE_COPY_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
-        MENUITEM "パスをテキストとしてコピー",   IDM_PANE_COPY_PATH_AS_TEXT,MFT_STRING,MFS_ENABLED
-        MENUITEM "UNC パス + 名前をテキストとしてコピー", IDM_PANE_COPY_PATH_AND_FILE_NAME,MFT_STRING,MFS_ENABLED
+        POPUP "テキストとしてコピー(&T)",                       65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "パス + 名前(&P)", IDM_PANE_COPY_PATH_AND_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
+            MENUITEM "名前(&N)",  IDM_PANE_COPY_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
+            MENUITEM "パス(&A)",   IDM_PANE_COPY_PATH_AS_TEXT,MFT_STRING,MFS_ENABLED
+            MENUITEM "UNC パス + 名前(&U)", IDM_PANE_COPY_PATH_AND_FILE_NAME,MFT_STRING,MFS_ENABLED
+        END
         MENUITEM MFT_SEPARATOR
         MENUITEM "選択(&S)...",                           IDM_PANE_SELECTION_SELECT_DIALOG,MFT_STRING,MFS_ENABLED
         MENUITEM "選択を解除します(&U)...",                         IDM_PANE_SELECTION_UNSELECT_DIALOG,MFT_STRING,MFS_ENABLED
         MENUITEM "選択範囲を反転(&I)",                    IDM_PANE_SELECTION_INVERT,MFT_STRING,MFS_ENABLED
         MENUITEM "すべて選択(&A)",                          IDM_PANE_SELECTION_SELECT_ALL,MFT_STRING,MFS_ENABLED
         MENUITEM "すべての選択を解除(&L)",                        IDM_PANE_SELECTION_UNSELECT_ALL,MFT_STRING,MFS_ENABLED
-        MENUITEM "選択範囲を復元(&R)",                   IDM_PANE_SELECTION_RESTORE,MFT_STRING,MFS_ENABLED
         MENUITEM "次へを選択(&N)",          IDM_PANE_SELECT_NEXT,MFT_STRING,MFS_ENABLED
-        MENUITEM "選択 + ディレクトリ サイズの計算 + 次へ", IDM_PANE_SELECT_CALC_DIR_SIZE_NEXT,MFT_STRING,MFS_ENABLED
-        POPUP "上級者向け(&A)",                       65535,MFT_STRING,MFS_ENABLED
+        MENUITEM "選択 + ディレクトリ サイズの計算 + 次へ(&C)", IDM_PANE_SELECT_CALC_DIR_SIZE_NEXT,MFT_STRING,MFS_ENABLED
+        POPUP "高度な選択(&D)",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "選択範囲を保存(&S)", IDM_PANE_SAVE_SELECTION,MFT_STRING,MFS_ENABLED
-            MENUITEM "選択範囲を復元(&R)", IDM_PANE_SELECTION_RESTORE,MFT_STRING,MFS_ENABLED
+            MENUITEM "選択範囲を復元(&R)...", IDM_PANE_SELECTION_RESTORE,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "同じ拡張子を選択(&X)",       IDM_PANE_SELECTION_SELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
-            MENUITEM "同じ拡張子の選択を解除する",      IDM_PANE_SELECTION_UNSELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
+            MENUITEM "同じ拡張子の選択を解除する(&A)",      IDM_PANE_SELECTION_UNSELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "同じ名前を選択(&N)",                   IDM_PANE_SELECTION_SELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
-            MENUITEM "同じ名前の選択を解除する",                  IDM_PANE_SELECTION_UNSELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "同じ名前の選択を解除する(&A)",                  IDM_PANE_SELECTION_UNSELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "選択した名前を非表示にする(&H)",          IDM_PANE_SELECTION_HIDE_SELECTED_NAMES,MFT_STRING,MFS_ENABLED
-            MENUITEM "選択されていない名前を非表示にする",         IDM_PANE_SELECTION_HIDE_UNSELECTED_NAMES,MFT_STRING,MFS_ENABLED
-            MENUITEM "隠された名前を表示",             IDM_PANE_SELECTION_SHOW_HIDDEN_NAMES,MFT_STRING,MFS_ENABLED
+            MENUITEM "選択されていない名前を非表示にする(&A)",         IDM_PANE_SELECTION_HIDE_UNSELECTED_NAMES,MFT_STRING,MFS_ENABLED
+            MENUITEM "隠された名前を表示(&B)",             IDM_PANE_SELECTION_SHOW_HIDDEN_NAMES,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
-            MENUITEM "前に選択した名前に移動",         IDM_PANE_SELECTION_GOTO_PREV_SELECTED_NAME,MFT_STRING,MFS_ENABLED
-            MENUITEM "次の選択した名前に移動",             IDM_PANE_SELECTION_GOTO_NEXT_SELECTED_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "前に選択した名前に移動(&A)",         IDM_PANE_SELECTION_GOTO_PREV_SELECTED_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "次の選択した名前に移動(&B)",             IDM_PANE_SELECTION_GOTO_NEXT_SELECTED_NAME,MFT_STRING,MFS_ENABLED
         END
     END
     POPUP "コマンド(&C)",                      65535,MFT_STRING,MFS_ENABLED
     BEGIN
-        MENUITEM "フォルダー(&F)...", IDM_PANE_CREATE_DIR,MFT_STRING,MFS_ENABLED
         MENUITEM "ディレクトリを変更する(&D)...", IDM_PANE_CHANGE_DIRECTORY,MFT_STRING,MFS_ENABLED
-	        MENUITEM "ディレクトリの比較(&D)...", IDM_APP_COMPARE,MFT_STRING,MFS_ENABLED
-	        MENUITEM "占有スペースの計算(&O)", IDM_PANE_VIEW_SPACE,MFT_STRING,MFS_ENABLED
-	        MENUITEM "ファイルとディレクトリの検索(&F)...", IDM_PANE_FIND,MFT_STRING,MFS_ENABLED
-	        MENUITEM "ファイルリストの作成(&F)...", IDM_PANE_MAKE_FILE_LIST,MFT_STRING,MFS_ENABLED
-	        MENUITEM "ショートカットまたはリンク先へ移動(&L)", IDM_PANE_GO_TO_SHORTCUT_OR_LINK_TARGET,MFT_STRING,MFS_ENABLED
+        MENUITEM "ファイルとディレクトリの検索(&F)...", IDM_PANE_FIND,MFT_STRING,MFS_ENABLED
+        MENUITEM "クイック検索(&Q)", IDM_PANE_QUICK_SEARCH,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "ディレクトリの比較(&C)...", IDM_APP_COMPARE,MFT_STRING,MFS_ENABLED
+        MENUITEM "占有スペースの計算(&O)", IDM_PANE_VIEW_SPACE,MFT_STRING,MFS_ENABLED
+        MENUITEM "ファイルリストの作成(&M)...", IDM_PANE_MAKE_FILE_LIST,MFT_STRING,MFS_ENABLED
+        MENUITEM "ショートカットまたはリンク先へ移動(&L)", IDM_PANE_GO_TO_SHORTCUT_OR_LINK_TARGET,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "開いているファイルのリスト(&O)", IDM_PANE_LIST_OPENED_FILES,MFT_STRING,MFS_ENABLED
         MENUITEM "フォルダー履歴を表示(&H)", IDM_PANE_SHOW_FOLDERS_HISTORY,MFT_STRING,MFS_ENABLED
+        MENUITEM "アクティブ ペイン メニューを開く(&A)", IDM_PANE_MENU,MFT_STRING,MFS_ENABLED
+        MENUITEM "コマンド パレット(&P)...", IDM_APP_COMMAND_PALETTE,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
-        MENUITEM "ネットワークドライブを接続する(&N)...", IDM_PANE_CONNECT,MFT_STRING,MFS_ENABLED
-        MENUITEM "切断する(&C)...", IDM_PANE_DISCONNECT,MFT_STRING,MFS_ENABLED
-        MENUITEM "共有ディレクトリ(&S)...", IDM_PANE_SHARES,MFT_STRING,MFS_ENABLED
-        MENUITEM "接続マネージャー(&C)...", IDM_PANE_CONNECTION_MANAGER,MFT_STRING,MFS_ENABLED
+        POPUP "接続(&N)",                      65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "接続マネージャー(&M)...", IDM_PANE_CONNECTION_MANAGER,MFT_STRING,MFS_ENABLED
+            MENUITEM "ネットワークドライブを接続する(&N)...", IDM_PANE_CONNECT,MFT_STRING,MFS_ENABLED
+            MENUITEM "切断する(&D)...", IDM_PANE_DISCONNECT,MFT_STRING,MFS_ENABLED
+            MENUITEM "共有ディレクトリ(&S)...", IDM_PANE_SHARES,MFT_STRING,MFS_ENABLED
+        END
         MENUITEM MFT_SEPARATOR
-        MENUITEM "コマンドシェル(&S)", IDM_PANE_OPEN_COMMAND_SHELL,MFT_STRING,MFS_ENABLED
-        MENUITEM "クイック検索(&S)", IDM_PANE_QUICK_SEARCH,MFT_STRING,MFS_ENABLED
-        MENUITEM "現在のディレクトリをコマンドラインに表示", IDM_PANE_BRING_CURRENT_DIR_TO_COMMAND_LINE,MFT_STRING,MFS_ENABLED
-        MENUITEM "ファイル名をコマンドラインに表示する", IDM_PANE_BRING_FILENAME_TO_COMMAND_LINE,MFT_STRING,MFS_ENABLED
-        MENUITEM "ペインメニュー(&M)", IDM_PANE_MENU,MFT_STRING,MFS_ENABLED
-        MENUITEM "関連付けを再読する(&R)", IDM_APP_REREAD_ASSOCIATIONS,MFT_STRING,MFS_ENABLED
+        POPUP "ターミナル(&T)",                         65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "コマンド シェル ウィンドウ(&C)", IDM_TERMINAL_OPEN_FLOATING_WINDOW,MFT_STRING,MFS_ENABLED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "現在のディレクトリを挿入(&D)", IDM_PANE_BRING_CURRENT_DIR_TO_COMMAND_LINE,MFT_STRING,MFS_ENABLED
+            MENUITEM "フォーカス項目を挿入(&I)", IDM_PANE_BRING_FILENAME_TO_COMMAND_LINE,MFT_STRING,MFS_ENABLED
+            MENUITEM "フル パスを挿入(&P)", IDM_PANE_BRING_FULL_PATH_TO_TERMINAL,MFT_STRING,MFS_ENABLED
+        END
+        MENUITEM MFT_SEPARATOR
         POPUP "ユーザー メニュー(&U)",                          65535,MFT_STRING,MFS_ENABLED
         BEGIN
-            MENUITEM "(空)",                     0,MFT_STRING,MFS_GRAYED
+            MENUITEM "(空)",                     IDM_PANE_USER_MENU_BASE,MFT_STRING,MFS_GRAYED
         END
         POPUP "エクスプローラーを開く(&E)",               65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "現在のフォルダー(&F)", IDM_PANE_OPEN_CURRENT_FOLDER,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
-            MENUITEM "デスクトップ",                  IDM_APP_OPEN_FILE_EXPLORER_DESKTOP,MFT_STRING,MFS_ENABLED
-            MENUITEM "書類",                IDM_APP_OPEN_FILE_EXPLORER_DOCUMENTS,MFT_STRING,MFS_ENABLED
-            MENUITEM "ダウンロード",                IDM_APP_OPEN_FILE_EXPLORER_DOWNLOADS,MFT_STRING,MFS_ENABLED
-            MENUITEM "写真",                 IDM_APP_OPEN_FILE_EXPLORER_PICTURES,MFT_STRING,MFS_ENABLED
-            MENUITEM "音楽",                    IDM_APP_OPEN_FILE_EXPLORER_MUSIC,MFT_STRING,MFS_ENABLED
-            MENUITEM "動画",                   IDM_APP_OPEN_FILE_EXPLORER_VIDEOS,MFT_STRING,MFS_ENABLED
-            MENUITEM "OneDrive",                 IDM_APP_OPEN_FILE_EXPLORER_ONEDRIVE,MFT_STRING,MFS_ENABLED
+            MENUITEM "デスクトップ(&A)",                  IDM_APP_OPEN_FILE_EXPLORER_DESKTOP,MFT_STRING,MFS_ENABLED
+            MENUITEM "書類(&B)",                IDM_APP_OPEN_FILE_EXPLORER_DOCUMENTS,MFT_STRING,MFS_ENABLED
+            MENUITEM "ダウンロード(&C)",                IDM_APP_OPEN_FILE_EXPLORER_DOWNLOADS,MFT_STRING,MFS_ENABLED
+            MENUITEM "写真(&D)",                 IDM_APP_OPEN_FILE_EXPLORER_PICTURES,MFT_STRING,MFS_ENABLED
+            MENUITEM "音楽(&E)",                    IDM_APP_OPEN_FILE_EXPLORER_MUSIC,MFT_STRING,MFS_ENABLED
+            MENUITEM "動画(&F)",                   IDM_APP_OPEN_FILE_EXPLORER_VIDEOS,MFT_STRING,MFS_ENABLED
+            MENUITEM "OneDrive(&G)",                 IDM_APP_OPEN_FILE_EXPLORER_ONEDRIVE,MFT_STRING,MFS_ENABLED
         END
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "関連付けを再読する(&R)", IDM_APP_REREAD_ASSOCIATIONS,MFT_STRING,MFS_ENABLED
+        MENUITEM "設定(&P)...", IDM_FILE_PREFERENCES,MFT_STRING,MFS_ENABLED
     END
     POPUP "プラグイン(&P)",                       65535,MFT_STRING,MFS_ENABLED
     BEGIN
@@ -262,18 +326,20 @@ BEGIN
             MENUITEM "レインボー(&R)",                    IDM_VIEW_THEME_RAINBOW,MFT_STRING,MFS_ENABLED
             MENUITEM "ハイコントラスト（アプリ）(&C)",        IDM_VIEW_THEME_HIGH_CONTRAST_APP,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
-            MENUITEM "前のテーマ",              IDM_VIEW_THEME_PREV,MFT_STRING,MFS_ENABLED
-            MENUITEM "次のテーマ",                  IDM_VIEW_THEME_NEXT,MFT_STRING,MFS_ENABLED
+            MENUITEM "前のテーマ(&P)",              IDM_VIEW_THEME_PREV,MFT_STRING,MFS_ENABLED
+            MENUITEM "次のテーマ(&N)",                  IDM_VIEW_THEME_NEXT,MFT_STRING,MFS_ENABLED
         END
         MENUITEM MFT_SEPARATOR
         MENUITEM "フルスクリーンの切り替え(&T)", IDM_APP_FULL_SCREEN,MFT_STRING,MFS_ENABLED
+        MENUITEM "ビューの幅(&W)...", IDM_APP_VIEW_WIDTH,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
         MENUITEM "ウィンドウメニュー(&W)",            IDM_VIEW_WINDOW_MENU,MFT_STRING,MFS_ENABLED
         MENUITEM "ペインのフォーカスを切り替える(&P)",            IDM_VIEW_SWITCH_PANE_FOCUS,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "ファイル操作(&O)", IDM_VIEW_FILE_OPERATIONS,MFT_STRING,MFS_ENABLED
         MENUITEM "ファイル操作に失敗した項目(&I)", IDM_VIEW_FILEOPS_FAILED_ITEMS,MFT_STRING,MFS_ENABLED
         MENUITEM "ファンクションバー(&F)",                IDM_VIEW_FUNCTIONBAR,MFT_STRING,MFS_ENABLED
         MENUITEM "メニューバー(&M)",                    IDM_VIEW_MENUBAR,MFT_STRING,MFS_ENABLED
-        MENUITEM MFT_SEPARATOR
-        MENUITEM "設定(&P)...",              IDM_FILE_PREFERENCES,MFT_STRING,MFS_ENABLED
     END
     POPUP "右(&R)",                         65535,MFT_STRING,MFS_ENABLED
     BEGIN
@@ -297,15 +363,16 @@ BEGIN
         MENUITEM "非常に詳細な(&X)",      IDM_RIGHT_DISPLAY_EXTRA_DETAILED,MFT_STRING,MFS_ENABLED
         MENUITEM "サムネイル(&T)",          IDM_RIGHT_DISPLAY_THUMBNAILS,MFT_STRING,MFS_ENABLED
         MENUITEM "プレビュー ペイン(&P)",      IDM_RIGHT_PREVIEW_PANE,MFT_STRING,MFS_ENABLED
+        MENUITEM "ターミナル ペイン(&M)",      IDM_RIGHT_TERMINAL_PANE,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         POPUP "並べ替え基準(&B)",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "なし(&N)",              IDM_RIGHT_SORT_NONE,MFT_STRING,MFS_ENABLED
-            MENUITEM "名前(&N)",              IDM_RIGHT_SORT_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "名前(&A)",              IDM_RIGHT_SORT_NAME,MFT_STRING,MFS_ENABLED
             MENUITEM "拡張子(&X)",         IDM_RIGHT_SORT_EXTENSION,MFT_STRING,MFS_ENABLED
             MENUITEM "時間(&T)",              IDM_RIGHT_SORT_TIME,MFT_STRING,MFS_ENABLED
             MENUITEM "サイズ(&S)",              IDM_RIGHT_SORT_SIZE,MFT_STRING,MFS_ENABLED
-            MENUITEM "属性(&A)",                 IDM_RIGHT_SORT_ATTRIBUTES,MFT_STRING,MFS_ENABLED
+            MENUITEM "属性(&B)",                 IDM_RIGHT_SORT_ATTRIBUTES,MFT_STRING,MFS_ENABLED
         END
         POPUP "表示する(&S)",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
@@ -317,12 +384,12 @@ BEGIN
             MENUITEM "ナビゲーション バー(&N)",     IDM_RIGHT_NAVIGATION_BAR,MFT_STRING,MFS_ENABLED
             MENUITEM "ステータス バー(&S)",            IDM_RIGHT_STATUSBAR,MFT_STRING,MFS_ENABLED
         END
+        MENUITEM "更新(&F)",                IDM_RIGHT_REFRESH,MFT_STRING,MFS_ENABLED
+        MENUITEM "フィルター...(&A)",             IDM_RIGHT_FILTER,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "ペインの最大化/復元(&M)", IDM_RIGHT_ZOOM_PANEL,MFT_STRING,MFS_ENABLED
         MENUITEM "ペインを入れ替える(&S)",              IDM_APP_SWAP_PANES,MFT_STRING,MFS_ENABLED
         MENUITEM "他のパネルからのパス(&O)",       IDM_RIGHT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
-        MENUITEM "更新(&F)",                IDM_RIGHT_REFRESH,MFT_STRING,MFS_ENABLED
-        MENUITEM "フィルター(&F)...",             IDM_RIGHT_FILTER,MFT_STRING,MFS_ENABLED
 #if defined(_DEBUG) || defined(DEBUG)
 	        MENUITEM MFT_SEPARATOR
 	        POPUP "オーバーレイ サンプル [dbg](&S)",          65535,MFT_STRING,MFS_ENABLED
@@ -445,11 +512,12 @@ BEGIN
     IDS_PREFS_CAT_KEYBOARD  "キーボード"
     IDS_PREFS_CAT_KEYBOARD_DESC "キーボードショートカット。"
     IDS_PREFS_CAT_MOUSE     "マウス"
-    IDS_PREFS_CAT_MOUSE_DESC "マウスのショートカット。"
-    IDS_PREFS_MOUSE_PLACEHOLDER "マウス ジェスチャの構成は将来のバージョンで予定されています。"
-    IDS_PREFS_MOUSE_EMPTY_TITLE "まだマウスの設定がありません"
-    IDS_PREFS_MOUSE_EMPTY_BODY "マウス ジェスチャの構成は将来のバージョンで予定されています。"
-    IDS_PREFS_MOUSE_EMPTY_CAPTION "現在のマウスの動作では、標準の組み込みデフォルトが引き続き使用されます。"
+    IDS_PREFS_CAT_MOUSE_DESC "ペインのフォーカスとポインターの動作。"
+    IDS_PREFS_MOUSE_SECTION_PANE_FOCUS "ペインのフォーカス"
+    IDS_PREFS_MOUSE_LABEL_FOCUS_FOLLOWS_POINTER "フォーカスをポインターに追従"
+    IDS_PREFS_MOUSE_DESC_FOCUS_FOLLOWS_POINTER "常に、クリックせずにポインターの下にあるペインへキーボード フォーカスを移動します。"
+    IDS_PREFS_MOUSE_LABEL_FOCUS_FOLLOWS_POINTER_TERMINAL_OPEN "ターミナルの表示中はフォーカスをポインターに追従"
+    IDS_PREFS_MOUSE_DESC_FOCUS_FOLLOWS_POINTER_TERMINAL_OPEN "いずれかのペインでターミナル タブが表示されている間、ポインターの下にあるペインへキーボード フォーカスを移動します。"
     IDS_PREFS_CAT_THEMES    "テーマ"
     IDS_PREFS_CAT_THEMES_DESC "テーマを選択して編集します。"
     IDS_PREFS_CAT_PLUGINS   "プラグイン"
@@ -757,6 +825,13 @@ BEGIN
     IDS_PREFS_THEMES_BASE_DARK "暗い"
     IDS_PREFS_THEMES_BASE_RAINBOW "レインボー"
     IDS_PREFS_THEMES_BASE_HIGH_CONTRAST "ハイコントラスト（アプリ）"
+    IDS_THEME_CYCLE_OVERLAY_UIA_FULL "テーマを {0} に変更しました。前: {1}。次: {2}。"
+    IDS_THEME_CYCLE_OVERLAY_UIA_CURRENT_ONLY "テーマを {0} に変更しました。"
+    IDS_THEME_CYCLE_OVERLAY_PREVIOUS_NAME "前のテーマ: {0}"
+    IDS_THEME_CYCLE_OVERLAY_CURRENT_NAME "現在のテーマ: {0}"
+    IDS_THEME_CYCLE_OVERLAY_NEXT_NAME "次のテーマ: {0}"
+    IDS_THEME_CYCLE_OVERLAY_DISMISS_ACTION "テーマ通知を閉じる"
+    IDS_THEME_CYCLE_OVERLAY_DISMISS_HELP "この通知内の任意の場所をクリックまたはタップすると閉じます。"
     IDS_PREFS_THEMES_NEW_THEME_ENTRY "<新テーマ>"
     IDS_PREFS_THEMES_DEFAULT_NEW_NAME "新しいテーマ"
     IDS_PREFS_THEMES_FILE_FILTER "テーマ ファイル (*.theme.json5)\0*.theme.json5\0JSON5 ファイル (*.json5)\0*.json5\0すべてのファイル (*.*)\0*.*\0\0"
@@ -891,6 +966,9 @@ BEGIN
     IDS_PREFS_PLUGINS_COL_ID "ID"
     IDS_PREFS_PLUGINS_TYPE_FILE_SYSTEM "ファイル システム"
     IDS_PREFS_PLUGINS_TYPE_VIEWER "ビューアー"
+    IDS_PREFS_PLUGINS_TYPE_TERMINAL "ターミナル"
+    IDS_CMD_BRING_FULL_PATH_TO_TERMINAL "ターミナルにフル パスを挿入"
+    IDS_CMD_DESC_BRING_FULL_PATH_TO_TERMINAL "反対側のペインのターミナルを開くか再利用し、フル パスを挿入します。"
     IDS_PREFS_PLUGINS_ORIGIN_EMBEDDED "埋め込み型"
     IDS_PREFS_PLUGINS_ORIGIN_OPTIONAL "オプション"
     IDS_PREFS_PLUGINS_ORIGIN_CUSTOM "カスタム"
@@ -1165,9 +1243,9 @@ BEGIN
     IDS_MSG_CLIPBOARD_LOCAL_FOLDER_REQUIRED              "ショートカットの貼り付けは、ローカル ファイル システム フォルダーでのみ使用できます。"
     IDS_MSG_CLIPBOARD_NO_SHORTCUT_SOURCE                 "クリップボードには、ショートカットを貼り付けるためのファイル パスが含まれていません。"
     IDS_FMT_CLIPBOARD_PASTE_SHORTCUT_FAILED              "{0} のショートカットの作成に失敗しました。 H結果: 0x{1:08X}。"
-    IDS_COMMAND_LINE_LABEL                               "コマンド:"
-    IDS_MSG_COMMAND_LINE_LOCAL_FOLDER_REQUIRED           "コマンド ライン入力には、アクティブ ペイン内のローカル Windows フォルダーが必要です。"
-    IDS_MSG_COMMAND_LINE_ITEM_REQUIRED                   "最初にファイルまたはフォルダーを選択またはフォーカスします。"
+    IDS_MSG_TERMINAL_LOCAL_FOLDER_REQUIRED               "ターミナルへの挿入には、アクティブ ペイン内のローカル Windows フォルダーが必要です。"
+    IDS_MSG_TERMINAL_ITEM_REQUIRED                       "最初にファイルまたはフォルダーを選択またはフォーカスします。"
+    IDS_MSG_TERMINAL_LOCATION_UNSUPPORTED                "プロバイダーに検証済みの Windows または WSL バッキング場所がないため、アクティブ ペインの場所をターミナルで開けません。"
     IDS_FMT_COMMAND_LINE_LAUNCH_FAILED                   "Windows はコマンド ラインを起動できませんでした。 H結果: 0x{0:08X}。"
     IDS_USER_MENU_UNAVAILABLE_TITLE                      "ユーザー メニュー項目は使用できません"
     IDS_FMT_USER_MENU_ITEM_UNAVAILABLE                   "ユーザー メニュー項目「{0}」は、{1} では使用できません。"
@@ -1309,15 +1387,20 @@ BEGIN
     IDS_FILEOPS_BTN_MODE_PARALLEL                         "パラレル"
     IDS_FILEOPS_MODE_NEW_TASKS                            "新しいタスク:"
     IDS_MSG_FILEOPS_CANCEL_ALL_CONFIRM                    "すべてのファイル操作をキャンセルしますか?"
-    IDS_FILEOPS_CALCULATING                               "計算中..."
-    IDS_FMT_FILEOPS_CALCULATING_TIME                      "計算中... ({0} 経過)"
+    IDS_FILEOPS_DISCOVERING                               "探索中..."
+    IDS_FMT_FILEOPS_DISCOVERING_TIME                      "探索中... ({0} 経過)"
+    IDS_FMT_FILEOPS_DISCOVERY_PROGRESS                    "これまで {0} / {1}、{2:L} / {3:L} 項目"
+    IDS_FMT_FILEOPS_ETA_PROVISIONAL                       "残り: {0} (探索中)"
+    IDS_FMT_FILEOPS_KNOWN_WORK                            "既知の作業: {0}%"
+    IDS_FMT_FILEOPS_GLOBAL_DISCOVERING_COUNT              "{0} 件が探索中、合計は増える可能性があります"
     IDS_FILEOPS_PREPARING                                 "準備中..."
     IDS_FMT_FILEOPS_PREPARING_TIME                        "準備中... ({0} 経過)"
-    IDS_FILEOPS_BTN_SKIP                                  "プリフライトをスキップする"
+    IDS_FILEOPS_BTN_SKIP                                  "探索をスキップ"
     IDS_FMT_FILEOPS_FILES_FOLDERS                         "{0:L} アイテム ({1:L} ファイル、{2:L} フォルダー)"
     IDS_FILEOPS_GRAPH_PAUSED                              "一時停止中"
     IDS_FILEOPS_GRAPH_WAITING                             "前の処理が完了するのを待っています"
-    IDS_FILEOPS_GRAPH_CALCULATING                         "計算中..."
+    IDS_FILEOPS_GRAPH_DISCOVERING                         "探索中..."
+    IDS_FILEOPS_DISCOVERING_AS_NEEDED                     "必要に応じて探索中..."
     IDS_CAPTION_FILEOPS_CANCEL_ALL                        "すべての操作をキャンセルする"
     IDS_MSG_FILEOPS_CANCEL_ALL_POPUP                      "保留中のファイル操作をすべてキャンセルしてもよろしいですか?"
     IDS_CAPTION_FILEOPS_EXIT                              "アプリケーションを終了する"
@@ -1327,6 +1410,9 @@ BEGIN
     IDS_FMT_FILEOPS_CONFLICT_EXISTS_NAMED                 "「{0}」は宛先にすでに存在します。"
     IDS_FILEOPS_CONFLICT_NONEMPTY_DIRECTORY               "宛先フォルダーは空ではありません。"
     IDS_FILEOPS_CONFLICT_REPARSE_POINT                    "宛先はリンクまたは再解析ポイントです。"
+    IDS_FILEOPS_CONFLICT_TYPE_MISMATCH                    "ソース項目と宛先項目の種類が一致しません。"
+    IDS_FILEOPS_CONFLICT_NAME_NOT_REPRESENTABLE           "宛先ではこの項目名を表現できません。"
+    IDS_FILEOPS_CONFLICT_TARGET                           "必要なリンク先を公開できませんでした。"
     IDS_FILEOPS_CONFLICT_READONLY                         "項目は読み取り専用です。"
     IDS_FILEOPS_CONFLICT_ACCESS_DENIED                    "アクセスが拒否されました。"
     IDS_FILEOPS_CONFLICT_SHARING                          "ファイルは使用中です。"
@@ -1336,15 +1422,20 @@ BEGIN
     IDS_FILEOPS_CONFLICT_NETWORK                          "ネットワークが利用できません。"
     IDS_FILEOPS_CONFLICT_UNKNOWN                          "操作が失敗しました (不明なエラー)。"
     IDS_FILEOPS_CONFLICT_RETRY_FAILED                     "再試行に失敗しました。"
+    IDS_FMT_FILEOPS_CONFLICT_ATTEMPT_FAILED               "試行 {0} は失敗しました。"
+    IDS_FILEOPS_FAILURE_SURFACE_TEXT                      "ファイル操作ウィンドウはグラフィックスを開始できませんでした。操作はバックグラウンドで続行します。停止するには [すべてキャンセル]、このウィンドウを隠すには [閉じる] を使用してください。"
+    IDS_FILEOPS_BTN_CLOSE                                 "閉じる"
+    IDS_FILEOPS_CONSENT_PERMANENT_DELETE_BY_NAME          "この場所では、名前がどのオブジェクトを指すかを確認できません。削除の実行時に選択した各名前にあるものが削除されます。"
     IDS_FILEOPS_CONFLICT_APPLY_TO_ALL                     "選択したアクションを同様のすべての競合に適用します"
     IDS_FILEOPS_CONFLICT_APPLY_TO_ALL_SHORT               "同様のすべて"
     IDS_FILEOPS_CONFLICT_BTN_OVERWRITE                    "上書き"
+    IDS_FILEOPS_CONFLICT_BTN_KEEP_BOTH                    "両方を保持"
     IDS_FILEOPS_CONFLICT_BTN_REPLACE_READONLY             "読み取り専用で置き換える"
+    IDS_FILEOPS_CONFLICT_BTN_REPLACE_LINK                 "リンクを置き換える"
     IDS_FILEOPS_CONFLICT_BTN_PERMANENT_DELETE             "完全に削除"
     IDS_FILEOPS_CONFLICT_BTN_RETRY                        "再試行"
     IDS_FILEOPS_CONFLICT_BTN_SKIP                         "項目をスキップ"
     IDS_FILEOPS_CONFLICT_BTN_MORE                         "その他..."
-    IDS_MSG_FILEOPS_REPARSE_FOLLOW_WARNING                "以下の再解析ターゲットは、リンクされたフォルダーに再帰したり、選択したツリーをエスケープしたり、予想よりもはるかに長く実行される可能性があります。\r\n\r\n続行しますか?"
     IDS_FILEOPS_CONFLICT_UNSUPPORTED_REPARSE              "この操作ではディレクトリ再解析ポイントを保存できません。"
     IDS_FILEOPS_STATUS_COMPLETED                          "完了"
     IDS_FILEOPS_STATUS_PARTIAL                            "スキップされたアイテムで完了"
@@ -1358,8 +1449,53 @@ BEGIN
     IDS_FILEOPS_BTN_CLEAR_COMPLETED                       "クリア完了"
     IDS_FILEOP_BTN_SHOW_LOG                               "ログを表示する"
     IDS_FILEOPS_STATUS_CANCELED                           "キャンセルされました"
+    IDS_FMT_FILEOPS_BADGE_COMPLETED_TOOLTIP               "正常に完了: {0:L}"
+    IDS_FMT_FILEOPS_BADGE_PARTIAL_TOOLTIP                 "部分的な結果または警告ありで完了: {0:L}"
+    IDS_FMT_FILEOPS_BADGE_FAILED_TOOLTIP                  "失敗: {0:L}"
+    IDS_FMT_FILEOPS_BADGE_CANCELED_TOOLTIP                "キャンセル: {0:L}"
+    IDS_FMT_FILEOPS_BADGE_INDETERMINATE_TOOLTIP           "結果不明: {0:L}"
     IDS_FILEOPS_STATUS_NEEDS_ATTENTION                    "注意が必要です"
-    IDS_FMT_FILEOPS_GLOBAL_STATUS_SUMMARY                 "{0:L} 実行中、{1:L} 待機中、{2:L} 注意が必要"
+    IDS_FILEOPS_STATUS_WAITING_FOR_DECISION               "判断をお待ちしています"
+    IDS_FILEOPS_CONFLICT_READING_DETAILS                  "判断に必要な詳細を読み込んでいます..."
+    IDS_FILEOPS_OWNED_STAGE_CLEANUP_UNKNOWN               "最終的な宛先は公開されませんでした。一時項目のクリーンアップを確認できないため、アーティファクトが残っている可能性があります。自動再試行はブロックされました。"
+    IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE                   "中断された操作の可能性があるアーティファクト"
+    IDS_FILEOPS_ARTIFACT_TOUCH_TITLE                      "操作アーティファクトの警告"
+    IDS_FMT_FILEOPS_ARTIFACT_TOUCH_WARNING                "この要求は、可能性のある操作アーティファクト {0:L} 個に触れます。データが不完全な場合があります。続行すると、現在のこれらのオブジェクトが変更される可能性があります。"
+    IDS_FMT_FILEOPS_ARTIFACT_TOUCH_BLOCKED                "この要求は {0:L} 個の操作アーティファクトに触れますが、Red Salamander は現在のすべての ID を確認できません。操作は開始されませんでした。"
+    IDS_FILEOPS_ARTIFACT_MENU_TITLE                       "操作アーティファクト"
+    IDS_FILEOPS_ARTIFACT_ACTION_INSPECT                   "読み取り専用で検査"
+    IDS_FILEOPS_ARTIFACT_ACTION_REVEAL                    "ペインに表示"
+    IDS_ITEM_PROPERTIES_SECTION_FILE_OPERATIONS           "ファイル操作"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CLASSIFICATION     "分類"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_REASON             "理由"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_OPERATION          "操作"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_TASK               "タスク"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_TIME               "時刻"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_KIND               "アーティファクトの種類"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_PHASE              "永続フェーズ"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_DESTINATION        "予定された宛先"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_FINAL_NAME         "最終名"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_PUBLICATION        "公開"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_SOURCE             "ソース"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CLEANUP            "クリーンアップ"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_VERIFICATION       "検証"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CURRENT_OBJECT     "現在のオブジェクト"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CLAIM_MATCH        "所有情報の一致"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_RECOVERY           "回復"
+    IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_SAFE_ACTIONS       "安全な操作"
+    IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_UNAVAILABLE        "利用不可"
+    IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_NAME_REASON        "名前がファイル操作によって生成されるアーティファクトのパターンに一致します"
+    IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_NO_CLAIM           "有効な操作記録または所有権情報は見つかりませんでした"
+    IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_SAFE_ACTIONS       "読み取り、開く、編集、プレビュー、コピー、エクスポートは利用できます。RedSalamander は管理対象の変更前に警告します"
+    IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_PRESENT            "存在"
+    IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_MISSING            "見つかりません"
+    IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_ADMITTED            "受付"
+    IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_EXECUTING           "実行"
+    IDS_FMT_FILEOPS_INTERRUPTED_MOVE_SUMMARY               "中断された操作 ID {0}: 移動は永続化された {1} フェーズの後で中断されました。受付済みプランは、{5:L} 個の認定済みソース場所に対して Native {2:L} 件、Managed {3:L} 件、Copy-only {4:L} 件です。ソースと宛先の両方が存在する可能性があります。操作する前に表示された場所を更新するか開いてください。Red Salamander は自動的に再開または削除しません。"
+    IDS_FMT_FILEOPS_GLOBAL_RUNNING_COUNT                  "実行中: {0:L}"
+    IDS_FMT_FILEOPS_GLOBAL_WAITING_COUNT                  "待機中: {0:L}"
+    IDS_FMT_FILEOPS_GLOBAL_ATTENTION_COUNT                "注意が必要: {0:L}"
+    IDS_FILEOPS_GLOBAL_STATUS_SEPARATOR                   "、"
     IDS_FMT_FILEOPS_GLOBAL_STATUS_WITH_SPEED              "{0} · {1}/秒"
     IDS_FMT_FILEOPS_GLOBAL_STATUS_WITH_ETA_SPEED          "{0} · {1} · {2}/秒"
     IDS_FILEOPS_STATUS_RUNNING                            "実行中"
@@ -1367,6 +1503,80 @@ BEGIN
     IDS_FILEOPS_STATUS_PARTIAL_SHORT                      "一部完了"
     IDS_FILEOPS_STATUS_FAILED_SHORT                       "失敗"
     IDS_FILEOPS_BTN_START_NOW                             "今すぐ開始"
+    IDS_FILEOPS_QUEUE_MOVE_UP                             "キュー内で上へ移動"
+    IDS_FILEOPS_QUEUE_MOVE_DOWN                           "キュー内で下へ移動"
+    IDS_FILEOPS_TOGGLE_DETAILS                            "詳細の表示または非表示"
+    IDS_FILEOPS_TOGGLE_TASK_DETAILS                       "タスクを展開または折りたたむ"
+    IDS_FILEOPS_COMPLETED_GROUP_ACCESSIBLE                "完了したタスク"
+    IDS_FILEOPS_AGGREGATE_PROGRESS                        "ファイル操作の全体的な進行状況"
+    IDS_FILEOPS_THROUGHPUT_GRAPH                          "転送スループット履歴"
+    IDS_FILEOPS_FOOTER_OPTIONS                            "オプション"
+    IDS_FILEOPS_CONFIRM_LINKS                             "リンク"
+    IDS_FILEOPS_CONFIRM_LINKS_PRESERVE                    "保持"
+    IDS_FILEOPS_CONFIRM_LINKS_SKIP                        "スキップ"
+    IDS_FILEOPS_CONFIRM_VERIFY                            "コピーした内容を検証"
+    IDS_FILEOPS_CONFIRM_VERIFY_UNSUPPORTED                "コピーした内容を検証 — このコピー先では利用できません"
+    IDS_FILEOPS_CONFIRM_VERIFY_NOT_APPLICABLE             "コピーした内容を検証 — ネイティブ移動には適用されません"
+    IDS_FILEOPS_CONFIRM_VERIFY_RUNTIME_CHECK               "コピーした内容を検証 — 操作開始時に対応状況を確認します"
+    IDS_FILEOPS_CONFIRM_START                             "開始"
+    IDS_FILEOPS_CONFIRM_BANDWIDTH                         "帯域幅"
+    IDS_FILEOPS_CONFIRM_CLIPBOARD_MOVE_WARNING            "この移動を開始すると切り取りリストが消費されます。項目を削除できない場合、移動元は残り、切り取りリストは復元されません。"
+    IDS_FILEOPS_CONSENT_LOW_SPACE                         "保存先の空き容量が不足しています。続行すると、一部の処理を公開した後に失敗する可能性があります。"
+    IDS_FILEOPS_CONSENT_SPACE_UNKNOWN                     "保存先の空き容量を取得できません。実際の書き込みエラーが発生するまで処理を続行できます。"
+    IDS_FILEOPS_CONSENT_EFS_PLAINTEXT                     "暗号化された移動元データが、保存先では平文として書き込まれます。"
+    IDS_FILEOPS_CONSENT_SPARSE_INFLATION                  "保存先はスパース割り当てを保持できず、論理サイズ全体を使用します。"
+    IDS_FILEOPS_CONSENT_PLACEHOLDER_HYDRATION             "続行するにはプレースホルダーの内容をダウンロードする必要があります。"
+    IDS_FILEOPS_CONSENT_METADATA_LOSS                     "この移動では、Mark-of-the-Web、代替ストリーム、拡張属性などのセキュリティ上重要なメタデータが失われます。"
+    IDS_FILEOPS_CONSENT_BTN_CONTINUE                      "続行"
+    IDS_FILEOPS_CONSENT_BTN_PLAINTEXT                     "平文としてコピー"
+    IDS_FILEOPS_CONSENT_BTN_DOWNLOAD                      "ダウンロードして続行"
+    IDS_FILEOPS_CONSENT_BTN_MOVE_ANYWAY                   "このまま移動"
+    IDS_FILEOPS_CONSENT_BTN_KEEP_SOURCE                   "移動元を保持"
+    IDS_FMT_FILEOPS_CONSENT_FACTS_ITEMS_BYTES             "対象項目: {0:L}  •  データ: {1}"
+    IDS_FILEOPS_CONSENT_SAME_HOST_OVERLAP                 "別のタスクが同じ場所で作業中です"
+    IDS_FILEOPS_CONSENT_BTN_QUEUE_AFTER                   "これらのタスクの後に実行"
+    IDS_FILEOPS_CONSENT_BTN_DONT_START                    "開始しない"
+    IDS_FILEOPS_CONSENT_BTN_RUN_CONCURRENT                "同時に実行"
+    IDS_FILEOPS_CONSENT_SAME_HOST_LIVE_OUTPUT             "別のタスクがここに出力中です"
+    IDS_FILEOPS_CONSENT_PERMANENT_DELETE                  "完全な削除"
+    IDS_FMT_FILEOPS_LIVE_OUTPUT_QUESTION                  "タスク #{0} はまだここに出力中です。今この項目を変更すると、そのタスクの結果が無効になる可能性があります。"
+    IDS_FILEOPS_CONSENT_BTN_QUEUE_UNTIL_FINISHED           "別のタスクの完了まで待機"
+    IDS_FILEOPS_CONSENT_BTN_DELETE_LIVE_OUTPUT             "このまま削除"
+    IDS_FILEOPS_CONSENT_BTN_RENAME_LIVE_OUTPUT             "このまま名前変更"
+    IDS_FILEOPS_CONSENT_BTN_REPLACE_LIVE_OUTPUT            "このまま置換"
+    IDS_FMT_FILEOPS_OVERLAP_REMOVES_READ                  "このタスクは、タスク #{0} がまだ読み取り中の項目を削除する可能性があります。"
+    IDS_FMT_FILEOPS_OVERLAP_SAME_NAMES                    "このタスクとタスク #{0} は同じ名前を作成または置き換える可能性があります。"
+    IDS_FMT_FILEOPS_OVERLAP_SAME_MEMBERS                  "このタスクとタスク #{0} は同じ項目を削除または名前変更する可能性があります。"
+    IDS_FMT_FILEOPS_OVERLAP_REMOVES_PUBLISHED             "このタスクは、タスク #{0} が書き込み中の項目を削除または名前変更する可能性があります。"
+    IDS_FMT_FILEOPS_OVERLAP_REPLACES_READ                 "このタスクは、タスク #{0} がまだ読み取り中の項目を置き換える可能性があります。"
+    IDS_FMT_FILEOPS_CONSENT_FACTS_ITEMS                   "対象項目: {0:L}"
+    IDS_FMT_FILEOPS_CONSENT_FACTS_BYTES                   "対象データ: {0}"
+    IDS_FILEOPS_RESULT_COPIED                              "コピー済み"
+    IDS_FILEOPS_RESULT_MOVED                               "移動済み"
+    IDS_FILEOPS_RESULT_COPIED_SOURCE_KEPT                  "コピー済み（移動元を保持）"
+    IDS_FILEOPS_RESULT_MOVED_SOURCE_FOLDER_KEPT            "移動済み（移動元フォルダーを保持）"
+    IDS_FILEOPS_RESULT_SKIPPED                             "スキップ"
+    IDS_FILEOPS_RESULT_UNKNOWN                             "結果は不明"
+    IDS_FILEOPS_STATUS_VERIFYING                           "検証中"
+    IDS_FILEOPS_RESULT_VERIFIED                            "検証済み"
+    IDS_FILEOPS_RESULT_VERIFICATION_FAILED                 "検証に失敗"
+    IDS_FILEOPS_RESULT_VERIFICATION_UNAVAILABLE            "検証を利用できません"
+    IDS_FILEOPS_RESULT_VERIFICATION_CANCELED               "検証をキャンセルしました"
+    IDS_FILEOPS_RESULT_SOURCE_UNKNOWN                      "移動元の結果は不明"
+    IDS_FILEOPS_RESULT_COMPLETED_CLEANUP_RETAINED          "完了しました。クリーンアップ項目が残っています。"
+    IDS_FILEOPS_CLEANUP_ITEM_RETAINED                      "要求された操作の完了後もクリーンアップ項目が残りました。自動再試行は行われていません。"
+    IDS_FILEOPS_RETAINED_VERIFICATION_CANCELED             "コピーしました。検証がキャンセルされたため、移動元を保持しました。"
+    IDS_FILEOPS_RETAINED_VERIFICATION_UNAVAILABLE          "コピーしました。要求された内容検証を利用できなかったため、移動元を保持しました。"
+    IDS_FILEOPS_RETAINED_VERIFICATION_FAILED               "コピーしました。内容検証に失敗したため、移動元を保持しました。"
+    IDS_FMT_FILEOPS_PROGRESS_SEGMENTS_ACCESSIBLE            "転送 {0}% 完了、検証 {1}% 完了。"
+    IDS_FILEOPS_CLIPBOARD_MOVE_QUEUED                     "移動をキューに追加しました — 切り取りリストを消去しました。"
+    IDS_FILEOPS_CLIPBOARD_MOVE_CLEAR_FAILED               "切り取りリストを消去できなかったため、移動は開始されませんでした。移動元は変更されていません。RedSalamander は同じリストを再度受け付けません。"
+    IDS_FILEOPS_CLIPBOARD_SOURCES_REMAIN                  "一部の移動元が残っています。切り取りリストは移動開始時に消費され、復元されませんでした。"
+    IDS_FILEOP_BTN_OPEN_SOURCE                            "移動元を開く"
+    IDS_FILEOP_BTN_SELECT_RETAINED                        "残った項目を選択"
+    IDS_FILEOP_BTN_CUT_RETAINED_AGAIN                     "残った項目をもう一度切り取る"
+    IDS_FILEOPS_RETAINED_SOURCE_CHANGED                   "移動後に残った移動元のセットが変更されました。選択もクリップボードへの追加も行われていません。"
+    IDS_FILEOPS_CLIPBOARD_SOURCE_UNKNOWN                  "一部の移動元の状態は不明です。切り取りリストは移動の開始時に消費され、復元されませんでした。"
     IDS_FILEOPS_CHECK_AUTODISMISS_OFF                     "自動終了の成功/キャンセル"
     IDS_FILEOPS_CHECK_AUTODISMISS_ON                      "自動終了の成功/キャンセル"
     IDS_FILEOP_BTN_EXPORT_ISSUES                          "輸出の問題"
@@ -1414,9 +1624,11 @@ BEGIN
     IDS_CMD_EDIT_NEW                                      "新規編集"
     IDS_CMD_ALTERNATE_EDIT                                "代替編集"
     IDS_CMD_COPY                                          "コピー"
+    IDS_CMD_COPY_WITH_OPTIONS                             "オプション付きでコピー"
     IDS_CMD_SORT_BY_TIME                                  "時間順に並べ替える"
     IDS_CMD_PACK                                          "パック"
     IDS_CMD_MOVE                                          "移動"
+    IDS_CMD_MOVE_WITH_OPTIONS                             "オプション付きで移動/名前変更"
     IDS_CMD_SORT_BY_SIZE                                  "サイズで並べ替え"
     IDS_CMD_UNPACK                                        "開梱"
     IDS_CMD_LOAD_SELECTION                                "ロード選択"
@@ -1448,10 +1660,10 @@ BEGIN
 	    IDS_CMD_UP_ONE_DIRECTORY                              "上の 1 つのディレクトリ"
 	    IDS_CMD_SWITCH_PANE_FOCUS                             "ペインのフォーカスを切り替える"
 	    IDS_CMD_EXECUTE_OPEN                                  "実行/開く"
-	    IDS_CMD_BRING_FILENAME_TO_COMMAND_LINE                "ファイル名をコマンドラインに表示する"
+	    IDS_CMD_BRING_FILENAME_TO_COMMAND_LINE                "フォーカス項目をターミナルに挿入"
 	    IDS_CMD_OPEN_PROPERTIES                               "プロパティを開く"
 	    IDS_CMD_SELECT_CALC_DIR_SIZE_NEXT                     "選択 + ディレクトリ サイズの計算 + 次へ"
-	    IDS_CMD_BRING_CURRENT_DIR_TO_COMMAND_LINE             "現在のディレクトリをコマンドラインに表示"
+	    IDS_CMD_BRING_CURRENT_DIR_TO_COMMAND_LINE             "現在のディレクトリをターミナルに挿入"
 	    IDS_CMD_WINDOW_MENU                                   "ウィンドウメニュー"
 	    IDS_CMD_QUICK_SEARCH                                  "クイック検索"
 	    IDS_CMD_SELECT_NEXT                                   "次へを選択"
@@ -1482,6 +1694,7 @@ BEGIN
 		    IDS_CMD_HISTORY_FORWARD                               "歴史の前進"
 		    IDS_CMD_GO_DRIVE_ROOT                                 "ドライブルートに移動"
 		    IDS_FMT_CMD_GO_DRIVE_ROOT_WITH_LETTER                 "ドライブ ルート ({0}:\\) に移動します。"
+		    IDS_CMD_SHOW_FILE_OPERATIONS                          "ファイル操作を表示"
 		    IDS_CMD_TOGGLE_FILEOPS_FAILED_ITEMS                   "Toggle ファイル操作の失敗した項目"
 		    IDS_CMD_FOCUS_ADDRESS_BAR                             "フォーカスアドレスバー"
 		    IDS_CMD_GO_ROOT_DIRECTORY                             "ルートディレクトリに移動"
@@ -1523,6 +1736,7 @@ BEGIN
 		    IDS_CMD_SELECT_FILE_SYSTEM_PLUGIN                      "ファイル システム プラグインの選択"
 		    IDS_PREVIEW_TAB_FOLDER                                 "フォルダー"
 		    IDS_PREVIEW_TAB_PREVIEW                                "プレビュー"
+		    IDS_PREVIEW_TAB_TERMINAL                               "ターミナル"
 		    IDS_PREVIEW_EMPTY                                      "プレビュー用にファイルが選択されていません。"
 		    IDS_PREVIEW_FOLDER_FMT                                 "フォルダー: {0}"
 		    IDS_PREVIEW_UNSUPPORTED                                "このビルドではローカル ファイルのプレビューを利用できます。"
@@ -1549,14 +1763,16 @@ BEGIN
 		    IDS_CMD_SHORT_THEME_SELECT_NEXT                      "次のテーマ"
 		    IDS_CMD_SHORT_THEME_SELECT_PREV                      "前のテーマ"
 		    IDS_CMD_SHORT_THEME_SYSTEM_HIGH_CONTRAST_INDICATOR   "ハイコントラスト"
+		    IDS_CMD_SHORT_SHOW_FILE_OPERATIONS                   "ファイル操作"
 		    IDS_CMD_SHORT_TOGGLE_FILEOPS_FAILED_ITEMS            "失敗したオペレーション"
 		    IDS_CMD_SHORT_TOGGLE_FUNCTION_BAR                    "ファンクバー"
 		    IDS_CMD_SHORT_TOGGLE_MENU_BAR                        "メニューバー"
 		    IDS_CMD_SHORT_VIEW_WIDTH                             "Vw幅"
 		    IDS_CMD_SHORT_ALTERNATE_VIEW                         "AltVw"
 		    IDS_CMD_SHORT_BATCH_RENAME                           "BatchRen"
-		    IDS_CMD_SHORT_BRING_CURRENT_DIR_TO_COMMAND_LINE      "DirToCmd"
-		    IDS_CMD_SHORT_BRING_FILENAME_TO_COMMAND_LINE         "名前からコマンドまで"
+		    IDS_CMD_SHORT_BRING_CURRENT_DIR_TO_COMMAND_LINE      "DirToTerm"
+		    IDS_CMD_SHORT_BRING_FILENAME_TO_COMMAND_LINE         "項目端末"
+		    IDS_CMD_SHORT_BRING_FULL_PATH_TO_TERMINAL             "フルパス端末"
 		    IDS_CMD_SHORT_CHANGE_ATTRIBUTES                      "変更属性"
 		    IDS_CMD_SHORT_CHANGE_CASE                            "ChgCase"
 		    IDS_CMD_SHORT_CHANGE_DIRECTORY                       "変更ディレクトリ"
@@ -1572,6 +1788,7 @@ BEGIN
 		    IDS_CMD_SHORT_COPY_PATH_AND_NAME_AS_TEXT             "コピーパスNm"
 		    IDS_CMD_SHORT_COPY_PATH_AS_TEXT                      "コピーパス"
 		    IDS_CMD_SHORT_COPY                                   "コピー"
+		    IDS_CMD_SHORT_COPY_WITH_OPTIONS                      "コピー設定"
 		    IDS_CMD_SHORT_COPY_PATH_AND_FILE_NAME                "コピーUNC"
 		    IDS_CMD_SHORT_MAKE_DIRECTORY                         "MakeDir"
 		    IDS_CMD_SHORT_DELETE                                 "削除"
@@ -1599,6 +1816,7 @@ BEGIN
 		    IDS_CMD_SHORT_MAKE_FILE_LIST                         "ファイルリスト"
 		    IDS_CMD_SHORT_MENU                                   "メニュー"
 		    IDS_CMD_SHORT_MOVE                                   "移動"
+		    IDS_CMD_SHORT_MOVE_WITH_OPTIONS                      "移動設定"
 		    IDS_CMD_SHORT_MOVE_TO_RECYCLE_BIN                    "リサイクル"
 		    IDS_CMD_SHORT_NAVIGATE_PATH                          "ゴーパス"
 		    IDS_CMD_SHORT_NEW_FROM_TEMPLATE                      "NewTmpl"
@@ -1677,8 +1895,8 @@ BEGIN
 		    IDS_CMD_DESC_SHORTCUTS                                "設定されているすべてのショートカットを表示します。"
 		    IDS_CMD_DESC_VIEW_WIDTH                               "表示幅を調整します。"
 		    IDS_CMD_DESC_ALTERNATE_VIEW                           "代替表示モードを切り替えます。"
-		    IDS_CMD_DESC_BRING_CURRENT_DIR_TO_COMMAND_LINE        "現在のディレクトリをコマンド ラインに挿入します。"
-		    IDS_CMD_DESC_BRING_FILENAME_TO_COMMAND_LINE           "フォーカスされたファイル名をコマンドラインに挿入します。"
+		    IDS_CMD_DESC_BRING_CURRENT_DIR_TO_COMMAND_LINE        "Enter を送信せずに、現在のディレクトリを反対側ペインのターミナルに挿入します。"
+		    IDS_CMD_DESC_BRING_FILENAME_TO_COMMAND_LINE           "反対側のペインのターミナルを開くか再利用し、追跡中のフォルダーが一致する場合はファイル名を、それ以外はフル パスを挿入します。"
 		    IDS_CMD_DESC_CHANGE_ATTRIBUTES                        "選択範囲のファイル属性を変更します。"
 		    IDS_CMD_DESC_CHANGE_CASE                              "選択範囲の大文字と小文字を変更します。"
 		    IDS_CMD_DESC_CHANGE_DIRECTORY                         "パスプロンプトを使用してディレクトリを変更します。"
@@ -1693,6 +1911,7 @@ BEGIN
 		    IDS_CMD_DESC_COPY_PATH_AND_NAME_AS_TEXT               "フルパスと名前をテキストとしてコピーします。"
 		    IDS_CMD_DESC_COPY_PATH_AS_TEXT                        "含まれているフォルダーのパスをテキストとしてコピーします。"
 		    IDS_CMD_DESC_COPY                                     "他のペインにコピーします。"
+		    IDS_CMD_DESC_COPY_WITH_OPTIONS                        "オプションを選択してから、他のペインにコピーします。"
 		    IDS_CMD_DESC_MAKE_DIRECTORY                           "新しいディレクトリを作成します。"
 		    IDS_CMD_DESC_DELETE                                   "選択範囲を削除します。"
 		    IDS_CMD_DESC_DISCONNECT                               "現在の場所から切断します。"
@@ -1711,6 +1930,7 @@ BEGIN
 		    IDS_CMD_DESC_LOAD_SELECTION                           "保存した選択内容をロードします。"
 		    IDS_CMD_DESC_MENU                                     "アクティブなペインのメイン メニューを開きます。"
 		    IDS_CMD_DESC_MOVE                                     "他のペインに移動します。"
+		    IDS_CMD_DESC_MOVE_WITH_OPTIONS                        "オプションを選択してから、他のペインに移動または名前を変更します。"
 		    IDS_CMD_DESC_MOVE_TO_RECYCLE_BIN                      "選択内容をごみ箱に移動します。"
 		    IDS_CMD_DESC_OPEN_CURRENT_FOLDER                      "現在のフォルダーを開きます。"
 		    IDS_CMD_DESC_OPEN_PROPERTIES                          "選択内容のプロパティ ダイアログを開きます。"
@@ -1787,6 +2007,7 @@ BEGIN
     IDS_BATCH_RENAME_ISSUE_NAME_INVALID_CHARACTER         "名前に無効な文字が含まれています"
     IDS_BATCH_RENAME_ISSUE_NAME_TOO_LONG                  "名前が長すぎます"
     IDS_BATCH_RENAME_ISSUE_NAME_DUPLICATE                 "同じフォルダー内で名前が重複しています"
+    IDS_BATCH_RENAME_ISSUE_SOURCE_DUPLICATE               "同じソース項目が複数回含まれています"
     IDS_BATCH_RENAME_ISSUE_NAME_UNCHANGED                 "名前は変更されません"
     IDS_BATCH_RENAME_ISSUE_NAME_CASE_ONLY                 "大文字と小文字のみが変わります"
     IDS_BATCH_RENAME_ISSUE_NAME_EDGE_SPACE_OR_DOT         "名前が空白で始まるか終わるか、ピリオドで終わっています"
@@ -1800,6 +2021,7 @@ BEGIN
     IDS_BATCH_RENAME_ISSUE_REGEX_INVALID                  "正規表現が無効です"
     IDS_BATCH_RENAME_ISSUE_REGEX_ERROR                    "正規表現エラー"
     IDS_BATCH_RENAME_ISSUE_PROVIDER_PATH_IDENTITY_UNKNOWN  "プロバイダーのパス ID を使用できません"
+    IDS_BATCH_RENAME_ISSUE_NAME_DEPENDENCY_CYCLE           "これらの名前は依存関係の循環を形成しています。一時的な中間名を使用してから、2 回目の非循環パスを実行してください。"
     IDS_BATCH_RENAME_HELPER_NAME                          "Name"
     IDS_BATCH_RENAME_HELPER_STEM                          "File name without extension"
     IDS_BATCH_RENAME_HELPER_EXT                           "Extension"
@@ -1874,6 +2096,7 @@ BEGIN
 		    IDS_CMD_DESC_HISTORY_BACK                             "履歴に戻ります。"
 		    IDS_CMD_DESC_HISTORY_FORWARD                          "履歴を前方に移動します。"
 		    IDS_CMD_DESC_GO_DRIVE_ROOT                            "選択したドライブのルートに移動します。"
+		    IDS_CMD_DESC_SHOW_FILE_OPERATIONS                     "ファイル操作ウィンドウを表示します。"
 		    IDS_CMD_DESC_TOGGLE_FILEOPS_FAILED_ITEMS              "ファイル操作に失敗した項目ペインを表示または非表示にします。"
 		    IDS_CMD_DESC_FOCUS_ADDRESS_BAR                        "アクティブなペインのアドレス バーにフォーカスします。"
 		    IDS_CMD_DESC_GO_ROOT_DIRECTORY                        "ルート ディレクトリに移動します。"
@@ -1931,11 +2154,9 @@ BEGIN
     IDS_PREFS_HOT_PATHS_BROWSE_ELLIPSIS               "閲覧する..."
     IDS_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN          "割り当てるときに設定ページを開く"
     IDS_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN_DESC     "パネルからスロットを割り当てた後、お気に入りパス設定ページを開きます。"
-    IDS_PREFS_FILEOPS_SECTION_PRECALC                 "事前計算"
-    IDS_PREFS_FILEOPS_PRECALC_ENABLED_TITLE           "事前計算スキャンを有効にする"
-    IDS_PREFS_FILEOPS_PRECALC_ENABLED_DESC            "開始する前にコピーと移動の選択内容をスキャンすると、合計と推定残り時間がすぐに利用可能になります。"
-    IDS_PREFS_FILEOPS_PRECALC_WORKERS_TITLE           "事前計算ワーカー"
-    IDS_PREFS_FILEOPS_PRECALC_WORKERS_DESC            "ホストの事前計算ツリーウォークに使用されるバックグラウンドワーカーの数。"
+    IDS_PREFS_FILEOPS_SECTION_VERIFICATION            "検証"
+    IDS_PREFS_FILEOPS_VERIFY_AFTER_COPY_TITLE          "コピーしたファイルを検証する"
+    IDS_PREFS_FILEOPS_VERIFY_AFTER_COPY_DESC           "公開後にコピーした通常ファイルの内容を比較します。コピーした全バイトを再度読み取る場合があります。"
     IDS_PREFS_FILEOPS_SECTION_BANDWIDTH               "帯域幅"
     IDS_PREFS_FILEOPS_BANDWIDTH_PRESET_TITLE          "デフォルトの速度制限"
     IDS_PREFS_FILEOPS_BANDWIDTH_PRESET_DESC           "新しいコピーおよび移動タスクのデフォルトのタスクごとの速度制限。特定の値を入力するには、「カスタム」を選択します。タスクは進行状況ポップアップでこれをオーバーライドできます。"
@@ -2171,4 +2392,123 @@ BEGIN
     IDS_FIND_RESULT_MENU_COPY_TO_DESTINATION          "宛先にコピー"
     IDS_FIND_RESULT_MENU_MOVE_TO_DESTINATION          "目的地へ移動"
     IDS_FMT_FILEOPS_CONFLICT_DATE_TIME                "{0} {1}"
+    IDS_CMD_COMMAND_PALETTE                           "RedSalamander コマンド パレット"
+    IDS_CMD_OPEN_SETTINGS_FILE                        "設定ファイルを開く"
+    IDS_CMD_TERMINAL_SESSION_MENU                     "ターミナル セッション メニュー"
+    IDS_CMD_TERMINAL_FIND                             "ターミナル テキストを検索"
+    IDS_CMD_TERMINAL_SUGGESTIONS                      "コマンド履歴の候補"
+    IDS_CMD_TERMINAL_TAB_NEW                          "新しいターミナル タブ / 反対側のペイン"
+    IDS_CMD_TERMINAL_OPEN_FLOATING_WINDOW             "フローティング ターミナルを開く / 新しいタブ"
+    IDS_CMD_TERMINAL_TAB_NEXT                         "次のターミナル タブ / コンテンツ"
+    IDS_CMD_TERMINAL_TAB_PREVIOUS                     "前のターミナル タブ / コンテンツ"
+    IDS_CMD_TERMINAL_TAB_SELECT_1                     "ターミナル タブ / コンテンツ 1 を選択"
+    IDS_CMD_TERMINAL_TAB_SELECT_2                     "ターミナル タブ / コンテンツ 2 を選択"
+    IDS_CMD_TERMINAL_TAB_SELECT_3                     "ターミナル タブ / コンテンツ 3 を選択"
+    IDS_CMD_TERMINAL_TAB_SELECT_4                     "フローティング ターミナル タブ 4 を選択"
+    IDS_CMD_TERMINAL_TAB_SELECT_5                     "フローティング ターミナル タブ 5 を選択"
+    IDS_CMD_TERMINAL_TAB_SELECT_6                     "フローティング ターミナル タブ 6 を選択"
+    IDS_CMD_TERMINAL_TAB_SELECT_7                     "フローティング ターミナル タブ 7 を選択"
+    IDS_CMD_TERMINAL_TAB_SELECT_8                     "フローティング ターミナル タブ 8 を選択"
+    IDS_CMD_TERMINAL_TAB_LAST                         "最後のターミナル タブ / コンテンツを選択"
+    IDS_CMD_TERMINAL_CLOSE                            "ターミナル タブを閉じる"
+    IDS_CMD_PANE_RESIZE_SPLITTER_LEFT                 "区切り線を左へ移動"
+    IDS_CMD_PANE_RESIZE_SPLITTER_RIGHT                "区切り線を右へ移動"
+    IDS_CMD_PANE_FOCUS_LEFT                           "左ペインにフォーカス"
+    IDS_CMD_PANE_FOCUS_RIGHT                          "右ペインにフォーカス"
+    IDS_CMD_TERMINAL_COPY_SELECTION_OR_PASSTHROUGH    "選択範囲をコピーまたは入力を渡す"
+    IDS_CMD_TERMINAL_SCROLL_LINE_DOWN                 "1 行下へスクロール"
+    IDS_CMD_TERMINAL_SCROLL_PAGE_DOWN                 "1 ページ下へスクロール"
+    IDS_CMD_TERMINAL_SCROLL_LINE_UP                   "1 行上へスクロール"
+    IDS_CMD_TERMINAL_SCROLL_PAGE_UP                   "1 ページ上へスクロール"
+    IDS_CMD_TERMINAL_SCROLL_TOP                       "先頭へスクロール"
+    IDS_CMD_TERMINAL_SCROLL_BOTTOM                    "末尾へスクロール"
+    IDS_CMD_TERMINAL_FONT_INCREASE                    "ターミナルのフォントを拡大"
+    IDS_CMD_TERMINAL_FONT_DECREASE                    "ターミナルのフォントを縮小"
+    IDS_CMD_TERMINAL_FONT_RESET                       "ターミナルのフォントをリセット"
+    IDS_CMD_CONTENT_TAB_NEXT                          "次のペイン コンテンツ"
+    IDS_CMD_CONTENT_TAB_PREVIOUS                      "前のペイン コンテンツ"
+    IDS_CMD_CONTENT_TAB_FOLDER                        "フォルダー コンテンツを選択"
+    IDS_CMD_CONTENT_TAB_PREVIEW                       "プレビュー コンテンツを選択"
+    IDS_CMD_CONTENT_TAB_TERMINAL                      "ターミナル コンテンツを選択"
+    IDS_CMD_CONTENT_TAB_LAST                          "最後のペイン コンテンツを選択"
+    IDS_CMD_DESC_COMMAND_PALETTE                       "現在のアプリケーション コンテキストで RedSalamander コマンドを検索して実行します。"
+    IDS_CMD_DESC_OPEN_SETTINGS_FILE                    "現在のグローバル アプリケーション設定ファイルを既定のエディターで開きます。"
+    IDS_CMD_DESC_TERMINAL_SESSION_MENU                 "現在のターミナルのセッションとプロファイルのメニューを開きます。"
+    IDS_CMD_DESC_TERMINAL_FIND                         "現在のターミナル バッファー内のテキストを検索します。"
+    IDS_CMD_DESC_TERMINAL_SUGGESTIONS                  "シェルのコマンド履歴を検索し、選択した候補を挿入します。"
+    IDS_CMD_DESC_TERMINAL_TAB_NEW                      "埋め込み時は反対側のペインに、その他の場合はフローティング ターミナル ウィンドウに新しいタブを開きます。"
+    IDS_CMD_DESC_TERMINAL_OPEN_FLOATING_WINDOW         "単一のフローティング ターミナル ウィンドウを開き、既に開いている場合はタブを追加します。"
+    IDS_CMD_DESC_TERMINAL_TAB_NEXT                     "次のターミナル タブまたは埋め込みペイン コンテンツを選択します。"
+    IDS_CMD_DESC_TERMINAL_TAB_PREVIOUS                 "前のターミナル タブまたは埋め込みペイン コンテンツを選択します。"
+    IDS_CMD_DESC_TERMINAL_TAB_SELECT                   "番号付きターミナル タブまたは対応する埋め込みペイン コンテンツを選択します。"
+    IDS_CMD_DESC_TERMINAL_TAB_LAST                     "最後のターミナル タブまたは埋め込みペイン コンテンツを選択します。"
+    IDS_CMD_DESC_TERMINAL_CLOSE                        "現在のターミナル タブまたは埋め込みターミナル セッションを閉じます。"
+    IDS_CMD_DESC_PANE_RESIZE_SPLITTER_LEFT             "ペインの区切り線を 1 段階左へ移動します。"
+    IDS_CMD_DESC_PANE_RESIZE_SPLITTER_RIGHT            "ペインの区切り線を 1 段階右へ移動します。"
+    IDS_CMD_DESC_PANE_FOCUS_LEFT                       "キーボード フォーカスを左ペインへ移動します。"
+    IDS_CMD_DESC_PANE_FOCUS_RIGHT                      "キーボード フォーカスを右ペインへ移動します。"
+    IDS_CMD_DESC_TERMINAL_COPY_SELECTION_OR_PASSTHROUGH "ターミナルの選択範囲をコピーして解除します。選択がない場合は元の入力をシェルへ渡します。"
+    IDS_CMD_DESC_TERMINAL_SCROLL_LINE_DOWN             "現在のターミナルのプライマリ バッファーを 1 行下へスクロールします。"
+    IDS_CMD_DESC_TERMINAL_SCROLL_PAGE_DOWN             "現在のターミナルのプライマリ バッファーを表示 1 ページ分下へスクロールします。"
+    IDS_CMD_DESC_TERMINAL_SCROLL_LINE_UP               "現在のターミナルのプライマリ バッファーを 1 行上へスクロールします。"
+    IDS_CMD_DESC_TERMINAL_SCROLL_PAGE_UP               "現在のターミナルのプライマリ バッファーを表示 1 ページ分上へスクロールします。"
+    IDS_CMD_DESC_TERMINAL_SCROLL_TOP                   "現在のターミナルのプライマリ バッファーの先頭へスクロールします。"
+    IDS_CMD_DESC_TERMINAL_SCROLL_BOTTOM                "末尾へスクロールし、現在のターミナル出力の追従を再開します。"
+    IDS_CMD_DESC_TERMINAL_FONT_INCREASE                "現在のターミナル セッションのフォント サイズを 1 DIP 拡大します。"
+    IDS_CMD_DESC_TERMINAL_FONT_DECREASE                "現在のターミナル セッションのフォント サイズを 1 DIP 縮小します。"
+    IDS_CMD_DESC_TERMINAL_FONT_RESET                   "現在のターミナル セッションのフォント サイズを設定済みの基本サイズに戻します。"
+    IDS_CMD_DESC_CONTENT_TAB_NEXT                      "現在のペインで次に利用可能なコンテンツ タブを選択します。"
+    IDS_CMD_DESC_CONTENT_TAB_PREVIOUS                  "現在のペインで前に利用可能なコンテンツ タブを選択します。"
+    IDS_CMD_DESC_CONTENT_TAB_FOLDER                    "現在のペインでフォルダー コンテンツを選択します。"
+    IDS_CMD_DESC_CONTENT_TAB_PREVIEW                   "利用可能な場合、現在のペインでプレビュー コンテンツを選択します。"
+    IDS_CMD_DESC_CONTENT_TAB_TERMINAL                  "利用可能な場合、現在のペインでターミナル コンテンツを選択します。"
+    IDS_CMD_DESC_CONTENT_TAB_LAST                      "現在のペインで最後に利用可能なコンテンツ タブを選択します。"
+    IDS_CMD_SHORT_COMMAND_PALETTE                      "コマンド一覧"
+    IDS_CMD_SHORT_OPEN_SETTINGS_FILE                   "設定ファイル"
+    IDS_CMD_SHORT_TERMINAL_SESSION_MENU                "端末メニュー"
+    IDS_CMD_SHORT_TERMINAL_FIND                        "端末検索"
+    IDS_CMD_SHORT_TERMINAL_SUGGESTIONS                 "履歴候補"
+    IDS_CMD_SHORT_TERMINAL_TAB_NEW                     "新規端末タブ"
+    IDS_CMD_SHORT_TERMINAL_OPEN_FLOATING_WINDOW        "浮動端末"
+    IDS_CMD_SHORT_TERMINAL_TAB_NEXT                    "次端末タブ"
+    IDS_CMD_SHORT_TERMINAL_TAB_PREVIOUS                "前端末タブ"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_1                "端末タブ1"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_2                "端末タブ2"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_3                "端末タブ3"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_4                "端末タブ4"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_5                "端末タブ5"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_6                "端末タブ6"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_7                "端末タブ7"
+    IDS_CMD_SHORT_TERMINAL_TAB_SELECT_8                "端末タブ8"
+    IDS_CMD_SHORT_TERMINAL_TAB_LAST                    "最後端末"
+    IDS_CMD_SHORT_TERMINAL_CLOSE                       "端末を閉じる"
+    IDS_CMD_SHORT_PANE_RESIZE_SPLITTER_LEFT            "区切り左"
+    IDS_CMD_SHORT_PANE_RESIZE_SPLITTER_RIGHT           "区切り右"
+    IDS_CMD_SHORT_PANE_FOCUS_LEFT                      "左フォーカス"
+    IDS_CMD_SHORT_PANE_FOCUS_RIGHT                     "右フォーカス"
+    IDS_CMD_SHORT_TERMINAL_COPY_SELECTION_OR_PASSTHROUGH "コピー入力"
+    IDS_CMD_SHORT_TERMINAL_SCROLL_LINE_DOWN            "1行下"
+    IDS_CMD_SHORT_TERMINAL_SCROLL_PAGE_DOWN            "1頁下"
+    IDS_CMD_SHORT_TERMINAL_SCROLL_LINE_UP              "1行上"
+    IDS_CMD_SHORT_TERMINAL_SCROLL_PAGE_UP              "1頁上"
+    IDS_CMD_SHORT_TERMINAL_SCROLL_TOP                  "先頭"
+    IDS_CMD_SHORT_TERMINAL_SCROLL_BOTTOM               "末尾"
+    IDS_CMD_SHORT_TERMINAL_FONT_INCREASE               "文字拡大"
+    IDS_CMD_SHORT_TERMINAL_FONT_DECREASE               "文字縮小"
+    IDS_CMD_SHORT_TERMINAL_FONT_RESET                  "文字リセット"
+    IDS_CMD_SHORT_CONTENT_TAB_NEXT                     "次コンテンツ"
+    IDS_CMD_SHORT_CONTENT_TAB_PREVIOUS                 "前コンテンツ"
+    IDS_CMD_SHORT_CONTENT_TAB_FOLDER                   "フォルダタブ"
+    IDS_CMD_SHORT_CONTENT_TAB_PREVIEW                  "プレビュー"
+    IDS_CMD_SHORT_CONTENT_TAB_TERMINAL                 "端末タブ"
+    IDS_CMD_SHORT_CONTENT_TAB_LAST                     "最後コンテンツ"
+    IDS_SHORTCUTS_GROUP_APPLICATION                    "アプリケーション"
+    IDS_SHORTCUTS_GROUP_TERMINAL                       "ターミナル"
+    IDS_PREFS_KEYBOARD_PASS_THROUGH                    "ターミナルへ渡す"
+    IDS_PREFS_KEYBOARD_NO_ACTION                       "操作なし"
+    IDS_PREFS_KEYBOARD_PASS_THROUGH_DESC               "RedSalamander コマンドを実行せず、このショートカットをターミナルへ送ります。"
+    IDS_PREFS_KEYBOARD_OVERRIDES_GLOBAL                "グローバル ショートカットを上書き"
+    IDS_COMMAND_PALETTE_SEARCH_CUE                     "コマンドを検索"
+    IDS_COMMAND_PALETTE_DISABLED                       "無効"
+    IDS_PREFS_KEYBOARD_IMPORT_SCOPE_INVALID            "ショートカットのコマンドまたは物理キー ID がスコープで無効です。パススルーはターミナル専用で、ファンクション バーのショートカットは仮想キーを使用します。"
 END

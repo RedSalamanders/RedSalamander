@@ -1,17 +1,14 @@
 #include "Document.h"
 #include "Helpers.h"
-#include "LocalFileTransaction.h"
-#include "StringConversion.h"
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <filesystem>
 #include <format>
 #include <limits>
 #include <optional>
-#include <span>
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -207,12 +204,14 @@ void Document::SetText(const std::wstring& text)
     while (end != std::wstring::npos)
     {
         end = text.find(L'\n', start);
-        Line line;
+        std::wstring lineText;
         if (end == std::wstring::npos)
-            line.text = text.substr(start);
+            lineText = text.substr(start);
         else
-            line.text = text.substr(start, end - start);
-        StripCarriageReturns(line.text);
+            lineText = text.substr(start, end - start);
+        StripCarriageReturns(lineText);
+        Line line;
+        line.text = std::move(lineText);
         _retainedTextBytes += static_cast<uint64_t>(line.text.size()) * sizeof(wchar_t);
         line.newlineCount       = static_cast<UINT32>(std::count(line.text.begin(), line.text.end(), L'\n'));
         line.cachedDisplayValid = false;
@@ -222,6 +221,25 @@ void Document::SetText(const std::wstring& text)
     InvalidateCaches();
     MarkAllDirtyUnsafe();  // Already holding lock
     RebuildVisibleLines(); // Rebuild visible lines after replacing all text
+}
+
+void Document::SetTextSnapshot(RedSalamanderMonitor::MonitorTextSnapshot&& snapshot)
+{
+    std::unique_lock lock(_rwMutex);
+    _lines.clear();
+    _visibleLines.clear();
+    _retainedTextBytes = snapshot.retainedTextBytes;
+    for (RedSalamanderMonitor::MonitorTextBlock& text : snapshot.lines)
+    {
+        Line line;
+        line.text               = std::move(text);
+        line.newlineCount       = 0u;
+        line.cachedDisplayValid = false;
+        _lines.push_back(std::move(line));
+    }
+    InvalidateCaches();
+    MarkAllDirtyUnsafe();
+    RebuildVisibleLines();
 }
 
 void Document::AppendText(const std::wstring& more)
@@ -249,7 +267,7 @@ void Document::AppendText(const std::wstring& more)
         const UINT32 prefix = PrefixLength(line);
         const size_t oldLen = static_cast<size_t>(prefix) + line.text.size();
         const size_t count  = end - start;
-        line.text.append(data + start, count);
+        line.text.Append(data + start, count);
         line.cachedDisplayValid = false;
         totalCharsAppended += count;
         const size_t newLen = static_cast<size_t>(prefix) + line.text.size();
@@ -345,9 +363,9 @@ void Document::AppendInfoLines(std::vector<InfoLineInput> lines)
 
 void Document::AppendInfoLineUnsafe(std::wstring text, const Debug::InfoParam& info)
 {
+    StripCarriageReturns(text);
     Line line;
     line.text = std::move(text);
-    StripCarriageReturns(line.text);
     line.newlineCount       = static_cast<UINT32>(std::count(line.text.begin(), line.text.end(), L'\n'));
     line.cachedDisplayValid = false;
     line.hasMeta            = true;
@@ -931,40 +949,24 @@ Document::FilteredTailResult Document::BuildFilteredTailText(size_t firstAll, si
     return result;
 }
 
-bool Document::SaveTextToFile(const std::wstring& path) const
+RedSalamanderMonitor::MonitorTextSnapshot Document::CaptureTextSnapshot() const
 {
-    Common::Files::LocalFileTransaction transaction;
-    if (FAILED(Common::Files::LocalFileTransaction::Create(
-            std::filesystem::path(path), Common::Files::ExistingTargetPolicy::Replace, false, transaction)))
+    RedSalamanderMonitor::MonitorTextSnapshot snapshot;
     {
-        return false;
-    }
-
-    constexpr std::array<std::byte, 3u> bom = {{std::byte{0xEFu}, std::byte{0xBBu}, std::byte{0xBFu}}};
-    if (FAILED(transaction.Write(std::span<const std::byte>(bom))))
-    {
-        return false;
-    }
-
-    uint64_t expectedBytes = bom.size();
-    std::shared_lock lock(_rwMutex);
-
-    for (size_t i = 0; i < _lines.size(); ++i)
-    {
-        const std::optional<std::string> utf8 = Common::Strings::TryUtf8FromUtf16Strict(_lines[i].text);
-        if (! utf8.has_value() || utf8->size() > (std::numeric_limits<uint64_t>::max)() - expectedBytes - 1u)
+        std::shared_lock lock(_rwMutex);
+        const auto lockStarted = std::chrono::steady_clock::now();
+        snapshot.retainedTextBytes = _retainedTextBytes;
+        for (const Line& line : _lines)
         {
-            return false;
+            snapshot.lines.push_back(line.text);
+            ++snapshot.sharedBlockCount;
         }
-        if (FAILED(transaction.Write(std::string_view(utf8.value()))) || FAILED(transaction.Write(std::string_view("\n", 1u))))
-        {
-            return false;
-        }
-        expectedBytes += static_cast<uint64_t>(utf8->size()) + 1u;
+        snapshot.sharedBlockBytes = snapshot.retainedTextBytes;
+        snapshot.peakAdditionalSnapshotBytes = static_cast<uint64_t>(snapshot.lines.size()) * sizeof(RedSalamanderMonitor::MonitorTextBlock);
+        snapshot.lockHoldUs = static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - lockStarted).count());
     }
-
-    lock.unlock();
-    return SUCCEEDED(transaction.Commit(expectedBytes));
+    return snapshot;
 }
 
 std::wstring Document::GetTextRange(UINT32 start, UINT32 length) const
@@ -995,7 +997,7 @@ std::wstring Document::GetTextRange(UINT32 start, UINT32 length) const
             {
                 const UINT32 rem   = count - firstPart;
                 const UINT32 tcopy = std::min<UINT32>(rem, static_cast<UINT32>(line.text.size()));
-                result.append(line.text, 0, tcopy);
+                result.append(line.text.Text(), 0, tcopy);
             }
         }
         else
@@ -1003,7 +1005,7 @@ std::wstring Document::GetTextRange(UINT32 start, UINT32 length) const
             const UINT32 off   = from - plen;
             const UINT32 tcopy = std::min<UINT32>(count, static_cast<UINT32>(line.text.size()) - std::min<UINT32>(off, static_cast<UINT32>(line.text.size())));
             if (off < line.text.size() && tcopy)
-                result.append(line.text, off, tcopy);
+                result.append(line.text.Text(), off, tcopy);
         }
     };
 
@@ -1030,7 +1032,7 @@ std::wstring Document::GetTextRange(UINT32 start, UINT32 length) const
     {
         const auto& ml = _lines[i];
         result += BuildPrefix(ml);
-        result += ml.text;
+        result += ml.text.Text();
         result += L'\n';
     }
     // Last line head

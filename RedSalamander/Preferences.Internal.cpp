@@ -309,12 +309,6 @@ void ApplyScrollToPosition(HWND pageHostWindow, PreferencesDialogState& state, i
     const int oldScrollY = state.pageScrollY;
     state.pageScrollY    = newScrollY;
 
-    SCROLLINFO si{};
-    si.cbSize = sizeof(si);
-    si.fMask  = SIF_POS;
-    si.nPos   = state.pageScrollY;
-    SetScrollInfo(pageHostWindow, SB_VERT, &si, TRUE);
-
     const int dy = oldScrollY - state.pageScrollY;
     ApplyScrollDelta(pageHostWindow, dy);
     // Avoid RDW_UPDATENOW — let Windows coalesce into a single WM_PAINT.
@@ -459,7 +453,9 @@ void BuildListItems(std::vector<PrefsPluginListItem>& out) noexcept
     {
         if (! viewerPlugins[i].id.empty())
         {
-            out.push_back(PrefsPluginListItem{PrefsPluginType::Viewer, i});
+            const PrefsPluginType type = viewerPlugins[i].type == ViewerPluginManager::PluginType::Terminal ? PrefsPluginType::Terminal
+                                                                                                            : PrefsPluginType::Viewer;
+            out.push_back(PrefsPluginListItem{type, i});
         }
     }
 
@@ -520,7 +516,9 @@ void BuildListItems(std::vector<PrefsPluginListItem>& out) noexcept
     {
         if (CompareTextNoCase(viewerPlugins[i].id, pluginId) == 0)
         {
-            return PrefsPluginListItem{PrefsPluginType::Viewer, i};
+            const PrefsPluginType type = viewerPlugins[i].type == ViewerPluginManager::PluginType::Terminal ? PrefsPluginType::Terminal
+                                                                                                            : PrefsPluginType::Viewer;
+            return PrefsPluginListItem{type, i};
         }
     }
 
@@ -1483,8 +1481,8 @@ void MaybeResetWorkingFileOperationsSettingsIfEmpty(Common::Settings::Settings& 
     const Common::Settings::FileOperationsSettings defaults{};
     const auto& fileOperations = settings.fileOperations.value();
     const bool hasNonDefault =
-        fileOperations.autoDismissSuccess != defaults.autoDismissSuccess || fileOperations.preCalcEnabled != defaults.preCalcEnabled ||
-        fileOperations.preCalcMaxWorkers != defaults.preCalcMaxWorkers || fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
+        fileOperations.autoDismissSuccess != defaults.autoDismissSuccess || fileOperations.verifyAfterCopy != defaults.verifyAfterCopy ||
+        fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
         fileOperations.defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
         fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles || fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
         fileOperations.diagnosticsDebugEnabled != defaults.diagnosticsDebugEnabled || fileOperations.maxIssueReportFiles.has_value() ||

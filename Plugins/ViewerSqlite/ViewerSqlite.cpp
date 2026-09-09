@@ -909,7 +909,8 @@ LRESULT ViewerSqlite::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
 
 HRESULT STDMETHODCALLTYPE ViewerSqlite::Open(const ViewerOpenContext* context) noexcept
 {
-    if (context == nullptr || context->fileSystem == nullptr || context->focusedPath == nullptr || context->focusedPath[0] == L'\0')
+    if (context == nullptr || context->sizeBytes < sizeof(ViewerOpenContext) || context->fileSystem == nullptr ||
+        context->focusedPath == nullptr || context->focusedPath[0] == L'\0')
     {
         return E_INVALIDARG;
     }
@@ -1041,7 +1042,7 @@ HRESULT STDMETHODCALLTYPE ViewerSqlite::Close() noexcept
 
 HRESULT STDMETHODCALLTYPE ViewerSqlite::SetTheme(const ViewerTheme* theme) noexcept
 {
-    if (theme == nullptr || theme->version < 2u || theme->version > 4u)
+    if (theme == nullptr || theme->sizeBytes < sizeof(ViewerTheme))
     {
         return E_INVALIDARG;
     }

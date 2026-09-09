@@ -608,7 +608,7 @@ private:
     }
 
     HWND _ownerWindow = nullptr;
-    ViewerTheme _theme{};
+    ViewerTheme _theme{.sizeBytes = sizeof(ViewerTheme)};
     bool _hasTheme = false;
     ThemePalette _palette{};
     std::wstring _caption;
@@ -952,64 +952,6 @@ bool LooksLikeBinaryData(const uint8_t* data, size_t size) noexcept
 
     const double ratio = static_cast<double>(suspiciousControls) / static_cast<double>(probeSize);
     return ratio > 0.25;
-}
-
-ViewerText::FileEncoding DisplayEncodingFileEncodingForSelection(UINT selection) noexcept
-{
-    switch (selection)
-    {
-        case IDM_VIEWER_ENCODING_DISPLAY_UTF8:
-        case IDM_VIEWER_ENCODING_DISPLAY_UTF8_BOM: return ViewerText::FileEncoding::Utf8;
-        case IDM_VIEWER_ENCODING_DISPLAY_UTF16BE_BOM: return ViewerText::FileEncoding::Utf16BE;
-        case IDM_VIEWER_ENCODING_DISPLAY_UTF16LE_BOM: return ViewerText::FileEncoding::Utf16LE;
-        case IDM_VIEWER_ENCODING_DISPLAY_UTF32BE_BOM: return ViewerText::FileEncoding::Utf32BE;
-        case IDM_VIEWER_ENCODING_DISPLAY_UTF32LE_BOM: return ViewerText::FileEncoding::Utf32LE;
-        default: return ViewerText::FileEncoding::Unknown;
-    }
-}
-
-UINT CodePageForSelection(UINT selection) noexcept
-{
-    switch (selection)
-    {
-        case IDM_VIEWER_ENCODING_DISPLAY_ANSI: return CP_ACP;
-        case IDM_VIEWER_ENCODING_DISPLAY_UTF7: return 65000u;
-        case IDM_VIEWER_ENCODING_DISPLAY_UTF8:
-        case IDM_VIEWER_ENCODING_DISPLAY_UTF8_BOM: return CP_UTF8;
-        case IDM_VIEWER_ENCODING_DISPLAY_UTF16BE_BOM:
-        case IDM_VIEWER_ENCODING_DISPLAY_UTF16LE_BOM:
-        case IDM_VIEWER_ENCODING_DISPLAY_UTF32BE_BOM:
-        case IDM_VIEWER_ENCODING_DISPLAY_UTF32LE_BOM: return CP_ACP;
-        default: break;
-    }
-
-    return selection;
-}
-
-uint64_t BytesToSkipForDisplayEncoding(UINT selection, ViewerText::FileEncoding encoding, uint64_t bomBytes) noexcept
-{
-    if (selection == IDM_VIEWER_ENCODING_DISPLAY_UTF8_BOM && encoding == ViewerText::FileEncoding::Utf8 && bomBytes == 3)
-    {
-        return 3u;
-    }
-    if (selection == IDM_VIEWER_ENCODING_DISPLAY_UTF16LE_BOM && encoding == ViewerText::FileEncoding::Utf16LE && bomBytes == 2)
-    {
-        return 2u;
-    }
-    if (selection == IDM_VIEWER_ENCODING_DISPLAY_UTF16BE_BOM && encoding == ViewerText::FileEncoding::Utf16BE && bomBytes == 2)
-    {
-        return 2u;
-    }
-    if (selection == IDM_VIEWER_ENCODING_DISPLAY_UTF32LE_BOM && encoding == ViewerText::FileEncoding::Utf32LE && bomBytes == 4)
-    {
-        return 4u;
-    }
-    if (selection == IDM_VIEWER_ENCODING_DISPLAY_UTF32BE_BOM && encoding == ViewerText::FileEncoding::Utf32BE && bomBytes == 4)
-    {
-        return 4u;
-    }
-
-    return 0;
 }
 
 uint64_t TextStreamChunkBytes(uint32_t textBufferMiB, ViewerText::FileEncoding displayEncoding) noexcept
@@ -4205,9 +4147,50 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 return FALSE;
             }
 
+            const UINT queryCommandId = menuSnapshot->queryCommandId;
             *menuSnapshot                    = {};
+            menuSnapshot->queryCommandId     = queryCommandId;
             menuSnapshot->hasHiddenMenuModel = _menuHandle != nullptr;
             menuSnapshot->ownerDrawItemCount = CountOwnerDrawMenuItems(_menuHandle.get());
+
+            if (queryCommandId != 0u && _menuHandle)
+            {
+                const auto queryMenuCommandState = [&](auto&& self, HMENU menu) noexcept -> bool
+                {
+                    if (! menu)
+                    {
+                        return false;
+                    }
+
+                    const int itemCount = GetMenuItemCount(menu);
+                    for (int position = 0; position < itemCount; ++position)
+                    {
+                        MENUITEMINFOW itemInfo{};
+                        itemInfo.cbSize = sizeof(itemInfo);
+                        itemInfo.fMask  = MIIM_ID | MIIM_STATE | MIIM_SUBMENU;
+                        if (GetMenuItemInfoW(menu, static_cast<UINT>(position), TRUE, &itemInfo) == 0)
+                        {
+                            continue;
+                        }
+
+                        if (itemInfo.hSubMenu && self(self, itemInfo.hSubMenu))
+                        {
+                            return true;
+                        }
+
+                        if (! itemInfo.hSubMenu && itemInfo.wID == queryCommandId)
+                        {
+                            menuSnapshot->queryCommandPresent = true;
+                            menuSnapshot->queryCommandEnabled = (itemInfo.fState & MFS_DISABLED) == 0u;
+                            menuSnapshot->queryCommandChecked = (itemInfo.fState & MFS_CHECKED) != 0u;
+                            return true;
+                        }
+                    }
+
+                    return false;
+                };
+                static_cast<void>(queryMenuCommandState(queryMenuCommandState, _menuHandle.get()));
+            }
             return TRUE;
         }
 #endif
@@ -5507,7 +5490,7 @@ void ViewerText::StartAsyncOpen(HWND hwnd,
 
         result->displayEncodingMenuSelection = selection;
 
-        const uint64_t streamSkipBytes = ::BytesToSkipForDisplayEncoding(selection, encoding, bomBytes);
+        const uint64_t streamSkipBytes = BytesToSkipForDisplayEncodingSelection(selection, encoding, bomBytes);
         result->textStreamSkipBytes    = streamSkipBytes;
 
         const uint64_t clampedStart   = std::min<uint64_t>(streamSkipBytes, detectedFileSize);
@@ -5516,7 +5499,7 @@ void ViewerText::StartAsyncOpen(HWND hwnd,
         result->textStreamActive      = false;
 
         const FileEncoding displayEncoding = DisplayEncodingFileEncodingForSelection(selection);
-        const UINT displayCodePage         = CodePageForSelection(selection);
+        const UINT displayCodePage         = CodePageForDisplayEncodingSelection(selection);
         const uint64_t maxChunkBytes       = ::TextStreamChunkBytes(textBufferMiB, displayEncoding);
         const uint64_t maxParsedDiffBytes  = kMaxFullyBufferedParsedDiffBytes;
         const bool diffByExtension         = HasDiffLikeExtension(path);
@@ -6368,7 +6351,6 @@ void ViewerText::ShowInlineAlert(InlineAlertSeverity severity, UINT titleId, UIN
     }
 
     HostAlertRequest request{};
-    request.version      = 1;
     request.sizeBytes    = sizeof(request);
     request.scope        = HOST_ALERT_SCOPE_WINDOW;
     request.modality     = HOST_ALERT_MODAL;
@@ -7208,6 +7190,7 @@ void ViewerText::OnCommand(HWND hwnd, UINT commandId, UINT notifyCode, HWND cont
 
         case IDM_VIEWER_ENCODING_NEXT: CommandCycleDisplayEncoding(hwnd, false); break;
         case IDM_VIEWER_ENCODING_PREVIOUS: CommandCycleDisplayEncoding(hwnd, true); break;
+        case IDM_VIEWER_ENCODING_MORE: CommandChooseDisplayEncoding(hwnd); break;
     }
 }
 
@@ -8283,17 +8266,7 @@ std::optional<ViewerText::SaveAsResult> ViewerText::ShowSaveAsDialog(HWND hwnd) 
         }
     }
 
-    UINT initialEncodingSelection = IDM_VIEWER_ENCODING_SAVE_KEEP_ORIGINAL;
-    switch (EffectiveSaveEncodingMenuSelection())
-    {
-        case IDM_VIEWER_ENCODING_SAVE_KEEP_ORIGINAL: initialEncodingSelection = IDM_VIEWER_ENCODING_SAVE_KEEP_ORIGINAL; break;
-        case IDM_VIEWER_ENCODING_SAVE_ANSI: initialEncodingSelection = IDM_VIEWER_ENCODING_DISPLAY_ANSI; break;
-        case IDM_VIEWER_ENCODING_SAVE_UTF8: initialEncodingSelection = IDM_VIEWER_ENCODING_DISPLAY_UTF8; break;
-        case IDM_VIEWER_ENCODING_SAVE_UTF8_BOM: initialEncodingSelection = IDM_VIEWER_ENCODING_DISPLAY_UTF8_BOM; break;
-        case IDM_VIEWER_ENCODING_SAVE_UTF16BE_BOM: initialEncodingSelection = IDM_VIEWER_ENCODING_DISPLAY_UTF16BE_BOM; break;
-        case IDM_VIEWER_ENCODING_SAVE_UTF16LE_BOM: initialEncodingSelection = IDM_VIEWER_ENCODING_DISPLAY_UTF16LE_BOM; break;
-        default: initialEncodingSelection = IDM_VIEWER_ENCODING_SAVE_KEEP_ORIGINAL; break;
-    }
+    const UINT initialEncodingSelection = EffectiveSaveEncodingMenuSelection();
 
     static constexpr DWORD kEncodingComboId = 6100u;
 
@@ -8421,104 +8394,10 @@ std::optional<ViewerText::SaveAsResult> ViewerText::ShowSaveAsDialog(HWND hwnd) 
         };
 
         addMenuItemToCombo(IDM_VIEWER_ENCODING_SAVE_KEEP_ORIGINAL);
-        if (hwnd)
-        {
-            HMENU rootMenu = _menuHandle ? _menuHandle.get() : GetMenu(hwnd);
-            if (rootMenu)
-            {
-                HMENU encodingMenu = nullptr;
-                const int topCount = GetMenuItemCount(rootMenu);
-                if (topCount <= 0)
-                {
-                    Debug::Error(L"addMenuItemToCombo: No top-level menu items");
-                    return std::nullopt;
-                }
-
-                for (UINT pos = 0; pos < static_cast<UINT>(topCount); ++pos)
-                {
-                    MENUITEMINFOW info{};
-                    info.cbSize = sizeof(info);
-                    info.fMask  = MIIM_SUBMENU;
-                    if (GetMenuItemInfoW(rootMenu, pos, TRUE, &info) == 0)
-                    {
-                        continue;
-                    }
-
-                    if (! info.hSubMenu)
-                    {
-                        continue;
-                    }
-
-                    if (GetMenuState(info.hSubMenu, IDM_VIEWER_ENCODING_DISPLAY_ANSI, MF_BYCOMMAND) != static_cast<UINT>(-1))
-                    {
-                        encodingMenu = info.hSubMenu;
-                        break;
-                    }
-                }
-
-                if (encodingMenu)
-                {
-                    auto addEncodingItems = [&](auto&& self, HMENU currentMenu) noexcept -> void
-                    {
-                        if (! currentMenu)
-                        {
-                            return;
-                        }
-
-                        const int count = GetMenuItemCount(currentMenu);
-                        if (count <= 0)
-                        {
-                            Debug::Error(L"addMenuItemToCombo: Encoding menu has no items");
-                            return;
-                        }
-
-                        for (UINT pos = 0; pos < static_cast<UINT>(count); ++pos)
-                        {
-                            MENUITEMINFOW info{};
-                            info.cbSize = sizeof(info);
-                            info.fMask  = MIIM_FTYPE | MIIM_ID | MIIM_SUBMENU;
-                            if (GetMenuItemInfoW(currentMenu, pos, TRUE, &info) == 0)
-                            {
-                                continue;
-                            }
-
-                            if (info.hSubMenu)
-                            {
-                                self(self, info.hSubMenu);
-                                continue;
-                            }
-
-                            if ((info.fType & MFT_SEPARATOR) != 0)
-                            {
-                                continue;
-                            }
-
-                            if (! IsEncodingMenuSelectionValid(info.wID))
-                            {
-                                continue;
-                            }
-
-                            wchar_t raw[256]{};
-                            const int len = GetMenuStringW(currentMenu, pos, raw, static_cast<int>(std::size(raw)), MF_BYPOSITION);
-                            if (len <= 0)
-                            {
-                                continue;
-                            }
-
-                            std::wstring text = stripMenuText(std::wstring_view(raw, static_cast<size_t>(len)));
-                            if (text.empty())
-                            {
-                                continue;
-                            }
-
-                            static_cast<void>(customize->AddControlItem(kEncodingComboId, info.wID, text.c_str()));
-                        }
-                    };
-
-                    addEncodingItems(addEncodingItems, encodingMenu);
-                }
-            }
-        }
+        addMenuItemToCombo(IDM_VIEWER_ENCODING_SAVE_UTF8);
+        addMenuItemToCombo(IDM_VIEWER_ENCODING_SAVE_UTF8_BOM);
+        addMenuItemToCombo(IDM_VIEWER_ENCODING_SAVE_UTF16LE_BOM);
+        addMenuItemToCombo(IDM_VIEWER_ENCODING_SAVE_UTF16BE_BOM);
 
         static_cast<void>(customize->SetSelectedControlItem(kEncodingComboId, initialEncodingSelection));
     }
@@ -9785,7 +9664,7 @@ bool ViewerText::HandleShortcutKey(HWND hwnd, WPARAM vk) noexcept
 
 HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noexcept
 {
-    if (! context || ! context->focusedPath || context->focusedPath[0] == L'\0')
+    if (! context || context->sizeBytes < sizeof(ViewerOpenContext) || ! context->focusedPath || context->focusedPath[0] == L'\0')
     {
         Debug::Error(L"ViewerText: Open called with an invalid context (focusedPath missing).");
         return E_INVALIDARG;
@@ -10045,7 +9924,7 @@ HRESULT STDMETHODCALLTYPE ViewerText::Close() noexcept
 
 HRESULT STDMETHODCALLTYPE ViewerText::SetTheme(const ViewerTheme* theme) noexcept
 {
-    if (! theme || theme->version < 2u || theme->version > 4u)
+    if (! theme || theme->sizeBytes < sizeof(ViewerTheme))
     {
         return E_INVALIDARG;
     }

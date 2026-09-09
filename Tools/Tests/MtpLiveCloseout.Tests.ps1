@@ -3,15 +3,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $helperScript = Join-Path $repoRoot 'Tools\Run-MtpLiveCloseout.ps1'
-
-function Get-RSText {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Path
-    )
-
-    return Get-Content -LiteralPath (Join-Path $repoRoot $Path) -Raw
-}
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
 
 Describe 'MTP live closeout helper contracts' {
     It 'keeps live mode gated on an approved device and scratch folder' {
@@ -39,6 +31,8 @@ Describe 'MTP live closeout helper contracts' {
         $source | Should Match 'Start-Process -FilePath \$pwsh'
         $source | Should Match '''-File'', \$runAll'
         $source | Should Match '''-CaseFilter'', ''mtp_live_device_smoke'''
+        $source | Should Match '''-TestRoot'', \$context\.TestRoot'
+        $source | Should Match '''-RunId'', \$context\.RunId'
         $source | Should Match '-RedirectStandardOutput \$stdout'
         $source | Should Match '-RedirectStandardError \$stderr'
     }
@@ -51,8 +45,22 @@ Describe 'MTP live closeout helper contracts' {
         $source | Should Match 'command\.txt'
         $source | Should Match 'mtp-env\.txt'
         $source | Should Match 'run-all-tests-results\.json'
+        $source | Should Match 'red-salamander\.run-all-tests\.v2'
+        $source | Should Match 'repository_verdict'
         $source | Should Match 'summary\.md'
         $source | Should Match 'finally\s*\{\s*foreach \(\$entry in \$previousEnv\.GetEnumerator\(\)\)'
         $source | Should Match 'Set-ProcessEnvironmentValue -Name \$entry\.Key -Value \$entry\.Value'
+    }
+
+    It 'keeps every local artifact below the selected marked test run' {
+        $source = Get-RSText -Path 'Tools\Run-MtpLiveCloseout.ps1'
+
+        $source | Should Match 'Get-RSTestSandboxRoot'
+        $source | Should Match 'Initialize-RSTestSandboxRoot'
+        $source | Should Match 'New-RSTestRunContext'
+        $source | Should Match 'Assert-RSTestSandboxContainedPath'
+        $source | Should Match 'Join-Path \$context\.RunRoot ''artifacts\\mtp-live-closeout'''
+        $source | Should Match '\$lastRun = \$context\.ArtifactRoot'
+        $source | Should Not Match 'LOCALAPPDATA|Specs\\TestRuns|local_scratch'
     }
 }

@@ -24,6 +24,7 @@
 
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
+#include "FileSystemRouteProviderBase.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
 
@@ -63,7 +64,9 @@ private:
 };
 
 class FileSystemDummy final : public IFileSystem,
+                              public FileSystemRouteCapabilitiesBase,
                               public IFileSystemIO,
+                              public IFileSystemAtomicWriter,
                               public IFileSystemDirectoryOperations,
                               public IFileSystemDirectoryWatch,
                               public IInformations,
@@ -102,6 +105,7 @@ public:
     HRESULT STDMETHODCALLTYPE GetAttributes(const wchar_t* path, unsigned long* fileAttributes) noexcept override;
     HRESULT STDMETHODCALLTYPE CreateFileReader(const wchar_t* path, IFileReader** reader) noexcept override;
     HRESULT STDMETHODCALLTYPE CreateFileWriter(const wchar_t* path, FileSystemFlags flags, IFileWriter** writer) noexcept override;
+    HRESULT STDMETHODCALLTYPE SupportsAtomicWriterCommit(const wchar_t* path, FileSystemFlags flags, BOOL* supported) noexcept override;
     HRESULT STDMETHODCALLTYPE GetFileBasicInformation(const wchar_t* path, FileSystemBasicInformation* info) noexcept override;
     HRESULT STDMETHODCALLTYPE SetFileBasicInformation(const wchar_t* path, const FileSystemBasicInformation* info) noexcept override;
     HRESULT STDMETHODCALLTYPE CreateDirectory(const wchar_t* path) noexcept override;
@@ -164,7 +168,9 @@ public:
 
     HRESULT STDMETHODCALLTYPE GetItemProperties(const wchar_t* path, const char** jsonUtf8) noexcept override;
 
-    HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
+                                                  FileSystemOperation operation,
+                                                  const char** jsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
                                                FileSystemOperation operationType,
                                                FileSystemTransferEndpoint endpoint,
@@ -172,8 +178,20 @@ public:
     HRESULT STDMETHODCALLTYPE GetStorageCharacteristics(const wchar_t* path, FileSystemStorageCharacteristics* characteristics) noexcept override;
 
     // Internal helper used by IFileWriter implementations.
-    HRESULT
-    CommitFileWriter(const std::filesystem::path& normalizedPath, FileSystemFlags flags, const std::shared_ptr<std::vector<std::byte>>& buffer) noexcept;
+    // R3-1: `requireOccupant` replaces only the object with that size and last-write time (the
+    // occupant the writer saw when it opened); anything else is ERROR_REVISION_MISMATCH.
+    HRESULT CommitFileWriter(const std::filesystem::path& normalizedPath,
+                             FileSystemFlags flags,
+                             const std::shared_ptr<std::vector<std::byte>>& buffer,
+                             bool requireOccupant,
+                             uint64_t occupantSizeBytes,
+                             __int64 occupantLastWriteTime,
+                             std::vector<std::byte>* committedSha256 = nullptr) noexcept;
+
+protected:
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                           FileSystemOperation operation,
+                                           FileSystemRouteDescriptor& descriptor) noexcept override;
 
 private:
     struct DummyNode
@@ -263,35 +281,47 @@ private:
 
     static constexpr char kCapabilitiesJson[] = R"json(
 {
-  "version": 1,
+  "version": 2,
+  "pathProfile": "dummy-local",
+  "rootId": "dummy-root",
   "operations": {
     "copy": true,
     "move": true,
-    "delete": true,
-    "rename": true,
+    "nativeMove": true,
+    "delete": false,
+    "rename": false,
+    "createDirectory": true,
     "properties": true,
     "read": true,
-    "write": true
+    "write": true,
+    "recycle": false
   },
   "concurrency": {
     "copyMoveMax": 4,
     "deleteMax": 8,
     "deleteRecycleBinMax": 2
   },
-  "crossFileSystem": {
+  "transfer": {
     "export": { "copy": ["*"], "move": ["*"] },
     "import": { "copy": ["*"], "move": ["*"] }
   },
-  "pathIdentity": {
-    "version": 1,
+  "identity": { "object": "none", "revision": "none", "boundDelete": false, "conditionalDelete": false },
+  "publication": { "exclusiveStage": false, "conditionalPublish": false, "committedSize": false },
+  "links": { "preserveFileLink": false, "preserveDirectoryLink": false, "retargetInTree": false, "exactLinkRemoval": false },
+  "metadata": { "motw": "unknown", "alternateStreams": "unknown", "extendedAttributes": "unknown", "sparse": "unknown", "efs": "unknown" },
+  "verification": { "hostReadback": false, "providerProof": "writer-digest" },
+  "cancellation": { "abort": false, "deadline": false, "routeClass": "bounded", "providerWatchdogTimeoutMs": 0 },
+  "names": {
     "pathTextStableIdentity": true,
-    "componentComparison": "ordinalIgnoreCase",
+    "comparison": "ordinalIgnoreCase",
     "normalization": "none",
     "preferredSeparator": "\\",
     "acceptedSeparators": ["\\", "/"],
     "casePreserving": true,
-    "caseOnlyRename": "supported"
-  }
+    "caseOnlyRename": "supported",
+    "maxComponentUtf16": 255
+  },
+  "directories": { "model": "native" }
 }
 )json";
 
@@ -301,6 +331,7 @@ private:
     inline static unsigned long _maxDepth                       = 10;
     inline static unsigned int _seed                            = 42;
     inline static unsigned long _latencyMilliseconds            = 0;
+    inline static bool _writerProof                             = true; // R3-2 route proof (configuration "writerProof")
     inline static unsigned long _streamChunkLatencyMilliseconds = 0;
     inline static std::wstring _virtualSpeedLimitText           = L"0";
     inline static std::atomic<uint64_t> _virtualSpeedLimitBytesPerSecond{0};

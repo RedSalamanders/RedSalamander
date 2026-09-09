@@ -1,5 +1,6 @@
 #include "BatchRenameEngine.h"
 
+#include "BatchRenameExecutionEngine.h"
 #include "ChangeCase.h"
 #include "Helpers.h"
 
@@ -14,7 +15,7 @@ namespace BatchRename
 {
 namespace
 {
-constexpr size_t kWindowsMaxLeafNameLength = 255u;
+constexpr size_t kMaximumCounterFormatWidth = 255u;
 
 // UI text features still use the legacy per-code-unit fold. Provider path identity decisions
 // flow through FileSystemPathIdentity instead.
@@ -33,23 +34,6 @@ constexpr size_t kWindowsMaxLeafNameLength = 255u;
         ::CharUpperBuffW(out.data(), static_cast<DWORD>(out.size()));
     }
     return out;
-}
-
-[[nodiscard]] bool ContainsPathSeparator(std::wstring_view text) noexcept
-{
-    return text.find(L'\\') != std::wstring_view::npos || text.find(L'/') != std::wstring_view::npos;
-}
-
-[[nodiscard]] bool IsDotOrDotDot(std::wstring_view text) noexcept
-{
-    return text == L"." || text == L"..";
-}
-
-[[nodiscard]] bool HasWindowsInvalidLeafCharacter(std::wstring_view text) noexcept
-{
-    constexpr std::wstring_view kInvalidLeafCharacters = L"<>:\"|?*";
-    return std::any_of(
-        text.begin(), text.end(), [](const wchar_t ch) noexcept { return ch < L' ' || kInvalidLeafCharacters.find(ch) != std::wstring_view::npos; });
 }
 
 [[nodiscard]] bool IsWordChar(wchar_t ch) noexcept
@@ -176,9 +160,9 @@ struct LeafNameParts final
     for (const wchar_t ch : format)
     {
         width = width * 10u + static_cast<size_t>(ch - L'0');
-        if (width > kWindowsMaxLeafNameLength)
+        if (width > kMaximumCounterFormatWidth)
         {
-            return kWindowsMaxLeafNameLength;
+            return kMaximumCounterFormatWidth;
         }
     }
     return width;
@@ -534,72 +518,6 @@ struct MacroExpansion final
     return result;
 }
 
-[[nodiscard]] bool IsReservedDeviceName(std::wstring_view leafName) noexcept
-{
-    // Win32 resolves DOS device names (CON, PRN, AUX, NUL, COM0-9, LPT0-9, CONIN$, CONOUT$) from
-    // the first dot-delimited token of the leaf name, ignoring trailing spaces and dots, so renames
-    // to e.g. "CON.txt" succeed under the \\?\ prefix but create un-openable files.
-    std::wstring_view token = leafName;
-    while (! token.empty() && (token.back() == L' ' || token.back() == L'.'))
-    {
-        token.remove_suffix(1u);
-    }
-
-    const size_t firstDot = token.find(L'.');
-    if (firstDot != std::wstring_view::npos)
-    {
-        token = token.substr(0, firstDot);
-    }
-    while (! token.empty() && token.back() == L' ')
-    {
-        token.remove_suffix(1u);
-    }
-
-    if (token.size() != 3u && token.size() != 4u && token.size() != 6u && token.size() != 7u)
-    {
-        return false;
-    }
-
-    const std::wstring folded = FoldCaseForCollisionKeys(token);
-    if (folded == L"CON" || folded == L"PRN" || folded == L"AUX" || folded == L"NUL")
-    {
-        return true;
-    }
-    if (folded == L"CONIN$" || folded == L"CONOUT$")
-    {
-        return true;
-    }
-    return folded.size() == 4u && (folded.starts_with(L"COM") || folded.starts_with(L"LPT")) && folded[3] >= L'0' && folded[3] <= L'9';
-}
-
-void ValidateLeafName(PreviewRow& row)
-{
-    if (row.newName.empty())
-    {
-        AddIssue(row, IssueSeverity::Error, L"name_empty");
-    }
-    if (IsDotOrDotDot(row.newName))
-    {
-        AddIssue(row, IssueSeverity::Error, L"name_dot");
-    }
-    if (ContainsPathSeparator(row.newName))
-    {
-        AddIssue(row, IssueSeverity::Error, L"name_separator");
-    }
-    if (HasWindowsInvalidLeafCharacter(row.newName))
-    {
-        AddIssue(row, IssueSeverity::Error, L"name_invalid_character");
-    }
-    if (IsReservedDeviceName(row.newName))
-    {
-        AddIssue(row, IssueSeverity::Error, L"name_reserved_device");
-    }
-    if (row.newName.size() > kWindowsMaxLeafNameLength)
-    {
-        AddIssue(row, IssueSeverity::Error, L"name_too_long");
-    }
-}
-
 [[nodiscard]] bool HasEdgeSpaceOrTrailingDot(std::wstring_view name) noexcept
 {
     if (name.empty())
@@ -632,93 +550,54 @@ void AddWarningIssues(PreviewRow& row, const FileSystemPathIdentity& pathIdentit
     }
 }
 
-void MarkDuplicateTargets(std::vector<PreviewRow>& rows, const FileSystemPathIdentity& pathIdentity)
+void MarkDuplicateSources(std::vector<PreviewRow>& rows, const FileSystemPathIdentity& pathIdentity)
 {
     std::vector<bool> duplicateRows(rows.size(), false);
-
     std::unordered_map<std::wstring, std::vector<size_t>> keyedRows;
     keyedRows.reserve(rows.size());
     bool canUseKeys = true;
 
-    for (size_t i = 0; i < rows.size(); ++i)
+    for (size_t index = 0u; index < rows.size(); ++index)
     {
-        if (rows[i].newName.empty())
-        {
-            continue;
-        }
-
-        const std::wstring parent                   = rows[i].sourcePath.parent_path().wstring();
-        const std::optional<std::wstring> parentKey = TryMakePathKey(pathIdentity, parent);
-        const std::optional<std::wstring> nameKey   = TryMakeComponentKey(pathIdentity, rows[i].newName);
-        if (! parentKey.has_value() || ! nameKey.has_value())
+        const std::optional<std::wstring> key = TryMakePathKey(pathIdentity, rows[index].sourcePath.native());
+        if (! key.has_value())
         {
             canUseKeys = false;
             break;
         }
-
-        std::wstring key;
-        key.reserve(parentKey->size() + 1u + nameKey->size());
-        key.append(parentKey.value());
-        key.push_back(L'\0');
-        key.append(nameKey.value());
-
-        std::vector<size_t>& matches = keyedRows[key];
+        std::vector<size_t>& matches = keyedRows[key.value()];
         for (const size_t candidate : matches)
         {
-            if (EquivalentPath(pathIdentity, parent, rows[candidate].sourcePath.parent_path().wstring()) &&
-                EquivalentComponent(pathIdentity, rows[i].newName, rows[candidate].newName))
+            if (EquivalentPath(pathIdentity, rows[index].sourcePath.native(), rows[candidate].sourcePath.native()))
             {
-                duplicateRows[i]         = true;
+                duplicateRows[index] = true;
                 duplicateRows[candidate] = true;
             }
         }
-        matches.push_back(i);
+        matches.push_back(index);
     }
 
     if (! canUseKeys)
     {
         std::ranges::fill(duplicateRows, false);
-
-        for (size_t i = 0; i < rows.size(); ++i)
+        for (size_t left = 0u; left < rows.size(); ++left)
         {
-            if (rows[i].newName.empty())
+            for (size_t right = left + 1u; right < rows.size(); ++right)
             {
-                continue;
-            }
-
-            const std::wstring parent = rows[i].sourcePath.parent_path().wstring();
-            for (size_t j = i + 1u; j < rows.size(); ++j)
-            {
-                if (rows[j].newName.empty())
+                if (EquivalentPath(pathIdentity, rows[left].sourcePath.native(), rows[right].sourcePath.native()))
                 {
-                    continue;
+                    duplicateRows[left] = true;
+                    duplicateRows[right] = true;
                 }
-
-                if (! EquivalentPath(pathIdentity, parent, rows[j].sourcePath.parent_path().wstring()))
-                {
-                    continue;
-                }
-                if (! EquivalentComponent(pathIdentity, rows[i].newName, rows[j].newName))
-                {
-                    continue;
-                }
-
-                duplicateRows[i] = true;
-                duplicateRows[j] = true;
             }
         }
     }
 
-    if (Debug::Perf::IsCaptureEnabled())
+    for (size_t index = 0u; index < duplicateRows.size(); ++index)
     {
-        Debug::Perf::EmitValue(L"batchrename.preview.duplicate_fallback_rows", canUseKeys ? 0u : static_cast<uint64_t>(rows.size()));
-    }
-
-    for (size_t i = 0; i < duplicateRows.size(); ++i)
-    {
-        if (duplicateRows[i])
+        if (duplicateRows[index])
         {
-            AddIssue(rows[i], IssueSeverity::Error, L"name_duplicate");
+            AddIssue(rows[index], IssueSeverity::Error, L"source_duplicate");
         }
     }
 }
@@ -965,11 +844,10 @@ Plan BuildPlan(const std::vector<Target>& targets, const Rules& rules, const Fil
 
         for (PreviewRow& row : plan.rows)
         {
-            ValidateLeafName(row);
             AddWarningIssues(row, pathIdentity);
         }
 
-        MarkDuplicateTargets(plan.rows, pathIdentity);
+        MarkDuplicateSources(plan.rows, pathIdentity);
         RecomputeStats(plan);
         validationPerf.SetValue1(static_cast<uint64_t>(plan.stats.errorRows));
     }

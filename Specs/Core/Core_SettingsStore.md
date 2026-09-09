@@ -1,5 +1,6 @@
 # Settings Store Specification (Common.dll)
 
+
 ## Overview
 
 RedSalamander needs a **single, shared** settings layer implemented in **`Common.dll`** to persist user parameters in a Windows-correct location. Settings are stored as **JSON** and must be **read/written with `yyjson`** (vcpkg-managed).
@@ -120,6 +121,18 @@ Saving must be atomic and conflict-aware to prevent partial writes and stale-sna
    caller is captured from the finalized sibling held through the move; do not re-stat the destination afterward.
 6. A successful mutable save advances the caller's expected identity so the same snapshot can be saved again.
 
+Moving the canonical settings file to a diagnostic or explicit-replacement backup is also a publication
+transaction. The reader MUST retain the handle to the exact file identity that supplied the
+diagnosed bytes. Ordinary valid loads request read access only so a compatible reader that omitted
+`FILE_SHARE_DELETE` cannot break settings loading. Recovery acquires the same per-target cross-process
+commit lock, opens a separate delete-capable handle, and proves its complete stamp is identical to the
+retained diagnosed handle before renaming that verified handle with `SetFileInformationByHandle`; it never
+moves the canonical pathname. If a different identity replaced the
+canonical path through POSIX rename semantics, the retained diagnosed handle is atomically snapshotted to a
+unique backup without reopening the pathname, and the operation returns `ERROR_REVISION_MISMATCH` so the caller
+reloads the winning canonical file. A deleted canonical path is re-resolved as missing without recreating it.
+The replacement itself is never moved or overwritten.
+
 The immutable `SaveSettings(..., const Settings&)` overload is a one-shot compatibility surface for shutdown
 and focused test snapshots. A caller that may save the same in-memory object again MUST use the mutable overload.
 Schema-file publication uses the same unique-sibling transaction but has no settings-snapshot CAS contract.
@@ -129,8 +142,16 @@ Schema-file publication uses the same unique-sibling transaction but has no sett
 For the normal startup / explicit recovery path (`LoadSettings(...)`):
 - If the file is missing, unreadable, not valid JSON, has an invalid root/schema marker, or uses an
   unsupported older schema, start with defaults.
+- Source presence is tri-state during early I/O: `Missing`, `PresentStamped`, or `PresentUnstampable`. Once an
+  open succeeds, size-query, size-limit, read, short-read, or stamp failure is never treated as `Missing`.
+  Defaults derived from a present but unstampable source are `ExplicitReplacementRequired` and ordinary save
+  cannot overwrite the existing recovery artifact.
 - If a whole-document failure existed on disk, rename it to a backup for diagnostics:
   - `<SettingsFileName>.bad.<UTC timestamp>`
+- Whole-document recovery captures the source stamp from the same handle as the diagnosed bytes and uses the
+  guarded backup transaction above. If that comparison reports `ERROR_REVISION_MISMATCH`, startup re-resolves
+  and reloads the canonical target once. A newer valid revision becomes the loaded settings; a now-missing target
+  produces defaults whose expected target is missing. A second conflict is returned and remains save-blocked.
 - Startup callers that need to explain recovery to the user call `LoadSettingsWithRecoveryInfo(...)`. When a previous settings file is backed up and defaults are restored, the app MUST show a localized warning that includes the original settings path, the backup path, and explains that the current run is using default settings. The warning should tell the user to close the app, compare the backup with the new settings file at the original path, and copy back only the settings they still need.
 - `fileActions`, `userMenu`, and `shortcuts` are independent optional sections. A malformed one resets only
   that section, leaves every valid section loaded, records a `SettingsSectionRecoveryInfo` entry, and does
@@ -143,7 +164,10 @@ For the normal startup / explicit recovery path (`LoadSettings(...)`):
   RedSalamander MUST surface an actionable warning that automatic persistence is disabled. A deliberate
   user-approved replacement may clear the block only after the source has been moved successfully to the
   standard timestamped backup path. The startup decision defaults to preservation; replacement requires an
-  explicit affirmative choice and keeps the exact newer source bytes in that backup.
+  explicit affirmative choice and keeps the exact newer source bytes in that backup. That choice authorizes only
+  the stamp presented to the user. If the target changes or disappears before confirmation is committed, the
+  replacement returns `ERROR_REVISION_MISMATCH`, creates no backup, publishes no defaults, and requires the user
+  to review the new state before confirming again.
 - When any whole-document recovery attempts to back up an invalid source but the move fails, the defaults
   snapshot MUST also be marked `ExplicitReplacementRequired`. Automatic, asynchronous, and shutdown saves may
   not overwrite the only remaining recovery artifact. Explicit replacement first moves that source to the
@@ -197,7 +221,10 @@ namespace Common::Settings
     HRESULT LoadSettingsWithRecoveryInfo(std::wstring_view appId, Settings& out, SettingsLoadRecoveryInfo* recovery) noexcept;
     HRESULT TryLoadSettingsNoRecovery(std::wstring_view appId, Settings& out) noexcept;
     HRESULT TryGetSettingsFileStamp(std::wstring_view appId, SettingsFileStamp& out) noexcept;
-    HRESULT BackupSettingsForExplicitReplacement(std::wstring_view appId, std::filesystem::path& backupPath) noexcept;
+    HRESULT BackupSettingsForExplicitReplacement(
+        std::wstring_view appId,
+        const std::optional<SettingsFileStamp>& expectedStamp,
+        std::filesystem::path& backupPath) noexcept;
     HRESULT SaveSettings(std::wstring_view appId, Settings& settings) noexcept;
     HRESULT SaveSettings(std::wstring_view appId, const Settings& oneShotSettings) noexcept;
     HRESULT SaveSettingsValuesOnly(std::wstring_view appId, Settings& settings) noexcept;
@@ -245,6 +272,8 @@ Return contract:
   later external writer may already own that path.
 - Save entry points compare `expectedFileStamp` under the cross-process target lock. Both a changed identity and
   an unexpected create/delete are conflicts. `ERROR_REVISION_MISMATCH` means no settings bytes were published.
+- `BackupSettingsForExplicitReplacement(...)` applies the same comparison under the same target lock before
+  moving the file. `ERROR_REVISION_MISMATCH` means no target or backup path was modified.
 - Numeric accessors for 32-bit fields MUST reject values greater than `UINT32_MAX`; they MUST NOT truncate.
 
 ## Live Reload Semantics (RedSalamander.exe)
@@ -253,6 +282,13 @@ Return contract:
 
 Watcher rules:
 - Detection is event-driven (directory change notification), but only the main settings file stamp is authoritative.
+- Every posted `WndMsg::kSettingsFileChanged` payload carries the hot-reload session generation captured by the
+  `Start(...)` call that owns the watcher. This includes initial/post-arm catch-up, directory-change, deferred
+  internal-save, and retry notifications.
+- The main-window message consumer MUST compare that payload generation with the current hot-reload session while
+  holding the watcher state lock, before reading the current app ID or settings file. A queued payload from a stopped
+  or replaced session is a no-op and MUST NOT load or apply the successor session's settings. Direct reload entry
+  points that do not originate from a queued watcher message remain same-session operations.
 - `SettingsHotReload::Start(...)` must not synchronously wait on directory-watch readiness during window creation and must not return `WAIT_TIMEOUT` for a transient initial `FindFirstChangeNotificationW(...)` arming failure.
 - Directory watcher readiness is worker-internal state; startup and main-window creation continue after launching the watcher, while the worker retries asynchronously until it can arm.
 - The worker creates a missing settings directory before it arms the directory notification, and retry waits remain cancellation-aware so teardown does not wait for the next retry interval.
@@ -324,6 +360,7 @@ The root JSON object may contain (depending on the application):
 - `theme` (object): current theme + custom themes
 - `plugins` (object): plugin discovery + per-plugin configuration
 - `ui` (object): app-wide DxUI density, motion, and backdrop preferences
+- `mouse` (object): pointer-driven pane-focus preferences
 - `mainMenu` (object): RedSalamander main window menu bar state
 - `cache` (object): cache configuration (directory enumeration cache, etc.)
 - `folders` (object): multi-pane folder state (current folder + global folder history)
@@ -449,6 +486,8 @@ Association action IDs must reference an action in the same `viewers.actions` or
 
 Launch macro strings are interpreted by the command layer, not by the settings store. Supported macros are `{Path}`, `{FullPath}`, `{PathAndFilename}`, `{Filename}`, `{SelectedPathsFile}`, `{OppositePanePath}`, and `{ComputerName}`. `workingDirectory` expands macros as raw text. `arguments` expands each macro as a Windows command-line argument by quoting and escaping the macro value; when a macro is already wrapped in literal quotes in the template, the macro content is escaped without adding another quote pair. Launch planning validates the expanded `executablePath` again and fails unless it is an explicit absolute executable path, so direct callers and externally edited JSON cannot bypass the settings or Preferences checks.
 
+`{SelectedPathsFile}` is a UTF-16LE BOM file created only when a launch field references that macro. It is not settings-store persistence and MUST NOT be recorded in settings. The command layer transfers one cleanup lease by value into launch processing and retains it across asynchronous process completion, wait failure, timeout, exit-code failure, and a successful launch that returns no usable process handle. Any delayed fallback is capped at ten minutes; bounded recovery scavenging recognizes only the command layer's exact aged `rsa????.tmp` ownership pattern and never follows reparses.
+
 Omitting `fileActions` uses the built-in viewer/editor defaults. Explicit empty `fileActions.viewers` or `fileActions.editors` sections mean the user cleared that action family and must round-trip as empty instead of being repopulated from defaults.
 
 Preferences contract:
@@ -495,31 +534,38 @@ Fields:
 - `includeAttributes` (bool): default `false`.
 - `includeDirectories` (bool): default `true`.
 
-## Shortcuts (v11)
+## Shortcuts (v16; introduced v11)
 
 Shortcut bindings live under:
 - `shortcuts`
 
 Structure:
+- `application` (array): global application bindings that remain eligible when a child surface owns focus
 - `functionBar` (array): Function Bar bindings (typically `F1`..`F12` with modifiers)
 - `folderView` (array): FolderView bindings (key chords that apply when a FolderView has focus)
+- `terminal` (array): bindings evaluated while an embedded or floating Terminal owns input
+- `applicationCollapsed` (bool, optional): persisted collapsed state for the Application group
 - `functionBarCollapsed` (bool, optional): persisted collapsed state for the Function Bar shortcuts group
 - `folderViewCollapsed` (bool, optional): persisted collapsed state for the Folder View shortcuts group
+- `terminalCollapsed` (bool, optional): persisted collapsed state for the Terminal group
 - `sortColumnId` (string, optional): stable logical column ID used for the persisted `ShortcutsWindow` grid sort
 - `sortDescending` (bool, optional): persisted sort direction for `sortColumnId`
 - `gridLayout` (array, optional): visible `ShortcutsWindow` grid column layout entries, keyed by stable column ID, display index, and width in DIPs
 
-Each binding entry:
-- `vk` (string): stable key name (examples: `F1`, `Backspace`, `Tab`, `Enter`, `Space`, `PageUp`, `PageDown`, `Home`, `End`, `Left`, `Right`, `Up`, `Down`, `Insert`, `Delete`, `A`, `0`, `VK_1B`)
+Each binding entry has exactly one key identity:
+- `vk` (string): stable virtual-key name (examples: `F1`, `Backspace`, `Tab`, `Enter`, `Space`, `PageUp`, `PageDown`, `Home`, `End`, `Left`, `Right`, `Up`, `Down`, `Insert`, `Delete`, `A`, `0`, `NumpadPlus`, `VK_1B`); or
+- `keyPosition` (string): layout-independent physical key identity, currently `numberRowPlus` (scan `0x0D`) or `numberRowMinus` (scan `0x0C`). It is mutually exclusive with `vk` and is required for main-keyboard `Ctrl++` / `Ctrl+-` so a keyboard-layout character change cannot change the binding. It is valid in Application, Folder View, and Terminal scopes, whose key-message paths preserve scan/extended identity; Function Bar accepts virtual-key identity only and rejects `keyPosition`.
 - `ctrl` (bool, optional): `true` for Ctrl modifier (omit when `false`)
 - `alt` (bool, optional): `true` for Alt modifier (omit when `false`)
 - `shift` (bool, optional): `true` for Shift modifier (omit when `false`)
-- `commandId` (string): command identifier (must start with `cmd/`); `cmd/shortcut/unassigned` is the internal sentinel for an intentionally unassigned shortcut chord
+- `commandId` (string): command identifier (must start with `cmd/`); `cmd/shortcut/unassigned` intentionally consumes a chord as no action, while terminal-only `cmd/shortcut/passthrough` explicitly yields the original key message to the Terminal child
 
 Notes:
 - Command IDs are stable; UI display names are localized resource strings. No user-facing command names are hard-coded in C++.
 - Missing shortcut chords mean “use the current canonical default if one exists.” To intentionally remove a default binding, persist the same chord with `commandId: "cmd/shortcut/unassigned"`.
 - The `cmd/shortcut/unassigned` sentinel is preserved during save/load and import/export, consumes its chord as a no-op at runtime, is hidden from assignable command lists, and is excluded from command reverse lookup.
+- The `cmd/shortcut/passthrough` sentinel is valid only in Terminal scope. It is preserved by save/load and import/export, remains visible as a binding-centric Helper/Preferences choice, is never a palette command, and forwards the original scan/extended/modifier identity rather than synthesizing terminal bytes.
+- Shortcut semantic validation is scope-aware in both startup loading and Preferences import. A persisted non-Terminal pass-through or physical Function Bar binding invalidates only the `shortcuts` section during startup recovery; other top-level settings and opaque JSON survive. Preferences import rejects the invalid shortcut document with localized feedback instead of normalizing it into a different scope. Keyboard capture in Function Bar scope records a virtual key rather than a physical `keyPosition`.
 - If a binding references a command that is not implemented, invoking it shows a localized “not yet implemented” message box and does nothing else (see `Specs/UI/UI_CommandMenuKeyboard.md`).
 - The `ShortcutsWindow` selected row and live search text are transient UI state, not persisted settings fields. Reopen restores persisted group collapse, logical sort, and visible column layout, then selects a valid row from the restored grid.
 
@@ -532,6 +578,25 @@ UI model to validate. Batch Rename additionally strips single-line control chara
 other sections preserve their decoded IDs. An invalid strict section such as Shortcuts recovers independently
 without discarding valid grid layouts in other sections.
 
+### Terminal floating-window state
+
+Application-owned floating Terminal state lives under
+`terminal.floatingWindow`, separate from plugin configuration. The optional
+object contains:
+
+- `placement`: the normal/maximized bounds plus monitor identity governed by the
+  Window Placement rules below;
+- `wasOpenAtCleanShutdown`: whether startup should recreate the singleton;
+- `activeTabId`: the stable ID of the selected tab; and
+- `tabs`: the ordered current live-tab records. Each record contains `tabId`,
+  `profileId`, `providerId`, and a validated `canonicalPath`.
+
+Only one floating-window object exists. Closing a tab removes its record;
+reordering changes array order. The store never appends closed-session history
+and never stores process IDs, screen contents, environment blocks, command
+history, or other live shell state. Invalid terminal persistence is recovered
+as an independent optional section without discarding unrelated settings.
+
 ## Window Placement
 
 ### Stored data
@@ -543,13 +608,14 @@ For each top-level window we store:
 
 Window IDs are strings (examples):
 - `MainWindow`
+- `PreferencesWindow`
 - `MonitorWindow`
 - `FindFilesWindow`
 
 ### Save policy
 
-- Save on application shutdown (primary).
-- Optionally debounce-save on meaningful move/resize (future enhancement).
+- Persist placement through the owning window's current accepted save/close path and on application shutdown.
+- Continuous or debounced move/resize persistence is not part of the current contract; changing that behavior is routed to `Specs/Plans/WIP/Operation_Atlas_RemainingSpecificationDecisions_2026-08-04.md`.
 
 ### Restore policy
 
@@ -558,6 +624,8 @@ When restoring a window:
 2. Convert bounds if needed (DPI change handling, see below).
 3. Ensure the window rectangle is **completely visible** on at least one monitor work area.
 4. Apply placement (normal bounds first; then maximize if `state == "maximized"`).
+
+If a window has a consumer-specific minimum size, enforce that minimum before the final visibility clamp. Full work-area visibility takes precedence when a monitor work area is smaller than the requested minimum.
 
 ### Full-visibility requirement (critical)
 
@@ -808,8 +876,7 @@ These keys are the global defaults edited by `Preferences -> File Operations`. P
 - `fileOperations.autoDismissSuccess`: whether completed successful/cancelled task cards auto-dismiss from the File Operations popup (bool, default: `false`).
 - `fileOperations.popupFooterOnly`: whether the File Operations popup presents only its aggregate footer instead of task cards (bool, default: `false`; owned by the popup, not edited in Preferences).
 - `fileOperations.popupCompactDensity`: whether the File Operations popup uses compact task-card density (bool, default: `false`; owned by the popup, not edited in Preferences).
-- `fileOperations.preCalcEnabled`: whether copy, move, and permanent delete tasks run the recursive pre-calculation pass when that operation type supports it (bool, default: `true`).
-- `fileOperations.preCalcMaxWorkers`: maximum worker count for the host-side pre-calculation tree walk (integer, `1..8`, default: `4`).
+- `fileOperations.verifyAfterCopy`: default for verifying copied regular-file content after publication (bool, default: `false`). Confirmation snapshots the value; a running task does not reread it.
 - `fileOperations.crossFsBridgeBufferSizeKB`: default per-buffer size for host-driven cross-filesystem bridge copies (integer, `512..16384`, default: `4096`). Two buffers are allocated per active bridged file transfer.
 - `fileOperations.defaultBandwidthLimitBytesPerSecond`: default speed limit applied to newly created copy/move tasks when the caller did not already specify one (integer, `>= 0`, default: `0`; `0` means unlimited).
 
@@ -831,6 +898,22 @@ These keys control the host-owned File Operations diagnostics log and exported i
 - `fileOperations.issuesPaneSortColumnId`: stable column identifier used to restore the issues-pane sort column (string, default: empty).
 - `fileOperations.issuesPaneSortDescending`: whether the restored issues-pane sort direction is descending (bool, default: `false`). The value remains part of non-default-state detection even when a malformed or migrated payload omits the corresponding column id.
 - `fileOperations.issuesPaneGridLayout`: persisted issues-pane column order and widths (array of grid-column layout entries, default: empty).
+
+The retired `fileOperations.preCalcEnabled` and `fileOperations.preCalcMaxWorkers` keys are
+ignored and are not written. File Operations uses one discovery/execution traversal; Skip discovery
+is task state and is never persisted. The retired provider `followTargets` link-policy value
+migrates silently to Skip, `copyReparse` migrates to Preserve, and new/absent values default to
+Preserve. Follow remains reserved and invalid.
+
+The link default is provider-owned configuration under
+`plugins.configurationByPluginId[builtin/file-system].reparsePointPolicy`, not a
+`fileOperations` setting. The local provider's schema and parser own the `preserve`/`skip`
+vocabulary and legacy migration. Confirmation snapshots the effective provider default and may
+override it for one task without writing SettingsStore or provider configuration.
+
+Theme definitions include `fileOps.progressVerify` and `fileOps.graphVerify`; they are theme
+keys, not SettingsStore values. Conflict grants, deferred consent, clipboard sequence, and recovery
+object tokens are task state and are never persisted as Preferences.
 
 ### UI ownership
 
@@ -990,6 +1073,23 @@ Behavior:
 - `windowBackdrop` stores the requested DWM backdrop policy for supported top-level windows. Unsupported environments, failed DWM application, and high-contrast mode fall back to `None`.
 - When a supported top-level window uses a non-`None` backdrop, its title-bar caption/border/text colors fall back to the DWM system defaults instead of forcing an app-specific title-bar color.
 - Preferences previews these values live through `workingSettings`, but only `Apply` / `OK` persist them to the settings store.
+
+## Mouse Pane-Focus Settings
+
+These settings are edited by the two independent toggles in `Preferences -> Mouse -> Pane focus`.
+
+Settings live under:
+- `mouse`
+
+Keys:
+- `focusFollowsPointer` (bool, default: `false`): always move keyboard focus to the pane under the pointer without requiring a click.
+- `focusFollowsPointerWhenTerminalOpen` (bool, default: `false`): compatibility property that moves keyboard focus to the pane under the pointer only while either pane is displaying its selected Terminal tab; an open terminal hidden behind another pane-content tab does not enable it.
+
+Behavior:
+- The booleans are additive and persist independently. `focusFollowsPointer` enables the behavior regardless of terminal state; `focusFollowsPointerWhenTerminalOpen` can enable it only for terminal-open sessions when the first setting is off. When both are true, the always-on behavior wins without canonicalizing away either value.
+- The writer omits each default `false` member and omits the whole `mouse` section when both members are at their defaults.
+- The parser accepts either member independently and defaults a missing member to `false`.
+- Preferences edits the working draft and follows the normal Apply/OK/Cancel contract.
 
 ## Compare Directories Defaults
 

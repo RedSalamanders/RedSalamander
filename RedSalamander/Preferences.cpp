@@ -164,6 +164,15 @@ bool DebugGetPreferencesKeyboardVisibleRowChordByCommandId(std::wstring_view com
     return PreferencesDialog::DebugGetKeyboardVisibleRowChordByCommandId(commandId, outChordText);
 }
 
+bool DebugGetPreferencesKeyboardVisibleRowPresentationByCommandId(
+    std::wstring_view commandId,
+    std::wstring& outScopeText,
+    std::wstring& outTooltipText) noexcept
+{
+    return PreferencesDialog::DebugGetKeyboardVisibleRowPresentationByCommandId(
+        commandId, outScopeText, outTooltipText);
+}
+
 bool DebugGetPreferencesKeyboardListRowClientRect(const size_t rowIndex, RECT& outRect) noexcept
 {
     return PreferencesDialog::DebugGetKeyboardListRowClientRect(rowIndex, outRect);
@@ -271,6 +280,11 @@ bool DebugSetPreferencesKeyboardFunctionBarScope() noexcept
     return PreferencesDialog::DebugSetKeyboardFunctionBarScope();
 }
 
+bool DebugSetPreferencesKeyboardTerminalScope() noexcept
+{
+    return PreferencesDialog::DebugSetKeyboardTerminalScope();
+}
+
 bool DebugCapturePreferencesKeyboardShortcut(const uint32_t vk, const uint32_t modifiers) noexcept
 {
     return PreferencesDialog::DebugCaptureKeyboardShortcut(vk, modifiers);
@@ -319,6 +333,16 @@ bool DebugSelectPreferencesGeneralReducedMotion(std::wstring_view displayText) n
 bool DebugSelectPreferencesGeneralWindowBackdrop(std::wstring_view displayText) noexcept
 {
     return PreferencesDialog::DebugSelectGeneralWindowBackdrop(displayText);
+}
+
+bool DebugSetPreferencesMouseFocusFollowsPointerSettings(bool always, bool whenTerminalOpen) noexcept
+{
+    return PreferencesDialog::DebugSetMouseFocusFollowsPointerSettings(always, whenTerminalOpen);
+}
+
+bool DebugGetPreferencesMouseFocusFollowsPointerSettings(Common::Settings::MouseSettings& outSettings) noexcept
+{
+    return PreferencesDialog::DebugGetMouseFocusFollowsPointerSettings(outSettings);
 }
 
 bool DebugFocusPreferencesPanesLeftDisplayToggle() noexcept
@@ -396,14 +420,14 @@ bool DebugGetPreferencesLastSettingsFileOpen(std::filesystem::path& outPath, HRE
     return PreferencesDialog::DebugGetLastSettingsFileOpen(outPath, outHr);
 }
 
-bool DebugFocusPreferencesFileOperationsPreCalcEnabledToggle() noexcept
+bool DebugFocusPreferencesFileOperationsVerifyAfterCopyToggle() noexcept
 {
-    return PreferencesDialog::DebugFocusFileOperationsPreCalcEnabledToggle();
+    return PreferencesDialog::DebugFocusFileOperationsVerifyAfterCopyToggle();
 }
 
-bool DebugGetPreferencesFileOperationsPreCalcEnabledToggleChecked(bool& outChecked) noexcept
+bool DebugGetPreferencesFileOperationsVerifyAfterCopyToggleChecked(bool& outChecked) noexcept
 {
-    return PreferencesDialog::DebugGetFileOperationsPreCalcEnabledToggleChecked(outChecked);
+    return PreferencesDialog::DebugGetFileOperationsVerifyAfterCopyToggleChecked(outChecked);
 }
 
 bool DebugSelectPreferencesFileOperationsBandwidthPreset(std::wstring_view displayText) noexcept

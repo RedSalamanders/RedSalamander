@@ -250,3 +250,17 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
     }
     Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisibleUs", L"", PerfElapsedUs(startedUs), 1u, 1u, S_OK);
 }
+
+void FolderWindow::FileOperationState::ShowPopup() noexcept
+{
+    _actionablePromptPresentationPending.store(false, std::memory_order_release);
+    RevealPendingTasksImmediately();
+    EnsurePopupVisible();
+}
+
+void FolderWindow::FileOperationState::OnPopupHiddenByUser() noexcept
+{
+    // A Close that follows publication wins over an already queued presentation wake.
+    // A later actionable publication stores true again and restores the decision surface.
+    _actionablePromptPresentationPending.store(false, std::memory_order_release);
+}

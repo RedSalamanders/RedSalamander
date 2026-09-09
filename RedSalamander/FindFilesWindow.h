@@ -48,7 +48,7 @@ void UpdateFindFilesWindowsTheme(const AppTheme& theme) noexcept;
 struct FindFilesDebugSourceOutcome final
 {
     size_t sourceIndex = 0;
-    HRESULT status     = E_PENDING;
+    bool removed       = false;
 };
 [[nodiscard]] std::vector<size_t> DebugSelectKnownCompletedFindFilesSourceIndicesForTests(
     size_t sourceCount, std::span<const FindFilesDebugSourceOutcome> outcomes, HRESULT overallStatus);

@@ -2,30 +2,12 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$helperScript = Join-Path $repoRoot 'Tools\TestInventory.ps1'
-
-function Assert-RSEqual {
-    param(
-        [Parameter(Mandatory = $true)]
-        [AllowNull()]
-        [object]$Actual,
-
-        [Parameter(Mandatory = $true)]
-        [AllowNull()]
-        [object]$Expected,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Message
-    )
-
-    if ($Actual -ne $Expected) {
-        throw "$Message Expected '$Expected' but got '$Actual'."
-    }
-}
+$helperModule = Join-Path $repoRoot 'Tools\Modules\Testing\TestInventory.psm1'
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
 
 Describe 'Test inventory helper' {
     BeforeAll {
-        . $helperScript
+        Import-Module $helperModule -Force -ErrorAction Stop
     }
 
     It 'derives in-product self-test surfaces without frozen registration totals' {
@@ -48,6 +30,12 @@ Describe 'Test inventory helper' {
                 '(?m)^\s*(?![#/])[^;\r\n()=]+?\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:=[^;\r\n]*)?;\s*$') |
             ForEach-Object { $_.Groups[1].Value } |
             Sort-Object -Unique)
+        $nonPersistedPhase0Names = @([Regex]::Matches(
+                $fileOperationsStruct.Groups['body'].Value,
+                '(?m)^\s*(?![#/])[^;\r\n()=]+?\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:=[^;\r\n]*)?;\s*//\s*NON_PERSISTED_PHASE0\s*$') |
+            ForEach-Object { $_.Groups[1].Value } |
+            Sort-Object -Unique)
+        Assert-RSEqual -Actual $nonPersistedPhase0Names.Count -Expected 0 -Message 'No FileOperationsSettings field may bypass persistence coverage after the Phase 0 bridge retirement.'
         $fieldCaseBlock = [Regex]::Match($settingsCases, 'const\s+std::array\s+fieldCases\s*\{(?<body>[\s\S]*?)\r?\n\s*\};\s*\r?\n\s*\r?\n\s*for\s*\(const\s+FieldCase&')
         Assert-RSEqual -Actual $fieldCaseBlock.Success -Expected $true -Message 'FileOperationsSettings field-case table was not found.'
         $fieldCaseNames = @([Regex]::Matches($fieldCaseBlock.Groups['body'].Value, 'FieldCase\{L"([A-Za-z0-9_]+)"') |
@@ -81,12 +69,17 @@ Describe 'Test inventory helper' {
             RedSalamanderMonitorEtwLatency = 'Executable'
             PerformanceTests2 = 'CppUnitTest'
             ToolsPesterTests = 'Pester'
+            ToolsPesterBuildToolchain = 'Pester'
             VcpkgMergeSynthetic = 'PowerShellScript'
         }
 
         foreach ($required in $requiredKinds.GetEnumerator()) {
             $matches = @($allEntries | Where-Object { $_.Name -eq $required.Key -and $_.Kind -eq $required.Value })
             Assert-RSEqual -Actual ($matches.Count -gt 0) -Expected $true -Message "Required test surface '$($required.Key)' with kind '$($required.Value)' is missing from CI/Full inventory."
+        }
+        foreach ($entry in $allEntries) {
+            Assert-RSEqual -Actual $entry.MetadataComplete -Expected $true -Message "Run-plan metadata is incomplete for '$($entry.Name)'."
+            Assert-RSEqual -Actual ([string]::IsNullOrWhiteSpace($entry.Id)) -Expected $false -Message "Run-plan ID is missing for '$($entry.Name)'."
         }
     }
 
@@ -102,6 +95,7 @@ Describe 'Test inventory helper' {
         Assert-RSEqual -Actual @($roundTrip.runPlan.projectBackedSurfaces).Count -Expected @($inventory.RunPlan.ProjectBackedSurfaces).Count -Message 'JSON manifest should preserve every project-backed test surface.'
         Assert-RSEqual -Actual @($roundTrip.runPlan.ci).Count -Expected @($inventory.RunPlan.CI).Count -Message 'JSON manifest should preserve every CI run-plan entry.'
         Assert-RSEqual -Actual @($roundTrip.runPlan.full).Count -Expected @($inventory.RunPlan.Full).Count -Message 'JSON manifest should preserve every Full run-plan entry.'
+        Assert-RSEqual -Actual @($roundTrip.runPlan.full | Where-Object { -not $_.metadataComplete }).Count -Expected 0 -Message 'JSON manifest should report complete metadata for every Full entry.'
     }
 
     It 'classifies every source-contract case for replacement decisions' {

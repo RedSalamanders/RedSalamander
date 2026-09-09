@@ -804,8 +804,7 @@ void TestTreeFocusVisualsRespectKeyboardFocusVisibilityAndHighContrast()
     Require(state.focusArgb == PackColorForTest(highContrastTheme.focusStroke),
             "tree high-contrast focused row keeps the palette focus stroke for the focus ring");
 
-    ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 2u;
+    ViewerTheme viewerTheme{.sizeBytes = sizeof(ViewerTheme)};
     viewerTheme.backgroundArgb             = 0xFF11161Cu;
     viewerTheme.textArgb                   = 0xFFE7EDF8u;
     viewerTheme.selectionBackgroundArgb    = 0xFF4B7ECEu;

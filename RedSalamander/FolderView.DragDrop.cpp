@@ -244,16 +244,25 @@ void FolderView::EnsureDropTarget()
 
 void FolderView::BeginDragDrop()
 {
-    if (_drag.anchorIndex == static_cast<size_t>(-1))
+    if (! _drag.potential || _drag.pressedIndex >= _items.size())
     {
         return;
     }
 
-    auto paths = GetSelectedOrFocusedPaths();
+    std::vector<std::filesystem::path> paths = _drag.sourcePaths;
     if (paths.empty())
     {
         return;
     }
+    const POINT dragStartPoint = _drag.startPoint;
+#ifdef ENABLE_TESTS
+    if (_debugSuppressOleDragDrop)
+    {
+        ++_debugDragStartCount;
+        _debugLastDragStartPaths = paths;
+        return;
+    }
+#endif
 
     std::wstring pluginId = _fileSystemPluginId;
     if (pluginId.empty() && _fileSystemMetadata && _fileSystemMetadata->id && _fileSystemMetadata->id[0] != L'\0')
@@ -285,7 +294,7 @@ void FolderView::BeginDragDrop()
     wil::com_ptr<IDragSourceHelper> helper;
     if (SUCCEEDED(CoCreateInstance(CLSID_DragDropHelper, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(helper.addressof()))))
     {
-        POINT screenPt = _drag.startPoint;
+        POINT screenPt = dragStartPoint;
         ClientToScreen(_hWnd.get(), &screenPt);
         helper->InitializeFromWindow(_hWnd.get(), &screenPt, dataObject.get());
     }
@@ -303,7 +312,7 @@ void FolderView::BeginDragDrop()
         EnumerateFolder();
     }
 
-    _drag.dragging = false;
+    DisarmPotentialDrag();
 }
 
 #ifdef ENABLE_TESTS
@@ -726,6 +735,8 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
             {
                 FileOperationRequest request{};
                 request.operation              = operationType;
+                request.origin                 = internalDrop ? FileOperationRequest::Origin::InternalDrop
+                                                              : FileOperationRequest::Origin::ExternalDrop;
                 request.sourcePaths            = std::move(paths);
                 request.sourceContextSpecified = internalDrop;
                 request.sourcePluginId         = std::move(sourcePluginId);

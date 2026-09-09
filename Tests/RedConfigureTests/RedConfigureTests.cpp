@@ -27,12 +27,14 @@
 #include <fstream>
 #include <format>
 #include <iostream>
+#include <limits>
 #include <optional>
 #include <span>
 #include <stop_token>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 #include <Windows.h>
@@ -1384,6 +1386,45 @@ END
     return ok;
 }
 
+[[nodiscard]] bool WriteLocalizationClipboardIdentityWorkspaceFixture(const std::filesystem::path& tempRoot)
+{
+    bool ok = true;
+    ok      = Require(WriteTestTextFile(tempRoot / L"App" / L"App.vcxproj",
+                                        R"xml(<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ItemGroup>
+    <ResourceCompile Include="App.rc" />
+  </ItemGroup>
+</Project>)xml"),
+                      L"Failed to write clipboard identity project fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"App" / L"App.rc",
+                                        R"rc(#include "resource.h"
+STRINGTABLE
+BEGIN
+    IDS_ROW_A "A {0}"
+    IDS_ROW_B "B {0}"
+    IDS_ROW_C "C {0}"
+    IDS_ROW_D "D {0}"
+END
+)rc"),
+                      L"Failed to write clipboard identity source fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"App" / L"Lang" / L"fr-FR" / L"App-fr-FR.rc",
+                                        R"rc(#include "resource.h"
+STRINGTABLE
+BEGIN
+    IDS_ROW_A "A-fr {0}"
+    IDS_ROW_B "B-fr {0}"
+    IDS_ROW_C "C-fr {0}"
+    IDS_ROW_D "D-fr {0}"
+END
+)rc"),
+                      L"Failed to write clipboard identity fr-FR fixture.") &&
+              ok;
+    return ok;
+}
+
 [[nodiscard]] bool TestRedConfigureSessionBuildsAllOwnerAllCultureLocalizationReview()
 {
     std::error_code ec;
@@ -1574,6 +1615,137 @@ END
     return ok;
 }
 
+[[nodiscard]] bool TestLocalizationClipboardPasteUsesVisibleIdentitiesAtomically()
+{
+    std::error_code ec;
+    const std::filesystem::path tempRoot = AcquireRedConfigureTestSandbox(L"RedConfigureLocalizationClipboardIdentityTest", ec);
+    if (ec)
+    {
+        return Require(false, L"Could not resolve a temporary directory for localization clipboard identity tests.");
+    }
+
+    std::filesystem::remove_all(tempRoot, ec);
+    bool ok = WriteLocalizationClipboardIdentityWorkspaceFixture(tempRoot);
+
+    RedConfigure::RedConfigureSession session;
+    ok = Require(SUCCEEDED(session.LoadWorkspace(tempRoot, L"fr-FR")), L"Session should load the localization clipboard identity fixture.") && ok;
+    ok = Require(session.EnsureLocalizationReviewCulture(L"de-DE") && session.EnsureLocalizationReviewCulture(L"ja-JP"),
+                 L"Clipboard identity fixture should add de-DE and ja-JP after fr-FR.") &&
+         ok;
+
+    const std::vector<std::wstring> storedCultures(session.GetLocalizationReviewCultures().begin(), session.GetLocalizationReviewCultures().end());
+    ok = Require(storedCultures == std::vector<std::wstring>{L"fr-FR", L"de-DE", L"ja-JP"},
+                 L"Clipboard identity fixture should retain stored culture order fr-FR, de-DE, ja-JP.") &&
+         ok;
+
+    const auto rows = session.GetLocalizationReviewRows();
+    const auto* rowA = FindReviewRow(rows, L"App", L"IDS_ROW_A");
+    const auto* rowB = FindReviewRow(rows, L"App", L"IDS_ROW_B");
+    const auto* rowC = FindReviewRow(rows, L"App", L"IDS_ROW_C");
+    const auto* rowD = FindReviewRow(rows, L"App", L"IDS_ROW_D");
+    ok = Require(rowA != nullptr && rowB != nullptr && rowC != nullptr && rowD != nullptr,
+                 L"Clipboard identity fixture should expose all four review rows.") &&
+         ok;
+    if (! rowA || ! rowB || ! rowC || ! rowD)
+    {
+        std::filesystem::remove_all(tempRoot, ec);
+        return false;
+    }
+
+    const size_t rowAIndex = static_cast<size_t>(rowA - rows.data());
+    const size_t rowBIndex = static_cast<size_t>(rowB - rows.data());
+    const size_t rowCIndex = static_cast<size_t>(rowC - rows.data());
+    const std::vector<size_t> visibleRows = {rowBIndex, rowCIndex, rowAIndex};
+    const std::vector<std::wstring> visibleCultures = {L"ja-JP", L"fr-FR", L"de-DE"};
+    const RedConfigure::Workflow::LocalizationClipboardPasteTarget target = RedConfigure::Workflow::BuildLocalizationClipboardPasteTarget(
+        rows, visibleRows, rowCIndex, visibleCultures, L"ja-JP");
+
+    ok = Require(target.destinationRows.size() == 2u && target.destinationRows[0].id == L"IDS_ROW_C" &&
+                     target.destinationRows[1].id == L"IDS_ROW_A",
+                 L"Clipboard target should preserve non-contiguous filtered/sorted visible row identity order.") &&
+         ok;
+    ok = Require(target.destinationCultures == visibleCultures,
+                 L"Clipboard target should preserve pinned/reordered visible culture identity order ja-JP, fr-FR, de-DE.") &&
+         ok;
+
+    const auto readCell = [&](std::wstring_view id, std::wstring_view culture) -> std::wstring
+    {
+        const auto currentRows = session.GetLocalizationReviewRows();
+        const RedConfigure::LocalizationReviewRow* const row = FindReviewRow(currentRows, L"App", id);
+        if (! row)
+        {
+            return L"<missing-row>";
+        }
+        const RedConfigure::LocalizationTargetCell* const cell = FindReviewTargetCell(*row, culture);
+        return cell ? cell->targetText : std::wstring(L"<missing-cell>");
+    };
+
+    const std::vector<std::wstring> before = {
+        readCell(L"IDS_ROW_C", L"ja-JP"),
+        readCell(L"IDS_ROW_C", L"fr-FR"),
+        readCell(L"IDS_ROW_A", L"ja-JP"),
+        readCell(L"IDS_ROW_A", L"fr-FR"),
+    };
+    const std::wstring pasteText = L"C-ja pasted {0}\tC-fr pasted {0}\r\nA-ja pasted {0}\tA-fr pasted {0}";
+    ok = Require(session.ApplyClipboardMatrix(target.destinationRows, target.destinationCultures, pasteText),
+                 L"Visible-identity 2x2 clipboard paste should apply.") &&
+         ok;
+    ok = Require(readCell(L"IDS_ROW_C", L"ja-JP") == L"C-ja pasted {0}" && readCell(L"IDS_ROW_C", L"fr-FR") == L"C-fr pasted {0}" &&
+                     readCell(L"IDS_ROW_A", L"ja-JP") == L"A-ja pasted {0}" && readCell(L"IDS_ROW_A", L"fr-FR") == L"A-fr pasted {0}",
+                 L"Visible-identity paste should update the projected rows and reordered cultures, not raw neighbors.") &&
+         ok;
+    ok = Require(readCell(L"IDS_ROW_B", L"ja-JP") == L"B {0}" && readCell(L"IDS_ROW_D", L"ja-JP") == L"D {0}" &&
+                     readCell(L"IDS_ROW_C", L"de-DE") == L"C {0}" && readCell(L"IDS_ROW_A", L"de-DE") == L"A {0}",
+                 L"Visible-identity paste should leave filtered rows and unused cultures unchanged.") &&
+         ok;
+
+    ok = Require(session.CanUndo() && session.Undo() && ! session.CanUndo() && session.CanRedo(),
+                 L"Visible-identity paste should create exactly one Undo unit.") &&
+         ok;
+    ok = Require(readCell(L"IDS_ROW_C", L"ja-JP") == before[0] && readCell(L"IDS_ROW_C", L"fr-FR") == before[1] &&
+                     readCell(L"IDS_ROW_A", L"ja-JP") == before[2] && readCell(L"IDS_ROW_A", L"fr-FR") == before[3],
+                 L"Undo should restore the complete visible-identity rectangle.") &&
+         ok;
+
+    const std::wstring invalidPlaceholder = L"C-ja invalid\tC-fr invalid {0}\r\nA-ja invalid {0}\tA-fr invalid {0}";
+    ok = Require(! session.ApplyClipboardMatrix(target.destinationRows, target.destinationCultures, invalidPlaceholder) && ! session.CanUndo() &&
+                     session.CanRedo(),
+                 L"One invalid placeholder should reject the complete rectangle without changing Undo/Redo state.") &&
+         ok;
+
+    RedConfigure::Workflow::LocalizationClipboardPasteTarget missingIdentityTarget = target;
+    missingIdentityTarget.destinationRows[1].id = L"IDS_MISSING";
+    ok = Require(! session.ApplyClipboardMatrix(missingIdentityTarget.destinationRows, missingIdentityTarget.destinationCultures, pasteText) &&
+                     ! session.CanUndo() && session.CanRedo(),
+                 L"A missing destination row identity should reject the complete rectangle without mutation.") &&
+         ok;
+
+    const std::vector<std::wstring> culturesWithDeHidden = {L"ja-JP", L"fr-FR"};
+    const auto hiddenCultureTarget = RedConfigure::Workflow::BuildLocalizationClipboardPasteTarget(
+        session.GetLocalizationReviewRows(), visibleRows, rowCIndex, culturesWithDeHidden, L"ja-JP");
+    ok = Require(! session.ApplyClipboardMatrix(hiddenCultureTarget.destinationRows,
+                                                hiddenCultureTarget.destinationCultures,
+                                                L"C-ja hidden {0}\tC-fr hidden {0}\tC-de hidden {0}") &&
+                     ! session.CanUndo() && session.CanRedo(),
+                 L"A rectangle crossing a hidden culture should fail without partial application.") &&
+         ok;
+
+    const auto missingSelectionTarget = RedConfigure::Workflow::BuildLocalizationClipboardPasteTarget(
+        session.GetLocalizationReviewRows(), visibleRows, (std::numeric_limits<size_t>::max)(), visibleCultures, L"ja-JP");
+    ok = Require(missingSelectionTarget.destinationRows.empty() && missingSelectionTarget.destinationCultures.empty(),
+                 L"A missing selected row identity should not synthesize a raw-index paste target.") &&
+         ok;
+
+    ok = Require(session.Redo(), L"Rejected clipboard rectangles should preserve the successful paste Redo unit.") && ok;
+    ok = Require(readCell(L"IDS_ROW_C", L"ja-JP") == L"C-ja pasted {0}" && readCell(L"IDS_ROW_A", L"fr-FR") == L"A-fr pasted {0}",
+                 L"Redo should restore the complete visible-identity rectangle after rejected attempts.") &&
+         ok;
+    ok = Require(session.Undo(), L"Final clipboard identity cleanup should undo the successful rectangle.") && ok;
+
+    std::filesystem::remove_all(tempRoot, ec);
+    return ok;
+}
+
 [[nodiscard]] bool ContainsExportPreview(std::span<const RedConfigure::LocalizationExportPreview> previews,
                                          std::wstring_view ownerName,
                                          std::wstring_view cultureName,
@@ -1609,29 +1781,24 @@ END
     if (appHello)
     {
         const size_t rowIndex = static_cast<size_t>(appHello - session.GetLocalizationReviewRows().data());
-        ok                    = Require(session.UpdateLocalizationReviewTarget(rowIndex, L"cs-CZ", L"Ahoj upraveno {0}"),
-                                        L"Review target edits should accept valid placeholder-equivalent text.") &&
-                                ok;
+        const RedConfigure::LocalizationReviewRowIdentity appHelloIdentity{
+            .ownerName = appHello->ownerName,
+            .id        = appHello->id,
+        };
+        ok = Require(session.UpdateLocalizationReviewTarget(rowIndex, L"cs-CZ", L"Ahoj upraveno {0}"),
+                     L"Review target edits should accept valid placeholder-equivalent text.") &&
+             ok;
         ok                    = Require(! session.UpdateLocalizationReviewTarget(rowIndex, L"cs-CZ", L"Ahoj upraveno"),
                                         L"Review target edits should reject placeholder mismatches.") &&
                                 ok;
         ok = Require(session.CanUndo() && session.Undo(), L"Localization edits should be undoable from the global command model.") && ok;
         ok = Require(session.CanRedo() && session.Redo(), L"Undone localization edits should be redoable from the global command model.") && ok;
 
-        size_t csCultureIndex = 0u;
-        const auto currentRows = session.GetLocalizationReviewRows();
-        if (rowIndex < currentRows.size())
-        {
-            for (size_t index = 0u; index < currentRows[rowIndex].targets.size(); ++index)
-            {
-                if (currentRows[rowIndex].targets[index].cultureName == L"cs-CZ")
-                {
-                    csCultureIndex = index;
-                    break;
-                }
-            }
-        }
-        ok = Require(session.ApplyClipboardMatrix(rowIndex, csCultureIndex, L"Clipboard {0}"),
+        const std::array<RedConfigure::LocalizationReviewRowIdentity, 1> clipboardRows = {
+            appHelloIdentity,
+        };
+        const std::array<std::wstring, 1> clipboardCultures = {L"cs-CZ"};
+        ok = Require(session.ApplyClipboardMatrix(clipboardRows, clipboardCultures, L"Clipboard {0}"),
                      L"Localization matrix should paste rectangular clipboard text into the selected culture.") &&
              ok;
         ok = Require(session.Undo(), L"Rectangular clipboard paste should be undoable as one operation.") && ok;
@@ -2986,169 +3153,62 @@ int wmain()
                                           GetEnvironmentString(L"REDCONFIGURE_PERF_RUN_ID"));
     }
     auto clearPerfOutput = wil::scope_exit([] { Debug::Perf::ClearJsonlOutput(); });
-    if (! TestPageDefinitions())
+    using TestFunction = bool (*)();
+    using TestCase     = std::pair<std::wstring_view, TestFunction>;
+    constexpr std::array tests{
+        TestCase{L"TestPageDefinitions", &TestPageDefinitions},
+        TestCase{L"TestResolveWorkspaceRootForLaunchPath", &TestResolveWorkspaceRootForLaunchPath},
+        TestCase{L"TestBoundedBinaryFileReader", &TestBoundedBinaryFileReader},
+        TestCase{L"TestWorkspaceDiscoveryFindsResourcesAndThemes", &TestWorkspaceDiscoveryFindsResourcesAndThemes},
+        TestCase{L"TestWorkspaceDiscoveryReportsScanErrors", &TestWorkspaceDiscoveryReportsScanErrors},
+        TestCase{L"TestThemeDefinitionJson5Parsing", &TestThemeDefinitionJson5Parsing},
+        TestCase{L"TestThemeDefinitionRejectsInvalidInput", &TestThemeDefinitionRejectsInvalidInput},
+        TestCase{L"TestThemeDefinitionJson5Export", &TestThemeDefinitionJson5Export},
+        TestCase{L"TestThemeExpressionLanguageAndRuntimeSources", &TestThemeExpressionLanguageAndRuntimeSources},
+        TestCase{L"TestThemeExpressionNumbersAreLocaleInvariant", &TestThemeExpressionNumbersAreLocaleInvariant},
+        TestCase{L"TestSettingsStoreThemeDirectoryUsesSharedParser", &TestSettingsStoreThemeDirectoryUsesSharedParser},
+        TestCase{L"TestShippedThemesUseVersion2Sources", &TestShippedThemesUseVersion2Sources},
+        TestCase{L"TestSettingsStoreInlineThemesUseSharedParser", &TestSettingsStoreInlineThemesUseSharedParser},
+        TestCase{L"TestRcStringTableParser", &TestRcStringTableParser},
+        TestCase{L"TestRcMenuParser", &TestRcMenuParser},
+        TestCase{L"TestRcDialogParser", &TestRcDialogParser},
+        TestCase{L"TestPlaceholderValidation", &TestPlaceholderValidation},
+        TestCase{L"TestTranslationViewSearchFilterAndSort", &TestTranslationViewSearchFilterAndSort},
+        TestCase{L"TestRedConfigureSessionBuildsAllOwnerAllCultureLocalizationReview", &TestRedConfigureSessionBuildsAllOwnerAllCultureLocalizationReview},
+        TestCase{L"TestLocalizationReviewViewFiltersSearchesAndSorts", &TestLocalizationReviewViewFiltersSearchesAndSorts},
+        TestCase{L"TestLocalizationClipboardPasteUsesVisibleIdentitiesAtomically", &TestLocalizationClipboardPasteUsesVisibleIdentitiesAtomically},
+        TestCase{L"TestLocalizationReviewEditingAndExportPreviews", &TestLocalizationReviewEditingAndExportPreviews},
+        TestCase{L"TestLocalizationReviewSkipsBadResourceFilesAndKeepsWorkspaceOpen", &TestLocalizationReviewSkipsBadResourceFilesAndKeepsWorkspaceOpen},
+        TestCase{L"TestLocalizationReviewGridModelShowsOwnersEnglishAndVisibleCultures", &TestLocalizationReviewGridModelShowsOwnersEnglishAndVisibleCultures},
+        TestCase{L"TestLocalizationReviewSurfacesMissingTranslations", &TestLocalizationReviewSurfacesMissingTranslations},
+        TestCase{L"TestLocalizationReviewCanCreateAndExportNewCulture", &TestLocalizationReviewCanCreateAndExportNewCulture},
+        TestCase{L"TestLocalizationReviewProjectionPerformanceMetric", &TestLocalizationReviewProjectionPerformanceMetric},
+        TestCase{L"TestRedConfigureRepoSizedScanAndValidationPerformance", &TestRedConfigureRepoSizedScanAndValidationPerformance},
+        TestCase{L"TestSplashScreenCloseGuardSuppressesPendingOpen", &TestSplashScreenCloseGuardSuppressesPendingOpen},
+        TestCase{L"TestRcWriterAndMerge", &TestRcWriterAndMerge},
+        TestCase{L"TestGeneratedRcCompilesWhenWindowsSdkIsAvailable", &TestGeneratedRcCompilesWhenWindowsSdkIsAvailable},
+        TestCase{L"TestRedConfigureWorkflowModels", &TestRedConfigureWorkflowModels},
+        TestCase{L"TestRedConfigureUiPageCreationAndSwitching", &TestRedConfigureUiPageCreationAndSwitching},
+        TestCase{L"TestThemeCatalogLoadsThemeFiles", &TestThemeCatalogLoadsThemeFiles},
+        TestCase{L"TestThemePreviewModelKeepsLastValidColor", &TestThemePreviewModelKeepsLastValidColor},
+        TestCase{L"TestThemePreviewModelResolvesColorExpressions", &TestThemePreviewModelResolvesColorExpressions},
+        TestCase{L"TestThemePreviewModelPaletteOperationsAndDynamicInspection", &TestThemePreviewModelPaletteOperationsAndDynamicInspection},
+        TestCase{L"TestThemeColorSuggestionsGuideExpressionEditing", &TestThemeColorSuggestionsGuideExpressionEditing},
+        TestCase{L"TestThemeColorKeyFilterNarrowsKeysCaseInsensitively", &TestThemeColorKeyFilterNarrowsKeysCaseInsensitively},
+        TestCase{L"TestThemePreviewHitSelectionUsesSmallestRegionAndCycles", &TestThemePreviewHitSelectionUsesSmallestRegionAndCycles},
+        TestCase{L"TestRedConfigureSessionExportsFirstUsableFiles", &TestRedConfigureSessionExportsFirstUsableFiles},
+        TestCase{L"TestRedConfigureSessionReadsBomlessUtf16LeRcFiles", &TestRedConfigureSessionReadsBomlessUtf16LeRcFiles},
+    };
+
+    for (const auto& [name, test] : tests)
     {
-        return 1;
-    }
-    if (! TestResolveWorkspaceRootForLaunchPath())
-    {
-        return 1;
-    }
-    if (! TestBoundedBinaryFileReader())
-    {
-        return 1;
-    }
-    if (! TestWorkspaceDiscoveryFindsResourcesAndThemes())
-    {
-        return 1;
-    }
-    if (! TestWorkspaceDiscoveryReportsScanErrors())
-    {
-        return 1;
-    }
-    if (! TestThemeDefinitionJson5Parsing())
-    {
-        return 1;
-    }
-    if (! TestThemeDefinitionRejectsInvalidInput())
-    {
-        return 1;
-    }
-    if (! TestThemeDefinitionJson5Export())
-    {
-        return 1;
-    }
-    if (! TestThemeExpressionLanguageAndRuntimeSources())
-    {
-        return 1;
-    }
-    if (! TestThemeExpressionNumbersAreLocaleInvariant())
-    {
-        return 1;
-    }
-    if (! TestSettingsStoreThemeDirectoryUsesSharedParser())
-    {
-        return 1;
-    }
-    if (! TestShippedThemesUseVersion2Sources())
-    {
-        return 1;
-    }
-    if (! TestSettingsStoreInlineThemesUseSharedParser())
-    {
-        return 1;
-    }
-    if (! TestRcStringTableParser())
-    {
-        return 1;
-    }
-    if (! TestRcMenuParser())
-    {
-        return 1;
-    }
-    if (! TestRcDialogParser())
-    {
-        return 1;
-    }
-    if (! TestPlaceholderValidation())
-    {
-        return 1;
-    }
-    if (! TestTranslationViewSearchFilterAndSort())
-    {
-        return 1;
-    }
-    if (! TestRedConfigureSessionBuildsAllOwnerAllCultureLocalizationReview())
-    {
-        return 1;
-    }
-    if (! TestLocalizationReviewViewFiltersSearchesAndSorts())
-    {
-        return 1;
-    }
-    if (! TestLocalizationReviewEditingAndExportPreviews())
-    {
-        return 1;
-    }
-    if (! TestLocalizationReviewSkipsBadResourceFilesAndKeepsWorkspaceOpen())
-    {
-        return 1;
-    }
-    if (! TestLocalizationReviewGridModelShowsOwnersEnglishAndVisibleCultures())
-    {
-        return 1;
-    }
-    if (! TestLocalizationReviewSurfacesMissingTranslations())
-    {
-        return 1;
-    }
-    if (! TestLocalizationReviewCanCreateAndExportNewCulture())
-    {
-        return 1;
-    }
-    if (! TestLocalizationReviewProjectionPerformanceMetric())
-    {
-        return 1;
-    }
-    if (! TestRedConfigureRepoSizedScanAndValidationPerformance())
-    {
-        return 1;
-    }
-    if (! TestSplashScreenCloseGuardSuppressesPendingOpen())
-    {
-        return 1;
-    }
-    if (! TestRcWriterAndMerge())
-    {
-        return 1;
-    }
-    if (! TestGeneratedRcCompilesWhenWindowsSdkIsAvailable())
-    {
-        return 1;
-    }
-    if (! TestRedConfigureWorkflowModels())
-    {
-        return 1;
-    }
-    if (! TestRedConfigureUiPageCreationAndSwitching())
-    {
-        return 1;
-    }
-    if (! TestThemeCatalogLoadsThemeFiles())
-    {
-        return 1;
-    }
-    if (! TestThemePreviewModelKeepsLastValidColor())
-    {
-        return 1;
-    }
-    if (! TestThemePreviewModelResolvesColorExpressions())
-    {
-        return 1;
-    }
-    if (! TestThemePreviewModelPaletteOperationsAndDynamicInspection())
-    {
-        return 1;
-    }
-    if (! TestThemeColorSuggestionsGuideExpressionEditing())
-    {
-        return 1;
-    }
-    if (! TestThemeColorKeyFilterNarrowsKeysCaseInsensitively())
-    {
-        return 1;
-    }
-    if (! TestThemePreviewHitSelectionUsesSmallestRegionAndCycles())
-    {
-        return 1;
-    }
-    if (! TestRedConfigureSessionExportsFirstUsableFiles())
-    {
-        return 1;
-    }
-    if (! TestRedConfigureSessionReadsBomlessUtf16LeRcFiles())
-    {
-        return 1;
+        std::wcerr << L"[ RUN      ] " << name << std::endl;
+        if (! test())
+        {
+            std::wcerr << L"[  FAILED  ] " << name << std::endl;
+            return 1;
+        }
+        std::wcerr << L"[       OK ] " << name << std::endl;
     }
 
     std::wcout << L"RedConfigureTests passed.\n";

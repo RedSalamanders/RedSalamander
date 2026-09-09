@@ -2,21 +2,25 @@
 #define NOMINMAX
 #include <windows.h>
 
-#include <sddl.h>
 #include <shellapi.h>
 
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <charconv>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <cwchar>
 #include <deque>
+#include <filesystem>
 #include <format>
 #include <mutex>
+#include <span>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <vector>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 28182)
@@ -24,8 +28,10 @@
 #pragma warning(pop)
 
 #define REDSAL_DEFINE_TRACE_PROVIDER
+#include "HandleIo.h"
 #include "Helpers.h"
 #include "MinimumOsVersion.h"
+#include "PathUtils.h"
 #include "SearchServiceBroker.h"
 #include "SqliteIndexStore.h"
 
@@ -231,7 +237,7 @@ wil::unique_event g_serviceStopEvent;
 std::atomic<HANDLE> g_foregroundStopEvent{nullptr};
 std::atomic<HANDLE> g_foregroundUiWakeEvent{nullptr};
 std::atomic<ForegroundConsoleState*> g_foregroundConsoleState{nullptr};
-constexpr wchar_t kSingleInstanceEventNameEnvVar[] = L"REDSALAMANDER_SEARCH_SERVICE_INSTANCE_EVENT";
+constexpr wchar_t kStoreWriterLockName[] = L".red-salamander-search-writer.lock";
 
 void UpdateServiceStatus(DWORD currentState, DWORD win32ExitCode, DWORD waitHint) noexcept
 {
@@ -274,79 +280,86 @@ void UpdateServiceStatus(DWORD currentState, DWORD win32ExitCode, DWORD waitHint
     return value;
 }
 
-[[nodiscard]] std::wstring GetSingleInstanceEventName() noexcept
-{
-    std::wstring eventName = GetEnvironmentVariableText(kSingleInstanceEventNameEnvVar);
-    if (! eventName.empty())
-    {
-        return eventName;
-    }
-
-    eventName.assign(L"Global\\");
-    eventName.append(SearchServiceBroker::kServiceName);
-    eventName.append(L".Instance");
-    return eventName;
-}
-
-HRESULT CreateSingleInstanceSecurity(SECURITY_ATTRIBUTES& outAttributes, wil::unique_hlocal& outDescriptor) noexcept
-{
-    outAttributes = {};
-    outDescriptor.reset();
-
-    static constexpr wchar_t kSingleInstanceSddl[] = L"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;IU)";
-
-    PSECURITY_DESCRIPTOR descriptor = nullptr;
-    if (::ConvertStringSecurityDescriptorToSecurityDescriptorW(kSingleInstanceSddl, SDDL_REVISION_1, &descriptor, nullptr) == 0)
-    {
-        return HRESULT_FROM_WIN32(::GetLastError());
-    }
-
-    outDescriptor.reset(descriptor);
-    outAttributes.nLength              = sizeof(outAttributes);
-    outAttributes.lpSecurityDescriptor = outDescriptor.get();
-    outAttributes.bInheritHandle       = FALSE;
-    return S_OK;
-}
-
-HRESULT AcquireSingleInstanceGuard(wil::unique_handle& outGuard, bool& outAlreadyRunning) noexcept
-{
-    outGuard.reset();
-    outAlreadyRunning = false;
-
-    SECURITY_ATTRIBUTES attributes{};
-    wil::unique_hlocal descriptor;
-    HRESULT hr = CreateSingleInstanceSecurity(attributes, descriptor);
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-
-    const std::wstring eventName = GetSingleInstanceEventName();
-    ::SetLastError(ERROR_SUCCESS);
-    outGuard.reset(::CreateEventW(&attributes, TRUE, FALSE, eventName.c_str()));
-    if (! outGuard)
-    {
-        return HRESULT_FROM_WIN32(::GetLastError());
-    }
-
-    outAlreadyRunning = (::GetLastError() == ERROR_ALREADY_EXISTS);
-    return S_OK;
-}
-
-[[nodiscard]] std::wstring BuildAlreadyRunningMessage() noexcept
-{
-    return std::format(L"Another '{}' instance is already running. Stop the existing Windows service or foreground process before starting a new one.",
-                       SearchServiceBroker::kServiceName);
-}
-
 [[nodiscard]] LocalSearchIndexCore::RepositoryOptions BuildRepositoryOptions(const ParsedArguments& parsed) noexcept
 {
     return {
-        .snapshotRootDirectory = parsed.storageRootDirectory,
+        .snapshotRootDirectory = parsed.storageRootDirectory.empty() ? SearchServiceBroker::GetProgramDataSearchIndexRoot()
+                                                                     : parsed.storageRootDirectory,
         .persistentStoreKind   = parsed.persistentStoreKind,
         .sqliteDatabasePath    = parsed.sqliteDatabasePath,
         .sqliteAuthoritative   = parsed.persistentStoreKind == LocalSearchIndexCore::PersistentStoreKind::Sqlite,
     };
+}
+
+// This stays SearchService-local because the store-directory trust boundary, lock filename, conflict mapping,
+// and startup metric are service policy rather than a general file-lock helper contract.
+HRESULT AcquireStoreWriterOwnership(const LocalSearchIndexCore::RepositoryOptions& repositoryOptions,
+                                    wil::unique_hfile& outLease,
+                                    bool& outAlreadyRunning,
+                                    std::wstring& outLockPath) noexcept
+{
+    Debug::Perf::Scope acquisitionPerf(L"search.service.writer_ownership.acquire_us");
+    acquisitionPerf.SetDetail(L"store-file");
+
+    outLease.reset();
+    outAlreadyRunning = false;
+    outLockPath.clear();
+
+    const LocalSearchIndexCore::PersistentStoreInfo storeInfo = LocalSearchIndexCore::GetPersistentStoreInfo(repositoryOptions);
+    const std::filesystem::path storeDirectory =
+        storeInfo.kind == LocalSearchIndexCore::PersistentStoreKind::Sqlite ? std::filesystem::path(storeInfo.primaryPath).parent_path()
+                                                                            : std::filesystem::path(storeInfo.rootDirectory);
+    if (storeDirectory.empty())
+    {
+        acquisitionPerf.SetHr(E_INVALIDARG);
+        return E_INVALIDARG;
+    }
+
+    outLockPath = (storeDirectory / kStoreWriterLockName).wstring();
+    const std::filesystem::path extendedStoreDirectory(
+        Common::Paths::ToExtendedWin32Path(storeDirectory.native()));
+    const std::wstring extendedLockPath = Common::Paths::ToExtendedWin32Path(outLockPath);
+    std::error_code createError;
+    std::filesystem::create_directories(extendedStoreDirectory, createError);
+    if (createError)
+    {
+        const HRESULT hr = HRESULT_FROM_WIN32(static_cast<DWORD>(createError.value()));
+        acquisitionPerf.SetHr(hr);
+        return hr;
+    }
+
+    HANDLE lease = ::CreateFileW(extendedLockPath.c_str(),
+                                 GENERIC_READ | GENERIC_WRITE,
+                                 0u,
+                                 nullptr,
+                                 OPEN_ALWAYS,
+                                 FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_NOT_CONTENT_INDEXED,
+                                 nullptr);
+    if (lease == INVALID_HANDLE_VALUE)
+    {
+        const DWORD error = ::GetLastError();
+        if (error == ERROR_SHARING_VIOLATION || error == ERROR_LOCK_VIOLATION)
+        {
+            outAlreadyRunning = true;
+            acquisitionPerf.SetValue0(1u);
+            return S_OK;
+        }
+
+        const HRESULT hr = HRESULT_FROM_WIN32(error);
+        acquisitionPerf.SetHr(hr);
+        return hr;
+    }
+
+    outLease.reset(lease);
+    acquisitionPerf.SetValue0(0u);
+    return S_OK;
+}
+
+[[nodiscard]] std::wstring BuildAlreadyRunningMessage(std::wstring_view lockPath) noexcept
+{
+    return std::format(L"Another '{}' writer for this SearchService store is already running (ownership file '{}'). Stop that live writer before retrying.",
+                       SearchServiceBroker::kServiceName,
+                       lockPath);
 }
 
 [[nodiscard]] bool TryParseStoreBackend(std::wstring_view text, LocalSearchIndexCore::PersistentStoreKind& outKind) noexcept
@@ -2455,11 +2468,11 @@ void PrintHelpText() noexcept
                     L"\r\n"
                     L"Notes:\r\n"
                     L"  --register and --unregister typically require an elevated terminal.\r\n"
-                    L"  Only one active '{1}' instance may run at a time for this build.\r\n"
+                    L"  Only one active writer may own a given SearchService store at a time; independent stores may run concurrently.\r\n"
                     L"  --run-foreground prints a startup banner with PID/build/mode details, shows a full-screen interactive dashboard\r\n"
                     L"                   with live status and history pages on a VT-capable console, and emits readable log lines when\r\n"
                     L"                   output is redirected.\r\n"
-                    L"  --compact targets the SQLite store, acquires the single-instance guard, truncates WAL, runs VACUUM,\r\n"
+                    L"  --compact targets the SQLite store, acquires store writer ownership, truncates WAL, runs VACUUM,\r\n"
                     L"            and records the last checkpoint/compaction timestamps.\r\n"
                     L"  --request-compact talks to the running service over the named pipe, runs live maintenance in-process,\r\n"
                     L"                    and prints the refreshed store state after the request completes.\r\n"
@@ -2767,27 +2780,32 @@ CommandResult RunCompactStore(const ParsedArguments& parsed) noexcept
         return result;
     }
 
-    wil::unique_handle instanceGuard;
-    bool alreadyRunning      = false;
-    const HRESULT instanceHr = AcquireSingleInstanceGuard(instanceGuard, alreadyRunning);
-    if (FAILED(instanceHr))
+    const LocalSearchIndexCore::RepositoryOptions repositoryOptions = BuildRepositoryOptions(parsed);
+    const LocalSearchIndexCore::PersistentStoreInfo storeInfo       = LocalSearchIndexCore::GetPersistentStoreInfo(repositoryOptions);
+    if (storeInfo.primaryPath.empty())
     {
-        result.hr      = instanceHr;
-        result.message = std::format(L"Failed to acquire the single-instance guard before compaction. hr=0x{:08X}", static_cast<unsigned long>(instanceHr));
+        result.hr      = E_FAIL;
+        result.message = L"Failed to resolve the SQLite database path for --compact.";
+        return result;
+    }
+
+    wil::unique_hfile writerLease;
+    bool alreadyRunning = false;
+    std::wstring lockPath;
+    const HRESULT ownershipHr = AcquireStoreWriterOwnership(repositoryOptions, writerLease, alreadyRunning, lockPath);
+    if (FAILED(ownershipHr))
+    {
+        result.hr = ownershipHr;
+        result.message =
+            std::format(L"Failed to acquire store writer ownership before compaction (ownership file '{}'). hr=0x{:08X}",
+                        lockPath,
+                        static_cast<unsigned long>(ownershipHr));
         return result;
     }
     if (alreadyRunning)
     {
         result.hr      = HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
-        result.message = std::format(L"{} Stop it before running --compact.", BuildAlreadyRunningMessage());
-        return result;
-    }
-
-    const LocalSearchIndexCore::PersistentStoreInfo storeInfo = LocalSearchIndexCore::GetPersistentStoreInfo(BuildRepositoryOptions(parsed));
-    if (storeInfo.primaryPath.empty())
-    {
-        result.hr      = E_FAIL;
-        result.message = L"Failed to resolve the SQLite database path for --compact.";
+        result.message = std::format(L"{} Stop it before running --compact.", BuildAlreadyRunningMessage(lockPath));
         return result;
     }
 
@@ -2875,20 +2893,25 @@ CommandResult RunForegroundService(const ParsedArguments& parsed) noexcept
 {
     CommandResult result{};
 
-    wil::unique_handle instanceGuard;
-    bool alreadyRunning      = false;
-    const HRESULT instanceHr = AcquireSingleInstanceGuard(instanceGuard, alreadyRunning);
-    if (FAILED(instanceHr))
+    const LocalSearchIndexCore::RepositoryOptions repositoryOptions = BuildRepositoryOptions(parsed);
+    wil::unique_hfile writerLease;
+    bool alreadyRunning = false;
+    std::wstring lockPath;
+    const HRESULT ownershipHr = AcquireStoreWriterOwnership(repositoryOptions, writerLease, alreadyRunning, lockPath);
+    if (FAILED(ownershipHr))
     {
-        result.hr      = instanceHr;
+        result.hr = ownershipHr;
         result.message = std::format(
-            L"Failed to create the single-instance guard for '{}'. hr=0x{:08X}", SearchServiceBroker::kServiceName, static_cast<unsigned long>(instanceHr));
+            L"Failed to acquire store writer ownership for '{}' (ownership file '{}'). hr=0x{:08X}",
+            SearchServiceBroker::kServiceName,
+            lockPath,
+            static_cast<unsigned long>(ownershipHr));
         return result;
     }
     if (alreadyRunning)
     {
         result.hr      = HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
-        result.message = BuildAlreadyRunningMessage();
+        result.message = BuildAlreadyRunningMessage(lockPath);
         return result;
     }
 
@@ -3268,12 +3291,18 @@ void WINAPI ServiceMain(DWORD argc, wchar_t** argv) noexcept
 
     UpdateServiceStatus(SERVICE_START_PENDING, NO_ERROR, 5000u);
 
-    wil::unique_handle instanceGuard;
-    bool alreadyRunning      = false;
-    const HRESULT instanceHr = AcquireSingleInstanceGuard(instanceGuard, alreadyRunning);
-    if (FAILED(instanceHr))
+    const ParsedArguments serviceArguments{};
+    const LocalSearchIndexCore::RepositoryOptions repositoryOptions = BuildRepositoryOptions(serviceArguments);
+    wil::unique_hfile writerLease;
+    bool alreadyRunning = false;
+    std::wstring lockPath;
+    const HRESULT ownershipHr = AcquireStoreWriterOwnership(repositoryOptions, writerLease, alreadyRunning, lockPath);
+    if (FAILED(ownershipHr))
     {
-        UpdateServiceStatus(SERVICE_STOPPED, static_cast<DWORD>(HRESULT_CODE(instanceHr)), 0u);
+        Debug::Error(L"RedSalamanderSearchService: failed to acquire store writer ownership at '{}'. hr=0x{:08X}",
+                     lockPath,
+                     static_cast<unsigned long>(ownershipHr));
+        UpdateServiceStatus(SERVICE_STOPPED, static_cast<DWORD>(HRESULT_CODE(ownershipHr)), 0u);
         return;
     }
     if (alreadyRunning)
@@ -3290,6 +3319,77 @@ void WINAPI ServiceMain(DWORD argc, wchar_t** argv) noexcept
 }
 
 #ifdef ENABLE_TESTS
+[[nodiscard]] uint16_t ReadUtf16LeCodeUnit(std::span<const std::byte> bytes, size_t offset) noexcept
+{
+    const uint16_t low  = std::to_integer<uint8_t>(bytes[offset]);
+    const uint16_t high = std::to_integer<uint8_t>(bytes[offset + 1u]);
+    return static_cast<uint16_t>(low | static_cast<uint16_t>(high << 8u));
+}
+
+[[nodiscard]] bool TryParseSelectedPathsManifestForTest(const wchar_t* path, uint64_t& recordCount) noexcept
+{
+    recordCount = 0u;
+    if (path == nullptr || path[0] == L'\0')
+    {
+        return false;
+    }
+
+    wil::unique_hfile file(CreateFileW(path,
+                                       GENERIC_READ,
+                                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                       nullptr,
+                                       OPEN_EXISTING,
+                                       FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
+                                       nullptr));
+    if (! file)
+    {
+        return false;
+    }
+
+    constexpr uint64_t kMaximumManifestBytes = 64u * 1024u * 1024u;
+    uint64_t fileSizeBytes                   = 0u;
+    if (FAILED(Common::HandleIo::GetFileSizeBounded(file.get(), kMaximumManifestBytes, fileSizeBytes)) || fileSizeBytes < 2u ||
+        (fileSizeBytes % sizeof(uint16_t)) != 0u)
+    {
+        return false;
+    }
+
+    std::vector<std::byte> bytes(static_cast<size_t>(fileSizeBytes));
+    if (FAILED(Common::HandleIo::ReadExact(file.get(), bytes)) || bytes[0] != std::byte{0xFFu} || bytes[1] != std::byte{0xFEu})
+    {
+        return false;
+    }
+
+    bool recordHasContent = false;
+    size_t offset         = 2u;
+    while (offset < bytes.size())
+    {
+        const uint16_t codeUnit = ReadUtf16LeCodeUnit(bytes, offset);
+        if (codeUnit == 0u || codeUnit == L'\n')
+        {
+            return false;
+        }
+        if (codeUnit != L'\r')
+        {
+            recordHasContent = true;
+            offset += sizeof(uint16_t);
+            continue;
+        }
+
+        if (! recordHasContent || offset + (2u * sizeof(uint16_t)) > bytes.size() ||
+            ReadUtf16LeCodeUnit(bytes, offset + sizeof(uint16_t)) != L'\n')
+        {
+            return false;
+        }
+
+        ++recordCount;
+        recordHasContent = false;
+        offset += 2u * sizeof(uint16_t);
+    }
+
+    return recordCount != 0u && ! recordHasContent;
+}
+
 [[nodiscard]] bool WriteTestSupportProbeChunk(HANDLE destination, char value, size_t byteCount) noexcept
 {
     std::array<char, 64u * 1024u> bytes{};
@@ -3365,6 +3465,82 @@ void WINAPI ServiceMain(DWORD argc, wchar_t** argv) noexcept
         Sleep(750u);
         wil::unique_hfile marker(CreateFileW(argv.get()[2], GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
         outExitCode = marker ? 0 : 85;
+        return true;
+    }
+    if (mode == L"file-action-lease")
+    {
+        if (argc != 6 && argc != 7)
+        {
+            outExitCode = 93;
+            return true;
+        }
+
+        wchar_t* delayEnd = nullptr;
+        const unsigned long delayMs = wcstoul(argv.get()[4], &delayEnd, 10);
+        wchar_t* exitEnd = nullptr;
+        const unsigned long requestedExitCode = wcstoul(argv.get()[5], &exitEnd, 10);
+        const bool replaceManifest = argc == 7 && std::wstring_view(argv.get()[6]) == L"replace";
+        if (delayEnd == nullptr || *delayEnd != L'\0' || exitEnd == nullptr || *exitEnd != L'\0' || delayMs > 10'000u || requestedExitCode > 255u ||
+            (argc == 7 && ! replaceManifest))
+        {
+            outExitCode = 94;
+            return true;
+        }
+
+        Sleep(static_cast<DWORD>(delayMs));
+        uint64_t selectedPathCount = 0u;
+        const bool manifestValid = TryParseSelectedPathsManifestForTest(argv.get()[2], selectedPathCount);
+        if (manifestValid && replaceManifest)
+        {
+            if (DeleteFileW(argv.get()[2]) == FALSE)
+            {
+                outExitCode = 98;
+                return true;
+            }
+            wil::unique_hfile replacement(CreateFileW(argv.get()[2],
+                                                       GENERIC_WRITE,
+                                                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                       nullptr,
+                                                       CREATE_NEW,
+                                                       FILE_ATTRIBUTE_NORMAL,
+                                                       nullptr));
+            constexpr std::string_view kReplacementPayload{"child replacement sentinel"};
+            if (! replacement || FAILED(Common::HandleIo::WriteAll(replacement.get(), kReplacementPayload.data(), kReplacementPayload.size())))
+            {
+                outExitCode = 99;
+                return true;
+            }
+        }
+        wil::unique_hfile marker(
+            CreateFileW(argv.get()[3], GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+        if (! marker)
+        {
+            outExitCode = 95;
+            return true;
+        }
+        std::array<char, 64u> markerBuffer{};
+        constexpr std::string_view kParsedPrefix{"parsed:"};
+        constexpr std::string_view kInvalid{"invalid"};
+        std::string_view markerText = kInvalid;
+        if (manifestValid)
+        {
+            std::copy(kParsedPrefix.begin(), kParsedPrefix.end(), markerBuffer.begin());
+            const auto conversion =
+                std::to_chars(markerBuffer.data() + kParsedPrefix.size(), markerBuffer.data() + markerBuffer.size(), selectedPathCount);
+            if (conversion.ec != std::errc{})
+            {
+                outExitCode = 96;
+                return true;
+            }
+            markerText = std::string_view(markerBuffer.data(), static_cast<size_t>(conversion.ptr - markerBuffer.data()));
+        }
+        if (FAILED(Common::HandleIo::WriteAll(marker.get(), markerText.data(), markerText.size())))
+        {
+            outExitCode = 96;
+            return true;
+        }
+
+        outExitCode = manifestValid ? static_cast<int>(requestedExitCode) : 97;
         return true;
     }
     if (mode == L"spawn-tree")

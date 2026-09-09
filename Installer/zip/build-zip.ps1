@@ -1,11 +1,25 @@
 <#
 .SYNOPSIS
     Creates a portable ZIP package for RedSalamander.
+.DESCRIPTION
+    Builds a versioned portable archive from one compiled output profile, then
+    validates the archive from a clean extraction before accepting it.
 .PARAMETER Configuration
     Build configuration (Debug or Release). Default: Release.
 .PARAMETER Platform
     Target platform (x64 or ARM64). Default: x64.
+.PARAMETER BuildNumber
+    Required positive build number identifying the already compiled profile.
+.EXAMPLE
+    .\Installer\zip\build-zip.ps1 -Configuration Release -Platform x64 -BuildNumber 184
+.OUTPUTS
+    None. Writes the portable ZIP beneath .build\AppPackages.
+.NOTES
+    Mutates shared packaging outputs while holding the repository-wide packaging
+    coordination lock. Interrupted packaging fails closed until a reviewer restores
+    Installer inputs and .build\AppPackages and removes the reported marker.
 #>
+[CmdletBinding()]
 param(
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release',
@@ -18,18 +32,28 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+if ($BuildNumber -le 0 -or $BuildNumber -gt 65535) {
+    throw 'Standalone ZIP packaging requires -BuildNumber in the range 1..65535. Use build.ps1 -Zip to propagate the compiled profile version automatically.'
+}
+
 # Paths
 $RepoRoot = Split-Path -Parent $PSScriptRoot | Split-Path -Parent
-$VersioningScript = Join-Path $RepoRoot "Tools\Versioning.ps1"
+$VersioningModule = Join-Path $RepoRoot "Tools\Modules\Build\Versioning.psm1"
+$ArtifactOperationLockModule = Join-Path $RepoRoot "Tools\Modules\Build\ArtifactOperationLock.psm1"
 $VcRuntimeScript = Join-Path $PSScriptRoot "VcRuntime.ps1"
-$RuntimeDependencyModule = Join-Path $RepoRoot "Tools\RuntimeDependencies.psm1"
-$PortablePackageSmokeModule = Join-Path $RepoRoot "Tools\PortablePackageSmoke.psm1"
+$RuntimeDependencyModule = Join-Path $RepoRoot "Tools\Modules\Packaging\RuntimeDependencies.psm1"
+$PortablePackageSmokeModule = Join-Path $RepoRoot "Tools\Modules\Packaging\PortablePackageSmoke.psm1"
 $BuildOutputDir = Join-Path $RepoRoot ".build\$Platform\$Configuration"
+$PackageSmokeHarness = Join-Path $BuildOutputDir "PluginContractTests.exe"
 $PackageOutputDir = Join-Path $RepoRoot ".build\AppPackages"
 $TempDir = Join-Path $env:TEMP "RedSalamanderZip_$([Guid]::NewGuid())"
 
-if (-not (Test-Path $VersioningScript)) {
-    throw "Version helper script not found: $VersioningScript"
+if (-not (Test-Path $VersioningModule)) {
+    throw "Version helper module not found: $VersioningModule"
+}
+
+if (-not (Test-Path $ArtifactOperationLockModule)) {
+    throw "Artifact-operation lock module not found: $ArtifactOperationLockModule"
 }
 
 if (-not (Test-Path $VcRuntimeScript)) {
@@ -44,21 +68,95 @@ if (-not (Test-Path $PortablePackageSmokeModule)) {
     throw "Portable package smoke helper not found: $PortablePackageSmokeModule"
 }
 
-. $VersioningScript
+Import-Module $VersioningModule -Force -ErrorAction Stop
+Import-Module $ArtifactOperationLockModule -Force -ErrorAction Stop
 . $VcRuntimeScript
-Import-Module $RuntimeDependencyModule -Force
-Import-Module $PortablePackageSmokeModule -Force
-$VersionContext = if ($BuildNumber -gt 0) {
-    Get-RSVersionContext -RepoRoot $RepoRoot -Configuration $Configuration -Platform $Platform -BuildNumber $BuildNumber
-} else {
-    $savedContext = Read-RSVersionContext -RepoRoot $RepoRoot
-    if ($savedContext) { $savedContext } else { Get-RSVersionContext -RepoRoot $RepoRoot -Configuration $Configuration -Platform $Platform }
+Import-Module $RuntimeDependencyModule -Force -ErrorAction Stop
+Import-Module $PortablePackageSmokeModule -Force -ErrorAction Stop
+
+# Reject a pre-existing .build or AppPackages reparse path before lock metadata
+# or package output can be redirected outside the repository. Missing components
+# are created only after the packaging lease is held.
+$PackageOutputDir = Resolve-RSGuardedRepositoryPath `
+    -RepoRoot $RepoRoot `
+    -GuardedRelativeRoot '.build\AppPackages' `
+    -Path $PackageOutputDir
+$ArtifactProfileScope = @{
+    kind = 'packaging-input'
+    target = 'portable-zip'
+    configuration = $Configuration
+    platform = $Platform
 }
+$PackagingScope = @{
+    kind = 'packaging'
+    target = 'portable-zip'
+    configuration = $Configuration
+    platform = $Platform
+    coordination = 'packaging'
+}
+$ArtifactProfileLock = $null
+$PackagingLock = $null
+try {
+    $ArtifactProfileLock = Enter-RSArtifactOperationLock `
+        -RepoRoot $RepoRoot `
+        -Operation "standalone portable ZIP input $Configuration|$Platform" `
+        -Scope $ArtifactProfileScope
+    if ($ArtifactProfileLock.WasAbandoned) {
+        [void](Set-RSArtifactOperationContaminated `
+                -RepoRoot $RepoRoot `
+                -Reason 'The previous build or packaging reader exited while using this compiled artifact profile.' `
+                -AbandonedOwner $ArtifactProfileLock.AbandonedOwner `
+                -Scope $ArtifactProfileScope)
+    }
+    if (Test-RSArtifactOperationContaminated -RepoRoot $RepoRoot -Scope $ArtifactProfileScope) {
+        $ProfileMarkerPath = Get-RSArtifactContaminationMarkerPath `
+            -RepoRoot $RepoRoot `
+            -Scope $ArtifactProfileScope
+        throw "Compiled packaging inputs may be incomplete after an interrupted operation. Run a full-solution build.ps1 -Rebuild for $Configuration|$Platform before packaging. Marker: $ProfileMarkerPath"
+    }
+    Assert-RSNoResidualArtifactToolProcesses `
+        -RepoRoot $RepoRoot `
+        -Scope $ArtifactProfileScope
+
+    $PackagingLock = Enter-RSArtifactOperationLock `
+        -RepoRoot $RepoRoot `
+        -Operation "standalone portable ZIP packaging $Configuration|$Platform" `
+        -Scope $PackagingScope
+    if ($PackagingLock.WasAbandoned) {
+        [void](Set-RSArtifactOperationContaminated `
+                -RepoRoot $RepoRoot `
+                -Reason 'The previous packaging owner exited while mutating shared installer inputs or AppPackages outputs.' `
+                -AbandonedOwner $PackagingLock.AbandonedOwner `
+                -Scope $PackagingScope)
+    }
+    $PackagingContamination = Read-RSArtifactOperationContamination `
+        -RepoRoot $RepoRoot `
+        -Scope $PackagingScope
+    if ($null -ne $PackagingContamination) {
+        $MarkerPath = Get-RSArtifactContaminationMarkerPath `
+            -RepoRoot $RepoRoot `
+            -Scope $PackagingScope
+        throw "Shared packaging state may be incomplete after an interrupted operation. Review and restore Installer inputs and .build\AppPackages, then remove the marker explicitly. Marker: $MarkerPath"
+    }
+
+    $PackageOutputDir = Resolve-RSGuardedRepositoryPath `
+        -RepoRoot $RepoRoot `
+        -GuardedRelativeRoot '.build\AppPackages' `
+        -Path $PackageOutputDir `
+        -CreateDirectory
+
+$VersionContext = New-RSVersionContext `
+    -RepoRoot $RepoRoot `
+    -Configuration $Configuration `
+    -Platform $Platform `
+    -BuildNumber $BuildNumber
 $Version = $VersionContext.PackagingVersion
 
 # Output ZIP path
 $ZipFileName = "RedSalamander-$Version-$Platform-Portable.zip"
 $ZipPath = Join-Path $PackageOutputDir $ZipFileName
+$StagedZipPath = Join-Path $PackageOutputDir `
+    ('.{0}.{1}.tmp.zip' -f $ZipFileName, [Guid]::NewGuid().ToString('N'))
 
 Write-Host "Creating portable ZIP package..." -ForegroundColor Cyan
 Write-Host "  Version: $Version" -ForegroundColor Gray
@@ -72,6 +170,9 @@ if (-not (Test-Path $BuildOutputDir)) {
 }
 
 $null = Assert-RSRuntimeDependenciesInOutput -RepoRoot $RepoRoot -BuildOutputDir $BuildOutputDir -Configuration $Configuration -Platform $Platform
+if (-not (Test-Path -LiteralPath $PackageSmokeHarness -PathType Leaf)) {
+    throw "Receipt-bound package smoke harness not found: $PackageSmokeHarness. Rebuild the complete $Configuration|$Platform profile."
+}
 
 # Create temp directory
 New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
@@ -185,17 +286,15 @@ https://github.com/RedSalamanders/RedSalamander
         Copy-Item $LicenseSource (Join-Path $TempDir "LICENSE.txt")
     }
 
-    # Ensure output directory exists
-    New-Item -ItemType Directory -Path $PackageOutputDir -Force | Out-Null
-
-    # Create ZIP archive
+    # Create and validate a unique same-directory archive before publishing it.
+    # The prior complete ZIP remains untouched until the final atomic operation.
     Write-Host "Compressing files..." -ForegroundColor Cyan
-    Compress-Archive -Path "$TempDir\*" -DestinationPath $ZipPath -Force
+    Compress-Archive -Path "$TempDir\*" -DestinationPath $StagedZipPath
 
     $HostCanExecutePackage = $Platform -eq 'x64' -or $env:PROCESSOR_ARCHITECTURE -eq 'ARM64'
     $SmokeResult = Test-RSPortablePackage `
         -RepoRoot $RepoRoot `
-        -ZipPath $ZipPath `
+        -ZipPath $StagedZipPath `
         -BuildOutputDir $BuildOutputDir `
         -Configuration $Configuration `
         -Platform $Platform `
@@ -205,6 +304,18 @@ https://github.com/RedSalamanders/RedSalamander
     } else {
         Write-Host "  Portable package app startup and all built-in plugin contracts passed." -ForegroundColor Gray
     }
+
+    # Revalidate every component immediately before the atomic replacement.
+    $PackageOutputDir = Resolve-RSGuardedRepositoryPath `
+        -RepoRoot $RepoRoot `
+        -GuardedRelativeRoot '.build\AppPackages' `
+        -Path $PackageOutputDir `
+        -CreateDirectory
+    $ZipPath = Publish-RSGuardedRepositoryFile `
+        -RepoRoot $RepoRoot `
+        -GuardedRelativeRoot '.build\AppPackages' `
+        -StagedPath $StagedZipPath `
+        -DestinationPath $ZipPath
 
     Write-Host "✓ Portable ZIP created successfully!" -ForegroundColor Green
     Write-Host "  $ZipPath" -ForegroundColor Gray
@@ -218,4 +329,13 @@ https://github.com/RedSalamanders/RedSalamander
     if (Test-Path $TempDir) {
         Remove-Item $TempDir -Recurse -Force
     }
+    if (-not [string]::IsNullOrEmpty($StagedZipPath) -and
+        (Test-Path -LiteralPath $StagedZipPath -PathType Leaf)) {
+        Remove-Item -LiteralPath $StagedZipPath -Force
+    }
+}
+}
+finally {
+    Exit-RSArtifactOperationLock -Lock $PackagingLock
+    Exit-RSArtifactOperationLock -Lock $ArtifactProfileLock
 }

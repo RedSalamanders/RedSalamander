@@ -2,11 +2,11 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$helperScript = Join-Path $repoRoot 'Tools\SanitizedEnvironment.ps1'
+$helperModule = Join-Path $repoRoot 'Tools\Modules\Build\SanitizedEnvironment.psm1'
 
 Describe 'SanitizedEnvironment helper' {
     BeforeAll {
-        . $helperScript
+        Import-Module $helperModule -Force -ErrorAction Stop
     }
 
     It 'creates a child ProcessStartInfo without mutating the caller Path' {

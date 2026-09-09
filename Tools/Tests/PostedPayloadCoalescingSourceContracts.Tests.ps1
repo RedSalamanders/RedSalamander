@@ -2,15 +2,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-
-function Get-RSText {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Path
-    )
-
-    return Get-Content -LiteralPath (Join-Path $repoRoot $Path) -Raw
-}
+Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
 
 Describe 'Posted payload coalescing source contracts' {
     It 'uses opaque registered tokens so teardown never exposes payload storage through lParam' {

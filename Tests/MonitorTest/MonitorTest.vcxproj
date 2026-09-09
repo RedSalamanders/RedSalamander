@@ -126,6 +126,7 @@
     <ClCompile Include="..\..\RedSalamanderMonitor\Document.cpp" />
     <ClCompile Include="..\..\RedSalamanderMonitor\EtwListener.cpp" />
     <ClCompile Include="..\..\RedSalamanderMonitor\MonitorFileReader.cpp" />
+    <ClCompile Include="..\..\RedSalamanderMonitor\MonitorFileExporter.cpp" />
     <ClCompile Include="MonitorTest.cpp" />
   </ItemGroup>
   <ItemGroup>

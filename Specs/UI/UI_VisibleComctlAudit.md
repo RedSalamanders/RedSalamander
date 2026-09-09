@@ -1,6 +1,6 @@
-# Visible Comctl Report-Surface Audit
+# Visible Comctl Report-Surface Contract
 
-Last updated: 2026-05-13
+Last verified: 2026-08-04
 
 ## Scope
 
@@ -38,5 +38,4 @@ notification handlers are not visible comctl32 listview/tooltip surfaces and bel
 - `Tools/Audit-RemainingWin32UiDependencies.ps1` remains the broader backlog guard for HDC/HFONT/font-message/native-child-control
   cleanup and is expected to report categories outside this visible comctl scope.
 - Standard USER32 controls such as `Static`, `Edit`, `Button`, and `ComboBox` are tracked outside this comctl audit.
-- Closeout audit output is archived at
-  `Specs/TestRuns/SINON/Audit/2026-05-13_win32_common_controls_audit_closeout/`.
+- Verification is the current output of `Tools/Audit-ComctlReportSurfaces.ps1`; an unavailable historical archive is not part of this contract.

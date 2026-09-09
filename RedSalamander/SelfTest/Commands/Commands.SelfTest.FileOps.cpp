@@ -88,11 +88,7 @@
         return L"<missing>";
     }
 
-    return std::format(L"name='{}' value='{}' readOnly={} controlType={}",
-                       state->name,
-                       state->value,
-                       state->isReadOnly ? 1 : 0,
-                       state->controlType);
+    return std::format(L"name='{}' value='{}' readOnly={} controlType={}", state->name, state->value, state->isReadOnly ? 1 : 0, state->controlType);
 }
 
 [[nodiscard]] std::wstring DescribeFileOpsControlValueStates(const std::vector<UiaControlValueState>& states) noexcept
@@ -2712,8 +2708,7 @@
 
     Common::Settings::FileOperationsSettings isolatedSettings = previousFileOperations.value_or(Common::Settings::FileOperationsSettings{});
     isolatedSettings.autoDismissSuccess                       = true;
-    isolatedSettings.preCalcEnabled                           = false;
-    isolatedSettings.preCalcMaxWorkers                        = 7u;
+    isolatedSettings.verifyAfterCopy                          = true;
     isolatedSettings.crossFsBridgeBufferSizeKB                = 2048u;
     isolatedSettings.defaultBandwidthLimitBytesPerSecond      = 987654u;
     isolatedSettings.maxDiagnosticsLogFiles                   = 23u;
@@ -2733,10 +2728,8 @@
         const auto& current = g_settings.fileOperations.value();
         state.Require(current.autoDismissSuccess == isolatedSettings.autoDismissSuccess,
                       std::format(L"Issues-pane view-state save should preserve autoDismissSuccess {}.", label));
-        state.Require(current.preCalcEnabled == isolatedSettings.preCalcEnabled,
-                      std::format(L"Issues-pane view-state save should preserve preCalcEnabled {}.", label));
-        state.Require(current.preCalcMaxWorkers == isolatedSettings.preCalcMaxWorkers,
-                      std::format(L"Issues-pane view-state save should preserve preCalcMaxWorkers {}.", label));
+        state.Require(current.verifyAfterCopy == isolatedSettings.verifyAfterCopy,
+                      std::format(L"Issues-pane view-state save should preserve verifyAfterCopy {}.", label));
         state.Require(current.crossFsBridgeBufferSizeKB == isolatedSettings.crossFsBridgeBufferSizeKB,
                       std::format(L"Issues-pane view-state save should preserve crossFsBridgeBufferSizeKB {}.", label));
         state.Require(current.defaultBandwidthLimitBytesPerSecond == isolatedSettings.defaultBandwidthLimitBytesPerSecond,
@@ -3679,23 +3672,16 @@
     };
 
     FileOperationsIssuesPane::SelfTestSnapshot snapshot{};
-    state.Require(waitForSnapshot(
-                      [&](const FileOperationsIssuesPane::SelfTestSnapshot& value) noexcept
-    {
-        return value.rowCount >= 1u && value.visibleWork.visibleRowCount > 0u && value.visibleWork.visibleColumnCount > 0u &&
-               value.dxResizeFailureCount == 0u;
-    },
-                      snapshot),
+    state.Require(waitForSnapshot([&](const FileOperationsIssuesPane::SelfTestSnapshot& value) noexcept
+    { return value.rowCount >= 1u && value.visibleWork.visibleRowCount > 0u && value.visibleWork.visibleColumnCount > 0u && value.dxResizeFailureCount == 0u; },
+                                  snapshot),
                   L"File-operations issues pane did not settle before hide-focus validation.");
     state.Require(FileOperationsIssuesPane::SelfTestSelectTask(pane, taskId),
                   std::format(L"Failed to select issues-pane task {} before hide-focus validation.", taskId));
     state.Require(FileOperationsIssuesPane::SelfTestFocusGrid(pane), L"Failed to focus the issues-pane DX grid before hide-focus validation.");
-    state.Require(waitForSnapshot(
-                      [&](const FileOperationsIssuesPane::SelfTestSnapshot& value) noexcept
-    {
-        return value.selectionCount == 1u && value.primarySelectedTaskId == taskId && value.gridFocused && GetFocus() == pane;
-    },
-                      snapshot),
+    state.Require(waitForSnapshot([&](const FileOperationsIssuesPane::SelfTestSnapshot& value) noexcept
+    { return value.selectionCount == 1u && value.primarySelectedTaskId == taskId && value.gridFocused && GetFocus() == pane; },
+                                  snapshot),
                   std::format(L"File-operations issues pane did not own logical and Win32 focus before hide-focus validation; "
                               L"focusHwnd=0x{:X}, pane=0x{:X}, gridFocused={}, selectionCount={}, selectedTask={}.",
                               reinterpret_cast<uintptr_t>(GetFocus()),
@@ -3726,7 +3712,7 @@
     }
 
     const auto focusDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(1500ms);
-    size_t stableSamples    = 0u;
+    size_t stableSamples     = 0u;
     while (std::chrono::steady_clock::now() < focusDeadline)
     {
         PumpPendingMessages();
@@ -4449,7 +4435,7 @@ bool RunFileOperationsSpeedLimitPromptModalCycle(HWND popup,
 
         std::vector<FolderWindow::FileOperationState::Task*> tasks;
         fileOps->CollectTasks(tasks);
-        const bool hasRemainingTasks = std::ranges::any_of(tasks, [](const auto* task) noexcept { return task != nullptr; });
+        const bool hasRemainingTasks     = std::ranges::any_of(tasks, [](const auto* task) noexcept { return task != nullptr; });
         const bool hasInformationalTasks = ! informational.empty();
 
         const HWND popup = fileOps->GetPopupHwndForSelfTest();
@@ -4853,10 +4839,10 @@ public:
         return E_NOTIMPL;
     }
 
-    HRESULT basicInformationResult = S_OK;
-    HRESULT attributesResult       = S_OK;
-    unsigned long attributes       = FILE_ATTRIBUTE_NORMAL;
-    __int64 lastWriteTime           = 0;
+    HRESULT basicInformationResult     = S_OK;
+    HRESULT attributesResult           = S_OK;
+    unsigned long attributes           = FILE_ATTRIBUTE_NORMAL;
+    __int64 lastWriteTime              = 0;
     uint32_t basicInformationCallCount = 0;
     uint32_t attributesCallCount       = 0;
 };
@@ -4868,8 +4854,7 @@ public:
     probe.lastWriteTime = 123456789;
 
     FileOpsConflictMetadataDebugResult metadata{};
-    state.Require(DebugReadFileOpsConflictMetadataForSelfTest(&probe, L"/metadata-probe", metadata),
-                  L"Basic-information metadata probe should succeed.");
+    state.Require(DebugReadFileOpsConflictMetadataForSelfTest(&probe, L"/metadata-probe", metadata), L"Basic-information metadata probe should succeed.");
     state.Require(probe.basicInformationCallCount == 1u && probe.attributesCallCount == 0u,
                   std::format(L"Successful basic information should avoid the attributes fallback; basic={}, attributes={}.",
                               probe.basicInformationCallCount,
@@ -4877,13 +4862,12 @@ public:
     state.Require(metadata.isDirectory && metadata.attributes == FILE_ATTRIBUTE_DIRECTORY && metadata.lastWriteTime == probe.lastWriteTime,
                   L"Basic-information metadata should populate attributes and last-write time.");
 
-    probe.basicInformationResult     = E_NOTIMPL;
-    probe.attributes                 = FILE_ATTRIBUTE_ARCHIVE;
-    probe.basicInformationCallCount  = 0;
-    probe.attributesCallCount        = 0;
-    metadata                         = {};
-    state.Require(DebugReadFileOpsConflictMetadataForSelfTest(&probe, L"/metadata-fallback", metadata),
-                  L"Attributes-only metadata fallback should succeed.");
+    probe.basicInformationResult    = E_NOTIMPL;
+    probe.attributes                = FILE_ATTRIBUTE_ARCHIVE;
+    probe.basicInformationCallCount = 0;
+    probe.attributesCallCount       = 0;
+    metadata                        = {};
+    state.Require(DebugReadFileOpsConflictMetadataForSelfTest(&probe, L"/metadata-fallback", metadata), L"Attributes-only metadata fallback should succeed.");
     state.Require(probe.basicInformationCallCount == 1u && probe.attributesCallCount == 1u,
                   std::format(L"Attributes should be queried exactly once after basic information fails; basic={}, attributes={}.",
                               probe.basicInformationCallCount,
@@ -4898,30 +4882,55 @@ public:
     using TaskSnapshot = FileOperationsPopupInternal::TaskSnapshot;
     using StatusKind   = TaskSnapshot::StatusKind;
 
-    TaskSnapshot calculating{};
-    calculating.kind              = TaskSnapshot::Kind::FileOperation;
-    calculating.taskId            = 1u;
-    calculating.operation         = FILESYSTEM_COPY;
-    calculating.started           = false;
-    calculating.preCalcInProgress = true;
-    calculating.plannedItems      = 8u;
-    calculating.statusKind        = StatusKind::Calculating;
-    DebugPublishFileOperationsPlannedItemTotalAfterPreCalculation(calculating);
-    state.Require(calculating.totalItems == 0u,
-                  L"Active pre-calculation must not promote planned roots into a determinate aggregate total.");
+    TaskSnapshot discovering{};
+    discovering.kind                 = TaskSnapshot::Kind::FileOperation;
+    discovering.taskId               = 1u;
+    discovering.operation            = FILESYSTEM_COPY;
+    discovering.started              = true;
+    discovering.discoveryAheadActive = true;
+    discovering.plannedItems         = 8u;
+    discovering.statusKind           = StatusKind::Discovering;
+    DebugPublishFileOperationsPlannedItemTotalAfterDiscovery(discovering);
+    state.Require(discovering.totalItems == 0u, L"Open discovery must not promote planned roots into a determinate aggregate total.");
 
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot calculatingSummary{};
-    state.Require(DebugBuildFileOperationsPopupGlobalSummarySnapshot({calculating}, calculatingSummary),
-                  L"Failed to build pre-calculation global summary.");
+    state.Require(DebugBuildFileOperationsPopupGlobalSummarySnapshot({discovering}, calculatingSummary), L"Failed to build open-discovery global summary.");
     state.Require(calculatingSummary.footerAggregateProgressVisible && ! calculatingSummary.footerAggregateProgressDeterminate,
-                  L"Active pre-calculation should expose indeterminate aggregate progress.");
+                  L"Open discovery should expose indeterminate aggregate progress.");
     state.Require(calculatingSummary.footerAggregateTotalItems == 0u && calculatingSummary.taskbarProgressState == static_cast<uint32_t>(TBPF_INDETERMINATE),
-                  L"Active pre-calculation should publish neither an item denominator nor determinate taskbar progress.");
+                  L"Open discovery should publish neither an item denominator nor determinate taskbar progress.");
 
-    calculating.preCalcInProgress = false;
-    DebugPublishFileOperationsPlannedItemTotalAfterPreCalculation(calculating);
-    state.Require(calculating.totalItems == calculating.plannedItems,
-                  L"Planned roots may become the fallback denominator after pre-calculation is no longer active.");
+    // FO-DISCOVERY-01 / D2-A08: a closed-total sibling is Known work while another task discovers;
+    // the footer stays determinate over that cohort and the taskbar stays indeterminate while any
+    // included total is open.
+    TaskSnapshot knownSibling{};
+    knownSibling.kind               = TaskSnapshot::Kind::FileOperation;
+    knownSibling.taskId             = 3u;
+    knownSibling.operation          = FILESYSTEM_COPY;
+    knownSibling.started            = true;
+    knownSibling.operationStartTick = 1u;
+    knownSibling.discoveryClosed    = true;
+    knownSibling.totalBytes         = 100u;
+    knownSibling.completedBytes     = 25u;
+    FileOperationsPopupInternal::PopupLayoutDebugSnapshot knownWorkSummary{};
+    state.Require(DebugBuildFileOperationsPopupGlobalSummarySnapshot({discovering, knownSibling}, knownWorkSummary),
+                  L"Failed to build the mixed Known-work summary.");
+    state.Require(knownWorkSummary.footerAggregateProgressVisible && knownWorkSummary.footerAggregateProgressDeterminate &&
+                      knownWorkSummary.footerAggregateTotalBytes == 100u && knownWorkSummary.footerAggregateCompletedBytes == 25u,
+                  L"A closed-total sibling must render as Known work while another task still discovers.");
+    state.Require(knownWorkSummary.taskbarProgressState == static_cast<uint32_t>(TBPF_INDETERMINATE),
+                  L"The taskbar must stay indeterminate while any included total is open.");
+    state.Require(calculatingSummary.footerOpenDiscoveryTasks == 1u && knownWorkSummary.footerOpenDiscoveryTasks == 1u,
+                  L"The footer must count the task whose discovery is still open.");
+    state.Require(knownWorkSummary.globalSummaryText.find(FormatStringResource(nullptr, IDS_FMT_FILEOPS_KNOWN_WORK, 25ul)) != std::wstring::npos &&
+                      knownWorkSummary.globalSummaryText.find(FormatStringResource(nullptr, IDS_FMT_FILEOPS_GLOBAL_DISCOVERING_COUNT, 1ul)) !=
+                          std::wstring::npos,
+                  L"The footer text must state Known work over the closed cohort and that one task is still discovering.");
+
+    discovering.discoveryAheadActive = false;
+    discovering.discoveryClosed      = true;
+    DebugPublishFileOperationsPlannedItemTotalAfterDiscovery(discovering);
+    state.Require(discovering.totalItems == discovering.plannedItems, L"Planned roots may become the fallback denominator after discovery closes.");
 
     TaskSnapshot unknownCompact{};
     unknownCompact.kind           = TaskSnapshot::Kind::FileOperation;
@@ -4932,9 +4941,10 @@ public:
     unknownCompact.resultHr = E_FAIL;
     state.Require(! DebugFileOperationsTaskHasKnownCompactProgress(unknownCompact),
                   L"A failed or cancelled finished row with no denominator must keep compact progress hidden.");
-    unknownCompact.finished   = false;
-    unknownCompact.resultHr   = S_OK;
-    unknownCompact.totalItems = 2u;
+    unknownCompact.finished        = false;
+    unknownCompact.resultHr        = S_OK;
+    unknownCompact.totalItems      = 2u;
+    unknownCompact.discoveryClosed = true;
     state.Require(DebugFileOperationsTaskHasKnownCompactProgress(unknownCompact),
                   L"A compact row with a published item denominator should render determinate progress.");
 
@@ -4945,17 +4955,17 @@ public:
     paused.paused     = true;
     paused.statusKind = StatusKind::Paused;
 
-    calculating.totalItems = 0;
-    calculating.started    = false;
+    discovering.totalItems = 0;
+    discovering.started    = false;
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot mixedEligibility{};
-    state.Require(DebugBuildFileOperationsPopupGlobalSummarySnapshot({paused, calculating}, mixedEligibility),
+    state.Require(DebugBuildFileOperationsPopupGlobalSummarySnapshot({paused, discovering}, mixedEligibility),
                   L"Failed to build mixed bulk-control eligibility summary.");
     state.Require(mixedEligibility.footerPauseResumeAllVisible && ! mixedEligibility.footerPauseResumeAllPauses,
-                  L"A paused started task plus unstarted pre-calculation should offer Resume all, not Pause all.");
+                  L"A paused started task plus an unstarted discovery task should offer Resume all, not Pause all.");
 
-    calculating.started = true;
+    discovering.started = true;
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot startedEligibility{};
-    state.Require(DebugBuildFileOperationsPopupGlobalSummarySnapshot({paused, calculating}, startedEligibility),
+    state.Require(DebugBuildFileOperationsPopupGlobalSummarySnapshot({paused, discovering}, startedEligibility),
                   L"Failed to build started bulk-control eligibility summary.");
     state.Require(startedEligibility.footerPauseResumeAllVisible && startedEligibility.footerPauseResumeAllPauses,
                   L"A started unpaused task should make the eligible bulk command Pause all.");
@@ -4973,8 +4983,7 @@ public:
     fileTimeValue.HighPart = fileTime.dwHighDateTime;
 
     SYSTEMTIME local{};
-    state.Require(SystemTimeToTzSpecificLocalTime(nullptr, &utc, &local) != FALSE,
-                  L"Failed to convert deterministic conflict timestamp to local time.");
+    state.Require(SystemTimeToTzSpecificLocalTime(nullptr, &utc, &local) != FALSE, L"Failed to convert deterministic conflict timestamp to local time.");
     const int expectedDateLength = GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, DATE_SHORTDATE, &local, nullptr, nullptr, 0, nullptr);
     const int expectedTimeLength = GetTimeFormatEx(LOCALE_NAME_USER_DEFAULT, TIME_NOSECONDS, &local, nullptr, nullptr, 0);
     state.Require(expectedDateLength > 1, L"Failed to query the expected user-locale conflict date length.");
@@ -4986,26 +4995,17 @@ public:
 
     std::wstring expectedDate(static_cast<size_t>(expectedDateLength), L'\0');
     std::wstring expectedTime(static_cast<size_t>(expectedTimeLength), L'\0');
-    state.Require(GetDateFormatEx(LOCALE_NAME_USER_DEFAULT,
-                                  DATE_SHORTDATE,
-                                  &local,
-                                  nullptr,
-                                  expectedDate.data(),
-                                  expectedDateLength,
-                                  nullptr) != 0,
+    state.Require(GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, DATE_SHORTDATE, &local, nullptr, expectedDate.data(), expectedDateLength, nullptr) != 0,
                   L"Failed to format the expected user-locale conflict date.");
-    state.Require(GetTimeFormatEx(LOCALE_NAME_USER_DEFAULT,
-                                  TIME_NOSECONDS,
-                                  &local,
-                                  nullptr,
-                                  expectedTime.data(),
-                                  expectedTimeLength) != 0,
+    state.Require(GetTimeFormatEx(LOCALE_NAME_USER_DEFAULT, TIME_NOSECONDS, &local, nullptr, expectedTime.data(), expectedTimeLength) != 0,
                   L"Failed to format the expected user-locale conflict time.");
     expectedDate.resize(static_cast<size_t>(expectedDateLength - 1));
     expectedTime.resize(static_cast<size_t>(expectedTimeLength - 1));
     const std::wstring expectedTimestamp = FormatStringResource(nullptr, IDS_FMT_FILEOPS_CONFLICT_DATE_TIME, expectedDate, expectedTime);
     state.Require(DebugFormatFileOperationsConflictTimestamp(static_cast<__int64>(fileTimeValue.QuadPart)) == expectedTimestamp,
                   L"Conflict timestamps should use correct UTC-to-local conversion and the user locale's short date/time formats.");
+    state.Require(DebugFileOperationsStreamColorSlotsRemainUniqueUnderPermutation(),
+                  L"Live throughput graph color slots must stay unique and stable when in-flight callback order permutes.");
     return state.failure.empty();
 }
 
@@ -5022,6 +5022,7 @@ public:
         task.statusKind           = status;
         task.finished             = finished;
         task.started              = true;
+        task.discoveryClosed      = true;
         task.hasProgressCallbacks = true;
         task.completedBytes       = completedBytes;
         task.totalBytes           = totalBytes;
@@ -5041,92 +5042,97 @@ public:
         return snapshot;
     };
 
-    FileOperationsPopupInternal::PopupLayoutDebugSnapshot completedOnly =
-        buildSummary({makeTask(1u, StatusKind::Partial, true, 128u, 128u)});
+    FileOperationsPopupInternal::PopupLayoutDebugSnapshot completedOnly = buildSummary({makeTask(1u, StatusKind::Partial, true, 128u, 128u)});
     state.Require(completedOnly.globalNeedAttentionCount == 0u,
-                  std::format(L"Completed partial cards should not keep live attention active; saw {}.",
-                              completedOnly.globalNeedAttentionCount));
+                  std::format(L"Completed partial cards should not keep live attention active; saw {}.", completedOnly.globalNeedAttentionCount));
     state.Require(! completedOnly.footerAggregateProgressVisible, L"Completed-only cards should not keep the live aggregate bar visible.");
     state.Require(completedOnly.taskbarProgressState == static_cast<uint32_t>(TBPF_NOPROGRESS),
-                  std::format(L"Completed-only cards should not keep taskbar progress active; saw state {}.",
-                              completedOnly.taskbarProgressState));
+                  std::format(L"Completed-only cards should not keep taskbar progress active; saw state {}.", completedOnly.taskbarProgressState));
 
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot completedPlusUnknown =
         buildSummary({makeTask(1u, StatusKind::Done, true, 128u, 128u), makeTask(2u, StatusKind::Running, false, 0u, 0u)});
     state.Require(completedPlusUnknown.globalRunningCount == 1u,
-                  std::format(L"Live running count should include the active unknown task only; saw {}.",
-                              completedPlusUnknown.globalRunningCount));
+                  std::format(L"Live running count should include the active unknown task only; saw {}.", completedPlusUnknown.globalRunningCount));
+    const std::wstring expectedRunningOnly =
+        FormatStringResource(nullptr, IDS_FMT_FILEOPS_GLOBAL_RUNNING_COUNT, static_cast<unsigned long>(completedPlusUnknown.globalRunningCount));
+    state.Require(completedPlusUnknown.globalSummaryText == expectedRunningOnly,
+                  L"A running-only global summary should omit zero waiting and need-attention categories.");
     state.Require(completedPlusUnknown.footerAggregateProgressVisible, L"Active unknown work should keep the live aggregate bar visible.");
-    state.Require(! completedPlusUnknown.footerAggregateProgressDeterminate,
-                  L"Completed totals should not make an active unknown task aggregate determinate.");
+    state.Require(! completedPlusUnknown.footerAggregateProgressDeterminate, L"Completed totals should not make an active unknown task aggregate determinate.");
     state.Require(completedPlusUnknown.footerAggregateTotalBytes == 0u && completedPlusUnknown.footerAggregateTotalItems == 0u,
                   std::format(L"Live aggregate totals should ignore completed cards; saw {} byte(s), {} item(s).",
                               completedPlusUnknown.footerAggregateTotalBytes,
                               completedPlusUnknown.footerAggregateTotalItems));
     state.Require(completedPlusUnknown.taskbarProgressState == static_cast<uint32_t>(TBPF_INDETERMINATE),
-                  std::format(L"Active unknown work should use indeterminate taskbar progress; saw state {}.",
-                              completedPlusUnknown.taskbarProgressState));
+                  std::format(L"Active unknown work should use indeterminate taskbar progress; saw state {}.", completedPlusUnknown.taskbarProgressState));
     state.Require(completedPlusUnknown.taskbarProgressTotal == 0u,
-                  std::format(L"Active unknown work should not inherit completed taskbar totals; saw total {}.",
-                              completedPlusUnknown.taskbarProgressTotal));
+                  std::format(L"Active unknown work should not inherit completed taskbar totals; saw total {}.", completedPlusUnknown.taskbarProgressTotal));
 
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot knownPlusUnknown =
         buildSummary({makeTask(3u, StatusKind::Running, false, 64u, 128u), makeTask(4u, StatusKind::Running, false, 0u, 0u)});
     state.Require(knownPlusUnknown.footerAggregateProgressVisible, L"Mixed known/unknown active work should keep aggregate progress visible.");
-    state.Require(! knownPlusUnknown.footerAggregateProgressDeterminate,
-                  L"Any active unknown task should force the aggregate footer out of determinate mode.");
-    state.Require(knownPlusUnknown.taskbarProgressState == static_cast<uint32_t>(TBPF_INDETERMINATE),
-                  std::format(L"Mixed known/unknown active work should use indeterminate taskbar progress; saw state {}.",
-                              knownPlusUnknown.taskbarProgressState));
-    state.Require(knownPlusUnknown.taskbarProgressTotal == 0u,
-                  std::format(L"Mixed known/unknown active work should not publish a partial taskbar total; saw total {}.",
-                              knownPlusUnknown.taskbarProgressTotal));
+    state.Require(! knownPlusUnknown.footerAggregateProgressDeterminate, L"Any active unknown task should force the aggregate footer out of determinate mode.");
+    state.Require(
+        knownPlusUnknown.taskbarProgressState == static_cast<uint32_t>(TBPF_INDETERMINATE),
+        std::format(L"Mixed known/unknown active work should use indeterminate taskbar progress; saw state {}.", knownPlusUnknown.taskbarProgressState));
+    state.Require(
+        knownPlusUnknown.taskbarProgressTotal == 0u,
+        std::format(L"Mixed known/unknown active work should not publish a partial taskbar total; saw total {}.", knownPlusUnknown.taskbarProgressTotal));
 
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot mixedRateSummary{};
     state.Require(DebugBuildFileOperationsPopupGlobalSummarySnapshot(
-                      {makeTask(3u, StatusKind::Running, false, 64u, 128u), makeTask(4u, StatusKind::Running, false, 0u, 0u)},
-                      mixedRateSummary,
-                      4096.0,
-                      -1.0),
+                      {makeTask(3u, StatusKind::Running, false, 64u, 128u), makeTask(4u, StatusKind::Running, false, 0u, 0u)}, mixedRateSummary, 4096.0, -1.0),
                   L"Failed to build mixed known/unknown aggregate throughput snapshot.");
-    state.Require(mixedRateSummary.footerAggregateBytesPerSecond == 4096.0,
-                  L"Mixed known/unknown aggregate should retain throughput text.");
-    state.Require(! mixedRateSummary.footerAggregateEtaVisible,
-                  L"Mixed known/unknown aggregate must suppress ETA even when throughput is available.");
+    state.Require(mixedRateSummary.footerAggregateBytesPerSecond == 4096.0, L"Mixed known/unknown aggregate should retain throughput text.");
+    state.Require(! mixedRateSummary.footerAggregateEtaVisible, L"Mixed known/unknown aggregate must suppress ETA even when throughput is available.");
 
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot completedPlusConflict =
         buildSummary({makeTask(5u, StatusKind::Partial, true, 128u, 128u), makeTask(6u, StatusKind::Conflict, false, 0u, 0u)});
     state.Require(completedPlusConflict.globalNeedAttentionCount == 1u,
                   std::format(L"Live attention count should include only the active conflict, not completed cards; saw {}.",
                               completedPlusConflict.globalNeedAttentionCount));
-    state.Require(! completedPlusConflict.footerAggregateProgressDeterminate,
-                  L"Completed totals should not make an active conflict aggregate determinate.");
+    const std::wstring expectedAttentionOnly =
+        FormatStringResource(nullptr, IDS_FMT_FILEOPS_GLOBAL_ATTENTION_COUNT, static_cast<unsigned long>(completedPlusConflict.globalNeedAttentionCount));
+    state.Require(completedPlusConflict.globalSummaryText == expectedAttentionOnly,
+                  L"An attention-only global summary should omit zero running and waiting categories.");
+    state.Require(! completedPlusConflict.footerAggregateProgressDeterminate, L"Completed totals should not make an active conflict aggregate determinate.");
     state.Require(completedPlusConflict.footerAggregateTotalBytes == 0u && completedPlusConflict.footerAggregateTotalItems == 0u,
                   std::format(L"Active conflict aggregate totals should ignore completed cards; saw {} byte(s), {} item(s).",
                               completedPlusConflict.footerAggregateTotalBytes,
                               completedPlusConflict.footerAggregateTotalItems));
     state.Require(completedPlusConflict.taskbarProgressState == static_cast<uint32_t>(TBPF_ERROR),
-                  std::format(L"Active conflict should keep taskbar state at error; saw state {}.",
-                              completedPlusConflict.taskbarProgressState));
+                  std::format(L"Active conflict should keep taskbar state at error; saw state {}.", completedPlusConflict.taskbarProgressState));
     state.Require(completedPlusConflict.taskbarProgressTotal == 0u,
-                  std::format(L"Active conflict should not inherit completed taskbar totals; saw total {}.",
-                              completedPlusConflict.taskbarProgressTotal));
+                  std::format(L"Active conflict should not inherit completed taskbar totals; saw total {}.", completedPlusConflict.taskbarProgressTotal));
 
     const double silentRate = DebugDecayRateForCallbackSilence(100.0 * 1024.0 * 1024.0, 40000ull);
-    state.Require(silentRate == 0.0,
-                  std::format(L"Silent callback decay should floor sub-byte rates to zero before ETA overflow; saw {}.", silentRate));
+    state.Require(silentRate == 0.0, std::format(L"Silent callback decay should floor sub-byte rates to zero before ETA overflow; saw {}.", silentRate));
 
-    FileOperationsPopupInternal::PopupLayoutDebugSnapshot extremeEta =
-        buildSummary({makeTask(7u, StatusKind::Running, false, 1u, 1024u)});
-    state.Require(DebugBuildFileOperationsPopupGlobalSummarySnapshot({makeTask(7u, StatusKind::Running, false, 1u, 1024u)},
-                                                                     extremeEta,
-                                                                     std::numeric_limits<double>::max(),
-                                                                     std::numeric_limits<double>::max()),
-                  L"Failed to build file-operations global summary snapshot with extreme rate overrides.");
+    FileOperationsPopupInternal::PopupLayoutDebugSnapshot extremeEta = buildSummary({makeTask(7u, StatusKind::Running, false, 1u, 1024u)});
+    state.Require(
+        DebugBuildFileOperationsPopupGlobalSummarySnapshot(
+            {makeTask(7u, StatusKind::Running, false, 1u, 1024u)}, extremeEta, std::numeric_limits<double>::max(), std::numeric_limits<double>::max()),
+        L"Failed to build file-operations global summary snapshot with extreme rate overrides.");
     state.Require(extremeEta.footerAggregateEtaVisible, L"Extreme aggregate ETA override should remain visible for clamp validation.");
     state.Require(extremeEta.footerAggregateEtaSeconds == std::numeric_limits<uint64_t>::max(),
                   std::format(L"Extreme aggregate ETA should saturate to uint64 max; saw {}.", extremeEta.footerAggregateEtaSeconds));
     state.Require(! extremeEta.globalSummaryText.empty(), L"Extreme aggregate speed/ETA summary text should still format.");
+
+    TaskSnapshot maximumTask   = makeTask(8u, StatusKind::Running, false, (std::numeric_limits<uint64_t>::max)(), (std::numeric_limits<uint64_t>::max)());
+    maximumTask.completedItems = (std::numeric_limits<unsigned long>::max)();
+    maximumTask.totalItems     = (std::numeric_limits<unsigned long>::max)();
+    TaskSnapshot oneMoreTask   = makeTask(9u, StatusKind::Running, false, 1u, 1u);
+    oneMoreTask.completedItems = 1u;
+    oneMoreTask.totalItems     = 1u;
+    const FileOperationsPopupInternal::PopupLayoutDebugSnapshot saturatedAggregate = buildSummary({maximumTask, oneMoreTask});
+    state.Require(saturatedAggregate.footerAggregateCompletedBytes == (std::numeric_limits<uint64_t>::max)() &&
+                      saturatedAggregate.footerAggregateTotalBytes == (std::numeric_limits<uint64_t>::max)() &&
+                      saturatedAggregate.footerAggregateCompletedItems == static_cast<uint64_t>((std::numeric_limits<unsigned long>::max)()) + 1u &&
+                      saturatedAggregate.footerAggregateTotalItems == static_cast<uint64_t>((std::numeric_limits<unsigned long>::max)()) + 1u,
+                  L"Global byte aggregates should saturate at UINT64_MAX while item aggregates retain their widened sum.");
+    state.Require(saturatedAggregate.footerAggregateCompletedBytes <= saturatedAggregate.footerAggregateTotalBytes &&
+                      saturatedAggregate.footerAggregateCompletedItems <= saturatedAggregate.footerAggregateTotalItems,
+                  L"Saturated global aggregate progress should preserve completed <= total.");
 
     const D2D1_RECT_F indeterminateBar = D2D1::RectF(0.0f, 0.0f, 100.0f, 6.0f);
     const D2D1_RECT_F reducedAtStart   = DebugComputeFileOperationsIndeterminateBarFill(indeterminateBar, 0ull, true);
@@ -5138,6 +5144,553 @@ public:
     state.Require(animatedAtStart.left != animatedLater.left || animatedAtStart.right != animatedLater.right,
                   L"Normal-motion indeterminate progress should advance across timer ticks.");
 
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFileOperationsRemovalFocusUsesExactOutcomesAndOwnershipEpochs(CaseState& state) noexcept
+{
+    const std::wstring failure = FolderView::DebugValidateRemovalFocusContractsForSelfTest();
+    state.Require(failure.empty(), failure.empty() ? L"" : std::format(L"Removal-focus contract validation failed: {}.", failure));
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFileOperationsMoveRemovalFocusSelectsNextSurvivor(CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for move-focus test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root      = suiteRoot / L"work" / (L"move_focus_" + NewGuidText());
+    const std::filesystem::path sourceDir = root / L"src";
+    const std::filesystem::path destDir   = root / L"dst";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(sourceDir / L"a_folder"), L"Failed to create a_folder for move-focus test.");
+    state.Require(SelfTest::EnsureDirectory(sourceDir / L"b_folder"), L"Failed to create b_folder for move-focus test.");
+    state.Require(SelfTest::EnsureDirectory(sourceDir / L"c_folder"), L"Failed to create c_folder for move-focus test.");
+    state.Require(SelfTest::WriteTextFile(sourceDir / L"d.txt", "d"), L"Failed to create d.txt for move-focus test.");
+    state.Require(SelfTest::WriteTextFile(sourceDir / L"e.txt", "e"), L"Failed to create e.txt for move-focus test.");
+    state.Require(SelfTest::EnsureDirectory(destDir), L"Failed to create destination folder for move-focus test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    auto* fileOps                                          = g_folderWindow.DebugGetFileOperationState();
+    const std::wstring leftPluginBefore                    = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring rightPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
+    const std::optional<std::filesystem::path> leftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+    const FolderView::SortBy leftSortBefore                = g_folderWindow.GetSortBy(FolderWindow::Pane::Left);
+    const FolderView::SortDirection leftDirectionBefore    = g_folderWindow.GetSortDirection(FolderWindow::Pane::Left);
+    const auto restore                                     = wil::scope_exit([&]
+    {
+        if (fileOps)
+        {
+            static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps));
+        }
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, rightPluginBefore));
+        g_folderWindow.SetSort(FolderWindow::Pane::Left, leftSortBefore, leftDirectionBefore);
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+        if (rightBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightBefore.value());
+        }
+        std::error_code cleanupError;
+        std::filesystem::remove_all(root, cleanupError);
+    });
+
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set left filesystem for move-focus test.");
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, L"builtin/file-system")),
+                  L"Failed to set right filesystem for move-focus test.");
+    g_folderWindow.SetSort(FolderWindow::Pane::Left, FolderView::SortBy::Name, FolderView::SortDirection::Ascending);
+
+    std::atomic<uint32_t> enumerationCount{0u};
+    g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
+                                                       [&](const std::filesystem::path& folder) noexcept
+    {
+        if (OrdinalString::EqualsNoCasePath(folder, sourceDir))
+        {
+            enumerationCount.fetch_add(1u, std::memory_order_release);
+        }
+    });
+    const auto clearEnumerationCallback = wil::scope_exit([&] { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
+
+    std::atomic<uint32_t> completedMoves{0u};
+    std::atomic<HRESULT> lastMoveResult{E_PENDING};
+    const uint64_t completionToken      = g_folderWindow.AddFileOperationCompletedCallback([&](const FolderWindow::FileOperationCompletedEvent& event) noexcept
+    {
+        if (event.operation != FILESYSTEM_MOVE || event.sourcePaths.empty() ||
+            ! OrdinalString::EqualsNoCasePath(event.sourcePaths.front().parent_path(), sourceDir))
+        {
+            return;
+        }
+        lastMoveResult.store(event.hr, std::memory_order_release);
+        completedMoves.fetch_add(1u, std::memory_order_release);
+    });
+    const auto removeCompletionCallback = wil::scope_exit([&] noexcept { g_folderWindow.RemoveFileOperationCompletedCallback(completionToken); });
+
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, sourceDir);
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, destDir);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, sourceDir, SelfTest::Scale(3000ms)), L"Failed to set source pane path for move-focus test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Right, destDir, SelfTest::Scale(3000ms)), L"Failed to set destination pane path for move-focus test.");
+    state.Require(WaitForAtomicAtLeast(enumerationCount, 1u, SelfTest::Scale(3000ms)), L"Initial move-focus enumeration did not complete.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a_folder", L"b_folder", L"c_folder", L"d.txt", L"e.txt"}, SelfTest::Scale(3000ms)),
+                  L"Move-focus fixture items did not load.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"b_folder"),
+                  L"Failed to focus the middle folder before move-focus test.");
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+    g_folderWindow.CommandMoveToOtherPane(FolderWindow::Pane::Left);
+
+    const auto deadline      = std::chrono::steady_clock::now() + SelfTest::Scale(8000ms);
+    bool focusedNextSurvivor = false;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        std::error_code existsError;
+        const bool removed = ! std::filesystem::exists(sourceDir / L"b_folder", existsError) && ! existsError;
+        if (completedMoves.load(std::memory_order_acquire) >= 1u && SUCCEEDED(lastMoveResult.load(std::memory_order_acquire)) && removed &&
+            g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == 4u &&
+            g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == L"c_folder" &&
+            g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 0u)
+        {
+            focusedNextSurvivor = true;
+            break;
+        }
+        Sleep(10u);
+    }
+    state.Require(
+        focusedNextSurvivor,
+        std::format(L"Moving the middle folder should focus the next source survivor; completions={}, hr=0x{:08X}, items={}, focus='{}', selected={}.",
+                    completedMoves.load(std::memory_order_acquire),
+                    static_cast<unsigned long>(lastMoveResult.load(std::memory_order_acquire)),
+                    g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
+                    g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left),
+                    g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left)));
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFileOperationsRoutineAndWithOptionsPaneCommands(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    state.Require(mainWindow != nullptr && IsWindow(mainWindow) != FALSE,
+                  L"Main window handle invalid for routine/options pane-transfer validation.");
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for routine/options pane-transfer validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root      = suiteRoot / L"work" / (L"pane_transfer_options_" + NewGuidText());
+    const std::filesystem::path sourceDir = root / L"src";
+    const std::filesystem::path destDir   = root / L"dst";
+    constexpr std::wstring_view kArtifactCopyName = L"copy.rs_ren_0123456789abcdef0123456789abcdef";
+    constexpr std::wstring_view kArtifactMoveName = L"move.rs_ren_fedcba9876543210fedcba9876543210";
+    const std::array<std::wstring_view, 6> sourceNames{
+        L"options-copy.txt",
+        L"options-move.txt",
+        L"routine-copy.txt",
+        L"routine-move.txt",
+        kArtifactCopyName,
+        kArtifactMoveName,
+    };
+
+    std::error_code cleanupError;
+    std::filesystem::remove_all(root, cleanupError);
+    state.Require(SelfTest::EnsureDirectory(sourceDir) && SelfTest::EnsureDirectory(destDir),
+                  L"Failed to create routine/options pane-transfer directories.");
+    for (const std::wstring_view name : sourceNames)
+    {
+        state.Require(SelfTest::WriteTextFile(sourceDir / name, "pane-transfer-options"),
+                      std::format(L"Failed to create routine/options pane-transfer fixture '{}'.", name));
+    }
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const auto cleanupRoot = wil::scope_exit([&]() noexcept
+    {
+        std::error_code ec;
+        std::filesystem::remove_all(root, ec);
+    });
+    const std::optional<std::filesystem::path> leftPathBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::optional<std::filesystem::path> rightPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+    const auto restorePanes = wil::scope_exit([&]() noexcept
+    {
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+        if (rightPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightPathBefore.value());
+        }
+        PumpPendingMessages();
+    });
+    const auto clearPromptOverride = wil::scope_exit([]() noexcept
+    {
+        HostClearTestPromptResultOverride();
+        HostResetTestPromptRequestCount();
+    });
+    std::atomic<uint32_t> routineCompletionMask{0u};
+    const uint64_t completionToken = g_folderWindow.AddFileOperationCompletedCallback(
+        [&](const FolderWindow::FileOperationCompletedEvent& event) noexcept
+    {
+        if (FAILED(event.hr) || event.sourcePaths.size() != 1u ||
+            ! OrdinalString::EqualsNoCasePath(event.sourcePaths.front().parent_path(), sourceDir))
+        {
+            return;
+        }
+
+        if (event.operation == FILESYSTEM_COPY && event.sourcePaths.front().filename() == L"routine-copy.txt")
+        {
+            routineCompletionMask.fetch_or(1u, std::memory_order_release);
+        }
+        else if (event.operation == FILESYSTEM_MOVE && event.sourcePaths.front().filename() == L"routine-move.txt")
+        {
+            routineCompletionMask.fetch_or(2u, std::memory_order_release);
+        }
+        else if (event.operation == FILESYSTEM_COPY && event.sourcePaths.front().filename() == kArtifactCopyName)
+        {
+            routineCompletionMask.fetch_or(4u, std::memory_order_release);
+        }
+    });
+    const auto removeCompletionCallback = wil::scope_exit([&]() noexcept
+    {
+        g_folderWindow.RemoveFileOperationCompletedCallback(completionToken);
+    });
+
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, sourceDir);
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, destDir);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, sourceDir, SelfTest::Scale(3000ms)),
+                  L"Failed to set the source pane for routine/options validation.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Right, destDir, SelfTest::Scale(3000ms)),
+                  L"Failed to set the destination pane for routine/options validation.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left,
+                                   {L"options-copy.txt", L"options-move.txt", L"routine-copy.txt", L"routine-move.txt", kArtifactCopyName, kArtifactMoveName},
+                                   SelfTest::Scale(3000ms)),
+                  L"Routine/options pane-transfer fixtures did not load.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const auto waitForPromptCount = [](uint64_t expected, std::chrono::milliseconds timeout) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            if (HostGetTestPromptRequestCount() >= expected)
+            {
+                return true;
+            }
+            std::this_thread::sleep_for(10ms);
+        }
+        PumpPendingMessages();
+        return HostGetTestPromptRequestCount() >= expected;
+    };
+    const auto waitForPathState = [](const std::filesystem::path& path, bool expected, std::chrono::milliseconds timeout) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            std::error_code ec;
+            if (std::filesystem::exists(path, ec) == expected && ! ec)
+            {
+                return true;
+            }
+            std::this_thread::sleep_for(10ms);
+        }
+        std::error_code ec;
+        return std::filesystem::exists(path, ec) == expected && ! ec;
+    };
+    const auto waitForCompletionMask = [&](uint32_t expected, std::chrono::milliseconds timeout) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            if ((routineCompletionMask.load(std::memory_order_acquire) & expected) == expected)
+            {
+                return true;
+            }
+            std::this_thread::sleep_for(10ms);
+        }
+        PumpPendingMessages();
+        return (routineCompletionMask.load(std::memory_order_acquire) & expected) == expected;
+    };
+    const auto invokeForFocusedItem = [&](std::wstring_view name, UINT commandId) noexcept
+    {
+        state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, name),
+                      std::format(L"Failed to focus '{}' before command {}.", name, commandId));
+        FocusFolderViewPane(FolderWindow::Pane::Left);
+        SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(commandId, 0), 0);
+    };
+
+    HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_CANCEL);
+    for (const auto& [name, commandId] : std::array<std::pair<std::wstring_view, UINT>, 2>{
+             std::pair{std::wstring_view{L"options-copy.txt"}, static_cast<UINT>(IDM_PANE_COPY_TO_OTHER_WITH_OPTIONS)},
+             std::pair{std::wstring_view{L"options-move.txt"}, static_cast<UINT>(IDM_PANE_MOVE_TO_OTHER_WITH_OPTIONS)},
+         })
+    {
+        HostResetTestPromptRequestCount();
+        invokeForFocusedItem(name, commandId);
+        state.Require(waitForPromptCount(1u, SelfTest::Scale(5000ms)),
+                      std::format(L"With-options command {} did not publish its pre-consumption prompt.", commandId));
+        HostPromptDebugSnapshot prompt{};
+        state.Require(HostGetTestPromptRequestCount() == 1u && HostGetTestLastPromptDebugSnapshot(prompt),
+                      std::format(L"With-options command {} should publish exactly one captured prompt.", commandId));
+        state.Require(prompt.hasFileOperationOptions,
+                      std::format(L"With-options command {} did not use the shared File Operations options surface.", commandId));
+        state.Require(waitForPathState(sourceDir / name, true, SelfTest::Scale(500ms)) &&
+                          waitForPathState(destDir / name, false, SelfTest::Scale(500ms)),
+                      std::format(L"Cancel from with-options command {} changed source or destination state.", commandId));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+    }
+    HostClearTestPromptResultOverride();
+
+    HostResetTestPromptRequestCount();
+    invokeForFocusedItem(L"routine-copy.txt", IDM_PANE_COPY_TO_OTHER);
+    state.Require(waitForPathState(destDir / L"routine-copy.txt", true, SelfTest::Scale(5000ms)),
+                  L"Routine F5-path copy did not reach the destination.");
+    state.Require(waitForCompletionMask(1u, SelfTest::Scale(5000ms)),
+                  L"Routine F5-path copy did not publish a successful terminal completion.");
+    state.Require(waitForPathState(sourceDir / L"routine-copy.txt", true, SelfTest::Scale(500ms)),
+                  L"Routine F5-path copy removed its source.");
+    state.Require(HostGetTestPromptRequestCount() == 0u,
+                  std::format(L"Routine copy showed {} generic prompt(s).", HostGetTestPromptRequestCount()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    HostResetTestPromptRequestCount();
+    invokeForFocusedItem(L"routine-move.txt", IDM_PANE_MOVE_TO_OTHER);
+    state.Require(waitForPathState(sourceDir / L"routine-move.txt", false, SelfTest::Scale(5000ms)) &&
+                      waitForPathState(destDir / L"routine-move.txt", true, SelfTest::Scale(5000ms)),
+                  L"Routine F6-path move did not preserve exact source/destination semantics.");
+    state.Require(waitForCompletionMask(3u, SelfTest::Scale(5000ms)),
+                  L"Routine F6-path move did not publish a successful terminal completion.");
+    state.Require(HostGetTestPromptRequestCount() == 0u,
+                  std::format(L"Routine move showed {} generic prompt(s).", HostGetTestPromptRequestCount()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    HostResetTestPromptRequestCount();
+    invokeForFocusedItem(kArtifactCopyName, IDM_PANE_COPY_TO_OTHER);
+    state.Require(waitForPathState(destDir / kArtifactCopyName, true, SelfTest::Scale(5000ms)) &&
+                      waitForPathState(sourceDir / kArtifactCopyName, true, SelfTest::Scale(500ms)),
+                  L"Routine Copy of a name-only Possible artifact did not preserve source and publish destination.");
+    state.Require(waitForCompletionMask(7u, SelfTest::Scale(5000ms)),
+                  L"Routine Copy of a name-only Possible artifact did not publish a successful terminal completion.");
+    state.Require(HostGetTestPromptRequestCount() == 0u,
+                  std::format(L"Routine Copy of a name-only Possible artifact showed {} prompt(s).", HostGetTestPromptRequestCount()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    HostResetTestPromptRequestCount();
+    HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_CANCEL);
+    invokeForFocusedItem(kArtifactMoveName, IDM_PANE_MOVE_TO_OTHER);
+    HostClearTestPromptResultOverride();
+    HostPromptDebugSnapshot artifactPrompt{};
+    state.Require(HostGetTestPromptRequestCount() == 1u && HostGetTestLastPromptDebugSnapshot(artifactPrompt) &&
+                      artifactPrompt.presentation == HOST_PROMPT_PRESENTATION_ARTIFACT_TOUCH &&
+                      artifactPrompt.defaultResult == HOST_PROMPT_RESULT_CANCEL,
+                  L"Routine Move of a Possible artifact should show exactly one Cancel-default artifact warning.");
+    state.Require(waitForPathState(sourceDir / kArtifactMoveName, true, SelfTest::Scale(500ms)) &&
+                      waitForPathState(destDir / kArtifactMoveName, false, SelfTest::Scale(500ms)),
+                  L"Canceling the Possible-artifact Move warning changed source or destination state.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFileOperationsCompletedPostFailureStillAppliesUiContract(HWND /*mainWindow*/, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+    auto* fileOps = g_folderWindow.DebugGetFileOperationState();
+    state.Require(fileOps != nullptr, L"File-operations state unavailable for PostCompleted fallback validation.");
+    if (! fileOps)
+    {
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    const std::filesystem::path root      = suiteRoot / L"work" / (L"fo_post_fail_" + NewGuidText());
+    const std::filesystem::path sourceDir = root / L"src";
+    const std::filesystem::path destDir   = root / L"dst";
+    const std::array<std::filesystem::path, 2> sources{sourceDir / L"payload-reaper.txt", sourceDir / L"payload-submit-fail.txt"};
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(sourceDir) && SelfTest::EnsureDirectory(destDir) && SelfTest::WriteTextFile(sources[0], "post-fail-reaper") &&
+                      SelfTest::WriteTextFile(sources[1], "post-fail-submit"),
+                  L"Failed to seed PostCompleted fallback folders.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                    = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring rightPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
+    const std::optional<std::filesystem::path> leftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+    const auto restore                                     = wil::scope_exit([&]
+    {
+        static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps));
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, rightPluginBefore));
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+        if (rightBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightBefore.value());
+        }
+        std::error_code cleanupEc;
+        std::filesystem::remove_all(root, cleanupEc);
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set left filesystem for PostCompleted fallback.");
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, L"builtin/file-system")),
+                  L"Failed to set right filesystem for PostCompleted fallback.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, sourceDir);
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, destDir);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, sourceDir, SelfTest::Scale(3000ms)), L"Failed to navigate left pane for PostCompleted fallback.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Right, destDir, SelfTest::Scale(3000ms)), L"Failed to navigate right pane for PostCompleted fallback.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const auto leftFs  = g_folderWindow.GetFileSystem(FolderWindow::Pane::Left);
+    const auto rightFs = g_folderWindow.GetFileSystem(FolderWindow::Pane::Right);
+    state.Require(leftFs && rightFs, L"Failed to resolve filesystems for PostCompleted fallback.");
+    if (! leftFs || ! rightFs)
+    {
+        return false;
+    }
+
+    std::array<std::atomic<uint64_t>, 2> completedTaskIds{};
+    const uint64_t token      = g_folderWindow.AddFileOperationCompletedCallback([&](const FolderWindow::FileOperationCompletedEvent& event) noexcept
+    {
+        if (event.operation != FILESYSTEM_COPY || event.sourcePaths.size() != 1u)
+        {
+            return;
+        }
+        for (size_t sourceIndex = 0u; sourceIndex < sources.size(); ++sourceIndex)
+        {
+            if (OrdinalString::EqualsNoCasePath(event.sourcePaths.front(), sources[sourceIndex]))
+            {
+                completedTaskIds[sourceIndex].store(event.taskId, std::memory_order_release);
+                return;
+            }
+        }
+    });
+    const auto removeCallback = wil::scope_exit([&]() noexcept { g_folderWindow.RemoveFileOperationCompletedCallback(token); });
+
+    state.Require(CloseFileOperationsPopupForSelfTest(fileOps), L"Could not clear file-operations tasks before PostCompleted fallback.");
+    const DWORD uiTid = GetCurrentThreadId();
+    for (size_t sourceIndex = 0u; sourceIndex < sources.size(); ++sourceIndex)
+    {
+        fileOps->DebugForceNextFileOperationCompletedPostFailure();
+        if (sourceIndex == 1u)
+        {
+            fileOps->DebugForceNextOrphanedCompletionDrainSubmissionFailure();
+        }
+        uint64_t startedTaskId = 0;
+        const HRESULT startHr  = fileOps->AdmitOperation(FILESYSTEM_COPY,
+                                                         FolderWindow::Pane::Left,
+                                                         FolderWindow::Pane::Right,
+                                                         leftFs,
+                                                         {sources[sourceIndex]},
+                                                         destDir,
+                                                         FILESYSTEM_FLAG_NONE,
+                                                         false,
+                                                         0,
+                                                         FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                         false,
+                                                         nullptr,
+                                                         &startedTaskId);
+        state.Require(SUCCEEDED(startHr) && startedTaskId != 0u,
+                      std::format(L"Failed to start PostCompleted fallback copy {} (hr=0x{:08X}).", sourceIndex, static_cast<unsigned long>(startHr)));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
+        if (sourceIndex == 1u)
+        {
+            // Do not pump the UI completion yet. Admission failure must first put
+            // ownership of the still-running jthread back on Task, so RemoveTask's
+            // destruction path necessarily joins before releasing Task storage.
+            const auto restorationDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(8000ms);
+            while (std::chrono::steady_clock::now() < restorationDeadline && fileOps->DebugLastRestoredCompletionWorkerTaskId() != startedTaskId)
+            {
+                std::this_thread::sleep_for(1ms);
+            }
+            state.Require(fileOps->DebugLastRestoredCompletionWorkerTaskId() == startedTaskId,
+                          L"Forced drain-submission failure did not restore the completion worker to Task.");
+            std::vector<FolderWindow::FileOperationState::Task*> liveBeforeCompletion;
+            fileOps->CollectTasks(liveBeforeCompletion);
+            const bool taskOwnsWorker = std::ranges::any_of(liveBeforeCompletion, [startedTaskId](const FolderWindow::FileOperationState::Task* task) noexcept {
+                return task && task->GetId() == startedTaskId && task->_thread.joinable();
+            });
+            state.Require(taskOwnsWorker, L"Drain-submission failure must restore the joinable worker handle before posting the UI wakeup.");
+        }
+
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(8000ms);
+        while (std::chrono::steady_clock::now() < deadline && completedTaskIds[sourceIndex].load(std::memory_order_acquire) == 0u)
+        {
+            PumpPendingMessages();
+            std::this_thread::sleep_for(20ms);
+        }
+        state.Require(completedTaskIds[sourceIndex].load(std::memory_order_acquire) == startedTaskId,
+                      sourceIndex == 0u ? L"Forced dual-post failure must still invoke UI completion callbacks."
+                                        : L"A forced drain-submission failure must retry the queued UI wakeup.");
+
+        const DWORD workerTid = fileOps->DebugLastFileOperationCompletionWorkerTid();
+        const DWORD applyTid  = fileOps->DebugLastFileOperationCompletionApplyTid();
+        state.Require(
+            workerTid != 0u && applyTid == uiTid && workerTid != applyTid,
+            std::format(L"Completion fallback must apply on the owning UI thread (workerTid={}, applyTid={}, uiTid={}).", workerTid, applyTid, uiTid));
+
+        PumpPendingMessages();
+        std::vector<FolderWindow::FileOperationState::Task*> liveTasks;
+        fileOps->CollectTasks(liveTasks);
+        const bool taskStillLive = std::ranges::any_of(
+            liveTasks, [startedTaskId](const FolderWindow::FileOperationState::Task* task) noexcept { return task && task->GetId() == startedTaskId; });
+        state.Require(! taskStillLive, L"Completion fallback must still RemoveTask on the UI thread.");
+    }
     return state.failure.empty();
 }
 
@@ -5285,22 +5838,25 @@ struct FileOperationsPopupTestFixture final
     std::optional<std::filesystem::path> rightBefore;
     std::vector<std::filesystem::path> folderHistoryBefore;
     AppTheme previousTheme{};
-    bool previousPopupFooterOnly    = false;
-    bool previousAutoDismissSuccess = false;
-    bool previousCompactDensity     = false;
-    bool issuesPaneVisibleBefore    = false;
-    bool settingsCaptured           = false;
-    bool themeCaptured              = false;
+    bool previousPopupFooterOnly      = false;
+    bool previousAutoDismissSuccess   = false;
+    bool previousCompactDensity       = false;
+    bool issuesPaneVisibleBefore      = false;
+    bool settingsCaptured             = false;
+    bool themeCaptured                = false;
     bool issuesPaneVisibilityCaptured = false;
-    bool paneStateCaptured          = false;
-    bool cleaned                    = false;
+    bool paneStateCaptured            = false;
+    bool cleaned                      = false;
 };
 
-[[nodiscard]] bool InitializeFileOperationsPopupTestFixture(HWND mainWindow, FileOperationsPopupTestFixture& fixture) noexcept
+[[nodiscard]] bool InitializeFileOperationsPopupTestFixture(
+    HWND mainWindow,
+    FileOperationsPopupTestFixture& fixture,
+    const bool hideBeforeActionablePublish = false) noexcept
 {
     using namespace std::chrono_literals;
     using ConflictAction = FolderWindow::FileOperationState::Task::ConflictAction;
-    CaseState& state = fixture.state;
+    CaseState& state     = fixture.state;
 
     if (! mainWindow || IsWindow(mainWindow) == FALSE)
     {
@@ -5322,12 +5878,12 @@ struct FileOperationsPopupTestFixture final
     fileOps->SetAutoDismissSuccess(false);
     fixture.previousCompactDensity = fileOps->GetPopupCompactDensity();
     fileOps->SetPopupCompactDensity(false);
-    fixture.issuesPaneVisibleBefore = g_folderWindow.IsFileOperationsIssuesPaneVisible();
+    fixture.issuesPaneVisibleBefore      = g_folderWindow.IsFileOperationsIssuesPaneVisible();
     fixture.issuesPaneVisibilityCaptured = true;
 
-    fixture.previousTheme = g_folderWindow.GetTheme();
-    fixture.themeCaptured = true;
-    AppTheme deterministicMotionTheme = fixture.previousTheme;
+    fixture.previousTheme                          = g_folderWindow.GetTheme();
+    fixture.themeCaptured                          = true;
+    AppTheme deterministicMotionTheme              = fixture.previousTheme;
     deterministicMotionTheme.reducedMotionOverride = false;
     g_folderWindow.ApplyTheme(deterministicMotionTheme);
 
@@ -5338,11 +5894,11 @@ struct FileOperationsPopupTestFixture final
         return false;
     }
 
-    fixture.root      = suiteRoot / L"work" / (L"fileops_conflict_prompt_" + NewGuidText());
-    fixture.sourceDir = fixture.root / L"src";
-    fixture.destDir   = fixture.root / L"dst";
-    fixture.source    = fixture.sourceDir / L"payload.txt";
-    fixture.dest      = fixture.destDir / L"payload.txt";
+    fixture.root          = suiteRoot / L"work" / (L"fileops_conflict_prompt_" + NewGuidText());
+    fixture.sourceDir     = fixture.root / L"src";
+    fixture.destDir       = fixture.root / L"dst";
+    fixture.source        = fixture.sourceDir / L"payload.txt";
+    fixture.dest          = fixture.destDir / L"payload.txt";
     const auto& root      = fixture.root;
     const auto& sourceDir = fixture.sourceDir;
     const auto& destDir   = fixture.destDir;
@@ -5366,17 +5922,16 @@ struct FileOperationsPopupTestFixture final
         return false;
     }
 
-    fixture.leftPluginBefore  = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    fixture.rightPluginBefore = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
-    fixture.leftBefore        = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    fixture.rightBefore       = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+    fixture.leftPluginBefore    = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    fixture.rightPluginBefore   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
+    fixture.leftBefore          = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    fixture.rightBefore         = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
     fixture.folderHistoryBefore = g_folderWindow.GetFolderHistory();
-    fixture.paneStateCaptured = true;
+    fixture.paneStateCaptured   = true;
 
     auto& taskId = fixture.taskId;
 
-    state.Require(CloseFileOperationsPopupForSelfTest(fileOps),
-                  L"File-operations popup test could not establish an empty task/completion baseline.");
+    state.Require(CloseFileOperationsPopupForSelfTest(fileOps), L"File-operations popup test could not establish an empty task/completion baseline.");
     state.Require(fileOps->DebugFlushPendingSettingsSaveForSelfTest(static_cast<DWORD>(SelfTest::Scale(10'000ms).count())),
                   L"File-operations popup test could not flush its initial asynchronous settings writes.");
     if (! state.failure.empty())
@@ -5411,8 +5966,8 @@ struct FileOperationsPopupTestFixture final
         }
     }
 
-    fixture.leftFileSystem  = g_folderWindow.GetFileSystem(FolderWindow::Pane::Left);
-    fixture.rightFileSystem = g_folderWindow.GetFileSystem(FolderWindow::Pane::Right);
+    fixture.leftFileSystem      = g_folderWindow.GetFileSystem(FolderWindow::Pane::Left);
+    fixture.rightFileSystem     = g_folderWindow.GetFileSystem(FolderWindow::Pane::Right);
     const auto& leftFileSystem  = fixture.leftFileSystem;
     const auto& rightFileSystem = fixture.rightFileSystem;
     state.Require(leftFileSystem && rightFileSystem, L"Failed to resolve local file-system interfaces for compact conflict prompt test.");
@@ -5423,7 +5978,7 @@ struct FileOperationsPopupTestFixture final
 
     const auto metadataPauseBailout = SelfTest::Scale(10'000ms);
     SetFileOpsConflictMetadataPauseForSelfTest(true, static_cast<ULONGLONG>(metadataPauseBailout.count()));
-    const HRESULT startHr = fileOps->StartOperation(FILESYSTEM_COPY,
+    const HRESULT startHr = fileOps->AdmitOperation(FILESYSTEM_COPY,
                                                     FolderWindow::Pane::Left,
                                                     FolderWindow::Pane::Right,
                                                     leftFileSystem,
@@ -5434,7 +5989,7 @@ struct FileOperationsPopupTestFixture final
                                                     0,
                                                     FolderWindow::FileOperationState::ExecutionMode::PerItem,
                                                     false,
-                                                    nullptr);
+                                                    rightFileSystem);
     state.Require(SUCCEEDED(startHr), std::format(L"Failed to start compact conflict prompt copy (hr=0x{:08X}).", static_cast<unsigned long>(startHr)));
     if (! state.failure.empty())
     {
@@ -5448,7 +6003,7 @@ struct FileOperationsPopupTestFixture final
         return false;
     }
 
-    fixture.popup = WaitForWindow([&]() noexcept { return fileOps->GetPopupHwndForSelfTest(); }, SelfTest::Scale(5000ms));
+    fixture.popup    = WaitForWindow([&]() noexcept { return fileOps->GetPopupHwndForSelfTest(); }, SelfTest::Scale(5000ms));
     const HWND popup = fixture.popup;
     state.Require(popup != nullptr && IsWindow(popup) != FALSE, L"File-operations popup did not open for compact conflict prompt test.");
     if (! popup || IsWindow(popup) == FALSE)
@@ -5468,10 +6023,18 @@ struct FileOperationsPopupTestFixture final
     state.Require(DebugGetFileOperationsPopupTaskSnapshot(popup, taskId.value(), promptWhileMetadataBlocked),
                   L"Popup snapshot blocked while conflict metadata was paused.");
     const auto promptSnapshotElapsed = std::chrono::steady_clock::now() - promptSnapshotStarted;
-    state.Require(promptSnapshotElapsed < SelfTest::Scale(500ms),
-                  L"Popup snapshot should remain responsive while conflict metadata is blocked.");
-    state.Require(promptWhileMetadataBlocked.conflict.active,
-                  L"Conflict prompt should be published before metadata decoration completes.");
+    state.Require(promptSnapshotElapsed < SelfTest::Scale(500ms), L"Popup snapshot should remain responsive while conflict metadata is blocked.");
+    state.Require(promptWhileMetadataBlocked.conflict.active, L"Conflict task should enter Needs attention before metadata decoration completes.");
+    state.Require(promptWhileMetadataBlocked.conflict.metadataLoading, L"Conflict task should report that it is reading details while metadata is blocked.");
+    state.Require(promptWhileMetadataBlocked.conflict.actionCount == 0u, L"Conflict task must not publish decision buttons until metadata resolves.");
+    state.Require(promptWhileMetadataBlocked.conflict.primaryActionCount == 0u && promptWhileMetadataBlocked.conflict.overflowActionCount == 0u,
+                  L"Conflict metadata loading must not publish primary or More action placement.");
+    state.Require(promptWhileMetadataBlocked.conflict.defaultAction == static_cast<uint8_t>(ConflictAction::None) &&
+                      promptWhileMetadataBlocked.conflict.escapeAction == static_cast<uint8_t>(ConflictAction::None),
+                  L"Conflict metadata loading must not publish default or Escape decisions.");
+    state.Require(! promptWhileMetadataBlocked.conflict.applyToAllEligible && ! promptWhileMetadataBlocked.conflict.skipAllEligible &&
+                      ! promptWhileMetadataBlocked.conflict.buttonsPublishable,
+                  L"Conflict metadata loading must withhold scope eligibility and button publishability.");
     bool blockedPromptHasOverwrite = false;
     for (size_t actionIndex = 0; actionIndex < promptWhileMetadataBlocked.conflict.actionCount; ++actionIndex)
     {
@@ -5481,8 +6044,14 @@ struct FileOperationsPopupTestFixture final
             break;
         }
     }
-    state.Require(! blockedPromptHasOverwrite,
-                  L"Local Exists prompt should withhold Overwrite until metadata proves the collision is replaceable.");
+    state.Require(! blockedPromptHasOverwrite, L"Local Exists prompt should withhold Overwrite until metadata proves the collision is replaceable.");
+    if (hideBeforeActionablePublish)
+    {
+        SendMessageW(popup, WM_CLOSE, 0, 0);
+        PumpPendingMessages();
+        state.Require(IsWindow(popup) != FALSE && IsWindowVisible(popup) == FALSE,
+                      L"Caption Close during conflict metadata loading should hide without resolving the pending decision.");
+    }
     ReleaseFileOpsConflictMetadataPauseForSelfTest();
     const auto metadataPauseExitDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
     while (HasFileOpsConflictMetadataPauseEnteredForSelfTest() && std::chrono::steady_clock::now() < metadataPauseExitDeadline)
@@ -5490,11 +6059,10 @@ struct FileOperationsPopupTestFixture final
         PumpPendingMessages();
         std::this_thread::sleep_for(10ms);
     }
-    state.Require(! HasFileOpsConflictMetadataPauseEnteredForSelfTest(),
-                  L"Conflict metadata pause point should report only the current blocked interval.");
+    state.Require(! HasFileOpsConflictMetadataPauseEnteredForSelfTest(), L"Conflict metadata pause point should report only the current blocked interval.");
 
-    auto& taskSnapshot = fixture.taskSnapshot;
-    taskSnapshot       = {};
+    auto& taskSnapshot        = fixture.taskSnapshot;
+    taskSnapshot              = {};
     const auto promptDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
     while (std::chrono::steady_clock::now() < promptDeadline)
     {
@@ -5507,29 +6075,87 @@ struct FileOperationsPopupTestFixture final
         std::this_thread::sleep_for(20ms);
     }
     state.Require(taskSnapshot.conflict.active, L"Compact conflict prompt test did not reach an active conflict prompt.");
+    state.Require(! taskSnapshot.conflict.metadataLoading, L"Conflict prompt should publish its stable action set only after metadata resolves.");
+    if (hideBeforeActionablePublish)
+    {
+        const HWND visiblePopup = WaitForWindow(
+            [&]() noexcept
+        {
+            const HWND candidate = fileOps->GetPopupHwndForSelfTest();
+            return candidate && IsWindowVisible(candidate) != FALSE ? candidate : nullptr;
+        },
+            SelfTest::Scale(5000ms));
+        state.Require(visiblePopup == popup,
+                      L"Publishing an actionable conflict should automatically restore the same hidden File Operations surface.");
+    }
     return state.failure.empty();
 }
 
 [[nodiscard]] bool ValidateFileOperationsConflictAndMetadata(FileOperationsPopupTestFixture& fixture) noexcept
 {
-    CaseState& state                   = fixture.state;
-    const auto& taskSnapshot          = fixture.taskSnapshot;
-    const uint64_t expectedSourceBytes = fixture.expectedSourceBytes;
+    using ConflictAction                    = FolderWindow::FileOperationState::Task::ConflictAction;
+    CaseState& state                        = fixture.state;
+    const auto& taskSnapshot                = fixture.taskSnapshot;
+    const uint64_t expectedSourceBytes      = fixture.expectedSourceBytes;
     const uint64_t expectedDestinationBytes = fixture.expectedDestinationBytes;
 
-    // Fairstream 3A/3B: an Exists conflict offers exactly Overwrite/Skip/Cancel — SkipAll is
-    // expressed by the All-similar toggle and Retry is withheld for deterministic buckets.
-    state.Require(taskSnapshot.conflict.actionCount == 3u,
-                  std::format(L"Exists conflict should offer exactly 3 actions (Overwrite/Skip/Cancel); saw {} action(s).",
+    // An eligible per-item Exists conflict exposes engine-backed Keep Both alongside the
+    // established Overwrite/Skip/Cancel choices. Skip-all remains All-similar + Skip.
+    state.Require(taskSnapshot.conflict.actionCount == 5u,
+                  std::format(L"Exists conflict should offer exactly 5 actions (Overwrite/Keep Both/Skip/Skip All/Cancel); saw {} action(s).",
                               taskSnapshot.conflict.actionCount));
+    const std::array expectedActions{
+        ConflictAction::Overwrite, ConflictAction::KeepBoth, ConflictAction::Skip, ConflictAction::SkipAll, ConflictAction::Cancel};
+    const std::array expectedPrimaryActions{ConflictAction::Overwrite, ConflictAction::KeepBoth, ConflictAction::Cancel};
+    const std::array expectedOverflowActions{ConflictAction::Skip, ConflictAction::SkipAll};
+    const auto matchesPublishedActions = [](const auto& actual, size_t actualCount, const auto& expected) noexcept
+    {
+        if (actualCount != expected.size())
+        {
+            return false;
+        }
+        for (size_t index = 0u; index < expected.size(); ++index)
+        {
+            if (actual[index] != static_cast<uint8_t>(expected[index]))
+            {
+                return false;
+            }
+        }
+        return true;
+    };
+    state.Require(matchesPublishedActions(taskSnapshot.conflict.actions, taskSnapshot.conflict.actionCount, expectedActions),
+                  L"Exists conflict should preserve the engine's complete ordered action set.");
+    state.Require(matchesPublishedActions(taskSnapshot.conflict.primaryActions, taskSnapshot.conflict.primaryActionCount, expectedPrimaryActions),
+                  L"Exists conflict should publish Overwrite, Keep Both, and Cancel as its primary placement.");
+    state.Require(matchesPublishedActions(taskSnapshot.conflict.overflowActions, taskSnapshot.conflict.overflowActionCount, expectedOverflowActions),
+                  L"Exists conflict should publish Skip and Skip All in More without popup-side reordering.");
+    state.Require(taskSnapshot.conflict.defaultAction == static_cast<uint8_t>(ConflictAction::Cancel) &&
+                      taskSnapshot.conflict.escapeAction == static_cast<uint8_t>(ConflictAction::Cancel),
+                  L"Exists conflict should publish Cancel as both the default and Escape action.");
+    state.Require(taskSnapshot.conflict.applyToAllEligible && taskSnapshot.conflict.skipAllEligible && taskSnapshot.conflict.buttonsPublishable,
+                  L"Exists conflict should publish its eligible scope and actionable button state.");
+    bool offersKeepBoth = false;
+    bool offersSkipAll  = false;
+    for (size_t index = 0u; index < taskSnapshot.conflict.actionCount && index < taskSnapshot.conflict.actions.size(); ++index)
+    {
+        if (taskSnapshot.conflict.actions[index] == static_cast<uint8_t>(FolderWindow::FileOperationState::Task::ConflictAction::KeepBoth))
+        {
+            offersKeepBoth = true;
+        }
+        if (taskSnapshot.conflict.actions[index] == static_cast<uint8_t>(FolderWindow::FileOperationState::Task::ConflictAction::SkipAll))
+        {
+            offersSkipAll = true;
+        }
+    }
+    state.Require(offersKeepBoth, L"Eligible per-item Exists conflict should expose Keep Both from the engine action layout.");
+    state.Require(offersSkipAll, L"Eligible per-item Exists conflict should expose Skip All through the More action layout.");
     state.Require(taskSnapshot.conflict.sourceMetadata.available, L"Conflict prompt should capture source metadata for the colliding item.");
     state.Require(taskSnapshot.conflict.destinationMetadata.available, L"Conflict prompt should capture destination metadata for the colliding item.");
     state.Require(taskSnapshot.conflict.sourceMetadata.sizeKnown, L"Conflict prompt source metadata should include file size.");
     state.Require(taskSnapshot.conflict.destinationMetadata.sizeKnown, L"Conflict prompt destination metadata should include file size.");
-    state.Require(taskSnapshot.conflict.sourceMetadata.sizeBytes == expectedSourceBytes,
-                  std::format(L"Conflict prompt source size should be {} byte(s), saw {}.",
-                              expectedSourceBytes,
-                              taskSnapshot.conflict.sourceMetadata.sizeBytes));
+    state.Require(
+        taskSnapshot.conflict.sourceMetadata.sizeBytes == expectedSourceBytes,
+        std::format(L"Conflict prompt source size should be {} byte(s), saw {}.", expectedSourceBytes, taskSnapshot.conflict.sourceMetadata.sizeBytes));
     state.Require(taskSnapshot.conflict.destinationMetadata.sizeBytes == expectedDestinationBytes,
                   std::format(L"Conflict prompt destination size should be {} byte(s), saw {}.",
                               expectedDestinationBytes,
@@ -5543,10 +6169,12 @@ struct FileOperationsPopupTestFixture final
 {
     using namespace std::chrono_literals;
     using ConflictAction = FolderWindow::FileOperationState::Task::ConflictAction;
-    CaseState& state = fixture.state;
-    auto* fileOps    = fixture.fileOps;
-    HWND& popup      = fixture.popup;
-    const auto& taskId = fixture.taskId;
+    CaseState& state     = fixture.state;
+    auto* fileOps        = fixture.fileOps;
+    HWND& popup          = fixture.popup;
+    const auto& taskId   = fixture.taskId;
+
+    Trace(L"FileOpsPopupPresentation: taskbar validation begin");
 
     const UINT taskbarButtonCreatedMessage = RegisterWindowMessageW(L"TaskbarButtonCreated");
     state.Require(taskbarButtonCreatedMessage != 0, L"Failed to resolve TaskbarButtonCreated message for taskbar retry validation.");
@@ -5557,50 +6185,31 @@ struct FileOperationsPopupTestFixture final
     DebugFailNextFileOperationsTaskbarListAttempts(1u);
     const auto resetForcedTaskbarFailures = wil::scope_exit([]() noexcept { DebugFailNextFileOperationsTaskbarListAttempts(0u); });
 
-    const auto waitForTaskbarSnapshot = [&](auto&& predicate, std::wstring_view context) noexcept
-    {
-        FileOperationsPopupInternal::PopupLayoutDebugSnapshot latest{};
-        latest.taskId       = taskId.value();
-        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3500ms);
-        while (std::chrono::steady_clock::now() < deadline)
-        {
-            PumpPendingMessages();
-            if (DebugGetFileOperationsPopupLayoutSnapshot(popup, latest) && predicate(latest))
-            {
-                return latest;
-            }
-            std::this_thread::sleep_for(50ms);
-        }
-
-        state.Require(false,
-                      std::format(L"Timed out waiting for taskbar retry state during {}; ready={}, available={}, retryPending={}, attempts={}, retryDelayMs={}.",
-                                  context,
-                                  latest.taskbarButtonReady ? L"yes" : L"no",
-                                  latest.taskbarListAvailable ? L"yes" : L"no",
-                                  latest.taskbarListRetryPending ? L"yes" : L"no",
-                                  latest.taskbarListAttemptCount,
-                                  latest.taskbarListRetryDelayMs));
-        return latest;
-    };
-
-    FileOperationsPopupInternal::PopupLayoutDebugSnapshot failedTaskbarLayout =
-        waitForTaskbarSnapshot(
-            [](const FileOperationsPopupInternal::PopupLayoutDebugSnapshot& snapshot) noexcept {
-                return snapshot.taskbarButtonReady && snapshot.taskbarListAttemptCount >= 1u && snapshot.taskbarListRetryPending;
-            },
-            L"forced taskbar-list failure");
+    state.Require(DebugUpdateFileOperationsPopupTaskbarProgress(popup), L"Failed to drive the forced taskbar-list initialization attempt.");
+    FileOperationsPopupInternal::PopupLayoutDebugSnapshot failedTaskbarLayout{};
+    failedTaskbarLayout.taskId = taskId.value();
+    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, failedTaskbarLayout),
+                  L"Failed to capture taskbar state after the forced taskbar-list initialization failure.");
+    state.Require(failedTaskbarLayout.taskbarButtonReady, L"TaskbarButtonCreated should mark the popup taskbar button ready.");
+    state.Require(! failedTaskbarLayout.taskbarListAvailable, L"A forced taskbar-list initialization failure must not retain an interface.");
+    state.Require(failedTaskbarLayout.taskbarListAttemptCount == 1u,
+                  std::format(L"The synchronous forced taskbar-list failure should consume exactly one attempt; observed {}.",
+                              failedTaskbarLayout.taskbarListAttemptCount));
+    state.Require(failedTaskbarLayout.taskbarListRetryPending, L"A forced taskbar-list initialization failure must schedule a retry.");
+    state.Require(failedTaskbarLayout.taskbarListRetryDelayMs > 0u, L"A forced taskbar-list initialization failure must publish a positive retry delay.");
     if (! state.failure.empty())
     {
         return false;
     }
 
     const uint32_t attemptsAfterForcedFailure = failedTaskbarLayout.taskbarListAttemptCount;
-    FileOperationsPopupInternal::PopupLayoutDebugSnapshot retryTaskbarLayout =
-        waitForTaskbarSnapshot(
-            [attemptsAfterForcedFailure](const FileOperationsPopupInternal::PopupLayoutDebugSnapshot& snapshot) noexcept {
-                return snapshot.taskbarButtonReady && snapshot.taskbarListAttemptCount > attemptsAfterForcedFailure;
-            },
-            L"taskbar-list retry after forced failure");
+    const auto retryDelayMs                   = static_cast<std::chrono::milliseconds::rep>(failedTaskbarLayout.taskbarListRetryDelayMs);
+    std::this_thread::sleep_for(std::chrono::milliseconds(retryDelayMs + 50));
+    state.Require(DebugUpdateFileOperationsPopupTaskbarProgress(popup), L"Failed to drive the taskbar-list retry after the forced failure.");
+    FileOperationsPopupInternal::PopupLayoutDebugSnapshot retryTaskbarLayout{};
+    retryTaskbarLayout.taskId = taskId.value();
+    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, retryTaskbarLayout), L"Failed to capture taskbar state after the taskbar-list retry.");
+    state.Require(retryTaskbarLayout.taskbarButtonReady, L"Taskbar-list retry must preserve the ready taskbar-button state.");
     state.Require(retryTaskbarLayout.taskbarListAttemptCount > attemptsAfterForcedFailure,
                   std::format(L"Taskbar-list initialization should retry after a transient failure; attempts before={}, after={}.",
                               attemptsAfterForcedFailure,
@@ -5631,15 +6240,217 @@ struct FileOperationsPopupTestFixture final
                                currentPopupRect.bottom - currentPopupRect.top,
                                SWP_NOZORDER | SWP_NOACTIVATE) != FALSE,
                   L"Failed to resize popup to the supported minimum width.");
-    PumpPendingMessages();
-
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot layout{};
-    layout.taskId = taskId.value();
-    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, layout), L"Failed to capture file-operations popup layout snapshot.");
+    const auto settledLayoutDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(2000ms);
+    size_t settledLayoutSamples      = 0u;
+    bool capturedLayoutSnapshot      = false;
+    while (std::chrono::steady_clock::now() < settledLayoutDeadline)
+    {
+        PumpPendingMessages();
+        FileOperationsPopupInternal::PopupLayoutDebugSnapshot candidate{};
+        candidate.taskId = taskId.value();
+        if (DebugGetFileOperationsPopupLayoutSnapshot(popup, candidate))
+        {
+            layout                 = candidate;
+            capturedLayoutSnapshot = true;
+            if (! candidate.layoutMotionActive)
+            {
+                ++settledLayoutSamples;
+                if (settledLayoutSamples >= 1u)
+                {
+                    break;
+                }
+            }
+            else
+            {
+                settledLayoutSamples = 0u;
+            }
+        }
+        else
+        {
+            settledLayoutSamples = 0u;
+        }
+        std::this_thread::sleep_for(20ms);
+    }
+    state.Require(capturedLayoutSnapshot, L"Failed to capture file-operations popup layout snapshot.");
+    state.Require(settledLayoutSamples >= 1u,
+                  std::format(L"File-operations popup layout motion did not settle before minimum-width validation "
+                              L"(autoResize={}, selectedTaskHeight={}, completedGroup={}).",
+                              layout.autoResizeMotionActive,
+                              layout.selectedTaskHeightMotionActive,
+                              layout.completedGroupLayoutMotionActive));
     if (! state.failure.empty())
     {
         return false;
     }
+
+    Trace(L"FileOpsPopupPresentation: taskbar validation complete");
+
+    state.Require(layout.usesDxUiHost, L"File Operations popup should expose its interactive surface through a DxUi WindowHost.");
+    state.Require(layout.hostedActionControlCount > 0u, L"File Operations popup should publish hosted action controls.");
+    state.Require(layout.hostedProgressControlCount == 0u, L"A conflict card excluded from the active cohort must not publish hosted progress controls.");
+    state.Require(layout.hostedGraphControlCount == 0u, L"A conflict card should withhold the throughput graph while preserving hosted actions.");
+    state.Require(layout.hostedAccessibilityNotificationCount > 0u, L"Initial needs-attention conflict should raise a hosted UIA notification.");
+    state.Require(layout.taskCardAnimationEnabled && layout.hostedProgressAnimationEnabled,
+                  L"Normal-motion popup should retain its card-height and hosted-progress easing capabilities.");
+    state.Require(WindowExposesUiaProvider(popup), L"Hosted File Operations popup should answer WM_GETOBJECT with a UIA provider.");
+
+    Trace(L"FileOpsPopupPresentation: UIA traversal begin");
+
+    {
+        wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> popupRootProvider;
+        popupRootProvider.attach(RedSalamander::DxUi::CreateWindowHostAccessibilityProvider(popup));
+        state.Require(popupRootProvider != nullptr, L"Failed to create the hosted File Operations UIA root provider.");
+        wil::com_ptr_nothrow<IRawElementProviderFragment> popupRootFragment;
+        if (popupRootProvider)
+        {
+            state.Require(SUCCEEDED(popupRootProvider.query_to(popupRootFragment.put())) && popupRootFragment != nullptr,
+                          L"Hosted File Operations UIA root should expose fragment navigation.");
+        }
+
+        size_t uiaActionCount   = 0u;
+        size_t uiaProgressCount = 0u;
+        size_t uiaGraphCount    = 0u;
+        wil::com_ptr_nothrow<IRawElementProviderSimple> aggregateProgressProvider;
+        wil::com_ptr_nothrow<IRawElementProviderSimple> optionsProvider;
+        if (popupRootFragment)
+        {
+            constexpr size_t kMaximumUiaFragments = 512u;
+            constexpr size_t kMaximumUiaSiblings  = 256u;
+            size_t visitedFragmentCount           = 0u;
+            std::vector<wil::com_ptr_nothrow<IRawElementProviderFragment>> pending;
+            pending.push_back(std::move(popupRootFragment));
+            while (! pending.empty() && visitedFragmentCount < kMaximumUiaFragments)
+            {
+                ++visitedFragmentCount;
+                wil::com_ptr_nothrow<IRawElementProviderFragment> current = std::move(pending.back());
+                pending.pop_back();
+                wil::com_ptr_nothrow<IRawElementProviderSimple> simple;
+                if (current && SUCCEEDED(current.query_to(simple.put())) && simple)
+                {
+                    VARIANT automationId{};
+                    VariantInit(&automationId);
+                    if (SUCCEEDED(simple->GetPropertyValue(UIA_AutomationIdPropertyId, &automationId)) && automationId.vt == VT_BSTR)
+                    {
+                        const std::wstring_view id = automationId.bstrVal ? std::wstring_view(automationId.bstrVal) : std::wstring_view{};
+                        if (id.starts_with(L"FileOperations.Action."))
+                        {
+                            ++uiaActionCount;
+                        }
+                        else if (id == L"FileOperations.Aggregate.Progress" || (id.starts_with(L"FileOperations.Task.") && id.ends_with(L".Progress")))
+                        {
+                            ++uiaProgressCount;
+                            if (id == L"FileOperations.Aggregate.Progress")
+                            {
+                                aggregateProgressProvider = simple;
+                            }
+                        }
+                        else if (id.starts_with(L"FileOperations.Task.") && id.ends_with(L".ThroughputGraph"))
+                        {
+                            ++uiaGraphCount;
+                        }
+
+                        const std::wstring expectedOptionsId =
+                            std::format(L"FileOperations.Action.{}.0.0", static_cast<uint32_t>(FileOperationsPopupInternal::PopupHitTest::Kind::FooterOptions));
+                        if (id == expectedOptionsId)
+                        {
+                            optionsProvider = simple;
+                        }
+                    }
+                    VariantClear(&automationId);
+                }
+
+                wil::com_ptr_nothrow<IRawElementProviderFragment> child;
+                if (! current || FAILED(current->Navigate(NavigateDirection_FirstChild, child.put())))
+                {
+                    continue;
+                }
+                size_t siblingCount = 0u;
+                while (child && siblingCount < kMaximumUiaSiblings)
+                {
+                    ++siblingCount;
+                    wil::com_ptr_nothrow<IRawElementProviderFragment> next;
+                    static_cast<void>(child->Navigate(NavigateDirection_NextSibling, next.put()));
+                    pending.push_back(std::move(child));
+                    child = std::move(next);
+                }
+                state.Require(siblingCount < kMaximumUiaSiblings, L"Hosted File Operations UIA sibling traversal exceeded its deterministic safety budget.");
+            }
+            state.Require(visitedFragmentCount < kMaximumUiaFragments,
+                          L"Hosted File Operations UIA fragment traversal exceeded its deterministic safety budget.");
+        }
+        Trace(
+            std::format(L"FileOpsPopupPresentation: UIA traversal complete actions={} progress={} graphs={}", uiaActionCount, uiaProgressCount, uiaGraphCount));
+        state.Require(
+            uiaActionCount == layout.hostedActionControlCount,
+            std::format(L"UIA action count should match the hosted control tree; UIA={}, hosted={}.", uiaActionCount, layout.hostedActionControlCount));
+        state.Require(
+            uiaProgressCount == layout.hostedProgressControlCount,
+            std::format(L"UIA progress count should match the hosted control tree; UIA={}, hosted={}.", uiaProgressCount, layout.hostedProgressControlCount));
+        state.Require(uiaGraphCount == layout.hostedGraphControlCount,
+                      std::format(L"UIA graph count should match the hosted control tree; UIA={}, hosted={}.", uiaGraphCount, layout.hostedGraphControlCount));
+        state.Require(aggregateProgressProvider == nullptr, L"An actionable conflict must not expose a stale aggregate progress provider through UIA.");
+        state.Require(optionsProvider != nullptr, L"Hosted File Operations controls should publish the footer Options action through UIA.");
+
+        wil::com_ptr_nothrow<IUnknown> rangePattern;
+        if (aggregateProgressProvider)
+        {
+            state.Require(SUCCEEDED(aggregateProgressProvider->GetPatternProvider(UIA_RangeValuePatternId, rangePattern.put())) && rangePattern != nullptr,
+                          L"Aggregate progress should expose the UIA RangeValue pattern.");
+        }
+        wil::com_ptr_nothrow<IRangeValueProvider> rangeValue;
+        if (rangePattern)
+        {
+            state.Require(SUCCEEDED(rangePattern.query_to(rangeValue.put())) && rangeValue != nullptr,
+                          L"Aggregate progress RangeValue pattern should be queryable.");
+        }
+        if (rangeValue)
+        {
+            BOOL readOnly  = FALSE;
+            double minimum = -1.0;
+            double maximum = -1.0;
+            state.Require(SUCCEEDED(rangeValue->get_IsReadOnly(&readOnly)) && readOnly == TRUE, L"Aggregate progress RangeValue should be read-only.");
+            state.Require(SUCCEEDED(rangeValue->get_Minimum(&minimum)) && SUCCEEDED(rangeValue->get_Maximum(&maximum)) && minimum == 0.0 && maximum == 100.0,
+                          L"Aggregate progress RangeValue should publish the 0..100 range.");
+        }
+
+        wil::com_ptr_nothrow<IUnknown> optionsInvokePattern;
+        if (optionsProvider)
+        {
+            state.Require(SUCCEEDED(optionsProvider->GetPatternProvider(UIA_InvokePatternId, optionsInvokePattern.put())) && optionsInvokePattern != nullptr,
+                          L"Hosted File Operations options action should expose UIA Invoke.");
+        }
+        wil::com_ptr_nothrow<IInvokeProvider> optionsInvoke;
+        if (optionsInvokePattern)
+        {
+            state.Require(SUCCEEDED(optionsInvokePattern.query_to(optionsInvoke.put())) && optionsInvoke != nullptr,
+                          L"Hosted File Operations options Invoke pattern should be queryable.");
+        }
+    }
+    Trace(L"FileOpsPopupPresentation: UIA providers released");
+
+    SetFocus(popup);
+    SendMessageW(popup, WM_KEYDOWN, VK_TAB, 0);
+    PumpPendingMessages();
+    FileOperationsPopupInternal::PopupLayoutDebugSnapshot firstTabLayout{};
+    firstTabLayout.taskId = taskId.value();
+    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, firstTabLayout) &&
+                      firstTabLayout.hostedFocusedAutomationId.starts_with(L"FileOperations.Action."),
+                  L"Tab should move focus into the hosted File Operations action order.");
+    const std::wstring firstFocusedId = firstTabLayout.hostedFocusedAutomationId;
+    SendMessageW(popup, WM_KEYDOWN, VK_TAB, 0);
+    PumpPendingMessages();
+    FileOperationsPopupInternal::PopupLayoutDebugSnapshot secondTabLayout{};
+    secondTabLayout.taskId = taskId.value();
+    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, secondTabLayout) && ! secondTabLayout.hostedFocusedAutomationId.empty() &&
+                      secondTabLayout.hostedFocusedAutomationId != firstFocusedId,
+                  L"A second Tab should advance to the next hosted File Operations action.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    Trace(L"FileOpsPopupPresentation: hosted input validation complete");
 
     const auto layoutHasPrimaryAction = [&](ConflictAction action) noexcept
     {
@@ -5656,10 +6467,20 @@ struct FileOperationsPopupTestFixture final
     state.Require(layout.conflictPrimaryActionCount <= 3u,
                   std::format(L"Conflict prompt should expose at most 3 primary action buttons; saw {}.", layout.conflictPrimaryActionCount));
     state.Require(layoutHasPrimaryAction(ConflictAction::Overwrite), L"Conflict prompt should keep Overwrite as a primary action.");
-    state.Require(layoutHasPrimaryAction(ConflictAction::Skip), L"Conflict prompt should keep Skip as a primary action.");
-    state.Require(layoutHasPrimaryAction(ConflictAction::Cancel), L"Conflict prompt should keep Cancel as a primary action.");
-    state.Require(! layout.conflictMoreVisible, L"Exists conflict prompt should have no More affordance once SkipAll/Retry are gone.");
-    state.Require(layout.conflictOverflowActionCount == 0u, L"Exists conflict prompt should have no overflow actions.");
+    state.Require(layoutHasPrimaryAction(ConflictAction::KeepBoth), L"Conflict prompt should expose Keep Both as a primary action.");
+    state.Require(layoutHasPrimaryAction(ConflictAction::Cancel), L"Conflict prompt should keep its safe Cancel action directly visible.");
+    state.Require(! layoutHasPrimaryAction(ConflictAction::Skip), L"Skip should move to More when visible Cancel occupies the third primary slot.");
+    state.Require(layout.conflictMoreVisible, L"Exists conflict prompt should expose More for its overflow Skip actions.");
+    state.Require(layout.conflictOverflowActionCount == 2u && layout.conflictOverflowActions[0] == static_cast<uint8_t>(ConflictAction::Skip) &&
+                      layout.conflictOverflowActions[1] == static_cast<uint8_t>(ConflictAction::SkipAll),
+                  L"Exists conflict overflow should contain Skip followed by Skip All.");
+    state.Require(layout.conflictDefaultAction == static_cast<uint8_t>(ConflictAction::Cancel) &&
+                      layout.conflictEscapeAction == static_cast<uint8_t>(ConflictAction::Cancel) && layout.conflictButtonsPublishable,
+                  L"Rendered conflict should consume the engine-published Cancel default/Escape action and button state.");
+    state.Require(layout.conflictSkipAllEligible, L"Rendered Exists conflict should preserve engine-published Skip All eligibility.");
+    state.Require(! layout.hostedDefaultAutomationId.empty() && layout.hostedDefaultAutomationId == layout.hostedCancelAutomationId &&
+                      layout.hostedDefaultAutomationId.ends_with(std::format(L".{}", static_cast<uint32_t>(ConflictAction::Cancel))),
+                  L"Hosted default and Escape controls should both map to the published Cancel action.");
     state.Require(layout.conflictApplyToAllVisible, L"Conflict prompt should keep an apply-to-all toggle visible.");
     state.Require(layout.conflictStackedPathRows, L"Conflict prompt should stack labels and full-width source/destination path rows.");
     state.Require(layout.conflictSourceMetadataVisible, L"Conflict prompt should show source metadata beside the stacked source row.");
@@ -5668,21 +6489,20 @@ struct FileOperationsPopupTestFixture final
     state.Require(layout.conflictMetadataDateCompareVisible, L"Conflict prompt should expose source/destination modified-date comparison metadata.");
     state.Require(layout.footerVisibleButtonCount >= 4u,
                   std::format(L"File-operations footer should expose the primary controls; saw {}.", layout.footerVisibleButtonCount));
-    state.Require(layout.footerAutoDismissVisible, L"File-operations footer should expose the auto-dismiss toggle.");
-    state.Require(! layout.footerAutoDismissLabelVisible,
-                  L"Minimum-width footer should hide the auto-dismiss label instead of clipping localized text.");
+    state.Require(! layout.footerAutoDismissVisible && ! layout.footerDensityToggleVisible,
+                  L"File-operations footer should move persistent auto-dismiss and density preferences into Options.");
+    state.Require(layout.footerOptionsVisible && layout.footerOptionsHitTargetActive,
+                  L"File-operations footer should expose a reachable Options overflow action.");
     state.Require(layout.footerDetailsToggleVisible, L"File-operations footer should expose the details collapse toggle.");
     state.Require(layout.footerDetailsToggleRightAligned, L"File-operations footer details collapse chevron should be right-aligned.");
-    state.Require(layout.footerQueueModeSegmentedVisible, L"File-operations footer should expose the segmented new-task mode control.");
-    state.Require(layout.footerQueueHitTargetActive && layout.footerParallelHitTargetActive,
-                  L"Queue and Parallel footer segments should each expose a real hit target.");
-    state.Require(layout.footerDensityToggleVisible, L"File-operations footer should expose the compact/expanded density toggle.");
-    state.Require(layout.footerDensityHitTargetActive, L"File-operations compact-density footer toggle should be reachable through normal hit testing.");
+    state.Require(! layout.footerQueueModeSegmentedVisible && layout.footerQueueModeSelectorVisible && layout.footerQueueModeUsesSelectorChrome,
+                  L"File-operations footer should expose one shared current-value Queue/Parallel selector instead of animated segments.");
+    state.Require(layout.footerQueueModeSelectorHitTargetActive, L"The current Queue/Parallel selector should expose one reliable hit target.");
     state.Require(! layout.popupCompactDensity, L"File-operations popup should start in expanded density for this test.");
     state.Require(! layout.reducedMotionEnabled, L"File-operations popup test theme should force reduced motion off.");
-    state.Require(layout.footerQueueModeAnimationEnabled, L"File-operations footer Queue/Parallel thumb should animate when reduced motion is off.");
+    state.Require(! layout.footerQueueModeAnimationEnabled, L"File-operations footer should not use a sliding Queue/Parallel thumb.");
     state.Require(layout.autoResizeAnimationEnabled, L"File-operations popup should use debounced animated auto-resize when reduced motion is off.");
-    state.Require(layout.footerAggregateProgressVisible, L"File-operations footer should expose aggregate progress.");
+    state.Require(! layout.footerAggregateProgressVisible, L"An actionable conflict excluded from the active cohort must not expose aggregate progress.");
     state.Require(! layout.hasVisibleButtonOverlap, L"File-operations popup rendered overlapping button hit targets.");
     state.Require(layout.taskUnderGraphProgressBarCount == 0u,
                   std::format(L"Conflict prompt should not render under-graph task progress bars; saw {}.", layout.taskUnderGraphProgressBarCount));
@@ -5703,95 +6523,134 @@ struct FileOperationsPopupTestFixture final
     state.Require(layout.globalNeedAttentionCount >= 1u, L"Conflict prompt should increment the global need-attention count.");
     state.Require(layout.taskbarProgressState == static_cast<uint32_t>(TBPF_ERROR),
                   std::format(L"Conflict prompt should map global taskbar progress to TBPF_ERROR; saw {}.", layout.taskbarProgressState));
-    const std::wstring expectedGlobalSummary = FormatStringResource(nullptr,
-                                                                    IDS_FMT_FILEOPS_GLOBAL_STATUS_SUMMARY,
-                                                                    static_cast<unsigned long>(layout.globalRunningCount),
-                                                                    static_cast<unsigned long>(layout.globalWaitingCount),
-                                                                    static_cast<unsigned long>(layout.globalNeedAttentionCount));
-    state.Require(layout.globalSummaryText == expectedGlobalSummary,
-                  L"Global status summary should equal the localized resource formatted from its structured counters.");
-
-    const auto clickFooterSegment = [&](const D2D1_RECT_F& rect) noexcept
+    std::vector<std::wstring> expectedGlobalSummaryParts;
+    if (layout.globalRunningCount > 0u)
     {
-        const int x = static_cast<int>(std::lround((rect.left + rect.right) * 0.5f));
-        const int y = static_cast<int>(std::lround((rect.top + rect.bottom) * 0.5f));
-        const LPARAM point = MAKELPARAM(static_cast<short>(x), static_cast<short>(y));
-        SendMessageW(popup, WM_LBUTTONDOWN, MK_LBUTTON, point);
-        SendMessageW(popup, WM_LBUTTONUP, 0, point);
-        PumpPendingMessages();
-    };
-    const bool queueModeBeforeSegmentClicks = fileOps->GetQueueNewTasks();
-    clickFooterSegment(layout.footerParallelSegmentRect);
-    state.Require(! fileOps->GetQueueNewTasks(), L"Clicking the Parallel segment should apply Parallel mode.");
-    clickFooterSegment(layout.footerParallelSegmentRect);
-    state.Require(! fileOps->GetQueueNewTasks(), L"Clicking the selected Parallel segment should be an idempotent no-op.");
-    clickFooterSegment(layout.footerQueueSegmentRect);
-    state.Require(fileOps->GetQueueNewTasks(), L"Clicking the Queue segment should apply Queue mode.");
-    fileOps->ApplyQueueMode(queueModeBeforeSegmentClicks);
+        expectedGlobalSummaryParts.push_back(
+            FormatStringResource(nullptr, IDS_FMT_FILEOPS_GLOBAL_RUNNING_COUNT, static_cast<unsigned long>(layout.globalRunningCount)));
+    }
+    if (layout.globalWaitingCount > 0u)
+    {
+        expectedGlobalSummaryParts.push_back(
+            FormatStringResource(nullptr, IDS_FMT_FILEOPS_GLOBAL_WAITING_COUNT, static_cast<unsigned long>(layout.globalWaitingCount)));
+    }
+    if (layout.globalNeedAttentionCount > 0u)
+    {
+        expectedGlobalSummaryParts.push_back(
+            FormatStringResource(nullptr, IDS_FMT_FILEOPS_GLOBAL_ATTENTION_COUNT, static_cast<unsigned long>(layout.globalNeedAttentionCount)));
+    }
+    std::wstring expectedGlobalSummary;
+    const std::wstring statusSeparator = LoadStringResource(nullptr, IDS_FILEOPS_GLOBAL_STATUS_SEPARATOR);
+    for (const std::wstring& part : expectedGlobalSummaryParts)
+    {
+        if (! expectedGlobalSummary.empty())
+        {
+            expectedGlobalSummary += statusSeparator;
+        }
+        expectedGlobalSummary += part;
+    }
+    state.Require(layout.globalSummaryText == expectedGlobalSummary, L"Global status summary should equal its localized nonzero structured counters.");
 
+    Trace(L"FileOpsPopupPresentation: footer mode selector validation begin");
+    const bool queueModeBeforeSegmentClicks = fileOps->GetQueueNewTasks();
+    FileOperationsPopupInternal::PopupSelfTestInvoke parallelMode{};
+    parallelMode.kind = FileOperationsPopupInternal::PopupHitTest::Kind::FooterQueueMode;
+    parallelMode.data = 2u;
+    state.Require(DebugInvokeFileOperationsPopup(popup, parallelMode), L"Failed to select Parallel through the footer mode command.");
+    state.Require(! fileOps->GetQueueNewTasks(), L"Selecting Parallel should apply Parallel mode.");
+    state.Require(DebugInvokeFileOperationsPopup(popup, parallelMode), L"Failed to repeat the Parallel footer mode command.");
+    state.Require(! fileOps->GetQueueNewTasks(), L"Selecting the current Parallel mode should be an idempotent no-op.");
+    FileOperationsPopupInternal::PopupSelfTestInvoke queueMode = parallelMode;
+    queueMode.data                                             = 1u;
+    state.Require(DebugInvokeFileOperationsPopup(popup, queueMode), L"Failed to select Queue through the footer mode command.");
+    state.Require(fileOps->GetQueueNewTasks(), L"Selecting Queue should apply Queue mode.");
+    fileOps->ApplyQueueMode(queueModeBeforeSegmentClicks);
+    Trace(L"FileOpsPopupPresentation: footer mode selector validation complete");
+
+    Trace(L"FileOpsPopupPresentation: minimized taskbar validation begin");
     ShowWindow(popup, SW_MINIMIZE);
+    Trace(L"FileOpsPopupPresentation: ShowWindow minimize returned");
     state.Require(IsIconic(popup) != FALSE, L"File-operations popup did not enter the minimized state for taskbar timer validation.");
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot beforeMinimizedTimer{};
     beforeMinimizedTimer.taskId = taskId.value();
     state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, beforeMinimizedTimer),
                   L"Failed to capture minimized popup taskbar state before the timer tick.");
+    Trace(L"FileOpsPopupPresentation: minimized snapshot captured");
     SendMessageW(popup, WM_TIMER, 1u, 0);
+    Trace(L"FileOpsPopupPresentation: minimized timer returned");
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot minimizedLayout{};
     minimizedLayout.taskId = taskId.value();
     state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, minimizedLayout), L"Failed to read minimized popup taskbar update state.");
     state.Require(minimizedLayout.taskbarUpdateCount > beforeMinimizedTimer.taskbarUpdateCount,
                   L"Popup timer should update taskbar progress while the window is minimized.");
     ShowWindow(popup, SW_RESTORE);
+    Trace(L"FileOpsPopupPresentation: ShowWindow restore returned");
     PumpPendingMessages();
+    Trace(L"FileOpsPopupPresentation: minimized taskbar validation complete");
 
+    Trace(L"FileOpsPopupPresentation: density persistence validation begin");
     FileOperationsPopupInternal::PopupSelfTestInvoke densityToggle{};
-    densityToggle.kind = FileOperationsPopupInternal::PopupHitTest::Kind::FooterDensity;
-    const DWORD settingsUiThreadId = GetCurrentThreadId();
+    densityToggle.kind                                                                  = FileOperationsPopupInternal::PopupHitTest::Kind::FooterDensity;
+    const DWORD settingsUiThreadId                                                      = GetCurrentThreadId();
     const FolderWindow::FileOperationState::SettingsSaveDebugSnapshot saveBeforeDensity = fileOps->DebugGetSettingsSaveSnapshotForSelfTest();
     state.Require(DebugInvokeFileOperationsPopup(popup, densityToggle), L"Failed to invoke the footer compact-density toggle.");
     const FolderWindow::FileOperationState::SettingsSaveDebugSnapshot saveQueuedByDensity = fileOps->DebugGetSettingsSaveSnapshotForSelfTest();
-    state.Require(saveQueuedByDensity.queuedGeneration > saveBeforeDensity.queuedGeneration,
-                  L"Compact-density input should enqueue a settings snapshot.");
+    state.Require(saveQueuedByDensity.queuedGeneration > saveBeforeDensity.queuedGeneration, L"Compact-density input should enqueue a settings snapshot.");
     state.Require(saveQueuedByDensity.lastQueueThreadId == settingsUiThreadId,
                   L"Compact-density input should capture its immutable settings snapshot on the UI thread.");
+    Trace(L"FileOpsPopupPresentation: density persistence flush begin");
     state.Require(fileOps->DebugFlushPendingSettingsSaveForSelfTest(static_cast<DWORD>(SelfTest::Scale(10'000ms).count())),
                   L"Compact-density asynchronous settings write did not complete within the bounded test deadline.");
+    Trace(L"FileOpsPopupPresentation: density persistence flush complete");
     const FolderWindow::FileOperationState::SettingsSaveDebugSnapshot saveAfterDensity = fileOps->DebugGetSettingsSaveSnapshotForSelfTest();
+    Trace(L"FileOpsPopupPresentation: density persistence snapshot captured");
     state.Require(saveAfterDensity.completedGeneration >= saveQueuedByDensity.queuedGeneration,
                   L"Compact-density asynchronous settings write did not persist the queued generation.");
     state.Require(saveAfterDensity.lastSaveThreadId != 0 && saveAfterDensity.lastSaveThreadId != settingsUiThreadId,
                   L"Compact-density settings/schema persistence must execute off the UI thread.");
     PumpPendingMessages();
+    Trace(L"FileOpsPopupPresentation: compact layout snapshot begin");
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot compactLayout{};
     compactLayout.taskId = taskId.value();
     state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, compactLayout), L"Failed to capture compact-density file-operation layout snapshot.");
+    Trace(L"FileOpsPopupPresentation: compact layout snapshot complete");
     state.Require(compactLayout.popupCompactDensity, L"Compact-density footer toggle should persist compact popup density.");
     state.Require(compactLayout.taskCompactRow, L"Compact-density popup should render the task as a compact row.");
     state.Require(! compactLayout.taskCollapsed, L"Compact-density default collapse should not overwrite the per-card collapse state.");
     FileOperationsPopupInternal::PopupSelfTestInvoke compactExpandInvoke{};
     compactExpandInvoke.kind   = FileOperationsPopupInternal::PopupHitTest::Kind::TaskToggleCollapse;
     compactExpandInvoke.taskId = taskId.value();
+    Trace(L"FileOpsPopupPresentation: compact row expand invoke begin");
     state.Require(DebugInvokeFileOperationsPopup(popup, compactExpandInvoke), L"Failed to expand the compact-density task row with the card chevron.");
+    Trace(L"FileOpsPopupPresentation: compact row expand invoke complete");
     PumpPendingMessages();
+    Trace(L"FileOpsPopupPresentation: compact expanded snapshot begin");
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot compactExpandedLayout{};
     compactExpandedLayout.taskId = taskId.value();
     state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, compactExpandedLayout),
                   L"Failed to capture compact-density expanded file-operation layout snapshot.");
+    Trace(L"FileOpsPopupPresentation: compact expanded snapshot complete");
     state.Require(compactExpandedLayout.popupCompactDensity, L"Expanding the compact-density row should keep compact density enabled.");
     state.Require(! compactExpandedLayout.taskCompactRow, L"Compact-density task chevron should expand the task row.");
     state.Require(! compactExpandedLayout.taskCollapsed, L"Compact-density expanded task should store an explicit expanded state.");
     state.Require(compactExpandedLayout.conflictApplyToAllVisible, L"Expanded compact-density conflict card should restore conflict actions.");
+    Trace(L"FileOpsPopupPresentation: expanded density restore invoke begin");
     state.Require(DebugInvokeFileOperationsPopup(popup, densityToggle), L"Failed to restore expanded-density file-operation layout.");
+    Trace(L"FileOpsPopupPresentation: expanded density restore invoke complete");
     PumpPendingMessages();
+    Trace(L"FileOpsPopupPresentation: expanded density snapshot begin");
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot expandedDensityLayout{};
     expandedDensityLayout.taskId = taskId.value();
     state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, expandedDensityLayout), L"Failed to capture restored expanded-density layout snapshot.");
+    Trace(L"FileOpsPopupPresentation: expanded density snapshot complete");
     state.Require(! expandedDensityLayout.popupCompactDensity, L"Second density toggle should restore expanded popup density.");
+    Trace(L"FileOpsPopupPresentation: density persistence validation complete");
     if (state.failure.empty())
     {
-        const AppTheme motionOnRestoreTheme = g_folderWindow.GetTheme();
-        const auto restoreMotionTheme       = wil::scope_exit([&]() noexcept { g_folderWindow.ApplyTheme(motionOnRestoreTheme); });
-        AppTheme reducedMotionTheme         = motionOnRestoreTheme;
+        Trace(L"FileOpsPopupPresentation: reduced-motion validation begin");
+        const AppTheme motionOnRestoreTheme      = g_folderWindow.GetTheme();
+        const auto restoreMotionTheme            = wil::scope_exit([&]() noexcept { g_folderWindow.ApplyTheme(motionOnRestoreTheme); });
+        AppTheme reducedMotionTheme              = motionOnRestoreTheme;
         reducedMotionTheme.reducedMotionOverride = true;
         g_folderWindow.ApplyTheme(reducedMotionTheme);
         PumpPendingMessages();
@@ -5803,12 +6662,16 @@ struct FileOperationsPopupTestFixture final
         state.Require(reducedMotionLayout.reducedMotionEnabled, L"Reduced-motion popup snapshot should reflect the theme override.");
         state.Require(! reducedMotionLayout.autoResizeAnimationEnabled, L"Reduced motion should disable animated popup auto-resize.");
         state.Require(! reducedMotionLayout.footerQueueModeAnimationEnabled, L"Reduced motion should disable Queue/Parallel thumb animation.");
+        state.Require(! reducedMotionLayout.taskCardAnimationEnabled && ! reducedMotionLayout.hostedProgressAnimationEnabled,
+                      L"Reduced motion should disable hosted card and progress easing.");
+        Trace(L"FileOpsPopupPresentation: reduced-motion validation complete");
     }
     if (state.failure.empty())
     {
-        const AppTheme motionOnRestoreTheme = g_folderWindow.GetTheme();
-        const auto restoreHighContrastTheme = wil::scope_exit([&]() noexcept { g_folderWindow.ApplyTheme(motionOnRestoreTheme); });
-        AppTheme highContrastTheme = ResolveAppTheme(ThemeMode::HighContrast, L"fileops-popup-high-contrast-status-selftest");
+        Trace(L"FileOpsPopupPresentation: high-contrast validation begin");
+        const AppTheme motionOnRestoreTheme     = g_folderWindow.GetTheme();
+        const auto restoreHighContrastTheme     = wil::scope_exit([&]() noexcept { g_folderWindow.ApplyTheme(motionOnRestoreTheme); });
+        AppTheme highContrastTheme              = ResolveAppTheme(ThemeMode::HighContrast, L"fileops-popup-high-contrast-status-selftest");
         highContrastTheme.reducedMotionOverride = false;
         g_folderWindow.ApplyTheme(highContrastTheme);
         PumpPendingMessages();
@@ -5827,15 +6690,17 @@ struct FileOperationsPopupTestFixture final
                       std::format(L"High-contrast conflict prompt should preserve Warning tone semantics; saw {}.", highContrastLayout.taskStatusVisualTone));
 
         FileOperationsPopupInternal::CaptionGlyphDebugSnapshot captionGlyph{};
-        state.Require(DebugGetFileOperationsPopupCaptionGlyphSnapshot(popup, captionGlyph),
-                      L"Failed to capture high-contrast caption glyph snapshot.");
+        state.Require(DebugGetFileOperationsPopupCaptionGlyphSnapshot(popup, captionGlyph), L"Failed to capture high-contrast caption glyph snapshot.");
         state.Require(captionGlyph.highContrastSuppressed && ! captionGlyph.statusVisible,
                       L"High-contrast popup should suppress the non-client caption status glyph while card status text/glyph remains visible.");
+        Trace(L"FileOpsPopupPresentation: high-contrast validation complete");
     }
     if (! state.failure.empty())
     {
         return false;
     }
+
+    Trace(L"FileOpsPopupPresentation: presentation and theme validation complete");
 
     RECT expandedPopupRectBeforeFooterOnly{};
     state.Require(GetWindowRect(popup, &expandedPopupRectBeforeFooterOnly) != FALSE,
@@ -5852,15 +6717,17 @@ struct FileOperationsPopupTestFixture final
     state.Require(footerOnlyLayout.footerOnly, L"Footer details collapse should persist the footer-only popup state.");
     state.Require(footerOnlyLayout.footerVisibleButtonCount >= 4u,
                   std::format(L"Footer-only popup should keep the footer controls visible; saw {}.", footerOnlyLayout.footerVisibleButtonCount));
-    state.Require(footerOnlyLayout.footerAutoDismissVisible, L"Footer-only popup should keep the auto-dismiss toggle visible.");
-    state.Require(footerOnlyLayout.footerDensityToggleVisible, L"Footer-only popup should keep the density toggle visible.");
+    state.Require(footerOnlyLayout.footerOptionsVisible && footerOnlyLayout.footerOptionsHitTargetActive,
+                  L"Footer-only popup should keep the persistent-preferences Options action visible.");
+    state.Require(footerOnlyLayout.footerQueueModeSelectorVisible && footerOnlyLayout.footerQueueModeUsesSelectorChrome &&
+                      footerOnlyLayout.footerQueueModeSelectorHitTargetActive,
+                  L"Footer-only popup should keep the shared current-value Queue/Parallel selector visible.");
     state.Require(footerOnlyLayout.footerDetailsToggleRightAligned, L"Footer-only popup should keep the details chevron right-aligned.");
-    state.Require(footerOnlyLayout.footerAggregateProgressVisible, L"Footer-only popup should keep aggregate progress visible.");
+    state.Require(! footerOnlyLayout.footerAggregateProgressVisible, L"Footer-only mode must not reintroduce aggregate progress for an actionable conflict.");
     state.Require(! footerOnlyLayout.hasVisibleButtonOverlap, L"Footer-only popup rendered overlapping button hit targets.");
     RECT footerOnlyPopupRect{};
     state.Require(GetWindowRect(popup, &footerOnlyPopupRect) != FALSE, L"Failed to capture footer-only popup placement.");
-    state.Require((footerOnlyPopupRect.bottom - footerOnlyPopupRect.top) <
-                      (expandedPopupRectBeforeFooterOnly.bottom - expandedPopupRectBeforeFooterOnly.top),
+    state.Require((footerOnlyPopupRect.bottom - footerOnlyPopupRect.top) < (expandedPopupRectBeforeFooterOnly.bottom - expandedPopupRectBeforeFooterOnly.top),
                   L"Footer-only popup should shrink to its footer band.");
     if (! state.failure.empty())
     {
@@ -5876,8 +6743,7 @@ struct FileOperationsPopupTestFixture final
     state.Require(popup != nullptr && IsWindow(popup) != FALSE, L"File-operations popup did not recreate in footer-only mode.");
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot recreatedFooterOnlyLayout{};
     recreatedFooterOnlyLayout.taskId = taskId.value();
-    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, recreatedFooterOnlyLayout),
-                  L"Failed to capture recreated footer-only popup layout.");
+    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, recreatedFooterOnlyLayout), L"Failed to capture recreated footer-only popup layout.");
     state.Require(recreatedFooterOnlyLayout.footerOnly, L"Recreated popup should retain the persisted footer-only state.");
     if (! state.failure.empty())
     {
@@ -5895,8 +6761,7 @@ struct FileOperationsPopupTestFixture final
     state.Require(! restoredLayout.footerOnly, L"Restoring details should clear the footer-only popup state.");
     state.Require(restoredLayout.conflictApplyToAllVisible, L"Restored conflict prompt should show the apply-to-all toggle.");
     RECT restoredExpandedPopupRect{};
-    state.Require(GetWindowRect(popup, &restoredExpandedPopupRect) != FALSE,
-                  L"Failed to capture expanded popup placement after recreation.");
+    state.Require(GetWindowRect(popup, &restoredExpandedPopupRect) != FALSE, L"Failed to capture expanded popup placement after recreation.");
     constexpr LONG kPlacementTolerancePx = 4;
     state.Require(std::abs(restoredExpandedPopupRect.left - expandedPopupRectBeforeFooterOnly.left) <= kPlacementTolerancePx &&
                       std::abs(restoredExpandedPopupRect.top - expandedPopupRectBeforeFooterOnly.top) <= kPlacementTolerancePx &&
@@ -5907,6 +6772,7 @@ struct FileOperationsPopupTestFixture final
     {
         return false;
     }
+    Trace(L"FileOpsPopupPresentation: footer-only recreation validation complete");
     return true;
 }
 
@@ -5914,10 +6780,10 @@ struct FileOperationsPopupTestFixture final
 {
     using namespace std::chrono_literals;
     using ConflictAction = FolderWindow::FileOperationState::Task::ConflictAction;
-    CaseState& state   = fixture.state;
-    const HWND popup   = fixture.popup;
-    const auto& taskId = fixture.taskId;
-    const auto& dest   = fixture.dest;
+    CaseState& state     = fixture.state;
+    const HWND popup     = fixture.popup;
+    const auto& taskId   = fixture.taskId;
+    const auto& dest     = fixture.dest;
 
     // Skip-everything is expressed as All-similar + Skip (SkipAll left the prompt entirely).
     FileOperationsPopupInternal::PopupSelfTestInvoke applyToAllToggle{};
@@ -5926,10 +6792,10 @@ struct FileOperationsPopupTestFixture final
     state.Require(DebugInvokeFileOperationsPopup(popup, applyToAllToggle), L"Failed to toggle the conflict prompt's All-similar checkbox.");
 
     FileOperationsPopupInternal::PopupSelfTestInvoke skipInvoke{};
-    skipInvoke.kind   = FileOperationsPopupInternal::PopupHitTest::Kind::TaskConflictAction;
+    skipInvoke.kind   = FileOperationsPopupInternal::PopupHitTest::Kind::TaskConflictMore;
     skipInvoke.taskId = taskId.value();
     skipInvoke.data   = static_cast<uint32_t>(ConflictAction::Skip);
-    state.Require(DebugInvokeFileOperationsPopup(popup, skipInvoke), L"Failed to invoke Skip with All-similar checked.");
+    state.Require(DebugInvokeFileOperationsPopup(popup, skipInvoke), L"Failed to invoke overflow Skip with All-similar checked.");
 
     const auto completionDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
     bool conflictResolved         = false;
@@ -5976,25 +6842,94 @@ struct FileOperationsPopupTestFixture final
     return true;
 }
 
+[[nodiscard]] bool ResolveInitialFileOperationsPopupConflictWithKeepBoth(FileOperationsPopupTestFixture& fixture) noexcept
+{
+    using namespace std::chrono_literals;
+    using ConflictAction                          = FolderWindow::FileOperationState::Task::ConflictAction;
+    CaseState& state                              = fixture.state;
+    const std::filesystem::path uniqueDestination = fixture.destDir / L"payload (2).txt";
+    FileOperationsPopupInternal::PopupLayoutDebugSnapshot beforeLayout{};
+    beforeLayout.taskId = fixture.taskId.value();
+    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, beforeLayout),
+                  L"Failed to capture the UIA notification count before Keep Both completion.");
+
+    FileOperationsPopupInternal::PopupSelfTestInvoke keepBothInvoke{};
+    keepBothInvoke.kind   = FileOperationsPopupInternal::PopupHitTest::Kind::TaskConflictAction;
+    keepBothInvoke.taskId = fixture.taskId.value();
+    keepBothInvoke.data   = static_cast<uint32_t>(ConflictAction::KeepBoth);
+    state.Require(DebugInvokeFileOperationsPopup(fixture.popup, keepBothInvoke),
+                  L"Failed to invoke Keep Both through the hosted File Operations conflict controls.");
+
+    const auto finishedDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    bool taskFinished           = false;
+    while (std::chrono::steady_clock::now() < finishedDeadline)
+    {
+        PumpPendingMessages();
+        FileOperationsPopupInternal::TaskSnapshot completed{};
+        if (DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, fixture.taskId.value(), completed) && completed.finished)
+        {
+            taskFinished = true;
+            break;
+        }
+        std::this_thread::sleep_for(20ms);
+    }
+
+    state.Require(taskFinished, L"Keep Both copy did not complete within the bounded deadline.");
+    state.Require(TextFileEqualsForFileOpsPrompt(fixture.dest, "existing payload"), L"Keep Both must preserve the original colliding destination.");
+    state.Require(TextFileEqualsForFileOpsPrompt(uniqueDestination, "new payload"), L"Keep Both must copy to the first available provider-aware sibling name.");
+    FileOperationsPopupInternal::PopupLayoutDebugSnapshot completedLayout{};
+    completedLayout.taskId          = fixture.taskId.value();
+    const auto notificationDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(2000ms);
+    bool completionAnnounced        = false;
+    while (std::chrono::steady_clock::now() < notificationDeadline)
+    {
+        PumpPendingMessages();
+        if (DebugGetFileOperationsPopupLayoutSnapshot(fixture.popup, completedLayout) &&
+            completedLayout.hostedAccessibilityNotificationCount > beforeLayout.hostedAccessibilityNotificationCount)
+        {
+            completionAnnounced = true;
+            break;
+        }
+        std::this_thread::sleep_for(20ms);
+    }
+    state.Require(completionAnnounced, L"Task completion should raise a hosted UIA notification after the needs-attention announcement.");
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool ValidateFileOperationsCompletedGroupAndNavigation(FileOperationsPopupTestFixture& fixture) noexcept
 {
     using namespace std::chrono_literals;
-    using ConflictAction = FolderWindow::FileOperationState::Task::ConflictAction;
+    using ConflictAction                                 = FolderWindow::FileOperationState::Task::ConflictAction;
     constexpr uint32_t kCompletedActionExportIssues      = 2u;
     constexpr uint32_t kCompletedActionFailedItems       = 3u;
     constexpr uint32_t kCompletedActionOpenDestination   = 4u;
     constexpr uint32_t kCompletedActionRevealDestination = 5u;
-    CaseState& state                = fixture.state;
-    auto* fileOps                   = fixture.fileOps;
-    const HWND popup                = fixture.popup;
-    const auto& taskId              = fixture.taskId;
-    const auto& sourceDir           = fixture.sourceDir;
-    const auto& destDir             = fixture.destDir;
-    const auto& leftFileSystem      = fixture.leftFileSystem;
+    CaseState& state                                     = fixture.state;
+    auto* fileOps                                        = fixture.fileOps;
+    const HWND popup                                     = fixture.popup;
+    const auto& taskId                                   = fixture.taskId;
+    const auto& sourceDir                                = fixture.sourceDir;
+    const auto& destDir                                  = fixture.destDir;
+    const auto& leftFileSystem                           = fixture.leftFileSystem;
 
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot completedLayout{};
-    completedLayout.taskId = taskId.value();
-    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, completedLayout), L"Failed to capture completed file-operation layout snapshot.");
+    completedLayout.taskId          = taskId.value();
+    const auto autoCollapseDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(2000ms);
+    bool collapseObserved           = false;
+    while (std::chrono::steady_clock::now() < autoCollapseDeadline)
+    {
+        PumpPendingMessages();
+        completedLayout        = {};
+        completedLayout.taskId = taskId.value();
+        if (DebugGetFileOperationsPopupLayoutSnapshot(popup, completedLayout) && completedLayout.taskAutoCollapsedOnCompletion &&
+            completedLayout.taskCompactRow && completedLayout.taskCompactProgressVisible && completedLayout.completedAutoCollapsedCount >= 1u)
+        {
+            collapseObserved = true;
+            break;
+        }
+        std::this_thread::sleep_for(20ms);
+    }
+    state.Require(collapseObserved, L"Failed to observe the completed file-operation layout after its UI-thread auto-collapse transition.");
     state.Require(completedLayout.taskAutoCollapsedOnCompletion, L"Completed diagnostic task should auto-collapse when it first finishes.");
     state.Require(completedLayout.taskCompactRow, L"Auto-collapsed completed diagnostic task should render as a compact row.");
     state.Require(completedLayout.taskCompactProgressVisible, L"Auto-collapsed completed diagnostic task should keep compact progress visible.");
@@ -6005,16 +6940,49 @@ struct FileOperationsPopupTestFixture final
         return false;
     }
 
-    state.Require(fixture.ExpandTaskIfCollapsed(taskId.value(), L"completed diagnostic"),
-                  L"Failed to expand completed diagnostic task before action checks.");
+    state.Require(fixture.ExpandTaskIfCollapsed(taskId.value(), L"completed diagnostic"), L"Failed to expand completed diagnostic task before action checks.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    completedLayout = {};
-    completedLayout.taskId = taskId.value();
-    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, completedLayout), L"Failed to capture expanded completed file-operation layout snapshot.");
+    completedLayout                   = {};
+    completedLayout.taskId            = taskId.value();
+    const auto expandedLayoutDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(2000ms);
+    D2D1_RECT_F previousMoreRect{};
+    size_t stableExpandedLayoutSamples = 0u;
+    bool havePreviousExpandedLayout    = false;
+    bool expandedLayoutSettled         = false;
+    while (std::chrono::steady_clock::now() < expandedLayoutDeadline)
+    {
+        PumpPendingMessages();
+        FileOperationsPopupInternal::PopupLayoutDebugSnapshot candidate{};
+        candidate.taskId = taskId.value();
+        if (DebugGetFileOperationsPopupLayoutSnapshot(popup, candidate) && ! candidate.taskCompactRow && candidate.completedDiagnosticsMoreButtonRectVisible)
+        {
+            const D2D1_RECT_F currentMoreRect = candidate.completedDiagnosticsMoreButtonRect;
+            const bool sameButtonGeometry     = havePreviousExpandedLayout && std::abs(currentMoreRect.left - previousMoreRect.left) <= 0.01f &&
+                                                std::abs(currentMoreRect.top - previousMoreRect.top) <= 0.01f &&
+                                                std::abs(currentMoreRect.right - previousMoreRect.right) <= 0.01f &&
+                                                std::abs(currentMoreRect.bottom - previousMoreRect.bottom) <= 0.01f;
+            stableExpandedLayoutSamples       = sameButtonGeometry ? stableExpandedLayoutSamples + 1u : 0u;
+            completedLayout                   = candidate;
+            previousMoreRect                  = currentMoreRect;
+            havePreviousExpandedLayout        = true;
+            if (stableExpandedLayoutSamples >= 3u)
+            {
+                expandedLayoutSettled = true;
+                break;
+            }
+        }
+        else
+        {
+            stableExpandedLayoutSamples = 0u;
+            havePreviousExpandedLayout  = false;
+        }
+        std::this_thread::sleep_for(20ms);
+    }
+    state.Require(expandedLayoutSettled, L"Expanded completed file-operation card's More hit target did not settle before activation.");
     state.Require(completedLayout.completedVisibleActionCount <= 2u,
                   std::format(L"Completed diagnostic task should expose at most 2 actions; saw {}.", completedLayout.completedVisibleActionCount));
     state.Require(completedLayout.completedDismissVisible, L"Completed diagnostic task should keep Dismiss as the primary action.");
@@ -6030,9 +6998,9 @@ struct FileOperationsPopupTestFixture final
                   L"Completed diagnostic task should surface a single partial/needs-attention status.");
     state.Require(completedLayout.taskStatusActiveStateCount == 1u,
                   std::format(L"Completed diagnostic task should have exactly one active status; saw {}.", completedLayout.taskStatusActiveStateCount));
-    state.Require(completedLayout.globalNeedAttentionCount == 0u,
-                  std::format(L"Completed diagnostic cards should not keep the live footer attention count active; saw {}.",
-                              completedLayout.globalNeedAttentionCount));
+    state.Require(
+        completedLayout.globalNeedAttentionCount == 0u,
+        std::format(L"Completed diagnostic cards should not keep the live footer attention count active; saw {}.", completedLayout.globalNeedAttentionCount));
     state.Require(completedLayout.taskbarProgressState == static_cast<uint32_t>(TBPF_NOPROGRESS),
                   std::format(L"Completed diagnostic cards should not keep taskbar progress active; saw state {}.", completedLayout.taskbarProgressState));
     state.Require(! completedLayout.footerAggregateProgressVisible,
@@ -6164,8 +7132,7 @@ struct FileOperationsPopupTestFixture final
 
     const std::filesystem::path aggregateConflictSource = sourceDir / L"aggregate-conflict.txt";
     const std::filesystem::path aggregateConflictDest   = destDir / aggregateConflictSource.filename();
-    state.Require(SelfTest::WriteTextFile(aggregateConflictSource, "new aggregate payload"),
-                  L"Failed to seed aggregate live-summary conflict source file.");
+    state.Require(SelfTest::WriteTextFile(aggregateConflictSource, "new aggregate payload"), L"Failed to seed aggregate live-summary conflict source file.");
     state.Require(SelfTest::WriteTextFile(aggregateConflictDest, "existing aggregate payload"),
                   L"Failed to seed aggregate live-summary conflict destination file.");
     if (! state.failure.empty())
@@ -6173,24 +7140,22 @@ struct FileOperationsPopupTestFixture final
         return false;
     }
 
-    uint64_t aggregateConflictTaskId = 0;
-    const HRESULT aggregateConflictStartHr =
-        fileOps->StartOperation(FILESYSTEM_COPY,
-                                FolderWindow::Pane::Left,
-                                FolderWindow::Pane::Right,
-                                leftFileSystem,
-                                {aggregateConflictSource},
-                                destDir,
-                                FILESYSTEM_FLAG_NONE,
-                                false,
-                                0,
-                                FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                false,
-                                nullptr,
-                                &aggregateConflictTaskId);
+    uint64_t aggregateConflictTaskId       = 0;
+    const HRESULT aggregateConflictStartHr = fileOps->AdmitOperation(FILESYSTEM_COPY,
+                                                                     FolderWindow::Pane::Left,
+                                                                     FolderWindow::Pane::Right,
+                                                                     leftFileSystem,
+                                                                     {aggregateConflictSource},
+                                                                     destDir,
+                                                                     FILESYSTEM_FLAG_NONE,
+                                                                     false,
+                                                                     0,
+                                                                     FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                                     false,
+                                                                     fixture.rightFileSystem,
+                                                                     &aggregateConflictTaskId);
     state.Require(SUCCEEDED(aggregateConflictStartHr),
-                  std::format(L"Failed to start aggregate live-summary conflict copy (hr=0x{:08X}).",
-                              static_cast<unsigned long>(aggregateConflictStartHr)));
+                  std::format(L"Failed to start aggregate live-summary conflict copy (hr=0x{:08X}).", static_cast<unsigned long>(aggregateConflictStartHr)));
     state.Require(aggregateConflictTaskId != 0, L"Aggregate live-summary conflict copy did not return a task id.");
     if (! state.failure.empty())
     {
@@ -6203,8 +7168,7 @@ struct FileOperationsPopupTestFixture final
     {
         PumpPendingMessages();
         FileOperationsPopupInternal::TaskSnapshot aggregateConflictSnapshot{};
-        if (DebugGetFileOperationsPopupTaskSnapshot(popup, aggregateConflictTaskId, aggregateConflictSnapshot) &&
-            aggregateConflictSnapshot.conflict.active)
+        if (DebugGetFileOperationsPopupTaskSnapshot(popup, aggregateConflictTaskId, aggregateConflictSnapshot) && aggregateConflictSnapshot.conflict.active)
         {
             aggregateConflictActive = true;
             break;
@@ -6233,7 +7197,7 @@ struct FileOperationsPopupTestFixture final
     }
 
     FileOperationsPopupInternal::PopupSelfTestInvoke aggregateSkipInvoke{};
-    aggregateSkipInvoke.kind   = FileOperationsPopupInternal::PopupHitTest::Kind::TaskConflictAction;
+    aggregateSkipInvoke.kind   = FileOperationsPopupInternal::PopupHitTest::Kind::TaskConflictMore;
     aggregateSkipInvoke.taskId = aggregateConflictTaskId;
     aggregateSkipInvoke.data   = static_cast<uint32_t>(ConflictAction::Skip);
     state.Require(DebugInvokeFileOperationsPopup(popup, aggregateSkipInvoke), L"Failed to resolve aggregate live-summary conflict with Skip.");
@@ -6257,11 +7221,17 @@ struct FileOperationsPopupTestFixture final
         return false;
     }
 
-    const std::filesystem::path successSource = sourceDir / L"completed-destination-action.txt";
-    const std::filesystem::path successDest   = destDir / successSource.filename();
+    // Reuse the fixture source that was present before the pane enumeration. Creating a new
+    // source and immediately starting discovery makes this UI contract depend on watcher
+    // publication timing instead of the completed-card behavior it is intended to validate.
+    const std::filesystem::path successSource = fixture.source;
+    const std::filesystem::path successDest   = fixture.dest;
     std::error_code successCleanupEc;
     std::filesystem::remove(successDest, successCleanupEc);
-    state.Require(SelfTest::WriteTextFile(successSource, "destination action payload"), L"Failed to seed completed destination action source file.");
+    state.Require(! successCleanupEc, L"Failed to remove the completed destination action target before the successful copy.");
+    std::error_code successSourceEc;
+    state.Require(std::filesystem::is_regular_file(successSource, successSourceEc) && ! successSourceEc,
+                  L"Completed destination action source file is unavailable.");
     if (! state.failure.empty())
     {
         return false;
@@ -6276,11 +7246,10 @@ struct FileOperationsPopupTestFixture final
             completedDestinationActionTaskId.store(event.taskId, std::memory_order_release);
         }
     });
-    const auto removeCompletedDestinationActionCallback = wil::scope_exit([&]() noexcept {
-        g_folderWindow.RemoveFileOperationCompletedCallback(completedDestinationActionCallbackToken);
-    });
+    const auto removeCompletedDestinationActionCallback =
+        wil::scope_exit([&]() noexcept { g_folderWindow.RemoveFileOperationCompletedCallback(completedDestinationActionCallbackToken); });
 
-    const HRESULT successStartHr = fileOps->StartOperation(FILESYSTEM_COPY,
+    const HRESULT successStartHr = fileOps->AdmitOperation(FILESYSTEM_COPY,
                                                            FolderWindow::Pane::Left,
                                                            FolderWindow::Pane::Right,
                                                            leftFileSystem,
@@ -6291,7 +7260,7 @@ struct FileOperationsPopupTestFixture final
                                                            0,
                                                            FolderWindow::FileOperationState::ExecutionMode::PerItem,
                                                            false,
-                                                           nullptr);
+                                                           fixture.rightFileSystem);
     state.Require(SUCCEEDED(successStartHr),
                   std::format(L"Failed to start completed destination action copy (hr=0x{:08X}).", static_cast<unsigned long>(successStartHr)));
     if (! state.failure.empty())
@@ -6332,21 +7301,43 @@ struct FileOperationsPopupTestFixture final
     }
     state.Require(successTaskFinished, L"Completed destination action copy did not finish.");
     state.Require(successCompletedSnapshot.warningCount == 0 && successCompletedSnapshot.errorCount == 0,
-                  L"Completed destination action copy should finish without diagnostics.");
+                  std::format(L"Completed destination action copy should finish without diagnostics "
+                              L"(hr=0x{:08X}, warnings={}, errors={}, message='{}').",
+                              static_cast<unsigned long>(successCompletedSnapshot.resultHr),
+                              successCompletedSnapshot.warningCount,
+                              successCompletedSnapshot.errorCount,
+                              successCompletedSnapshot.lastDiagnosticMessage));
     if (! state.failure.empty())
     {
         return false;
     }
 
     FileOperationsPopupInternal::PopupLayoutDebugSnapshot successLayout{};
-    successLayout.taskId = successTaskId;
-    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, successLayout),
-                  L"Failed to capture completed destination action layout snapshot.");
+    const auto successCollapseDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(2000ms);
+    bool successCollapseObserved       = false;
+    while (std::chrono::steady_clock::now() < successCollapseDeadline)
+    {
+        PumpPendingMessages();
+        successLayout        = {};
+        successLayout.taskId = successTaskId;
+        if (DebugGetFileOperationsPopupLayoutSnapshot(popup, successLayout) && successLayout.taskAutoCollapsedOnCompletion && successLayout.taskCompactRow &&
+            successLayout.taskCompactProgressVisible)
+        {
+            successCollapseObserved = true;
+            break;
+        }
+        std::this_thread::sleep_for(20ms);
+    }
+    state.Require(successCollapseObserved, L"Failed to observe the completed success task after its UI-thread auto-collapse transition.");
     state.Require(successLayout.completedGroupVisible, L"Multiple completed file-operation cards should show a Completed (N) group.");
     state.Require(successLayout.completedGroupExpanded, L"Completed group should start expanded so completed-card actions remain discoverable.");
+    state.Require(successLayout.completedGroupAnimationEnabled, L"Completed group should use bounded expand/collapse motion when reduced motion is off.");
     state.Require(successLayout.completedGroupCount == 3u,
-                  std::format(L"Completed group should contain exactly the three case-owned file-operation cards; saw {}.",
-                              successLayout.completedGroupCount));
+                  std::format(L"Completed group should contain exactly the three case-owned file-operation cards; saw {}.", successLayout.completedGroupCount));
+    state.Require(successLayout.completedGroupCompletedCount + successLayout.completedGroupPartialCount + successLayout.completedGroupFailedCount +
+                          successLayout.completedGroupCanceledCount ==
+                      successLayout.completedGroupCount,
+                  L"Completed-group result badges should classify every grouped operation exactly once.");
     state.Require(successLayout.completedGroupVisibleTaskCount == successLayout.completedGroupCount,
                   std::format(L"Expanded completed group should show all grouped tasks; visible={}, total={}.",
                               successLayout.completedGroupVisibleTaskCount,
@@ -6364,16 +7355,32 @@ struct FileOperationsPopupTestFixture final
     state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, collapsedGroupLayout), L"Failed to capture collapsed completed-group layout.");
     state.Require(collapsedGroupLayout.completedGroupVisible, L"Completed group should remain visible after collapse.");
     state.Require(! collapsedGroupLayout.completedGroupExpanded, L"Completed group should report collapsed after its group toggle.");
-    state.Require(collapsedGroupLayout.completedGroupVisibleTaskCount == 0u,
-                  std::format(L"Collapsed completed group should hide grouped task rows; saw {} visible.",
-                              collapsedGroupLayout.completedGroupVisibleTaskCount));
+    state.Require(
+        collapsedGroupLayout.completedGroupVisibleTaskCount == 0u,
+        std::format(L"Collapsed completed group should hide grouped task rows; saw {} visible.", collapsedGroupLayout.completedGroupVisibleTaskCount));
+    state.Require(collapsedGroupLayout.completedGroupCompletedCount == successLayout.completedGroupCompletedCount &&
+                      collapsedGroupLayout.completedGroupPartialCount == successLayout.completedGroupPartialCount &&
+                      collapsedGroupLayout.completedGroupFailedCount == successLayout.completedGroupFailedCount &&
+                      collapsedGroupLayout.completedGroupCanceledCount == successLayout.completedGroupCanceledCount,
+                  L"Collapsed completed group should preserve Completed, Partial, Failed, and Canceled badge counts.");
+    const size_t expectedBadgeTooltipCount = static_cast<size_t>(collapsedGroupLayout.completedGroupCompletedCount != 0u) +
+                                             static_cast<size_t>(collapsedGroupLayout.completedGroupPartialCount != 0u) +
+                                             static_cast<size_t>(collapsedGroupLayout.completedGroupFailedCount != 0u) +
+                                             static_cast<size_t>(collapsedGroupLayout.completedGroupCanceledCount != 0u);
+    state.Require(collapsedGroupLayout.hostedTooltipRegionCount == expectedBadgeTooltipCount,
+                  std::format(L"Collapsed result badges should expose one tooltip region per nonzero category; expected {}, saw {}.",
+                              expectedBadgeTooltipCount,
+                              collapsedGroupLayout.hostedTooltipRegionCount));
+    state.Require(collapsedGroupLayout.completedGroupBadgeTooltipsInformative,
+                  L"Collapsed result badge tooltips should explain the category instead of repeating the visible count.");
+    state.Require(collapsedGroupLayout.completedGroupClearTooltipEmpty, L"Clear completed should not expose a tooltip that merely repeats its visible label.");
     state.Require(collapsedGroupLayout.taskHiddenByCompletedGroup, L"Selected completed task should report hidden while the group is collapsed.");
 
     FileOperationsPopupInternal::PopupSelfTestInvoke expandCompletedGroup{};
     expandCompletedGroup.kind = FileOperationsPopupInternal::PopupHitTest::Kind::CompletedGroupToggle;
     state.Require(DebugInvokeFileOperationsPopup(popup, expandCompletedGroup), L"Failed to expand the Completed (N) group.");
     PumpPendingMessages();
-    successLayout = {};
+    successLayout        = {};
     successLayout.taskId = successTaskId;
     state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, successLayout), L"Failed to capture re-expanded completed-group layout.");
     state.Require(successLayout.completedGroupExpanded, L"Completed group should report expanded after the second group toggle.");
@@ -6385,10 +7392,9 @@ struct FileOperationsPopupTestFixture final
         return false;
     }
 
-    successLayout = {};
+    successLayout        = {};
     successLayout.taskId = successTaskId;
-    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, successLayout),
-                  L"Failed to capture expanded completed destination action layout snapshot.");
+    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, successLayout), L"Failed to capture expanded completed destination action layout snapshot.");
     state.Require(successLayout.completedVisibleActionCount <= 2u,
                   std::format(L"Completed success task should expose at most 2 actions; saw {}.", successLayout.completedVisibleActionCount));
     state.Require(successLayout.completedDismissVisible, L"Completed success task should keep Dismiss as the primary action.");
@@ -6412,8 +7418,7 @@ struct FileOperationsPopupTestFixture final
 
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, kBuiltinDummyFileSystemIdForFileOpsPrompt)),
                   L"Failed to switch the destination pane away from the completed task provider.");
-    state.Require(NavigationLocation::EqualsNoCase(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right),
-                                                   kBuiltinDummyFileSystemIdForFileOpsPrompt),
+    state.Require(NavigationLocation::EqualsNoCase(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right), kBuiltinDummyFileSystemIdForFileOpsPrompt),
                   L"Destination pane did not switch to the dummy provider before completed-action validation.");
     g_folderWindow.SetFolderHistory({});
 
@@ -6434,19 +7439,12 @@ struct FileOperationsPopupTestFixture final
     revealDestinationInvoke.kind   = FileOperationsPopupInternal::PopupHitTest::Kind::TaskCompletedMore;
     revealDestinationInvoke.taskId = successTaskId;
     revealDestinationInvoke.data   = kCompletedActionRevealDestination;
-    state.Require(DebugInvokeFileOperationsPopup(popup, revealDestinationInvoke),
-                  L"Failed to invoke completed-task Reveal item through the More affordance.");
+    state.Require(DebugInvokeFileOperationsPopup(popup, revealDestinationInvoke), L"Failed to invoke completed-task Reveal item through the More affordance.");
     state.Require(fixture.WaitForFocusedPath(FolderWindow::Pane::Right, successDest, SelfTest::Scale(3000ms)),
                   L"Reveal item did not focus the copied destination item in the destination pane.");
 
-    const HRESULT rejectedLocationHr = g_folderWindow.ExecuteInPaneLocation(FolderWindow::Pane::Right,
-                                                                            kBuiltinDummyFileSystemIdForFileOpsPrompt,
-                                                                            L"invalid-short-id",
-                                                                            {},
-                                                                            std::filesystem::path(L"/"),
-                                                                            {},
-                                                                            0u,
-                                                                            false);
+    const HRESULT rejectedLocationHr = g_folderWindow.ExecuteInPaneLocation(
+        FolderWindow::Pane::Right, kBuiltinDummyFileSystemIdForFileOpsPrompt, L"invalid-short-id", {}, std::filesystem::path(L"/"), {}, 0u, false);
     state.Require(FAILED(rejectedLocationHr), L"Completed-action navigation should reject a mismatched provider identity.");
     state.Require(NavigationLocation::EqualsNoCase(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right), L"builtin/file-system"),
                   L"Rejected completed-action navigation should restore the pane provider.");
@@ -6459,19 +7457,233 @@ struct FileOperationsPopupTestFixture final
 [[nodiscard]] bool TestFileOperationsPopupConflictAndMetadata(HWND mainWindow, CaseState& state) noexcept
 {
     FileOperationsPopupTestFixture fixture(state);
-    if (InitializeFileOperationsPopupTestFixture(mainWindow, fixture) && ValidateFileOperationsConflictAndMetadata(fixture))
+    if (InitializeFileOperationsPopupTestFixture(mainWindow, fixture, true) && ValidateFileOperationsConflictAndMetadata(fixture))
     {
-        static_cast<void>(ResolveInitialFileOperationsPopupConflict(fixture));
+        static_cast<void>(ResolveInitialFileOperationsPopupConflictWithKeepBoth(fixture));
     }
     state.Require(fixture.Cleanup(), L"Conflict-metadata popup test did not clean every case-owned task and completion.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFileOperationsPopupConflictCloseAndEscape(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+    FileOperationsPopupTestFixture fixture(state);
+    if (InitializeFileOperationsPopupTestFixture(mainWindow, fixture) && ValidateFileOperationsConflictAndMetadata(fixture))
+    {
+        const HWND popup = fixture.popup;
+        SendMessageW(popup, WM_CLOSE, 0, 0);
+        PumpPendingMessages();
+        state.Require(IsWindow(popup) != FALSE && IsWindowVisible(popup) == FALSE,
+                      L"Closing an actionable conflict popup should hide it without destroying the task surface.");
+
+        FileOperationsPopupInternal::TaskSnapshot hiddenSnapshot{};
+        state.Require(DebugGetFileOperationsPopupTaskSnapshot(popup, fixture.taskId.value(), hiddenSnapshot) && hiddenSnapshot.conflict.active,
+                      L"Closing an actionable conflict popup must not resolve its immutable decision snapshot.");
+
+        SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_VIEW_FILE_OPERATIONS, 0), 0);
+        fixture.popup = WaitForWindow(
+            [&]() noexcept
+        {
+            const HWND candidate = fixture.fileOps->GetPopupHwndForSelfTest();
+            return candidate && IsWindowVisible(candidate) != FALSE ? candidate : nullptr;
+        },
+            SelfTest::Scale(5000ms));
+        state.Require(fixture.popup == popup,
+                      L"Show File Operations should reopen the same hidden conflict surface without changing its decision.");
+
+        SetFocus(fixture.popup);
+        SendMessageW(fixture.popup, WM_KEYDOWN, VK_ESCAPE, 0);
+        PumpPendingMessages();
+
+        const auto finishedDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+        bool canceledByEscape       = false;
+        while (std::chrono::steady_clock::now() < finishedDeadline)
+        {
+            PumpPendingMessages();
+            FileOperationsPopupInternal::TaskSnapshot resolved{};
+            if (DebugGetFileOperationsPopupTaskSnapshot(fixture.popup, fixture.taskId.value(), resolved) && (! resolved.conflict.active || resolved.finished))
+            {
+                canceledByEscape = true;
+                break;
+            }
+            std::this_thread::sleep_for(20ms);
+        }
+        state.Require(canceledByEscape, L"Escape should invoke the engine-published Cancel action for the current conflict.");
+        state.Require(IsWindow(fixture.popup) != FALSE, L"Escape should resolve the current conflict decision without closing the stable popup surface.");
+        state.Require(TextFileEqualsForFileOpsPrompt(fixture.dest, "existing payload"),
+                      L"Escape/Cancel should leave the existing destination payload untouched.");
+    }
+    state.Require(fixture.Cleanup(), L"Conflict close/Escape test did not clean every case-owned task and completion.");
+    return state.failure.empty();
+}
+
+namespace
+{
+[[nodiscard]] HWND FindFailureSurfaceButton(HWND popup, std::wstring_view text) noexcept
+{
+    HWND child = nullptr;
+    while ((child = FindWindowExW(popup, child, L"Button", nullptr)) != nullptr)
+    {
+        wchar_t caption[128]{};
+        GetWindowTextW(child, caption, static_cast<int>(std::size(caption)));
+        if (text == caption)
+        {
+            return child;
+        }
+    }
+    return nullptr;
+}
+
+// C4: the graphics-independent failure surface. One popup HWND, three native children (text, Cancel all,
+// Close), no hosted control, no legacy painter, keyboard and UIA through the native classes, and no
+// mutation action reachable except Cancel all.
+[[nodiscard]] bool ValidateFileOperationsPopupFailureSurface(FileOperationsPopupTestFixture& fixture, std::wstring_view label) noexcept
+{
+    using namespace std::chrono_literals;
+    CaseState& state = fixture.state;
+    HWND popup       = fixture.popup;
+    PumpPendingMessages();
+
+    FileOperationsPopupInternal::PopupLayoutDebugSnapshot layout{};
+    layout.taskId = fixture.taskId.value_or(0u);
+    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, layout), std::format(L"{}: failed to capture the layout snapshot.", label));
+    state.Require(layout.failureSurfaceActive, std::format(L"{}: the popup should be on its failure surface.", label));
+    state.Require(! layout.usesDxUiHost && layout.hostedActionControlCount == 0u && layout.hostedProgressControlCount == 0u &&
+                      layout.hostedGraphControlCount == 0u,
+                  std::format(L"{}: the failure surface must not retain hosted controls.", label));
+    state.Require(layout.failureSurfaceChildCount == 3u,
+                  std::format(L"{}: expected text, Cancel all, and Close; saw {} native children.", label, layout.failureSurfaceChildCount));
+    state.Require(! layout.failureSurfaceText.empty() && ! layout.globalSummaryText.empty() &&
+                      layout.failureSurfaceText.find(layout.globalSummaryText) != std::wstring::npos,
+                  std::format(L"{}: the failure text must explain the situation and carry the live summary; text='{}' summary='{}'.",
+                              label,
+                              layout.failureSurfaceText,
+                              layout.globalSummaryText));
+
+    const std::wstring cancelAllText = LoadStringResource(nullptr, IDS_FILEOPS_BTN_CANCEL_ALL);
+    const std::wstring closeText     = LoadStringResource(nullptr, IDS_FILEOPS_BTN_CLOSE);
+    const HWND cancelAll             = FindFailureSurfaceButton(popup, cancelAllText);
+    const HWND close                 = FindFailureSurfaceButton(popup, closeText);
+    state.Require(cancelAll != nullptr && close != nullptr && IsWindowVisible(cancelAll) != FALSE && IsWindowVisible(close) != FALSE,
+                  std::format(L"{}: native Cancel all and Close buttons must exist and be visible.", label));
+    if (! cancelAll || ! close)
+    {
+        return false;
+    }
+
+    const auto uiaStats = CollectVisibleUiaDescendantPatternStats(popup);
+    state.Require(uiaStats.has_value() && uiaStats->namedButtonControlCount >= 2u && uiaStats->invokePatternCount >= 2u,
+                  std::format(L"{}: UIA must expose two named, invokable buttons; {}.", label, DescribeFileOpsPatternStats(uiaStats)));
+
+    SetFocus(close);
+    PumpPendingMessages();
+    state.Require(GetFocus() == close, std::format(L"{}: Close should take keyboard focus.", label));
+    SendMessageW(close, WM_KEYDOWN, VK_TAB, 0);
+    PumpPendingMessages();
+    state.Require(GetFocus() == cancelAll, std::format(L"{}: Tab from Close should focus Cancel all.", label));
+    SendMessageW(cancelAll, WM_KEYDOWN, VK_TAB, 0);
+    PumpPendingMessages();
+    state.Require(GetFocus() == close, std::format(L"{}: Tab from Cancel all should return to Close.", label));
+
+    if (fixture.taskId.has_value())
+    {
+        FileOperationsPopupInternal::PopupSelfTestInvoke conflictInvoke{};
+        conflictInvoke.kind   = FileOperationsPopupInternal::PopupHitTest::Kind::TaskConflictAction;
+        conflictInvoke.taskId = fixture.taskId.value();
+        conflictInvoke.data   = 1u;
+        state.Require(! DebugInvokeFileOperationsPopup(popup, conflictInvoke),
+                      std::format(L"{}: a conflict action must not be reachable while the failure surface is shown.", label));
+        state.Require(fixture.fileOps && fixture.fileOps->FindTask(fixture.taskId.value()) != nullptr,
+                      std::format(L"{}: the refused action must leave the task untouched.", label));
+    }
+
+    AppTheme highContrast     = fixture.previousTheme;
+    highContrast.highContrast = true;
+    g_folderWindow.ApplyTheme(highContrast);
+    PumpPendingMessages();
+    RECT windowRect{};
+    static_cast<void>(GetWindowRect(popup, &windowRect));
+    SendMessageW(popup, WM_DPICHANGED, MAKEWPARAM(144, 144), reinterpret_cast<LPARAM>(&windowRect));
+    PumpPendingMessages();
+    FileOperationsPopupInternal::PopupLayoutDebugSnapshot afterTheme{};
+    afterTheme.taskId = fixture.taskId.value_or(0u);
+    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, afterTheme) && afterTheme.failureSurfaceActive &&
+                      afterTheme.failureSurfaceChildCount == 3u && IsWindowVisible(cancelAll) != FALSE && IsWindowVisible(close) != FALSE,
+                  std::format(L"{}: the failure surface must survive a high-contrast theme change and a DPI change.", label));
+
+    SetFocus(close);
+    SendMessageW(close, WM_KEYDOWN, VK_ESCAPE, 0);
+    PumpPendingMessages();
+    state.Require(IsWindowVisible(popup) == FALSE, std::format(L"{}: Escape should hide the popup without resolving anything.", label));
+    state.Require(fixture.fileOps && fixture.taskId.has_value() && fixture.fileOps->FindTask(fixture.taskId.value()) != nullptr,
+                  std::format(L"{}: hiding must not cancel the task.", label));
+
+    if (fixture.fileOps)
+    {
+        fixture.fileOps->DebugEnsurePopupVisibleForSelfTest();
+        PumpPendingMessages();
+        state.Require(IsWindowVisible(popup) != FALSE, std::format(L"{}: the hidden failure surface must show again on request.", label));
+        SetFocus(cancelAll);
+        SendMessageW(cancelAll, WM_KEYDOWN, VK_RETURN, 0);
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+        while (fixture.fileOps->HasActiveOperations() && std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            std::this_thread::sleep_for(20ms);
+        }
+        state.Require(! fixture.fileOps->HasActiveOperations(), std::format(L"{}: Enter on Cancel all must cancel every operation.", label));
+    }
+    return state.failure.empty();
+}
+} // namespace
+
+[[nodiscard]] bool TestFileOperationsPopupFailureSurfaceOnHostAttachFailure(HWND mainWindow, CaseState& state) noexcept
+{
+    {
+        FileOperationsPopupTestFixture fixture(state);
+        DebugFailNextFileOperationsDxUiHostAttachAttempts(1u);
+        const auto resetForcedAttachFailure = wil::scope_exit([] { DebugFailNextFileOperationsDxUiHostAttachAttempts(0u); });
+        if (InitializeFileOperationsPopupTestFixture(mainWindow, fixture) && fixture.taskId.has_value())
+        {
+            static_cast<void>(ValidateFileOperationsPopupFailureSurface(fixture, L"host-attach failure"));
+        }
+        state.Require(fixture.Cleanup(), L"Failure-surface popup test did not clean every case-owned task and completion.");
+    }
+    if (state.failure.empty())
+    {
+        // Close and reopen: the next attachment succeeds, so the hosted popup returns.
+        FileOperationsPopupTestFixture reopened(state);
+        if (InitializeFileOperationsPopupTestFixture(mainWindow, reopened) && reopened.taskId.has_value())
+        {
+            FileOperationsPopupInternal::PopupLayoutDebugSnapshot layout{};
+            layout.taskId = reopened.taskId.value();
+            state.Require(DebugGetFileOperationsPopupLayoutSnapshot(reopened.popup, layout) && layout.usesDxUiHost && ! layout.failureSurfaceActive &&
+                              layout.failureSurfaceChildCount == 0u,
+                          L"A reopened popup must attach its hosted controls again and leave no failure-surface child behind.");
+        }
+        state.Require(reopened.Cleanup(), L"Reopened popup test did not clean every case-owned task and completion.");
+    }
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFileOperationsPopupFailureSurfaceOnD2DTargetFailure(HWND mainWindow, CaseState& state) noexcept
+{
+    FileOperationsPopupTestFixture fixture(state);
+    DebugFailNextFileOperationsD2DTargetAttempts(1u);
+    const auto resetForcedTargetFailure = wil::scope_exit([] { DebugFailNextFileOperationsD2DTargetAttempts(0u); });
+    if (InitializeFileOperationsPopupTestFixture(mainWindow, fixture) && fixture.taskId.has_value())
+    {
+        static_cast<void>(ValidateFileOperationsPopupFailureSurface(fixture, L"Direct2D target failure"));
+    }
+    state.Require(fixture.Cleanup(), L"Direct2D failure-surface popup test did not clean every case-owned task and completion.");
     return state.failure.empty();
 }
 
 [[nodiscard]] bool TestFileOperationsPopupPresentationSettingsAndTaskbar(HWND mainWindow, CaseState& state) noexcept
 {
     FileOperationsPopupTestFixture fixture(state);
-    if (InitializeFileOperationsPopupTestFixture(mainWindow, fixture) &&
-        ValidateFileOperationsPopupPresentationSettingsAndTaskbar(fixture))
+    if (InitializeFileOperationsPopupTestFixture(mainWindow, fixture) && ValidateFileOperationsPopupPresentationSettingsAndTaskbar(fixture))
     {
         static_cast<void>(ResolveInitialFileOperationsPopupConflict(fixture));
     }
@@ -6626,7 +7838,7 @@ struct FileOperationsPopupTestFixture final
     const auto cleanup = wil::scope_exit([&]() noexcept
     {
         closePrompt();
-        static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps));
+        static_cast<void>(CloseFileOperationsPopupForSelfTest(g_folderWindow.DebugGetFileOperationState()));
 
         if (! leftPluginBefore.empty())
         {
@@ -6692,7 +7904,7 @@ struct FileOperationsPopupTestFixture final
         return false;
     }
 
-    const HRESULT startHr = fileOps->StartOperation(FILESYSTEM_COPY,
+    const HRESULT startHr = fileOps->AdmitOperation(FILESYSTEM_COPY,
                                                     FolderWindow::Pane::Left,
                                                     FolderWindow::Pane::Right,
                                                     leftFileSystem,
@@ -6944,6 +8156,48 @@ struct FileOperationsPopupTestFixture final
         return false;
     }
 
+    HostResetPromptShutdown();
+    const auto resetPromptShutdown = wil::scope_exit([]() noexcept { HostResetPromptShutdown(); });
+    std::atomic<bool> shutdownPromptObserved = false;
+    HWND shutdownPrompt = nullptr;
+    const HWND folderWindow = g_folderWindow.GetHwnd();
+    const auto shutdownStartedAt = std::chrono::steady_clock::now();
+    const bool shutdownInvoked = RunFileOperationsSpeedLimitPromptModalCycle(popup,
+                                                                             openPrompt,
+                                                                             [&](const HWND prompt) noexcept
+    {
+        shutdownPrompt = prompt;
+        shutdownPromptObserved.store(prompt != nullptr && IsWindow(prompt) != FALSE, std::memory_order_release);
+        if (! prompt || IsWindow(prompt) == FALSE)
+        {
+            return;
+        }
+
+        state.Require(folderWindow != nullptr && IsWindow(folderWindow) != FALSE,
+                      L"Folder-window handle unavailable for nested speed-limit prompt shutdown validation.");
+        state.Require(PostMessageW(folderWindow, WndMsg::kFileOperationShutdownForSelfTest, taskId.value(), 0) != FALSE,
+                      L"Failed to queue File Operations shutdown inside the custom speed-limit prompt pump.");
+        state.Require(WaitForWindowClosed(prompt, SelfTest::Scale(3000ms)),
+                      L"Custom speed-limit prompt did not unwind after nested File Operations shutdown.");
+    });
+    HostResetPromptShutdown();
+    const bool retainedDuringShutdown = g_folderWindow.DebugWasFileOperationStateRetainedDuringNestedPromptShutdown();
+    auto* const freshFileOps = g_folderWindow.DebugGetFileOperationState();
+    Debug::Perf::Emit(L"FileOps.SelfTest.SpeedLimitPromptNestedShutdownUs",
+                      L"popup-control-prompt-lifetime",
+                      Debug::Perf::ElapsedUs(shutdownStartedAt),
+                      retainedDuringShutdown ? 1u : 0u,
+                      GetFileOperationsSpeedLimitPromptHandle() == nullptr ? 1u : 0u,
+                      freshFileOps && ! freshFileOps->FindTask(taskId.value()) ? S_OK : E_UNEXPECTED);
+    state.Require(shutdownInvoked && shutdownPromptObserved.load(std::memory_order_acquire),
+                  L"Failed to open the custom speed-limit prompt for nested File Operations shutdown validation.");
+    state.Require(shutdownPrompt != nullptr && IsWindow(shutdownPrompt) == FALSE,
+                  L"Custom speed-limit prompt remained alive after nested File Operations shutdown.");
+    state.Require(retainedDuringShutdown,
+                  L"Nested speed-limit prompt shutdown must retain FileOperationState until the modal frame unwinds.");
+    state.Require(freshFileOps != nullptr && ! freshFileOps->FindTask(taskId.value()),
+                  L"Nested speed-limit prompt shutdown must leave no stale task for post-pump speed-limit submission.");
+
     return state.failure.empty();
 }
 
@@ -7078,7 +8332,7 @@ struct FileOperationsPopupTestFixture final
         return false;
     }
 
-    const HRESULT startHr = fileOps->StartOperation(FILESYSTEM_COPY,
+    const HRESULT startHr = fileOps->AdmitOperation(FILESYSTEM_COPY,
                                                     FolderWindow::Pane::Left,
                                                     FolderWindow::Pane::Right,
                                                     leftFileSystem,
@@ -7491,7 +8745,7 @@ struct FileOperationsPopupTestFixture final
         }
     }
 
-    const HRESULT startHr = fileOps->StartOperation(FILESYSTEM_COPY,
+    const HRESULT startHr = fileOps->AdmitOperation(FILESYSTEM_COPY,
                                                     FolderWindow::Pane::Left,
                                                     FolderWindow::Pane::Right,
                                                     leftFileSystem,
@@ -7634,7 +8888,7 @@ struct FileOperationsPopupTestFixture final
             }
         }
 
-        const HRESULT restartHr = fileOps->StartOperation(FILESYSTEM_COPY,
+        const HRESULT restartHr = fileOps->AdmitOperation(FILESYSTEM_COPY,
                                                           FolderWindow::Pane::Left,
                                                           FolderWindow::Pane::Right,
                                                           leftFileSystem,
@@ -7705,6 +8959,10 @@ struct FileOperationsPopupTestFixture final
         }
         state.Require(GetFileOperationsSpeedLimitPromptHandle() == nullptr,
                       std::format(L"Custom speed-limit prompt should close before churn cycle {} starts.", cycle));
+        // Each churn cycle creates a new provider surface. Release the previous
+        // cycle's cached UIA provider before opening the next prompt so a reused
+        // HWND cannot return stale edit text.
+        ReleaseThreadUiAutomationForSelfTest();
         FileOperationsPopupInternal::TaskSnapshot cycleSnapshot{};
         const bool haveChurnTask = ensureChurnTaskForCycle(cycle, expectedLimit, cycleSnapshot);
         state.Require(haveChurnTask && taskId.has_value(), std::format(L"Failed to resolve the queued speed-limit churn task before cycle {}.", cycle));
@@ -7781,12 +9039,10 @@ struct FileOperationsPopupTestFixture final
             }
 
             std::optional<UiaValuePatternState> valueState;
-            const bool valueStateMatchesSnapshot = WaitForVisibleDescendantValuePatternState(
-                prompt,
-                UIA_EditControlTypeId,
-                [&](const UiaValuePatternState& state) noexcept { return state.value == snapshot.text; },
-                valueState,
-                std::format(L"File Operations speed-limit churn cycle {} initial ValuePattern read", cycle));
+            const bool valueStateMatchesSnapshot =
+                WaitForVisibleDescendantValuePatternState(prompt, UIA_EditControlTypeId, [&](const UiaValuePatternState& state) noexcept {
+                return state.value == snapshot.text;
+            }, valueState, std::format(L"File Operations speed-limit churn cycle {} initial ValuePattern read", cycle));
             const auto editValueStates = CollectVisibleDescendantControlValueStates(prompt, UIA_EditControlTypeId);
             const std::wstring valueDiagnostics =
                 std::format(L"snapshotText='{}' snapshotInitial={} observed={} stats={} edits=[{}] prompt=0x{:X} focus=0x{:X} foreground=0x{:X}",
@@ -7804,11 +9060,9 @@ struct FileOperationsPopupTestFixture final
             if (valueState.has_value())
             {
                 state.Require(! valueState->isReadOnly, std::format(L"Custom speed-limit prompt field should remain editable during cycle {}.", cycle));
-                state.Require(valueStateMatchesSnapshot,
-                              std::format(L"Custom speed-limit prompt ValuePattern should settle to '{}' during cycle {}. {}",
-                                          snapshot.text,
-                                          cycle,
-                                          valueDiagnostics));
+                state.Require(
+                    valueStateMatchesSnapshot,
+                    std::format(L"Custom speed-limit prompt ValuePattern should settle to '{}' during cycle {}. {}", snapshot.text, cycle, valueDiagnostics));
                 state.Require(! valueState->name.empty(),
                               std::format(L"Custom speed-limit prompt field should expose a stable accessible name during cycle {}.", cycle));
             }
@@ -8249,7 +9503,7 @@ struct FileOperationsPopupTestFixture final
             }
         }
 
-        const HRESULT startHr = fileOps->StartOperation(FILESYSTEM_COPY,
+        const HRESULT startHr = fileOps->AdmitOperation(FILESYSTEM_COPY,
                                                         FolderWindow::Pane::Left,
                                                         FolderWindow::Pane::Right,
                                                         leftFileSystem,
@@ -8499,6 +9753,107 @@ struct FileOperationsPopupTestFixture final
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestLocalBlockedReaderCancellationIsBounded(CaseState& state) noexcept
+{
+    using PfnRunLocalReaderCancellationTest = HRESULT(__stdcall*)(
+        const wchar_t*, uint64_t*, uint64_t*, uint64_t*, unsigned int*, unsigned long*, HRESULT*, BOOL*, BOOL*, BOOL*);
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    const std::filesystem::path root      = suiteRoot / L"work" / (L"local_reader_cancel_" + NewGuidText());
+    const std::filesystem::path payloadPath = root / L"payload.bin";
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create the Local reader cancellation fixture directory.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    constexpr size_t payloadBytes = 8u * 1024u * 1024u;
+    std::vector<std::byte> payload(payloadBytes);
+    for (size_t index = 0u; index < payload.size(); ++index)
+    {
+        payload[index] = static_cast<std::byte>(index % 251u);
+    }
+    state.Require(SelfTest::WriteBinaryFile(payloadPath, payload), L"Failed to seed the Local reader cancellation ordinary-read fixture.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    std::array<wchar_t, 32'768u> executablePath{};
+    const DWORD executableLength = GetModuleFileNameW(nullptr, executablePath.data(), static_cast<DWORD>(executablePath.size()));
+    state.Require(executableLength != 0u && executableLength < executablePath.size(), L"Failed to resolve the selftest executable path.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    const std::filesystem::path pluginPath =
+        std::filesystem::path(std::wstring_view(executablePath.data(), executableLength)).parent_path() / L"Plugins" / L"FileSystem.dll";
+    wil::unique_hmodule module(LoadLibraryExW(pluginPath.c_str(), nullptr, 0u));
+    state.Require(static_cast<bool>(module), std::format(L"Failed to load the Local provider test module from '{}'.", pluginPath.wstring()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const FARPROC testProc = GetProcAddress(module.get(), "RedSalamanderFileSystemTestLocalReaderCancellation");
+#pragma warning(push)
+#pragma warning(disable : 4191) // The test-only Win32 export is validated for null before calling the exact typed signature.
+    const auto runTest = reinterpret_cast<PfnRunLocalReaderCancellationTest>(testProc);
+#pragma warning(pop)
+    state.Require(runTest != nullptr, L"The Local provider test build is missing its reader-cancellation export.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    uint64_t cancelDurationUs   = 0u;
+    uint64_t ordinaryDurationUs = 0u;
+    uint64_t ordinaryBytesRead  = 0u;
+    unsigned int abortChecks    = 0u;
+    unsigned long canceledBytes = 0u;
+    HRESULT blockedReadHr       = E_PENDING;
+    BOOL enteredPending         = FALSE;
+    BOOL seekReplayMatched      = FALSE;
+    BOOL cleanupComplete        = FALSE;
+    const HRESULT hr = runTest(payloadPath.c_str(),
+                               &cancelDurationUs,
+                               &ordinaryDurationUs,
+                               &ordinaryBytesRead,
+                               &abortChecks,
+                               &canceledBytes,
+                               &blockedReadHr,
+                               &enteredPending,
+                               &seekReplayMatched,
+                               &cleanupComplete);
+
+    Debug::Perf::Emit(L"FileOps.SelfTest.R0eOr1.LocalBlockedReadCancelUs",
+                      L"local-provider",
+                      cancelDurationUs,
+                      abortChecks,
+                      canceledBytes,
+                      blockedReadHr);
+    Debug::Perf::Emit(L"FileOps.SelfTest.R0eOr1.OrdinaryReadUs",
+                      L"legacy-and-bound",
+                      ordinaryDurationUs,
+                      ordinaryBytesRead,
+                      seekReplayMatched == TRUE ? 1u : 0u,
+                      hr);
+
+    state.Require(SUCCEEDED(hr), std::format(L"Local reader cancellation fixture failed with hr=0x{:08X}.", static_cast<unsigned long>(hr)));
+    state.Require(ordinaryBytesRead == payloadBytes * 2u,
+                  std::format(L"Local ordinary readers returned {} bytes; expected {}.", ordinaryBytesRead, payloadBytes * 2u));
+    state.Require(seekReplayMatched == TRUE, L"Legacy and exact-bound Local readers disagreed after seeking to the same offset.");
+    state.Require(enteredPending == TRUE, L"Local blocked read did not remain in kernel-pending state long enough to observe cooperative cancellation.");
+    state.Require(abortChecks >= 2u, std::format(L"Local blocked read observed only {} operation-control checks.", abortChecks));
+    state.Require(blockedReadHr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                  std::format(L"Local blocked read returned hr=0x{:08X}; expected ERROR_CANCELLED.", static_cast<unsigned long>(blockedReadHr)));
+    state.Require(canceledBytes == 0u, std::format(L"Local blocked read reported {} bytes after cancellation.", canceledBytes));
+    state.Require(cancelDurationUs < 500'000u,
+                  std::format(L"Local blocked read took {} us to unwind after cancellation; budget is 500000 us.", cancelDurationUs));
+    state.Require(cleanupComplete == TRUE, L"Local blocked-read fixture retained pending I/O after its fail-safe cleanup.");
+    return state.failure.empty();
+}
+
 } // namespace (tests)
 
 void RunFileOpsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
@@ -8561,14 +9916,38 @@ void RunFileOpsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOp
     SelfTest::RunCase(options, suite, L"cmd_pane_fileops_popup_global_summary_ignores_finished_tasks", [](CaseState& state) noexcept {
         return TestFileOperationsPopupGlobalSummaryIgnoresFinishedTasks(state);
     });
+    SelfTest::RunCase(options, suite, L"cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs", [](CaseState& state) noexcept {
+        return TestFileOperationsRemovalFocusUsesExactOutcomesAndOwnershipEpochs(state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_fileops_move_removal_focus_selects_next_survivor", [](CaseState& state) noexcept {
+        return TestFileOperationsMoveRemovalFocusSelectsNextSurvivor(state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_fileops_routine_and_with_options_commands", [=](CaseState& state) noexcept {
+        return TestFileOperationsRoutineAndWithOptionsPaneCommands(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_fileops_completed_post_failure_still_applies_ui_contract", [=](CaseState& state) noexcept {
+        return TestFileOperationsCompletedPostFailureStillAppliesUiContract(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_pane_fileops_popup_progress_contracts", [](CaseState& state) noexcept {
         return TestFileOperationsPopupProgressContracts(state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_fileops_local_blocked_reader_cancel_is_bounded", [](CaseState& state) noexcept {
+        return TestLocalBlockedReaderCancellationIsBounded(state);
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_fileops_conflict_metadata_uses_single_provider_roundtrip", [](CaseState& state) noexcept {
         return TestFileOperationsConflictMetadataUsesSingleProviderRoundTrip(state);
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_fileops_conflict_prompt_metadata_and_actions", [=](CaseState& state) noexcept {
         return TestFileOperationsPopupConflictAndMetadata(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot", [=](CaseState& state) noexcept {
+        return TestFileOperationsPopupConflictCloseAndEscape(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_fileops_popup_failure_surface_on_host_attach_failure", [=](CaseState& state) noexcept {
+        return TestFileOperationsPopupFailureSurfaceOnHostAttachFailure(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_fileops_popup_failure_surface_on_d2d_target_failure", [=](CaseState& state) noexcept {
+        return TestFileOperationsPopupFailureSurfaceOnD2DTargetFailure(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_fileops_popup_presentation_settings_and_taskbar", [=](CaseState& state) noexcept {
         return TestFileOperationsPopupPresentationSettingsAndTaskbar(mainWindow, state);

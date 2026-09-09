@@ -11,6 +11,7 @@ This spec defines the normative windowing behavior for long-lived RedSalamander 
 - Compare Directories
 - About / Help-style informational windows
 - viewer windows such as Space Viewer
+- the singleton floating Terminal window
 - app-owned captioned utility/dialog windows when a domain spec explicitly includes them in the shared tool-window chrome contract
 
 Native OS dialogs remain out of scope here. Transient app-owned prompts, confirmations, credential editors, and popup-owned helper surfaces may remain explicitly owned or modal when their own specs require it, but any such window that opts into the shared tool-window chrome contract MUST follow the backdrop policy below.
@@ -45,6 +46,36 @@ Transient alert/help overlays are not long-lived tool windows. They MAY be imple
 ## Connection Manager
 
 The Connection Manager is a top-level modeless tool window for normal application commands. Connect validates and saves the current profile, posts a typed payload to the owner, and closes only after the owner notification is queued. Close validates and saves dirty edits or leaves the window open when validation fails.
+
+## Floating Terminal
+
+`cmd/terminal/openFloatingWindow` (`Ctrl+Shift+N`) creates or activates one
+independent, modeless floating Terminal top-level window. RedSalamander MUST
+never create a second floating Terminal root. Invoking the command while the
+root exists adds and selects a new tab at the invoking trusted path. The one
+root may contain as many tabs as the user opens; each tab owns an independent
+Terminal instance and shell session.
+
+The window persists one placement record plus the ordered live-tab set: stable
+tab ID, profile ID, provider ID, canonical trusted path, and active tab ID.
+Move/resize and tab reorder state is coalesced before save. A clean shutdown
+marks whether the root was open; startup restores one root and fresh shells in
+the exact saved tab order, then selects the saved active ID. Closed tabs are
+removed immediately and no unbounded closed-session ledger is retained.
+
+The normal tab commands create, switch, select, reorder, and close floating
+tabs. `Ctrl+Shift+T` adds a tab at the active trusted path;
+`Ctrl+Tab`/`Ctrl+Shift+Tab` cycle live tabs; `Ctrl+Alt+1` through
+`Ctrl+Alt+8` select those indices; `Ctrl+Alt+9` selects the last tab; and
+`Ctrl+Shift+W` closes the selected tab. A real root-shell exit removes only its
+matching tab after final terminal output is drained. Closing or exiting the
+last tab closes the floating root. Manual close, shell exit, app shutdown, and
+late/duplicate callback races converge on the same idempotent teardown path.
+
+The floating Terminal follows the shared top-level icon, minimum-size, DPI,
+backdrop, placement clamping, and shutdown rules above. Window placement is
+associated with the singleton, while path/profile state belongs to individual
+tabs; it is not a per-path collection of floating windows.
 
 ## Rationale
 

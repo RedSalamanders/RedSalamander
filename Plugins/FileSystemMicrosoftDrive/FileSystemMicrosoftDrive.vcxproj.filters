@@ -5,6 +5,7 @@
     <ClCompile Include="Factory.cpp" />
     <ClCompile Include="FilesInformationMicrosoftDrive.cpp" />
     <ClCompile Include="FileSystemMicrosoftDrive.cpp" />
+    <ClCompile Include="FileSystemMicrosoftDrive.SelfTest.FakeGraph.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="FileSystemMicrosoftDrive.h" />

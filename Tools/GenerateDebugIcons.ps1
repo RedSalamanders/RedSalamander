@@ -1,3 +1,19 @@
+<#
+.SYNOPSIS
+Regenerates the checked-in debug-badged application icons.
+
+.DESCRIPTION
+Reads the canonical RedSalamander and Monitor icon sources, adds the standard amber debug badge at 16, 32, 48, and 256 pixels, and replaces their checked-in *_debug.ico counterparts.
+
+.OUTPUTS
+No pipeline output. Replaces RedSalamander/res/logo_debug.ico and RedSalamanderMonitor/res/logo_background_debug.ico.
+
+.NOTES
+Prerequisites: PowerShell on Windows with System.Drawing support and both source icon files. Side effects: overwrites two tracked source assets; review their Git diff before committing. Exit is nonzero when an input is missing or image/ICO generation fails. Primary consumers: maintainers regenerating debug assets; the generated icons are compiled by the application resource projects.
+
+.EXAMPLE
+.\Tools\GenerateDebugIcons.ps1
+#>
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 

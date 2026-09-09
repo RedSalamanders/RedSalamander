@@ -1945,6 +1945,120 @@ const auto runRemoteFileCompare = [&](std::wstring_view caseName,
     });
 };
 
+const auto runSmbFileCompare = [&](std::wstring_view caseName) noexcept
+{
+    if (! SelfTest::CaseFilterMatches(options.caseFilter, caseName))
+    {
+        return;
+    }
+
+    if (options.failFast && suite.failed != 0)
+    {
+        AppendCaseResult(suite, caseName, SelfTest::SelfTestCaseResult::Status::skipped, L"not executed (fail-fast)");
+        return;
+    }
+
+    std::wstring smbRootText = GetEnvVarTrimmed(kSelfTestEnvSmbRoot);
+    std::replace(smbRootText.begin(), smbRootText.end(), L'/', L'\\');
+    while (smbRootText.size() > 2u && smbRootText.back() == L'\\')
+    {
+        smbRootText.pop_back();
+    }
+    if (smbRootText.empty())
+    {
+        AppendCaseResult(suite,
+                         caseName,
+                         SelfTest::SelfTestCaseResult::Status::skipped,
+                         std::format(L"SMB smoke skipped: configure path.smb.primary or set {}.", kSelfTestEnvSmbRoot));
+        return;
+    }
+
+    size_t segmentCount = 0u;
+    bool hasSelfTestSegment = false;
+    bool hasUnsafeSegment = false;
+    for (size_t i = 2u; i < smbRootText.size();)
+    {
+        while (i < smbRootText.size() && smbRootText[i] == L'\\')
+        {
+            ++i;
+        }
+        const size_t start = i;
+        while (i < smbRootText.size() && smbRootText[i] != L'\\')
+        {
+            ++i;
+        }
+        if (start == i)
+        {
+            continue;
+        }
+        const std::wstring_view segment = std::wstring_view(smbRootText).substr(start, i - start);
+        ++segmentCount;
+        hasUnsafeSegment = hasUnsafeSegment || segment == L"." || segment == L"..";
+        hasSelfTestSegment = hasSelfTestSegment || ContainsIgnoreCase(segment, L"selftest");
+    }
+
+    if (smbRootText.rfind(L"\\\\", 0u) != 0u || segmentCount < 3u || hasUnsafeSegment || ! hasSelfTestSegment)
+    {
+        AppendCaseResult(suite,
+                         caseName,
+                         SelfTest::SelfTestCaseResult::Status::skipped,
+                         L"SMB HARD REQUIREMENT: root must be a UNC directory below the share, contain no dot segments, and include a 'selftest' segment.");
+        return;
+    }
+
+    const DWORD attributes = GetFileAttributesW(smbRootText.c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0u)
+    {
+        const DWORD attributesError = attributes == INVALID_FILE_ATTRIBUTES ? GetLastError() : ERROR_DIRECTORY;
+        AppendCaseResult(suite,
+                         caseName,
+                         SelfTest::SelfTestCaseResult::Status::skipped,
+                         std::format(L"SMB root is unavailable or is not a directory. error={0}", attributesError));
+        return;
+    }
+
+    SelfTest::RunCase(options,
+                      suite,
+                      caseName,
+                      [&](SelfTest::CaseState& state) noexcept
+    {
+        const std::filesystem::path smbRoot(smbRootText);
+        const std::filesystem::path localRoot = root / std::wstring(caseName) / L"left";
+        state.Require(SelfTest::EnsureDirectory(localRoot), L"SMB compare: failed to create local root folder.");
+
+        const std::wstring uniqueName = std::format(L"only_left_{}.txt", guid);
+        state.Require(SelfTest::WriteTextFile(localRoot / uniqueName, "L"), L"SMB compare: failed to write local test file.");
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
+        Common::Settings::CompareDirectoriesSettings settings{};
+        settings.compareContent = true;
+        auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, localRoot, smbRoot, settings);
+        auto decision = session->GetOrComputeDecision(std::filesystem::path{});
+        state.Require(static_cast<bool>(decision), L"SMB compare: decision is null.");
+        if (! decision)
+        {
+            return false;
+        }
+
+        state.Require(SUCCEEDED(decision->hr),
+                      std::format(L"SMB compare failed. hr=0x{0:08X}", static_cast<unsigned long>(decision->hr)));
+        state.Require(! decision->rightFolderMissing, L"SMB compare: configured root reported missing.");
+        const auto* item = FindItem(*decision, uniqueName);
+        state.Require(item != nullptr, L"SMB compare: unique local file missing from decision.");
+        if (item)
+        {
+            state.Require(item->isDifferent && item->selectLeft && ! item->selectRight,
+                          L"SMB compare: unique local file should be selected only on the left.");
+            state.Require(HasFlag(item->differenceMask, CompareDirectoriesDiffBit::OnlyInLeft),
+                          L"SMB compare: expected OnlyInLeft difference.");
+        }
+        return state.failure.empty();
+    });
+};
+
 const auto runRemoteDirectorySizeCallbackContract = [&](std::wstring_view caseName,
                                                         std::wstring_view protocolLabel,
                                                         std::wstring_view envVarName,
@@ -2893,6 +3007,10 @@ runRemoteDirectorySizeCallbackContract(L"remote_sharepoint_directory_size_callba
                                        kSelfTestDefaultConnSharePoint,
                                        kBuiltinSharePointFileSystemId);
 runRemoteFileCompare(L"remote_file_ftp", L"FTP", kSelfTestEnvConnFtp, kSelfTestDefaultConnFtp, kBuiltinFtpFileSystemId);
+runRemoteFileCompare(L"remote_file_sftp", L"SFTP", kSelfTestEnvConnSftp, kSelfTestDefaultConnSftp, kBuiltinSftpFileSystemId);
+runRemoteFileCompare(L"remote_file_scp", L"SCP", kSelfTestEnvConnScp, kSelfTestDefaultConnScp, kBuiltinScpFileSystemId);
+runRemoteFileCompare(L"remote_file_imap", L"IMAP", kSelfTestEnvConnImap, kSelfTestDefaultConnImap, kBuiltinImapFileSystemId);
+runSmbFileCompare(L"remote_file_smb");
 runRemoteDirectorySizeCallbackContract(
     L"remote_ftp_directory_size_callback_contract", L"FTP", kSelfTestEnvConnFtp, kSelfTestDefaultConnFtp, kBuiltinFtpFileSystemId);
 runRemoteFtpPartialContinue(L"remote_ftp_continue_on_error_partial");

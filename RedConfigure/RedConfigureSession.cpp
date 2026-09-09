@@ -1297,38 +1297,119 @@ Workflow::BatchApprovalResult RedConfigureSession::ApplyThemeMassChange(const Wo
     return Workflow::BatchApprovalResult::Applied;
 }
 
-bool RedConfigureSession::ApplyClipboardMatrix(size_t startRow, size_t startCultureIndex, std::wstring_view clipboardText)
+bool RedConfigureSession::ApplyClipboardMatrix(std::span<const LocalizationReviewRowIdentity> destinationRows,
+                                               std::span<const std::wstring> destinationCultures,
+                                               std::wstring_view clipboardText)
 {
     const Workflow::ClipboardMatrix matrix = Workflow::ParseClipboardMatrix(clipboardText);
-    if (matrix.rows.empty() || startRow >= _localizationReviewRows.size())
+    if (matrix.rows.empty() || matrix.rows.front().empty() || matrix.rows.size() > destinationRows.size())
     {
         return false;
     }
-    RecordUndoSnapshot();
-    bool changed = false;
-    for (size_t rowOffset = 0u; rowOffset < matrix.rows.size() && startRow + rowOffset < _localizationReviewRows.size(); ++rowOffset)
+
+    const size_t columnCount = matrix.rows.front().size();
+    if (columnCount > destinationCultures.size() || matrix.rows.size() > (std::numeric_limits<size_t>::max)() / columnCount)
     {
-        LocalizationReviewRow& row = _localizationReviewRows[startRow + rowOffset];
-        for (size_t columnOffset = 0u; columnOffset < matrix.rows[rowOffset].size() && startCultureIndex + columnOffset < row.targets.size(); ++columnOffset)
+        return false;
+    }
+    if (std::ranges::any_of(matrix.rows, [columnCount](const std::vector<std::wstring>& row) noexcept { return row.size() != columnCount; }))
+    {
+        return false;
+    }
+
+    struct PreparedCell
+    {
+        size_t rowIndex  = 0u;
+        size_t cellIndex = 0u;
+        std::wstring text;
+        Localization::PlaceholderValidationResult validation;
+    };
+
+    std::vector<size_t> resolvedRows;
+    resolvedRows.reserve(matrix.rows.size());
+    for (size_t rowOffset = 0u; rowOffset < matrix.rows.size(); ++rowOffset)
+    {
+        const LocalizationReviewRowIdentity& identity = destinationRows[rowOffset];
+        std::optional<size_t> matchingRow;
+        for (size_t rowIndex = 0u; rowIndex < _localizationReviewRows.size(); ++rowIndex)
         {
-            LocalizationTargetCell& cell = row.targets[startCultureIndex + columnOffset];
-            const std::wstring& text = matrix.rows[rowOffset][columnOffset];
-            const auto validation = Localization::ValidatePlaceholders(row.sourceText, text);
-            if (validation.status != Localization::PlaceholderStatus::Ok)
+            const LocalizationReviewRow& row = _localizationReviewRows[rowIndex];
+            if (row.ownerName == identity.ownerName && row.id == identity.id)
             {
-                continue;
+                if (matchingRow.has_value())
+                {
+                    return false;
+                }
+                matchingRow = rowIndex;
             }
-            cell.targetText = text;
-            cell.validation = validation;
-            cell.dirty      = true;
-            changed         = true;
+        }
+        if (! matchingRow.has_value() || std::ranges::find(resolvedRows, matchingRow.value()) != resolvedRows.end())
+        {
+            return false;
+        }
+        resolvedRows.push_back(matchingRow.value());
+    }
+
+    for (size_t cultureOffset = 0u; cultureOffset < columnCount; ++cultureOffset)
+    {
+        if (destinationCultures[cultureOffset].empty())
+        {
+            return false;
+        }
+        for (size_t earlierCulture = 0u; earlierCulture < cultureOffset; ++earlierCulture)
+        {
+            if (CompareTextIgnoreCase(destinationCultures[earlierCulture], destinationCultures[cultureOffset]) == 0)
+            {
+                return false;
+            }
         }
     }
-    if (! changed && ! _undoHistory.empty())
+
+    std::vector<PreparedCell> preparedCells;
+    preparedCells.reserve(matrix.rows.size() * columnCount);
+    for (size_t rowOffset = 0u; rowOffset < matrix.rows.size(); ++rowOffset)
     {
-        _undoHistory.pop_back();
+        const size_t rowIndex             = resolvedRows[rowOffset];
+        const LocalizationReviewRow& row  = _localizationReviewRows[rowIndex];
+        for (size_t cultureOffset = 0u; cultureOffset < columnCount; ++cultureOffset)
+        {
+            std::optional<size_t> matchingCell;
+            for (size_t cellIndex = 0u; cellIndex < row.targets.size(); ++cellIndex)
+            {
+                if (CompareTextIgnoreCase(row.targets[cellIndex].cultureName, destinationCultures[cultureOffset]) == 0)
+                {
+                    if (matchingCell.has_value())
+                    {
+                        return false;
+                    }
+                    matchingCell = cellIndex;
+                }
+            }
+            if (! matchingCell.has_value())
+            {
+                return false;
+            }
+
+            const std::wstring& text = matrix.rows[rowOffset][cultureOffset];
+            Localization::PlaceholderValidationResult validation = Localization::ValidatePlaceholders(row.sourceText, text);
+            if (validation.status != Localization::PlaceholderStatus::Ok)
+            {
+                return false;
+            }
+            preparedCells.push_back(
+                {.rowIndex = rowIndex, .cellIndex = matchingCell.value(), .text = text, .validation = std::move(validation)});
+        }
     }
-    return changed;
+
+    RecordUndoSnapshot();
+    for (PreparedCell& prepared : preparedCells)
+    {
+        LocalizationTargetCell& cell = _localizationReviewRows[prepared.rowIndex].targets[prepared.cellIndex];
+        cell.targetText              = std::move(prepared.text);
+        cell.validation              = std::move(prepared.validation);
+        cell.dirty                   = true;
+    }
+    return true;
 }
 
 bool RedConfigureSession::Undo()

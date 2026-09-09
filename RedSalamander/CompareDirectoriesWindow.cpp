@@ -2703,14 +2703,27 @@ void CompareDirectoriesWindow::OnFolderWindowFileOperationCompleted(const Folder
         return;
     }
 
-    // Invalidate affected paths so the forced refresh performed by FolderWindow updates the compare decisions.
+    // Every source disposition refreshes the source row. Destination refresh is driven only by
+    // publication truth; missing item truth is conservative Unknown and is refreshed as well.
     const bool hasResolvedDestinations = e.destinationPaths.size() == e.sourcePaths.size();
     for (size_t index = 0; index < e.sourcePaths.size(); ++index)
     {
         const std::filesystem::path& src = e.sourcePaths[index];
         _session->InvalidateForAbsolutePath(src, true);
 
-        if (hasResolvedDestinations)
+        const auto outcome = std::ranges::find_if(e.itemOutcomes, [index](const FolderWindow::FileOperationItemOutcome& item) noexcept
+        { return item.sourceIndex == index; });
+        if (outcome != e.itemOutcomes.end() && outcome->publication != FileOperations::PublicationState::Published &&
+            outcome->publication != FileOperations::PublicationState::Unknown)
+        {
+            continue;
+        }
+
+        if (outcome != e.itemOutcomes.end() && ! outcome->finalDestinationPath.empty())
+        {
+            _session->InvalidateForAbsolutePath(outcome->finalDestinationPath, true);
+        }
+        else if (hasResolvedDestinations)
         {
             _session->InvalidateForAbsolutePath(e.destinationPaths[index], true);
         }

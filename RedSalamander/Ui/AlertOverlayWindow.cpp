@@ -28,6 +28,7 @@ constexpr wchar_t kAnchorOriginalWndProcProp[]   = L"RedSalamander.AlertOverlay.
 constexpr wchar_t kAnchorStateProp[]             = L"RedSalamander.AlertOverlay.AnchorState";
 constexpr UINT kUiaInvokeButtonMessage           = WM_APP + 0x72;
 constexpr UINT kUiaInvokeDismissMessage          = WM_APP + 0x73;
+constexpr UINT kUiaInvokeOptionMessage           = WM_APP + 0x74;
 
 POINT PointFromLParam(LPARAM lp) noexcept
 {
@@ -77,6 +78,7 @@ public:
         Root,
         Text,
         CloseButton,
+        Option,
         Button,
     };
 
@@ -400,6 +402,18 @@ public:
             }
         }
 
+        if (const std::optional<uint32_t> focusedOptionId = window->_overlay.GetFocusedOptionId(); focusedOptionId.has_value())
+        {
+            const auto& options = window->_overlay.GetModel().options;
+            for (size_t index = 0; index < options.size(); ++index)
+            {
+                if (options[index].id == focusedOptionId.value())
+                {
+                    return CreateFragment(_hwnd, ElementId{ElementKind::Option, index}, provider);
+                }
+            }
+        }
+
         return CreateFragment(_hwnd, ElementId{}, provider);
     }
 
@@ -414,6 +428,16 @@ public:
         if (_id.kind == ElementKind::CloseButton)
         {
             return PostInvokeMessage(_hwnd, kUiaInvokeDismissMessage, 0);
+        }
+
+        if (_id.kind == ElementKind::Option)
+        {
+            const auto& options = window->_overlay.GetModel().options;
+            if (_id.index >= options.size())
+            {
+                return UIA_E_ELEMENTNOTAVAILABLE;
+            }
+            return PostInvokeMessage(_hwnd, kUiaInvokeOptionMessage, static_cast<WPARAM>(options[_id.index].id));
         }
 
         const auto& buttons = window->_overlay.GetModel().buttons;
@@ -466,7 +490,7 @@ private:
 
     [[nodiscard]] bool IsButtonLike() const noexcept
     {
-        return _id.kind == ElementKind::Button || _id.kind == ElementKind::CloseButton;
+        return _id.kind == ElementKind::Button || _id.kind == ElementKind::Option || _id.kind == ElementKind::CloseButton;
     }
 
     [[nodiscard]] AlertOverlayWindow* ResolveWindow() const noexcept
@@ -492,6 +516,7 @@ private:
             case ElementKind::Root: return UIA_PaneControlTypeId;
             case ElementKind::Text: return UIA_TextControlTypeId;
             case ElementKind::CloseButton:
+            case ElementKind::Option:
             case ElementKind::Button: return UIA_ButtonControlTypeId;
             default: return UIA_CustomControlTypeId;
         }
@@ -516,6 +541,17 @@ private:
                 return std::format(L"{}\n{}", model.title, model.message);
             }
             case ElementKind::CloseButton: return L"Close";
+            case ElementKind::Option:
+                if (_id.index < model.options.size())
+                {
+                    const auto& option = model.options[_id.index];
+                    if (! option.choices.empty() && option.selectedIndex < option.choices.size())
+                    {
+                        return std::format(L"{}: {}", option.label, option.choices[option.selectedIndex].label);
+                    }
+                    return option.label;
+                }
+                return {};
             case ElementKind::Button:
                 if (_id.index < model.buttons.size())
                 {
@@ -533,6 +569,12 @@ private:
             case ElementKind::Root: return L"AlertOverlay";
             case ElementKind::Text: return L"AlertOverlay.Text";
             case ElementKind::CloseButton: return L"AlertOverlay.Close";
+            case ElementKind::Option:
+            {
+                const auto& options = window._overlay.GetModel().options;
+                const uint32_t id   = _id.index < options.size() ? options[_id.index].id : 0u;
+                return std::format(L"AlertOverlay.Option.{}", id);
+            }
             case ElementKind::Button:
             {
                 const auto& buttons = window._overlay.GetModel().buttons;
@@ -547,7 +589,7 @@ private:
     {
         std::vector<ElementId> children;
         const AlertModel& model = window._overlay.GetModel();
-        children.reserve(model.buttons.size() + 2u);
+        children.reserve(model.options.size() + model.buttons.size() + 2u);
         if (! model.title.empty() || ! model.message.empty())
         {
             children.push_back(ElementId{ElementKind::Text, 0u});
@@ -555,6 +597,10 @@ private:
         if (model.closable)
         {
             children.push_back(ElementId{ElementKind::CloseButton, 0u});
+        }
+        for (size_t index = 0u; index < model.options.size(); ++index)
+        {
+            children.push_back(ElementId{ElementKind::Option, index});
         }
         for (size_t index = 0u; index < model.buttons.size(); ++index)
         {
@@ -718,6 +764,7 @@ LRESULT AlertOverlayWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) n
             }
             break;
         case kUiaInvokeButtonMessage: InvokeButton(static_cast<uint32_t>(wp)); return 0;
+        case kUiaInvokeOptionMessage: InvokeOption(static_cast<uint32_t>(wp)); return 0;
         case kUiaInvokeDismissMessage: InvokeDismiss(); return 0;
         case WM_PAINT: OnPaint(); return 0;
         case WM_DPICHANGED_AFTERPARENT:
@@ -960,6 +1007,12 @@ void AlertOverlayWindow::OnLButtonUp(POINT pt) noexcept
         return;
     }
 
+    if (pressed.part == AlertHitTest::Part::Option && hit.part == AlertHitTest::Part::Option && pressed.buttonId == hit.buttonId)
+    {
+        InvokeOption(hit.buttonId);
+        return;
+    }
+
     if (_overlay.UpdateHotState(D2D1::Point2F(xDip, yDip)))
     {
         InvalidateRect(_hwnd.get(), nullptr, FALSE);
@@ -990,7 +1043,7 @@ void AlertOverlayWindow::OnKeyDown(WPARAM key) noexcept
     if (key == VK_TAB)
     {
         const bool reverse = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-        if (_overlay.FocusNextButton(reverse))
+        if (_overlay.FocusNextInteractive(reverse))
         {
             InvalidateRect(_hwnd.get(), nullptr, FALSE);
         }
@@ -1000,6 +1053,11 @@ void AlertOverlayWindow::OnKeyDown(WPARAM key) noexcept
     if (key == VK_LEFT || key == VK_UP || key == VK_RIGHT || key == VK_DOWN)
     {
         const bool reverse = (key == VK_LEFT || key == VK_UP);
+        if (const std::optional<uint32_t> optionId = _overlay.GetFocusedOptionId(); optionId.has_value())
+        {
+            InvokeOption(optionId.value(), reverse);
+            return;
+        }
         if (_overlay.FocusNextButton(reverse))
         {
             InvalidateRect(_hwnd.get(), nullptr, FALSE);
@@ -1009,6 +1067,11 @@ void AlertOverlayWindow::OnKeyDown(WPARAM key) noexcept
 
     if (key == VK_RETURN || key == VK_SPACE)
     {
+        if (const std::optional<uint32_t> optionId = _overlay.GetFocusedOptionId(); optionId.has_value())
+        {
+            InvokeOption(optionId.value());
+            return;
+        }
         std::optional<uint32_t> buttonId = _overlay.GetFocusedButtonId();
         if (! buttonId.has_value())
         {
@@ -1105,7 +1168,7 @@ LRESULT AlertOverlayWindow::OnSetCursor(HWND cursorWindow, UINT hitTest, UINT mo
             const float xDip       = DipFromPx(pt.x);
             const float yDip       = DipFromPx(pt.y);
             const AlertHitTest hit = _overlay.HitTest(D2D1::Point2F(xDip, yDip));
-            if (hit.part == AlertHitTest::Part::Close || hit.part == AlertHitTest::Part::Button)
+            if (hit.part == AlertHitTest::Part::Close || hit.part == AlertHitTest::Part::Option || hit.part == AlertHitTest::Part::Button)
             {
                 SetCursor(LoadCursorW(nullptr, IDC_HAND));
                 return TRUE;
@@ -1126,6 +1189,14 @@ void AlertOverlayWindow::InvokeButton(uint32_t buttonId) noexcept
     }
 
     Hide();
+}
+
+void AlertOverlayWindow::InvokeOption(uint32_t optionId, bool reverse) noexcept
+{
+    if (_overlay.ActivateOption(optionId, reverse) && _hwnd)
+    {
+        InvalidateRect(_hwnd.get(), nullptr, FALSE);
+    }
 }
 
 void AlertOverlayWindow::InvokeDismiss() noexcept
@@ -1983,6 +2054,28 @@ bool DebugGetAlertOverlayWindowSnapshot(HWND hwnd, AlertOverlayWindowDebugSnapsh
     out.lastMouseUpPointPx         = window->_debugLastMouseUpPointPx;
     out.lastMouseDownHitPart       = window->_debugLastMouseDownHitPart;
     out.lastMouseUpHitPart         = window->_debugLastMouseUpHitPart;
+    const AlertModel& model        = window->_overlay.GetModel();
+    out.presentation               = model.presentation;
+    out.renderedIconPresentation   = window->_overlay.DebugGetLastDrawnIconPresentationForTest();
+    out.renderedIconGlyph          = window->_overlay.DebugGetLastDrawnIconGlyphForTest();
+    out.renderedCloseGlyph         = window->_overlay.DebugGetLastDrawnCloseGlyphForTest();
+    out.title                      = model.title;
+    out.optionValues.clear();
+    out.optionValues.reserve(model.options.size());
+    for (const AlertOption& option : model.options)
+    {
+        out.optionValues.push_back(
+            (! option.choices.empty() && option.selectedIndex < option.choices.size()) ? option.choices[option.selectedIndex].value : 0u);
+    }
+    out.primaryButtonLabel.clear();
+    for (const AlertButton& button : model.buttons)
+    {
+        if (button.primary)
+        {
+            out.primaryButtonLabel = button.label;
+            break;
+        }
+    }
     return true;
 }
 #endif

@@ -16,7 +16,7 @@ Describe 'Build output process preflight' {
             throw "build.ps1 did not parse: $($parseErrors[0].Message)"
         }
 
-        foreach ($functionName in @('Test-BuildOutputSelfTestCommandLine', 'Stop-BuildOutputProcess')) {
+        foreach ($functionName in @('Assert-BuildOutputProcessNotRunning')) {
             $functionAst = $buildAst.Find({
                 param($node)
                 $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
@@ -35,22 +35,7 @@ Describe 'Build output process preflight' {
         Mock Stop-Process {}
     }
 
-    It 'recognizes suite and option self-test command-line flags without matching ordinary arguments' {
-        $exe = 'Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe'
-        foreach ($commandLine in @(
-            "`"$exe`" --selftest",
-            "`"$exe`" --commands-selftest --selftest-repeat=100",
-            "`"$exe`" --selftest-case=cmd_pane_fileops_completed_group_and_navigation",
-            "`"$exe`" `"--monitor-scrollback-selftest`""
-        )) {
-            (Test-BuildOutputSelfTestCommandLine -CommandLine $commandLine) | Should Be $true
-        }
-
-        (Test-BuildOutputSelfTestCommandLine -CommandLine "`"$exe`"") | Should Be $false
-        (Test-BuildOutputSelfTestCommandLine -CommandLine "`"$exe`" --output=selftest") | Should Be $false
-    }
-
-    It 'aborts with diagnostics and kills nothing when any exact-path process is a self-test' {
+    It 'fails closed with diagnostics and kills nothing when an exact-path process is a self-test' {
         $expectedPath = Join-Path $TestDrive 'Debug\RedSalamander.exe'
         $script:buildOutputProcesses = @(
             [pscustomobject]@{
@@ -67,13 +52,14 @@ Describe 'Build output process preflight' {
 
         $errorMessage = $null
         try {
-            Stop-BuildOutputProcess -ProcessName 'RedSalamander.exe' -ExpectedExePath $expectedPath
+            Assert-BuildOutputProcessNotRunning -ProcessName 'RedSalamander.exe' -ExpectedExePath $expectedPath
         }
         catch {
             $errorMessage = $_.Exception.Message
         }
 
-        $errorMessage | Should Match 'Build canceled because an active self-test may be using a target output'
+        $errorMessage | Should Match 'independently launched process is using an exact target output'
+        $errorMessage | Should Match 'was not terminated because it is not proven to belong to this operation'
         $errorMessage | Should Match 'PID=4101'
         $errorMessage | Should Match ([regex]::Escape([System.IO.Path]::GetFullPath($expectedPath)))
         $errorMessage | Should Match ([regex]::Escape('--commands-selftest --selftest-repeat=100'))
@@ -92,7 +78,7 @@ Describe 'Build output process preflight' {
 
         $errorMessage = $null
         try {
-            Stop-BuildOutputProcess -ProcessName 'RedSalamander.exe' -ExpectedExePath $expectedPath
+            Assert-BuildOutputProcessNotRunning -ProcessName 'RedSalamander.exe' -ExpectedExePath $expectedPath
         }
         catch {
             $errorMessage = $_.Exception.Message
@@ -103,7 +89,7 @@ Describe 'Build output process preflight' {
         Assert-MockCalled Stop-Process -Times 0
     }
 
-    It 'still force-closes an exact-path interactive instance and ignores other paths' {
+    It 'preserves both exact-path and foreign-checkout interactive processes while failing only for the exact target' {
         $expectedPath = Join-Path $TestDrive 'Debug\RedSalamander.exe'
         $otherPath = Join-Path $TestDrive 'Other\RedSalamander.exe'
         $script:buildOutputProcesses = @(
@@ -119,18 +105,87 @@ Describe 'Build output process preflight' {
             }
         )
 
-        Stop-BuildOutputProcess -ProcessName 'RedSalamander.exe' -ExpectedExePath $expectedPath
+        $errorMessage = $null
+        try {
+            Assert-BuildOutputProcessNotRunning -ProcessName 'RedSalamander.exe' -ExpectedExePath $expectedPath
+        }
+        catch {
+            $errorMessage = $_.Exception.Message
+        }
 
-        Assert-MockCalled Stop-Process -Times 1 -ParameterFilter { $Id -eq 4302 -and $Force }
+        $errorMessage | Should Match 'PID=4302'
+        $errorMessage | Should Not Match 'PID=4301'
+        Assert-MockCalled Stop-Process -Times 0
+    }
+
+    It 'allows a foreign-checkout process to survive without blocking this output profile' {
+        $expectedPath = Join-Path $TestDrive 'CurrentCheckout\.build\x64\Debug\RedSalamander.exe'
+        $foreignPath = Join-Path $TestDrive 'ForeignCheckout\.build\x64\Debug\RedSalamander.exe'
+        $script:buildOutputProcesses = @(
+            [pscustomobject]@{
+                ProcessId = 4401
+                ExecutablePath = $foreignPath
+                CommandLine = "`"$foreignPath`" --interactive"
+            }
+        )
+
+        { Assert-BuildOutputProcessNotRunning -ProcessName 'RedSalamander.exe' -ExpectedExePath $expectedPath } |
+            Should Not Throw
+        Assert-MockCalled Stop-Process -Times 0
+    }
+
+    It 'fails closed and kills nothing when target process metadata cannot be enumerated' {
+        $expectedPath = Join-Path $TestDrive 'CurrentCheckout\.build\x64\Debug\RedSalamander.exe'
+        Mock Get-CimInstance { throw 'CIM metadata unavailable' }
+
+        $errorMessage = $null
+        try {
+            Assert-BuildOutputProcessNotRunning `
+                -ProcessName 'RedSalamander.exe' `
+                -ExpectedExePath $expectedPath
+        }
+        catch {
+            $errorMessage = $_.Exception.Message
+        }
+
+        $errorMessage | Should Match 'target-output process safety could not be verified'
+        $errorMessage | Should Match 'unable to enumerate'
+        $errorMessage | Should Match 'No process was terminated'
+        $errorMessage | Should Match 'CIM metadata unavailable'
+        Assert-MockCalled Stop-Process -Times 0
+    }
+
+    It 'creates collision-resistant build log paths for concurrent profiles' {
+        $tokens = $null
+        $parseErrors = $null
+        $buildAst = [System.Management.Automation.Language.Parser]::ParseFile(
+            $buildScript,
+            [ref]$tokens,
+            [ref]$parseErrors)
+        @($parseErrors).Count | Should Be 0
+        $logFunction = $buildAst.Find({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -eq 'New-ProcessLogPath'
+            }, $true)
+        $scriptRootForLogTest = $TestDrive
+        Invoke-Expression ($logFunction.Extent.Text.Replace('$PSScriptRoot', '$scriptRootForLogTest'))
+
+        $first = New-ProcessLogPath -Prefix 'msbuild'
+        $second = New-ProcessLogPath -Prefix 'msbuild'
+        $first | Should Not Be $second
+        (Split-Path -Leaf $first) | Should Match "^msbuild-\d{8}_\d{6}_\d{3}-pid$PID-[0-9a-f]{8}\.log$"
     }
 }
 
 Describe 'Artifact operation lock' {
     BeforeAll {
-        $sanitizedEnvironmentScript = Join-Path $repoRoot 'Tools\SanitizedEnvironment.ps1'
-        $artifactLockScript = Join-Path $repoRoot 'Tools\ArtifactOperationLock.ps1'
-        . $sanitizedEnvironmentScript
-        . $artifactLockScript
+        $sanitizedEnvironmentModule = Join-Path $repoRoot 'Tools\Modules\Build\SanitizedEnvironment.psm1'
+        $artifactLockModule = Join-Path $repoRoot 'Tools\Modules\Build\ArtifactOperationLock.psm1'
+        Import-Module $sanitizedEnvironmentModule -Force -ErrorAction Stop
+        # Contained-process delegation discovers the optional lock hooks from
+        # the global command table, matching production callers.
+        Import-Module $artifactLockModule -Force -Global -ErrorAction Stop
 
         if (-not ('RedSalamander.ToolingTests.InheritableEvent' -as [type])) {
             Add-Type -TypeDefinition @'
@@ -207,31 +262,196 @@ namespace RedSalamander.ToolingTests
         }
     }
 
+    It 'creates only reparse-free destinations beneath an exact guarded repository root' {
+        $testRepo = Join-Path $TestDrive 'GuardedPathRepo'
+        New-Item -ItemType Directory -Path $testRepo -Force | Out-Null
+
+        $destination = Resolve-RSGuardedRepositoryPath `
+            -RepoRoot $testRepo `
+            -GuardedRelativeRoot '.build\AppPackages' `
+            -Path '.build\AppPackages\nested\output' `
+            -CreateDirectory
+        (Test-Path -LiteralPath $destination -PathType Container) | Should Be $true
+
+        {
+            Resolve-RSGuardedRepositoryPath `
+                -RepoRoot $testRepo `
+                -GuardedRelativeRoot '.build\AppPackages' `
+                -Path '.build\escaped' `
+                -CreateDirectory
+        } | Should Throw 'Destination must remain beneath the guarded repository root'
+        (Test-Path -LiteralPath (Join-Path $testRepo '.build\escaped')) | Should Be $false
+    }
+
+    It 'rejects a junction escape before creating anything in the junction target' {
+        $testRepo = Join-Path $TestDrive 'GuardedJunctionRepo'
+        $outside = Join-Path $TestDrive 'GuardedJunctionOutside'
+        $buildRoot = Join-Path $testRepo '.build'
+        $junction = Join-Path $buildRoot 'AppPackages'
+        $sentinel = Join-Path $outside 'sentinel.txt'
+        New-Item -ItemType Directory -Path $buildRoot,$outside -Force | Out-Null
+        [IO.File]::WriteAllText($sentinel, 'preserve-app-packages-target')
+        New-Item -ItemType Junction -Path $junction -Target $outside | Out-Null
+
+        try {
+            {
+                Resolve-RSGuardedRepositoryPath `
+                    -RepoRoot $testRepo `
+                    -GuardedRelativeRoot '.build\AppPackages' `
+                    -Path '.build\AppPackages\escaped' `
+                    -CreateDirectory
+            } | Should Throw 'contains a reparse point'
+            (Test-Path -LiteralPath (Join-Path $outside 'escaped')) | Should Be $false
+            (Get-Content -LiteralPath $sentinel -Raw) | Should Be 'preserve-app-packages-target'
+        }
+        finally {
+            Remove-Item -LiteralPath $junction -Force
+        }
+    }
+
+    It 'rejects a .build junction before touching its external sentinel' {
+        $testRepo = Join-Path $TestDrive 'GuardedBuildJunctionRepo'
+        $outside = Join-Path $TestDrive 'GuardedBuildJunctionOutside'
+        $junction = Join-Path $testRepo '.build'
+        $sentinel = Join-Path $outside 'sentinel.txt'
+        New-Item -ItemType Directory -Path $testRepo,$outside -Force | Out-Null
+        [IO.File]::WriteAllText($sentinel, 'preserve-build-target')
+        New-Item -ItemType Junction -Path $junction -Target $outside | Out-Null
+
+        try {
+            {
+                Resolve-RSGuardedRepositoryPath `
+                    -RepoRoot $testRepo `
+                    -GuardedRelativeRoot '.build\AppPackages' `
+                    -Path '.build\AppPackages\package.zip' `
+                    -CreateDirectory
+            } | Should Throw 'contains a reparse point'
+            (Test-Path -LiteralPath (Join-Path $outside 'AppPackages')) | Should Be $false
+            (Get-Content -LiteralPath $sentinel -Raw) | Should Be 'preserve-build-target'
+        }
+        finally {
+            Remove-Item -LiteralPath $junction -Force
+        }
+    }
+
+    It 'atomically publishes a same-directory guarded file and preserves prior bytes on rejected input' {
+        $testRepo = Join-Path $TestDrive 'GuardedPublicationRepo'
+        $output = Join-Path $testRepo '.build\AppPackages'
+        [void](New-Item -ItemType Directory -Path $testRepo)
+        [void](Resolve-RSGuardedRepositoryPath `
+                -RepoRoot $testRepo `
+                -GuardedRelativeRoot '.build\AppPackages' `
+                -Path $output `
+                -CreateDirectory)
+        $destination = Join-Path $output 'package.zip'
+        $staged = Join-Path $output '.package.new.tmp.zip'
+        [IO.File]::WriteAllText($destination, 'previous-complete-zip')
+        [IO.File]::WriteAllText($staged, 'new-complete-zip')
+
+        $published = Publish-RSGuardedRepositoryFile `
+            -RepoRoot $testRepo `
+            -GuardedRelativeRoot '.build\AppPackages' `
+            -StagedPath $staged `
+            -DestinationPath $destination
+        $published | Should Be $destination
+        (Get-Content -LiteralPath $destination -Raw) | Should Be 'new-complete-zip'
+        (Test-Path -LiteralPath $staged) | Should Be $false
+
+        $outsideStaged = Join-Path $TestDrive 'outside-staged.zip'
+        [IO.File]::WriteAllText($outsideStaged, 'untrusted-new-bytes')
+        {
+            Publish-RSGuardedRepositoryFile `
+                -RepoRoot $testRepo `
+                -GuardedRelativeRoot '.build\AppPackages' `
+                -StagedPath $outsideStaged `
+                -DestinationPath $destination
+        } | Should Throw 'Destination must remain beneath the guarded repository root'
+        (Get-Content -LiteralPath $destination -Raw) | Should Be 'new-complete-zip'
+    }
+
+    It 'rejects a final-file reparse destination without changing its external target' {
+        $testRepo = Join-Path $TestDrive 'GuardedFinalReparseRepo'
+        $output = Join-Path $testRepo '.build\AppPackages'
+        $outside = Join-Path $TestDrive 'GuardedFinalReparseOutside'
+        [void](New-Item -ItemType Directory -Path $testRepo)
+        [void](Resolve-RSGuardedRepositoryPath `
+                -RepoRoot $testRepo `
+                -GuardedRelativeRoot '.build\AppPackages' `
+                -Path $output `
+                -CreateDirectory)
+        [void](New-Item -ItemType Directory -Path $outside -Force)
+        $sentinel = Join-Path $outside 'sentinel.zip'
+        $destination = Join-Path $output 'package.zip'
+        $staged = Join-Path $output '.package.new.tmp.zip'
+        [IO.File]::WriteAllText($sentinel, 'external-final-sentinel')
+        [IO.File]::WriteAllText($staged, 'new-complete-zip')
+        [void](New-Item -ItemType SymbolicLink -Path $destination -Target $sentinel)
+
+        try {
+            {
+                Publish-RSGuardedRepositoryFile `
+                    -RepoRoot $testRepo `
+                    -GuardedRelativeRoot '.build\AppPackages' `
+                    -StagedPath $staged `
+                    -DestinationPath $destination
+            } | Should Throw 'contains a reparse point'
+            (Get-Content -LiteralPath $sentinel -Raw) | Should Be 'external-final-sentinel'
+        }
+        finally {
+            Remove-Item -LiteralPath $destination -Force
+        }
+    }
+
     It 'uses a canonical repository identity and supports balanced same-thread reentrancy' {
         $testRepo = Join-Path $TestDrive 'Repo'
         New-Item -ItemType Directory -Path $testRepo -Force | Out-Null
+        $debugScope = @{ configuration = 'Debug'; platform = 'x64'; kind = 'test' }
+        $releaseScope = @{ configuration = 'Release'; platform = 'x64'; kind = 'build' }
+        $arm64Scope = @{ configuration = 'Debug'; platform = 'ARM64'; kind = 'build' }
+        $debugDependencyScope = @{ configuration = 'Debug'; platform = 'x64'; kind = 'build'; coordination = 'shared-dependency' }
+        $releaseDependencyScope = @{ configuration = 'Release'; platform = 'x64'; kind = 'build'; coordination = 'shared-dependency' }
 
-        $lockPath = Get-RSArtifactOperationLockPath -RepoRoot $testRepo
-        $caseVariantLockPath = Get-RSArtifactOperationLockPath -RepoRoot $testRepo.ToUpperInvariant()
+        $lockPath = Get-RSArtifactOperationLockPath -RepoRoot $testRepo -Scope $debugScope
+        $caseVariantLockPath = Get-RSArtifactOperationLockPath `
+            -RepoRoot $testRepo.ToUpperInvariant() `
+            -Scope @{ configuration = 'debug'; platform = 'X64' }
         $lockPath.ToUpperInvariant() | Should Be $caseVariantLockPath.ToUpperInvariant()
+        $lockPath | Should Not Be (Get-RSArtifactOperationLockPath -RepoRoot $testRepo -Scope $releaseScope)
+        $lockPath | Should Not Be (Get-RSArtifactOperationLockPath -RepoRoot $testRepo -Scope $arm64Scope)
+        (Get-RSArtifactOperationLockPath -RepoRoot $testRepo -Scope $debugDependencyScope) |
+            Should Be (Get-RSArtifactOperationLockPath -RepoRoot $testRepo -Scope $releaseDependencyScope)
+        $debugPackagingScope = @{ configuration = 'Debug'; platform = 'x64'; coordination = 'packaging' }
+        $arm64PackagingScope = @{ configuration = 'Release'; platform = 'ARM64'; coordination = 'packaging' }
+        (Get-RSArtifactOperationLockPath -RepoRoot $testRepo -Scope $debugPackagingScope) |
+            Should Be (Get-RSArtifactOperationLockPath -RepoRoot $testRepo -Scope $arm64PackagingScope)
 
         $outer = $null
         $inner = $null
-        $metadataPath = Get-RSArtifactOperationOwnerMetadataPath -RepoRoot $testRepo
+        $metadataPath = Get-RSArtifactOperationOwnerMetadataPath -RepoRoot $testRepo -Scope $debugScope
         try {
-            $outer = Enter-RSArtifactOperationLock -RepoRoot $testRepo -Operation 'outer-test'
+            $outer = Enter-RSArtifactOperationLock `
+                -RepoRoot $testRepo `
+                -Operation 'outer-test' `
+                -Scope $debugScope
             (Test-Path -LiteralPath $metadataPath) | Should Be $true
-            $metadata = Read-RSArtifactOperationOwnerMetadata -RepoRoot $testRepo
+            $metadata = Read-RSArtifactOperationOwnerMetadata -RepoRoot $testRepo -Scope $debugScope
             $metadata.owner_pid | Should Be $PID
             $metadata.operation | Should Be 'outer-test'
+            $metadata.schema | Should Be 'red-salamander.artifact-operation-owner.v4'
+            $metadata.scope_key | Should Be 'profile|platform=X64|configuration=DEBUG'
+            [System.IO.Path]::GetFullPath([string]$metadata.owner_process_path) |
+                Should Be ([System.IO.Path]::GetFullPath((Get-Process -Id $PID).Path))
             [string]::IsNullOrWhiteSpace([string]$metadata.started_utc) | Should Be $false
             (Get-Content -LiteralPath $metadataPath -Raw) |
                 Should Match '"started_utc"\s*:\s*"[^"]+Z"'
-            (Remove-RSArtifactOperationOwnerMetadata -RepoRoot $testRepo -Token 'not-the-owner') |
+            (Remove-RSArtifactOperationOwnerMetadata -RepoRoot $testRepo -Token 'not-the-owner' -Scope $debugScope) |
                 Should Be $false
             (Test-Path -LiteralPath $metadataPath) | Should Be $true
 
-            $inner = Enter-RSArtifactOperationLock -RepoRoot $testRepo -Operation 'inner-test'
+            $inner = Enter-RSArtifactOperationLock `
+                -RepoRoot $testRepo `
+                -Operation 'inner-test' `
+                -Scope $debugScope
             $outer.WasAbandoned | Should Be $false
             $inner.WasAbandoned | Should Be $false
             $outer.IsRootOwner | Should Be $true
@@ -249,11 +469,246 @@ namespace RedSalamander.ToolingTests
 
         $afterRelease = $null
         try {
-            $afterRelease = Enter-RSArtifactOperationLock -RepoRoot $testRepo -Operation 'after-release-test'
+            $afterRelease = Enter-RSArtifactOperationLock `
+                -RepoRoot $testRepo `
+                -Operation 'after-release-test' `
+                -Scope $debugScope
             $afterRelease.WasAbandoned | Should Be $false
         }
         finally {
             Exit-RSArtifactOperationLock -Lock $afterRelease
+        }
+    }
+
+    It 'requires an explicit production artifact profile and keeps repository fallback opt-in' {
+        $testRepo = Join-Path $TestDrive 'ExplicitScopeRepo'
+        New-Item -ItemType Directory -Path $testRepo -Force | Out-Null
+
+        foreach ($invalidScope in @(@{}, @{ platform = 'x64' })) {
+            $message = $null
+            try {
+                $unexpected = Enter-RSArtifactOperationLock `
+                    -RepoRoot $testRepo `
+                    -Operation 'invalid-scope' `
+                    -Scope $invalidScope
+                Exit-RSArtifactOperationLock -Lock $unexpected
+            }
+            catch {
+                $message = $_.Exception.Message
+            }
+            $message | Should Match 'must provide non-empty, path-safe Scope\.configuration and Scope\.platform'
+        }
+
+        $compatibilityLock = $null
+        try {
+            $compatibilityLock = Enter-RSArtifactOperationLock `
+                -RepoRoot $testRepo `
+                -Operation 'compatibility-test' `
+                -AllowRepositoryScope
+            $compatibilityLock.IsRootOwner | Should Be $true
+        }
+        finally {
+            Exit-RSArtifactOperationLock -Lock $compatibilityLock
+        }
+    }
+
+    It 'rejects unknown coordination kinds instead of silently selecting a profile lock' {
+        $testRepo = Join-Path $TestDrive 'InvalidCoordinationRepo'
+        New-Item -ItemType Directory -Path $testRepo -Force | Out-Null
+        $message = $null
+        try {
+            $unexpected = Enter-RSArtifactOperationLock `
+                -RepoRoot $testRepo `
+                -Operation 'typo-scope' `
+                -Scope @{
+                    configuration = 'Debug'
+                    platform = 'x64'
+                    coordination = 'shared-dependecy'
+                }
+            Exit-RSArtifactOperationLock -Lock $unexpected
+        }
+        catch {
+            $message = $_.Exception.Message
+        }
+
+        $message | Should Match 'Scope\.coordination must be artifact-profile, shared-dependency, or packaging'
+    }
+
+    It 'matches command-line paths only at complete token boundaries' {
+        $testRepo = Join-Path $TestDrive 'PathBoundaryRepo'
+        $quotedOutput = Join-Path $testRepo '.build\x64\Debug\sample.obj'
+        $nearPrefix = "$testRepo-copy\.build\x64\Debug\sample.obj"
+        $concatenatedPrefix = "C:\Other$testRepo\.build\x64\Debug\sample.obj"
+        $attachedFakePrefix = "C:\Other/Fo$testRepo\.build\x64\Debug\sample.obj"
+        $global:RSTestBoundaryRepo = $testRepo
+        $global:RSTestQuotedOutput = $quotedOutput
+        $global:RSTestNearPrefix = $nearPrefix
+        $global:RSTestConcatenatedPrefix = $concatenatedPrefix
+        $global:RSTestAttachedFakePrefix = $attachedFakePrefix
+        try {
+            InModuleScope ArtifactOperationLock {
+                (Test-RSArtifactCommandLineContainsPath `
+                        -CommandLine ('cl.exe /Fo"' + $global:RSTestQuotedOutput + '"') `
+                        -Path $global:RSTestBoundaryRepo) |
+                    Should Be $true
+                (Test-RSArtifactCommandLineContainsPath `
+                        -CommandLine ('cl.exe /Fo' + $global:RSTestBoundaryRepo + '\.build\x64\Debug\sample.obj') `
+                        -Path $global:RSTestBoundaryRepo) |
+                    Should Be $true
+                (Test-RSArtifactCommandLineContainsPath `
+                        -CommandLine ('link.exe /OUT:' + $global:RSTestBoundaryRepo + '\.build\x64\Debug\sample.exe') `
+                        -Path $global:RSTestBoundaryRepo) |
+                    Should Be $true
+                (Test-RSArtifactCommandLineContainsPath `
+                        -CommandLine ('cl.exe /Fo"' + $global:RSTestNearPrefix + '"') `
+                        -Path $global:RSTestBoundaryRepo) |
+                    Should Be $false
+                (Test-RSArtifactCommandLineContainsPath `
+                        -CommandLine ('cl.exe /Fo"' + $global:RSTestConcatenatedPrefix + '"') `
+                        -Path $global:RSTestBoundaryRepo) |
+                    Should Be $false
+                (Test-RSArtifactCommandLineContainsPath `
+                        -CommandLine ('cl.exe ' + $global:RSTestAttachedFakePrefix) `
+                        -Path $global:RSTestBoundaryRepo) |
+                    Should Be $false
+            }
+        }
+        finally {
+            foreach ($name in @(
+                    'RSTestBoundaryRepo',
+                    'RSTestQuotedOutput',
+                    'RSTestNearPrefix',
+                    'RSTestConcatenatedPrefix',
+                    'RSTestAttachedFakePrefix')) {
+                Remove-Variable -Name $name -Scope Global -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
+    It 'matches combined MSBuild property lists without crossing configuration or platform scope' {
+        $testRepo = Join-Path $TestDrive 'CombinedPropertyRepo'
+        New-Item -ItemType Directory -Path $testRepo -Force | Out-Null
+        $global:RSTestCombinedPropertyRepo = $testRepo
+        try {
+            InModuleScope ArtifactOperationLock {
+                $debugX64 = Get-RSArtifactOperationScopeInfo `
+                    -RepoRoot $global:RSTestCombinedPropertyRepo `
+                    -Scope @{ configuration = 'Debug'; platform = 'x64' }
+                $releaseX64 = Get-RSArtifactOperationScopeInfo `
+                    -RepoRoot $global:RSTestCombinedPropertyRepo `
+                    -Scope @{ configuration = 'Release'; platform = 'x64' }
+                $debugArm64 = Get-RSArtifactOperationScopeInfo `
+                    -RepoRoot $global:RSTestCombinedPropertyRepo `
+                    -Scope @{ configuration = 'Debug'; platform = 'ARM64' }
+                $solution = Join-Path $global:RSTestCombinedPropertyRepo 'RedSalamander.sln'
+
+                (Test-RSArtifactCommandLineMatchesScope `
+                        -CommandLine ('MSBuild.exe "' + $solution + '" /p:Configuration=Debug;Platform=x64') `
+                        -ScopeInfo $debugX64) |
+                    Should Be $true
+                (Test-RSArtifactCommandLineMatchesScope `
+                        -CommandLine ('MSBuild.exe "' + $solution + '" -p:Configuration=Debug,Platform=x64') `
+                        -ScopeInfo $debugX64) |
+                    Should Be $true
+                (Test-RSArtifactCommandLineMatchesScope `
+                        -CommandLine ('MSBuild.exe "' + $solution + '" /p:Configuration=Release;Platform=x64') `
+                        -ScopeInfo $debugX64) |
+                    Should Be $false
+                (Test-RSArtifactCommandLineMatchesScope `
+                        -CommandLine ('MSBuild.exe "' + $solution + '" /p:Configuration=Debug;Platform=ARM64') `
+                        -ScopeInfo $debugArm64) |
+                    Should Be $true
+                (Test-RSArtifactCommandLineMatchesScope `
+                        -CommandLine ('MSBuild.exe "' + $solution + '" /p:Configuration=Debug;Platform=ARM64') `
+                        -ScopeInfo $releaseX64) |
+                    Should Be $false
+                (Get-RSMSBuildPropertyValue `
+                        -Arguments @('/p:Configuration=Release;Platform=x64', '-p:Configuration=Debug') `
+                        -Name 'Configuration') |
+                    Should Be 'Debug'
+                (Get-RSMSBuildPropertyValue `
+                        -Arguments @('-p:Configuration=Debug,Platform=x64') `
+                        -Name 'Platform') |
+                    Should Be 'x64'
+            }
+        }
+        finally {
+            Remove-Variable -Name RSTestCombinedPropertyRepo -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'requires distinct nested coordination locks to release in same-thread LIFO order' {
+        $testRepo = Join-Path $TestDrive 'LifoRepo'
+        New-Item -ItemType Directory -Path $testRepo -Force | Out-Null
+        $profileScope = @{ configuration = 'Debug'; platform = 'x64' }
+        $dependencyScope = @{
+            configuration = 'Debug'
+            platform = 'x64'
+            coordination = 'shared-dependency'
+        }
+        $profileLock = $null
+        $dependencyLock = $null
+        try {
+            $profileLock = Enter-RSArtifactOperationLock `
+                -RepoRoot $testRepo `
+                -Operation 'profile' `
+                -Scope $profileScope
+            $dependencyLock = Enter-RSArtifactOperationLock `
+                -RepoRoot $testRepo `
+                -Operation 'dependency' `
+                -Scope $dependencyScope
+
+            $message = $null
+            try {
+                Exit-RSArtifactOperationLock -Lock $profileLock
+            }
+            catch {
+                $message = $_.Exception.Message
+            }
+            $message | Should Match 'same-thread LIFO order'
+
+            Exit-RSArtifactOperationLock -Lock $dependencyLock
+            $dependencyLock = $null
+            Exit-RSArtifactOperationLock -Lock $profileLock
+            $profileLock = $null
+        }
+        finally {
+            Exit-RSArtifactOperationLock -Lock $dependencyLock
+            Exit-RSArtifactOperationLock -Lock $profileLock
+        }
+    }
+
+    It 'rejects stale owner PID reuse when the executable path no longer matches metadata' {
+        $currentProcess = Get-Process -Id $PID
+        try {
+            $global:RSTestOwnerPid = $PID
+            $global:RSTestOwnerStartTicks = $currentProcess.StartTime.ToUniversalTime().Ticks
+            $global:RSTestOwnerPath = [System.IO.Path]::GetFullPath($currentProcess.Path)
+            $global:RSTestWrongOwnerPath = Join-Path $TestDrive 'Foreign\pwsh.exe'
+        }
+        finally {
+            $currentProcess.Dispose()
+        }
+
+        try {
+            InModuleScope ArtifactOperationLock {
+                (Test-RSArtifactOperationOwnerProcess `
+                        -OwnerProcessId $global:RSTestOwnerPid `
+                        -OwnerProcessStartUtcTicks $global:RSTestOwnerStartTicks `
+                        -OwnerProcessPath $global:RSTestOwnerPath) |
+                    Should Be $true
+                (Test-RSArtifactOperationOwnerProcess `
+                        -OwnerProcessId $global:RSTestOwnerPid `
+                        -OwnerProcessStartUtcTicks $global:RSTestOwnerStartTicks `
+                        -OwnerProcessPath $global:RSTestWrongOwnerPath) |
+                    Should Be $false
+            }
+        }
+        finally {
+            Remove-Variable -Name RSTestOwnerPid -Scope Global -ErrorAction SilentlyContinue
+            Remove-Variable -Name RSTestOwnerStartTicks -Scope Global -ErrorAction SilentlyContinue
+            Remove-Variable -Name RSTestOwnerPath -Scope Global -ErrorAction SilentlyContinue
+            Remove-Variable -Name RSTestWrongOwnerPath -Scope Global -ErrorAction SilentlyContinue
         }
     }
 
@@ -430,28 +885,31 @@ while ($true) { Start-Sleep -Milliseconds 100 }
         ($afterHandles - $beforeHandles) | Should BeLessThan 24
     }
 
-    It 'rejects a second process while the repository artifact lock is owned' {
+    It 'rejects a same-profile process while allowing a disjoint configuration concurrently' {
         $testRepo = Join-Path $TestDrive 'ContendedRepo'
         $readyPath = Join-Path $TestDrive 'owner.ready'
         $releasePath = Join-Path $TestDrive 'owner.release'
         $childScript = Join-Path $TestDrive 'HoldArtifactLock.ps1'
         New-Item -ItemType Directory -Path $testRepo -Force | Out-Null
 
-        $escapedHelper = $artifactLockScript.Replace("'", "''")
+        $escapedHelper = $artifactLockModule.Replace("'", "''")
         $escapedRepo = $testRepo.Replace("'", "''")
         $escapedReady = $readyPath.Replace("'", "''")
         $escapedRelease = $releasePath.Replace("'", "''")
         @"
 `$ErrorActionPreference = 'Stop'
-. '$escapedHelper'
-`$lock = Enter-RSArtifactOperationLock -RepoRoot '$escapedRepo' -Operation 'child-owner'
+Import-Module '$escapedHelper' -Force -ErrorAction Stop
+`$lock = Enter-RSArtifactOperationLock -RepoRoot '$escapedRepo' -Operation 'child-owner' -Scope @{ configuration = 'Debug'; platform = 'x64' }
+`$dependencyLock = `$null
 try {
+    `$dependencyLock = Enter-RSArtifactOperationLock -RepoRoot '$escapedRepo' -Operation 'child-vcpkg-owner' -Scope @{ configuration = 'Debug'; platform = 'x64'; coordination = 'shared-dependency' }
     [System.IO.File]::WriteAllText('$escapedReady', 'ready')
     while (-not (Test-Path -LiteralPath '$escapedRelease')) {
         Start-Sleep -Milliseconds 25
     }
 }
 finally {
+    Exit-RSArtifactOperationLock -Lock `$dependencyLock
     Exit-RSArtifactOperationLock -Lock `$lock
 }
 "@ | Set-Content -LiteralPath $childScript -Encoding UTF8
@@ -472,15 +930,44 @@ finally {
             }
             $ready | Should Be $true
 
+            $disjoint = $null
+            try {
+                $disjoint = Enter-RSArtifactOperationLock `
+                    -RepoRoot $testRepo `
+                    -Operation 'release-owner' `
+                    -Scope @{ configuration = 'Release'; platform = 'x64' }
+                $disjoint.IsRootOwner | Should Be $true
+            }
+            finally {
+                Exit-RSArtifactOperationLock -Lock $disjoint
+            }
+
+            $dependencyMessage = $null
+            try {
+                $unexpectedDependency = Enter-RSArtifactOperationLock `
+                    -RepoRoot $testRepo `
+                    -Operation 'release-vcpkg-owner' `
+                    -Scope @{ configuration = 'Release'; platform = 'x64'; coordination = 'shared-dependency' }
+                Exit-RSArtifactOperationLock -Lock $unexpectedDependency
+            }
+            catch {
+                $dependencyMessage = $_.Exception.Message
+            }
+            $dependencyMessage | Should Match 'shared-dependency\|platform=X64'
+
             $message = $null
             try {
-                $unexpected = Enter-RSArtifactOperationLock -RepoRoot $testRepo -Operation 'second-owner'
+                $unexpected = Enter-RSArtifactOperationLock `
+                    -RepoRoot $testRepo `
+                    -Operation 'second-owner' `
+                    -Scope @{ configuration = 'Debug'; platform = 'x64' }
                 Exit-RSArtifactOperationLock -Lock $unexpected
             }
             catch {
                 $message = $_.Exception.Message
             }
             $message | Should Match 'another RedSalamander build or test operation owns'
+            $message | Should Match 'profile\|platform=X64\|configuration=DEBUG'
             $message | Should Match "Owner PID=$($child.Id)"
             $message | Should Match "Operation='child-owner'"
             $message | Should Match "StartedUtc='[^']+'"
@@ -497,19 +984,19 @@ finally {
     It 'rejects a parallel runspace in the owner process instead of treating it as local nesting' {
         $testRepo = Join-Path $TestDrive 'ParallelRunspaceRepo'
         New-Item -ItemType Directory -Path $testRepo -Force | Out-Null
-        $escapedHelper = $artifactLockScript.Replace("'", "''")
+        $escapedHelper = $artifactLockModule.Replace("'", "''")
         $escapedRepo = $testRepo.Replace("'", "''")
 
         $outer = $null
         $parallelPowerShell = $null
         try {
-            $outer = Enter-RSArtifactOperationLock -RepoRoot $testRepo -Operation 'owning-runspace'
+            $outer = Enter-RSArtifactOperationLock -RepoRoot $testRepo -Operation 'owning-runspace' -AllowRepositoryScope
             $parallelPowerShell = [PowerShell]::Create()
             [void]$parallelPowerShell.AddScript(@"
 `$ErrorActionPreference = 'Stop'
-. '$escapedHelper'
+Import-Module '$escapedHelper' -Force -ErrorAction Stop
 try {
-    `$unexpected = Enter-RSArtifactOperationLock -RepoRoot '$escapedRepo' -Operation 'parallel-runspace'
+    `$unexpected = Enter-RSArtifactOperationLock -RepoRoot '$escapedRepo' -Operation 'parallel-runspace' -AllowRepositoryScope
     Exit-RSArtifactOperationLock -Lock `$unexpected
     Write-Output 'ACQUIRED'
 }
@@ -535,25 +1022,40 @@ catch {
         $childScript = Join-Path $TestDrive 'InheritArtifactLock.ps1'
         $resultPath = Join-Path $TestDrive 'inherited-result.txt'
         $releasePath = Join-Path $TestDrive 'inherited-release.txt'
+        $errorPath = Join-Path $TestDrive 'inherited-error.txt'
         New-Item -ItemType Directory -Path $testRepo -Force | Out-Null
 
-        $escapedEnvironment = $sanitizedEnvironmentScript.Replace("'", "''")
-        $escapedHelper = $artifactLockScript.Replace("'", "''")
+        $escapedEnvironment = $sanitizedEnvironmentModule.Replace("'", "''")
+        $escapedHelper = $artifactLockModule.Replace("'", "''")
         $escapedRepo = $testRepo.Replace("'", "''")
         $escapedResult = $resultPath.Replace("'", "''")
         $escapedRelease = $releasePath.Replace("'", "''")
+        $escapedError = $errorPath.Replace("'", "''")
         @"
 `$ErrorActionPreference = 'Stop'
-. '$escapedEnvironment'
-. '$escapedHelper'
-`$lock = Enter-RSArtifactOperationLock -RepoRoot '$escapedRepo' -Operation 'descendant-build'
+trap {
+    [System.IO.File]::AppendAllText('$escapedError', "`n" + `$_.Exception.ToString())
+    exit 1
+}
+Import-Module '$escapedEnvironment' -Force -ErrorAction Stop
+Import-Module '$escapedHelper' -Force -ErrorAction Stop
+`$lock = Enter-RSArtifactOperationLock -RepoRoot '$escapedRepo' -Operation 'descendant-build' -AllowRepositoryScope
+`$nestedLock = `$null
+`$secondHop = `$null
 try {
-    [System.IO.File]::WriteAllText('$escapedResult', [string]`$lock.IsDelegated)
+    `$nestedLock = Enter-RSArtifactOperationLock -RepoRoot '$escapedRepo' -Operation 'nested-descendant-build' -AllowRepositoryScope
+    `$secondHop = New-RSArtifactOperationChildDelegation
+    `$secondHopBlocked = `$null -eq `$secondHop
+    [System.IO.File]::WriteAllText(
+        '$escapedResult',
+        ('{0}|{1}|{2}' -f `$lock.IsDelegated, `$nestedLock.IsDelegated, `$secondHopBlocked))
     while (-not (Test-Path -LiteralPath '$escapedRelease')) {
         Start-Sleep -Milliseconds 25
     }
 }
 finally {
+    Complete-RSArtifactOperationChildDelegation -Delegation `$secondHop
+    Exit-RSArtifactOperationLock -Lock `$nestedLock
     Exit-RSArtifactOperationLock -Lock `$lock
 }
 "@ | Set-Content -LiteralPath $childScript -Encoding UTF8
@@ -561,8 +1063,14 @@ finally {
         $metadataPath = Get-RSArtifactOperationOwnerMetadataPath -RepoRoot $testRepo
         $rootLock = $null
         try {
-            $rootLock = Enter-RSArtifactOperationLock -RepoRoot $testRepo -Operation 'root-runner'
+            $rootLock = Enter-RSArtifactOperationLock -RepoRoot $testRepo -Operation 'root-runner' -AllowRepositoryScope
             $rootMetadata = Read-RSArtifactOperationOwnerMetadata -RepoRoot $testRepo
+
+            $delegationProbe = New-RSArtifactOperationChildDelegation
+            if ($null -eq $delegationProbe) {
+                throw 'The owning thread could not create a contained-child delegation probe.'
+            }
+            Complete-RSArtifactOperationChildDelegation -Delegation $delegationProbe
 
             $pwsh = (Get-Process -Id $PID).Path
             $startInfo = New-RSProcessStartInfo `
@@ -577,14 +1085,22 @@ finally {
                     -DelegateArtifactOperation
 
                 $resultReady = $false
-                for ($attempt = 0; $attempt -lt 200; $attempt++) {
+                for ($attempt = 0; $attempt -lt 600; $attempt++) {
                     if (Test-Path -LiteralPath $resultPath) {
                         $resultReady = $true
                         break
                     }
+                    if ($child.HasExited) { break }
                     Start-Sleep -Milliseconds 25
                 }
-                $resultReady | Should Be $true
+                if (-not $resultReady) {
+                    $childError = if (Test-Path -LiteralPath $errorPath) {
+                        Get-Content -LiteralPath $errorPath -Raw
+                    } else {
+                        '<no child error record>'
+                    }
+                    throw "Delegated child did not publish its result. Exited=$($child.HasExited) ExitCode=$(if ($child.HasExited) { $child.ExitCode } else { '<running>' }) Error=$childError"
+                }
                 $releaseMessage = $null
                 try {
                     Exit-RSArtifactOperationLock -Lock $rootLock
@@ -604,7 +1120,7 @@ finally {
                 Close-RSContainedProcess -Process $child
             }
 
-            (Get-Content -LiteralPath $resultPath -Raw) | Should Be 'True'
+            (Get-Content -LiteralPath $resultPath -Raw) | Should Be 'True|True|True'
             (Test-Path -LiteralPath $metadataPath) | Should Be $true
             $metadataAfterChild = Read-RSArtifactOperationOwnerMetadata -RepoRoot $testRepo
             $metadataAfterChild.token | Should Be $rootMetadata.token
@@ -629,7 +1145,7 @@ finally {
         $ownerStderrPath = Join-Path $TestDrive 'stale-owner.stderr.log'
         New-Item -ItemType Directory -Path $testRepo -Force | Out-Null
 
-        $escapedHelper = $artifactLockScript.Replace("'", "''")
+        $escapedHelper = $artifactLockModule.Replace("'", "''")
         $escapedRepo = $testRepo.Replace("'", "''")
         $escapedSurvivor = $survivorScript.Replace("'", "''")
         $escapedReady = $survivorReadyPath.Replace("'", "''")
@@ -639,14 +1155,14 @@ finally {
         @"
 param([int]`$OwnerPid)
 `$ErrorActionPreference = 'Stop'
-. '$escapedHelper'
+Import-Module '$escapedHelper' -Force -ErrorAction Stop
 [System.IO.File]::WriteAllText('$escapedReady', 'ready')
 while (`$null -ne (Get-Process -Id `$OwnerPid -ErrorAction SilentlyContinue)) {
     Start-Sleep -Milliseconds 25
 }
 `$lock = `$null
 try {
-    `$lock = Enter-RSArtifactOperationLock -RepoRoot '$escapedRepo' -Operation 'surviving-descendant' -TimeoutMilliseconds 5000
+    `$lock = Enter-RSArtifactOperationLock -RepoRoot '$escapedRepo' -Operation 'surviving-descendant' -AllowRepositoryScope -TimeoutMilliseconds 5000
     [System.IO.File]::WriteAllText(
         '$escapedResult',
         "`$(`$lock.IsDelegated)|`$(`$lock.WasAbandoned)")
@@ -664,8 +1180,8 @@ finally {
 
         @"
 `$ErrorActionPreference = 'Stop'
-. '$escapedHelper'
-`$lock = Enter-RSArtifactOperationLock -RepoRoot '$escapedRepo' -Operation 'doomed-owner'
+Import-Module '$escapedHelper' -Force -ErrorAction Stop
+`$lock = Enter-RSArtifactOperationLock -RepoRoot '$escapedRepo' -Operation 'doomed-owner' -AllowRepositoryScope
 `$pwsh = (Get-Process -Id `$PID).Path
 `$survivor = Start-Process -FilePath `$pwsh -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', '"$escapedSurvivor"', '-OwnerPid', `$PID) -PassThru -WindowStyle Hidden
 [System.IO.File]::WriteAllText('$escapedPid', [string]`$survivor.Id)
@@ -712,7 +1228,7 @@ while (-not (Test-Path -LiteralPath '$escapedReady')) {
             $survivorProcess = Get-Process -Id $survivorPid -ErrorAction Stop
             $message = $null
             try {
-                $unexpected = Enter-RSArtifactOperationLock -RepoRoot $testRepo -Operation 'observer'
+                $unexpected = Enter-RSArtifactOperationLock -RepoRoot $testRepo -Operation 'observer' -AllowRepositoryScope
                 Exit-RSArtifactOperationLock -Lock $unexpected
             }
             catch {
@@ -741,12 +1257,12 @@ while (-not (Test-Path -LiteralPath '$escapedReady')) {
         $childScript = Join-Path $TestDrive 'AbandonArtifactLock.ps1'
         New-Item -ItemType Directory -Path $testRepo -Force | Out-Null
 
-        $escapedHelper = $artifactLockScript.Replace("'", "''")
+        $escapedHelper = $artifactLockModule.Replace("'", "''")
         $escapedRepo = $testRepo.Replace("'", "''")
         @"
 `$ErrorActionPreference = 'Stop'
-. '$escapedHelper'
-`$lock = Enter-RSArtifactOperationLock -RepoRoot '$escapedRepo' -Operation 'abandoned-owner'
+Import-Module '$escapedHelper' -Force -ErrorAction Stop
+`$lock = Enter-RSArtifactOperationLock -RepoRoot '$escapedRepo' -Operation 'abandoned-owner' -AllowRepositoryScope
 [Environment]::Exit(0)
 "@ | Set-Content -LiteralPath $childScript -Encoding UTF8
 
@@ -760,7 +1276,7 @@ while (-not (Test-Path -LiteralPath '$escapedReady')) {
             $child.WaitForExit(5000) | Should Be $true
             $child.ExitCode | Should Be 0
 
-            $lock = Enter-RSArtifactOperationLock -RepoRoot $testRepo -Operation 'abandonment-observer'
+            $lock = Enter-RSArtifactOperationLock -RepoRoot $testRepo -Operation 'abandonment-observer' -AllowRepositoryScope
             $lock.WasAbandoned | Should Be $true
             $markerPath = Set-RSArtifactOperationContaminated -RepoRoot $testRepo -Reason 'test abandonment'
             (Test-Path -LiteralPath $markerPath) | Should Be $true
@@ -786,10 +1302,10 @@ while (-not (Test-Path -LiteralPath '$escapedReady')) {
 
         $legacyLock = $null
         try {
-            $legacyLock = Enter-RSArtifactOperationLock -RepoRoot $legacyRepo -Operation 'legacy-sidecar-observer'
+            $legacyLock = Enter-RSArtifactOperationLock -RepoRoot $legacyRepo -Operation 'legacy-sidecar-observer' -AllowRepositoryScope
             $legacyLock.WasAbandoned | Should Be $true
             (Read-RSArtifactOperationOwnerMetadata -RepoRoot $legacyRepo).schema |
-                Should Be 'red-salamander.artifact-operation-owner.v3'
+                Should Be 'red-salamander.artifact-operation-owner.v4'
             [void](Set-RSArtifactOperationContaminated -RepoRoot $legacyRepo -Reason 'stale v1 owner')
             (Test-RSArtifactOperationContaminated -RepoRoot $legacyRepo) | Should Be $true
             Clear-RSArtifactOperationContaminated -RepoRoot $legacyRepo
@@ -799,36 +1315,162 @@ while (-not (Test-Path -LiteralPath '$escapedReady')) {
         }
     }
 
-    It 'rejects residual compiler tools whose command line targets the repository' {
+    It 'rejects only residual tools proven to target the same repository and output profile' {
         $testRepo = Join-Path $TestDrive 'ResidualRepo'
         New-Item -ItemType Directory -Path $testRepo -Force | Out-Null
-        Mock Get-CimInstance {
+        Mock Get-CimInstance -ModuleName ArtifactOperationLock {
+            $testRepo = $global:RSTestResidualArtifactRepo
             return @(
                 [pscustomobject]@{
                     ProcessId = 7711
                     ParentProcessId = 7700
                     Name = 'cl.exe'
-                    CommandLine = "cl.exe /Fo`"$testRepo\.build\Intermediate\sample.obj`" sample.cpp"
+                    CommandLine = 'cl.exe /Fo"' + $testRepo + '\.build\Intermediate\x64\Debug\Project\sample.obj" "' + $testRepo + '\sample.cpp"'
+                },
+                [pscustomobject]@{
+                    ProcessId = 7722
+                    ParentProcessId = 7700
+                    Name = 'link.exe'
+                    CommandLine = 'link.exe /OUT:"' + $testRepo + '\.build\x64\Release\RedSalamander.exe"'
                 },
                 [pscustomobject]@{
                     ProcessId = 8811
                     ParentProcessId = 8800
                     Name = 'MSBuild.exe'
-                    CommandLine = 'MSBuild.exe C:\OtherRepo\Other.sln'
+                    CommandLine = 'MSBuild.exe C:\OtherRepo\Other.sln /p:Configuration=Debug /p:Platform=x64'
+                },
+                [pscustomobject]@{
+                    ProcessId = 9911
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $testRepo + '\RedSalamander.sln" /p:Configuration=Release /p:Platform=x64'
+                },
+                [pscustomobject]@{
+                    ProcessId = 9922
+                    ParentProcessId = 9900
+                    Name = 'MSBuild.exe'
+                    CommandLine = 'MSBuild.exe "' + $testRepo + '\RedSalamander.sln" /p:Configuration=Release /p:Platform=ARM64'
+                },
+                [pscustomobject]@{
+                    ProcessId = 9933
+                    ParentProcessId = 9900
+                    Name = 'vcpkg.exe'
+                    CommandLine = 'vcpkg.exe install --triplet x64-windows --x-manifest-root "' + $testRepo + '" --x-install-root "' + $testRepo + '\.build\vcpkg_install_staging\x64-windows"'
+                },
+                [pscustomobject]@{
+                    ProcessId = 9934
+                    ParentProcessId = 9900
+                    Name = 'vcpkg.exe'
+                    CommandLine = 'vcpkg.exe install --triplet x64-windows --x-manifest-root "' + $testRepo + '" --x-install-root "' + $testRepo + '\.build\vcpkg_installed\x64"'
+                },
+                [pscustomobject]@{
+                    ProcessId = 9944
+                    ParentProcessId = 9900
+                    Name = 'vcpkg.exe'
+                    CommandLine = 'vcpkg.exe install --triplet x64-windows --x-manifest-root "C:\OtherRepo" --x-install-root "C:\OtherRepo\.build\vcpkg_installed\x64-windows"'
+                },
+                [pscustomobject]@{
+                    ProcessId = 9955
+                    ParentProcessId = 9900
+                    Name = 'vcpkg.exe'
+                    CommandLine = 'vcpkg.exe install --triplet=x64-windows-static-md --x-manifest-root "' + $testRepo + '" --x-install-root="' + $testRepo + '\.build\vcpkg_install_staging\x64-windows-static-md"'
+                },
+                [pscustomobject]@{
+                    ProcessId = 9966
+                    ParentProcessId = 9900
+                    Name = 'vcpkg.exe'
+                    CommandLine = 'vcpkg.exe install --triplet arm64-windows-static-md --x-manifest-root "' + $testRepo + '" --x-install-root "' + $testRepo + '\.build\vcpkg_install_staging\arm64-windows-static-md"'
+                },
+                [pscustomobject]@{
+                    ProcessId = 9967
+                    ParentProcessId = 9900
+                    Name = 'vcpkg.exe'
+                    CommandLine = 'vcpkg.exe install --triplet arm64-windows --x-manifest-root "' + $testRepo + '" --x-install-root "' + $testRepo + '\.build\vcpkg_installed\arm64"'
+                },
+                [pscustomobject]@{
+                    ProcessId = 9977
+                    ParentProcessId = 9900
+                    Name = 'vcpkg.exe'
+                    CommandLine = 'vcpkg.exe install --triplet x64-windows-static-md --x-manifest-root "C:\ForeignRepo" --x-install-root "C:\ForeignRepo\.build\vcpkg_install_staging\x64-windows-static-md"'
+                },
+                [pscustomobject]@{
+                    ProcessId = 9988
+                    ParentProcessId = 9900
+                    Name = 'cl.exe'
+                    CommandLine = 'cl.exe /I"' + $testRepo + '\.build\vcpkg_installed\x64\x64-windows-static-md\include" "' + $testRepo + '\sample.cpp"'
+                },
+                [pscustomobject]@{
+                    ProcessId = 9999
+                    ParentProcessId = 9900
+                    Name = 'link.exe'
+                    CommandLine = 'link.exe /LIBPATH:"' + $testRepo + '\.build\vcpkg_install_staging\arm64-windows-static-md\lib"'
+                },
+                [pscustomobject]@{
+                    ProcessId = 10011
+                    ParentProcessId = 9900
+                    Name = 'cl.exe'
+                    CommandLine = 'cl.exe /I"C:\ForeignRepo\.build\vcpkg_installed\x64-windows-static-md\include"'
                 }
             )
         }
 
+        $global:RSTestResidualArtifactRepo = $testRepo
         $message = $null
         try {
-            Assert-RSNoResidualArtifactToolProcesses -RepoRoot $testRepo
+            Assert-RSNoResidualArtifactToolProcesses `
+                -RepoRoot $testRepo `
+                -Scope @{ configuration = 'Debug'; platform = 'x64' }
         }
         catch {
             $message = $_.Exception.Message
         }
 
-        $message | Should Match 'build tool is still touching this repository'
+        $message | Should Match 'build tool is still touching artifact scope'
+        $message | Should Match 'profile\|platform=X64\|configuration=DEBUG'
         $message | Should Match 'PID=7711'
+        $message | Should Not Match 'PID=7722'
         $message | Should Not Match 'PID=8811'
+
+        $sharedDependencyMessage = $null
+        try {
+            Assert-RSNoResidualArtifactToolProcesses `
+                -RepoRoot $testRepo `
+                -Scope @{ configuration = 'Debug'; platform = 'x64'; coordination = 'shared-dependency' }
+        }
+        catch {
+            $sharedDependencyMessage = $_.Exception.Message
+        }
+        $sharedDependencyMessage | Should Match 'PID=9911'
+        $sharedDependencyMessage | Should Match 'PID=9933'
+        $sharedDependencyMessage | Should Match 'PID=9934'
+        $sharedDependencyMessage | Should Match 'PID=9955'
+        $sharedDependencyMessage | Should Match 'PID=9988'
+        $sharedDependencyMessage | Should Not Match 'PID=9922'
+        $sharedDependencyMessage | Should Not Match 'PID=9944'
+        $sharedDependencyMessage | Should Not Match 'PID=9966'
+        $sharedDependencyMessage | Should Not Match 'PID=9967'
+        $sharedDependencyMessage | Should Not Match 'PID=9977'
+        $sharedDependencyMessage | Should Not Match 'PID=9999'
+        $sharedDependencyMessage | Should Not Match 'PID=10011'
+
+        $arm64SharedDependencyMessage = $null
+        try {
+            Assert-RSNoResidualArtifactToolProcesses `
+                -RepoRoot $testRepo `
+                -Scope @{ configuration = 'Debug'; platform = 'ARM64'; coordination = 'shared-dependency' }
+        }
+        catch {
+            $arm64SharedDependencyMessage = $_.Exception.Message
+        }
+        $arm64SharedDependencyMessage | Should Match 'PID=9922'
+        $arm64SharedDependencyMessage | Should Match 'PID=9966'
+        $arm64SharedDependencyMessage | Should Match 'PID=9967'
+        $arm64SharedDependencyMessage | Should Match 'PID=9999'
+        $arm64SharedDependencyMessage | Should Not Match 'PID=9911'
+        $arm64SharedDependencyMessage | Should Not Match 'PID=9955'
+        $arm64SharedDependencyMessage | Should Not Match 'PID=9977'
+        $arm64SharedDependencyMessage | Should Not Match 'PID=9988'
+        $arm64SharedDependencyMessage | Should Not Match 'PID=10011'
+        Remove-Variable -Name RSTestResidualArtifactRepo -Scope Global -ErrorAction SilentlyContinue
     }
 }

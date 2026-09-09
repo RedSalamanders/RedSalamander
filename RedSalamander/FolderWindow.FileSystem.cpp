@@ -6,6 +6,7 @@
 #include "FileActionLauncher.h"
 #include "FileActionResolver.h"
 #include "FolderWindowInternal.h"
+#include "FolderWindow.FileOperationsInternal.h"
 #include "FolderWindow.FileSystem.Private.h"
 #include "Helpers.h"
 #include "LocalFileTransaction.h"
@@ -1973,7 +1974,7 @@ std::optional<std::filesystem::path> TryResolveInstanceContextToWindowsPath(std:
         }
     }
 
-    if (LooksLikeWindowsAbsolutePath(text))
+    if (Common::Paths::IsFullyAbsoluteWindowsPath(text))
     {
         return std::filesystem::path(text);
     }
@@ -1992,7 +1993,7 @@ std::optional<std::filesystem::path> TryResolveInstanceContextToWindowsPath(std:
         remainderView = remainderView.substr(0, bar);
     }
 
-    if (! LooksLikeWindowsAbsolutePath(remainderView))
+    if (! Common::Paths::IsFullyAbsoluteWindowsPath(remainderView))
     {
         return std::nullopt;
     }
@@ -3391,6 +3392,7 @@ public:
                                               ? _restoreFocusWindow
                                               : _ownerWindow;
                 SetFocus(restoreFocus);
+                static_cast<void>(PostMessageW(_ownerWindow, WndMsg::kPaneRestoreFolderFocus, 0, 0));
             }
         });
 
@@ -3941,7 +3943,9 @@ LRESULT FolderWindow::OnChangeCaseTaskUpdate(LPARAM lp) noexcept
         return 0;
     }
 
-    return static_cast<LRESULT>(CreateOrUpdateInformationalTask(payload->update));
+    const uint64_t taskId = ResolveChangeCaseTaskUpdate(*payload, [this](const InformationalTaskUpdate& update) noexcept
+    { return CreateOrUpdateInformationalTask(update); });
+    return static_cast<LRESULT>(taskId);
 }
 
 LRESULT FolderWindow::OnChangeCaseCompleted(LPARAM lp) noexcept
@@ -3959,19 +3963,68 @@ LRESULT FolderWindow::OnChangeCaseCompleted(LPARAM lp) noexcept
     }
 
     const HRESULT cancelledHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
-    if (FAILED(payload->hr) && payload->hr != cancelledHr && payload->hr != E_ABORT)
+    if (FAILED(payload->hr))
     {
-        std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
-        std::wstring message = FormatStringResource(nullptr, IDS_FMT_PANE_CHANGE_CASE_FAILED, static_cast<unsigned long>(payload->hr));
-        state.folderView.ShowAlertOverlay(
-            FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message), payload->hr);
-        MessageBeep(MB_ICONERROR);
+        if (payload->hr != cancelledHr && payload->hr != E_ABORT)
+        {
+            std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+            std::wstring message = FormatStringResource(nullptr, IDS_FMT_PANE_CHANGE_CASE_FAILED, static_cast<unsigned long>(payload->hr));
+            state.folderView.ShowAlertOverlay(
+                FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message), payload->hr);
+            MessageBeep(MB_ICONERROR);
+        }
         return 0;
     }
 
-    if (SUCCEEDED(payload->hr))
+    if (SUCCEEDED(payload->hr) && payload->operations.empty())
     {
-        state.folderView.ForceRefresh();
+        return 0;
+    }
+
+    EnsureFileOperations();
+    if (! _fileOperations || ! payload->fileSystem)
+    {
+        return 0;
+    }
+
+    const Pane pane = payload->pane;
+    const std::filesystem::path focusFolder = std::move(payload->focusFolder);
+    const std::wstring focusDisplayName = std::move(payload->focusDisplayName);
+    uint64_t taskId = 0u;
+    const HRESULT startHr = _fileOperations->AdmitScheduledRename(
+        pane,
+        payload->fileSystem,
+        FileOperations::RenameOrigin::ChangeCase,
+        std::move(payload->operations),
+        {},
+        [this, pane, focusFolder, focusDisplayName](const uint64_t publishedTaskId) mutable
+        {
+            _fileOperationRequestCompletionCallbacks.insert_or_assign(
+                publishedTaskId,
+                [this, pane, focusFolder, focusDisplayName](const FileOperationCompletedEvent& event) mutable
+                {
+                    PaneState& completionState = pane == Pane::Left ? _leftPane : _rightPane;
+                    if (SUCCEEDED(event.hr))
+                    {
+                        const std::optional<std::filesystem::path> currentFolder = completionState.folderView.GetFolderPath();
+                        if (currentFolder.has_value() && ! focusFolder.empty() && ! focusDisplayName.empty() &&
+                            OrdinalString::EqualsNoCasePath(currentFolder.value(), focusFolder))
+                        {
+                            completionState.folderView.RememberFocusedItemForFolder(focusFolder, focusDisplayName);
+                        }
+                    }
+                    completionState.folderView.ForceRefresh();
+                });
+        },
+        &taskId);
+    if (FAILED(startHr) || taskId == 0u)
+    {
+        const HRESULT failureHr = FAILED(startHr) ? startHr : E_UNEXPECTED;
+        std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+        std::wstring message = FormatStringResource(nullptr, IDS_FMT_PANE_CHANGE_CASE_FAILED, static_cast<unsigned long>(failureHr));
+        state.folderView.ShowAlertOverlay(
+            FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message), failureHr);
+        MessageBeep(MB_ICONERROR);
     }
 
     return 0;
@@ -4683,7 +4736,6 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
         }
 
         HostAlertRequest request{};
-        request.version      = 1;
         request.sizeBytes    = sizeof(request);
         request.scope        = HOST_ALERT_SCOPE_APPLICATION;
         request.modality     = HOST_ALERT_MODELESS;
@@ -5103,6 +5155,7 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
             _panePathChangedCallback(pane, pluginPath);
         }
     }
+    PublishTerminalSourceLocation(pane, pluginPath);
 }
 
 bool FolderWindow::TryOpenFileAsVirtualFileSystem(Pane pane, const std::filesystem::path& path) noexcept

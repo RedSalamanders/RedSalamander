@@ -14,6 +14,11 @@ It extends the shared viewer contract in `Specs/Plugins/Plugins_ViewerPlugins.md
 - The main surface is the parsed PE text/content viewport.
 - In standalone mode, ViewerPE shows the filename dropdown only when `otherFiles` contains more than one peer file; the dropdown uses the shared compact 28 DIP combo height to leave more vertical room for parsed data.
 - In embedded preview mode, ViewerPE hides the standalone filename dropdown and menu/title chrome so the parsed content blends into the preview/tab background.
+- The minimal menu remains File and View. File is ordered Export as Text,
+  Export as Markdown, Refresh, Other Files (Previous/Next/First/Last),
+  separator, Exit. View contains only Go to Top and Go to Bottom. Unsupported
+  editing commands are not added, and static sibling access keys are unique in
+  every supported locale.
 
 ## Keyboard Contract
 
