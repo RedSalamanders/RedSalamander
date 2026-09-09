@@ -24,6 +24,8 @@
 #include <utility>
 #include <vector>
 
+#include <objbase.h>
+
 #include <UIAutomation.h>
 #include <imm.h>
 #include <shellapi.h>

@@ -3,8 +3,9 @@
 #include <cstddef>
 #include <string_view>
 
-#include <UIAutomation.h>
 #include <objbase.h>
+
+#include <UIAutomation.h>
 
 namespace RedSalamander::DxUi
 {

@@ -816,6 +816,53 @@ Describe 'Embedded Terminal plugin source contracts' {
         $loaderHeader | Should Match '(?ms)#include <windows.h>\s*\r?\n\s*\r?\n#include <bcrypt.h>\s*\r?\n#include <wincodec.h>'
     }
 
+    It 'includes COM headers before UIAutomation.h and XmlLite.h so clang-format cannot alphabetize them first' {
+        # WIN32_LEAN_AND_MEAN windows.h does not pull ole2/objbase. UIAutomation.h and XmlLite.h
+        # need interface/IUnknown. SortIncludes puts UIAutomation.h/XmlLite.h before objbase.h/objidl.h
+        # inside one block (U/X before o).
+        $comInclude = [regex]::new('(?im)^#include\s+<(?:objbase|ole2|objidl|oleauto)\.h>')
+        $uiaInclude = [regex]::new('(?im)^#include\s+<UIAutomation(?:Core)?\.h>')
+        $xmlLiteInclude = [regex]::new('(?im)^#include\s+<XmlLite\.h>')
+        $headerRoots = @(
+            'Common'
+            'Plugins'
+            'RedSalamander'
+            'RedConfigure'
+            'RedLauncher'
+            'RedSalamanderMonitor'
+            'RedSalamanderSearchService'
+            'Tests'
+        )
+        foreach ($rootName in $headerRoots) {
+            $root = Join-Path $repoRoot $rootName
+            if (-not (Test-Path -LiteralPath $root)) {
+                continue
+            }
+            Get-ChildItem -LiteralPath $root -Recurse -File |
+                Where-Object { $_.Extension -eq '.h' -or $_.Extension -eq '.hpp' } |
+                ForEach-Object {
+                    $text = Get-Content -LiteralPath $_.FullName -Raw
+                    $relative = $_.FullName.Substring($repoRoot.Length).TrimStart('\', '/')
+                    $comMatches = @($comInclude.Matches($text))
+                    foreach ($dependent in @($uiaInclude, $xmlLiteInclude)) {
+                        foreach ($match in $dependent.Matches($text)) {
+                            $prior = $comMatches | Where-Object { $_.Index -lt $match.Index } | Select-Object -Last 1
+                            if ($null -eq $prior) {
+                                throw "$relative includes a COM SDK header before objbase/ole2/objidl/oleauto.h."
+                            }
+                        }
+                    }
+                }
+        }
+
+        $workspaceDiscovery = Get-RSTerminalText -Path 'RedConfigure\Workspace\WorkspaceDiscovery.cpp'
+        $workspaceDiscovery | Should Match '(?ms)#include <objidl.h>\s*\r?\n\s*\r?\n#include <XmlLite.h>'
+        $terminalHeader = Get-RSTerminalText -Path 'Plugins\Terminal\Terminal.h'
+        $accessibilityHeader = Get-RSTerminalText -Path 'Plugins\Terminal\TerminalAccessibility.h'
+        $terminalHeader | Should Match '(?ms)#include <windows.h>\s*\r?\n\s*\r?\n#include <objbase.h>'
+        $accessibilityHeader | Should Match '(?ms)#include <windows.h>\s*\r?\n\s*\r?\n#include <objbase.h>'
+    }
+
     It 'locks the exact private runtime and Terminal plugin as an atomic generated-hash pair' {
         $loader | Should Match 'CreateFileW\([\s\S]+GENERIC_READ,[\s\r\n]+FILE_SHARE_READ,[\s\S]+FILE_FLAG_OPEN_REPARSE_POINT'
         $loader | Should Not Match 'FILE_SHARE_WRITE|FILE_SHARE_DELETE'

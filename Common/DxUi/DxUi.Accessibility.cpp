@@ -20,8 +20,9 @@
 #include <utility>
 #include <vector>
 
-#include <UIAutomation.h>
 #include <oleauto.h>
+
+#include <UIAutomation.h>
 
 #pragma comment(lib, "uiautomationcore.lib")
 

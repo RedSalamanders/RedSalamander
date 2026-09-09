@@ -7,6 +7,8 @@
 #include "TestWindowActivationGuard.h"
 #include "WindowMessages.h"
 
+#include <objbase.h>
+
 #include <UIAutomation.h>
 #include <imm.h>
 #include <richedit.h>
