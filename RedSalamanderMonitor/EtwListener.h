@@ -51,11 +51,8 @@ public:
     using DebugProcessTraceFunction = ULONG (*)(void* context, TRACEHANDLE traceHandle) noexcept;
     using DebugCloseTraceFunction   = void (*)(void* context, TRACEHANDLE traceHandle) noexcept;
 
-    void DebugStartConsumerForTesting(TRACEHANDLE traceHandle,
-                                      DebugProcessTraceFunction processTrace,
-                                      DebugCloseTraceFunction closeTrace,
-                                      void* context,
-                                      DWORD shutdownTimeoutMs);
+    void DebugStartConsumerForTesting(
+        TRACEHANDLE traceHandle, DebugProcessTraceFunction processTrace, DebugCloseTraceFunction closeTrace, void* context, DWORD shutdownTimeoutMs);
 #endif
 
     // Get last error message (if Start failed)
@@ -102,8 +99,8 @@ private:
     ULONG _lastErrorCode = ERROR_SUCCESS;
 #if defined(ENABLE_TESTS)
     DebugCloseTraceFunction _debugCloseTrace = nullptr;
-    void* _debugTraceContext                = nullptr;
-    DWORD _shutdownTimeoutMs                = 5'000u;
+    void* _debugTraceContext                 = nullptr;
+    DWORD _shutdownTimeoutMs                 = 5'000u;
 #endif
 
 public:

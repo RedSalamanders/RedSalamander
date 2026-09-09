@@ -28,8 +28,6 @@ struct OwnedTerminalLocation final
 #if defined(ENABLE_TESTS)
 [[nodiscard]] HRESULT DebugTerminateRootProcess(ITerminal* terminal, uint32_t exitCode) noexcept;
 [[nodiscard]] HRESULT DebugGetScreenText(ITerminal* terminal, std::wstring& text) noexcept;
-[[nodiscard]] HRESULT DebugRunCommandExperiencePerfSelfTests(
-    unsigned int* passedTests,
-    unsigned int* failedTests) noexcept;
+[[nodiscard]] HRESULT DebugRunCommandExperiencePerfSelfTests(unsigned int* passedTests, unsigned int* failedTests) noexcept;
 #endif
 } // namespace TerminalHostSupport

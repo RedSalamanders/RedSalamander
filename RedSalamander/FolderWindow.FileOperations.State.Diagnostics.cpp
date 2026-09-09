@@ -403,11 +403,8 @@ void FolderWindow::FileOperationState::SaveIssuesPaneViewState(std::wstring_view
 
 namespace
 {
-[[nodiscard]] bool TryGetFileOperationsWindowPlacement(const Common::Settings::Settings* settings,
-                                                       std::wstring_view windowId,
-                                                       RECT& outRect,
-                                                       bool& outMaximized,
-                                                       UINT currentDpi) noexcept
+[[nodiscard]] bool TryGetFileOperationsWindowPlacement(
+    const Common::Settings::Settings* settings, std::wstring_view windowId, RECT& outRect, bool& outMaximized, UINT currentDpi) noexcept
 {
     outRect      = RECT{};
     outMaximized = false;
@@ -1034,9 +1031,9 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
     summary.autoConcurrencyDestinationStorageKind    = task._autoConcurrencyDestinationStorageKind.load(std::memory_order_acquire);
     summary.autoTunedConcurrency                     = task._autoTunedConcurrency.load(std::memory_order_acquire);
     summary.effectiveConcurrencyBudget               = task._effectiveConcurrencyBudget.load(std::memory_order_acquire);
-    summary.clipboardMoveAdmission                    = task._clipboardMoveAdmission;
-    summary.clipboardMoveConsumed                     = task._clipboardMoveConsumed.load(std::memory_order_acquire);
-    summary.clipboardMoveConsumptionStatus            = task._clipboardMoveConsumptionStatus.load(std::memory_order_acquire);
+    summary.clipboardMoveAdmission                   = task._clipboardMoveAdmission;
+    summary.clipboardMoveConsumed                    = task._clipboardMoveConsumed.load(std::memory_order_acquire);
+    summary.clipboardMoveConsumptionStatus           = task._clipboardMoveConsumptionStatus.load(std::memory_order_acquire);
 
     bool anySkipped = false;
     {
@@ -1098,7 +1095,7 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
                             {
                                 summary.exactRetainedSourceItems.push_back(CompletedTaskSummary::RetainedSourceActionItem{
                                     .providerPath = std::move(retainedPath),
-                                    .identity = item->retainedSourceIdentity.value(),
+                                    .identity     = item->retainedSourceIdentity.value(),
                                 });
                             }
                         }
@@ -1124,8 +1121,7 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
             {
                 increment(summary.verifiedItemCount);
             }
-            else if (item->verification == FileOperations::VerificationState::Failed ||
-                     item->verification == FileOperations::VerificationState::Unavailable ||
+            else if (item->verification == FileOperations::VerificationState::Failed || item->verification == FileOperations::VerificationState::Unavailable ||
                      item->verification == FileOperations::VerificationState::Canceled)
             {
                 increment(summary.verificationProblemItemCount);
@@ -1152,8 +1148,7 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
             {
                 increment(summary.unknownOwnedStageCount);
             }
-            if (item->completion == FileOperations::ItemCompletion::Indeterminate ||
-                item->publication == FileOperations::PublicationState::Unknown ||
+            if (item->completion == FileOperations::ItemCompletion::Indeterminate || item->publication == FileOperations::PublicationState::Unknown ||
                 item->sourceDisposition == FileOperations::SourceDisposition::Unknown)
             {
                 increment(summary.indeterminateItemCount);
@@ -1187,10 +1182,10 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
     }
     else if (summary.operation == FILESYSTEM_MOVE && summary.publishedItemCount > 0u && summary.retainedSourceCount > 0u)
     {
-        summary.resultSummary = LoadStringResource(nullptr,
-                                                   summary.retainedSourceNativeCount == summary.retainedSourceCount
-                                                       ? IDS_FILEOPS_RESULT_MOVED_SOURCE_FOLDER_KEPT
-                                                       : IDS_FILEOPS_RESULT_COPIED_SOURCE_KEPT);
+        summary.resultSummary =
+            LoadStringResource(nullptr,
+                               summary.retainedSourceNativeCount == summary.retainedSourceCount ? IDS_FILEOPS_RESULT_MOVED_SOURCE_FOLDER_KEPT
+                                                                                                : IDS_FILEOPS_RESULT_COPIED_SOURCE_KEPT);
     }
     else if (anySkipped && summary.publishedItemCount == 0u)
     {
@@ -1375,27 +1370,22 @@ FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperati
         EnqueueTaskDiagnostic(std::move(autoEntry));
     }
 
-    const bool cleanCompletion = summary.resultHr == S_OK && summary.warningCount == 0u &&
-        summary.errorCount == 0u && summary.indeterminateItemCount == 0u;
-    const bool inlineRenameSilentCompletion = task._suppressCleanCompletionSummary && cleanCompletion &&
-        summary.operation == FILESYSTEM_RENAME && summary.publishedItemCount == 1u &&
-        summary.removedSourceCount == 1u && summary.retainedSourceCount == 0u && summary.unknownSourceCount == 0u;
-    const bool routineSilentPresentation = ! task._suppressCleanCompletionSummary && cleanCompletion;
-    bool completedWhilePresentationHidden = false;
+    const bool cleanCompletion = summary.resultHr == S_OK && summary.warningCount == 0u && summary.errorCount == 0u && summary.indeterminateItemCount == 0u;
+    const bool inlineRenameSilentCompletion = task._suppressCleanCompletionSummary && cleanCompletion && summary.operation == FILESYSTEM_RENAME &&
+                                              summary.publishedItemCount == 1u && summary.removedSourceCount == 1u && summary.retainedSourceCount == 0u &&
+                                              summary.unknownSourceCount == 0u;
+    const bool routineSilentPresentation    = ! task._suppressCleanCompletionSummary && cleanCompletion;
+    bool completedWhilePresentationHidden   = false;
     if (inlineRenameSilentCompletion || routineSilentPresentation)
     {
         Task::TaskPresentationState expected = Task::TaskPresentationState::Hidden;
-        completedWhilePresentationHidden = task._presentationState.compare_exchange_strong(
-            expected,
-            Task::TaskPresentationState::SuppressedCleanSuccess,
-            std::memory_order_acq_rel,
-            std::memory_order_acquire);
+        completedWhilePresentationHidden     = task._presentationState.compare_exchange_strong(
+            expected, Task::TaskPresentationState::SuppressedCleanSuccess, std::memory_order_acq_rel, std::memory_order_acquire);
         if (completedWhilePresentationHidden)
         {
-            const ULONGLONG admittedTick =
-                task._presentationDeadlineTick >= FileOperations::kTaskCardRevealDelayMs
-                    ? task._presentationDeadlineTick - FileOperations::kTaskCardRevealDelayMs
-                    : 0u;
+            const ULONGLONG admittedTick              = task._presentationDeadlineTick >= FileOperations::kTaskCardRevealDelayMs
+                                                            ? task._presentationDeadlineTick - FileOperations::kTaskCardRevealDelayMs
+                                                            : 0u;
             const ULONGLONG completedPresentationTick = TaskPresentationNowTick();
             Debug::Perf::Emit(L"FileOps.TaskPresentation.SilentCleanSuccessMs",
                               L"hidden-completion",

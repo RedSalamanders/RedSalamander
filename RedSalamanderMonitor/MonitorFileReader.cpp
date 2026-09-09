@@ -38,7 +38,9 @@ constexpr HRESULT kCancelled   = HRESULT_FROM_WIN32(ERROR_CANCELLED);
 class CancellationPoller final
 {
 public:
-    explicit CancellationPoller(std::stop_token stopToken) noexcept : _stopToken(stopToken) {}
+    explicit CancellationPoller(std::stop_token stopToken) noexcept : _stopToken(stopToken)
+    {
+    }
 
     [[nodiscard]] bool IsCancellationRequested(size_t completedUnits = 1u) noexcept
     {
@@ -59,8 +61,9 @@ private:
 class SnapshotBuilder final
 {
 public:
-    SnapshotBuilder(uint64_t maxRetainedTextBytes, size_t maxLines) noexcept :
-        _maxRetainedTextBytes(std::max<uint64_t>(sizeof(wchar_t), maxRetainedTextBytes)), _maxLines(std::max<size_t>(1u, maxLines))
+    SnapshotBuilder(uint64_t maxRetainedTextBytes, size_t maxLines) noexcept
+        : _maxRetainedTextBytes(std::max<uint64_t>(sizeof(wchar_t), maxRetainedTextBytes)),
+          _maxLines(std::max<size_t>(1u, maxLines))
     {
     }
 
@@ -110,8 +113,8 @@ public:
             snapshot.lines.emplace_back(std::move(line));
         }
         snapshot.retainedTextBytes = _retainedTextBytes;
-        snapshot.sharedBlockCount = static_cast<uint64_t>(snapshot.lines.size());
-        snapshot.sharedBlockBytes = snapshot.retainedTextBytes;
+        snapshot.sharedBlockCount  = static_cast<uint64_t>(snapshot.lines.size());
+        snapshot.sharedBlockBytes  = snapshot.retainedTextBytes;
         return S_OK;
     }
 
@@ -128,7 +131,7 @@ private:
     }
 
     uint64_t _maxRetainedTextBytes = 0u;
-    size_t _maxLines                = 0u;
+    size_t _maxLines               = 0u;
     uint64_t _retainedTextBytes    = 0u;
     std::deque<std::wstring> _lines;
     std::wstring _currentLine;
@@ -211,8 +214,8 @@ private:
         _minimumScalar          = minimumScalar;
     }
 
-    uint32_t _scalar        = 0u;
-    uint32_t _minimumScalar = 0u;
+    uint32_t _scalar                = 0u;
+    uint32_t _minimumScalar         = 0u;
     uint8_t _continuationsRemaining = 0u;
 };
 
@@ -243,8 +246,8 @@ public:
                 {
                     return kDecodeError;
                 }
-                const uint32_t scalar = 0x10000u + ((static_cast<uint32_t>(_highSurrogate.value()) - 0xD800u) << 10u) +
-                                        (static_cast<uint32_t>(codeUnit) - 0xDC00u);
+                const uint32_t scalar =
+                    0x10000u + ((static_cast<uint32_t>(_highSurrogate.value()) - 0xD800u) << 10u) + (static_cast<uint32_t>(codeUnit) - 0xDC00u);
                 _highSurrogate.reset();
                 const HRESULT hr = builder.AppendScalar(scalar);
                 if (FAILED(hr))
@@ -294,12 +297,12 @@ MonitorFileReadResult ReadMonitorTextFile(const std::filesystem::path& path,
     }
 
     wil::unique_hfile file(CreateFileW(path.c_str(),
-                                      GENERIC_READ,
-                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                      nullptr,
-                                      OPEN_EXISTING,
-                                      FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
-                                      nullptr));
+                                       GENERIC_READ,
+                                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                       nullptr,
+                                       OPEN_EXISTING,
+                                       FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
+                                       nullptr));
     if (! file)
     {
         return Failed(NormalizeCancelledIoError(GetLastError(), stopToken));
@@ -315,7 +318,7 @@ MonitorFileReadResult ReadMonitorTextFile(const std::filesystem::path& path,
         return Failed(HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
     }
 
-    const uint64_t totalBytes = static_cast<uint64_t>(fileSize.QuadPart);
+    const uint64_t totalBytes      = static_cast<uint64_t>(fileSize.QuadPart);
     const uint64_t maxEncodedBytes = std::max<uint64_t>(1u, limits.maxEncodedBytes);
     if (totalBytes > maxEncodedBytes)
     {
@@ -325,7 +328,7 @@ MonitorFileReadResult ReadMonitorTextFile(const std::filesystem::path& path,
     constexpr DWORD kChunkBytes = 64u * 1024u;
     std::array<std::byte, kChunkBytes> chunk{};
     std::array<std::byte, 3u> encodingProbe{};
-    size_t encodingProbeSize = 0u;
+    size_t encodingProbeSize       = 0u;
     const size_t requiredProbeSize = static_cast<size_t>(std::min<uint64_t>(encodingProbe.size(), totalBytes));
     enum class Encoding : uint8_t
     {
@@ -400,8 +403,8 @@ MonitorFileReadResult ReadMonitorTextFile(const std::filesystem::path& path,
         if (encoding != Encoding::Unknown && chunkOffset < completed)
         {
             const std::span<const std::byte> payload(chunk.data() + chunkOffset, completed - chunkOffset);
-            const HRESULT decodeHr = encoding == Encoding::Utf16Le ? utf16Decoder.Consume(payload, builder, cancellation)
-                                                                   : utf8Decoder.Consume(payload, builder, cancellation);
+            const HRESULT decodeHr =
+                encoding == Encoding::Utf16Le ? utf16Decoder.Consume(payload, builder, cancellation) : utf8Decoder.Consume(payload, builder, cancellation);
             if (FAILED(decodeHr))
             {
                 return Failed(decodeHr, totalBytes, bytesRead);
@@ -429,7 +432,7 @@ MonitorFileReadResult ReadMonitorTextFile(const std::filesystem::path& path,
     {
         return Failed(finishSnapshotHr, totalBytes, bytesRead);
     }
-    const size_t lineCount = snapshot.lines.size();
+    const size_t lineCount               = snapshot.lines.size();
     const uint64_t peakRetainedTextBytes = snapshot.retainedTextBytes;
 
     return MonitorFileReadResult{

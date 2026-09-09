@@ -68,7 +68,7 @@ struct ParsedArguments final
     std::wstring sqliteDatabasePath;
     std::wstring actionOption;
     std::wstring errorMessage;
-    bool storeBackendExplicit                             = false;
+    bool storeBackendExplicit = false;
 #if defined(RS_SEARCH_TEST_HOOKS)
     SearchServiceBroker::ServerTestHook testHook = SearchServiceBroker::ServerTestHook::None;
 #endif
@@ -283,8 +283,7 @@ void UpdateServiceStatus(DWORD currentState, DWORD win32ExitCode, DWORD waitHint
 [[nodiscard]] LocalSearchIndexCore::RepositoryOptions BuildRepositoryOptions(const ParsedArguments& parsed) noexcept
 {
     return {
-        .snapshotRootDirectory = parsed.storageRootDirectory.empty() ? SearchServiceBroker::GetProgramDataSearchIndexRoot()
-                                                                     : parsed.storageRootDirectory,
+        .snapshotRootDirectory = parsed.storageRootDirectory.empty() ? SearchServiceBroker::GetProgramDataSearchIndexRoot() : parsed.storageRootDirectory,
         .persistentStoreKind   = parsed.persistentStoreKind,
         .sqliteDatabasePath    = parsed.sqliteDatabasePath,
         .sqliteAuthoritative   = parsed.persistentStoreKind == LocalSearchIndexCore::PersistentStoreKind::Sqlite,
@@ -306,9 +305,9 @@ HRESULT AcquireStoreWriterOwnership(const LocalSearchIndexCore::RepositoryOption
     outLockPath.clear();
 
     const LocalSearchIndexCore::PersistentStoreInfo storeInfo = LocalSearchIndexCore::GetPersistentStoreInfo(repositoryOptions);
-    const std::filesystem::path storeDirectory =
-        storeInfo.kind == LocalSearchIndexCore::PersistentStoreKind::Sqlite ? std::filesystem::path(storeInfo.primaryPath).parent_path()
-                                                                            : std::filesystem::path(storeInfo.rootDirectory);
+    const std::filesystem::path storeDirectory                = storeInfo.kind == LocalSearchIndexCore::PersistentStoreKind::Sqlite
+                                                                    ? std::filesystem::path(storeInfo.primaryPath).parent_path()
+                                                                    : std::filesystem::path(storeInfo.rootDirectory);
     if (storeDirectory.empty())
     {
         acquisitionPerf.SetHr(E_INVALIDARG);
@@ -316,8 +315,7 @@ HRESULT AcquireStoreWriterOwnership(const LocalSearchIndexCore::RepositoryOption
     }
 
     outLockPath = (storeDirectory / kStoreWriterLockName).wstring();
-    const std::filesystem::path extendedStoreDirectory(
-        Common::Paths::ToExtendedWin32Path(storeDirectory.native()));
+    const std::filesystem::path extendedStoreDirectory(Common::Paths::ToExtendedWin32Path(storeDirectory.native()));
     const std::wstring extendedLockPath = Common::Paths::ToExtendedWin32Path(outLockPath);
     std::error_code createError;
     std::filesystem::create_directories(extendedStoreDirectory, createError);
@@ -328,13 +326,8 @@ HRESULT AcquireStoreWriterOwnership(const LocalSearchIndexCore::RepositoryOption
         return hr;
     }
 
-    HANDLE lease = ::CreateFileW(extendedLockPath.c_str(),
-                                 GENERIC_READ | GENERIC_WRITE,
-                                 0u,
-                                 nullptr,
-                                 OPEN_ALWAYS,
-                                 FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_NOT_CONTENT_INDEXED,
-                                 nullptr);
+    HANDLE lease = ::CreateFileW(
+        extendedLockPath.c_str(), GENERIC_READ | GENERIC_WRITE, 0u, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_NOT_CONTENT_INDEXED, nullptr);
     if (lease == INVALID_HANDLE_VALUE)
     {
         const DWORD error = ::GetLastError();
@@ -2795,11 +2788,10 @@ CommandResult RunCompactStore(const ParsedArguments& parsed) noexcept
     const HRESULT ownershipHr = AcquireStoreWriterOwnership(repositoryOptions, writerLease, alreadyRunning, lockPath);
     if (FAILED(ownershipHr))
     {
-        result.hr = ownershipHr;
-        result.message =
-            std::format(L"Failed to acquire store writer ownership before compaction (ownership file '{}'). hr=0x{:08X}",
-                        lockPath,
-                        static_cast<unsigned long>(ownershipHr));
+        result.hr      = ownershipHr;
+        result.message = std::format(L"Failed to acquire store writer ownership before compaction (ownership file '{}'). hr=0x{:08X}",
+                                     lockPath,
+                                     static_cast<unsigned long>(ownershipHr));
         return result;
     }
     if (alreadyRunning)
@@ -2900,12 +2892,11 @@ CommandResult RunForegroundService(const ParsedArguments& parsed) noexcept
     const HRESULT ownershipHr = AcquireStoreWriterOwnership(repositoryOptions, writerLease, alreadyRunning, lockPath);
     if (FAILED(ownershipHr))
     {
-        result.hr = ownershipHr;
-        result.message = std::format(
-            L"Failed to acquire store writer ownership for '{}' (ownership file '{}'). hr=0x{:08X}",
-            SearchServiceBroker::kServiceName,
-            lockPath,
-            static_cast<unsigned long>(ownershipHr));
+        result.hr      = ownershipHr;
+        result.message = std::format(L"Failed to acquire store writer ownership for '{}' (ownership file '{}'). hr=0x{:08X}",
+                                     SearchServiceBroker::kServiceName,
+                                     lockPath,
+                                     static_cast<unsigned long>(ownershipHr));
         return result;
     }
     if (alreadyRunning)
@@ -3299,9 +3290,8 @@ void WINAPI ServiceMain(DWORD argc, wchar_t** argv) noexcept
     const HRESULT ownershipHr = AcquireStoreWriterOwnership(repositoryOptions, writerLease, alreadyRunning, lockPath);
     if (FAILED(ownershipHr))
     {
-        Debug::Error(L"RedSalamanderSearchService: failed to acquire store writer ownership at '{}'. hr=0x{:08X}",
-                     lockPath,
-                     static_cast<unsigned long>(ownershipHr));
+        Debug::Error(
+            L"RedSalamanderSearchService: failed to acquire store writer ownership at '{}'. hr=0x{:08X}", lockPath, static_cast<unsigned long>(ownershipHr));
         UpdateServiceStatus(SERVICE_STOPPED, static_cast<DWORD>(HRESULT_CODE(ownershipHr)), 0u);
         return;
     }
@@ -3376,8 +3366,7 @@ void WINAPI ServiceMain(DWORD argc, wchar_t** argv) noexcept
             continue;
         }
 
-        if (! recordHasContent || offset + (2u * sizeof(uint16_t)) > bytes.size() ||
-            ReadUtf16LeCodeUnit(bytes, offset + sizeof(uint16_t)) != L'\n')
+        if (! recordHasContent || offset + (2u * sizeof(uint16_t)) > bytes.size() || ReadUtf16LeCodeUnit(bytes, offset + sizeof(uint16_t)) != L'\n')
         {
             return false;
         }
@@ -3398,7 +3387,7 @@ void WINAPI ServiceMain(DWORD argc, wchar_t** argv) noexcept
     while (writtenTotal < byteCount)
     {
         const DWORD requested = static_cast<DWORD>((std::min)(bytes.size(), byteCount - writtenTotal));
-        DWORD written = 0u;
+        DWORD written         = 0u;
         if (WriteFile(destination, bytes.data(), requested, &written, nullptr) == FALSE || written == 0u)
         {
             return false;
@@ -3421,16 +3410,15 @@ void WINAPI ServiceMain(DWORD argc, wchar_t** argv) noexcept
     const std::wstring_view mode = std::wstring_view(argv.get()[1]).substr(kPrefix.size());
     if (mode == L"streams")
     {
-        const HANDLE stdoutHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-        const HANDLE stderrHandle = GetStdHandle(STD_ERROR_HANDLE);
+        const HANDLE stdoutHandle     = GetStdHandle(STD_OUTPUT_HANDLE);
+        const HANDLE stderrHandle     = GetStdHandle(STD_ERROR_HANDLE);
         constexpr size_t kStreamBytes = 2u * 1024u * 1024u;
         outExitCode = WriteTestSupportProbeChunk(stdoutHandle, 'O', kStreamBytes) && WriteTestSupportProbeChunk(stderrHandle, 'E', kStreamBytes) ? 0 : 81;
         return true;
     }
     if (mode == L"arguments")
     {
-        const bool argumentsMatch = argc == 6 && std::wstring_view(argv.get()[2]) == L"space value" &&
-                                    std::wstring_view(argv.get()[3]) == L"quote\"value" &&
+        const bool argumentsMatch = argc == 6 && std::wstring_view(argv.get()[2]) == L"space value" && std::wstring_view(argv.get()[3]) == L"quote\"value" &&
                                     std::wstring_view(argv.get()[4]) == L"backslash\\tail\\" &&
                                     std::wstring_view(argv.get()[5]) == L"Unicode-\u6E2C\u8A66-\U0001F642";
         constexpr std::string_view kOk{"ARGUMENTS_OK"};
@@ -3475,11 +3463,11 @@ void WINAPI ServiceMain(DWORD argc, wchar_t** argv) noexcept
             return true;
         }
 
-        wchar_t* delayEnd = nullptr;
-        const unsigned long delayMs = wcstoul(argv.get()[4], &delayEnd, 10);
-        wchar_t* exitEnd = nullptr;
+        wchar_t* delayEnd                     = nullptr;
+        const unsigned long delayMs           = wcstoul(argv.get()[4], &delayEnd, 10);
+        wchar_t* exitEnd                      = nullptr;
         const unsigned long requestedExitCode = wcstoul(argv.get()[5], &exitEnd, 10);
-        const bool replaceManifest = argc == 7 && std::wstring_view(argv.get()[6]) == L"replace";
+        const bool replaceManifest            = argc == 7 && std::wstring_view(argv.get()[6]) == L"replace";
         if (delayEnd == nullptr || *delayEnd != L'\0' || exitEnd == nullptr || *exitEnd != L'\0' || delayMs > 10'000u || requestedExitCode > 255u ||
             (argc == 7 && ! replaceManifest))
         {
@@ -3489,7 +3477,7 @@ void WINAPI ServiceMain(DWORD argc, wchar_t** argv) noexcept
 
         Sleep(static_cast<DWORD>(delayMs));
         uint64_t selectedPathCount = 0u;
-        const bool manifestValid = TryParseSelectedPathsManifestForTest(argv.get()[2], selectedPathCount);
+        const bool manifestValid   = TryParseSelectedPathsManifestForTest(argv.get()[2], selectedPathCount);
         if (manifestValid && replaceManifest)
         {
             if (DeleteFileW(argv.get()[2]) == FALSE)
@@ -3497,13 +3485,8 @@ void WINAPI ServiceMain(DWORD argc, wchar_t** argv) noexcept
                 outExitCode = 98;
                 return true;
             }
-            wil::unique_hfile replacement(CreateFileW(argv.get()[2],
-                                                       GENERIC_WRITE,
-                                                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                                       nullptr,
-                                                       CREATE_NEW,
-                                                       FILE_ATTRIBUTE_NORMAL,
-                                                       nullptr));
+            wil::unique_hfile replacement(CreateFileW(
+                argv.get()[2], GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
             constexpr std::string_view kReplacementPayload{"child replacement sentinel"};
             if (! replacement || FAILED(Common::HandleIo::WriteAll(replacement.get(), kReplacementPayload.data(), kReplacementPayload.size())))
             {
@@ -3511,8 +3494,7 @@ void WINAPI ServiceMain(DWORD argc, wchar_t** argv) noexcept
                 return true;
             }
         }
-        wil::unique_hfile marker(
-            CreateFileW(argv.get()[3], GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+        wil::unique_hfile marker(CreateFileW(argv.get()[3], GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
         if (! marker)
         {
             outExitCode = 95;
@@ -3525,8 +3507,7 @@ void WINAPI ServiceMain(DWORD argc, wchar_t** argv) noexcept
         if (manifestValid)
         {
             std::copy(kParsedPrefix.begin(), kParsedPrefix.end(), markerBuffer.begin());
-            const auto conversion =
-                std::to_chars(markerBuffer.data() + kParsedPrefix.size(), markerBuffer.data() + markerBuffer.size(), selectedPathCount);
+            const auto conversion = std::to_chars(markerBuffer.data() + kParsedPrefix.size(), markerBuffer.data() + markerBuffer.size(), selectedPathCount);
             if (conversion.ec != std::errc{})
             {
                 outExitCode = 96;
@@ -3580,13 +3561,13 @@ void WINAPI ServiceMain(DWORD argc, wchar_t** argv) noexcept
             outExitCode = 90;
             return true;
         }
-        wchar_t* end = nullptr;
+        wchar_t* end              = nullptr;
         const uintptr_t rawHandle = static_cast<uintptr_t>(_wcstoui64(argv.get()[2], &end, 10));
-        const bool inherited = end && *end == L'\0' && SetEvent(reinterpret_cast<HANDLE>(rawHandle)) != FALSE;
+        const bool inherited      = end && *end == L'\0' && SetEvent(reinterpret_cast<HANDLE>(rawHandle)) != FALSE;
         constexpr std::string_view kClosed{"HANDLE_CLOSED"};
         constexpr std::string_view kInherited{"HANDLE_INHERITED"};
         const std::string_view output = inherited ? kInherited : kClosed;
-        DWORD written = 0u;
+        DWORD written                 = 0u;
         static_cast<void>(WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), output.data(), static_cast<DWORD>(output.size()), &written, nullptr));
         outExitCode = inherited ? 91 : 0;
         return true;

@@ -142,7 +142,7 @@ void FolderView::UpdatePendingRefreshToPaintResult(uint64_t generation, uint64_t
         return;
     }
 
-    _pendingRefreshToPaintMetric->value0 = itemCount;
+    _pendingRefreshToPaintMetric->value0      = itemCount;
     _pendingRefreshToPaintMetric->resultReady = true;
 }
 
@@ -291,9 +291,8 @@ void FolderView::SetFolderPath(const std::optional<std::filesystem::path>& folde
     DisarmPotentialDrag();
     if (! folderPath)
     {
-        const bool hadCurrent = _focusedIndex < _items.size();
-        const bool hadSelection = _selectionStats.selectedFiles != 0u || _selectionStats.selectedFolders != 0u ||
-            _selectionStats.singleItem.has_value();
+        const bool hadCurrent   = _focusedIndex < _items.size();
+        const bool hadSelection = _selectionStats.selectedFiles != 0u || _selectionStats.selectedFolders != 0u || _selectionStats.singleItem.has_value();
         ++_folderPathGeneration;
         ExitIncrementalSearch();
         DismissAlertOverlay();
@@ -315,9 +314,9 @@ void FolderView::SetFolderPath(const std::optional<std::filesystem::path>& folde
         _itemsFolder.clear();
         _pendingNavigationDisplayedModel.reset();
         _pendingExplicitCurrentTarget.reset();
-        _focusedIndex = static_cast<size_t>(-1);
-        _anchorIndex = static_cast<size_t>(-1);
-        _hoveredIndex = static_cast<size_t>(-1);
+        _focusedIndex   = static_cast<size_t>(-1);
+        _anchorIndex    = static_cast<size_t>(-1);
+        _hoveredIndex   = static_cast<size_t>(-1);
         _selectionStats = {};
         if (hadSelection)
         {
@@ -617,9 +616,8 @@ void FolderView::OnDpiChanged(float newDpi)
 void FolderView::SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem)
 {
     DisarmPotentialDrag();
-    const bool hadCurrent = _focusedIndex < _items.size();
-    const bool hadSelection = _selectionStats.selectedFiles != 0u || _selectionStats.selectedFolders != 0u ||
-        _selectionStats.singleItem.has_value();
+    const bool hadCurrent   = _focusedIndex < _items.size();
+    const bool hadSelection = _selectionStats.selectedFiles != 0u || _selectionStats.selectedFolders != 0u || _selectionStats.singleItem.has_value();
     ++_fileSystemLiveInstanceEpoch;
     ++_removalFocusProviderEpoch;
     CancelPendingEnumeration();
@@ -648,7 +646,7 @@ void FolderView::SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem)
     _fileSystemPathIdentity.reset();
     RefreshFileSystemPathIdentity();
     _displayedFolder.reset();
-    _fileSystemMetadata = nullptr;
+    _fileSystemMetadata         = nullptr;
     _localShellBackedFileSystem = false;
     if (_fileSystem)
     {
@@ -671,9 +669,9 @@ void FolderView::SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem)
 
     if (_currentFolder && _fileSystem && _hWnd)
     {
-        const std::wstring currentFolderText = _currentFolder->wstring();
-        const bool currentLooksWindows       = NavigationLocation::LooksLikeWindowsAbsolutePath(currentFolderText);
-        const bool currentLooksPluginPath    = ! currentFolderText.empty() && (currentFolderText.front() == L'/' || currentFolderText.front() == L'\\');
+        const std::wstring currentFolderText  = _currentFolder->wstring();
+        const bool currentLooksWindows        = NavigationLocation::LooksLikeWindowsAbsolutePath(currentFolderText);
+        const bool currentLooksPluginPath     = ! currentFolderText.empty() && (currentFolderText.front() == L'/' || currentFolderText.front() == L'\\');
         const std::wstring_view pluginShortId = fileSystemPluginShortId;
         const bool isFilePlugin               = _localShellBackedFileSystem;
 
@@ -738,8 +736,7 @@ void FolderView::RefreshFileSystemPathIdentity() noexcept
         return;
     }
 
-    const FileSystemRouteContract::QueryResult route =
-        FileSystemRouteContract::Query(_fileSystem.get(), L"/", FILESYSTEM_RENAME, _fileSystemPluginId);
+    const FileSystemRouteContract::QueryResult route = FileSystemRouteContract::Query(_fileSystem.get(), L"/", FILESYSTEM_RENAME, _fileSystemPluginId);
     if (route.state != FileSystemRouteContract::QueryState::Available || ! route.snapshot.pathIdentity.has_value())
     {
         return;
@@ -821,9 +818,9 @@ LRESULT FolderView::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         case WndMsg::kFolderViewDirectoryCacheDirty: OnDirectoryCacheDirty(); return 0;
         case WM_DESTROY: OnDestroy(); return 0;
         case WM_NCDESTROY:
-            _pasteShortcutInFlight = false;
+            _pasteShortcutInFlight        = false;
             _activePasteShortcutRequestId = 0u;
-            _pasteShortcutStartedAt = {};
+            _pasteShortcutStartedAt       = {};
             _pendingPasteShortcutRequests.clear();
             static_cast<void>(DrainPostedPayloadsForWindow(hwnd));
             break;
@@ -1204,18 +1201,18 @@ bool FolderView::DebugWarmRenderingForSelfTest() noexcept
 FolderView::RenderingDebugSnapshot FolderView::DebugGetRenderingSnapshot() const noexcept
 {
     return RenderingDebugSnapshot{
-        .dpi                                = _dpi,
-        .clientSizePx                       = _clientSize,
-        .hasD2DTarget                       = _d2dTarget != nullptr,
-        .swapChainResizePending             = _swapChainResizePending,
-        .forceFullRenderOnNextPaint       = _forceFullRenderOnNextPaint,
-        .lastRenderWasFullClient          = _debugLastRenderWasFullClient,
-        .dpiChangeCount                   = _debugDpiChangeCount,
-        .fullClientRenderCount            = _debugFullClientRenderCount,
-        .deviceLossRecoveryCount            = _debugDeviceLossRecoveryCount,
-        .deviceLossDiscardedResourcesCount  = _debugDeviceLossDiscardedResourcesCount,
+        .dpi                               = _dpi,
+        .clientSizePx                      = _clientSize,
+        .hasD2DTarget                      = _d2dTarget != nullptr,
+        .swapChainResizePending            = _swapChainResizePending,
+        .forceFullRenderOnNextPaint        = _forceFullRenderOnNextPaint,
+        .lastRenderWasFullClient           = _debugLastRenderWasFullClient,
+        .dpiChangeCount                    = _debugDpiChangeCount,
+        .fullClientRenderCount             = _debugFullClientRenderCount,
+        .deviceLossRecoveryCount           = _debugDeviceLossRecoveryCount,
+        .deviceLossDiscardedResourcesCount = _debugDeviceLossDiscardedResourcesCount,
         .drawItemTransientBrushCreateCount = _debugDrawItemTransientBrushCreateCount.load(std::memory_order_acquire),
-        .lastRenderInvalidRectPx            = _debugLastRenderInvalidRectPx,
+        .lastRenderInvalidRectPx           = _debugLastRenderInvalidRectPx,
     };
 }
 

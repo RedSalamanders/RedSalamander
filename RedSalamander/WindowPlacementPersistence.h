@@ -70,11 +70,11 @@ inline void Save(Common::Settings::Settings& settings, std::wstring_view windowI
         return SW_SHOWNORMAL;
     }
 
-    const UINT dpi = GetDpiForWindow(hwnd);
+    const UINT dpi                               = GetDpiForWindow(hwnd);
     Common::Settings::WindowPlacement normalized = Common::Settings::NormalizeWindowPlacement(placement, dpi);
 
-    const int minimumWidth  = std::max(1, static_cast<int>(minimumSizePx.cx));
-    const int minimumHeight = std::max(1, static_cast<int>(minimumSizePx.cy));
+    const int minimumWidth   = std::max(1, static_cast<int>(minimumSizePx.cx));
+    const int minimumHeight  = std::max(1, static_cast<int>(minimumSizePx.cy));
     normalized.bounds.width  = std::max(normalized.bounds.width, minimumWidth);
     normalized.bounds.height = std::max(normalized.bounds.height, minimumHeight);
     normalized.dpi           = dpi;

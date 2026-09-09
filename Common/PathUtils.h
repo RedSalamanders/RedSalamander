@@ -124,8 +124,7 @@ enum class WindowsPathClass
 [[nodiscard]] inline bool IsExtendedWindowsPath(std::wstring_view path) noexcept
 {
     const WindowsPathClass pathClass = ClassifyWindowsPath(path);
-    return pathClass == WindowsPathClass::ExtendedDriveAbsolute || pathClass == WindowsPathClass::ExtendedUnc ||
-           pathClass == WindowsPathClass::ExtendedOther;
+    return pathClass == WindowsPathClass::ExtendedDriveAbsolute || pathClass == WindowsPathClass::ExtendedUnc || pathClass == WindowsPathClass::ExtendedOther;
 }
 
 [[nodiscard]] inline bool IsDeviceWindowsPath(std::wstring_view path) noexcept
@@ -171,8 +170,7 @@ enum class WindowsPathClass
 // no-follow provider binding at the mutation boundary.
 [[nodiscard]] inline bool IsSupportedLocalFileOperationPath(std::wstring_view path) noexcept
 {
-    if (path.empty() || StartsWithAsciiNoCase(path, LR"(\\.\)") || StartsWithAsciiNoCase(path, LR"(\??\)") ||
-        StartsWithAsciiNoCase(path, LR"(\\??\)"))
+    if (path.empty() || StartsWithAsciiNoCase(path, LR"(\\.\)") || StartsWithAsciiNoCase(path, LR"(\??\)") || StartsWithAsciiNoCase(path, LR"(\\??\)"))
     {
         return false;
     }
@@ -232,8 +230,7 @@ enum class WindowsPathClass
     {
         return true;
     }
-    return CompareStringOrdinal(
-               left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE) == CSTR_EQUAL;
+    return CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE) == CSTR_EQUAL;
 }
 
 // Component-boundary containment for already-normalized local Windows path text.
@@ -245,11 +242,7 @@ enum class WindowsPathClass
     {
         return false;
     }
-    if (CompareStringOrdinal(root.data(),
-                             static_cast<int>(root.size()),
-                             candidate.data(),
-                             static_cast<int>(root.size()),
-                             TRUE) != CSTR_EQUAL)
+    if (CompareStringOrdinal(root.data(), static_cast<int>(root.size()), candidate.data(), static_cast<int>(root.size()), TRUE) != CSTR_EQUAL)
     {
         return false;
     }
@@ -273,10 +266,7 @@ struct UniqueSiblingFileOptions final
 // Builds the familiar non-destructive sibling name used by "Keep both" flows.
 // The caller owns existence checks because the path may belong to any filesystem
 // provider; ordinal 2 produces "name (2).ext" (or "folder (2)").
-[[nodiscard]] inline HRESULT BuildUniqueSiblingPathCandidate(std::wstring_view siblingOf,
-                                                             bool isDirectory,
-                                                             size_t ordinal,
-                                                             std::wstring& pathOut) noexcept
+[[nodiscard]] inline HRESULT BuildUniqueSiblingPathCandidate(std::wstring_view siblingOf, bool isDirectory, size_t ordinal, std::wstring& pathOut) noexcept
 {
     pathOut.clear();
     if (ordinal < 2u)
@@ -301,13 +291,13 @@ struct UniqueSiblingFileOptions final
         }
     }
 
-    const std::wstring_view stem = extensionOffset == std::wstring_view::npos ? leaf : leaf.substr(0u, extensionOffset);
+    const std::wstring_view stem      = extensionOffset == std::wstring_view::npos ? leaf : leaf.substr(0u, extensionOffset);
     const std::wstring_view extension = extensionOffset == std::wstring_view::npos ? std::wstring_view{} : leaf.substr(extensionOffset);
-    pathOut = std::format(L"{}{} ({}){}", siblingOf.substr(0u, separator + 1u), stem, ordinal, extension);
+    pathOut                           = std::format(L"{}{} ({}){}", siblingOf.substr(0u, separator + 1u), stem, ordinal, extension);
     return S_OK;
 }
 
-template<typename UniqueFile, typename CandidateTokenFactory>
+template <typename UniqueFile, typename CandidateTokenFactory>
 [[nodiscard]] inline HRESULT CreateUniqueFileInDirectory(std::wstring_view directory,
                                                          const UniqueSiblingFileOptions& options,
                                                          CandidateTokenFactory&& makeCandidateToken,
@@ -344,13 +334,7 @@ template<typename UniqueFile, typename CandidateTokenFactory>
         candidate.append(candidateToken);
         candidate.append(options.suffix);
 
-        UniqueFile file(CreateFileW(candidate.c_str(),
-                                    options.desiredAccess,
-                                    options.shareMode,
-                                    nullptr,
-                                    CREATE_NEW,
-                                    options.flagsAndAttributes,
-                                    nullptr));
+        UniqueFile file(CreateFileW(candidate.c_str(), options.desiredAccess, options.shareMode, nullptr, CREATE_NEW, options.flagsAndAttributes, nullptr));
         if (file)
         {
             pathOut = std::move(candidate);
@@ -367,7 +351,7 @@ template<typename UniqueFile, typename CandidateTokenFactory>
     return HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
 }
 
-template<typename UniqueFile>
+template <typename UniqueFile>
 [[nodiscard]] inline HRESULT CreateUniqueFileInDirectory(std::wstring_view directory,
                                                          const UniqueSiblingFileOptions& options,
                                                          std::wstring& pathOut,
@@ -398,7 +382,7 @@ template<typename UniqueFile>
 
 // Creates and returns a sibling using CREATE_NEW. The path is published only after the
 // caller owns the handle, so collision retries cannot overwrite an existing file.
-template<typename UniqueFile>
+template <typename UniqueFile>
 [[nodiscard]] inline HRESULT CreateUniqueSiblingFile(std::wstring_view siblingOf,
                                                      const UniqueSiblingFileOptions& options,
                                                      std::wstring& pathOut,

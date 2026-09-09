@@ -10,7 +10,7 @@
 
 namespace FileSystemRouteContract
 {
-inline constexpr unsigned long kNormalArenaBytes = 4u * 1024u;
+inline constexpr unsigned long kNormalArenaBytes  = 4u * 1024u;
 inline constexpr unsigned long kMaximumArenaBytes = 64u * 1024u;
 
 enum class QueryState : uint8_t
@@ -25,55 +25,52 @@ struct Snapshot final
     std::wstring providerId;
     std::wstring pathProfileId;
     std::wstring rootId;
-    FileSystemRouteAvailability availability = FILESYSTEM_ROUTE_UNSUPPORTED;
+    FileSystemRouteAvailability availability      = FILESYSTEM_ROUTE_UNSUPPORTED;
     FileSystemCancellationRoute cancellationRoute = FILESYSTEM_CANCELLATION_UNCONTAINED;
-    FileSystemNamespaceKind namespaceKind = FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER;
-    FileSystemRouteNormalization normalization = FILESYSTEM_ROUTE_NORMALIZATION_NONE;
-    uint32_t proofFlags = FILESYSTEM_ROUTE_PROOF_NONE;
-    uint32_t providerWatchdogTimeoutMs = 0u;
-    uint32_t copyMoveMaxConcurrency = 0u;
-    uint32_t deleteMaxConcurrency = 0u;
-    uint32_t deleteRecycleBinMaxConcurrency = 0u;
-    uint64_t maxComponentUtf16 = 0u;
+    FileSystemNamespaceKind namespaceKind         = FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER;
+    FileSystemRouteNormalization normalization    = FILESYSTEM_ROUTE_NORMALIZATION_NONE;
+    uint32_t proofFlags                           = FILESYSTEM_ROUTE_PROOF_NONE;
+    uint32_t providerWatchdogTimeoutMs            = 0u;
+    uint32_t copyMoveMaxConcurrency               = 0u;
+    uint32_t deleteMaxConcurrency                 = 0u;
+    uint32_t deleteRecycleBinMaxConcurrency       = 0u;
+    uint64_t maxComponentUtf16                    = 0u;
 
-    bool copyOperation = false;
-    bool moveOperation = false;
-    bool nativeMoveOperation = false;
-    bool deleteOperation = false;
-    bool renameOperation = false;
+    bool copyOperation            = false;
+    bool moveOperation            = false;
+    bool nativeMoveOperation      = false;
+    bool deleteOperation          = false;
+    bool renameOperation          = false;
     bool createDirectoryOperation = false;
-    bool properties = false;
-    bool read = false;
-    bool write = false;
-    bool recycleOperation = false;
-    bool boundDelete = false;
-    bool conditionalDelete = false;
-    bool exclusiveStage = false;
-    bool conditionalPublish = false;
-    bool committedSize = false;
-    bool preserveFileLink = false;
-    bool preserveDirectoryLink = false;
-    bool retargetInTree = false;
-    bool exactLinkRemoval = false;
-    bool cancellationAbort = false;
-    bool cancellationDeadline = false;
+    bool properties               = false;
+    bool read                     = false;
+    bool write                    = false;
+    bool recycleOperation         = false;
+    bool boundDelete              = false;
+    bool conditionalDelete        = false;
+    bool exclusiveStage           = false;
+    bool conditionalPublish       = false;
+    bool committedSize            = false;
+    bool preserveFileLink         = false;
+    bool preserveDirectoryLink    = false;
+    bool retargetInTree           = false;
+    bool exactLinkRemoval         = false;
+    bool cancellationAbort        = false;
+    bool cancellationDeadline     = false;
     std::optional<FileSystemPathIdentity> pathIdentity;
 };
 
 struct QueryResult final
 {
     QueryState state = QueryState::ContractViolation;
-    HRESULT status = E_UNEXPECTED;
+    HRESULT status   = E_UNEXPECTED;
     Snapshot snapshot;
     bool usedArenaFallback = false;
 };
 
 // Queries and immediately copies every provider-owned fact. Missing typed support and
 // malformed output fail closed; capability JSON is never consulted.
-[[nodiscard]] QueryResult Query(IFileSystem* fileSystem,
-                                std::wstring_view path,
-                                FileSystemOperation operation,
-                                std::wstring_view expectedProviderId) noexcept;
+[[nodiscard]] QueryResult Query(IFileSystem* fileSystem, std::wstring_view path, FileSystemOperation operation, std::wstring_view expectedProviderId) noexcept;
 [[nodiscard]] QueryResult Query(IFileSystemRouteCapabilities* routeCapabilities,
                                 std::wstring_view path,
                                 FileSystemOperation operation,
@@ -90,15 +87,12 @@ struct QueryResult final
 struct BooleanResult final
 {
     QueryState state = QueryState::ContractViolation;
-    HRESULT status = E_UNEXPECTED;
-    bool value = false;
+    HRESULT status   = E_UNEXPECTED;
+    bool value       = false;
 };
 
-[[nodiscard]] BooleanResult QueryTransferPeerAllowed(IFileSystem* fileSystem,
-                                                     std::wstring_view path,
-                                                     FileSystemOperation operation,
-                                                     FileSystemTransferPeerRole role,
-                                                     std::wstring_view peerPluginId) noexcept;
+[[nodiscard]] BooleanResult QueryTransferPeerAllowed(
+    IFileSystem* fileSystem, std::wstring_view path, FileSystemOperation operation, FileSystemTransferPeerRole role, std::wstring_view peerPluginId) noexcept;
 [[nodiscard]] BooleanResult QueryTransferPeerAllowed(IFileSystemRouteCapabilities* routeCapabilities,
                                                      std::wstring_view path,
                                                      FileSystemOperation operation,
@@ -107,10 +101,10 @@ struct BooleanResult final
 
 struct ChildNameResult final
 {
-    QueryState state = QueryState::ContractViolation;
-    HRESULT status = E_UNEXPECTED;
+    QueryState state                     = QueryState::ContractViolation;
+    HRESULT status                       = E_UNEXPECTED;
     FileSystemChildNameStatus nameStatus = FILESYSTEM_CHILD_NAME_UNSUPPORTED;
-    HRESULT failureStatus = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    HRESULT failureStatus                = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
 };
 
 [[nodiscard]] ChildNameResult ValidateChildName(IFileSystem* fileSystem,
@@ -124,10 +118,10 @@ struct ChildNameResult final
 
 struct ChildNameContractResult final
 {
-    QueryState state = QueryState::ContractViolation;
-    HRESULT status = E_UNEXPECTED;
+    QueryState state                     = QueryState::ContractViolation;
+    HRESULT status                       = E_UNEXPECTED;
     FileSystemChildNameStatus nameStatus = FILESYSTEM_CHILD_NAME_UNSUPPORTED;
-    HRESULT failureStatus = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    HRESULT failureStatus                = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     std::wstring joinedPath;
     std::wstring collisionKey;
     uint32_t arenaFallbackCount = 0u;
@@ -147,18 +141,17 @@ struct ChildNameContractResult final
                                                              FileSystemOperation operation,
                                                              std::wstring_view expectedProviderId) noexcept;
 #ifdef ENABLE_TESTS
-[[nodiscard]] ChildNameContractResult QueryChildNameContractWithAllocationFailureForSelfTest(
-    IFileSystemRouteCapabilities* routeCapabilities,
-    std::wstring_view parentPath,
-    std::wstring_view childName,
-    FileSystemOperation operation,
-    std::wstring_view expectedProviderId) noexcept;
+[[nodiscard]] ChildNameContractResult QueryChildNameContractWithAllocationFailureForSelfTest(IFileSystemRouteCapabilities* routeCapabilities,
+                                                                                             std::wstring_view parentPath,
+                                                                                             std::wstring_view childName,
+                                                                                             FileSystemOperation operation,
+                                                                                             std::wstring_view expectedProviderId) noexcept;
 #endif
 
 struct StringResult final
 {
     QueryState state = QueryState::ContractViolation;
-    HRESULT status = E_UNEXPECTED;
+    HRESULT status   = E_UNEXPECTED;
     std::wstring value;
     bool usedArenaFallback = false;
 };

@@ -20,13 +20,13 @@
 #include <utility>
 #include <vector>
 
-#include <windowsx.h>
-#include <wincrypt.h>
-#include <imm.h>
-#include <shlobj.h>
-#include <shellapi.h>
 #include <UIAutomation.h>
+#include <imm.h>
+#include <shellapi.h>
+#include <shlobj.h>
 #include <uxtheme.h>
+#include <wincrypt.h>
+#include <windowsx.h>
 
 #pragma comment(lib, "crypt32")
 #pragma comment(lib, "imm32")
@@ -36,10 +36,10 @@
 
 #include <yyjson.h>
 
-#include "Helpers.h"
 #include "DxUi/DxUi.h"
-#include "PathUtils.h"
+#include "Helpers.h"
 #include "PaneVisualState.h"
+#include "PathUtils.h"
 #include "ProcessCommandLine.h"
 #include "StringConversion.h"
 #include "UnicodeClipboard.h"
@@ -54,17 +54,15 @@ using namespace TerminalPluginDetail;
 
 GhosttyPoint Terminal::terminalPointFromClient(POINT clientPoint) const noexcept
 {
-    const float scale = static_cast<float>(std::max<UINT>(_dpi, 1u)) / 96.0f;
-    const int cellWidth = std::max(1, static_cast<int>(std::lround(_cellWidthDip * scale)));
+    const float scale    = static_cast<float>(std::max<UINT>(_dpi, 1u)) / 96.0f;
+    const int cellWidth  = std::max(1, static_cast<int>(std::lround(_cellWidthDip * scale)));
     const int cellHeight = std::max(1, static_cast<int>(std::lround(_cellHeightDip * scale)));
-    const int maximumX = std::max(0, static_cast<int>(_columns) - 1);
-    const int maximumY = std::max(0, static_cast<int>(_rows) - 1);
+    const int maximumX   = std::max(0, static_cast<int>(_columns) - 1);
+    const int maximumY   = std::max(0, static_cast<int>(_rows) - 1);
     GhosttyPoint point{};
-    point.tag = GHOSTTY_POINT_TAG_VIEWPORT;
-    point.value.coordinate.x = static_cast<uint16_t>(
-        std::clamp(static_cast<int>(clientPoint.x) / cellWidth, 0, maximumX));
-    point.value.coordinate.y = static_cast<uint32_t>(
-        std::clamp(static_cast<int>(clientPoint.y) / cellHeight, 0, maximumY));
+    point.tag                = GHOSTTY_POINT_TAG_VIEWPORT;
+    point.value.coordinate.x = static_cast<uint16_t>(std::clamp(static_cast<int>(clientPoint.x) / cellWidth, 0, maximumX));
+    point.value.coordinate.y = static_cast<uint32_t>(std::clamp(static_cast<int>(clientPoint.y) / cellHeight, 0, maximumY));
     return point;
 }
 
@@ -79,15 +77,14 @@ bool Terminal::updateSelection(POINT clientPoint) noexcept
     selection.size = sizeof(selection);
     {
         std::scoped_lock lock(_terminalMutex);
-        if (_ghosttyTerminal == nullptr || _selectionAnchor == nullptr || _runtime.terminalGridRef == nullptr ||
-            _runtime.trackedGridRefSnapshot == nullptr ||
+        if (_ghosttyTerminal == nullptr || _selectionAnchor == nullptr || _runtime.terminalGridRef == nullptr || _runtime.trackedGridRefSnapshot == nullptr ||
             _runtime.trackedGridRefSnapshot(_selectionAnchor, &anchor) != GHOSTTY_SUCCESS ||
             _runtime.terminalGridRef(_ghosttyTerminal, currentPoint, &current) != GHOSTTY_SUCCESS)
         {
             return false;
         }
-        selection.start = anchor;
-        selection.end = current;
+        selection.start     = anchor;
+        selection.end       = current;
         selection.rectangle = (GetKeyState(VK_MENU) & 0x8000) != 0;
         if (_runtime.terminalSet(_ghosttyTerminal, GHOSTTY_TERMINAL_OPT_SELECTION, &selection) != GHOSTTY_SUCCESS)
         {
@@ -103,7 +100,7 @@ bool Terminal::updateSelection(POINT clientPoint) noexcept
 
 void Terminal::stopSelection() noexcept
 {
-    _selecting = false;
+    _selecting               = false;
     _selectionAutoScrollRows = 0;
     if (const HWND hwnd = _windowHandle.load(std::memory_order_acquire); hwnd != nullptr)
     {
@@ -175,10 +172,10 @@ bool Terminal::copySelection(bool* selectionPresent) noexcept
         *selectionPresent = false;
     }
     GhosttyTerminalSelectionFormatOptions options{};
-    options.size = sizeof(options);
-    options.emit = GHOSTTY_FORMATTER_FORMAT_PLAIN;
-    options.unwrap = true;
-    options.trim = true;
+    options.size    = sizeof(options);
+    options.emit    = GHOSTTY_FORMATTER_FORMAT_PLAIN;
+    options.unwrap  = true;
+    options.trim    = true;
     size_t required = 0u;
     {
         std::scoped_lock lock(_terminalMutex);
@@ -186,8 +183,7 @@ bool Terminal::copySelection(bool* selectionPresent) noexcept
         {
             return false;
         }
-        const GhosttyResult query =
-            _runtime.terminalSelectionFormatBuffer(_ghosttyTerminal, options, nullptr, 0u, &required);
+        const GhosttyResult query = _runtime.terminalSelectionFormatBuffer(_ghosttyTerminal, options, nullptr, 0u, &required);
         if (query == GHOSTTY_NO_VALUE || required == 0u)
         {
             return false;
@@ -207,16 +203,15 @@ bool Terminal::copySelection(bool* selectionPresent) noexcept
     {
         std::scoped_lock lock(_terminalMutex);
         if (_ghosttyTerminal == nullptr ||
-            _runtime.terminalSelectionFormatBuffer(_ghosttyTerminal, options, bytes.get(), required, &written) != GHOSTTY_SUCCESS ||
-            written == 0u || written > required)
+            _runtime.terminalSelectionFormatBuffer(_ghosttyTerminal, options, bytes.get(), required, &written) != GHOSTTY_SUCCESS || written == 0u ||
+            written > required)
         {
             SecureZeroMemory(bytes.get(), required);
             return false;
         }
     }
-    const auto wipeBytes = wil::scope_exit([&bytes, required]() noexcept { SecureZeroMemory(bytes.get(), required); });
-    const std::optional<std::wstring> text = Common::Strings::TryUtf16FromUtf8Strict(
-        std::string_view(reinterpret_cast<const char*>(bytes.get()), written));
+    const auto wipeBytes                   = wil::scope_exit([&bytes, required]() noexcept { SecureZeroMemory(bytes.get(), required); });
+    const std::optional<std::wstring> text = Common::Strings::TryUtf16FromUtf8Strict(std::string_view(reinterpret_cast<const char*>(bytes.get()), written));
     if (! text.has_value() || text.value().empty())
     {
         return false;
@@ -228,8 +223,8 @@ bool Terminal::copySelection(bool* selectionPresent) noexcept
     }
 #endif
     const HWND hwnd = _windowHandle.load(std::memory_order_acquire);
-    const bool copied = hwnd != nullptr && Common::Clipboard::TrySetUnicodeText(
-                                             GetAncestor(hwnd, GA_ROOT), text.value(), Common::Clipboard::EmptyUnicodeTextPolicy::Reject);
+    const bool copied =
+        hwnd != nullptr && Common::Clipboard::TrySetUnicodeText(GetAncestor(hwnd, GA_ROOT), text.value(), Common::Clipboard::EmptyUnicodeTextPolicy::Reject);
     if (copied)
     {
         if (selectionPresent != nullptr)
@@ -244,14 +239,14 @@ bool Terminal::copySelection(bool* selectionPresent) noexcept
 bool Terminal::hasSelection() noexcept
 {
     GhosttyTerminalSelectionFormatOptions options{};
-    options.size = sizeof(options);
-    options.emit = GHOSTTY_FORMATTER_FORMAT_PLAIN;
-    options.unwrap = true;
-    options.trim = true;
+    options.size    = sizeof(options);
+    options.emit    = GHOSTTY_FORMATTER_FORMAT_PLAIN;
+    options.unwrap  = true;
+    options.trim    = true;
     size_t required = 0u;
     std::scoped_lock lock(_terminalMutex);
     return _ghosttyTerminal != nullptr && _runtime.terminalSelectionFormatBuffer != nullptr &&
-        _runtime.terminalSelectionFormatBuffer(_ghosttyTerminal, options, nullptr, 0u, &required) == GHOSTTY_OUT_OF_SPACE && required != 0u;
+           _runtime.terminalSelectionFormatBuffer(_ghosttyTerminal, options, nullptr, 0u, &required) == GHOSTTY_OUT_OF_SPACE && required != 0u;
 }
 
 void Terminal::clearSelection() noexcept
@@ -270,8 +265,7 @@ void Terminal::clearSelection() noexcept
     }
 }
 
-bool Terminal::encodeMouse(
-    GhosttyMouseAction action, GhosttyMouseButton button, POINT clientPoint, bool anyButtonPressed) noexcept
+bool Terminal::encodeMouse(GhosttyMouseAction action, GhosttyMouseButton button, POINT clientPoint, bool anyButtonPressed) noexcept
 {
     if (_mouseEncoder == nullptr || _mouseEvent == nullptr)
     {
@@ -286,11 +280,11 @@ bool Terminal::encodeMouse(
     {
         return false;
     }
-    size.screen_width = static_cast<uint32_t>(std::max(1L, client.right - client.left));
+    size.screen_width  = static_cast<uint32_t>(std::max(1L, client.right - client.left));
     size.screen_height = static_cast<uint32_t>(std::max(1L, client.bottom - client.top));
-    const float scale = static_cast<float>(std::max<UINT>(_dpi, 1u)) / 96.0f;
-    size.cell_width = static_cast<uint32_t>(std::max(1, static_cast<int>(std::lround(_cellWidthDip * scale))));
-    size.cell_height = static_cast<uint32_t>(std::max(1, static_cast<int>(std::lround(_cellHeightDip * scale))));
+    const float scale  = static_cast<float>(std::max<UINT>(_dpi, 1u)) / 96.0f;
+    size.cell_width    = static_cast<uint32_t>(std::max(1, static_cast<int>(std::lround(_cellWidthDip * scale))));
+    size.cell_height   = static_cast<uint32_t>(std::max(1, static_cast<int>(std::lround(_cellHeightDip * scale))));
 
     GhosttyMods modifiers = 0u;
     if ((GetKeyState(VK_SHIFT) & 0x8000) != 0)
@@ -315,8 +309,7 @@ bool Terminal::encodeMouse(
         _runtime.mouseEncoderSetFromTerminal(_mouseEncoder, _ghosttyTerminal);
     }
     _runtime.mouseEncoderSetOption(_mouseEncoder, GHOSTTY_MOUSE_ENCODER_OPT_SIZE, &size);
-    _runtime.mouseEncoderSetOption(
-        _mouseEncoder, GHOSTTY_MOUSE_ENCODER_OPT_ANY_BUTTON_PRESSED, &anyButtonPressed);
+    _runtime.mouseEncoderSetOption(_mouseEncoder, GHOSTTY_MOUSE_ENCODER_OPT_ANY_BUTTON_PRESSED, &anyButtonPressed);
     _runtime.mouseEventSetAction(_mouseEvent, action);
     if (button == GHOSTTY_MOUSE_BUTTON_UNKNOWN)
     {
@@ -327,13 +320,11 @@ bool Terminal::encodeMouse(
         _runtime.mouseEventSetButton(_mouseEvent, button);
     }
     _runtime.mouseEventSetMods(_mouseEvent, modifiers);
-    _runtime.mouseEventSetPosition(
-        _mouseEvent, GhosttyMousePosition{static_cast<float>(clientPoint.x), static_cast<float>(clientPoint.y)});
+    _runtime.mouseEventSetPosition(_mouseEvent, GhosttyMousePosition{static_cast<float>(clientPoint.x), static_cast<float>(clientPoint.y)});
 
     std::array<char, 128u> encoded{};
-    size_t written = 0u;
-    GhosttyResult result = _runtime.mouseEncoderEncode(
-        _mouseEncoder, _mouseEvent, encoded.data(), encoded.size(), &written);
+    size_t written       = 0u;
+    GhosttyResult result = _runtime.mouseEncoderEncode(_mouseEncoder, _mouseEvent, encoded.data(), encoded.size(), &written);
     if (result == GHOSTTY_SUCCESS)
     {
         return written != 0u && writeInput(std::string_view(encoded.data(), written));
@@ -344,10 +335,9 @@ bool Terminal::encodeMouse(
     }
     std::vector<char> overflow(written);
     size_t overflowWritten = 0u;
-    result = _runtime.mouseEncoderEncode(
-        _mouseEncoder, _mouseEvent, overflow.data(), overflow.size(), &overflowWritten);
+    result                 = _runtime.mouseEncoderEncode(_mouseEncoder, _mouseEvent, overflow.data(), overflow.size(), &overflowWritten);
     return result == GHOSTTY_SUCCESS && overflowWritten != 0u && overflowWritten <= overflow.size() &&
-        writeInput(std::string_view(overflow.data(), overflowWritten));
+           writeInput(std::string_view(overflow.data(), overflowWritten));
 }
 
 void Terminal::NotifyKittyReady(void* context) noexcept
@@ -358,14 +348,13 @@ void Terminal::NotifyKittyReady(void* context) noexcept
         return;
     }
     const HWND hwnd = self->_windowHandle.load(std::memory_order_acquire);
-    auto payload = std::unique_ptr<ReadyWakePayload>(new (std::nothrow) ReadyWakePayload());
+    auto payload    = std::unique_ptr<ReadyWakePayload>(new (std::nothrow) ReadyWakePayload());
     if (hwnd == nullptr || self->_closing.load(std::memory_order_acquire) || ! payload)
     {
         return;
     }
     payload->sessionGeneration = self->_sessionGeneration.load(std::memory_order_acquire);
-    static_cast<void>(PostMessagePayload(
-        hwnd, WndMsg::kTerminalKittyReady, 0u, std::move(payload)));
+    static_cast<void>(PostMessagePayload(hwnd, WndMsg::kTerminalKittyReady, 0u, std::move(payload)));
 }
 
 void Terminal::releaseReportedMouseButtons() noexcept
@@ -374,8 +363,7 @@ void Terminal::releaseReportedMouseButtons() noexcept
     {
         if (RemoveReportedMouseButton(_reportedMouseButtons, button))
         {
-            static_cast<void>(encodeMouse(
-                GHOSTTY_MOUSE_ACTION_RELEASE, button, _reportedMouseLastPoint, _reportedMouseButtons != 0u));
+            static_cast<void>(encodeMouse(GHOSTTY_MOUSE_ACTION_RELEASE, button, _reportedMouseLastPoint, _reportedMouseButtons != 0u));
         }
     }
 }
@@ -383,7 +371,7 @@ void Terminal::releaseReportedMouseButtons() noexcept
 void Terminal::scrollViewport(intptr_t rows) noexcept
 {
     GhosttyTerminalScrollViewport scroll{};
-    scroll.tag = GHOSTTY_SCROLL_VIEWPORT_DELTA;
+    scroll.tag         = GHOSTTY_SCROLL_VIEWPORT_DELTA;
     scroll.value.delta = rows;
     {
         std::scoped_lock lock(_terminalMutex);
@@ -406,9 +394,8 @@ void Terminal::scrollViewport(intptr_t rows) noexcept
 void Terminal::scrollViewportTo(uint64_t row) noexcept
 {
     GhosttyTerminalScrollViewport scroll{};
-    scroll.tag = GHOSTTY_SCROLL_VIEWPORT_ROW;
-    scroll.value.row = static_cast<size_t>(std::min<uint64_t>(
-        row, static_cast<uint64_t>((std::numeric_limits<size_t>::max)())));
+    scroll.tag       = GHOSTTY_SCROLL_VIEWPORT_ROW;
+    scroll.value.row = static_cast<size_t>(std::min<uint64_t>(row, static_cast<uint64_t>((std::numeric_limits<size_t>::max)())));
     {
         std::scoped_lock lock(_terminalMutex);
         if (_ghosttyTerminal == nullptr || _runtime.terminalScrollViewport == nullptr)
@@ -448,47 +435,36 @@ void Terminal::handleVerticalScroll(UINT scrollCode) noexcept
         return;
     }
 
-    const uint64_t visible = std::min(scrollbar.len, scrollbar.total);
+    const uint64_t visible       = std::min(scrollbar.len, scrollbar.total);
     const uint64_t maximumOffset = scrollbar.total - visible;
-    uint64_t target = std::min(scrollbar.offset, maximumOffset);
+    uint64_t target              = std::min(scrollbar.offset, maximumOffset);
     switch (scrollCode)
     {
-    case SB_LINEUP:
-        target = target > 0u ? target - 1u : 0u;
-        break;
-    case SB_LINEDOWN:
-        if (target < maximumOffset)
+        case SB_LINEUP: target = target > 0u ? target - 1u : 0u; break;
+        case SB_LINEDOWN:
+            if (target < maximumOffset)
+            {
+                ++target;
+            }
+            break;
+        case SB_PAGEUP: target = target > visible ? target - visible : 0u; break;
+        case SB_PAGEDOWN: target += std::min(visible, maximumOffset - target); break;
+        case SB_TOP: target = 0u; break;
+        case SB_BOTTOM: target = maximumOffset; break;
+        case SB_THUMBPOSITION:
+        case SB_THUMBTRACK:
         {
-            ++target;
+            SCROLLINFO info{};
+            info.cbSize = sizeof(info);
+            info.fMask  = SIF_TRACKPOS;
+            if (GetScrollInfo(_windowHandle.load(std::memory_order_acquire), SB_VERT, &info) != FALSE)
+            {
+                target = static_cast<uint64_t>(std::max(0, info.nTrackPos));
+            }
+            break;
         }
-        break;
-    case SB_PAGEUP:
-        target = target > visible ? target - visible : 0u;
-        break;
-    case SB_PAGEDOWN:
-        target += std::min(visible, maximumOffset - target);
-        break;
-    case SB_TOP:
-        target = 0u;
-        break;
-    case SB_BOTTOM:
-        target = maximumOffset;
-        break;
-    case SB_THUMBPOSITION:
-    case SB_THUMBTRACK:
-    {
-        SCROLLINFO info{};
-        info.cbSize = sizeof(info);
-        info.fMask = SIF_TRACKPOS;
-        if (GetScrollInfo(_windowHandle.load(std::memory_order_acquire), SB_VERT, &info) != FALSE)
-        {
-            target = static_cast<uint64_t>(std::max(0, info.nTrackPos));
-        }
-        break;
-    }
-    case SB_ENDSCROLL:
-    default:
-        return;
+        case SB_ENDSCROLL:
+        default: return;
     }
     scrollViewportTo(std::min(target, maximumOffset));
 }
@@ -498,7 +474,7 @@ bool Terminal::getScrollbarState(GhosttyTerminalScrollbar& state) noexcept
     state = {};
     std::scoped_lock lock(_terminalMutex);
     return _ghosttyTerminal != nullptr && _runtime.terminalGet != nullptr &&
-        _runtime.terminalGet(_ghosttyTerminal, GHOSTTY_TERMINAL_DATA_SCROLLBAR, &state) == GHOSTTY_SUCCESS;
+           _runtime.terminalGet(_ghosttyTerminal, GHOSTTY_TERMINAL_DATA_SCROLLBAR, &state) == GHOSTTY_SUCCESS;
 }
 
 void Terminal::updateScrollbar() noexcept
@@ -513,7 +489,7 @@ void Terminal::updateScrollbar() noexcept
     if (! getScrollbarState(scrollbar))
     {
         scrollbar.total = _rows;
-        scrollbar.len = _rows;
+        scrollbar.len   = _rows;
     }
     const SCROLLINFO info = MakeTerminalScrollInfo(scrollbar);
     SetScrollInfo(hwnd, SB_VERT, &info, TRUE);
@@ -526,37 +502,33 @@ void Terminal::updateImeCandidatePosition() noexcept
     {
         return;
     }
-    uint16_t cursorX = 0u;
-    uint16_t cursorY = 0u;
+    uint16_t cursorX      = 0u;
+    uint16_t cursorY      = 0u;
     bool cursorInViewport = false;
     if (_renderState != nullptr)
     {
-        static_cast<void>(_runtime.renderStateGet(
-            _renderState, GHOSTTY_RENDER_STATE_DATA_CURSOR_VIEWPORT_HAS_VALUE, &cursorInViewport));
+        static_cast<void>(_runtime.renderStateGet(_renderState, GHOSTTY_RENDER_STATE_DATA_CURSOR_VIEWPORT_HAS_VALUE, &cursorInViewport));
         if (cursorInViewport)
         {
-            static_cast<void>(_runtime.renderStateGet(
-                _renderState, GHOSTTY_RENDER_STATE_DATA_CURSOR_VIEWPORT_X, &cursorX));
-            static_cast<void>(_runtime.renderStateGet(
-                _renderState, GHOSTTY_RENDER_STATE_DATA_CURSOR_VIEWPORT_Y, &cursorY));
+            static_cast<void>(_runtime.renderStateGet(_renderState, GHOSTTY_RENDER_STATE_DATA_CURSOR_VIEWPORT_X, &cursorX));
+            static_cast<void>(_runtime.renderStateGet(_renderState, GHOSTTY_RENDER_STATE_DATA_CURSOR_VIEWPORT_Y, &cursorY));
         }
     }
     const float scale = static_cast<float>(std::max<UINT>(_dpi, 1u)) / 96.0f;
-    const LONG x = static_cast<LONG>(std::lround(static_cast<float>(cursorX) * _cellWidthDip * scale));
-    const LONG y = static_cast<LONG>(std::lround(static_cast<float>(cursorY + 1u) * _cellHeightDip * scale));
+    const LONG x      = static_cast<LONG>(std::lround(static_cast<float>(cursorX) * _cellWidthDip * scale));
+    const LONG y      = static_cast<LONG>(std::lround(static_cast<float>(cursorY + 1u) * _cellHeightDip * scale));
     HIMC inputContext = ImmGetContext(hwnd);
     if (inputContext == nullptr)
     {
         return;
     }
-    const auto releaseContext = wil::scope_exit(
-        [hwnd, inputContext]() noexcept { static_cast<void>(ImmReleaseContext(hwnd, inputContext)); });
+    const auto releaseContext = wil::scope_exit([hwnd, inputContext]() noexcept { static_cast<void>(ImmReleaseContext(hwnd, inputContext)); });
     CANDIDATEFORM candidate{};
-    candidate.dwStyle = CFS_CANDIDATEPOS;
+    candidate.dwStyle      = CFS_CANDIDATEPOS;
     candidate.ptCurrentPos = POINT{x, y};
     static_cast<void>(ImmSetCandidateWindow(inputContext, &candidate));
     COMPOSITIONFORM composition{};
-    composition.dwStyle = CFS_POINT;
+    composition.dwStyle      = CFS_POINT;
     composition.ptCurrentPos = POINT{x, y};
     static_cast<void>(ImmSetCompositionWindow(inputContext, &composition));
 }
@@ -607,9 +579,8 @@ bool Terminal::encodeSpecialKey(WPARAM virtualKey, LPARAM keyData, bool released
         }
         _runtime.keyEncoderSetFromTerminal(_keyEncoder, _ghosttyTerminal);
     }
-    const GhosttyKeyAction action = released
-        ? GHOSTTY_KEY_ACTION_RELEASE
-        : ((keyData & (static_cast<LPARAM>(1u) << 30u)) != 0 ? GHOSTTY_KEY_ACTION_REPEAT : GHOSTTY_KEY_ACTION_PRESS);
+    const GhosttyKeyAction action =
+        released ? GHOSTTY_KEY_ACTION_RELEASE : ((keyData & (static_cast<LPARAM>(1u) << 30u)) != 0 ? GHOSTTY_KEY_ACTION_REPEAT : GHOSTTY_KEY_ACTION_PRESS);
     _runtime.keyEventSetAction(_keyEvent, action);
     _runtime.keyEventSetKey(_keyEvent, key);
     _runtime.keyEventSetMods(_keyEvent, modifiers);
@@ -636,7 +607,7 @@ bool Terminal::encodeSpecialKey(WPARAM virtualKey, LPARAM keyData, bool released
     };
 
     std::array<char, 128u> encoded{};
-    size_t length = 0u;
+    size_t length        = 0u;
     GhosttyResult result = _runtime.keyEncoderEncode(_keyEncoder, _keyEvent, encoded.data(), encoded.size(), &length);
     if (result == GHOSTTY_SUCCESS)
     {
@@ -652,7 +623,7 @@ bool Terminal::encodeSpecialKey(WPARAM virtualKey, LPARAM keyData, bool released
     }
     std::vector<char> overflow(length);
     size_t written = 0u;
-    result = _runtime.keyEncoderEncode(_keyEncoder, _keyEvent, overflow.data(), overflow.size(), &written);
+    result         = _runtime.keyEncoderEncode(_keyEncoder, _keyEvent, overflow.data(), overflow.size(), &written);
     if (result != GHOSTTY_SUCCESS || written > overflow.size())
     {
         return false;
@@ -670,8 +641,8 @@ void Terminal::resizeTerminal() noexcept
     }
     RECT client{};
     GetClientRect(hwnd, &client);
-    const int width = client.right - client.left;
-    const int height = client.bottom - client.top;
+    const int width        = client.right - client.left;
+    const int height       = client.bottom - client.top;
     const bool emptyClient = width <= 0 || height <= 0;
     if (emptyClient)
     {
@@ -680,31 +651,31 @@ void Terminal::resizeTerminal() noexcept
         return;
     }
     updateCellMetrics();
-    const int cellWidth = std::max(1, static_cast<int>(std::lround(_cellWidthDip * static_cast<float>(_dpi) / 96.0f)));
-    const int cellHeight = std::max(1, static_cast<int>(std::lround(_cellHeightDip * static_cast<float>(_dpi) / 96.0f)));
+    const int cellWidth    = std::max(1, static_cast<int>(std::lround(_cellWidthDip * static_cast<float>(_dpi) / 96.0f)));
+    const int cellHeight   = std::max(1, static_cast<int>(std::lround(_cellHeightDip * static_cast<float>(_dpi) / 96.0f)));
     const uint16_t columns = static_cast<uint16_t>(std::clamp(width / cellWidth, 1, static_cast<int>((std::numeric_limits<uint16_t>::max)())));
-    const uint16_t rows = static_cast<uint16_t>(std::clamp(height / cellHeight, 1, static_cast<int>((std::numeric_limits<uint16_t>::max)())));
+    const uint16_t rows    = static_cast<uint16_t>(std::clamp(height / cellHeight, 1, static_cast<int>((std::numeric_limits<uint16_t>::max)())));
     if (_ptyClientSizeSynced && columns == _columns && rows == _rows)
     {
         return;
     }
     _columns = columns;
-    _rows = rows;
+    _rows    = rows;
 
     {
         std::scoped_lock teardownLock(_sessionTeardownMutex);
         if (_pseudoConsole)
         {
-            static_cast<void>(ResizePseudoConsole(_pseudoConsole.get(), COORD{static_cast<SHORT>(std::min<uint16_t>(_columns, SHRT_MAX)),
-                                                                             static_cast<SHORT>(std::min<uint16_t>(_rows, SHRT_MAX))}));
+            static_cast<void>(ResizePseudoConsole(
+                _pseudoConsole.get(),
+                COORD{static_cast<SHORT>(std::min<uint16_t>(_columns, SHRT_MAX)), static_cast<SHORT>(std::min<uint16_t>(_rows, SHRT_MAX))}));
             _ptyClientSizeSynced = true;
         }
     }
     std::scoped_lock lock(_terminalMutex);
     if (_ghosttyTerminal != nullptr)
     {
-        static_cast<void>(_runtime.terminalResize(
-            _ghosttyTerminal, _columns, _rows, static_cast<uint32_t>(cellWidth), static_cast<uint32_t>(cellHeight)));
+        static_cast<void>(_runtime.terminalResize(_ghosttyTerminal, _columns, _rows, static_cast<uint32_t>(cellWidth), static_cast<uint32_t>(cellHeight)));
     }
 }
 
@@ -715,8 +686,8 @@ void Terminal::updateCellMetrics() noexcept
         return;
     }
 
-    _cellWidthDip = std::max(1.0f, _liveFontSizeDip * 0.62f);
-    _cellHeightDip = std::max(1.0f, _liveFontSizeDip * 1.40f);
+    _cellWidthDip     = std::max(1.0f, _liveFontSizeDip * 0.62f);
+    _cellHeightDip    = std::max(1.0f, _liveFontSizeDip * 1.40f);
     _cellMetricsValid = true;
     if (FAILED(ensureTextResources()) || ! _dwriteFactory || ! _textFormat)
     {
@@ -725,12 +696,7 @@ void Terminal::updateCellMetrics() noexcept
 
     wil::com_ptr<IDWriteTextLayout> layout;
     constexpr wchar_t kCellMeasureText[] = L"M";
-    if (FAILED(_dwriteFactory->CreateTextLayout(kCellMeasureText,
-                                                 1u,
-                                                 _textFormat.get(),
-                                                 _liveFontSizeDip * 4.0f,
-                                                 _liveFontSizeDip * 4.0f,
-                                                 layout.put())))
+    if (FAILED(_dwriteFactory->CreateTextLayout(kCellMeasureText, 1u, _textFormat.get(), _liveFontSizeDip * 4.0f, _liveFontSizeDip * 4.0f, layout.put())))
     {
         return;
     }
@@ -741,40 +707,31 @@ void Terminal::updateCellMetrics() noexcept
         return;
     }
 
-    const float scale = static_cast<float>(std::max<UINT>(_dpi, 1u)) / 96.0f;
-    const int cellWidthPx = std::max(1, static_cast<int>(std::lround(metrics.widthIncludingTrailingWhitespace * scale)));
+    const float scale      = static_cast<float>(std::max<UINT>(_dpi, 1u)) / 96.0f;
+    const int cellWidthPx  = std::max(1, static_cast<int>(std::lround(metrics.widthIncludingTrailingWhitespace * scale)));
     const int cellHeightPx = std::max(1, static_cast<int>(std::lround(metrics.height * scale)));
-    _cellWidthDip = static_cast<float>(cellWidthPx) / scale;
-    _cellHeightDip = static_cast<float>(cellHeightPx) / scale;
+    _cellWidthDip          = static_cast<float>(cellWidthPx) / scale;
+    _cellHeightDip         = static_cast<float>(cellHeightPx) / scale;
 }
 
 HRESULT Terminal::ensureTextResources() noexcept
 {
     if (! _dwriteFactory)
     {
-        const HRESULT hr = DWriteCreateFactory(
-            DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(_dwriteFactory.put()));
+        const HRESULT hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(_dwriteFactory.put()));
         if (FAILED(hr))
         {
             return hr;
         }
     }
-    const auto createTextFormat = [this](DWRITE_FONT_WEIGHT weight,
-                                         DWRITE_FONT_STYLE style,
-                                         wil::com_ptr<IDWriteTextFormat>& output) noexcept -> HRESULT
+    const auto createTextFormat = [this](DWRITE_FONT_WEIGHT weight, DWRITE_FONT_STYLE style, wil::com_ptr<IDWriteTextFormat>& output) noexcept -> HRESULT
     {
         if (output)
         {
             return S_OK;
         }
-        const HRESULT hr = _dwriteFactory->CreateTextFormat(_config.fontFamily.c_str(),
-                                                            nullptr,
-                                                            weight,
-                                                            style,
-                                                            DWRITE_FONT_STRETCH_NORMAL,
-                                                            _liveFontSizeDip,
-                                                            L"en-us",
-                                                            output.put());
+        const HRESULT hr = _dwriteFactory->CreateTextFormat(
+            _config.fontFamily.c_str(), nullptr, weight, style, DWRITE_FONT_STRETCH_NORMAL, _liveFontSizeDip, L"en-us", output.put());
         if (FAILED(hr))
         {
             return hr;
@@ -835,10 +792,9 @@ HRESULT Terminal::ensureDeviceResources() noexcept
         }
         RECT client{};
         GetClientRect(hwnd, &client);
-        const D2D1_SIZE_U size = D2D1::SizeU(static_cast<UINT32>(std::max(0L, client.right - client.left)),
-                                             static_cast<UINT32>(std::max(0L, client.bottom - client.top)));
-        HRESULT hr = _d2dFactory->CreateHwndRenderTarget(
-            D2D1::RenderTargetProperties(), D2D1::HwndRenderTargetProperties(hwnd, size), _renderTarget.put());
+        const D2D1_SIZE_U size =
+            D2D1::SizeU(static_cast<UINT32>(std::max(0L, client.right - client.left)), static_cast<UINT32>(std::max(0L, client.bottom - client.top)));
+        HRESULT hr = _d2dFactory->CreateHwndRenderTarget(D2D1::RenderTargetProperties(), D2D1::HwndRenderTargetProperties(hwnd, size), _renderTarget.put());
         if (FAILED(hr))
         {
             return hr;
@@ -875,8 +831,8 @@ HRESULT Terminal::resizeRenderTargetToClient() noexcept
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
-    const D2D1_SIZE_U size = D2D1::SizeU(static_cast<UINT32>(std::max(0L, client.right - client.left)),
-                                         static_cast<UINT32>(std::max(0L, client.bottom - client.top)));
+    const D2D1_SIZE_U size =
+        D2D1::SizeU(static_cast<UINT32>(std::max(0L, client.right - client.left)), static_cast<UINT32>(std::max(0L, client.bottom - client.top)));
     if (size.width == 0u || size.height == 0u)
     {
         return S_FALSE;
@@ -888,7 +844,7 @@ HRESULT Terminal::resizeRenderTargetToClient() noexcept
     }
 
     const auto startedAt = std::chrono::steady_clock::now();
-    const HRESULT hr = _renderTarget->Resize(size);
+    const HRESULT hr     = _renderTarget->Resize(size);
     if (SUCCEEDED(hr))
     {
         ++_kittyResizeCount;
@@ -968,7 +924,7 @@ std::wstring Terminal::formatScreen() noexcept
     {
         return {};
     }
-    size_t required = 0u;
+    size_t required           = 0u;
     const GhosttyResult query = _runtime.formatterFormatBuffer(_formatter, nullptr, 0u, &required);
     if (required == 0u)
     {
@@ -985,8 +941,7 @@ std::wstring Terminal::formatScreen() noexcept
     {
         return LoadStringResource(g_hInstance, IDS_TERMINAL_FORMAT_ERROR);
     }
-    return Common::Strings::Utf16FromUtf8ReplacingInvalid(
-        std::string_view(reinterpret_cast<const char*>(bytes.data()), written));
+    return Common::Strings::Utf16FromUtf8ReplacingInvalid(std::string_view(reinterpret_cast<const char*>(bytes.data()), written));
 }
 
 bool Terminal::handleKittyImageQueryResult(KittyImageSnapshot& image, GhosttyResult result) noexcept
@@ -995,28 +950,24 @@ bool Terminal::handleKittyImageQueryResult(KittyImageSnapshot& image, GhosttyRes
     {
         return false;
     }
-    image.state = result == GHOSTTY_NO_VALUE ? KittyImageState::EnginePending : KittyImageState::Rejected;
+    image.state            = result == GHOSTTY_NO_VALUE ? KittyImageState::EnginePending : KittyImageState::Rejected;
     image.pendingRequestId = 0u;
     return true;
 }
 
 void Terminal::resetKittyPendingForStorageChange(KittyImageSnapshot& image) noexcept
 {
-    if (image.state == KittyImageState::ConversionPending || image.state == KittyImageState::EnginePending ||
-        image.state == KittyImageState::Rejected)
+    if (image.state == KittyImageState::ConversionPending || image.state == KittyImageState::EnginePending || image.state == KittyImageState::Rejected)
     {
-        image.state = KittyImageState::Missing;
+        image.state            = KittyImageState::Missing;
         image.pendingRequestId = 0u;
     }
 }
 
-bool Terminal::needsKittyReplacementWork(
-    const KittyImageSnapshot& image,
-    uint64_t currentRequestId,
-    bool retryDeferred) noexcept
+bool Terminal::needsKittyReplacementWork(const KittyImageSnapshot& image, uint64_t currentRequestId, bool retryDeferred) noexcept
 {
     return image.state == KittyImageState::Missing || image.state == KittyImageState::EnginePending || retryDeferred ||
-        (image.state == KittyImageState::ConversionPending && image.pendingRequestId != currentRequestId);
+           (image.state == KittyImageState::ConversionPending && image.pendingRequestId != currentRequestId);
 }
 
 bool Terminal::isCurrentKittyConversionResult(const KittyImageSnapshot& image, uint64_t requestId) noexcept
@@ -1024,10 +975,7 @@ bool Terminal::isCurrentKittyConversionResult(const KittyImageSnapshot& image, u
     return image.state == KittyImageState::ConversionPending && image.pendingRequestId == requestId;
 }
 
-bool Terminal::captureKittyGraphicsLocked(
-    TerminalKittyGenerationWork& work,
-    std::vector<KittyPlacementSnapshot>& placements,
-    bool& submitWork) noexcept
+bool Terminal::captureKittyGraphicsLocked(TerminalKittyGenerationWork& work, std::vector<KittyPlacementSnapshot>& placements, bool& submitWork) noexcept
 {
     struct VisibleImage final
     {
@@ -1037,29 +985,28 @@ bool Terminal::captureKittyGraphicsLocked(
 
     work = {};
     placements.clear();
-    submitWork = false;
-    _kittyCaptureSourceBytes = 0u;
-    _kittyCapturePinnedBytes = 0u;
-    _kittyCaptureEnginePlacementBytes = 0u;
-    _kittyCaptureEnginePlacementCount = 0u;
-    _kittyCaptureTotalPlacements = 0u;
-    _kittyCaptureVisiblePlacements = 0u;
-    _kittyCaptureOffscreenPlacements = 0u;
-    _kittyCaptureVirtualPlacements = 0u;
-    _kittyCaptureVisibleImageKeys = 0u;
-    _kittyCaptureMissingImageKeys = 0u;
+    submitWork                          = false;
+    _kittyCaptureSourceBytes            = 0u;
+    _kittyCapturePinnedBytes            = 0u;
+    _kittyCaptureEnginePlacementBytes   = 0u;
+    _kittyCaptureEnginePlacementCount   = 0u;
+    _kittyCaptureTotalPlacements        = 0u;
+    _kittyCaptureVisiblePlacements      = 0u;
+    _kittyCaptureOffscreenPlacements    = 0u;
+    _kittyCaptureVirtualPlacements      = 0u;
+    _kittyCaptureVisibleImageKeys       = 0u;
+    _kittyCaptureMissingImageKeys       = 0u;
     _kittyCaptureEnginePendingImageKeys = 0u;
-    _kittyCaptureDeferredImageKeys = 0u;
-    _kittyCaptureRejectedImageKeys = 0u;
+    _kittyCaptureDeferredImageKeys      = 0u;
+    _kittyCaptureRejectedImageKeys      = 0u;
     if (_ghosttyTerminal == nullptr || _kittyPlacementIterator == nullptr)
     {
         return true;
     }
 
     GhosttyKittyGraphics graphics = nullptr;
-    uint64_t storageGeneration = 0u;
-    if (_runtime.terminalGet(_ghosttyTerminal, GHOSTTY_TERMINAL_DATA_KITTY_GRAPHICS, &graphics) != GHOSTTY_SUCCESS ||
-        graphics == nullptr ||
+    uint64_t storageGeneration    = 0u;
+    if (_runtime.terminalGet(_ghosttyTerminal, GHOSTTY_TERMINAL_DATA_KITTY_GRAPHICS, &graphics) != GHOSTTY_SUCCESS || graphics == nullptr ||
         _runtime.kittyGraphicsGet(graphics, GHOSTTY_KITTY_GRAPHICS_DATA_GENERATION, &storageGeneration) != GHOSTTY_SUCCESS)
     {
         return false;
@@ -1071,26 +1018,16 @@ bool Terminal::captureKittyGraphicsLocked(
     }
     size_t placementCountLimit = 0u;
     size_t placementBytesLimit = 0u;
-    if (_runtime.kittyGraphicsGet(
-            graphics,
-            GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_COUNT,
-            &_kittyCaptureEnginePlacementCount) != GHOSTTY_SUCCESS ||
-        _runtime.kittyGraphicsGet(
-            graphics,
-            GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_ALLOCATED_BYTES,
-            &_kittyCaptureEnginePlacementBytes) != GHOSTTY_SUCCESS ||
-        _runtime.kittyGraphicsGet(
-            graphics, GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_COUNT_LIMIT, &placementCountLimit) != GHOSTTY_SUCCESS ||
-        _runtime.kittyGraphicsGet(
-            graphics, GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_BYTES_LIMIT, &placementBytesLimit) != GHOSTTY_SUCCESS ||
-        _kittyCaptureEnginePlacementCount > kMaximumKittyPlacements ||
-        _kittyCaptureEnginePlacementBytes > kMaximumKittyPlacementBytes ||
+    if (_runtime.kittyGraphicsGet(graphics, GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_COUNT, &_kittyCaptureEnginePlacementCount) != GHOSTTY_SUCCESS ||
+        _runtime.kittyGraphicsGet(graphics, GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_ALLOCATED_BYTES, &_kittyCaptureEnginePlacementBytes) != GHOSTTY_SUCCESS ||
+        _runtime.kittyGraphicsGet(graphics, GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_COUNT_LIMIT, &placementCountLimit) != GHOSTTY_SUCCESS ||
+        _runtime.kittyGraphicsGet(graphics, GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_BYTES_LIMIT, &placementBytesLimit) != GHOSTTY_SUCCESS ||
+        _kittyCaptureEnginePlacementCount > kMaximumKittyPlacements || _kittyCaptureEnginePlacementBytes > kMaximumKittyPlacementBytes ||
         placementCountLimit != kMaximumKittyPlacements || placementBytesLimit != kMaximumKittyPlacementBytes)
     {
         return false;
     }
-    if (_runtime.kittyGraphicsGet(
-            graphics, GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_ITERATOR, &_kittyPlacementIterator) != GHOSTTY_SUCCESS)
+    if (_runtime.kittyGraphicsGet(graphics, GHOSTTY_KITTY_GRAPHICS_DATA_PLACEMENT_ITERATOR, &_kittyPlacementIterator) != GHOSTTY_SUCCESS)
     {
         return false;
     }
@@ -1131,19 +1068,13 @@ bool Terminal::captureKittyGraphicsLocked(
         uint32_t imageId = 0u;
         uint32_t xOffset = 0u;
         uint32_t yOffset = 0u;
-        int32_t z = 0;
-        bool isVirtual = false;
-        if (_runtime.kittyPlacementGet(
-                _kittyPlacementIterator, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IMAGE_ID, &imageId) != GHOSTTY_SUCCESS ||
-            _runtime.kittyPlacementGet(
-                _kittyPlacementIterator, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IS_VIRTUAL, &isVirtual) != GHOSTTY_SUCCESS ||
-            _runtime.kittyPlacementGet(
-                _kittyPlacementIterator, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_X_OFFSET, &xOffset) != GHOSTTY_SUCCESS ||
-            _runtime.kittyPlacementGet(
-                _kittyPlacementIterator, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_Y_OFFSET, &yOffset) != GHOSTTY_SUCCESS ||
-            _runtime.kittyPlacementGet(
-                _kittyPlacementIterator, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_Z, &z) != GHOSTTY_SUCCESS ||
-            isVirtual)
+        int32_t z        = 0;
+        bool isVirtual   = false;
+        if (_runtime.kittyPlacementGet(_kittyPlacementIterator, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IMAGE_ID, &imageId) != GHOSTTY_SUCCESS ||
+            _runtime.kittyPlacementGet(_kittyPlacementIterator, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_IS_VIRTUAL, &isVirtual) != GHOSTTY_SUCCESS ||
+            _runtime.kittyPlacementGet(_kittyPlacementIterator, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_X_OFFSET, &xOffset) != GHOSTTY_SUCCESS ||
+            _runtime.kittyPlacementGet(_kittyPlacementIterator, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_Y_OFFSET, &yOffset) != GHOSTTY_SUCCESS ||
+            _runtime.kittyPlacementGet(_kittyPlacementIterator, GHOSTTY_KITTY_GRAPHICS_PLACEMENT_DATA_Z, &z) != GHOSTTY_SUCCESS || isVirtual)
         {
             if (isVirtual)
             {
@@ -1159,8 +1090,7 @@ bool Terminal::captureKittyGraphicsLocked(
         }
         GhosttyKittyGraphicsPlacementRenderInfo renderInfo{};
         renderInfo.size = sizeof(renderInfo);
-        if (_runtime.kittyPlacementRenderInfo(
-                _kittyPlacementIterator, image, _ghosttyTerminal, &renderInfo) != GHOSTTY_SUCCESS)
+        if (_runtime.kittyPlacementRenderInfo(_kittyPlacementIterator, image, _ghosttyTerminal, &renderInfo) != GHOSTTY_SUCCESS)
         {
             continue;
         }
@@ -1169,8 +1099,7 @@ bool Terminal::captureKittyGraphicsLocked(
             ++_kittyCaptureOffscreenPlacements;
             continue;
         }
-        if (renderInfo.pixel_width == 0u || renderInfo.pixel_height == 0u ||
-            renderInfo.source_width == 0u || renderInfo.source_height == 0u)
+        if (renderInfo.pixel_width == 0u || renderInfo.pixel_height == 0u || renderInfo.source_width == 0u || renderInfo.source_height == 0u)
         {
             continue;
         }
@@ -1178,12 +1107,7 @@ bool Terminal::captureKittyGraphicsLocked(
         uint64_t imageGeneration = 0u;
         const std::array fields{GHOSTTY_KITTY_IMAGE_DATA_GENERATION};
         std::array<void*, 1u> imageGenerationValues{{&imageGeneration}};
-        if (_runtime.kittyGraphicsImageGetMulti(
-                image,
-                fields.size(),
-                fields.data(),
-                imageGenerationValues.data(),
-                nullptr) != GHOSTTY_SUCCESS ||
+        if (_runtime.kittyGraphicsImageGetMulti(image, fields.size(), fields.data(), imageGenerationValues.data(), nullptr) != GHOSTTY_SUCCESS ||
             imageGeneration == 0u)
         {
             continue;
@@ -1192,8 +1116,7 @@ bool Terminal::captureKittyGraphicsLocked(
         const KittyImageKey imageKey{imageId, imageGeneration};
         for (auto imageIterator = _kittyImages.begin(); imageIterator != _kittyImages.end();)
         {
-            if (imageIterator->first.imageId != imageId ||
-                imageIterator->first.imageGeneration == imageGeneration)
+            if (imageIterator->first.imageId != imageId || imageIterator->first.imageGeneration == imageGeneration)
             {
                 ++imageIterator;
                 continue;
@@ -1212,16 +1135,16 @@ bool Terminal::captureKittyGraphicsLocked(
         }
 
         KittyPlacementSnapshot placement{};
-        placement.imageKey = imageKey;
-        placement.renderInfo = renderInfo;
+        placement.imageKey      = imageKey;
+        placement.renderInfo    = renderInfo;
         placement.xOffsetPixels = xOffset;
         placement.yOffsetPixels = yOffset;
-        placement.z = z;
+        placement.z             = z;
         placements.push_back(placement);
     }
 
     _kittyCaptureVisiblePlacements = placements.size();
-    _kittyCaptureVisibleImageKeys = visibleImages.size();
+    _kittyCaptureVisibleImageKeys  = visibleImages.size();
     if (storageGenerationChanged)
     {
         for (auto imageIterator = _kittyImages.begin(); imageIterator != _kittyImages.end();)
@@ -1249,23 +1172,21 @@ bool Terminal::captureKittyGraphicsLocked(
     const auto retryDeferred = [this, visibleKeyCount = visibleImages.size()](const KittyImageSnapshot& image) noexcept
     {
         return image.state == KittyImageState::Deferred &&
-            (_kittyCapturePinnedBytes < image.deferredPinnedBytes ||
-             visibleKeyCount < image.deferredVisibleKeyCount);
+               (_kittyCapturePinnedBytes < image.deferredPinnedBytes || visibleKeyCount < image.deferredVisibleKeyCount);
     };
-    const bool needsReplacementWork = std::ranges::any_of(
-        visibleImages,
-        [this, &retryDeferred](const VisibleImage& visible) noexcept
-        {
-            const KittyImageSnapshot& image = _kittyImages.find(visible.key)->second;
-            return needsKittyReplacementWork(image, _kittyRequestId, retryDeferred(image));
-        });
+    const bool needsReplacementWork = std::ranges::any_of(visibleImages,
+                                                          [this, &retryDeferred](const VisibleImage& visible) noexcept
+    {
+        const KittyImageSnapshot& image = _kittyImages.find(visible.key)->second;
+        return needsKittyReplacementWork(image, _kittyRequestId, retryDeferred(image));
+    });
 
-    size_t totalSourceBytes = 0u;
+    size_t totalSourceBytes    = 0u;
     size_t totalConvertedBytes = 0u;
     if (needsReplacementWork)
     {
-        const size_t availableConvertedBytes = TerminalKittyImagePipeline::MaximumConvertedBytes -
-            std::min(_kittyCapturePinnedBytes, TerminalKittyImagePipeline::MaximumConvertedBytes);
+        const size_t availableConvertedBytes =
+            TerminalKittyImagePipeline::MaximumConvertedBytes - std::min(_kittyCapturePinnedBytes, TerminalKittyImagePipeline::MaximumConvertedBytes);
         for (const VisibleImage& visible : visibleImages)
         {
             KittyImageSnapshot& snapshot = _kittyImages.find(visible.key)->second;
@@ -1275,96 +1196,90 @@ bool Terminal::captureKittyGraphicsLocked(
                 continue;
             }
 
-            uint32_t width = 0u;
-            uint32_t height = 0u;
-            GhosttyKittyImageFormat format = GHOSTTY_KITTY_IMAGE_FORMAT_MAX_VALUE;
+            uint32_t width                           = 0u;
+            uint32_t height                          = 0u;
+            GhosttyKittyImageFormat format           = GHOSTTY_KITTY_IMAGE_FORMAT_MAX_VALUE;
             GhosttyKittyImageCompression compression = GHOSTTY_KITTY_IMAGE_COMPRESSION_MAX_VALUE;
-            const uint8_t* source = nullptr;
-            size_t sourceLength = 0u;
-            const std::array<GhosttyKittyGraphicsImageData, 6u> keys{
-                GHOSTTY_KITTY_IMAGE_DATA_WIDTH,
-                GHOSTTY_KITTY_IMAGE_DATA_HEIGHT,
-                GHOSTTY_KITTY_IMAGE_DATA_FORMAT,
-                GHOSTTY_KITTY_IMAGE_DATA_COMPRESSION,
-                GHOSTTY_KITTY_IMAGE_DATA_DATA_PTR,
-                GHOSTTY_KITTY_IMAGE_DATA_DATA_LEN};
+            const uint8_t* source                    = nullptr;
+            size_t sourceLength                      = 0u;
+            const std::array<GhosttyKittyGraphicsImageData, 6u> keys{GHOSTTY_KITTY_IMAGE_DATA_WIDTH,
+                                                                     GHOSTTY_KITTY_IMAGE_DATA_HEIGHT,
+                                                                     GHOSTTY_KITTY_IMAGE_DATA_FORMAT,
+                                                                     GHOSTTY_KITTY_IMAGE_DATA_COMPRESSION,
+                                                                     GHOSTTY_KITTY_IMAGE_DATA_DATA_PTR,
+                                                                     GHOSTTY_KITTY_IMAGE_DATA_DATA_LEN};
             std::array<void*, 6u> values{&width, &height, &format, &compression, &source, &sourceLength};
-            const GhosttyResult imageResult = _runtime.kittyGraphicsImageGetMulti(
-                visible.image, keys.size(), keys.data(), values.data(), nullptr);
+            const GhosttyResult imageResult = _runtime.kittyGraphicsImageGetMulti(visible.image, keys.size(), keys.data(), values.data(), nullptr);
             if (handleKittyImageQueryResult(snapshot, imageResult))
             {
                 continue;
             }
-            if (source == nullptr || width == 0u || height == 0u ||
-                compression != GHOSTTY_KITTY_IMAGE_COMPRESSION_NONE)
+            if (source == nullptr || width == 0u || height == 0u || compression != GHOSTTY_KITTY_IMAGE_COMPRESSION_NONE)
             {
-                snapshot.state = KittyImageState::Rejected;
+                snapshot.state            = KittyImageState::Rejected;
                 snapshot.pendingRequestId = 0u;
                 continue;
             }
 
-            size_t sourceBytesPerPixel = 0u;
+            size_t sourceBytesPerPixel           = 0u;
             TerminalKittyPixelFormat pixelFormat = TerminalKittyPixelFormat::Rgba;
             switch (format)
             {
-            case GHOSTTY_KITTY_IMAGE_FORMAT_RGB:
-                sourceBytesPerPixel = 3u;
-                pixelFormat = TerminalKittyPixelFormat::Rgb;
-                break;
-            case GHOSTTY_KITTY_IMAGE_FORMAT_RGBA:
-                sourceBytesPerPixel = 4u;
-                pixelFormat = TerminalKittyPixelFormat::Rgba;
-                break;
-            case GHOSTTY_KITTY_IMAGE_FORMAT_GRAY_ALPHA:
-                sourceBytesPerPixel = 2u;
-                pixelFormat = TerminalKittyPixelFormat::GrayAlpha;
-                break;
-            case GHOSTTY_KITTY_IMAGE_FORMAT_GRAY:
-                sourceBytesPerPixel = 1u;
-                pixelFormat = TerminalKittyPixelFormat::Gray;
-                break;
-            case GHOSTTY_KITTY_IMAGE_FORMAT_PNG:
-            case GHOSTTY_KITTY_IMAGE_FORMAT_MAX_VALUE:
-                snapshot.state = KittyImageState::Rejected;
-                snapshot.pendingRequestId = 0u;
-                continue;
+                case GHOSTTY_KITTY_IMAGE_FORMAT_RGB:
+                    sourceBytesPerPixel = 3u;
+                    pixelFormat         = TerminalKittyPixelFormat::Rgb;
+                    break;
+                case GHOSTTY_KITTY_IMAGE_FORMAT_RGBA:
+                    sourceBytesPerPixel = 4u;
+                    pixelFormat         = TerminalKittyPixelFormat::Rgba;
+                    break;
+                case GHOSTTY_KITTY_IMAGE_FORMAT_GRAY_ALPHA:
+                    sourceBytesPerPixel = 2u;
+                    pixelFormat         = TerminalKittyPixelFormat::GrayAlpha;
+                    break;
+                case GHOSTTY_KITTY_IMAGE_FORMAT_GRAY:
+                    sourceBytesPerPixel = 1u;
+                    pixelFormat         = TerminalKittyPixelFormat::Gray;
+                    break;
+                case GHOSTTY_KITTY_IMAGE_FORMAT_PNG:
+                case GHOSTTY_KITTY_IMAGE_FORMAT_MAX_VALUE:
+                    snapshot.state            = KittyImageState::Rejected;
+                    snapshot.pendingRequestId = 0u;
+                    continue;
             }
 
             const uint64_t pixelCount = static_cast<uint64_t>(width) * static_cast<uint64_t>(height);
             if (pixelCount > kMaximumKittyPixels)
             {
-                snapshot.state = KittyImageState::Rejected;
+                snapshot.state            = KittyImageState::Rejected;
                 snapshot.pendingRequestId = 0u;
                 continue;
             }
             const uint64_t expectedSourceBytes = pixelCount * sourceBytesPerPixel;
-            const uint64_t convertedBytes = pixelCount * 4u;
-            if (expectedSourceBytes != sourceLength ||
-                expectedSourceBytes > TerminalKittyImagePipeline::MaximumSourceBytes ||
+            const uint64_t convertedBytes      = pixelCount * 4u;
+            if (expectedSourceBytes != sourceLength || expectedSourceBytes > TerminalKittyImagePipeline::MaximumSourceBytes ||
                 convertedBytes > TerminalKittyImagePipeline::MaximumConvertedBytes)
             {
-                snapshot.state = KittyImageState::Rejected;
+                snapshot.state            = KittyImageState::Rejected;
                 snapshot.pendingRequestId = 0u;
                 continue;
             }
-            if (totalSourceBytes >
-                    TerminalKittyImagePipeline::MaximumSourceBytes - static_cast<size_t>(expectedSourceBytes) ||
-                convertedBytes > availableConvertedBytes ||
-                totalConvertedBytes > availableConvertedBytes - static_cast<size_t>(convertedBytes))
+            if (totalSourceBytes > TerminalKittyImagePipeline::MaximumSourceBytes - static_cast<size_t>(expectedSourceBytes) ||
+                convertedBytes > availableConvertedBytes || totalConvertedBytes > availableConvertedBytes - static_cast<size_t>(convertedBytes))
             {
-                snapshot.state = KittyImageState::Deferred;
-                snapshot.pendingRequestId = 0u;
-                snapshot.deferredPinnedBytes = _kittyCapturePinnedBytes;
+                snapshot.state                   = KittyImageState::Deferred;
+                snapshot.pendingRequestId        = 0u;
+                snapshot.deferredPinnedBytes     = _kittyCapturePinnedBytes;
                 snapshot.deferredVisibleKeyCount = visibleImages.size();
                 continue;
             }
 
             TerminalKittyImageWork imageWork{};
-            imageWork.imageId = visible.key.imageId;
-            imageWork.width = width;
-            imageWork.height = height;
+            imageWork.imageId         = visible.key.imageId;
+            imageWork.width           = width;
+            imageWork.height          = height;
             imageWork.imageGeneration = visible.key.imageGeneration;
-            imageWork.format = pixelFormat;
+            imageWork.format          = pixelFormat;
             imageWork.source.assign(source, source + sourceLength);
             totalSourceBytes += sourceLength;
             totalConvertedBytes += static_cast<size_t>(convertedBytes);
@@ -1375,13 +1290,13 @@ bool Terminal::captureKittyGraphicsLocked(
     if (! work.images.empty())
     {
         work.requestId = ++_kittyRequestId;
-        submitWork = true;
+        submitWork     = true;
         for (const TerminalKittyImageWork& imageWork : work.images)
         {
             const KittyImageKey key{imageWork.imageId, imageWork.imageGeneration};
             KittyImageSnapshot& snapshot = _kittyImages.find(key)->second;
-            snapshot.state = KittyImageState::ConversionPending;
-            snapshot.pendingRequestId = work.requestId;
+            snapshot.state               = KittyImageState::ConversionPending;
+            snapshot.pendingRequestId    = work.requestId;
         }
     }
     _kittyCaptureSourceBytes = totalSourceBytes;
@@ -1426,29 +1341,25 @@ void Terminal::consumeKittyReady() noexcept
             evictionCandidates.push_back(imageKey);
         }
     }
-    std::ranges::sort(
-        evictionCandidates,
-        [this](const KittyImageKey& left, const KittyImageKey& right) noexcept
-        {
-            return _kittyImages.find(left)->second.lastVisibleEpoch < _kittyImages.find(right)->second.lastVisibleEpoch;
-        });
+    std::ranges::sort(evictionCandidates, [this](const KittyImageKey& left, const KittyImageKey& right) noexcept {
+        return _kittyImages.find(left)->second.lastVisibleEpoch < _kittyImages.find(right)->second.lastVisibleEpoch;
+    });
     size_t evictionIndex = 0u;
     for (TerminalKittyConvertedImage& converted : result->images)
     {
         const KittyImageKey imageKey{converted.imageId, converted.imageGeneration};
         const auto imageIterator = _kittyImages.find(imageKey);
-        if (imageIterator == _kittyImages.end() ||
-            ! isCurrentKittyConversionResult(imageIterator->second, result->requestId))
+        if (imageIterator == _kittyImages.end() || ! isCurrentKittyConversionResult(imageIterator->second, result->requestId))
         {
             continue;
         }
         const size_t convertedBytes = converted.bgra.size();
-        while (convertedBytes > TerminalKittyImagePipeline::MaximumConvertedBytes -
-                std::min(_kittyCachedBytes, TerminalKittyImagePipeline::MaximumConvertedBytes) &&
+        while (convertedBytes >
+                   TerminalKittyImagePipeline::MaximumConvertedBytes - std::min(_kittyCachedBytes, TerminalKittyImagePipeline::MaximumConvertedBytes) &&
                evictionIndex < evictionCandidates.size())
         {
             const KittyImageKey evictedKey = evictionCandidates[evictionIndex++];
-            const auto evictedIterator = _kittyImages.find(evictedKey);
+            const auto evictedIterator     = _kittyImages.find(evictedKey);
             if (evictedIterator == _kittyImages.end())
             {
                 continue;
@@ -1461,26 +1372,25 @@ void Terminal::consumeKittyReady() noexcept
         }
 
         KittyImageSnapshot& image = imageIterator->second;
-        if (convertedBytes > TerminalKittyImagePipeline::MaximumConvertedBytes -
-                std::min(_kittyCachedBytes, TerminalKittyImagePipeline::MaximumConvertedBytes))
+        if (convertedBytes > TerminalKittyImagePipeline::MaximumConvertedBytes - std::min(_kittyCachedBytes, TerminalKittyImagePipeline::MaximumConvertedBytes))
         {
-            image.state = KittyImageState::Deferred;
-            image.pendingRequestId = 0u;
-            image.deferredPinnedBytes = _kittyCapturePinnedBytes;
+            image.state                   = KittyImageState::Deferred;
+            image.pendingRequestId        = 0u;
+            image.deferredPinnedBytes     = _kittyCapturePinnedBytes;
             image.deferredVisibleKeyCount = _kittyCaptureVisibleImageKeys;
             continue;
         }
-        image.width = converted.width;
+        image.width  = converted.width;
         image.height = converted.height;
-        image.bgra = std::move(converted.bgra);
+        image.bgra   = std::move(converted.bgra);
         image.bitmap.reset();
-        image.uploadState = KittyBitmapUploadState::Eligible;
-        image.uploadHr = S_OK;
-        image.uploadRetryAtTick = 0u;
+        image.uploadState            = KittyBitmapUploadState::Eligible;
+        image.uploadHr               = S_OK;
+        image.uploadRetryAtTick      = 0u;
         image.uploadDeviceGeneration = _kittyDeviceGeneration;
-        image.uploadAttemptCount = 0u;
-        image.state = KittyImageState::Ready;
-        image.pendingRequestId = 0u;
+        image.uploadAttemptCount     = 0u;
+        image.state                  = KittyImageState::Ready;
+        image.pendingRequestId       = 0u;
         _kittyCachedBytes += image.bgra.size();
     }
 }
@@ -1496,16 +1406,14 @@ void Terminal::requestKittyRepaint(HWND hwnd) noexcept
 void Terminal::armKittyUploadRetryTimer(ULONGLONG retryAtTick) noexcept
 {
     const HWND hwnd = _windowHandle.load(std::memory_order_acquire);
-    if (hwnd == nullptr ||
-        (_kittyNextUploadRetryAtTick != 0u && _kittyNextUploadRetryAtTick <= retryAtTick))
+    if (hwnd == nullptr || (_kittyNextUploadRetryAtTick != 0u && _kittyNextUploadRetryAtTick <= retryAtTick))
     {
         return;
     }
-    const ULONGLONG now = GetTickCount64();
-    const ULONGLONG remaining = retryAtTick > now ? retryAtTick - now : 1u;
-    const DWORD delayMilliseconds = static_cast<DWORD>(
-        std::min<ULONGLONG>((std::numeric_limits<DWORD>::max)(), std::max<ULONGLONG>(1u, remaining)));
-    _kittyNextUploadRetryAtTick = retryAtTick;
+    const ULONGLONG now           = GetTickCount64();
+    const ULONGLONG remaining     = retryAtTick > now ? retryAtTick - now : 1u;
+    const DWORD delayMilliseconds = static_cast<DWORD>(std::min<ULONGLONG>((std::numeric_limits<DWORD>::max)(), std::max<ULONGLONG>(1u, remaining)));
+    _kittyNextUploadRetryAtTick   = retryAtTick;
     if (SetTimer(hwnd, kKittyUploadRetryTimer, delayMilliseconds, nullptr) == 0u)
     {
         _kittyNextUploadRetryAtTick = 0u;
@@ -1526,19 +1434,18 @@ Terminal::KittyBitmapUploadResult Terminal::ensureKittyBitmap(KittyImageSnapshot
     {
         return {KittyBitmapUploadDisposition::Ready, S_OK};
     }
-    if (! _renderTarget || image.width == 0u || image.height == 0u ||
-        image.width > (std::numeric_limits<UINT32>::max)() / 4u ||
+    if (! _renderTarget || image.width == 0u || image.height == 0u || image.width > (std::numeric_limits<UINT32>::max)() / 4u ||
         image.bgra.size() != static_cast<size_t>(image.width) * image.height * 4u)
     {
         return {KittyBitmapUploadDisposition::InvalidInput, E_INVALIDARG};
     }
     if (image.uploadDeviceGeneration != _kittyDeviceGeneration)
     {
-        image.uploadState = KittyBitmapUploadState::Eligible;
-        image.uploadHr = S_OK;
-        image.uploadRetryAtTick = 0u;
+        image.uploadState            = KittyBitmapUploadState::Eligible;
+        image.uploadHr               = S_OK;
+        image.uploadRetryAtTick      = 0u;
         image.uploadDeviceGeneration = _kittyDeviceGeneration;
-        image.uploadAttemptCount = 0u;
+        image.uploadAttemptCount     = 0u;
     }
     if (image.uploadState == KittyBitmapUploadState::PermanentFailure)
     {
@@ -1558,8 +1465,7 @@ Terminal::KittyBitmapUploadResult Terminal::ensureKittyBitmap(KittyImageSnapshot
         image.uploadState = KittyBitmapUploadState::Eligible;
     }
     const size_t uploadBytes = image.bgra.size();
-    if (_kittyFrameUploadCount >= kMaximumKittyUploadsPerFrame ||
-        uploadBytes > kMaximumKittyUploadBytesPerFrame - _kittyFrameUploadBytes)
+    if (_kittyFrameUploadCount >= kMaximumKittyUploadsPerFrame || uploadBytes > kMaximumKittyUploadBytesPerFrame - _kittyFrameUploadBytes)
     {
         _kittyUploadDeferred = true;
         return {KittyBitmapUploadDisposition::DeferredBudget, S_FALSE};
@@ -1567,10 +1473,10 @@ Terminal::KittyBitmapUploadResult Terminal::ensureKittyBitmap(KittyImageSnapshot
     ++_kittyFrameUploadCount;
     _kittyFrameUploadBytes += uploadBytes;
     ++image.uploadAttemptCount;
-    const D2D1_BITMAP_PROPERTIES properties = D2D1::BitmapProperties(
-        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96.0f, 96.0f);
+    const D2D1_BITMAP_PROPERTIES properties =
+        D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96.0f, 96.0f);
     const auto startedAt = std::chrono::steady_clock::now();
-    HRESULT hr = S_OK;
+    HRESULT hr           = S_OK;
 #if defined(ENABLE_TESTS)
     if (! _debugKittyUploadFailures.empty())
     {
@@ -1580,31 +1486,26 @@ Terminal::KittyBitmapUploadResult Terminal::ensureKittyBitmap(KittyImageSnapshot
     else
 #endif
     {
-        hr = _renderTarget->CreateBitmap(D2D1::SizeU(image.width, image.height),
-                                         image.bgra.data(),
-                                         image.width * 4u,
-                                         properties,
-                                         image.bitmap.put());
+        hr = _renderTarget->CreateBitmap(D2D1::SizeU(image.width, image.height), image.bgra.data(), image.width * 4u, properties, image.bitmap.put());
     }
     Debug::Perf::EmitDurationUs(L"terminal.kitty.upload_us", Debug::Perf::ElapsedUs(startedAt), uploadBytes, 1u, hr);
     image.uploadHr = hr;
     if (SUCCEEDED(hr))
     {
-        image.uploadState = KittyBitmapUploadState::Eligible;
+        image.uploadState       = KittyBitmapUploadState::Eligible;
         image.uploadRetryAtTick = 0u;
         return {KittyBitmapUploadDisposition::Uploaded, hr};
     }
     if (hr == D2DERR_RECREATE_TARGET)
     {
-        image.uploadState = KittyBitmapUploadState::RecreatePending;
+        image.uploadState              = KittyBitmapUploadState::RecreatePending;
         _kittyRecreateTargetAfterFrame = true;
         return {KittyBitmapUploadDisposition::RecreateTarget, hr};
     }
     if (IsTransientKittyUploadFailure(hr) && image.uploadAttemptCount < kMaximumKittyTransientUploadAttempts)
     {
-        image.uploadState = KittyBitmapUploadState::RetryPending;
-        const DWORD delayMilliseconds = kInitialKittyUploadRetryDelayMilliseconds <<
-            ((image.uploadAttemptCount - 1u) * 2u);
+        image.uploadState             = KittyBitmapUploadState::RetryPending;
+        const DWORD delayMilliseconds = kInitialKittyUploadRetryDelayMilliseconds << ((image.uploadAttemptCount - 1u) * 2u);
         scheduleKittyUploadRetry(image, delayMilliseconds);
         return {KittyBitmapUploadDisposition::RetryScheduled, hr};
     }
@@ -1629,14 +1530,12 @@ bool Terminal::recoverKittyDeviceAfterFrame(HWND hwnd) noexcept
 void Terminal::drawKittyLayer(GhosttyKittyPlacementLayer layer) noexcept
 {
     constexpr int32_t belowBackgroundMaximum = (std::numeric_limits<int32_t>::min)() / 2;
-    const float pixelToDip = 96.0f / static_cast<float>(std::max<UINT>(_dpi, 1u));
+    const float pixelToDip                   = 96.0f / static_cast<float>(std::max<UINT>(_dpi, 1u));
     for (const KittyPlacementSnapshot& placement : _kittyPlacements)
     {
-        const bool matches = layer == GHOSTTY_KITTY_PLACEMENT_LAYER_BELOW_BG
-                ? placement.z < belowBackgroundMaximum
-                : layer == GHOSTTY_KITTY_PLACEMENT_LAYER_BELOW_TEXT
-                ? placement.z >= belowBackgroundMaximum && placement.z < 0
-                : layer == GHOSTTY_KITTY_PLACEMENT_LAYER_ABOVE_TEXT && placement.z >= 0;
+        const bool matches = layer == GHOSTTY_KITTY_PLACEMENT_LAYER_BELOW_BG     ? placement.z < belowBackgroundMaximum
+                             : layer == GHOSTTY_KITTY_PLACEMENT_LAYER_BELOW_TEXT ? placement.z >= belowBackgroundMaximum && placement.z < 0
+                                                                                 : layer == GHOSTTY_KITTY_PLACEMENT_LAYER_ABOVE_TEXT && placement.z >= 0;
         if (! matches)
         {
             continue;
@@ -1647,28 +1546,22 @@ void Terminal::drawKittyLayer(GhosttyKittyPlacementLayer layer) noexcept
         {
             continue;
         }
-        KittyImageSnapshot& image = imageIterator->second;
+        KittyImageSnapshot& image            = imageIterator->second;
         const KittyBitmapUploadResult upload = ensureKittyBitmap(image);
-        if (upload.disposition != KittyBitmapUploadDisposition::Ready &&
-            upload.disposition != KittyBitmapUploadDisposition::Uploaded)
+        if (upload.disposition != KittyBitmapUploadDisposition::Ready && upload.disposition != KittyBitmapUploadDisposition::Uploaded)
         {
             continue;
         }
         const auto& info = placement.renderInfo;
-        const float left = static_cast<float>(info.viewport_col) * _cellWidthDip +
-            static_cast<float>(placement.xOffsetPixels) * pixelToDip;
-        const float top = static_cast<float>(info.viewport_row) * _cellHeightDip +
-            static_cast<float>(placement.yOffsetPixels) * pixelToDip;
-        const D2D1_RECT_F destination = D2D1::RectF(left,
-                                                     top,
-                                                     left + static_cast<float>(info.pixel_width) * pixelToDip,
-                                                     top + static_cast<float>(info.pixel_height) * pixelToDip);
+        const float left = static_cast<float>(info.viewport_col) * _cellWidthDip + static_cast<float>(placement.xOffsetPixels) * pixelToDip;
+        const float top  = static_cast<float>(info.viewport_row) * _cellHeightDip + static_cast<float>(placement.yOffsetPixels) * pixelToDip;
+        const D2D1_RECT_F destination =
+            D2D1::RectF(left, top, left + static_cast<float>(info.pixel_width) * pixelToDip, top + static_cast<float>(info.pixel_height) * pixelToDip);
         const D2D1_RECT_F source = D2D1::RectF(static_cast<float>(info.source_x),
-                                                static_cast<float>(info.source_y),
-                                                static_cast<float>(info.source_x + info.source_width),
-                                                static_cast<float>(info.source_y + info.source_height));
-        _renderTarget->DrawBitmap(
-            image.bitmap.get(), destination, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, source);
+                                               static_cast<float>(info.source_y),
+                                               static_cast<float>(info.source_x + info.source_width),
+                                               static_cast<float>(info.source_y + info.source_height));
+        _renderTarget->DrawBitmap(image.bitmap.get(), destination, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, source);
     }
 }
 
@@ -1681,13 +1574,12 @@ bool Terminal::renderStructuredScreen(float widthDip, float heightDip) noexcept
 
     TerminalKittyGenerationWork kittyWork;
     std::vector<KittyPlacementSnapshot> kittyPlacements;
-    bool kittyCaptureReady = false;
-    bool submitKittyWork = false;
+    bool kittyCaptureReady           = false;
+    bool submitKittyWork             = false;
     const auto kittyCaptureStartedAt = std::chrono::steady_clock::now();
     {
         std::scoped_lock lock(_terminalMutex);
-        if (! _diagnosticText.empty() || _ghosttyTerminal == nullptr ||
-            _runtime.renderStateBeginUpdate(_renderState, _ghosttyTerminal) != GHOSTTY_SUCCESS)
+        if (! _diagnosticText.empty() || _ghosttyTerminal == nullptr || _runtime.renderStateBeginUpdate(_renderState, _ghosttyTerminal) != GHOSTTY_SUCCESS)
         {
             return false;
         }
@@ -1717,7 +1609,7 @@ bool Terminal::renderStructuredScreen(float widthDip, float heightDip) noexcept
             static_cast<void>(imageKey);
             if (image.state == KittyImageState::ConversionPending || image.state == KittyImageState::EnginePending)
             {
-                image.state = KittyImageState::Missing;
+                image.state            = KittyImageState::Missing;
                 image.pendingRequestId = 0u;
             }
         }
@@ -1749,10 +1641,9 @@ bool Terminal::renderStructuredScreen(float widthDip, float heightDip) noexcept
                 for (auto& [imageKey, image] : _kittyImages)
                 {
                     static_cast<void>(imageKey);
-                    if (image.state == KittyImageState::ConversionPending &&
-                        image.pendingRequestId == _kittyRequestId)
+                    if (image.state == KittyImageState::ConversionPending && image.pendingRequestId == _kittyRequestId)
                     {
-                        image.state = KittyImageState::Missing;
+                        image.state            = KittyImageState::Missing;
                         image.pendingRequestId = 0u;
                     }
                 }
@@ -1777,20 +1668,19 @@ bool Terminal::renderStructuredScreen(float widthDip, float heightDip) noexcept
     Debug::Perf::EmitValue(L"terminal.kitty.evicted_bytes", _kittyEvictedBytes);
     Debug::Perf::EmitValue(L"terminal.kitty.evicted_image_count", _kittyEvictedImageCount);
     Debug::Perf::EmitValue(L"terminal.kitty.missing_image_key_count", _kittyCaptureMissingImageKeys);
-    Debug::Perf::EmitValue(
-        L"terminal.kitty.engine_pending_image_key_count", _kittyCaptureEnginePendingImageKeys);
+    Debug::Perf::EmitValue(L"terminal.kitty.engine_pending_image_key_count", _kittyCaptureEnginePendingImageKeys);
     Debug::Perf::EmitValue(L"terminal.kitty.deferred_image_key_count", _kittyCaptureDeferredImageKeys);
     Debug::Perf::EmitValue(L"terminal.kitty.rejected_image_key_count", _kittyCaptureRejectedImageKeys);
     Debug::Perf::EmitValue(L"terminal.kitty.superseded_image_count", _kittySupersededImageCount);
     Debug::Perf::EmitValue(L"terminal.kitty.removed_image_count", _kittyRemovedImageCount);
-    _kittyFrameUploadBytes = 0u;
-    _kittyFrameUploadCount = 0u;
-    _kittyFrameImageLookupCount = 0u;
-    _kittyUploadDeferred = false;
+    _kittyFrameUploadBytes         = 0u;
+    _kittyFrameUploadCount         = 0u;
+    _kittyFrameImageLookupCount    = 0u;
+    _kittyUploadDeferred           = false;
     _kittyRecreateTargetAfterFrame = false;
 
     uint16_t columns = 0u;
-    uint16_t rows = 0u;
+    uint16_t rows    = 0u;
     if (_runtime.renderStateGet(_renderState, GHOSTTY_RENDER_STATE_DATA_COLS, &columns) != GHOSTTY_SUCCESS ||
         _runtime.renderStateGet(_renderState, GHOSTTY_RENDER_STATE_DATA_ROWS, &rows) != GHOSTTY_SUCCESS ||
         _runtime.renderStateGet(_renderState, GHOSTTY_RENDER_STATE_DATA_ROW_ITERATOR, &_renderRows) != GHOSTTY_SUCCESS)
@@ -1803,8 +1693,7 @@ bool Terminal::renderStructuredScreen(float widthDip, float heightDip) noexcept
     {
         const D2D1_ANTIALIAS_MODE previousAntialiasMode = _renderTarget->GetAntialiasMode();
         _renderTarget->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
-        const auto restoreAntialiasMode = wil::scope_exit(
-            [&]() noexcept { _renderTarget->SetAntialiasMode(previousAntialiasMode); });
+        const auto restoreAntialiasMode = wil::scope_exit([&]() noexcept { _renderTarget->SetAntialiasMode(previousAntialiasMode); });
 
         uint16_t backgroundRowIndex = 0u;
         while (backgroundRowIndex < rows && _runtime.renderRowIteratorNext(_renderRows))
@@ -1817,36 +1706,28 @@ bool Terminal::renderStructuredScreen(float widthDip, float heightDip) noexcept
             uint16_t backgroundColumnIndex = 0u;
             while (backgroundColumnIndex < columns && _runtime.renderRowCellsNext(_renderCells))
             {
-                GhosttyCell rawCell = 0u;
+                GhosttyCell rawCell  = 0u;
                 GhosttyCellWide wide = GHOSTTY_CELL_WIDE_NARROW;
                 GhosttyStyle style{};
-                style.size = sizeof(style);
-                bool selected = false;
+                style.size      = sizeof(style);
+                bool selected   = false;
                 bool hasStyling = false;
                 GhosttyColorRgb background{};
                 GhosttyColorRgb foreground{};
-                static_cast<void>(_runtime.renderRowCellsGet(
-                    _renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_RAW, &rawCell));
+                static_cast<void>(_runtime.renderRowCellsGet(_renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_RAW, &rawCell));
                 static_cast<void>(_runtime.cellGet(rawCell, GHOSTTY_CELL_DATA_WIDE, &wide));
-                static_cast<void>(_runtime.renderRowCellsGet(
-                    _renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_SELECTED, &selected));
-                static_cast<void>(_runtime.renderRowCellsGet(
-                    _renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_HAS_STYLING, &hasStyling));
+                static_cast<void>(_runtime.renderRowCellsGet(_renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_SELECTED, &selected));
+                static_cast<void>(_runtime.renderRowCellsGet(_renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_HAS_STYLING, &hasStyling));
                 if (hasStyling)
                 {
-                    static_cast<void>(_runtime.renderRowCellsGet(
-                        _renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_STYLE, &style));
+                    static_cast<void>(_runtime.renderRowCellsGet(_renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_STYLE, &style));
                 }
                 uint32_t backgroundArgb = _backgroundArgb;
                 uint32_t foregroundArgb = _foregroundArgb;
-                const bool explicitBackground = _runtime.renderRowCellsGet(
-                                                    _renderCells,
-                                                    GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_BG_COLOR,
-                                                    &background) == GHOSTTY_SUCCESS;
-                const bool explicitForeground = _runtime.renderRowCellsGet(
-                                                    _renderCells,
-                                                    GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_FG_COLOR,
-                                                    &foreground) == GHOSTTY_SUCCESS;
+                const bool explicitBackground =
+                    _runtime.renderRowCellsGet(_renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_BG_COLOR, &background) == GHOSTTY_SUCCESS;
+                const bool explicitForeground =
+                    _runtime.renderRowCellsGet(_renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_FG_COLOR, &foreground) == GHOSTTY_SUCCESS;
                 if (explicitBackground)
                 {
                     backgroundArgb = ArgbFromGhostty(background);
@@ -1865,11 +1746,10 @@ bool Terminal::renderStructuredScreen(float widthDip, float heightDip) noexcept
                 }
                 if (explicitBackground || selected || style.inverse)
                 {
-                    const float left = static_cast<float>(backgroundColumnIndex) * _cellWidthDip;
-                    const float top = static_cast<float>(backgroundRowIndex) * _cellHeightDip;
-                    const float cellWidth = wide == GHOSTTY_CELL_WIDE_WIDE ? _cellWidthDip * 2.0f : _cellWidthDip;
-                    const D2D1_RECT_F cellRect = D2D1::RectF(
-                        left, top, std::min(widthDip, left + cellWidth), std::min(heightDip, top + _cellHeightDip));
+                    const float left           = static_cast<float>(backgroundColumnIndex) * _cellWidthDip;
+                    const float top            = static_cast<float>(backgroundRowIndex) * _cellHeightDip;
+                    const float cellWidth      = wide == GHOSTTY_CELL_WIDE_WIDE ? _cellWidthDip * 2.0f : _cellWidthDip;
+                    const D2D1_RECT_F cellRect = D2D1::RectF(left, top, std::min(widthDip, left + cellWidth), std::min(heightDip, top + _cellHeightDip));
                     _foregroundBrush->SetColor(RedSalamander::DxUi::ColorFromArgb(backgroundArgb));
                     _renderTarget->FillRectangle(cellRect, _foregroundBrush.get());
                 }
@@ -1879,8 +1759,7 @@ bool Terminal::renderStructuredScreen(float widthDip, float heightDip) noexcept
         }
     }
     drawKittyLayer(GHOSTTY_KITTY_PLACEMENT_LAYER_BELOW_TEXT);
-    if (_runtime.renderStateGet(
-            _renderState, GHOSTTY_RENDER_STATE_DATA_ROW_ITERATOR, &_renderRows) != GHOSTTY_SUCCESS)
+    if (_runtime.renderStateGet(_renderState, GHOSTTY_RENDER_STATE_DATA_ROW_ITERATOR, &_renderRows) != GHOSTTY_SUCCESS)
     {
         return false;
     }
@@ -1897,40 +1776,32 @@ bool Terminal::renderStructuredScreen(float widthDip, float heightDip) noexcept
         uint16_t columnIndex = 0u;
         while (columnIndex < columns && _runtime.renderRowCellsNext(_renderCells))
         {
-            GhosttyCell rawCell = 0u;
+            GhosttyCell rawCell  = 0u;
             GhosttyCellWide wide = GHOSTTY_CELL_WIDE_NARROW;
             GhosttyStyle style{};
-            style.size = sizeof(style);
-            bool selected = false;
+            style.size      = sizeof(style);
+            bool selected   = false;
             bool hasStyling = false;
-            bool hyperlink = false;
+            bool hyperlink  = false;
             GhosttyColorRgb background{};
             GhosttyColorRgb foreground{};
 
-            static_cast<void>(_runtime.renderRowCellsGet(
-                _renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_RAW, &rawCell));
+            static_cast<void>(_runtime.renderRowCellsGet(_renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_RAW, &rawCell));
             static_cast<void>(_runtime.cellGet(rawCell, GHOSTTY_CELL_DATA_WIDE, &wide));
             static_cast<void>(_runtime.cellGet(rawCell, GHOSTTY_CELL_DATA_HAS_HYPERLINK, &hyperlink));
-            static_cast<void>(_runtime.renderRowCellsGet(
-                _renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_SELECTED, &selected));
-            static_cast<void>(_runtime.renderRowCellsGet(
-                _renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_HAS_STYLING, &hasStyling));
+            static_cast<void>(_runtime.renderRowCellsGet(_renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_SELECTED, &selected));
+            static_cast<void>(_runtime.renderRowCellsGet(_renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_HAS_STYLING, &hasStyling));
             if (hasStyling)
             {
-                static_cast<void>(_runtime.renderRowCellsGet(
-                    _renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_STYLE, &style));
+                static_cast<void>(_runtime.renderRowCellsGet(_renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_STYLE, &style));
             }
 
             uint32_t backgroundArgb = _backgroundArgb;
             uint32_t foregroundArgb = hyperlink ? _hyperlinkArgb : _foregroundArgb;
-            const bool explicitBackground = _runtime.renderRowCellsGet(
-                                                _renderCells,
-                                                GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_BG_COLOR,
-                                                &background) == GHOSTTY_SUCCESS;
-            const bool explicitForeground = _runtime.renderRowCellsGet(
-                                                _renderCells,
-                                                GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_FG_COLOR,
-                                                &foreground) == GHOSTTY_SUCCESS;
+            const bool explicitBackground =
+                _runtime.renderRowCellsGet(_renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_BG_COLOR, &background) == GHOSTTY_SUCCESS;
+            const bool explicitForeground =
+                _runtime.renderRowCellsGet(_renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_FG_COLOR, &foreground) == GHOSTTY_SUCCESS;
             if (explicitBackground)
             {
                 backgroundArgb = ArgbFromGhostty(background);
@@ -1953,21 +1824,19 @@ bool Terminal::renderStructuredScreen(float widthDip, float heightDip) noexcept
                 foregroundArgb = WithAlpha(foregroundArgb, 0x8Fu);
             }
 
-            const float left = static_cast<float>(columnIndex) * _cellWidthDip;
-            const float top = static_cast<float>(rowIndex) * _cellHeightDip;
-            const float cellWidth = wide == GHOSTTY_CELL_WIDE_WIDE ? _cellWidthDip * 2.0f : _cellWidthDip;
-            const D2D1_RECT_F cellRect = D2D1::RectF(
-                left, top, std::min(widthDip, left + cellWidth), std::min(heightDip, top + _cellHeightDip));
+            const float left           = static_cast<float>(columnIndex) * _cellWidthDip;
+            const float top            = static_cast<float>(rowIndex) * _cellHeightDip;
+            const float cellWidth      = wide == GHOSTTY_CELL_WIDE_WIDE ? _cellWidthDip * 2.0f : _cellWidthDip;
+            const D2D1_RECT_F cellRect = D2D1::RectF(left, top, std::min(widthDip, left + cellWidth), std::min(heightDip, top + _cellHeightDip));
             if (wide != GHOSTTY_CELL_WIDE_SPACER_TAIL && wide != GHOSTTY_CELL_WIDE_SPACER_HEAD && ! style.invisible)
             {
                 std::array<uint8_t, 256u> graphemeBytes{};
                 GhosttyBuffer grapheme{graphemeBytes.data(), graphemeBytes.size(), 0u};
-                if (_runtime.renderRowCellsGet(
-                        _renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_GRAPHEMES_UTF8, &grapheme) == GHOSTTY_SUCCESS &&
+                if (_runtime.renderRowCellsGet(_renderCells, GHOSTTY_RENDER_STATE_ROW_CELLS_DATA_GRAPHEMES_UTF8, &grapheme) == GHOSTTY_SUCCESS &&
                     grapheme.len != 0u)
                 {
-                    const std::wstring text = Common::Strings::Utf16FromUtf8ReplacingInvalid(
-                        std::string_view(reinterpret_cast<const char*>(grapheme.ptr), grapheme.len));
+                    const std::wstring text =
+                        Common::Strings::Utf16FromUtf8ReplacingInvalid(std::string_view(reinterpret_cast<const char*>(grapheme.ptr), grapheme.len));
                     IDWriteTextFormat* textFormat = _textFormat.get();
                     if (style.bold && style.italic)
                     {
@@ -1982,12 +1851,8 @@ bool Terminal::renderStructuredScreen(float widthDip, float heightDip) noexcept
                         textFormat = _italicTextFormat.get();
                     }
                     _foregroundBrush->SetColor(RedSalamander::DxUi::ColorFromArgb(foregroundArgb));
-                    _renderTarget->DrawTextW(text.data(),
-                                             static_cast<UINT32>(text.size()),
-                                             textFormat,
-                                             cellRect,
-                                             _foregroundBrush.get(),
-                                             D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                    _renderTarget->DrawTextW(
+                        text.data(), static_cast<UINT32>(text.size()), textFormat, cellRect, _foregroundBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
                 }
             }
 
@@ -2013,34 +1878,27 @@ bool Terminal::renderStructuredScreen(float widthDip, float heightDip) noexcept
         ++rowIndex;
     }
 
-    bool cursorVisible = false;
-    bool cursorInViewport = false;
-    uint16_t cursorX = 0u;
-    uint16_t cursorY = 0u;
+    bool cursorVisible                              = false;
+    bool cursorInViewport                           = false;
+    uint16_t cursorX                                = 0u;
+    uint16_t cursorY                                = 0u;
     GhosttyRenderStateCursorVisualStyle cursorStyle = GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_BLOCK;
     if (_runtime.renderStateGet(_renderState, GHOSTTY_RENDER_STATE_DATA_CURSOR_VISIBLE, &cursorVisible) == GHOSTTY_SUCCESS &&
-        _runtime.renderStateGet(_renderState, GHOSTTY_RENDER_STATE_DATA_CURSOR_VIEWPORT_HAS_VALUE, &cursorInViewport) == GHOSTTY_SUCCESS &&
-        cursorVisible && cursorInViewport &&
-        _runtime.renderStateGet(_renderState, GHOSTTY_RENDER_STATE_DATA_CURSOR_VIEWPORT_X, &cursorX) == GHOSTTY_SUCCESS &&
+        _runtime.renderStateGet(_renderState, GHOSTTY_RENDER_STATE_DATA_CURSOR_VIEWPORT_HAS_VALUE, &cursorInViewport) == GHOSTTY_SUCCESS && cursorVisible &&
+        cursorInViewport && _runtime.renderStateGet(_renderState, GHOSTTY_RENDER_STATE_DATA_CURSOR_VIEWPORT_X, &cursorX) == GHOSTTY_SUCCESS &&
         _runtime.renderStateGet(_renderState, GHOSTTY_RENDER_STATE_DATA_CURSOR_VIEWPORT_Y, &cursorY) == GHOSTTY_SUCCESS)
     {
-        static_cast<void>(_runtime.renderStateGet(
-            _renderState, GHOSTTY_RENDER_STATE_DATA_CURSOR_VISUAL_STYLE, &cursorStyle));
-        const float left = static_cast<float>(cursorX) * _cellWidthDip;
-        const float top = static_cast<float>(cursorY) * _cellHeightDip;
+        static_cast<void>(_runtime.renderStateGet(_renderState, GHOSTTY_RENDER_STATE_DATA_CURSOR_VISUAL_STYLE, &cursorStyle));
+        const float left       = static_cast<float>(cursorX) * _cellWidthDip;
+        const float top        = static_cast<float>(cursorY) * _cellHeightDip;
         D2D1_RECT_F cursorRect = D2D1::RectF(left, top, left + _cellWidthDip, top + _cellHeightDip);
         switch (cursorStyle)
         {
-        case GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_BAR:
-            cursorRect.right = cursorRect.left + std::max(1.0f, _cellWidthDip * 0.16f);
-            break;
-        case GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_UNDERLINE:
-            cursorRect.top = cursorRect.bottom - std::max(1.0f, _cellHeightDip * 0.12f);
-            break;
-        case GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_BLOCK_HOLLOW:
-        case GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_BLOCK:
-        case GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_MAX_VALUE:
-            break;
+            case GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_BAR: cursorRect.right = cursorRect.left + std::max(1.0f, _cellWidthDip * 0.16f); break;
+            case GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_UNDERLINE: cursorRect.top = cursorRect.bottom - std::max(1.0f, _cellHeightDip * 0.12f); break;
+            case GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_BLOCK_HOLLOW:
+            case GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_BLOCK:
+            case GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_MAX_VALUE: break;
         }
         _foregroundBrush->SetColor(RedSalamander::DxUi::ColorFromArgb(WithAlpha(_cursorArgb, 0xB0u)));
         if (cursorStyle == GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_BLOCK_HOLLOW || GetFocus() != _windowHandle.load(std::memory_order_acquire))
@@ -2054,24 +1912,21 @@ bool Terminal::renderStructuredScreen(float widthDip, float heightDip) noexcept
     }
     if (! _imeComposition.empty() && cursorInViewport)
     {
-        const float left = static_cast<float>(cursorX) * _cellWidthDip;
-        const float top = static_cast<float>(cursorY) * _cellHeightDip;
+        const float left           = static_cast<float>(cursorX) * _cellWidthDip;
+        const float top            = static_cast<float>(cursorY) * _cellHeightDip;
         const float requestedWidth = static_cast<float>(_imeComposition.size()) * _cellWidthDip;
-        const D2D1_RECT_F compositionRect = D2D1::RectF(
-            left, top, std::min(widthDip, left + std::max(_cellWidthDip, requestedWidth)), std::min(heightDip, top + _cellHeightDip));
+        const D2D1_RECT_F compositionRect =
+            D2D1::RectF(left, top, std::min(widthDip, left + std::max(_cellWidthDip, requestedWidth)), std::min(heightDip, top + _cellHeightDip));
         _foregroundBrush->SetColor(RedSalamander::DxUi::ColorFromArgb(_foregroundArgb));
         _renderTarget->DrawTextW(_imeComposition.data(),
-                                 static_cast<UINT32>(std::min<size_t>(
-                                     _imeComposition.size(), (std::numeric_limits<UINT32>::max)())),
+                                 static_cast<UINT32>(std::min<size_t>(_imeComposition.size(), (std::numeric_limits<UINT32>::max)())),
                                  _textFormat.get(),
                                  compositionRect,
                                  _foregroundBrush.get(),
                                  D2D1_DRAW_TEXT_OPTIONS_CLIP);
         const float underlineY = std::max(compositionRect.top, compositionRect.bottom - 1.0f);
-        _renderTarget->DrawLine(D2D1::Point2F(compositionRect.left, underlineY),
-                                D2D1::Point2F(compositionRect.right, underlineY),
-                                _foregroundBrush.get(),
-                                1.0f);
+        _renderTarget->DrawLine(
+            D2D1::Point2F(compositionRect.left, underlineY), D2D1::Point2F(compositionRect.right, underlineY), _foregroundBrush.get(), 1.0f);
     }
     drawKittyLayer(GHOSTTY_KITTY_PLACEMENT_LAYER_ABOVE_TEXT);
     return true;
@@ -2099,7 +1954,7 @@ void Terminal::publishAccessibilitySnapshot() noexcept
     {
         return;
     }
-    const HWND hwnd = _windowHandle.load(std::memory_order_acquire);
+    const HWND hwnd   = _windowHandle.load(std::memory_order_acquire);
     std::wstring text = formatScreen();
     if (std::wstring confirmation = confirmationAccessibilityText(); ! confirmation.empty())
     {
@@ -2125,11 +1980,11 @@ void Terminal::render() noexcept
     Debug::Perf::Scope renderPerf(L"terminal.render.frame_us");
     renderPerf.SetValue0(_columns);
     renderPerf.SetValue1(_rows);
-    const auto frameStartedAt = std::chrono::steady_clock::now();
-    _kittyFrameUploadBytes = 0u;
-    _kittyFrameUploadCount = 0u;
+    const auto frameStartedAt   = std::chrono::steady_clock::now();
+    _kittyFrameUploadBytes      = 0u;
+    _kittyFrameUploadCount      = 0u;
     _kittyFrameImageLookupCount = 0u;
-    _kittyUploadDeferred = false;
+    _kittyUploadDeferred        = false;
     PAINTSTRUCT paint{};
     const HWND hwnd = _windowHandle.load(std::memory_order_acquire);
     if (hwnd == nullptr)
@@ -2139,7 +1994,7 @@ void Terminal::render() noexcept
     const bool paneFocused = GetFocus() == hwnd;
     renderPerf.SetDetail(paneFocused ? L"focused" : L"unfocused");
     const wil::unique_hdc_paint paintDc = wil::BeginPaint(hwnd, &paint);
-    const HRESULT resourcesHr = ensureDeviceResources();
+    const HRESULT resourcesHr           = ensureDeviceResources();
     if (FAILED(resourcesHr))
     {
         renderPerf.SetHr(resourcesHr);
@@ -2161,13 +2016,13 @@ void Terminal::render() noexcept
     }
     RECT client{};
     GetClientRect(hwnd, &client);
-    const D2D1_SIZE_U size = D2D1::SizeU(static_cast<UINT32>(std::max(0L, client.right - client.left)),
-                                         static_cast<UINT32>(std::max(0L, client.bottom - client.top)));
+    const D2D1_SIZE_U size =
+        D2D1::SizeU(static_cast<UINT32>(std::max(0L, client.right - client.left)), static_cast<UINT32>(std::max(0L, client.bottom - client.top)));
 
     _renderTarget->BeginDraw();
     _renderTarget->Clear(RedSalamander::DxUi::ColorFromArgb(_backgroundArgb));
     _foregroundBrush->SetColor(RedSalamander::DxUi::ColorFromArgb(_foregroundArgb));
-    const float widthDip = static_cast<float>(size.width) * 96.0f / static_cast<float>(std::max<UINT>(_dpi, 1u));
+    const float widthDip  = static_cast<float>(size.width) * 96.0f / static_cast<float>(std::max<UINT>(_dpi, 1u));
     const float heightDip = static_cast<float>(size.height) * 96.0f / static_cast<float>(std::max<UINT>(_dpi, 1u));
     const bool structured = renderStructuredScreen(widthDip, heightDip);
     if (! structured)
@@ -2194,28 +2049,22 @@ void Terminal::render() noexcept
     {
         clearRenderDirtyState();
     }
-    Debug::Perf::EmitDurationUs(L"terminal.frame_total_us",
-                                Debug::Perf::ElapsedUs(frameStartedAt),
-                                _kittyFrameUploadBytes,
-                                _kittyFrameUploadCount,
-                                drawHr);
+    Debug::Perf::EmitDurationUs(L"terminal.frame_total_us", Debug::Perf::ElapsedUs(frameStartedAt), _kittyFrameUploadBytes, _kittyFrameUploadCount, drawHr);
     Debug::Perf::EmitValue(L"terminal.kitty.image_lookup_count", _kittyFrameImageLookupCount);
     Debug::Perf::EmitValue(L"terminal.kitty.frame_upload_bytes", _kittyFrameUploadBytes);
     Debug::Perf::EmitValue(L"terminal.kitty.frame_upload_count", _kittyFrameUploadCount);
     if (SUCCEEDED(drawHr))
     {
-        const int64_t nowNs = SteadyTimestampNs();
-        const int64_t inputNs = _lastInputTimestampNs.exchange(0, std::memory_order_acq_rel);
+        const int64_t nowNs    = SteadyTimestampNs();
+        const int64_t inputNs  = _lastInputTimestampNs.exchange(0, std::memory_order_acq_rel);
         const int64_t outputNs = _lastOutputTimestampNs.exchange(0, std::memory_order_acq_rel);
         if (inputNs > 0 && nowNs >= inputNs)
         {
-            Debug::Perf::EmitDurationUs(
-                L"terminal.input_to_frame_us", static_cast<uint64_t>(nowNs - inputNs) / 1000u);
+            Debug::Perf::EmitDurationUs(L"terminal.input_to_frame_us", static_cast<uint64_t>(nowNs - inputNs) / 1000u);
         }
         if (outputNs > 0 && nowNs >= outputNs)
         {
-            Debug::Perf::EmitDurationUs(
-                L"terminal.output_to_frame_us", static_cast<uint64_t>(nowNs - outputNs) / 1000u);
+            Debug::Perf::EmitDurationUs(L"terminal.output_to_frame_us", static_cast<uint64_t>(nowNs - outputNs) / 1000u);
         }
     }
     if (! recoveredDevice && _kittyUploadDeferred)
@@ -2226,16 +2075,14 @@ void Terminal::render() noexcept
 
 void Terminal::drawInactivePaneOverlay(float widthDip, float heightDip, bool paneFocused) noexcept
 {
-    const float overlayAlpha =
-        Common::PaneVisualState::ResolveInactiveContentOverlayAlpha(paneFocused, _themeHighContrast);
+    const float overlayAlpha = Common::PaneVisualState::ResolveInactiveContentOverlayAlpha(paneFocused, _themeHighContrast);
     if (overlayAlpha <= 0.0f || ! _renderTarget || ! _foregroundBrush)
     {
         return;
     }
 
     D2D1_COLOR_F overlayColor = RedSalamander::DxUi::ColorFromArgb(_backgroundArgb);
-    overlayColor.a = overlayAlpha;
+    overlayColor.a            = overlayAlpha;
     _foregroundBrush->SetColor(overlayColor);
     _renderTarget->FillRectangle(D2D1::RectF(0.0f, 0.0f, widthDip, heightDip), _foregroundBrush.get());
 }
-

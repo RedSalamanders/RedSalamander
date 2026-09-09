@@ -8,8 +8,8 @@
 #include "HostServices.h"
 #include "NavigationLocation.h"
 #include "ThroughputParsing.h"
-#include "WindowMaximizeBehavior.h"
 #include "Win32CallbackHelpers.h"
+#include "WindowMaximizeBehavior.h"
 #include "WindowSizing.h"
 
 #include <algorithm>
@@ -738,7 +738,7 @@ void CopyPublishedConflictPolicy(const FolderWindow::FileOperationState::Task::C
 }
 
 [[nodiscard]] std::wstring ConflictActionText(ConflictAction action,
-                                              ConflictBucket bucket = ConflictBucket::Unknown,
+                                              ConflictBucket bucket         = ConflictBucket::Unknown,
                                               FileSystemOperation operation = FILESYSTEM_COPY) noexcept
 {
     switch (action)
@@ -920,10 +920,10 @@ struct GlobalFileOperationsStatusSummary
     uint32_t openDiscoveryTasks        = 0u;
     // A closed task with no total at all: nothing is known about it and it will not close later,
     // so it keeps the aggregate indeterminate (unlike an open task, which only adds to the count).
-    bool hasClosedUnknownTotals        = false;
-    double displayedBytesPerSec        = 0.0;
-    bool hasAggregateEta               = false;
-    double aggregateEtaSeconds         = 0.0;
+    bool hasClosedUnknownTotals = false;
+    double displayedBytesPerSec = 0.0;
+    bool hasAggregateEta        = false;
+    double aggregateEtaSeconds  = 0.0;
 };
 
 struct GlobalTaskbarProgressModel
@@ -1013,8 +1013,7 @@ void PublishPlannedItemTotalAfterDiscovery(FileOperationsPopupInternal::TaskSnap
         return false;
     }
     const auto phase = static_cast<FileOperations::TaskLifecyclePhase>(task.lifecyclePhase);
-    return phase == FileOperations::TaskLifecyclePhase::Preparing ||
-           phase == FileOperations::TaskLifecyclePhase::AwaitingAcceptance;
+    return phase == FileOperations::TaskLifecyclePhase::Preparing || phase == FileOperations::TaskLifecyclePhase::AwaitingAcceptance;
 }
 
 [[nodiscard]] TaskStatusKind ResolveTaskStatusKind(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
@@ -1307,8 +1306,8 @@ struct TerminalAxisBadge final
     }
     if (task.operation == FILESYSTEM_MOVE && task.retainedSourceCount > 0u)
     {
-        const UINT wording = task.retainedSourceNativeCount == task.retainedSourceCount ? IDS_FILEOPS_RESULT_MOVED_SOURCE_FOLDER_KEPT
-                                                                                        : IDS_FILEOPS_RESULT_COPIED_SOURCE_KEPT;
+        const UINT wording =
+            task.retainedSourceNativeCount == task.retainedSourceCount ? IDS_FILEOPS_RESULT_MOVED_SOURCE_FOLDER_KEPT : IDS_FILEOPS_RESULT_COPIED_SOURCE_KEPT;
         badges[count++] = TerminalAxisBadge{LoadStringResource(nullptr, wording), PopupStatusVisualTone::Warning, L"SourceRetained"};
     }
     return count;
@@ -1622,8 +1621,7 @@ struct CompletedGroupResultSummary final
                 static_cast<unsigned long>(std::clamp(std::lround(static_cast<double>(GlobalAggregateProgressFraction(summary)) * 100.0), 0L, 100L));
             statusParts.push_back(FormatStringResource(nullptr, IDS_FMT_FILEOPS_KNOWN_WORK, knownWorkPercent));
         }
-        statusParts.push_back(
-            FormatStringResource(nullptr, IDS_FMT_FILEOPS_GLOBAL_DISCOVERING_COUNT, static_cast<unsigned long>(summary.openDiscoveryTasks)));
+        statusParts.push_back(FormatStringResource(nullptr, IDS_FMT_FILEOPS_GLOBAL_DISCOVERING_COUNT, static_cast<unsigned long>(summary.openDiscoveryTasks)));
     }
 
     const std::wstring separator = LoadStringResource(nullptr, IDS_FILEOPS_GLOBAL_STATUS_SEPARATOR);
@@ -3680,7 +3678,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::EnsureBrushes() noex
     const D2D1::ColorF warningText = theme.folderView.warningText;
     const D2D1::ColorF errorText   = theme.folderView.errorText;
 
-    const D2D1::ColorF graphLine   = theme.fileOperations.graphLine;
+    const D2D1::ColorF graphLine = theme.fileOperations.graphLine;
 
     if (! _bgBrush)
     {
@@ -4154,20 +4152,20 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         snap.verificationRequested                 = completed.verifiedItemCount > 0u || completed.verificationProblemItemCount > 0u;
         snap.verifiedItemCount                     = completed.verifiedItemCount;
         snap.verificationProblemItemCount          = completed.verificationProblemItemCount;
-        snap.verificationState      = static_cast<uint8_t>(completed.verificationFailedItemCount > 0u        ? FileOperations::VerificationState::Failed
-                                                           : completed.verificationCanceledItemCount > 0u    ? FileOperations::VerificationState::Canceled
-                                                           : completed.verificationUnavailableItemCount > 0u ? FileOperations::VerificationState::Unavailable
-                                                           : completed.verifiedItemCount > 0u                ? FileOperations::VerificationState::Verified
-                                                                                                             : FileOperations::VerificationState::NotRequested);
-        snap.hasIndeterminateResult = completed.indeterminateItemCount > 0u;
-        snap.interruptedMoveNotice  = completed.interruptedMoveNotice;
-        snap.interruptedOperationId = completed.interruptedOperationId;
-        snap.clipboardMoveAdmission = completed.clipboardMoveAdmission;
-        snap.clipboardMoveConsumed  = completed.clipboardMoveConsumed;
-        snap.hasSourceActionPaths   = ! completed.retainedSourcePaths.empty() || ! completed.unknownSourcePaths.empty();
-        snap.retainedSourceCount    = completed.retainedSourceCount;
+        snap.verificationState         = static_cast<uint8_t>(completed.verificationFailedItemCount > 0u        ? FileOperations::VerificationState::Failed
+                                                              : completed.verificationCanceledItemCount > 0u    ? FileOperations::VerificationState::Canceled
+                                                              : completed.verificationUnavailableItemCount > 0u ? FileOperations::VerificationState::Unavailable
+                                                              : completed.verifiedItemCount > 0u ? FileOperations::VerificationState::Verified
+                                                                                                 : FileOperations::VerificationState::NotRequested);
+        snap.hasIndeterminateResult    = completed.indeterminateItemCount > 0u;
+        snap.interruptedMoveNotice     = completed.interruptedMoveNotice;
+        snap.interruptedOperationId    = completed.interruptedOperationId;
+        snap.clipboardMoveAdmission    = completed.clipboardMoveAdmission;
+        snap.clipboardMoveConsumed     = completed.clipboardMoveConsumed;
+        snap.hasSourceActionPaths      = ! completed.retainedSourcePaths.empty() || ! completed.unknownSourcePaths.empty();
+        snap.retainedSourceCount       = completed.retainedSourceCount;
         snap.retainedSourceNativeCount = completed.retainedSourceNativeCount;
-        snap.unknownSourceCount     = completed.unknownSourceCount;
+        snap.unknownSourceCount        = completed.unknownSourceCount;
         snap.exactRetainedSourceActionAvailable = completed.clipboardMoveAdmission && NavigationLocation::IsFilePluginShortId(completed.sourcePluginShortId) &&
                                                   completed.retainedSourceCount > 0u && completed.unknownSourceCount == 0u &&
                                                   completed.exactRetainedSourceItems.size() == completed.retainedSourceCount;
@@ -4474,12 +4472,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexce
         if (! itemRate && ! task.discoveryClosed && ! task.paused && task.discoveredTotalBytes > task.completedBytes &&
             IsByteRateUsableForEta(history.displayedBytesPerSec))
         {
-            const double rawProvisionalSeconds =
-                static_cast<double>(task.discoveredTotalBytes - task.completedBytes) / history.displayedBytesPerSec;
-            history.provisionalEtaSeconds = history.hasProvisionalEta
-                                                ? SmoothEtaSecondsForDisplay(history.provisionalEtaSeconds, rawProvisionalSeconds, smoothingElapsedMs)
-                                                : rawProvisionalSeconds;
-            history.hasProvisionalEta     = true;
+            const double rawProvisionalSeconds = static_cast<double>(task.discoveredTotalBytes - task.completedBytes) / history.displayedBytesPerSec;
+            history.provisionalEtaSeconds      = history.hasProvisionalEta
+                                                     ? SmoothEtaSecondsForDisplay(history.provisionalEtaSeconds, rawProvisionalSeconds, smoothingElapsedMs)
+                                                     : rawProvisionalSeconds;
+            history.hasProvisionalEta          = true;
         }
         else
         {
@@ -5138,12 +5135,12 @@ std::wstring FileOperationsPopupInternal::FileOperationsPopupState::HostedContro
         case PopupHitTest::Kind::TaskConflictToggleApplyToAll: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_APPLY_TO_ALL_SHORT);
         case PopupHitTest::Kind::TaskConflictAction:
         {
-            ConflictBucket bucket = ConflictBucket::Unknown;
+            ConflictBucket bucket         = ConflictBucket::Unknown;
             FileSystemOperation operation = FILESYSTEM_COPY;
             if (const auto* task = fileOps ? fileOps->FindTask(hit.taskId) : nullptr)
             {
                 std::scoped_lock lock(task->_conflictArbiter.mutex);
-                bucket = task->_conflictArbiter.prompt.bucket;
+                bucket    = task->_conflictArbiter.prompt.bucket;
                 operation = task->GetOperation();
             }
             return ConflictActionText(static_cast<ConflictAction>(hit.data), bucket, operation);
@@ -6859,7 +6856,6 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         }
                         _hostedProgressDescriptors.push_back(
                             HostedProgressDescriptor{barRc, task.taskId, static_cast<double>(hostedFraction) * 100.0, ! hostedHasTotal});
-
                     }
 
                     if (info.finished)
@@ -7868,7 +7864,6 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     const D2D1_RECT_F barRc = D2D1::RectF(barX, barsTop, barX + barW, barsTop + barHItem);
                     _hostedProgressDescriptors.push_back(
                         HostedProgressDescriptor{barRc, task.taskId, progressPresentation.fraction * 100.0, ! progressPresentation.determinate});
-
                 }
                 else if (hasConflictPrompt || ! progressPresentation.showTransferProgress)
                 {
@@ -7892,7 +7887,6 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     }
                     _hostedProgressDescriptors.push_back(
                         HostedProgressDescriptor{totalBarRc, task.taskId, std::clamp(hostedFraction, 0.0, 1.0) * 100.0, ! hostedUseBytes && ! hostedUseItems});
-
                 }
                 else
                 {
@@ -7914,7 +7908,6 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     progressDescriptor.primarySegmentValue   = VerificationTransferProgressPercent(task);
                     progressDescriptor.secondarySegmentValue = VerificationProofProgressPercent(task);
                     _hostedProgressDescriptors.push_back(progressDescriptor);
-
                 }
 
                 {
@@ -7974,8 +7967,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                 for (size_t i = 0; i < primaryActionCount; ++i)
                                 {
                                     const ConflictAction action = ConflictActionFromRaw(task.conflict.primaryActions[i]);
-                                    const std::wstring label =
-                                        ConflictActionText(action, static_cast<ConflictBucket>(task.conflict.bucket), task.operation);
+                                    const std::wstring label    = ConflictActionText(action, static_cast<ConflictBucket>(task.conflict.bucket), task.operation);
 
                                     PopupButton btn{};
                                     btn.bounds     = D2D1::RectF(xBtn, rowY, xBtn + btnW, rowYBottom);
@@ -9062,7 +9054,7 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::ShowCustomSpeedLimit
         return false;
     }
 
-    uint64_t resolvedTaskId = requestedTaskId;
+    uint64_t resolvedTaskId                      = requestedTaskId;
     FolderWindow::FileOperationState::Task* task = resolvedTaskId != 0 ? fileOps->FindTask(resolvedTaskId) : nullptr;
     if (! task)
     {
@@ -9083,7 +9075,7 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::ShowCustomSpeedLimit
         return false;
     }
 
-    const uint64_t taskId = resolvedTaskId;
+    const uint64_t taskId       = resolvedTaskId;
     const uint64_t currentLimit = task->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
     const FolderWindow::FileOperationPromptDispatchScope promptDispatch(*folderWindow);
     const auto promptResult = ShowCustomSpeedLimitPrompt(hwnd, folderWindow->GetTheme(), currentLimit);
@@ -9733,41 +9725,41 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::EnterFailureSurface(
     const std::wstring cancelAll = LoadStringResource(nullptr, IDS_FILEOPS_BTN_CANCEL_ALL);
     const std::wstring close     = LoadStringResource(nullptr, IDS_FILEOPS_BTN_CLOSE);
     _failureText                 = CreateWindowExW(0,
-                                   L"STATIC",
-                                   L"",
-                                   WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL,
-                                   0,
-                                   0,
-                                   0,
-                                   0,
-                                   hwnd,
-                                   reinterpret_cast<HMENU>(kFailureSurfaceTextId),
-                                   instance,
-                                   nullptr);
+                                                   L"STATIC",
+                                                   L"",
+                                                   WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   hwnd,
+                                                   reinterpret_cast<HMENU>(kFailureSurfaceTextId),
+                                                   instance,
+                                                   nullptr);
     _failureCancelAll            = CreateWindowExW(0,
-                                        L"BUTTON",
-                                        cancelAll.c_str(),
-                                        WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-                                        0,
-                                        0,
-                                        0,
-                                        0,
-                                        hwnd,
-                                        reinterpret_cast<HMENU>(kFailureSurfaceCancelAllId),
-                                        instance,
-                                        nullptr);
+                                                   L"BUTTON",
+                                                   cancelAll.c_str(),
+                                                   WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   hwnd,
+                                                   reinterpret_cast<HMENU>(kFailureSurfaceCancelAllId),
+                                                   instance,
+                                                   nullptr);
     _failureClose                = CreateWindowExW(0,
-                                    L"BUTTON",
-                                    close.c_str(),
-                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-                                    0,
-                                    0,
-                                    0,
-                                    0,
-                                    hwnd,
-                                    reinterpret_cast<HMENU>(kFailureSurfaceCloseId),
-                                    instance,
-                                    nullptr);
+                                                   L"BUTTON",
+                                                   close.c_str(),
+                                                   WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   hwnd,
+                                                   reinterpret_cast<HMENU>(kFailureSurfaceCloseId),
+                                                   instance,
+                                                   nullptr);
     if (! _failureText || ! _failureCancelAll || ! _failureClose)
     {
         // The existing host error surface carries the explanation; Cancel all stays reachable
@@ -9815,8 +9807,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::LayoutFailureSurface
         {
             _failureFont.reset(CreateFontIndirectW(&metrics.lfMessageFont));
         }
-        _failureFontDpi   = _dpi;
-        const HFONT font  = _failureFont ? _failureFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+        _failureFontDpi  = _dpi;
+        const HFONT font = _failureFont ? _failureFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
         for (const HWND child : {_failureText, _failureCancelAll, _failureClose})
         {
             SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
@@ -9877,7 +9869,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::RefreshFailureSurfac
             case FILESYSTEM_CREATE_DIRECTORY:
             default: break;
         }
-        text.append(L"\r\n").append(LoadStringResource(nullptr, operationId)).append(L": ").append(StatusTextForTask(task, ResolveTaskStatusKind(task), nowTick));
+        text.append(L"\r\n")
+            .append(LoadStringResource(nullptr, operationId))
+            .append(L": ")
+            .append(StatusTextForTask(task, ResolveTaskStatusKind(task), nowTick));
         ++listed;
     }
     if (text != _failureTextValue)
@@ -11959,9 +11954,9 @@ bool DebugValidateFileOperationsVerificationPresentation() noexcept
     {
         return false;
     }
-    streamingTask.discoveryClosed                             = true;
-    streamingTask.totalBytes                                  = 240u;
-    const WholeTaskProgressPresentation closedProgress        = ResolveWholeTaskProgressPresentation(streamingTask);
+    streamingTask.discoveryClosed                      = true;
+    streamingTask.totalBytes                           = 240u;
+    const WholeTaskProgressPresentation closedProgress = ResolveWholeTaskProgressPresentation(streamingTask);
     if (! closedProgress.determinate || closedProgress.provisional || std::abs(closedProgress.fraction - 1.0) > 0.001)
     {
         return false;

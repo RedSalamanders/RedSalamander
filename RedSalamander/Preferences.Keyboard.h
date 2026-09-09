@@ -64,10 +64,9 @@ public:
     [[nodiscard]] bool DebugGetListPointerState(PreferencesGridPointerDebugState& outState) const noexcept;
     [[nodiscard]] bool DebugFindListRowByCommandId(std::wstring_view commandId, size_t& outRowIndex) const noexcept;
     [[nodiscard]] bool DebugGetVisibleRowChordByCommandId(std::wstring_view commandId, std::wstring& outChordText) const noexcept;
-    [[nodiscard]] bool DebugGetVisibleRowPresentationByCommandId(
-        std::wstring_view commandId,
-        std::wstring& outScopeText,
-        std::wstring& outTooltipText) const noexcept;
+    [[nodiscard]] bool DebugGetVisibleRowPresentationByCommandId(std::wstring_view commandId,
+                                                                 std::wstring& outScopeText,
+                                                                 std::wstring& outTooltipText) const noexcept;
     [[nodiscard]] bool DebugSelectListRow(size_t rowIndex) noexcept;
     [[nodiscard]] bool DebugSetSearchText(std::wstring_view text) noexcept;
     [[nodiscard]] bool DebugSetFunctionBarScope() noexcept;

@@ -1470,7 +1470,7 @@ struct TopLevelMenuMapping
         return false;
     }
 
-    int copyTextSubMenuPos = -1;
+    int copyTextSubMenuPos  = -1;
     const int editItemCount = GetMenuItemCount(editMenu);
     for (int pos = 0; pos < editItemCount; ++pos)
     {
@@ -1489,8 +1489,7 @@ struct TopLevelMenuMapping
 
     state.Require(NormalizeMenuItemLabel(GetMenuItemTextByPosition(editMenu, copyTextSubMenuPos)) == L"Copy as Text",
                   L"Copy-text submenu should use the concise 'Copy as Text' label.");
-    state.Require(copyTextSubMenuPos > 0 && IsMenuSeparatorAt(editMenu, copyTextSubMenuPos - 1),
-                  L"Copy-text submenu should be preceded by a separator.");
+    state.Require(copyTextSubMenuPos > 0 && IsMenuSeparatorAt(editMenu, copyTextSubMenuPos - 1), L"Copy-text submenu should be preceded by a separator.");
     state.Require((copyTextSubMenuPos + 1) < editItemCount && IsMenuSeparatorAt(editMenu, copyTextSubMenuPos + 1),
                   L"Copy-text submenu should be followed by a separator.");
 
@@ -1533,43 +1532,43 @@ struct TopLevelMenuMapping
         return false;
     }
 
-    const DWORD processId             = GetCurrentProcessId();
-    const DWORD uiThreadId            = GetWindowThreadProcessId(mainWindow, nullptr);
-    const auto baseline               = SnapshotTopLevelWindowsForProcess(processId);
-    const bool baselineMenuBarVisible = DebugIsMainMenuBarSurfaceVisible(mainWindow);
+    const DWORD processId                                      = GetCurrentProcessId();
+    const DWORD uiThreadId                                     = GetWindowThreadProcessId(mainWindow, nullptr);
+    const auto baseline                                        = SnapshotTopLevelWindowsForProcess(processId);
+    const bool baselineMenuBarVisible                          = DebugIsMainMenuBarSurfaceVisible(mainWindow);
     const std::optional<FolderWindow::Pane> baselineZoomedPane = g_folderWindow.GetZoomedPane();
     const std::optional<float> baselineZoomRestoreSplitRatio   = g_folderWindow.GetZoomRestoreSplitRatio();
     const float baselineSplitRatio                             = g_folderWindow.GetSplitRatio();
     const bool baselineFunctionBarVisible                      = g_folderWindow.GetFunctionBarVisible();
     FolderWindow::PreviewPaneDebugSnapshot baselinePreview{};
-    const bool baselinePreviewOk = g_folderWindow.DebugGetPreviewPaneSnapshot(baselinePreview);
+    const bool baselinePreviewOk                      = g_folderWindow.DebugGetPreviewPaneSnapshot(baselinePreview);
     const Common::Settings::Settings baselineSettings = g_settings;
-    const auto restoreSettings = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
+    const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
     struct PaneLiveState final
     {
         FolderView::DisplayMode displayMode{};
         FolderView::SortBy sortBy{};
         FolderView::SortDirection sortDirection{};
-        bool statusBarVisible    = false;
+        bool statusBarVisible      = false;
         bool fileExtensionsVisible = false;
-        bool thumbnailsVisible   = false;
-        uint32_t thumbnailSizeDip = 0;
-        bool navigationBarVisible = false;
-        bool filterBarVisible    = false;
+        bool thumbnailsVisible     = false;
+        uint32_t thumbnailSizeDip  = 0;
+        bool navigationBarVisible  = false;
+        bool filterBarVisible      = false;
     };
     const auto capturePaneLiveState = [](FolderWindow::Pane pane) noexcept
     {
         return PaneLiveState{
-            .displayMode          = g_folderWindow.GetDisplayMode(pane),
-            .sortBy               = g_folderWindow.GetSortBy(pane),
-            .sortDirection        = g_folderWindow.GetSortDirection(pane),
-            .statusBarVisible     = g_folderWindow.GetStatusBarVisible(pane),
+            .displayMode           = g_folderWindow.GetDisplayMode(pane),
+            .sortBy                = g_folderWindow.GetSortBy(pane),
+            .sortDirection         = g_folderWindow.GetSortDirection(pane),
+            .statusBarVisible      = g_folderWindow.GetStatusBarVisible(pane),
             .fileExtensionsVisible = g_folderWindow.GetFileExtensionsVisible(pane),
-            .thumbnailsVisible    = g_folderWindow.GetThumbnailsVisible(pane),
-            .thumbnailSizeDip     = g_folderWindow.GetThumbnailSizeDip(pane),
-            .navigationBarVisible = g_folderWindow.GetNavigationBarVisible(pane),
-            .filterBarVisible     = g_folderWindow.GetFilterBarVisible(pane),
+            .thumbnailsVisible     = g_folderWindow.GetThumbnailsVisible(pane),
+            .thumbnailSizeDip      = g_folderWindow.GetThumbnailSizeDip(pane),
+            .navigationBarVisible  = g_folderWindow.GetNavigationBarVisible(pane),
+            .filterBarVisible      = g_folderWindow.GetFilterBarVisible(pane),
         };
     };
     const PaneLiveState leftPaneLiveState  = capturePaneLiveState(FolderWindow::Pane::Left);
@@ -1640,9 +1639,9 @@ struct TopLevelMenuMapping
 
         g_folderWindow.SetFunctionBarVisible(baselineFunctionBarVisible);
         PumpPendingMessages();
-        state.Require(g_folderWindow.GetFunctionBarVisible() == baselineFunctionBarVisible,
-                      std::format(L"Dispatch smoke: cleanup did not restore function bar visibility to {}.",
-                                  baselineFunctionBarVisible ? L"visible" : L"hidden"));
+        state.Require(
+            g_folderWindow.GetFunctionBarVisible() == baselineFunctionBarVisible,
+            std::format(L"Dispatch smoke: cleanup did not restore function bar visibility to {}.", baselineFunctionBarVisible ? L"visible" : L"hidden"));
 
         g_folderWindow.SetZoomState(baselineZoomedPane, baselineZoomRestoreSplitRatio);
         if (! baselineZoomedPane.has_value() && ! baselineZoomRestoreSplitRatio.has_value())
@@ -1692,10 +1691,8 @@ struct TopLevelMenuMapping
                   L"Dispatch smoke: failed to set right pane path.");
 
     const Common::Settings::Settings fixtureSettings = g_settings;
-    const auto restorePaneFixture = [&](FolderWindow::Pane pane,
-                                        const std::filesystem::path& expectedPath,
-                                        std::wstring_view paneName,
-                                        const PaneLiveState& liveState) noexcept
+    const auto restorePaneFixture =
+        [&](FolderWindow::Pane pane, const std::filesystem::path& expectedPath, std::wstring_view paneName, const PaneLiveState& liveState) noexcept
     {
         if (g_folderWindow.GetDisplayMode(pane) != liveState.displayMode)
         {
@@ -1732,7 +1729,7 @@ struct TopLevelMenuMapping
 
         const bool providerMatches = OrdinalString::EqualsNoCase(g_folderWindow.GetFileSystemPluginId(pane), L"builtin/file-system");
         const std::optional<std::filesystem::path> currentPath = g_folderWindow.GetCurrentPath(pane);
-        const bool pathMatches = currentPath.has_value() && OrdinalString::EqualsNoCasePath(currentPath.value(), expectedPath);
+        const bool pathMatches                                 = currentPath.has_value() && OrdinalString::EqualsNoCasePath(currentPath.value(), expectedPath);
         if (! providerMatches)
         {
             state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(pane, L"builtin/file-system")),
@@ -1747,10 +1744,9 @@ struct TopLevelMenuMapping
         }
 
         const HWND folderViewHwnd = g_folderWindow.GetFolderViewHwnd(pane);
-        FolderView* folderView = folderViewHwnd && IsWindow(folderViewHwnd) != FALSE
-                                     ? reinterpret_cast<FolderView*>(GetWindowLongPtrW(folderViewHwnd, GWLP_USERDATA))
-                                     : nullptr;
-        bool enumerationSettled = folderView && folderView->IsCurrentFolderEnumerated();
+        FolderView* folderView =
+            folderViewHwnd && IsWindow(folderViewHwnd) != FALSE ? reinterpret_cast<FolderView*>(GetWindowLongPtrW(folderViewHwnd, GWLP_USERDATA)) : nullptr;
+        bool enumerationSettled   = folderView && folderView->IsCurrentFolderEnumerated();
         const auto settleDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds{3000});
         while (! enumerationSettled && std::chrono::steady_clock::now() < settleDeadline)
         {
@@ -1762,9 +1758,7 @@ struct TopLevelMenuMapping
             }
         }
         state.Require(enumerationSettled,
-                      std::format(L"Dispatch smoke: the {} pane enumeration did not settle at '{}' before the next command.",
-                                  paneName,
-                                  expectedPath.native()));
+                      std::format(L"Dispatch smoke: the {} pane enumeration did not settle at '{}' before the next command.", paneName, expectedPath.native()));
     };
 
     const std::unordered_set<std::wstring_view> skipIds = {
@@ -1827,8 +1821,8 @@ struct TopLevelMenuMapping
                       std::format(L"Dispatch smoke: {} left UI in menu mode.", cmd.id));
         if (! WaitForNoNonBaselineWindows(processId, baseline, mainWindow, SelfTest::Scale(std::chrono::milliseconds{2000})))
         {
-            state.Require(false, std::format(L"Dispatch smoke: {} left windows open: {}.", cmd.id,
-                                             DescribeNonBaselineWindows(processId, baseline, mainWindow)));
+            state.Require(false,
+                          std::format(L"Dispatch smoke: {} left windows open: {}.", cmd.id, DescribeNonBaselineWindows(processId, baseline, mainWindow)));
         }
         restoreSmokeUiState();
         g_settings = fixtureSettings;
@@ -1853,8 +1847,7 @@ struct TopLevelMenuMapping
                   L"Dispatch smoke: cleanup left UI in menu mode.");
     if (! WaitForNoNonBaselineWindows(processId, baseline, mainWindow, SelfTest::Scale(std::chrono::milliseconds{2000})))
     {
-        state.Require(false, std::format(L"Dispatch smoke: cleanup left windows open: {}.",
-                                         DescribeNonBaselineWindows(processId, baseline, mainWindow)));
+        state.Require(false, std::format(L"Dispatch smoke: cleanup left windows open: {}.", DescribeNonBaselineWindows(processId, baseline, mainWindow)));
     }
     return state.failure.empty();
 }
@@ -3267,10 +3260,10 @@ private:
 
     const auto pathEditSurfaceReady = [&](const NavigationViewDebugSnapshot& value) noexcept
     {
-        return (value.focusTarget == NavigationViewDebugFocusTarget::PathEdit || value.focusTarget == NavigationViewDebugFocusTarget::None) &&
-               value.editMode && ! value.currentEditText.empty() && value.visibleChildWindowCount == 1u && ! value.fullPathPopupVisible &&
-               ! value.fullPathPopupEditMode && value.currentEditHostHwnd != nullptr && value.currentEditInputHwnd != nullptr &&
-               value.currentEditHasSelection && value.currentEditSelectionStart == 0u && value.currentEditSelectionEnd == value.currentEditText.size() &&
+        return (value.focusTarget == NavigationViewDebugFocusTarget::PathEdit || value.focusTarget == NavigationViewDebugFocusTarget::None) && value.editMode &&
+               ! value.currentEditText.empty() && value.visibleChildWindowCount == 1u && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode &&
+               value.currentEditHostHwnd != nullptr && value.currentEditInputHwnd != nullptr && value.currentEditHasSelection &&
+               value.currentEditSelectionStart == 0u && value.currentEditSelectionEnd == value.currentEditText.size() &&
                value.currentPathText == root.wstring() && value.currentEditText.find(root.wstring()) != std::wstring::npos &&
                g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
                g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
@@ -3278,10 +3271,7 @@ private:
     };
 
     NavigationViewDebugSnapshot editSnapshot{};
-    const bool reachedEditMode                                     = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
-                                                                                                   pathEditSurfaceReady,
-                                                               SelfTest::Scale(3000ms),
-                                                               &editSnapshot);
+    const bool reachedEditMode = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left, pathEditSurfaceReady, SelfTest::Scale(3000ms), &editSnapshot);
     const std::optional<std::filesystem::path> panePathAfterDouble = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     state.Require(reachedEditMode,
                   std::format(L"Navigation view did not enter address-bar edit mode after path-region double-click; focusTarget={}, editMode={}, "
@@ -3524,8 +3514,7 @@ private:
     }
 
     state.Require(focusBelongsToEditSurface(focused, tabSnapshot),
-                  std::format(L"Focused edit window unavailable before navigation-view path edit tab handoff; {}",
-                              describeEditFocusState(tabSnapshot)));
+                  std::format(L"Focused edit window unavailable before navigation-view path edit tab handoff; {}", describeEditFocusState(tabSnapshot)));
     if (! state.failure.empty())
     {
         return false;
@@ -3875,11 +3864,11 @@ private:
                                                                                         [&](const NavigationViewDebugSnapshot& value) noexcept
             {
                 return value.focusTarget == NavigationViewDebugFocusTarget::PathEdit && value.editMode && value.currentEditUsesNativeTextInput &&
-                        value.currentEditCaretScreenRectValid && value.currentEditHostHwnd == currentSnapshot.currentEditHostHwnd &&
-                        value.currentEditInputHwnd == currentSnapshot.currentEditInputHwnd && focusBelongsToEditSurface(GetFocus(), value) &&
-                        IsWindow(value.currentEditHostHwnd) != FALSE && value.currentPathText == root.wstring() &&
-                        (! requireActiveComposition || value.currentEditHasActiveComposition) &&
-                        g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
+                       value.currentEditCaretScreenRectValid && value.currentEditHostHwnd == currentSnapshot.currentEditHostHwnd &&
+                       value.currentEditInputHwnd == currentSnapshot.currentEditInputHwnd && focusBelongsToEditSurface(GetFocus(), value) &&
+                       IsWindow(value.currentEditHostHwnd) != FALSE && value.currentPathText == root.wstring() &&
+                       (! requireActiveComposition || value.currentEditHasActiveComposition) &&
+                       g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
                        g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == baselineSelectedCount;
             },
                                                                   SelfTest::Scale(1000ms),
@@ -3905,7 +3894,7 @@ private:
             currentSnapshot = focusedSnapshot;
             snapshot        = currentSnapshot;
             return (currentSnapshot.currentEditInputHwnd && IsWindow(currentSnapshot.currentEditInputHwnd) != FALSE) ? currentSnapshot.currentEditInputHwnd
-                                                                                                                    : currentSnapshot.currentEditHostHwnd;
+                                                                                                                     : currentSnapshot.currentEditHostHwnd;
         };
 
         HWND editTarget = resolveNativeEditTarget(editSnapshot, std::format(L"{} IME start", label), false);
@@ -3940,8 +3929,7 @@ private:
             {
                 compositionSnapshotReadable = true;
                 compositionSnapshot         = value;
-                compositionReady            = value.focusTarget == NavigationViewDebugFocusTarget::PathEdit && value.editMode &&
-                                   value.currentEditHasActiveComposition &&
+                compositionReady = value.focusTarget == NavigationViewDebugFocusTarget::PathEdit && value.editMode && value.currentEditHasActiveComposition &&
                                    value.currentEditCompositionStart <= value.currentEditCompositionEnd &&
                                    value.currentEditCompositionEnd <= value.currentEditText.size();
                 if (compositionReady)
@@ -4425,7 +4413,7 @@ private:
     const std::optional<float> zoomRestoreBefore                     = g_folderWindow.GetZoomRestoreSplitRatio();
     const float splitRatioBefore                                     = g_folderWindow.GetSplitRatio();
     const HWND focusBefore                                           = GetFocus();
-    const auto restore = wil::scope_exit([&]
+    const auto restore                                               = wil::scope_exit([&]
     {
         g_settings.mouse = mouseBefore;
         g_folderWindow.SetZoomState(zoomBefore, zoomRestoreBefore);
@@ -4453,21 +4441,17 @@ private:
         return false;
     }
 
-    state.Require(FocusWindowAndWait(leftFolderView, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                  L"Left FolderView did not accept the baseline focus.");
-    state.Require(GetForegroundWindow() == GetAncestor(mainWindow, GA_ROOT),
-                  L"Main window did not become foreground before focus-follows-pointer validation.");
+    state.Require(FocusWindowAndWait(leftFolderView, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Left FolderView did not accept the baseline focus.");
+    state.Require(GetForegroundWindow() == GetAncestor(mainWindow, GA_ROOT), L"Main window did not become foreground before focus-follows-pointer validation.");
 
     g_settings.mouse.reset();
-    state.Require(! g_folderWindow.HandlePanePointerFocus(rightFolderView),
-                  L"Click-to-focus mode must ignore pointer-only pane transitions.");
+    state.Require(! g_folderWindow.HandlePanePointerFocus(rightFolderView), L"Click-to-focus mode must ignore pointer-only pane transitions.");
     state.Require(GetFocus() == leftFolderView, L"Click-to-focus mode changed pane focus without a click.");
 
     g_settings.mouse = Common::Settings::MouseSettings{
         .focusFollowsPointer = true,
     };
-    state.Require(g_folderWindow.HandlePanePointerFocus(rightFolderView),
-                  L"Always mode did not move focus to the pane under the pointer.");
+    state.Require(g_folderWindow.HandlePanePointerFocus(rightFolderView), L"Always mode did not move focus to the pane under the pointer.");
     state.Require(GetFocus() == rightFolderView || IsChild(rightFolderView, GetFocus()) != FALSE,
                   L"Always mode did not leave keyboard focus in the right pane.");
 
@@ -4484,15 +4468,15 @@ private:
     const FolderWindow::Pane activeBeforeFailedFocus = g_folderWindow.GetActivePane();
     EnableWindow(rightFolderView, FALSE);
     const auto restoreRightFolderView = wil::scope_exit([&] { EnableWindow(rightFolderView, TRUE); });
-    state.Require(! g_folderWindow.HandlePanePointerFocus(rightFolderView),
-                  L"Pointer-follow must not report success when the target pane rejects SetFocus.");
-    state.Require(g_folderWindow.GetActivePane() == activeBeforeFailedFocus,
-                  L"Pointer-follow must not commit _activePane when SetFocus fails.");
+    state.Require(! g_folderWindow.HandlePanePointerFocus(rightFolderView), L"Pointer-follow must not report success when the target pane rejects SetFocus.");
+    state.Require(g_folderWindow.GetActivePane() == activeBeforeFailedFocus, L"Pointer-follow must not commit _activePane when SetFocus fails.");
     return state.failure.empty();
 }
 
-[[nodiscard]] bool TestPaneNavigationViewFullPathPopupEditRoute(
-    HWND mainWindow, CaseState& state, bool ownedWindowActivationOnly = false, bool reentrantDestroy = false) noexcept
+[[nodiscard]] bool TestPaneNavigationViewFullPathPopupEditRoute(HWND mainWindow,
+                                                                CaseState& state,
+                                                                bool ownedWindowActivationOnly = false,
+                                                                bool reentrantDestroy          = false) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -4509,9 +4493,9 @@ private:
         return false;
     }
 
-    const std::wstring popupRootId         = NewGuidText().substr(0, 8);
-    const std::filesystem::path popupRoot = suiteRoot / L"w" / (L"nvp_" + popupRootId) / L"alpha_segment" / L"beta_segment" / L"gamma_segment" /
-                                            L"delta_segment";
+    const std::wstring popupRootId = NewGuidText().substr(0, 8);
+    const std::filesystem::path popupRoot =
+        suiteRoot / L"w" / (L"nvp_" + popupRootId) / L"alpha_segment" / L"beta_segment" / L"gamma_segment" / L"delta_segment";
     std::error_code ec;
     std::filesystem::remove_all(popupRoot, ec);
     state.Require(SelfTest::EnsureDirectory(popupRoot), L"Failed to create navigation-view full-path popup root.");
@@ -4750,18 +4734,8 @@ private:
 
     if (ownedWindowActivationOnly)
     {
-        wil::unique_hwnd ownedPopupProbe{CreateWindowExW(WS_EX_TOOLWINDOW,
-                                                         L"STATIC",
-                                                         L"",
-                                                         WS_POPUP,
-                                                         0,
-                                                         0,
-                                                         32,
-                                                         32,
-                                                         popupHwnd,
-                                                         nullptr,
-                                                         GetModuleHandleW(nullptr),
-                                                         nullptr)};
+        wil::unique_hwnd ownedPopupProbe{
+            CreateWindowExW(WS_EX_TOOLWINDOW, L"STATIC", L"", WS_POPUP, 0, 0, 32, 32, popupHwnd, nullptr, GetModuleHandleW(nullptr), nullptr)};
         state.Require(ownedPopupProbe != nullptr && GetWindow(ownedPopupProbe.get(), GW_OWNER) == popupHwnd,
                       L"Navigation-view full-path popup proof could not create an owned top-level menu surrogate.");
         if (ownedPopupProbe)
@@ -4871,14 +4845,14 @@ private:
         return false;
     }
 
-    bool destroyProbeReached = false;
+    bool destroyProbeReached  = false;
     bool earlyRestoreConsumed = false;
-    const auto clearDestroyProbe = wil::scope_exit([&]() noexcept {
-        g_folderWindow.DebugSetNavigationFullPathPopupDestroyProbe(FolderWindow::Pane::Left, {});
-    });
+    const auto clearDestroyProbe =
+        wil::scope_exit([&]() noexcept { g_folderWindow.DebugSetNavigationFullPathPopupDestroyProbe(FolderWindow::Pane::Left, {}); });
     if (reentrantDestroy)
     {
-        g_folderWindow.DebugSetNavigationFullPathPopupDestroyProbe(FolderWindow::Pane::Left, [&]() noexcept
+        g_folderWindow.DebugSetNavigationFullPathPopupDestroyProbe(FolderWindow::Pane::Left,
+                                                                   [&]() noexcept
         {
             destroyProbeReached = true;
             MSG restore{};
@@ -4976,9 +4950,9 @@ private:
         return false;
     }
 
-    const std::wstring popupRootId         = NewGuidText().substr(0, 8);
-    const std::filesystem::path popupRoot = suiteRoot / L"w" / (L"nvp_ancestor_" + popupRootId) / L"alpha_segment" / L"beta_segment" /
-                                            L"gamma_segment" / L"delta_segment";
+    const std::wstring popupRootId = NewGuidText().substr(0, 8);
+    const std::filesystem::path popupRoot =
+        suiteRoot / L"w" / (L"nvp_ancestor_" + popupRootId) / L"alpha_segment" / L"beta_segment" / L"gamma_segment" / L"delta_segment";
     std::error_code ec;
     std::filesystem::remove_all(popupRoot.parent_path().parent_path().parent_path().parent_path(), ec);
     state.Require(SelfTest::EnsureDirectory(popupRoot), L"Failed to create full-path popup ancestor-click root.");
@@ -5585,8 +5559,8 @@ private:
             return;
         }
 
-        popupResult.selectedIndex      = static_cast<int>(popupState.keyboardIndex.value());
-        const int itemCount            = static_cast<int>(baselineSnapshot.historyCount);
+        popupResult.selectedIndex = static_cast<int>(popupState.keyboardIndex.value());
+        const int itemCount       = static_cast<int>(baselineSnapshot.historyCount);
         if (itemCount < 2)
         {
             PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
@@ -5679,21 +5653,18 @@ private:
     return state.failure.empty();
 }
 
-[[nodiscard]] bool WaitForNavigationViewKeyboardMenuFocusReturn(FolderWindow::Pane pane,
-                                                                HWND folderView,
-                                                                HWND navigationView,
-                                                                std::chrono::milliseconds timeout,
-                                                                CaseState& state,
-                                                                std::wstring_view context) noexcept
+[[nodiscard]] bool WaitForNavigationViewKeyboardMenuFocusReturn(
+    FolderWindow::Pane pane, HWND folderView, HWND navigationView, std::chrono::milliseconds timeout, CaseState& state, std::wstring_view context) noexcept
 {
     using namespace std::chrono_literals;
 
     if (folderView == nullptr || IsWindow(folderView) == FALSE || navigationView == nullptr || IsWindow(navigationView) == FALSE)
     {
-        state.Require(false, std::format(L"{} cannot verify focus return because pane handles are invalid; folderView={}, navigationView={}.",
-                                         context,
-                                         DescribeWindowHandleForSelfTest(folderView),
-                                         DescribeWindowHandleForSelfTest(navigationView)));
+        state.Require(false,
+                      std::format(L"{} cannot verify focus return because pane handles are invalid; folderView={}, navigationView={}.",
+                                  context,
+                                  DescribeWindowHandleForSelfTest(folderView),
+                                  DescribeWindowHandleForSelfTest(navigationView)));
         return false;
     }
 
@@ -5930,12 +5901,8 @@ private:
         return false;
     }
 
-    if (! WaitForNavigationViewKeyboardMenuFocusReturn(FolderWindow::Pane::Left,
-                                                       folderView,
-                                                       navigationView,
-                                                       SelfTest::Scale(3000ms),
-                                                       state,
-                                                       L"Navigation view menu-region keyboard activation"))
+    if (! WaitForNavigationViewKeyboardMenuFocusReturn(
+            FolderWindow::Pane::Left, folderView, navigationView, SelfTest::Scale(3000ms), state, L"Navigation view menu-region keyboard activation"))
     {
         return false;
     }
@@ -6134,12 +6101,8 @@ private:
         return false;
     }
 
-    if (! WaitForNavigationViewKeyboardMenuFocusReturn(FolderWindow::Pane::Left,
-                                                       folderView,
-                                                       navigationView,
-                                                       SelfTest::Scale(3000ms),
-                                                       state,
-                                                       L"Navigation view disk-info keyboard activation"))
+    if (! WaitForNavigationViewKeyboardMenuFocusReturn(
+            FolderWindow::Pane::Left, folderView, navigationView, SelfTest::Scale(3000ms), state, L"Navigation view disk-info keyboard activation"))
     {
         return false;
     }
@@ -6807,8 +6770,8 @@ private:
     const auto waitForFolderFocus = [&](std::wstring_view context) noexcept
     {
         NavigationViewDebugSnapshot snapshot{};
-        const bool focused = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
-                                                           [&](const NavigationViewDebugSnapshot& value) noexcept
+        const bool focused               = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                                         [&](const NavigationViewDebugSnapshot& value) noexcept
         {
             return value.focusTarget == NavigationViewDebugFocusTarget::None && ! value.editMode && ! value.historyDropdownVisible &&
                    ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&
@@ -7594,13 +7557,10 @@ private:
         return false;
     }
 
-    const std::wstring rootText    = root.wstring();
+    const std::wstring rootText = root.wstring();
     NavigationViewDebugSnapshot pathReadySnapshot{};
     state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
-                                                [&](const NavigationViewDebugSnapshot& value) noexcept
-    {
-        return value.currentPathText == rootText;
-    },
+                                                [&](const NavigationViewDebugSnapshot& value) noexcept { return value.currentPathText == rootText; },
                                                 SelfTest::Scale(3000ms),
                                                 &pathReadySnapshot),
                   std::format(L"Navigation view path did not settle before edit refresh test. currentPath='{}' expected='{}'. {}",
@@ -7686,7 +7646,7 @@ private:
                               editSnapshot.debugEnterEditSuccessCount,
                               editSnapshot.debugEnterEditAbortCount,
                               editSnapshot.debugLastEnterEditAbortReason) +
-                              L" " + DescribeNavigationViewVisibilityForSelfTest(FolderWindow::Pane::Left, navigationView));
+                      L" " + DescribeNavigationViewVisibilityForSelfTest(FolderWindow::Pane::Left, navigationView));
     if (! state.failure.empty())
     {
         return false;
@@ -8993,10 +8953,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
 
     WndMsg::ViewerNativeMenuModelDebugSnapshot contextMenuSnapshot{};
     contextMenuSnapshot.queryCommandId = IDM_FOLDERVIEW_CONTEXT_CUT;
-    state.Require(SendMessageW(probe.hwnd,
-                               WndMsg::kViewerDebugGetNativeMenuModelSnapshot,
-                               0,
-                               reinterpret_cast<LPARAM>(&contextMenuSnapshot)) != FALSE &&
+    state.Require(SendMessageW(probe.hwnd, WndMsg::kViewerDebugGetNativeMenuModelSnapshot, 0, reinterpret_cast<LPARAM>(&contextMenuSnapshot)) != FALSE &&
                       contextMenuSnapshot.queryCommandPresent && ! contextMenuSnapshot.queryCommandEnabled,
                   L"ViewerSpace must include host Cut and disable it when leaf file commands are unavailable.");
 
@@ -9270,10 +9227,8 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     state.Require(g_folderWindow.DebugGetSplitterSnapshot(splitterSnapshot) && splitterSnapshot.leftArrowRect.bottom > splitterSnapshot.leftArrowRect.top &&
                       splitterSnapshot.rightArrowRect.bottom > splitterSnapshot.rightArrowRect.top,
                   L"Folder splitter should expose clickable navigation-height arrow zones at both ends.");
-    state.Require(splitterSnapshot.leftArrowTargetPane == FolderWindow::Pane::Left &&
-                      splitterSnapshot.leftArrowGlyph == FluentIcons::kChevronRightSmall &&
-                      splitterSnapshot.rightArrowTargetPane == FolderWindow::Pane::Right &&
-                      splitterSnapshot.rightArrowGlyph == FluentIcons::kChevronLeftSmall,
+    state.Require(splitterSnapshot.leftArrowTargetPane == FolderWindow::Pane::Left && splitterSnapshot.leftArrowGlyph == FluentIcons::kChevronRightSmall &&
+                      splitterSnapshot.rightArrowTargetPane == FolderWindow::Pane::Right && splitterSnapshot.rightArrowGlyph == FluentIcons::kChevronLeftSmall,
                   L"Restored splitter arrows should point in the direction the splitter will move to maximize the target pane.");
     state.Require(splitterSnapshot.arrowColor == splitterSnapshot.gripColor, L"Splitter arrows should use the same color as the centered grip dots.");
     state.Require(splitterSnapshot.arrowChevronSizePx > splitterSnapshot.gripDotSizePx &&
@@ -9287,8 +9242,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left),
                   L"Left splitter arrow should focus the maximized left folder view.");
     state.Require(g_folderWindow.DebugGetSplitterSnapshot(splitterSnapshot) && splitterSnapshot.leftArrowTargetPane == FolderWindow::Pane::Right &&
-                      splitterSnapshot.rightArrowTargetPane == FolderWindow::Pane::Right &&
-                      splitterSnapshot.leftArrowGlyph == FluentIcons::kChevronLeftSmall &&
+                      splitterSnapshot.rightArrowTargetPane == FolderWindow::Pane::Right && splitterSnapshot.leftArrowGlyph == FluentIcons::kChevronLeftSmall &&
                       splitterSnapshot.rightArrowGlyph == FluentIcons::kChevronLeftSmall,
                   L"When the left pane is maximized, both splitter arrows should point left to switch to the hidden right pane.");
     state.Require(g_folderWindow.DebugClickSplitterArrow(FolderWindow::Pane::Left), L"Left splitter arrow click helper failed while left pane was maximized.");
@@ -9297,8 +9251,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Right),
                   L"Splitter arrow should focus the newly maximized right folder view.");
     state.Require(g_folderWindow.DebugGetSplitterSnapshot(splitterSnapshot) && splitterSnapshot.leftArrowTargetPane == FolderWindow::Pane::Left &&
-                      splitterSnapshot.rightArrowTargetPane == FolderWindow::Pane::Left &&
-                      splitterSnapshot.leftArrowGlyph == FluentIcons::kChevronRightSmall &&
+                      splitterSnapshot.rightArrowTargetPane == FolderWindow::Pane::Left && splitterSnapshot.leftArrowGlyph == FluentIcons::kChevronRightSmall &&
                       splitterSnapshot.rightArrowGlyph == FluentIcons::kChevronRightSmall,
                   L"When the right pane is maximized, both splitter arrows should point right to switch to the hidden left pane.");
     state.Require(g_folderWindow.DebugHoverSplitterArrow(FolderWindow::Pane::Right) && g_folderWindow.DebugGetSplitterSnapshot(splitterSnapshot) &&
@@ -9880,18 +9833,17 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
             static_cast<LONG>(std::lround((firstItemRectDip.left + firstItemRectDip.right) * 0.5f * pixelScale)),
             static_cast<LONG>(std::lround((firstItemRectDip.top + firstItemRectDip.bottom) * 0.5f * pixelScale)),
         };
-        orphanedLeftButtonUpPosted.store(PostMessageW(replacementPopup,
-                                                      WM_LBUTTONUP,
-                                                      0,
-                                                      MAKELPARAM(static_cast<SHORT>(firstItemClientPoint.x), static_cast<SHORT>(firstItemClientPoint.y))) != FALSE,
-                                         std::memory_order_release);
+        orphanedLeftButtonUpPosted.store(
+            PostMessageW(
+                replacementPopup, WM_LBUTTONUP, 0, MAKELPARAM(static_cast<SHORT>(firstItemClientPoint.x), static_cast<SHORT>(firstItemClientPoint.y))) != FALSE,
+            std::memory_order_release);
 
         // The cross-thread state probe is deliberately serviced after queued
         // pointer input. Success therefore proves the orphaned release did not
         // select the first command and close the replacement popup.
         RedSalamander::DxUi::ContextMenuPopupDebugState stateAfterOrphanedRelease{};
         orphanedLeftButtonUpIgnored.store(RedSalamander::DxUi::DebugGetContextMenuPopupState(replacementPopup, stateAfterOrphanedRelease),
-                                         std::memory_order_release);
+                                          std::memory_order_release);
         if (IsWindow(replacementPopup) != FALSE)
         {
             PostMessageW(replacementPopup, WM_KEYDOWN, VK_ESCAPE, 0);
@@ -10082,8 +10034,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         }
 
         SetFocus(menuBarWindow);
-        const bool postedOpen = PostMessageW(menuBarWindow, WM_KEYDOWN, VK_DOWN, 0) != FALSE &&
-                                PostMessageW(menuBarWindow, WM_KEYUP, VK_DOWN, 0) != FALSE;
+        const bool postedOpen = PostMessageW(menuBarWindow, WM_KEYDOWN, VK_DOWN, 0) != FALSE && PostMessageW(menuBarWindow, WM_KEYUP, VK_DOWN, 0) != FALSE;
         openInputSent.store(postedOpen, std::memory_order_release);
         SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, std::format(L"menuBar_hover: posted keyboard open={}", postedOpen));
         if (! openInputSent.load(std::memory_order_acquire))
@@ -10117,15 +10068,11 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         POINT liveFirstClientPoint = liveFirstScreenPoint;
         if (ScreenToClient(menuBarWindow, &liveFirstClientPoint) != FALSE && IsWindow(menuBarWindow) != FALSE)
         {
-            stalePointerSeedDelivered.store(PostMessageW(menuBarWindow,
-                                                         WM_MOUSEMOVE,
-                                                         0,
-                                                         MAKELPARAM(liveFirstClientPoint.x, liveFirstClientPoint.y)) != FALSE,
+            stalePointerSeedDelivered.store(PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(liveFirstClientPoint.x, liveFirstClientPoint.y)) != FALSE,
                                             std::memory_order_release);
         }
         SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands,
-                                   std::format(L"menuBar_hover: stale pointer seed delivered={}",
-                                               stalePointerSeedDelivered.load(std::memory_order_acquire)));
+                                   std::format(L"menuBar_hover: stale pointer seed delivered={}", stalePointerSeedDelivered.load(std::memory_order_acquire)));
         if (stalePointerSeedDelivered.load(std::memory_order_acquire))
         {
             std::this_thread::sleep_for(25ms);
@@ -10254,7 +10201,8 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     }
 
     state.Require(openInputSent.load(std::memory_order_acquire), L"Failed to post the keyboard open on the temporary menu bar.");
-    state.Require(firstMenuSelected.load(std::memory_order_acquire), L"Temporary menu-bar keyboard open did not keep the expected first top-level menu selected.");
+    state.Require(firstMenuSelected.load(std::memory_order_acquire),
+                  L"Temporary menu-bar keyboard open did not keep the expected first top-level menu selected.");
     state.Require(initialPopupObserved.load(std::memory_order_acquire), L"Temporary menu-bar keyboard open did not open the initial DxUI popup.");
     state.Require(stalePointerSeedDelivered.load(std::memory_order_acquire),
                   L"Temporary menu-bar hover-switch test did not seed the keyboard-open stale-pointer guard before hovering the neighboring item.");
@@ -10392,8 +10340,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     const POINT secondLowerEdgeScreenPoint = makeMenuBarHoverPoint(secondItemRect);
 
     const auto clearHoverSuppressionCursorOverride = wil::scope_exit([]() noexcept { DebugSetMainMenuBarHoverSuppressionCursorOverride(std::nullopt); });
-    DebugSetMainMenuBarHoverSuppressionCursorOverride(
-        ResolveMenuBarHoverSuppressionPoint(mainWindow, firstScreenPoint, firstIndex, secondIndex));
+    DebugSetMainMenuBarHoverSuppressionCursorOverride(ResolveMenuBarHoverSuppressionPoint(mainWindow, firstScreenPoint, firstIndex, secondIndex));
 
     std::atomic<bool> popupDriverDone{false};
     std::atomic<bool> clickInputSent{false};
@@ -10887,7 +10834,8 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
                 replacementPopup             = WaitForRootSwitchedDxUiContextMenuWindow(initialPopup, 0u, &observedSwitchCount, SelfTest::Scale(100ms));
                 rootPointerSwitchCount.store(observedSwitchCount, std::memory_order_release);
                 selectedIndexAfterHoverWait.store(DebugGetMainMenuBarSelectedIndex(), std::memory_order_release);
-                settledOnPlugins = replacementPopup && selectedIndexAfterHoverWait.load(std::memory_order_acquire) == static_cast<int>(pluginsMapping->visualIndex);
+                settledOnPlugins =
+                    replacementPopup && selectedIndexAfterHoverWait.load(std::memory_order_acquire) == static_cast<int>(pluginsMapping->visualIndex);
                 if (settledOnPlugins)
                 {
                     break;
@@ -11118,8 +11066,8 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
 
     const POINT viewScreenPoint{(viewItemRect.left + viewItemRect.right) / 2, (viewItemRect.top + viewItemRect.bottom) / 2};
     const POINT filesScreenPoint = makeMenuBarHoverPoint(filesItemRect);
-    POINT viewClientPoint  = viewScreenPoint;
-    POINT filesClientPoint = filesScreenPoint;
+    POINT viewClientPoint        = viewScreenPoint;
+    POINT filesClientPoint       = filesScreenPoint;
     state.Require(ScreenToClient(menuBarWindow, &viewClientPoint) != FALSE, L"Failed to map the View menu-bar item to client coordinates.");
     state.Require(ScreenToClient(menuBarWindow, &filesClientPoint) != FALSE, L"Failed to map the Files menu-bar item to client coordinates.");
     size_t filesHitIndex = 0u;
@@ -12291,7 +12239,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
             return;
         }
 
-        const size_t childIndex      = initializedChildIndex.value();
+        const size_t childIndex       = initializedChildIndex.value();
         const size_t navigationBudget = static_cast<size_t>((std::max)(initializedItemCount, 1)) * 2u;
         for (size_t attempt = 0; attempt < navigationBudget; ++attempt)
         {
@@ -13774,7 +13722,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     const std::optional<std::filesystem::path> leftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
     const FolderWindow::Pane activePaneBefore              = g_folderWindow.GetActivePane();
-    bool paneRestoreAttempted                               = false;
+    bool paneRestoreAttempted                              = false;
     const auto restorePanes                                = wil::scope_exit([&]
     {
         if (paneRestoreAttempted)
@@ -13810,7 +13758,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     std::atomic<uint32_t> leftRestoreEnumCount{0};
     std::atomic<uint32_t> rightRestoreEnumCount{0};
     g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
-                                                        [&](const std::filesystem::path& folder) noexcept
+                                                       [&](const std::filesystem::path& folder) noexcept
     {
         if (OrdinalString::EqualsNoCasePath(folder, left) || OrdinalString::EqualsNoCasePath(folder, right))
         {
@@ -13951,43 +13899,43 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
             }
 
             const std::optional<std::filesystem::path> panePath = g_folderWindow.GetCurrentPath(pane);
-            state.Require(false,
-                          std::format(L"Navigation shell did not stay quiet during {}; pane={}, snapshotOk={}, navHwnd=0x{:X}, navVisible={}, "
-                                      L"expectedPath='{}', panePath='{}', currentPath='{}', pluginId='{}', pluginShortId='{}', instanceContext='{}', "
-                                      L"focusTarget={}, editMode={}, historyVisible={}, suggestVisible={}, popupVisible={}, childWindows={}, "
-                                      L"historyCount={}, baselineHistoryCount={}, itemCount={}, expectedItem='{}', expectedItemVisible={}, "
-                                      L"nameFilterActive={}, focusedFolderMatches={}, expectedFocusedFolderView=0x{:X}, focusedFolderView=0x{:X}, focusedWindow={}.",
-                                      context,
-                                      static_cast<unsigned>(pane),
-                                      snapshotOk ? L"yes" : L"no",
-                                      reinterpret_cast<uintptr_t>(g_folderWindow.DebugGetNavigationViewHwnd(pane)),
-                                      g_folderWindow.GetNavigationBarVisible(pane) ? L"yes" : L"no",
-                                      expectedPath.wstring(),
-                                      panePath.has_value() ? panePath->wstring() : std::wstring{},
-                                      snapshot.currentPathText,
-                                      std::wstring(g_folderWindow.GetFileSystemPluginId(pane)),
-                                      std::wstring(g_folderWindow.GetFileSystemPluginShortId(pane)),
-                                      std::wstring(g_folderWindow.GetFileSystemInstanceContext(pane)),
-                                      static_cast<unsigned>(snapshot.focusTarget),
-                                      snapshot.editMode ? L"yes" : L"no",
-                                      snapshot.historyDropdownVisible ? L"yes" : L"no",
-                                      snapshot.editSuggestPopupVisible ? L"yes" : L"no",
-                                      snapshot.fullPathPopupVisible ? L"yes" : L"no",
-                                      snapshot.visibleChildWindowCount,
-                                      snapshot.historyCount,
-                                      baselineSnapshot.historyCount,
-                                      g_folderWindow.DebugGetItemCount(pane),
-                                      expectedItemName,
-                                      g_folderWindow.DebugHasItemDisplayName(pane, expectedItemName) ? L"yes" : L"no",
-                                      g_folderWindow.DebugIsNameFilterActive(pane) ? L"yes" : L"no",
-                                      (! requireFocusedFolderView ||
-                                       g_folderWindow.GetFocusedFolderViewHwnd() == g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left))
-                                          ? L"yes"
-                                          : L"no",
-                                      static_cast<unsigned long long>(
-                                          reinterpret_cast<uintptr_t>(g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left))),
-                                      static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(g_folderWindow.GetFocusedFolderViewHwnd())),
-                                      DescribeWindowHandleForSelfTest(GetFocus())));
+            state.Require(
+                false,
+                std::format(
+                    L"Navigation shell did not stay quiet during {}; pane={}, snapshotOk={}, navHwnd=0x{:X}, navVisible={}, "
+                    L"expectedPath='{}', panePath='{}', currentPath='{}', pluginId='{}', pluginShortId='{}', instanceContext='{}', "
+                    L"focusTarget={}, editMode={}, historyVisible={}, suggestVisible={}, popupVisible={}, childWindows={}, "
+                    L"historyCount={}, baselineHistoryCount={}, itemCount={}, expectedItem='{}', expectedItemVisible={}, "
+                    L"nameFilterActive={}, focusedFolderMatches={}, expectedFocusedFolderView=0x{:X}, focusedFolderView=0x{:X}, focusedWindow={}.",
+                    context,
+                    static_cast<unsigned>(pane),
+                    snapshotOk ? L"yes" : L"no",
+                    reinterpret_cast<uintptr_t>(g_folderWindow.DebugGetNavigationViewHwnd(pane)),
+                    g_folderWindow.GetNavigationBarVisible(pane) ? L"yes" : L"no",
+                    expectedPath.wstring(),
+                    panePath.has_value() ? panePath->wstring() : std::wstring{},
+                    snapshot.currentPathText,
+                    std::wstring(g_folderWindow.GetFileSystemPluginId(pane)),
+                    std::wstring(g_folderWindow.GetFileSystemPluginShortId(pane)),
+                    std::wstring(g_folderWindow.GetFileSystemInstanceContext(pane)),
+                    static_cast<unsigned>(snapshot.focusTarget),
+                    snapshot.editMode ? L"yes" : L"no",
+                    snapshot.historyDropdownVisible ? L"yes" : L"no",
+                    snapshot.editSuggestPopupVisible ? L"yes" : L"no",
+                    snapshot.fullPathPopupVisible ? L"yes" : L"no",
+                    snapshot.visibleChildWindowCount,
+                    snapshot.historyCount,
+                    baselineSnapshot.historyCount,
+                    g_folderWindow.DebugGetItemCount(pane),
+                    expectedItemName,
+                    g_folderWindow.DebugHasItemDisplayName(pane, expectedItemName) ? L"yes" : L"no",
+                    g_folderWindow.DebugIsNameFilterActive(pane) ? L"yes" : L"no",
+                    (! requireFocusedFolderView || g_folderWindow.GetFocusedFolderViewHwnd() == g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left))
+                        ? L"yes"
+                        : L"no",
+                    static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left))),
+                    static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(g_folderWindow.GetFocusedFolderViewHwnd())),
+                    DescribeWindowHandleForSelfTest(GetFocus())));
         }
     };
 
@@ -13998,15 +13946,13 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Right) == 0u,
                   L"Swap Panes should not create right-pane selection while keeping the navigation shell quiet.");
 
-    paneRestoreAttempted = true;
-    const HRESULT restoreLeftPlugin = g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore);
+    paneRestoreAttempted             = true;
+    const HRESULT restoreLeftPlugin  = g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore);
     const HRESULT restoreRightPlugin = g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, rightPluginBefore);
     state.Require(SUCCEEDED(restoreLeftPlugin),
-                  std::format(L"Swap Panes teardown failed to restore the left plugin (hr=0x{:08X}).",
-                              static_cast<unsigned long>(restoreLeftPlugin)));
+                  std::format(L"Swap Panes teardown failed to restore the left plugin (hr=0x{:08X}).", static_cast<unsigned long>(restoreLeftPlugin)));
     state.Require(SUCCEEDED(restoreRightPlugin),
-                  std::format(L"Swap Panes teardown failed to restore the right plugin (hr=0x{:08X}).",
-                              static_cast<unsigned long>(restoreRightPlugin)));
+                  std::format(L"Swap Panes teardown failed to restore the right plugin (hr=0x{:08X}).", static_cast<unsigned long>(restoreRightPlugin)));
     if (leftBefore.has_value())
     {
         g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
@@ -14642,11 +14588,9 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
             .includeDetailsLine      = false,
             .includeMetadataLine     = false,
         });
-        state.Require(std::abs(metrics.tileWidthDip - 900.0f) <= 0.1f,
-                      L"Separate empty-folder parent action should span the pane item row width.");
+        state.Require(std::abs(metrics.tileWidthDip - 900.0f) <= 0.1f, L"Separate empty-folder parent action should span the pane item row width.");
         state.Require(std::abs(metrics.tileHeightDip - 28.0f) <= 0.1f,
-                      std::format(L"Separate empty-folder parent action should be one row tall, not full-client. height={:.1f}",
-                                  metrics.tileHeightDip));
+                      std::format(L"Separate empty-folder parent action should be one row tall, not full-client. height={:.1f}", metrics.tileHeightDip));
     }
 
     const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
@@ -14700,14 +14644,11 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     state.Require(! g_folderWindow.DebugGetEmptyFolderFunMessage(FolderWindow::Pane::Left).empty(),
                   L"Expected empty-folder fun message to be populated from resources.");
     {
-        const FolderView::DebugFocusSelectionStateSnapshot snapshot =
-            g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
+        const FolderView::DebugFocusSelectionStateSnapshot snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
         state.Require(snapshot.itemCount == 0u && snapshot.currentIndex == static_cast<size_t>(-1) && snapshot.focusedFlagCount == 0u &&
-                          snapshot.selectedCount == 0u && snapshot.anchorIndex == static_cast<size_t>(-1) &&
-                          snapshot.potentialDragSourceCount == 0u,
+                          snapshot.selectedCount == 0u && snapshot.anchorIndex == static_cast<size_t>(-1) && snapshot.potentialDragSourceCount == 0u,
                       L"Empty folder must have no real current, focused flag, selection, anchor, or drag source.");
-        state.Require(snapshot.emptyParentActionActive,
-                      L"Successful unfiltered empty folder should expose the separate Go to parent action.");
+        state.Require(snapshot.emptyParentActionActive, L"Successful unfiltered empty folder should expose the separate Go to parent action.");
         state.Require(g_folderWindow.DebugGetPaneCommandTargetPathsForSelfTest(FolderWindow::Pane::Left).empty(),
                       L"The separate empty-folder parent action must not enter item-command fallback.");
     }
@@ -14793,8 +14734,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
                       WaitForAtomicAtLeast(enumEmpty, 4u, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Failed to restore empty child for empty-surface exclusion checks.");
 
-    g_folderWindow.SetNameFilterState(
-        FolderWindow::Pane::Left, FolderView::NameFilterState{.enabled = true, .text = L"*.does-not-match"}, false);
+    g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, FolderView::NameFilterState{.enabled = true, .text = L"*.does-not-match"}, false);
     state.Require(! g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left).emptyParentActionActive,
                   L"Filtered-empty display must not expose the Go to parent action.");
     g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, FolderView::NameFilterState{}, false);
@@ -14997,8 +14937,10 @@ void PumpPendingMessagesExceptWindowPaint(HWND excludedPaintWindow) noexcept
     }
 }
 
-[[nodiscard]] bool WaitForAtomicAtLeastWithoutWindowPaint(
-    const std::atomic<uint32_t>& value, uint32_t expected, HWND excludedPaintWindow, std::chrono::milliseconds timeout) noexcept
+[[nodiscard]] bool WaitForAtomicAtLeastWithoutWindowPaint(const std::atomic<uint32_t>& value,
+                                                          uint32_t expected,
+                                                          HWND excludedPaintWindow,
+                                                          std::chrono::milliseconds timeout) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -15025,8 +14967,7 @@ void PumpPendingMessagesExceptWindowPaint(HWND excludedPaintWindow) noexcept
            left.batchIconUpdateCalls == right.batchIconUpdateCalls && left.incrementalSearchEffectUpdates == right.incrementalSearchEffectUpdates;
 }
 
-[[nodiscard]] bool WaitForFolderViewWarmPerfQuiescence(
-    FolderWindow::Pane pane, std::chrono::milliseconds stableFor, std::chrono::milliseconds timeout) noexcept
+[[nodiscard]] bool WaitForFolderViewWarmPerfQuiescence(FolderWindow::Pane pane, std::chrono::milliseconds stableFor, std::chrono::milliseconds timeout) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -16067,11 +16008,11 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
         return false;
     }
 
-    const std::filesystem::path root     = suiteRoot / L"work" / (L"thumbnail_cached_only_" + NewGuidText());
+    const std::filesystem::path root        = suiteRoot / L"work" / (L"thumbnail_cached_only_" + NewGuidText());
     const std::filesystem::path handoffRoot = suiteRoot / L"work" / (L"thumbnail_provider_handoff_" + NewGuidText());
-    const std::filesystem::path slowRoot = suiteRoot / L"work" / (L"thumbnail_provider_slow_" + NewGuidText());
-    const std::filesystem::path idleRoot = suiteRoot / L"work" / (L"thumbnail_provider_idle_" + NewGuidText());
-    const std::uintmax_t metricScanOffset = FolderViewPerfMetricScanOffset();
+    const std::filesystem::path slowRoot    = suiteRoot / L"work" / (L"thumbnail_provider_slow_" + NewGuidText());
+    const std::filesystem::path idleRoot    = suiteRoot / L"work" / (L"thumbnail_provider_idle_" + NewGuidText());
+    const std::uintmax_t metricScanOffset   = FolderViewPerfMetricScanOffset();
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     std::filesystem::remove_all(handoffRoot, ec);
@@ -16084,8 +16025,7 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
     state.Require(TestWriteTinyBmpFile(root / L"cached_visible.bmp"), L"Failed to write cached-only visible BMP fixture.");
     state.Require(TestWriteTinyBmpFile(handoffRoot / L"provider_handoff.bmp"), L"Failed to write provider handoff BMP fixture.");
     state.Require(SelfTest::WriteTextFile(root / L"fallback_visible.txt", "cached-only fallback probe"), L"Failed to write cached-only fallback fixture.");
-    state.Require(SelfTest::WriteTextFile(slowRoot / L"slow_provider_probe.txt", "slow provider thumbnail probe"),
-                  L"Failed to write slow-provider fixture.");
+    state.Require(SelfTest::WriteTextFile(slowRoot / L"slow_provider_probe.txt", "slow provider thumbnail probe"), L"Failed to write slow-provider fixture.");
     state.Require(SelfTest::WriteTextFile(idleRoot / L"idle.txt", "thumbnail idle target"), L"Failed to write idle fixture.");
     if (! state.failure.empty())
     {
@@ -16136,18 +16076,10 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
                               settled.thumbnailCompletedCount,
                               settled.thumbnailFallbackCount,
                               settled.thumbnailWicSuccessCount));
-    Debug::Perf::Emit(L"thumbnails.shell_provider_allowed_count",
-                      L"visible_cached",
-                      0,
-                      settled.thumbnailShellProviderAllowedCount,
-                      settled.thumbnailCompletedCount,
-                      S_OK);
-    Debug::Perf::Emit(L"thumbnails.shell_provider_timeout_count",
-                      L"visible_cached",
-                      0,
-                      settled.thumbnailShellProviderTimeoutCount,
-                      settled.thumbnailCompletedCount,
-                      S_OK);
+    Debug::Perf::Emit(
+        L"thumbnails.shell_provider_allowed_count", L"visible_cached", 0, settled.thumbnailShellProviderAllowedCount, settled.thumbnailCompletedCount, S_OK);
+    Debug::Perf::Emit(
+        L"thumbnails.shell_provider_timeout_count", L"visible_cached", 0, settled.thumbnailShellProviderTimeoutCount, settled.thumbnailCompletedCount, S_OK);
     if (! state.failure.empty())
     {
         return false;
@@ -16179,9 +16111,7 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
     }
     const uint64_t handoffClaimsAfter = FolderViewPerfMetricCountInRun(L"thumbnails.provider_probe_result_claimed", metricScanOffset);
     state.Require(handoffClaimsAfter == handoffClaimsBefore + 1u,
-                  std::format(L"Provider handoff boundary must have exactly one result owner; before={} after={}.",
-                              handoffClaimsBefore,
-                              handoffClaimsAfter));
+                  std::format(L"Provider handoff boundary must have exactly one result owner; before={} after={}.", handoffClaimsBefore, handoffClaimsAfter));
     if (! state.failure.empty())
     {
         return false;
@@ -16212,7 +16142,8 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
 
     const auto closeStart = std::chrono::steady_clock::now();
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, idleRoot);
-    const uint64_t closeReturnUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - closeStart).count());
+    const uint64_t closeReturnUs =
+        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - closeStart).count());
     state.Require(closeReturnUs < static_cast<uint64_t>(SelfTest::ScaleTimeout(500000)),
                   std::format(L"Navigation away from a slow provider-allowed thumbnail probe blocked for {} us.", closeReturnUs));
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, idleRoot, SelfTest::Scale(4000ms)), L"Idle target path did not load after slow thumbnail probe.");
@@ -16224,7 +16155,8 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
                                             SelfTest::Scale(4000ms),
                                             &idleSettled),
                   L"Thumbnail pipeline should reach zero pending work after navigation away from slow provider probe.");
-    const uint64_t closeToIdleUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - closeStart).count());
+    const uint64_t closeToIdleUs =
+        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - closeStart).count());
     Debug::Perf::Emit(L"thumbnails.close_to_idle_us", L"", closeToIdleUs, idleSettled.thumbnailPendingCount, 0, S_OK);
     state.Require(idleSettled.thumbnailPendingCount == 0u,
                   std::format(L"Thumbnail pending work should be zero after navigation; pending={}.", idleSettled.thumbnailPendingCount));
@@ -17142,12 +17074,9 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
     }
 
     constexpr uint64_t kCurrentBatchPendingApplies = 2u;
-    state.Require(g_folderWindow.DebugSeedThumbnailPendingAndPostThumbnailBitmapMessagesForTest(FolderWindow::Pane::Left,
-                                                                                                kCurrentBatchPendingApplies,
-                                                                                                1u,
-                                                                                                1u,
-                                                                                                0u),
-                  L"Failed to post stale thumbnail bitmap messages.");
+    state.Require(
+        g_folderWindow.DebugSeedThumbnailPendingAndPostThumbnailBitmapMessagesForTest(FolderWindow::Pane::Left, kCurrentBatchPendingApplies, 1u, 1u, 0u),
+        L"Failed to post stale thumbnail bitmap messages.");
     FolderWindow::PaneViewOptionsDebugSnapshot seeded{};
     state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Left, seeded),
                   L"Failed to capture seeded stale thumbnail pending snapshot.");
@@ -17171,12 +17100,13 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
                               afterStale.thumbnailStaleDropCount,
                               expectedStaleDrops));
     const uint64_t expectedPendingAfterStaleGeneration = kCurrentBatchPendingApplies - 1u;
-    state.Require(afterStale.thumbnailPendingCount == expectedPendingAfterStaleGeneration,
-                  std::format(L"A stale-generation current-batch thumbnail message must decrement pending while a stale-batch message must not; pending={} expected={} "
-                              L"staleDrops={}.",
-                              afterStale.thumbnailPendingCount,
-                              expectedPendingAfterStaleGeneration,
-                              afterStale.thumbnailStaleDropCount));
+    state.Require(
+        afterStale.thumbnailPendingCount == expectedPendingAfterStaleGeneration,
+        std::format(L"A stale-generation current-batch thumbnail message must decrement pending while a stale-batch message must not; pending={} expected={} "
+                    L"staleDrops={}.",
+                    afterStale.thumbnailPendingCount,
+                    expectedPendingAfterStaleGeneration,
+                    afterStale.thumbnailStaleDropCount));
 
     static_cast<void>(g_folderWindow.DebugSeedThumbnailPendingAndPostThumbnailBitmapMessagesForTest(FolderWindow::Pane::Left, 0u, 0u, 0u, 0u));
     FolderWindow::PaneViewOptionsDebugSnapshot beforeLate{};
@@ -17189,12 +17119,9 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
         return false;
     }
 
-    state.Require(g_folderWindow.DebugSeedThumbnailPendingAndPostThumbnailBitmapMessagesForTest(FolderWindow::Pane::Left,
-                                                                                                kCurrentBatchPendingApplies,
-                                                                                                0u,
-                                                                                                0u,
-                                                                                                1u),
-                  L"Failed to post unaccounted current thumbnail bitmap message.");
+    state.Require(
+        g_folderWindow.DebugSeedThumbnailPendingAndPostThumbnailBitmapMessagesForTest(FolderWindow::Pane::Left, kCurrentBatchPendingApplies, 0u, 0u, 1u),
+        L"Failed to post unaccounted current thumbnail bitmap message.");
     const uint64_t expectedLateCompleted = beforeLate.thumbnailCompletedCount + 1u;
     FolderWindow::PaneViewOptionsDebugSnapshot afterLate{};
     state.Require(WaitForPaneThumbnailStats(FolderWindow::Pane::Left,
@@ -17205,11 +17132,12 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
                   std::format(L"Unaccounted current thumbnail bitmap message was not handled; completed={} expectedAtLeast={}.",
                               afterLate.thumbnailCompletedCount,
                               expectedLateCompleted));
-    state.Require(afterLate.thumbnailPendingCount == kCurrentBatchPendingApplies,
-                  std::format(L"Unaccounted current thumbnail bitmap messages must not decrement current-batch pending applies; pending={} expected={} completed={}.",
-                              afterLate.thumbnailPendingCount,
-                              kCurrentBatchPendingApplies,
-                              afterLate.thumbnailCompletedCount));
+    state.Require(
+        afterLate.thumbnailPendingCount == kCurrentBatchPendingApplies,
+        std::format(L"Unaccounted current thumbnail bitmap messages must not decrement current-batch pending applies; pending={} expected={} completed={}.",
+                    afterLate.thumbnailPendingCount,
+                    kCurrentBatchPendingApplies,
+                    afterLate.thumbnailCompletedCount));
 
     static_cast<void>(g_folderWindow.DebugSeedThumbnailPendingAndPostThumbnailBitmapMessagesForTest(FolderWindow::Pane::Left, 0u, 0u, 0u, 0u));
     return state.failure.empty();
@@ -17445,10 +17373,10 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
         return false;
     }
 
-    const FolderWindow::Pane pane = FolderWindow::Pane::Left;
-    const bool statusBefore       = g_folderWindow.GetStatusBarVisible(pane);
+    const FolderWindow::Pane pane      = FolderWindow::Pane::Left;
+    const bool statusBefore            = g_folderWindow.GetStatusBarVisible(pane);
     const uint32_t thumbnailSizeBefore = g_folderWindow.GetThumbnailSizeDip(pane);
-    const auto restoreState       = wil::scope_exit([&]
+    const auto restoreState            = wil::scope_exit([&]
     {
         g_folderWindow.SetThumbnailSizeDip(pane, thumbnailSizeBefore);
         g_folderWindow.SetStatusBarVisible(pane, statusBefore);
@@ -17499,16 +17427,16 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
                             {
                                 sawFourStops.store(true, std::memory_order_release);
                                 D2D1_RECT_F sliderRectDip{};
-                                if (itemIndex < popupState.sliderValues.size() && RedSalamander::DxUi::DebugGetContextMenuPopupItemRect(popup, itemIndex, sliderRectDip))
+                                if (itemIndex < popupState.sliderValues.size() &&
+                                    RedSalamander::DxUi::DebugGetContextMenuPopupItemRect(popup, itemIndex, sliderRectDip))
                                 {
                                     const uint32_t currentStop = popupState.sliderValues[itemIndex];
                                     const uint32_t targetStop  = currentStop < 3u ? currentStop + 1u : currentStop - 1u;
                                     const float scale          = static_cast<float>(popupState.dpi) / 96.0f;
-                                    const auto stopX = [&](uint32_t stopIndex) noexcept
+                                    const auto stopX           = [&](uint32_t stopIndex) noexcept
                                     {
-                                        const float xDip = std::lerp(sliderRectDip.left + 16.0f,
-                                                                     sliderRectDip.right - 16.0f,
-                                                                     static_cast<float>(stopIndex) / 3.0f);
+                                        const float xDip =
+                                            std::lerp(sliderRectDip.left + 16.0f, sliderRectDip.right - 16.0f, static_cast<float>(stopIndex) / 3.0f);
                                         return static_cast<LONG>(std::lround(xDip * scale));
                                     };
                                     const LONG y = static_cast<LONG>(std::lround((sliderRectDip.top + 50.0f) * scale));
@@ -17560,7 +17488,8 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
     state.Require(closedPopup.load(std::memory_order_acquire), L"Pane status-bar sort popup did not close after thumbnail slider validation.");
     state.Require(sawThumbnailSlider.load(std::memory_order_acquire), L"Pane bottom-right sort popup should expose a Thumbnail size slider row.");
     state.Require(sawFourStops.load(std::memory_order_acquire), L"Thumbnail size slider should expose four discrete stops.");
-    state.Require(sawSortShortcuts.load(std::memory_order_acquire), L"Pane bottom-right sort popup should expose right-aligned Ctrl+F2 through Ctrl+F6 shortcuts.");
+    state.Require(sawSortShortcuts.load(std::memory_order_acquire),
+                  L"Pane bottom-right sort popup should expose right-aligned Ctrl+F2 through Ctrl+F6 shortcuts.");
     state.Require(completedSliderDrag.load(std::memory_order_acquire), L"Thumbnail size slider should accept a held-pointer drag and commit on release.");
     if (completedSliderDrag.load(std::memory_order_acquire))
     {
@@ -17994,8 +17923,7 @@ void AppendFolderViewSortToggleRecordJson(std::wstring& out, const FolderViewSor
         return false;
     }
 
-    const SelfTest::TestSandbox sandbox =
-        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"folder_sort_toggle_stress");
+    const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"folder_sort_toggle_stress");
     state.Require(sandbox.IsValid(), L"Sort-toggle stress TestSandbox root unavailable.");
     if (! sandbox.IsValid())
     {
@@ -18095,8 +18023,7 @@ void AppendFolderViewSortToggleRecordJson(std::wstring& out, const FolderViewSor
         const auto start         = std::chrono::steady_clock::now();
 
         g_folderWindow.SetSort(FolderWindow::Pane::Left, request.sort, request.direction);
-        state.Require(WaitForFolderViewSortAndWarmRender(
-                          FolderWindow::Pane::Left, folderView, request.sort, request.direction, 5000u, SelfTest::Scale(5000ms)),
+        state.Require(WaitForFolderViewSortAndWarmRender(FolderWindow::Pane::Left, folderView, request.sort, request.direction, 5000u, SelfTest::Scale(5000ms)),
                       std::format(L"Sort-toggle stress did not reach sort-ready warm rendering for {} / {}.", sortName, directionName));
 
         const auto elapsedUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start).count());
@@ -18179,17 +18106,17 @@ struct FolderViewScrollStepPerfRecord
 {
     std::wstring mode;
     std::wstring step;
-    uint64_t inputToPaintUs      = 0;
-    uint64_t frameCount          = 0;
+    uint64_t inputToPaintUs              = 0;
+    uint64_t frameCount                  = 0;
     uint64_t productPaintRenderCount     = 0;
     uint64_t productPaintFullClientCount = 0;
     uint64_t productPaintDirtyAreaPx     = 0;
     bool viewportChanged                 = false;
-    size_t visibleItemCount      = 0;
-    size_t firstVisibleIndex     = 0;
-    size_t lastVisibleIndex      = 0;
-    float horizontalOffsetDip    = 0.0f;
-    float maxHorizontalOffsetDip = 0.0f;
+    size_t visibleItemCount              = 0;
+    size_t firstVisibleIndex             = 0;
+    size_t lastVisibleIndex              = 0;
+    float horizontalOffsetDip            = 0.0f;
+    float maxHorizontalOffsetDip         = 0.0f;
 };
 
 struct FolderViewFrameMetricPresenceRecord
@@ -18269,9 +18196,9 @@ struct FolderViewPerfBudgetEntry
     std::string stat;
     std::string severity;
     std::string sourceArchive;
-    double measured      = 0.0;
-    double maximum       = 0.0;
-    uint64_t minSamples  = 0;
+    double measured     = 0.0;
+    double maximum      = 0.0;
+    uint64_t minSamples = 0;
 };
 
 struct FolderViewPerfBudgetMachine
@@ -18528,8 +18455,7 @@ struct FolderViewPerfBudgetFile
     return true;
 }
 
-[[nodiscard]] const FolderViewPerfBudgetMachine* FindFolderViewPerfBudgetMachine(const FolderViewPerfBudgetFile& budget,
-                                                                                 std::string_view machineHash) noexcept
+[[nodiscard]] const FolderViewPerfBudgetMachine* FindFolderViewPerfBudgetMachine(const FolderViewPerfBudgetFile& budget, std::string_view machineHash) noexcept
 {
     for (const FolderViewPerfBudgetMachine& machine : budget.machines)
     {
@@ -18640,7 +18566,7 @@ struct FolderViewPerfBudgetFile
         return false;
     }
 
-    const std::string currentMachine = NarrowFolderViewBudgetAscii(SelfTest::GetSelfTestMachineHash());
+    const std::string currentMachine           = NarrowFolderViewBudgetAscii(SelfTest::GetSelfTestMachineHash());
     const FolderViewPerfBudgetMachine* machine = FindFolderViewPerfBudgetMachine(budget, currentMachine);
     if (! machine)
     {
@@ -18661,8 +18587,8 @@ struct FolderViewPerfBudgetFile
 
     const std::string currentCase  = NarrowFolderViewBudgetAscii(caseName);
     const std::string currentBuild = NarrowFolderViewBudgetAscii(SelfTest::GetSelfTestBuildFlavor());
-    bool hasCaseEntry             = false;
-    bool appliedHardEntry         = false;
+    bool hasCaseEntry              = false;
+    bool appliedHardEntry          = false;
 
     for (const FolderViewPerfBudgetEntry& entry : machine->entries)
     {
@@ -18677,17 +18603,17 @@ struct FolderViewPerfBudgetFile
         }
         if (entry.severity == "soft")
         {
-            Trace(std::format(L"FolderView perf soft budget observed for {0} / {1}.",
-                              WidenFolderViewBudgetAscii(entry.caseName),
-                              WidenFolderViewBudgetAscii(entry.metric)));
+            Trace(std::format(
+                L"FolderView perf soft budget observed for {0} / {1}.", WidenFolderViewBudgetAscii(entry.caseName), WidenFolderViewBudgetAscii(entry.metric)));
             continue;
         }
         if (entry.severity != "hard")
         {
-            state.Require(false, std::format(L"FolderView perf budget entry for {0} / {1} has unsupported severity '{2}'.",
-                                             WidenFolderViewBudgetAscii(entry.caseName),
-                                             WidenFolderViewBudgetAscii(entry.metric),
-                                             WidenFolderViewBudgetAscii(entry.severity)));
+            state.Require(false,
+                          std::format(L"FolderView perf budget entry for {0} / {1} has unsupported severity '{2}'.",
+                                      WidenFolderViewBudgetAscii(entry.caseName),
+                                      WidenFolderViewBudgetAscii(entry.metric),
+                                      WidenFolderViewBudgetAscii(entry.severity)));
             return false;
         }
 
@@ -18706,7 +18632,8 @@ struct FolderViewPerfBudgetFile
             return false;
         }
 
-        const double actual = entry.stat == "p95" ? FolderViewPercentile(values, 95.0) : (values.empty() ? 0.0 : *std::max_element(values.begin(), values.end()));
+        const double actual =
+            entry.stat == "p95" ? FolderViewPercentile(values, 95.0) : (values.empty() ? 0.0 : *std::max_element(values.begin(), values.end()));
         if (actual > entry.maximum)
         {
             state.Require(false,
@@ -18728,9 +18655,8 @@ struct FolderViewPerfBudgetFile
     }
     if (! appliedHardEntry)
     {
-        const std::wstring message = std::format(L"FolderView perf budgets skipped for {0} build {1}; no hard entries matched this build.",
-                                                 caseName,
-                                                 SelfTest::GetSelfTestBuildFlavor());
+        const std::wstring message = std::format(
+            L"FolderView perf budgets skipped for {0} build {1}; no hard entries matched this build.", caseName, SelfTest::GetSelfTestBuildFlavor());
         Trace(message);
         if (options.requirePerfBudgets)
         {
@@ -18778,12 +18704,12 @@ struct SelfTestProcessMemorySnapshot
 struct FolderViewEnvironmentMatrix
 {
     std::wstring buildConfiguration;
-    UINT mainWindowDpi         = 0;
-    UINT displayScalePercent   = 0;
-    DWORD displayRefreshHz     = 0;
-    bool remoteSession         = false;
-    bool warpDllAvailable      = false;
-    bool warpRunExecuted       = false;
+    UINT mainWindowDpi       = 0;
+    UINT displayScalePercent = 0;
+    DWORD displayRefreshHz   = 0;
+    bool remoteSession       = false;
+    bool warpDllAvailable    = false;
+    bool warpRunExecuted     = false;
     std::wstring adapterName;
     std::wstring driverVersion;
     std::wstring highDpiRunStatus;
@@ -18843,23 +18769,23 @@ struct FolderViewEnvironmentMatrix
 [[nodiscard]] FolderViewEnvironmentMatrix CaptureFolderViewEnvironmentMatrix(HWND mainWindow)
 {
     DEVMODEW mode{};
-    mode.dmSize              = sizeof(mode);
-    const bool haveDevMode   = EnumDisplaySettingsW(nullptr, ENUM_CURRENT_SETTINGS, &mode) != FALSE;
-    const UINT dpi           = mainWindow && IsWindow(mainWindow) != FALSE ? GetDpiForWindow(mainWindow) : 0u;
-    const bool warpForced    = IsFolderViewForceWarpEnabled();
+    mode.dmSize            = sizeof(mode);
+    const bool haveDevMode = EnumDisplaySettingsW(nullptr, ENUM_CURRENT_SETTINGS, &mode) != FALSE;
+    const UINT dpi         = mainWindow && IsWindow(mainWindow) != FALSE ? GetDpiForWindow(mainWindow) : 0u;
+    const bool warpForced  = IsFolderViewForceWarpEnabled();
     FolderViewEnvironmentMatrix result{};
     result.buildConfiguration = std::wstring(SelfTest::GetSelfTestBuildFlavor());
     result.mainWindowDpi      = dpi;
     result.displayScalePercent =
         dpi > 0u ? static_cast<UINT>((static_cast<uint64_t>(dpi) * 100u + (USER_DEFAULT_SCREEN_DPI / 2u)) / USER_DEFAULT_SCREEN_DPI) : 0u;
-    result.displayRefreshHz   = haveDevMode ? mode.dmDisplayFrequency : 0u;
-    result.remoteSession      = GetSystemMetrics(SM_REMOTESESSION) != 0;
-    result.warpDllAvailable   = IsWarpDllAvailable();
-    result.warpRunExecuted    = warpForced;
-    result.adapterName        = QueryPrimaryDxgiAdapterName();
-    result.driverVersion      = L"unavailable: DXGI adapter description does not expose the installed driver version";
-    result.highDpiRunStatus   = dpi >= 144u ? L"covered: active run is at or above 150% scale" : L"not-run: active DPI is below 150% scale";
-    result.rdpRunStatus       = result.remoteSession ? L"covered: active run is an RDP session" : L"not-run: active run is local console";
+    result.displayRefreshHz = haveDevMode ? mode.dmDisplayFrequency : 0u;
+    result.remoteSession    = GetSystemMetrics(SM_REMOTESESSION) != 0;
+    result.warpDllAvailable = IsWarpDllAvailable();
+    result.warpRunExecuted  = warpForced;
+    result.adapterName      = QueryPrimaryDxgiAdapterName();
+    result.driverVersion    = L"unavailable: DXGI adapter description does not expose the installed driver version";
+    result.highDpiRunStatus = dpi >= 144u ? L"covered: active run is at or above 150% scale" : L"not-run: active DPI is below 150% scale";
+    result.rdpRunStatus     = result.remoteSession ? L"covered: active run is an RDP session" : L"not-run: active run is local console";
     if (warpForced)
     {
         result.warpRunStatus = result.warpDllAvailable ? L"covered: REDSALAMANDER_FOLDERVIEW_FORCE_WARP=1 forced FolderView D3D device creation through WARP"
@@ -18871,7 +18797,8 @@ struct FolderViewEnvironmentMatrix
                                                        : L"blocked: d3d10warp.dll not found on this machine";
     }
     result.skippedMatrixReason = warpForced ? L"RDP and alternate hardware refresh/scale variants require matching external sessions."
-                                            : L"WARP can be covered with REDSALAMANDER_FOLDERVIEW_FORCE_WARP=1; RDP and alternate hardware refresh/scale variants require matching external sessions.";
+                                            : L"WARP can be covered with REDSALAMANDER_FOLDERVIEW_FORCE_WARP=1; RDP and alternate hardware refresh/scale "
+                                              L"variants require matching external sessions.";
     result.matrixComment = L"Selftest archive captures the active environment. Debug and test-enabled Release variants are separate runs.";
     return result;
 }
@@ -19146,10 +19073,9 @@ struct FolderViewDummyPluginHandles
 
     for (size_t i = 0; i < itemCount; ++i)
     {
-        const size_t extensionIndex = extensionCount > 0u ? (i % extensionCount) : 0u;
-        const std::wstring extension =
-            extensionCount > 0u ? std::format(L".fvx{:03}", extensionIndex) : std::wstring(L".txt");
-        const std::wstring fileName = std::format(L"scaleprobe_{:05}_ext{:03}{}", i, extensionIndex, extension);
+        const size_t extensionIndex  = extensionCount > 0u ? (i % extensionCount) : 0u;
+        const std::wstring extension = extensionCount > 0u ? std::format(L".fvx{:03}", extensionIndex) : std::wstring(L".txt");
+        const std::wstring fileName  = std::format(L"scaleprobe_{:05}_ext{:03}{}", i, extensionIndex, extension);
         state.Require(WriteTextFileFsIoForFolderViewPerf(handles.io, root / fileName, "x"),
                       std::format(L"Failed to create dummy FolderView perf item {}.", fileName));
         if (! state.failure.empty())
@@ -19186,7 +19112,7 @@ struct FolderViewDummyPluginHandles
     }
 
     FileSystemBasicInformation info{};
-    info.sizeBytes = sizeof(info);
+    info.sizeBytes              = sizeof(info);
     const std::wstring pathText = ToFolderViewDummyPluginPathText(path);
     HRESULT hr                  = handles.io->GetFileBasicInformation(pathText.c_str(), &info);
     state.Require(SUCCEEDED(hr), std::format(L"Failed to read dummy item metadata for '{}'. hr=0x{:08X}", pathText, static_cast<unsigned int>(hr)));
@@ -19815,8 +19741,7 @@ struct FolderViewDummyPluginHandles
 {
     using namespace std::chrono_literals;
 
-    const SelfTest::TestSandbox sandbox =
-        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"viewer_space_synthetic_bucket_metrics");
+    const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"viewer_space_synthetic_bucket_metrics");
     state.Require(sandbox.IsValid(), L"ViewerSpace synthetic-bucket metrics TestSandbox root unavailable.");
     if (! sandbox.IsValid())
     {
@@ -19869,14 +19794,15 @@ struct FolderViewDummyPluginHandles
                current.fileCandidateCount == kExpectedFileCandidateCount && current.syntheticCount > 0u && current.syntheticBytes > 0u;
     },
                                                         SelfTest::Scale(15000ms));
-    state.Require(settled,
-                  std::format(
-                      L"ViewerSpace synthetic-bucket metrics test did not settle. state={}, rootBytes={}, fileCandidates={}, syntheticCount={}, syntheticBytes={}.",
-                      static_cast<unsigned int>(snapshot.scanState),
-                      snapshot.rootTotalBytes,
-                      snapshot.fileCandidateCount,
-                      snapshot.syntheticCount,
-                      snapshot.syntheticBytes));
+    state.Require(
+        settled,
+        std::format(
+            L"ViewerSpace synthetic-bucket metrics test did not settle. state={}, rootBytes={}, fileCandidates={}, syntheticCount={}, syntheticBytes={}.",
+            static_cast<unsigned int>(snapshot.scanState),
+            snapshot.rootTotalBytes,
+            snapshot.fileCandidateCount,
+            snapshot.syntheticCount,
+            snapshot.syntheticBytes));
 
     state.Require(snapshot.syntheticCount == 1u,
                   std::format(L"ViewerSpace files-only synthetic bucket count should be exactly 1, got {}.", snapshot.syntheticCount));
@@ -20946,13 +20872,13 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     FolderView::IncrementalSearchDebugSnapshot searchSnapshot{};
     state.Require(WaitForFolderViewQuickSearchSnapshot(FolderWindow::Pane::Left,
                                                        [](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept
-    {
-        return value.active && value.query.empty();
-    }, SelfTest::Scale(1000ms), &searchSnapshot),
+    { return value.active && value.query.empty(); },
+                                                       SelfTest::Scale(1000ms),
+                                                       &searchSnapshot),
                   std::format(L"Overlay invalidation stress quick search did not activate cleanly; active={} query='{}'; {}.",
-                               searchSnapshot.active ? L"yes" : L"no",
-                               searchSnapshot.query,
-                               focusDiagnostics()));
+                              searchSnapshot.active ? L"yes" : L"no",
+                              searchSnapshot.query,
+                              focusDiagnostics()));
     if (! state.failure.empty())
     {
         return false;
@@ -20978,12 +20904,12 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
 
     state.Require(WaitForFolderViewQuickSearchSnapshot(FolderWindow::Pane::Left,
                                                        [](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept
-    {
-        return value.active && value.query == L"overlay";
-    }, SelfTest::Scale(1500ms), &searchSnapshot),
+    { return value.active && value.query == L"overlay"; },
+                                                       SelfTest::Scale(1500ms),
+                                                       &searchSnapshot),
                   std::format(L"Overlay invalidation stress quick search did not capture the expected query; active={} query='{}'.",
-                               searchSnapshot.active ? L"yes" : L"no",
-                               searchSnapshot.query));
+                              searchSnapshot.active ? L"yes" : L"no",
+                              searchSnapshot.query));
     state.Require(! searchSnapshot.matches.empty(), L"Overlay invalidation stress quick search produced no visible matches.");
     if (! state.failure.empty())
     {
@@ -21007,10 +20933,10 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     PumpLimitedPendingMessagesForPerf(32u);
     static_cast<void>(g_folderWindow.DebugWarmPaneRendering(FolderWindow::Pane::Left));
 
-    const std::uintmax_t overlayMetricScanOffset = FolderViewPerfMetricScanOffset();
-    constexpr uint64_t kMinimumOverlayAnimationFrames = 8u;
+    const std::uintmax_t overlayMetricScanOffset           = FolderViewPerfMetricScanOffset();
+    constexpr uint64_t kMinimumOverlayAnimationFrames      = 8u;
     constexpr uint64_t kOverlayFrameCollectionTargetPasses = kFolderViewPerfMinimumSamplesForP95;
-    uint64_t overlayFrameCollectionPassCount = 0u;
+    uint64_t overlayFrameCollectionPassCount               = 0u;
     for (; overlayFrameCollectionPassCount < kOverlayFrameCollectionTargetPasses; ++overlayFrameCollectionPassCount)
     {
         PumpLimitedPendingMessagesForPerf(8u);
@@ -21091,8 +21017,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     }
 
     const std::uintmax_t frameMetricScanOffset = FolderViewPerfMetricScanOffset();
-    const std::wstring rootId                   = NewGuidText().substr(0, 8);
-    const std::filesystem::path root            = suiteRoot / L"w" / (L"scroll_" + rootId);
+    const std::wstring rootId                  = NewGuidText().substr(0, 8);
+    const std::filesystem::path root           = suiteRoot / L"w" / (L"scroll_" + rootId);
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     state.Require(CreateFolderViewScrollRenderFixture(state, root), L"Failed to create scroll/render stress fixture.");
@@ -21179,7 +21105,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
             {
                 const std::wstring stepDetail = std::format(L"pass{}:{}", gesturePassCount, stepName);
                 ValidateRect(folderView, nullptr);
-                const auto perfBefore = g_folderWindow.DebugGetWarmPanePerfSnapshot(FolderWindow::Pane::Left);
+                const auto perfBefore                                 = g_folderWindow.DebugGetWarmPanePerfSnapshot(FolderWindow::Pane::Left);
                 const FolderView::RenderingDebugSnapshot renderBefore = g_folderWindow.DebugGetPaneRenderingSnapshot(FolderWindow::Pane::Left);
                 FolderView::DebugColumnLayoutSnapshot beforeSnapshot{};
                 const bool beforeSnapshotOk = g_folderWindow.DebugGetPaneColumnLayoutSnapshot(FolderWindow::Pane::Left, beforeSnapshot);
@@ -21193,10 +21119,9 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                 SendMessageW(folderView, message, request, 0);
                 UpdateWindow(folderView);
                 PumpPendingMessages();
-                const auto perfAfterProductPaint = g_folderWindow.DebugGetWarmPanePerfSnapshot(FolderWindow::Pane::Left);
-                const FolderView::RenderingDebugSnapshot renderAfterProductPaint =
-                    g_folderWindow.DebugGetPaneRenderingSnapshot(FolderWindow::Pane::Left);
-                const bool warmOk = g_folderWindow.DebugWarmPaneRendering(FolderWindow::Pane::Left);
+                const auto perfAfterProductPaint                                 = g_folderWindow.DebugGetWarmPanePerfSnapshot(FolderWindow::Pane::Left);
+                const FolderView::RenderingDebugSnapshot renderAfterProductPaint = g_folderWindow.DebugGetPaneRenderingSnapshot(FolderWindow::Pane::Left);
+                const bool warmOk                                                = g_folderWindow.DebugWarmPaneRendering(FolderWindow::Pane::Left);
                 PumpPendingMessages();
                 const auto elapsedUs =
                     static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start).count());
@@ -21211,17 +21136,14 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                     return false;
                 }
 
-                const uint64_t frameCount = perfAfter.renderCalls - perfBefore.renderCalls;
-                const uint64_t productPaintRenderCount = perfAfterProductPaint.renderCalls - perfBefore.renderCalls;
-                const uint64_t productPaintFullClientCount =
-                    renderAfterProductPaint.fullClientRenderCount - renderBefore.fullClientRenderCount;
-                const RECT productPaintDirtyRect = renderAfterProductPaint.lastRenderInvalidRectPx;
-                const uint64_t productPaintDirtyAreaPx = productPaintRenderCount == 0u
-                                                             ? 0u
-                                                             : static_cast<uint64_t>(
-                                                                   std::max<LONG>(0, productPaintDirtyRect.right - productPaintDirtyRect.left)) *
-                                                                   static_cast<uint64_t>(
-                                                                       std::max<LONG>(0, productPaintDirtyRect.bottom - productPaintDirtyRect.top));
+                const uint64_t frameCount                  = perfAfter.renderCalls - perfBefore.renderCalls;
+                const uint64_t productPaintRenderCount     = perfAfterProductPaint.renderCalls - perfBefore.renderCalls;
+                const uint64_t productPaintFullClientCount = renderAfterProductPaint.fullClientRenderCount - renderBefore.fullClientRenderCount;
+                const RECT productPaintDirtyRect           = renderAfterProductPaint.lastRenderInvalidRectPx;
+                const uint64_t productPaintDirtyAreaPx =
+                    productPaintRenderCount == 0u ? 0u
+                                                  : static_cast<uint64_t>(std::max<LONG>(0, productPaintDirtyRect.right - productPaintDirtyRect.left)) *
+                                                        static_cast<uint64_t>(std::max<LONG>(0, productPaintDirtyRect.bottom - productPaintDirtyRect.top));
                 const bool viewportChanged = std::abs(snapshot.horizontalOffsetDip - beforeSnapshot.horizontalOffsetDip) > 0.01f ||
                                              snapshot.firstVisibleIndex != beforeSnapshot.firstVisibleIndex ||
                                              snapshot.lastVisibleIndex != beforeSnapshot.lastVisibleIndex;
@@ -21278,31 +21200,33 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                                   S_OK);
 
                 records.push_back(FolderViewScrollStepPerfRecord{
-                    .mode                   = modeName,
-                    .step                   = stepDetail,
-                    .inputToPaintUs         = elapsedUs,
-                    .frameCount             = frameCount,
+                    .mode                        = modeName,
+                    .step                        = stepDetail,
+                    .inputToPaintUs              = elapsedUs,
+                    .frameCount                  = frameCount,
                     .productPaintRenderCount     = productPaintRenderCount,
                     .productPaintFullClientCount = productPaintFullClientCount,
                     .productPaintDirtyAreaPx     = productPaintDirtyAreaPx,
                     .viewportChanged             = viewportChanged,
-                    .visibleItemCount       = snapshot.visibleItems.size(),
-                    .firstVisibleIndex      = snapshot.firstVisibleIndex,
-                    .lastVisibleIndex       = snapshot.lastVisibleIndex,
-                    .horizontalOffsetDip    = snapshot.horizontalOffsetDip,
-                    .maxHorizontalOffsetDip = snapshot.maxHorizontalOffsetDip,
+                    .visibleItemCount            = snapshot.visibleItems.size(),
+                    .firstVisibleIndex           = snapshot.firstVisibleIndex,
+                    .lastVisibleIndex            = snapshot.lastVisibleIndex,
+                    .horizontalOffsetDip         = snapshot.horizontalOffsetDip,
+                    .maxHorizontalOffsetDip      = snapshot.maxHorizontalOffsetDip,
                 });
                 return true;
             };
 
-            state.Require(driveStep(WM_HSCROLL, SB_LEFT, L"h-left"), std::format(L"Scroll/render failed at h-left for {} pass {}.", modeName, gesturePassCount));
+            state.Require(driveStep(WM_HSCROLL, SB_LEFT, L"h-left"),
+                          std::format(L"Scroll/render failed at h-left for {} pass {}.", modeName, gesturePassCount));
             state.Require(driveStep(WM_HSCROLL, SB_LEFT, L"h-left-noop"),
                           std::format(L"Scroll/render failed at h-left-noop for {} pass {}.", modeName, gesturePassCount));
             state.Require(driveStep(WM_HSCROLL, SB_LINERIGHT, L"h-line-right"),
                           std::format(L"Scroll/render failed at h-line-right for {} pass {}.", modeName, gesturePassCount));
             state.Require(driveStep(WM_HSCROLL, SB_PAGERIGHT, L"h-page-right"),
                           std::format(L"Scroll/render failed at h-page-right for {} pass {}.", modeName, gesturePassCount));
-            state.Require(driveStep(WM_HSCROLL, SB_RIGHT, L"h-right"), std::format(L"Scroll/render failed at h-right for {} pass {}.", modeName, gesturePassCount));
+            state.Require(driveStep(WM_HSCROLL, SB_RIGHT, L"h-right"),
+                          std::format(L"Scroll/render failed at h-right for {} pass {}.", modeName, gesturePassCount));
             state.Require(driveStep(WM_HSCROLL, SB_RIGHT, L"h-right-noop"),
                           std::format(L"Scroll/render failed at h-right-noop for {} pass {}.", modeName, gesturePassCount));
             state.Require(driveStep(WM_HSCROLL, SB_PAGELEFT, L"h-page-left"),
@@ -21356,8 +21280,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     };
     const uint64_t totalFrameCount   = frameMetricPresence[0].count;
     const uint64_t presentFrameCount = frameMetricPresence[1].count;
-    const bool samplesEnoughForP95 =
-        totalFrameCount >= kFolderViewPerfMinimumSamplesForP95 && presentFrameCount >= kFolderViewPerfMinimumSamplesForP95;
+    const bool samplesEnoughForP95   = totalFrameCount >= kFolderViewPerfMinimumSamplesForP95 && presentFrameCount >= kFolderViewPerfMinimumSamplesForP95;
     state.Require(samplesEnoughForP95,
                   std::format(L"Scroll/render stress captured too few frame samples for p95 after {} gesture passes; total={} present={} required={}.",
                               gesturePassCount,
@@ -21431,18 +21354,18 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     {
         return false;
     }
-    const auto restoreDummyConfig = wil::scope_exit([&]() noexcept
-    { static_cast<void>(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), previousDummyConfig)); });
+    const auto restoreDummyConfig =
+        wil::scope_exit([&]() noexcept { static_cast<void>(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), previousDummyConfig)); });
 
     constexpr std::string_view kDeterministicEmptyDummyConfig =
         R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0"})json";
     state.Require(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), kDeterministicEmptyDummyConfig),
                   L"Failed to apply deterministic empty dummy configuration for huge FolderView scale perf.");
 
-    const bool optIn50k                    = IsFolderViewHugePerfOptInEnabled();
-    const size_t itemCount                 = optIn50k ? 50000u : 10000u;
-    constexpr size_t kExtensionCount       = 160u;
-    const std::filesystem::path dummyRoot  = std::filesystem::path(L"/folderview-huge-scale") / SanitizeFolderViewDummyPathSegment(NewGuidText());
+    const bool optIn50k                   = IsFolderViewHugePerfOptInEnabled();
+    const size_t itemCount                = optIn50k ? 50000u : 10000u;
+    constexpr size_t kExtensionCount      = 160u;
+    const std::filesystem::path dummyRoot = std::filesystem::path(L"/folderview-huge-scale") / SanitizeFolderViewDummyPathSegment(NewGuidText());
     std::wstring firstName;
     std::wstring middleName;
     std::wstring lastName;
@@ -21485,10 +21408,9 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     ClearPaneIncrementalSearchForSelfTest(FolderWindow::Pane::Left);
     FolderView::IncrementalSearchDebugSnapshot initialSearchSnapshot{};
     state.Require(WaitForFolderViewQuickSearchSnapshot(FolderWindow::Pane::Left,
-                                                       [](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept
-    {
-        return ! value.active;
-    }, SelfTest::Scale(1000ms), &initialSearchSnapshot),
+                                                       [](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept { return ! value.active; },
+                                                       SelfTest::Scale(1000ms),
+                                                       &initialSearchSnapshot),
                   std::format(L"Huge FolderView scale inherited active quick search; query='{}'.", initialSearchSnapshot.query));
     if (! state.failure.empty())
     {
@@ -21501,7 +21423,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     g_folderWindow.SetSort(FolderWindow::Pane::Left, FolderView::SortBy::Name, FolderView::SortDirection::Ascending);
     g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
 
-    const std::uintmax_t frameMetricScanOffset = FolderViewPerfMetricScanOffset();
+    const std::uintmax_t frameMetricScanOffset                  = FolderViewPerfMetricScanOffset();
     const SelfTestProcessMemorySnapshot beforeEnumerationMemory = SampleSelfTestProcessMemory();
     EmitFolderViewMemoryMetrics(L"before-enumeration", beforeEnumerationMemory, static_cast<uint64_t>(itemCount));
 
@@ -21545,8 +21467,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
 
     state.Require(g_folderWindow.DebugWarmPaneRendering(FolderWindow::Pane::Left), L"Huge FolderView scale first visible paint failed.");
     const uint64_t firstVisiblePaintUs = Debug::Perf::ElapsedUs(navigationStart);
-    Debug::Perf::Emit(
-        L"folder.scale.first_visible_paint_us", L"dummy-10k-exact", firstVisiblePaintUs, static_cast<uint64_t>(itemCount), 0u, S_OK);
+    Debug::Perf::Emit(L"folder.scale.first_visible_paint_us", L"dummy-10k-exact", firstVisiblePaintUs, static_cast<uint64_t>(itemCount), 0u, S_OK);
     const SelfTestProcessMemorySnapshot afterFirstPaintMemory = SampleSelfTestProcessMemory();
     EmitFolderViewMemoryMetrics(L"after-first-paint", afterFirstPaintMemory, static_cast<uint64_t>(itemCount));
 
@@ -21602,9 +21523,9 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     FolderView::IncrementalSearchDebugSnapshot searchSnapshot{};
     state.Require(WaitForFolderViewQuickSearchSnapshot(FolderWindow::Pane::Left,
                                                        [](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept
-    {
-        return value.active && value.query.empty();
-    }, SelfTest::Scale(1000ms), &searchSnapshot),
+    { return value.active && value.query.empty(); },
+                                                       SelfTest::Scale(1000ms),
+                                                       &searchSnapshot),
                   std::format(L"Huge FolderView scale quick-search activation did not settle; active={} query='{}', folderView=0x{:X}, "
                               L"focusedFolderView=0x{:X}, win32Focus=0x{:X}, foreground=0x{:X}.",
                               searchSnapshot.active ? L"yes" : L"no",
@@ -21639,9 +21560,9 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         const uint64_t keyToPaintUs = Debug::Perf::ElapsedUs(keyStart);
         state.Require(WaitForFolderViewQuickSearchSnapshot(FolderWindow::Pane::Left,
                                                            [&](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept
-        {
-            return value.active && value.query == currentQuery && ! value.matches.empty();
-        }, SelfTest::Scale(1500ms), &searchSnapshot),
+        { return value.active && value.query == currentQuery && ! value.matches.empty(); },
+                                                           SelfTest::Scale(1500ms),
+                                                           &searchSnapshot),
                       std::format(L"Huge FolderView scale quick-search mismatch; expected='{}' active={} actual='{}' matches={}.",
                                   currentQuery,
                                   searchSnapshot.active ? L"yes" : L"no",
@@ -21698,9 +21619,9 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     state.Require(g_folderWindow.DebugGetPaneColumnLayoutSnapshot(FolderWindow::Pane::Left, afterScrollSnapshot),
                   L"Huge FolderView scale failed to capture after-scroll layout snapshot.");
     const FolderView::RenderingDebugSnapshot renderingSnapshot = g_folderWindow.DebugGetPaneRenderingSnapshot(FolderWindow::Pane::Left);
-    state.Require(renderingSnapshot.drawItemTransientBrushCreateCount == 0u,
-                  std::format(L"Huge FolderView scale selected-scroll created {} transient D2D brush(es).",
-                              renderingSnapshot.drawItemTransientBrushCreateCount));
+    state.Require(
+        renderingSnapshot.drawItemTransientBrushCreateCount == 0u,
+        std::format(L"Huge FolderView scale selected-scroll created {} transient D2D brush(es).", renderingSnapshot.drawItemTransientBrushCreateCount));
     if (! state.failure.empty())
     {
         return false;
@@ -21788,8 +21709,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     std::string previousDummyConfig;
     state.Require(BackupPluginConfigurationForFolderViewPerf(dummy.informations.get(), previousDummyConfig),
                   L"Failed to snapshot dummy configuration for FolderView current-invariant test.");
-    const auto restoreDummyConfig = wil::scope_exit([&]() noexcept
-    { static_cast<void>(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), previousDummyConfig)); });
+    const auto restoreDummyConfig =
+        wil::scope_exit([&]() noexcept { static_cast<void>(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), previousDummyConfig)); });
     constexpr std::string_view kDeterministicEmptyDummyConfig =
         R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0"})json";
     state.Require(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), kDeterministicEmptyDummyConfig),
@@ -21799,8 +21720,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         return false;
     }
 
-    const std::filesystem::path root =
-        std::filesystem::path(L"/folderview-current-invariant") / SanitizeFolderViewDummyPathSegment(NewGuidText());
+    const std::filesystem::path root = std::filesystem::path(L"/folderview-current-invariant") / SanitizeFolderViewDummyPathSegment(NewGuidText());
     state.Require(EnsureFolderViewDummyFolderExists(dummy.fileSystem.get(), root), L"Failed to create dummy current-invariant root.");
     const auto cleanupRoot = wil::scope_exit([&]() noexcept
     {
@@ -21809,9 +21729,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     });
 
     const auto createItem = [&](std::wstring_view name) noexcept
-    {
-        state.Require(WriteTextFileFsIoForFolderViewPerf(dummy.io, root / name, "x"), std::format(L"Failed to create '{}'.", name));
-    };
+    { state.Require(WriteTextFileFsIoForFolderViewPerf(dummy.io, root / name, "x"), std::format(L"Failed to create '{}'.", name)); };
     for (const std::wstring_view name : {L"a.txt", L"b.txt", L"c.txt", L"d.txt", L"e.txt"})
     {
         createItem(name);
@@ -21821,13 +21739,13 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         return false;
     }
 
-    const std::wstring pluginBefore = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring pluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
     const std::optional<std::filesystem::path> pathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const FolderView::DisplayMode displayBefore = g_folderWindow.GetDisplayMode(FolderWindow::Pane::Left);
-    const FolderView::SortBy sortBefore = g_folderWindow.GetSortBy(FolderWindow::Pane::Left);
-    const FolderView::SortDirection directionBefore = g_folderWindow.GetSortDirection(FolderWindow::Pane::Left);
-    const FolderView::NameFilterState filterBefore = g_folderWindow.DebugGetNameFilterState(FolderWindow::Pane::Left);
-    const auto restorePane = wil::scope_exit([&]() noexcept
+    const FolderView::DisplayMode displayBefore           = g_folderWindow.GetDisplayMode(FolderWindow::Pane::Left);
+    const FolderView::SortBy sortBefore                   = g_folderWindow.GetSortBy(FolderWindow::Pane::Left);
+    const FolderView::SortDirection directionBefore       = g_folderWindow.GetSortDirection(FolderWindow::Pane::Left);
+    const FolderView::NameFilterState filterBefore        = g_folderWindow.DebugGetNameFilterState(FolderWindow::Pane::Left);
+    const auto restorePane                                = wil::scope_exit([&]() noexcept
     {
         g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, filterBefore, false);
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, pluginBefore));
@@ -21854,23 +21772,19 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
             enumerationCount.fetch_add(1u, std::memory_order_release);
         }
     });
-    const auto clearEnumerationCallback = wil::scope_exit([&]() noexcept
-    { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
+    const auto clearEnumerationCallback = wil::scope_exit([&]() noexcept { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
 
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePluginPathForFolderViewPerf(FolderWindow::Pane::Left, root, SelfTest::Scale(10000ms)),
                   L"FolderView current-invariant root did not load.");
-    state.Require(WaitForAtomicAtLeast(enumerationCount, 1u, SelfTest::Scale(10000ms)),
-                  L"FolderView current-invariant initial enumeration did not complete.");
+    state.Require(WaitForAtomicAtLeast(enumerationCount, 1u, SelfTest::Scale(10000ms)), L"FolderView current-invariant initial enumeration did not complete.");
     state.Require(WaitForFolderViewItemCount(FolderWindow::Pane::Left, 5u, SelfTest::Scale(10000ms)),
                   L"FolderView current-invariant initial model did not settle.");
 
     const HWND folderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
-    state.Require(folderView && IsWindow(folderView) != FALSE &&
-                      g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"b.txt"),
+    state.Require(folderView && IsWindow(folderView) != FALSE && g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"b.txt"),
                   L"Dummy-provider Cut enablement fixture is unavailable.");
-    const std::optional<POINT> dummyItemPoint =
-        g_folderWindow.DebugGetPaneItemCenterClientPointForSelfTest(FolderWindow::Pane::Left, L"b.txt");
+    const std::optional<POINT> dummyItemPoint = g_folderWindow.DebugGetPaneItemCenterClientPointForSelfTest(FolderWindow::Pane::Left, L"b.txt");
     state.Require(dummyItemPoint.has_value(), L"Dummy-provider Cut enablement item point is unavailable.");
     if (! state.failure.empty())
     {
@@ -21892,8 +21806,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                 if (cut != popupState.itemTexts.end())
                 {
                     const size_t cutIndex = static_cast<size_t>(std::distance(popupState.itemTexts.begin(), cut));
-                    dummyCutDisabled.store(cutIndex < popupState.itemEnabled.size() && ! popupState.itemEnabled[cutIndex],
-                                           std::memory_order_release);
+                    dummyCutDisabled.store(cutIndex < popupState.itemEnabled.size() && ! popupState.itemEnabled[cutIndex], std::memory_order_release);
                 }
                 PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
                 PostMessageW(popup, WM_KEYUP, VK_ESCAPE, 0);
@@ -21904,28 +21817,22 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     });
     POINT dummyItemScreenPoint = dummyItemPoint.value();
     ClientToScreen(folderView, &dummyItemScreenPoint);
-    SendMessageW(folderView,
-                 WM_CONTEXTMENU,
-                 reinterpret_cast<WPARAM>(folderView),
-                 MAKELPARAM(dummyItemScreenPoint.x, dummyItemScreenPoint.y));
+    SendMessageW(folderView, WM_CONTEXTMENU, reinterpret_cast<WPARAM>(folderView), MAKELPARAM(dummyItemScreenPoint.x, dummyItemScreenPoint.y));
     dummyMenuCloser.join();
     state.Require(dummyMenuOpened.load(std::memory_order_acquire), L"Dummy-provider item context menu did not open.");
-    state.Require(dummyCutDisabled.load(std::memory_order_acquire),
-                  L"FolderView Cut must be disabled for providers that cannot publish local CF_HDROP paths.");
+    state.Require(dummyCutDisabled.load(std::memory_order_acquire), L"FolderView Cut must be disabled for providers that cannot publish local CF_HDROP paths.");
 
     const auto requireInvariant = [&](std::wstring_view expectedCurrent, size_t expectedItemCount, std::wstring_view stage) noexcept
     {
-        const FolderView::DebugFocusSelectionStateSnapshot snapshot =
-            g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
-        const bool empty = expectedItemCount == 0u;
+        const FolderView::DebugFocusSelectionStateSnapshot snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
+        const bool empty                                            = expectedItemCount == 0u;
         state.Require(snapshot.itemCount == expectedItemCount,
                       std::format(L"{} item count mismatch: expected {}, got {}.", stage, expectedItemCount, snapshot.itemCount));
         state.Require(empty ? snapshot.currentIndex == static_cast<size_t>(-1) : snapshot.currentIndex < snapshot.itemCount,
                       std::format(L"{} current index violates the empty/nonempty invariant.", stage));
         state.Require(snapshot.focusedFlagCount == (empty ? 0u : 1u),
                       std::format(L"{} focused-flag count mismatch: expected {}, got {}.", stage, empty ? 0u : 1u, snapshot.focusedFlagCount));
-        state.Require((empty && snapshot.anchorIndex == static_cast<size_t>(-1)) ||
-                          (! empty && snapshot.anchorIndex < snapshot.itemCount),
+        state.Require((empty && snapshot.anchorIndex == static_cast<size_t>(-1)) || (! empty && snapshot.anchorIndex < snapshot.itemCount),
                       std::format(L"{} anchor invariant failed.", stage));
         state.Require(snapshot.currentDisplayName == expectedCurrent,
                       std::format(L"{} current mismatch: expected '{}', got '{}'.", stage, expectedCurrent, snapshot.currentDisplayName));
@@ -21934,15 +21841,14 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     const auto deleteItem = [&](std::wstring_view name) noexcept
     {
         const std::wstring pathText = (root / name).generic_wstring();
-        const HRESULT hr = dummy.fileSystem->DeleteItem(pathText.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+        const HRESULT hr            = dummy.fileSystem->DeleteItem(pathText.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
         state.Require(hr == S_OK, std::format(L"Failed to delete '{}'. hr=0x{:08X}", name, static_cast<uint32_t>(hr)));
     };
     const auto refresh = [&](size_t expectedCount, std::wstring_view expectedCurrent, std::wstring_view stage) noexcept
     {
         const uint32_t before = enumerationCount.load(std::memory_order_acquire);
         g_folderWindow.CommandRefresh(FolderWindow::Pane::Left);
-        state.Require(WaitForAtomicAtLeast(enumerationCount, before + 1u, SelfTest::Scale(10000ms)),
-                      std::format(L"{} enumeration did not complete.", stage));
+        state.Require(WaitForAtomicAtLeast(enumerationCount, before + 1u, SelfTest::Scale(10000ms)), std::format(L"{} enumeration did not complete.", stage));
         state.Require(WaitForFolderViewItemCount(FolderWindow::Pane::Left, expectedCount, SelfTest::Scale(10000ms)),
                       std::format(L"{} item model did not settle.", stage));
         if (! expectedCurrent.empty())
@@ -21954,9 +21860,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     };
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"b.txt"), L"Could not focus b.txt.");
-    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left,
-                                                          [](std::wstring_view name) noexcept { return name == L"a.txt" || name == L"e.txt"; },
-                                                          true);
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
+        FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"a.txt" || name == L"e.txt"; }, true);
     const auto beforeSingle = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     deleteItem(L"b.txt");
     const auto afterSingle = refresh(4u, L"c.txt", L"single-row keyed successor");
@@ -21966,9 +21871,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                   L"Single-row disappearance did not report GenericSuccessor.");
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"c.txt"), L"Could not focus c.txt.");
-    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left,
-                                                          [](std::wstring_view name) noexcept { return name == L"e.txt"; },
-                                                          true);
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"e.txt"; }, true);
     const auto beforeMultiple = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     deleteItem(L"a.txt");
     deleteItem(L"c.txt");
@@ -22017,41 +21920,32 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     }
     refresh(4u, L"z.txt", L"filter/hide repair fixture population");
     g_folderWindow.SetSort(FolderWindow::Pane::Left, FolderView::SortBy::Name, FolderView::SortDirection::Ascending);
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"b.log"),
-                  L"Could not focus b.log before filter repair.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"b.log"), L"Could not focus b.log before filter repair.");
     const uint32_t beforeFilter = enumerationCount.load(std::memory_order_acquire);
-    g_folderWindow.SetNameFilterState(
-        FolderWindow::Pane::Left, FolderView::NameFilterState{.enabled = true, .text = L"*.txt"}, true);
-    state.Require(WaitForAtomicAtLeast(enumerationCount, beforeFilter + 1u, SelfTest::Scale(10000ms)),
-                  L"Filter repair enumeration did not complete.");
+    g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, FolderView::NameFilterState{.enabled = true, .text = L"*.txt"}, true);
+    state.Require(WaitForAtomicAtLeast(enumerationCount, beforeFilter + 1u, SelfTest::Scale(10000ms)), L"Filter repair enumeration did not complete.");
     state.Require(WaitForFolderViewItemCount(FolderWindow::Pane::Left, 3u, SelfTest::Scale(10000ms)) &&
                       WaitForFolderViewFocusedItem(FolderWindow::Pane::Left, L"c.txt", SelfTest::Scale(3000ms)),
                   L"Filtering the current item did not choose the next item in resulting UI order.");
     const auto filteredRepair = requireInvariant(L"c.txt", 3u, L"filter-removal successor");
-    state.Require(filteredRepair.resolutionReason == FolderView::CurrentResolutionReason::GenericSuccessor,
-                  L"Filter removal did not report GenericSuccessor.");
+    state.Require(filteredRepair.resolutionReason == FolderView::CurrentResolutionReason::GenericSuccessor, L"Filter removal did not report GenericSuccessor.");
 
-    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left,
-                                                           [](std::wstring_view name) noexcept { return name == L"c.txt"; },
-                                                           true);
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"c.txt"; }, true);
     const uint32_t beforeHide = enumerationCount.load(std::memory_order_acquire);
     g_folderWindow.CommandSelectionHideSelectedNames(FolderWindow::Pane::Left);
-    state.Require(WaitForAtomicAtLeast(enumerationCount, beforeHide + 1u, SelfTest::Scale(10000ms)),
-                  L"Hide Selected repair enumeration did not complete.");
+    state.Require(WaitForAtomicAtLeast(enumerationCount, beforeHide + 1u, SelfTest::Scale(10000ms)), L"Hide Selected repair enumeration did not complete.");
     state.Require(WaitForFolderViewItemCount(FolderWindow::Pane::Left, 2u, SelfTest::Scale(10000ms)) &&
                       WaitForFolderViewFocusedItem(FolderWindow::Pane::Left, L"z.txt", SelfTest::Scale(3000ms)),
                   L"Hiding the selected current item did not choose the next resulting visible item.");
     const auto hiddenRepair = requireInvariant(L"z.txt", 2u, L"hidden-name successor");
-    state.Require(hiddenRepair.resolutionReason == FolderView::CurrentResolutionReason::GenericSuccessor &&
-                      hiddenRepair.selectedCount == 0u,
+    state.Require(hiddenRepair.resolutionReason == FolderView::CurrentResolutionReason::GenericSuccessor && hiddenRepair.selectedCount == 0u,
                   L"Hidden current repair selected its replacement or reported the wrong reason.");
 
     const uint32_t beforeShow = enumerationCount.load(std::memory_order_acquire);
     g_folderWindow.CommandSelectionShowHiddenNames(FolderWindow::Pane::Left);
     state.Require(WaitForAtomicAtLeast(enumerationCount, beforeShow + 1u, SelfTest::Scale(10000ms)),
                   L"Show Hidden Names enumeration did not complete after repair test.");
-    state.Require(! g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"c.txt"),
-                  L"A hidden selected identity resurrected when shown again.");
+    state.Require(! g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"c.txt"), L"A hidden selected identity resurrected when shown again.");
     g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, FolderView::NameFilterState{}, true);
 
     return state.failure.empty();
@@ -22076,9 +21970,9 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         return false;
     }
 
-    const std::wstring pluginBefore = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring pluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
     const std::optional<std::filesystem::path> pathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const auto restorePane = wil::scope_exit([&]() noexcept
+    const auto restorePane                                = wil::scope_exit([&]() noexcept
     {
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, pluginBefore));
         if (pathBefore.has_value())
@@ -22087,8 +21981,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         }
     });
 
-    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left,
-                                                                      kBuiltinDummyFileSystemIdForFolderViewPerf.data())),
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, kBuiltinDummyFileSystemIdForFolderViewPerf.data())),
                   L"Failed to switch to dummy file system for FolderView focus-memory LRU test.");
     g_folderWindow.DebugClearPaneFocusMemoryForSelfTest(FolderWindow::Pane::Left);
 
@@ -22096,61 +21989,44 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     for (size_t index = 0u; index < 512u; ++index)
     {
         state.Require(g_folderWindow.DebugRememberPaneFocusMemoryEntryForSelfTest(
-                          FolderWindow::Pane::Left,
-                          memoryRoot / std::format(L"location_{:03}", index),
-                          std::format(L"item_{:03}.txt", index)),
+                          FolderWindow::Pane::Left, memoryRoot / std::format(L"location_{:03}", index), std::format(L"item_{:03}.txt", index)),
                       std::format(L"Failed to cache focus-memory entry {}.", index));
     }
-    FolderView::DebugFocusSelectionStateSnapshot snapshot =
-        g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
+    FolderView::DebugFocusSelectionStateSnapshot snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     state.Require(snapshot.focusMemoryEntryCount == 512u, L"Focus-memory entry cap fixture did not reach exactly 512 entries.");
     state.Require(snapshot.focusMemoryPayloadBytes <= 512u * 1024u, L"Focus-memory payload exceeded 512 KiB before eviction.");
     state.Require(snapshot.focusMemoryEvictionCount == 0u, L"Focus-memory evicted an entry before reaching either cap.");
 
-    const std::wstring touched = g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left,
-                                                                                            memoryRoot / L"location_000");
+    const std::wstring touched = g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, memoryRoot / L"location_000");
     state.Require(OrdinalString::EqualsNoCase(touched, L"item_000.txt"), L"Focus-memory touch lookup did not return entry zero.");
-    state.Require(g_folderWindow.DebugRememberPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left,
-                                                                               memoryRoot / L"location_512",
-                                                                               L"item_512.txt"),
+    state.Require(g_folderWindow.DebugRememberPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, memoryRoot / L"location_512", L"item_512.txt"),
                   L"Failed to insert the entry-cap eviction probe.");
 
     snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     state.Require(snapshot.focusMemoryEntryCount == 512u, L"Focus-memory did not enforce the 512-entry cap.");
     state.Require(snapshot.focusMemoryPayloadBytes <= 512u * 1024u, L"Focus-memory payload exceeded 512 KiB after entry-cap eviction.");
     state.Require(snapshot.focusMemoryEvictionCount == 1u, L"Focus-memory did not evict exactly one least-recently-used entry.");
-    state.Require(g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left,
-                                                                            memoryRoot / L"location_001").empty(),
+    state.Require(g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, memoryRoot / L"location_001").empty(),
                   L"Focus-memory did not evict the deterministic least-recently-used entry.");
-    state.Require(OrdinalString::EqualsNoCase(
-                      g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left,
-                                                                                memoryRoot / L"location_000"),
-                      L"item_000.txt"),
+    state.Require(OrdinalString::EqualsNoCase(g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, memoryRoot / L"location_000"),
+                                              L"item_000.txt"),
                   L"Focus-memory evicted the recently touched entry.");
 
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to switch providers during focus-memory isolation test.");
-    state.Require(g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left,
-                                                                            memoryRoot / L"location_000").empty(),
+    state.Require(g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, memoryRoot / L"location_000").empty(),
                   L"Focus-memory collided across provider identity.");
-    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left,
-                                                                      kBuiltinDummyFileSystemIdForFolderViewPerf.data())),
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, kBuiltinDummyFileSystemIdForFolderViewPerf.data())),
                   L"Failed to restore dummy provider during focus-memory isolation test.");
-    state.Require(OrdinalString::EqualsNoCase(
-                      g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left,
-                                                                                memoryRoot / L"location_000"),
-                      L"item_000.txt"),
+    state.Require(OrdinalString::EqualsNoCase(g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, memoryRoot / L"location_000"),
+                                              L"item_000.txt"),
                   L"Focus-memory did not survive a provider round-trip.");
 
     g_folderWindow.DebugClearPaneFocusMemoryForSelfTest(FolderWindow::Pane::Left);
-    state.Require(g_folderWindow.DebugRememberPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left,
-                                                                               memoryRoot / L"useful",
-                                                                               L"useful.txt"),
+    state.Require(g_folderWindow.DebugRememberPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, memoryRoot / L"useful", L"useful.txt"),
                   L"Failed to insert useful focus-memory entry before oversized probe.");
     const std::wstring oversizedItem(300000u, L'x');
-    state.Require(! g_folderWindow.DebugRememberPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left,
-                                                                                 memoryRoot / L"oversized",
-                                                                                 oversizedItem),
+    state.Require(! g_folderWindow.DebugRememberPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, memoryRoot / L"oversized", oversizedItem),
                   L"Focus-memory accepted an individually oversized entry.");
     snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     state.Require(snapshot.focusMemoryEntryCount == 1u && snapshot.focusMemoryEvictionCount == 0u,
@@ -22162,48 +22038,40 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     g_folderWindow.DebugClearPaneFocusMemoryForSelfTest(FolderWindow::Pane::Left);
     const std::wstring payloadItemOne(140000u, L'a');
     const std::wstring payloadItemTwo(140000u, L'b');
-    state.Require(g_folderWindow.DebugRememberPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left,
-                                                                               memoryRoot / L"payload-one",
-                                                                               payloadItemOne),
+    state.Require(g_folderWindow.DebugRememberPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, memoryRoot / L"payload-one", payloadItemOne),
                   L"Failed to insert the first payload-cap entry.");
-    state.Require(g_folderWindow.DebugRememberPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left,
-                                                                               memoryRoot / L"payload-two",
-                                                                               payloadItemTwo),
+    state.Require(g_folderWindow.DebugRememberPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, memoryRoot / L"payload-two", payloadItemTwo),
                   L"Failed to insert the second payload-cap entry.");
     snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     state.Require(snapshot.focusMemoryEntryCount == 1u && snapshot.focusMemoryEvictionCount == 1u,
                   L"Focus-memory did not deterministically evict for the 512-KiB payload cap.");
-    state.Require(snapshot.focusMemoryPayloadBytes <= 512u * 1024u,
-                  L"Focus-memory exceeded the 512-KiB payload cap after eviction.");
-    state.Require(g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left,
-                                                                            memoryRoot / L"payload-one").empty(),
+    state.Require(snapshot.focusMemoryPayloadBytes <= 512u * 1024u, L"Focus-memory exceeded the 512-KiB payload cap after eviction.");
+    state.Require(g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, memoryRoot / L"payload-one").empty(),
                   L"Focus-memory retained the least-recently-used payload entry.");
-    state.Require(g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left,
-                                                                             memoryRoot / L"payload-two").size() == payloadItemTwo.size(),
+    state.Require(g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, memoryRoot / L"payload-two").size() ==
+                      payloadItemTwo.size(),
                   L"Focus-memory did not retain the newest payload entry.");
 
-    const std::wstring dummyPluginId = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::wstring dummyContext = std::wstring(g_folderWindow.GetFileSystemInstanceContext(FolderWindow::Pane::Left));
+    const std::wstring dummyPluginId             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring dummyContext              = std::wstring(g_folderWindow.GetFileSystemInstanceContext(FolderWindow::Pane::Left));
     const std::filesystem::path sameTextLocation = memoryRoot / L"same-text-location";
     g_folderWindow.DebugClearPaneFocusMemoryForSelfTest(FolderWindow::Pane::Left);
     g_folderWindow.DebugSetPaneFileSystemContextForSelfTest(FolderWindow::Pane::Left, dummyPluginId, L"mount-A");
-    state.Require(g_folderWindow.DebugRememberPaneFocusMemoryEntryForSelfTest(
-                      FolderWindow::Pane::Left, sameTextLocation, L"mount-a.txt"),
+    state.Require(g_folderWindow.DebugRememberPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, sameTextLocation, L"mount-a.txt"),
                   L"Failed to record mount-A focus memory.");
     g_folderWindow.DebugSetPaneFileSystemContextForSelfTest(FolderWindow::Pane::Left, dummyPluginId, L"mount-B");
     state.Require(g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, sameTextLocation).empty(),
                   L"Focus memory collided across provider instance/mount context.");
-    state.Require(g_folderWindow.DebugRememberPaneFocusMemoryEntryForSelfTest(
-                      FolderWindow::Pane::Left, sameTextLocation, L"mount-b.txt"),
+    state.Require(g_folderWindow.DebugRememberPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, sameTextLocation, L"mount-b.txt"),
                   L"Failed to record mount-B focus memory.");
     g_folderWindow.DebugSetPaneFileSystemContextForSelfTest(FolderWindow::Pane::Left, dummyPluginId, L"mount-A");
-    state.Require(OrdinalString::EqualsNoCase(
-                      g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, sameTextLocation), L"mount-a.txt"),
-                  L"Focus memory did not restore the independent mount-A entry.");
+    state.Require(
+        OrdinalString::EqualsNoCase(g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, sameTextLocation), L"mount-a.txt"),
+        L"Focus memory did not restore the independent mount-A entry.");
     g_folderWindow.DebugSetPaneFileSystemContextForSelfTest(FolderWindow::Pane::Left, dummyPluginId, L"mount-B");
-    state.Require(OrdinalString::EqualsNoCase(
-                      g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, sameTextLocation), L"mount-b.txt"),
-                  L"Focus memory did not restore the independent mount-B entry.");
+    state.Require(
+        OrdinalString::EqualsNoCase(g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, sameTextLocation), L"mount-b.txt"),
+        L"Focus memory did not restore the independent mount-B entry.");
     g_folderWindow.DebugSetPaneFileSystemContextForSelfTest(FolderWindow::Pane::Left, dummyPluginId, dummyContext);
 
     return state.failure.empty();
@@ -22233,15 +22101,14 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     std::string previousDummyConfig;
     state.Require(BackupPluginConfigurationForFolderViewPerf(dummy.informations.get(), previousDummyConfig),
                   L"Failed to snapshot dummy configuration for FolderView focus-memory navigation test.");
-    const auto restoreDummyConfig = wil::scope_exit([&]() noexcept
-    { static_cast<void>(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), previousDummyConfig)); });
+    const auto restoreDummyConfig =
+        wil::scope_exit([&]() noexcept { static_cast<void>(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), previousDummyConfig)); });
     constexpr std::string_view kDeterministicEmptyDummyConfig =
         R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0"})json";
     state.Require(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), kDeterministicEmptyDummyConfig),
                   L"Failed to apply deterministic dummy configuration for FolderView focus-memory navigation test.");
 
-    const std::filesystem::path root =
-        std::filesystem::path(L"/folderview-focus-memory-navigation") / SanitizeFolderViewDummyPathSegment(NewGuidText());
+    const std::filesystem::path root    = std::filesystem::path(L"/folderview-focus-memory-navigation") / SanitizeFolderViewDummyPathSegment(NewGuidText());
     const std::filesystem::path folderA = root / L"a";
     const std::filesystem::path folderB = root / L"b";
     state.Require(EnsureFolderViewDummyFolderExists(dummy.fileSystem.get(), folderA), L"Failed to create focus-memory folder A.");
@@ -22259,11 +22126,11 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         static_cast<void>(dummy.fileSystem->DeleteItem(rootText.c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr));
     });
 
-    const std::wstring pluginBefore = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring pluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
     const std::optional<std::filesystem::path> pathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const FolderView::SortBy sortBefore = g_folderWindow.GetSortBy(FolderWindow::Pane::Left);
-    const FolderView::SortDirection directionBefore = g_folderWindow.GetSortDirection(FolderWindow::Pane::Left);
-    const auto restorePane = wil::scope_exit([&]() noexcept
+    const FolderView::SortBy sortBefore                   = g_folderWindow.GetSortBy(FolderWindow::Pane::Left);
+    const FolderView::SortDirection directionBefore       = g_folderWindow.GetSortDirection(FolderWindow::Pane::Left);
+    const auto restorePane                                = wil::scope_exit([&]() noexcept
     {
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, pluginBefore));
         g_folderWindow.SetSort(FolderWindow::Pane::Left, sortBefore, directionBefore);
@@ -22273,55 +22140,43 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         }
     });
 
-    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left,
-                                                                      kBuiltinDummyFileSystemIdForFolderViewPerf.data())),
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, kBuiltinDummyFileSystemIdForFolderViewPerf.data())),
                   L"Failed to switch to dummy provider for focus-memory navigation test.");
     g_folderWindow.SetSort(FolderWindow::Pane::Left, FolderView::SortBy::Name, FolderView::SortDirection::Ascending);
     g_folderWindow.DebugClearPaneFocusMemoryForSelfTest(FolderWindow::Pane::Left);
 
     std::atomic<uint32_t> enumerationCount{0u};
-    g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
-                                                       [&](const std::filesystem::path&) noexcept
-    { enumerationCount.fetch_add(1u, std::memory_order_release); });
-    const auto clearEnumerationCallback = wil::scope_exit([&]() noexcept
-    { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
-    const auto navigate = [&](const std::filesystem::path& folder, size_t itemCount, std::wstring_view stage) noexcept
+    g_folderWindow.SetPaneEnumerationCompletedCallback(
+        FolderWindow::Pane::Left, [&](const std::filesystem::path&) noexcept { enumerationCount.fetch_add(1u, std::memory_order_release); });
+    const auto clearEnumerationCallback = wil::scope_exit([&]() noexcept { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
+    const auto navigate                 = [&](const std::filesystem::path& folder, size_t itemCount, std::wstring_view stage) noexcept
     {
         const uint32_t before = enumerationCount.load(std::memory_order_acquire);
         g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, folder);
         state.Require(WaitForPanePluginPathForFolderViewPerf(FolderWindow::Pane::Left, folder, SelfTest::Scale(10000ms)),
                       std::format(L"{} path did not settle.", stage));
-        state.Require(WaitForAtomicAtLeast(enumerationCount, before + 1u, SelfTest::Scale(10000ms)),
-                      std::format(L"{} enumeration did not complete.", stage));
+        state.Require(WaitForAtomicAtLeast(enumerationCount, before + 1u, SelfTest::Scale(10000ms)), std::format(L"{} enumeration did not complete.", stage));
         state.Require(WaitForFolderViewItemCount(FolderWindow::Pane::Left, itemCount, SelfTest::Scale(10000ms)),
                       std::format(L"{} model did not settle.", stage));
     };
 
     navigate(folderA, 2u, L"initial folder A");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"two.txt"),
-                  L"Failed to focus folder A item two.");
-    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left,
-                                                          [](std::wstring_view name) noexcept { return name == L"one.txt"; },
-                                                          true);
-    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 1u,
-                  L"Failed to establish the selection-clearing navigation fixture.");
-    FolderView::SelectionStats cachedSelection =
-        g_folderWindow.DebugGetCachedPaneSelectionStatsForSelfTest(FolderWindow::Pane::Left);
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"two.txt"), L"Failed to focus folder A item two.");
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"one.txt"; }, true);
+    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 1u, L"Failed to establish the selection-clearing navigation fixture.");
+    FolderView::SelectionStats cachedSelection = g_folderWindow.DebugGetCachedPaneSelectionStatsForSelfTest(FolderWindow::Pane::Left);
     state.Require(cachedSelection.selectedFiles == 1u && cachedSelection.selectedFolders == 0u,
                   L"FolderWindow did not receive the selected-file fixture before navigation.");
 
     navigate(folderB, 1u, L"folder B");
-    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 0u,
-                  L"Navigation to folder B retained selection from folder A.");
+    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 0u, L"Navigation to folder B retained selection from folder A.");
     cachedSelection = g_folderWindow.DebugGetCachedPaneSelectionStatsForSelfTest(FolderWindow::Pane::Left);
-    state.Require(cachedSelection.selectedFiles == 0u && cachedSelection.selectedFolders == 0u &&
-                      ! cachedSelection.singleItem.has_value(),
+    state.Require(cachedSelection.selectedFiles == 0u && cachedSelection.selectedFolders == 0u && ! cachedSelection.singleItem.has_value(),
                   L"Successful navigation did not notify FolderWindow that the prior selection was cleared.");
     navigate(folderA, 2u, L"folder A return");
     state.Require(WaitForFolderViewFocusedItem(FolderWindow::Pane::Left, L"two.txt", SelfTest::Scale(3000ms)),
                   L"Folder A current item was not restored after the navigation round-trip.");
-    FolderView::DebugFocusSelectionStateSnapshot snapshot =
-        g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
+    FolderView::DebugFocusSelectionStateSnapshot snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     state.Require(snapshot.resolutionReason == FolderView::CurrentResolutionReason::NavigationMemoryRestore,
                   L"Folder A return did not report NavigationMemoryRestore.");
     state.Require(snapshot.selectedCount == 0u, L"Focus-memory restoration also restored selection.");
@@ -22330,8 +22185,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_LEFT_GO_TO_BACK, 0), 0);
     state.Require(WaitForPanePluginPathForFolderViewPerf(FolderWindow::Pane::Left, folderB, SelfTest::Scale(10000ms)),
                   L"History Back did not return to folder B.");
-    state.Require(WaitForAtomicAtLeast(enumerationCount, beforeHistoryBack + 1u, SelfTest::Scale(10000ms)),
-                  L"History Back enumeration did not complete.");
+    state.Require(WaitForAtomicAtLeast(enumerationCount, beforeHistoryBack + 1u, SelfTest::Scale(10000ms)), L"History Back enumeration did not complete.");
     state.Require(WaitForFolderViewFocusedItem(FolderWindow::Pane::Left, L"other.txt", SelfTest::Scale(3000ms)) &&
                       g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 0u,
                   L"History Back did not restore folder B current-only state.");
@@ -22348,11 +22202,9 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
 
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to switch away from dummy provider during navigation round-trip.");
-    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left,
-                                                                      kBuiltinDummyFileSystemIdForFolderViewPerf.data())),
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, kBuiltinDummyFileSystemIdForFolderViewPerf.data())),
                   L"Failed to switch back to dummy provider during navigation round-trip.");
-    const std::wstring rememberedAfterProviderSwitch =
-        g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, folderA);
+    const std::wstring rememberedAfterProviderSwitch = g_folderWindow.DebugLookupPaneFocusMemoryEntryForSelfTest(FolderWindow::Pane::Left, folderA);
     state.Require(OrdinalString::EqualsNoCase(rememberedAfterProviderSwitch, L"two.txt"),
                   std::format(L"Folder A focus-memory entry was unavailable after provider round-trip; remembered='{}', context='{}'.",
                               rememberedAfterProviderSwitch,
@@ -22371,15 +22223,13 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
 {
     using namespace std::chrono_literals;
 
-    if (! mainWindow || IsWindow(mainWindow) == FALSE ||
-        ! PrepareMainWindowForIsolatedUiCase(mainWindow, state, L"FolderView selection input contract"))
+    if (! mainWindow || IsWindow(mainWindow) == FALSE || ! PrepareMainWindowForIsolatedUiCase(mainWindow, state, L"FolderView selection input contract"))
     {
         state.Require(false, L"Main window is unavailable for FolderView selection input contract.");
         return false;
     }
 
-    const std::filesystem::path root = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands) / L"work" /
-        (L"folderview_selection_input_" + NewGuidText());
+    const std::filesystem::path root = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands) / L"work" / (L"folderview_selection_input_" + NewGuidText());
     std::error_code cleanupError;
     std::filesystem::remove_all(root, cleanupError);
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create FolderView selection-input fixture root.");
@@ -22397,11 +22247,11 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         std::filesystem::remove_all(root, error);
     });
 
-    const std::wstring pluginBefore = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring pluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
     const std::optional<std::filesystem::path> pathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const FolderView::SortBy sortBefore = g_folderWindow.GetSortBy(FolderWindow::Pane::Left);
-    const FolderView::SortDirection directionBefore = g_folderWindow.GetSortDirection(FolderWindow::Pane::Left);
-    const auto restorePane = wil::scope_exit([&]() noexcept
+    const FolderView::SortBy sortBefore                   = g_folderWindow.GetSortBy(FolderWindow::Pane::Left);
+    const FolderView::SortDirection directionBefore       = g_folderWindow.GetSortDirection(FolderWindow::Pane::Left);
+    const auto restorePane                                = wil::scope_exit([&]() noexcept
     {
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, pluginBefore));
         g_folderWindow.SetSort(FolderWindow::Pane::Left, sortBefore, directionBefore);
@@ -22424,8 +22274,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
             enumerationCount.fetch_add(1u, std::memory_order_release);
         }
     });
-    const auto clearEnumerationCallback = wil::scope_exit([&]() noexcept
-    { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
+    const auto clearEnumerationCallback = wil::scope_exit([&]() noexcept { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(5000ms)), L"Selection-input path did not settle.");
     state.Require(WaitForAtomicAtLeast(enumerationCount, 1u, SelfTest::Scale(5000ms)), L"Selection-input enumeration did not complete.");
@@ -22448,8 +22297,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     {
         const POINT point = pointFor(name);
         SendMessageW(folderView, WM_LBUTTONDOWN, MK_LBUTTON | modifiers, MAKELPARAM(point.x, point.y));
-        const FolderView::DebugFocusSelectionStateSnapshot down =
-            g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
+        const FolderView::DebugFocusSelectionStateSnapshot down = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
         state.Require(OrdinalString::EqualsNoCase(down.currentDisplayName, name),
                       std::format(L"Left-button-down on '{}' did not establish current immediately.", name));
         if (release)
@@ -22460,16 +22308,13 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     };
     const auto selectNames = [&](std::initializer_list<std::wstring_view> names) noexcept
     {
-        g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left,
-                                                              [names](std::wstring_view candidate) noexcept
-        {
+        g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [names](std::wstring_view candidate) noexcept {
             return std::ranges::any_of(names, [&](std::wstring_view name) noexcept { return candidate == name; });
-        },
-                                                              true);
+        }, true);
     };
     struct ItemContextMenuObservation final
     {
-        bool opened = false;
+        bool opened       = false;
         bool shapeCorrect = false;
     };
     const auto openAndDismissPointerMenu = [&](std::wstring_view name) noexcept
@@ -22485,28 +22330,27 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
             while (! stopToken.stop_requested() && std::chrono::steady_clock::now() < deadline)
             {
                 GUITHREADINFO info{};
-                info.cbSize = sizeof(info);
+                info.cbSize       = sizeof(info);
                 const bool inMenu = GetGUIThreadInfo(uiThreadId, &info) != FALSE && (info.flags & GUI_INMENUMODE) != 0;
-                const HWND popup = FindVisibleOwnedDxUiContextMenuWindow(folderView);
+                const HWND popup  = FindVisibleOwnedDxUiContextMenuWindow(folderView);
                 if (inMenu || popup)
                 {
                     opened.store(true, std::memory_order_release);
                     RedSalamander::DxUi::ContextMenuPopupDebugState popupState{};
                     if (popup && RedSalamander::DxUi::DebugGetContextMenuPopupState(popup, popupState))
                     {
-                        const auto cut = std::ranges::find(popupState.itemTexts, L"Cut");
-                        const auto properties = std::ranges::find(popupState.itemTexts, L"Properties");
-                        const size_t cutIndex = static_cast<size_t>(std::distance(popupState.itemTexts.begin(), cut));
-                        const size_t propertiesIndex =
-                            static_cast<size_t>(std::distance(popupState.itemTexts.begin(), properties));
-                        const bool propertiesIsFinalNormalAction = properties != popupState.itemTexts.end() &&
+                        const auto cut               = std::ranges::find(popupState.itemTexts, L"Cut");
+                        const auto properties        = std::ranges::find(popupState.itemTexts, L"Properties");
+                        const size_t cutIndex        = static_cast<size_t>(std::distance(popupState.itemTexts.begin(), cut));
+                        const size_t propertiesIndex = static_cast<size_t>(std::distance(popupState.itemTexts.begin(), properties));
+                        const bool propertiesIsFinalNormalAction =
+                            properties != popupState.itemTexts.end() &&
                             (propertiesIndex + 1u == popupState.itemTexts.size() ||
-                             (propertiesIndex + 2u < popupState.itemTexts.size() &&
-                              propertiesIndex + 1u < popupState.itemKinds.size() &&
+                             (propertiesIndex + 2u < popupState.itemTexts.size() && propertiesIndex + 1u < popupState.itemKinds.size() &&
                               popupState.itemKinds[propertiesIndex + 1u] == RedSalamander::DxUi::MenuItemKind::Separator &&
                               popupState.itemTexts[propertiesIndex + 2u].find(L"[dbg]") != std::wstring::npos));
-                        shapeCorrect.store(cut != popupState.itemTexts.end() && cutIndex < popupState.itemEnabled.size() &&
-                                               popupState.itemEnabled[cutIndex] && propertiesIsFinalNormalAction,
+                        shapeCorrect.store(cut != popupState.itemTexts.end() && cutIndex < popupState.itemEnabled.size() && popupState.itemEnabled[cutIndex] &&
+                                               propertiesIsFinalNormalAction,
                                            std::memory_order_release);
                     }
                     const HWND target = popup ? popup : (info.hwndMenuOwner ? info.hwndMenuOwner : folderView);
@@ -22519,7 +22363,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         });
         SendMessageW(folderView, WM_CONTEXTMENU, reinterpret_cast<WPARAM>(folderView), MAKELPARAM(screenPoint.x, screenPoint.y));
         return ItemContextMenuObservation{
-            .opened = opened.load(std::memory_order_acquire),
+            .opened       = opened.load(std::memory_order_acquire),
             .shapeCorrect = shapeCorrect.load(std::memory_order_acquire),
         };
     };
@@ -22542,18 +22386,16 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                       g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"b.txt"),
                   L"Ctrl+Click did not add only the clicked item.");
     const FolderView::DebugFocusSelectionStateSnapshot ctrlOff = press(L"b.txt", MK_CONTROL, false);
-    state.Require(ctrlOff.selectedCount == 2u && ctrlOff.potentialDragSourceCount == 0u,
-                  L"Ctrl+Click deselection armed a drag from the leftover selection.");
+    state.Require(ctrlOff.selectedCount == 2u && ctrlOff.potentialDragSourceCount == 0u, L"Ctrl+Click deselection armed a drag from the leftover selection.");
     SendMessageW(folderView, WM_LBUTTONUP, MK_CONTROL, MAKELPARAM(pointFor(L"b.txt").x, pointFor(L"b.txt").y));
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"b.txt"), L"Failed to establish no-anchor Shift fixture current.");
     g_folderWindow.DebugClearPaneSelectionAnchorForSelfTest(FolderWindow::Pane::Left);
     press(L"d.txt", MK_SHIFT);
-    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 3u &&
-                      g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"b.txt") &&
-                      g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"c.txt") &&
-                      g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"d.txt"),
-                  L"No-anchor Shift+Click did not include pre-press current through clicked endpoint.");
+    state.Require(
+        g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 3u && g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"b.txt") &&
+            g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"c.txt") && g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"d.txt"),
+        L"No-anchor Shift+Click did not include pre-press current through clicked endpoint.");
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"b.txt"), L"Failed to establish additive range current.");
     selectNames({L"a.txt"});
@@ -22562,23 +22404,19 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 4u,
                   L"No-anchor Ctrl+Shift+Click did not add the inclusive pre-press-current range.");
 
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"a.txt"),
-                  L"Failed to establish pointer right-click fixture current.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"a.txt"), L"Failed to establish pointer right-click fixture current.");
     selectNames({L"a.txt", L"c.txt"});
     const ItemContextMenuObservation unselectedItemMenu = openAndDismissPointerMenu(L"b.txt");
     state.Require(unselectedItemMenu.opened, L"Pointer menu on an unselected item did not open.");
-    state.Require(unselectedItemMenu.shapeCorrect,
-                  L"Local item context menu should enable Cut and keep Properties as the final normal action.");
-    FolderView::DebugFocusSelectionStateSnapshot snapshot =
-        g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
+    state.Require(unselectedItemMenu.shapeCorrect, L"Local item context menu should enable Cut and keep Properties as the final normal action.");
+    FolderView::DebugFocusSelectionStateSnapshot snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     state.Require(snapshot.currentDisplayName == L"b.txt" && snapshot.selectedCount == 1u &&
                       g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"b.txt"),
                   L"Right-click on an unselected item did not establish it as the sole item target.");
     selectNames({L"a.txt", L"c.txt"});
     const ItemContextMenuObservation selectedItemMenu = openAndDismissPointerMenu(L"c.txt");
     state.Require(selectedItemMenu.opened, L"Pointer menu on a selected item did not open.");
-    state.Require(selectedItemMenu.shapeCorrect,
-                  L"Selected-set item context menu should enable Cut and keep Properties as the final normal action.");
+    state.Require(selectedItemMenu.shapeCorrect, L"Selected-set item context menu should enable Cut and keep Properties as the final normal action.");
     snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     state.Require(snapshot.currentDisplayName == L"c.txt" && snapshot.selectedCount == 2u &&
                       g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"a.txt") &&
@@ -22588,12 +22426,10 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"b.txt"),
                   L"Failed to establish ordinary keyboard-move fixture current.");
     selectNames({L"a.txt", L"d.txt"});
-    const uint64_t keyboardMoveSelectionDigest =
-        g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left).selectionDigest;
+    const uint64_t keyboardMoveSelectionDigest = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left).selectionDigest;
     g_folderWindow.DebugSendPaneKeyForSelfTest(FolderWindow::Pane::Left, VK_DOWN, false, false);
     snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
-    state.Require(snapshot.currentDisplayName == L"c.txt" && snapshot.selectedCount == 2u &&
-                      snapshot.selectionDigest == keyboardMoveSelectionDigest,
+    state.Require(snapshot.currentDisplayName == L"c.txt" && snapshot.selectedCount == 2u && snapshot.selectionDigest == keyboardMoveSelectionDigest,
                   L"Ordinary keyboard navigation changed selection while moving current.");
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"b.txt"),
@@ -22616,11 +22452,9 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     state.Require(snapshot.currentDisplayName == L"d.txt" && snapshot.selectedCount == 4u,
                   L"No-anchor Ctrl+Shift+End did not add the inclusive pre-move-current range.");
 
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"c.txt"),
-                  L"Failed to establish Home/End fixture current.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"c.txt"), L"Failed to establish Home/End fixture current.");
     selectNames({L"a.txt", L"d.txt"});
-    const uint64_t homeEndSelectionDigest =
-        g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left).selectionDigest;
+    const uint64_t homeEndSelectionDigest = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left).selectionDigest;
     g_folderWindow.DebugSendPaneKeyForSelfTest(FolderWindow::Pane::Left, VK_HOME, false, false);
     g_folderWindow.DebugSendPaneKeyForSelfTest(FolderWindow::Pane::Left, VK_END, false, false);
     snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
@@ -22628,16 +22462,12 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                   L"Home/End navigation did not preserve selection while moving current.");
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_SELECTION_SELECT_ALL, 0), 0);
-    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 4u,
-                  L"Ctrl+A command routing did not select the complete displayed set.");
+    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 4u, L"Ctrl+A command routing did not select the complete displayed set.");
     g_folderWindow.CommandSelectionInvert(FolderWindow::Pane::Left);
-    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 0u,
-                  L"Invert Selection did not mutate the concrete displayed set.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"a.txt"),
-                  L"Failed to establish extension-mask fixture current.");
+    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 0u, L"Invert Selection did not mutate the concrete displayed set.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"a.txt"), L"Failed to establish extension-mask fixture current.");
     g_folderWindow.CommandSelectionSelectSameExtension(FolderWindow::Pane::Left);
-    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 4u,
-                  L"Select Same Extension did not add every displayed .txt identity.");
+    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 4u, L"Select Same Extension did not add every displayed .txt identity.");
     g_folderWindow.CommandSelectionUnselectSameExtension(FolderWindow::Pane::Left);
     state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 0u,
                   L"Unselect Same Extension did not remove every displayed .txt identity.");
@@ -22645,12 +22475,11 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"b.txt"),
                   L"Failed to establish selected-name navigation fixture current.");
     selectNames({L"a.txt", L"c.txt"});
-    const FolderView::DebugFocusSelectionStateSnapshot selectedNameBefore =
-        g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
+    const FolderView::DebugFocusSelectionStateSnapshot selectedNameBefore = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     g_folderWindow.CommandSelectionGoToNextSelectedName(FolderWindow::Pane::Left);
     snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
-    state.Require(snapshot.currentDisplayName == L"c.txt" && snapshot.selectedCount == 2u &&
-                      snapshot.anchorIndex == snapshot.currentIndex && snapshot.focusOwnershipEpoch > selectedNameBefore.focusOwnershipEpoch,
+    state.Require(snapshot.currentDisplayName == L"c.txt" && snapshot.selectedCount == 2u && snapshot.anchorIndex == snapshot.currentIndex &&
+                      snapshot.focusOwnershipEpoch > selectedNameBefore.focusOwnershipEpoch,
                   L"Alt+Down selected-name navigation did not preserve selection and establish destination current/anchor ownership.");
     g_folderWindow.CommandSelectionGoToNextSelectedName(FolderWindow::Pane::Left);
     state.Require(g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == L"a.txt",
@@ -22661,35 +22490,31 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                   L"Alt+Up selected-name navigation did not wrap while preserving selection.");
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"a.txt"), L"Failed to establish Space fixture current.");
-    const FolderWindow::DebugSelectionSizeSnapshot unselectedSpaceSizeBefore =
-        g_folderWindow.DebugGetSelectionSizeSnapshot(FolderWindow::Pane::Left);
+    const FolderWindow::DebugSelectionSizeSnapshot unselectedSpaceSizeBefore = g_folderWindow.DebugGetSelectionSizeSnapshot(FolderWindow::Pane::Left);
     SendMessageW(folderView, WM_KEYDOWN, VK_SPACE, 0);
     SendMessageW(folderView, WM_KEYUP, VK_SPACE, 0);
-    snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
+    snapshot                                               = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     FolderWindow::DebugSelectionSizeSnapshot selectionSize = g_folderWindow.DebugGetSelectionSizeSnapshot(FolderWindow::Pane::Left);
     state.Require(snapshot.currentDisplayName == L"b.txt" && snapshot.selectedCount == 1u &&
-                       g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"a.txt") &&
-                       ! g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"b.txt") && snapshot.anchorIndex == snapshot.currentIndex &&
-                       snapshot.selectedFileCount == 1u && snapshot.selectedFileBytes == 1u,
-                   L"Space did not select the operated unselected current, request its post-toggle set, then advance without selecting destination.");
-    state.Require(selectionSize.requestCount == unselectedSpaceSizeBefore.requestCount + 1u &&
-                      selectionSize.lastRequestedSelectedPaths.size() == 1u &&
+                      g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"a.txt") &&
+                      ! g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"b.txt") && snapshot.anchorIndex == snapshot.currentIndex &&
+                      snapshot.selectedFileCount == 1u && snapshot.selectedFileBytes == 1u,
+                  L"Space did not select the operated unselected current, request its post-toggle set, then advance without selecting destination.");
+    state.Require(selectionSize.requestCount == unselectedSpaceSizeBefore.requestCount + 1u && selectionSize.lastRequestedSelectedPaths.size() == 1u &&
                       selectionSize.lastRequestedSelectedPaths.front().filename() == L"a.txt",
                   L"Space did not submit the complete post-toggle selection-size snapshot for the operated unselected current item.");
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"b.txt"), L"Failed to establish selected-current Space fixture.");
     selectNames({L"b.txt"});
-    const FolderWindow::DebugSelectionSizeSnapshot selectedSpaceSizeBefore =
-        g_folderWindow.DebugGetSelectionSizeSnapshot(FolderWindow::Pane::Left);
+    const FolderWindow::DebugSelectionSizeSnapshot selectedSpaceSizeBefore = g_folderWindow.DebugGetSelectionSizeSnapshot(FolderWindow::Pane::Left);
     SendMessageW(folderView, WM_KEYDOWN, VK_SPACE, 0);
     SendMessageW(folderView, WM_KEYUP, VK_SPACE, 0);
-    snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
+    snapshot      = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     selectionSize = g_folderWindow.DebugGetSelectionSizeSnapshot(FolderWindow::Pane::Left);
     state.Require(snapshot.currentDisplayName == L"c.txt" && snapshot.selectedCount == 0u && snapshot.anchorIndex == snapshot.currentIndex,
-                   L"Space did not deselect the operated selected current and advance without wrap/implicit destination selection.");
-    state.Require(selectionSize.requestCount == selectedSpaceSizeBefore.requestCount + 1u &&
-                      selectionSize.lastRequestedSelectedPaths.empty() && ! selectionSize.folderBytesPending &&
-                      ! selectionSize.folderBytesValid && selectionSize.folderBytes == 0u,
+                  L"Space did not deselect the operated selected current and advance without wrap/implicit destination selection.");
+    state.Require(selectionSize.requestCount == selectedSpaceSizeBefore.requestCount + 1u && selectionSize.lastRequestedSelectedPaths.empty() &&
+                      ! selectionSize.folderBytesPending && ! selectionSize.folderBytesValid && selectionSize.folderBytes == 0u,
                   L"Space deselection did not cancel size work and submit the empty post-toggle selected set.");
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"d.txt"), L"Failed to establish last-row Space fixture.");
@@ -22705,8 +22530,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     SendMessageW(folderView, WM_KEYUP, VK_INSERT, 0);
     snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     state.Require(snapshot.currentDisplayName == L"b.txt" && g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"a.txt") &&
-                       ! g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"b.txt"),
-                   L"Insert did not toggle operated current and advance without selecting destination.");
+                      ! g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"b.txt"),
+                  L"Insert did not toggle operated current and advance without selecting destination.");
     state.Require(g_folderWindow.DebugGetSelectionSizeSnapshot(FolderWindow::Pane::Left).requestCount == insertSizeRequestsBefore,
                   L"Insert incorrectly requested explicit selection-size computation.");
     SendMessageW(folderView, WM_KEYDOWN, VK_ESCAPE, 0);
@@ -22729,8 +22554,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         return false;
     }
 
-    const std::filesystem::path root = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands) / L"work" /
-        (L"folderview_empty_background_" + NewGuidText());
+    const std::filesystem::path root = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands) / L"work" / (L"folderview_empty_background_" + NewGuidText());
     const std::filesystem::path emptyRoot = root / L"empty";
     std::error_code cleanupError;
     std::filesystem::remove_all(root, cleanupError);
@@ -22749,9 +22573,9 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         std::filesystem::remove_all(root, error);
     });
 
-    const std::wstring pluginBefore = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring pluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
     const std::optional<std::filesystem::path> pathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const auto restorePane = wil::scope_exit([&]() noexcept
+    const auto restorePane                                = wil::scope_exit([&]() noexcept
     {
         g_folderWindow.DebugSetPaneSuppressOleDragDropForSelfTest(FolderWindow::Pane::Left, false);
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, pluginBefore));
@@ -22774,18 +22598,15 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
             enumerationCount.fetch_add(1u, std::memory_order_release);
         }
     });
-    const auto clearEnumerationCallback = wil::scope_exit([&]() noexcept
-    { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
+    const auto clearEnumerationCallback = wil::scope_exit([&]() noexcept { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(5000ms)), L"Empty-background path did not settle.");
     state.Require(WaitForAtomicAtLeast(enumerationCount, 1u, SelfTest::Scale(5000ms)), L"Empty-background enumeration did not complete.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.txt", L"b.txt", L"c.txt"}, SelfTest::Scale(5000ms)),
                   L"Empty-background items did not settle.");
-    const HWND folderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
-    const std::optional<POINT> backgroundPoint =
-        g_folderWindow.DebugGetPaneEmptyBackgroundClientPointForSelfTest(FolderWindow::Pane::Left);
-    state.Require(folderView && IsWindow(folderView) != FALSE && backgroundPoint.has_value(),
-                  L"Empty-background pointer target is unavailable.");
+    const HWND folderView                      = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    const std::optional<POINT> backgroundPoint = g_folderWindow.DebugGetPaneEmptyBackgroundClientPointForSelfTest(FolderWindow::Pane::Left);
+    state.Require(folderView && IsWindow(folderView) != FALSE && backgroundPoint.has_value(), L"Empty-background pointer target is unavailable.");
     if (! state.failure.empty())
     {
         return false;
@@ -22794,31 +22615,23 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     g_folderWindow.DebugSetPaneSuppressOleDragDropForSelfTest(FolderWindow::Pane::Left, true);
     const auto establishFixture = [&]() noexcept
     {
-        state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"b.txt"),
-                      L"Failed to establish empty-background current item.");
-        g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left,
-                                                              [](std::wstring_view name) noexcept
-        { return name == L"a.txt" || name == L"c.txt"; },
-                                                              true);
+        state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"b.txt"), L"Failed to establish empty-background current item.");
+        g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
+            FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"a.txt" || name == L"c.txt"; }, true);
         return g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     };
 
     for (const WPARAM modifiers : std::array<WPARAM, 4u>{{0u, MK_CONTROL, MK_SHIFT, MK_CONTROL | MK_SHIFT}})
     {
         const FolderView::DebugFocusSelectionStateSnapshot before = establishFixture();
-        SendMessageW(folderView,
-                     WM_LBUTTONDOWN,
-                     MK_LBUTTON | modifiers,
-                     MAKELPARAM(backgroundPoint->x, backgroundPoint->y));
+        SendMessageW(folderView, WM_LBUTTONDOWN, MK_LBUTTON | modifiers, MAKELPARAM(backgroundPoint->x, backgroundPoint->y));
         SendMessageW(folderView, WM_LBUTTONUP, modifiers, MAKELPARAM(backgroundPoint->x, backgroundPoint->y));
-        const FolderView::DebugFocusSelectionStateSnapshot after =
-            g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
+        const FolderView::DebugFocusSelectionStateSnapshot after = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
         state.Require(after.currentDisplayName == L"b.txt" && after.currentIndex < after.itemCount && after.focusedFlagCount == 1u,
                       L"Modified empty-background press removed or duplicated current.");
         state.Require(after.selectedCount == 0u && after.anchorIndex == after.currentIndex && after.potentialDragSourceCount == 0u,
                       L"Modified empty-background press did not clear selection/drag and reset anchor to current.");
-        state.Require(after.focusOwnershipEpoch == before.focusOwnershipEpoch,
-                      L"Modified empty-background press changed the current-ownership epoch.");
+        state.Require(after.focusOwnershipEpoch == before.focusOwnershipEpoch, L"Modified empty-background press changed the current-ownership epoch.");
     }
 
     const uint64_t dragStartBefore = g_folderWindow.DebugGetPaneDragStartCountForSelfTest(FolderWindow::Pane::Left);
@@ -22829,7 +22642,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
 
     struct PointerContextMenuObservation final
     {
-        bool opened = false;
+        bool opened                 = false;
         bool backgroundShapeCorrect = false;
     };
     const auto runPointerContextMenu = [&](POINT clientPoint) noexcept
@@ -22852,8 +22665,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                     { return std::ranges::find(popupState.itemTexts, expected) != popupState.itemTexts.end(); };
                     backgroundShapeCorrect.store(popupState.itemTexts.size() >= 5u && popupState.itemTexts[0] == L"Paste" &&
                                                      popupState.itemTexts[1] == L"New" && containsText(L"Refresh") &&
-                                                     containsText(L"Calculate Occupied Space") && ! containsText(L"Open") &&
-                                                     ! containsText(L"Delete...") && ! containsText(L"Properties"),
+                                                     containsText(L"Calculate Occupied Space") && ! containsText(L"Open") && ! containsText(L"Delete...") &&
+                                                     ! containsText(L"Properties"),
                                                  std::memory_order_release);
 
                     PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
@@ -22865,13 +22678,13 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         });
         SendMessageW(folderView, WM_CONTEXTMENU, reinterpret_cast<WPARAM>(folderView), MAKELPARAM(screenPoint.x, screenPoint.y));
         return PointerContextMenuObservation{
-            .opened = opened.load(std::memory_order_acquire),
+            .opened                 = opened.load(std::memory_order_acquire),
             .backgroundShapeCorrect = backgroundShapeCorrect.load(std::memory_order_acquire),
         };
     };
 
     FolderView::DebugFocusSelectionStateSnapshot before = establishFixture();
-    const PointerContextMenuObservation pointerMenu = runPointerContextMenu(backgroundPoint.value());
+    const PointerContextMenuObservation pointerMenu     = runPointerContextMenu(backgroundPoint.value());
     state.Require(pointerMenu.opened, L"Pointer background context menu did not open.");
     state.Require(pointerMenu.backgroundShapeCorrect,
                   L"Background context menu should expose Paste, New, Refresh, and Calculate Occupied Space without item actions.");
@@ -22880,10 +22693,10 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                       after.focusOwnershipEpoch == before.focusOwnershipEpoch,
                   L"Pointer background context route did not clear selection while retaining current and ownership.");
 
-    before = establishFixture();
+    before                 = establishFixture();
     const DWORD uiThreadId = GetWindowThreadProcessId(folderView, nullptr);
-    const UiMenuRoundTripResult keyboardMenu = TriggerAndDismissKeyboardActivatedUiMenu(
-        folderView, VK_APPS, uiThreadId, folderView, SelfTest::Scale(3000ms), SelfTest::Scale(3000ms));
+    const UiMenuRoundTripResult keyboardMenu =
+        TriggerAndDismissKeyboardActivatedUiMenu(folderView, VK_APPS, uiThreadId, folderView, SelfTest::Scale(3000ms), SelfTest::Scale(3000ms));
     state.Require(keyboardMenu.opened && keyboardMenu.closed, L"Keyboard FolderView context menu did not complete its round-trip.");
     after = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     state.Require(after.currentDisplayName == L"b.txt" && after.selectedCount == 2u && after.selectionDigest == before.selectionDigest &&
@@ -22891,43 +22704,35 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                   L"Keyboard context menu behaved like a synthetic pointer miss.");
 
     before = establishFixture();
-    SendMessageW(folderView,
-                 WM_LBUTTONDOWN,
-                 MK_LBUTTON,
-                 MAKELPARAM(backgroundPoint->x, backgroundPoint->y));
+    SendMessageW(folderView, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(backgroundPoint->x, backgroundPoint->y));
     SendMessageW(folderView, WM_LBUTTONUP, 0, MAKELPARAM(backgroundPoint->x, backgroundPoint->y));
     after = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
-    state.Require(after.currentDisplayName == L"b.txt" && after.selectedCount == 0u &&
-                      after.focusOwnershipEpoch == before.focusOwnershipEpoch,
+    state.Require(after.currentDisplayName == L"b.txt" && after.selectedCount == 0u && after.focusOwnershipEpoch == before.focusOwnershipEpoch,
                   L"Removal-focus E2E fixture did not retain current ownership after the background miss.");
 
     std::atomic<uint32_t> completedDeletes{0u};
     std::atomic<HRESULT> lastDeleteResult{E_PENDING};
-    const uint64_t completionToken = g_folderWindow.AddFileOperationCompletedCallback(
-        [&](const FolderWindow::FileOperationCompletedEvent& event) noexcept
+    const uint64_t completionToken      = g_folderWindow.AddFileOperationCompletedCallback([&](const FolderWindow::FileOperationCompletedEvent& event) noexcept
     {
-        if (event.operation == FILESYSTEM_DELETE && event.sourcePaths.size() == 1u &&
-            OrdinalString::EqualsNoCasePath(event.sourcePaths[0], root / L"b.txt"))
+        if (event.operation == FILESYSTEM_DELETE && event.sourcePaths.size() == 1u && OrdinalString::EqualsNoCasePath(event.sourcePaths[0], root / L"b.txt"))
         {
             lastDeleteResult.store(event.hr, std::memory_order_release);
             completedDeletes.fetch_add(1u, std::memory_order_release);
         }
     });
-    const auto removeCompletionCallback = wil::scope_exit([&]() noexcept
-    { g_folderWindow.RemoveFileOperationCompletedCallback(completionToken); });
+    const auto removeCompletionCallback = wil::scope_exit([&]() noexcept { g_folderWindow.RemoveFileOperationCompletedCallback(completionToken); });
 
     const uint32_t enumerationBeforeDelete = enumerationCount.load(std::memory_order_acquire);
     FocusFolderViewPane(FolderWindow::Pane::Left);
     g_folderWindow.CommandDelete(FolderWindow::Pane::Left);
     const auto deleteDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(8000ms);
-    bool deleteRehomed = false;
+    bool deleteRehomed        = false;
     while (std::chrono::steady_clock::now() < deleteDeadline)
     {
         PumpPendingMessages();
         std::error_code existsError;
-        const bool removed = ! std::filesystem::exists(root / L"b.txt", existsError) && ! existsError;
-        const FolderView::DebugFocusSelectionStateSnapshot deleteSnapshot =
-            g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
+        const bool removed                                                = ! std::filesystem::exists(root / L"b.txt", existsError) && ! existsError;
+        const FolderView::DebugFocusSelectionStateSnapshot deleteSnapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
         if (completedDeletes.load(std::memory_order_acquire) >= 1u && lastDeleteResult.load(std::memory_order_acquire) == S_OK && removed &&
             enumerationCount.load(std::memory_order_acquire) > enumerationBeforeDelete && deleteSnapshot.itemCount == 2u &&
             deleteSnapshot.currentDisplayName == L"c.txt" && deleteSnapshot.selectedCount == 0u &&
@@ -22959,10 +22764,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         }
     });
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, emptyRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, emptyRoot, SelfTest::Scale(5000ms)),
-                  L"Empty-pane keyboard context path did not settle.");
-    state.Require(WaitForAtomicAtLeast(emptyEnumerationCount, 1u, SelfTest::Scale(5000ms)),
-                  L"Empty-pane keyboard context enumeration did not complete.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, emptyRoot, SelfTest::Scale(5000ms)), L"Empty-pane keyboard context path did not settle.");
+    state.Require(WaitForAtomicAtLeast(emptyEnumerationCount, 1u, SelfTest::Scale(5000ms)), L"Empty-pane keyboard context enumeration did not complete.");
     state.Require(WaitForFolderViewItemCount(FolderWindow::Pane::Left, 0u, SelfTest::Scale(3000ms)),
                   L"Empty-pane keyboard context fixture should contain no items.");
 
@@ -22980,9 +22783,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                 emptyKeyboardMenuOpened.store(true, std::memory_order_release);
                 const auto containsText = [&](std::wstring_view expected) noexcept
                 { return std::ranges::find(popupState.itemTexts, expected) != popupState.itemTexts.end(); };
-                emptyKeyboardMenuIsBackground.store(containsText(L"Paste") && containsText(L"New") && containsText(L"Refresh") &&
-                                                        ! containsText(L"Open") && ! containsText(L"Cut") &&
-                                                        ! containsText(L"Delete...") && ! containsText(L"Properties"),
+                emptyKeyboardMenuIsBackground.store(containsText(L"Paste") && containsText(L"New") && containsText(L"Refresh") && ! containsText(L"Open") &&
+                                                        ! containsText(L"Cut") && ! containsText(L"Delete...") && ! containsText(L"Properties"),
                                                     std::memory_order_release);
                 PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
                 PostMessageW(popup, WM_KEYUP, VK_ESCAPE, 0);
@@ -22992,21 +22794,16 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         }
     });
     FocusFolderViewPane(FolderWindow::Pane::Left);
-    SendMessageW(folderView,
-                 WM_CONTEXTMENU,
-                 reinterpret_cast<WPARAM>(folderView),
-                 MAKELPARAM(static_cast<WORD>(-1), static_cast<WORD>(-1)));
+    SendMessageW(folderView, WM_CONTEXTMENU, reinterpret_cast<WPARAM>(folderView), MAKELPARAM(static_cast<WORD>(-1), static_cast<WORD>(-1)));
     emptyMenuCloser.join();
-    state.Require(emptyKeyboardMenuOpened.load(std::memory_order_acquire),
-                  L"Keyboard context menu did not open for an empty pane.");
+    state.Require(emptyKeyboardMenuOpened.load(std::memory_order_acquire), L"Keyboard context menu did not open for an empty pane.");
     state.Require(emptyKeyboardMenuIsBackground.load(std::memory_order_acquire),
                   L"Shift+F10/VK_APPS on an empty pane must show the background menu and omit item-only actions.");
 
-    const std::filesystem::path artifactRoot = root / L"artifact";
+    const std::filesystem::path artifactRoot  = root / L"artifact";
     constexpr std::wstring_view kArtifactName = L"user.rs_tmp_0123456789abcdef0123456789abcdef_1";
     state.Require(SelfTest::EnsureDirectory(artifactRoot), L"Failed to create artifact-menu ordering fixture.");
-    state.Require(SelfTest::WriteTextFile(artifactRoot / kArtifactName, "artifact"),
-                  L"Failed to create artifact-menu ordering item.");
+    state.Require(SelfTest::WriteTextFile(artifactRoot / kArtifactName, "artifact"), L"Failed to create artifact-menu ordering item.");
     std::atomic<uint32_t> artifactEnumerationCount{0u};
     g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
                                                        [&](const std::filesystem::path& folder) noexcept
@@ -23017,15 +22814,12 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         }
     });
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, artifactRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, artifactRoot, SelfTest::Scale(5000ms)),
-                  L"Artifact-menu ordering path did not settle.");
-    state.Require(WaitForAtomicAtLeast(artifactEnumerationCount, 1u, SelfTest::Scale(5000ms)),
-                  L"Artifact-menu ordering enumeration did not complete.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, artifactRoot, SelfTest::Scale(5000ms)), L"Artifact-menu ordering path did not settle.");
+    state.Require(WaitForAtomicAtLeast(artifactEnumerationCount, 1u, SelfTest::Scale(5000ms)), L"Artifact-menu ordering enumeration did not complete.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {kArtifactName}, SelfTest::Scale(5000ms)) &&
                       g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, kArtifactName),
                   L"Artifact-menu ordering item did not become current.");
-    const std::optional<POINT> artifactPoint =
-        g_folderWindow.DebugGetPaneItemCenterClientPointForSelfTest(FolderWindow::Pane::Left, kArtifactName);
+    const std::optional<POINT> artifactPoint = g_folderWindow.DebugGetPaneItemCenterClientPointForSelfTest(FolderWindow::Pane::Left, kArtifactName);
     state.Require(artifactPoint.has_value(), L"Artifact-menu ordering pointer target is unavailable.");
     if (! state.failure.empty())
     {
@@ -23044,21 +22838,19 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
             if (popup && IsWindow(popup) != FALSE && RedSalamander::DxUi::DebugGetContextMenuPopupState(popup, popupState))
             {
                 artifactMenuOpened.store(true, std::memory_order_release);
-                const auto artifact = std::ranges::find(popupState.itemTexts, L"Operation artifact");
+                const auto artifact   = std::ranges::find(popupState.itemTexts, L"Operation artifact");
                 const auto properties = std::ranges::find(popupState.itemTexts, L"Properties");
                 if (artifact != popupState.itemTexts.end() && properties != popupState.itemTexts.end())
                 {
-                    const size_t artifactIndex = static_cast<size_t>(std::distance(popupState.itemTexts.begin(), artifact));
+                    const size_t artifactIndex   = static_cast<size_t>(std::distance(popupState.itemTexts.begin(), artifact));
                     const size_t propertiesIndex = static_cast<size_t>(std::distance(popupState.itemTexts.begin(), properties));
-                    const bool propertiesIsFinalNormalAction = propertiesIndex + 1u == popupState.itemTexts.size() ||
-                        (propertiesIndex + 2u < popupState.itemTexts.size() &&
-                         propertiesIndex + 1u < popupState.itemKinds.size() &&
+                    const bool propertiesIsFinalNormalAction =
+                        propertiesIndex + 1u == popupState.itemTexts.size() ||
+                        (propertiesIndex + 2u < popupState.itemTexts.size() && propertiesIndex + 1u < popupState.itemKinds.size() &&
                          popupState.itemKinds[propertiesIndex + 1u] == RedSalamander::DxUi::MenuItemKind::Separator &&
                          popupState.itemTexts[propertiesIndex + 2u].find(L"[dbg]") != std::wstring::npos);
-                    artifactBeforeProperties.store(propertiesIndex == artifactIndex + 2u &&
-                                                       artifactIndex + 1u < popupState.itemKinds.size() &&
-                                                       popupState.itemKinds[artifactIndex + 1u] ==
-                                                           RedSalamander::DxUi::MenuItemKind::Separator &&
+                    artifactBeforeProperties.store(propertiesIndex == artifactIndex + 2u && artifactIndex + 1u < popupState.itemKinds.size() &&
+                                                       popupState.itemKinds[artifactIndex + 1u] == RedSalamander::DxUi::MenuItemKind::Separator &&
                                                        propertiesIsFinalNormalAction,
                                                    std::memory_order_release);
                 }
@@ -23071,10 +22863,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     });
     POINT artifactScreenPoint = artifactPoint.value();
     ClientToScreen(folderView, &artifactScreenPoint);
-    SendMessageW(folderView,
-                 WM_CONTEXTMENU,
-                 reinterpret_cast<WPARAM>(folderView),
-                 MAKELPARAM(artifactScreenPoint.x, artifactScreenPoint.y));
+    SendMessageW(folderView, WM_CONTEXTMENU, reinterpret_cast<WPARAM>(folderView), MAKELPARAM(artifactScreenPoint.x, artifactScreenPoint.y));
     artifactMenuCloser.join();
     state.Require(artifactMenuOpened.load(std::memory_order_acquire), L"Artifact item context menu did not open.");
     state.Require(artifactBeforeProperties.load(std::memory_order_acquire),
@@ -23094,8 +22883,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         return false;
     }
 
-    const std::filesystem::path root = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands) / L"work" /
-        (L"folderview_selection_refresh_filter_" + NewGuidText());
+    const std::filesystem::path root =
+        SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands) / L"work" / (L"folderview_selection_refresh_filter_" + NewGuidText());
     std::error_code error;
     std::filesystem::remove_all(root, error);
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create selection refresh/filter fixture root.");
@@ -23113,12 +22902,12 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         std::filesystem::remove_all(root, cleanupError);
     });
 
-    const std::wstring pluginBefore = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring pluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
     const std::optional<std::filesystem::path> pathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const FolderView::SortBy sortBefore = g_folderWindow.GetSortBy(FolderWindow::Pane::Left);
-    const FolderView::SortDirection directionBefore = g_folderWindow.GetSortDirection(FolderWindow::Pane::Left);
-    const FolderView::NameFilterState filterBefore = g_folderWindow.DebugGetNameFilterState(FolderWindow::Pane::Left);
-    const auto restorePane = wil::scope_exit([&]() noexcept
+    const FolderView::SortBy sortBefore                   = g_folderWindow.GetSortBy(FolderWindow::Pane::Left);
+    const FolderView::SortDirection directionBefore       = g_folderWindow.GetSortDirection(FolderWindow::Pane::Left);
+    const FolderView::NameFilterState filterBefore        = g_folderWindow.DebugGetNameFilterState(FolderWindow::Pane::Left);
+    const auto restorePane                                = wil::scope_exit([&]() noexcept
     {
         g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
         g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, filterBefore, false);
@@ -23143,12 +22932,11 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
             enumerationCount.fetch_add(1u, std::memory_order_release);
         }
     });
-    const auto clearEnumerationCallback = wil::scope_exit([&]() noexcept
-    { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
+    const auto clearEnumerationCallback = wil::scope_exit([&]() noexcept { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
     const auto waitForAcceptedRootModel = [&](uint32_t previousEnumerationCount,
-                                               size_t expectedItemCount,
-                                               std::initializer_list<std::wstring_view> expectedNames,
-                                               std::wstring_view stage) noexcept
+                                              size_t expectedItemCount,
+                                              std::initializer_list<std::wstring_view> expectedNames,
+                                              std::wstring_view stage) noexcept
     {
         state.Require(WaitForAtomicAtLeast(enumerationCount, previousEnumerationCount + 1u, SelfTest::Scale(5000ms)),
                       std::format(L"{} enumeration did not complete.", stage));
@@ -23159,20 +22947,16 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     };
 
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(5000ms)),
-                  L"Selection refresh/filter path did not settle.");
-    state.Require(WaitForAtomicAtLeast(enumerationCount, 1u, SelfTest::Scale(5000ms)),
-                  L"Selection refresh/filter initial enumeration did not complete.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(5000ms)), L"Selection refresh/filter path did not settle.");
+    state.Require(WaitForAtomicAtLeast(enumerationCount, 1u, SelfTest::Scale(5000ms)), L"Selection refresh/filter initial enumeration did not complete.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.txt", L"b.log", L"c.txt"}, SelfTest::Scale(5000ms)),
                   L"Selection refresh/filter fixture did not settle.");
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_SELECTION_SELECT_ALL, 0), 0);
-    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 3u,
-                  L"Select All did not materialize the initial displayed set.");
+    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 3u, L"Select All did not materialize the initial displayed set.");
 
     uint32_t before = enumerationCount.load(std::memory_order_acquire);
-    g_folderWindow.SetNameFilterState(
-        FolderWindow::Pane::Left, FolderView::NameFilterState{.enabled = true, .text = L"*.txt"}, true);
+    g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, FolderView::NameFilterState{.enabled = true, .text = L"*.txt"}, true);
     waitForAcceptedRootModel(before, 2u, {L"a.txt", L"c.txt"}, L"Select All followed by filter");
     state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 2u &&
                       g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"a.txt") &&
@@ -23222,8 +23006,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                       g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 1u,
                   L"An ordinarily recreated identity resurrected its old selection.");
 
-    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
-        FolderWindow::Pane::Left, [](std::wstring_view) noexcept { return false; }, true);
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [](std::wstring_view) noexcept { return false; }, true);
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"b.log"),
                   L"Failed to focus b.log before automatic-current repair selection check.");
     error.clear();
@@ -23237,10 +23020,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                       ! g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"c.txt"),
                   L"Automatic current repair selected the replacement identity.");
 
-    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
-        FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"c.txt"; }, true);
-    const FolderView::DebugFocusSelectionStateSnapshot beforeFailedResult =
-        g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"c.txt"; }, true);
+    const FolderView::DebugFocusSelectionStateSnapshot beforeFailedResult = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root / L"missing-folder");
     FolderView::AlertOverlayDebugSnapshot alert{};
     const auto failureDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
@@ -23254,8 +23035,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         }
         std::this_thread::sleep_for(10ms);
     }
-    const FolderView::DebugFocusSelectionStateSnapshot afterFailedResult =
-        g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
+    const FolderView::DebugFocusSelectionStateSnapshot afterFailedResult = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     state.Require(alert.visible && alert.kind == FolderView::ErrorOverlayKind::Enumeration &&
                       afterFailedResult.currentDisplayName == beforeFailedResult.currentDisplayName &&
                       afterFailedResult.selectedCount == beforeFailedResult.selectedCount &&
@@ -23285,8 +23065,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         return false;
     }
 
-    const std::filesystem::path root = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands) / L"work" /
-        (L"folderview_selection_visibility_" + NewGuidText());
+    const std::filesystem::path root =
+        SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands) / L"work" / (L"folderview_selection_visibility_" + NewGuidText());
     std::error_code error;
     std::filesystem::remove_all(root, error);
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create selection visibility fixture root.");
@@ -23294,10 +23074,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     {
         state.Require(SelfTest::WriteTextFile(root / name, "x"), std::format(L"Failed to create '{}'.", name));
     }
-    state.Require(SetFileAttributesW((root / L"hidden.txt").c_str(), FILE_ATTRIBUTE_HIDDEN) != FALSE,
-                  L"Failed to mark hidden.txt hidden.");
-    state.Require(SetFileAttributesW((root / L"system.txt").c_str(), FILE_ATTRIBUTE_SYSTEM) != FALSE,
-                  L"Failed to mark system.txt system.");
+    state.Require(SetFileAttributesW((root / L"hidden.txt").c_str(), FILE_ATTRIBUTE_HIDDEN) != FALSE, L"Failed to mark hidden.txt hidden.");
+    state.Require(SetFileAttributesW((root / L"system.txt").c_str(), FILE_ATTRIBUTE_SYSTEM) != FALSE, L"Failed to mark system.txt system.");
     if (! state.failure.empty())
     {
         return false;
@@ -23310,12 +23088,12 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         std::filesystem::remove_all(root, cleanupError);
     });
 
-    const std::wstring pluginBefore = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring pluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
     const std::optional<std::filesystem::path> pathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const FolderView::NameFilterState filterBefore = g_folderWindow.DebugGetNameFilterState(FolderWindow::Pane::Left);
-    const bool showHiddenBefore = g_folderWindow.GetShowHiddenFiles();
-    const bool showSystemBefore = g_folderWindow.GetShowSystemFiles();
-    const auto restorePane = wil::scope_exit([&]() noexcept
+    const FolderView::NameFilterState filterBefore        = g_folderWindow.DebugGetNameFilterState(FolderWindow::Pane::Left);
+    const bool showHiddenBefore                           = g_folderWindow.GetShowHiddenFiles();
+    const bool showSystemBefore                           = g_folderWindow.GetShowSystemFiles();
+    const auto restorePane                                = wil::scope_exit([&]() noexcept
     {
         g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
         g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, filterBefore, false);
@@ -23344,12 +23122,11 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
             enumerationCount.fetch_add(1u, std::memory_order_release);
         }
     });
-    const auto clearEnumerationCallback = wil::scope_exit([&]() noexcept
-    { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
+    const auto clearEnumerationCallback = wil::scope_exit([&]() noexcept { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
     const auto waitForAcceptedRootModel = [&](uint32_t previousEnumerationCount,
-                                               size_t expectedItemCount,
-                                               std::initializer_list<std::wstring_view> expectedNames,
-                                               std::wstring_view stage) noexcept
+                                              size_t expectedItemCount,
+                                              std::initializer_list<std::wstring_view> expectedNames,
+                                              std::wstring_view stage) noexcept
     {
         state.Require(WaitForAtomicAtLeast(enumerationCount, previousEnumerationCount + 1u, SelfTest::Scale(5000ms)),
                       std::format(L"{} enumeration did not complete.", stage));
@@ -23360,19 +23137,15 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     };
     const auto selectNames = [&](std::initializer_list<std::wstring_view> names) noexcept
     {
-        g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left,
-                                                               [names](std::wstring_view candidate) noexcept
-        { return std::ranges::any_of(names, [&](std::wstring_view name) noexcept { return candidate == name; }); },
-                                                               true);
+        g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [names](std::wstring_view candidate) noexcept {
+            return std::ranges::any_of(names, [&](std::wstring_view name) noexcept { return candidate == name; });
+        }, true);
     };
 
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(5000ms)),
-                  L"Selection visibility path did not settle.");
-    state.Require(WaitForAtomicAtLeast(enumerationCount, 1u, SelfTest::Scale(5000ms)),
-                  L"Selection visibility initial enumeration did not complete.");
-    state.Require(WaitForPaneItems(
-                      FolderWindow::Pane::Left, {L"a.txt", L"b.log", L"hidden.txt", L"system.txt"}, SelfTest::Scale(5000ms)),
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(5000ms)), L"Selection visibility path did not settle.");
+    state.Require(WaitForAtomicAtLeast(enumerationCount, 1u, SelfTest::Scale(5000ms)), L"Selection visibility initial enumeration did not complete.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.txt", L"b.log", L"hidden.txt", L"system.txt"}, SelfTest::Scale(5000ms)),
                   L"Selection visibility fixture did not settle.");
 
     selectNames({L"a.txt"});
@@ -23426,8 +23199,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
 
     selectNames({});
     before = enumerationCount.load(std::memory_order_acquire);
-    g_folderWindow.SetNameFilterState(
-        FolderWindow::Pane::Left, FolderView::NameFilterState{.enabled = true, .text = L"*.txt"}, true);
+    g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, FolderView::NameFilterState{.enabled = true, .text = L"*.txt"}, true);
     waitForAcceptedRootModel(before, 3u, {L"a.txt", L"hidden.txt", L"system.txt"}, L"filtered selection commands");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"a.txt"),
                   L"Failed to focus a.txt for filtered same-extension command.");
@@ -23435,8 +23207,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 3u,
                   L"Same Extension did not affect exactly the displayed filtered identities.");
     g_folderWindow.CommandSelectionInvert(FolderWindow::Pane::Left);
-    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 0u,
-                  L"Invert did not mutate exactly the displayed filtered identities.");
+    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 0u, L"Invert did not mutate exactly the displayed filtered identities.");
     before = enumerationCount.load(std::memory_order_acquire);
     g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, FolderView::NameFilterState{}, true);
     waitForAcceptedRootModel(before, 4u, {L"a.txt", L"b.log", L"hidden.txt", L"system.txt"}, L"clear filtered selection commands");
@@ -23447,8 +23218,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     g_folderWindow.CommandSelectionSave(FolderWindow::Pane::Left);
     state.Require(g_folderWindow.HasSavedSelection(), L"Save Selection did not capture the visible selected identities.");
     before = enumerationCount.load(std::memory_order_acquire);
-    g_folderWindow.SetNameFilterState(
-        FolderWindow::Pane::Left, FolderView::NameFilterState{.enabled = true, .text = L"a*"}, true);
+    g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, FolderView::NameFilterState{.enabled = true, .text = L"a*"}, true);
     waitForAcceptedRootModel(before, 1u, {L"a.txt"}, L"narrow before Restore Selection");
     g_folderWindow.CommandSelectionRestore(FolderWindow::Pane::Left);
     state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 1u &&
@@ -23475,15 +23245,13 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
 {
     using namespace std::chrono_literals;
 
-    if (! mainWindow || IsWindow(mainWindow) == FALSE ||
-        ! PrepareMainWindowForIsolatedUiCase(mainWindow, state, L"FolderView drag source target contract"))
+    if (! mainWindow || IsWindow(mainWindow) == FALSE || ! PrepareMainWindowForIsolatedUiCase(mainWindow, state, L"FolderView drag source target contract"))
     {
         state.Require(false, L"Main window is unavailable for FolderView drag-source contract.");
         return false;
     }
 
-    const std::filesystem::path root = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands) / L"work" /
-        (L"folderview_drag_source_" + NewGuidText());
+    const std::filesystem::path root = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands) / L"work" / (L"folderview_drag_source_" + NewGuidText());
     std::error_code cleanupError;
     std::filesystem::remove_all(root, cleanupError);
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create drag-source fixture root.");
@@ -23501,9 +23269,9 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         std::filesystem::remove_all(root, error);
     });
 
-    const std::wstring pluginBefore = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring pluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
     const std::optional<std::filesystem::path> pathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const auto restorePane = wil::scope_exit([&]() noexcept
+    const auto restorePane                                = wil::scope_exit([&]() noexcept
     {
         g_folderWindow.DebugSetPaneSuppressOleDragDropForSelfTest(FolderWindow::Pane::Left, false);
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, pluginBefore));
@@ -23526,16 +23294,13 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
             enumerationCount.fetch_add(1u, std::memory_order_release);
         }
     });
-    const auto clearEnumerationCallback = wil::scope_exit([&]() noexcept
-    { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
+    const auto clearEnumerationCallback = wil::scope_exit([&]() noexcept { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(5000ms)), L"Drag-source path did not settle.");
     state.Require(WaitForAtomicAtLeast(enumerationCount, 1u, SelfTest::Scale(5000ms)), L"Drag-source enumeration did not complete.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.txt", L"b.txt", L"c.txt"}, SelfTest::Scale(5000ms)),
-                  L"Drag-source items did not settle.");
-    const HWND folderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
-    const std::optional<POINT> backgroundPoint =
-        g_folderWindow.DebugGetPaneEmptyBackgroundClientPointForSelfTest(FolderWindow::Pane::Left);
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.txt", L"b.txt", L"c.txt"}, SelfTest::Scale(5000ms)), L"Drag-source items did not settle.");
+    const HWND folderView                      = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    const std::optional<POINT> backgroundPoint = g_folderWindow.DebugGetPaneEmptyBackgroundClientPointForSelfTest(FolderWindow::Pane::Left);
     state.Require(folderView && IsWindow(folderView) != FALSE && backgroundPoint.has_value(), L"Drag-source pointer targets are unavailable.");
     if (! state.failure.empty())
     {
@@ -23554,28 +23319,25 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         SendMessageW(folderView, WM_LBUTTONDOWN, MK_LBUTTON | modifiers, MAKELPARAM(point.x, point.y));
         return point;
     };
-    const auto release = [&](POINT point, WPARAM modifiers = 0u) noexcept
-    { SendMessageW(folderView, WM_LBUTTONUP, modifiers, MAKELPARAM(point.x, point.y)); };
+    const auto release = [&](POINT point, WPARAM modifiers = 0u) noexcept { SendMessageW(folderView, WM_LBUTTONUP, modifiers, MAKELPARAM(point.x, point.y)); };
     const auto selectNames = [&](std::initializer_list<std::wstring_view> names) noexcept
     {
-        g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left,
-                                                              [names](std::wstring_view candidate) noexcept
-        { return std::ranges::any_of(names, [&](std::wstring_view name) noexcept { return candidate == name; }); },
-                                                              true);
+        g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [names](std::wstring_view candidate) noexcept {
+            return std::ranges::any_of(names, [&](std::wstring_view name) noexcept { return candidate == name; });
+        }, true);
     };
 
     g_folderWindow.DebugSetPaneSuppressOleDragDropForSelfTest(FolderWindow::Pane::Left, true);
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"a.txt"), L"Failed to establish empty-selection drag current.");
-    std::vector<std::filesystem::path> commandTargets =
-        g_folderWindow.DebugGetPaneCommandTargetPathsForSelfTest(FolderWindow::Pane::Left);
+    std::vector<std::filesystem::path> commandTargets = g_folderWindow.DebugGetPaneCommandTargetPathsForSelfTest(FolderWindow::Pane::Left);
     state.Require(commandTargets.size() == 1u && commandTargets[0].filename() == L"a.txt" &&
                       g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 0u,
                   L"Empty selection did not expose current-only command fallback while status remained selection-only.");
-    POINT point = down(L"a.txt");
+    POINT point                                           = down(L"a.txt");
     FolderView::DebugFocusSelectionStateSnapshot snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     state.Require(snapshot.potentialDragSourceCount == 1u, L"Empty-selection item press did not arm current-item fallback.");
-    const UINT dragDpi = GetDpiForWindow(folderView);
-    const int dragWidth = (std::max)(1, GetSystemMetricsForDpi(SM_CXDRAG, dragDpi));
+    const UINT dragDpi   = GetDpiForWindow(folderView);
+    const int dragWidth  = (std::max)(1, GetSystemMetricsForDpi(SM_CXDRAG, dragDpi));
     const int dragHeight = (std::max)(1, GetSystemMetricsForDpi(SM_CYDRAG, dragDpi));
     const POINT insideThreshold{
         point.x + (dragWidth - dragWidth / 2) - 1,
@@ -23599,16 +23361,16 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     state.Require(snapshot.selectedCount == 2u,
                   std::format(L"Selected-set drag fixture did not contain two items before press; selected={}.", snapshot.selectedCount));
-    point = down(L"c.txt");
-    snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
+    point          = down(L"c.txt");
+    snapshot       = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     commandTargets = g_folderWindow.DebugGetPaneCommandTargetPathsForSelfTest(FolderWindow::Pane::Left);
     state.Require(snapshot.potentialDragSourceCount == 2u && snapshot.selectedCount == 2u,
                   std::format(L"Press on selected item did not snapshot the selected set; selected={}, source={}, current='{}'.",
                               snapshot.selectedCount,
                               snapshot.potentialDragSourceCount,
                               snapshot.currentDisplayName));
-    state.Require(commandTargets.size() == snapshot.potentialDragSourceCount &&
-                      std::ranges::all_of(commandTargets, [&](const std::filesystem::path& path) noexcept
+    state.Require(commandTargets.size() == snapshot.potentialDragSourceCount && std::ranges::all_of(commandTargets,
+                                                                                                    [&](const std::filesystem::path& path) noexcept
     { return path.filename() == L"a.txt" || path.filename() == L"c.txt"; }),
                   L"Selection-aware command targets and drag-source resolution did not use the same selected-set fallback.");
     release(point);
@@ -23616,7 +23378,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                   L"Button release did not disarm the potential drag.");
 
     selectNames({L"a.txt", L"c.txt"});
-    point = down(L"b.txt");
+    point    = down(L"b.txt");
     snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     state.Require(snapshot.selectedCount == 1u && g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"b.txt") &&
                       snapshot.potentialDragSourceCount == 1u,
@@ -23625,7 +23387,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"a.txt"), L"Failed to reset Ctrl+Click drag fixture.");
     selectNames({L"a.txt", L"c.txt"});
-    point = down(L"c.txt", MK_CONTROL);
+    point    = down(L"c.txt", MK_CONTROL);
     snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     state.Require(snapshot.selectedCount == 1u && ! g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"c.txt") &&
                       snapshot.potentialDragSourceCount == 0u,
@@ -23636,7 +23398,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     SendMessageW(folderView, WM_CANCELMODE, 0, 0);
     state.Require(g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left).potentialDragSourceCount == 0u,
                   L"Cancellation did not disarm potential drag.");
-    point = down(L"a.txt");
+    point                                = down(L"a.txt");
     const uint64_t dragCountBeforeEscape = g_folderWindow.DebugGetPaneDragStartCountForSelfTest(FolderWindow::Pane::Left);
     SendMessageW(folderView, WM_KEYDOWN, VK_ESCAPE, 0);
     snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
@@ -23657,23 +23419,17 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                   L"Sort/model replacement did not disarm potential drag.");
     g_folderWindow.SetSort(FolderWindow::Pane::Left, FolderView::SortBy::Name, FolderView::SortDirection::Ascending);
 
-    point = down(L"a.txt");
+    point                   = down(L"a.txt");
     const POINT secondPoint = down(L"b.txt");
-    startedPaths = g_folderWindow.DebugGetPaneLastDragStartPathsForSelfTest(FolderWindow::Pane::Left);
-    snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
+    startedPaths            = g_folderWindow.DebugGetPaneLastDragStartPathsForSelfTest(FolderWindow::Pane::Left);
+    snapshot                = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
     state.Require(snapshot.potentialDragSourceCount == 1u && snapshot.currentDisplayName == L"b.txt",
                   L"A new press did not replace the older potential drag source.");
     release(secondPoint);
 
     point = down(L"a.txt");
-    SendMessageW(folderView,
-                 WM_LBUTTONDOWN,
-                 MK_LBUTTON,
-                 MAKELPARAM(backgroundPoint->x, backgroundPoint->y));
-    SendMessageW(folderView,
-                 WM_MOUSEMOVE,
-                 MK_LBUTTON,
-                 MAKELPARAM(backgroundPoint->x + 100, backgroundPoint->y + 100));
+    SendMessageW(folderView, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(backgroundPoint->x, backgroundPoint->y));
+    SendMessageW(folderView, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(backgroundPoint->x + 100, backgroundPoint->y + 100));
     state.Require(g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left).potentialDragSourceCount == 0u,
                   L"Empty-background movement inherited an older drag source.");
     SendMessageW(folderView, WM_LBUTTONUP, 0, MAKELPARAM(backgroundPoint->x, backgroundPoint->y));
@@ -23716,24 +23472,23 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     {
         return false;
     }
-    const auto restoreDummyConfig = wil::scope_exit([&]() noexcept
-    { static_cast<void>(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), previousDummyConfig)); });
+    const auto restoreDummyConfig =
+        wil::scope_exit([&]() noexcept { static_cast<void>(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), previousDummyConfig)); });
 
     constexpr std::string_view kDeterministicEmptyDummyConfig =
         R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0"})json";
     state.Require(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), kDeterministicEmptyDummyConfig),
                   L"Failed to apply deterministic dummy configuration for FolderView focus/selection state perf.");
 
-    constexpr size_t kItemCount = 10000u;
-    constexpr size_t kExtensionCount = 64u;
+    constexpr size_t kItemCount       = 10000u;
+    constexpr size_t kExtensionCount  = 64u;
     constexpr size_t kSortSampleCount = 200u;
-    const auto makeFixtureName = [](size_t index) noexcept
+    const auto makeFixtureName        = [](size_t index) noexcept
     {
         const size_t extensionIndex = index % kExtensionCount;
         return std::format(L"scaleprobe_{:05}_ext{:03}.fvx{:03}", index, extensionIndex, extensionIndex);
     };
-    const std::filesystem::path dummyRoot =
-        std::filesystem::path(L"/folderview-focus-selection-state") / SanitizeFolderViewDummyPathSegment(NewGuidText());
+    const std::filesystem::path dummyRoot = std::filesystem::path(L"/folderview-focus-selection-state") / SanitizeFolderViewDummyPathSegment(NewGuidText());
     std::wstring firstName;
     std::wstring middleName;
     std::wstring lastName;
@@ -23749,13 +23504,13 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         static_cast<void>(dummy.fileSystem->DeleteItem(rootText.c_str(), FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr));
     });
 
-    const std::wstring leftPluginBefore = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
     const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const FolderView::DisplayMode displayBefore = g_folderWindow.GetDisplayMode(FolderWindow::Pane::Left);
-    const FolderView::SortBy sortBefore = g_folderWindow.GetSortBy(FolderWindow::Pane::Left);
-    const FolderView::SortDirection directionBefore = g_folderWindow.GetSortDirection(FolderWindow::Pane::Left);
-    const FolderView::NameFilterState filterBefore = g_folderWindow.DebugGetNameFilterState(FolderWindow::Pane::Left);
-    const auto restorePaneState = wil::scope_exit([&]() noexcept
+    const FolderView::DisplayMode displayBefore           = g_folderWindow.GetDisplayMode(FolderWindow::Pane::Left);
+    const FolderView::SortBy sortBefore                   = g_folderWindow.GetSortBy(FolderWindow::Pane::Left);
+    const FolderView::SortDirection directionBefore       = g_folderWindow.GetSortDirection(FolderWindow::Pane::Left);
+    const FolderView::NameFilterState filterBefore        = g_folderWindow.DebugGetNameFilterState(FolderWindow::Pane::Left);
+    const auto restorePaneState                           = wil::scope_exit([&]() noexcept
     {
         g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, filterBefore, false);
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
@@ -23782,8 +23537,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
             enumerationCount.fetch_add(1u, std::memory_order_release);
         }
     });
-    const auto clearEnumerationCallback = wil::scope_exit([&]() noexcept
-    { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
+    const auto clearEnumerationCallback = wil::scope_exit([&]() noexcept { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
 
     const std::uintmax_t metricScanOffset = FolderViewPerfMetricScanOffset();
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, dummyRoot);
@@ -23800,24 +23554,23 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
 
     constexpr size_t kReasonCount = static_cast<size_t>(FolderView::CurrentResolutionReason::Unresolved) + 1u;
     std::array<uint64_t, kReasonCount> resolutionReasonCounts{};
-    uint64_t modelChangeSamples = 0u;
-    uint64_t invariantViolationCount = 0u;
-    size_t maximumFocusMemoryEntries = 0u;
+    uint64_t modelChangeSamples           = 0u;
+    uint64_t invariantViolationCount      = 0u;
+    size_t maximumFocusMemoryEntries      = 0u;
     size_t maximumFocusMemoryPayloadBytes = 0u;
-    auto observe = [&]() noexcept
+    auto observe                          = [&]() noexcept
     {
-        const FolderView::DebugFocusSelectionStateSnapshot snapshot =
-            g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
-        const size_t reasonIndex = static_cast<size_t>(snapshot.resolutionReason);
+        const FolderView::DebugFocusSelectionStateSnapshot snapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
+        const size_t reasonIndex                                    = static_cast<size_t>(snapshot.resolutionReason);
         if (reasonIndex < resolutionReasonCounts.size())
         {
             ++resolutionReasonCounts[reasonIndex];
         }
         ++modelChangeSamples;
-        maximumFocusMemoryEntries = (std::max)(maximumFocusMemoryEntries, snapshot.focusMemoryEntryCount);
+        maximumFocusMemoryEntries      = (std::max)(maximumFocusMemoryEntries, snapshot.focusMemoryEntryCount);
         maximumFocusMemoryPayloadBytes = (std::max)(maximumFocusMemoryPayloadBytes, snapshot.focusMemoryPayloadBytes);
-        if ((snapshot.itemCount == 0u && (snapshot.currentIndex != static_cast<size_t>(-1) || snapshot.focusedFlagCount != 0u ||
-                                         snapshot.selectedCount != 0u || snapshot.anchorIndex != static_cast<size_t>(-1))) ||
+        if ((snapshot.itemCount == 0u && (snapshot.currentIndex != static_cast<size_t>(-1) || snapshot.focusedFlagCount != 0u || snapshot.selectedCount != 0u ||
+                                          snapshot.anchorIndex != static_cast<size_t>(-1))) ||
             (snapshot.itemCount > 0u && (snapshot.currentIndex >= snapshot.itemCount || snapshot.focusedFlagCount != 1u)))
         {
             ++invariantViolationCount;
@@ -23833,19 +23586,16 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, middleName),
                   L"Failed to focus the middle dummy item before the current-survives phase.");
     g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
-        FolderWindow::Pane::Left,
-        [&](std::wstring_view name) noexcept { return name == firstName || name == middleName || name == lastName; },
-        true);
+        FolderWindow::Pane::Left, [&](std::wstring_view name) noexcept { return name == firstName || name == middleName || name == lastName; }, true);
     const uint32_t refreshBeforeSurvival = enumerationCount.load(std::memory_order_acquire);
     g_folderWindow.CommandRefresh(FolderWindow::Pane::Left);
     state.Require(WaitForAtomicAtLeast(enumerationCount, refreshBeforeSurvival + 1u, SelfTest::Scale(20000ms)),
                   L"FolderView focus/selection state current-survives refresh did not complete.");
     observe();
 
-    const HWND pointerFolderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
-    const std::wstring pointerTargetName = makeFixtureName(5001u);
-    const std::optional<POINT> pointerTarget =
-        g_folderWindow.DebugGetPaneItemCenterClientPointForSelfTest(FolderWindow::Pane::Left, pointerTargetName);
+    const HWND pointerFolderView             = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    const std::wstring pointerTargetName     = makeFixtureName(5001u);
+    const std::optional<POINT> pointerTarget = g_folderWindow.DebugGetPaneItemCenterClientPointForSelfTest(FolderWindow::Pane::Left, pointerTargetName);
     state.Require(pointerFolderView && IsWindow(pointerFolderView) != FALSE && pointerTarget.has_value(),
                   L"FolderView focus/selection state pointer transition target is unavailable.");
     if (pointerFolderView && pointerTarget.has_value())
@@ -23855,8 +23605,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         SendMessageW(pointerFolderView, WM_LBUTTONUP, 0, MAKELPARAM(pointerTarget->x, pointerTarget->y));
         UpdateWindow(pointerFolderView);
         PumpPendingMessages();
-        const FolderView::DebugFocusSelectionStateSnapshot pointerSnapshot =
-            g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
+        const FolderView::DebugFocusSelectionStateSnapshot pointerSnapshot = g_folderWindow.DebugGetFocusSelectionStateSnapshot(FolderWindow::Pane::Left);
         state.Require(pointerSnapshot.currentDisplayName == pointerTargetName && pointerSnapshot.selectedCount == 1u &&
                           FolderViewPerfMetricCountInRun(L"folder.frame.input_to_paint_us", metricScanOffset) > pointerMetricBefore,
                       L"FolderView focus/selection state pointer transition did not produce current/selection and aggregate input-to-paint evidence.");
@@ -23864,9 +23613,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, middleName),
                   L"Failed to restore middle current after pointer transition.");
     g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
-        FolderWindow::Pane::Left,
-        [&](std::wstring_view name) noexcept { return name == firstName || name == middleName || name == lastName; },
-        true);
+        FolderWindow::Pane::Left, [&](std::wstring_view name) noexcept { return name == firstName || name == middleName || name == lastName; }, true);
 
     for (size_t sample = 0u; sample < kSortSampleCount; ++sample)
     {
@@ -23885,8 +23632,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, FolderView::NameFilterState{.enabled = true, .text = L"scaleprobe_00*"}, true);
     state.Require(WaitForAtomicAtLeast(enumerationCount, filterEnumerationBefore + 1u, SelfTest::Scale(20000ms)),
                   L"FolderView focus/selection state filter enumeration did not complete.");
-    state.Require(g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) > 0u &&
-                      g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) < kItemCount,
+    state.Require(g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) > 0u && g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) < kItemCount,
                   L"FolderView focus/selection state filter did not produce a nonempty subset.");
     observe();
 
@@ -23911,7 +23657,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     for (const size_t index : std::array<size_t, 3u>{{4999u, 5000u, 5001u}})
     {
         const std::wstring pathText = (dummyRoot / makeFixtureName(index)).generic_wstring();
-        const HRESULT deleteHr = dummy.fileSystem->DeleteItem(pathText.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+        const HRESULT deleteHr      = dummy.fileSystem->DeleteItem(pathText.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
         state.Require(deleteHr == S_OK, std::format(L"Failed to remove focus-disappearance fixture {}. hr=0x{:08X}", index, static_cast<uint32_t>(deleteHr)));
     }
     const uint32_t disappearanceBefore = enumerationCount.load(std::memory_order_acquire);
@@ -23932,11 +23678,9 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     for (const size_t index : std::array<size_t, 3u>{{5999u, 6000u, 6001u}})
     {
         const std::wstring pathText = (dummyRoot / makeFixtureName(index)).generic_wstring();
-        const HRESULT deleteHr = dummy.fileSystem->DeleteItem(pathText.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+        const HRESULT deleteHr      = dummy.fileSystem->DeleteItem(pathText.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
         state.Require(deleteHr == S_OK,
-                      std::format(L"Failed to remove Sort None focus-disappearance fixture {}. hr=0x{:08X}",
-                                  index,
-                                  static_cast<uint32_t>(deleteHr)));
+                      std::format(L"Failed to remove Sort None focus-disappearance fixture {}. hr=0x{:08X}", index, static_cast<uint32_t>(deleteHr)));
     }
     const uint32_t sortNoneDisappearanceBefore = enumerationCount.load(std::memory_order_acquire);
     g_folderWindow.CommandRefresh(FolderWindow::Pane::Left);
@@ -23949,31 +23693,26 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                       sortNoneRepairSnapshot.resolutionReason == FolderView::CurrentResolutionReason::GenericPredecessor,
                   L"FolderView focus/selection state Sort None disappearance did not exercise generic repair.");
 
-    const std::filesystem::path memoryRoot =
-        std::filesystem::path(L"/folderview-focus-memory") / SanitizeFolderViewDummyPathSegment(NewGuidText());
+    const std::filesystem::path memoryRoot = std::filesystem::path(L"/folderview-focus-memory") / SanitizeFolderViewDummyPathSegment(NewGuidText());
     for (size_t index = 0u; index < 600u; ++index)
     {
-        g_folderWindow.DebugRememberPaneFocusedItemForFolder(FolderWindow::Pane::Left,
-                                                             memoryRoot / std::format(L"location_{:03}", index),
-                                                             std::format(L"item_{:03}.txt", index));
+        g_folderWindow.DebugRememberPaneFocusedItemForFolder(
+            FolderWindow::Pane::Left, memoryRoot / std::format(L"location_{:03}", index), std::format(L"item_{:03}.txt", index));
     }
     const FolderView::DebugFocusSelectionStateSnapshot finalSnapshot = observe();
     Debug::Perf::Emit(L"folder.focus_memory.entry_count", L"post-churn", 0u, finalSnapshot.focusMemoryEntryCount, 600u, S_OK);
     Debug::Perf::Emit(L"folder.focus_memory.payload_bytes", L"post-churn", 0u, finalSnapshot.focusMemoryPayloadBytes, 600u, S_OK);
     Debug::Perf::Emit(L"folder.focus_memory.eviction_count", L"post-churn", 0u, finalSnapshot.focusMemoryEvictionCount, 600u, S_OK);
 
-    maximumFocusMemoryEntries = (std::max)(maximumFocusMemoryEntries, finalSnapshot.focusMemoryEntryCount);
+    maximumFocusMemoryEntries      = (std::max)(maximumFocusMemoryEntries, finalSnapshot.focusMemoryEntryCount);
     maximumFocusMemoryPayloadBytes = (std::max)(maximumFocusMemoryPayloadBytes, finalSnapshot.focusMemoryPayloadBytes);
     const uint64_t focusMemoryCapViolationCount =
         (finalSnapshot.focusMemoryEntryCount > 512u ? 1u : 0u) + (finalSnapshot.focusMemoryPayloadBytes > 512u * 1024u ? 1u : 0u);
     const uint64_t focusResolveMetricRows = FolderViewPerfMetricCountInRun(L"folder.focus.resolve_us", metricScanOffset);
-    const uint64_t refreshMetricRows = FolderViewPerfMetricCountInRun(L"folder.refresh.enumeration_count", metricScanOffset);
+    const uint64_t refreshMetricRows      = FolderViewPerfMetricCountInRun(L"folder.refresh.enumeration_count", metricScanOffset);
     state.Require(focusResolveMetricRows >= kSortSampleCount,
-                  std::format(L"FolderView focus/selection state emitted {} resolver rows; expected at least {}.",
-                              focusResolveMetricRows,
-                              kSortSampleCount));
-    state.Require(refreshMetricRows >= 4u,
-                  std::format(L"FolderView focus/selection state emitted {} refresh rows; expected at least 4.", refreshMetricRows));
+                  std::format(L"FolderView focus/selection state emitted {} resolver rows; expected at least {}.", focusResolveMetricRows, kSortSampleCount));
+    state.Require(refreshMetricRows >= 4u, std::format(L"FolderView focus/selection state emitted {} refresh rows; expected at least 4.", refreshMetricRows));
     state.Require(invariantViolationCount == 0u,
                   std::format(L"FolderView focus/selection state observed {} current/selection invariant violation(s).", invariantViolationCount));
     state.Require(focusMemoryCapViolationCount == 0u,
@@ -24015,18 +23754,13 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     json.append(L"\n}\n");
 
     const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"folderView_perf_focus_selection_state_metrics.json");
-    const bool artifactWriteOk = ! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, json);
-    state.Require(artifactWriteOk && SelfTest::PathExists(artifactPath),
-                  L"Failed to write FolderView focus/selection state perf artifact.");
+    const bool artifactWriteOk               = ! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, json);
+    state.Require(artifactWriteOk && SelfTest::PathExists(artifactPath), L"Failed to write FolderView focus/selection state perf artifact.");
     return state.failure.empty();
 }
 
-[[nodiscard]] bool CreateFolderViewColdFirstVisitFixture(CaseState& state,
-                                                         const std::filesystem::path& root,
-                                                         size_t itemCount,
-                                                         size_t extensionCount,
-                                                         std::wstring& firstName,
-                                                         std::wstring& lastName) noexcept
+[[nodiscard]] bool CreateFolderViewColdFirstVisitFixture(
+    CaseState& state, const std::filesystem::path& root, size_t itemCount, size_t extensionCount, std::wstring& firstName, std::wstring& lastName) noexcept
 {
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create cold first-visit fixture root.");
     if (! state.failure.empty())
@@ -24073,9 +23807,9 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         return false;
     }
 
-    constexpr size_t kItemCount       = 384u;
-    constexpr size_t kExtensionCount  = 128u;
-    const std::filesystem::path root  = suiteRoot / L"work" / (L"folder_cold_first_visit_" + NewGuidText());
+    constexpr size_t kItemCount      = 384u;
+    constexpr size_t kExtensionCount = 128u;
+    const std::filesystem::path root = suiteRoot / L"work" / (L"folder_cold_first_visit_" + NewGuidText());
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     std::wstring firstName;
@@ -24146,7 +23880,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     const auto iconStart        = std::chrono::steady_clock::now();
     state.Require(WaitForFolderViewBitmapIconCount(FolderWindow::Pane::Left, 1u, SelfTest::Scale(5000ms)),
                   L"Cold FolderView first-visit did not resolve any bitmap icons.");
-    const uint64_t iconSettleUs = Debug::Perf::ElapsedUs(iconStart);
+    const uint64_t iconSettleUs           = Debug::Perf::ElapsedUs(iconStart);
     const auto coldPerfAfterIcons         = g_folderWindow.DebugGetWarmPanePerfSnapshot(FolderWindow::Pane::Left);
     const uint64_t iconQueueCalls         = coldPerfAfterIcons.queueIconLoadingCalls - coldPerfBefore.queueIconLoadingCalls;
     const uint64_t iconProcessQueueCalls  = coldPerfAfterIcons.processIconQueueCalls - coldPerfBefore.processIconQueueCalls;
@@ -24253,8 +23987,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     {
         return false;
     }
-    const auto restoreDummyConfig = wil::scope_exit([&]() noexcept
-    { static_cast<void>(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), previousDummyConfig)); });
+    const auto restoreDummyConfig =
+        wil::scope_exit([&]() noexcept { static_cast<void>(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), previousDummyConfig)); });
 
     constexpr std::string_view kEmptyFastConfig =
         R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":43,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0"})json";
@@ -24372,15 +24106,15 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     IconCache::GetInstance().Clear();
     SelfTestLatency::ClearAll();
     SelfTestLatency::SetNextDelay(SelfTestLatency::Point::IconPathLiveLookup, SelfTest::Scale(40ms));
-    const auto firstFailedLookupStart = std::chrono::steady_clock::now();
-    const std::optional<int> firstFailedIcon = IconCache::GetInstance().QuerySysIconIndexForPath(missingIconPath.c_str(), 0, false);
-    const uint64_t firstFailedLookupUs       = Debug::Perf::ElapsedUs(firstFailedLookupStart);
+    const auto firstFailedLookupStart             = std::chrono::steady_clock::now();
+    const std::optional<int> firstFailedIcon      = IconCache::GetInstance().QuerySysIconIndexForPath(missingIconPath.c_str(), 0, false);
+    const uint64_t firstFailedLookupUs            = Debug::Perf::ElapsedUs(firstFailedLookupStart);
     const uint64_t failedLookupConsumesAfterFirst = SelfTestLatency::ConsumeCount(SelfTestLatency::Point::IconPathLiveLookup);
 
     SelfTestLatency::SetNextDelay(SelfTestLatency::Point::IconPathLiveLookup, SelfTest::Scale(40ms));
-    const auto repeatedFailedLookupStart = std::chrono::steady_clock::now();
-    const std::optional<int> repeatedFailedIcon = IconCache::GetInstance().QuerySysIconIndexForPath(missingIconPath.c_str(), 0, false);
-    const uint64_t repeatedFailedLookupUs       = Debug::Perf::ElapsedUs(repeatedFailedLookupStart);
+    const auto repeatedFailedLookupStart           = std::chrono::steady_clock::now();
+    const std::optional<int> repeatedFailedIcon    = IconCache::GetInstance().QuerySysIconIndexForPath(missingIconPath.c_str(), 0, false);
+    const uint64_t repeatedFailedLookupUs          = Debug::Perf::ElapsedUs(repeatedFailedLookupStart);
     const uint64_t failedLookupConsumesAfterRepeat = SelfTestLatency::ConsumeCount(SelfTestLatency::Point::IconPathLiveLookup);
     const uint64_t repeatedFailedLookupCount =
         failedLookupConsumesAfterRepeat > failedLookupConsumesAfterFirst ? failedLookupConsumesAfterRepeat - failedLookupConsumesAfterFirst : 0u;
@@ -24393,7 +24127,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                   std::format(L"First slow failed icon lookup should consume exactly one live lookup hook; consumed={}.", failedLookupConsumesAfterFirst));
     state.Require(repeatedFailedLookupCount == 0u,
                   std::format(L"Repeated failed live icon lookup should honor the bounded negative-cache backoff; repeated shell lookups={}.",
-                               repeatedFailedLookupCount));
+                              repeatedFailedLookupCount));
     if (! state.failure.empty())
     {
         return false;
@@ -24515,16 +24249,16 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     {
         return false;
     }
-    const auto restoreDummyConfig = wil::scope_exit([&]() noexcept
-    { static_cast<void>(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), previousDummyConfig)); });
+    const auto restoreDummyConfig =
+        wil::scope_exit([&]() noexcept { static_cast<void>(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), previousDummyConfig)); });
 
     constexpr std::string_view kDeterministicEmptyDummyConfig =
         R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":44,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0"})json";
     state.Require(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), kDeterministicEmptyDummyConfig),
                   L"Failed to apply deterministic empty dummy configuration for FolderView relayout churn perf.");
 
-    constexpr size_t kItemCount          = 10000u;
-    constexpr size_t kExtensionCount     = 24u;
+    constexpr size_t kItemCount           = 10000u;
+    constexpr size_t kExtensionCount      = 24u;
     const std::filesystem::path dummyRoot = std::filesystem::path(L"/folderview-relayout-churn") / SanitizeFolderViewDummyPathSegment(NewGuidText());
     std::wstring firstName;
     std::wstring middleName;
@@ -24647,17 +24381,17 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
 
     std::vector<uint64_t> relayoutUs;
     relayoutUs.reserve(6u);
-    const std::uintmax_t relayoutMetricScanOffset = FolderViewPerfMetricScanOffset();
-    const float alternateDpi = std::abs(originalDpi - 144.0f) > 0.5f ? 144.0f : 120.0f;
-    constexpr std::array<ThemeMode, 3> kRelayoutThemes = {{ThemeMode::Dark, ThemeMode::Light, ThemeMode::HighContrast}};
+    const std::uintmax_t relayoutMetricScanOffset                  = FolderViewPerfMetricScanOffset();
+    const float alternateDpi                                       = std::abs(originalDpi - 144.0f) > 0.5f ? 144.0f : 120.0f;
+    constexpr std::array<ThemeMode, 3> kRelayoutThemes             = {{ThemeMode::Dark, ThemeMode::Light, ThemeMode::HighContrast}};
     constexpr std::array<std::wstring_view, 3> kRelayoutThemeNames = {{L"dark", L"light", L"high-contrast"}};
     for (size_t cycle = 0; cycle < 6u; ++cycle)
     {
-        const float dpi = (cycle % 2u) == 0u ? alternateDpi : originalDpi;
-        const size_t themeIndex = cycle % kRelayoutThemes.size();
+        const float dpi                = (cycle % 2u) == 0u ? alternateDpi : originalDpi;
+        const size_t themeIndex        = cycle % kRelayoutThemes.size();
         const std::wstring cycleDetail = std::format(L"dpi-{:.0f}:theme-{}:cycle-{}", dpi, kRelayoutThemeNames[themeIndex], cycle);
-        const auto relayoutStart = std::chrono::steady_clock::now();
-        auto phaseStart          = std::chrono::steady_clock::now();
+        const auto relayoutStart       = std::chrono::steady_clock::now();
+        auto phaseStart                = std::chrono::steady_clock::now();
         g_folderWindow.OnDpiChanged(dpi);
         Debug::Perf::Emit(L"folder.relayout.dpi_change_us", cycleDetail, Debug::Perf::ElapsedUs(phaseStart), static_cast<uint64_t>(cycle), kItemCount, S_OK);
         phaseStart = std::chrono::steady_clock::now();
@@ -24676,7 +24410,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                          std::max(640, originalWidth + deltaWidth),
                          std::max(420, originalHeight + static_cast<int>(cycle % 3u) * 20),
                          SWP_NOZORDER | SWP_NOACTIVATE);
-            Debug::Perf::Emit(L"folder.relayout.set_window_pos_us", cycleDetail, Debug::Perf::ElapsedUs(phaseStart), static_cast<uint64_t>(cycle), kItemCount, S_OK);
+            Debug::Perf::Emit(
+                L"folder.relayout.set_window_pos_us", cycleDetail, Debug::Perf::ElapsedUs(phaseStart), static_cast<uint64_t>(cycle), kItemCount, S_OK);
         }
         phaseStart = std::chrono::steady_clock::now();
         PumpPendingMessages();
@@ -24694,12 +24429,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                       std::format(L"FolderView relayout churn snapshot failed for cycle {}.", cycle));
         state.Require(snapshot.firstVisibleIndex > 0u,
                       std::format(L"FolderView relayout churn cycle {} lost scrolled position; firstVisibleIndex={}.", cycle, snapshot.firstVisibleIndex));
-        Debug::Perf::Emit(L"folder.relayout_to_paint_us",
-                          cycleDetail,
-                          elapsedUs,
-                          static_cast<uint64_t>(snapshot.visibleItems.size()),
-                          kItemCount,
-                          S_OK);
+        Debug::Perf::Emit(L"folder.relayout_to_paint_us", cycleDetail, elapsedUs, static_cast<uint64_t>(snapshot.visibleItems.size()), kItemCount, S_OK);
         relayoutUs.push_back(elapsedUs);
         if (! state.failure.empty())
         {
@@ -25034,9 +24764,9 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(5000ms)), L"Refresh-preservation path did not load.");
     state.Require(WaitForAtomicAtLeast(enumerationCount, 1u, SelfTest::Scale(5000ms)), L"Initial refresh-preservation enumeration did not complete.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"focus_anchor.txt", L"selected_keep.txt", L"rename_from.txt", L"delete_me.txt"},
-                                   SelfTest::Scale(5000ms)),
-                  L"Refresh-preservation seed items did not load.");
+    state.Require(
+        WaitForPaneItems(FolderWindow::Pane::Left, {L"focus_anchor.txt", L"selected_keep.txt", L"rename_from.txt", L"delete_me.txt"}, SelfTest::Scale(5000ms)),
+        L"Refresh-preservation seed items did not load.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"focus_anchor.txt"), L"Failed to focus refresh-preservation anchor.");
     state.Require(WaitForFolderViewFocusedItem(FolderWindow::Pane::Left, L"focus_anchor.txt", SelfTest::Scale(2000ms)),
                   L"Refresh-preservation focus did not settle before mutation.");
@@ -25049,8 +24779,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     FocusFolderViewPane(FolderWindow::Pane::Left);
     state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
                   L"Refresh-preservation FolderView did not receive focus before quick search.");
-    state.Require(ClearSyntheticTextInputModifiersForFolderViewPerf(),
-                  L"Refresh-preservation FolderView could not clear synthetic text-input modifiers.");
+    state.Require(ClearSyntheticTextInputModifiersForFolderViewPerf(), L"Refresh-preservation FolderView could not clear synthetic text-input modifiers.");
     if (! state.failure.empty())
     {
         return false;
@@ -25059,9 +24788,9 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     FolderView::IncrementalSearchDebugSnapshot searchSnapshot{};
     state.Require(WaitForFolderViewQuickSearchSnapshot(FolderWindow::Pane::Left,
                                                        [](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept
-    {
-        return value.active && value.query.empty();
-    }, SelfTest::Scale(1000ms), &searchSnapshot),
+    { return value.active && value.query.empty(); },
+                                                       SelfTest::Scale(1000ms),
+                                                       &searchSnapshot),
                   std::format(L"Refresh-preservation quick search did not activate cleanly; active={} query='{}'.",
                               searchSnapshot.active ? L"yes" : L"no",
                               searchSnapshot.query));
@@ -25081,9 +24810,9 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     }
     state.Require(WaitForFolderViewQuickSearchSnapshot(FolderWindow::Pane::Left,
                                                        [](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept
-    {
-        return value.active && value.query == L"focus";
-    }, SelfTest::Scale(1500ms), &searchSnapshot),
+    { return value.active && value.query == L"focus"; },
+                                                       SelfTest::Scale(1500ms),
+                                                       &searchSnapshot),
                   std::format(L"Expected active query 'focus' before mutation, got active={} query='{}'.", searchSnapshot.active, searchSnapshot.query));
     state.Require(g_folderWindow.DebugWarmPaneRendering(FolderWindow::Pane::Left), L"Refresh-preservation quick-search warm render failed before mutation.");
     if (! state.failure.empty())
@@ -25135,13 +24864,13 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         return false;
     }
 
-    const auto settleStart = std::chrono::steady_clock::now();
-    const bool settled =
-        WaitForAtomicAtLeast(enumerationCount, enumBefore + 1u, SelfTest::Scale(10000ms)) &&
-        WaitForPaneItems(FolderWindow::Pane::Left, {L"focus_anchor.txt", L"selected_keep.txt", L"rename_to.txt", L"created_one.txt"},
-                         SelfTest::Scale(10000ms)) &&
-        WaitForFolderViewItemCount(FolderWindow::Pane::Left, 12u, SelfTest::Scale(10000ms)) &&
-        WaitForFolderViewFocusedItem(FolderWindow::Pane::Left, L"focus_anchor.txt", SelfTest::Scale(5000ms));
+    const auto settleStart  = std::chrono::steady_clock::now();
+    const bool settled      = WaitForAtomicAtLeast(enumerationCount, enumBefore + 1u, SelfTest::Scale(10000ms)) &&
+                              WaitForPaneItems(FolderWindow::Pane::Left,
+                                               {L"focus_anchor.txt", L"selected_keep.txt", L"rename_to.txt", L"created_one.txt"},
+                                               SelfTest::Scale(10000ms)) &&
+                              WaitForFolderViewItemCount(FolderWindow::Pane::Left, 12u, SelfTest::Scale(10000ms)) &&
+                              WaitForFolderViewFocusedItem(FolderWindow::Pane::Left, L"focus_anchor.txt", SelfTest::Scale(5000ms));
     const uint64_t settleUs = Debug::Perf::ElapsedUs(settleStart);
     state.Require(settled,
                   std::format(L"Refresh-preservation mutation did not settle. itemCount={} focus='{}' refreshDelta={} enumCount={}.",
@@ -25149,8 +24878,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                               g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left),
                               g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) - refreshBefore,
                               enumerationCount.load(std::memory_order_acquire)));
-    state.Require(! g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"delete_me.txt"),
-                  L"Refresh-preservation should not show deleted file.");
+    state.Require(! g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"delete_me.txt"), L"Refresh-preservation should not show deleted file.");
     state.Require(! g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"rename_from.txt"),
                   L"Refresh-preservation should not show renamed source.");
     state.Require(g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"selected_keep.txt"),
@@ -25174,13 +24902,13 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     Debug::Perf::Emit(
         L"folder.refresh_preservation_settle_us", L"final_items=12", settleUs, refreshDelta, enumerationCount.load(std::memory_order_acquire), S_OK);
 
-    const uint64_t preserveMetricCount        = FolderViewPerfMetricCountInRun(L"folder.refresh.preserve_count", metricScanOffset);
-    const uint64_t rebuildMetricCount         = FolderViewPerfMetricCountInRun(L"folder.refresh.rebuild_count", metricScanOffset);
-    const uint64_t selectionMetricCount       = FolderViewPerfMetricCountInRun(L"folder.refresh.selection_preserve_count", metricScanOffset);
-    const uint64_t renameTransferMetricCount  = FolderViewPerfMetricCountInRun(L"folder.refresh.rename_transfer_count", metricScanOffset);
-    const uint64_t requestToPaintMetricCount  = FolderViewPerfMetricCountInRun(L"folder.refresh.request_to_paint_us", metricScanOffset);
-    const uint64_t debounceDelayMetricCount   = FolderViewPerfMetricCountInRun(L"folder.refresh.debounce_delay_ms", metricScanOffset);
-    const uint64_t enumerationMetricCount     = FolderViewPerfMetricCountInRun(L"folder.refresh.enumeration_count", metricScanOffset);
+    const uint64_t preserveMetricCount       = FolderViewPerfMetricCountInRun(L"folder.refresh.preserve_count", metricScanOffset);
+    const uint64_t rebuildMetricCount        = FolderViewPerfMetricCountInRun(L"folder.refresh.rebuild_count", metricScanOffset);
+    const uint64_t selectionMetricCount      = FolderViewPerfMetricCountInRun(L"folder.refresh.selection_preserve_count", metricScanOffset);
+    const uint64_t renameTransferMetricCount = FolderViewPerfMetricCountInRun(L"folder.refresh.rename_transfer_count", metricScanOffset);
+    const uint64_t requestToPaintMetricCount = FolderViewPerfMetricCountInRun(L"folder.refresh.request_to_paint_us", metricScanOffset);
+    const uint64_t debounceDelayMetricCount  = FolderViewPerfMetricCountInRun(L"folder.refresh.debounce_delay_ms", metricScanOffset);
+    const uint64_t enumerationMetricCount    = FolderViewPerfMetricCountInRun(L"folder.refresh.enumeration_count", metricScanOffset);
     state.Require(preserveMetricCount > 0u, L"Missing folder.refresh.preserve_count metric.");
     state.Require(rebuildMetricCount > 0u, L"Missing folder.refresh.rebuild_count metric.");
     state.Require(selectionMetricCount > 0u, L"Missing folder.refresh.selection_preserve_count metric.");
@@ -25230,9 +24958,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     return state.failure.empty();
 }
 
-[[nodiscard]] bool CreateFolderViewIconPipelineLocalFixture(CaseState& state,
-                                                            const std::filesystem::path& root,
-                                                            std::vector<std::wstring>& probeNames) noexcept
+[[nodiscard]] bool CreateFolderViewIconPipelineLocalFixture(CaseState& state, const std::filesystem::path& root, std::vector<std::wstring>& probeNames) noexcept
 {
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create icon-pipeline local fixture root.");
     if (! state.failure.empty())
@@ -25277,7 +25003,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     }
 
     std::error_code ec;
-    const std::filesystem::path root = suiteRoot / L"work" / (L"iconcache_live_failure_retry_" + NewGuidText());
+    const std::filesystem::path root      = suiteRoot / L"work" / (L"iconcache_live_failure_retry_" + NewGuidText());
     const std::filesystem::path probePath = root / L"transient-live-icon.txt";
     std::filesystem::remove_all(root, ec);
     ec.clear();
@@ -25290,36 +25016,32 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     }
 
     SelfTestLatency::ClearAll();
-    auto cleanup = wil::scope_exit([] { SelfTestLatency::ClearAll(); });
+    auto cleanup                               = wil::scope_exit([] { SelfTestLatency::ClearAll(); });
     constexpr uint64_t kRefreshesInsideBackoff = 8u;
     for (uint64_t refreshIndex = 0u; refreshIndex < kRefreshesInsideBackoff; ++refreshIndex)
     {
         IconCache::GetInstance().Clear();
         SelfTestLatency::SetNextFailure(SelfTestLatency::Point::IconPathLiveLookup, E_ACCESSDENIED);
-        const std::optional<int> baselineIcon =
-            IconCache::GetInstance().QuerySysIconIndexForPath(probePath.c_str(), FILE_ATTRIBUTE_NORMAL, false);
+        const std::optional<int> baselineIcon = IconCache::GetInstance().QuerySysIconIndexForPath(probePath.c_str(), FILE_ATTRIBUTE_NORMAL, false);
         state.Require(! baselineIcon.has_value(), L"Uncached baseline live icon lookup should consume the forced shell failure.");
     }
     const uint64_t baselineShellLookups = SelfTestLatency::ConsumeCount(SelfTestLatency::Point::IconPathLiveLookup);
-    state.Require(baselineShellLookups == kRefreshesInsideBackoff,
-                  std::format(L"Uncached baseline should issue one shell lookup per refresh; refreshes={} lookups={}.",
-                              kRefreshesInsideBackoff,
-                              baselineShellLookups));
+    state.Require(
+        baselineShellLookups == kRefreshesInsideBackoff,
+        std::format(L"Uncached baseline should issue one shell lookup per refresh; refreshes={} lookups={}.", kRefreshesInsideBackoff, baselineShellLookups));
 
     IconCache::GetInstance().Clear();
     SelfTestLatency::ClearAll();
     const std::uintmax_t metricScanOffset = FolderViewPerfMetricScanOffset();
-    const auto firstBackoff = std::chrono::milliseconds{DebugGetLivePathIconFailureBackoffMs(1u)};
-    const auto secondBackoff = std::chrono::milliseconds{DebugGetLivePathIconFailureBackoffMs(2u)};
-    state.Require(firstBackoff >= 1ms && secondBackoff == firstBackoff * 2,
-                  std::format(L"Live icon failure backoff should double from the first retry; first={}ms second={}ms.",
-                              firstBackoff.count(),
-                              secondBackoff.count()));
+    const auto firstBackoff               = std::chrono::milliseconds{DebugGetLivePathIconFailureBackoffMs(1u)};
+    const auto secondBackoff              = std::chrono::milliseconds{DebugGetLivePathIconFailureBackoffMs(2u)};
+    state.Require(
+        firstBackoff >= 1ms && secondBackoff == firstBackoff * 2,
+        std::format(L"Live icon failure backoff should double from the first retry; first={}ms second={}ms.", firstBackoff.count(), secondBackoff.count()));
 
     SelfTestLatency::SetNextFailure(SelfTestLatency::Point::IconPathLiveLookup, E_ACCESSDENIED);
-    const std::optional<int> firstIcon =
-        IconCache::GetInstance().QuerySysIconIndexForPath(probePath.c_str(), FILE_ATTRIBUTE_NORMAL, false);
-    const uint64_t consumesAfterFirst = SelfTestLatency::ConsumeCount(SelfTestLatency::Point::IconPathLiveLookup);
+    const std::optional<int> firstIcon = IconCache::GetInstance().QuerySysIconIndexForPath(probePath.c_str(), FILE_ATTRIBUTE_NORMAL, false);
+    const uint64_t consumesAfterFirst  = SelfTestLatency::ConsumeCount(SelfTestLatency::Point::IconPathLiveLookup);
 
     std::optional<int> secondIcon;
     for (uint64_t refreshIndex = 0u; refreshIndex < kRefreshesInsideBackoff; ++refreshIndex)
@@ -25331,55 +25053,45 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
 
     std::this_thread::sleep_for(firstBackoff + 100ms);
     SelfTestLatency::SetNextFailure(SelfTestLatency::Point::IconPathLiveLookup, E_ACCESSDENIED);
-    const std::optional<int> thirdIcon =
-        IconCache::GetInstance().QuerySysIconIndexForPath(probePath.c_str(), FILE_ATTRIBUTE_NORMAL, false);
-    const uint64_t consumesAfterThird = SelfTestLatency::ConsumeCount(SelfTestLatency::Point::IconPathLiveLookup);
+    const std::optional<int> thirdIcon = IconCache::GetInstance().QuerySysIconIndexForPath(probePath.c_str(), FILE_ATTRIBUTE_NORMAL, false);
+    const uint64_t consumesAfterThird  = SelfTestLatency::ConsumeCount(SelfTestLatency::Point::IconPathLiveLookup);
 
     std::this_thread::sleep_for(100ms);
-    const std::optional<int> fourthIcon =
-        IconCache::GetInstance().QuerySysIconIndexForPath(probePath.c_str(), FILE_ATTRIBUTE_NORMAL, false);
-    const uint64_t consumesAfterFourth = SelfTestLatency::ConsumeCount(SelfTestLatency::Point::IconPathLiveLookup);
+    const std::optional<int> fourthIcon = IconCache::GetInstance().QuerySysIconIndexForPath(probePath.c_str(), FILE_ATTRIBUTE_NORMAL, false);
+    const uint64_t consumesAfterFourth  = SelfTestLatency::ConsumeCount(SelfTestLatency::Point::IconPathLiveLookup);
 
     std::this_thread::sleep_for(secondBackoff + 100ms);
-    const std::optional<int> fifthIcon =
-        IconCache::GetInstance().QuerySysIconIndexForPath(probePath.c_str(), FILE_ATTRIBUTE_NORMAL, false);
-    const uint64_t consumesAfterFifth = SelfTestLatency::ConsumeCount(SelfTestLatency::Point::IconPathLiveLookup);
+    const std::optional<int> fifthIcon = IconCache::GetInstance().QuerySysIconIndexForPath(probePath.c_str(), FILE_ATTRIBUTE_NORMAL, false);
+    const uint64_t consumesAfterFifth  = SelfTestLatency::ConsumeCount(SelfTestLatency::Point::IconPathLiveLookup);
 
-    const std::optional<int> sixthIcon =
-        IconCache::GetInstance().QuerySysIconIndexForPath(probePath.c_str(), FILE_ATTRIBUTE_NORMAL, false);
-    const uint64_t consumesAfterSixth = SelfTestLatency::ConsumeCount(SelfTestLatency::Point::IconPathLiveLookup);
+    const std::optional<int> sixthIcon = IconCache::GetInstance().QuerySysIconIndexForPath(probePath.c_str(), FILE_ATTRIBUTE_NORMAL, false);
+    const uint64_t consumesAfterSixth  = SelfTestLatency::ConsumeCount(SelfTestLatency::Point::IconPathLiveLookup);
 
     state.Require(! firstIcon.has_value(), L"Forced transient live icon lookup failure should report no icon index.");
     state.Require(consumesAfterFirst == 1u,
                   std::format(L"Forced transient live icon lookup should consume exactly one live hook; consumed={}.", consumesAfterFirst));
     state.Require(! secondIcon.has_value(), L"Immediate repeated live icon lookup should use the first negative-cache backoff window.");
-    state.Require(consumesAfterSecond == consumesAfterFirst,
-                  std::format(L"Immediate repeated live icon lookup should not re-enter the shell; before={} after={}.",
-                              consumesAfterFirst,
-                              consumesAfterSecond));
+    state.Require(
+        consumesAfterSecond == consumesAfterFirst,
+        std::format(L"Immediate repeated live icon lookup should not re-enter the shell; before={} after={}.", consumesAfterFirst, consumesAfterSecond));
     state.Require(! thirdIcon.has_value(), L"Retry after the first backoff should reach the forced second shell failure.");
-    state.Require(consumesAfterThird == consumesAfterSecond + 1u,
-                  std::format(L"Retry after the first backoff should perform exactly one shell lookup; before={} after={}.",
-                              consumesAfterSecond,
-                              consumesAfterThird));
+    state.Require(
+        consumesAfterThird == consumesAfterSecond + 1u,
+        std::format(L"Retry after the first backoff should perform exactly one shell lookup; before={} after={}.", consumesAfterSecond, consumesAfterThird));
     state.Require(! fourthIcon.has_value(), L"Lookup inside the doubled backoff should remain negatively cached.");
-    state.Require(consumesAfterFourth == consumesAfterThird,
-                  std::format(L"Lookup inside the doubled backoff should not re-enter the shell; before={} after={}.",
-                              consumesAfterThird,
-                              consumesAfterFourth));
+    state.Require(
+        consumesAfterFourth == consumesAfterThird,
+        std::format(L"Lookup inside the doubled backoff should not re-enter the shell; before={} after={}.", consumesAfterThird, consumesAfterFourth));
     state.Require(fifthIcon.has_value(), L"Retry after the doubled backoff should re-enter the shell and recover.");
-    state.Require(consumesAfterFifth == consumesAfterFourth + 1u,
-                  std::format(L"Retry after the doubled backoff should perform exactly one shell lookup; before={} after={}.",
-                              consumesAfterFourth,
-                              consumesAfterFifth));
+    state.Require(
+        consumesAfterFifth == consumesAfterFourth + 1u,
+        std::format(L"Retry after the doubled backoff should perform exactly one shell lookup; before={} after={}.", consumesAfterFourth, consumesAfterFifth));
     state.Require(sixthIcon.has_value() && fifthIcon.has_value() && sixthIcon.value() == fifthIcon.value(),
                   L"Successful live icon lookup should replace and clear the negative entry with a positive cache entry.");
     state.Require(consumesAfterSixth == consumesAfterFifth,
-                  std::format(L"Recovered success should be served from the positive cache; before={} after={}.",
-                              consumesAfterFifth,
-                              consumesAfterSixth));
+                  std::format(L"Recovered success should be served from the positive cache; before={} after={}.", consumesAfterFifth, consumesAfterSixth));
 
-    const uint64_t uncachedFailureRows = FolderViewPerfMetricCountInRun(L"iconcache.path_live_lookup_failed_uncached", metricScanOffset);
+    const uint64_t uncachedFailureRows  = FolderViewPerfMetricCountInRun(L"iconcache.path_live_lookup_failed_uncached", metricScanOffset);
     const uint64_t cachedFailureHitRows = FolderViewPerfMetricCountInRun(L"iconcache.path_live_lookup_failure_cache_hit", metricScanOffset);
     state.Require(uncachedFailureRows == 2u,
                   std::format(L"Two actual failed shell lookups should preserve two uncached-failure rows; rows={}.", uncachedFailureRows));
@@ -25448,8 +25160,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     std::error_code ec;
     std::filesystem::remove_all(localRoot, ec);
     std::vector<std::wstring> localProbeNames;
-    state.Require(CreateFolderViewIconPipelineLocalFixture(state, localRoot, localProbeNames),
-                  L"Failed to create icon-pipeline local cold/slow fixture.");
+    state.Require(CreateFolderViewIconPipelineLocalFixture(state, localRoot, localProbeNames), L"Failed to create icon-pipeline local cold/slow fixture.");
     if (! state.failure.empty())
     {
         return false;
@@ -25473,8 +25184,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
 
     const auto navigationStart = std::chrono::steady_clock::now();
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, localRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, localRoot, SelfTest::Scale(10000ms)),
-                  L"Icon-pipeline local cold/slow path did not load.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, localRoot, SelfTest::Scale(10000ms)), L"Icon-pipeline local cold/slow path did not load.");
     state.Require(WaitForFolderViewItemCount(FolderWindow::Pane::Left, localProbeNames.size(), SelfTest::Scale(10000ms)),
                   std::format(L"Icon-pipeline local item count mismatch; expected={} actual={}.",
                               localProbeNames.size(),
@@ -25489,7 +25199,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         return false;
     }
 
-    const auto earlyIconStart = std::chrono::steady_clock::now();
+    const auto earlyIconStart                    = std::chrono::steady_clock::now();
     const bool resolvedBeforeSlowExtractFinished = WaitForFolderViewBitmapIconCount(FolderWindow::Pane::Left, 1u, SelfTest::Scale(700ms));
     const uint64_t earlyIconUs                   = Debug::Perf::ElapsedUs(earlyIconStart);
     state.Require(resolvedBeforeSlowExtractFinished,
@@ -25523,8 +25233,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     {
         return false;
     }
-    const auto restoreDummyConfig = wil::scope_exit([&]() noexcept
-    { static_cast<void>(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), previousDummyConfig)); });
+    const auto restoreDummyConfig =
+        wil::scope_exit([&]() noexcept { static_cast<void>(SetPluginConfigurationForFolderViewPerf(dummy.informations.get(), previousDummyConfig)); });
 
     constexpr std::string_view kEmptyDummyConfig =
         R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":45,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0"})json";
@@ -25610,8 +25320,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                   L"Icon-pipeline recall thumbnail fallback did not settle.");
     const uint64_t thumbnailProviderConsumes = SelfTestLatency::ConsumeCount(SelfTestLatency::Point::ShellThumbnailProviderAllowed);
     state.Require(thumbnailProviderConsumes == 0u,
-                  std::format(L"Offline/recall synthetic provider thumbnails should not invoke provider shell I/O; consumed={}.",
-                              thumbnailProviderConsumes));
+                  std::format(L"Offline/recall synthetic provider thumbnails should not invoke provider shell I/O; consumed={}.", thumbnailProviderConsumes));
 
     Debug::Perf::Emit(L"folder.icon_pipeline.early_visible_icon_us",
                       L"one-delayed-extract",
@@ -25619,12 +25328,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                       resolvedBeforeSlowExtractFinished ? 1u : 0u,
                       iconExtractLatencyConsumeCount,
                       resolvedBeforeSlowExtractFinished ? S_OK : S_FALSE);
-    Debug::Perf::Emit(L"folder.icon_pipeline.bitmap_icon_count",
-                      L"one-delayed-extract",
-                      0u,
-                      bitmapIconCount,
-                      localProbeNames.size(),
-                      bitmapIconCount >= 2u ? S_OK : S_FALSE);
+    Debug::Perf::Emit(
+        L"folder.icon_pipeline.bitmap_icon_count", L"one-delayed-extract", 0u, bitmapIconCount, localProbeNames.size(), bitmapIconCount >= 2u ? S_OK : S_FALSE);
 
     static constexpr std::array<std::wstring_view, 13> kMetricAuditNames{{
         L"FolderView.ExecuteEnumeration.IconIndex.QueryExtensions",
@@ -26978,17 +26683,13 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     static_cast<void>(SendMessageW(folderView, WM_KEYDOWN, navigationKey, 1));
     const std::wstring focusAfterInput = std::wstring(g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left));
     state.Require(focusAfterInput != focusBeforeInput,
-                  std::format(L"FolderView input-to-paint failure proof must move focus; before='{}' after='{}'.",
-                              focusBeforeInput,
-                              focusAfterInput));
+                  std::format(L"FolderView input-to-paint failure proof must move focus; before='{}' after='{}'.", focusBeforeInput, focusAfterInput));
     UpdateWindow(folderView);
     const uint64_t inputMetricAfterFailedPaint = FolderViewPerfMetricCountInRun(L"folder.frame.input_to_paint_us", metricScanOffset);
-    state.Require(inputMetricAfterFailedPaint == inputMetricBefore,
-                  std::format(L"Input-to-paint metric emitted during failed EndDraw paint; before={} after={}.",
-                              inputMetricBefore,
-                              inputMetricAfterFailedPaint));
-    state.Require(g_folderWindow.DebugWarmPaneRendering(FolderWindow::Pane::Left),
-                  L"Failed to warm render after the failed input-to-paint paint.");
+    state.Require(
+        inputMetricAfterFailedPaint == inputMetricBefore,
+        std::format(L"Input-to-paint metric emitted during failed EndDraw paint; before={} after={}.", inputMetricBefore, inputMetricAfterFailedPaint));
+    state.Require(g_folderWindow.DebugWarmPaneRendering(FolderWindow::Pane::Left), L"Failed to warm render after the failed input-to-paint paint.");
     const uint64_t inputMetricAfterLaterPresent = FolderViewPerfMetricCountInRun(L"folder.frame.input_to_paint_us", metricScanOffset);
     state.Require(inputMetricAfterLaterPresent == inputMetricBefore,
                   std::format(L"Stale input-to-paint metric emitted on an unrelated later Present; before={} after={}.",
@@ -26999,9 +26700,9 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         return false;
     }
 
-    const uint64_t metricBefore           = FolderViewPerfMetricCountInRun(L"folder.refresh.request_to_paint_us", metricScanOffset);
-    const uint32_t enumBefore             = enumRoot.load(std::memory_order_acquire);
-    const uint64_t refreshBefore          = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
+    const uint64_t metricBefore  = FolderViewPerfMetricCountInRun(L"folder.refresh.request_to_paint_us", metricScanOffset);
+    const uint32_t enumBefore    = enumRoot.load(std::memory_order_acquire);
+    const uint64_t refreshBefore = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
 
     g_folderWindow.CommandRefresh(FolderWindow::Pane::Left);
     state.Require(WaitForAtomicAtLeastWithoutWindowPaint(enumRoot, enumBefore + 1u, folderView, SelfTest::Scale(5000ms)),
@@ -27023,21 +26724,17 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     UpdateWindow(folderView);
     const uint64_t metricAfterFailedPaint = FolderViewPerfMetricCountInRun(L"folder.refresh.request_to_paint_us", metricScanOffset);
     state.Require(metricAfterFailedPaint == metricBefore,
-                  std::format(L"Refresh-to-paint metric emitted during failed EndDraw paint; before={} after={}.",
-                              metricBefore,
-                              metricAfterFailedPaint));
+                  std::format(L"Refresh-to-paint metric emitted during failed EndDraw paint; before={} after={}.", metricBefore, metricAfterFailedPaint));
     if (! state.failure.empty())
     {
         return false;
     }
 
-    state.Require(g_folderWindow.DebugWarmPaneRendering(FolderWindow::Pane::Left),
-                  L"Failed to warm render after the failed refresh-to-paint paint.");
+    state.Require(g_folderWindow.DebugWarmPaneRendering(FolderWindow::Pane::Left), L"Failed to warm render after the failed refresh-to-paint paint.");
     const uint64_t metricAfterLaterPresent = FolderViewPerfMetricCountInRun(L"folder.refresh.request_to_paint_us", metricScanOffset);
-    state.Require(metricAfterLaterPresent == metricBefore,
-                  std::format(L"Stale refresh-to-paint metric emitted on an unrelated later Present; before={} after={}.",
-                              metricBefore,
-                              metricAfterLaterPresent));
+    state.Require(
+        metricAfterLaterPresent == metricBefore,
+        std::format(L"Stale refresh-to-paint metric emitted on an unrelated later Present; before={} after={}.", metricBefore, metricAfterLaterPresent));
 
     return state.failure.empty();
 }
@@ -27112,10 +26809,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                                   alert.title));
     };
 
-    auto assertRecovered = [&](FolderView::DebugRenderFailurePoint point,
-                               HRESULT forcedHr,
-                               std::wstring_view context,
-                               const FolderView::RenderingDebugSnapshot& before)
+    auto assertRecovered =
+        [&](FolderView::DebugRenderFailurePoint point, HRESULT forcedHr, std::wstring_view context, const FolderView::RenderingDebugSnapshot& before)
     {
         g_folderWindow.DebugForcePaneNextRenderFailure(FolderWindow::Pane::Left, point, forcedHr);
         state.Require(g_folderWindow.DebugWarmPaneRendering(FolderWindow::Pane::Left),
@@ -27174,7 +26869,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                   L"Enumeration did not complete for FolderView device-loss recovery test.");
     state.Require(WaitForFolderViewItemCount(FolderWindow::Pane::Left, 2u, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"FolderView device-loss fixture did not show the expected item count.");
-    state.Require(g_folderWindow.DebugWarmPaneRendering(FolderWindow::Pane::Left), L"Failed to warm initial FolderView rendering before device-loss injection.");
+    state.Require(g_folderWindow.DebugWarmPaneRendering(FolderWindow::Pane::Left),
+                  L"Failed to warm initial FolderView rendering before device-loss injection.");
     assertNoAlert(L"initial warm render");
     if (! state.failure.empty())
     {
@@ -27266,11 +26962,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
 
     FocusFolderViewPane(FolderWindow::Pane::Left);
     g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
-        FolderWindow::Pane::Left,
-        [](std::wstring_view name) noexcept { return name == L"alpha.txt" || name == L"beta.txt" || name == L"gamma.txt"; },
-        true);
-    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 3u,
-                  L"FolderView brush-reuse guard failed to create a wide selected set.");
+        FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"alpha.txt" || name == L"beta.txt" || name == L"gamma.txt"; }, true);
+    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 3u, L"FolderView brush-reuse guard failed to create a wide selected set.");
     state.Require(g_folderWindow.DebugSetPaneHoveredItemByDisplayName(FolderWindow::Pane::Left, L"hover.txt"),
                   L"FolderView brush-reuse guard failed to set an unselected hovered item.");
     if (! state.failure.empty())
@@ -27279,8 +26972,7 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     }
 
     g_folderWindow.DebugResetPaneDrawItemTransientBrushCreateCount(FolderWindow::Pane::Left);
-    state.Require(g_folderWindow.DebugWarmPaneRendering(FolderWindow::Pane::Left),
-                  L"Failed to warm-render FolderView brush-reuse guard.");
+    state.Require(g_folderWindow.DebugWarmPaneRendering(FolderWindow::Pane::Left), L"Failed to warm-render FolderView brush-reuse guard.");
 
     const FolderView::RenderingDebugSnapshot snapshot = g_folderWindow.DebugGetPaneRenderingSnapshot(FolderWindow::Pane::Left);
     Debug::Perf::Emit(L"folder.draw_item.transient_brush_create_count",
@@ -27289,9 +26981,9 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
                       snapshot.drawItemTransientBrushCreateCount,
                       4u,
                       snapshot.drawItemTransientBrushCreateCount == 0u ? S_OK : E_FAIL);
-    state.Require(snapshot.drawItemTransientBrushCreateCount == 0u,
-                  std::format(L"DrawItem created {} transient D2D brush(es) while rendering selected/hovered items.",
-                              snapshot.drawItemTransientBrushCreateCount));
+    state.Require(
+        snapshot.drawItemTransientBrushCreateCount == 0u,
+        std::format(L"DrawItem created {} transient D2D brush(es) while rendering selected/hovered items.", snapshot.drawItemTransientBrushCreateCount));
     if (! state.failure.empty())
     {
         return false;
@@ -27503,7 +27195,11 @@ void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
     SelfTest::RunCase(options, suite, L"cmd_pane_navigationView_full_path_popup_edit_route", [=](CaseState& state) noexcept {
         return TestPaneNavigationViewFullPathPopupEditRoute(mainWindow, state);
     });
-    SelfTest::RunCase(options, suite, L"cmd_reliability_navigation_popup_close_survives_reentrant_restore", [=](CaseState& state) noexcept {
+    SelfTest::RunCase(options,
+                      suite,
+                      L"cmd_reliability_navigation_popup_close_survives_reentrant_restore",
+                      [=](CaseState& state) noexcept
+    {
         return TestPaneFocusFollowsPointerAlwaysMovesFocusWithoutClick(mainWindow, state) &&
                TestPaneNavigationViewFullPathPopupEditRoute(mainWindow, state, false, true);
     });
@@ -27742,9 +27438,8 @@ void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
     SelfTest::RunCase(options, suite, L"folderView_perf_scroll_render_stress", [=](CaseState& state) noexcept {
         return TestFolderViewPerfScrollRenderStress(mainWindow, state);
     });
-    SelfTest::RunCase(options, suite, L"folderView_perf_huge_folder_scale", [=](CaseState& state) noexcept {
-        return TestFolderViewPerfHugeFolderScale(mainWindow, state);
-    });
+    SelfTest::RunCase(
+        options, suite, L"folderView_perf_huge_folder_scale", [=](CaseState& state) noexcept { return TestFolderViewPerfHugeFolderScale(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"folder_view_focus_invariant_generic_rebuild", [=](CaseState& state) noexcept {
         return TestFolderViewFocusInvariantGenericRebuild(mainWindow, state);
     });
@@ -27772,9 +27467,8 @@ void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
     SelfTest::RunCase(options, suite, L"folderView_perf_focus_selection_state", [=](CaseState& state) noexcept {
         return TestFolderViewPerfFocusSelectionState(mainWindow, state);
     });
-    SelfTest::RunCase(options, suite, L"folderView_perf_cold_first_visit", [=](CaseState& state) noexcept {
-        return TestFolderViewPerfColdFirstVisit(mainWindow, state);
-    });
+    SelfTest::RunCase(
+        options, suite, L"folderView_perf_cold_first_visit", [=](CaseState& state) noexcept { return TestFolderViewPerfColdFirstVisit(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"folderView_perf_slow_virtual_provider", [=](CaseState& state) noexcept {
         return TestFolderViewPerfSlowVirtualProvider(mainWindow, state);
     });
@@ -27802,10 +27496,9 @@ void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
         options, suite, L"cmd_pane_selection_same_extension", [=](CaseState& state) noexcept { return TestSelectSameExtensionCommands(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_selection_invert", [=](CaseState& state) noexcept { return TestInvertSelectionCommand(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_selection_hide_names", [=](CaseState& state) noexcept { return TestHideNamesCommands(mainWindow, state); });
-    SelfTest::RunCase(
-        options, suite, L"cmd_pane_selection_save_restore", [=](CaseState& state) noexcept {
-            return SkipIfCommandsSelfTestClipboardUnavailable(state) || TestSelectionSaveRestoreCommands(mainWindow, state);
-        });
+    SelfTest::RunCase(options, suite, L"cmd_pane_selection_save_restore", [=](CaseState& state) noexcept {
+        return SkipIfCommandsSelfTestClipboardUnavailable(state) || TestSelectionSaveRestoreCommands(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_pane_copy_text", [=](CaseState& state) noexcept {
         return SkipIfCommandsSelfTestClipboardUnavailable(state) || TestCopyTextCommands(mainWindow, state);
     });

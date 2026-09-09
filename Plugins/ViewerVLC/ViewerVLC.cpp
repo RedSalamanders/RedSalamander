@@ -26,9 +26,9 @@
 
 #include "DxUi/DxUi.Typography.h"
 #include "Helpers.h"
+#include "ViewerTitleBarTheme.h"
 #include "Win32CallbackHelpers.h"
 #include "WindowMessages.h"
-#include "ViewerTitleBarTheme.h"
 #include "WindowSizing.h"
 
 #include "resource.h"
@@ -648,8 +648,7 @@ struct HudLayout
         return false;
     }
 
-    return std::ranges::all_of(value, [](const char ch) noexcept
-    {
+    return std::ranges::all_of(value, [](const char ch) noexcept {
         return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-' || ch == '.';
     });
 }
@@ -662,7 +661,8 @@ struct HudLayout
 
 [[nodiscard]] bool IsAllowedAudioVisualization(std::string_view value) noexcept
 {
-    static constexpr std::array<std::string_view, 9> kAllowed{{"off", "any", "projectm", "spectrometer", "spectrum", "vumeter", "goom", "glspectrum", "visual"}};
+    static constexpr std::array<std::string_view, 9> kAllowed{
+        {"off", "any", "projectm", "spectrometer", "spectrum", "vumeter", "goom", "glspectrum", "visual"}};
     return std::ranges::any_of(kAllowed, [value](const std::string_view allowed) noexcept { return EqualsAsciiIgnoreCase(value, allowed); });
 }
 
@@ -674,9 +674,38 @@ struct HudLayout
     }
 
     static constexpr std::array<std::string_view, 32> kDenied{{
-        "plugin-path", "plugins-cache", "reset-plugins-cache", "config", "vlm-conf", "module", "intf", "extraintf", "control", "lua", "sout",
-        "codec", "dec-dev", "demux", "access", "stream-filter", "video-filter", "audio-filter", "sub-filter", "services-discovery", "keystore", "input-slave",
-        "plugins-scan", "ignore-config", "http", "rc", "telnet", "sub-source", "video-splitter", "logfile", "file-logging", "pidfile",
+        "plugin-path",
+        "plugins-cache",
+        "reset-plugins-cache",
+        "config",
+        "vlm-conf",
+        "module",
+        "intf",
+        "extraintf",
+        "control",
+        "lua",
+        "sout",
+        "codec",
+        "dec-dev",
+        "demux",
+        "access",
+        "stream-filter",
+        "video-filter",
+        "audio-filter",
+        "sub-filter",
+        "services-discovery",
+        "keystore",
+        "input-slave",
+        "plugins-scan",
+        "ignore-config",
+        "http",
+        "rc",
+        "telnet",
+        "sub-source",
+        "video-splitter",
+        "logfile",
+        "file-logging",
+        "pidfile",
     }};
 
     if (EqualsAsciiIgnoreCase(key, "vout") || EqualsAsciiIgnoreCase(key, "aout") || EqualsAsciiIgnoreCase(key, "avcodec-hw") ||
@@ -685,7 +714,8 @@ struct HudLayout
         return true;
     }
 
-    return std::ranges::any_of(kDenied, [key](const std::string_view denied) noexcept
+    return std::ranges::any_of(kDenied,
+                               [key](const std::string_view denied) noexcept
     {
         if (key.size() < denied.size())
         {
@@ -710,10 +740,11 @@ struct HudLayout
         return false;
     }
 
-    const size_t equals = argument.find('=');
+    const size_t equals        = argument.find('=');
     const std::string_view key = argument.substr(2, equals == std::string_view::npos ? std::string_view::npos : equals - 2);
-    if (key.empty() || ! std::ranges::all_of(key, [](const char ch) noexcept
-        { return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-'; }))
+    if (key.empty() || ! std::ranges::all_of(key, [](const char ch) noexcept {
+        return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-';
+    }))
     {
         return false;
     }
@@ -994,8 +1025,8 @@ struct ViewerVLC::VlcAsyncLoadWork
 
     wil::unique_hmodule moduleKeepAlive;
     wil::com_ptr<IViewer> self;
-    ViewerVLC* owner         = nullptr;
-    HWND hwnd              = nullptr;
+    ViewerVLC* owner        = nullptr;
+    HWND hwnd               = nullptr;
     uint64_t requestId      = 0;
     uint64_t windowIdentity = 0;
     std::filesystem::path path;
@@ -1004,7 +1035,7 @@ struct ViewerVLC::VlcAsyncLoadWork
     std::string reusableInstanceArgsKey;
     bool hasReusableInstance = false;
 #ifdef ENABLE_TESTS
-    uint32_t delayMs = 0;
+    uint32_t delayMs        = 0;
     bool failCompletionPost = false;
 #endif
 };
@@ -1035,7 +1066,7 @@ struct ViewerVLC::VlcAsyncCloseWork
 
     wil::unique_hmodule moduleKeepAlive;
     wil::com_ptr<IViewer> self;
-    ViewerVLC* owner          = nullptr;
+    ViewerVLC* owner        = nullptr;
     HWND hwnd               = nullptr;
     uint64_t requestId      = 0;
     uint64_t windowIdentity = 0;
@@ -1073,15 +1104,9 @@ void NotifyVlcAsyncFallback(HWND hwnd, const uint64_t windowIdentity) noexcept
     }
 
     DWORD_PTR ignored = 0u;
-    static_cast<void>(SendMessageTimeoutW(hwnd,
-                                          WndMsg::kViewerVlcAsyncFallbackReady,
-                                          static_cast<WPARAM>(windowIdentity),
-                                          0,
-                                          SMTO_ABORTIFHUNG | SMTO_BLOCK,
-                                          100u,
-                                          &ignored));
+    static_cast<void>(
+        SendMessageTimeoutW(hwnd, WndMsg::kViewerVlcAsyncFallbackReady, static_cast<WPARAM>(windowIdentity), 0, SMTO_ABORTIFHUNG | SMTO_BLOCK, 100u, &ignored));
 }
-
 
 } // namespace
 
@@ -1157,12 +1182,12 @@ void CALLBACK ViewerVLC::VlcCleanupDispatcherCallback(PTP_CALLBACK_INSTANCE inst
         uint32_t delayMs = 0u;
         std::shared_ptr<wil::unique_handle> releaseGate;
 #endif
-        bool synthetic          = false;
+        bool synthetic = false;
         {
             std::lock_guard lock(self->_cleanupDispatcherMutex);
             if (self->_deferredCleanupHead)
             {
-                state = std::move(self->_deferredCleanupHead);
+                state                      = std::move(self->_deferredCleanupHead);
                 self->_deferredCleanupHead = std::move(state->deferredCleanupNext);
                 requestId                  = state->cleanupRequestId;
                 windowIdentity             = state->cleanupWindowIdentity;
@@ -1208,10 +1233,8 @@ void CALLBACK ViewerVLC::VlcCleanupDispatcherCallback(PTP_CALLBACK_INSTANCE inst
             self->_syntheticCleanupPending.store(false, std::memory_order_release);
         }
 
-        self->RecordAsyncFallbackCompletion(AsyncFallbackCompletion{.kind = AsyncFallbackKind::Cleanup,
-                                                                     .requestId = requestId,
-                                                                     .windowIdentity = windowIdentity,
-                                                                     .hr = S_OK});
+        self->RecordAsyncFallbackCompletion(
+            AsyncFallbackCompletion{.kind = AsyncFallbackKind::Cleanup, .requestId = requestId, .windowIdentity = windowIdentity, .hr = S_OK});
         Debug::Perf::Emit(L"viewer.vlc.cleanup_us",
                           synthetic ? L"dispatcher-synthetic" : L"dispatcher-stop-release",
                           Debug::Perf::ElapsedUs(startedAt),
@@ -1955,11 +1978,11 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 return FALSE;
             }
 
-            *snapshot                = {};
-            snapshot->loadingActive  = _loadingUiActive;
-            snapshot->loadingVisible = _loadingUiVisible;
-            snapshot->missingVisible = _missingUiVisible;
-            snapshot->hasVideoChild  = _hVideo && IsWindow(_hVideo.get()) != FALSE;
+            *snapshot                   = {};
+            snapshot->loadingActive     = _loadingUiActive;
+            snapshot->loadingVisible    = _loadingUiVisible;
+            snapshot->missingVisible    = _missingUiVisible;
+            snapshot->hasVideoChild     = _hVideo && IsWindow(_hVideo.get()) != FALSE;
             snapshot->vlcModuleLoaded   = _vlc && _vlc->module;
             snapshot->vlcInstanceLoaded = _vlc && _vlc->instance;
             snapshot->vlcPlayerCreated  = _vlc && _vlc->player;
@@ -2001,22 +2024,22 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 snapshot->loadingSpinnerSecondDotArgb     = OpaqueArgbFromColorRef(ResolveLoadingSpinnerDotColor(spinner, 1));
             }
 
-            snapshot->windowIdentity          = _windowIdentity;
-            snapshot->loadRequestId           = _asyncOpenGeneration;
-            snapshot->pendingLoadWorkCount    = _pendingLoadWorkCount;
-            snapshot->loadQueueAccepted       = _loadQueueAccepted;
-            snapshot->loadQueueRejected       = _loadQueueRejected;
-            snapshot->staleLoadResults        = _staleLoadResults;
-            snapshot->cleanupCompletions      = _cleanupCompletions;
-            snapshot->deferredCleanupCount    = _deferredCleanupCount.load(std::memory_order_acquire) +
-                                                (_syntheticCleanupPending.load(std::memory_order_acquire) ? 1u : 0u);
-            snapshot->cleanupDeferrals        = _cleanupDeferrals.load(std::memory_order_acquire);
-            snapshot->cleanupSubmitFailures   = _cleanupSubmitFailures;
+            snapshot->windowIdentity       = _windowIdentity;
+            snapshot->loadRequestId        = _asyncOpenGeneration;
+            snapshot->pendingLoadWorkCount = _pendingLoadWorkCount;
+            snapshot->loadQueueAccepted    = _loadQueueAccepted;
+            snapshot->loadQueueRejected    = _loadQueueRejected;
+            snapshot->staleLoadResults     = _staleLoadResults;
+            snapshot->cleanupCompletions   = _cleanupCompletions;
+            snapshot->deferredCleanupCount =
+                _deferredCleanupCount.load(std::memory_order_acquire) + (_syntheticCleanupPending.load(std::memory_order_acquire) ? 1u : 0u);
+            snapshot->cleanupDeferrals          = _cleanupDeferrals.load(std::memory_order_acquire);
+            snapshot->cleanupSubmitFailures     = _cleanupSubmitFailures;
             snapshot->cleanupAllocationFailures = _cleanupAllocationFailures;
-            snapshot->asyncResultPostFailures = g_asyncResultPostFailures.load(std::memory_order_acquire);
-            snapshot->loadPostFallbacks       = _loadPostFallbacks;
-            snapshot->cleanupPostFallbacks    = _cleanupPostFallbacks;
-            snapshot->closePending            = _closePending;
+            snapshot->asyncResultPostFailures   = g_asyncResultPostFailures.load(std::memory_order_acquire);
+            snapshot->loadPostFallbacks         = _loadPostFallbacks;
+            snapshot->cleanupPostFallbacks      = _cleanupPostFallbacks;
+            snapshot->closePending              = _closePending;
 
             const SIZE snapshotSize  = ComputeSnapshotSize();
             snapshot->snapshotWidth  = snapshotSize.cx;
@@ -2103,7 +2126,7 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 releaseGate = std::make_shared<wil::unique_handle>(std::move(duplicate));
             }
 
-            _debugStopDelayMs = std::min<uint32_t>(delay->delayMs, 10'000u);
+            _debugStopDelayMs     = std::min<uint32_t>(delay->delayMs, 10'000u);
             _debugStopReleaseGate = std::move(releaseGate);
             return TRUE;
         }
@@ -2115,8 +2138,8 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 return FALSE;
             }
 
-            _debugLoadDelayMs        = std::min<uint32_t>(control->loadDelayMs, 10'000u);
-            _debugFailNextLoadSubmit = control->failNextLoadSubmit;
+            _debugLoadDelayMs                 = std::min<uint32_t>(control->loadDelayMs, 10'000u);
+            _debugFailNextLoadSubmit          = control->failNextLoadSubmit;
             _debugFailNextLoadCompletionPost  = control->failNextLoadCompletionPost;
             _debugFailNextCloseCompletionPost = control->failNextCloseCompletionPost;
             _debugFailNextCleanupSubmit       = control->failNextCleanupSubmit;
@@ -2610,10 +2633,10 @@ LRESULT ViewerVLC::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
     _hudDWriteFactory.reset();
     _hudD2DFactory.reset();
 
-    _loadingTimerId     = 0;
-    _loadingUiActive    = false;
-    _loadingUiVisible   = false;
-    _loadingStartedTick = 0;
+    _loadingTimerId           = 0;
+    _loadingUiActive          = false;
+    _loadingUiVisible         = false;
+    _loadingStartedTick       = 0;
     _windowIdentity           = 0;
     _closePending             = false;
     _destroyingAfterCleanup   = false;
@@ -2621,9 +2644,9 @@ LRESULT ViewerVLC::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
     _pendingCloseCleanupCount = 0;
     {
         std::lock_guard lock(_asyncFallbackMutex);
-        _asyncFallbackLoadCount    = 0;
-        _asyncFallbackCleanupCount = 0;
-        _asyncFallbackNewestLoad   = {};
+        _asyncFallbackLoadCount     = 0;
+        _asyncFallbackCleanupCount  = 0;
+        _asyncFallbackNewestLoad    = {};
         _asyncFallbackNewestCleanup = {};
     }
 
@@ -2721,7 +2744,7 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::Open(const ViewerOpenContext* context) noex
         HWND window = CreateWindowExW(0, kClassName, caption.c_str(), style, x, y, w, h, embeddedMode ? embeddedParent : nullptr, nullptr, g_hInstance, this);
         if (! window)
         {
-            _windowIdentity = 0;
+            _windowIdentity       = 0;
             const DWORD lastError = Debug::ErrorWithLastError(L"ViewerVLC: CreateWindowExW failed.");
             return HRESULT_FROM_WIN32(lastError);
         }
@@ -5205,21 +5228,16 @@ void ViewerVLC::BeginAsyncVlcLoad(const std::filesystem::path& path) noexcept
         ++_loadQueueRejected;
         SetLoadingUiVisible(false);
         SetMissingUiVisible(true, LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_ASYNC_SUBMIT_FAILED));
-        Debug::Perf::Emit(L"viewer.vlc.queue",
-                          L"module-pin-failed",
-                          0u,
-                          _asyncOpenGeneration,
-                          _windowIdentity,
-                          HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND));
+        Debug::Perf::Emit(L"viewer.vlc.queue", L"module-pin-failed", 0u, _asyncOpenGeneration, _windowIdentity, HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND));
         return;
     }
-    work->self            = static_cast<IViewer*>(this);
-    work->owner           = this;
-    work->hwnd            = _hWnd.get();
-    work->requestId       = ++_asyncOpenGeneration;
-    work->windowIdentity  = _windowIdentity;
-    work->path            = path;
-    work->config          = _config;
+    work->self           = static_cast<IViewer*>(this);
+    work->owner          = this;
+    work->hwnd           = _hWnd.get();
+    work->requestId      = ++_asyncOpenGeneration;
+    work->windowIdentity = _windowIdentity;
+    work->path           = path;
+    work->config         = _config;
     if (_vlc && _vlc->instance && _vlc->module)
     {
         work->reusableInstallDir      = _vlc->installDir;
@@ -5227,16 +5245,17 @@ void ViewerVLC::BeginAsyncVlcLoad(const std::filesystem::path& path) noexcept
         work->hasReusableInstance     = true;
     }
 #ifdef ENABLE_TESTS
-    work->delayMs            = _debugLoadDelayMs;
-    work->failCompletionPost = std::exchange(_debugFailNextLoadCompletionPost, false);
+    work->delayMs                 = _debugLoadDelayMs;
+    work->failCompletionPost      = std::exchange(_debugFailNextLoadCompletionPost, false);
     const bool forceSubmitFailure = std::exchange(_debugFailNextLoadSubmit, false);
 #else
     constexpr bool forceSubmitFailure = false;
 #endif
     ++_pendingLoadWorkCount;
 
-    const BOOL queued = forceSubmitFailure ? FALSE : TrySubmitThreadpoolCallback(
-        [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
+    const BOOL queued = forceSubmitFailure ? FALSE
+                                           : TrySubmitThreadpoolCallback(
+                                                 [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
     {
         std::unique_ptr<VlcAsyncLoadWork> work(static_cast<VlcAsyncLoadWork*>(context));
         if (work && work->moduleKeepAlive)
@@ -5249,13 +5268,13 @@ void ViewerVLC::BeginAsyncVlcLoad(const std::filesystem::path& path) noexcept
         ApplyDebugStopDelay(work->delayMs);
 #endif
 
-        auto result            = std::make_unique<VlcAsyncLoadResult>();
+        auto result             = std::make_unique<VlcAsyncLoadResult>();
         result->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
-        result->requestId      = work->requestId;
-        result->windowIdentity = work->windowIdentity;
-        result->path           = work->path;
-        result->self           = work->self;
-        result->owner          = work->owner;
+        result->requestId       = work->requestId;
+        result->windowIdentity  = work->windowIdentity;
+        result->path            = work->path;
+        result->self            = work->self;
+        result->owner           = work->owner;
 
         std::error_code ec;
         if (! std::filesystem::exists(work->path, ec) || ! std::filesystem::is_regular_file(work->path, ec))
@@ -5272,8 +5291,8 @@ void ViewerVLC::BeginAsyncVlcLoad(const std::filesystem::path& path) noexcept
             }
             else
             {
-                result->reuseExisting = work->hasReusableInstance && work->reusableInstallDir == spec.installDir &&
-                                        work->reusableInstanceArgsKey == spec.instanceArgsKey;
+                result->reuseExisting =
+                    work->hasReusableInstance && work->reusableInstallDir == spec.installDir && work->reusableInstanceArgsKey == spec.instanceArgsKey;
                 if (result->reuseExisting)
                 {
                     result->hr = S_OK;
@@ -5301,11 +5320,10 @@ void ViewerVLC::BeginAsyncVlcLoad(const std::filesystem::path& path) noexcept
             g_asyncResultPostFailures.fetch_add(1, std::memory_order_acq_rel);
             if (work->owner)
             {
-                work->owner->RecordAsyncFallbackCompletion(
-                    AsyncFallbackCompletion{.kind = AsyncFallbackKind::Load,
-                                            .requestId = work->requestId,
-                                            .windowIdentity = work->windowIdentity,
-                                            .hr = HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND)});
+                work->owner->RecordAsyncFallbackCompletion(AsyncFallbackCompletion{.kind           = AsyncFallbackKind::Load,
+                                                                                   .requestId      = work->requestId,
+                                                                                   .windowIdentity = work->windowIdentity,
+                                                                                   .hr             = HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND)});
             }
             NotifyVlcAsyncFallback(work->hwnd, work->windowIdentity);
             Debug::Warning(L"ViewerVLC: could not pin the module for the async VLC initialization result.");
@@ -5318,18 +5336,15 @@ void ViewerVLC::BeginAsyncVlcLoad(const std::filesystem::path& path) noexcept
             g_asyncResultPostFailures.fetch_add(1, std::memory_order_acq_rel);
             if (work->owner)
             {
-                work->owner->RecordAsyncFallbackCompletion(
-                    AsyncFallbackCompletion{.kind = AsyncFallbackKind::Load,
-                                            .requestId = work->requestId,
-                                            .windowIdentity = work->windowIdentity,
-                                            .hr = completionHr});
+                work->owner->RecordAsyncFallbackCompletion(AsyncFallbackCompletion{
+                    .kind = AsyncFallbackKind::Load, .requestId = work->requestId, .windowIdentity = work->windowIdentity, .hr = completionHr});
             }
             NotifyVlcAsyncFallback(work->hwnd, work->windowIdentity);
             Debug::Warning(L"ViewerVLC: Failed to post async VLC initialization result.");
         }
     },
-        work.get(),
-        nullptr);
+                                                 work.get(),
+                                                 nullptr);
 
     if (queued == 0)
     {
@@ -5374,7 +5389,8 @@ void ViewerVLC::OnAsyncVlcLoadComplete(std::unique_ptr<VlcAsyncLoadResult> resul
     if (_closePending || result->requestId != _asyncOpenGeneration)
     {
         ++_staleLoadResults;
-        Debug::Perf::Emit(L"viewer.vlc.queue", _closePending ? L"closed" : L"stale-request", result->elapsedUs, result->requestId, result->windowIdentity, result->hr);
+        Debug::Perf::Emit(
+            L"viewer.vlc.queue", _closePending ? L"closed" : L"stale-request", result->elapsedUs, result->requestId, result->windowIdentity, result->hr);
         if (_closePending && result->state)
         {
             _vlc = std::move(result->state);
@@ -5419,7 +5435,7 @@ void ViewerVLC::OnAsyncVlcLoadComplete(std::unique_ptr<VlcAsyncLoadResult> resul
     }
 
     RetireVlcStateAsync(std::move(_vlc), true);
-    _vlc = std::move(result->state);
+    _vlc         = std::move(result->state);
     _isAudioFile = IsAudioExtension(result->path.extension().wstring());
     static_cast<void>(StartPlaybackWithLoadedVlc(result->path));
 }
@@ -5480,8 +5496,8 @@ void ViewerVLC::BeginDeferredClose() noexcept
     }
     ShowWindow(_hWnd.get(), SW_HIDE);
 
-    bool needsCleanup = _vlc != nullptr || _deferredCleanupCount.load(std::memory_order_acquire) != 0u ||
-                        _syntheticCleanupPending.load(std::memory_order_acquire);
+    bool needsCleanup =
+        _vlc != nullptr || _deferredCleanupCount.load(std::memory_order_acquire) != 0u || _syntheticCleanupPending.load(std::memory_order_acquire);
 #ifdef ENABLE_TESTS
     needsCleanup = needsCleanup || _debugStopDelayMs != 0 || _debugStopReleaseGate;
 #endif
@@ -5490,24 +5506,18 @@ void ViewerVLC::BeginDeferredClose() noexcept
         static_cast<void>(TryQueueDeferredCloseCleanup());
     }
 
-    Debug::Perf::Emit(L"viewer.vlc.close_ui_us",
-                      L"return",
-                      Debug::Perf::ElapsedUs(startedAt),
-                      _pendingLoadWorkCount,
-                      _pendingCloseCleanupCount,
-                      S_OK);
+    Debug::Perf::Emit(L"viewer.vlc.close_ui_us", L"return", Debug::Perf::ElapsedUs(startedAt), _pendingLoadWorkCount, _pendingCloseCleanupCount, S_OK);
     EnsureVlcCleanupProgress();
     CompleteCloseAfterCleanup();
 }
 
 bool ViewerVLC::TryQueueDeferredCloseCleanup() noexcept
 {
-    bool currentQueued = true;
+    bool currentQueued       = true;
     bool needsCurrentCleanup = _vlc != nullptr;
 #ifdef ENABLE_TESTS
     needsCurrentCleanup = needsCurrentCleanup ||
-                          (_closePending && (_debugStopDelayMs != 0 || _debugStopReleaseGate) &&
-                           ! _syntheticCleanupPending.load(std::memory_order_acquire));
+                          (_closePending && (_debugStopDelayMs != 0 || _debugStopReleaseGate) && ! _syntheticCleanupPending.load(std::memory_order_acquire));
 #endif
     if (needsCurrentCleanup)
     {
@@ -5516,8 +5526,8 @@ bool ViewerVLC::TryQueueDeferredCloseCleanup() noexcept
             _vlc->cleanupRequestId      = _closeRequestId;
             _vlc->cleanupWindowIdentity = _cleanupNotifyIdentity.load(std::memory_order_acquire);
 #ifdef ENABLE_TESTS
-            _vlc->cleanupDelayMs      = _debugStopDelayMs;
-            _vlc->cleanupReleaseGate  = _debugStopReleaseGate;
+            _vlc->cleanupDelayMs     = _debugStopDelayMs;
+            _vlc->cleanupReleaseGate = _debugStopReleaseGate;
 #endif
         }
         currentQueued = TryQueueVlcStateCleanup(_vlc);
@@ -5562,26 +5572,19 @@ bool ViewerVLC::TryQueueVlcStateCleanup(std::unique_ptr<VlcState>& state) noexce
 #endif
 
 #ifdef ENABLE_TESTS
-    const uint32_t cleanupDelayMs = state ? state->cleanupDelayMs : _debugStopDelayMs;
-    const std::shared_ptr<wil::unique_handle> cleanupReleaseGate =
-        (state && state->cleanupReleaseGate) ? state->cleanupReleaseGate : _debugStopReleaseGate;
+    const uint32_t cleanupDelayMs                                = state ? state->cleanupDelayMs : _debugStopDelayMs;
+    const std::shared_ptr<wil::unique_handle> cleanupReleaseGate = (state && state->cleanupReleaseGate) ? state->cleanupReleaseGate : _debugStopReleaseGate;
 #endif
 
     bool forceAllocationFailure = false;
 #ifdef ENABLE_TESTS
     forceAllocationFailure = std::exchange(_debugFailNextCleanupAllocation, false);
 #endif
-    auto work = forceAllocationFailure ? std::unique_ptr<VlcAsyncCloseWork>{}
-                                       : std::unique_ptr<VlcAsyncCloseWork>(new (std::nothrow) VlcAsyncCloseWork{});
+    auto work = forceAllocationFailure ? std::unique_ptr<VlcAsyncCloseWork>{} : std::unique_ptr<VlcAsyncCloseWork>(new (std::nothrow) VlcAsyncCloseWork{});
     if (! work)
     {
         ++_cleanupAllocationFailures;
-        Debug::Perf::Emit(L"viewer.vlc.queue",
-                          L"cleanup-allocation-failed",
-                          0u,
-                          _closeRequestId,
-                          _windowIdentity,
-                          E_OUTOFMEMORY);
+        Debug::Perf::Emit(L"viewer.vlc.queue", L"cleanup-allocation-failed", 0u, _closeRequestId, _windowIdentity, E_OUTOFMEMORY);
         return false;
     }
 
@@ -5589,20 +5592,15 @@ bool ViewerVLC::TryQueueVlcStateCleanup(std::unique_ptr<VlcState>& state) noexce
     if (! work->moduleKeepAlive)
     {
         ++_cleanupAllocationFailures;
-        Debug::Perf::Emit(L"viewer.vlc.queue",
-                          L"cleanup-module-pin-failed",
-                          0u,
-                          _closeRequestId,
-                          _windowIdentity,
-                          HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND));
+        Debug::Perf::Emit(L"viewer.vlc.queue", L"cleanup-module-pin-failed", 0u, _closeRequestId, _windowIdentity, HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND));
         return false;
     }
-    work->self            = static_cast<IViewer*>(this);
-    work->owner           = this;
-    work->hwnd            = _hWnd.get();
-    work->requestId       = _closeRequestId;
-    work->windowIdentity  = _windowIdentity;
-    work->state           = std::move(state);
+    work->self           = static_cast<IViewer*>(this);
+    work->owner          = this;
+    work->hwnd           = _hWnd.get();
+    work->requestId      = _closeRequestId;
+    work->windowIdentity = _windowIdentity;
+    work->state          = std::move(state);
 #ifdef ENABLE_TESTS
     work->delayMs            = cleanupDelayMs;
     work->releaseGate        = cleanupReleaseGate;
@@ -5613,8 +5611,9 @@ bool ViewerVLC::TryQueueVlcStateCleanup(std::unique_ptr<VlcState>& state) noexce
 #ifdef ENABLE_TESTS
     forceSubmitFailure = std::exchange(_debugFailNextCleanupSubmit, false);
 #endif
-    const BOOL queued = forceSubmitFailure ? FALSE : TrySubmitThreadpoolCallback(
-        [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
+    const BOOL queued = forceSubmitFailure ? FALSE
+                                           : TrySubmitThreadpoolCallback(
+                                                 [](PTP_CALLBACK_INSTANCE instance, void* context) noexcept
     {
         std::unique_ptr<VlcAsyncCloseWork> work(static_cast<VlcAsyncCloseWork*>(context));
         if (work && work->moduleKeepAlive)
@@ -5632,13 +5631,13 @@ bool ViewerVLC::TryQueueVlcStateCleanup(std::unique_ptr<VlcState>& state) noexce
         }
         work->state.reset();
 
-        auto result            = std::make_unique<VlcAsyncCloseResult>();
+        auto result             = std::make_unique<VlcAsyncCloseResult>();
         result->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
-        result->self           = work->self;
-        result->hwnd           = work->hwnd;
-        result->requestId      = work->requestId;
-        result->windowIdentity = work->windowIdentity;
-        result->elapsedUs      = Debug::Perf::ElapsedUs(startedAt);
+        result->self            = work->self;
+        result->hwnd            = work->hwnd;
+        result->requestId       = work->requestId;
+        result->windowIdentity  = work->windowIdentity;
+        result->elapsedUs       = Debug::Perf::ElapsedUs(startedAt);
         Debug::Perf::Emit(L"viewer.vlc.cleanup_us", L"stop-release", result->elapsedUs, result->requestId, result->windowIdentity, S_OK);
 
 #ifdef ENABLE_TESTS
@@ -5652,11 +5651,10 @@ bool ViewerVLC::TryQueueVlcStateCleanup(std::unique_ptr<VlcState>& state) noexce
             g_asyncResultPostFailures.fetch_add(1, std::memory_order_acq_rel);
             if (work->owner)
             {
-                work->owner->RecordAsyncFallbackCompletion(
-                    AsyncFallbackCompletion{.kind = AsyncFallbackKind::Cleanup,
-                                            .requestId = work->requestId,
-                                            .windowIdentity = work->windowIdentity,
-                                            .hr = HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND)});
+                work->owner->RecordAsyncFallbackCompletion(AsyncFallbackCompletion{.kind           = AsyncFallbackKind::Cleanup,
+                                                                                   .requestId      = work->requestId,
+                                                                                   .windowIdentity = work->windowIdentity,
+                                                                                   .hr             = HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND)});
             }
             NotifyVlcAsyncFallback(work->hwnd, work->windowIdentity);
             Debug::Warning(L"ViewerVLC: could not pin the module for the async close result.");
@@ -5669,18 +5667,17 @@ bool ViewerVLC::TryQueueVlcStateCleanup(std::unique_ptr<VlcState>& state) noexce
             g_asyncResultPostFailures.fetch_add(1, std::memory_order_acq_rel);
             if (work->owner)
             {
-                work->owner->RecordAsyncFallbackCompletion(
-                    AsyncFallbackCompletion{.kind = AsyncFallbackKind::Cleanup,
-                                            .requestId = work->requestId,
-                                            .windowIdentity = work->windowIdentity,
-                                            .hr = HRESULT_FROM_WIN32(ERROR_WRITE_FAULT)});
+                work->owner->RecordAsyncFallbackCompletion(AsyncFallbackCompletion{.kind           = AsyncFallbackKind::Cleanup,
+                                                                                   .requestId      = work->requestId,
+                                                                                   .windowIdentity = work->windowIdentity,
+                                                                                   .hr             = HRESULT_FROM_WIN32(ERROR_WRITE_FAULT)});
             }
             NotifyVlcAsyncFallback(work->hwnd, work->windowIdentity);
             Debug::Warning(L"ViewerVLC: async close payload post failed; queued the identity-bound UI fallback.");
         }
     },
-        work.get(),
-        nullptr);
+                                                 work.get(),
+                                                 nullptr);
 
     if (queued == 0)
     {
@@ -5753,11 +5750,14 @@ void ViewerVLC::EnsureVlcCleanupProgress() noexcept
 
 void ViewerVLC::OnAsyncVlcCloseComplete(std::unique_ptr<VlcAsyncCloseResult> result) noexcept
 {
-    if (! result || result->self.get() != static_cast<IViewer*>(this) || result->hwnd != _hWnd.get() || result->windowIdentity != _windowIdentity ||
-        ! _hWnd)
+    if (! result || result->self.get() != static_cast<IViewer*>(this) || result->hwnd != _hWnd.get() || result->windowIdentity != _windowIdentity || ! _hWnd)
     {
-        Debug::Perf::Emit(L"viewer.vlc.queue", L"stale-cleanup", result ? result->elapsedUs : 0u, result ? result->requestId : 0u,
-                          result ? result->windowIdentity : 0u, HRESULT_FROM_WIN32(ERROR_CANCELLED));
+        Debug::Perf::Emit(L"viewer.vlc.queue",
+                          L"stale-cleanup",
+                          result ? result->elapsedUs : 0u,
+                          result ? result->requestId : 0u,
+                          result ? result->windowIdentity : 0u,
+                          HRESULT_FROM_WIN32(ERROR_CANCELLED));
         return;
     }
 
@@ -5791,16 +5791,16 @@ void ViewerVLC::RecordAsyncFallbackCompletion(AsyncFallbackCompletion completion
 
 void ViewerVLC::DrainAsyncFallbackCompletions() noexcept
 {
-    uint64_t loadCount = 0;
+    uint64_t loadCount    = 0;
     uint64_t cleanupCount = 0;
     AsyncFallbackCompletion newestLoad{};
     AsyncFallbackCompletion newestCleanup{};
     {
         std::lock_guard lock(_asyncFallbackMutex);
-        loadCount                      = std::exchange(_asyncFallbackLoadCount, 0u);
-        cleanupCount                   = std::exchange(_asyncFallbackCleanupCount, 0u);
-        newestLoad                     = std::exchange(_asyncFallbackNewestLoad, AsyncFallbackCompletion{});
-        newestCleanup                  = std::exchange(_asyncFallbackNewestCleanup, AsyncFallbackCompletion{});
+        loadCount     = std::exchange(_asyncFallbackLoadCount, 0u);
+        cleanupCount  = std::exchange(_asyncFallbackCleanupCount, 0u);
+        newestLoad    = std::exchange(_asyncFallbackNewestLoad, AsyncFallbackCompletion{});
+        newestCleanup = std::exchange(_asyncFallbackNewestCleanup, AsyncFallbackCompletion{});
     }
 
     if (loadCount != 0u)
@@ -5809,7 +5809,7 @@ void ViewerVLC::DrainAsyncFallbackCompletions() noexcept
         _pendingLoadWorkCount -= retiredLoads;
         _loadPostFallbacks += loadCount;
 
-        const bool sameWindow = newestLoad.windowIdentity != 0 && newestLoad.windowIdentity == _windowIdentity;
+        const bool sameWindow      = newestLoad.windowIdentity != 0 && newestLoad.windowIdentity == _windowIdentity;
         const bool currentTerminal = sameWindow && ! _closePending && newestLoad.requestId == _asyncOpenGeneration;
         _staleLoadResults += loadCount - (currentTerminal ? 1u : 0u);
         if (currentTerminal)
@@ -5820,8 +5820,8 @@ void ViewerVLC::DrainAsyncFallbackCompletions() noexcept
         }
         else
         {
-            const wchar_t* label = ! sameWindow ? L"post-fallback-stale-window"
-                                                : (_closePending ? L"load-post-fallback-closed" : L"load-post-fallback-stale-request");
+            const wchar_t* label =
+                ! sameWindow ? L"post-fallback-stale-window" : (_closePending ? L"load-post-fallback-closed" : L"load-post-fallback-stale-request");
             Debug::Perf::Emit(L"viewer.vlc.queue", label, 0u, newestLoad.requestId, newestLoad.windowIdentity, newestLoad.hr);
         }
     }
@@ -5834,21 +5834,12 @@ void ViewerVLC::DrainAsyncFallbackCompletions() noexcept
             _pendingCloseCleanupCount -= retiredCleanups;
             _cleanupCompletions += cleanupCount;
             _cleanupPostFallbacks += cleanupCount;
-            Debug::Perf::Emit(L"viewer.vlc.queue",
-                              L"cleanup-post-fallback-terminal",
-                              0u,
-                              newestCleanup.requestId,
-                              newestCleanup.windowIdentity,
-                              newestCleanup.hr);
+            Debug::Perf::Emit(
+                L"viewer.vlc.queue", L"cleanup-post-fallback-terminal", 0u, newestCleanup.requestId, newestCleanup.windowIdentity, newestCleanup.hr);
         }
         else
         {
-            Debug::Perf::Emit(L"viewer.vlc.queue",
-                              L"post-fallback-stale-window",
-                              0u,
-                              newestCleanup.requestId,
-                              newestCleanup.windowIdentity,
-                              newestCleanup.hr);
+            Debug::Perf::Emit(L"viewer.vlc.queue", L"post-fallback-stale-window", 0u, newestCleanup.requestId, newestCleanup.windowIdentity, newestCleanup.hr);
         }
     }
 
@@ -5865,9 +5856,9 @@ void ViewerVLC::CompleteCloseAfterCleanup() noexcept
         return;
     }
 
-    _destroyingAfterCleanup      = true;
-    _embeddedMode                = false;
-    _embeddedFocusReturnWindow   = nullptr;
+    _destroyingAfterCleanup    = true;
+    _embeddedMode              = false;
+    _embeddedFocusReturnWindow = nullptr;
     _hWnd.reset();
 }
 

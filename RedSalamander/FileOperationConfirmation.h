@@ -34,4 +34,4 @@ struct NonRevertableFileOperationPromptCounts
                                                      const std::filesystem::path& destinationFolder,
                                                      const NonRevertableFileOperationPromptCounts& counts,
                                                      HostFileOperationPromptOptions* options = nullptr,
-                                                     std::wstring_view confirmationMessage = {}) noexcept;
+                                                     std::wstring_view confirmationMessage   = {}) noexcept;

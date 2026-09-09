@@ -17,9 +17,9 @@
 namespace
 {
 constexpr DWORD kMaximumDistributionSubkeys = 1024u;
-constexpr size_t kGuidChars                  = 38u;
-constexpr std::wstring_view kDockerPrefix    = L"docker-desktop";
-constexpr std::wstring_view kRancherPrefix   = L"rancher-desktop";
+constexpr size_t kGuidChars                 = 38u;
+constexpr std::wstring_view kDockerPrefix   = L"docker-desktop";
+constexpr std::wstring_view kRancherPrefix  = L"rancher-desktop";
 
 [[nodiscard]] bool StartsWithNoCase(std::wstring_view value, std::wstring_view prefix) noexcept
 {
@@ -63,14 +63,7 @@ std::vector<DistributionRecord> EnumerateDistributions(HKEY root, const wchar_t*
     uint64_t inspectedSubkeys = 0u;
     HRESULT resultStatus      = S_OK;
     const auto emitMetric     = wil::scope_exit([&]() noexcept
-    {
-        Debug::Perf::Emit(L"wsl.catalog.enumerate_us",
-                          L"registry",
-                          Debug::Perf::ElapsedUs(startedAt),
-                          distributions.size(),
-                          inspectedSubkeys,
-                          resultStatus);
-    });
+    { Debug::Perf::Emit(L"wsl.catalog.enumerate_us", L"registry", Debug::Perf::ElapsedUs(startedAt), distributions.size(), inspectedSubkeys, resultStatus); });
 
     if (root == nullptr || subKey == nullptr)
     {
@@ -128,7 +121,9 @@ std::vector<DistributionRecord> EnumerateDistributions(HKEY root, const wchar_t*
         distributions.push_back(std::move(record));
     }
 
-    std::sort(distributions.begin(), distributions.end(), [](const DistributionRecord& left, const DistributionRecord& right) noexcept
+    std::sort(distributions.begin(),
+              distributions.end(),
+              [](const DistributionRecord& left, const DistributionRecord& right) noexcept
     {
         const int nameComparison = CompareNoCase(left.name, right.name);
         if (nameComparison != CSTR_EQUAL)
@@ -150,7 +145,6 @@ std::vector<DistributionRecord> EnumerateDistributions(HKEY root, const wchar_t*
 bool IsInstalled() noexcept
 {
     wil::unique_hkey catalogKey;
-    return SUCCEEDED(wil::reg::open_unique_key_nothrow(
-        HKEY_CURRENT_USER, kDistributionRegistryPath, catalogKey, wil::reg::key_access::read));
+    return SUCCEEDED(wil::reg::open_unique_key_nothrow(HKEY_CURRENT_USER, kDistributionRegistryPath, catalogKey, wil::reg::key_access::read));
 }
 } // namespace Common::Wsl

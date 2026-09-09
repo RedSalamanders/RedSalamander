@@ -9,16 +9,16 @@ inline constexpr uint64_t kMebibyte = 1024ull * 1024ull;
 
 struct DecodedImagePolicy final
 {
-    uint32_t maxDimension        = 16'384u;
-    uint64_t maxPixels           = 64ull * 1024ull * 1024ull;
-    uint64_t maxBgraBytes        = 256ull * kMebibyte;
+    uint32_t maxDimension         = 16'384u;
+    uint64_t maxPixels            = 64ull * 1024ull * 1024ull;
+    uint64_t maxBgraBytes         = 256ull * kMebibyte;
     uint64_t maxEmbeddedJpegBytes = 64ull * kMebibyte;
 };
 
 inline constexpr DecodedImagePolicy kProductionDecodedImagePolicy{};
 inline constexpr uint64_t kProductionSpeculativeDecodedBytes = 384ull * kMebibyte;
-inline constexpr uint64_t kProductionMainSourceBytes          = 1024ull * kMebibyte;
-inline constexpr uint64_t kProductionSidecarSourceBytes       = 64ull * kMebibyte;
+inline constexpr uint64_t kProductionMainSourceBytes         = 1024ull * kMebibyte;
+inline constexpr uint64_t kProductionSidecarSourceBytes      = 64ull * kMebibyte;
 inline constexpr uint64_t kProductionMainOwnedPeakBytes =
     kProductionMainSourceBytes + kProductionSidecarSourceBytes + (2ull * kProductionDecodedImagePolicy.maxBgraBytes);
 
@@ -36,10 +36,10 @@ enum class ValidationError : uint8_t
 
 struct DecodedImageLayout final
 {
-    uint32_t width    = 0u;
-    uint32_t height   = 0u;
-    uint64_t pixels   = 0u;
-    uint64_t rowBytes = 0u;
+    uint32_t width     = 0u;
+    uint32_t height    = 0u;
+    uint64_t pixels    = 0u;
+    uint64_t rowBytes  = 0u;
     uint64_t bgraBytes = 0u;
 };
 
@@ -64,9 +64,9 @@ struct DecodedImageLayout final
 }
 
 [[nodiscard]] constexpr ValidationError ValidateDecodedImage(uint32_t width,
-                                                              uint32_t height,
-                                                              const DecodedImagePolicy& policy,
-                                                              DecodedImageLayout& out) noexcept
+                                                             uint32_t height,
+                                                             const DecodedImagePolicy& policy,
+                                                             DecodedImageLayout& out) noexcept
 {
     out = {};
     if (width == 0u || height == 0u || policy.maxDimension == 0u || policy.maxPixels == 0u || policy.maxBgraBytes == 0u)
@@ -88,7 +88,7 @@ struct DecodedImageLayout final
         return ValidationError::PixelLimit;
     }
 
-    uint64_t rowBytes = 0u;
+    uint64_t rowBytes  = 0u;
     uint64_t bgraBytes = 0u;
     if (! TryMultiply(width, 4u, rowBytes) || ! TryMultiply(pixels, 4u, bgraBytes))
     {
@@ -107,12 +107,8 @@ struct DecodedImageLayout final
     return ValidationError::None;
 }
 
-[[nodiscard]] constexpr ValidationError ValidateEmbeddedJpeg(uint32_t width,
-                                                              uint32_t height,
-                                                              uint64_t compressedBytes,
-                                                              uint64_t sourceBytes,
-                                                              const DecodedImagePolicy& policy,
-                                                              DecodedImageLayout& out) noexcept
+[[nodiscard]] constexpr ValidationError ValidateEmbeddedJpeg(
+    uint32_t width, uint32_t height, uint64_t compressedBytes, uint64_t sourceBytes, const DecodedImagePolicy& policy, DecodedImageLayout& out) noexcept
 {
     const ValidationError imageError = ValidateDecodedImage(width, height, policy, out);
     if (imageError != ValidationError::None)
@@ -131,16 +127,16 @@ struct DecodedImageLayout final
 }
 
 [[nodiscard]] constexpr ValidationError ValidatePackedBitmap(uint32_t width,
-                                                              uint32_t height,
-                                                              uint32_t colors,
-                                                              uint32_t bitsPerSample,
-                                                              uint64_t packedBytes,
-                                                              uint64_t sourceBytes,
-                                                              const DecodedImagePolicy& policy,
-                                                              DecodedImageLayout& out,
-                                                              uint64_t& outExpectedPackedBytes) noexcept
+                                                             uint32_t height,
+                                                             uint32_t colors,
+                                                             uint32_t bitsPerSample,
+                                                             uint64_t packedBytes,
+                                                             uint64_t sourceBytes,
+                                                             const DecodedImagePolicy& policy,
+                                                             DecodedImageLayout& out,
+                                                             uint64_t& outExpectedPackedBytes) noexcept
 {
-    outExpectedPackedBytes = 0u;
+    outExpectedPackedBytes           = 0u;
     const ValidationError imageError = ValidateDecodedImage(width, height, policy, out);
     if (imageError != ValidationError::None)
     {

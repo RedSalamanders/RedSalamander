@@ -282,7 +282,7 @@ struct ConnectionInfo
     // Synchronous IMAP orchestration fixture, not a transport/cancellation substitute.
     // The caller owns the context for this ConnectionInfo's entire call lifetime.
     HRESULT (*imapRequestForSelfTest)(void*, std::wstring_view, std::string_view, std::string&) noexcept = nullptr;
-    void* imapRequestContextForSelfTest = nullptr;
+    void* imapRequestContextForSelfTest                                                                  = nullptr;
 #endif
 };
 
@@ -318,9 +318,18 @@ public:
     void Insert(std::wstring_view normalizedPath);
     void Finalize() noexcept;
     [[nodiscard]] bool Contains(std::wstring_view normalizedPath) const noexcept;
-    [[nodiscard]] size_t size() const noexcept { return _digests.size(); }
-    [[nodiscard]] uint64_t RetainedBytes() const noexcept { return static_cast<uint64_t>(_digests.capacity()) * sizeof(uint64_t); }
-    [[nodiscard]] bool IsFinalized() const noexcept { return _finalized; }
+    [[nodiscard]] size_t size() const noexcept
+    {
+        return _digests.size();
+    }
+    [[nodiscard]] uint64_t RetainedBytes() const noexcept
+    {
+        return static_cast<uint64_t>(_digests.capacity()) * sizeof(uint64_t);
+    }
+    [[nodiscard]] bool IsFinalized() const noexcept
+    {
+        return _finalized;
+    }
 
 private:
     std::vector<uint64_t> _digests;
@@ -333,9 +342,18 @@ public:
     void Insert(std::wstring_view normalizedPath, uint64_t sizeBytes);
     void Finalize() noexcept;
     [[nodiscard]] std::optional<uint64_t> Find(std::wstring_view normalizedPath) const noexcept;
-    [[nodiscard]] size_t size() const noexcept { return _entries.size(); }
-    [[nodiscard]] uint64_t RetainedBytes() const noexcept { return static_cast<uint64_t>(_entries.capacity()) * sizeof(std::pair<uint64_t, uint64_t>); }
-    [[nodiscard]] bool IsFinalized() const noexcept { return _finalized; }
+    [[nodiscard]] size_t size() const noexcept
+    {
+        return _entries.size();
+    }
+    [[nodiscard]] uint64_t RetainedBytes() const noexcept
+    {
+        return static_cast<uint64_t>(_entries.capacity()) * sizeof(std::pair<uint64_t, uint64_t>);
+    }
+    [[nodiscard]] bool IsFinalized() const noexcept
+    {
+        return _finalized;
+    }
 
 private:
     std::vector<std::pair<uint64_t, uint64_t>> _entries;
@@ -366,7 +384,7 @@ public:
     [[nodiscard]] static HRESULT ParseChunksForSelfTest(std::span<const std::string_view> chunks,
                                                         std::vector<FilesInformationCurl::Entry>& entries,
                                                         std::wstring_view lookupLeaf = {},
-                                                        uint64_t* inspectedRows = nullptr) noexcept;
+                                                        uint64_t* inspectedRows      = nullptr) noexcept;
     [[nodiscard]] static std::optional<CurlFailedConnectPorts> ParseFailedConnectTraceForSelfTest(curl_infotype type, std::string_view text) noexcept;
     [[nodiscard]] std::optional<CurlFailedConnectPorts> FailedConnectPortsForSelfTest() const noexcept;
     [[nodiscard]] bool HasActiveTransferForSelfTest() const noexcept;
@@ -556,11 +574,8 @@ struct CurlSourceSizeCommitment final
 
 // Prefer the targeted probe over listing metadata. Only explicit primitive
 // unavailability may fall back to the listed value/unknown-size policy.
-[[nodiscard]] HRESULT ResolveCurlSourceSizeCommitment(const ConnectionInfo& conn,
-                                                      std::wstring_view pluginPath,
-                                                      uint64_t listedSizeBytes,
-                                                      bool listedSizeKnown,
-                                                      CurlSourceSizeCommitment& commitmentOut) noexcept;
+[[nodiscard]] HRESULT ResolveCurlSourceSizeCommitment(
+    const ConnectionInfo& conn, std::wstring_view pluginPath, uint64_t listedSizeBytes, bool listedSizeKnown, CurlSourceSizeCommitment& commitmentOut) noexcept;
 [[nodiscard]] HRESULT CurlPerformListAndParse(const ConnectionInfo& conn,
                                               std::wstring_view pluginPath,
                                               std::vector<FilesInformationCurl::Entry>& outEntries) noexcept;
@@ -892,13 +907,12 @@ struct TransferProgressContext
     }
 };
 
-[[nodiscard]] HRESULT CurlDownloadToFile(
-    const ConnectionInfo& conn,
-    std::wstring_view pluginPath,
-    HANDLE file,
-    const FileSystemOptions* options,
-    TransferProgressContext* progressCtx,
-    std::optional<uint64_t> expectedSizeBytes = std::nullopt) noexcept;
+[[nodiscard]] HRESULT CurlDownloadToFile(const ConnectionInfo& conn,
+                                         std::wstring_view pluginPath,
+                                         HANDLE file,
+                                         const FileSystemOptions* options,
+                                         TransferProgressContext* progressCtx,
+                                         std::optional<uint64_t> expectedSizeBytes = std::nullopt) noexcept;
 
 [[nodiscard]] HRESULT CurlUploadFromFile(const ConnectionInfo& conn,
                                          std::wstring_view pluginPath,
@@ -930,14 +944,14 @@ enum class CurlCleanupDebtKind : uint32_t
 
 struct CurlPublicationResult final
 {
-    HRESULT primaryMutationHr = S_OK;
-    HRESULT cleanupHr         = S_OK;
-    HRESULT sourceDeletionHr  = S_OK;
+    HRESULT primaryMutationHr      = S_OK;
+    HRESULT cleanupHr              = S_OK;
+    HRESULT sourceDeletionHr       = S_OK;
     bool primaryCommitted          = false;
     bool immutableRollbackEligible = false;
     bool artifactsPreserved        = false;
-    uint32_t cleanupDebtMask        = CurlCleanupDebtMask(CurlCleanupDebtKind::None);
-    uint64_t cleanupDebtCount       = 0u;
+    uint32_t cleanupDebtMask       = CurlCleanupDebtMask(CurlCleanupDebtKind::None);
+    uint64_t cleanupDebtCount      = 0u;
 
     void RecordPrimaryFailure(HRESULT failureHr) noexcept
     {
@@ -967,9 +981,8 @@ struct CurlPublicationResult final
         }
 
         cleanupDebtMask |= CurlCleanupDebtMask(kind);
-        cleanupDebtCount = cleanupDebtCount > (std::numeric_limits<uint64_t>::max)() - count
-                               ? (std::numeric_limits<uint64_t>::max)()
-                               : cleanupDebtCount + count;
+        cleanupDebtCount =
+            cleanupDebtCount > (std::numeric_limits<uint64_t>::max)() - count ? (std::numeric_limits<uint64_t>::max)() : cleanupDebtCount + count;
         artifactsPreserved = true;
         if (SUCCEEDED(cleanupHr) && FAILED(failureHr))
         {
@@ -984,9 +997,8 @@ struct CurlPublicationResult final
         if (other.cleanupDebtCount != 0u)
         {
             cleanupDebtMask |= other.cleanupDebtMask;
-            cleanupDebtCount = cleanupDebtCount > (std::numeric_limits<uint64_t>::max)() - other.cleanupDebtCount
-                                   ? (std::numeric_limits<uint64_t>::max)()
-                                   : cleanupDebtCount + other.cleanupDebtCount;
+            cleanupDebtCount = cleanupDebtCount > (std::numeric_limits<uint64_t>::max)() - other.cleanupDebtCount ? (std::numeric_limits<uint64_t>::max)()
+                                                                                                                  : cleanupDebtCount + other.cleanupDebtCount;
             if (SUCCEEDED(cleanupHr) && FAILED(other.cleanupHr))
             {
                 cleanupHr = other.cleanupHr;
@@ -1001,8 +1013,8 @@ struct CurlPublicationResult final
     {
         if (FAILED(primaryMutationHr))
         {
-            constexpr uint32_t kPartialMutationDebtMask = CurlCleanupDebtMask(CurlCleanupDebtKind::RetainedRollbackSibling) |
-                                                           CurlCleanupDebtMask(CurlCleanupDebtKind::PreservedDestinationTree);
+            constexpr uint32_t kPartialMutationDebtMask =
+                CurlCleanupDebtMask(CurlCleanupDebtKind::RetainedRollbackSibling) | CurlCleanupDebtMask(CurlCleanupDebtKind::PreservedDestinationTree);
             return (cleanupDebtMask & kPartialMutationDebtMask) != 0u ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : primaryMutationHr;
         }
         if (FAILED(sourceDeletionHr))
@@ -1016,9 +1028,9 @@ struct CurlPublicationResult final
 class CurlPublicationAccumulator final
 {
 public:
-    CurlPublicationAccumulator()                                            = default;
-    CurlPublicationAccumulator(const CurlPublicationAccumulator&)           = delete;
-    CurlPublicationAccumulator(CurlPublicationAccumulator&&)                = delete;
+    CurlPublicationAccumulator()                                             = default;
+    CurlPublicationAccumulator(const CurlPublicationAccumulator&)            = delete;
+    CurlPublicationAccumulator(CurlPublicationAccumulator&&)                 = delete;
     CurlPublicationAccumulator& operator=(const CurlPublicationAccumulator&) = delete;
     CurlPublicationAccumulator& operator=(CurlPublicationAccumulator&&)      = delete;
 
@@ -1046,14 +1058,14 @@ public:
     [[nodiscard]] CurlPublicationResult Snapshot() const noexcept
     {
         return CurlPublicationResult{
-            .primaryMutationHr          = static_cast<HRESULT>(_primaryMutationHr.load(std::memory_order_acquire)),
-            .cleanupHr                  = static_cast<HRESULT>(_cleanupHr.load(std::memory_order_acquire)),
-            .sourceDeletionHr           = static_cast<HRESULT>(_sourceDeletionHr.load(std::memory_order_acquire)),
-            .primaryCommitted           = _primaryCommitted.load(std::memory_order_acquire),
-            .immutableRollbackEligible  = _immutableRollbackEligible.load(std::memory_order_acquire),
-            .artifactsPreserved         = _artifactsPreserved.load(std::memory_order_acquire),
-            .cleanupDebtMask            = _cleanupDebtMask.load(std::memory_order_acquire),
-            .cleanupDebtCount           = _cleanupDebtCount.load(std::memory_order_acquire),
+            .primaryMutationHr         = static_cast<HRESULT>(_primaryMutationHr.load(std::memory_order_acquire)),
+            .cleanupHr                 = static_cast<HRESULT>(_cleanupHr.load(std::memory_order_acquire)),
+            .sourceDeletionHr          = static_cast<HRESULT>(_sourceDeletionHr.load(std::memory_order_acquire)),
+            .primaryCommitted          = _primaryCommitted.load(std::memory_order_acquire),
+            .immutableRollbackEligible = _immutableRollbackEligible.load(std::memory_order_acquire),
+            .artifactsPreserved        = _artifactsPreserved.load(std::memory_order_acquire),
+            .cleanupDebtMask           = _cleanupDebtMask.load(std::memory_order_acquire),
+            .cleanupDebtCount          = _cleanupDebtCount.load(std::memory_order_acquire),
         };
     }
 
@@ -1146,16 +1158,16 @@ enum class ImapResponseCapture : uint8_t
 [[nodiscard]] HRESULT ReadDirectoryEntries(const ConnectionInfo& conn, std::wstring_view path, std::vector<FilesInformationCurl::Entry>& entries) noexcept;
 struct CurlEntryLookupMetrics final
 {
-    uint64_t rows = 0u;
-    uint64_t pathBytes = 0u;
+    uint64_t rows          = 0u;
+    uint64_t pathBytes     = 0u;
     uint64_t metadataBytes = 0u;
 };
 
 [[nodiscard]] HRESULT GetEntryInfo(const ConnectionInfo& conn,
-                                  std::wstring_view path,
-                                  FilesInformationCurl::Entry& out,
-                                  CurlEntryLookupMetrics* metrics = nullptr,
-                                  std::function<HRESULT()> checkpoint = {}) noexcept;
+                                   std::wstring_view path,
+                                   FilesInformationCurl::Entry& out,
+                                   CurlEntryLookupMetrics* metrics     = nullptr,
+                                   std::function<HRESULT()> checkpoint = {}) noexcept;
 
 // R0f-Curl operation-control plumbing. The mutation entry points and the shared scheduler keep the
 // owning File Operations call's options on the current thread; ApplyCommonCurlOptions installs a

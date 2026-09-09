@@ -86,8 +86,7 @@ struct ObjectDocument
     return result;
 }
 
-[[nodiscard]] inline std::optional<std::string> WriteObjectWithoutMembers(const ObjectDocument& source,
-                                                                          std::span<const char* const> memberNames) noexcept
+[[nodiscard]] inline std::optional<std::string> WriteObjectWithoutMembers(const ObjectDocument& source, std::span<const char* const> memberNames) noexcept
 {
     if (! source)
     {
@@ -187,9 +186,7 @@ template <typename T> struct MemberResult
     return requirement == MemberRequirement::Required ? MemberStatus::MissingRequired : MemberStatus::MissingOptional;
 }
 
-[[nodiscard]] inline MemberResult<std::string_view> GetStringMember(const yyjson_val* object,
-                                                                    const char* key,
-                                                                    MemberRequirement requirement) noexcept
+[[nodiscard]] inline MemberResult<std::string_view> GetStringMember(const yyjson_val* object, const char* key, MemberRequirement requirement) noexcept
 {
     yyjson_val* value = const_cast<yyjson_val*>(FindMember(object, key));
     if (! value)
@@ -210,9 +207,7 @@ template <typename T> struct MemberResult
                 : MemberResult<std::string_view>{.status = MemberStatus::WrongType};
 }
 
-[[nodiscard]] inline MemberResult<std::wstring> GetUtf16StringMemberStrict(const yyjson_val* object,
-                                                                           const char* key,
-                                                                           MemberRequirement requirement) noexcept
+[[nodiscard]] inline MemberResult<std::wstring> GetUtf16StringMemberStrict(const yyjson_val* object, const char* key, MemberRequirement requirement) noexcept
 {
     const MemberResult<std::string_view> utf8 = GetStringMember(object, key, requirement);
     if (! utf8.HasValue())
@@ -257,8 +252,7 @@ template <typename T> struct MemberResult
     return {.status = MemberStatus::Value, .value = yyjson_get_bool(value)};
 }
 
-template <typename T>
-[[nodiscard]] inline std::optional<T> ParseIntegerString(std::string_view text) noexcept
+template <typename T> [[nodiscard]] inline std::optional<T> ParseIntegerString(std::string_view text) noexcept
 {
     T value{};
     const std::from_chars_result parsed = std::from_chars(text.data(), text.data() + text.size(), value, 10);
@@ -298,7 +292,7 @@ template <typename T>
     }
     if (stringPolicy == NumericStringPolicy::Allow && yyjson_is_str(value))
     {
-        const char* text = yyjson_get_str(value);
+        const char* text                    = yyjson_get_str(value);
         const std::optional<int64_t> parsed = text ? ParseIntegerString<int64_t>(std::string_view{text, yyjson_get_len(value)}) : std::nullopt;
         return parsed.has_value() ? MemberResult<int64_t>{.status = MemberStatus::Value, .value = parsed.value()}
                                   : MemberResult<int64_t>{.status = MemberStatus::OutOfRange};
@@ -309,7 +303,7 @@ template <typename T>
 [[nodiscard]] inline MemberResult<uint64_t> GetUInt64Member(const yyjson_val* object,
                                                             const char* key,
                                                             MemberRequirement requirement,
-                                                            NumericStringPolicy stringPolicy = NumericStringPolicy::Reject,
+                                                            NumericStringPolicy stringPolicy    = NumericStringPolicy::Reject,
                                                             UnsignedIntegerPolicy integerPolicy = UnsignedIntegerPolicy::AllowNonnegativeSigned) noexcept
 {
     yyjson_val* value = const_cast<yyjson_val*>(FindMember(object, key));
@@ -340,10 +334,10 @@ template <typename T>
     }
     if (stringPolicy == NumericStringPolicy::Allow && yyjson_is_str(value))
     {
-        const char* text = yyjson_get_str(value);
+        const char* text                     = yyjson_get_str(value);
         const std::optional<uint64_t> parsed = text ? ParseIntegerString<uint64_t>(std::string_view{text, yyjson_get_len(value)}) : std::nullopt;
         return parsed.has_value() ? MemberResult<uint64_t>{.status = MemberStatus::Value, .value = parsed.value()}
-                                   : MemberResult<uint64_t>{.status = MemberStatus::OutOfRange};
+                                  : MemberResult<uint64_t>{.status = MemberStatus::OutOfRange};
     }
     return {.status = MemberStatus::WrongType};
 }

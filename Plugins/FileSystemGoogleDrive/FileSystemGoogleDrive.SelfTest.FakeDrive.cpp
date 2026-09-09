@@ -1,8 +1,8 @@
 #if defined(ENABLE_TESTS)
 
 // The loopback HTTP fixture must precede the Windows headers the plugin header pulls in.
-#include "LoopbackHttpFixture.h"
 #include "ContentDigest.h"
+#include "LoopbackHttpFixture.h"
 
 #include "FileSystemGoogleDrive.h"
 
@@ -117,14 +117,14 @@ constexpr std::string_view kFolderMime = "application/vnd.google-apps.folder";
     {
         return values;
     }
-    const size_t open = json.find('[', keyAt);
+    const size_t open  = json.find('[', keyAt);
     const size_t close = open == std::string_view::npos ? std::string_view::npos : json.find(']', open);
     if (open == std::string_view::npos || close == std::string_view::npos)
     {
         return values;
     }
     std::string_view inner = json.substr(open + 1u, close - open - 1u);
-    size_t pos = 0u;
+    size_t pos             = 0u;
     while ((pos = inner.find('"', pos)) != std::string_view::npos)
     {
         const size_t end = inner.find('"', pos + 1u);
@@ -173,7 +173,8 @@ constexpr std::string_view kFolderMime = "application/vnd.google-apps.folder";
 
 [[nodiscard]] LoopbackHttpResponse ErrorResponse(int status, std::string_view reason, std::string_view message)
 {
-    return JsonResponse(status, std::format(R"({{"error":{{"code":{},"message":{},"errors":[{{"reason":{}}}]}}}})", status, JsonQuote(message), JsonQuote(reason)));
+    return JsonResponse(status,
+                        std::format(R"({{"error":{{"code":{},"message":{},"errors":[{{"reason":{}}}]}}}})", status, JsonQuote(message), JsonQuote(reason)));
 }
 
 [[nodiscard]] LoopbackHttpResponse EmptyResponse(int status)
@@ -209,7 +210,14 @@ class FakeDrive final
 public:
     FakeDrive()
     {
-        _files.push_back(DriveFile{.id = "root", .name = "My Drive", .mimeType = std::string(kFolderMime), .parents = {}, .bytes = {}, .version = 1u, .trashed = false, .modified = Common::SelfTest::LoopbackHttpNowSeconds()});
+        _files.push_back(DriveFile{.id       = "root",
+                                   .name     = "My Drive",
+                                   .mimeType = std::string(kFolderMime),
+                                   .parents  = {},
+                                   .bytes    = {},
+                                   .version  = 1u,
+                                   .trashed  = false,
+                                   .modified = Common::SelfTest::LoopbackHttpNowSeconds()});
     }
     FakeDrive(const FakeDrive&)            = delete;
     FakeDrive& operator=(const FakeDrive&) = delete;
@@ -272,7 +280,9 @@ public:
         }
         if (path == "/drive/v3/about")
         {
-            return JsonResponse(200, R"({"user":{"displayName":"Google Drive SelfTest","emailAddress":"selftest@example.invalid"},"storageQuota":{"limit":"1073741824","usage":"4096","usageInDrive":"4096"}})");
+            return JsonResponse(
+                200,
+                R"({"user":{"displayName":"Google Drive SelfTest","emailAddress":"selftest@example.invalid"},"storageQuota":{"limit":"1073741824","usage":"4096","usageInDrive":"4096"}})");
         }
         if (path.starts_with("/upload/session/"))
         {
@@ -300,15 +310,15 @@ public:
         }
         if (path.starts_with("/drive/v3/files/"))
         {
-            std::string_view rest = path.substr(16u);
-            const size_t slash    = rest.find('/');
-            const std::string id  = std::string(rest.substr(0, slash));
+            std::string_view rest       = path.substr(16u);
+            const size_t slash          = rest.find('/');
+            const std::string id        = std::string(rest.substr(0, slash));
             const std::string_view tail = slash == std::string_view::npos ? std::string_view{} : rest.substr(slash);
             if (request.method == "DELETE" && tail.empty())
             {
                 ++_deleteRequests;
             }
-            DriveFile* file       = FindByIdLocked(id);
+            DriveFile* file = FindByIdLocked(id);
             if (file == nullptr)
             {
                 return ErrorResponse(404, "notFound", "File not found: " + id);
@@ -435,13 +445,13 @@ private:
 
     [[nodiscard]] DriveFile& AddLocked(std::string name, std::string parentId, bool isFolder)
     {
-        _files.push_back(DriveFile{.id = std::format("gd-{}", ++_nextId),
-                                   .name = std::move(name),
+        _files.push_back(DriveFile{.id       = std::format("gd-{}", ++_nextId),
+                                   .name     = std::move(name),
                                    .mimeType = isFolder ? std::string(kFolderMime) : std::string("application/octet-stream"),
-                                   .parents = {std::move(parentId)},
-                                   .bytes = {},
-                                   .version = ++_nextVersion,
-                                   .trashed = false,
+                                   .parents  = {std::move(parentId)},
+                                   .bytes    = {},
+                                   .version  = ++_nextVersion,
+                                   .trashed  = false,
                                    .modified = Common::SelfTest::LoopbackHttpNowSeconds()});
         return _files.back();
     }
@@ -480,17 +490,18 @@ private:
         // Drive reports sha256Checksum for binary content it stores (R3-2 writer proof).
         std::vector<std::byte> sha256;
         static_cast<void>(Common::Crypto::ComputeContentDigest(Common::Crypto::ContentDigestAlgorithm::Sha256, std::as_bytes(std::span(file.bytes)), sha256));
-        return std::format(R"({{"kind":"drive#file","id":{},"name":{},"mimeType":{},"size":"{}","modifiedTime":"{}","createdTime":"{}","trashed":{},"version":"{}","sha256Checksum":"{}","parents":{}}})",
-                           JsonQuote(file.id),
-                           JsonQuote(file.name),
-                           JsonQuote(file.mimeType),
-                           file.bytes.size(),
-                           Common::SelfTest::LoopbackHttpIso8601(file.modified),
-                           Common::SelfTest::LoopbackHttpIso8601(file.modified),
-                           file.trashed ? "true" : "false",
-                           file.version,
-                           Common::Crypto::EncodeHexDigest(sha256),
-                           parents);
+        return std::format(
+            R"({{"kind":"drive#file","id":{},"name":{},"mimeType":{},"size":"{}","modifiedTime":"{}","createdTime":"{}","trashed":{},"version":"{}","sha256Checksum":"{}","parents":{}}})",
+            JsonQuote(file.id),
+            JsonQuote(file.name),
+            JsonQuote(file.mimeType),
+            file.bytes.size(),
+            Common::SelfTest::LoopbackHttpIso8601(file.modified),
+            Common::SelfTest::LoopbackHttpIso8601(file.modified),
+            file.trashed ? "true" : "false",
+            file.version,
+            Common::Crypto::EncodeHexDigest(sha256),
+            parents);
     }
 
     // `q` grammar the plugin uses: `trashed = false and '<id>' in parents [and name = '<name>']`.
@@ -606,9 +617,9 @@ private:
                 return ErrorResponse(404, "notFound", "Parent not found: " + parent);
             }
         }
-        DriveFile& created  = AddLocked(name, parents.front(), mimeType == kFolderMime);
-        created.mimeType    = mimeType;
-        created.parents     = parents;
+        DriveFile& created = AddLocked(name, parents.front(), mimeType == kFolderMime);
+        created.mimeType   = mimeType;
+        created.parents    = parents;
         return JsonResponse(200, FileJsonLocked(created));
     }
 
@@ -699,9 +710,9 @@ private:
         }
         if (! emptyCompletion)
         {
-            uint64_t first = 0u;
-            uint64_t last  = 0u;
-            uint64_t total = 0u;
+            uint64_t first     = 0u;
+            uint64_t last      = 0u;
+            uint64_t total     = 0u;
             const size_t dash  = spec.find('-');
             const size_t slash = spec.find('/');
             if (dash == std::string_view::npos || slash == std::string_view::npos || slash < dash)
@@ -974,7 +985,7 @@ void RunDriveStalledRequestCancelSelfTests(unsigned int& passed, unsigned int& f
             endpoint.Drive().SeedFile(std::format("/drip/object-{:03}.bin", index), std::vector<uint8_t>(16u, static_cast<uint8_t>(index)));
         }
         constexpr unsigned int kDeepTreeLevels = 80u;
-        std::string deepDirectoryPath = "/deep";
+        std::string deepDirectoryPath          = "/deep";
         for (unsigned int level = 0u; level < kDeepTreeLevels; ++level)
         {
             deepDirectoryPath += std::format("/level-{:03}", level);
@@ -1001,13 +1012,16 @@ void RunDriveStalledRequestCancelSelfTests(unsigned int& passed, unsigned int& f
         }
         constexpr uint32_t kConnectTimeoutMs = 2'000u;
         constexpr uint32_t kRequestTimeoutMs = 3'000u;
-        HRESULT hr = fileSystem->SetConfiguration(R"({"connectTimeoutMs":2000,"requestTimeoutMs":3000})");
+        HRESULT hr                           = fileSystem->SetConfiguration(R"({"connectTimeoutMs":2000,"requestTimeoutMs":3000})");
         if (! DebugCheck(SUCCEEDED(hr), L"Google Drive instance should accept the fixture configuration", passed, failed))
         {
             return;
         }
         const unsigned long boundMs = FileSystemGoogleDriveInternal::DriveProviderWatchdogTimeoutMs(kConnectTimeoutMs, kRequestTimeoutMs);
-        DebugCheck(boundMs > 0u && boundMs <= 20'000u, L"the Google Drive provider-owned bound must be a small nonzero value for the fixture timeouts", passed, failed);
+        DebugCheck(boundMs > 0u && boundMs <= 20'000u,
+                   L"the Google Drive provider-owned bound must be a small nonzero value for the fixture timeouts",
+                   passed,
+                   failed);
 
         const auto deleteWithControl = [&](const wchar_t* path, FileSystemFlags flags, CancelControl* control, std::atomic<HRESULT>& result) noexcept
         {
@@ -1043,7 +1057,10 @@ void RunDriveStalledRequestCancelSelfTests(unsigned int& passed, unsigned int& f
             std::fwprintf(stderr, L"[Google Drive] streaming request returned %llu ms after Cancel\n", static_cast<unsigned long long>(cancelMs));
             DebugCheck(listingReached, L"the folder Delete must list the children on the fixture", passed, failed);
             DebugCheck(returned, L"a request whose body is still arriving must return after Cancel", passed, failed);
-            DebugCheck(deleteHr.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_CANCELLED), L"a canceled streaming request must report ERROR_CANCELLED", passed, failed);
+            DebugCheck(deleteHr.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                       L"a canceled streaming request must report ERROR_CANCELLED",
+                       passed,
+                       failed);
             DebugCheck(cancelMs < 3'000u, L"Cancel must return a streaming request within a few progress callbacks", passed, failed);
             DebugCheck(endpoint.Server().RequestCount("DELETE") == 0u, L"a Delete canceled while listing must not delete anything", passed, failed);
             if (! returned)
@@ -1075,10 +1092,16 @@ void RunDriveStalledRequestCancelSelfTests(unsigned int& passed, unsigned int& f
                 endpoint.Stop();
             }
             deleter.join();
-            std::fwprintf(stderr, L"[Google Drive] stalled request returned %llu ms after Cancel (declared bound %lu ms)\n", static_cast<unsigned long long>(cancelMs), boundMs);
+            std::fwprintf(stderr,
+                          L"[Google Drive] stalled request returned %llu ms after Cancel (declared bound %lu ms)\n",
+                          static_cast<unsigned long long>(cancelMs),
+                          boundMs);
             DebugCheck(deleteReached, L"the stalled DELETE must reach the fixture", passed, failed);
             DebugCheck(returned, L"a request the server never answers must return after Cancel", passed, failed);
-            DebugCheck(deleteHr.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_CANCELLED), L"a canceled stalled request must report ERROR_CANCELLED", passed, failed);
+            DebugCheck(deleteHr.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                       L"a canceled stalled request must report ERROR_CANCELLED",
+                       passed,
+                       failed);
             DebugCheck(cancelMs < 3'000u, L"Cancel on a silent server must return within a few progress callbacks", passed, failed);
             if (! returned)
             {
@@ -1093,7 +1116,10 @@ void RunDriveStalledRequestCancelSelfTests(unsigned int& passed, unsigned int& f
             deleteWithControl(L"/@conn:google-drive-selftest/stall.txt", FILESYSTEM_FLAG_NONE, nullptr, deleteHr);
             const ULONGLONG elapsedMs = GetTickCount64() - boundStart;
             const HRESULT boundHr     = deleteHr.load(std::memory_order_acquire);
-            std::fwprintf(stderr, L"[Google Drive] stalled request returned on its own after %llu ms (declared bound %lu ms)\n", static_cast<unsigned long long>(elapsedMs), boundMs);
+            std::fwprintf(stderr,
+                          L"[Google Drive] stalled request returned on its own after %llu ms (declared bound %lu ms)\n",
+                          static_cast<unsigned long long>(elapsedMs),
+                          boundMs);
             DebugCheck(FAILED(boundHr) && boundHr != HRESULT_FROM_WIN32(ERROR_CANCELLED),
                        L"an un-canceled stalled request must fail through the transport bound, not as a cancel",
                        passed,
@@ -1104,9 +1130,8 @@ void RunDriveStalledRequestCancelSelfTests(unsigned int& passed, unsigned int& f
         DebugCheck(endpoint.Drive().Exists("/stall.txt"), L"a stalled DELETE the client gave up on must not be reported as deleted", passed, failed);
 
         FileSystemDirectorySizeResult deepSize{};
-        deepSize.sizeBytes = sizeof(deepSize);
-        const HRESULT deepSizeHr = fileSystem->GetDirectorySize(
-            L"/@conn:google-drive-selftest/deep", FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, &deepSize);
+        deepSize.sizeBytes       = sizeof(deepSize);
+        const HRESULT deepSizeHr = fileSystem->GetDirectorySize(L"/@conn:google-drive-selftest/deep", FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, &deepSize);
         DebugCheck(SUCCEEDED(deepSizeHr) && deepSize.status == S_OK && deepSize.directoryCount == kDeepTreeLevels && deepSize.fileCount == 1u &&
                        deepSize.totalBytes == 7u,
                    L"recursive Google Drive directory size must include every level beyond the former depth-64 cutoff",
@@ -1114,13 +1139,9 @@ void RunDriveStalledRequestCancelSelfTests(unsigned int& passed, unsigned int& f
                    failed);
 
         const ULONGLONG deepCopyStart = GetTickCount64();
-        const HRESULT deepCopyHr = fileSystem->CopyItem(L"/@conn:google-drive-selftest/deep",
-                                                        L"/@conn:google-drive-selftest/deep-copy",
-                                                        FILESYSTEM_FLAG_RECURSIVE,
-                                                        nullptr,
-                                                        nullptr,
-                                                        nullptr);
-        const uint64_t deepCopyMs = GetTickCount64() - deepCopyStart;
+        const HRESULT deepCopyHr      = fileSystem->CopyItem(
+            L"/@conn:google-drive-selftest/deep", L"/@conn:google-drive-selftest/deep-copy", FILESYSTEM_FLAG_RECURSIVE, nullptr, nullptr, nullptr);
+        const uint64_t deepCopyMs            = GetTickCount64() - deepCopyStart;
         const std::string copiedDeepFilePath = "/deep-copy" + deepFilePath.substr(std::string_view("/deep").size());
         DebugCheck(SUCCEEDED(deepCopyHr) && endpoint.Drive().Exists(copiedDeepFilePath),
                    L"provider-native Google Drive copy must complete an iterative tree deeper than 64 levels",
@@ -1253,7 +1274,9 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderGoogleDriveStart
     }
 }
 
-extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderGoogleDriveFakeDriveRequestLogForSelfTest(void* endpoint, wchar_t* buffer, unsigned int capacity) noexcept
+extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderGoogleDriveFakeDriveRequestLogForSelfTest(void* endpoint,
+                                                                                                          wchar_t* buffer,
+                                                                                                          unsigned int capacity) noexcept
 {
     if (endpoint == nullptr || buffer == nullptr || capacity == 0u)
     {

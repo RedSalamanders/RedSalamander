@@ -10,7 +10,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::SetConfiguration(const char* configurati
 
     if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
     {
-        nextConfiguration = configurationJsonUtf8;
+        nextConfiguration                   = configurationJsonUtf8;
         Common::Json::ObjectDocument parsed = Common::Json::ParseObjectDocument(nextConfiguration, YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
         if (! parsed)
         {

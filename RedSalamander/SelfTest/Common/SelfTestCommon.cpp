@@ -322,8 +322,7 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
         return false;
     }
 
-    return std::ranges::all_of(value, [](const wchar_t ch) noexcept
-    {
+    return std::ranges::all_of(value, [](const wchar_t ch) noexcept {
         return (ch >= L'0' && ch <= L'9') || (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') || ch == L'-' || ch == L'_';
     });
 }
@@ -402,13 +401,8 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
         const std::filesystem::path markerPath = alternateBase / std::wstring(Common::Testing::kTestSandboxMarkerFileName);
 #pragma warning(push)
 #pragma warning(disable : 4625 4626) // WIL unique_hfile is intentionally non-copyable.
-        wil::unique_hfile markerFile(CreateFileW(markerPath.c_str(),
-                                                 GENERIC_WRITE,
-                                                 0u,
-                                                 nullptr,
-                                                 CREATE_NEW,
-                                                 FILE_ATTRIBUTE_HIDDEN | FILE_FLAG_WRITE_THROUGH,
-                                                 nullptr));
+        wil::unique_hfile markerFile(
+            CreateFileW(markerPath.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_NEW, FILE_ATTRIBUTE_HIDDEN | FILE_FLAG_WRITE_THROUGH, nullptr));
 #pragma warning(pop)
         if (! markerFile)
         {
@@ -417,11 +411,7 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
 
         const std::string_view markerContents = Common::Testing::kTestSandboxMarkerContents;
         DWORD bytesWritten                    = 0u;
-        const bool written = WriteFile(markerFile.get(),
-                                       markerContents.data(),
-                                       static_cast<DWORD>(markerContents.size()),
-                                       &bytesWritten,
-                                       nullptr) != FALSE &&
+        const bool written = WriteFile(markerFile.get(), markerContents.data(), static_cast<DWORD>(markerContents.size()), &bytesWritten, nullptr) != FALSE &&
                              bytesWritten == static_cast<DWORD>(markerContents.size());
         markerFile.reset();
         if (! written)
@@ -466,8 +456,7 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
         Common::Testing::GetDedicatedExternalTestSandboxBase(alternateBase, Common::Testing::kTestSandboxDirectoryName);
     std::error_code ec;
     if (! authorizedBase.has_value() || ! Common::Testing::TestSandboxPathEquals(alternateBase, authorizedBase.value()) ||
-        ! Common::Testing::IsExistingTestSandboxPathReparseFree(alternateBase, ec) ||
-        ! InitializeAlternateVolumeTestSandboxRoot(alternateBase))
+        ! Common::Testing::IsExistingTestSandboxPathReparseFree(alternateBase, ec) || ! InitializeAlternateVolumeTestSandboxRoot(alternateBase))
     {
         return {};
     }
@@ -523,8 +512,7 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
         return {};
     }
 
-    const std::filesystem::path root =
-        repositoryRoot.root_path() / std::wstring(Common::Testing::kTestSandboxDirectoryName);
+    const std::filesystem::path root = repositoryRoot.root_path() / std::wstring(Common::Testing::kTestSandboxDirectoryName);
     if (! Common::Testing::IsAuthorizedTestSandboxPath(root, repositoryRoot, true, ec))
     {
         return {};
@@ -561,12 +549,8 @@ const char* CaseStatusName(SelfTestCaseResult::Status status) noexcept
     std::filesystem::create_directories(sandboxRoot, ec);
     if (ec)
     {
-        AppendSelfTestTrace(std::format(L"{}: suite={} case={} create failed path='{}' error={}",
-                                        traceKind,
-                                        suiteSegment,
-                                        caseSegment,
-                                        sandboxRoot.wstring(),
-                                        ec.value()));
+        AppendSelfTestTrace(
+            std::format(L"{}: suite={} case={} create failed path='{}' error={}", traceKind, suiteSegment, caseSegment, sandboxRoot.wstring(), ec.value()));
         return {};
     }
 
@@ -1559,8 +1543,7 @@ std::optional<uint64_t> ExtractJsonUInt(std::string_view json, std::string_view 
                 return std::nullopt;
             }
             ++valueStart;
-            while (valueStart < json.size() &&
-                   (json[valueStart] == ' ' || json[valueStart] == '\t' || json[valueStart] == '\r' || json[valueStart] == '\n'))
+            while (valueStart < json.size() && (json[valueStart] == ' ' || json[valueStart] == '\t' || json[valueStart] == '\r' || json[valueStart] == '\n'))
             {
                 ++valueStart;
             }
@@ -1602,7 +1585,7 @@ HRESULT LoadPluginSelfTestExport(std::wstring_view pluginId, std::string_view ex
         return E_INVALIDARG;
     }
 
-    FileSystemPluginManager& pluginManager                  = FileSystemPluginManager::GetInstance();
+    FileSystemPluginManager& pluginManager               = FileSystemPluginManager::GetInstance();
     const FileSystemPluginManager::PluginEntry* mtpEntry = nullptr;
     for (const FileSystemPluginManager::PluginEntry& entry : pluginManager.GetPlugins())
     {
@@ -1952,8 +1935,8 @@ void TriggerSelfTestCaseCrashInjection(SelfTestSuite suite, std::wstring_view na
 
 void RecalculateSuiteSummary(SelfTestSuiteResult& suite) noexcept
 {
-    suite.passed = 0;
-    suite.failed = 0;
+    suite.passed  = 0;
+    suite.failed  = 0;
     suite.skipped = 0;
     suite.failureMessage.clear();
 
@@ -2014,11 +1997,11 @@ void AppendCaseResult(
     SelfTestSuiteResult& suite, std::wstring_view name, SelfTestCaseResult::Status status, std::wstring_view reason, uint64_t durationMs) noexcept
 {
     SelfTestCaseResult result{};
-    result.name       = std::wstring(name);
-    result.status     = status;
-    result.durationMs = durationMs;
+    result.name        = std::wstring(name);
+    result.status      = status;
+    result.durationMs  = durationMs;
     result.repeatIndex = 1u;
-    result.reason     = std::wstring(reason);
+    result.reason      = std::wstring(reason);
     AppendCaseResult(suite, std::move(result));
 }
 
@@ -2035,7 +2018,7 @@ void MarkInFlightSelfTestCaseCrashed(SelfTestRunResult& runResult, std::wstring_
         return;
     }
 
-    const auto now = std::chrono::steady_clock::now();
+    const auto now      = std::chrono::steady_clock::now();
     uint64_t durationMs = 0;
     if (now >= crashedCase->startedAt)
     {
@@ -2043,9 +2026,8 @@ void MarkInFlightSelfTestCaseCrashed(SelfTestRunResult& runResult, std::wstring_
     }
 
     SelfTestSuiteResult* targetSuite = nullptr;
-    const auto existingSuite = std::find_if(runResult.suites.begin(),
-                                            runResult.suites.end(),
-                                            [&](const SelfTestSuiteResult& item) noexcept { return item.suite == crashedCase->suite; });
+    const auto existingSuite         = std::find_if(
+        runResult.suites.begin(), runResult.suites.end(), [&](const SelfTestSuiteResult& item) noexcept { return item.suite == crashedCase->suite; });
     if (existingSuite != runResult.suites.end())
     {
         targetSuite = std::addressof(*existingSuite);
@@ -2058,24 +2040,23 @@ void MarkInFlightSelfTestCaseCrashed(SelfTestRunResult& runResult, std::wstring_
         targetSuite = std::addressof(runResult.suites.back());
     }
 
-    const auto existingCase = std::find_if(targetSuite->cases.begin(),
-                                           targetSuite->cases.end(),
-                                           [&](const SelfTestCaseResult& item) noexcept { return item.name == crashedCase->name; });
+    const auto existingCase = std::find_if(
+        targetSuite->cases.begin(), targetSuite->cases.end(), [&](const SelfTestCaseResult& item) noexcept { return item.name == crashedCase->name; });
     if (existingCase != targetSuite->cases.end())
     {
-        existingCase->status = SelfTestCaseResult::Status::crashed;
+        existingCase->status     = SelfTestCaseResult::Status::crashed;
         existingCase->durationMs = durationMs;
-        existingCase->reason = std::wstring(reason.empty() ? std::wstring_view(L"case crashed") : reason);
+        existingCase->reason     = std::wstring(reason.empty() ? std::wstring_view(L"case crashed") : reason);
         RecalculateSuiteSummary(*targetSuite);
         FlushSuiteJsonAfterCase(*targetSuite);
     }
     else
     {
         SelfTestCaseResult result{};
-        result.name = crashedCase->name;
-        result.status = SelfTestCaseResult::Status::crashed;
+        result.name       = crashedCase->name;
+        result.status     = SelfTestCaseResult::Status::crashed;
         result.durationMs = durationMs;
-        result.reason = std::wstring(reason.empty() ? std::wstring_view(L"case crashed") : reason);
+        result.reason     = std::wstring(reason.empty() ? std::wstring_view(L"case crashed") : reason);
         AppendCaseResult(*targetSuite, std::move(result));
     }
 
@@ -2421,7 +2402,7 @@ void TryArchiveLastRunToRepo(std::wstring_view area, int exitCode, uint64_t dura
 
     std::error_code ec;
     const std::filesystem::path archiveRoot = selfTestRoot.parent_path() / L"archive";
-    const std::filesystem::path areaRoot = archiveRoot / profile / std::filesystem::path(area);
+    const std::filesystem::path areaRoot    = archiveRoot / profile / std::filesystem::path(area);
     std::filesystem::create_directories(areaRoot, ec);
 
     const std::filesystem::path runRoot = CreateUniqueRunFolder(areaRoot);

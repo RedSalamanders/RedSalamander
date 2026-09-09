@@ -5291,8 +5291,7 @@ public:
 {
     using namespace std::chrono_literals;
 
-    state.Require(mainWindow != nullptr && IsWindow(mainWindow) != FALSE,
-                  L"Main window handle invalid for routine/options pane-transfer validation.");
+    state.Require(mainWindow != nullptr && IsWindow(mainWindow) != FALSE, L"Main window handle invalid for routine/options pane-transfer validation.");
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
     state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for routine/options pane-transfer validation.");
     if (! state.failure.empty())
@@ -5300,9 +5299,9 @@ public:
         return false;
     }
 
-    const std::filesystem::path root      = suiteRoot / L"work" / (L"pane_transfer_options_" + NewGuidText());
-    const std::filesystem::path sourceDir = root / L"src";
-    const std::filesystem::path destDir   = root / L"dst";
+    const std::filesystem::path root              = suiteRoot / L"work" / (L"pane_transfer_options_" + NewGuidText());
+    const std::filesystem::path sourceDir         = root / L"src";
+    const std::filesystem::path destDir           = root / L"dst";
     constexpr std::wstring_view kArtifactCopyName = L"copy.rs_ren_0123456789abcdef0123456789abcdef";
     constexpr std::wstring_view kArtifactMoveName = L"move.rs_ren_fedcba9876543210fedcba9876543210";
     const std::array<std::wstring_view, 6> sourceNames{
@@ -5316,8 +5315,7 @@ public:
 
     std::error_code cleanupError;
     std::filesystem::remove_all(root, cleanupError);
-    state.Require(SelfTest::EnsureDirectory(sourceDir) && SelfTest::EnsureDirectory(destDir),
-                  L"Failed to create routine/options pane-transfer directories.");
+    state.Require(SelfTest::EnsureDirectory(sourceDir) && SelfTest::EnsureDirectory(destDir), L"Failed to create routine/options pane-transfer directories.");
     for (const std::wstring_view name : sourceNames)
     {
         state.Require(SelfTest::WriteTextFile(sourceDir / name, "pane-transfer-options"),
@@ -5328,14 +5326,14 @@ public:
         return false;
     }
 
-    const auto cleanupRoot = wil::scope_exit([&]() noexcept
+    const auto cleanupRoot                                     = wil::scope_exit([&]() noexcept
     {
         std::error_code ec;
         std::filesystem::remove_all(root, ec);
     });
     const std::optional<std::filesystem::path> leftPathBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const std::optional<std::filesystem::path> rightPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
-    const auto restorePanes = wil::scope_exit([&]() noexcept
+    const auto restorePanes                                    = wil::scope_exit([&]() noexcept
     {
         if (leftPathBefore.has_value())
         {
@@ -5347,17 +5345,15 @@ public:
         }
         PumpPendingMessages();
     });
-    const auto clearPromptOverride = wil::scope_exit([]() noexcept
+    const auto clearPromptOverride                             = wil::scope_exit([]() noexcept
     {
         HostClearTestPromptResultOverride();
         HostResetTestPromptRequestCount();
     });
     std::atomic<uint32_t> routineCompletionMask{0u};
-    const uint64_t completionToken = g_folderWindow.AddFileOperationCompletedCallback(
-        [&](const FolderWindow::FileOperationCompletedEvent& event) noexcept
+    const uint64_t completionToken      = g_folderWindow.AddFileOperationCompletedCallback([&](const FolderWindow::FileOperationCompletedEvent& event) noexcept
     {
-        if (FAILED(event.hr) || event.sourcePaths.size() != 1u ||
-            ! OrdinalString::EqualsNoCasePath(event.sourcePaths.front().parent_path(), sourceDir))
+        if (FAILED(event.hr) || event.sourcePaths.size() != 1u || ! OrdinalString::EqualsNoCasePath(event.sourcePaths.front().parent_path(), sourceDir))
         {
             return;
         }
@@ -5375,10 +5371,7 @@ public:
             routineCompletionMask.fetch_or(4u, std::memory_order_release);
         }
     });
-    const auto removeCompletionCallback = wil::scope_exit([&]() noexcept
-    {
-        g_folderWindow.RemoveFileOperationCompletedCallback(completionToken);
-    });
+    const auto removeCompletionCallback = wil::scope_exit([&]() noexcept { g_folderWindow.RemoveFileOperationCompletedCallback(completionToken); });
 
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, sourceDir);
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, destDir);
@@ -5464,8 +5457,7 @@ public:
                       std::format(L"With-options command {} should publish exactly one captured prompt.", commandId));
         state.Require(prompt.hasFileOperationOptions,
                       std::format(L"With-options command {} did not use the shared File Operations options surface.", commandId));
-        state.Require(waitForPathState(sourceDir / name, true, SelfTest::Scale(500ms)) &&
-                          waitForPathState(destDir / name, false, SelfTest::Scale(500ms)),
+        state.Require(waitForPathState(sourceDir / name, true, SelfTest::Scale(500ms)) && waitForPathState(destDir / name, false, SelfTest::Scale(500ms)),
                       std::format(L"Cancel from with-options command {} changed source or destination state.", commandId));
         if (! state.failure.empty())
         {
@@ -5476,14 +5468,10 @@ public:
 
     HostResetTestPromptRequestCount();
     invokeForFocusedItem(L"routine-copy.txt", IDM_PANE_COPY_TO_OTHER);
-    state.Require(waitForPathState(destDir / L"routine-copy.txt", true, SelfTest::Scale(5000ms)),
-                  L"Routine F5-path copy did not reach the destination.");
-    state.Require(waitForCompletionMask(1u, SelfTest::Scale(5000ms)),
-                  L"Routine F5-path copy did not publish a successful terminal completion.");
-    state.Require(waitForPathState(sourceDir / L"routine-copy.txt", true, SelfTest::Scale(500ms)),
-                  L"Routine F5-path copy removed its source.");
-    state.Require(HostGetTestPromptRequestCount() == 0u,
-                  std::format(L"Routine copy showed {} generic prompt(s).", HostGetTestPromptRequestCount()));
+    state.Require(waitForPathState(destDir / L"routine-copy.txt", true, SelfTest::Scale(5000ms)), L"Routine F5-path copy did not reach the destination.");
+    state.Require(waitForCompletionMask(1u, SelfTest::Scale(5000ms)), L"Routine F5-path copy did not publish a successful terminal completion.");
+    state.Require(waitForPathState(sourceDir / L"routine-copy.txt", true, SelfTest::Scale(500ms)), L"Routine F5-path copy removed its source.");
+    state.Require(HostGetTestPromptRequestCount() == 0u, std::format(L"Routine copy showed {} generic prompt(s).", HostGetTestPromptRequestCount()));
     if (! state.failure.empty())
     {
         return false;
@@ -5494,10 +5482,8 @@ public:
     state.Require(waitForPathState(sourceDir / L"routine-move.txt", false, SelfTest::Scale(5000ms)) &&
                       waitForPathState(destDir / L"routine-move.txt", true, SelfTest::Scale(5000ms)),
                   L"Routine F6-path move did not preserve exact source/destination semantics.");
-    state.Require(waitForCompletionMask(3u, SelfTest::Scale(5000ms)),
-                  L"Routine F6-path move did not publish a successful terminal completion.");
-    state.Require(HostGetTestPromptRequestCount() == 0u,
-                  std::format(L"Routine move showed {} generic prompt(s).", HostGetTestPromptRequestCount()));
+    state.Require(waitForCompletionMask(3u, SelfTest::Scale(5000ms)), L"Routine F6-path move did not publish a successful terminal completion.");
+    state.Require(HostGetTestPromptRequestCount() == 0u, std::format(L"Routine move showed {} generic prompt(s).", HostGetTestPromptRequestCount()));
     if (! state.failure.empty())
     {
         return false;
@@ -5523,8 +5509,7 @@ public:
     HostClearTestPromptResultOverride();
     HostPromptDebugSnapshot artifactPrompt{};
     state.Require(HostGetTestPromptRequestCount() == 1u && HostGetTestLastPromptDebugSnapshot(artifactPrompt) &&
-                      artifactPrompt.presentation == HOST_PROMPT_PRESENTATION_ARTIFACT_TOUCH &&
-                      artifactPrompt.defaultResult == HOST_PROMPT_RESULT_CANCEL,
+                      artifactPrompt.presentation == HOST_PROMPT_PRESENTATION_ARTIFACT_TOUCH && artifactPrompt.defaultResult == HOST_PROMPT_RESULT_CANCEL,
                   L"Routine Move of a Possible artifact should show exactly one Cancel-default artifact warning.");
     state.Require(waitForPathState(sourceDir / kArtifactMoveName, true, SelfTest::Scale(500ms)) &&
                       waitForPathState(destDir / kArtifactMoveName, false, SelfTest::Scale(500ms)),
@@ -5849,10 +5834,9 @@ struct FileOperationsPopupTestFixture final
     bool cleaned                      = false;
 };
 
-[[nodiscard]] bool InitializeFileOperationsPopupTestFixture(
-    HWND mainWindow,
-    FileOperationsPopupTestFixture& fixture,
-    const bool hideBeforeActionablePublish = false) noexcept
+[[nodiscard]] bool InitializeFileOperationsPopupTestFixture(HWND mainWindow,
+                                                            FileOperationsPopupTestFixture& fixture,
+                                                            const bool hideBeforeActionablePublish = false) noexcept
 {
     using namespace std::chrono_literals;
     using ConflictAction = FolderWindow::FileOperationState::Task::ConflictAction;
@@ -6085,8 +6069,7 @@ struct FileOperationsPopupTestFixture final
             return candidate && IsWindowVisible(candidate) != FALSE ? candidate : nullptr;
         },
             SelfTest::Scale(5000ms));
-        state.Require(visiblePopup == popup,
-                      L"Publishing an actionable conflict should automatically restore the same hidden File Operations surface.");
+        state.Require(visiblePopup == popup, L"Publishing an actionable conflict should automatically restore the same hidden File Operations surface.");
     }
     return state.failure.empty();
 }
@@ -7489,8 +7472,7 @@ struct FileOperationsPopupTestFixture final
             return candidate && IsWindowVisible(candidate) != FALSE ? candidate : nullptr;
         },
             SelfTest::Scale(5000ms));
-        state.Require(fixture.popup == popup,
-                      L"Show File Operations should reopen the same hidden conflict surface without changing its decision.");
+        state.Require(fixture.popup == popup, L"Show File Operations should reopen the same hidden conflict surface without changing its decision.");
 
         SetFocus(fixture.popup);
         SendMessageW(fixture.popup, WM_KEYDOWN, VK_ESCAPE, 0);
@@ -8157,14 +8139,14 @@ namespace
     }
 
     HostResetPromptShutdown();
-    const auto resetPromptShutdown = wil::scope_exit([]() noexcept { HostResetPromptShutdown(); });
+    const auto resetPromptShutdown           = wil::scope_exit([]() noexcept { HostResetPromptShutdown(); });
     std::atomic<bool> shutdownPromptObserved = false;
-    HWND shutdownPrompt = nullptr;
-    const HWND folderWindow = g_folderWindow.GetHwnd();
-    const auto shutdownStartedAt = std::chrono::steady_clock::now();
-    const bool shutdownInvoked = RunFileOperationsSpeedLimitPromptModalCycle(popup,
-                                                                             openPrompt,
-                                                                             [&](const HWND prompt) noexcept
+    HWND shutdownPrompt                      = nullptr;
+    const HWND folderWindow                  = g_folderWindow.GetHwnd();
+    const auto shutdownStartedAt             = std::chrono::steady_clock::now();
+    const bool shutdownInvoked               = RunFileOperationsSpeedLimitPromptModalCycle(popup,
+                                                                                           openPrompt,
+                                                                                           [&](const HWND prompt) noexcept
     {
         shutdownPrompt = prompt;
         shutdownPromptObserved.store(prompt != nullptr && IsWindow(prompt) != FALSE, std::memory_order_release);
@@ -8177,12 +8159,11 @@ namespace
                       L"Folder-window handle unavailable for nested speed-limit prompt shutdown validation.");
         state.Require(PostMessageW(folderWindow, WndMsg::kFileOperationShutdownForSelfTest, taskId.value(), 0) != FALSE,
                       L"Failed to queue File Operations shutdown inside the custom speed-limit prompt pump.");
-        state.Require(WaitForWindowClosed(prompt, SelfTest::Scale(3000ms)),
-                      L"Custom speed-limit prompt did not unwind after nested File Operations shutdown.");
+        state.Require(WaitForWindowClosed(prompt, SelfTest::Scale(3000ms)), L"Custom speed-limit prompt did not unwind after nested File Operations shutdown.");
     });
     HostResetPromptShutdown();
     const bool retainedDuringShutdown = g_folderWindow.DebugWasFileOperationStateRetainedDuringNestedPromptShutdown();
-    auto* const freshFileOps = g_folderWindow.DebugGetFileOperationState();
+    auto* const freshFileOps          = g_folderWindow.DebugGetFileOperationState();
     Debug::Perf::Emit(L"FileOps.SelfTest.SpeedLimitPromptNestedShutdownUs",
                       L"popup-control-prompt-lifetime",
                       Debug::Perf::ElapsedUs(shutdownStartedAt),
@@ -8193,8 +8174,7 @@ namespace
                   L"Failed to open the custom speed-limit prompt for nested File Operations shutdown validation.");
     state.Require(shutdownPrompt != nullptr && IsWindow(shutdownPrompt) == FALSE,
                   L"Custom speed-limit prompt remained alive after nested File Operations shutdown.");
-    state.Require(retainedDuringShutdown,
-                  L"Nested speed-limit prompt shutdown must retain FileOperationState until the modal frame unwinds.");
+    state.Require(retainedDuringShutdown, L"Nested speed-limit prompt shutdown must retain FileOperationState until the modal frame unwinds.");
     state.Require(freshFileOps != nullptr && ! freshFileOps->FindTask(taskId.value()),
                   L"Nested speed-limit prompt shutdown must leave no stale task for post-pump speed-limit submission.");
 
@@ -9755,11 +9735,11 @@ namespace
 
 [[nodiscard]] bool TestLocalBlockedReaderCancellationIsBounded(CaseState& state) noexcept
 {
-    using PfnRunLocalReaderCancellationTest = HRESULT(__stdcall*)(
-        const wchar_t*, uint64_t*, uint64_t*, uint64_t*, unsigned int*, unsigned long*, HRESULT*, BOOL*, BOOL*, BOOL*);
+    using PfnRunLocalReaderCancellationTest =
+        HRESULT(__stdcall*)(const wchar_t*, uint64_t*, uint64_t*, uint64_t*, unsigned int*, unsigned long*, HRESULT*, BOOL*, BOOL*, BOOL*);
 
-    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
-    const std::filesystem::path root      = suiteRoot / L"work" / (L"local_reader_cancel_" + NewGuidText());
+    const std::filesystem::path suiteRoot   = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    const std::filesystem::path root        = suiteRoot / L"work" / (L"local_reader_cancel_" + NewGuidText());
     const std::filesystem::path payloadPath = root / L"payload.bin";
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create the Local reader cancellation fixture directory.");
     if (! state.failure.empty())
@@ -9815,29 +9795,20 @@ namespace
     BOOL enteredPending         = FALSE;
     BOOL seekReplayMatched      = FALSE;
     BOOL cleanupComplete        = FALSE;
-    const HRESULT hr = runTest(payloadPath.c_str(),
-                               &cancelDurationUs,
-                               &ordinaryDurationUs,
-                               &ordinaryBytesRead,
-                               &abortChecks,
-                               &canceledBytes,
-                               &blockedReadHr,
-                               &enteredPending,
-                               &seekReplayMatched,
-                               &cleanupComplete);
+    const HRESULT hr            = runTest(payloadPath.c_str(),
+                                          &cancelDurationUs,
+                                          &ordinaryDurationUs,
+                                          &ordinaryBytesRead,
+                                          &abortChecks,
+                                          &canceledBytes,
+                                          &blockedReadHr,
+                                          &enteredPending,
+                                          &seekReplayMatched,
+                                          &cleanupComplete);
 
-    Debug::Perf::Emit(L"FileOps.SelfTest.R0eOr1.LocalBlockedReadCancelUs",
-                      L"local-provider",
-                      cancelDurationUs,
-                      abortChecks,
-                      canceledBytes,
-                      blockedReadHr);
-    Debug::Perf::Emit(L"FileOps.SelfTest.R0eOr1.OrdinaryReadUs",
-                      L"legacy-and-bound",
-                      ordinaryDurationUs,
-                      ordinaryBytesRead,
-                      seekReplayMatched == TRUE ? 1u : 0u,
-                      hr);
+    Debug::Perf::Emit(L"FileOps.SelfTest.R0eOr1.LocalBlockedReadCancelUs", L"local-provider", cancelDurationUs, abortChecks, canceledBytes, blockedReadHr);
+    Debug::Perf::Emit(
+        L"FileOps.SelfTest.R0eOr1.OrdinaryReadUs", L"legacy-and-bound", ordinaryDurationUs, ordinaryBytesRead, seekReplayMatched == TRUE ? 1u : 0u, hr);
 
     state.Require(SUCCEEDED(hr), std::format(L"Local reader cancellation fixture failed with hr=0x{:08X}.", static_cast<unsigned long>(hr)));
     state.Require(ordinaryBytesRead == payloadBytes * 2u,

@@ -30,11 +30,11 @@ struct Line
     };
 
     RedSalamanderMonitor::MonitorTextBlock text; // immutable message text block (may include '\n')
-    std::vector<ColorSpan> spans;       // optional text coloring
-    bool hasMeta = false;               // whether metadata exists for this logical line
-    Debug::InfoParam meta{};            // metadata (time/pid/tid/type)
-    mutable std::wstring cachedPrefix;  // Cached prefix to avoid rebuilding time/ids string repeatedly
-    mutable std::wstring cachedDisplay; // Cached full display string (prefix+text) to avoid rebuilding
+    std::vector<ColorSpan> spans;                // optional text coloring
+    bool hasMeta = false;                        // whether metadata exists for this logical line
+    Debug::InfoParam meta{};                     // metadata (time/pid/tid/type)
+    mutable std::wstring cachedPrefix;           // Cached prefix to avoid rebuilding time/ids string repeatedly
+    mutable std::wstring cachedDisplay;          // Cached full display string (prefix+text) to avoid rebuilding
     mutable bool cachedDisplayValid   = false;
     mutable UINT32 cachedPrefixLen    = 0;     // Cached prefix length for fast access
     mutable bool cachedPrefixLenValid = false; // Whether cached length is valid
@@ -77,10 +77,10 @@ public:
 
     struct RetentionResult
     {
-        size_t linesEvicted                 = 0u;
-        uint64_t textBytesEvicted           = 0u;
+        size_t linesEvicted                = 0u;
+        uint64_t textBytesEvicted          = 0u;
         uint64_t characterPositionsEvicted = 0u;
-        uint64_t displayRowsEvicted         = 0u;
+        uint64_t displayRowsEvicted        = 0u;
     };
     [[nodiscard]] RetentionResult EnforceRetentionLimits(size_t maxLines, uint64_t maxTextBytes);
 
@@ -103,9 +103,9 @@ public:
     bool IsLineVisible(size_t sourceIndex) const;
 
     // Line access methods
-    Line GetVisibleLine(size_t visibleIndex) const;              // Locked snapshot by visible index
-    Line GetSourceLine(size_t sourceIndex) const;                 // Locked snapshot by source index
-    std::vector<VisibleLine> VisibleLines() const;                // Locked visibility snapshot
+    Line GetVisibleLine(size_t visibleIndex) const; // Locked snapshot by visible index
+    Line GetSourceLine(size_t sourceIndex) const;   // Locked snapshot by source index
+    std::vector<VisibleLine> VisibleLines() const;  // Locked visibility snapshot
 
     // Display row mapping (VisibleLine architecture)
     UINT32 DisplayRowForVisible(size_t visibleIndex) const;

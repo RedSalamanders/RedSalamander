@@ -53,7 +53,7 @@ struct PopupHitTest
 };
 
 #ifdef ENABLE_TESTS
-inline constexpr uint32_t kPopupSelfTestDestroyOnNextShowData        = 0xD1570001u;
+inline constexpr uint32_t kPopupSelfTestDestroyOnNextShowData = 0xD1570001u;
 
 struct PopupSelfTestInvoke
 {
@@ -442,26 +442,26 @@ struct PopupLayoutDebugSnapshot
     std::wstring globalSummaryText;
 
     // Graph hue fairness (Fairstream 4D): aggregated over the task's live rate-history buckets.
-    uint32_t graphMultiHueBucketCount            = 0u;
-    uint32_t graphSingleHueBucketCount           = 0u;
-    uint32_t graphDistinctHueCount               = 0u;
-    double graphMinHueShare                      = 0.0; // per-hue share of summed multi-hue bucket weight
-    double graphMaxHueShare                      = 0.0;
-    uint32_t graphDebugAccumulateCalls           = 0u;
-    uint32_t graphDebugLastPending               = 0u;
-    uint32_t graphDebugMaxStreams                = 0u;
-    uint32_t graphRowColorMatchCount             = 0u;
-    uint32_t graphRowColorMismatchCount          = 0u;
-    bool graphCurrentBandwidthLineVisible        = false;
-    bool graphCurrentBandwidthLabelVisible       = false;
-    bool graphEtaLabelVisible                    = false;
-    bool graphEtaLabelRightAligned               = false;
-    bool taskInlineSpeedRowVisible               = false;
-    bool taskInlineEtaRowVisible                 = false;
-    float taskExpandedBaseHeightDip              = 0.0f;
-    double graphCurrentBandwidthBytesPerSecond   = 0.0;
-    bool failureSurfaceActive                    = false; // C4: native text + Cancel all + Close, no D2D/DxUi
-    size_t failureSurfaceChildCount              = 0u;
+    uint32_t graphMultiHueBucketCount          = 0u;
+    uint32_t graphSingleHueBucketCount         = 0u;
+    uint32_t graphDistinctHueCount             = 0u;
+    double graphMinHueShare                    = 0.0; // per-hue share of summed multi-hue bucket weight
+    double graphMaxHueShare                    = 0.0;
+    uint32_t graphDebugAccumulateCalls         = 0u;
+    uint32_t graphDebugLastPending             = 0u;
+    uint32_t graphDebugMaxStreams              = 0u;
+    uint32_t graphRowColorMatchCount           = 0u;
+    uint32_t graphRowColorMismatchCount        = 0u;
+    bool graphCurrentBandwidthLineVisible      = false;
+    bool graphCurrentBandwidthLabelVisible     = false;
+    bool graphEtaLabelVisible                  = false;
+    bool graphEtaLabelRightAligned             = false;
+    bool taskInlineSpeedRowVisible             = false;
+    bool taskInlineEtaRowVisible               = false;
+    float taskExpandedBaseHeightDip            = 0.0f;
+    double graphCurrentBandwidthBytesPerSecond = 0.0;
+    bool failureSurfaceActive                  = false; // C4: native text + Cancel all + Close, no D2D/DxUi
+    size_t failureSurfaceChildCount            = 0u;
     std::wstring failureSurfaceText;
 };
 
@@ -578,8 +578,8 @@ struct RateHistory
     double smoothedEtaSeconds               = 0.0;
     bool hasSmoothedEta                     = false;
     // D2-A08: while discovery is open, the remaining time over the workload discovered so far.
-    double provisionalEtaSeconds            = 0.0;
-    bool hasProvisionalEta                  = false;
+    double provisionalEtaSeconds = 0.0;
+    bool hasProvisionalEta       = false;
 };
 
 class FileOperationsPopupState final
@@ -805,11 +805,11 @@ private:
 
     RedSalamander::DxUi::WindowHost _controlsHost;
     RedSalamander::DxUi::Panel* _controlsRoot = nullptr;
-    bool _failureSurface       = false;
-    HWND _failureText          = nullptr;
-    HWND _failureCancelAll     = nullptr;
-    HWND _failureClose         = nullptr;
-    UINT _failureFontDpi       = 0u;
+    bool _failureSurface                      = false;
+    HWND _failureText                         = nullptr;
+    HWND _failureCancelAll                    = nullptr;
+    HWND _failureClose                        = nullptr;
+    UINT _failureFontDpi                      = 0u;
     wil::unique_hfont _failureFont;
     std::wstring _failureTextValue;
     std::vector<RedSalamander::DxUi::Button*> _hostedButtons;

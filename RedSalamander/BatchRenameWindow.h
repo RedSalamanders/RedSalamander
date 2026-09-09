@@ -27,7 +27,7 @@ struct BatchRenamePaneContext
     {
         std::vector<BatchRenameExecutionOp> operations;
         std::optional<FileSystemPathIdentity> pathIdentity;
-        size_t totalRows = 0u;
+        size_t totalRows     = 0u;
         size_t unchangedRows = 0u;
         std::function<void(BatchRenameExecutionResult result)> onCompleted;
         std::function<void(uint64_t completedItems, uint64_t totalItems)> onProgress;
@@ -185,9 +185,7 @@ void DebugClearBatchRenameWindowDestinationProbeFailurePath() noexcept;
                                                                         const std::filesystem::path& root,
                                                                         size_t& refreshedRows,
                                                                         uint64_t& identityComparisons) noexcept;
-[[nodiscard]] bool DebugMeasureBatchRenameCollisionNameIndexForTests(size_t nameCount,
-                                                                     size_t componentLength,
-                                                                     uint64_t& retainedBytes) noexcept;
+[[nodiscard]] bool DebugMeasureBatchRenameCollisionNameIndexForTests(size_t nameCount, size_t componentLength, uint64_t& retainedBytes) noexcept;
 [[nodiscard]] BatchRename::Plan DebugBuildBatchRenamePlanForContextForTests(const BatchRenamePaneContext& context,
                                                                             const std::vector<BatchRename::Target>& targets,
                                                                             const BatchRename::Rules& rules) noexcept;

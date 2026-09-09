@@ -28,15 +28,14 @@ public:
 
     void Paint(RedSalamander::DxUi::WindowHost& host) const override
     {
-        RedSalamander::DxUi::PaintTransientSurface(
-            host,
-            D2D1::RectF(80.0f, 50.0f, 560.0f, 150.0f),
-            RedSalamander::DxUi::TransientSurfaceOptions{
-                .cornerRadiusDip = 18.0f,
-                .drawShadow       = true,
-                .pressed          = _pressed,
-                .backdrop         = &_backdrop,
-            });
+        RedSalamander::DxUi::PaintTransientSurface(host,
+                                                   D2D1::RectF(80.0f, 50.0f, 560.0f, 150.0f),
+                                                   RedSalamander::DxUi::TransientSurfaceOptions{
+                                                       .cornerRadiusDip = 18.0f,
+                                                       .drawShadow      = true,
+                                                       .pressed         = _pressed,
+                                                       .backdrop        = &_backdrop,
+                                                   });
     }
 
 private:
@@ -65,10 +64,8 @@ private:
     {
         return 0u;
     }
-    return static_cast<uint32_t>(capture.bgraPixels[offset]) |
-           (static_cast<uint32_t>(capture.bgraPixels[offset + 1u]) << 8u) |
-           (static_cast<uint32_t>(capture.bgraPixels[offset + 2u]) << 16u) |
-           (static_cast<uint32_t>(capture.bgraPixels[offset + 3u]) << 24u);
+    return static_cast<uint32_t>(capture.bgraPixels[offset]) | (static_cast<uint32_t>(capture.bgraPixels[offset + 1u]) << 8u) |
+           (static_cast<uint32_t>(capture.bgraPixels[offset + 2u]) << 16u) | (static_cast<uint32_t>(capture.bgraPixels[offset + 3u]) << 24u);
 }
 
 [[nodiscard]] uint64_t CountVisiblePixels(const WindowHostBitmapCapture& capture, uint8_t threshold = 8u) noexcept
@@ -100,19 +97,16 @@ void TestSharedTransientSurfaceRendersOrdinaryPressedAndHighContrastPolicies()
     AttachedHostWindow window(WindowHost::PresentationMode::CompositionSwapChain);
     SetWindowPos(window.Hwnd(), nullptr, 0, 0, 640, 240, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
     window.PumpMessages();
-    ThemePalette ordinary = MakeDefaultThemePalette(true);
+    ThemePalette ordinary    = MakeDefaultThemePalette(true);
     ordinary.overlayMaterial = OverlayMaterial::Solid;
     window.Host().SetTheme(ordinary);
-    auto root = std::make_unique<TransientSurfaceProbe>();
+    auto root                          = std::make_unique<TransientSurfaceProbe>();
     TransientSurfaceProbe* const probe = root.get();
     window.Host().SetRoot(std::move(root));
 
-    const WindowHostBitmapCapture ordinaryCapture =
-        CaptureAttachedHostWindowBitmap(window, "ordinary shared transient-surface capture succeeds");
-    Require(CaptureAlpha(ordinaryCapture, 320u, 100u) > 240u,
-            "ordinary shared transient surface has an opaque center");
-    Require(CaptureAlpha(ordinaryCapture, 0u, 0u) == 0u,
-            "ordinary shared transient surface preserves transparent outer pixels");
+    const WindowHostBitmapCapture ordinaryCapture = CaptureAttachedHostWindowBitmap(window, "ordinary shared transient-surface capture succeeds");
+    Require(CaptureAlpha(ordinaryCapture, 320u, 100u) > 240u, "ordinary shared transient surface has an opaque center");
+    Require(CaptureAlpha(ordinaryCapture, 0u, 0u) == 0u, "ordinary shared transient surface preserves transparent outer pixels");
 
     WindowHostBitmapCapture backdropCapture{};
     backdropCapture.widthPx  = static_cast<UINT>(std::lround(window.Host().DipsToPixels(480.0f)));
@@ -122,8 +116,8 @@ void TestSharedTransientSurfaceRendersOrdinaryPressedAndHighContrastPolicies()
     {
         for (UINT x = 0u; x < backdropCapture.widthPx; ++x)
         {
-            const size_t offset = ((static_cast<size_t>(y) * backdropCapture.widthPx) + x) * 4u;
-            const bool alternate = ((x / 24u) + (y / 16u)) % 2u != 0u;
+            const size_t offset                     = ((static_cast<size_t>(y) * backdropCapture.widthPx) + x) * 4u;
+            const bool alternate                    = ((x / 24u) + (y / 16u)) % 2u != 0u;
             backdropCapture.bgraPixels[offset]      = alternate ? 0x20u : 0xD0u;
             backdropCapture.bgraPixels[offset + 1u] = alternate ? 0xB0u : 0x30u;
             backdropCapture.bgraPixels[offset + 2u] = alternate ? 0xF0u : 0x40u;
@@ -134,16 +128,13 @@ void TestSharedTransientSurfaceRendersOrdinaryPressedAndHighContrastPolicies()
 
     ordinary.overlayMaterial = OverlayMaterial::Mica;
     window.Host().SetTheme(ordinary);
-    const WindowHostBitmapCapture micaCapture =
-        CaptureAttachedHostWindowBitmap(window, "Mica shared transient-surface capture succeeds");
-    ordinary.overlayMaterial = OverlayMaterial::MicaAlt;
+    const WindowHostBitmapCapture micaCapture = CaptureAttachedHostWindowBitmap(window, "Mica shared transient-surface capture succeeds");
+    ordinary.overlayMaterial                  = OverlayMaterial::MicaAlt;
     window.Host().SetTheme(ordinary);
-    const WindowHostBitmapCapture micaAltCapture =
-        CaptureAttachedHostWindowBitmap(window, "MicaAlt shared transient-surface capture succeeds");
-    ordinary.overlayMaterial = OverlayMaterial::Acrylic;
+    const WindowHostBitmapCapture micaAltCapture = CaptureAttachedHostWindowBitmap(window, "MicaAlt shared transient-surface capture succeeds");
+    ordinary.overlayMaterial                     = OverlayMaterial::Acrylic;
     window.Host().SetTheme(ordinary);
-    const WindowHostBitmapCapture acrylicCapture =
-        CaptureAttachedHostWindowBitmap(window, "Acrylic shared transient-surface capture succeeds");
+    const WindowHostBitmapCapture acrylicCapture = CaptureAttachedHostWindowBitmap(window, "Acrylic shared transient-surface capture succeeds");
     probe->ClearBackdrop();
     const WindowHostBitmapCapture acrylicWithoutBackdrop =
         CaptureAttachedHostWindowBitmap(window, "Acrylic shared transient surface falls back without a backdrop capture");
@@ -159,8 +150,7 @@ void TestSharedTransientSurfaceRendersOrdinaryPressedAndHighContrastPolicies()
     ordinary.overlayMaterial = OverlayMaterial::Solid;
     window.Host().SetTheme(ordinary);
     probe->SetPressed(true);
-    const WindowHostBitmapCapture pressedCapture =
-        CaptureAttachedHostWindowBitmap(window, "pressed shared transient-surface capture succeeds");
+    const WindowHostBitmapCapture pressedCapture = CaptureAttachedHostWindowBitmap(window, "pressed shared transient-surface capture succeeds");
     Require(CaptureBgra(pressedCapture, 320u, 100u) != CaptureBgra(ordinaryCapture, 320u, 100u),
             "pressed shared transient surface applies its canonical pressed overlay");
 
@@ -168,14 +158,10 @@ void TestSharedTransientSurfaceRendersOrdinaryPressedAndHighContrastPolicies()
     highContrast.highContrast = true;
     window.Host().SetTheme(highContrast);
     probe->SetPressed(false);
-    const WindowHostBitmapCapture highContrastCapture =
-        CaptureAttachedHostWindowBitmap(window, "High Contrast shared transient-surface capture succeeds");
-    Require(CaptureAlpha(highContrastCapture, 320u, 100u) > 240u,
-            "High Contrast shared transient surface has an opaque solid center");
-    Require(CaptureAlpha(highContrastCapture, 0u, 0u) == 0u,
-            "High Contrast shared transient surface preserves transparent outer pixels");
-    Require(CaptureAlpha(highContrastCapture, 80u, 50u) > 0u,
-            "High Contrast shared transient surface uses a rectangular visible border");
+    const WindowHostBitmapCapture highContrastCapture = CaptureAttachedHostWindowBitmap(window, "High Contrast shared transient-surface capture succeeds");
+    Require(CaptureAlpha(highContrastCapture, 320u, 100u) > 240u, "High Contrast shared transient surface has an opaque solid center");
+    Require(CaptureAlpha(highContrastCapture, 0u, 0u) == 0u, "High Contrast shared transient surface preserves transparent outer pixels");
+    Require(CaptureAlpha(highContrastCapture, 80u, 50u) > 0u, "High Contrast shared transient surface uses a rectangular visible border");
     Require(CountVisiblePixels(ordinaryCapture) != CountVisiblePixels(highContrastCapture),
             "ordinary shadow/rounding and High Contrast solid geometry produce distinct captures");
 }
@@ -197,43 +183,36 @@ void TestThroughputGraphBandsStayBelowHistoryLine()
     graph->SetBounds(D2D1::RectF(40.0f, 20.0f, 600.0f, 180.0f));
 
     std::array<ThroughputGraphSample, 2u> samples{};
-    samples[0].value                  = 100.0;
-    samples[0].hueDegrees             = 20.0f;
-    samples[0].hueWeights[0]          = ThroughputGraphHueWeight{20.0f, 1.0, 0u};
-    samples[0].hueWeightCount         = 1u;
-    samples[1].value                  = 20.0;
-    samples[1].hueDegrees             = 20.0f;
-    samples[1].hueWeights[0]          = ThroughputGraphHueWeight{20.0f, 1.0, 0u};
-    samples[1].hueWeightCount         = 1u;
+    samples[0].value          = 100.0;
+    samples[0].hueDegrees     = 20.0f;
+    samples[0].hueWeights[0]  = ThroughputGraphHueWeight{20.0f, 1.0, 0u};
+    samples[0].hueWeightCount = 1u;
+    samples[1].value          = 20.0;
+    samples[1].hueDegrees     = 20.0f;
+    samples[1].hueWeights[0]  = ThroughputGraphHueWeight{20.0f, 1.0, 0u};
+    samples[1].hueWeightCount = 1u;
     graph->SetSamples(samples);
     window.Host().SetRoot(std::move(root));
 
     graph->SetPerStreamBands(false);
-    const WindowHostBitmapCapture unfilled =
-        CaptureAttachedHostWindowBitmap(window, "unfilled throughput graph capture succeeds");
+    const WindowHostBitmapCapture unfilled = CaptureAttachedHostWindowBitmap(window, "unfilled throughput graph capture succeeds");
     graph->SetPerStreamBands(true);
-    const WindowHostBitmapCapture oneStream =
-        CaptureAttachedHostWindowBitmap(window, "single-stream default throughput graph capture succeeds");
-    ThroughputGraphDebugState state = graph->GetDebugState();
-    Require(! state.bandsActive && state.renderedGeometryCount == 1u,
-            "default one-stream throughput graph uses one base-accent geometry instead of hue bands");
-    Require(std::abs(state.bandFillAlpha - 0.22f) < 0.001f,
-            "dark-theme throughput graph area fill remains translucent");
+    const WindowHostBitmapCapture oneStream = CaptureAttachedHostWindowBitmap(window, "single-stream default throughput graph capture succeeds");
+    ThroughputGraphDebugState state         = graph->GetDebugState();
+    Require(! state.bandsActive && state.renderedGeometryCount == 1u, "default one-stream throughput graph uses one base-accent geometry instead of hue bands");
+    Require(std::abs(state.bandFillAlpha - 0.22f) < 0.001f, "dark-theme throughput graph area fill remains translucent");
 
     graph->SetCurrentValueMarker(80.0, L"80 B/s");
-    const WindowHostBitmapCapture currentValueMarker =
-        CaptureAttachedHostWindowBitmap(window, "current-value throughput graph marker capture succeeds");
+    const WindowHostBitmapCapture currentValueMarker = CaptureAttachedHostWindowBitmap(window, "current-value throughput graph marker capture succeeds");
     graph->SetCurrentValueMarker(80.0, L"80 B/s", L"Remaining: 00:20");
-    Require(graph->GetDebugState().currentValueTrailingLabelVisible,
-            "throughput graph exposes its trailing current-value label in debug state");
+    Require(graph->GetDebugState().currentValueTrailingLabelVisible, "throughput graph exposes its trailing current-value label in debug state");
     const WindowHostBitmapCapture currentValueMarkerWithEta =
         CaptureAttachedHostWindowBitmap(window, "current-value throughput graph marker with ETA capture succeeds");
 
     const auto pixelAtDip = [&](const WindowHostBitmapCapture& capture, float x, float y) noexcept
     {
-        return CaptureBgra(capture,
-                           static_cast<UINT>(std::lround(window.Host().DipsToPixels(x))),
-                           static_cast<UINT>(std::lround(window.Host().DipsToPixels(y))));
+        return CaptureBgra(
+            capture, static_cast<UINT>(std::lround(window.Host().DipsToPixels(x))), static_cast<UINT>(std::lround(window.Host().DipsToPixels(y))));
     };
 
     Require(pixelAtDip(oneStream, 180.0f, 30.0f) == pixelAtDip(unfilled, 180.0f, 30.0f),
@@ -246,11 +225,10 @@ void TestThroughputGraphBandsStayBelowHistoryLine()
             "throughput graph paints the current effective-bandwidth horizontal marker over the history area");
 
     uint64_t trailingLabelChangedPixels = 0u;
-    const UINT trailingLeftPx  = static_cast<UINT>(std::lround(window.Host().DipsToPixels(450.0f)));
-    const UINT trailingTopPx   = static_cast<UINT>(std::lround(window.Host().DipsToPixels(22.0f)));
-    const UINT trailingRightPx = std::min(currentValueMarker.widthPx, static_cast<UINT>(std::lround(window.Host().DipsToPixels(596.0f))));
-    const UINT trailingBottomPx =
-        std::min(currentValueMarker.heightPx, static_cast<UINT>(std::lround(window.Host().DipsToPixels(46.0f))));
+    const UINT trailingLeftPx           = static_cast<UINT>(std::lround(window.Host().DipsToPixels(450.0f)));
+    const UINT trailingTopPx            = static_cast<UINT>(std::lround(window.Host().DipsToPixels(22.0f)));
+    const UINT trailingRightPx          = std::min(currentValueMarker.widthPx, static_cast<UINT>(std::lround(window.Host().DipsToPixels(596.0f))));
+    const UINT trailingBottomPx         = std::min(currentValueMarker.heightPx, static_cast<UINT>(std::lround(window.Host().DipsToPixels(46.0f))));
     for (UINT y = trailingTopPx; y < trailingBottomPx; ++y)
     {
         for (UINT x = trailingLeftPx; x < trailingRightPx; ++x)
@@ -261,21 +239,18 @@ void TestThroughputGraphBandsStayBelowHistoryLine()
             }
         }
     }
-    Require(trailingLabelChangedPixels > 0u,
-            "throughput graph paints the trailing ETA in the right-aligned half of the current-value label row");
+    Require(trailingLabelChangedPixels > 0u, "throughput graph paints the trailing ETA in the right-aligned half of the current-value label row");
 
     samples[0].hueWeights[1]  = ThroughputGraphHueWeight{220.0f, 1.0, 1u};
     samples[0].hueWeightCount = 2u;
     samples[1].hueWeights[1]  = ThroughputGraphHueWeight{220.0f, 1.0, 1u};
     samples[1].hueWeightCount = 2u;
     graph->SetSamples(samples);
-    const WindowHostBitmapCapture concurrent =
-        CaptureAttachedHostWindowBitmap(window, "concurrent-stream default throughput graph capture succeeds");
-    state = graph->GetDebugState();
+    const WindowHostBitmapCapture concurrent = CaptureAttachedHostWindowBitmap(window, "concurrent-stream default throughput graph capture succeeds");
+    state                                    = graph->GetDebugState();
     Require(state.bandsActive && state.activeColorSlotCount == 2u && state.renderedGeometryCount == 1u && state.renderedQuadCount == 2u,
             "default concurrent throughput graph renders fixed-slot bands through one bounded raster clip geometry");
-    Require(std::abs(state.bandFillAlpha - 0.22f) < 0.001f,
-            "per-stream hue bands preserve the translucent area-fill alpha");
+    Require(std::abs(state.bandFillAlpha - 0.22f) < 0.001f, "per-stream hue bands preserve the translucent area-fill alpha");
     Require(pixelAtDip(concurrent, 400.0f, 135.0f) != pixelAtDip(oneStream, 400.0f, 135.0f),
             "default concurrent throughput graph exposes a stream-colored band pixel");
 
@@ -292,8 +267,7 @@ void TestThroughputGraphBandsStayBelowHistoryLine()
     window.Host().SetTheme(theme);
     static_cast<void>(CaptureAttachedHostWindowBitmap(window, "High Contrast throughput graph capture succeeds"));
     state = graph->GetDebugState();
-    Require(! state.bandsActive && state.renderedGeometryCount == 1u,
-            "High Contrast throughput graph suppresses hue bands and keeps one base geometry");
+    Require(! state.bandsActive && state.renderedGeometryCount == 1u, "High Contrast throughput graph suppresses hue bands and keeps one base geometry");
 }
 
 void TestThroughputGraphHueChurnPerformanceScenario()
@@ -322,9 +296,9 @@ void TestThroughputGraphHueChurnPerformanceScenario()
     std::array<ThroughputGraphSample, 180u> samples{};
     for (size_t sampleIndex = 0u; sampleIndex < samples.size(); ++sampleIndex)
     {
-        auto& sample         = samples[sampleIndex];
-        sample.value         = 80.0 + static_cast<double>(sampleIndex % 80u);
-        sample.hueDegrees    = static_cast<float>(sampleIndex * ThroughputGraphSample::kMaxHueWeights);
+        auto& sample          = samples[sampleIndex];
+        sample.value          = 80.0 + static_cast<double>(sampleIndex % 80u);
+        sample.hueDegrees     = static_cast<float>(sampleIndex * ThroughputGraphSample::kMaxHueWeights);
         sample.hueWeightCount = sample.hueWeights.size();
         for (size_t hueIndex = 0u; hueIndex < sample.hueWeights.size(); ++hueIndex)
         {
@@ -345,31 +319,17 @@ void TestThroughputGraphHueChurnPerformanceScenario()
     {
         const auto startedAt = std::chrono::steady_clock::now();
         static_cast<void>(CaptureAttachedHostWindowBitmap(window, "throughput graph hue-churn measured capture succeeds"));
-        Debug::Perf::Emit(L"dxui.throughput_graph.hue_churn_capture_us",
-                          L"180x16",
-                          Debug::Perf::ElapsedUs(startedAt),
-                          samples.size(),
-                          kExpectedLegacyGeometryCount,
-                          S_OK);
+        Debug::Perf::Emit(
+            L"dxui.throughput_graph.hue_churn_capture_us", L"180x16", Debug::Perf::ElapsedUs(startedAt), samples.size(), kExpectedLegacyGeometryCount, S_OK);
         const ThroughputGraphDebugState runState = graph->GetDebugState();
-        Debug::Perf::Emit(L"dxui.throughput_graph.band_render_us",
-                          L"180x16",
-                          runState.bandRenderDurationUs,
-                          runState.sampleCount,
-                          runState.renderedQuadCount,
-                          S_OK);
-        Debug::Perf::Emit(L"dxui.throughput_graph.band_geometry_count",
-                          L"180x16",
-                          0u,
-                          runState.renderedGeometryCount,
-                          runState.activeColorSlotCount,
-                          S_OK);
+        Debug::Perf::Emit(
+            L"dxui.throughput_graph.band_render_us", L"180x16", runState.bandRenderDurationUs, runState.sampleCount, runState.renderedQuadCount, S_OK);
+        Debug::Perf::Emit(L"dxui.throughput_graph.band_geometry_count", L"180x16", 0u, runState.renderedGeometryCount, runState.activeColorSlotCount, S_OK);
     }
     const ThroughputGraphDebugState state = graph->GetDebugState();
     Require(state.bandsActive && state.sampleCount == samples.size() && state.renderedQuadCount == 2864u,
             "180x16 throughput graph churn emits the complete bounded quad workload");
-    Require(state.activeColorSlotCount == ThroughputGraphSample::kMaxHueWeights &&
-                state.renderedGeometryCount <= ThroughputGraphSample::kMaxHueWeights,
+    Require(state.activeColorSlotCount == ThroughputGraphSample::kMaxHueWeights && state.renderedGeometryCount <= ThroughputGraphSample::kMaxHueWeights,
             "180x16 throughput graph churn caps active slots and geometries at the admitted stream bound");
 }
 
@@ -1703,8 +1663,7 @@ void RunRenderingTests()
         std::cerr << "  [DONE] " << name << '\n' << std::flush;
     };
 
-    runTest("TestSharedTransientSurfaceRendersOrdinaryPressedAndHighContrastPolicies",
-            TestSharedTransientSurfaceRendersOrdinaryPressedAndHighContrastPolicies);
+    runTest("TestSharedTransientSurfaceRendersOrdinaryPressedAndHighContrastPolicies", TestSharedTransientSurfaceRendersOrdinaryPressedAndHighContrastPolicies);
     runTest("TestThroughputGraphBandsStayBelowHistoryLine", TestThroughputGraphBandsStayBelowHistoryLine);
     runTest("TestThroughputGraphHueChurnPerformanceScenario", TestThroughputGraphHueChurnPerformanceScenario);
     runTest("TestDxUiCoreControlsDarkVisualBaseline", TestDxUiCoreControlsDarkVisualBaseline);

@@ -7,8 +7,8 @@
 // and the bridge compares the two. This is content-integrity evidence for verification and Managed
 // Move source cleanup; it never authorizes overwrite, skip, or deletion by itself.
 
-#include <windows.h>
 #include <bcrypt.h>
+#include <windows.h>
 
 #include <array>
 #include <cstddef>
@@ -91,7 +91,7 @@ public:
         {
             return false;
         }
-        _algorithm     = algorithm;
+        _algorithm         = algorithm;
         DWORD objectLength = 0;
         DWORD hashLength   = 0;
         DWORD written      = 0;
@@ -127,7 +127,8 @@ public:
         while (offset < bytes.size())
         {
             const size_t chunk = (std::min)(bytes.size() - offset, static_cast<size_t>(1u << 30));
-            if (! BCRYPT_SUCCESS(BCryptHashData(_hash, const_cast<PUCHAR>(reinterpret_cast<const UCHAR*>(bytes.data() + offset)), static_cast<ULONG>(chunk), 0)))
+            if (! BCRYPT_SUCCESS(
+                    BCryptHashData(_hash, const_cast<PUCHAR>(reinterpret_cast<const UCHAR*>(bytes.data() + offset)), static_cast<ULONG>(chunk), 0)))
             {
                 return false;
             }
@@ -180,16 +181,16 @@ class QuickXorHasher final
 public:
     void Update(std::span<const std::byte> bytes) noexcept
     {
-        constexpr int kWidthInBits     = 160;
-        constexpr int kShift           = 11;
-        constexpr int kBitsInLastCell  = 32;
-        int currentShift               = _shiftSoFar;
-        int vectorArrayIndex           = currentShift / 64;
-        int vectorOffset               = currentShift % 64;
-        const size_t iterations        = (std::min)(bytes.size(), static_cast<size_t>(kWidthInBits));
+        constexpr int kWidthInBits    = 160;
+        constexpr int kShift          = 11;
+        constexpr int kBitsInLastCell = 32;
+        int currentShift              = _shiftSoFar;
+        int vectorArrayIndex          = currentShift / 64;
+        int vectorOffset              = currentShift % 64;
+        const size_t iterations       = (std::min)(bytes.size(), static_cast<size_t>(kWidthInBits));
         for (size_t i = 0; i < iterations; ++i)
         {
-            const bool isLastCell     = vectorArrayIndex == static_cast<int>(_data.size()) - 1;
+            const bool isLastCell      = vectorArrayIndex == static_cast<int>(_data.size()) - 1;
             const int bitsInVectorCell = isLastCell ? kBitsInLastCell : 64;
             if (vectorOffset <= bitsInVectorCell - 8)
             {
@@ -243,8 +244,8 @@ public:
 
 private:
     std::array<uint64_t, 3> _data{};
-    int _shiftSoFar        = 0;
-    uint64_t _lengthSoFar  = 0;
+    int _shiftSoFar       = 0;
+    uint64_t _lengthSoFar = 0;
 };
 } // namespace Detail
 
@@ -367,9 +368,12 @@ private:
     }
     const auto nibble = [](char ch) noexcept -> int
     {
-        if (ch >= '0' && ch <= '9') return ch - '0';
-        if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
-        if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
+        if (ch >= '0' && ch <= '9')
+            return ch - '0';
+        if (ch >= 'a' && ch <= 'f')
+            return ch - 'a' + 10;
+        if (ch >= 'A' && ch <= 'F')
+            return ch - 'A' + 10;
         return -1;
     };
     digest.reserve(text.size() / 2u);
@@ -392,11 +396,16 @@ private:
     digest.clear();
     const auto value = [](char ch) noexcept -> int
     {
-        if (ch >= 'A' && ch <= 'Z') return ch - 'A';
-        if (ch >= 'a' && ch <= 'z') return ch - 'a' + 26;
-        if (ch >= '0' && ch <= '9') return ch - '0' + 52;
-        if (ch == '+') return 62;
-        if (ch == '/') return 63;
+        if (ch >= 'A' && ch <= 'Z')
+            return ch - 'A';
+        if (ch >= 'a' && ch <= 'z')
+            return ch - 'a' + 26;
+        if (ch >= '0' && ch <= '9')
+            return ch - '0' + 52;
+        if (ch == '+')
+            return 62;
+        if (ch == '/')
+            return 63;
         return -1;
     };
     uint32_t accumulator = 0;

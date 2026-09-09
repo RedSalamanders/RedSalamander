@@ -613,10 +613,10 @@ void WindowHost::SecureClearNativeTextInputStateCache() noexcept
 
 void WindowHost::DeactivateNativeTextInputSession(bool restoreHostFocus) noexcept
 {
-    if (_nativeTextInputImeComposing && _nativeTextInputImeBaseState.has_value() && _nativeTextInputControl &&
-        ! _nativeTextInputControlLifetime.expired() && NativeTextInputControlBelongsToTree(_root.get(), _nativeTextInputControl))
+    if (_nativeTextInputImeComposing && _nativeTextInputImeBaseState.has_value() && _nativeTextInputControl && ! _nativeTextInputControlLifetime.expired() &&
+        NativeTextInputControlBelongsToTree(_root.get(), _nativeTextInputControl))
     {
-        Control* const editTarget                  = _nativeTextInputControl;
+        Control* const editTarget                   = _nativeTextInputControl;
         const std::weak_ptr<int> editTargetLifetime = _nativeTextInputControlLifetime;
         static_cast<void>(editTarget->ImportTextInputState(*this, _nativeTextInputImeBaseState.value(), false));
         if (! editTargetLifetime.expired() && editTarget == _nativeTextInputControl && NativeTextInputControlBelongsToTree(_root.get(), editTarget))
@@ -732,8 +732,8 @@ void WindowHost::DeactivateNativeTextInputTsf() noexcept
     {
         static_cast<void>(_nativeTextInputTsfTextStore.query_to(textStoreToDisconnect.put()));
     }
-    const bool controlIsLive = _nativeTextInputControl && ! _nativeTextInputControlLifetime.expired() &&
-                               NativeTextInputControlBelongsToTree(_root.get(), _nativeTextInputControl);
+    const bool controlIsLive =
+        _nativeTextInputControl && ! _nativeTextInputControlLifetime.expired() && NativeTextInputControlBelongsToTree(_root.get(), _nativeTextInputControl);
     if (! controlIsLive)
     {
         // A retained TSF context may synchronously call its store during Pop. Sever all

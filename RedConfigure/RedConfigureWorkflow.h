@@ -56,7 +56,7 @@ struct ValidationIssue
 {
     ValidationSeverity severity = ValidationSeverity::Error;
     ValidationCategory category = ValidationCategory::Workspace;
-    ValidationCode code = ValidationCode::WorkspaceProcessingError;
+    ValidationCode code         = ValidationCode::WorkspaceProcessingError;
     std::vector<std::wstring> arguments;
     std::wstring ownerName;
     std::wstring resourceId;
@@ -208,7 +208,7 @@ struct ThemeMassPreview
     ThemeMassRequest request;
     std::vector<ThemeMassChange> changes;
     Common::Settings::ThemeDefinition beforeTheme;
-    BatchApprovalResult result = BatchApprovalResult::NoChanges;
+    BatchApprovalResult result     = BatchApprovalResult::NoChanges;
     ThemeMassDiagnostic diagnostic = ThemeMassDiagnostic::None;
 };
 
@@ -231,27 +231,25 @@ struct ThemeTokenMetadata
     std::wstring key;
     std::wstring group;
     ThemeTokenSourceKind sourceKind = ThemeTokenSourceKind::Inherited;
-    size_t usageCount = 0u;
-    double contrastRatio = 0.0;
-    bool contrastKnown = false;
-    bool contrastPass  = false;
+    size_t usageCount               = 0u;
+    double contrastRatio            = 0.0;
+    bool contrastKnown              = false;
+    bool contrastPass               = false;
 };
 
 [[nodiscard]] size_t CountDirtyLocalizationCells(std::span<const LocalizationReviewRow> rows) noexcept;
 [[nodiscard]] ValidationSummary ValidateWorkspace(const RedConfigureSession& session,
                                                   const std::filesystem::path& localizationOutputRoot,
                                                   const std::filesystem::path& themeOutputPath);
-[[nodiscard]] LocalizationBatchPreview PreviewLocalizationBatch(std::span<const LocalizationReviewRow> rows,
-                                                                const LocalizationBatchRequest& request);
-[[nodiscard]] std::vector<DuplicateAccelerator> FindDuplicateSiblingAccelerators(std::span<const LocalizationReviewRow> rows,
-                                                                                 std::wstring_view cultureName);
+[[nodiscard]] LocalizationBatchPreview PreviewLocalizationBatch(std::span<const LocalizationReviewRow> rows, const LocalizationBatchRequest& request);
+[[nodiscard]] std::vector<DuplicateAccelerator> FindDuplicateSiblingAccelerators(std::span<const LocalizationReviewRow> rows, std::wstring_view cultureName);
 [[nodiscard]] ClipboardMatrix ParseClipboardMatrix(std::wstring_view text);
 [[nodiscard]] std::wstring SerializeClipboardMatrix(const ClipboardMatrix& matrix);
 [[nodiscard]] LocalizationClipboardPasteTarget BuildLocalizationClipboardPasteTarget(std::span<const LocalizationReviewRow> rows,
-                                                                                       std::span<const size_t> viewRows,
-                                                                                       size_t selectedSessionRow,
-                                                                                       std::span<const std::wstring> orderedCultures,
-                                                                                       std::wstring_view selectedCulture);
+                                                                                     std::span<const size_t> viewRows,
+                                                                                     size_t selectedSessionRow,
+                                                                                     std::span<const std::wstring> orderedCultures,
+                                                                                     std::wstring_view selectedCulture);
 [[nodiscard]] ThemeMassPreview PreviewThemeMassChange(const Themes::ThemePreviewModel& model, const ThemeMassRequest& request);
 [[nodiscard]] BatchApprovalResult ApplyThemeMassChange(Themes::ThemePreviewModel& model, const ThemeMassPreview& preview);
 [[nodiscard]] std::optional<DuplicateThemeCandidate> BuildDuplicateThemeCandidate(std::wstring_view sourceId,

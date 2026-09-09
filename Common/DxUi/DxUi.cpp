@@ -84,9 +84,7 @@ bool TransientSurfaceBackdrop::HasCapture() const noexcept
     return capture.widthPx != 0u && capture.heightPx != 0u && expectedBytes == capture.bgraPixels.size();
 }
 
-bool CaptureTransientSurfaceBackdrop(const RECT& surfaceScreenRect,
-                                     TransientSurfaceBackdrop& outBackdrop,
-                                     std::wstring_view componentName) noexcept
+bool CaptureTransientSurfaceBackdrop(const RECT& surfaceScreenRect, TransientSurfaceBackdrop& outBackdrop, std::wstring_view componentName) noexcept
 {
     WindowHostBitmapCapture capture;
     if (! CaptureBackdropScreenRegion(surfaceScreenRect, capture, componentName))
@@ -130,11 +128,8 @@ namespace
         D2D1_BITMAP_OPTIONS_NONE, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), host.GetDpi(), host.GetDpi());
     wil::com_ptr<ID2D1Bitmap1> bitmap;
     const UINT32 pitch = backdrop.capture.widthPx * 4u;
-    const HRESULT hr   = dc->CreateBitmap(D2D1::SizeU(backdrop.capture.widthPx, backdrop.capture.heightPx),
-                                        backdrop.capture.bgraPixels.data(),
-                                        pitch,
-                                        &bitmapProperties,
-                                        bitmap.put());
+    const HRESULT hr   = dc->CreateBitmap(
+        D2D1::SizeU(backdrop.capture.widthPx, backdrop.capture.heightPx), backdrop.capture.bgraPixels.data(), pitch, &bitmapProperties, bitmap.put());
     if (FAILED(hr) || ! bitmap)
     {
         Debug::Warning(L"DxUi::PaintTransientSurface: failed to create backdrop bitmap: 0x{:08X}", hr);
@@ -146,10 +141,7 @@ namespace
     return backdrop.cachedBitmap.get();
 }
 
-void PaintTransientSurfaceBackdrop(WindowHost& host,
-                                   const D2D1_RECT_F& surfaceRect,
-                                   float cornerRadiusDip,
-                                   TransientSurfaceBackdrop* backdrop) noexcept
+void PaintTransientSurfaceBackdrop(WindowHost& host, const D2D1_RECT_F& surfaceRect, float cornerRadiusDip, TransientSurfaceBackdrop* backdrop) noexcept
 {
     const ThemePalette& theme = host.GetTheme();
     const float opacity       = ResolveOverlayBackdropOpacity(theme);
@@ -169,8 +161,7 @@ void PaintTransientSurfaceBackdrop(WindowHost& host,
     wil::com_ptr<ID2D1Factory> factory;
     dc->GetFactory(factory.put());
     wil::com_ptr<ID2D1RoundedRectangleGeometry> roundedGeometry;
-    if (! factory || FAILED(factory->CreateRoundedRectangleGeometry(
-                        D2D1::RoundedRect(surfaceRect, cornerRadiusDip, cornerRadiusDip), roundedGeometry.put())) ||
+    if (! factory || FAILED(factory->CreateRoundedRectangleGeometry(D2D1::RoundedRect(surfaceRect, cornerRadiusDip, cornerRadiusDip), roundedGeometry.put())) ||
         ! roundedGeometry)
     {
         return;
@@ -186,10 +177,8 @@ void PaintTransientSurfaceBackdrop(WindowHost& host,
     blurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_OPTIMIZATION, D2D1_GAUSSIANBLUR_OPTIMIZATION_BALANCED);
     blurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_BORDER_MODE, D2D1_BORDER_MODE_HARD);
 
-    const D2D1_RECT_F sourceRect = D2D1::RectF(0.0f,
-                                               0.0f,
-                                               host.PixelsToDip(static_cast<float>(backdrop->capture.widthPx)),
-                                               host.PixelsToDip(static_cast<float>(backdrop->capture.heightPx)));
+    const D2D1_RECT_F sourceRect = D2D1::RectF(
+        0.0f, 0.0f, host.PixelsToDip(static_cast<float>(backdrop->capture.widthPx)), host.PixelsToDip(static_cast<float>(backdrop->capture.heightPx)));
     const D2D1_LAYER_PARAMETERS1 layerParameters = D2D1::LayerParameters1(surfaceRect,
                                                                           roundedGeometry.get(),
                                                                           D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
@@ -197,16 +186,14 @@ void PaintTransientSurfaceBackdrop(WindowHost& host,
                                                                           std::clamp(opacity, 0.0f, 1.0f),
                                                                           nullptr,
                                                                           D2D1_LAYER_OPTIONS1_NONE);
-    const D2D1_POINT_2F targetOffset = D2D1::Point2F(surfaceRect.left, surfaceRect.top);
+    const D2D1_POINT_2F targetOffset             = D2D1::Point2F(surfaceRect.left, surfaceRect.top);
     dc->PushLayer(layerParameters, nullptr);
     dc->DrawImage(blurEffect.get(), &targetOffset, &sourceRect, D2D1_INTERPOLATION_MODE_LINEAR, D2D1_COMPOSITE_MODE_SOURCE_OVER);
     dc->PopLayer();
 }
 } // namespace
 
-void PaintTransientSurface(WindowHost& host,
-                           const D2D1_RECT_F& surfaceRect,
-                           const TransientSurfaceOptions& options) noexcept
+void PaintTransientSurface(WindowHost& host, const D2D1_RECT_F& surfaceRect, const TransientSurfaceOptions& options) noexcept
 {
     ID2D1DeviceContext* const dc = host.GetDeviceContext();
     if (! dc)
@@ -215,17 +202,15 @@ void PaintTransientSurface(WindowHost& host,
     }
 
     const ThemePalette& theme = host.GetTheme();
-    const float radius         = theme.highContrast ? 0.0f : std::max(0.0f, options.cornerRadiusDip);
+    const float radius        = theme.highContrast ? 0.0f : std::max(0.0f, options.cornerRadiusDip);
     if (options.drawShadow && ! theme.highContrast)
     {
         for (int ring = 3; ring >= 1; --ring)
         {
             const float spread = static_cast<float>(ring) * 2.0f;
             const float alpha  = 0.025f * static_cast<float>(4 - ring);
-            const D2D1_RECT_F shadowRect = D2D1::RectF(surfaceRect.left - spread,
-                                                       surfaceRect.top - spread + 2.0f,
-                                                       surfaceRect.right + spread,
-                                                       surfaceRect.bottom + spread + 2.0f);
+            const D2D1_RECT_F shadowRect =
+                D2D1::RectF(surfaceRect.left - spread, surfaceRect.top - spread + 2.0f, surfaceRect.right + spread, surfaceRect.bottom + spread + 2.0f);
             if (ID2D1SolidColorBrush* const shadow = host.GetSolidBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, alpha)))
             {
                 dc->FillRoundedRectangle(D2D1::RoundedRect(shadowRect, radius + spread, radius + spread), shadow);
@@ -269,13 +254,8 @@ void PaintTransientSurface(WindowHost& host,
         innerRimColor.a *= 0.45f;
         if (ID2D1SolidColorBrush* const innerRim = host.GetSolidBrush(innerRimColor))
         {
-            const D2D1_RECT_F innerRect = D2D1::RectF(surfaceRect.left + 1.0f,
-                                                      surfaceRect.top + 1.0f,
-                                                      surfaceRect.right - 1.0f,
-                                                      surfaceRect.bottom - 1.0f);
-            dc->DrawRoundedRectangle(D2D1::RoundedRect(innerRect, std::max(0.0f, radius - 1.0f), std::max(0.0f, radius - 1.0f)),
-                                     innerRim,
-                                     1.0f);
+            const D2D1_RECT_F innerRect = D2D1::RectF(surfaceRect.left + 1.0f, surfaceRect.top + 1.0f, surfaceRect.right - 1.0f, surfaceRect.bottom - 1.0f);
+            dc->DrawRoundedRectangle(D2D1::RoundedRect(innerRect, std::max(0.0f, radius - 1.0f), std::max(0.0f, radius - 1.0f)), innerRim, 1.0f);
         }
     }
     if (options.pressed)

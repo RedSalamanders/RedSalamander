@@ -103,10 +103,18 @@ uint64_t ConsumeCount(Point point) noexcept
 
 namespace SelfTestLatency
 {
-void SetNextDelay(Point /*point*/, std::chrono::milliseconds /*delay*/) noexcept {}
-void SetNextFailure(Point /*point*/, HRESULT /*hr*/) noexcept {}
-void ClearAll() noexcept {}
-void Consume(Point /*point*/, std::stop_token /*stopToken*/) noexcept {}
+void SetNextDelay(Point /*point*/, std::chrono::milliseconds /*delay*/) noexcept
+{
+}
+void SetNextFailure(Point /*point*/, HRESULT /*hr*/) noexcept
+{
+}
+void ClearAll() noexcept
+{
+}
+void Consume(Point /*point*/, std::stop_token /*stopToken*/) noexcept
+{
+}
 HRESULT ConsumeFailure(Point /*point*/) noexcept
 {
     return S_OK;

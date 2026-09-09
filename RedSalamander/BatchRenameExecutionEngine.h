@@ -100,9 +100,9 @@ struct BatchRenameExecutionOptions final
 {
     BatchRenameExecutionProgressCallback progressCallback = nullptr;
     void* progressContext                                 = nullptr;
-    BatchRenameMutationCallback mutationCallback           = nullptr;
-    void* mutationContext                                  = nullptr;
-    const BatchRenameExecutionSchedule* schedule            = nullptr;
+    BatchRenameMutationCallback mutationCallback          = nullptr;
+    void* mutationContext                                 = nullptr;
+    const BatchRenameExecutionSchedule* schedule          = nullptr;
 };
 
 [[nodiscard]] bool IsBatchRenameCancellationHRESULT(HRESULT hr) noexcept;

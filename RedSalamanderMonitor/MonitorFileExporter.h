@@ -16,7 +16,7 @@ namespace RedSalamanderMonitor
 {
 struct MonitorFileExportResult
 {
-    HRESULT hr = E_FAIL;
+    HRESULT hr            = E_FAIL;
     uint64_t bytesWritten = 0u;
     size_t lineCount      = 0u;
 };

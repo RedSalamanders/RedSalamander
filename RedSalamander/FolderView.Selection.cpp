@@ -10,8 +10,8 @@ void FolderView::SelectSingle(size_t index)
     {
         ++_removalFocusOwnershipEpoch;
     }
-    const int marginPx                = std::max(1, PxFromDip(kFocusStrokeThicknessDip));
-    auto invalidateItem               = [&](size_t itemIndex) noexcept
+    const int marginPx  = std::max(1, PxFromDip(kFocusStrokeThicknessDip));
+    auto invalidateItem = [&](size_t itemIndex) noexcept
     {
         const auto invalidIndex = static_cast<size_t>(-1);
         if (itemIndex == invalidIndex || itemIndex >= _items.size())
@@ -72,14 +72,14 @@ void FolderView::ToggleSelection(size_t index)
     if (index >= _items.size())
         return;
 
-    const auto invalidIndex = static_cast<size_t>(-1);
+    const auto invalidIndex           = static_cast<size_t>(-1);
     const size_t previousFocusedIndex = _focusedIndex;
     if (previousFocusedIndex != index)
     {
         ++_removalFocusOwnershipEpoch;
     }
-    const int marginPx      = std::max(1, PxFromDip(kFocusStrokeThicknessDip));
-    auto invalidateItem     = [&](size_t itemIndex) noexcept
+    const int marginPx  = std::max(1, PxFromDip(kFocusStrokeThicknessDip));
+    auto invalidateItem = [&](size_t itemIndex) noexcept
     {
         if (itemIndex == invalidIndex || itemIndex >= _items.size())
         {
@@ -124,8 +124,8 @@ void FolderView::RangeSelect(size_t index, const bool additive)
     {
         ++_removalFocusOwnershipEpoch;
     }
-    const int marginPx                = std::max(1, PxFromDip(kFocusStrokeThicknessDip));
-    auto invalidateItem               = [&](size_t itemIndex) noexcept
+    const int marginPx  = std::max(1, PxFromDip(kFocusStrokeThicknessDip));
+    auto invalidateItem = [&](size_t itemIndex) noexcept
     {
         const auto invalidIndex = static_cast<size_t>(-1);
         if (itemIndex == invalidIndex || itemIndex >= _items.size())
@@ -762,8 +762,8 @@ void FolderView::FocusItem(size_t index, bool ensureVisible)
     {
         ++_removalFocusOwnershipEpoch;
     }
-    const int marginPx                = std::max(1, PxFromDip(kFocusStrokeThicknessDip));
-    auto invalidateItem               = [&](size_t itemIndex) noexcept
+    const int marginPx  = std::max(1, PxFromDip(kFocusStrokeThicknessDip));
+    auto invalidateItem = [&](size_t itemIndex) noexcept
     {
         if (itemIndex == invalidIndex || itemIndex >= _items.size())
         {
@@ -1199,7 +1199,7 @@ FolderView::DebugFocusSelectionStateSnapshot FolderView::DebugGetFocusSelectionS
 {
     constexpr uint64_t kFnvOffset = 14695981039346656037ull;
     constexpr uint64_t kFnvPrime  = 1099511628211ull;
-    const auto appendDigest = [](uint64_t& digest, std::wstring_view text) noexcept
+    const auto appendDigest       = [](uint64_t& digest, std::wstring_view text) noexcept
     {
         for (const wchar_t ch : text)
         {
@@ -1211,16 +1211,16 @@ FolderView::DebugFocusSelectionStateSnapshot FolderView::DebugGetFocusSelectionS
     };
 
     DebugFocusSelectionStateSnapshot snapshot{};
-    snapshot.itemCount = _items.size();
-    snapshot.currentIndex = _focusedIndex;
-    snapshot.anchorIndex = _anchorIndex;
-    snapshot.resolutionReason = _lastCurrentResolutionReason;
-    snapshot.focusOwnershipEpoch = _removalFocusOwnershipEpoch;
-    snapshot.selectedFileCount = _selectionStats.selectedFiles;
-    snapshot.selectedFolderCount = _selectionStats.selectedFolders;
-    snapshot.selectedFileBytes = _selectionStats.selectedFileBytes;
-    snapshot.emptyParentActionActive = CanShowEmptyFolderState() && _emptyFolderState.has_value();
-    snapshot.selectionDigest = kFnvOffset;
+    snapshot.itemCount                 = _items.size();
+    snapshot.currentIndex              = _focusedIndex;
+    snapshot.anchorIndex               = _anchorIndex;
+    snapshot.resolutionReason          = _lastCurrentResolutionReason;
+    snapshot.focusOwnershipEpoch       = _removalFocusOwnershipEpoch;
+    snapshot.selectedFileCount         = _selectionStats.selectedFiles;
+    snapshot.selectedFolderCount       = _selectionStats.selectedFolders;
+    snapshot.selectedFileBytes         = _selectionStats.selectedFileBytes;
+    snapshot.emptyParentActionActive   = CanShowEmptyFolderState() && _emptyFolderState.has_value();
+    snapshot.selectionDigest           = kFnvOffset;
     snapshot.potentialDragSourceDigest = kFnvOffset;
 
     if (_focusedIndex < _items.size())
@@ -1250,34 +1250,33 @@ FolderView::DebugFocusSelectionStateSnapshot FolderView::DebugGetFocusSelectionS
         }
     }
 
-    snapshot.focusMemoryEntryCount = _focusMemory.size();
-    snapshot.focusMemoryPayloadBytes = _focusMemoryPayloadBytes;
-    snapshot.focusMemoryEvictionCount = _focusMemoryEvictionCount;
-    snapshot.focusMemoryHitCount = _focusMemoryHitCount;
-    snapshot.focusMemoryMissCount = _focusMemoryMissCount;
-    snapshot.focusMemoryNoCacheCount = _focusMemoryNoCacheCount;
+    snapshot.focusMemoryEntryCount                   = _focusMemory.size();
+    snapshot.focusMemoryPayloadBytes                 = _focusMemoryPayloadBytes;
+    snapshot.focusMemoryEvictionCount                = _focusMemoryEvictionCount;
+    snapshot.focusMemoryHitCount                     = _focusMemoryHitCount;
+    snapshot.focusMemoryMissCount                    = _focusMemoryMissCount;
+    snapshot.focusMemoryNoCacheCount                 = _focusMemoryNoCacheCount;
     snapshot.focusMemoryLocationIdentityNoCacheCount = _focusMemoryLocationIdentityNoCacheCount;
-    snapshot.focusMemoryItemIdentityNoCacheCount = _focusMemoryItemIdentityNoCacheCount;
-    snapshot.focusMemoryOversizedEntryNoCacheCount = _focusMemoryOversizedEntryNoCacheCount;
-    snapshot.focusMemoryLastNoCacheReason = _focusMemoryLastNoCacheReason;
+    snapshot.focusMemoryItemIdentityNoCacheCount     = _focusMemoryItemIdentityNoCacheCount;
+    snapshot.focusMemoryOversizedEntryNoCacheCount   = _focusMemoryOversizedEntryNoCacheCount;
+    snapshot.focusMemoryLastNoCacheReason            = _focusMemoryLastNoCacheReason;
     return snapshot;
 }
 
 void FolderView::DebugClearFocusMemoryForSelfTest() noexcept
 {
     ClearFocusMemory();
-    _focusMemoryEvictionCount = 0u;
-    _focusMemoryHitCount = 0u;
-    _focusMemoryMissCount = 0u;
-    _focusMemoryNoCacheCount = 0u;
+    _focusMemoryEvictionCount                = 0u;
+    _focusMemoryHitCount                     = 0u;
+    _focusMemoryMissCount                    = 0u;
+    _focusMemoryNoCacheCount                 = 0u;
     _focusMemoryLocationIdentityNoCacheCount = 0u;
-    _focusMemoryItemIdentityNoCacheCount = 0u;
-    _focusMemoryOversizedEntryNoCacheCount = 0u;
-    _focusMemoryLastNoCacheReason = FocusMemoryNoCacheReason::None;
+    _focusMemoryItemIdentityNoCacheCount     = 0u;
+    _focusMemoryOversizedEntryNoCacheCount   = 0u;
+    _focusMemoryLastNoCacheReason            = FocusMemoryNoCacheReason::None;
 }
 
-bool FolderView::DebugRememberFocusMemoryEntryForSelfTest(const std::filesystem::path& folder,
-                                                          const std::wstring_view itemDisplayName) noexcept
+bool FolderView::DebugRememberFocusMemoryEntryForSelfTest(const std::filesystem::path& folder, const std::wstring_view itemDisplayName) noexcept
 {
     return RecordFocusMemoryEntry(folder, itemDisplayName);
 }

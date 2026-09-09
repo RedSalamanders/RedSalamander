@@ -22,11 +22,11 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include "FileSystemRouteProviderBase.h"
+#include "PackedFileInfoBuffer.h"
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
-#include "FileSystemRouteProviderBase.h"
 #include "PlugInterfaces/Informations.h"
-#include "PackedFileInfoBuffer.h"
 #include "PlugInterfaces/NavigationMenu.h"
 
 struct IHost;
@@ -187,9 +187,7 @@ public:
                                           IFileSystemCallback* callback    = nullptr,
                                           void* cookie                     = nullptr) noexcept override;
 
-    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
-                                                  FileSystemOperation operation,
-                                                  const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
                                                FileSystemOperation operationType,
                                                FileSystemTransferEndpoint endpoint,
@@ -219,9 +217,7 @@ public:
     HRESULT STDMETHODCALLTYPE UnwatchDirectory(const wchar_t* path) noexcept override;
 
 protected:
-    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path,
-                                           FileSystemOperation operation,
-                                           FileSystemRouteDescriptor& descriptor) noexcept override;
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path, FileSystemOperation operation, FileSystemRouteDescriptor& descriptor) noexcept override;
 
 private:
     ~FileSystemCurl();

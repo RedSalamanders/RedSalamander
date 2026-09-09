@@ -25,7 +25,7 @@ namespace Common::Registry
 // This is a bounded policy adapter, not a replacement for wil::reg. WIL owns ordinary key lifetime,
 // open/create, iteration, and typed-value operations. Its allocating string getters intentionally do
 // not expose this adapter's pre-allocation byte cap, query/read mutation policy, or test observer.
-inline constexpr size_t kDefaultMaxStringBytes = 64u * 1024u;
+inline constexpr size_t kDefaultMaxStringBytes        = 64u * 1024u;
 inline constexpr unsigned int kDefaultMaxReadAttempts = 3u;
 
 using StringReadObserver = void (*)(HKEY key, const wchar_t* valueName, unsigned int attempt, void* cookie) noexcept;
@@ -44,7 +44,5 @@ struct StringReadOptions
     void* observerCookie                     = nullptr;
 };
 
-[[nodiscard]] COMMON_API std::optional<std::wstring> ReadBoundedStringValue(HKEY key,
-                                                                             const wchar_t* valueName,
-                                                                             const StringReadOptions& options = {}) noexcept;
+[[nodiscard]] COMMON_API std::optional<std::wstring> ReadBoundedStringValue(HKEY key, const wchar_t* valueName, const StringReadOptions& options = {}) noexcept;
 } // namespace Common::Registry

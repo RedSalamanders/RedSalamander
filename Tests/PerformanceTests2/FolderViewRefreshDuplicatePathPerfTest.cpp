@@ -1,9 +1,9 @@
 #include "pch.h"
 
 #include "DirectoryInfoCache.h"
+#include "FileSystemRouteProviderBase.h"
 #include "FolderViewInternal.Access.h"
 #include "FolderWatcher.h"
-#include "FileSystemRouteProviderBase.h"
 #include "IconCache.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "WSLDistro.h"
@@ -323,9 +323,7 @@ public:
     {
         return E_NOTIMPL;
     }
-    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* /*path*/,
-                                                  FileSystemOperation /*operation*/,
-                                                  const char** jsonUtf8) noexcept override
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* /*path*/, FileSystemOperation /*operation*/, const char** jsonUtf8) noexcept override
     {
         if (! jsonUtf8)
         {
@@ -364,22 +362,20 @@ public:
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
-    HRESULT BuildFileSystemRouteDescriptor(const wchar_t*,
-                                           FileSystemOperation,
-                                           FileSystemRouteDescriptor& descriptor) noexcept override
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t*, FileSystemOperation, FileSystemRouteDescriptor& descriptor) noexcept override
     {
-        descriptor.providerId = L"builtin/file-system";
-        descriptor.pathProfileId = L"performance-test-read-only";
-        descriptor.rootId = L"performance-test-duplicate-path-root";
-        descriptor.acceptedSeparators = L"\\/";
-        descriptor.availability = FILESYSTEM_ROUTE_AVAILABLE;
-        descriptor.namespaceKind = FILESYSTEM_NAMESPACE_REAL_CONTAINER;
-        descriptor.componentComparison = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE;
-        descriptor.caseOnlyRename = FILESYSTEM_ROUTE_CASE_ONLY_NOT_APPLICABLE;
+        descriptor.providerId             = L"builtin/file-system";
+        descriptor.pathProfileId          = L"performance-test-read-only";
+        descriptor.rootId                 = L"performance-test-duplicate-path-root";
+        descriptor.acceptedSeparators     = L"\\/";
+        descriptor.availability           = FILESYSTEM_ROUTE_AVAILABLE;
+        descriptor.namespaceKind          = FILESYSTEM_NAMESPACE_REAL_CONTAINER;
+        descriptor.componentComparison    = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE;
+        descriptor.caseOnlyRename         = FILESYSTEM_ROUTE_CASE_ONLY_NOT_APPLICABLE;
         descriptor.pathTextStableIdentity = true;
-        descriptor.casePreserving = true;
-        descriptor.windowsChildNames = true;
-        descriptor.preferredSeparator = L'\\';
+        descriptor.casePreserving         = true;
+        descriptor.windowsChildNames      = true;
+        descriptor.preferredSeparator     = L'\\';
         return S_OK;
     }
 

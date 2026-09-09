@@ -1,7 +1,7 @@
 #include "Framework.h"
 
-#include "SettingsSchemaParser.h"
 #include "Helpers.h"
+#include "SettingsSchemaParser.h"
 #include "YyjsonHelpers.h"
 
 #include <algorithm>
@@ -39,15 +39,13 @@ namespace
 
 [[nodiscard]] std::optional<std::string_view> TryGetUtf8String(yyjson_val* obj, const char* key) noexcept
 {
-    const Common::Json::MemberResult<std::string_view> value =
-        Common::Json::GetStringMember(obj, key, Common::Json::MemberRequirement::Optional);
+    const Common::Json::MemberResult<std::string_view> value = Common::Json::GetStringMember(obj, key, Common::Json::MemberRequirement::Optional);
     return value.HasValue() ? std::optional<std::string_view>{value.value} : std::nullopt;
 }
 
 [[nodiscard]] std::optional<int64_t> TryGetInt64(yyjson_val* obj, const char* key) noexcept
 {
-    const Common::Json::MemberResult<int64_t> value =
-        Common::Json::GetInt64Member(obj, key, Common::Json::MemberRequirement::Optional);
+    const Common::Json::MemberResult<int64_t> value = Common::Json::GetInt64Member(obj, key, Common::Json::MemberRequirement::Optional);
     return value.HasValue() ? std::optional<int64_t>{value.value} : std::nullopt;
 }
 

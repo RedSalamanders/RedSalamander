@@ -63,8 +63,8 @@ public:
     IMtpBackendFileReader(const IMtpBackendFileReader&)            = delete;
     IMtpBackendFileReader& operator=(const IMtpBackendFileReader&) = delete;
 
-    virtual HRESULT GetSize(uint64_t& sizeBytes) noexcept                                                        = 0;
-    virtual HRESULT Seek(__int64 offset, unsigned long origin, uint64_t& newPosition) noexcept                  = 0;
+    virtual HRESULT GetSize(uint64_t& sizeBytes) noexcept                                                              = 0;
+    virtual HRESULT Seek(__int64 offset, unsigned long origin, uint64_t& newPosition) noexcept                         = 0;
     virtual HRESULT Read(std::span<std::byte> buffer, unsigned long requestedBytes, unsigned long& bytesRead) noexcept = 0;
 
 protected:
@@ -79,29 +79,26 @@ public:
     IMtpBackend(const IMtpBackend&)            = delete;
     IMtpBackend& operator=(const IMtpBackend&) = delete;
 
-    virtual MtpBackendInfo GetInfo() const noexcept                                                                           = 0;
-    virtual HRESULT EnumerateDirectory(std::wstring_view path, std::vector<MtpItem>& items) noexcept                          = 0;
-    virtual HRESULT GetAttributes(std::wstring_view path, unsigned long& attributes) noexcept                                 = 0;
-    virtual HRESULT GetBasicInformation(std::wstring_view path, FileSystemBasicInformation& info) noexcept                    = 0;
-    virtual HRESULT GetFileSize(std::wstring_view path, uint64_t& sizeBytes) noexcept                                         = 0;
-    virtual HRESULT CreateFileReader(std::wstring_view path, std::shared_ptr<IMtpBackendFileReader>& reader) noexcept        = 0;
-    virtual HRESULT ReadFile(std::wstring_view path, std::vector<std::byte>& bytes) noexcept                                  = 0;
-    virtual HRESULT WriteFile(std::wstring_view path, std::span<const std::byte> bytes, bool allowOverwrite) noexcept         = 0;
-    virtual HRESULT WriteFileFromHandle(std::wstring_view path,
-                                        HANDLE sourceFile,
-                                        uint64_t sizeBytes,
-                                        bool allowOverwrite) noexcept                                                        = 0;
-    virtual HRESULT CompareFileWithHandle(std::wstring_view path, HANDLE sourceFile, uint64_t sizeBytes) noexcept             = 0;
-    virtual HRESULT CreateDirectory(std::wstring_view path) noexcept                                                          = 0;
-    virtual HRESULT DeleteItem(std::wstring_view path, bool recursive) noexcept                                               = 0;
+    virtual MtpBackendInfo GetInfo() const noexcept                                                                                  = 0;
+    virtual HRESULT EnumerateDirectory(std::wstring_view path, std::vector<MtpItem>& items) noexcept                                 = 0;
+    virtual HRESULT GetAttributes(std::wstring_view path, unsigned long& attributes) noexcept                                        = 0;
+    virtual HRESULT GetBasicInformation(std::wstring_view path, FileSystemBasicInformation& info) noexcept                           = 0;
+    virtual HRESULT GetFileSize(std::wstring_view path, uint64_t& sizeBytes) noexcept                                                = 0;
+    virtual HRESULT CreateFileReader(std::wstring_view path, std::shared_ptr<IMtpBackendFileReader>& reader) noexcept                = 0;
+    virtual HRESULT ReadFile(std::wstring_view path, std::vector<std::byte>& bytes) noexcept                                         = 0;
+    virtual HRESULT WriteFile(std::wstring_view path, std::span<const std::byte> bytes, bool allowOverwrite) noexcept                = 0;
+    virtual HRESULT WriteFileFromHandle(std::wstring_view path, HANDLE sourceFile, uint64_t sizeBytes, bool allowOverwrite) noexcept = 0;
+    virtual HRESULT CompareFileWithHandle(std::wstring_view path, HANDLE sourceFile, uint64_t sizeBytes) noexcept                    = 0;
+    virtual HRESULT CreateDirectory(std::wstring_view path) noexcept                                                                 = 0;
+    virtual HRESULT DeleteItem(std::wstring_view path, bool recursive) noexcept                                                      = 0;
     // R0c-OR3: delete the object at `path` only when its live persistent id (re-resolved, never taken
     // from a path cache) equals `expectedPersistentId`; otherwise ERROR_REVISION_MISMATCH and nothing
     // is deleted. The overwrite commits and journal replay use this instead of a path delete.
     virtual HRESULT DeleteItemByIdentity(std::wstring_view path, std::wstring_view expectedPersistentId, bool recursive) noexcept = 0;
-    virtual HRESULT RenameItem(std::wstring_view sourcePath, std::wstring_view destinationPath, bool allowOverwrite) noexcept = 0;
-    virtual HRESULT CopyItem(std::wstring_view sourcePath, std::wstring_view destinationPath, bool allowOverwrite) noexcept   = 0;
-    virtual HRESULT MoveItem(std::wstring_view sourcePath, std::wstring_view destinationPath, bool allowOverwrite) noexcept   = 0;
-    virtual HRESULT GetItemProperties(std::wstring_view path, std::string& jsonUtf8) noexcept                                 = 0;
+    virtual HRESULT RenameItem(std::wstring_view sourcePath, std::wstring_view destinationPath, bool allowOverwrite) noexcept     = 0;
+    virtual HRESULT CopyItem(std::wstring_view sourcePath, std::wstring_view destinationPath, bool allowOverwrite) noexcept       = 0;
+    virtual HRESULT MoveItem(std::wstring_view sourcePath, std::wstring_view destinationPath, bool allowOverwrite) noexcept       = 0;
+    virtual HRESULT GetItemProperties(std::wstring_view path, std::string& jsonUtf8) noexcept                                     = 0;
     virtual void RequestCancel() noexcept
     {
     }
@@ -129,8 +126,8 @@ class MtpBackendCommandQueue;
 using MemoryBackendReadObserver = void (*)(void* context, uint64_t bytesRead) noexcept;
 
 [[nodiscard]] std::shared_ptr<IMtpBackendFileReader> CreateMemoryBackendFileReader(std::vector<std::byte> bytes,
-                                                                                   uint32_t readDelayMs = 0,
-                                                                                   std::shared_ptr<void> readContext = {},
+                                                                                   uint32_t readDelayMs               = 0,
+                                                                                   std::shared_ptr<void> readContext  = {},
                                                                                    MemoryBackendReadObserver observer = nullptr);
 
 enum class MtpBackendCommandKind : uint8_t

@@ -76,7 +76,7 @@ struct SelfTestOptions
     std::wstring orderProofCaseName;
     // Explicit-order dispatchers run one exact case at a time; keep classifier proof hooks aware
     // that those exact-case calls still represent suite/shuffle context, not isolated retries.
-    bool classifierProofSuiteContext = false;
+    bool classifierProofSuiteContext   = false;
     bool classifierProofShuffleContext = false;
     // Optional JSON5 perf budget file used by focused performance selftests.
     std::filesystem::path perfBudgetPath;
@@ -441,12 +441,9 @@ bool RemoveAll(const std::filesystem::path& path) noexcept;
                                                std::string_view exportName,
                                                wil::unique_hmodule& module,
                                                FARPROC& exportAddress) noexcept;
-[[nodiscard]] HRESULT LoadMtpPluginSelfTestExport(std::string_view exportName,
-                                                  wil::unique_hmodule& module,
-                                                  FARPROC& exportAddress) noexcept;
+[[nodiscard]] HRESULT LoadMtpPluginSelfTestExport(std::string_view exportName, wil::unique_hmodule& module, FARPROC& exportAddress) noexcept;
 
-template<typename Fn, typename... Args>
-[[nodiscard]] HRESULT CallMtpPluginExport(std::string_view exportName, Args&&... args) noexcept
+template <typename Fn, typename... Args> [[nodiscard]] HRESULT CallMtpPluginExport(std::string_view exportName, Args&&... args) noexcept
 {
 #pragma warning(push)
 #pragma warning(disable : 4625 4626) // WIL module owners are intentionally non-copyable; this helper keeps the pin local.

@@ -712,7 +712,6 @@ struct ResultListMutation
     bool inserted = false;
 };
 
-
 [[nodiscard]] uint64_t MakeResultStableId(const FindResultRecord& record) noexcept
 {
     return (static_cast<uint64_t>(StableHash32(record.key)) << 32u) ^ static_cast<uint64_t>(StableHash32(record.relativePath));
@@ -979,8 +978,8 @@ public:
                 outCell.text      = record.displayName;
                 if (record.artifactProjection)
                 {
-                    outCell.badgeText = LoadStringResource(nullptr, IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE);
-                    outCell.badgeTone = RedSalamander::DxUi::AdornmentTone::Warning;
+                    outCell.badgeText   = LoadStringResource(nullptr, IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE);
+                    outCell.badgeTone   = RedSalamander::DxUi::AdornmentTone::Warning;
                     outCell.tooltipText = outCell.badgeText;
                 }
                 break;
@@ -1847,10 +1846,10 @@ private:
     void OnGridContextMenu(Grid& sender, size_t rowIndex, POINT screenPoint) override;
     [[nodiscard]] wil::com_ptr<ID2D1Bitmap1> GetGridIconBitmap(const Grid& sender, int iconIndex, float targetDipSize, ID2D1DeviceContext* d2dContext) override;
 
-    HWND _ownerWindow                     = nullptr;
+    HWND _ownerWindow                      = nullptr;
     FolderWindow* _applicationFolderWindow = nullptr;
-    HWND _restoreFocusWindow              = nullptr;
-    Common::Settings::Settings* _settings = nullptr;
+    HWND _restoreFocusWindow               = nullptr;
+    Common::Settings::Settings* _settings  = nullptr;
     AppTheme _theme{};
     FindFilesPaneContext _context;
     size_t _dispatchDepth      = 0u;
@@ -2016,14 +2015,8 @@ struct SearchCallbacks final : IFileSystemSearchCallback
 
     ~SearchCallbacks() noexcept
     {
-        const uint64_t lookupUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
-            _artifactLookupDuration).count());
-        Debug::Perf::Emit(L"fileops.artifact.find_projection.us",
-                          L"name-shape-only",
-                          lookupUs,
-                          _artifactProjectedCount,
-                          _artifactProbeCandidateCount,
-                          S_OK);
+        const uint64_t lookupUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(_artifactLookupDuration).count());
+        Debug::Perf::Emit(L"fileops.artifact.find_projection.us", L"name-shape-only", lookupUs, _artifactProjectedCount, _artifactProbeCandidateCount, S_OK);
         Debug::Perf::EmitValue(L"fileops.artifact.find_projection.lookup_rows", _artifactLookupRowCount, S_OK);
     }
 
@@ -2140,7 +2133,7 @@ struct SearchCallbacks final : IFileSystemSearchCallback
         payload->epoch      = _epoch;
         payload->enqueuedAt = now;
         _batch.clear();
-        _batchFirstQueuedAt = {};
+        _batchFirstQueuedAt       = {};
         const WPARAM operationKey = static_cast<WPARAM>(payload->epoch);
         if (! PostMessagePayload(_hwnd, WndMsg::kFindSearchResults, operationKey, std::move(payload)))
         {
@@ -2178,18 +2171,15 @@ struct SearchCallbacks final : IFileSystemSearchCallback
         record.stableRowId             = MakeResultStableId(record);
 
         const auto artifactLookupStartedAt = SteadyClock::now();
-        const bool artifactCandidate = FileOperationArtifacts::HasPossibleArtifactName(record.displayName);
+        const bool artifactCandidate       = FileOperationArtifacts::HasPossibleArtifactName(record.displayName);
         _artifactLookupDuration += SteadyClock::now() - artifactLookupStartedAt;
         ++_artifactLookupRowCount;
         if (artifactCandidate)
         {
             ++_artifactProbeCandidateCount;
             FileOperationArtifacts::Projection projection{};
-            if (FileOperationArtifacts::ProjectProviderObject(_request.context.fileSystem.get(),
-                                                              record.fullPath,
-                                                              record.pluginId,
-                                                              record.instanceContext,
-                                                              projection) == S_OK)
+            if (FileOperationArtifacts::ProjectProviderObject(
+                    _request.context.fileSystem.get(), record.fullPath, record.pluginId, record.instanceContext, projection) == S_OK)
             {
                 record.artifactProjection = std::make_shared<FileOperationArtifacts::Projection>(std::move(projection));
                 ++_artifactProjectedCount;
@@ -2300,9 +2290,9 @@ struct SearchCallbacks final : IFileSystemSearchCallback
     SearchServiceStatusSnapshot _latestServiceStatus;
     FindSearchProgressPayload _latestProgress;
     SteadyClock::duration _artifactLookupDuration{};
-    uint64_t _artifactLookupRowCount = 0u;
+    uint64_t _artifactLookupRowCount      = 0u;
     uint64_t _artifactProbeCandidateCount = 0u;
-    uint64_t _artifactProjectedCount = 0u;
+    uint64_t _artifactProjectedCount      = 0u;
 };
 
 SearchSessionController::~SearchSessionController() noexcept
@@ -2501,7 +2491,7 @@ void SearchSessionController::Run(SearchRequest request, uint64_t epoch) noexcep
     if (complete)
     {
         const WPARAM operationKey = static_cast<WPARAM>(complete->epoch);
-        completionQueued = PostMessagePayload(_ownerHwnd, WndMsg::kFindSearchComplete, operationKey, std::move(complete));
+        completionQueued          = PostMessagePayload(_ownerHwnd, WndMsg::kFindSearchComplete, operationKey, std::move(complete));
     }
     if (! completionQueued)
     {
@@ -2510,8 +2500,8 @@ void SearchSessionController::Run(SearchRequest request, uint64_t epoch) noexcep
         // completion so the UI thread still runs OnSearchComplete -> CompleteDeferredCloseIfReady and a
         // deferred window close does not leak the hidden window. Best-effort: if even this post fails the
         // window survives until app teardown, but no UI-thread state is corrupted.
-        static_cast<void>(PostMessagePayload(
-            _ownerHwnd, WndMsg::kFindSearchComplete, static_cast<WPARAM>(epoch), std::unique_ptr<FindSearchCompletePayload>{}));
+        static_cast<void>(
+            PostMessagePayload(_ownerHwnd, WndMsg::kFindSearchComplete, static_cast<WPARAM>(epoch), std::unique_ptr<FindSearchCompletePayload>{}));
     }
 }
 
@@ -3452,9 +3442,10 @@ void FindFilesWindow::EnsureFileOperationCompletedSubscription() noexcept
     {
         return;
     }
-    _fileOperationCompletedCallbackToken = _applicationFolderWindow->AddFileOperationCompletedCallback([this](const FolderWindow::FileOperationCompletedEvent& e) noexcept
-    { OnFolderWindowFileOperationCompleted(e); },
-                                                                                            _fileOperationCompletedCallbackLifetime);
+    _fileOperationCompletedCallbackToken =
+        _applicationFolderWindow->AddFileOperationCompletedCallback([this](const FolderWindow::FileOperationCompletedEvent& e) noexcept {
+        OnFolderWindowFileOperationCompleted(e);
+    }, _fileOperationCompletedCallbackLifetime);
 }
 
 void FindFilesWindow::ReapExpiredPendingResultRemovals(uint64_t nowTickMs) noexcept
@@ -3508,12 +3499,11 @@ std::optional<std::wstring> FindFilesWindow::ResolveResultShortcutCommand(UINT m
         shortcuts.Load(defaultShortcuts);
     }
 
-    const std::optional<std::wstring_view> command = (vk >= VK_F1 && vk <= VK_F12)
-                                                        ? shortcuts.FindFunctionBarCommand(vk, modifiers)
-                                                        : shortcuts.FindFolderViewCommand(vk,
-                                                                                          modifiers,
-                                                                                          Common::Keyboard::ScanCodeFromKeyMessageLParam(lParam),
-                                                                                          Common::Keyboard::IsExtendedKeyMessageLParam(lParam));
+    const std::optional<std::wstring_view> command =
+        (vk >= VK_F1 && vk <= VK_F12)
+            ? shortcuts.FindFunctionBarCommand(vk, modifiers)
+            : shortcuts.FindFolderViewCommand(
+                  vk, modifiers, Common::Keyboard::ScanCodeFromKeyMessageLParam(lParam), Common::Keyboard::IsExtendedKeyMessageLParam(lParam));
     if (! command.has_value())
     {
         return std::nullopt;
@@ -3874,8 +3864,8 @@ bool FindFilesWindow::IsResultMenuActionEnabled(FindResultMenuAction action, std
         return false;
     }
 
-    bool allWindowsPaths = true;
-    bool oneProviderContext = true;
+    bool allWindowsPaths      = true;
+    bool oneProviderContext   = true;
     bool firstProviderContext = true;
     std::wstring_view pluginId;
     std::wstring_view instanceContext;
@@ -3887,12 +3877,12 @@ bool FindFilesWindow::IsResultMenuActionEnabled(FindResultMenuAction action, std
         }
 
         const FindResultRecord& result = _results[index];
-        allWindowsPaths = allWindowsPaths && NavigationLocation::LooksLikeWindowsAbsolutePath(result.fullPath);
+        allWindowsPaths                = allWindowsPaths && NavigationLocation::LooksLikeWindowsAbsolutePath(result.fullPath);
         if (firstProviderContext)
         {
             firstProviderContext = false;
-            pluginId        = result.pluginId;
-            instanceContext = result.instanceContext;
+            pluginId             = result.pluginId;
+            instanceContext      = result.instanceContext;
         }
         else if (CompareStringOrdinal(pluginId.data(), static_cast<int>(pluginId.size()), result.pluginId.c_str(), -1, TRUE) != CSTR_EQUAL ||
                  ! NavigationLocation::EqualsNoCase(instanceContext, result.instanceContext))
@@ -3921,9 +3911,7 @@ bool FindFilesWindow::IsResultMenuActionEnabled(FindResultMenuAction action, std
     return false;
 }
 
-void FindFilesWindow::AppendResultMenuActions(std::vector<MenuFlyoutItem>& items,
-                                              std::span<const size_t> selectedIndices,
-                                              bool includeOpenActions) const
+void FindFilesWindow::AppendResultMenuActions(std::vector<MenuFlyoutItem>& items, std::span<const size_t> selectedIndices, bool includeOpenActions) const
 {
     const auto appendAction = [&](FindResultMenuAction action)
     { items.push_back(BuildResultMenuItem(action, IsResultMenuActionEnabled(action, selectedIndices))); };
@@ -4048,7 +4036,7 @@ void FindFilesWindow::ShowResultContextMenu(size_t clickedRowIndex, POINT screen
     }
 
     const std::vector<size_t> selectedIndices = CollectSelectedResultIndices();
-    const bool clickedIsSelected = std::ranges::find(selectedIndices, clickedRowIndex) != selectedIndices.end();
+    const bool clickedIsSelected              = std::ranges::find(selectedIndices, clickedRowIndex) != selectedIndices.end();
     if (! clickedIsSelected && _resultsList)
     {
         _resultsList->GetSelectionModel().SetSingle(_resultsModel.GetStableRowId(clickedRowIndex));
@@ -5652,32 +5640,27 @@ bool FindFilesWindow::BeginSearch(SearchOperation operation, const SearchTextOve
 void FindFilesWindow::OnSearchResults(WPARAM operationKey, LPARAM lParam) noexcept
 {
     uint64_t drainedResultsRecordCount = 0u;
-    auto drained = TakeAndCoalesceContiguousPostedPayloads<FindSearchResultsPayload>(
+    auto drained                       = TakeAndCoalesceContiguousPostedPayloads<FindSearchResultsPayload>(
         _hWnd.get(),
         WndMsg::kFindSearchResults,
         operationKey,
         lParam,
         [](const FindSearchResultsPayload& current, uint64_t drainedPayloadCount) noexcept
-        { return drainedPayloadCount < kResultsDrainMaxMessages && current.results.size() < kResultsDrainMaxRecords; },
+    { return drainedPayloadCount < kResultsDrainMaxMessages && current.results.size() < kResultsDrainMaxRecords; },
         [&](std::unique_ptr<FindSearchResultsPayload>& current, std::unique_ptr<FindSearchResultsPayload> newer) noexcept
+    {
+        if (newer->epoch != current->epoch)
         {
-            if (newer->epoch != current->epoch)
-            {
-                return;
-            }
-            if (newer->enqueuedAt != SteadyClock::time_point{})
-            {
-                Debug::Perf::Emit(L"find.ui.results_to_visible_latency_ms",
-                                  L"",
-                                  ElapsedUsSince(newer->enqueuedAt),
-                                  static_cast<uint64_t>(newer->results.size()),
-                                  0u,
-                                  S_OK);
-            }
-            drainedResultsRecordCount += static_cast<uint64_t>(newer->results.size());
-            current->results.insert(
-                current->results.end(), std::make_move_iterator(newer->results.begin()), std::make_move_iterator(newer->results.end()));
-        });
+            return;
+        }
+        if (newer->enqueuedAt != SteadyClock::time_point{})
+        {
+            Debug::Perf::Emit(
+                L"find.ui.results_to_visible_latency_ms", L"", ElapsedUsSince(newer->enqueuedAt), static_cast<uint64_t>(newer->results.size()), 0u, S_OK);
+        }
+        drainedResultsRecordCount += static_cast<uint64_t>(newer->results.size());
+        current->results.insert(current->results.end(), std::make_move_iterator(newer->results.begin()), std::make_move_iterator(newer->results.end()));
+    });
     auto payload = std::move(drained.payload);
     if (! payload)
     {
@@ -5828,12 +5811,12 @@ void FindFilesWindow::OnSearchProgress(WPARAM operationKey, LPARAM lParam) noexc
         lParam,
         [](const FindSearchProgressPayload&, uint64_t) noexcept { return true; },
         [](std::unique_ptr<FindSearchProgressPayload>& current, std::unique_ptr<FindSearchProgressPayload> newer) noexcept
+    {
+        if (newer->epoch == current->epoch)
         {
-            if (newer->epoch == current->epoch)
-            {
-                current = std::move(newer);
-            }
-        });
+            current = std::move(newer);
+        }
+    });
     auto payload = std::move(drained.payload);
     if (! payload)
     {
@@ -7565,11 +7548,8 @@ LRESULT CALLBACK FindFilesWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam
 
 } // namespace
 
-bool ShowFindFilesWindow(HWND owner,
-                         FolderWindow& applicationFolderWindow,
-                         Common::Settings::Settings& settings,
-                         const AppTheme& theme,
-                         FindFilesPaneContext context) noexcept
+bool ShowFindFilesWindow(
+    HWND owner, FolderWindow& applicationFolderWindow, Common::Settings::Settings& settings, const AppTheme& theme, FindFilesPaneContext context) noexcept
 {
     auto* window = new (std::nothrow) FindFilesWindow(owner, applicationFolderWindow, settings, theme, std::move(context));
     if (! window)
@@ -7640,8 +7620,7 @@ std::vector<size_t> DebugSelectKnownCompletedFindFilesSourceIndicesForTests(size
         keys.push_back(std::to_wstring(index));
     }
 
-    const std::unordered_set<std::wstring> completedKeys =
-        CollectKnownCompletedResultKeys(std::span<const std::wstring>(keys), outcomes, overallStatus);
+    const std::unordered_set<std::wstring> completedKeys = CollectKnownCompletedResultKeys(std::span<const std::wstring>(keys), outcomes, overallStatus);
     std::vector<size_t> completedIndices;
     completedIndices.reserve(completedKeys.size());
     for (size_t index = 0; index < keys.size(); ++index)

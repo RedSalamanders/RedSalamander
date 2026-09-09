@@ -67,9 +67,9 @@ struct ForceWilTemplateInstantiations
 #include "BatchRenameWindow.h"
 #include "ChangeCase.h"
 #include "CommandDispatch.Debug.h"
+#include "CommandPaletteWindow.h"
 #include "CommandRegistry.h"
 #include "CommandRuntimeState.h"
-#include "CommandPaletteWindow.h"
 #include "CommandVisuals.h"
 #include "CompareDirectoriesWindow.h"
 #include "ConnectionCredentialPromptDialog.h"
@@ -84,46 +84,46 @@ struct ForceWilTemplateInstantiations
 #include "FileOperationArtifactRegistry.h"
 #include "FileOperationDurableStore.h"
 #include "FileOperationMoveBreadcrumb.h"
+#include "FileSystemPluginManager.h"
 #include "FileSystemRouteContract.h"
 #include "FileSystemRouteProviderBase.h"
-#include "FileSystemPluginManager.h"
 #include "FindFilesWindow.h"
 #include "FloatingTerminalWindow.h"
-#include "TerminalHostSupport.h"
 #include "FluentIcons.h"
 #include "FolderViewEmptyStateLayout.h"
-#include "FolderWindow.FileSystem.Private.h"
 #include "FolderWindow.FileOperations.IssuesPane.h"
 #include "FolderWindow.FileOperations.Popup.h"
 #include "FolderWindow.FileOperationsInternal.h"
+#include "FolderWindow.FileSystem.Private.h"
 #include "FolderWindow.h"
-#include "Helpers.h"
 #include "HandleIo.h"
+#include "Helpers.h"
 #include "HostServices.h"
 #include "IconCache.h"
-#include "LocalSearchIndexCore.h"
 #include "LocalFileTransaction.h"
+#include "LocalSearchIndexCore.h"
 #include "ManagePluginsDialog.h"
 #include "NavigationLocation.h"
 #include "NavigationView.h"
 #include "PlugInterfaces/Factory.h"
-#include "ProcessCommandLine.h"
 #include "Preferences.Internal.h"
 #include "Preferences.h"
+#include "ProcessCommandLine.h"
 #include "RedSalamander.h"
 #include "SearchServiceBroker.h"
+#include "SelfTest/Common/SelfTestLatencyHooks.h"
 #include "SettingsHotReload.h"
 #include "SettingsSave.h"
-#include "SelfTest/Common/SelfTestLatencyHooks.h"
-#include "TestSupport/TestSupport.h"
-#include "TestSupport/DirectedSelfTestInputWarning.h"
-#include "ShortcutDefaults.h"
 #include "ShortcutCommandCatalog.h"
+#include "ShortcutDefaults.h"
 #include "ShortcutManager.h"
 #include "ShortcutText.h"
-#include "StringConversion.h"
 #include "ShortcutsWindow.h"
 #include "SplashScreen.h"
+#include "StringConversion.h"
+#include "TerminalHostSupport.h"
+#include "TestSupport/DirectedSelfTestInputWarning.h"
+#include "TestSupport/TestSupport.h"
 #include "Ui/AlertOverlayWindow.h"
 #include "ViewerPluginManager.h"
 #include "WindowBackdropPolicy.h"
@@ -512,29 +512,27 @@ template <typename WorkerFunc> void RunChangeCasePromptModalCycle(HWND mainWindo
 // Keep Settings first: it currently owns shared UIA/window helper definitions consumed by
 // the other command selftest families.
 
-#include "Commands.SelfTest.Settings.cpp"
-#include "Commands.SelfTest.ThemeOverlay.cpp"
 #include "Commands.SelfTest.BatchRename.cpp"
 #include "Commands.SelfTest.CompareOptions.cpp"
 #include "Commands.SelfTest.Connections.cpp"
 #include "Commands.SelfTest.Dialogs.cpp"
 #include "Commands.SelfTest.FileOps.cpp"
+#include "Commands.SelfTest.Navigation.cpp"
 #include "Commands.SelfTest.PluginConfig.cpp"
 #include "Commands.SelfTest.Preferences.cpp"
-#include "Commands.SelfTest.Navigation.cpp"
 #include "Commands.SelfTest.Search.cpp"
+#include "Commands.SelfTest.Settings.cpp"
 #include "Commands.SelfTest.ShellCommands.cpp"
 #include "Commands.SelfTest.Shortcuts.cpp"
+#include "Commands.SelfTest.ThemeOverlay.cpp"
 #include "Commands.SelfTest.ViewCommands.cpp"
 
 } // namespace
 
 bool CommandsSelfTest::IsKnownFamily(const std::wstring_view family) noexcept
 {
-    return std::ranges::any_of(kCommandsSelfTestFamilies, [family](const std::wstring_view candidate) noexcept
-    {
-        return SelfTest::SelfTestCaseNameEquals(candidate, family);
-    });
+    return std::ranges::any_of(kCommandsSelfTestFamilies,
+                               [family](const std::wstring_view candidate) noexcept { return SelfTest::SelfTestCaseNameEquals(candidate, family); });
 }
 
 std::vector<std::wstring> CommandsSelfTest::ListCases(const SelfTest::SelfTestOptions& options) noexcept
@@ -598,7 +596,7 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
 
     if (! options.listCasesOnly)
     {
-        const std::vector<std::wstring> declaredCases = ListCases(options);
+        const std::vector<std::wstring> declaredCases                     = ListCases(options);
         const std::vector<SelfTest::SelfTestCaseExecution> executionOrder = SelfTest::BuildSelfTestCaseExecutionOrder(options, declaredCases);
         Trace(std::format(L"CommandsSelfTest: isolated execution order count={} repeat={} shuffleSeed={}",
                           executionOrder.size(),
@@ -607,7 +605,7 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
         const DirectedSelfTestInputWarning inputWarning(mainWindow);
         for (const SelfTest::SelfTestCaseExecution& execution : executionOrder)
         {
-            SelfTest::SelfTestOptions caseOptions = options;
+            SelfTest::SelfTestOptions caseOptions     = options;
             caseOptions.caseFilter                    = execution.name;
             caseOptions.repeatCount                   = 1u;
             caseOptions.repeatIndex                   = execution.repeatIndex;
@@ -625,10 +623,12 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
             isolationState.Require(inputWarning.IsVisible(), L"The foreground-input warning is unavailable.");
             if (! isolationState.failure.empty() || ! PrepareMainWindowForIsolatedUiCase(mainWindow, isolationState, isolationContext))
             {
-                const std::wstring failure = isolationState.failure.empty()
-                                                 ? std::format(L"Failed to isolate the main window before {}.", isolationContext)
-                                                 : std::move(isolationState.failure);
-                SelfTest::RunCase(caseOptions, suite, execution.name, [&](CaseState& state) noexcept
+                const std::wstring failure = isolationState.failure.empty() ? std::format(L"Failed to isolate the main window before {}.", isolationContext)
+                                                                            : std::move(isolationState.failure);
+                SelfTest::RunCase(caseOptions,
+                                  suite,
+                                  execution.name,
+                                  [&](CaseState& state) noexcept
                 {
                     state.Require(false, failure);
                     return false;

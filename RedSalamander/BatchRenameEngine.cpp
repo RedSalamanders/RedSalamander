@@ -570,7 +570,7 @@ void MarkDuplicateSources(std::vector<PreviewRow>& rows, const FileSystemPathIde
         {
             if (EquivalentPath(pathIdentity, rows[index].sourcePath.native(), rows[candidate].sourcePath.native()))
             {
-                duplicateRows[index] = true;
+                duplicateRows[index]     = true;
                 duplicateRows[candidate] = true;
             }
         }
@@ -586,7 +586,7 @@ void MarkDuplicateSources(std::vector<PreviewRow>& rows, const FileSystemPathIde
             {
                 if (EquivalentPath(pathIdentity, rows[left].sourcePath.native(), rows[right].sourcePath.native()))
                 {
-                    duplicateRows[left] = true;
+                    duplicateRows[left]  = true;
                     duplicateRows[right] = true;
                 }
             }

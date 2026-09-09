@@ -18,7 +18,7 @@ namespace RedSalamander::TestSupport
 class ScopedWindowActivationBlocker final
 {
 public:
-    ScopedWindowActivationBlocker()                                              = default;
+    ScopedWindowActivationBlocker()                                                = default;
     ScopedWindowActivationBlocker(const ScopedWindowActivationBlocker&)            = delete;
     ScopedWindowActivationBlocker& operator=(const ScopedWindowActivationBlocker&) = delete;
     ScopedWindowActivationBlocker(ScopedWindowActivationBlocker&&)                 = delete;

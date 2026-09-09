@@ -52,10 +52,10 @@ public:
     Terminal();
     ~Terminal();
 
-    Terminal(const Terminal&) = delete;
-    Terminal(Terminal&&) = delete;
+    Terminal(const Terminal&)            = delete;
+    Terminal(Terminal&&)                 = delete;
     Terminal& operator=(const Terminal&) = delete;
-    Terminal& operator=(Terminal&&) = delete;
+    Terminal& operator=(Terminal&&)      = delete;
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** object) noexcept override;
     ULONG STDMETHODCALLTYPE AddRef() noexcept override;
@@ -84,20 +84,11 @@ public:
     [[nodiscard]] HRESULT DebugGetDiagnosticText(TerminalOwnedUtf16* text) noexcept;
     [[nodiscard]] HRESULT DebugGetScreenText(TerminalOwnedUtf16* text) noexcept;
     [[nodiscard]] HRESULT DebugTerminateRootProcess(uint32_t exitCode) noexcept;
-    [[nodiscard]] HRESULT DebugRunCommandExperiencePerfSelfTests(
-        unsigned int* passedTests,
-        unsigned int* failedTests) noexcept;
-    [[nodiscard]] HRESULT DebugRunKittyCacheSelfTests(
-        unsigned int* passedTests,
-        unsigned int* failedTests) noexcept;
-    [[nodiscard]] HRESULT DebugRunVtUpgradeCorpus(
-        TerminalVtUpgradeTestContract::Evidence* evidence) noexcept;
-    [[nodiscard]] HRESULT DebugRunInputRoutingContractSelfTests(
-        unsigned int* passedTests,
-        unsigned int* failedTests) noexcept;
-    [[nodiscard]] HRESULT DebugRunRuntimeLifecycleSelfTests(
-        unsigned int* passedTests,
-        unsigned int* failedTests) noexcept;
+    [[nodiscard]] HRESULT DebugRunCommandExperiencePerfSelfTests(unsigned int* passedTests, unsigned int* failedTests) noexcept;
+    [[nodiscard]] HRESULT DebugRunKittyCacheSelfTests(unsigned int* passedTests, unsigned int* failedTests) noexcept;
+    [[nodiscard]] HRESULT DebugRunVtUpgradeCorpus(TerminalVtUpgradeTestContract::Evidence* evidence) noexcept;
+    [[nodiscard]] HRESULT DebugRunInputRoutingContractSelfTests(unsigned int* passedTests, unsigned int* failedTests) noexcept;
+    [[nodiscard]] HRESULT DebugRunRuntimeLifecycleSelfTests(unsigned int* passedTests, unsigned int* failedTests) noexcept;
     void DebugClearCapturedInput() noexcept;
     [[nodiscard]] std::string DebugTakeCapturedInput() noexcept;
     [[nodiscard]] DWORD DebugCommandSurfaceJoinTid() const noexcept;
@@ -139,16 +130,16 @@ private:
 
     struct Config final
     {
-        std::wstring fontFamily = L"Cascadia Mono";
-        float fontSizeDip = 14.0f;
-        uint32_t maxFormattedBytes = 8u * 1024u * 1024u;
-        uint32_t pasteMaxBytes = 4u * 1024u * 1024u;
-        uint32_t osc52MaxBytes = 256u * 1024u;
-        std::wstring defaultShell = L"auto";
+        std::wstring fontFamily      = L"Cascadia Mono";
+        float fontSizeDip            = 14.0f;
+        uint32_t maxFormattedBytes   = 8u * 1024u * 1024u;
+        uint32_t pasteMaxBytes       = 4u * 1024u * 1024u;
+        uint32_t osc52MaxBytes       = 256u * 1024u;
+        std::wstring defaultShell    = L"auto";
         std::wstring hyperlinkPolicy = L"ask";
-        std::wstring osc52Policy = L"ask";
-        bool followPathWhenIdle = false;
-        bool warnOnUnsafePaste = true;
+        std::wstring osc52Policy     = L"ask";
+        bool followPathWhenIdle      = false;
+        bool warnOnUnsafePaste       = true;
     };
 
     struct Osc52ClipboardPayload final
@@ -169,14 +160,16 @@ private:
     struct CommandSurfaceJoinContext final
     {
         CommandSurfaceJoinContext(std::jthread workerHandle, wil::unique_hmodule module, Terminal* value) noexcept
-            : worker(std::move(workerHandle)), modulePin(std::move(module)), terminal(value)
+            : worker(std::move(workerHandle)),
+              modulePin(std::move(module)),
+              terminal(value)
         {
         }
-        ~CommandSurfaceJoinContext() = default;
-        CommandSurfaceJoinContext(const CommandSurfaceJoinContext&) = delete;
-        CommandSurfaceJoinContext(CommandSurfaceJoinContext&&) = delete;
+        ~CommandSurfaceJoinContext()                                           = default;
+        CommandSurfaceJoinContext(const CommandSurfaceJoinContext&)            = delete;
+        CommandSurfaceJoinContext(CommandSurfaceJoinContext&&)                 = delete;
         CommandSurfaceJoinContext& operator=(const CommandSurfaceJoinContext&) = delete;
-        CommandSurfaceJoinContext& operator=(CommandSurfaceJoinContext&&) = delete;
+        CommandSurfaceJoinContext& operator=(CommandSurfaceJoinContext&&)      = delete;
 
         std::jthread worker;
         wil::unique_hmodule modulePin;
@@ -185,12 +178,14 @@ private:
 
     struct InputDrainContext final
     {
-        InputDrainContext(Terminal* value, wil::unique_hmodule module) noexcept : terminal(value), modulePin(std::move(module)) {}
-        ~InputDrainContext() = default;
-        InputDrainContext(const InputDrainContext&) = delete;
-        InputDrainContext(InputDrainContext&&) = delete;
+        InputDrainContext(Terminal* value, wil::unique_hmodule module) noexcept : terminal(value), modulePin(std::move(module))
+        {
+        }
+        ~InputDrainContext()                                   = default;
+        InputDrainContext(const InputDrainContext&)            = delete;
+        InputDrainContext(InputDrainContext&&)                 = delete;
         InputDrainContext& operator=(const InputDrainContext&) = delete;
-        InputDrainContext& operator=(InputDrainContext&&) = delete;
+        InputDrainContext& operator=(InputDrainContext&&)      = delete;
 
         Terminal* terminal;
         wil::unique_hmodule modulePin;
@@ -198,7 +193,7 @@ private:
 
     struct KittyImageKey final
     {
-        uint32_t imageId = 0u;
+        uint32_t imageId         = 0u;
         uint64_t imageGeneration = 0u;
 
         bool operator==(const KittyImageKey&) const noexcept = default;
@@ -208,9 +203,8 @@ private:
     {
         [[nodiscard]] size_t operator()(const KittyImageKey& key) const noexcept
         {
-            const uint64_t mixed = key.imageGeneration ^
-                (static_cast<uint64_t>(key.imageId) + 0x9E3779B97F4A7C15ull +
-                 (key.imageGeneration << 6u) + (key.imageGeneration >> 2u));
+            const uint64_t mixed =
+                key.imageGeneration ^ (static_cast<uint64_t>(key.imageId) + 0x9E3779B97F4A7C15ull + (key.imageGeneration << 6u) + (key.imageGeneration >> 2u));
             return std::hash<uint64_t>{}(mixed);
         }
     };
@@ -248,25 +242,25 @@ private:
     struct KittyBitmapUploadResult final
     {
         KittyBitmapUploadDisposition disposition = KittyBitmapUploadDisposition::InvalidInput;
-        HRESULT hr = E_FAIL;
+        HRESULT hr                               = E_FAIL;
     };
 
     struct KittyImageSnapshot final
     {
-        uint32_t width = 0u;
+        uint32_t width  = 0u;
         uint32_t height = 0u;
         std::vector<uint8_t> bgra;
         wil::com_ptr<ID2D1Bitmap> bitmap;
-        KittyImageState state = KittyImageState::Missing;
-        uint64_t pendingRequestId = 0u;
-        uint64_t lastVisibleEpoch = 0u;
-        size_t deferredPinnedBytes = 0u;
-        size_t deferredVisibleKeyCount = 0u;
+        KittyImageState state              = KittyImageState::Missing;
+        uint64_t pendingRequestId          = 0u;
+        uint64_t lastVisibleEpoch          = 0u;
+        size_t deferredPinnedBytes         = 0u;
+        size_t deferredVisibleKeyCount     = 0u;
         KittyBitmapUploadState uploadState = KittyBitmapUploadState::Eligible;
-        HRESULT uploadHr = S_OK;
-        ULONGLONG uploadRetryAtTick = 0u;
-        uint64_t uploadDeviceGeneration = 0u;
-        uint32_t uploadAttemptCount = 0u;
+        HRESULT uploadHr                   = S_OK;
+        ULONGLONG uploadRetryAtTick        = 0u;
+        uint64_t uploadDeviceGeneration    = 0u;
+        uint32_t uploadAttemptCount        = 0u;
     };
 
     struct KittyPlacementSnapshot final
@@ -275,12 +269,12 @@ private:
         GhosttyKittyGraphicsPlacementRenderInfo renderInfo{};
         uint32_t xOffsetPixels = 0u;
         uint32_t yOffsetPixels = 0u;
-        int32_t z = 0;
+        int32_t z              = 0;
     };
 
     struct MessageRouteResult final
     {
-        bool handled = false;
+        bool handled   = false;
         LRESULT result = 0;
     };
 
@@ -288,18 +282,14 @@ private:
     [[nodiscard]] MessageRouteResult routeInputMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     [[nodiscard]] MessageRouteResult routeMouseMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     [[nodiscard]] MessageRouteResult routeImeMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
-    [[nodiscard]] MessageRouteResult routeAccessibilityMessage(
-        HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+    [[nodiscard]] MessageRouteResult routeAccessibilityMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     [[nodiscard]] MessageRouteResult routeSessionMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
-    [[nodiscard]] MessageRouteResult routeClipboardMessage(
-        HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+    [[nodiscard]] MessageRouteResult routeClipboardMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     [[nodiscard]] MessageRouteResult routeRenderMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     [[nodiscard]] MessageRouteResult routeTeardownMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
     static void GhosttyWritePty(GhosttyTerminal terminal, void* userData, const uint8_t* data, size_t length) noexcept;
-    static void GhosttyClipboardWrite(
-        GhosttyTerminal terminal, void* userData, const ::GhosttyClipboardWrite* write) noexcept;
-    [[nodiscard]] GhosttyClipboardWriteResult handleGhosttyClipboardWrite(
-        const ::GhosttyClipboardWrite* write) noexcept;
+    static void GhosttyClipboardWrite(GhosttyTerminal terminal, void* userData, const ::GhosttyClipboardWrite* write) noexcept;
+    [[nodiscard]] GhosttyClipboardWriteResult handleGhosttyClipboardWrite(const ::GhosttyClipboardWrite* write) noexcept;
     static void CALLBACK CloseThreadpoolCallback(PTP_CALLBACK_INSTANCE instance, void* context, PTP_WORK work) noexcept;
     static void CALLBACK InputDrainCallback(PTP_CALLBACK_INSTANCE instance, void* context) noexcept;
     static void CALLBACK CommandSurfaceJoinCallback(PTP_CALLBACK_INSTANCE instance, void* context) noexcept;
@@ -310,10 +300,7 @@ private:
     [[nodiscard]] HRESULT initializeEngine() noexcept;
     void releaseEngine() noexcept;
     [[nodiscard]] HRESULT startPseudoConsole(const TerminalLogicalLocation& location) noexcept;
-    [[nodiscard]] HRESULT resolveShell(const TerminalLogicalLocation& location,
-                                       std::wstring& executable,
-                                       std::wstring& commandLine,
-                                       ShellKind& kind) noexcept;
+    [[nodiscard]] HRESULT resolveShell(const TerminalLogicalLocation& location, std::wstring& executable, std::wstring& commandLine, ShellKind& kind) noexcept;
     void readerMain(std::stop_token stopToken, wil::unique_handle outputRead) noexcept;
     void processWatcherMain(std::stop_token stopToken, wil::unique_handle rootProcess) noexcept;
     void notifyOutputReady() noexcept;
@@ -350,9 +337,7 @@ private:
     void activateCommandSurfaceSelection() noexcept;
     void drawCommandSurface(float widthDip, float heightDip) noexcept;
     [[nodiscard]] std::wstring commandSurfaceAccessibilityText() const;
-    void recordShortcutRoute(TerminalShortcutRoute route,
-                             HRESULT result,
-                             std::chrono::steady_clock::time_point startedAt) noexcept;
+    void recordShortcutRoute(TerminalShortcutRoute route, HRESULT result, std::chrono::steady_clock::time_point startedAt) noexcept;
     void flushShortcutRouteMetrics() noexcept;
     [[nodiscard]] bool copySelection(bool* selectionPresent = nullptr) noexcept;
     [[nodiscard]] bool hasSelection() noexcept;
@@ -362,8 +347,7 @@ private:
     [[nodiscard]] bool selectWordAt(POINT clientPoint) noexcept;
     [[nodiscard]] bool selectAll() noexcept;
     [[nodiscard]] GhosttyPoint terminalPointFromClient(POINT clientPoint) const noexcept;
-    [[nodiscard]] bool encodeMouse(
-        GhosttyMouseAction action, GhosttyMouseButton button, POINT clientPoint, bool anyButtonPressed) noexcept;
+    [[nodiscard]] bool encodeMouse(GhosttyMouseAction action, GhosttyMouseButton button, POINT clientPoint, bool anyButtonPressed) noexcept;
     void releaseReportedMouseButtons() noexcept;
     void scrollViewport(intptr_t rows) noexcept;
     void scrollViewportTo(uint64_t row) noexcept;
@@ -385,21 +369,13 @@ private:
     void scheduleKittyUploadRetry(KittyImageSnapshot& image, DWORD delayMilliseconds) noexcept;
     void drawInactivePaneOverlay(float widthDip, float heightDip, bool paneFocused) noexcept;
     [[nodiscard]] bool renderStructuredScreen(float widthDip, float heightDip) noexcept;
-    [[nodiscard]] bool captureKittyGraphicsLocked(
-        TerminalKittyGenerationWork& work,
-        std::vector<KittyPlacementSnapshot>& placements,
-        bool& submitWork) noexcept;
-    [[nodiscard]] static bool handleKittyImageQueryResult(
-        KittyImageSnapshot& image,
-        GhosttyResult result) noexcept;
+    [[nodiscard]] bool captureKittyGraphicsLocked(TerminalKittyGenerationWork& work,
+                                                  std::vector<KittyPlacementSnapshot>& placements,
+                                                  bool& submitWork) noexcept;
+    [[nodiscard]] static bool handleKittyImageQueryResult(KittyImageSnapshot& image, GhosttyResult result) noexcept;
     static void resetKittyPendingForStorageChange(KittyImageSnapshot& image) noexcept;
-    [[nodiscard]] static bool needsKittyReplacementWork(
-        const KittyImageSnapshot& image,
-        uint64_t currentRequestId,
-        bool retryDeferred) noexcept;
-    [[nodiscard]] static bool isCurrentKittyConversionResult(
-        const KittyImageSnapshot& image,
-        uint64_t requestId) noexcept;
+    [[nodiscard]] static bool needsKittyReplacementWork(const KittyImageSnapshot& image, uint64_t currentRequestId, bool retryDeferred) noexcept;
+    [[nodiscard]] static bool isCurrentKittyConversionResult(const KittyImageSnapshot& image, uint64_t requestId) noexcept;
     void consumeKittyReady() noexcept;
     void drawKittyLayer(GhosttyKittyPlacementLayer layer) noexcept;
     [[nodiscard]] KittyBitmapUploadResult ensureKittyBitmap(KittyImageSnapshot& image) noexcept;
@@ -429,15 +405,15 @@ private:
     wil::unique_hwnd _window;
 
     TerminalRuntimeLoader _runtime;
-    GhosttyTerminal _ghosttyTerminal = nullptr;
-    GhosttyFormatter _formatter = nullptr;
-    GhosttyRenderState _renderState = nullptr;
-    GhosttyRenderStateRowIterator _renderRows = nullptr;
-    GhosttyRenderStateRowCells _renderCells = nullptr;
-    GhosttyKeyEncoder _keyEncoder = nullptr;
-    GhosttyKeyEvent _keyEvent = nullptr;
-    GhosttyMouseEncoder _mouseEncoder = nullptr;
-    GhosttyMouseEvent _mouseEvent = nullptr;
+    GhosttyTerminal _ghosttyTerminal                              = nullptr;
+    GhosttyFormatter _formatter                                   = nullptr;
+    GhosttyRenderState _renderState                               = nullptr;
+    GhosttyRenderStateRowIterator _renderRows                     = nullptr;
+    GhosttyRenderStateRowCells _renderCells                       = nullptr;
+    GhosttyKeyEncoder _keyEncoder                                 = nullptr;
+    GhosttyKeyEvent _keyEvent                                     = nullptr;
+    GhosttyMouseEncoder _mouseEncoder                             = nullptr;
+    GhosttyMouseEvent _mouseEvent                                 = nullptr;
     GhosttyKittyGraphicsPlacementIterator _kittyPlacementIterator = nullptr;
     std::mutex _terminalMutex;
     std::wstring _diagnosticText;
@@ -462,8 +438,7 @@ private:
     std::atomic_uint32_t _debugEngineInitializationFailStage{0u};
     std::atomic_uint32_t _debugClipboardCallbackCount{0u};
     std::atomic_uint32_t _debugClipboardReplyCount{0u};
-    std::atomic<GhosttyClipboardWriteResult> _debugClipboardReplyResult{
-        GHOSTTY_CLIPBOARD_WRITE_RESULT_MAX_VALUE};
+    std::atomic<GhosttyClipboardWriteResult> _debugClipboardReplyResult{GHOSTTY_CLIPBOARD_WRITE_RESULT_MAX_VALUE};
     std::atomic_uint32_t _debugOsc52PayloadPostCount{0u};
 #endif
     wil::unique_threadpool_work_nowait _closeWork;
@@ -472,9 +447,9 @@ private:
     std::mutex _sessionTeardownMutex;
     std::mutex _inputMutex;
     std::deque<std::string> _inputQueue;
-    size_t _inputQueuedBytes = 0u;
+    size_t _inputQueuedBytes    = 0u;
     size_t _inputActiveRequests = 0u;
-    bool _inputDrainScheduled = false;
+    bool _inputDrainScheduled   = false;
     std::atomic_uint64_t _outputGeneration{0u};
     std::atomic_uint64_t _outputConsumedGeneration{0u};
     std::atomic_bool _outputNotificationPending{false};
@@ -491,7 +466,7 @@ private:
 
     std::mutex _stateMutex;
     TerminalOriginalSourceKey _originalSource{};
-    uint64_t _sourceGeneration = 0u;
+    uint64_t _sourceGeneration               = 0u;
     TerminalLocationKind _sourceLocationKind = TerminalLocationKind::Unsupported;
     std::wstring _sourceLocationPath;
     std::wstring _sourcePluginShortId;
@@ -503,12 +478,12 @@ private:
     std::wstring _pendingPromptExpectedBuffer;
     std::wstring _pendingPromptReplacement;
     std::wstring _pendingFollowDirectory;
-    TerminalFollowState _followState = TerminalFollowState::Disabled;
-    bool _integrationTrusted = false;
+    TerminalFollowState _followState      = TerminalFollowState::Disabled;
+    bool _integrationTrusted              = false;
     bool _trustedHistoryProviderAvailable = false;
-    bool _idleAtPrimaryPrompt = false;
-    bool _hasPendingUserInput = false;
-    bool _commandSubmitted = false;
+    bool _idleAtPrimaryPrompt             = false;
+    bool _hasPendingUserInput             = false;
+    bool _commandSubmitted                = false;
 #if defined(ENABLE_TESTS)
     std::atomic_uint32_t _integrationDebugStage{0u};
     std::atomic<HRESULT> _integrationDebugResult{S_OK};
@@ -529,66 +504,66 @@ private:
     TerminalKittyImagePipeline _kittyPipeline;
     std::unordered_map<KittyImageKey, KittyImageSnapshot, KittyImageKeyHash> _kittyImages;
     std::vector<KittyPlacementSnapshot> _kittyPlacements;
-    uint64_t _kittyRequestId = 0u;
-    uint64_t _kittyTargetStorageGeneration = 0u;
-    uint64_t _kittyCacheEpoch = 0u;
-    size_t _kittyCachedBytes = 0u;
-    size_t _kittyCaptureSourceBytes = 0u;
-    size_t _kittyCapturePinnedBytes = 0u;
-    size_t _kittyCaptureEnginePlacementBytes = 0u;
-    size_t _kittyCaptureEnginePlacementCount = 0u;
-    size_t _kittyCaptureTotalPlacements = 0u;
-    size_t _kittyCaptureVisiblePlacements = 0u;
-    size_t _kittyCaptureOffscreenPlacements = 0u;
-    size_t _kittyCaptureVirtualPlacements = 0u;
-    size_t _kittyCaptureVisibleImageKeys = 0u;
-    size_t _kittyCaptureMissingImageKeys = 0u;
+    uint64_t _kittyRequestId                   = 0u;
+    uint64_t _kittyTargetStorageGeneration     = 0u;
+    uint64_t _kittyCacheEpoch                  = 0u;
+    size_t _kittyCachedBytes                   = 0u;
+    size_t _kittyCaptureSourceBytes            = 0u;
+    size_t _kittyCapturePinnedBytes            = 0u;
+    size_t _kittyCaptureEnginePlacementBytes   = 0u;
+    size_t _kittyCaptureEnginePlacementCount   = 0u;
+    size_t _kittyCaptureTotalPlacements        = 0u;
+    size_t _kittyCaptureVisiblePlacements      = 0u;
+    size_t _kittyCaptureOffscreenPlacements    = 0u;
+    size_t _kittyCaptureVirtualPlacements      = 0u;
+    size_t _kittyCaptureVisibleImageKeys       = 0u;
+    size_t _kittyCaptureMissingImageKeys       = 0u;
     size_t _kittyCaptureEnginePendingImageKeys = 0u;
-    size_t _kittyCaptureDeferredImageKeys = 0u;
-    size_t _kittyCaptureRejectedImageKeys = 0u;
-    size_t _kittySupersededImageCount = 0u;
-    size_t _kittyRemovedImageCount = 0u;
-    size_t _kittyEvictedBytes = 0u;
-    size_t _kittyEvictedImageCount = 0u;
-    size_t _kittyFrameUploadBytes = 0u;
-    uint32_t _kittyFrameUploadCount = 0u;
-    size_t _kittyFrameImageLookupCount = 0u;
-    bool _kittyUploadDeferred = false;
-    bool _kittyRecreateTargetAfterFrame = false;
-    ULONGLONG _kittyNextUploadRetryAtTick = 0u;
-    uint64_t _kittyDeviceGeneration = 0u;
-    uint32_t _kittyUploadRetryScheduleCount = 0u;
-    uint32_t _kittyStableUploadFailureCount = 0u;
-    uint32_t _kittyDeviceRecoveryCount = 0u;
-    uint32_t _kittyRepaintRequestCount = 0u;
-    uint32_t _kittyResizeCount = 0u;
-    uint32_t _kittyResizeRecreateCount = 0u;
-    size_t _kittyResizeRetainedBitmapCount = 0u;
-    size_t _kittyResizeRetainedBitmapBytes = 0u;
+    size_t _kittyCaptureDeferredImageKeys      = 0u;
+    size_t _kittyCaptureRejectedImageKeys      = 0u;
+    size_t _kittySupersededImageCount          = 0u;
+    size_t _kittyRemovedImageCount             = 0u;
+    size_t _kittyEvictedBytes                  = 0u;
+    size_t _kittyEvictedImageCount             = 0u;
+    size_t _kittyFrameUploadBytes              = 0u;
+    uint32_t _kittyFrameUploadCount            = 0u;
+    size_t _kittyFrameImageLookupCount         = 0u;
+    bool _kittyUploadDeferred                  = false;
+    bool _kittyRecreateTargetAfterFrame        = false;
+    ULONGLONG _kittyNextUploadRetryAtTick      = 0u;
+    uint64_t _kittyDeviceGeneration            = 0u;
+    uint32_t _kittyUploadRetryScheduleCount    = 0u;
+    uint32_t _kittyStableUploadFailureCount    = 0u;
+    uint32_t _kittyDeviceRecoveryCount         = 0u;
+    uint32_t _kittyRepaintRequestCount         = 0u;
+    uint32_t _kittyResizeCount                 = 0u;
+    uint32_t _kittyResizeRecreateCount         = 0u;
+    size_t _kittyResizeRetainedBitmapCount     = 0u;
+    size_t _kittyResizeRetainedBitmapBytes     = 0u;
 #if defined(ENABLE_TESTS)
     std::deque<HRESULT> _debugKittyUploadFailures;
 #endif
-    uint32_t _backgroundArgb = 0xFF101010u;
-    uint32_t _foregroundArgb = 0xFFF0F0F0u;
-    uint32_t _cursorArgb = 0xFFF0F0F0u;
-    uint32_t _selectionBackgroundArgb = 0xFF264F78u;
-    uint32_t _selectionForegroundArgb = 0xFFFFFFFFu;
-    uint32_t _hyperlinkArgb = 0xFF4EA1FFu;
-    bool _themeDark = true;
-    bool _themeHighContrast = false;
-    UINT _dpi = USER_DEFAULT_SCREEN_DPI;
-    float _cellWidthDip = 8.68f;
-    float _cellHeightDip = 19.6f;
-    float _liveFontSizeDip = 14.0f;
-    bool _cellMetricsValid = false;
-    uint16_t _columns = 80u;
-    uint16_t _rows = 24u;
-    bool _ptyClientSizeSynced = false;
-    int _mouseWheelDeltaRemainder = 0;
+    uint32_t _backgroundArgb               = 0xFF101010u;
+    uint32_t _foregroundArgb               = 0xFFF0F0F0u;
+    uint32_t _cursorArgb                   = 0xFFF0F0F0u;
+    uint32_t _selectionBackgroundArgb      = 0xFF264F78u;
+    uint32_t _selectionForegroundArgb      = 0xFFFFFFFFu;
+    uint32_t _hyperlinkArgb                = 0xFF4EA1FFu;
+    bool _themeDark                        = true;
+    bool _themeHighContrast                = false;
+    UINT _dpi                              = USER_DEFAULT_SCREEN_DPI;
+    float _cellWidthDip                    = 8.68f;
+    float _cellHeightDip                   = 19.6f;
+    float _liveFontSizeDip                 = 14.0f;
+    bool _cellMetricsValid                 = false;
+    uint16_t _columns                      = 80u;
+    uint16_t _rows                         = 24u;
+    bool _ptyClientSizeSynced              = false;
+    int _mouseWheelDeltaRemainder          = 0;
     GhosttyTrackedGridRef _selectionAnchor = nullptr;
     POINT _selectionLastPoint{};
-    int _selectionAutoScrollRows = 0;
-    bool _selecting = false;
+    int _selectionAutoScrollRows  = 0;
+    bool _selecting               = false;
     uint8_t _reportedMouseButtons = 0u;
     POINT _reportedMouseLastPoint{};
     wchar_t _pendingHighSurrogate = L'\0';
@@ -597,12 +572,12 @@ private:
     std::wstring _pendingHyperlink;
     std::wstring _pendingOsc52Text;
     bool _unsafePasteConfirmationVisible = false;
-    bool _hyperlinkConfirmationVisible = false;
-    bool _osc52ConfirmationVisible = false;
+    bool _hyperlinkConfirmationVisible   = false;
+    bool _osc52ConfirmationVisible       = false;
 
     CommandSurfaceKind _commandSurfaceKind = CommandSurfaceKind::None;
-    uint64_t _commandSurfaceGeneration = 0u;
-    bool _commandSurfaceLoading = false;
+    uint64_t _commandSurfaceGeneration     = 0u;
+    bool _commandSurfaceLoading            = false;
     std::wstring _commandSurfaceQuery;
     std::shared_ptr<std::wstring> _commandSurfaceSnapshot;
     std::shared_ptr<std::vector<std::wstring>> _commandSurfaceSessionHistorySnapshot;
@@ -610,26 +585,25 @@ private:
     std::wstring _commandSurfaceHistoryPath;
     std::wstring _persistedHistoryPath;
     std::wstring _commandSurfaceStatusOverride;
-    uint64_t _commandSurfaceSessionGeneration = 0u;
-    uint64_t _commandSurfaceStateGeneration = 0u;
-    bool _commandSurfaceHistoryTrusted = false;
-    bool _commandSurfaceInsertionPending = false;
+    uint64_t _commandSurfaceSessionGeneration  = 0u;
+    uint64_t _commandSurfaceStateGeneration    = 0u;
+    bool _commandSurfaceHistoryTrusted         = false;
+    bool _commandSurfaceInsertionPending       = false;
     uint64_t _commandSurfaceSnapshotGeneration = 0u;
-    bool _commandSurfaceSnapshotReady = false;
+    bool _commandSurfaceSnapshotReady          = false;
     std::vector<TerminalCommandSurfaceModel::FindMatch> _commandSurfaceFindRows;
     size_t _commandSurfaceFindTotal = 0u;
     std::vector<TerminalCommandSurfaceModel::Suggestion> _commandSurfaceSuggestionRows;
-    std::shared_ptr<std::vector<std::wstring>> _persistedHistory =
-        std::make_shared<std::vector<std::wstring>>();
-    size_t _commandSurfaceSelected = 0u;
-    uint64_t _shortcutRouteBatchCount = 0u;
-    uint64_t _shortcutRouteBatchTotalUs = 0u;
-    uint64_t _shortcutRouteBatchMaximumUs = 0u;
-    uint64_t _shortcutRouteBatchHandled = 0u;
-    uint64_t _shortcutRouteBatchPassThrough = 0u;
-    uint64_t _shortcutRouteBatchHost = 0u;
-    uint64_t _shortcutRouteBatchBlocked = 0u;
-    uint64_t _shortcutRouteBatchFailed = 0u;
+    std::shared_ptr<std::vector<std::wstring>> _persistedHistory = std::make_shared<std::vector<std::wstring>>();
+    size_t _commandSurfaceSelected                               = 0u;
+    uint64_t _shortcutRouteBatchCount                            = 0u;
+    uint64_t _shortcutRouteBatchTotalUs                          = 0u;
+    uint64_t _shortcutRouteBatchMaximumUs                        = 0u;
+    uint64_t _shortcutRouteBatchHandled                          = 0u;
+    uint64_t _shortcutRouteBatchPassThrough                      = 0u;
+    uint64_t _shortcutRouteBatchHost                             = 0u;
+    uint64_t _shortcutRouteBatchBlocked                          = 0u;
+    uint64_t _shortcutRouteBatchFailed                           = 0u;
     std::atomic<Osc52Policy> _osc52Policy{Osc52Policy::Ask};
     std::atomic_uint32_t _osc52MaxBytes{256u * 1024u};
     std::atomic_bool _osc52PostPending{false};
@@ -656,8 +630,8 @@ private:
     std::atomic_uint64_t _sessionGeneration{0u};
 
     std::mutex _eventCallbackMutex;
-    ITerminalEventCallback* _eventCallback = nullptr; // Weak; host owns it.
-    void* _eventCallbackCookie = nullptr;
+    ITerminalEventCallback* _eventCallback    = nullptr; // Weak; host owns it.
+    void* _eventCallbackCookie                = nullptr;
     uint64_t _eventDeliveredSessionGeneration = 0u;
 
     Config _config;

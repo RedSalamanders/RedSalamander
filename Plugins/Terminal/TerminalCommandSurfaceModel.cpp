@@ -28,34 +28,24 @@ constexpr size_t kMaximumSuggestionCharacters = 32u * 1024u;
     {
         return uint8_t{0};
     }
-    if (text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()) ||
-        query.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
+    if (text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()) || query.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
     {
         return std::nullopt;
     }
-    const int found = FindStringOrdinal(FIND_FROMSTART,
-                                        text.data(),
-                                        static_cast<int>(text.size()),
-                                        query.data(),
-                                        static_cast<int>(query.size()),
-                                        TRUE);
+    const int found = FindStringOrdinal(FIND_FROMSTART, text.data(), static_cast<int>(text.size()), query.data(), static_cast<int>(query.size()), TRUE);
     return found < 0 ? std::nullopt : std::optional<size_t>(static_cast<size_t>(found));
 }
 
 [[nodiscard]] bool StartsWithNoCase(std::wstring_view text, std::wstring_view query) noexcept
 {
     return query.size() <= text.size() &&
-        CompareStringOrdinal(text.data(), static_cast<int>(query.size()), query.data(), static_cast<int>(query.size()), TRUE) == CSTR_EQUAL;
+           CompareStringOrdinal(text.data(), static_cast<int>(query.size()), query.data(), static_cast<int>(query.size()), TRUE) == CSTR_EQUAL;
 }
 
 [[nodiscard]] bool EqualsNoCase(std::wstring_view left, std::wstring_view right) noexcept
 {
     return left.size() == right.size() &&
-        CompareStringOrdinal(left.data(),
-                             static_cast<int>(left.size()),
-                             right.data(),
-                             static_cast<int>(right.size()),
-                             TRUE) == CSTR_EQUAL;
+           CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE) == CSTR_EQUAL;
 }
 
 [[nodiscard]] bool HasTokenPrefixNoCase(std::wstring_view text, std::wstring_view query) noexcept
@@ -80,9 +70,7 @@ constexpr size_t kMaximumSuggestionCharacters = 32u * 1024u;
     size_t queryIndex = 0u;
     for (const wchar_t character : text)
     {
-        if (queryIndex < query.size() &&
-            std::towupper(static_cast<wint_t>(character)) ==
-                std::towupper(static_cast<wint_t>(query[queryIndex])))
+        if (queryIndex < query.size() && std::towupper(static_cast<wint_t>(character)) == std::towupper(static_cast<wint_t>(query[queryIndex])))
         {
             ++queryIndex;
         }
@@ -90,8 +78,7 @@ constexpr size_t kMaximumSuggestionCharacters = 32u * 1024u;
     return queryIndex == query.size();
 }
 
-[[nodiscard]] std::optional<uint8_t> SuggestionMatchRank(
-    std::wstring_view text, std::wstring_view query) noexcept
+[[nodiscard]] std::optional<uint8_t> SuggestionMatchRank(std::wstring_view text, std::wstring_view query) noexcept
 {
     if (query.empty() || EqualsNoCase(text, query))
     {
@@ -109,10 +96,7 @@ constexpr size_t kMaximumSuggestionCharacters = 32u * 1024u;
     {
         return uint8_t{3};
     }
-    if (query.size() > 128u || std::ranges::any_of(query, [](wchar_t character) noexcept
-        {
-            return std::iswspace(static_cast<wint_t>(character)) != 0;
-        }))
+    if (query.size() > 128u || std::ranges::any_of(query, [](wchar_t character) noexcept { return std::iswspace(static_cast<wint_t>(character)) != 0; }))
     {
         return std::nullopt;
     }
@@ -123,11 +107,7 @@ struct OrdinalNoCaseLess final
 {
     [[nodiscard]] bool operator()(const std::wstring& left, const std::wstring& right) const noexcept
     {
-        return CompareStringOrdinal(left.data(),
-                                    static_cast<int>(left.size()),
-                                    right.data(),
-                                    static_cast<int>(right.size()),
-                                    TRUE) == CSTR_LESS_THAN;
+        return CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE) == CSTR_LESS_THAN;
     }
 };
 
@@ -139,10 +119,8 @@ bool IsSafeSuggestion(std::wstring_view text) noexcept
     {
         return false;
     }
-    return std::ranges::none_of(text, [](wchar_t character) noexcept
-    {
-        return character == L'\r' || character == L'\n' || character == L'\0' ||
-            (character < L' ' && character != L'\t');
+    return std::ranges::none_of(text, [](wchar_t character) noexcept {
+        return character == L'\r' || character == L'\n' || character == L'\0' || (character < L' ' && character != L'\t');
     });
 }
 
@@ -155,7 +133,7 @@ FindResult Find(std::wstring_view snapshot, std::wstring_view query, size_t maxi
     }
 
     size_t lineNumber = 0u;
-    size_t start = 0u;
+    size_t start      = 0u;
     while (start <= snapshot.size())
     {
         if (stopToken.stop_requested())
@@ -164,8 +142,8 @@ FindResult Find(std::wstring_view snapshot, std::wstring_view query, size_t maxi
             result.rows.clear();
             return result;
         }
-        const size_t end = snapshot.find_first_of(L"\r\n", start);
-        const size_t lineEnd = end == std::wstring_view::npos ? snapshot.size() : end;
+        const size_t end       = snapshot.find_first_of(L"\r\n", start);
+        const size_t lineEnd   = end == std::wstring_view::npos ? snapshot.size() : end;
         std::wstring_view line = snapshot.substr(start, lineEnd - start);
         if (const std::optional<size_t> offset = FindNoCase(line, query); offset.has_value())
         {
@@ -190,20 +168,21 @@ FindResult Find(std::wstring_view snapshot, std::wstring_view query, size_t maxi
     return result;
 }
 
-std::vector<std::wstring> LoadPowerShellHistory(std::wstring_view trustedPath,
-                                               size_t maximumBytes,
-                                               size_t maximumEntries,
-                                               std::stop_token stopToken)
+std::vector<std::wstring> LoadPowerShellHistory(std::wstring_view trustedPath, size_t maximumBytes, size_t maximumEntries, std::stop_token stopToken)
 {
     std::vector<std::wstring> result;
-    if (trustedPath.empty() || trustedPath.size() > 32767u || maximumBytes == 0u || maximumEntries == 0u ||
-        stopToken.stop_requested())
+    if (trustedPath.empty() || trustedPath.size() > 32767u || maximumBytes == 0u || maximumEntries == 0u || stopToken.stop_requested())
     {
         return result;
     }
     const std::wstring path(trustedPath);
-    wil::unique_hfile file(CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                      nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
+    wil::unique_hfile file(CreateFileW(path.c_str(),
+                                       GENERIC_READ,
+                                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                       nullptr,
+                                       OPEN_EXISTING,
+                                       FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
+                                       nullptr));
     if (! file)
     {
         return result;
@@ -213,9 +192,9 @@ std::vector<std::wstring> LoadPowerShellHistory(std::wstring_view trustedPath,
     {
         return result;
     }
-    const uint64_t fileSize = static_cast<uint64_t>(size.QuadPart);
+    const uint64_t fileSize  = static_cast<uint64_t>(size.QuadPart);
     const size_t bytesToRead = static_cast<size_t>(std::min<uint64_t>(fileSize, maximumBytes));
-    const uint64_t offset = fileSize - bytesToRead;
+    const uint64_t offset    = fileSize - bytesToRead;
     if (offset != 0u)
     {
         LARGE_INTEGER seek{};
@@ -232,10 +211,7 @@ std::vector<std::wstring> LoadPowerShellHistory(std::wstring_view trustedPath,
         return result;
     }
     bytes.resize(read);
-    const auto scrubBytes = wil::scope_exit([&bytes]() noexcept
-    {
-        SecureZeroMemory(bytes.data(), bytes.size());
-    });
+    const auto scrubBytes = wil::scope_exit([&bytes]() noexcept { SecureZeroMemory(bytes.data(), bytes.size()); });
     if (stopToken.stop_requested())
     {
         return result;
@@ -250,19 +226,16 @@ std::vector<std::wstring> LoadPowerShellHistory(std::wstring_view trustedPath,
         }
         ++first;
     }
-    std::wstring decoded = Common::Strings::Utf16FromUtf8ReplacingInvalid(std::string_view(bytes).substr(first));
-    const auto scrubDecoded = wil::scope_exit([&decoded]() noexcept
-    {
-        SecureZeroMemory(decoded.data(), decoded.size() * sizeof(wchar_t));
-    });
-    size_t start = 0u;
+    std::wstring decoded    = Common::Strings::Utf16FromUtf8ReplacingInvalid(std::string_view(bytes).substr(first));
+    const auto scrubDecoded = wil::scope_exit([&decoded]() noexcept { SecureZeroMemory(decoded.data(), decoded.size() * sizeof(wchar_t)); });
+    size_t start            = 0u;
     while (start <= decoded.size())
     {
         if (stopToken.stop_requested())
         {
             return {};
         }
-        const size_t end = decoded.find_first_of(L"\r\n", start);
+        const size_t end     = decoded.find_first_of(L"\r\n", start);
         const size_t lineEnd = end == std::wstring::npos ? decoded.size() : end;
         std::wstring line(decoded.data() + start, lineEnd - start);
         if (IsSafeSuggestion(line))
@@ -301,8 +274,8 @@ SuggestionResult FilterSuggestions(const std::vector<std::wstring>& persistedHis
     {
         Suggestion row;
         uint8_t matchRank = 0u;
-        size_t recency = 0u;
-        size_t frequency = 1u;
+        size_t recency    = 0u;
+        size_t frequency  = 1u;
     };
     std::vector<Ranked> ranked;
     // The tree comparator is the exact same ordinal-ignore-case relation used
@@ -337,9 +310,9 @@ SuggestionResult FilterSuggestions(const std::vector<std::wstring>& persistedHis
             }
             const size_t rankedIndex = ranked.size();
             ranked.push_back(Ranked{
-                .row = Suggestion{.text = value, .currentSession = currentSession},
+                .row       = Suggestion{.text = value, .currentSession = currentSession},
                 .matchRank = matchRank.value(),
-                .recency = reverseIndex,
+                .recency   = reverseIndex,
             });
             indices.emplace(ranked.back().row.text, rankedIndex);
         }
@@ -350,18 +323,21 @@ SuggestionResult FilterSuggestions(const std::vector<std::wstring>& persistedHis
         result.cancelled = true;
         return result;
     }
-    std::ranges::stable_sort(ranked, [](const Ranked& left, const Ranked& right) noexcept
+    std::ranges::stable_sort(ranked,
+                             [](const Ranked& left, const Ranked& right) noexcept
     {
-        if (left.matchRank != right.matchRank) return left.matchRank < right.matchRank;
-        if (left.row.currentSession != right.row.currentSession) return left.row.currentSession;
-        if (left.recency != right.recency) return left.recency < right.recency;
-        if (left.frequency != right.frequency) return left.frequency > right.frequency;
-        const int normalized = CompareStringOrdinal(left.row.text.data(),
-                                                    static_cast<int>(left.row.text.size()),
-                                                    right.row.text.data(),
-                                                    static_cast<int>(right.row.text.size()),
-                                                    TRUE);
-        if (normalized != CSTR_EQUAL) return normalized == CSTR_LESS_THAN;
+        if (left.matchRank != right.matchRank)
+            return left.matchRank < right.matchRank;
+        if (left.row.currentSession != right.row.currentSession)
+            return left.row.currentSession;
+        if (left.recency != right.recency)
+            return left.recency < right.recency;
+        if (left.frequency != right.frequency)
+            return left.frequency > right.frequency;
+        const int normalized = CompareStringOrdinal(
+            left.row.text.data(), static_cast<int>(left.row.text.size()), right.row.text.data(), static_cast<int>(right.row.text.size()), TRUE);
+        if (normalized != CSTR_EQUAL)
+            return normalized == CSTR_LESS_THAN;
         return left.row.text < right.row.text;
     });
     result.rows.reserve(std::min(maximumRows, ranked.size()));

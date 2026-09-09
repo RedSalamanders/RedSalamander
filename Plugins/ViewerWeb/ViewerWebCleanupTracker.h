@@ -17,12 +17,12 @@ public:
 
     struct Operations
     {
-        void* context = nullptr;
-        CleanupOperation deleteNow = nullptr;
+        void* context                  = nullptr;
+        CleanupOperation deleteNow     = nullptr;
         CleanupOperation scheduleLater = nullptr;
     };
 
-    StagedCleanupTracker()                                      = default;
+    StagedCleanupTracker()                                       = default;
     StagedCleanupTracker(const StagedCleanupTracker&)            = delete;
     StagedCleanupTracker(StagedCleanupTracker&&)                 = delete;
     StagedCleanupTracker& operator=(const StagedCleanupTracker&) = delete;
@@ -54,7 +54,7 @@ public:
         failed.reserve(current.size());
         for (std::wstring& path : current)
         {
-            const bool deleted = operations.deleteNow && operations.deleteNow(operations.context, path);
+            const bool deleted   = operations.deleteNow && operations.deleteNow(operations.context, path);
             const bool scheduled = ! deleted && operations.scheduleLater && operations.scheduleLater(operations.context, path);
             if (! deleted && ! scheduled)
             {

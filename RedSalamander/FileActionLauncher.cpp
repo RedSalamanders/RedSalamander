@@ -20,8 +20,8 @@
 #pragma warning(pop)
 
 #include "AppDataPaths.h"
-#include "Helpers.h"
 #include "HandleIo.h"
+#include "Helpers.h"
 #include "PathUtils.h"
 #include "ProcessCommandLine.h"
 
@@ -246,9 +246,7 @@ void AppendWindowsQuotedArgumentContent(std::wstring& out, std::wstring_view val
 {
     references = {};
 
-    const std::array templates{std::wstring_view(action.executablePath),
-                               std::wstring_view(action.arguments),
-                               std::wstring_view(action.workingDirectory)};
+    const std::array templates{std::wstring_view(action.executablePath), std::wstring_view(action.arguments), std::wstring_view(action.workingDirectory)};
     const auto referencesAny = [&](const std::span<const std::wstring_view> macroNames, bool& result) noexcept -> HRESULT
     {
         result = false;
@@ -470,11 +468,7 @@ constexpr std::wstring_view kSelectedPathsManifestSuffix{L".txt"};
     {
         return false;
     }
-    return CompareStringOrdinal(leftText.data(),
-                                static_cast<int>(leftText.size()),
-                                rightText.data(),
-                                static_cast<int>(rightText.size()),
-                                TRUE) == CSTR_EQUAL;
+    return CompareStringOrdinal(leftText.data(), static_cast<int>(leftText.size()), rightText.data(), static_cast<int>(rightText.size()), TRUE) == CSTR_EQUAL;
 }
 
 enum class SelectedPathsCleanupOutcome : uint64_t
@@ -516,21 +510,15 @@ void CleanupSelectedPathsFile(const std::filesystem::path& file,
 
     wil::unique_hfile root;
     FILE_ID_INFO currentRootIdentity{};
-    const HRESULT rootHr = OpenValidatedSelectedPathsDirectory(
-        rootPath.native(), FILE_SHARE_READ | FILE_SHARE_WRITE, root, currentRootIdentity);
+    const HRESULT rootHr = OpenValidatedSelectedPathsDirectory(rootPath.native(), FILE_SHARE_READ | FILE_SHARE_WRITE, root, currentRootIdentity);
     if (FAILED(rootHr) || ! EqualFileIdentity(currentRootIdentity, expectedRootIdentity))
     {
         finish(SelectedPathsCleanupOutcome::RootChanged);
         return;
     }
 
-    wil::unique_hfile candidate(CreateFileW(file.c_str(),
-                                            DELETE | FILE_READ_ATTRIBUTES,
-                                            FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                            nullptr,
-                                            OPEN_EXISTING,
-                                            FILE_FLAG_OPEN_REPARSE_POINT,
-                                            nullptr));
+    wil::unique_hfile candidate(CreateFileW(
+        file.c_str(), DELETE | FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
     if (! candidate)
     {
         const DWORD error = GetLastError();
@@ -600,19 +588,19 @@ void CleanupSelectedPathsFile(const std::filesystem::path& file,
 
 struct SelectedPathsRecoveryLimits final
 {
-    uint64_t minimumAgeMs  = 0u;
-    size_t maximumEntries  = 0u;
-    size_t maximumDeletes  = 0u;
+    uint64_t minimumAgeMs     = 0u;
+    size_t maximumEntries     = 0u;
+    size_t maximumDeletes     = 0u;
     uint64_t maximumElapsedMs = 0u;
 };
 
 struct SelectedPathsRecoveryObservation final
 {
-    uint64_t inspected = 0u;
-    uint64_t deleted   = 0u;
-    uint64_t skipped   = 0u;
-    uint64_t errors    = 0u;
-    uint64_t elapsedUs = 0u;
+    uint64_t inspected        = 0u;
+    uint64_t deleted          = 0u;
+    uint64_t skipped          = 0u;
+    uint64_t errors           = 0u;
+    uint64_t elapsedUs        = 0u;
     bool stoppedByEntryBound  = false;
     bool stoppedByDeleteBound = false;
     bool stoppedByTimeBound   = false;
@@ -649,9 +637,9 @@ struct SelectedPathsRecoveryObservation final
                                                    std::wstring& cursor,
                                                    SelectedPathsRecoveryObservation& observation) noexcept
 {
-    observation = {};
+    observation          = {};
     const auto startedAt = std::chrono::steady_clock::now();
-    const auto finish = wil::scope_exit([&]() noexcept { observation.elapsedUs = Debug::Perf::ElapsedUs(startedAt); });
+    const auto finish    = wil::scope_exit([&]() noexcept { observation.elapsedUs = Debug::Perf::ElapsedUs(startedAt); });
     if (rootPath.empty())
     {
         return E_INVALIDARG;
@@ -659,15 +647,13 @@ struct SelectedPathsRecoveryObservation final
 
     wil::unique_hfile root;
     FILE_ID_INFO rootIdentity{};
-    if (const HRESULT hr = OpenValidatedSelectedPathsDirectory(
-            rootPath, FILE_SHARE_READ | FILE_SHARE_WRITE, root, rootIdentity);
-        FAILED(hr))
+    if (const HRESULT hr = OpenValidatedSelectedPathsDirectory(rootPath, FILE_SHARE_READ | FILE_SHARE_WRITE, root, rootIdentity); FAILED(hr))
     {
         return hr;
     }
 
-    const std::wstring searchPath = BuildSelectedPathsChildPath(
-        rootPath, std::wstring(kSelectedPathsManifestPrefix) + L"*" + std::wstring(kSelectedPathsManifestSuffix));
+    const std::wstring searchPath =
+        BuildSelectedPathsChildPath(rootPath, std::wstring(kSelectedPathsManifestPrefix) + L"*" + std::wstring(kSelectedPathsManifestSuffix));
     WIN32_FIND_DATAW data{};
     wil::unique_hfind find(FindFirstFileExW(searchPath.c_str(), FindExInfoBasic, &data, FindExSearchNameMatch, nullptr, 0u));
     if (! find)
@@ -684,9 +670,8 @@ struct SelectedPathsRecoveryObservation final
     FILETIME now{};
     GetSystemTimeAsFileTime(&now);
     const uint64_t nowTicks = FileTimeTicks(now);
-    const uint64_t minimumAgeTicks = limits.minimumAgeMs > (std::numeric_limits<uint64_t>::max)() / 10'000u
-                                          ? (std::numeric_limits<uint64_t>::max)()
-                                          : limits.minimumAgeMs * 10'000u;
+    const uint64_t minimumAgeTicks =
+        limits.minimumAgeMs > (std::numeric_limits<uint64_t>::max)() / 10'000u ? (std::numeric_limits<uint64_t>::max)() : limits.minimumAgeMs * 10'000u;
     const auto deadline = startedAt + std::chrono::milliseconds{limits.maximumElapsedMs};
     bool seekingCursor  = ! cursor.empty();
     bool cursorMatched  = ! seekingCursor;
@@ -711,22 +696,21 @@ struct SelectedPathsRecoveryObservation final
 
         if (observation.inspected >= limits.maximumEntries)
         {
-            cursor = leaf;
+            cursor                          = leaf;
             observation.stoppedByEntryBound = true;
-            stoppedByBound = true;
+            stoppedByBound                  = true;
             break;
         }
         if (std::chrono::steady_clock::now() >= deadline)
         {
-            cursor = leaf;
+            cursor                         = leaf;
             observation.stoppedByTimeBound = true;
-            stoppedByBound = true;
+            stoppedByBound                 = true;
             break;
         }
         ++observation.inspected;
 
-        if (! IsSelectedPathsManifestName(leaf) ||
-            (data.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0u)
+        if (! IsSelectedPathsManifestName(leaf) || (data.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0u)
         {
             ++observation.skipped;
         }
@@ -757,22 +741,21 @@ struct SelectedPathsRecoveryObservation final
                 FILE_ATTRIBUTE_TAG_INFO attributes{};
                 FILE_BASIC_INFO basic{};
                 const HRESULT attributesHr = QueryFileAttributes(candidate.get(), attributes);
-                if (FAILED(attributesHr) ||
-                    GetFileInformationByHandleEx(candidate.get(), FileBasicInfo, &basic, sizeof(basic)) == FALSE)
+                if (FAILED(attributesHr) || GetFileInformationByHandleEx(candidate.get(), FileBasicInfo, &basic, sizeof(basic)) == FALSE)
                 {
                     ++observation.errors;
                 }
-                else if ((attributes.FileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0u ||
-                         basic.LastWriteTime.QuadPart < 0 || static_cast<uint64_t>(basic.LastWriteTime.QuadPart) > nowTicks ||
+                else if ((attributes.FileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0u || basic.LastWriteTime.QuadPart < 0 ||
+                         static_cast<uint64_t>(basic.LastWriteTime.QuadPart) > nowTicks ||
                          nowTicks - static_cast<uint64_t>(basic.LastWriteTime.QuadPart) < minimumAgeTicks)
                 {
                     ++observation.skipped;
                 }
                 else if (observation.deleted >= limits.maximumDeletes)
                 {
-                    cursor = leaf;
+                    cursor                           = leaf;
                     observation.stoppedByDeleteBound = true;
-                    stoppedByBound = true;
+                    stoppedByBound                   = true;
                     break;
                 }
                 else if (SUCCEEDED(MarkFileForDeletion(candidate.get())))
@@ -800,7 +783,7 @@ struct SelectedPathsRecoveryObservation final
     if (! cursorMatched)
     {
         cursor.clear();
-        observation.resetMissingCursor = true;
+        observation.resetMissingCursor  = true;
         observation.stoppedByEntryBound = true;
         return S_OK;
     }
@@ -826,13 +809,13 @@ void CALLBACK SelectedPathsRecoveryCallback(PTP_CALLBACK_INSTANCE /*instance*/, 
     constexpr size_t kMaximumPasses = 32u;
     constexpr SelectedPathsRecoveryLimits kLimits{24ull * 60ull * 60ull * 1000ull, 128u, 16u, 20u};
     std::wstring cursor;
-    uint64_t inspected = 0u;
-    uint64_t deleted   = 0u;
-    uint64_t skipped   = 0u;
-    uint64_t errors    = 0u;
-    uint64_t boundHits = 0u;
-    size_t passes      = 0u;
-    HRESULT finalHr    = S_OK;
+    uint64_t inspected   = 0u;
+    uint64_t deleted     = 0u;
+    uint64_t skipped     = 0u;
+    uint64_t errors      = 0u;
+    uint64_t boundHits   = 0u;
+    size_t passes        = 0u;
+    HRESULT finalHr      = S_OK;
     const auto startedAt = std::chrono::steady_clock::now();
     for (; passes < kMaximumPasses; ++passes)
     {
@@ -851,8 +834,7 @@ void CALLBACK SelectedPathsRecoveryCallback(PTP_CALLBACK_INSTANCE /*instance*/, 
         }
     }
 
-    Debug::Perf::EmitDurationUs(
-        L"fileaction.selected_paths_recovery.elapsed_us", Debug::Perf::ElapsedUs(startedAt), inspected, deleted, finalHr);
+    Debug::Perf::EmitDurationUs(L"fileaction.selected_paths_recovery.elapsed_us", Debug::Perf::ElapsedUs(startedAt), inspected, deleted, finalHr);
     Debug::Perf::EmitValue(L"fileaction.selected_paths_recovery.inspected", inspected);
     Debug::Perf::EmitValue(L"fileaction.selected_paths_recovery.deleted", deleted);
     Debug::Perf::EmitValue(L"fileaction.selected_paths_recovery.skipped", skipped);
@@ -900,8 +882,7 @@ struct SelectedPathsValidationSummary final
     return S_OK;
 }
 
-[[nodiscard]] HRESULT ValidateSelectedPathRecord(const std::filesystem::path& selectedPath,
-                                                 SelectedPathsValidationSummary& summary) noexcept
+[[nodiscard]] HRESULT ValidateSelectedPathRecord(const std::filesystem::path& selectedPath, SelectedPathsValidationSummary& summary) noexcept
 {
     if (selectedPath.empty())
     {
@@ -935,8 +916,7 @@ struct SelectedPathsValidationSummary final
     return S_OK;
 }
 
-[[nodiscard]] HRESULT ValidateSelectedPaths(std::span<const std::filesystem::path> selectedPaths,
-                                            SelectedPathsValidationSummary& summary) noexcept
+[[nodiscard]] HRESULT ValidateSelectedPaths(std::span<const std::filesystem::path> selectedPaths, SelectedPathsValidationSummary& summary) noexcept
 {
     summary = {};
     for (const std::filesystem::path& selectedPath : selectedPaths)
@@ -969,17 +949,15 @@ struct SelectedPathsValidationSummary final
         return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
     }
 
-    ioPath = Common::Paths::IsExtendedWindowsPath(native) || native.size() + leafBudget >= MAX_PATH
-                 ? Common::Paths::ToExtendedWin32Path(native)
-                 : native;
+    ioPath = Common::Paths::IsExtendedWindowsPath(native) || native.size() + leafBudget >= MAX_PATH ? Common::Paths::ToExtendedWin32Path(native) : native;
     return S_OK;
 }
 
 [[nodiscard]] HRESULT EnsureSelectedPathsDirectory(const std::filesystem::path& directory,
-                                                    size_t leafBudget,
-                                                    std::wstring& ioPath,
-                                                    wil::unique_hfile* retainedDirectory = nullptr,
-                                                    FILE_ID_INFO* retainedIdentity = nullptr) noexcept
+                                                   size_t leafBudget,
+                                                   std::wstring& ioPath,
+                                                   wil::unique_hfile* retainedDirectory = nullptr,
+                                                   FILE_ID_INFO* retainedIdentity       = nullptr) noexcept
 {
     if ((retainedDirectory == nullptr) != (retainedIdentity == nullptr))
     {
@@ -1001,8 +979,7 @@ struct SelectedPathsValidationSummary final
 
     wil::unique_hfile directoryHandle;
     FILE_ID_INFO directoryIdentity{};
-    const DWORD shareMode = retainedDirectory == nullptr ? FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE
-                                                          : FILE_SHARE_READ | FILE_SHARE_WRITE;
+    const DWORD shareMode = retainedDirectory == nullptr ? FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE : FILE_SHARE_READ | FILE_SHARE_WRITE;
     if (const HRESULT hr = OpenValidatedSelectedPathsDirectory(ioPath, shareMode, directoryHandle, directoryIdentity); FAILED(hr))
     {
         return hr;
@@ -1030,8 +1007,7 @@ struct SelectedPathsValidationSummary final
 #if defined(ENABLE_TESTS)
     if (testOptions != nullptr && ! testOptions->rootOverride.empty())
     {
-        return EnsureSelectedPathsDirectory(
-            testOptions->rootOverride, kManifestLeafBudget, rootForIo, std::addressof(rootHandle), &rootIdentity);
+        return EnsureSelectedPathsDirectory(testOptions->rootOverride, kManifestLeafBudget, rootForIo, std::addressof(rootHandle), &rootIdentity);
     }
 #endif
 
@@ -1047,12 +1023,7 @@ struct SelectedPathsValidationSummary final
         return hr;
     }
     const HRESULT manifestRootHr =
-        EnsureSelectedPathsDirectory(
-            companyRoot / kSelectedPathsManifestDirectory,
-            kManifestLeafBudget,
-            rootForIo,
-            std::addressof(rootHandle),
-            &rootIdentity);
+        EnsureSelectedPathsDirectory(companyRoot / kSelectedPathsManifestDirectory, kManifestLeafBudget, rootForIo, std::addressof(rootHandle), &rootIdentity);
     if (SUCCEEDED(manifestRootHr))
     {
         ScheduleSelectedPathsRecovery(rootForIo);
@@ -1142,12 +1113,12 @@ struct SelectedPathsValidationSummary final
 }
 
 [[nodiscard]] HRESULT CreateSelectedPathsFile(std::span<const std::filesystem::path> selectedPaths,
-                                               FileActionLauncher::LaunchPlan::SelectedPathsFileLease& outLease
+                                              FileActionLauncher::LaunchPlan::SelectedPathsFileLease& outLease
 #if defined(ENABLE_TESTS)
-                                               ,
-                                               const FileActionLauncher::Testing::SelectedPathsFileOptions* testOptions
+                                              ,
+                                              const FileActionLauncher::Testing::SelectedPathsFileOptions* testOptions
 #endif
-                                               ) noexcept
+                                              ) noexcept
 {
     outLease.Reset();
 
@@ -1191,7 +1162,7 @@ struct SelectedPathsValidationSummary final
                                                             ,
                                                             testOptions
 #endif
-                                                            );
+        );
         FAILED(hr))
     {
         buildPerf.SetHr(hr);
@@ -1201,9 +1172,9 @@ struct SelectedPathsValidationSummary final
     std::wstring filePath;
     wil::unique_hfile file;
     const auto createStartedAt = std::chrono::steady_clock::now();
-    const HRESULT createHr = CreateSelectedPathsManifestHandle(rootForIo,
-                                                               filePath,
-                                                               file
+    const HRESULT createHr     = CreateSelectedPathsManifestHandle(rootForIo,
+                                                                   filePath,
+                                                                   file
 #if defined(ENABLE_TESTS)
                                                                ,
                                                                testOptions,
@@ -1225,7 +1196,7 @@ struct SelectedPathsValidationSummary final
         return createHr;
     }
 
-    bool keepCompletedFile = false;
+    bool keepCompletedFile          = false;
     const auto deleteIncompleteFile = wil::scope_exit([&]() noexcept
     {
         if (file && ! keepCompletedFile)
@@ -1238,9 +1209,9 @@ struct SelectedPathsValidationSummary final
     writePerf.SetValue1(summary.totalBytes);
 
     constexpr uint64_t kMaximumSelectedPathsWriteBufferBytes = 64u * 1024u;
-    const size_t writeBufferSize = static_cast<size_t>((std::min)(summary.totalBytes, kMaximumSelectedPathsWriteBufferBytes));
+    const size_t writeBufferSize                             = static_cast<size_t>((std::min)(summary.totalBytes, kMaximumSelectedPathsWriteBufferBytes));
     std::vector<std::byte> writeBuffer(writeBufferSize);
-    size_t bufferedBytes = 0u;
+    size_t bufferedBytes    = 0u;
     uint64_t writeCallCount = 0u;
 
     const auto flushBufferedBytes = [&]() noexcept -> HRESULT
@@ -1340,15 +1311,14 @@ struct SelectedPathsValidationSummary final
 #if defined(ENABLE_TESTS)
     if (observation != nullptr)
     {
-        observation->writeCallCount      = writeCallCount;
-        observation->peakAdditionalBytes = peakSerializationBytes;
-        observation->selectionCopyBytes  = 0u;
+        observation->writeCallCount       = writeCallCount;
+        observation->peakAdditionalBytes  = peakSerializationBytes;
+        observation->selectionCopyBytes   = 0u;
         observation->usedAggregatePayload = false;
     }
 #endif
 
-    FileActionLauncher::LaunchPlan::SelectedPathsFileLease lease(
-        std::filesystem::path(filePath), std::filesystem::path(rootForIo), fileIdentity, rootIdentity);
+    FileActionLauncher::LaunchPlan::SelectedPathsFileLease lease(std::filesystem::path(filePath), std::filesystem::path(rootForIo), fileIdentity, rootIdentity);
     keepCompletedFile = true;
     file.reset();
     rootHandle.reset();
@@ -1409,8 +1379,8 @@ std::atomic<InjectedLaunchFault> g_nextInjectedLaunchFault{InjectedLaunchFault::
 }
 
 [[nodiscard]] HRESULT PrepareDeferredCleanupContext(FileActionLauncher::LaunchPlan::SelectedPathsFileLease& lease,
-                                                     InjectedLaunchFault fault,
-                                                     std::unique_ptr<DeferredCleanupContext>& context) noexcept
+                                                    InjectedLaunchFault fault,
+                                                    std::unique_ptr<DeferredCleanupContext>& context) noexcept
 {
     context.reset();
     if (! lease.HasValue())
@@ -1460,9 +1430,9 @@ void ScheduleDeferredCleanup(std::unique_ptr<DeferredCleanupContext>& context, w
     }
 
     constexpr DWORD kMaximumRetentionMs = 10u * 60u * 1000u;
-    const DWORD retentionMs = std::clamp<DWORD>(requestedRetentionMs, DWORD{1u}, kMaximumRetentionMs);
-    context->process        = std::move(process);
-    const HANDLE target     = context->process ? context->process.get() : context->fallbackEvent.get();
+    const DWORD retentionMs             = std::clamp<DWORD>(requestedRetentionMs, DWORD{1u}, kMaximumRetentionMs);
+    context->process                    = std::move(process);
+    const HANDLE target                 = context->process ? context->process.get() : context->fallbackEvent.get();
 
     LARGE_INTEGER relativeTimeout{};
     relativeTimeout.QuadPart = -static_cast<LONGLONG>(retentionMs) * 10'000ll;
@@ -1478,9 +1448,9 @@ void ScheduleDeferredCleanup(std::unique_ptr<DeferredCleanupContext>& context, w
 namespace FileActionLauncher
 {
 LaunchPlan::SelectedPathsFileLease::SelectedPathsFileLease(std::filesystem::path path,
-                                                          std::filesystem::path rootPath,
-                                                          const FILE_ID_INFO& fileIdentity,
-                                                          const FILE_ID_INFO& rootIdentity) noexcept
+                                                           std::filesystem::path rootPath,
+                                                           const FILE_ID_INFO& fileIdentity,
+                                                           const FILE_ID_INFO& rootIdentity) noexcept
     : _path(std::move(path)),
       _rootPath(std::move(rootPath)),
       _fileIdentity(fileIdentity),
@@ -1580,7 +1550,7 @@ HRESULT RunSelectedPathsRecoveryPassForTest(const std::filesystem::path& root,
     }
     const SelectedPathsRecoveryLimits limits{minimumAgeMs, maximumEntries, maximumDeletes, maximumElapsedMs};
     ::SelectedPathsRecoveryObservation internal{};
-    const HRESULT hr = RunSelectedPathsRecoveryPass(rootForIo, limits, cursor, internal);
+    const HRESULT hr                 = RunSelectedPathsRecoveryPass(rootForIo, limits, cursor, internal);
     observation.inspected            = internal.inspected;
     observation.deleted              = internal.deleted;
     observation.skipped              = internal.skipped;
@@ -1641,14 +1611,12 @@ bool TemplateContainsSupportedMacro(const std::wstring_view templateText) noexce
     return false;
 }
 
-HRESULT GetExternalActionPathReferences(const Common::Settings::FileActionDefinition& action,
-                                        ExternalActionPathReferences& references) noexcept
+HRESULT GetExternalActionPathReferences(const Common::Settings::FileActionDefinition& action, ExternalActionPathReferences& references) noexcept
 {
     return ActionPathReferences(action, references);
 }
 
-HRESULT ExternalActionUsesSelectedPathsFile(const Common::Settings::FileActionDefinition& action,
-                                            bool& usesSelectedPathsFile) noexcept
+HRESULT ExternalActionUsesSelectedPathsFile(const Common::Settings::FileActionDefinition& action, bool& usesSelectedPathsFile) noexcept
 {
     return ActionReferencesSelectedPathsFile(action, usesSelectedPathsFile);
 }
@@ -1693,7 +1661,7 @@ HRESULT BuildExternalLaunchPlan(const Common::Settings::FileActionDefinition& ac
                                                        ,
                                                        effectiveContext.selectedPathsFileOptions
 #endif
-                                                       );
+            );
             FAILED(hr))
         {
             return hr;
