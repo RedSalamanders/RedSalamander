@@ -4,9 +4,10 @@
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+#include <windows.h>
+
 #include <bcrypt.h>
 #include <wincodec.h>
-#include <windows.h>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027)

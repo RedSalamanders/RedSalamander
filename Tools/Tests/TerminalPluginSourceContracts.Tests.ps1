@@ -773,6 +773,49 @@ Describe 'Embedded Terminal plugin source contracts' {
         $commandSurfaceModel | Should Not Match 'GetEnvironmentVariableW|ConsoleHost_history\.txt'
     }
 
+    It 'includes windows.h before bcrypt.h in first-party headers so clang-format cannot alphabetize CNG first' {
+        # bcrypt.h needs ULONG/NTSTATUS from windows.h. IncludeBlocks: Preserve plus SortIncludes
+        # would put bcrypt.h first inside a shared block, so windows.h must occupy an earlier block.
+        $windowsInclude = [regex]::new('(?im)^#include\s+<windows\.h>')
+        $bcryptInclude = [regex]::new('(?im)^#include\s+<bcrypt\.h>')
+        $headerRoots = @(
+            'Common'
+            'Plugins'
+            'RedSalamander'
+            'RedConfigure'
+            'RedLauncher'
+            'RedSalamanderMonitor'
+            'RedSalamanderSearchService'
+            'Tests'
+        )
+        foreach ($rootName in $headerRoots) {
+            $root = Join-Path $repoRoot $rootName
+            if (-not (Test-Path -LiteralPath $root)) {
+                continue
+            }
+            Get-ChildItem -LiteralPath $root -Recurse -File |
+                Where-Object { $_.Extension -eq '.h' -or $_.Extension -eq '.hpp' } |
+                ForEach-Object {
+                    $text = Get-Content -LiteralPath $_.FullName -Raw
+                    $bcryptMatches = @($bcryptInclude.Matches($text))
+                    if ($bcryptMatches.Count -eq 0) {
+                        return
+                    }
+                    $windowsMatches = @($windowsInclude.Matches($text))
+                    $relative = $_.FullName.Substring($repoRoot.Length).TrimStart('\', '/')
+                    foreach ($match in $bcryptMatches) {
+                        $prior = $windowsMatches | Where-Object { $_.Index -lt $match.Index } | Select-Object -Last 1
+                        if ($null -eq $prior) {
+                            throw "$relative includes <bcrypt.h> before <windows.h>."
+                        }
+                    }
+                    $text | Should Match '(?ms)#include <windows.h>\s*\r?\n\s*\r?\n#include <bcrypt.h>'
+                }
+        }
+
+        $loaderHeader | Should Match '(?ms)#include <windows.h>\s*\r?\n\s*\r?\n#include <bcrypt.h>\s*\r?\n#include <wincodec.h>'
+    }
+
     It 'locks the exact private runtime and Terminal plugin as an atomic generated-hash pair' {
         $loader | Should Match 'CreateFileW\([\s\S]+GENERIC_READ,[\s\r\n]+FILE_SHARE_READ,[\s\S]+FILE_FLAG_OPEN_REPARSE_POINT'
         $loader | Should Not Match 'FILE_SHARE_WRITE|FILE_SHARE_DELETE'

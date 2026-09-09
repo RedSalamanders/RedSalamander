@@ -939,7 +939,11 @@ the builder writes
 `include/red_salamander/terminal_runtime_identity.generated.h` beside the
 platform product. That header contains the exact built DLL size and raw
 SHA-256, and `TerminalRuntimeLoader.cpp` compiles those values into
-`Terminal.dll`. The shipped `Terminal.dll` and `ghostty-vt.dll` are consequently
+`Terminal.dll`. `TerminalRuntimeLoader.h` includes `windows.h` (`WIN32_LEAN_AND_MEAN` /
+`NOMINMAX`) in its own include block before `bcrypt.h` and `wincodec.h`. clang-format
+`SortIncludes` is alphabetical inside a block, so those SDK headers must not share a
+block with `windows.h` or a TU that includes the loader header first fails to compile.
+The shipped `Terminal.dll` and `ghostty-vt.dll` are consequently
 an atomic byte-exact pair even when a later clean build produces another valid
 hash. `terminal-runtime-identity.json` schema 5 records the pair's raw hash,
 size, PE identity, input locks, build arguments, overlay hash, and a diagnostic

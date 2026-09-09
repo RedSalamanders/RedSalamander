@@ -7,8 +7,11 @@
 // and the bridge compares the two. This is content-integrity evidence for verification and Managed
 // Move source cleanup; it never authorizes overwrite, skip, or deletion by itself.
 
-#include <bcrypt.h>
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <windows.h>
+
+#include <bcrypt.h>
 
 #include <array>
 #include <cstddef>
