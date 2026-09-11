@@ -453,8 +453,8 @@ void BuildListItems(std::vector<PrefsPluginListItem>& out) noexcept
     {
         if (! viewerPlugins[i].id.empty())
         {
-            const PrefsPluginType type =
-                viewerPlugins[i].type == ViewerPluginManager::PluginType::Terminal ? PrefsPluginType::Terminal : PrefsPluginType::Viewer;
+            const PrefsPluginType type = viewerPlugins[i].type == ViewerPluginManager::PluginType::Terminal ? PrefsPluginType::Terminal
+                                                                                                            : PrefsPluginType::Viewer;
             out.push_back(PrefsPluginListItem{type, i});
         }
     }
@@ -516,8 +516,8 @@ void BuildListItems(std::vector<PrefsPluginListItem>& out) noexcept
     {
         if (CompareTextNoCase(viewerPlugins[i].id, pluginId) == 0)
         {
-            const PrefsPluginType type =
-                viewerPlugins[i].type == ViewerPluginManager::PluginType::Terminal ? PrefsPluginType::Terminal : PrefsPluginType::Viewer;
+            const PrefsPluginType type = viewerPlugins[i].type == ViewerPluginManager::PluginType::Terminal ? PrefsPluginType::Terminal
+                                                                                                            : PrefsPluginType::Viewer;
             return PrefsPluginListItem{type, i};
         }
     }
@@ -1480,14 +1480,14 @@ void MaybeResetWorkingFileOperationsSettingsIfEmpty(Common::Settings::Settings& 
 
     const Common::Settings::FileOperationsSettings defaults{};
     const auto& fileOperations = settings.fileOperations.value();
-    const bool hasNonDefault = fileOperations.autoDismissSuccess != defaults.autoDismissSuccess || fileOperations.verifyAfterCopy != defaults.verifyAfterCopy ||
-                               fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
-                               fileOperations.defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
-                               fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles ||
-                               fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
-                               fileOperations.diagnosticsDebugEnabled != defaults.diagnosticsDebugEnabled || fileOperations.maxIssueReportFiles.has_value() ||
-                               fileOperations.maxDiagnosticsInMemory.has_value() || fileOperations.maxDiagnosticsPerFlush.has_value() ||
-                               fileOperations.diagnosticsFlushIntervalMs.has_value() || fileOperations.diagnosticsCleanupIntervalMs.has_value();
+    const bool hasNonDefault =
+        fileOperations.autoDismissSuccess != defaults.autoDismissSuccess || fileOperations.verifyAfterCopy != defaults.verifyAfterCopy ||
+        fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
+        fileOperations.defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
+        fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles || fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
+        fileOperations.diagnosticsDebugEnabled != defaults.diagnosticsDebugEnabled || fileOperations.maxIssueReportFiles.has_value() ||
+        fileOperations.maxDiagnosticsInMemory.has_value() || fileOperations.maxDiagnosticsPerFlush.has_value() ||
+        fileOperations.diagnosticsFlushIntervalMs.has_value() || fileOperations.diagnosticsCleanupIntervalMs.has_value();
 
     if (! hasNonDefault)
     {

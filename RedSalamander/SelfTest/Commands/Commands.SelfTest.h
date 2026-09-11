@@ -6,8 +6,6 @@
 #define NOMINMAX
 #include <windows.h>
 
-#include <objbase.h>
-
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -25,10 +23,10 @@ using SessionEndSettingsWriterForSelfTest = HRESULT (*)(std::wstring_view appId,
 
 struct SessionEndSettingsDebugSnapshot
 {
-    uint32_t writerCallCount         = 0u;
-    uint32_t normalTeardownCallCount = 0u;
-    uint64_t durationUs              = 0u;
-    HRESULT lastResult               = S_OK;
+    uint32_t writerCallCount          = 0u;
+    uint32_t normalTeardownCallCount  = 0u;
+    uint64_t durationUs               = 0u;
+    HRESULT lastResult                = S_OK;
     Common::Settings::Settings settings;
 };
 

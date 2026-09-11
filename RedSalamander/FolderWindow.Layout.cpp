@@ -143,13 +143,15 @@ void FolderWindow::OnPaint()
                 D2DHdcPaint::Session chevronPaint;
                 if (chevronPaint.Begin(hdc.get(), client))
                 {
-                    const COLORREF color   = GetSplitterArrowColor();
+                    const COLORREF color = GetSplitterArrowColor();
                     const float fontSizePx = static_cast<float>(std::max(8, GetSplitterArrowChevronSizePx() * 2));
                     static_cast<void>(chevronPaint.DrawCenteredGlyph(arrowRect,
-                                                                     pointsLeft ? FluentIcons::kChevronLeftSmall : FluentIcons::kChevronRightSmall,
-                                                                     pointsLeft ? FluentIcons::kFallbackChevronLeft : FluentIcons::kFallbackChevronRight,
-                                                                     color,
-                                                                     fontSizePx));
+                                                                      pointsLeft ? FluentIcons::kChevronLeftSmall
+                                                                                 : FluentIcons::kChevronRightSmall,
+                                                                      pointsLeft ? FluentIcons::kFallbackChevronLeft
+                                                                                 : FluentIcons::kFallbackChevronRight,
+                                                                      color,
+                                                                      fontSizePx));
                 }
             };
 
@@ -609,8 +611,8 @@ void FolderWindow::LayoutEmbeddedPreviewViewer(Pane hostPane) noexcept
 
     RECT client{};
     GetClientRect(host.hPreviewContent.get(), &client);
-    const int width          = std::max(0L, client.right - client.left);
-    const int height         = std::max(0L, client.bottom - client.top);
+    const int width  = std::max(0L, client.right - client.left);
+    const int height = std::max(0L, client.bottom - client.top);
     ViewerInstance* instance = host.previewViewerInstance;
     const HWND viewerHwnd    = instance ? instance->embeddedHwnd : nullptr;
     if (! IsOwnedPreviewEmbeddedHwnd(host, instance, viewerHwnd))
@@ -921,9 +923,9 @@ void FolderWindow::TogglePreviewPane(Pane sourcePane)
     const Pane hostPane = OppositePane(sourcePane);
     PaneState& host     = hostPane == Pane::Left ? _leftPane : _rightPane;
 
-    _previewSourcePane       = sourcePane;
-    host.previewTabsVisible  = true;
-    host.previewTabSelected  = true;
+    _previewSourcePane      = sourcePane;
+    host.previewTabsVisible = true;
+    host.previewTabSelected = true;
     host.terminalTabSelected = false;
     UpdatePreviewTabSelection(hostPane);
     RefreshPreviewPane();
@@ -949,7 +951,7 @@ void FolderWindow::SetPreviewPaneTab(Pane hostPane, bool previewTab) noexcept
 
 void FolderWindow::SetPaneContentTab(Pane hostPane, size_t tabIndex) noexcept
 {
-    PaneState& host             = hostPane == Pane::Left ? _leftPane : _rightPane;
+    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
     const bool previewAvailable = _previewSourcePane.has_value() && OppositePane(_previewSourcePane.value()) == hostPane;
     if (! host.previewTabsVisible || (tabIndex == 1u && ! previewAvailable) || (tabIndex == 2u && ! host.terminalOpen) || tabIndex > 2u)
     {
@@ -1002,8 +1004,8 @@ void FolderWindow::ClosePreviewPane() noexcept
     const Pane hostPane = OppositePane(_previewSourcePane.value());
     PaneState& host     = hostPane == Pane::Left ? _leftPane : _rightPane;
 
-    host.previewTabsVisible  = host.terminalOpen;
-    host.previewTabSelected  = false;
+    host.previewTabsVisible = host.terminalOpen;
+    host.previewTabSelected = false;
     host.terminalTabSelected = host.terminalOpen;
     host.previewedPath.clear();
     host.previewViewerPluginId.clear();
@@ -1156,7 +1158,7 @@ void FolderWindow::LayoutEmbeddedTerminal(Pane hostPane) noexcept
         return;
     }
 
-    const HWND frame         = _hWnd.get();
+    const HWND frame = _hWnd.get();
     const HWND currentParent = GetParent(host.terminalHwnd);
     if (currentParent != frame && currentParent != host.hPreviewContent.get())
     {
@@ -1180,11 +1182,17 @@ void FolderWindow::LayoutEmbeddedTerminal(Pane hostPane) noexcept
     {
         GetClientRect(host.hPreviewContent.get(), &dest);
     }
-    const int width  = std::max(0L, dest.right - dest.left);
+    const int width = std::max(0L, dest.right - dest.left);
     const int height = std::max(0L, dest.bottom - dest.top);
     if (width <= 0 || height <= 0)
     {
-        SetWindowPos(host.terminalHwnd, nullptr, dest.left, dest.top, width, height, SWP_NOZORDER | SWP_NOACTIVATE | SWP_HIDEWINDOW);
+        SetWindowPos(host.terminalHwnd,
+                     nullptr,
+                     dest.left,
+                     dest.top,
+                     width,
+                     height,
+                     SWP_NOZORDER | SWP_NOACTIVATE | SWP_HIDEWINDOW);
         return;
     }
 

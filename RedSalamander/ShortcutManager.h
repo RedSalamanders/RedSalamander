@@ -17,7 +17,7 @@ struct ShortcutsSettings;
 
 namespace ShortcutIds
 {
-inline constexpr std::wstring_view kUnassignedCommandId  = L"cmd/shortcut/unassigned";
+inline constexpr std::wstring_view kUnassignedCommandId = L"cmd/shortcut/unassigned";
 inline constexpr std::wstring_view kPassThroughCommandId = L"cmd/shortcut/passthrough";
 
 [[nodiscard]] constexpr bool IsUnassignedCommandId(std::wstring_view commandId) noexcept
@@ -45,24 +45,21 @@ public:
 
     struct ShortcutChord final
     {
-        uint32_t vk                               = 0;
-        uint32_t modifiers                        = 0;
+        uint32_t vk        = 0;
+        uint32_t modifiers = 0;
         Common::Keyboard::KeyPosition keyPosition = Common::Keyboard::KeyPosition::None;
     };
 
     void Clear() noexcept;
     void Load(const Common::Settings::ShortcutsSettings& shortcuts);
 
-    [[nodiscard]] std::optional<std::wstring_view> FindApplicationCommand(uint32_t vk,
-                                                                          uint32_t modifiers,
-                                                                          uint16_t scanCode = 0u,
-                                                                          bool extended     = false) const noexcept;
+    [[nodiscard]] std::optional<std::wstring_view> FindApplicationCommand(
+        uint32_t vk, uint32_t modifiers, uint16_t scanCode = 0u, bool extended = false) const noexcept;
     [[nodiscard]] std::optional<std::wstring_view> FindFunctionBarCommand(uint32_t vk, uint32_t modifiers) const noexcept;
-    [[nodiscard]] std::optional<std::wstring_view> FindFolderViewCommand(uint32_t vk,
-                                                                         uint32_t modifiers,
-                                                                         uint16_t scanCode = 0u,
-                                                                         bool extended     = false) const noexcept;
-    [[nodiscard]] std::optional<std::wstring_view> FindTerminalCommand(uint32_t vk, uint32_t modifiers, uint16_t scanCode, bool extended) const noexcept;
+    [[nodiscard]] std::optional<std::wstring_view> FindFolderViewCommand(
+        uint32_t vk, uint32_t modifiers, uint16_t scanCode = 0u, bool extended = false) const noexcept;
+    [[nodiscard]] std::optional<std::wstring_view> FindTerminalCommand(
+        uint32_t vk, uint32_t modifiers, uint16_t scanCode, bool extended) const noexcept;
     [[nodiscard]] std::optional<ShortcutChord> TryGetShortcutForCommand(std::wstring_view commandId) const noexcept;
 
     [[nodiscard]] const std::vector<uint32_t>& GetApplicationConflicts() const noexcept;

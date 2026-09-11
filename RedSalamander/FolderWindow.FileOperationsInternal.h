@@ -8,8 +8,8 @@
 #include "FileOperationMoveBreadcrumb.h"
 #include "FolderWindowInternal.h"
 
-#include <array>
 #include <chrono>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -125,12 +125,12 @@ struct QualifiedEndpoint
     std::wstring profileId;
     std::wstring rootId;
     std::optional<FileSystemPathIdentity> pathIdentity;
-    bool verificationHostReadback                 = false;
-    bool verificationProviderBlake3Proof          = false;
-    bool verificationWriterDigestProof            = false; // R3-2: the destination writer proves the published content
-    bool verificationCapabilityCheckDeferred      = false;
-    bool cancellationAbort                        = false;
-    bool cancellationDeadline                     = false;
+    bool verificationHostReadback            = false;
+    bool verificationProviderBlake3Proof     = false;
+    bool verificationWriterDigestProof       = false; // R3-2: the destination writer proves the published content
+    bool verificationCapabilityCheckDeferred = false;
+    bool cancellationAbort                   = false;
+    bool cancellationDeadline                = false;
     CancellationRouteClass cancellationRouteClass = CancellationRouteClass::Uncontained;
     uint32_t providerWatchdogTimeoutMs            = 0u;
 };
@@ -289,15 +289,15 @@ struct PreparationScopeFact final
 {
     uint32_t endpointIndex = 0u;
     std::wstring providerPath;
-    MutationInterlockAccess access  = MutationInterlockAccess::WriteSource;
-    bool exactDeleteAuthority       = false;
+    MutationInterlockAccess access = MutationInterlockAccess::WriteSource;
+    bool exactDeleteAuthority      = false;
     bool conservativeIdentityDomain = false;
 };
 
 struct PreparationStrategyFact final
 {
     OperationStrategy strategy = OperationStrategy::Copy;
-    uint64_t selectedRootCount = 0u;
+    uint64_t selectedRootCount  = 0u;
 };
 
 // Immutable, authority-free observer facts published after worker-owned preparation. Bound
@@ -305,14 +305,14 @@ struct PreparationStrategyFact final
 // this snapshot.
 struct PreparationSnapshot final
 {
-    uint64_t taskId                  = 0u;
-    FileSystemOperation operation    = FILESYSTEM_COPY;
-    uint64_t selectedRootCount       = 0u;
-    uint64_t copyOnlyCount           = 0u;
-    uint64_t buildSnapshotUs         = 0u;
-    uint64_t selectedRootReadinessUs = 0u;
-    uint64_t retainedBytes           = 0u;
-    HRESULT status                   = E_PENDING;
+    uint64_t taskId                    = 0u;
+    FileSystemOperation operation      = FILESYSTEM_COPY;
+    uint64_t selectedRootCount         = 0u;
+    uint64_t copyOnlyCount             = 0u;
+    uint64_t buildSnapshotUs           = 0u;
+    uint64_t selectedRootReadinessUs   = 0u;
+    uint64_t retainedBytes             = 0u;
+    HRESULT status                     = E_PENDING;
     std::vector<PreparationEndpointFact> endpoints;
     std::vector<PreparationScopeFact> scopes;
     std::vector<PreparationStrategyFact> strategies;
@@ -499,20 +499,20 @@ enum class DeferredConsentRisk : uint8_t
     PlaceholderHydration,
     MetadataLoss,
     RecycleEscalation,
-    SameHostOverlap,    // R4-A02-1: another live or queued task in this host overlaps this task's scopes
+    SameHostOverlap, // R4-A02-1: another live or queued task in this host overlaps this task's scopes
     SameHostLiveOutput, // R4-A02-2: this mutation would invalidate another concurrently-live task's output
-    PermanentDelete,    // C1: the initial permanent-delete confirmation, asked on the card after Preparing pinned the roots
+    PermanentDelete, // C1: the initial permanent-delete confirmation, asked on the card after Preparing pinned the roots
 };
 
 // R4-A02-1: the concrete problem an overlap advisory names (roles of the first conflicting pair).
 enum class SameHostOverlapProblem : uint8_t
 {
     None,
-    RemovesRead,      // this task writes/removes what the other task reads
-    SameNames,        // both publish into the same destination names
-    SameMembers,      // both remove or rename the same members
-    RemovesPublished, // this task removes/renames what the other task publishes
-    ReplacesRead,     // this task publishes over what the other task reads
+    RemovesRead,       // this task writes/removes what the other task reads
+    SameNames,         // both publish into the same destination names
+    SameMembers,       // both remove or rename the same members
+    RemovesPublished,  // this task removes/renames what the other task publishes
+    ReplacesRead,      // this task publishes over what the other task reads
 };
 
 inline constexpr size_t kMaxSameHostOverlapRelations = 64u;
@@ -838,9 +838,9 @@ struct FolderWindow::FileOperationState
         // This should be >= the Copy/Move worker concurrency cap so parallel file copies can be represented.
         static constexpr size_t kMaxInFlightFiles = 16u;
 
-        using ConflictBucket      = FileOperations::ConflictClass;
-        using ConflictAction      = FileOperations::ConflictAction;
-        using TaskLifecyclePhase  = FileOperations::TaskLifecyclePhase;
+        using ConflictBucket = FileOperations::ConflictClass;
+        using ConflictAction = FileOperations::ConflictAction;
+        using TaskLifecyclePhase = FileOperations::TaskLifecyclePhase;
         using PreparationSnapshot = FileOperations::PreparationSnapshot;
 
         enum class TaskPresentationState : uint8_t
@@ -1012,9 +1012,9 @@ struct FolderWindow::FileOperationState
             const void* cookieKey     = nullptr;
             uint64_t progressStreamId = 0;
             std::wstring sourcePath;
-            uint64_t totalBytes                      = 0;
-            uint64_t completedBytes                  = 0;
-            ULONGLONG lastUpdateTick                 = 0;
+            uint64_t totalBytes      = 0;
+            uint64_t completedBytes  = 0;
+            ULONGLONG lastUpdateTick = 0;
             bool completionCountedWhileDiscoveryOpen = false;
         };
 
@@ -1190,8 +1190,9 @@ struct FolderWindow::FileOperationState
         void TogglePause() noexcept;
         void SetDesiredSpeedLimit(uint64_t bytesPerSecond) noexcept;
         void NoteLiveOutputPublished(std::wstring_view providerPath) noexcept;
-        [[nodiscard]] LiveOutputGuardDisposition GuardLiveOutputBeforeInvalidation(std::wstring_view providerPath,
-                                                                                   FileOperations::MutationInterlockAccess access) noexcept;
+        [[nodiscard]] LiveOutputGuardDisposition GuardLiveOutputBeforeInvalidation(
+            std::wstring_view providerPath,
+            FileOperations::MutationInterlockAccess access) noexcept;
         void SetWaitForOthers(bool wait) noexcept;
         void SetWaitingInQueue(bool waiting) noexcept;
         void SetQueuePaused(bool paused) noexcept;
@@ -1252,7 +1253,8 @@ struct FolderWindow::FileOperationState
         void StorePlans(std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans) noexcept;
         HRESULT PrepareBatchRenameAdmission() noexcept;
         HRESULT PrepareBatchRenameArtifactGuard() noexcept;
-        void CompleteBatchRenameArtifactPrompt(HRESULT status, std::optional<FileOperationArtifacts::TouchGuardReceipt> receipt) noexcept;
+        void CompleteBatchRenameArtifactPrompt(HRESULT status,
+                                               std::optional<FileOperationArtifacts::TouchGuardReceipt> receipt) noexcept;
         HRESULT RevalidateArtifactTouchGuard() noexcept;
         HRESULT ExecuteInlineRename() noexcept;
         HRESULT ExecuteBatchRename() noexcept;
@@ -1262,7 +1264,9 @@ struct FolderWindow::FileOperationState
                                            std::vector<FileOperations::BoundObjectAuthority>& authorities) noexcept;
         void InitializeSourceItemResultBuilders() noexcept;
         void MarkSourceItemsMutationPossible() noexcept;
-        [[nodiscard]] static bool ClipboardMutationGateAllows(HRESULT readinessStatus, HRESULT consumptionStatus, bool consumed) noexcept;
+        [[nodiscard]] static bool ClipboardMutationGateAllows(HRESULT readinessStatus,
+                                                               HRESULT consumptionStatus,
+                                                               bool consumed) noexcept;
         [[nodiscard]] bool StoreTypedItemResult(FileOperations::FileOperationItemResult result) noexcept;
         HRESULT FinalizeTypedItemResults(HRESULT operationStatus) noexcept;
         HRESULT PrepareForExecution() noexcept;
@@ -1284,7 +1288,9 @@ struct FolderWindow::FileOperationState
         void BeginDiscovery() noexcept;
         void MarkDiscoveryItemClosed(size_t sourceIndex) noexcept;
         void CloseDiscovery() noexcept;
-        void NoteDiscoveryCompletionWhileOpen(uint64_t observedAtPerfUs, uint64_t completedBytes, uint64_t completedMutations) noexcept;
+        void NoteDiscoveryCompletionWhileOpen(uint64_t observedAtPerfUs,
+                                              uint64_t completedBytes,
+                                              uint64_t completedMutations) noexcept;
         void InitializeFileSystemOptions(FileSystemOptions& options, void* operationControlCookie = nullptr) const noexcept;
         void LogDiagnostic(DiagnosticSeverity severity,
                            HRESULT status,
@@ -1440,7 +1446,7 @@ struct FolderWindow::FileOperationState
         std::atomic<bool> _taskFinished{false};
         std::atomic<bool> _observedSkipAction{false};
         std::atomic<TaskPresentationState> _presentationState{TaskPresentationState::NotApplicable};
-        ULONGLONG _presentationDeadlineTick  = 0;
+        ULONGLONG _presentationDeadlineTick = 0;
         bool _suppressCleanCompletionSummary = false;
 
         ConflictArbiter _conflictArbiter;
@@ -1597,26 +1603,27 @@ struct FolderWindow::FileOperationState
     HRESULT AdmitBatchRename(FolderWindow::Pane sourcePane,
                              const wil::com_ptr<IFileSystem>& fileSystem,
                              std::vector<BatchRenameExecutionOp> operations,
-                             std::function<void(uint64_t completedItems, uint64_t totalItems)> progressCallback                  = {},
-                             std::function<void(uint64_t taskId)> publishedCallback                                              = {},
-                             uint64_t* taskIdOut                                                                                 = nullptr,
-                             std::function<HRESULT()> preConsumptionDecisionGate                                                 = {},
+                             std::function<void(uint64_t completedItems, uint64_t totalItems)> progressCallback = {},
+                             std::function<void(uint64_t taskId)> publishedCallback = {},
+                             uint64_t* taskIdOut                                                                = nullptr,
+                             std::function<HRESULT()> preConsumptionDecisionGate                               = {},
                              std::function<void(std::shared_ptr<const FileOperations::PreparationSnapshot>)> preparationObserver = {});
 
     HRESULT AdmitScheduledRename(FolderWindow::Pane sourcePane,
                                  const wil::com_ptr<IFileSystem>& fileSystem,
                                  FileOperations::RenameOrigin origin,
                                  std::vector<BatchRenameExecutionOp> operations,
-                                 std::function<void(uint64_t completedItems, uint64_t totalItems)> progressCallback                  = {},
-                                 std::function<void(uint64_t taskId)> publishedCallback                                              = {},
-                                 uint64_t* taskIdOut                                                                                 = nullptr,
-                                 std::function<HRESULT()> preConsumptionDecisionGate                                                 = {},
+                                 std::function<void(uint64_t completedItems, uint64_t totalItems)> progressCallback = {},
+                                 std::function<void(uint64_t taskId)> publishedCallback = {},
+                                 uint64_t* taskIdOut = nullptr,
+                                 std::function<HRESULT()> preConsumptionDecisionGate = {},
                                  std::function<void(std::shared_ptr<const FileOperations::PreparationSnapshot>)> preparationObserver = {});
 
     void OnBatchRenameArtifactPrompt(std::unique_ptr<BatchRenameArtifactPromptPayload> payload) noexcept;
-    void CompleteBatchRenameArtifactPromptByTaskId(uint64_t taskId,
-                                                   HRESULT status,
-                                                   std::optional<FileOperationArtifacts::TouchGuardReceipt> receipt = std::nullopt) noexcept;
+    void CompleteBatchRenameArtifactPromptByTaskId(
+        uint64_t taskId,
+        HRESULT status,
+        std::optional<FileOperationArtifacts::TouchGuardReceipt> receipt = std::nullopt) noexcept;
     void OnClipboardMoveReady(std::unique_ptr<ClipboardMoveReadyPayload> payload) noexcept;
     void CompleteClipboardMoveAdmissionByTaskId(uint64_t taskId, HRESULT status) noexcept;
 
@@ -1762,7 +1769,7 @@ struct FolderWindow::FileOperationState
         uint64_t firstTaskId                           = 0u;
         uint32_t taskCount                             = 0u;
         std::array<uint64_t, FileOperations::kMaxSameHostOverlapRelations> taskIds{};
-        size_t relationCount  = 0u;
+        size_t relationCount = 0u;
         bool relationOverflow = false;
 
         [[nodiscard]] bool CanRunConcurrently() const noexcept
@@ -1852,7 +1859,7 @@ private:
     struct ActiveMutationInterlock final
     {
         uint64_t taskId                                                   = 0;
-        Task* task                                                        = nullptr;
+        Task* task                                                         = nullptr;
         const std::vector<FileOperations::MutationInterlockScope>* scopes = nullptr;
     };
     // A task publishes its immutable scope vector before asking for overlap consent. Keeping this
@@ -1863,14 +1870,14 @@ private:
     std::vector<ActiveMutationInterlock> _activeMutationInterlocks;
     struct LivePublishedScope final
     {
-        uint64_t taskId                                            = 0u;
+        uint64_t taskId                                             = 0u;
         const FileOperations::MutationInterlockScope* plannedScope = nullptr;
         std::wstring providerPath;
     };
     static constexpr size_t kMaxLivePublishedScopes = 256u;
     std::array<LivePublishedScope, kMaxLivePublishedScopes> _livePublishedScopes{};
-    size_t _livePublishedScopeCount  = 0u;
-    bool _livePublishedIndexOverflow = false;
+    size_t _livePublishedScopeCount      = 0u;
+    bool _livePublishedIndexOverflow     = false;
 
     std::mutex _diagnosticsMutex;
     std::deque<TaskDiagnosticEntry> _diagnosticsInMemory;
@@ -1904,7 +1911,7 @@ private:
                                               std::wstring_view providerPath,
                                               FileSystemOperation operation,
                                               std::wstring_view pluginId = {},
-                                              FileSystemFlags flags      = FILESYSTEM_FLAG_NONE) noexcept;
+                                              FileSystemFlags flags = FILESYSTEM_FLAG_NONE) noexcept;
 [[nodiscard]] bool IsAutoDismissableFileOperationCompletion(HRESULT resultHr, unsigned long warningCount, unsigned long errorCount) noexcept;
 [[nodiscard]] bool ShouldRetryPublishedDestinationVerification(HRESULT hr) noexcept;
 

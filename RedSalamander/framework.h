@@ -16,8 +16,9 @@
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
-#include "Win32CallbackHelpers.h"
 #include <windows.h>
+
+#include "Win32CallbackHelpers.h"
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027

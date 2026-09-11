@@ -1,5 +1,5 @@
-#include "FileOperationTraversalPolicy.h"
 #include "FileSystemCurl.Internal.h"
+#include "FileOperationTraversalPolicy.h"
 
 #include <charconv>
 #include <chrono>
@@ -2320,7 +2320,7 @@ struct ImapFetchAttributes
 
         std::string response;
         const auto fetchStarted = std::chrono::steady_clock::now();
-        HRESULT hr              = CurlPerformImapCustomRequest(conn, mailboxPath, requestText, response, stopReasonOut, ImapResponseCapture::WireLines);
+        HRESULT hr = CurlPerformImapCustomRequest(conn, mailboxPath, requestText, response, stopReasonOut, ImapResponseCapture::WireLines);
         Debug::Perf::EmitDurationUs(L"filesystem.imap.fetch_summaries_us",
                                     Debug::Perf::ElapsedUs(fetchStarted),
                                     static_cast<uint64_t>(endIndex - startIndex),
@@ -3742,9 +3742,9 @@ struct ImapListingFixture final : IFileSystemOperationControl
     ImapListingFixture(ImapListingFixture&&)                 = delete;
     ImapListingFixture& operator=(ImapListingFixture&&)      = delete;
 
-    size_t messageCount = 3u;
-    size_t searchCount  = 0u;
-    size_t fetchCount   = 0u;
+    size_t messageCount           = 3u;
+    size_t searchCount            = 0u;
+    size_t fetchCount             = 0u;
     // FETCH sets without ',' or ':' are not listing-shaped for libcurl and must never be sent.
     size_t bareUidFetchCount      = 0u;
     size_t cancelAtFetch          = 0u;

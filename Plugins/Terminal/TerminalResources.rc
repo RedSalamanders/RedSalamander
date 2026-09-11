@@ -91,4 +91,7 @@ BEGIN
     IDS_TERMINAL_SUGGESTIONS_INSTRUCTIONS "Enter inserts • Esc closes"
     IDS_TERMINAL_FIND_INSTRUCTIONS "Enter/F3 next • Shift+F3 previous • Esc closes"
     IDS_TERMINAL_HISTORY_PROMPT_CHANGED "The prompt changed before the command could be inserted. Reopen Suggestions and try again."
+    IDS_TERMINAL_FONT_UNAVAILABLE "Font ""{0}"" is not installed. Using ""{1}"" instead."
+    IDS_TERMINAL_FONT_MISSING_GLYPHS "Font ""{0}"" has no icon (Nerd Font) glyphs, so some characters show as boxes."
+    IDS_TERMINAL_FONT_NOTICE_DISMISS "Dismiss"
 END

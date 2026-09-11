@@ -1,13 +1,13 @@
 // MonitorTest.cpp : This file contains the 'main' function. Program execution begins and ends there.
 //
 
-#include <array>
 #include <atomic>
+#include <array>
 #include <chrono>
 #include <fcntl.h>
-#include <filesystem>
 #include <format>
 #include <fstream>
+#include <filesystem>
 #include <io.h>
 #include <iomanip>
 #include <iostream>
@@ -18,7 +18,9 @@
 #include <thread>
 #include <vector>
 
-#include <Windows.h>
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
 
 #include "InvalidRectVisualization.h"
 #include "LocalFileTransaction.h"
@@ -182,7 +184,7 @@ namespace
     byteBounded.AppendInfoLine(L"0123456789", MakeTestInfo(Debug::InfoParam::Type::Info, 20u));
     byteBounded.AppendInfoLine(L"abcdefghij", MakeTestInfo(Debug::InfoParam::Type::Info, 21u));
     byteBounded.AppendInfoLine(L"ABCDEFGHIJ", MakeTestInfo(Debug::InfoParam::Type::Info, 22u));
-    const uint64_t oneLineBytes                  = 10u * sizeof(wchar_t);
+    const uint64_t oneLineBytes = 10u * sizeof(wchar_t);
     const Document::RetentionResult byteEviction = byteBounded.EnforceRetentionLimits(10u, oneLineBytes);
     return byteEviction.linesEvicted == 2u && byteEviction.textBytesEvicted == 2u * oneLineBytes && byteBounded.TotalLineCount() == 1u &&
            byteBounded.RetainedTextBytes() == oneLineBytes && byteBounded.GetSourceLine(0u).text == L"ABCDEFGHIJ";
@@ -228,19 +230,20 @@ namespace
         {"blank-record", "\n", {L""}, bom + "\n"},
         {"consecutive-blank", "a\n\nb", {L"a", L"", L"b"}, bom + "a\n\nb\n"},
         {"trailing-blanks", "a\n\n\n", {L"a", L"", L""}, bom + "a\n\n\n"},
-        {"unicode", bom + std::string("\xC3\xA9\xF0\x9F\x98\x80\n", 7u), {L"\x00E9\xD83D\xDE00"}, bom + std::string("\xC3\xA9\xF0\x9F\x98\x80\n", 7u)},
+        {"unicode", bom + std::string("\xC3\xA9\xF0\x9F\x98\x80\n", 7u), {L"\x00E9\xD83D\xDE00"},
+         bom + std::string("\xC3\xA9\xF0\x9F\x98\x80\n", 7u)},
     };
     for (const CanonicalCase& testCase : canonicalCases)
     {
-        const std::filesystem::path inputPath  = root / std::filesystem::path(testCase.name + "-input.txt");
+        const std::filesystem::path inputPath = root / std::filesystem::path(testCase.name + "-input.txt");
         const std::filesystem::path outputPath = root / std::filesystem::path(testCase.name + "-output.txt");
         const std::vector<unsigned char> inputBytes(testCase.input.begin(), testCase.input.end());
         if (! writeBytes(inputPath, inputBytes))
         {
             return false;
         }
-        const auto firstRead =
-            RedSalamanderMonitor::ReadMonitorTextFile(inputPath, {}, {.maxEncodedBytes = 4'096u, .maxRetainedTextBytes = 4'096u, .maxLines = 16u});
+        const auto firstRead = RedSalamanderMonitor::ReadMonitorTextFile(
+            inputPath, {}, {.maxEncodedBytes = 4'096u, .maxRetainedTextBytes = 4'096u, .maxLines = 16u});
         if (FAILED(firstRead.hr) || firstRead.snapshot.lines.size() != testCase.records.size())
         {
             return false;
@@ -253,8 +256,8 @@ namespace
             }
         }
         const auto exportResult = RedSalamanderMonitor::WriteMonitorTextSnapshot(outputPath, firstRead.snapshot, {});
-        const auto secondRead =
-            RedSalamanderMonitor::ReadMonitorTextFile(outputPath, {}, {.maxEncodedBytes = 4'096u, .maxRetainedTextBytes = 4'096u, .maxLines = 16u});
+        const auto secondRead = RedSalamanderMonitor::ReadMonitorTextFile(
+            outputPath, {}, {.maxEncodedBytes = 4'096u, .maxRetainedTextBytes = 4'096u, .maxLines = 16u});
         if (FAILED(exportResult.hr) || readBytes(outputPath) != testCase.canonical || FAILED(secondRead.hr) ||
             secondRead.snapshot.lines.size() != testCase.records.size())
         {
@@ -270,15 +273,15 @@ namespace
     }
 
     const std::filesystem::path exactBudgetPath = root / L"exact-line-budget.txt";
-    const std::filesystem::path overBudgetPath  = root / L"over-line-budget.txt";
+    const std::filesystem::path overBudgetPath = root / L"over-line-budget.txt";
     if (! writeBytes(exactBudgetPath, {'a', '\n', 'b', '\n'}) || ! writeBytes(overBudgetPath, {'a', '\n', 'b', '\n', 'c', '\n'}))
     {
         return false;
     }
-    const auto exactBudget =
-        RedSalamanderMonitor::ReadMonitorTextFile(exactBudgetPath, {}, {.maxEncodedBytes = 1'024u, .maxRetainedTextBytes = 1'024u, .maxLines = 2u});
-    const auto overBudget =
-        RedSalamanderMonitor::ReadMonitorTextFile(overBudgetPath, {}, {.maxEncodedBytes = 1'024u, .maxRetainedTextBytes = 1'024u, .maxLines = 2u});
+    const auto exactBudget = RedSalamanderMonitor::ReadMonitorTextFile(
+        exactBudgetPath, {}, {.maxEncodedBytes = 1'024u, .maxRetainedTextBytes = 1'024u, .maxLines = 2u});
+    const auto overBudget = RedSalamanderMonitor::ReadMonitorTextFile(
+        overBudgetPath, {}, {.maxEncodedBytes = 1'024u, .maxRetainedTextBytes = 1'024u, .maxLines = 2u});
     if (FAILED(exactBudget.hr) || exactBudget.lineCount != 2u || overBudget.hr != HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW))
     {
         return false;
@@ -288,19 +291,7 @@ namespace
     {
         std::ofstream valid(validPath, std::ios::binary | std::ios::trunc);
         constexpr std::array<unsigned char, 13u> validBytes{{
-            0xEFu,
-            0xBBu,
-            0xBFu,
-            'a',
-            'l',
-            'p',
-            'h',
-            'a',
-            '\n',
-            'b',
-            'e',
-            't',
-            'a',
+            0xEFu, 0xBBu, 0xBFu, 'a', 'l', 'p', 'h', 'a', '\n', 'b', 'e', 't', 'a',
         }};
         valid.write(reinterpret_cast<const char*>(validBytes.data()), static_cast<std::streamsize>(validBytes.size()));
         if (! valid.good())
@@ -310,11 +301,11 @@ namespace
     }
 
     uint64_t reportedBytes = 0u;
-    const auto validResult =
-        RedSalamanderMonitor::ReadMonitorTextFile(validPath,
-                                                  std::stop_token{},
-                                                  {.maxEncodedBytes = 1u * 1024u * 1024u, .maxRetainedTextBytes = 1u * 1024u * 1024u, .maxLines = 10u},
-                                                  [&reportedBytes](uint64_t bytesRead, uint64_t) noexcept { reportedBytes = bytesRead; });
+    const auto validResult = RedSalamanderMonitor::ReadMonitorTextFile(
+        validPath,
+        std::stop_token{},
+        {.maxEncodedBytes = 1u * 1024u * 1024u, .maxRetainedTextBytes = 1u * 1024u * 1024u, .maxLines = 10u},
+        [&reportedBytes](uint64_t bytesRead, uint64_t) noexcept { reportedBytes = bytesRead; });
     if (FAILED(validResult.hr) || validResult.snapshot.lines.size() != 2u || validResult.snapshot.lines[0] != L"alpha" ||
         validResult.snapshot.lines[1] != L"beta" || validResult.snapshot.retainedTextBytes != 9u * sizeof(wchar_t) || validResult.lineCount != 2u ||
         reportedBytes != validResult.totalBytes)
@@ -328,8 +319,10 @@ namespace
         constexpr std::array<unsigned char, 2u> invalidBytes{{0xC3u, 0x28u}};
         invalid.write(reinterpret_cast<const char*>(invalidBytes.data()), static_cast<std::streamsize>(invalidBytes.size()));
     }
-    if (RedSalamanderMonitor::ReadMonitorTextFile(invalidPath, std::stop_token{}, {.maxEncodedBytes = 1'024u, .maxRetainedTextBytes = 1'024u, .maxLines = 10u})
-            .hr != HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION))
+    if (RedSalamanderMonitor::ReadMonitorTextFile(
+            invalidPath, std::stop_token{}, {.maxEncodedBytes = 1'024u, .maxRetainedTextBytes = 1'024u, .maxLines = 10u})
+            .hr !=
+        HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION))
     {
         return false;
     }
@@ -341,7 +334,8 @@ namespace
     }
     if (RedSalamanderMonitor::ReadMonitorTextFile(
             lineBudgetPath, std::stop_token{}, {.maxEncodedBytes = 1'024u, .maxRetainedTextBytes = 1'024u, .maxLines = 2u})
-            .hr != HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW))
+            .hr !=
+        HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW))
     {
         return false;
     }
@@ -351,17 +345,17 @@ namespace
     {
         return false;
     }
-    const auto exactExpansion =
-        RedSalamanderMonitor::ReadMonitorTextFile(expansionPath, std::stop_token{}, {.maxEncodedBytes = 4u, .maxRetainedTextBytes = 8u, .maxLines = 1u});
-    const auto overExpansion =
-        RedSalamanderMonitor::ReadMonitorTextFile(expansionPath, std::stop_token{}, {.maxEncodedBytes = 4u, .maxRetainedTextBytes = 6u, .maxLines = 1u});
+    const auto exactExpansion = RedSalamanderMonitor::ReadMonitorTextFile(
+        expansionPath, std::stop_token{}, {.maxEncodedBytes = 4u, .maxRetainedTextBytes = 8u, .maxLines = 1u});
+    const auto overExpansion = RedSalamanderMonitor::ReadMonitorTextFile(
+        expansionPath, std::stop_token{}, {.maxEncodedBytes = 4u, .maxRetainedTextBytes = 6u, .maxLines = 1u});
     if (FAILED(exactExpansion.hr) || exactExpansion.peakRetainedTextBytes != 8u || exactExpansion.snapshot.lines.size() != 1u ||
         exactExpansion.snapshot.lines[0] != L"abcd" || overExpansion.hr != HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW))
     {
         return false;
     }
 
-    constexpr size_t kDecoderChunkBytes       = 64u * 1024u;
+    constexpr size_t kDecoderChunkBytes = 64u * 1024u;
     const std::filesystem::path splitUtf8Path = root / L"split-utf8.txt";
     std::vector<unsigned char> splitUtf8(kDecoderChunkBytes - 2u, static_cast<unsigned char>('x'));
     splitUtf8.insert(splitUtf8.end(), {0xF0u, 0x9Fu, 0x98u, 0x80u});
@@ -370,9 +364,12 @@ namespace
         return false;
     }
     const auto splitUtf8Result = RedSalamanderMonitor::ReadMonitorTextFile(
-        splitUtf8Path, std::stop_token{}, {.maxEncodedBytes = splitUtf8.size(), .maxRetainedTextBytes = 2u * splitUtf8.size(), .maxLines = 1u});
-    if (FAILED(splitUtf8Result.hr) || splitUtf8Result.snapshot.lines.size() != 1u || splitUtf8Result.snapshot.lines[0].size() != kDecoderChunkBytes ||
-        splitUtf8Result.snapshot.lines[0][kDecoderChunkBytes - 2u] != L'\xD83D' || splitUtf8Result.snapshot.lines[0][kDecoderChunkBytes - 1u] != L'\xDE00')
+        splitUtf8Path,
+        std::stop_token{},
+        {.maxEncodedBytes = splitUtf8.size(), .maxRetainedTextBytes = 2u * splitUtf8.size(), .maxLines = 1u});
+    if (FAILED(splitUtf8Result.hr) || splitUtf8Result.snapshot.lines.size() != 1u ||
+        splitUtf8Result.snapshot.lines[0].size() != kDecoderChunkBytes || splitUtf8Result.snapshot.lines[0][kDecoderChunkBytes - 2u] != L'\xD83D' ||
+        splitUtf8Result.snapshot.lines[0][kDecoderChunkBytes - 1u] != L'\xDE00')
     {
         return false;
     }
@@ -390,26 +387,31 @@ namespace
         return false;
     }
     const auto splitUtf16Result = RedSalamanderMonitor::ReadMonitorTextFile(
-        splitUtf16Path, std::stop_token{}, {.maxEncodedBytes = splitUtf16.size(), .maxRetainedTextBytes = splitUtf16.size(), .maxLines = 1u});
+        splitUtf16Path,
+        std::stop_token{},
+        {.maxEncodedBytes = splitUtf16.size(), .maxRetainedTextBytes = splitUtf16.size(), .maxLines = 1u});
     if (FAILED(splitUtf16Result.hr) || splitUtf16Result.snapshot.lines.size() != 1u || splitUtf16Result.snapshot.lines[0].size() != 32'768u ||
         splitUtf16Result.snapshot.lines[0][32'766u] != L'\xD83D' || splitUtf16Result.snapshot.lines[0][32'767u] != L'\xDE00')
     {
         return false;
     }
 
-    const std::filesystem::path truncatedUtf8Path  = root / L"truncated-utf8.txt";
+    const std::filesystem::path truncatedUtf8Path = root / L"truncated-utf8.txt";
     const std::filesystem::path truncatedUtf16Path = root / L"truncated-utf16.txt";
-    const std::filesystem::path unpairedUtf16Path  = root / L"unpaired-utf16.txt";
+    const std::filesystem::path unpairedUtf16Path = root / L"unpaired-utf16.txt";
     if (! writeBytes(truncatedUtf8Path, {0xF0u, 0x9Fu, 0x98u}) || ! writeBytes(truncatedUtf16Path, {0xFFu, 0xFEu, 0x41u}) ||
         ! writeBytes(unpairedUtf16Path, {0xFFu, 0xFEu, 0x3Du, 0xD8u}))
     {
         return false;
     }
-    const RedSalamanderMonitor::MonitorFileReadLimits invalidLimits{.maxEncodedBytes = 1'024u, .maxRetainedTextBytes = 1'024u, .maxLines = 10u};
-    if (RedSalamanderMonitor::ReadMonitorTextFile(truncatedUtf8Path, std::stop_token{}, invalidLimits).hr != HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION) ||
+    const RedSalamanderMonitor::MonitorFileReadLimits invalidLimits{
+        .maxEncodedBytes = 1'024u, .maxRetainedTextBytes = 1'024u, .maxLines = 10u};
+    if (RedSalamanderMonitor::ReadMonitorTextFile(truncatedUtf8Path, std::stop_token{}, invalidLimits).hr !=
+            HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION) ||
         RedSalamanderMonitor::ReadMonitorTextFile(truncatedUtf16Path, std::stop_token{}, invalidLimits).hr !=
             HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION) ||
-        RedSalamanderMonitor::ReadMonitorTextFile(unpairedUtf16Path, std::stop_token{}, invalidLimits).hr != HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION))
+        RedSalamanderMonitor::ReadMonitorTextFile(unpairedUtf16Path, std::stop_token{}, invalidLimits).hr !=
+            HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION))
     {
         return false;
     }
@@ -426,12 +428,12 @@ namespace
         midDecodeCancellation.get_token(),
         {.maxEncodedBytes = cancellationPayload.size(), .maxRetainedTextBytes = 2u * cancellationPayload.size(), .maxLines = 1u},
         [&midDecodeCancellation](uint64_t bytesRead, uint64_t) noexcept
-    {
-        if (bytesRead >= kDecoderChunkBytes)
         {
-            midDecodeCancellation.request_stop();
-        }
-    });
+            if (bytesRead >= kDecoderChunkBytes)
+            {
+                midDecodeCancellation.request_stop();
+            }
+        });
     if (cancelledDuringDecode.hr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || cancelledDuringDecode.bytesRead != kDecoderChunkBytes)
     {
         return false;
@@ -447,9 +449,10 @@ namespace
     }
     hugeFile.reset();
     const auto hugeResult = RedSalamanderMonitor::ReadMonitorTextFile(
-        hugePath, std::stop_token{}, {.maxEncodedBytes = 64u * 1024u * 1024u, .maxRetainedTextBytes = 64u * 1024u * 1024u, .maxLines = 100'000u});
-    if (hugeResult.hr != HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) || hugeResult.bytesRead != 0u ||
-        hugeResult.totalBytes != static_cast<uint64_t>(hugeSize.QuadPart))
+        hugePath,
+        std::stop_token{},
+        {.maxEncodedBytes = 64u * 1024u * 1024u, .maxRetainedTextBytes = 64u * 1024u * 1024u, .maxLines = 100'000u});
+    if (hugeResult.hr != HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) || hugeResult.bytesRead != 0u || hugeResult.totalBytes != static_cast<uint64_t>(hugeSize.QuadPart))
     {
         return false;
     }
@@ -485,7 +488,7 @@ namespace
 
 struct EtwConsumerShutdownTestContext final
 {
-    EtwConsumerShutdownTestContext()                                                 = default;
+    EtwConsumerShutdownTestContext() = default;
     EtwConsumerShutdownTestContext(const EtwConsumerShutdownTestContext&)            = delete;
     EtwConsumerShutdownTestContext& operator=(const EtwConsumerShutdownTestContext&) = delete;
     EtwConsumerShutdownTestContext(EtwConsumerShutdownTestContext&&)                 = delete;
@@ -539,7 +542,7 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
 
 [[nodiscard]] bool RunEtwConsumerShutdownSelfTest()
 {
-    constexpr TRACEHANDLE kJoinedHandle   = 0x1020u;
+    constexpr TRACEHANDLE kJoinedHandle  = 0x1020u;
     constexpr TRACEHANDLE kDetachedHandle = 0x3040u;
 
     EtwConsumerShutdownTestContext joinedContext;
@@ -549,7 +552,8 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
     }
     {
         EtwListener listener;
-        listener.DebugStartConsumerForTesting(kJoinedHandle, ProcessEtwConsumerForTest, CloseEtwConsumerForTest, &joinedContext, 1'000u);
+        listener.DebugStartConsumerForTesting(
+            kJoinedHandle, ProcessEtwConsumerForTest, CloseEtwConsumerForTest, &joinedContext, 1'000u);
         if (WaitForSingleObject(joinedContext.started.get(), 1'000u) != WAIT_OBJECT_0)
         {
             return false;
@@ -570,7 +574,8 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
         return false;
     }
     EtwListener listener;
-    listener.DebugStartConsumerForTesting(kDetachedHandle, ProcessEtwConsumerForTest, CloseEtwConsumerForTest, &detachedContext, 20u);
+    listener.DebugStartConsumerForTesting(
+        kDetachedHandle, ProcessEtwConsumerForTest, CloseEtwConsumerForTest, &detachedContext, 20u);
     if (WaitForSingleObject(detachedContext.started.get(), 1'000u) != WAIT_OBJECT_0)
     {
         return false;
@@ -629,7 +634,8 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
     Document invalidDocument;
     std::wstring malformed(1u, static_cast<wchar_t>(0xD800u));
     invalidDocument.AppendInfoLine(malformed, MakeTestInfo(Debug::InfoParam::Type::Text, 10u));
-    const auto invalidResult = RedSalamanderMonitor::WriteMonitorTextSnapshot(target, invalidDocument.CaptureTextSnapshot(), std::stop_token{});
+    const auto invalidResult = RedSalamanderMonitor::WriteMonitorTextSnapshot(
+        target, invalidDocument.CaptureTextSnapshot(), std::stop_token{});
     if (SUCCEEDED(invalidResult.hr) || ReadMonitorTestFile(target) != "previous-good")
     {
         return false;
@@ -638,7 +644,8 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
     Document validDocument;
     validDocument.AppendInfoLine(L"valid export", MakeTestInfo(Debug::InfoParam::Type::Text, 11u));
     const std::string expected = std::string("\xEF\xBB\xBF", 3u) + "valid export\n";
-    const auto validResult     = RedSalamanderMonitor::WriteMonitorTextSnapshot(target, validDocument.CaptureTextSnapshot(), std::stop_token{});
+    const auto validResult = RedSalamanderMonitor::WriteMonitorTextSnapshot(
+        target, validDocument.CaptureTextSnapshot(), std::stop_token{});
     if (FAILED(validResult.hr) || ReadMonitorTestFile(target) != expected)
     {
         return false;
@@ -648,7 +655,7 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
     ingestingDocument.AppendInfoLine(L"snapshot-start", MakeTestInfo(Debug::InfoParam::Type::Text, 12u));
     RedSalamanderMonitor::MonitorTextSnapshot startSnapshot = ingestingDocument.CaptureTextSnapshot();
     ingestingDocument.AppendInfoLine(L"arrived-during-export", MakeTestInfo(Debug::InfoParam::Type::Text, 13u));
-    const auto startSnapshotResult          = RedSalamanderMonitor::WriteMonitorTextSnapshot(target, startSnapshot, std::stop_token{});
+    const auto startSnapshotResult = RedSalamanderMonitor::WriteMonitorTextSnapshot(target, startSnapshot, std::stop_token{});
     const std::string expectedStartSnapshot = std::string("\xEF\xBB\xBF", 3u) + "snapshot-start\n";
     if (FAILED(startSnapshotResult.hr) || ReadMonitorTestFile(target) != expectedStartSnapshot || ingestingDocument.TotalLineCount() != 2u)
     {
@@ -670,7 +677,8 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
     lifetimeDocument.AppendInfoLine(L"retained-before-capture", MakeTestInfo(Debug::InfoParam::Type::Text, 14u));
     lifetimeDocument.AppendInfoLine(L"embedded\nrecord", MakeTestInfo(Debug::InfoParam::Type::Text, 15u));
     const RedSalamanderMonitor::MonitorTextSnapshot lifetimeSnapshot = lifetimeDocument.CaptureTextSnapshot();
-    if (lifetimeSnapshot.copiedTextBytes != 0u || lifetimeSnapshot.activeTailCopiedBytes > RedSalamanderMonitor::kMonitorSnapshotMaxActiveTailBytes ||
+    if (lifetimeSnapshot.copiedTextBytes != 0u ||
+        lifetimeSnapshot.activeTailCopiedBytes > RedSalamanderMonitor::kMonitorSnapshotMaxActiveTailBytes ||
         lifetimeSnapshot.sharedBlockCount != lifetimeSnapshot.lines.size() || lifetimeSnapshot.sharedBlockBytes != lifetimeSnapshot.retainedTextBytes)
     {
         return false;
@@ -678,7 +686,7 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
     static_cast<void>(lifetimeDocument.EnforceRetentionLimits(1u, 1u * 1024u * 1024u));
     lifetimeDocument.Clear();
     lifetimeDocument.SetText(L"replacement");
-    const auto lifetimeResult          = RedSalamanderMonitor::WriteMonitorTextSnapshot(target, lifetimeSnapshot, {});
+    const auto lifetimeResult = RedSalamanderMonitor::WriteMonitorTextSnapshot(target, lifetimeSnapshot, {});
     const std::string expectedLifetime = std::string("\xEF\xBB\xBF", 3u) + "retained-before-capture\nembedded\nrecord\n";
     if (FAILED(lifetimeResult.hr) || ReadMonitorTestFile(target) != expectedLifetime || lifetimeDocument.GetSourceLine(0u).text != L"replacement")
     {
@@ -703,7 +711,8 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
         const RedSalamanderMonitor::MonitorTextSnapshot practicalSnapshot = practicalLargeDocument.CaptureTextSnapshot();
         if (practicalSnapshot.lines.size() != kPracticalLineCount || practicalSnapshot.copiedTextBytes != 0u ||
             practicalSnapshot.activeTailCopiedBytes > RedSalamanderMonitor::kMonitorSnapshotMaxActiveTailBytes ||
-            practicalSnapshot.sharedBlockCount != kPracticalLineCount || practicalSnapshot.sharedBlockBytes != practicalLargeDocument.RetainedTextBytes() ||
+            practicalSnapshot.sharedBlockCount != kPracticalLineCount ||
+            practicalSnapshot.sharedBlockBytes != practicalLargeDocument.RetainedTextBytes() ||
             practicalSnapshot.peakAdditionalSnapshotBytes > kPracticalLineCount * sizeof(RedSalamanderMonitor::MonitorTextBlock))
         {
             return false;
@@ -719,7 +728,10 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
     largeSnapshot.retainedTextBytes = largeSnapshot.lines[0].size() * sizeof(wchar_t);
     std::stop_source exportCancellation;
     const auto cancelledResult = RedSalamanderMonitor::WriteMonitorTextSnapshot(
-        target, largeSnapshot, exportCancellation.get_token(), [&exportCancellation](uint64_t, size_t) noexcept { exportCancellation.request_stop(); });
+        target,
+        largeSnapshot,
+        exportCancellation.get_token(),
+        [&exportCancellation](uint64_t, size_t) noexcept { exportCancellation.request_stop(); });
     if (cancelledResult.hr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || ReadMonitorTestFile(target) != "previous-good")
     {
         return false;
@@ -772,7 +784,8 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
 
     {
         Common::Files::LocalFileTransaction transaction;
-        if (FAILED(Common::Files::LocalFileTransaction::Create(target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)) ||
+        if (FAILED(Common::Files::LocalFileTransaction::Create(
+                target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)) ||
             FAILED(transaction.Write(std::string_view("abandoned"))))
         {
             return false;
@@ -786,7 +799,8 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
     const HRESULT diskFull = HRESULT_FROM_WIN32(ERROR_DISK_FULL);
     {
         Common::Files::LocalFileTransaction transaction;
-        if (FAILED(Common::Files::LocalFileTransaction::Create(target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)))
+        if (FAILED(Common::Files::LocalFileTransaction::Create(
+                target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)))
         {
             return false;
         }
@@ -805,7 +819,8 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
     {
         Common::Files::LocalFileTransaction transaction;
         constexpr std::string_view replacement = "replacement";
-        if (FAILED(Common::Files::LocalFileTransaction::Create(target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)) ||
+        if (FAILED(Common::Files::LocalFileTransaction::Create(
+                target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)) ||
             FAILED(transaction.Write(replacement)))
         {
             return false;
@@ -824,8 +839,10 @@ void CloseEtwConsumerForTest(void* rawContext, TRACEHANDLE traceHandle) noexcept
     {
         Common::Files::LocalFileTransaction transaction;
         constexpr std::string_view replacement = "replacement";
-        if (FAILED(Common::Files::LocalFileTransaction::Create(target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)) ||
-            FAILED(transaction.Write(replacement)) || transaction.Commit(replacement.size() + 1u) != HRESULT_FROM_WIN32(ERROR_INVALID_DATA))
+        if (FAILED(Common::Files::LocalFileTransaction::Create(
+                target, Common::Files::ExistingTargetPolicy::Replace, false, transaction)) ||
+            FAILED(transaction.Write(replacement)) ||
+            transaction.Commit(replacement.size() + 1u) != HRESULT_FROM_WIN32(ERROR_INVALID_DATA))
         {
             return false;
         }
@@ -1084,6 +1101,7 @@ static int RunMonitorTest()
         std::wcerr << L"Monitor document batch/filter self-test failed\n";
         return 2;
     }
+
 
     if (! RunMonitorDocumentRetentionSelfTest())
     {

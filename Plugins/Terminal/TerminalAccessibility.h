@@ -4,8 +4,6 @@
 #define NOMINMAX
 #include <windows.h>
 
-#include <objbase.h>
-
 #include <memory>
 #include <string>
 
@@ -15,10 +13,10 @@ public:
     TerminalAccessibility();
     ~TerminalAccessibility();
 
-    TerminalAccessibility(const TerminalAccessibility&)            = delete;
-    TerminalAccessibility(TerminalAccessibility&&)                 = delete;
+    TerminalAccessibility(const TerminalAccessibility&) = delete;
+    TerminalAccessibility(TerminalAccessibility&&) = delete;
     TerminalAccessibility& operator=(const TerminalAccessibility&) = delete;
-    TerminalAccessibility& operator=(TerminalAccessibility&&)      = delete;
+    TerminalAccessibility& operator=(TerminalAccessibility&&) = delete;
 
     [[nodiscard]] HRESULT Initialize(HWND window) noexcept;
     void Publish(std::wstring text, bool focused) noexcept;

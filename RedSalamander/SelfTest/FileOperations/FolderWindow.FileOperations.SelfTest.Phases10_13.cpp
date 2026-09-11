@@ -17,9 +17,7 @@ case SelfTestState::Step::FileOps_CrossVolumeMovePartialFailureStatus:
     if (state.stepState == 0)
     {
         // R3-2: this case covers Copy-only Move into a destination without content proof.
-        static_cast<void>(SetPluginConfiguration(
-            state.infoDummy.get(),
-            R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0","writerProof":false})json"));
+        static_cast<void>(SetPluginConfiguration(state.infoDummy.get(), R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0","writerProof":false})json"));
         if (! RecreateEmptyDirectory(srcRoot) || ! WriteTestFile(srcFile, 256ull * 1024ull) || ! EnsureDummyFolderExists(state.fsDummy.get(), dummyRoot))
         {
             Fail(L"Copy-only Move status test failed to prepare source/destination folders.");
@@ -159,9 +157,8 @@ case SelfTestState::Step::FileOps_ReparseLiteralCopyKeepsTargets:
     const std::wstring expectedInsideTarget = NormalizePathForCompare(std::filesystem::absolute(insideTarget).wstring());
     if (copiedInsideTarget.value() != expectedInsideTarget)
     {
-        Fail(std::format(L"Copied in-tree reparse target must keep its stored source target text. expected='{}' actual='{}'.",
-                         expectedInsideTarget,
-                         copiedInsideTarget.value()));
+        Fail(std::format(
+            L"Copied in-tree reparse target must keep its stored source target text. expected='{}' actual='{}'.", expectedInsideTarget, copiedInsideTarget.value()));
         return true;
     }
 
@@ -180,8 +177,12 @@ case SelfTestState::Step::FileOps_ReparseLiteralCopyKeepsTargets:
         return true;
     }
 
-    Debug::Perf::Emit(
-        L"FileOps.SelfTest.ReparseLiteralCopyKeepsTargets", L"shape=in-tree-literal-plus-out-of-tree-literal", 2, CountFilesRecursive(copiedRoot), 1, S_OK);
+    Debug::Perf::Emit(L"FileOps.SelfTest.ReparseLiteralCopyKeepsTargets",
+                      L"shape=in-tree-literal-plus-out-of-tree-literal",
+                      2,
+                      CountFilesRecursive(copiedRoot),
+                      1,
+                      S_OK);
 
     NextStep(state, SelfTestState::Step::FileOps_DeleteToctouSwapGuard);
     return false;
@@ -578,7 +579,8 @@ case SelfTestState::Step::Phase10_PermanentDelete:
                                                                          true);
         }
         auto* capturedTask = capturedOptionsTask.has_value() ? state.fileOps->FindTask(capturedOptionsTask.value()) : nullptr;
-        const std::shared_ptr<const FileOperations::FileOperationPlanGroup> capturedPlans = capturedTask != nullptr ? capturedTask->LoadPlans() : nullptr;
+        const std::shared_ptr<const FileOperations::FileOperationPlanGroup> capturedPlans =
+            capturedTask != nullptr ? capturedTask->LoadPlans() : nullptr;
         if (! capturedPlans || capturedPlans->empty())
         {
             Fail(L"Accepted Copy confirmation did not publish an immutable plan group.");
@@ -642,11 +644,10 @@ case SelfTestState::Step::Phase10_PermanentDelete:
             return false;
         }
         std::error_code cancelExistsEc;
-        if (cancelled->second.hr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || ! std::filesystem::exists(cancelFile, cancelExistsEc) || cancelExistsEc ||
-            HostGetTestPromptRequestCount() != 0u)
+        if (cancelled->second.hr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || ! std::filesystem::exists(cancelFile, cancelExistsEc) ||
+            cancelExistsEc || HostGetTestPromptRequestCount() != 0u)
         {
-            Fail(std::format(L"A cancelled permanent-delete confirmation must end the task as canceled with the source intact and no modal prompt "
-                             L"(hr=0x{:08X}, prompts={}).",
+            Fail(std::format(L"A cancelled permanent-delete confirmation must end the task as canceled with the source intact and no modal prompt (hr=0x{:08X}, prompts={}).",
                              static_cast<unsigned long>(cancelled->second.hr),
                              HostGetTestPromptRequestCount()));
             return true;
@@ -1916,15 +1917,15 @@ case SelfTestState::Step::Phase10_ClipboardAdmissionAndRetainedActions:
         return true;
     }
 
-    const std::filesystem::path sourceRoot            = state.tempRoot / L"p4-clipboard-source";
-    const std::filesystem::path destinationRoot       = state.tempRoot / L"p4-clipboard-destination";
-    const std::filesystem::path acceptedSource        = sourceRoot / L"accepted.bin";
-    const std::filesystem::path failedClearSource     = sourceRoot / L"clear-failed.bin";
+    const std::filesystem::path sourceRoot        = state.tempRoot / L"p4-clipboard-source";
+    const std::filesystem::path destinationRoot   = state.tempRoot / L"p4-clipboard-destination";
+    const std::filesystem::path acceptedSource    = sourceRoot / L"accepted.bin";
+    const std::filesystem::path failedClearSource = sourceRoot / L"clear-failed.bin";
     const std::filesystem::path failedReadinessSource = sourceRoot / L"readiness-failed.bin";
-    const std::filesystem::path duplicateSource       = sourceRoot / L"duplicate.bin";
-    constexpr uint32_t kAcceptedSequence              = 0x41A50001u;
-    constexpr uint32_t kFailedClearSequence           = 0x41A50002u;
-    constexpr uint32_t kFailedReadinessSequence       = 0x41A50003u;
+    const std::filesystem::path duplicateSource   = sourceRoot / L"duplicate.bin";
+    constexpr uint32_t kAcceptedSequence          = 0x41A50001u;
+    constexpr uint32_t kFailedClearSequence       = 0x41A50002u;
+    constexpr uint32_t kFailedReadinessSequence   = 0x41A50003u;
 
     if (state.stepState == 0)
     {
@@ -1943,26 +1944,27 @@ case SelfTestState::Step::Phase10_ClipboardAdmissionAndRetainedActions:
         }
 
         state.taskA = StartFileOperationAndGetId(state.fileOps,
-                                                 FILESYSTEM_MOVE,
-                                                 FolderWindow::Pane::Left,
-                                                 FolderWindow::Pane::Right,
-                                                 state.fsLocal,
-                                                 {acceptedSource},
-                                                 destinationRoot,
-                                                 FILESYSTEM_FLAG_NONE,
-                                                 false,
-                                                 0u,
-                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                 false,
-                                                 state.fsLocal,
-                                                 {},
-                                                 kAcceptedSequence,
-                                                 [&]() noexcept
+                                                                     FILESYSTEM_MOVE,
+                                                                     FolderWindow::Pane::Left,
+                                                                     FolderWindow::Pane::Right,
+                                                                     state.fsLocal,
+                                                                     {acceptedSource},
+                                                                     destinationRoot,
+                                                                     FILESYSTEM_FLAG_NONE,
+                                                                     false,
+                                                                     0u,
+                                                                     FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                                     false,
+                                                                     state.fsLocal,
+                                                                     {},
+                                                                     kAcceptedSequence,
+                                                                     [&]() noexcept
         {
             std::vector<FolderWindow::FileOperationState::Task*> tasks;
             state.fileOps->CollectTasks(tasks);
             state.phase10ClipboardPublishedNonRunning.store(
-                std::ranges::any_of(tasks, [](const auto* task) noexcept { return task != nullptr && task->_clipboardMoveAdmission && ! task->HasStarted(); }),
+                std::ranges::any_of(tasks, [](const auto* task) noexcept
+                { return task != nullptr && task->_clipboardMoveAdmission && ! task->HasStarted(); }),
                 std::memory_order_release);
             return S_OK;
         });
@@ -2021,22 +2023,22 @@ case SelfTestState::Step::Phase10_ClipboardAdmissionAndRetainedActions:
             return true;
         }
 
-        state.taskC                                           = StartFileOperationAndGetId(state.fileOps,
-                                                                                           FILESYSTEM_MOVE,
-                                                                                           FolderWindow::Pane::Left,
-                                                                                           FolderWindow::Pane::Right,
-                                                                                           state.fsLocal,
-                                                                                           {failedReadinessSource},
-                                                                                           destinationRoot,
-                                                                                           FILESYSTEM_FLAG_NONE,
-                                                                                           false,
-                                                                                           0u,
-                                                                                           FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                                           false,
-                                                                                           state.fsLocal,
-                                                                                           {},
-                                                                                           kFailedReadinessSequence,
-                                                                                           [&]() noexcept
+        state.taskC = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_MOVE,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {failedReadinessSource},
+                                                 destinationRoot,
+                                                 FILESYSTEM_FLAG_NONE,
+                                                 false,
+                                                 0u,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsLocal,
+                                                 {},
+                                                 kFailedReadinessSequence,
+                                                 [&]() noexcept
         {
             state.phase10ClipboardReadinessBarrierCalled.store(true, std::memory_order_release);
             return S_OK;
@@ -2046,9 +2048,10 @@ case SelfTestState::Step::Phase10_ClipboardAdmissionAndRetainedActions:
             state.phase10ClipboardSlowGateRelease.wait(false, std::memory_order_acquire);
             return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
         });
-        FolderWindow::FileOperationState::Task* readinessTask = state.taskC.has_value() ? state.fileOps->FindTask(state.taskC.value()) : nullptr;
-        state.phase10ClipboardReturnedBeforeReadiness =
-            readinessTask != nullptr && ! readinessTask->_selectedRootReadinessComplete.load(std::memory_order_acquire);
+        FolderWindow::FileOperationState::Task* readinessTask =
+            state.taskC.has_value() ? state.fileOps->FindTask(state.taskC.value()) : nullptr;
+        state.phase10ClipboardReturnedBeforeReadiness = readinessTask != nullptr &&
+            ! readinessTask->_selectedRootReadinessComplete.load(std::memory_order_acquire);
         state.phase10ClipboardSlowGateRelease.store(true, std::memory_order_release);
         state.phase10ClipboardSlowGateRelease.notify_all();
         if (! state.taskC.has_value() || ! state.phase10ClipboardReturnedBeforeReadiness)
@@ -2060,19 +2063,20 @@ case SelfTestState::Step::Phase10_ClipboardAdmissionAndRetainedActions:
         return false;
     }
 
-    if (! state.taskA.has_value() || ! state.taskB.has_value() || ! state.taskC.has_value() || ! state.completedTasks.contains(state.taskA.value()) ||
-        ! state.completedTasks.contains(state.taskB.value()) || ! state.completedTasks.contains(state.taskC.value()))
+    if (! state.taskA.has_value() || ! state.taskB.has_value() || ! state.taskC.has_value() ||
+        ! state.completedTasks.contains(state.taskA.value()) || ! state.completedTasks.contains(state.taskB.value()) ||
+        ! state.completedTasks.contains(state.taskC.value()))
     {
         return false;
     }
 
     std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
     state.fileOps->CollectCompletedTasks(summaries);
-    const auto accepted        = std::ranges::find_if(summaries, [&](const auto& summary) noexcept { return summary.taskId == state.taskA.value(); });
-    const auto clearFailed     = std::ranges::find_if(summaries, [&](const auto& summary) noexcept { return summary.taskId == state.taskB.value(); });
+    const auto accepted    = std::ranges::find_if(summaries, [&](const auto& summary) noexcept { return summary.taskId == state.taskA.value(); });
+    const auto clearFailed = std::ranges::find_if(summaries, [&](const auto& summary) noexcept { return summary.taskId == state.taskB.value(); });
     const auto readinessFailed = std::ranges::find_if(summaries, [&](const auto& summary) noexcept { return summary.taskId == state.taskC.value(); });
 
-    constexpr size_t kR1aBuilderCount        = 4'096u;
+    constexpr size_t kR1aBuilderCount       = 4'096u;
     constexpr uint64_t kR1aGateDecisionCount = 1'024u;
     const auto r1aPerfStarted                = std::chrono::steady_clock::now();
     FolderWindow::FileOperationState::Task r1aTerminalTask(*state.fileOps);
@@ -2080,25 +2084,23 @@ case SelfTestState::Step::Phase10_ClipboardAdmissionAndRetainedActions:
     r1aTerminalTask._sourcePaths.assign(kR1aBuilderCount, std::filesystem::path(L"r1a-selected-root"));
     r1aTerminalTask.InitializeSourceItemResultBuilders();
     static_cast<void>(r1aTerminalTask.FinalizeTypedItemResults(HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED)));
-    const uint64_t r1aTerminalStoreCount = static_cast<uint64_t>(
-        std::ranges::count_if(r1aTerminalTask._sourceItemResultBuilders, [](const auto& builder) noexcept { return builder.terminal.has_value(); }));
-    const uint64_t r1aPendingResultCount =
-        static_cast<uint64_t>(std::ranges::count_if(r1aTerminalTask._sourceItemResultBuilders, [](const auto& builder) noexcept {
-        return builder.terminal.has_value() && builder.terminal->status == E_PENDING;
-    }));
+    const uint64_t r1aTerminalStoreCount = static_cast<uint64_t>(std::ranges::count_if(
+        r1aTerminalTask._sourceItemResultBuilders, [](const auto& builder) noexcept { return builder.terminal.has_value(); }));
+    const uint64_t r1aPendingResultCount = static_cast<uint64_t>(std::ranges::count_if(
+        r1aTerminalTask._sourceItemResultBuilders,
+        [](const auto& builder) noexcept { return builder.terminal.has_value() && builder.terminal->status == E_PENDING; }));
 
     FolderWindow::FileOperationState::Task r1aCanceledTask(*state.fileOps);
     r1aCanceledTask._operation   = FILESYSTEM_MOVE;
     r1aCanceledTask._sourcePaths = {std::filesystem::path(L"r1a-canceled-root-a"), std::filesystem::path(L"r1a-canceled-root-b")};
     r1aCanceledTask.InitializeSourceItemResultBuilders();
     static_cast<void>(r1aCanceledTask.FinalizeTypedItemResults(HRESULT_FROM_WIN32(ERROR_CANCELLED)));
-    const bool canceledPreparingDense = std::ranges::all_of(r1aCanceledTask._sourceItemResultBuilders,
-                                                            [](const auto& builder) noexcept
+    const bool canceledPreparingDense = std::ranges::all_of(r1aCanceledTask._sourceItemResultBuilders, [](const auto& builder) noexcept
     {
         return builder.terminal.has_value() && builder.terminal->status == HRESULT_FROM_WIN32(ERROR_CANCELLED) &&
-               builder.terminal->publication == FileOperations::PublicationState::NotAttempted &&
-               builder.terminal->sourceDisposition == FileOperations::SourceDisposition::Retained &&
-               builder.terminal->completion == FileOperations::ItemCompletion::Canceled;
+            builder.terminal->publication == FileOperations::PublicationState::NotAttempted &&
+            builder.terminal->sourceDisposition == FileOperations::SourceDisposition::Retained &&
+            builder.terminal->completion == FileOperations::ItemCompletion::Canceled;
     });
 
     FolderWindow::FileOperationState::Task r1aDuplicateTask(*state.fileOps);
@@ -2106,20 +2108,19 @@ case SelfTestState::Step::Phase10_ClipboardAdmissionAndRetainedActions:
     r1aDuplicateTask._sourcePaths = {std::filesystem::path(L"r1a-duplicate-root")};
     r1aDuplicateTask.InitializeSourceItemResultBuilders();
     FileOperations::FileOperationItemResult firstResult{};
-    firstResult.sourceIndex                                 = 0u;
-    firstResult.publication                                 = FileOperations::PublicationState::Published;
-    firstResult.sourceDisposition                           = FileOperations::SourceDisposition::Retained;
-    firstResult.completion                                  = FileOperations::ItemCompletion::Completed;
-    firstResult.status                                      = S_OK;
-    const bool firstStoreAccepted                           = r1aDuplicateTask.StoreTypedItemResult(firstResult);
+    firstResult.sourceIndex       = 0u;
+    firstResult.publication       = FileOperations::PublicationState::Published;
+    firstResult.sourceDisposition = FileOperations::SourceDisposition::Retained;
+    firstResult.completion        = FileOperations::ItemCompletion::Completed;
+    firstResult.status            = S_OK;
+    const bool firstStoreAccepted = r1aDuplicateTask.StoreTypedItemResult(firstResult);
     FileOperations::FileOperationItemResult duplicateResult = firstResult;
-    duplicateResult.publication                             = FileOperations::PublicationState::NotPublished;
-    duplicateResult.completion                              = FileOperations::ItemCompletion::Failed;
-    duplicateResult.status                                  = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
-    const bool duplicateStoreAccepted                       = r1aDuplicateTask.StoreTypedItemResult(std::move(duplicateResult));
-    const bool duplicateStorePreservedFirst =
-        firstStoreAccepted && ! duplicateStoreAccepted && r1aDuplicateTask._sourceItemResultBuilders.size() == 1u &&
-        r1aDuplicateTask._sourceItemResultBuilders.front().terminal.has_value() &&
+    duplicateResult.publication       = FileOperations::PublicationState::NotPublished;
+    duplicateResult.completion        = FileOperations::ItemCompletion::Failed;
+    duplicateResult.status            = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    const bool duplicateStoreAccepted = r1aDuplicateTask.StoreTypedItemResult(std::move(duplicateResult));
+    const bool duplicateStorePreservedFirst = firstStoreAccepted && ! duplicateStoreAccepted &&
+        r1aDuplicateTask._sourceItemResultBuilders.size() == 1u && r1aDuplicateTask._sourceItemResultBuilders.front().terminal.has_value() &&
         r1aDuplicateTask._sourceItemResultBuilders.front().terminal->status == S_OK &&
         r1aDuplicateTask._sourceItemResultBuilders.front().terminal->publication == FileOperations::PublicationState::Published;
     const uint64_t duplicateStoreRejectCount = r1aDuplicateTask._duplicateTerminalStoreRejectCount.load(std::memory_order_acquire);
@@ -2128,10 +2129,11 @@ case SelfTestState::Step::Phase10_ClipboardAdmissionAndRetainedActions:
     for (uint64_t decision = 0u; decision < kR1aGateDecisionCount; ++decision)
     {
         const HRESULT consumeHr = (decision % 2u) == 0u ? S_OK : HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
-        clipboardGateMutationPermitCount += FolderWindow::FileOperationState::Task::ClipboardMutationGateAllows(S_OK, consumeHr, consumeHr == S_OK) ? 1u : 0u;
+        clipboardGateMutationPermitCount +=
+            FolderWindow::FileOperationState::Task::ClipboardMutationGateAllows(S_OK, consumeHr, consumeHr == S_OK) ? 1u : 0u;
     }
-    const uint64_t r1aTerminalFunnelUs =
-        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - r1aPerfStarted).count());
+    const uint64_t r1aTerminalFunnelUs = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - r1aPerfStarted).count());
     Debug::Perf::Emit(L"FileOps.SelfTest.R1a.TerminalFunnelUs", L"candidate", r1aTerminalFunnelUs, kR1aBuilderCount, r1aTerminalStoreCount, S_OK);
     Debug::Perf::Emit(L"FileOps.SelfTest.R1a.BuilderCount", L"selected-roots", 0u, kR1aBuilderCount, kR1aBuilderCount, S_OK);
     Debug::Perf::Emit(L"FileOps.SelfTest.R1a.TerminalStoreCount", L"dense", 0u, r1aTerminalStoreCount, kR1aBuilderCount, S_OK);
@@ -2140,23 +2142,24 @@ case SelfTestState::Step::Phase10_ClipboardAdmissionAndRetainedActions:
     Debug::Perf::Emit(L"FileOps.SelfTest.R1a.ProviderCallCount", L"no-provider", 0u, 0u, 0u, S_OK);
 
     if (accepted == summaries.end() || ! accepted->clipboardMoveAdmission || ! accepted->clipboardMoveConsumed ||
-        accepted->clipboardMoveConsumptionStatus != S_OK || ! state.phase10ClipboardPublishedNonRunning.load(std::memory_order_acquire))
+        accepted->clipboardMoveConsumptionStatus != S_OK ||
+        ! state.phase10ClipboardPublishedNonRunning.load(std::memory_order_acquire))
     {
         Fail(L"P4.5 accepted clipboard Move did not retain the successful consumption receipt.");
         return true;
     }
     if (clearFailed == summaries.end() || ! clearFailed->clipboardMoveAdmission || clearFailed->clipboardMoveConsumed ||
-        clearFailed->clipboardMoveConsumptionStatus != HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) || SUCCEEDED(clearFailed->resultHr) ||
-        clearFailed->retainedSourceCount != 1u || clearFailed->unknownSourceCount != 0u || ! std::filesystem::exists(failedClearSource) ||
-        std::filesystem::exists(destinationRoot / failedClearSource.filename()))
+        clearFailed->clipboardMoveConsumptionStatus != HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) ||
+        SUCCEEDED(clearFailed->resultHr) || clearFailed->retainedSourceCount != 1u || clearFailed->unknownSourceCount != 0u ||
+        ! std::filesystem::exists(failedClearSource) || std::filesystem::exists(destinationRoot / failedClearSource.filename()))
     {
         Fail(L"R1a clipboard-consumption failure did not terminate with dense known-no-mutation truth.");
         return true;
     }
     if (readinessFailed == summaries.end() || ! readinessFailed->clipboardMoveAdmission || readinessFailed->clipboardMoveConsumed ||
-        readinessFailed->clipboardMoveConsumptionStatus != HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) || SUCCEEDED(readinessFailed->resultHr) ||
-        readinessFailed->retainedSourceCount != 1u || readinessFailed->unknownSourceCount != 0u || ! std::filesystem::exists(failedReadinessSource) ||
-        std::filesystem::exists(destinationRoot / failedReadinessSource.filename()) ||
+        readinessFailed->clipboardMoveConsumptionStatus != HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) ||
+        SUCCEEDED(readinessFailed->resultHr) || readinessFailed->retainedSourceCount != 1u || readinessFailed->unknownSourceCount != 0u ||
+        ! std::filesystem::exists(failedReadinessSource) || std::filesystem::exists(destinationRoot / failedReadinessSource.filename()) ||
         state.phase10ClipboardReadinessBarrierCalled.load(std::memory_order_acquire))
     {
         Fail(L"R1a selected-root readiness failure did not terminate before clipboard consumption with dense known-no-mutation truth.");
@@ -2884,14 +2887,14 @@ case SelfTestState::Step::R1d_PreparingLifecycle:
         return true;
     }
 
-    const std::filesystem::path sourceRoot         = state.tempRoot / L"r1d-preparing-source";
-    const std::filesystem::path destinationRoot    = state.tempRoot / L"r1d-preparing-destination";
-    const std::filesystem::path copySource         = sourceRoot / L"copy.bin";
-    const std::filesystem::path fastCopySource     = sourceRoot / L"fast-copy.bin";
-    const std::filesystem::path moveSource         = sourceRoot / L"move.bin";
-    const std::filesystem::path failedGateSource   = sourceRoot / L"failed-gate.bin";
+    const std::filesystem::path sourceRoot      = state.tempRoot / L"r1d-preparing-source";
+    const std::filesystem::path destinationRoot = state.tempRoot / L"r1d-preparing-destination";
+    const std::filesystem::path copySource      = sourceRoot / L"copy.bin";
+    const std::filesystem::path fastCopySource  = sourceRoot / L"fast-copy.bin";
+    const std::filesystem::path moveSource      = sourceRoot / L"move.bin";
+    const std::filesystem::path failedGateSource = sourceRoot / L"failed-gate.bin";
     const std::filesystem::path canceledGateSource = sourceRoot / L"canceled-gate.bin";
-    constexpr uint32_t kMoveClipboardSequence      = 0x41D10001u;
+    constexpr uint32_t kMoveClipboardSequence  = 0x41D10001u;
 
     if (state.stepState == 0)
     {
@@ -2900,11 +2903,11 @@ case SelfTestState::Step::R1d_PreparingLifecycle:
         state.taskC.reset();
         state.r1dPreparingGateEntered.store(false, std::memory_order_release);
         state.r1dPreparingGateRelease.store(false, std::memory_order_release);
-        state.r1dAdmissionReturnedBeforeReadiness   = false;
+        state.r1dAdmissionReturnedBeforeReadiness = false;
         state.r1dMoveBreadcrumbPublishedBeforeReady = false;
-        if (! RecreateEmptyDirectory(sourceRoot) || ! RecreateEmptyDirectory(destinationRoot) || ! WriteTestFile(copySource, 4096u) ||
-            ! WriteTestFile(fastCopySource, 4096u) || ! WriteTestFile(moveSource, 4096u) || ! WriteTestFile(failedGateSource, 4096u) ||
-            ! WriteTestFile(canceledGateSource, 4096u))
+        if (! RecreateEmptyDirectory(sourceRoot) || ! RecreateEmptyDirectory(destinationRoot) ||
+            ! WriteTestFile(copySource, 4096u) || ! WriteTestFile(fastCopySource, 4096u) || ! WriteTestFile(moveSource, 4096u) ||
+            ! WriteTestFile(failedGateSource, 4096u) || ! WriteTestFile(canceledGateSource, 4096u))
         {
             Fail(L"R1d Preparing fixtures could not be created.");
             return true;
@@ -2913,20 +2916,28 @@ case SelfTestState::Step::R1d_PreparingLifecycle:
         constexpr size_t kSelectedRootCount = 4'096u;
         FileOperations::QualifiedEndpoint sourceEndpoint{};
         FileOperations::QualifiedEndpoint destinationEndpoint{};
-        if (! FileOperations::TryQualifyEndpointForSelfTest(
-                state.fsLocal, sourceRoot.native(), FILESYSTEM_COPY, kPluginIdLocal, L"host/default", sourceEndpoint) ||
-            ! FileOperations::TryQualifyEndpointForSelfTest(
-                state.fsLocal, destinationRoot.native(), FILESYSTEM_COPY, kPluginIdLocal, L"host/default", destinationEndpoint))
+        if (! FileOperations::TryQualifyEndpointForSelfTest(state.fsLocal,
+                                                            sourceRoot.native(),
+                                                            FILESYSTEM_COPY,
+                                                            kPluginIdLocal,
+                                                            L"host/default",
+                                                            sourceEndpoint) ||
+            ! FileOperations::TryQualifyEndpointForSelfTest(state.fsLocal,
+                                                            destinationRoot.native(),
+                                                            FILESYSTEM_COPY,
+                                                            kPluginIdLocal,
+                                                            L"host/default",
+                                                            destinationEndpoint))
         {
             Fail(L"R1d Preparing performance endpoints could not be qualified.");
             return true;
         }
 
         FileOperations::TransferPlan perfPlan{};
-        perfPlan.intent                         = FileOperations::TransferIntent::Copy;
-        perfPlan.strategy                       = FileOperations::OperationStrategy::Copy;
-        perfPlan.sourceEndpoint                 = std::move(sourceEndpoint);
-        perfPlan.destinationEndpoint            = std::move(destinationEndpoint);
+        perfPlan.intent              = FileOperations::TransferIntent::Copy;
+        perfPlan.strategy            = FileOperations::OperationStrategy::Copy;
+        perfPlan.sourceEndpoint      = std::move(sourceEndpoint);
+        perfPlan.destinationEndpoint = std::move(destinationEndpoint);
         perfPlan.destination.providerFolderPath = destinationRoot.native();
         perfPlan.selectedItems.reserve(kSelectedRootCount);
         for (size_t index = 0u; index < kSelectedRootCount; ++index)
@@ -2971,13 +2982,13 @@ case SelfTestState::Step::R1d_PreparingLifecycle:
             });
         }
 
-        const auto readinessStarted                   = std::chrono::steady_clock::now();
+        const auto readinessStarted = std::chrono::steady_clock::now();
         FileOperations::PlanRejectionBucket rejection = FileOperations::PlanRejectionBucket::None;
-        HRESULT readinessHr                           = FileOperations::ValidatePlan(perfPlans->front(), &rejection);
+        HRESULT readinessHr = FileOperations::ValidatePlan(perfPlans->front(), &rejection);
         if (SUCCEEDED(readinessHr))
         {
-            const uint64_t validationUs =
-                static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - readinessStarted).count());
+            const uint64_t validationUs = static_cast<uint64_t>(
+                std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - readinessStarted).count());
             readinessHr = perfTask.BuildPreparationSnapshot(validationUs);
         }
         if (FAILED(readinessHr))
@@ -2986,8 +2997,9 @@ case SelfTestState::Step::R1d_PreparingLifecycle:
             return true;
         }
         const std::shared_ptr<const FileOperations::PreparationSnapshot> preparation = perfTask.LoadPreparationSnapshot();
-        if (! preparation || preparation->selectedRootCount != kSelectedRootCount || preparation->scopes.size() != kSelectedRootCount * 2u ||
-            preparation->endpoints.size() != 1u || preparation->strategies.size() != 1u || preparation->copyOnlyCount != 0u ||
+        if (! preparation || preparation->selectedRootCount != kSelectedRootCount ||
+            preparation->scopes.size() != kSelectedRootCount * 2u || preparation->endpoints.size() != 1u ||
+            preparation->strategies.size() != 1u || preparation->copyOnlyCount != 0u ||
             preparation->buildSnapshotUs >= 2'000'000u || preparation->selectedRootReadinessUs >= 2'000'000u ||
             preparation->retainedBytes >= 64u * 1024u * 1024u)
         {
@@ -2998,39 +3010,42 @@ case SelfTestState::Step::R1d_PreparingLifecycle:
         state.fileOps->DebugSetTaskPresentationNowTickForSelfTest(10'000u);
         state.r1dPresentationBaseline = state.fileOps->DebugTaskPresentedCount();
         HostResetTestPromptRequestCount();
-        state.taskA                                          = StartFileOperationAndGetId(state.fileOps,
-                                                                                          FILESYSTEM_COPY,
-                                                                                          FolderWindow::Pane::Left,
-                                                                                          FolderWindow::Pane::Right,
-                                                                                          state.fsLocal,
-                                                                                          {copySource},
-                                                                                          destinationRoot,
-                                                                                          FILESYSTEM_FLAG_NONE,
-                                                                                          false,
-                                                                                          0u,
-                                                                                          FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                                          false,
-                                                                                          state.fsLocal,
-                                                                                          {},
-                                                                                          std::nullopt,
-                                                                                          {},
-                                                                                          [&]() noexcept
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {copySource},
+                                                 destinationRoot,
+                                                 FILESYSTEM_FLAG_NONE,
+                                                 false,
+                                                 0u,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsLocal,
+                                                 {},
+                                                 std::nullopt,
+                                                 {},
+                                                 [&]() noexcept
         {
             state.r1dPreparingGateEntered.store(true, std::memory_order_release);
             state.r1dPreparingGateEntered.notify_all();
             state.r1dPreparingGateRelease.wait(false, std::memory_order_acquire);
             return S_OK;
         });
-        FolderWindow::FileOperationState::Task* admittedTask = state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
-        if (! state.taskA.has_value() || admittedTask == nullptr || ! admittedTask->IsPresentationHidden() || HostGetTestPromptRequestCount() != 0u)
+        FolderWindow::FileOperationState::Task* admittedTask =
+            state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
+        if (! state.taskA.has_value() || admittedTask == nullptr || ! admittedTask->IsPresentationHidden() ||
+            HostGetTestPromptRequestCount() != 0u)
         {
             Fail(L"R1d routine Copy did not enter hidden common Preparing without a generic confirmation prompt.");
             return true;
         }
 
         FolderWindow::FileOperationState::Task* task = admittedTask;
-        state.r1dAdmissionReturnedBeforeReadiness    = task != nullptr && ! task->_selectedRootReadinessComplete.load(std::memory_order_acquire);
-        state.stepState                              = 1;
+        state.r1dAdmissionReturnedBeforeReadiness = task != nullptr &&
+            ! task->_selectedRootReadinessComplete.load(std::memory_order_acquire);
+        state.stepState = 1;
         return false;
     }
 
@@ -3041,18 +3056,21 @@ case SelfTestState::Step::R1d_PreparingLifecycle:
             return false;
         }
         const FolderWindow::FileOperationState::Task* task = state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
-        const std::shared_ptr<const FileOperations::PreparationSnapshot> preparation = task == nullptr ? nullptr : task->LoadPreparationSnapshot();
+        const std::shared_ptr<const FileOperations::PreparationSnapshot> preparation =
+            task == nullptr ? nullptr : task->LoadPreparationSnapshot();
         state.fileOps->DebugSetTaskPresentationNowTickForSelfTest(10'499u);
         static_cast<void>(state.fileOps->RefreshDeferredTaskPresentation());
         const bool hiddenBeforeDeadline = task != nullptr && task->IsPresentationHidden();
         state.fileOps->DebugSetTaskPresentationNowTickForSelfTest(10'500u);
         static_cast<void>(state.fileOps->RefreshDeferredTaskPresentation());
-        const bool revealedAtDeadline =
-            task != nullptr && task->IsPresentationVisible() && state.fileOps->DebugTaskPresentedCount() == state.r1dPresentationBaseline + 1u;
+        const bool revealedAtDeadline = task != nullptr && task->IsPresentationVisible() &&
+            state.fileOps->DebugTaskPresentedCount() == state.r1dPresentationBaseline + 1u;
         if (! state.r1dAdmissionReturnedBeforeReadiness || task == nullptr ||
-            task->GetLifecyclePhase() != FileOperations::TaskLifecyclePhase::AwaitingAcceptance || ! preparation || preparation->selectedRootCount != 1u ||
-            preparation->scopes.size() != 2u || preparation->endpoints.size() != 1u || preparation->strategies.size() != 1u || preparation->status != S_OK ||
-            ! hiddenBeforeDeadline || ! revealedAtDeadline || task->_selectedRootReadinessComplete.load(std::memory_order_acquire) ||
+            task->GetLifecyclePhase() != FileOperations::TaskLifecyclePhase::AwaitingAcceptance || ! preparation ||
+            preparation->selectedRootCount != 1u || preparation->scopes.size() != 2u || preparation->endpoints.size() != 1u ||
+            preparation->strategies.size() != 1u || preparation->status != S_OK ||
+            ! hiddenBeforeDeadline || ! revealedAtDeadline ||
+            task->_selectedRootReadinessComplete.load(std::memory_order_acquire) ||
             std::filesystem::exists(destinationRoot / copySource.filename()))
         {
             state.r1dPreparingGateRelease.store(true, std::memory_order_release);
@@ -3080,19 +3098,19 @@ case SelfTestState::Step::R1d_PreparingLifecycle:
 
         state.fileOps->DebugSetTaskPresentationNowTickForSelfTest(20'000u);
         state.r1dPresentationBaseline = state.fileOps->DebugTaskPresentedCount();
-        state.taskA                   = StartFileOperationAndGetId(state.fileOps,
-                                                                   FILESYSTEM_COPY,
-                                                                   FolderWindow::Pane::Left,
-                                                                   FolderWindow::Pane::Right,
-                                                                   state.fsLocal,
-                                                                   {fastCopySource},
-                                                                   destinationRoot,
-                                                                   FILESYSTEM_FLAG_NONE,
-                                                                   false,
-                                                                   0u,
-                                                                   FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                   false,
-                                                                   state.fsLocal);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {fastCopySource},
+                                                 destinationRoot,
+                                                 FILESYSTEM_FLAG_NONE,
+                                                 false,
+                                                 0u,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsLocal);
         if (! state.taskA.has_value())
         {
             Fail(L"R1d fast routine Copy could not be admitted for no-flash coverage.");
@@ -3108,7 +3126,8 @@ case SelfTestState::Step::R1d_PreparingLifecycle:
         {
             return false;
         }
-        if (! std::filesystem::exists(destinationRoot / fastCopySource.filename()) || state.fileOps->DebugTaskPresentedCount() != state.r1dPresentationBaseline)
+        if (! std::filesystem::exists(destinationRoot / fastCopySource.filename()) ||
+            state.fileOps->DebugTaskPresentedCount() != state.r1dPresentationBaseline)
         {
             Fail(L"R1d fast routine Copy did not complete cleanly without revealing a task surface.");
             return true;
@@ -3156,11 +3175,16 @@ case SelfTestState::Step::R1d_PreparingLifecycle:
             return false;
         }
         const FolderWindow::FileOperationState::Task* task = state.taskB.has_value() ? state.fileOps->FindTask(state.taskB.value()) : nullptr;
-        state.r1dMoveBreadcrumbPublishedBeforeReady        = task != nullptr && task->_moveBreadcrumb.has_value();
+        state.r1dMoveBreadcrumbPublishedBeforeReady = task != nullptr && task->_moveBreadcrumb.has_value();
         const bool mutationBeforeReady = ! std::filesystem::exists(moveSource) || std::filesystem::exists(destinationRoot / moveSource.filename());
         Debug::Perf::Emit(L"FileOps.Preparing.MutationBeforeReadyCount", L"behavioral", 0u, mutationBeforeReady ? 1u : 0u, 0u, S_OK);
         Debug::Perf::Emit(L"FileOps.Preparing.ClipboardBeforeReadyCount", L"behavioral", 0u, 0u, 0u, S_OK);
-        Debug::Perf::Emit(L"FileOps.Preparing.BreadcrumbBeforeReadyCount", L"behavioral", 0u, state.r1dMoveBreadcrumbPublishedBeforeReady ? 1u : 0u, 0u, S_OK);
+        Debug::Perf::Emit(L"FileOps.Preparing.BreadcrumbBeforeReadyCount",
+                          L"behavioral",
+                          0u,
+                          state.r1dMoveBreadcrumbPublishedBeforeReady ? 1u : 0u,
+                          0u,
+                          S_OK);
         state.r1dPreparingGateRelease.store(true, std::memory_order_release);
         state.r1dPreparingGateRelease.notify_all();
         if (task == nullptr || mutationBeforeReady || state.r1dMoveBreadcrumbPublishedBeforeReady)
@@ -3216,14 +3240,16 @@ case SelfTestState::Step::R1d_PreparingLifecycle:
         {
             return false;
         }
-        const CompletedTaskInfo& completed                    = state.completedTasks.at(state.taskC.value());
-        const FileOperations::FileOperationItemResult* result = completed.sourceItemResults.size() == 1u && completed.sourceItemResults.front().has_value()
-                                                                    ? std::addressof(completed.sourceItemResults.front().value())
-                                                                    : nullptr;
-        if (completed.hr != E_ACCESSDENIED || result == nullptr || result->publication != FileOperations::PublicationState::NotAttempted ||
-            result->sourceDisposition != FileOperations::SourceDisposition::Retained || result->completion != FileOperations::ItemCompletion::Failed ||
-            result->status != E_ACCESSDENIED || ! std::filesystem::exists(failedGateSource) ||
-            std::filesystem::exists(destinationRoot / failedGateSource.filename()))
+        const CompletedTaskInfo& completed = state.completedTasks.at(state.taskC.value());
+        const FileOperations::FileOperationItemResult* result =
+            completed.sourceItemResults.size() == 1u && completed.sourceItemResults.front().has_value()
+                ? std::addressof(completed.sourceItemResults.front().value())
+                : nullptr;
+        if (completed.hr != E_ACCESSDENIED || result == nullptr ||
+            result->publication != FileOperations::PublicationState::NotAttempted ||
+            result->sourceDisposition != FileOperations::SourceDisposition::Retained ||
+            result->completion != FileOperations::ItemCompletion::Failed || result->status != E_ACCESSDENIED ||
+            ! std::filesystem::exists(failedGateSource) || std::filesystem::exists(destinationRoot / failedGateSource.filename()))
         {
             Fail(L"R1d failed decision gate did not reduce to one dense source-retained, no-mutation result.");
             return true;
@@ -3289,15 +3315,17 @@ case SelfTestState::Step::R1d_PreparingLifecycle:
     {
         return false;
     }
-    const CompletedTaskInfo& canceled                             = state.completedTasks.at(state.taskA.value());
-    const FileOperations::FileOperationItemResult* canceledResult = canceled.sourceItemResults.size() == 1u && canceled.sourceItemResults.front().has_value()
-                                                                        ? std::addressof(canceled.sourceItemResults.front().value())
-                                                                        : nullptr;
+    const CompletedTaskInfo& canceled = state.completedTasks.at(state.taskA.value());
+    const FileOperations::FileOperationItemResult* canceledResult =
+        canceled.sourceItemResults.size() == 1u && canceled.sourceItemResults.front().has_value()
+            ? std::addressof(canceled.sourceItemResults.front().value())
+            : nullptr;
     if (canceled.hr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || canceledResult == nullptr ||
         canceledResult->publication != FileOperations::PublicationState::NotAttempted ||
         canceledResult->sourceDisposition != FileOperations::SourceDisposition::Retained ||
-        canceledResult->completion != FileOperations::ItemCompletion::Canceled || canceledResult->status != HRESULT_FROM_WIN32(ERROR_CANCELLED) ||
-        ! std::filesystem::exists(canceledGateSource) || std::filesystem::exists(destinationRoot / canceledGateSource.filename()))
+        canceledResult->completion != FileOperations::ItemCompletion::Canceled ||
+        canceledResult->status != HRESULT_FROM_WIN32(ERROR_CANCELLED) || ! std::filesystem::exists(canceledGateSource) ||
+        std::filesystem::exists(destinationRoot / canceledGateSource.filename()))
     {
         Fail(L"R1d canceled decision gate did not reduce to one dense source-retained, no-mutation result.");
         return true;
@@ -3341,9 +3369,7 @@ case SelfTestState::Step::Phase11_CrossFileSystemBridge:
             R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":4,"deleteMaxConcurrency":8,"deleteRecycleBinMaxConcurrency":2,"enumerationSoftMaxBufferMiB":512,"enumerationHardMaxBufferMiB":2048,"reparsePointPolicy":"preserve","searchBackendPreference":"auto","searchMaxDirectoryWalkers":4})json"));
 
         // R3-2: this case covers Copy-only Move into a destination without content proof.
-        static_cast<void>(SetPluginConfiguration(
-            state.infoDummy.get(),
-            R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0","writerProof":false})json"));
+        static_cast<void>(SetPluginConfiguration(state.infoDummy.get(), R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0","writerProof":false})json"));
 
         if (! RecreateEmptyDirectory(srcDir) || ! RecreateEmptyDirectory(dstDir) || ! RecreateEmptyDirectory(moveDir))
         {
@@ -3471,19 +3497,19 @@ case SelfTestState::Step::Phase11_CrossFileSystemBridge:
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_NONE);
         HostResetTestPromptRequestCount();
-        state.taskC = StartFileOperationAndGetId(state.fileOps,
-                                                 FILESYSTEM_MOVE,
-                                                 FolderWindow::Pane::Left,
-                                                 FolderWindow::Pane::Right,
-                                                 state.fsLocal,
-                                                 {moveFile},
-                                                 std::filesystem::path(dummyMoveRoot),
-                                                 flags,
-                                                 false,
-                                                 0,
-                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                 false,
-                                                 state.fsDummy);
+        state.taskC                 = StartFileOperationAndGetId(state.fileOps,
+                                                                 FILESYSTEM_MOVE,
+                                                                 FolderWindow::Pane::Left,
+                                                                 FolderWindow::Pane::Right,
+                                                                 state.fsLocal,
+                                                                 {moveFile},
+                                                                 std::filesystem::path(dummyMoveRoot),
+                                                                 flags,
+                                                                 false,
+                                                                 0,
+                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                                 false,
+                                                                 state.fsDummy);
         if (! state.taskC.has_value())
         {
             Fail(L"Failed to start cross-filesystem move (local -> dummy).");
@@ -3491,7 +3517,8 @@ case SelfTestState::Step::Phase11_CrossFileSystemBridge:
         }
         if (HostGetTestPromptRequestCount() != 1u)
         {
-            Fail(std::format(L"Known Copy-only Move must receive exactly one acceptance before mutation; got {} prompts.", HostGetTestPromptRequestCount()));
+            Fail(std::format(L"Known Copy-only Move must receive exactly one acceptance before mutation; got {} prompts.",
+                             HostGetTestPromptRequestCount()));
             return true;
         }
 
@@ -6135,9 +6162,11 @@ case SelfTestState::Step::Phase12_ReparsePointPolicy:
             return true;
         }
         const auto* bridgeMoveTask = state.fileOps ? state.fileOps->FindTask(state.taskC.value()) : nullptr;
-        const std::shared_ptr<const FileOperations::FileOperationPlanGroup> bridgeMovePlans = bridgeMoveTask != nullptr ? bridgeMoveTask->LoadPlans() : nullptr;
-        const auto* bridgeMovePlan =
-            bridgeMovePlans && bridgeMovePlans->size() == 1u ? std::get_if<FileOperations::TransferPlan>(&bridgeMovePlans->front()) : nullptr;
+        const std::shared_ptr<const FileOperations::FileOperationPlanGroup> bridgeMovePlans =
+            bridgeMoveTask != nullptr ? bridgeMoveTask->LoadPlans() : nullptr;
+        const auto* bridgeMovePlan = bridgeMovePlans && bridgeMovePlans->size() == 1u
+                                         ? std::get_if<FileOperations::TransferPlan>(&bridgeMovePlans->front())
+                                         : nullptr;
         // R3-2: the Dummy destination proves published content through its writer, so the pair is
         // admitted Managed; a link carries no writer proof and still retains its source per item.
         if (bridgeMovePlan == nullptr || bridgeMovePlan->strategy != FileOperations::OperationStrategy::Managed)
@@ -6196,7 +6225,7 @@ case SelfTestState::Step::Phase12_ReparsePointPolicy:
                     diagnostics += std::format(L" [{} 0x{:08X} {}]", entry.category, static_cast<unsigned long>(entry.status), entry.message);
                 }
             }
-            const auto& results    = itBridgeMove->second.sourceItemResults;
+            const auto& results = itBridgeMove->second.sourceItemResults;
             const auto* const item = results.empty() || ! results.front().has_value() ? nullptr : &results.front().value();
             Fail(std::format(L"Bridge move reparse expected intentional-Skip S_FALSE (0x{:08X}) but got 0x{:08X} (item status=0x{:08X} completion={} "
                              L"publication={} disposition={} strategy={}).{}",
@@ -6847,19 +6876,22 @@ case SelfTestState::Step::C1_ExitCloseDeferredUntilTasksQuiet:
     }
     if (state.stepState == 0u)
     {
-        const wil::com_ptr<IFileSystem> paneFileSystem = state.folderWindow ? state.folderWindow->GetFileSystem(FolderWindow::Pane::Left) : nullptr;
+        const wil::com_ptr<IFileSystem> paneFileSystem =
+            state.folderWindow ? state.folderWindow->GetFileSystem(FolderWindow::Pane::Left) : nullptr;
         if (! state.fileOps || ! state.folderWindow || ! paneFileSystem)
         {
             Fail(L"C1 exit close deferred requires the folder window and its left pane file system.");
             return true;
         }
-        if (! RecreateEmptyDirectory(root) || ! RecreateEmptyDirectory(destination) || ! WriteFilledTestFile(source, 256u * 1024u, 0x3C))
+        if (! RecreateEmptyDirectory(root) || ! RecreateEmptyDirectory(destination) ||
+            ! WriteFilledTestFile(source, 256u * 1024u, 0x3C))
         {
             Fail(L"C1 exit close deferred could not stage its source.");
             cleanup();
             return true;
         }
-        state.c1DeferredCloseTarget = CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr);
+        state.c1DeferredCloseTarget =
+            CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, nullptr, nullptr);
         if (state.c1DeferredCloseTarget == nullptr)
         {
             Fail(L"C1 exit close deferred could not create its message-only close target.");
@@ -6883,7 +6915,8 @@ case SelfTestState::Step::C1_ExitCloseDeferredUntilTasksQuiet:
                                                                   &taskId);
         if (FAILED(admissionHr) || taskId == 0u)
         {
-            Fail(std::format(L"C1 exit close deferred could not admit its copy (hr=0x{:08X}).", static_cast<unsigned long>(admissionHr)));
+            Fail(std::format(L"C1 exit close deferred could not admit its copy (hr=0x{:08X}).",
+                             static_cast<unsigned long>(admissionHr)));
             cleanup();
             return true;
         }
@@ -6932,7 +6965,8 @@ case SelfTestState::Step::C1_ExitCloseDeferredUntilTasksQuiet:
         return false;
     }
     const auto done = state.completedTasks.find(state.taskA.value());
-    if (done == state.completedTasks.end() || state.fileOps->HasActiveOperations() || IsWindow(state.folderWindow->GetHwnd()) == FALSE)
+    if (done == state.completedTasks.end() || state.fileOps->HasActiveOperations() ||
+        IsWindow(state.folderWindow->GetHwnd()) == FALSE)
     {
         Fail(L"C1 exit close deferred: the close must resume only after the last task is reaped, with the folder window still alive.");
         cleanup();
@@ -6942,7 +6976,8 @@ case SelfTestState::Step::C1_ExitCloseDeferredUntilTasksQuiet:
     if (drainedHr != HRESULT_FROM_WIN32(ERROR_CANCELLED) && drainedHr != HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) &&
         drainedHr != HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE))
     {
-        Fail(std::format(L"C1 exit close deferred: the drained task must end as a cancellation (hr=0x{:08X}).", static_cast<unsigned long>(drainedHr)));
+        Fail(std::format(L"C1 exit close deferred: the drained task must end as a cancellation (hr=0x{:08X}).",
+                         static_cast<unsigned long>(drainedHr)));
         cleanup();
         return true;
     }
@@ -6955,11 +6990,11 @@ case SelfTestState::Step::Beeline_SameVolumeTreeMoveIsRename:
 {
     // Beeline: a same-volume Move of a regular file and a directory tree is one Native rename per
     // selected item. The identity of a nested child survives the move, which no copy could reproduce.
-    const std::filesystem::path root         = state.tempRoot / L"beeline-tree-move";
-    const std::filesystem::path source       = root / L"source";
-    const std::filesystem::path destination  = root / L"destination";
-    const std::filesystem::path innerSource  = source / L"tree" / L"inner.bin";
-    const std::filesystem::path innerMoved   = destination / L"tree" / L"inner.bin";
+    const std::filesystem::path root        = state.tempRoot / L"beeline-tree-move";
+    const std::filesystem::path source      = root / L"source";
+    const std::filesystem::path destination = root / L"destination";
+    const std::filesystem::path innerSource = source / L"tree" / L"inner.bin";
+    const std::filesystem::path innerMoved  = destination / L"tree" / L"inner.bin";
     const std::filesystem::path bulkSource   = root / L"bulk";
     const std::filesystem::path bulkCopyRoot = root / L"bulk-copy";
     const std::filesystem::path bulkCopied   = bulkCopyRoot / L"bulk";
@@ -6967,7 +7002,7 @@ case SelfTestState::Step::Beeline_SameVolumeTreeMoveIsRename:
     const std::filesystem::path bulkMoved    = bulkMoveRoot / L"bulk";
     constexpr unsigned int kBulkFiles        = 2'000u;
     constexpr size_t kBulkFileBytes          = 8u * 1024u;
-    const auto fileIdentity                  = [](const std::filesystem::path& path) noexcept -> std::optional<std::pair<DWORD, ULONGLONG>>
+    const auto fileIdentity = [](const std::filesystem::path& path) noexcept -> std::optional<std::pair<DWORD, ULONGLONG>>
     {
         const wil::unique_hfile handle(CreateFileW(path.c_str(),
                                                    FILE_READ_ATTRIBUTES,
@@ -7012,18 +7047,18 @@ case SelfTestState::Step::Beeline_SameVolumeTreeMoveIsRename:
         state.beelineVolumeSerial = identityBefore->first;
         state.beelineFileIndex    = identityBefore->second;
         state.taskA               = StartFileOperationAndGetId(state.fileOps,
-                                                               FILESYSTEM_MOVE,
-                                                               FolderWindow::Pane::Left,
-                                                               FolderWindow::Pane::Right,
-                                                               state.fsLocal,
-                                                               {source / L"file.bin", source / L"tree"},
-                                                               destination,
-                                                               static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
-                                                               false,
-                                                               0,
-                                                               FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                               false,
-                                                               nullptr);
+                                                 FILESYSTEM_MOVE,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {source / L"file.bin", source / L"tree"},
+                                                 destination,
+                                                 static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 nullptr);
         if (! state.taskA.has_value())
         {
             Fail(L"Beeline tree move could not start its move.");
@@ -7070,16 +7105,16 @@ case SelfTestState::Step::Beeline_SameVolumeTreeMoveIsRename:
         }
         state.markerTick = GetTickCount64();
         state.taskA      = StartFileOperationAndGetId(state.fileOps,
-                                                      FILESYSTEM_COPY,
-                                                      FolderWindow::Pane::Left,
-                                                      FolderWindow::Pane::Right,
-                                                      state.fsLocal,
-                                                      {bulkSource},
-                                                      bulkCopyRoot,
-                                                      static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
-                                                      false,
-                                                      0,
-                                                      FolderWindow::FileOperationState::ExecutionMode::PerItem);
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {bulkSource},
+                                                 bulkCopyRoot,
+                                                 static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             Fail(L"Beeline tree move could not start its baseline copy.");
@@ -7092,24 +7127,24 @@ case SelfTestState::Step::Beeline_SameVolumeTreeMoveIsRename:
     {
         if (FAILED(done->second.hr) || ! FileSizeEquals(bulkCopied / std::format(L"file{:04}.bin", kBulkFiles - 1u), kBulkFileBytes))
         {
-            Fail(
-                std::format(L"Beeline tree move: the baseline copy of the throughput tree failed (hr=0x{:08X}).", static_cast<unsigned long>(done->second.hr)));
+            Fail(std::format(L"Beeline tree move: the baseline copy of the throughput tree failed (hr=0x{:08X}).",
+                             static_cast<unsigned long>(done->second.hr)));
             state.taskA.reset();
             return true;
         }
         state.beelineCopyMs = done->second.completionTick - state.markerTick;
         state.markerTick    = GetTickCount64();
         state.taskA         = StartFileOperationAndGetId(state.fileOps,
-                                                         FILESYSTEM_MOVE,
-                                                         FolderWindow::Pane::Left,
-                                                         FolderWindow::Pane::Right,
-                                                         state.fsLocal,
-                                                         {bulkCopied},
-                                                         bulkMoveRoot,
-                                                         static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
-                                                         false,
-                                                         0,
-                                                         FolderWindow::FileOperationState::ExecutionMode::PerItem);
+                                                 FILESYSTEM_MOVE,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {bulkCopied},
+                                                 bulkMoveRoot,
+                                                 static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             Fail(L"Beeline tree move could not start its throughput move.");
@@ -7123,21 +7158,23 @@ case SelfTestState::Step::Beeline_SameVolumeTreeMoveIsRename:
         ! FileSizeEquals(bulkMoved / std::format(L"file{:04}.bin", kBulkFiles - 1u), kBulkFileBytes) ||
         DebugGetPreparedTransferStrategyForSelfTest(state.taskA.value()) != FileOperations::OperationStrategy::Native || moveMs > state.beelineCopyMs)
     {
-        Fail(std::format(
-            L"Beeline tree move: the rename Move of the throughput tree must be Native and no slower than its copy (hr=0x{:08X}, copyMs={}, moveMs={}).",
-            static_cast<unsigned long>(done->second.hr),
-            state.beelineCopyMs,
-            moveMs));
+        Fail(std::format(L"Beeline tree move: the rename Move of the throughput tree must be Native and no slower than its copy (hr=0x{:08X}, copyMs={}, moveMs={}).",
+                         static_cast<unsigned long>(done->second.hr),
+                         state.beelineCopyMs,
+                         moveMs));
         state.taskA.reset();
         return true;
     }
-    Debug::Perf::Emit(
-        L"FileOps.SelfTest.SameVolumeTreeMoveThroughput",
-        std::format(L"files={};bytes={};copyMs={};moveMs={}", kBulkFiles, static_cast<uint64_t>(kBulkFiles) * kBulkFileBytes, state.beelineCopyMs, moveMs),
-        moveMs,
-        state.beelineCopyMs,
-        static_cast<uint64_t>(kBulkFiles),
-        done->second.hr);
+    Debug::Perf::Emit(L"FileOps.SelfTest.SameVolumeTreeMoveThroughput",
+                      std::format(L"files={};bytes={};copyMs={};moveMs={}",
+                                  kBulkFiles,
+                                  static_cast<uint64_t>(kBulkFiles) * kBulkFileBytes,
+                                  state.beelineCopyMs,
+                                  moveMs),
+                      moveMs,
+                      state.beelineCopyMs,
+                      static_cast<uint64_t>(kBulkFiles),
+                      done->second.hr);
     static_cast<void>(SelfTest::RemoveAll(root));
     state.taskA.reset();
     NextStep(state, SelfTestState::Step::Beeline_LoopbackShareMoveIsRename);
@@ -7223,9 +7260,9 @@ case SelfTestState::Step::C1_PermanentDeleteConfirmsOnCard:
     // published task ends canceled with the file intact (on the baseline the modal refused and no
     // task existed). Without an override the card shows the consent with Cancel and Permanently
     // delete, and answering Permanently delete removes the file.
-    using Task                         = FolderWindow::FileOperationState::Task;
-    const std::filesystem::path root   = state.tempRoot / L"c1-permanent-delete-card";
-    const std::filesystem::path victim = root / L"victim.bin";
+    using Task                              = FolderWindow::FileOperationState::Task;
+    const std::filesystem::path root        = state.tempRoot / L"c1-permanent-delete-card";
+    const std::filesystem::path victim      = root / L"victim.bin";
     if (HasTimedOut(state, GetTickCount64(), 60'000ull))
     {
         HostClearTestPromptResultOverride();
@@ -7278,8 +7315,7 @@ case SelfTestState::Step::C1_PermanentDeleteConfirmsOnCard:
         std::error_code ec;
         if (done->second.hr != HRESULT_FROM_WIN32(ERROR_CANCELLED) || ! std::filesystem::exists(victim, ec) || HostGetTestPromptRequestCount() != 0u)
         {
-            Fail(std::format(L"C1 permanent delete card: a cancelled confirmation must end the task as canceled with the file intact and no modal "
-                             L"(hr=0x{:08X}, prompts={}).",
+            Fail(std::format(L"C1 permanent delete card: a cancelled confirmation must end the task as canceled with the file intact and no modal (hr=0x{:08X}, prompts={}).",
                              static_cast<unsigned long>(done->second.hr),
                              HostGetTestPromptRequestCount()));
             state.taskA.reset();
@@ -7326,10 +7362,9 @@ case SelfTestState::Step::C1_PermanentDeleteConfirmsOnCard:
         if (prompt->bucket != Task::ConflictBucket::PermanentDeleteConfirmation || ! PromptHasAction(prompt.value(), Task::ConflictAction::PermanentDelete) ||
             ! PromptHasAction(prompt.value(), Task::ConflictAction::Cancel) || prompt->consentDetail.empty())
         {
-            Fail(
-                std::format(L"C1 permanent delete card: the card must ask with Permanently delete and Cancel and say what is deleted (bucket={}, detail='{}').",
-                            static_cast<unsigned int>(prompt->bucket),
-                            prompt->consentDetail));
+            Fail(std::format(L"C1 permanent delete card: the card must ask with Permanently delete and Cancel and say what is deleted (bucket={}, detail='{}').",
+                             static_cast<unsigned int>(prompt->bucket),
+                             prompt->consentDetail));
             task->SubmitConflictDecision(Task::ConflictAction::Cancel, false);
             state.taskA.reset();
             return true;

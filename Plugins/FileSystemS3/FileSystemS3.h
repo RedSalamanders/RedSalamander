@@ -24,12 +24,12 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
-#include "FileSystemRouteProviderBase.h"
-#include "PackedFileInfoBuffer.h"
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
+#include "FileSystemRouteProviderBase.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
+#include "PackedFileInfoBuffer.h"
 #include "PlugInterfaces/NavigationMenu.h"
 
 namespace Aws
@@ -205,7 +205,9 @@ public:
                                           IFileSystemCallback* callback    = nullptr,
                                           void* cookie                     = nullptr) noexcept override;
 
-    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
+                                                  FileSystemOperation operation,
+                                                  const char** jsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
                                                FileSystemOperation operationType,
                                                FileSystemTransferEndpoint endpoint,
@@ -225,9 +227,7 @@ public:
 
     // IFileSystemIdentityDelete (C10): a Permanent Delete pins the object revision it confirmed
     // (version id or ETag) and the conditional delete re-checks it on the server.
-    HRESULT STDMETHODCALLTYPE ResolveDeleteIdentity(const wchar_t* path,
-                                                    const FileSystemOptions* options,
-                                                    FileSystemDeleteIdentity* identity) noexcept override;
+    HRESULT STDMETHODCALLTYPE ResolveDeleteIdentity(const wchar_t* path, const FileSystemOptions* options, FileSystemDeleteIdentity* identity) noexcept override;
     HRESULT STDMETHODCALLTYPE DeleteIfIdentity(const wchar_t* path,
                                                const FileSystemDeleteIdentity* identity,
                                                FileSystemFlags flags,
@@ -267,7 +267,9 @@ public:
     };
 
 protected:
-    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path, FileSystemOperation operation, FileSystemRouteDescriptor& descriptor) noexcept override;
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                           FileSystemOperation operation,
+                                           FileSystemRouteDescriptor& descriptor) noexcept override;
 
 private:
     ~FileSystemS3();

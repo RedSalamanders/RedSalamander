@@ -2,9 +2,11 @@
 // Build: cl /O2 /std:c++20 ntfastwalk_rel.cpp
 #include <string>
 #include <vector>
+
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+
 #include <winternl.h> // NTSTATUS, IO_STATUS_BLOCK, UNICODE_STRING, OBJECT_ATTRIBUTES
 
 // --- Minimal NT Helpers/defs (avoid extra headers) ---------------------------

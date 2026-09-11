@@ -1,13 +1,13 @@
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-
 #include <array>
 #include <iterator>
 #include <new>
 #include <optional>
 #include <string>
 #include <string_view>
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 4514) // WIL headers: deleted copy/move and unused inline Helpers

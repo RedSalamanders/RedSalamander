@@ -3,13 +3,15 @@
 #include "FileSystemPathIdentity.h"
 #include "PlugInterfaces/FileSystem.h"
 
-#include <Windows.h>
-
 #include <atomic>
 #include <filesystem>
 #include <span>
 #include <string>
 #include <vector>
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
 
 struct BatchRenameUndoEntry final
 {
@@ -100,9 +102,9 @@ struct BatchRenameExecutionOptions final
 {
     BatchRenameExecutionProgressCallback progressCallback = nullptr;
     void* progressContext                                 = nullptr;
-    BatchRenameMutationCallback mutationCallback          = nullptr;
-    void* mutationContext                                 = nullptr;
-    const BatchRenameExecutionSchedule* schedule          = nullptr;
+    BatchRenameMutationCallback mutationCallback           = nullptr;
+    void* mutationContext                                  = nullptr;
+    const BatchRenameExecutionSchedule* schedule            = nullptr;
 };
 
 [[nodiscard]] bool IsBatchRenameCancellationHRESULT(HRESULT hr) noexcept;

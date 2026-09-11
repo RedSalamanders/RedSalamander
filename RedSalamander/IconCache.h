@@ -14,8 +14,11 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <ShlObj.h>
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <Windows.h>
+
+#include <ShlObj.h>
 
 #include <d2d1_1.h>
 

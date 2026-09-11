@@ -5,15 +5,15 @@
 #include "DxUiThemePalette.h"
 #include "FileActionLauncher.h"
 #include "FileActionResolver.h"
+#include "FolderWindowInternal.h"
 #include "FolderWindow.FileOperationsInternal.h"
 #include "FolderWindow.FileSystem.Private.h"
-#include "FolderWindowInternal.h"
 #include "Helpers.h"
-#include "HostServices.h"
 #include "LocalFileTransaction.h"
+#include "PathUtils.h"
+#include "HostServices.h"
 #include "MaskSyntax.h"
 #include "NavigationLocation.h"
-#include "PathUtils.h"
 
 #include "SettingsStore.h"
 #include "ViewerPluginManager.h"
@@ -3943,8 +3943,8 @@ LRESULT FolderWindow::OnChangeCaseTaskUpdate(LPARAM lp) noexcept
         return 0;
     }
 
-    const uint64_t taskId =
-        ResolveChangeCaseTaskUpdate(*payload, [this](const InformationalTaskUpdate& update) noexcept { return CreateOrUpdateInformationalTask(update); });
+    const uint64_t taskId = ResolveChangeCaseTaskUpdate(*payload, [this](const InformationalTaskUpdate& update) noexcept
+    { return CreateOrUpdateInformationalTask(update); });
     return static_cast<LRESULT>(taskId);
 }
 
@@ -3987,39 +3987,41 @@ LRESULT FolderWindow::OnChangeCaseCompleted(LPARAM lp) noexcept
         return 0;
     }
 
-    const Pane pane                         = payload->pane;
+    const Pane pane = payload->pane;
     const std::filesystem::path focusFolder = std::move(payload->focusFolder);
-    const std::wstring focusDisplayName     = std::move(payload->focusDisplayName);
-    uint64_t taskId                         = 0u;
-    const HRESULT startHr = _fileOperations->AdmitScheduledRename(pane,
-                                                                  payload->fileSystem,
-                                                                  FileOperations::RenameOrigin::ChangeCase,
-                                                                  std::move(payload->operations),
-                                                                  {},
-                                                                  [this, pane, focusFolder, focusDisplayName](const uint64_t publishedTaskId) mutable
-    {
-        _fileOperationRequestCompletionCallbacks.insert_or_assign(publishedTaskId,
-                                                                  [this, pane, focusFolder, focusDisplayName](const FileOperationCompletedEvent& event) mutable
+    const std::wstring focusDisplayName = std::move(payload->focusDisplayName);
+    uint64_t taskId = 0u;
+    const HRESULT startHr = _fileOperations->AdmitScheduledRename(
+        pane,
+        payload->fileSystem,
+        FileOperations::RenameOrigin::ChangeCase,
+        std::move(payload->operations),
+        {},
+        [this, pane, focusFolder, focusDisplayName](const uint64_t publishedTaskId) mutable
         {
-            PaneState& completionState = pane == Pane::Left ? _leftPane : _rightPane;
-            if (SUCCEEDED(event.hr))
-            {
-                const std::optional<std::filesystem::path> currentFolder = completionState.folderView.GetFolderPath();
-                if (currentFolder.has_value() && ! focusFolder.empty() && ! focusDisplayName.empty() &&
-                    OrdinalString::EqualsNoCasePath(currentFolder.value(), focusFolder))
+            _fileOperationRequestCompletionCallbacks.insert_or_assign(
+                publishedTaskId,
+                [this, pane, focusFolder, focusDisplayName](const FileOperationCompletedEvent& event) mutable
                 {
-                    completionState.folderView.RememberFocusedItemForFolder(focusFolder, focusDisplayName);
-                }
-            }
-            completionState.folderView.ForceRefresh();
-        });
-    },
-                                                                  &taskId);
+                    PaneState& completionState = pane == Pane::Left ? _leftPane : _rightPane;
+                    if (SUCCEEDED(event.hr))
+                    {
+                        const std::optional<std::filesystem::path> currentFolder = completionState.folderView.GetFolderPath();
+                        if (currentFolder.has_value() && ! focusFolder.empty() && ! focusDisplayName.empty() &&
+                            OrdinalString::EqualsNoCasePath(currentFolder.value(), focusFolder))
+                        {
+                            completionState.folderView.RememberFocusedItemForFolder(focusFolder, focusDisplayName);
+                        }
+                    }
+                    completionState.folderView.ForceRefresh();
+                });
+        },
+        &taskId);
     if (FAILED(startHr) || taskId == 0u)
     {
         const HRESULT failureHr = FAILED(startHr) ? startHr : E_UNEXPECTED;
-        std::wstring title      = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
-        std::wstring message    = FormatStringResource(nullptr, IDS_FMT_PANE_CHANGE_CASE_FAILED, static_cast<unsigned long>(failureHr));
+        std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+        std::wstring message = FormatStringResource(nullptr, IDS_FMT_PANE_CHANGE_CASE_FAILED, static_cast<unsigned long>(failureHr));
         state.folderView.ShowAlertOverlay(
             FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message), failureHr);
         MessageBeep(MB_ICONERROR);
@@ -4666,7 +4668,8 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
             return;
         }
 
-        static_cast<void>(ShowConnectionManagerWindow(_hWnd.get(), *this, L"RedSalamander", *_settings, _theme, filterPluginId, static_cast<uint8_t>(pane)));
+        static_cast<void>(
+            ShowConnectionManagerWindow(_hWnd.get(), *this, L"RedSalamander", *_settings, _theme, filterPluginId, static_cast<uint8_t>(pane)));
     };
 
     auto parseNavConnectionName = [&](std::wstring_view rawNavText, std::wstring& outConnectionName, std::wstring& outPathOverride) -> bool
@@ -5607,8 +5610,7 @@ bool DebugSetFolderViewPaneFilterPromptHelpExpanded(bool expanded) noexcept
 bool DebugConfirmFolderViewPaneFilterPrompt() noexcept
 {
     const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
-    return PostDxUiPromptCloseDebugCommand(
-        hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Confirm));
+    return PostDxUiPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Confirm));
 }
 
 bool DebugCancelFolderViewPaneFilterPrompt() noexcept
@@ -5838,8 +5840,7 @@ bool DebugSetFolderViewChangeCasePromptSelections(size_t styleIndex, size_t targ
 bool DebugConfirmFolderViewChangeCasePrompt() noexcept
 {
     const HWND hwnd = GetFolderViewChangeCasePromptHandle();
-    return PostDxUiPromptCloseDebugCommand(
-        hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Confirm));
+    return PostDxUiPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Confirm));
 }
 
 bool DebugCancelFolderViewChangeCasePrompt() noexcept

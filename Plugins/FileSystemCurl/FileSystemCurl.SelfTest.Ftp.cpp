@@ -5,9 +5,9 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
-#include "FileOperationTraversalPolicy.h"
 #include "FileSystemCurl.Internal.h"
 #include "FileSystemRouteContract.h"
+#include "FileOperationTraversalPolicy.h"
 #include "PlugInterfaces/Informations.h"
 
 #include <algorithm>
@@ -16,8 +16,8 @@
 #include <charconv>
 #include <chrono>
 #include <condition_variable>
-#include <cstdint>
 #include <cstdio>
+#include <cstdint>
 #include <format>
 #include <iterator>
 #include <limits>
@@ -468,8 +468,8 @@ public:
     void SetLostMutationReply(std::string verb, std::string sourcePath, std::vector<uint8_t> replacement)
     {
         std::scoped_lock lock(_stateMutex);
-        _lostMutationReplyVerb        = std::move(verb);
-        _lostMutationReplyPath        = NormalizeFtpPath(sourcePath, "/");
+        _lostMutationReplyVerb = std::move(verb);
+        _lostMutationReplyPath = NormalizeFtpPath(sourcePath, "/");
         _lostMutationReplyReplacement = std::move(replacement);
     }
 
@@ -487,7 +487,8 @@ public:
         const std::string normalizedDirectory = NormalizeFtpPath(directory, "/");
         const std::string normalizedPath      = NormalizeFtpPath(path, "/");
         std::scoped_lock lock(_stateMutex);
-        _filesBeforeDirectoryList.insert_or_assign(normalizedDirectory, PendingFileInjection{.path = normalizedPath, .bytes = std::move(bytes)});
+        _filesBeforeDirectoryList.insert_or_assign(
+            normalizedDirectory, PendingFileInjection{.path = normalizedPath, .bytes = std::move(bytes)});
     }
 
     void SetFileAfterDirectoryCreate(std::string directory, std::string path, std::vector<uint8_t> bytes)
@@ -495,7 +496,8 @@ public:
         const std::string normalizedDirectory = NormalizeFtpPath(directory, "/");
         const std::string normalizedPath      = NormalizeFtpPath(path, "/");
         std::scoped_lock lock(_stateMutex);
-        _filesAfterDirectoryCreate.insert_or_assign(normalizedDirectory, PendingFileInjection{.path = normalizedPath, .bytes = std::move(bytes)});
+        _filesAfterDirectoryCreate.insert_or_assign(
+            normalizedDirectory, PendingFileInjection{.path = normalizedPath, .bytes = std::move(bytes)});
     }
 
     void SetDeleteFailure(std::string path)
@@ -762,8 +764,8 @@ private:
     {
         std::scoped_lock lock(_stateMutex);
         const bool exactFailure = _deleteFailures.contains(std::string(path));
-        const bool markerFailure =
-            std::ranges::any_of(_deleteFailureMarkers, [path](const std::string& marker) noexcept { return path.find(marker) != std::string_view::npos; });
+        const bool markerFailure = std::ranges::any_of(
+            _deleteFailureMarkers, [path](const std::string& marker) noexcept { return path.find(marker) != std::string_view::npos; });
         if (! exactFailure && ! markerFailure)
         {
             return false;
@@ -1458,7 +1460,8 @@ private:
                 }
                 else
                 {
-                    hr = TryGetFileSize(path, size) ? SendAll(control, std::format("213 {}\r\n", size)) : SendAll(control, "550 File not found.\r\n");
+                    hr = TryGetFileSize(path, size) ? SendAll(control, std::format("213 {}\r\n", size))
+                                                    : SendAll(control, "550 File not found.\r\n");
                 }
             }
             else if (verb == "MDTM")
@@ -1498,7 +1501,7 @@ private:
             }
             else if (verb == "RETR")
             {
-                hr            = HandleRetrieve(control, passiveListener, stopToken, NormalizeFtpPath(argument, currentDirectory), restartOffset);
+                hr = HandleRetrieve(control, passiveListener, stopToken, NormalizeFtpPath(argument, currentDirectory), restartOffset);
                 restartOffset = 0u;
             }
             else if (verb == "STOR")
@@ -1508,7 +1511,7 @@ private:
             else if (verb == "DELE")
             {
                 const std::string path = NormalizeFtpPath(argument, currentDirectory);
-                bool loseReply         = false;
+                bool loseReply = false;
                 hr = ShouldRejectDelete(path)
                          ? SendAll(control, "550 Delete rejected by deterministic race fixture.\r\n")
                          : (DeleteFile(path, loseReply) ? (loseReply ? HRESULT_FROM_WIN32(ERROR_CONNECTION_ABORTED) : SendAll(control, "250 File deleted.\r\n"))
@@ -1667,7 +1670,7 @@ private:
     bool _listIncludesSize             = true;
     bool _failWriterPromotion          = false;
     DownloadDelivery _downloadDelivery = DownloadDelivery::Complete;
-    unsigned short _port               = 0u;
+    unsigned short _port       = 0u;
     wil::unique_socket _listener;
     std::mutex _clientsMutex;
     std::vector<std::jthread> _clients;
@@ -1678,7 +1681,7 @@ private:
     std::string _lateListingDirectory;
     std::string _lateListingDeletedPath;
     LateListingReply _lateListingReply = LateListingReply::Complete;
-    size_t _lateListingReachedCount    = 0u;
+    size_t _lateListingReachedCount = 0u;
     size_t _lateListingReleasedCount   = 0u;
     size_t _lateListingTimeoutCount    = 0u;
     struct PendingFileInjection final
@@ -1707,24 +1710,24 @@ private:
     std::set<std::string> _directories{"/"};
     std::vector<CommandRecord> _commands;
     std::vector<std::string> _deletedPaths;
-    size_t _lastUploadReceivedBytes            = 0u;
-    size_t _lastUploadRetainedBytes            = 0u;
-    size_t _lastDownloadSentBytes              = 0u;
-    size_t _beforeRenameInjectionCount         = 0u;
-    size_t _afterRenameInjectionCount          = 0u;
-    size_t _beforeListInjectionCount           = 0u;
+    size_t _lastUploadReceivedBytes = 0u;
+    size_t _lastUploadRetainedBytes = 0u;
+    size_t _lastDownloadSentBytes   = 0u;
+    size_t _beforeRenameInjectionCount = 0u;
+    size_t _afterRenameInjectionCount  = 0u;
+    size_t _beforeListInjectionCount   = 0u;
     size_t _afterDirectoryCreateInjectionCount = 0u;
-    size_t _rejectedDeleteCount                = 0u;
-    size_t _lostMutationReplyCount             = 0u;
-    size_t _rejectedDirectoryAccessCount       = 0u;
-    size_t _passiveListenerCreations           = 0u;
-    size_t _passiveListenerReuses              = 0u;
-    size_t _passivePendingRetirements          = 0u;
-    size_t _idleControlClosures                = 0u;
+    size_t _rejectedDeleteCount        = 0u;
+    size_t _lostMutationReplyCount     = 0u;
+    size_t _rejectedDirectoryAccessCount = 0u;
+    size_t _passiveListenerCreations     = 0u;
+    size_t _passiveListenerReuses        = 0u;
+    size_t _passivePendingRetirements    = 0u;
+    size_t _idleControlClosures          = 0u;
     std::array<DataTransferCounts, static_cast<size_t>(DataTransferKind::Count)> _dataTransfers{};
-    uint64_t _listPayloadBuildUs = 0u;
-    uint64_t _listPayloadBytes   = 0u;
-    HRESULT _serverHr            = S_OK;
+    uint64_t _listPayloadBuildUs    = 0u;
+    uint64_t _listPayloadBytes      = 0u;
+    HRESULT _serverHr               = S_OK;
 
     std::jthread _thread;
 };
@@ -1751,19 +1754,19 @@ struct WriterLifetimeResult final
 
 struct ReaderScenarioResult final
 {
-    HRESULT setupHr                = E_FAIL;
-    HRESULT createHr               = E_FAIL;
-    HRESULT getSizeHr              = E_FAIL;
-    HRESULT seekHr                 = S_OK;
-    HRESULT firstReadHr            = E_FAIL;
-    HRESULT secondReadHr           = E_FAIL;
-    HRESULT restartSeekHr          = E_FAIL;
-    HRESULT restartReadHr          = E_FAIL;
-    HRESULT restartEofHr           = E_FAIL;
-    uint64_t committedSizeBytes    = 0u;
-    uint64_t seekPosition          = 0u;
-    unsigned long firstBytesRead   = 0u;
-    unsigned long secondBytesRead  = 0u;
+    HRESULT setupHr      = E_FAIL;
+    HRESULT createHr     = E_FAIL;
+    HRESULT getSizeHr    = E_FAIL;
+    HRESULT seekHr       = S_OK;
+    HRESULT firstReadHr  = E_FAIL;
+    HRESULT secondReadHr = E_FAIL;
+    HRESULT restartSeekHr = E_FAIL;
+    HRESULT restartReadHr = E_FAIL;
+    HRESULT restartEofHr  = E_FAIL;
+    uint64_t committedSizeBytes = 0u;
+    uint64_t seekPosition       = 0u;
+    unsigned long firstBytesRead  = 0u;
+    unsigned long secondBytesRead = 0u;
     unsigned long restartBytesRead = 0u;
     unsigned long restartEofBytes  = 0u;
     std::vector<uint8_t> firstBytes;
@@ -1791,12 +1794,12 @@ struct RenameScenarioResult final
 class CleanupDebtAlertHost final : public IHost, public IHostAlerts
 {
 public:
-    CleanupDebtAlertHost()                                       = default;
-    CleanupDebtAlertHost(const CleanupDebtAlertHost&)            = delete;
-    CleanupDebtAlertHost(CleanupDebtAlertHost&&)                 = delete;
-    CleanupDebtAlertHost& operator=(const CleanupDebtAlertHost&) = delete;
-    CleanupDebtAlertHost& operator=(CleanupDebtAlertHost&&)      = delete;
-    ~CleanupDebtAlertHost()                                      = default;
+    CleanupDebtAlertHost()                                            = default;
+    CleanupDebtAlertHost(const CleanupDebtAlertHost&)                 = delete;
+    CleanupDebtAlertHost(CleanupDebtAlertHost&&)                      = delete;
+    CleanupDebtAlertHost& operator=(const CleanupDebtAlertHost&)      = delete;
+    CleanupDebtAlertHost& operator=(CleanupDebtAlertHost&&)           = delete;
+    ~CleanupDebtAlertHost()                                           = default;
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** result) noexcept override
     {
@@ -1876,7 +1879,8 @@ public:
     }
 
 private:
-    template <size_t Size> static void CopyBoundedText(const wchar_t* source, std::array<wchar_t, Size>& destination) noexcept
+    template <size_t Size>
+    static void CopyBoundedText(const wchar_t* source, std::array<wchar_t, Size>& destination) noexcept
     {
         destination.fill(L'\0');
         if (! source)
@@ -1907,12 +1911,12 @@ private:
 class CleanupDebtOperationCallback final : public IFileSystemCallback
 {
 public:
-    CleanupDebtOperationCallback()                                               = default;
-    CleanupDebtOperationCallback(const CleanupDebtOperationCallback&)            = delete;
-    CleanupDebtOperationCallback(CleanupDebtOperationCallback&&)                 = delete;
-    CleanupDebtOperationCallback& operator=(const CleanupDebtOperationCallback&) = delete;
-    CleanupDebtOperationCallback& operator=(CleanupDebtOperationCallback&&)      = delete;
-    ~CleanupDebtOperationCallback()                                              = default;
+    CleanupDebtOperationCallback()                                                  = default;
+    CleanupDebtOperationCallback(const CleanupDebtOperationCallback&)               = delete;
+    CleanupDebtOperationCallback(CleanupDebtOperationCallback&&)                    = delete;
+    CleanupDebtOperationCallback& operator=(const CleanupDebtOperationCallback&)    = delete;
+    CleanupDebtOperationCallback& operator=(CleanupDebtOperationCallback&&)         = delete;
+    ~CleanupDebtOperationCallback()                                                 = default;
 
     HRESULT STDMETHODCALLTYPE FileSystemProgress(FileSystemOperation /*operationType*/,
                                                  unsigned long /*totalItems*/,
@@ -1942,10 +1946,10 @@ public:
         std::scoped_lock lock(_mutex);
         if (_completedCount < _statuses.size())
         {
-            _indices[_completedCount]   = itemIndex;
-            _statuses[_completedCount]  = status;
+            _indices[_completedCount]  = itemIndex;
+            _statuses[_completedCount] = status;
             _mutations[_completedCount] = FileSystemRouteContract::SnapshotItemMutationResult(mutationResult);
-            _invalidMutation            = _invalidMutation || (mutationResult != nullptr && ! _mutations[_completedCount].has_value());
+            _invalidMutation = _invalidMutation || (mutationResult != nullptr && ! _mutations[_completedCount].has_value());
         }
         ++_completedCount;
         return S_OK;
@@ -1975,7 +1979,7 @@ public:
             return E_POINTER;
         }
         *expectedDestination = nullptr;
-        *action              = FileSystemIssueAction::Cancel;
+        *action = FileSystemIssueAction::Cancel;
         return S_OK;
     }
 
@@ -2062,14 +2066,15 @@ private:
 class CleanupDebtWatchCallback final : public IFileSystemDirectoryWatchCallback
 {
 public:
-    CleanupDebtWatchCallback()                                           = default;
-    CleanupDebtWatchCallback(const CleanupDebtWatchCallback&)            = delete;
-    CleanupDebtWatchCallback(CleanupDebtWatchCallback&&)                 = delete;
-    CleanupDebtWatchCallback& operator=(const CleanupDebtWatchCallback&) = delete;
-    CleanupDebtWatchCallback& operator=(CleanupDebtWatchCallback&&)      = delete;
-    ~CleanupDebtWatchCallback()                                          = default;
+    CleanupDebtWatchCallback()                                              = default;
+    CleanupDebtWatchCallback(const CleanupDebtWatchCallback&)               = delete;
+    CleanupDebtWatchCallback(CleanupDebtWatchCallback&&)                    = delete;
+    CleanupDebtWatchCallback& operator=(const CleanupDebtWatchCallback&)    = delete;
+    CleanupDebtWatchCallback& operator=(CleanupDebtWatchCallback&&)         = delete;
+    ~CleanupDebtWatchCallback()                                             = default;
 
-    HRESULT STDMETHODCALLTYPE FileSystemDirectoryChanged(const FileSystemDirectoryChangeNotification* notification, void* /*cookie*/) noexcept override
+    HRESULT STDMETHODCALLTYPE FileSystemDirectoryChanged(const FileSystemDirectoryChangeNotification* notification,
+                                                         void* /*cookie*/) noexcept override
     {
         if (! notification || notification->sizeBytes < sizeof(FileSystemDirectoryChangeNotification))
         {
@@ -2093,17 +2098,17 @@ private:
 
 struct CleanupDebtScenarioResult final
 {
-    HRESULT setupHr                            = E_FAIL;
-    HRESULT operationHr                        = E_FAIL;
-    HRESULT secondCommitHr                     = E_FAIL;
-    uint64_t elapsedMs                         = 0u;
-    size_t commandsAfterFirstCommit            = 0u;
-    unsigned int alertsAfterFirstCommit        = 0u;
+    HRESULT setupHr         = E_FAIL;
+    HRESULT operationHr     = E_FAIL;
+    HRESULT secondCommitHr  = E_FAIL;
+    uint64_t elapsedMs      = 0u;
+    size_t commandsAfterFirstCommit = 0u;
+    unsigned int alertsAfterFirstCommit = 0u;
     unsigned int notificationsAfterFirstCommit = 0u;
-    unsigned int alertCount                    = 0u;
-    unsigned int notificationCount             = 0u;
-    bool alertShapeValid                       = false;
-    bool callbacksSucceeded                    = false;
+    unsigned int alertCount        = 0u;
+    unsigned int notificationCount = 0u;
+    bool alertShapeValid            = false;
+    bool callbacksSucceeded         = false;
     std::wstring alertMessage;
     EndpointSnapshot source;
     EndpointSnapshot destination;
@@ -2155,13 +2160,13 @@ struct CleanupDebtScenarioResult final
 [[nodiscard]] ScenarioResult RunScenario(UploadRetention retention,
                                          const std::vector<uint8_t>& sourceBytes,
                                          const std::vector<uint8_t>& destinationSentinel,
-                                         bool move                              = true,
-                                         bool destinationCanProveSize           = true,
-                                         DownloadDelivery sourceDelivery        = DownloadDelivery::Complete,
-                                         bool sourceCanProveSize                = true,
+                                         bool move                    = true,
+                                         bool destinationCanProveSize = true,
+                                         DownloadDelivery sourceDelivery = DownloadDelivery::Complete,
+                                         bool sourceCanProveSize          = true,
                                          std::optional<size_t> sourceListedSize = std::nullopt,
-                                         bool sourceSizeAuthenticationFailure   = false,
-                                         bool sourceSizeMissingFailure          = false)
+                                         bool sourceSizeAuthenticationFailure  = false,
+                                         bool sourceSizeMissingFailure         = false)
 {
     ScenarioResult result{};
     FakeFtpEndpoint source(UploadRetention::Complete, sourceCanProveSize, sourceCanProveSize, false, sourceDelivery);
@@ -2232,11 +2237,11 @@ struct CleanupDebtScenarioResult final
 }
 
 [[nodiscard]] CollectionScenarioResult RunBatchScenario(bool move,
-                                                        const std::vector<uint8_t>& firstBytes,
-                                                        const std::vector<uint8_t>& secondBytes,
-                                                        DownloadDelivery delivery,
-                                                        bool sourceCanProveSize,
-                                                        bool staleListedSizes = false)
+                                                         const std::vector<uint8_t>& firstBytes,
+                                                         const std::vector<uint8_t>& secondBytes,
+                                                         DownloadDelivery delivery,
+                                                         bool sourceCanProveSize,
+                                                         bool staleListedSizes = false)
 {
     CollectionScenarioResult result{};
     FakeFtpEndpoint source(UploadRetention::Complete, sourceCanProveSize, sourceCanProveSize, false, delivery);
@@ -2270,21 +2275,22 @@ struct CleanupDebtScenarioResult final
         };
         const std::array<const wchar_t*, 2u> sourcePathPointers{sourcePaths[0].c_str(), sourcePaths[1].c_str()};
         const std::wstring destinationFolder = std::format(L"//anonymous@127.0.0.1:{}/batch-destination", destination.Port());
-        const FileSystemFlags flags          = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
-        result.operationHr                   = move ? fileSystem->MoveItems(sourcePathPointers.data(),
-                                                                            static_cast<unsigned long>(sourcePathPointers.size()),
-                                                                            destinationFolder.c_str(),
-                                                                            flags,
-                                                                            nullptr,
-                                                                            nullptr,
-                                                                            nullptr)
-                                                    : fileSystem->CopyItems(sourcePathPointers.data(),
-                                                                            static_cast<unsigned long>(sourcePathPointers.size()),
-                                                                            destinationFolder.c_str(),
-                                                                            flags,
-                                                                            nullptr,
-                                                                            nullptr,
-                                                                            nullptr);
+        const FileSystemFlags flags =
+            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+        result.operationHr = move ? fileSystem->MoveItems(sourcePathPointers.data(),
+                                                          static_cast<unsigned long>(sourcePathPointers.size()),
+                                                          destinationFolder.c_str(),
+                                                          flags,
+                                                          nullptr,
+                                                          nullptr,
+                                                          nullptr)
+                                  : fileSystem->CopyItems(sourcePathPointers.data(),
+                                                          static_cast<unsigned long>(sourcePathPointers.size()),
+                                                          destinationFolder.c_str(),
+                                                          flags,
+                                                          nullptr,
+                                                          nullptr,
+                                                          nullptr);
     }
 
     fileSystem.reset();
@@ -2296,11 +2302,11 @@ struct CleanupDebtScenarioResult final
 }
 
 [[nodiscard]] CollectionScenarioResult RunRecursiveScenario(bool move,
-                                                            const std::vector<uint8_t>& rootBytes,
-                                                            const std::vector<uint8_t>& nestedBytes,
-                                                            DownloadDelivery delivery,
-                                                            bool sourceCanProveSize,
-                                                            bool staleListedSizes = false)
+                                                             const std::vector<uint8_t>& rootBytes,
+                                                             const std::vector<uint8_t>& nestedBytes,
+                                                             DownloadDelivery delivery,
+                                                             bool sourceCanProveSize,
+                                                             bool staleListedSizes = false)
 {
     CollectionScenarioResult result{};
     FakeFtpEndpoint source(UploadRetention::Complete, sourceCanProveSize, sourceCanProveSize, false, delivery);
@@ -2330,9 +2336,9 @@ struct CleanupDebtScenarioResult final
     {
         const std::wstring sourcePath      = std::format(L"//anonymous@127.0.0.1:{}/source-tree", source.Port());
         const std::wstring destinationPath = std::format(L"//anonymous@127.0.0.1:{}/destination-tree", destination.Port());
-        const FileSystemFlags flags        = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE);
-        result.operationHr                 = move ? fileSystem->MoveItem(sourcePath.c_str(), destinationPath.c_str(), flags, nullptr, nullptr, nullptr)
-                                                  : fileSystem->CopyItem(sourcePath.c_str(), destinationPath.c_str(), flags, nullptr, nullptr, nullptr);
+        const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE);
+        result.operationHr = move ? fileSystem->MoveItem(sourcePath.c_str(), destinationPath.c_str(), flags, nullptr, nullptr, nullptr)
+                                  : fileSystem->CopyItem(sourcePath.c_str(), destinationPath.c_str(), flags, nullptr, nullptr, nullptr);
     }
 
     fileSystem.reset();
@@ -2343,7 +2349,9 @@ struct CleanupDebtScenarioResult final
     return result;
 }
 
-[[nodiscard]] ScenarioResult RunNoOverwriteSingleRaceScenario(bool move, const std::vector<uint8_t>& sourceBytes, const std::vector<uint8_t>& concurrentBytes)
+[[nodiscard]] ScenarioResult RunNoOverwriteSingleRaceScenario(bool move,
+                                                               const std::vector<uint8_t>& sourceBytes,
+                                                               const std::vector<uint8_t>& concurrentBytes)
 {
     ScenarioResult result{};
     FakeFtpEndpoint source(UploadRetention::Complete);
@@ -2367,10 +2375,11 @@ struct CleanupDebtScenarioResult final
     {
         const std::wstring sourcePath      = std::format(L"//anonymous@127.0.0.1:{}/source.bin", source.Port());
         const std::wstring destinationPath = std::format(L"//anonymous@127.0.0.1:{}/destination.bin", destination.Port());
-        const auto started                 = std::chrono::steady_clock::now();
-        result.moveHr    = move ? fileSystem->MoveItem(sourcePath.c_str(), destinationPath.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr)
-                                : fileSystem->CopyItem(sourcePath.c_str(), destinationPath.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
-        result.elapsedMs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count());
+        const auto started = std::chrono::steady_clock::now();
+        result.moveHr = move ? fileSystem->MoveItem(sourcePath.c_str(), destinationPath.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr)
+                             : fileSystem->CopyItem(sourcePath.c_str(), destinationPath.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+        result.elapsedMs = static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count());
     }
 
     fileSystem.reset();
@@ -2382,9 +2391,9 @@ struct CleanupDebtScenarioResult final
 }
 
 [[nodiscard]] CollectionScenarioResult RunNoOverwriteBatchRaceScenario(bool move,
-                                                                       const std::vector<uint8_t>& firstBytes,
-                                                                       const std::vector<uint8_t>& secondBytes,
-                                                                       const std::vector<uint8_t>& concurrentBytes)
+                                                                        const std::vector<uint8_t>& firstBytes,
+                                                                        const std::vector<uint8_t>& secondBytes,
+                                                                        const std::vector<uint8_t>& concurrentBytes)
 {
     CollectionScenarioResult result{};
     FakeFtpEndpoint source(UploadRetention::Complete);
@@ -2415,22 +2424,23 @@ struct CleanupDebtScenarioResult final
         };
         const std::array<const wchar_t*, 2u> sourcePathPointers{sourcePaths[0].c_str(), sourcePaths[1].c_str()};
         const std::wstring destinationFolder = std::format(L"//anonymous@127.0.0.1:{}/batch-destination", destination.Port());
-        const auto started                   = std::chrono::steady_clock::now();
-        result.operationHr                   = move ? fileSystem->MoveItems(sourcePathPointers.data(),
-                                                                            static_cast<unsigned long>(sourcePathPointers.size()),
-                                                                            destinationFolder.c_str(),
-                                                                            FILESYSTEM_FLAG_CONTINUE_ON_ERROR,
-                                                                            nullptr,
-                                                                            nullptr,
-                                                                            nullptr)
-                                                    : fileSystem->CopyItems(sourcePathPointers.data(),
-                                                                            static_cast<unsigned long>(sourcePathPointers.size()),
-                                                                            destinationFolder.c_str(),
-                                                                            FILESYSTEM_FLAG_CONTINUE_ON_ERROR,
-                                                                            nullptr,
-                                                                            nullptr,
-                                                                            nullptr);
-        result.elapsedMs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count());
+        const auto started = std::chrono::steady_clock::now();
+        result.operationHr = move ? fileSystem->MoveItems(sourcePathPointers.data(),
+                                                          static_cast<unsigned long>(sourcePathPointers.size()),
+                                                          destinationFolder.c_str(),
+                                                          FILESYSTEM_FLAG_CONTINUE_ON_ERROR,
+                                                          nullptr,
+                                                          nullptr,
+                                                          nullptr)
+                                  : fileSystem->CopyItems(sourcePathPointers.data(),
+                                                          static_cast<unsigned long>(sourcePathPointers.size()),
+                                                          destinationFolder.c_str(),
+                                                          FILESYSTEM_FLAG_CONTINUE_ON_ERROR,
+                                                          nullptr,
+                                                          nullptr,
+                                                          nullptr);
+        result.elapsedMs = static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count());
     }
 
     fileSystem.reset();
@@ -2466,7 +2476,7 @@ struct CleanupDebtScenarioResult final
     {
         const std::wstring sourceA      = std::format(L"//anonymous@127.0.0.1:{}/rename-a.bin", endpoint.Port());
         const std::wstring destinationA = std::format(L"//anonymous@127.0.0.1:{}/renamed-a.bin", endpoint.Port());
-        const auto started              = std::chrono::steady_clock::now();
+        const auto started = std::chrono::steady_clock::now();
         if (! batch)
         {
             result.operationHr = fileSystem->RenameItem(sourceA.c_str(), destinationA.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
@@ -2478,10 +2488,15 @@ struct CleanupDebtScenarioResult final
                 FileSystemRenamePair{.sizeBytes = sizeof(FileSystemRenamePair), .sourcePath = sourceA.c_str(), .newName = L"renamed-a.bin"},
                 FileSystemRenamePair{.sizeBytes = sizeof(FileSystemRenamePair), .sourcePath = sourceB.c_str(), .newName = L"renamed-b.bin"},
             };
-            result.operationHr =
-                fileSystem->RenameItems(pairs.data(), static_cast<unsigned long>(pairs.size()), FILESYSTEM_FLAG_CONTINUE_ON_ERROR, nullptr, nullptr, nullptr);
+            result.operationHr = fileSystem->RenameItems(pairs.data(),
+                                                         static_cast<unsigned long>(pairs.size()),
+                                                         FILESYSTEM_FLAG_CONTINUE_ON_ERROR,
+                                                         nullptr,
+                                                         nullptr,
+                                                         nullptr);
         }
-        result.elapsedMs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count());
+        result.elapsedMs = static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count());
     }
 
     fileSystem.reset();
@@ -2491,8 +2506,8 @@ struct CleanupDebtScenarioResult final
 }
 
 [[nodiscard]] ScenarioResult RunMoveDeleteFailureRaceScenario(const std::vector<uint8_t>& sourceBytes,
-                                                              const std::vector<uint8_t>& destinationSentinel,
-                                                              const std::vector<uint8_t>& concurrentBytes)
+                                                               const std::vector<uint8_t>& destinationSentinel,
+                                                               const std::vector<uint8_t>& concurrentBytes)
 {
     ScenarioResult result{};
     FakeFtpEndpoint source(UploadRetention::Complete);
@@ -2517,9 +2532,11 @@ struct CleanupDebtScenarioResult final
     {
         const std::wstring sourcePath      = std::format(L"//anonymous@127.0.0.1:{}/source.bin", source.Port());
         const std::wstring destinationPath = std::format(L"//anonymous@127.0.0.1:{}/destination.bin", destination.Port());
-        const auto started                 = std::chrono::steady_clock::now();
-        result.moveHr    = fileSystem->MoveItem(sourcePath.c_str(), destinationPath.c_str(), FILESYSTEM_FLAG_ALLOW_OVERWRITE, nullptr, nullptr, nullptr);
-        result.elapsedMs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count());
+        const auto started = std::chrono::steady_clock::now();
+        result.moveHr = fileSystem->MoveItem(
+            sourcePath.c_str(), destinationPath.c_str(), FILESYSTEM_FLAG_ALLOW_OVERWRITE, nullptr, nullptr, nullptr);
+        result.elapsedMs = static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count());
     }
 
     fileSystem.reset();
@@ -2530,7 +2547,8 @@ struct CleanupDebtScenarioResult final
     return result;
 }
 
-[[nodiscard]] CollectionScenarioResult RunRecursiveRollbackRaceScenario(const std::vector<uint8_t>& sourceBytes, const std::vector<uint8_t>& concurrentBytes)
+[[nodiscard]] CollectionScenarioResult RunRecursiveRollbackRaceScenario(const std::vector<uint8_t>& sourceBytes,
+                                                                         const std::vector<uint8_t>& concurrentBytes)
 {
     CollectionScenarioResult result{};
     FakeFtpEndpoint source(UploadRetention::Complete);
@@ -2554,14 +2572,15 @@ struct CleanupDebtScenarioResult final
     {
         const std::wstring sourcePath      = std::format(L"//anonymous@127.0.0.1:{}/source-tree", source.Port());
         const std::wstring destinationPath = std::format(L"//anonymous@127.0.0.1:{}/destination-tree", destination.Port());
-        const auto started                 = std::chrono::steady_clock::now();
-        result.operationHr                 = fileSystem->CopyItem(sourcePath.c_str(),
-                                                                  destinationPath.c_str(),
-                                                                  static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE),
-                                                                  nullptr,
-                                                                  nullptr,
-                                                                  nullptr);
-        result.elapsedMs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count());
+        const auto started = std::chrono::steady_clock::now();
+        result.operationHr = fileSystem->CopyItem(sourcePath.c_str(),
+                                                  destinationPath.c_str(),
+                                                  static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE),
+                                                  nullptr,
+                                                  nullptr,
+                                                  nullptr);
+        result.elapsedMs = static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count());
     }
 
     fileSystem.reset();
@@ -2573,12 +2592,12 @@ struct CleanupDebtScenarioResult final
 }
 
 [[nodiscard]] ReaderScenarioResult RunReaderScenario(const std::vector<uint8_t>& sourceBytes,
-                                                     DownloadDelivery delivery,
-                                                     std::optional<uint64_t> seekOffset = std::nullopt,
-                                                     bool restartAfterFailure           = false,
-                                                     std::optional<size_t> listedSize   = std::nullopt,
-                                                     bool sizeAuthenticationFailure     = false,
-                                                     bool sizeMissingFailure            = false)
+                                                      DownloadDelivery delivery,
+                                                      std::optional<uint64_t> seekOffset = std::nullopt,
+                                                      bool restartAfterFailure           = false,
+                                                      std::optional<size_t> listedSize    = std::nullopt,
+                                                      bool sizeAuthenticationFailure     = false,
+                                                      bool sizeMissingFailure            = false)
 {
     ReaderScenarioResult result{};
     FakeFtpEndpoint source(UploadRetention::Complete, true, true, false, delivery);
@@ -2641,21 +2660,25 @@ struct CleanupDebtScenarioResult final
     }
 
     std::vector<uint8_t> buffer(sourceBytes.size() + 32u);
-    result.firstReadHr = FAILED(result.seekHr) ? result.seekHr : reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &result.firstBytesRead);
+    result.firstReadHr = FAILED(result.seekHr) ? result.seekHr
+                                               : reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &result.firstBytesRead);
     result.firstBytes.assign(buffer.begin(), buffer.begin() + static_cast<std::ptrdiff_t>(result.firstBytesRead));
-    result.secondReadHr =
-        FAILED(result.firstReadHr) ? result.firstReadHr : reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &result.secondBytesRead);
+    result.secondReadHr = FAILED(result.firstReadHr)
+                              ? result.firstReadHr
+                              : reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &result.secondBytesRead);
 
     if (restartAfterFailure)
     {
         source.SetDownloadDelivery(DownloadDelivery::Complete);
         uint64_t restartPosition = 99u;
         result.restartSeekHr     = reader->Seek(0, FILE_BEGIN, &restartPosition);
-        result.restartReadHr = FAILED(result.restartSeekHr) ? result.restartSeekHr
-                                                            : reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &result.restartBytesRead);
+        result.restartReadHr = FAILED(result.restartSeekHr)
+                                   ? result.restartSeekHr
+                                   : reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &result.restartBytesRead);
         result.restartBytes.assign(buffer.begin(), buffer.begin() + static_cast<std::ptrdiff_t>(result.restartBytesRead));
-        result.restartEofHr = FAILED(result.restartReadHr) ? result.restartReadHr
-                                                           : reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &result.restartEofBytes);
+        result.restartEofHr = FAILED(result.restartReadHr)
+                                  ? result.restartReadHr
+                                  : reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &result.restartEofBytes);
     }
 
     reader.reset();
@@ -2672,7 +2695,7 @@ struct CleanupDebtScenarioResult final
                                                      const std::vector<uint8_t>* destinationSentinel,
                                                      FileSystemFlags flags,
                                                      bool commitWriter,
-                                                     bool failWriterPromotion                                         = false,
+                                                     bool failWriterPromotion = false,
                                                      const std::vector<uint8_t>* concurrentDestinationBeforePromotion = nullptr)
 {
     WriterLifetimeResult result{};
@@ -2749,9 +2772,9 @@ struct CleanupDebtScenarioResult final
 
 [[nodiscard]] CleanupDebtScenarioResult RunCleanupDebtWriterScenario(const std::vector<uint8_t>& bytes,
                                                                      const std::vector<uint8_t>& destinationSentinel,
-                                                                     UploadRetention retention       = UploadRetention::Complete,
+                                                                     UploadRetention retention = UploadRetention::Complete,
                                                                      bool rejectWriterStagingCleanup = false,
-                                                                     bool retryCommit                = true)
+                                                                     bool retryCommit = true)
 {
     CleanupDebtScenarioResult result{};
     CleanupDebtAlertHost host;
@@ -2800,14 +2823,14 @@ struct CleanupDebtScenarioResult final
     }
 
     unsigned long written = 0u;
-    const auto started    = std::chrono::steady_clock::now();
+    const auto started     = std::chrono::steady_clock::now();
     if (SUCCEEDED(hr))
     {
         hr = writer->Write(bytes.data(), static_cast<unsigned long>(bytes.size()), &written);
     }
     if (SUCCEEDED(hr))
     {
-        result.operationHr                   = writer->Commit();
+        result.operationHr = writer->Commit();
         result.commandsAfterFirstCommit      = destination.Snapshot().commands.size();
         result.alertsAfterFirstCommit        = host.AlertCount();
         result.notificationsAfterFirstCommit = watchCallback.NotificationCount();
@@ -2825,13 +2848,13 @@ struct CleanupDebtScenarioResult final
     fileSystem.reset();
     destination.Stop();
 
-    result.setupHr            = hr;
-    result.alertCount         = host.AlertCount();
-    result.notificationCount  = watchCallback.NotificationCount();
-    result.alertShapeValid    = host.HasExpectedWarningShape();
-    result.alertMessage       = host.Message();
+    result.setupHr           = hr;
+    result.alertCount        = host.AlertCount();
+    result.notificationCount = watchCallback.NotificationCount();
+    result.alertShapeValid   = host.HasExpectedWarningShape();
+    result.alertMessage      = host.Message();
     result.callbacksSucceeded = written == bytes.size();
-    result.destination        = destination.Snapshot();
+    result.destination       = destination.Snapshot();
     return result;
 }
 
@@ -2905,25 +2928,47 @@ enum class CleanupDebtTransferShape
         hr = watch->WatchDirectory(watchPath.c_str(), &watchCallback, nullptr);
     }
 
-    result.setupHr     = hr;
+    result.setupHr = hr;
     const auto started = std::chrono::steady_clock::now();
     if (SUCCEEDED(hr))
     {
-        const FileSystemFlags overwriteFlags = static_cast<FileSystemFlags>(
-            FILESYSTEM_FLAG_ALLOW_OVERWRITE | (shape == CleanupDebtTransferShape::Recursive ? FILESYSTEM_FLAG_RECURSIVE : FILESYSTEM_FLAG_NONE));
+        const FileSystemFlags overwriteFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_ALLOW_OVERWRITE |
+                                                                            (shape == CleanupDebtTransferShape::Recursive
+                                                                                 ? FILESYSTEM_FLAG_RECURSIVE
+                                                                                 : FILESYSTEM_FLAG_NONE));
         if (shape == CleanupDebtTransferShape::Single)
         {
             const std::wstring sourcePath      = std::format(L"//anonymous@127.0.0.1:{}/source.bin", source.Port());
             const std::wstring destinationPath = std::format(L"{}/destination.bin", destinationRoot);
-            result.operationHr = move ? fileSystem->MoveItem(sourcePath.c_str(), destinationPath.c_str(), overwriteFlags, nullptr, &operationCallback, nullptr)
-                                      : fileSystem->CopyItem(sourcePath.c_str(), destinationPath.c_str(), overwriteFlags, nullptr, &operationCallback, nullptr);
+            result.operationHr = move ? fileSystem->MoveItem(sourcePath.c_str(),
+                                                              destinationPath.c_str(),
+                                                              overwriteFlags,
+                                                              nullptr,
+                                                              &operationCallback,
+                                                              nullptr)
+                                      : fileSystem->CopyItem(sourcePath.c_str(),
+                                                              destinationPath.c_str(),
+                                                              overwriteFlags,
+                                                              nullptr,
+                                                              &operationCallback,
+                                                              nullptr);
         }
         else if (shape == CleanupDebtTransferShape::Recursive)
         {
             const std::wstring sourcePath      = std::format(L"//anonymous@127.0.0.1:{}/source-tree", source.Port());
             const std::wstring destinationPath = std::format(L"{}/destination-tree", destinationRoot);
-            result.operationHr = move ? fileSystem->MoveItem(sourcePath.c_str(), destinationPath.c_str(), overwriteFlags, nullptr, &operationCallback, nullptr)
-                                      : fileSystem->CopyItem(sourcePath.c_str(), destinationPath.c_str(), overwriteFlags, nullptr, &operationCallback, nullptr);
+            result.operationHr = move ? fileSystem->MoveItem(sourcePath.c_str(),
+                                                              destinationPath.c_str(),
+                                                              overwriteFlags,
+                                                              nullptr,
+                                                              &operationCallback,
+                                                              nullptr)
+                                      : fileSystem->CopyItem(sourcePath.c_str(),
+                                                              destinationPath.c_str(),
+                                                              overwriteFlags,
+                                                              nullptr,
+                                                              &operationCallback,
+                                                              nullptr);
         }
         else
         {
@@ -2933,21 +2978,21 @@ enum class CleanupDebtTransferShape
             };
             const std::array<const wchar_t*, 2u> sourcePathPointers{sourcePaths[0].c_str(), sourcePaths[1].c_str()};
             const std::wstring destinationFolder = std::format(L"{}/batch-destination", destinationRoot);
-            const FileSystemFlags batchFlags     = static_cast<FileSystemFlags>(overwriteFlags | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
-            result.operationHr                   = move ? fileSystem->MoveItems(sourcePathPointers.data(),
-                                                                                static_cast<unsigned long>(sourcePathPointers.size()),
-                                                                                destinationFolder.c_str(),
-                                                                                batchFlags,
-                                                                                nullptr,
-                                                                                &operationCallback,
-                                                                                nullptr)
-                                                        : fileSystem->CopyItems(sourcePathPointers.data(),
-                                                                                static_cast<unsigned long>(sourcePathPointers.size()),
-                                                                                destinationFolder.c_str(),
-                                                                                batchFlags,
-                                                                                nullptr,
-                                                                                &operationCallback,
-                                                                                nullptr);
+            const FileSystemFlags batchFlags = static_cast<FileSystemFlags>(overwriteFlags | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+            result.operationHr = move ? fileSystem->MoveItems(sourcePathPointers.data(),
+                                                               static_cast<unsigned long>(sourcePathPointers.size()),
+                                                               destinationFolder.c_str(),
+                                                               batchFlags,
+                                                               nullptr,
+                                                               &operationCallback,
+                                                               nullptr)
+                                      : fileSystem->CopyItems(sourcePathPointers.data(),
+                                                               static_cast<unsigned long>(sourcePathPointers.size()),
+                                                               destinationFolder.c_str(),
+                                                               batchFlags,
+                                                               nullptr,
+                                                               &operationCallback,
+                                                               nullptr);
         }
     }
     result.elapsedMs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count());
@@ -2962,13 +3007,13 @@ enum class CleanupDebtTransferShape
     destination.Stop();
 
     const size_t expectedCallbacks = shape == CleanupDebtTransferShape::Batch ? 2u : 1u;
-    result.alertCount              = host.AlertCount();
-    result.notificationCount       = watchCallback.NotificationCount();
-    result.alertShapeValid         = host.HasExpectedWarningShape();
-    result.alertMessage            = host.Message();
-    result.callbacksSucceeded      = operationCallback.CompletedSuccessfully(expectedCallbacks);
-    result.source                  = source.Snapshot();
-    result.destination             = destination.Snapshot();
+    result.alertCount        = host.AlertCount();
+    result.notificationCount = watchCallback.NotificationCount();
+    result.alertShapeValid   = host.HasExpectedWarningShape();
+    result.alertMessage      = host.Message();
+    result.callbacksSucceeded = operationCallback.CompletedSuccessfully(expectedCallbacks);
+    result.source            = source.Snapshot();
+    result.destination       = destination.Snapshot();
     return result;
 }
 
@@ -3015,35 +3060,33 @@ enum class CleanupDebtTransferShape
     return std::ranges::any_of(snapshot.deletedPaths, [marker](const std::string& path) noexcept { return path.find(marker) != std::string::npos; });
 }
 
-[[nodiscard]] bool TransactionSiblingEquals(const EndpointSnapshot& snapshot, std::string_view marker, const std::vector<uint8_t>& expected) noexcept
+[[nodiscard]] bool TransactionSiblingEquals(const EndpointSnapshot& snapshot,
+                                            std::string_view marker,
+                                            const std::vector<uint8_t>& expected) noexcept
 {
-    return std::ranges::any_of(
-        snapshot.files, [marker, &expected](const auto& entry) noexcept { return entry.first.find(marker) != std::string::npos && entry.second == expected; });
+    return std::ranges::any_of(snapshot.files, [marker, &expected](const auto& entry) noexcept {
+        return entry.first.find(marker) != std::string::npos && entry.second == expected;
+    });
 }
 
 [[nodiscard]] size_t CountTransactionSiblings(const EndpointSnapshot& snapshot, std::string_view marker) noexcept
 {
-    return static_cast<size_t>(
-        std::ranges::count_if(snapshot.files, [marker](const auto& entry) noexcept { return entry.first.find(marker) != std::string::npos; }));
+    return static_cast<size_t>(std::ranges::count_if(snapshot.files, [marker](const auto& entry) noexcept {
+        return entry.first.find(marker) != std::string::npos;
+    }));
 }
 
 [[nodiscard]] bool CleanupDebtAlertIsContentFree(const CleanupDebtScenarioResult& result, size_t expectedCount)
 {
     const std::wstring expectedCountText = std::to_wstring(expectedCount);
     constexpr std::array<std::wstring_view, 8u> kForbiddenFragments{{
-        L"127.0.0.1",
-        L"anonymous",
-        L".bin",
-        L"source-tree",
-        L"destination-tree",
-        L".redsalamander-",
-        L"//",
-        L"\\",
+        L"127.0.0.1", L"anonymous", L".bin", L"source-tree", L"destination-tree", L".redsalamander-", L"//", L"\\",
     }};
 
     return ! result.alertMessage.empty() && result.alertMessage.find(expectedCountText) != std::wstring::npos &&
-           std::ranges::none_of(kForbiddenFragments,
-                                [&result](std::wstring_view fragment) { return result.alertMessage.find(fragment) != std::wstring::npos; });
+           std::ranges::none_of(kForbiddenFragments, [&result](std::wstring_view fragment) {
+               return result.alertMessage.find(fragment) != std::wstring::npos;
+           });
 }
 
 void CheckShortScenario(const ScenarioResult& result,
@@ -3343,14 +3386,14 @@ private:
         _fetchSets.emplace_back(uidSet);
         while (! uidSet.empty())
         {
-            const size_t comma               = uidSet.find(',');
-            const std::string_view token     = uidSet.substr(0u, comma);
-            const size_t colon               = token.find(':');
-            uint64_t first                   = 0u;
-            uint64_t last                    = 0u;
+            const size_t comma           = uidSet.find(',');
+            const std::string_view token = uidSet.substr(0u, comma);
+            const size_t colon           = token.find(':');
+            uint64_t first               = 0u;
+            uint64_t last                = 0u;
             const std::string_view firstText = token.substr(0u, colon);
             const std::string_view lastText  = colon == std::string_view::npos ? token : token.substr(colon + 1u);
-            const auto firstParsed           = std::from_chars(firstText.data(), firstText.data() + firstText.size(), first);
+            const auto firstParsed = std::from_chars(firstText.data(), firstText.data() + firstText.size(), first);
             if (firstParsed.ec != std::errc{} || firstParsed.ptr != firstText.data() + firstText.size())
             {
                 return {};
@@ -3482,7 +3525,7 @@ private:
             {
                 std::scoped_lock lock(_stateMutex);
                 const uint64_t nextUid = _messages.empty() ? 1u : _messages.back().uid + 1u;
-                reply = std::format("* STATUS \"INBOX\" (MESSAGES {} RECENT 0 UIDNEXT {} UIDVALIDITY 777 UNSEEN 0)\r\n{} OK STATUS completed\r\n",
+                reply                  = std::format("* STATUS \"INBOX\" (MESSAGES {} RECENT 0 UIDNEXT {} UIDVALIDITY 777 UNSEEN 0)\r\n{} OK STATUS completed\r\n",
                                     _messages.size(),
                                     nextUid,
                                     tag);
@@ -3491,8 +3534,8 @@ private:
             {
                 std::scoped_lock lock(_stateMutex);
                 const uint64_t nextUid = _messages.empty() ? 1u : _messages.back().uid + 1u;
-                reply = std::format("* {} EXISTS\r\n* 0 RECENT\r\n* FLAGS (\\Seen \\Flagged \\Deleted)\r\n"
-                                    "* OK [UIDVALIDITY 777] UIDs valid\r\n* OK [UIDNEXT {}] Predicted next UID\r\n{} OK [READ-WRITE] {} completed\r\n",
+                reply                  = std::format("* {} EXISTS\r\n* 0 RECENT\r\n* FLAGS (\\Seen \\Flagged \\Deleted)\r\n"
+                                                     "* OK [UIDVALIDITY 777] UIDs valid\r\n* OK [UIDNEXT {}] Predicted next UID\r\n{} OK [READ-WRITE] {} completed\r\n",
                                     _messages.size(),
                                     nextUid,
                                     tag,
@@ -3719,9 +3762,9 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
 
         const std::vector<uint8_t> sourceBytes         = MakeSourceBytes();
         const std::vector<uint8_t> destinationSentinel = MakeDestinationSentinel();
-        constexpr std::string_view kConcurrentText     = "concurrent-owner-bytes-must-survive";
+        constexpr std::string_view kConcurrentText      = "concurrent-owner-bytes-must-survive";
         const std::vector<uint8_t> concurrentBytes(kConcurrentText.begin(), kConcurrentText.end());
-        const ScenarioResult shortResult = RunScenario(UploadRetention::StrictPrefix, sourceBytes, destinationSentinel);
+        const ScenarioResult shortResult               = RunScenario(UploadRetention::StrictPrefix, sourceBytes, destinationSentinel);
         CheckShortScenario(shortResult, sourceBytes, destinationSentinel, passed, failed);
 
         const ScenarioResult controlResult = RunScenario(UploadRetention::Complete, sourceBytes, destinationSentinel);
@@ -3767,15 +3810,17 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
         const WriterLifetimeResult failedPromotion =
             RunWriterScenario(sourceBytes, UploadRetention::Complete, &destinationSentinel, FILESYSTEM_FLAG_ALLOW_OVERWRITE, true, true);
         DebugCheck(failedPromotion.setupHr == S_OK && failedPromotion.createHr == S_OK && failedPromotion.writeHr == S_OK &&
-                       failedPromotion.commitHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) && FileAbsent(failedPromotion.destination, "/owned-writer.bin") &&
+                       failedPromotion.commitHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) &&
+                       FileAbsent(failedPromotion.destination, "/owned-writer.bin") &&
                        TransactionSiblingEquals(failedPromotion.destination, kRollbackSiblingMarker, destinationSentinel),
                    L"writer promotion failure should preserve the prior final as a rollback artifact rather than restore by pathname",
                    passed,
                    failed);
 
-        const WriterLifetimeResult concurrentFailedPromotion =
-            RunWriterScenario(sourceBytes, UploadRetention::Complete, &destinationSentinel, FILESYSTEM_FLAG_ALLOW_OVERWRITE, true, true, &concurrentBytes);
-        packageCCheck(concurrentFailedPromotion.setupHr == S_OK && concurrentFailedPromotion.createHr == S_OK && concurrentFailedPromotion.writeHr == S_OK &&
+        const WriterLifetimeResult concurrentFailedPromotion = RunWriterScenario(
+            sourceBytes, UploadRetention::Complete, &destinationSentinel, FILESYSTEM_FLAG_ALLOW_OVERWRITE, true, true, &concurrentBytes);
+        packageCCheck(concurrentFailedPromotion.setupHr == S_OK && concurrentFailedPromotion.createHr == S_OK &&
+                          concurrentFailedPromotion.writeHr == S_OK &&
                           concurrentFailedPromotion.commitHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY),
                       L"writer promotion failure with a concurrent final should report partial preserved state");
         packageCCheck(FileEquals(concurrentFailedPromotion.destination, "/owned-writer.bin", concurrentBytes) &&
@@ -3807,7 +3852,7 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
         uint64_t conditionalPublicationDurationUs = 0u;
         uint64_t conditionalPublicationCommands   = 0u;
         uint64_t conditionalPublicationInjections = 0u;
-        const auto checkNoOverwriteSingle         = [&](bool move, std::wstring_view operation) noexcept
+        const auto checkNoOverwriteSingle = [&](bool move, std::wstring_view operation) noexcept
         {
             const ScenarioResult result = RunNoOverwriteSingleRaceScenario(move, sourceBytes, concurrentBytes);
             conditionalPublicationDurationUs += result.elapsedMs * 1000u;
@@ -3815,11 +3860,11 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
             conditionalPublicationInjections += result.destination.beforeRenameInjectionCount;
             // R0f-Curl: the destination is absent at probe time, so the staged bytes are published; the
             // creator injected between the probe and the rename is overwritten (documented window).
-            packageCCheck(
-                result.setupHr == S_OK && result.moveHr == S_OK &&
-                    (move ? FileAbsent(result.source, "/source.bin") : FileEquals(result.source, "/source.bin", sourceBytes)) &&
-                    FileEquals(result.destination, "/destination.bin", sourceBytes) && result.destination.beforeRenameInjectionCount == 1u,
-                std::format(L"no-overwrite single {} should probe, publish the staged bytes, and overwrite only the late creator", operation).c_str());
+            packageCCheck(result.setupHr == S_OK && result.moveHr == S_OK &&
+                              (move ? FileAbsent(result.source, "/source.bin") : FileEquals(result.source, "/source.bin", sourceBytes)) &&
+                              FileEquals(result.destination, "/destination.bin", sourceBytes) &&
+                              result.destination.beforeRenameInjectionCount == 1u,
+                          std::format(L"no-overwrite single {} should probe, publish the staged bytes, and overwrite only the late creator", operation).c_str());
         };
         checkNoOverwriteSingle(false, L"COPY");
         checkNoOverwriteSingle(true, L"MOVE");
@@ -3835,13 +3880,13 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
             conditionalPublicationDurationUs += result.elapsedMs * 1000u;
             conditionalPublicationCommands += result.source.commands.size() + result.destination.commands.size();
             conditionalPublicationInjections += result.destination.beforeRenameInjectionCount;
-            packageCCheck(
-                result.setupHr == S_OK && result.operationHr == S_OK &&
-                    (move ? (FileAbsent(result.source, "/batch-a.bin") && FileAbsent(result.source, "/batch-b.bin"))
-                          : (FileEquals(result.source, "/batch-a.bin", sourceBytes) && FileEquals(result.source, "/batch-b.bin", secondSourceBytes))) &&
-                    FileEquals(result.destination, "/batch-destination/batch-a.bin", sourceBytes) &&
-                    FileEquals(result.destination, "/batch-destination/batch-b.bin", secondSourceBytes) && result.destination.beforeRenameInjectionCount == 2u,
-                std::format(L"no-overwrite batch {} should probe, publish every staged item, and overwrite only the late creators", operation).c_str());
+            packageCCheck(result.setupHr == S_OK && result.operationHr == S_OK &&
+                              (move ? (FileAbsent(result.source, "/batch-a.bin") && FileAbsent(result.source, "/batch-b.bin"))
+                                    : (FileEquals(result.source, "/batch-a.bin", sourceBytes) && FileEquals(result.source, "/batch-b.bin", secondSourceBytes))) &&
+                              FileEquals(result.destination, "/batch-destination/batch-a.bin", sourceBytes) &&
+                              FileEquals(result.destination, "/batch-destination/batch-b.bin", secondSourceBytes) &&
+                              result.destination.beforeRenameInjectionCount == 2u,
+                          std::format(L"no-overwrite batch {} should probe, publish every staged item, and overwrite only the late creators", operation).c_str());
         };
         checkNoOverwriteBatch(false, L"COPY");
         checkNoOverwriteBatch(true, L"MOVE");
@@ -3852,13 +3897,11 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
             conditionalPublicationDurationUs += result.elapsedMs * 1000u;
             conditionalPublicationCommands += result.endpoint.commands.size();
             conditionalPublicationInjections += result.endpoint.beforeRenameInjectionCount;
-            const bool sourcesRenamed =
-                FileAbsent(result.endpoint, "/rename-a.bin") && FileEquals(result.endpoint, "/renamed-a.bin", sourceBytes) &&
-                (! batch || (FileAbsent(result.endpoint, "/rename-b.bin") && FileEquals(result.endpoint, "/renamed-b.bin", sourceBytes)));
-            packageCCheck(
-                result.setupHr == S_OK && result.operationHr == S_OK && sourcesRenamed && result.endpoint.beforeRenameInjectionCount == (batch ? 2u : 1u),
-                std::format(L"no-overwrite {} RENAME should probe, rename, and overwrite only a creator that appears inside the documented window", shape)
-                    .c_str());
+            const bool sourcesRenamed = FileAbsent(result.endpoint, "/rename-a.bin") && FileEquals(result.endpoint, "/renamed-a.bin", sourceBytes) &&
+                                        (! batch || (FileAbsent(result.endpoint, "/rename-b.bin") && FileEquals(result.endpoint, "/renamed-b.bin", sourceBytes)));
+            packageCCheck(result.setupHr == S_OK && result.operationHr == S_OK && sourcesRenamed &&
+                              result.endpoint.beforeRenameInjectionCount == (batch ? 2u : 1u),
+                          std::format(L"no-overwrite {} RENAME should probe, rename, and overwrite only a creator that appears inside the documented window", shape).c_str());
         };
         checkNoOverwriteRename(false, L"single");
         checkNoOverwriteRename(true, L"batch");
@@ -3873,7 +3916,8 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
                               S_OK);
         }
 
-        const ScenarioResult moveDeleteFailure = RunMoveDeleteFailureRaceScenario(sourceBytes, destinationSentinel, concurrentBytes);
+        const ScenarioResult moveDeleteFailure =
+            RunMoveDeleteFailureRaceScenario(sourceBytes, destinationSentinel, concurrentBytes);
         packageCCheck(moveDeleteFailure.setupHr == S_OK && moveDeleteFailure.moveHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) &&
                           FileEquals(moveDeleteFailure.source, "/source.bin", sourceBytes) && moveDeleteFailure.source.rejectedDeleteCount == 1u,
                       L"MOVE source-delete failure should preserve the source and report partial state");
@@ -3917,25 +3961,29 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
             return DebugCheck(condition, message, passed, failed);
         };
 
-        const CleanupDebtScenarioResult cleanupDebtWriter = RunCleanupDebtWriterScenario(sourceBytes, destinationSentinel);
-        packageDCheck(
-            cleanupDebtWriter.setupHr == S_OK && cleanupDebtWriter.operationHr == S_OK && cleanupDebtWriter.secondCommitHr == S_OK &&
-                cleanupDebtWriter.callbacksSucceeded && FileEquals(cleanupDebtWriter.destination, "/owned-writer.bin", sourceBytes) &&
-                CountTransactionSiblings(cleanupDebtWriter.destination, kRollbackSiblingMarker) == 1u &&
-                TransactionSiblingEquals(cleanupDebtWriter.destination, kRollbackSiblingMarker, destinationSentinel) &&
-                ! DeletedTransactionSibling(cleanupDebtWriter.destination, kRollbackSiblingMarker) &&
-                CountCommands(cleanupDebtWriter.destination, "DELE", kRollbackSiblingMarker) == 0u && cleanupDebtWriter.destination.rejectedDeleteCount == 0u &&
-                CountCommands(cleanupDebtWriter.destination, "STOR", kWriterSiblingMarker) == 1u &&
-                CountCommands(cleanupDebtWriter.destination, "SIZE", kWriterSiblingMarker) == 1u &&
-                cleanupDebtWriter.commandsAfterFirstCommit == cleanupDebtWriter.destination.commands.size() && cleanupDebtWriter.alertsAfterFirstCommit == 1u &&
-                cleanupDebtWriter.alertCount == 1u && cleanupDebtWriter.notificationsAfterFirstCommit == 1u && cleanupDebtWriter.notificationCount == 1u &&
-                cleanupDebtWriter.alertShapeValid && CleanupDebtAlertIsContentFree(cleanupDebtWriter, 1u) &&
-                SUCCEEDED(cleanupDebtWriter.destination.serverHr) && cleanupDebtWriter.elapsedMs <= 15000u,
-            L"committed writer overwrite should expose one content-free cleanup debt exactly once and keep second Commit idempotent");
+        const CleanupDebtScenarioResult cleanupDebtWriter =
+            RunCleanupDebtWriterScenario(sourceBytes, destinationSentinel);
+        packageDCheck(cleanupDebtWriter.setupHr == S_OK && cleanupDebtWriter.operationHr == S_OK &&
+                          cleanupDebtWriter.secondCommitHr == S_OK && cleanupDebtWriter.callbacksSucceeded &&
+                          FileEquals(cleanupDebtWriter.destination, "/owned-writer.bin", sourceBytes) &&
+                          CountTransactionSiblings(cleanupDebtWriter.destination, kRollbackSiblingMarker) == 1u &&
+                          TransactionSiblingEquals(cleanupDebtWriter.destination, kRollbackSiblingMarker, destinationSentinel) &&
+                          ! DeletedTransactionSibling(cleanupDebtWriter.destination, kRollbackSiblingMarker) &&
+                          CountCommands(cleanupDebtWriter.destination, "DELE", kRollbackSiblingMarker) == 0u &&
+                          cleanupDebtWriter.destination.rejectedDeleteCount == 0u &&
+                          CountCommands(cleanupDebtWriter.destination, "STOR", kWriterSiblingMarker) == 1u &&
+                          CountCommands(cleanupDebtWriter.destination, "SIZE", kWriterSiblingMarker) == 1u &&
+                          cleanupDebtWriter.commandsAfterFirstCommit == cleanupDebtWriter.destination.commands.size() &&
+                          cleanupDebtWriter.alertsAfterFirstCommit == 1u && cleanupDebtWriter.alertCount == 1u &&
+                          cleanupDebtWriter.notificationsAfterFirstCommit == 1u && cleanupDebtWriter.notificationCount == 1u &&
+                          cleanupDebtWriter.alertShapeValid && CleanupDebtAlertIsContentFree(cleanupDebtWriter, 1u) &&
+                          SUCCEEDED(cleanupDebtWriter.destination.serverHr) && cleanupDebtWriter.elapsedMs <= 15000u,
+                      L"committed writer overwrite should expose one content-free cleanup debt exactly once and keep second Commit idempotent");
 
         const CleanupDebtScenarioResult failedWriterCleanup =
             RunCleanupDebtWriterScenario(sourceBytes, destinationSentinel, UploadRetention::StrictPrefix, true, false);
-        packageDCheck(failedWriterCleanup.setupHr == S_OK && failedWriterCleanup.operationHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) &&
+        packageDCheck(failedWriterCleanup.setupHr == S_OK &&
+                          failedWriterCleanup.operationHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) &&
                           failedWriterCleanup.secondCommitHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) && failedWriterCleanup.callbacksSucceeded &&
                           FileEquals(failedWriterCleanup.destination, "/owned-writer.bin", destinationSentinel) &&
                           CountTransactionSiblings(failedWriterCleanup.destination, kWriterSiblingMarker) == 1u &&
@@ -3970,25 +4018,27 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
                           SUCCEEDED(failedWriterUpload.destination.serverHr) && failedWriterUpload.elapsedMs <= 15000u,
                       L"failed writer upload should retain its primary transport error and expose one failed staging-cleanup debt");
 
-        const CleanupDebtScenarioResult cleanupDebtSingleCopy =
-            RunCleanupDebtTransferScenario(CleanupDebtTransferShape::Single, false, sourceBytes, secondSourceBytes, destinationSentinel);
-        packageDCheck(cleanupDebtSingleCopy.setupHr == S_OK && cleanupDebtSingleCopy.operationHr == S_OK && cleanupDebtSingleCopy.callbacksSucceeded &&
-                          FileEquals(cleanupDebtSingleCopy.source, "/source.bin", sourceBytes) &&
+        const CleanupDebtScenarioResult cleanupDebtSingleCopy = RunCleanupDebtTransferScenario(
+            CleanupDebtTransferShape::Single, false, sourceBytes, secondSourceBytes, destinationSentinel);
+        packageDCheck(cleanupDebtSingleCopy.setupHr == S_OK && cleanupDebtSingleCopy.operationHr == S_OK &&
+                          cleanupDebtSingleCopy.callbacksSucceeded && FileEquals(cleanupDebtSingleCopy.source, "/source.bin", sourceBytes) &&
                           FileEquals(cleanupDebtSingleCopy.destination, "/destination.bin", sourceBytes) &&
                           CountTransactionSiblings(cleanupDebtSingleCopy.destination, kRollbackSiblingMarker) == 1u &&
                           TransactionSiblingEquals(cleanupDebtSingleCopy.destination, kRollbackSiblingMarker, destinationSentinel) &&
                           ! DeletedTransactionSibling(cleanupDebtSingleCopy.destination, kRollbackSiblingMarker) &&
                           CountCommands(cleanupDebtSingleCopy.destination, "DELE", kRollbackSiblingMarker) == 0u &&
                           cleanupDebtSingleCopy.destination.rejectedDeleteCount == 0u &&
-                          CountCommands(cleanupDebtSingleCopy.source, "DELE", "source.bin") == 0u && cleanupDebtSingleCopy.notificationCount == 1u &&
-                          cleanupDebtSingleCopy.alertCount == 1u && cleanupDebtSingleCopy.alertShapeValid &&
-                          CleanupDebtAlertIsContentFree(cleanupDebtSingleCopy, 1u) && SUCCEEDED(cleanupDebtSingleCopy.source.serverHr) &&
-                          SUCCEEDED(cleanupDebtSingleCopy.destination.serverHr) && cleanupDebtSingleCopy.elapsedMs <= 15000u,
+                          CountCommands(cleanupDebtSingleCopy.source, "DELE", "source.bin") == 0u &&
+                          cleanupDebtSingleCopy.notificationCount == 1u && cleanupDebtSingleCopy.alertCount == 1u &&
+                          cleanupDebtSingleCopy.alertShapeValid && CleanupDebtAlertIsContentFree(cleanupDebtSingleCopy, 1u) &&
+                          SUCCEEDED(cleanupDebtSingleCopy.source.serverHr) && SUCCEEDED(cleanupDebtSingleCopy.destination.serverHr) &&
+                          cleanupDebtSingleCopy.elapsedMs <= 15000u,
                       L"single COPY overwrite should commit bytes and expose one retained rollback debt without deleting it");
 
-        const CleanupDebtScenarioResult cleanupDebtRecursiveCopy =
-            RunCleanupDebtTransferScenario(CleanupDebtTransferShape::Recursive, false, sourceBytes, secondSourceBytes, destinationSentinel);
-        packageDCheck(cleanupDebtRecursiveCopy.setupHr == S_OK && cleanupDebtRecursiveCopy.operationHr == S_OK && cleanupDebtRecursiveCopy.callbacksSucceeded &&
+        const CleanupDebtScenarioResult cleanupDebtRecursiveCopy = RunCleanupDebtTransferScenario(
+            CleanupDebtTransferShape::Recursive, false, sourceBytes, secondSourceBytes, destinationSentinel);
+        packageDCheck(cleanupDebtRecursiveCopy.setupHr == S_OK && cleanupDebtRecursiveCopy.operationHr == S_OK &&
+                          cleanupDebtRecursiveCopy.callbacksSucceeded &&
                           FileEquals(cleanupDebtRecursiveCopy.source, "/source-tree/root.bin", sourceBytes) &&
                           FileEquals(cleanupDebtRecursiveCopy.source, "/source-tree/nested/child.bin", secondSourceBytes) &&
                           FileEquals(cleanupDebtRecursiveCopy.destination, "/destination-tree/root.bin", sourceBytes) &&
@@ -3996,69 +4046,77 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
                           CountTransactionSiblings(cleanupDebtRecursiveCopy.destination, kRollbackSiblingMarker) == 2u &&
                           ! DeletedTransactionSibling(cleanupDebtRecursiveCopy.destination, kRollbackSiblingMarker) &&
                           CountCommands(cleanupDebtRecursiveCopy.destination, "DELE", kRollbackSiblingMarker) == 0u &&
-                          cleanupDebtRecursiveCopy.destination.rejectedDeleteCount == 0u && cleanupDebtRecursiveCopy.notificationCount == 1u &&
-                          cleanupDebtRecursiveCopy.alertCount == 1u && cleanupDebtRecursiveCopy.alertShapeValid &&
-                          CleanupDebtAlertIsContentFree(cleanupDebtRecursiveCopy, 2u) && SUCCEEDED(cleanupDebtRecursiveCopy.source.serverHr) &&
-                          SUCCEEDED(cleanupDebtRecursiveCopy.destination.serverHr) && cleanupDebtRecursiveCopy.elapsedMs <= 15000u,
+                          cleanupDebtRecursiveCopy.destination.rejectedDeleteCount == 0u &&
+                          cleanupDebtRecursiveCopy.notificationCount == 1u && cleanupDebtRecursiveCopy.alertCount == 1u &&
+                          cleanupDebtRecursiveCopy.alertShapeValid && CleanupDebtAlertIsContentFree(cleanupDebtRecursiveCopy, 2u) &&
+                          SUCCEEDED(cleanupDebtRecursiveCopy.source.serverHr) && SUCCEEDED(cleanupDebtRecursiveCopy.destination.serverHr) &&
+                          cleanupDebtRecursiveCopy.elapsedMs <= 15000u,
                       L"recursive COPY overwrite should aggregate two retained rollback debts into one observable outcome");
 
-        const CleanupDebtScenarioResult cleanupDebtBatchCopy =
-            RunCleanupDebtTransferScenario(CleanupDebtTransferShape::Batch, false, sourceBytes, secondSourceBytes, destinationSentinel);
-        packageDCheck(cleanupDebtBatchCopy.setupHr == S_OK && cleanupDebtBatchCopy.operationHr == S_OK && cleanupDebtBatchCopy.callbacksSucceeded &&
-                          FileEquals(cleanupDebtBatchCopy.source, "/batch-a.bin", sourceBytes) &&
+        const CleanupDebtScenarioResult cleanupDebtBatchCopy = RunCleanupDebtTransferScenario(
+            CleanupDebtTransferShape::Batch, false, sourceBytes, secondSourceBytes, destinationSentinel);
+        packageDCheck(cleanupDebtBatchCopy.setupHr == S_OK && cleanupDebtBatchCopy.operationHr == S_OK &&
+                          cleanupDebtBatchCopy.callbacksSucceeded && FileEquals(cleanupDebtBatchCopy.source, "/batch-a.bin", sourceBytes) &&
                           FileEquals(cleanupDebtBatchCopy.source, "/batch-b.bin", secondSourceBytes) &&
                           FileEquals(cleanupDebtBatchCopy.destination, "/batch-destination/batch-a.bin", sourceBytes) &&
                           FileEquals(cleanupDebtBatchCopy.destination, "/batch-destination/batch-b.bin", secondSourceBytes) &&
                           CountTransactionSiblings(cleanupDebtBatchCopy.destination, kRollbackSiblingMarker) == 2u &&
                           ! DeletedTransactionSibling(cleanupDebtBatchCopy.destination, kRollbackSiblingMarker) &&
                           CountCommands(cleanupDebtBatchCopy.destination, "DELE", kRollbackSiblingMarker) == 0u &&
-                          cleanupDebtBatchCopy.destination.rejectedDeleteCount == 0u && cleanupDebtBatchCopy.notificationCount == 2u &&
-                          cleanupDebtBatchCopy.alertCount == 1u && cleanupDebtBatchCopy.alertShapeValid &&
-                          CleanupDebtAlertIsContentFree(cleanupDebtBatchCopy, 2u) && SUCCEEDED(cleanupDebtBatchCopy.source.serverHr) &&
-                          SUCCEEDED(cleanupDebtBatchCopy.destination.serverHr) && cleanupDebtBatchCopy.elapsedMs <= 15000u,
+                          cleanupDebtBatchCopy.destination.rejectedDeleteCount == 0u &&
+                          cleanupDebtBatchCopy.notificationCount == 2u && cleanupDebtBatchCopy.alertCount == 1u &&
+                          cleanupDebtBatchCopy.alertShapeValid && CleanupDebtAlertIsContentFree(cleanupDebtBatchCopy, 2u) &&
+                          SUCCEEDED(cleanupDebtBatchCopy.source.serverHr) && SUCCEEDED(cleanupDebtBatchCopy.destination.serverHr) &&
+                          cleanupDebtBatchCopy.elapsedMs <= 15000u,
                       L"batch COPY overwrite should aggregate two retained rollback debts while keeping both item callbacks successful");
 
-        const CleanupDebtScenarioResult cleanupDebtSingleMove =
-            RunCleanupDebtTransferScenario(CleanupDebtTransferShape::Single, true, sourceBytes, secondSourceBytes, destinationSentinel);
-        packageDCheck(
-            cleanupDebtSingleMove.setupHr == S_OK && cleanupDebtSingleMove.operationHr == S_OK && cleanupDebtSingleMove.callbacksSucceeded &&
-                FileAbsent(cleanupDebtSingleMove.source, "/source.bin") && FileEquals(cleanupDebtSingleMove.destination, "/destination.bin", sourceBytes) &&
-                CountTransactionSiblings(cleanupDebtSingleMove.destination, kRollbackSiblingMarker) == 1u &&
-                TransactionSiblingEquals(cleanupDebtSingleMove.destination, kRollbackSiblingMarker, destinationSentinel) &&
-                ! DeletedTransactionSibling(cleanupDebtSingleMove.destination, kRollbackSiblingMarker) &&
-                CountCommands(cleanupDebtSingleMove.destination, "DELE", kRollbackSiblingMarker) == 0u &&
-                cleanupDebtSingleMove.destination.rejectedDeleteCount == 0u && CountCommands(cleanupDebtSingleMove.source, "DELE", "source.bin") == 1u &&
-                cleanupDebtSingleMove.notificationCount == 1u && cleanupDebtSingleMove.alertCount == 1u && cleanupDebtSingleMove.alertShapeValid &&
-                CleanupDebtAlertIsContentFree(cleanupDebtSingleMove, 1u) && SUCCEEDED(cleanupDebtSingleMove.source.serverHr) &&
-                SUCCEEDED(cleanupDebtSingleMove.destination.serverHr) && cleanupDebtSingleMove.elapsedMs <= 15000u,
-            L"single MOVE overwrite should delete its source after publication and expose one retained rollback debt");
+        const CleanupDebtScenarioResult cleanupDebtSingleMove = RunCleanupDebtTransferScenario(
+            CleanupDebtTransferShape::Single, true, sourceBytes, secondSourceBytes, destinationSentinel);
+        packageDCheck(cleanupDebtSingleMove.setupHr == S_OK && cleanupDebtSingleMove.operationHr == S_OK &&
+                          cleanupDebtSingleMove.callbacksSucceeded && FileAbsent(cleanupDebtSingleMove.source, "/source.bin") &&
+                          FileEquals(cleanupDebtSingleMove.destination, "/destination.bin", sourceBytes) &&
+                          CountTransactionSiblings(cleanupDebtSingleMove.destination, kRollbackSiblingMarker) == 1u &&
+                          TransactionSiblingEquals(cleanupDebtSingleMove.destination, kRollbackSiblingMarker, destinationSentinel) &&
+                          ! DeletedTransactionSibling(cleanupDebtSingleMove.destination, kRollbackSiblingMarker) &&
+                          CountCommands(cleanupDebtSingleMove.destination, "DELE", kRollbackSiblingMarker) == 0u &&
+                          cleanupDebtSingleMove.destination.rejectedDeleteCount == 0u &&
+                          CountCommands(cleanupDebtSingleMove.source, "DELE", "source.bin") == 1u &&
+                          cleanupDebtSingleMove.notificationCount == 1u && cleanupDebtSingleMove.alertCount == 1u &&
+                          cleanupDebtSingleMove.alertShapeValid && CleanupDebtAlertIsContentFree(cleanupDebtSingleMove, 1u) &&
+                          SUCCEEDED(cleanupDebtSingleMove.source.serverHr) && SUCCEEDED(cleanupDebtSingleMove.destination.serverHr) &&
+                          cleanupDebtSingleMove.elapsedMs <= 15000u,
+                      L"single MOVE overwrite should delete its source after publication and expose one retained rollback debt");
 
-        const CleanupDebtScenarioResult cleanupDebtBatchMove =
-            RunCleanupDebtTransferScenario(CleanupDebtTransferShape::Batch, true, sourceBytes, secondSourceBytes, destinationSentinel);
-        packageDCheck(cleanupDebtBatchMove.setupHr == S_OK && cleanupDebtBatchMove.operationHr == S_OK && cleanupDebtBatchMove.callbacksSucceeded &&
-                          FileAbsent(cleanupDebtBatchMove.source, "/batch-a.bin") && FileAbsent(cleanupDebtBatchMove.source, "/batch-b.bin") &&
+        const CleanupDebtScenarioResult cleanupDebtBatchMove = RunCleanupDebtTransferScenario(
+            CleanupDebtTransferShape::Batch, true, sourceBytes, secondSourceBytes, destinationSentinel);
+        packageDCheck(cleanupDebtBatchMove.setupHr == S_OK && cleanupDebtBatchMove.operationHr == S_OK &&
+                          cleanupDebtBatchMove.callbacksSucceeded && FileAbsent(cleanupDebtBatchMove.source, "/batch-a.bin") &&
+                          FileAbsent(cleanupDebtBatchMove.source, "/batch-b.bin") &&
                           FileEquals(cleanupDebtBatchMove.destination, "/batch-destination/batch-a.bin", sourceBytes) &&
                           FileEquals(cleanupDebtBatchMove.destination, "/batch-destination/batch-b.bin", secondSourceBytes) &&
                           CountTransactionSiblings(cleanupDebtBatchMove.destination, kRollbackSiblingMarker) == 2u &&
                           ! DeletedTransactionSibling(cleanupDebtBatchMove.destination, kRollbackSiblingMarker) &&
                           CountCommands(cleanupDebtBatchMove.destination, "DELE", kRollbackSiblingMarker) == 0u &&
-                          cleanupDebtBatchMove.destination.rejectedDeleteCount == 0u && CountCommands(cleanupDebtBatchMove.source, "DELE", ".bin") == 2u &&
-                          cleanupDebtBatchMove.notificationCount == 2u && cleanupDebtBatchMove.alertCount == 1u && cleanupDebtBatchMove.alertShapeValid &&
-                          CleanupDebtAlertIsContentFree(cleanupDebtBatchMove, 2u) && SUCCEEDED(cleanupDebtBatchMove.source.serverHr) &&
-                          SUCCEEDED(cleanupDebtBatchMove.destination.serverHr) && cleanupDebtBatchMove.elapsedMs <= 15000u,
+                          cleanupDebtBatchMove.destination.rejectedDeleteCount == 0u &&
+                          CountCommands(cleanupDebtBatchMove.source, "DELE", ".bin") == 2u &&
+                          cleanupDebtBatchMove.notificationCount == 2u && cleanupDebtBatchMove.alertCount == 1u &&
+                          cleanupDebtBatchMove.alertShapeValid && CleanupDebtAlertIsContentFree(cleanupDebtBatchMove, 2u) &&
+                          SUCCEEDED(cleanupDebtBatchMove.source.serverHr) && SUCCEEDED(cleanupDebtBatchMove.destination.serverHr) &&
+                          cleanupDebtBatchMove.elapsedMs <= 15000u,
                       L"batch MOVE overwrite should delete both sources and aggregate two retained rollback debts into one outcome");
 
         if (Debug::Perf::IsCaptureEnabled())
         {
-            const uint64_t cleanupDebtDurationUs = (cleanupDebtWriter.elapsedMs + cleanupDebtSingleCopy.elapsedMs + cleanupDebtRecursiveCopy.elapsedMs +
-                                                    cleanupDebtBatchCopy.elapsedMs + cleanupDebtSingleMove.elapsedMs + cleanupDebtBatchMove.elapsedMs) *
-                                                   1000u;
-            const uint64_t cleanupDebtCommands   = cleanupDebtWriter.destination.commands.size() + cleanupDebtSingleCopy.source.commands.size() +
-                                                   cleanupDebtSingleCopy.destination.commands.size() + cleanupDebtRecursiveCopy.source.commands.size() +
-                                                   cleanupDebtRecursiveCopy.destination.commands.size() + cleanupDebtBatchCopy.source.commands.size() +
-                                                   cleanupDebtBatchCopy.destination.commands.size() + cleanupDebtSingleMove.source.commands.size() +
-                                                   cleanupDebtSingleMove.destination.commands.size() + cleanupDebtBatchMove.source.commands.size() +
-                                                   cleanupDebtBatchMove.destination.commands.size();
+            const uint64_t cleanupDebtDurationUs =
+                (cleanupDebtWriter.elapsedMs + cleanupDebtSingleCopy.elapsedMs + cleanupDebtRecursiveCopy.elapsedMs +
+                 cleanupDebtBatchCopy.elapsedMs + cleanupDebtSingleMove.elapsedMs + cleanupDebtBatchMove.elapsedMs) *
+                1000u;
+            const uint64_t cleanupDebtCommands = cleanupDebtWriter.destination.commands.size() + cleanupDebtSingleCopy.source.commands.size() +
+                                                 cleanupDebtSingleCopy.destination.commands.size() + cleanupDebtRecursiveCopy.source.commands.size() +
+                                                 cleanupDebtRecursiveCopy.destination.commands.size() + cleanupDebtBatchCopy.source.commands.size() +
+                                                 cleanupDebtBatchCopy.destination.commands.size() + cleanupDebtSingleMove.source.commands.size() +
+                                                 cleanupDebtSingleMove.destination.commands.size() + cleanupDebtBatchMove.source.commands.size() +
+                                                 cleanupDebtBatchMove.destination.commands.size();
             Debug::Perf::Emit(L"FileOps.Curl.CleanupDebtGuard",
                               L"six committed overwrite shapes; aggregate retained recovery-item count and bounded endpoint work",
                               cleanupDebtDurationUs,
@@ -4072,7 +4130,9 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
         const ScenarioResult unknownSizeMove = RunScenario(UploadRetention::StrictPrefix, sourceBytes, destinationSentinel, true, false);
         CheckUnknownSizeScenario(unknownSizeMove, sourceBytes, destinationSentinel, L"MOVE", passed, failed);
 
-        const auto checkKnownSourceMismatch = [&](const ScenarioResult& result, std::wstring_view operation, std::wstring_view bodyShape) noexcept
+        const auto checkKnownSourceMismatch = [&](const ScenarioResult& result,
+                                                  std::wstring_view operation,
+                                                  std::wstring_view bodyShape) noexcept
         {
             packageBCheck(result.setupHr == S_OK && result.moveHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY),
                           std::format(L"known-size {} RETR {} should fail with ERROR_PARTIAL_COPY (setup={:#010x}, result={:#010x})",
@@ -4081,10 +4141,12 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
                                       static_cast<unsigned long>(result.setupHr),
                                       static_cast<unsigned long>(result.moveHr))
                               .c_str());
-            packageBCheck(FileEquals(result.source, "/source.bin", sourceBytes) && FileEquals(result.destination, "/destination.bin", destinationSentinel),
+            packageBCheck(FileEquals(result.source, "/source.bin", sourceBytes) &&
+                           FileEquals(result.destination, "/destination.bin", destinationSentinel),
                           std::format(L"known-size {} RETR {} should preserve source and destination bytes", bodyShape, operation).c_str());
-            packageBCheck(CountCommands(result.source, "RETR", "source.bin") == 1u && CountCommands(result.destination, "STOR") == 0u &&
-                              CountCommands(result.source, "DELE", "source.bin") == 0u,
+            packageBCheck(CountCommands(result.source, "RETR", "source.bin") == 1u &&
+                           CountCommands(result.destination, "STOR") == 0u &&
+                           CountCommands(result.source, "DELE", "source.bin") == 0u,
                           std::format(L"known-size {} RETR {} should stop before upload, promotion, or source deletion", bodyShape, operation).c_str());
         };
 
@@ -4095,25 +4157,30 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
             RunScenario(UploadRetention::Complete, sourceBytes, destinationSentinel, true, true, DownloadDelivery::StrictPrefix, true);
         checkKnownSourceMismatch(knownSourceShortMove, L"MOVE", L"short");
         checkKnownSourceMismatch(
-            RunScenario(UploadRetention::Complete, sourceBytes, destinationSentinel, false, true, DownloadDelivery::Overlong, true), L"COPY", L"overlong");
+            RunScenario(UploadRetention::Complete, sourceBytes, destinationSentinel, false, true, DownloadDelivery::Overlong, true),
+            L"COPY",
+            L"overlong");
         checkKnownSourceMismatch(
-            RunScenario(UploadRetention::Complete, sourceBytes, destinationSentinel, true, true, DownloadDelivery::Overlong, true), L"MOVE", L"overlong");
+            RunScenario(UploadRetention::Complete, sourceBytes, destinationSentinel, true, true, DownloadDelivery::Overlong, true),
+            L"MOVE",
+            L"overlong");
 
         const ScenarioResult unknownSourceMove =
             RunScenario(UploadRetention::Complete, sourceBytes, destinationSentinel, true, true, DownloadDelivery::Complete, false);
         packageBCheck(unknownSourceMove.setupHr == S_OK && unknownSourceMove.moveHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) &&
-                          FileEquals(unknownSourceMove.source, "/source.bin", sourceBytes) &&
-                          FileEquals(unknownSourceMove.destination, "/destination.bin", destinationSentinel),
+                       FileEquals(unknownSourceMove.source, "/source.bin", sourceBytes) &&
+                       FileEquals(unknownSourceMove.destination, "/destination.bin", destinationSentinel),
                       L"unknown-size native MOVE should fail closed and preserve both endpoints");
-        packageBCheck(CountCommands(unknownSourceMove.source, "RETR", "source.bin") == 0u && CountCommands(unknownSourceMove.destination, "STOR") == 0u &&
-                          CountCommands(unknownSourceMove.source, "DELE", "source.bin") == 0u,
+        packageBCheck(CountCommands(unknownSourceMove.source, "RETR", "source.bin") == 0u &&
+                       CountCommands(unknownSourceMove.destination, "STOR") == 0u &&
+                       CountCommands(unknownSourceMove.source, "DELE", "source.bin") == 0u,
                       L"unknown-size native MOVE should stop before download, destination mutation, or source deletion");
 
         const ScenarioResult unknownSourceCopy =
             RunScenario(UploadRetention::Complete, sourceBytes, destinationSentinel, false, true, DownloadDelivery::Complete, false);
         packageBCheck(unknownSourceCopy.setupHr == S_OK && unknownSourceCopy.moveHr == S_OK &&
-                          FileEquals(unknownSourceCopy.source, "/source.bin", sourceBytes) &&
-                          FileEquals(unknownSourceCopy.destination, "/destination.bin", sourceBytes),
+                       FileEquals(unknownSourceCopy.source, "/source.bin", sourceBytes) &&
+                       FileEquals(unknownSourceCopy.destination, "/destination.bin", sourceBytes),
                       L"unknown-size native COPY may publish exact downloaded bytes while retaining its source");
 
         const auto checkKnownShortBatch = [&](const CollectionScenarioResult& result, std::wstring_view operation) noexcept
@@ -4124,17 +4191,21 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
                                       static_cast<unsigned long>(result.setupHr),
                                       static_cast<unsigned long>(result.operationHr))
                               .c_str());
-            packageBCheck(FileEquals(result.source, "/batch-a.bin", sourceBytes) && FileEquals(result.source, "/batch-b.bin", secondSourceBytes) &&
-                              FileAbsent(result.destination, "/batch-destination/batch-a.bin") &&
-                              FileAbsent(result.destination, "/batch-destination/batch-b.bin"),
+            packageBCheck(FileEquals(result.source, "/batch-a.bin", sourceBytes) &&
+                               FileEquals(result.source, "/batch-b.bin", secondSourceBytes) &&
+                               FileAbsent(result.destination, "/batch-destination/batch-a.bin") &&
+                               FileAbsent(result.destination, "/batch-destination/batch-b.bin"),
                           std::format(L"known-size short RETR batch {} should preserve both sources and publish neither destination", operation).c_str());
-            packageBCheck(CountCommands(result.source, "RETR", ".bin") == 2u && CountCommands(result.destination, "STOR") == 0u &&
-                              CountCommands(result.source, "DELE", ".bin") == 0u,
+            packageBCheck(CountCommands(result.source, "RETR", ".bin") == 2u &&
+                               CountCommands(result.destination, "STOR") == 0u &&
+                               CountCommands(result.source, "DELE", ".bin") == 0u,
                           std::format(L"known-size short RETR batch {} should stop each item before upload or source deletion", operation).c_str());
         };
 
-        checkKnownShortBatch(RunBatchScenario(false, sourceBytes, secondSourceBytes, DownloadDelivery::StrictPrefix, true), L"COPY");
-        checkKnownShortBatch(RunBatchScenario(true, sourceBytes, secondSourceBytes, DownloadDelivery::StrictPrefix, true), L"MOVE");
+        checkKnownShortBatch(
+            RunBatchScenario(false, sourceBytes, secondSourceBytes, DownloadDelivery::StrictPrefix, true), L"COPY");
+        checkKnownShortBatch(
+            RunBatchScenario(true, sourceBytes, secondSourceBytes, DownloadDelivery::StrictPrefix, true), L"MOVE");
 
         const auto checkKnownShortRecursive = [&](const CollectionScenarioResult& result, std::wstring_view operation) noexcept
         {
@@ -4144,63 +4215,76 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
                                       static_cast<unsigned long>(result.setupHr),
                                       static_cast<unsigned long>(result.operationHr))
                               .c_str());
-            packageBCheck(
-                FileEquals(result.source, "/source-tree/root.bin", sourceBytes) &&
-                    FileEquals(result.source, "/source-tree/nested/child.bin", secondSourceBytes) && result.source.directories.contains("/source-tree") &&
-                    result.source.directories.contains("/source-tree/nested") && result.destination.files.empty() &&
-                    result.destination.directories.contains("/destination-tree") && CountCommands(result.destination, "RMD", "destination-tree") == 0u,
-                std::format(L"known-size short RETR recursive {} should preserve the source tree and the uncertain destination tree", operation).c_str());
-            packageBCheck(CountCommands(result.source, "RETR", ".bin") == 1u && CountCommands(result.destination, "STOR") == 0u &&
-                              CountCommands(result.source, "DELE", ".bin") == 0u,
+            packageBCheck(FileEquals(result.source, "/source-tree/root.bin", sourceBytes) &&
+                               FileEquals(result.source, "/source-tree/nested/child.bin", secondSourceBytes) &&
+                               result.source.directories.contains("/source-tree") && result.source.directories.contains("/source-tree/nested") &&
+                               result.destination.files.empty() && result.destination.directories.contains("/destination-tree") &&
+                               CountCommands(result.destination, "RMD", "destination-tree") == 0u,
+                          std::format(L"known-size short RETR recursive {} should preserve the source tree and the uncertain destination tree", operation)
+                              .c_str());
+            packageBCheck(CountCommands(result.source, "RETR", ".bin") == 1u &&
+                               CountCommands(result.destination, "STOR") == 0u &&
+                               CountCommands(result.source, "DELE", ".bin") == 0u,
                           std::format(L"known-size short RETR recursive {} should stop before upload or source deletion", operation).c_str());
         };
 
-        checkKnownShortRecursive(RunRecursiveScenario(false, sourceBytes, secondSourceBytes, DownloadDelivery::StrictPrefix, true), L"COPY");
-        checkKnownShortRecursive(RunRecursiveScenario(true, sourceBytes, secondSourceBytes, DownloadDelivery::StrictPrefix, true), L"MOVE");
+        checkKnownShortRecursive(
+            RunRecursiveScenario(false, sourceBytes, secondSourceBytes, DownloadDelivery::StrictPrefix, true), L"COPY");
+        checkKnownShortRecursive(
+            RunRecursiveScenario(true, sourceBytes, secondSourceBytes, DownloadDelivery::StrictPrefix, true), L"MOVE");
 
-        const CollectionScenarioResult unknownBatchCopy = RunBatchScenario(false, sourceBytes, secondSourceBytes, DownloadDelivery::Complete, false);
+        const CollectionScenarioResult unknownBatchCopy =
+            RunBatchScenario(false, sourceBytes, secondSourceBytes, DownloadDelivery::Complete, false);
         packageBCheck(unknownBatchCopy.setupHr == S_OK && unknownBatchCopy.operationHr == S_OK &&
-                          FileEquals(unknownBatchCopy.source, "/batch-a.bin", sourceBytes) &&
-                          FileEquals(unknownBatchCopy.source, "/batch-b.bin", secondSourceBytes) &&
-                          FileEquals(unknownBatchCopy.destination, "/batch-destination/batch-a.bin", sourceBytes) &&
-                          FileEquals(unknownBatchCopy.destination, "/batch-destination/batch-b.bin", secondSourceBytes) &&
-                          CountCommands(unknownBatchCopy.source, "DELE", ".bin") == 0u,
+                           FileEquals(unknownBatchCopy.source, "/batch-a.bin", sourceBytes) &&
+                           FileEquals(unknownBatchCopy.source, "/batch-b.bin", secondSourceBytes) &&
+                           FileEquals(unknownBatchCopy.destination, "/batch-destination/batch-a.bin", sourceBytes) &&
+                           FileEquals(unknownBatchCopy.destination, "/batch-destination/batch-b.bin", secondSourceBytes) &&
+                           CountCommands(unknownBatchCopy.source, "DELE", ".bin") == 0u,
                       L"unknown-size batch COPY may publish both exact staged files while retaining both sources");
 
-        const CollectionScenarioResult unknownBatchMove = RunBatchScenario(true, sourceBytes, secondSourceBytes, DownloadDelivery::Complete, false);
+        const CollectionScenarioResult unknownBatchMove =
+            RunBatchScenario(true, sourceBytes, secondSourceBytes, DownloadDelivery::Complete, false);
         packageBCheck(unknownBatchMove.setupHr == S_OK && unknownBatchMove.operationHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) &&
-                          FileEquals(unknownBatchMove.source, "/batch-a.bin", sourceBytes) &&
-                          FileEquals(unknownBatchMove.source, "/batch-b.bin", secondSourceBytes) && unknownBatchMove.destination.files.empty() &&
-                          CountCommands(unknownBatchMove.source, "RETR", ".bin") == 0u && CountCommands(unknownBatchMove.destination, "STOR") == 0u &&
-                          CountCommands(unknownBatchMove.source, "DELE", ".bin") == 0u,
+                           FileEquals(unknownBatchMove.source, "/batch-a.bin", sourceBytes) &&
+                           FileEquals(unknownBatchMove.source, "/batch-b.bin", secondSourceBytes) && unknownBatchMove.destination.files.empty() &&
+                           CountCommands(unknownBatchMove.source, "RETR", ".bin") == 0u &&
+                           CountCommands(unknownBatchMove.destination, "STOR") == 0u &&
+                           CountCommands(unknownBatchMove.source, "DELE", ".bin") == 0u,
                       L"unknown-size batch MOVE should fail every item before download, destination mutation, or source deletion");
 
-        const CollectionScenarioResult unknownRecursiveCopy = RunRecursiveScenario(false, sourceBytes, secondSourceBytes, DownloadDelivery::Complete, false);
+        const CollectionScenarioResult unknownRecursiveCopy =
+            RunRecursiveScenario(false, sourceBytes, secondSourceBytes, DownloadDelivery::Complete, false);
         packageBCheck(unknownRecursiveCopy.setupHr == S_OK && unknownRecursiveCopy.operationHr == S_OK &&
-                          FileEquals(unknownRecursiveCopy.source, "/source-tree/root.bin", sourceBytes) &&
-                          FileEquals(unknownRecursiveCopy.source, "/source-tree/nested/child.bin", secondSourceBytes) &&
-                          FileEquals(unknownRecursiveCopy.destination, "/destination-tree/root.bin", sourceBytes) &&
-                          FileEquals(unknownRecursiveCopy.destination, "/destination-tree/nested/child.bin", secondSourceBytes) &&
-                          CountCommands(unknownRecursiveCopy.source, "DELE", ".bin") == 0u,
+                           FileEquals(unknownRecursiveCopy.source, "/source-tree/root.bin", sourceBytes) &&
+                           FileEquals(unknownRecursiveCopy.source, "/source-tree/nested/child.bin", secondSourceBytes) &&
+                           FileEquals(unknownRecursiveCopy.destination, "/destination-tree/root.bin", sourceBytes) &&
+                           FileEquals(unknownRecursiveCopy.destination, "/destination-tree/nested/child.bin", secondSourceBytes) &&
+                           CountCommands(unknownRecursiveCopy.source, "DELE", ".bin") == 0u,
                       L"unknown-size recursive COPY may publish exact staged files while retaining the complete source tree");
 
-        const CollectionScenarioResult unknownRecursiveMove = RunRecursiveScenario(true, sourceBytes, secondSourceBytes, DownloadDelivery::Complete, false);
+        const CollectionScenarioResult unknownRecursiveMove =
+            RunRecursiveScenario(true, sourceBytes, secondSourceBytes, DownloadDelivery::Complete, false);
         packageBCheck(unknownRecursiveMove.setupHr == S_OK && unknownRecursiveMove.operationHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) &&
-                          FileEquals(unknownRecursiveMove.source, "/source-tree/root.bin", sourceBytes) &&
-                          FileEquals(unknownRecursiveMove.source, "/source-tree/nested/child.bin", secondSourceBytes) &&
-                          unknownRecursiveMove.destination.files.empty() && unknownRecursiveMove.destination.directories == std::set<std::string>{"/"} &&
-                          CountCommands(unknownRecursiveMove.source, "RETR", ".bin") == 0u && CountCommands(unknownRecursiveMove.destination, "MKD") == 0u &&
-                          CountCommands(unknownRecursiveMove.destination, "RMD") == 0u && CountCommands(unknownRecursiveMove.destination, "STOR") == 0u &&
-                          CountCommands(unknownRecursiveMove.source, "DELE", ".bin") == 0u,
+                           FileEquals(unknownRecursiveMove.source, "/source-tree/root.bin", sourceBytes) &&
+                           FileEquals(unknownRecursiveMove.source, "/source-tree/nested/child.bin", secondSourceBytes) &&
+                           unknownRecursiveMove.destination.files.empty() && unknownRecursiveMove.destination.directories == std::set<std::string>{"/"} &&
+                           CountCommands(unknownRecursiveMove.source, "RETR", ".bin") == 0u &&
+                           CountCommands(unknownRecursiveMove.destination, "MKD") == 0u &&
+                           CountCommands(unknownRecursiveMove.destination, "RMD") == 0u &&
+                           CountCommands(unknownRecursiveMove.destination, "STOR") == 0u &&
+                           CountCommands(unknownRecursiveMove.source, "DELE", ".bin") == 0u,
                       L"unknown-size recursive MOVE should fail preflight before creating a destination tree or touching source bytes");
 
         const auto checkHardProbeFailure = [&](const ScenarioResult& result, std::wstring_view operation) noexcept
         {
             packageBCheck(result.setupHr == S_OK && result.moveHr == HRESULT_FROM_WIN32(ERROR_LOGON_FAILURE) &&
-                              FileEquals(result.source, "/source.bin", sourceBytes) &&
-                              FileEquals(result.destination, "/destination.bin", destinationSentinel) &&
-                              CountCommands(result.source, "SIZE", "source.bin") >= 1u && CountCommands(result.source, "RETR", "source.bin") == 0u &&
-                              CountCommands(result.destination, "STOR") == 0u && CountCommands(result.source, "DELE", "source.bin") == 0u,
+                               FileEquals(result.source, "/source.bin", sourceBytes) &&
+                               FileEquals(result.destination, "/destination.bin", destinationSentinel) &&
+                               CountCommands(result.source, "SIZE", "source.bin") >= 1u &&
+                               CountCommands(result.source, "RETR", "source.bin") == 0u &&
+                               CountCommands(result.destination, "STOR") == 0u &&
+                               CountCommands(result.source, "DELE", "source.bin") == 0u,
                           std::format(L"targeted SIZE authentication failure for {} should propagate before transfer or mutation "
                                       L"(setup={:#010x}, result={:#010x}, SIZE={}, RETR={}, STOR={}, DELE={})",
                                       operation,
@@ -4212,20 +4296,36 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
                                       CountCommands(result.source, "DELE", "source.bin"))
                               .c_str());
         };
-        checkHardProbeFailure(
-            RunScenario(UploadRetention::Complete, sourceBytes, destinationSentinel, false, true, DownloadDelivery::Complete, true, std::nullopt, true),
-            L"COPY");
-        checkHardProbeFailure(
-            RunScenario(UploadRetention::Complete, sourceBytes, destinationSentinel, true, true, DownloadDelivery::Complete, true, std::nullopt, true),
-            L"MOVE");
+        checkHardProbeFailure(RunScenario(UploadRetention::Complete,
+                                          sourceBytes,
+                                          destinationSentinel,
+                                          false,
+                                          true,
+                                          DownloadDelivery::Complete,
+                                          true,
+                                          std::nullopt,
+                                          true),
+                              L"COPY");
+        checkHardProbeFailure(RunScenario(UploadRetention::Complete,
+                                          sourceBytes,
+                                          destinationSentinel,
+                                          true,
+                                          true,
+                                          DownloadDelivery::Complete,
+                                          true,
+                                          std::nullopt,
+                                          true),
+                              L"MOVE");
 
         const auto checkMissingProbeFailure = [&](const ScenarioResult& result, std::wstring_view operation) noexcept
         {
             packageBCheck(result.setupHr == S_OK && result.moveHr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) &&
-                              FileEquals(result.source, "/source.bin", sourceBytes) &&
-                              FileEquals(result.destination, "/destination.bin", destinationSentinel) &&
-                              CountCommands(result.source, "SIZE", "source.bin") >= 1u && CountCommands(result.source, "RETR", "source.bin") == 0u &&
-                              CountCommands(result.destination, "STOR") == 0u && CountCommands(result.source, "DELE", "source.bin") == 0u,
+                               FileEquals(result.source, "/source.bin", sourceBytes) &&
+                               FileEquals(result.destination, "/destination.bin", destinationSentinel) &&
+                               CountCommands(result.source, "SIZE", "source.bin") >= 1u &&
+                               CountCommands(result.source, "RETR", "source.bin") == 0u &&
+                               CountCommands(result.destination, "STOR") == 0u &&
+                               CountCommands(result.source, "DELE", "source.bin") == 0u,
                           std::format(L"targeted SIZE disappearance for {} should propagate before transfer or mutation "
                                       L"(setup={:#010x}, result={:#010x}, SIZE={}, RETR={}, STOR={}, DELE={})",
                                       operation,
@@ -4237,38 +4337,67 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
                                       CountCommands(result.source, "DELE", "source.bin"))
                               .c_str());
         };
-        checkMissingProbeFailure(
-            RunScenario(UploadRetention::Complete, sourceBytes, destinationSentinel, false, true, DownloadDelivery::Complete, true, std::nullopt, false, true),
-            L"COPY");
-        checkMissingProbeFailure(
-            RunScenario(UploadRetention::Complete, sourceBytes, destinationSentinel, true, true, DownloadDelivery::Complete, true, std::nullopt, false, true),
-            L"MOVE");
+        checkMissingProbeFailure(RunScenario(UploadRetention::Complete,
+                                             sourceBytes,
+                                             destinationSentinel,
+                                             false,
+                                             true,
+                                             DownloadDelivery::Complete,
+                                             true,
+                                             std::nullopt,
+                                             false,
+                                             true),
+                                 L"COPY");
+        checkMissingProbeFailure(RunScenario(UploadRetention::Complete,
+                                             sourceBytes,
+                                             destinationSentinel,
+                                             true,
+                                             true,
+                                             DownloadDelivery::Complete,
+                                             true,
+                                             std::nullopt,
+                                             false,
+                                             true),
+                                 L"MOVE");
 
         const auto checkStaleSingle = [&](const ScenarioResult& result, bool move, std::wstring_view operation) noexcept
         {
             packageBCheck(result.setupHr == S_OK && result.moveHr == S_OK &&
-                              (move ? FileAbsent(result.source, "/source.bin") : FileEquals(result.source, "/source.bin", sourceBytes)) &&
-                              FileEquals(result.destination, "/destination.bin", sourceBytes) && CountCommands(result.source, "SIZE", "source.bin") >= 1u,
+                               (move ? FileAbsent(result.source, "/source.bin") : FileEquals(result.source, "/source.bin", sourceBytes)) &&
+                               FileEquals(result.destination, "/destination.bin", sourceBytes) &&
+                               CountCommands(result.source, "SIZE", "source.bin") >= 1u,
                           std::format(L"stale-listing single {} should use the targeted source size and publish exact bytes", operation).c_str());
         };
-        checkStaleSingle(
-            RunScenario(UploadRetention::Complete, sourceBytes, destinationSentinel, false, true, DownloadDelivery::Complete, true, sourceBytes.size() / 2u),
-            false,
-            L"COPY");
-        checkStaleSingle(
-            RunScenario(UploadRetention::Complete, sourceBytes, destinationSentinel, true, true, DownloadDelivery::Complete, true, sourceBytes.size() / 2u),
-            true,
-            L"MOVE");
+        checkStaleSingle(RunScenario(UploadRetention::Complete,
+                                     sourceBytes,
+                                     destinationSentinel,
+                                     false,
+                                     true,
+                                     DownloadDelivery::Complete,
+                                     true,
+                                     sourceBytes.size() / 2u),
+                         false,
+                         L"COPY");
+        checkStaleSingle(RunScenario(UploadRetention::Complete,
+                                     sourceBytes,
+                                     destinationSentinel,
+                                     true,
+                                     true,
+                                     DownloadDelivery::Complete,
+                                     true,
+                                     sourceBytes.size() / 2u),
+                         true,
+                         L"MOVE");
 
         const auto checkStaleBatch = [&](const CollectionScenarioResult& result, bool move, std::wstring_view operation) noexcept
         {
-            const bool sourceState =
-                move ? FileAbsent(result.source, "/batch-a.bin") && FileAbsent(result.source, "/batch-b.bin")
-                     : FileEquals(result.source, "/batch-a.bin", sourceBytes) && FileEquals(result.source, "/batch-b.bin", secondSourceBytes);
+            const bool sourceState = move ? FileAbsent(result.source, "/batch-a.bin") && FileAbsent(result.source, "/batch-b.bin")
+                                          : FileEquals(result.source, "/batch-a.bin", sourceBytes) &&
+                                                FileEquals(result.source, "/batch-b.bin", secondSourceBytes);
             packageBCheck(result.setupHr == S_OK && result.operationHr == S_OK && sourceState &&
-                              FileEquals(result.destination, "/batch-destination/batch-a.bin", sourceBytes) &&
-                              FileEquals(result.destination, "/batch-destination/batch-b.bin", secondSourceBytes) &&
-                              CountCommands(result.source, "SIZE", ".bin") >= 2u,
+                               FileEquals(result.destination, "/batch-destination/batch-a.bin", sourceBytes) &&
+                               FileEquals(result.destination, "/batch-destination/batch-b.bin", secondSourceBytes) &&
+                               CountCommands(result.source, "SIZE", ".bin") >= 2u,
                           std::format(L"stale-listing batch {} should target-probe both files and publish exact bytes", operation).c_str());
         };
         checkStaleBatch(RunBatchScenario(false, sourceBytes, secondSourceBytes, DownloadDelivery::Complete, true, true), false, L"COPY");
@@ -4276,64 +4405,72 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
 
         const auto checkStaleRecursive = [&](const CollectionScenarioResult& result, bool move, std::wstring_view operation) noexcept
         {
-            const bool sourceState = move ? FileAbsent(result.source, "/source-tree/root.bin") && FileAbsent(result.source, "/source-tree/nested/child.bin") &&
+            const bool sourceState = move ? FileAbsent(result.source, "/source-tree/root.bin") &&
+                                                FileAbsent(result.source, "/source-tree/nested/child.bin") &&
                                                 ! result.source.directories.contains("/source-tree")
                                           : FileEquals(result.source, "/source-tree/root.bin", sourceBytes) &&
                                                 FileEquals(result.source, "/source-tree/nested/child.bin", secondSourceBytes);
             packageBCheck(result.setupHr == S_OK && result.operationHr == S_OK && sourceState &&
-                              FileEquals(result.destination, "/destination-tree/root.bin", sourceBytes) &&
-                              FileEquals(result.destination, "/destination-tree/nested/child.bin", secondSourceBytes) &&
-                              CountCommands(result.source, "SIZE", ".bin") >= 2u,
+                               FileEquals(result.destination, "/destination-tree/root.bin", sourceBytes) &&
+                               FileEquals(result.destination, "/destination-tree/nested/child.bin", secondSourceBytes) &&
+                               CountCommands(result.source, "SIZE", ".bin") >= 2u,
                           std::format(L"stale-listing recursive {} should target-probe every file and publish the exact tree", operation).c_str());
         };
-        checkStaleRecursive(RunRecursiveScenario(false, sourceBytes, secondSourceBytes, DownloadDelivery::Complete, true, true), false, L"COPY");
-        checkStaleRecursive(RunRecursiveScenario(true, sourceBytes, secondSourceBytes, DownloadDelivery::Complete, true, true), true, L"MOVE");
+        checkStaleRecursive(
+            RunRecursiveScenario(false, sourceBytes, secondSourceBytes, DownloadDelivery::Complete, true, true), false, L"COPY");
+        checkStaleRecursive(
+            RunRecursiveScenario(true, sourceBytes, secondSourceBytes, DownloadDelivery::Complete, true, true), true, L"MOVE");
 
         const ReaderScenarioResult exactReader = RunReaderScenario(sourceBytes, DownloadDelivery::Complete);
         packageBCheck(exactReader.setupHr == S_OK && exactReader.createHr == S_OK && exactReader.getSizeHr == S_OK &&
-                          exactReader.committedSizeBytes == sourceBytes.size() && exactReader.firstReadHr == S_OK &&
-                          exactReader.firstBytesRead == sourceBytes.size() && exactReader.firstBytes == sourceBytes && exactReader.secondReadHr == S_OK &&
-                          exactReader.secondBytesRead == 0u,
+                       exactReader.committedSizeBytes == sourceBytes.size() && exactReader.firstReadHr == S_OK &&
+                       exactReader.firstBytesRead == sourceBytes.size() && exactReader.firstBytes == sourceBytes &&
+                       exactReader.secondReadHr == S_OK && exactReader.secondBytesRead == 0u,
                       L"real Curl reader should expose exact known-size bytes followed by successful EOF");
 
         const std::vector<uint8_t> emptySourceBytes;
         const ReaderScenarioResult exactEmptyReader = RunReaderScenario(emptySourceBytes, DownloadDelivery::Complete);
         packageBCheck(exactEmptyReader.setupHr == S_OK && exactEmptyReader.createHr == S_OK && exactEmptyReader.getSizeHr == S_OK &&
-                          exactEmptyReader.committedSizeBytes == 0u && exactEmptyReader.firstReadHr == S_OK && exactEmptyReader.firstBytesRead == 0u &&
-                          exactEmptyReader.secondReadHr == S_OK && exactEmptyReader.secondBytesRead == 0u &&
-                          CountCommands(exactEmptyReader.source, "RETR", "source.bin") == 1u,
+                           exactEmptyReader.committedSizeBytes == 0u && exactEmptyReader.firstReadHr == S_OK &&
+                           exactEmptyReader.firstBytesRead == 0u && exactEmptyReader.secondReadHr == S_OK &&
+                           exactEmptyReader.secondBytesRead == 0u && CountCommands(exactEmptyReader.source, "RETR", "source.bin") == 1u,
                       L"real Curl reader should validate an exact zero-byte body before returning successful EOF");
 
         constexpr unsigned int kReaderShutdownStressIterations = 32u;
-        bool readerShutdownStressPassed                        = true;
+        bool readerShutdownStressPassed                         = true;
         for (unsigned int iteration = 0u; iteration < kReaderShutdownStressIterations; ++iteration)
         {
             const ReaderScenarioResult shutdownReader = RunReaderScenario(emptySourceBytes, DownloadDelivery::Complete);
-            readerShutdownStressPassed = readerShutdownStressPassed && shutdownReader.setupHr == S_OK && shutdownReader.createHr == S_OK &&
-                                         shutdownReader.getSizeHr == S_OK && shutdownReader.committedSizeBytes == 0u && shutdownReader.firstReadHr == S_OK &&
-                                         shutdownReader.firstBytesRead == 0u && shutdownReader.secondReadHr == S_OK && shutdownReader.secondBytesRead == 0u &&
-                                         CountCommands(shutdownReader.source, "RETR", "source.bin") == 1u;
+            readerShutdownStressPassed =
+                readerShutdownStressPassed && shutdownReader.setupHr == S_OK && shutdownReader.createHr == S_OK && shutdownReader.getSizeHr == S_OK &&
+                shutdownReader.committedSizeBytes == 0u && shutdownReader.firstReadHr == S_OK && shutdownReader.firstBytesRead == 0u &&
+                shutdownReader.secondReadHr == S_OK && shutdownReader.secondBytesRead == 0u &&
+                CountCommands(shutdownReader.source, "RETR", "source.bin") == 1u;
         }
-        packageBCheck(readerShutdownStressPassed, L"Curl reader teardown should wake and join an idle transfer worker without a lost notification");
+        packageBCheck(readerShutdownStressPassed,
+                      L"Curl reader teardown should wake and join an idle transfer worker without a lost notification");
 
         const ReaderScenarioResult overlongEmptyReader = RunReaderScenario(emptySourceBytes, DownloadDelivery::Overlong);
         packageBCheck(overlongEmptyReader.setupHr == S_OK && overlongEmptyReader.createHr == S_OK && overlongEmptyReader.getSizeHr == S_OK &&
-                          overlongEmptyReader.committedSizeBytes == 0u && overlongEmptyReader.firstReadHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
-                          overlongEmptyReader.firstBytesRead == 0u && overlongEmptyReader.source.lastDownloadSentBytes == 1u,
+                           overlongEmptyReader.committedSizeBytes == 0u &&
+                           overlongEmptyReader.firstReadHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
+                           overlongEmptyReader.firstBytesRead == 0u && overlongEmptyReader.source.lastDownloadSentBytes == 1u,
                       L"real Curl reader should reject a nonempty body that contradicts a zero-byte commitment");
 
-        const ReaderScenarioResult staleReader = RunReaderScenario(sourceBytes, DownloadDelivery::Complete, std::nullopt, false, sourceBytes.size() / 2u);
+        const ReaderScenarioResult staleReader =
+            RunReaderScenario(sourceBytes, DownloadDelivery::Complete, std::nullopt, false, sourceBytes.size() / 2u);
         packageBCheck(staleReader.setupHr == S_OK && staleReader.createHr == S_OK && staleReader.getSizeHr == S_OK &&
-                          staleReader.committedSizeBytes == sourceBytes.size() && staleReader.firstReadHr == S_OK && staleReader.firstBytes == sourceBytes &&
-                          staleReader.secondReadHr == S_OK && staleReader.secondBytesRead == 0u &&
-                          CountCommands(staleReader.source, "SIZE", "source.bin") >= 1u,
+                           staleReader.committedSizeBytes == sourceBytes.size() && staleReader.firstReadHr == S_OK &&
+                           staleReader.firstBytes == sourceBytes && staleReader.secondReadHr == S_OK && staleReader.secondBytesRead == 0u &&
+                           CountCommands(staleReader.source, "SIZE", "source.bin") >= 1u,
                       L"real Curl reader should replace a stale listing size with the targeted source commitment");
 
         const ReaderScenarioResult readerProbeAuthentication =
             RunReaderScenario(sourceBytes, DownloadDelivery::Complete, std::nullopt, false, std::nullopt, true);
-        packageBCheck(readerProbeAuthentication.setupHr == S_OK && readerProbeAuthentication.createHr == HRESULT_FROM_WIN32(ERROR_LOGON_FAILURE) &&
-                          CountCommands(readerProbeAuthentication.source, "SIZE", "source.bin") >= 1u &&
-                          CountCommands(readerProbeAuthentication.source, "RETR", "source.bin") == 0u,
+        packageBCheck(readerProbeAuthentication.setupHr == S_OK &&
+                           readerProbeAuthentication.createHr == HRESULT_FROM_WIN32(ERROR_LOGON_FAILURE) &&
+                           CountCommands(readerProbeAuthentication.source, "SIZE", "source.bin") >= 1u &&
+                           CountCommands(readerProbeAuthentication.source, "RETR", "source.bin") == 0u,
                       std::format(L"real Curl reader should propagate a targeted SIZE authentication failure before starting RETR "
                                   L"(setup={:#010x}, create={:#010x}, SIZE={}, RETR={})",
                                   static_cast<unsigned long>(readerProbeAuthentication.setupHr),
@@ -4345,8 +4482,8 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
         const ReaderScenarioResult readerProbeMissing =
             RunReaderScenario(sourceBytes, DownloadDelivery::Complete, std::nullopt, false, std::nullopt, false, true);
         packageBCheck(readerProbeMissing.setupHr == S_OK && readerProbeMissing.createHr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) &&
-                          CountCommands(readerProbeMissing.source, "SIZE", "source.bin") >= 1u &&
-                          CountCommands(readerProbeMissing.source, "RETR", "source.bin") == 0u,
+                           CountCommands(readerProbeMissing.source, "SIZE", "source.bin") >= 1u &&
+                           CountCommands(readerProbeMissing.source, "RETR", "source.bin") == 0u,
                       std::format(L"real Curl reader should propagate targeted SIZE disappearance before RETR "
                                   L"(setup={:#010x}, create={:#010x}, SIZE={}, RETR={})",
                                   static_cast<unsigned long>(readerProbeMissing.setupHr),
@@ -4357,7 +4494,7 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
 
         const ReaderScenarioResult shortReader = RunReaderScenario(sourceBytes, DownloadDelivery::StrictPrefix);
         packageBCheck(shortReader.setupHr == S_OK && shortReader.createHr == S_OK && shortReader.getSizeHr == S_OK &&
-                          shortReader.firstReadHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) && shortReader.firstBytesRead == 0u,
+                       shortReader.firstReadHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) && shortReader.firstBytesRead == 0u,
                       std::format(L"real Curl reader should reject protocol-success premature EOF before returning successful zero bytes "
                                   L"(setup={:#010x}, create={:#010x}, size={:#010x}, read={:#010x}, bytes={})",
                                   static_cast<unsigned long>(shortReader.setupHr),
@@ -4369,7 +4506,7 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
 
         const ReaderScenarioResult overlongReader = RunReaderScenario(sourceBytes, DownloadDelivery::Overlong);
         packageBCheck(overlongReader.setupHr == S_OK && overlongReader.createHr == S_OK && overlongReader.getSizeHr == S_OK &&
-                          overlongReader.firstReadHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && overlongReader.firstBytesRead == 0u,
+                       overlongReader.firstReadHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) && overlongReader.firstBytesRead == 0u,
                       std::format(L"real Curl reader should reject a body beyond its committed size "
                                   L"(setup={:#010x}, create={:#010x}, size={:#010x}, read={:#010x}, bytes={})",
                                   static_cast<unsigned long>(overlongReader.setupHr),
@@ -4379,14 +4516,16 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
                                   overlongReader.firstBytesRead)
                           .c_str());
 
-        constexpr uint64_t kSeekOffset        = 137u;
+        constexpr uint64_t kSeekOffset = 137u;
         const ReaderScenarioResult seekReader = RunReaderScenario(sourceBytes, DownloadDelivery::Complete, kSeekOffset);
         const std::vector<uint8_t> expectedSeekBytes(sourceBytes.begin() + static_cast<std::ptrdiff_t>(kSeekOffset), sourceBytes.end());
         packageBCheck(seekReader.setupHr == S_OK && seekReader.createHr == S_OK && seekReader.getSizeHr == S_OK &&
-                          seekReader.committedSizeBytes == sourceBytes.size() && seekReader.seekHr == S_OK && seekReader.seekPosition == kSeekOffset &&
-                          seekReader.firstReadHr == S_OK && seekReader.firstBytes == expectedSeekBytes && seekReader.secondReadHr == S_OK &&
-                          seekReader.secondBytesRead == 0u && seekReader.source.lastDownloadSentBytes == expectedSeekBytes.size() &&
-                          CountCommands(seekReader.source, "REST", "137") == 1u && CountCommands(seekReader.source, "RETR", "source.bin") == 1u,
+                       seekReader.committedSizeBytes == sourceBytes.size() && seekReader.seekHr == S_OK &&
+                       seekReader.seekPosition == kSeekOffset && seekReader.firstReadHr == S_OK &&
+                       seekReader.firstBytes == expectedSeekBytes && seekReader.secondReadHr == S_OK && seekReader.secondBytesRead == 0u &&
+                       seekReader.source.lastDownloadSentBytes == expectedSeekBytes.size() &&
+                       CountCommands(seekReader.source, "REST", "137") == 1u &&
+                       CountCommands(seekReader.source, "RETR", "source.bin") == 1u,
                       (std::format(L"real Curl reader should validate a REST seek against only the committed remaining range "
                                    L"(setup={:#010x}, create={:#010x}, seek={:#010x}/{}, read={:#010x}/{}, eof={:#010x}/{}, expected={})",
                                    static_cast<unsigned long>(seekReader.setupHr),
@@ -4406,8 +4545,8 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
 
         const ReaderScenarioResult restartReader = RunReaderScenario(sourceBytes, DownloadDelivery::StrictPrefix, std::nullopt, true);
         packageBCheck(restartReader.firstReadHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) && restartReader.restartSeekHr == S_OK &&
-                          restartReader.restartReadHr == S_OK && restartReader.restartBytes == sourceBytes && restartReader.restartEofHr == S_OK &&
-                          restartReader.restartEofBytes == 0u,
+                       restartReader.restartReadHr == S_OK && restartReader.restartBytes == sourceBytes &&
+                       restartReader.restartEofHr == S_OK && restartReader.restartEofBytes == 0u,
                       std::format(L"real Curl reader should discard a failed generation and validate a complete restarted generation "
                                   L"(first={:#010x}, seek={:#010x}, restart={:#010x}/{}, eof={:#010x}/{})",
                                   static_cast<unsigned long>(restartReader.firstReadHr),
@@ -4490,7 +4629,7 @@ void RunCurlShortSuccessfulUploadSelfTests(unsigned int& passed, unsigned int& f
 // Three Fresh Full gates crashed inside libcurl's pooled-connection matching before this held.
 void RunCurlParallelWritersSelfTests(unsigned int& passed, unsigned int& failed) noexcept
 {
-    constexpr unsigned int kThreads          = 6u;
+    constexpr unsigned int kThreads         = 6u;
     constexpr unsigned int kUploadsPerThread = 10u;
     constexpr size_t kUploadBytes            = 64u * 1024u;
 
@@ -4522,8 +4661,7 @@ void RunCurlParallelWritersSelfTests(unsigned int& passed, unsigned int& failed)
         {
             return;
         }
-        hr = information->SetConfiguration(
-            R"({"connectTimeoutMs":5000,"operationTimeoutMs":30000,"copyMoveMaxConcurrency":8,"deleteMaxConcurrency":1,"ftpUseEpsv":true})");
+        hr = information->SetConfiguration(R"({"connectTimeoutMs":5000,"operationTimeoutMs":30000,"copyMoveMaxConcurrency":8,"deleteMaxConcurrency":1,"ftpUseEpsv":true})");
         if (! DebugCheck(SUCCEEDED(hr), L"FTP instance should accept the parallel-writers configuration", passed, failed))
         {
             return;
@@ -4547,9 +4685,10 @@ void RunCurlParallelWritersSelfTests(unsigned int& passed, unsigned int& failed)
                 {
                     for (unsigned int index = 0u; index < kUploadsPerThread; ++index)
                     {
-                        const std::wstring path = std::format(L"//anonymous@127.0.0.1:{}/parallel-{}-{}.bin", endpoint.Port(), thread, index);
+                        const std::wstring path =
+                            std::format(L"//anonymous@127.0.0.1:{}/parallel-{}-{}.bin", endpoint.Port(), thread, index);
                         wil::com_ptr<IFileWriter> writer;
-                        HRESULT uploadHr      = io->CreateFileWriter(path.c_str(), FILESYSTEM_FLAG_ALLOW_OVERWRITE, writer.put());
+                        HRESULT uploadHr = io->CreateFileWriter(path.c_str(), FILESYSTEM_FLAG_ALLOW_OVERWRITE, writer.put());
                         unsigned long written = 0u;
                         if (SUCCEEDED(uploadHr) && writer)
                         {
@@ -4600,7 +4739,7 @@ void RunCurlStalledReaderCancelSelfTests(unsigned int& passed, unsigned int& fai
     class ReaderCancelControl final : public IFileSystemOperationControl
     {
     public:
-        ReaderCancelControl() noexcept                             = default;
+        ReaderCancelControl() noexcept = default;
         ReaderCancelControl(const ReaderCancelControl&)            = delete;
         ReaderCancelControl& operator=(const ReaderCancelControl&) = delete;
         ReaderCancelControl(ReaderCancelControl&&)                 = delete;
@@ -4662,8 +4801,7 @@ void RunCurlStalledReaderCancelSelfTests(unsigned int& passed, unsigned int& fai
             return;
         }
         // A generous watchdog: the cancel, not the low-speed bound, must end the stalled transfer.
-        hr = information->SetConfiguration(
-            R"({"connectTimeoutMs":5000,"operationTimeoutMs":20000,"copyMoveMaxConcurrency":1,"deleteMaxConcurrency":1,"ftpUseEpsv":true})");
+        hr = information->SetConfiguration(R"({"connectTimeoutMs":5000,"operationTimeoutMs":20000,"copyMoveMaxConcurrency":1,"deleteMaxConcurrency":1,"ftpUseEpsv":true})");
         if (! DebugCheck(SUCCEEDED(hr), L"FTP instance should accept the stalled-reader configuration", passed, failed))
         {
             return;
@@ -5618,10 +5756,9 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlDirectorySiz
                     // observed when the callback aborts inside `a`. `z`'s files stay
                     // unsized; the abort remains global.
                     ? result.fileCount >= 90u && result.fileCount <= 199u && result.totalBytes == result.fileCount * bytes.size() && result.directoryCount == 2u
-                    : shape == Shape::FlatCancel
-                          ? result.fileCount >= 17u && result.fileCount <= 128u && result.totalBytes == result.fileCount * bytes.size() &&
-                                result.directoryCount == 0u
-                          : result.totalBytes == expectedBytes && result.fileCount == expectedFiles && result.directoryCount == expectedDirectories;
+                : shape == Shape::FlatCancel
+                    ? result.fileCount >= 17u && result.fileCount <= 128u && result.totalBytes == result.fileCount * bytes.size() && result.directoryCount == 0u
+                    : result.totalBytes == expectedBytes && result.fileCount == expectedFiles && result.directoryCount == expectedDirectories;
             const bool contentsCorrect = before.files == after.files && before.directories == after.directories && SUCCEEDED(after.serverHr);
             const bool correct         = hr == expectedHr && result.status == hr && totalsCorrect && contentsCorrect && cooperativeCancel &&
                                          (shape != Shape::PreCanceled || after.commands.empty());
@@ -6276,34 +6413,36 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlMovePrefligh
             {
                 hr = arena.Initialize(4096u);
             }
-            const wchar_t* sourcePath =
-                SUCCEEDED(hr) ? CopyArenaString(arena.Get(), std::format(L"//anonymous@127.0.0.1:{}/selected", source.Port())) : nullptr;
-            const wchar_t* destinationPath =
-                SUCCEEDED(hr) ? CopyArenaString(arena.Get(), std::format(L"//anonymous@127.0.0.1:{}/destination", destination.Port())) : nullptr;
+            const wchar_t* sourcePath      = SUCCEEDED(hr) ? CopyArenaString(arena.Get(), std::format(L"//anonymous@127.0.0.1:{}/selected", source.Port())) : nullptr;
+            const wchar_t* destinationPath = SUCCEEDED(hr) ? CopyArenaString(arena.Get(), std::format(L"//anonymous@127.0.0.1:{}/destination", destination.Port())) : nullptr;
             if (! DebugCheck(SUCCEEDED(hr) && sourcePath && destinationPath, L"late-writer Move fixture starts", *passed, *failed))
             {
                 return E_FAIL;
             }
             CleanupDebtOperationCallback callback;
             FileSystemOptions options{};
-            options.sizeBytes           = sizeof(options);
-            options.linkPolicy          = FILESYSTEM_LINK_PRESERVE;
-            options.operationControl    = nullptr;
+            options.sizeBytes        = sizeof(options);
+            options.linkPolicy       = FILESYSTEM_LINK_PRESERVE;
+            options.operationControl = nullptr;
             const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE);
-            hr                          = fileSystem->MoveItem(sourcePath, destinationPath, flags, &options, &callback, nullptr);
+            hr = fileSystem->MoveItem(sourcePath, destinationPath, flags, &options, &callback, nullptr);
             fileSystem.reset();
             source.Stop();
             destination.Stop();
             const EndpointSnapshot sourceAfter      = source.Snapshot();
             const EndpointSnapshot destinationAfter = destination.Snapshot();
             const bool latePreserved                = FileEquals(sourceAfter, "/selected/late.bin", bytes);
-            const bool lateNotDeleted =
-                std::ranges::none_of(sourceAfter.deletedPaths, [](const std::string& path) noexcept { return path == "/selected/late.bin"; });
-            const bool copiedKept    = FileEquals(destinationAfter, "/destination/kept.bin", bytes);
-            const bool lateNotCopied = ! destinationAfter.files.contains("/destination/late.bin");
-            DebugCheck(
-                latePreserved && lateNotDeleted && copiedKept && lateNotCopied, L"Move source-delete keeps a file created after preflight", *passed, *failed);
-            DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY), L"Move reports partial when a late source file blocks source cleanup", *passed, *failed);
+            const bool lateNotDeleted               = std::ranges::none_of(sourceAfter.deletedPaths, [](const std::string& path) noexcept { return path == "/selected/late.bin"; });
+            const bool copiedKept                   = FileEquals(destinationAfter, "/destination/kept.bin", bytes);
+            const bool lateNotCopied                = ! destinationAfter.files.contains("/destination/late.bin");
+            DebugCheck(latePreserved && lateNotDeleted && copiedKept && lateNotCopied,
+                       L"Move source-delete keeps a file created after preflight",
+                       *passed,
+                       *failed);
+            DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY),
+                       L"Move reports partial when a late source file blocks source cleanup",
+                       *passed,
+                       *failed);
         }
     }
     catch (const std::bad_alloc&)
@@ -6623,9 +6762,9 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlEntryLookupT
             bool pausedOnFirst    = false;
             if (SUCCEEDED(hr))
             {
-                hr               = wideChild.Next(entry);
-                firstIsDirectory = hr == S_OK && entry.name == L"nested" && (entry.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                pausedOnFirst    = firstIsDirectory && wideChild.HasActiveTransferForSelfTest();
+                hr                = wideChild.Next(entry);
+                firstIsDirectory  = hr == S_OK && entry.name == L"nested" && (entry.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+                pausedOnFirst     = firstIsDirectory && wideChild.HasActiveTransferForSelfTest();
                 while ((hr = wideChild.Next(entry)) == S_OK)
                 {
                 }
@@ -6869,7 +7008,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlEntryLookupT
                     std::vector<FilesInformationCurl::Entry> entries;
                     const HRESULT hr = CurlDirectoryCursor::ParseChunksForSelfTest(chunks, entries);
                     socketsCorrect   = socketsCorrect && hr == S_OK && entries.size() == 1u && entries.front().name == L"mysql.sock" &&
-                                       (entries.front().attributes & FILE_ATTRIBUTE_DEVICE) != 0 && ! entries.front().sizeKnown;
+                                     (entries.front().attributes & FILE_ATTRIBUTE_DEVICE) != 0 && ! entries.front().sizeKnown;
                 }
                 const std::array<std::string_view, 1u> phantom{"not-date  03:04PM                4 phantom.bin\r\n"};
                 std::vector<FilesInformationCurl::Entry> phantomEntries;
@@ -6899,8 +7038,8 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlEntryLookupT
                 chunks.push_back(std::string_view(listing).substr(offset, CURL_MAX_WRITE_SIZE));
             }
             std::vector<FilesInformationCurl::Entry> ordinary;
-            const HRESULT ordinaryHr =
-                ParseDirectoryListing(dos ? "01-02-26  03:04PM  4 f-04096.bin\r\n" : "-rw-r--r-- 1 owner group 4 Jan 02 2026 f-04096.bin\r\n", ordinary);
+            const HRESULT ordinaryHr = ParseDirectoryListing(
+                dos ? "01-02-26  03:04PM  4 f-04096.bin\r\n" : "-rw-r--r-- 1 owner group 4 Jan 02 2026 f-04096.bin\r\n", ordinary);
             for (const bool missing : {false, true})
             {
                 std::vector<FilesInformationCurl::Entry> matches;
@@ -6910,9 +7049,9 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlEntryLookupT
                 uint64_t durationUs  = 0u;
                 for (size_t attempt = 0u; attempt < repeats; ++attempt)
                 {
-                    uint64_t rows         = 0u;
-                    const auto started    = std::chrono::steady_clock::now();
-                    const HRESULT parseHr = CurlDirectoryCursor::ParseChunksForSelfTest(chunks, matches, missing ? L"absent.bin" : L"f-04096.bin", &rows);
+                    uint64_t rows          = 0u;
+                    const auto started     = std::chrono::steady_clock::now();
+                    const HRESULT parseHr  = CurlDirectoryCursor::ParseChunksForSelfTest(chunks, matches, missing ? L"absent.bin" : L"f-04096.bin", &rows);
                     durationUs += Debug::Perf::ElapsedUs(started);
                     inspected += rows;
                     matchesSeen += matches.size();
@@ -6920,14 +7059,13 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlEntryLookupT
                     if (! missing && matches.size() == 1u)
                     {
                         const auto& match = matches.front();
-                        correct           = correct && match.name == L"f-04096.bin" && match.sizeKnown && match.sizeBytes == 4u &&
-                                            match.attributes == FILE_ATTRIBUTE_NORMAL && match.lastWriteTime == ordinary.front().lastWriteTime;
+                        correct = correct && match.name == L"f-04096.bin" && match.sizeKnown && match.sizeBytes == 4u &&
+                                  match.attributes == FILE_ATTRIBUTE_NORMAL && match.lastWriteTime == ordinary.front().lastWriteTime;
                     }
                 }
                 const std::wstring detail = std::format(L"{};queries={};missing={}", dos ? L"DOS" : L"Unix", repeats, missing);
                 Debug::Perf::Emit(L"FileOps.Curl.EntryLookup.ParseOnly", detail.c_str(), durationUs, inspected, matchesSeen, correct ? S_OK : E_FAIL);
-                DebugCheck(
-                    correct && inspected == repeats * rowCount, L"pure lookup parser validates every row and retains only exact matches", *passed, *failed);
+                DebugCheck(correct && inspected == repeats * rowCount, L"pure lookup parser validates every row and retains only exact matches", *passed, *failed);
             }
         }
         const std::vector<uint8_t> bytes{0x31u, 0x00u, 0xAAu, 0xFEu};
@@ -7508,9 +7646,9 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlCopyTraversa
                         paths[0] = sourcePath;
                         CancelControl control;
                         FileSystemOptions options{};
-                        options.sizeBytes        = sizeof(options);
-                        options.linkPolicy       = FILESYSTEM_LINK_PRESERVE;
-                        options.operationControl = &control;
+                        options.sizeBytes           = sizeof(options);
+                        options.linkPolicy          = FILESYSTEM_LINK_PRESERVE;
+                        options.operationControl    = &control;
                         // Serial 4,097-file loopback Copy was 108s on the archived
                         // Debug lane and now sits near 120s. Keep 180s of headroom
                         // so listing-before-descent and machine load cannot miss
@@ -7589,7 +7727,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlCopyTraversa
                                                    (! earlyReject || destinationAfter.directories == destinationBefore.directories) &&
                                                    FileEquals(sourceAfter, "/sibling.bin", bytes) && FileEquals(destinationAfter, "/sibling.bin", bytes);
                         const bool truthful      = move ? callback.SingleCompletionHasTruth(false) : callback.SingleCopyCompletionHasStatus(hr);
-                        bool boundedFixture      = true;
+                        bool boundedFixture = true;
                         std::wstring boundedDetail;
                         if (shape == Shape::Wide)
                         {
@@ -7626,17 +7764,16 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlCopyTraversa
                                                        firstUses == endpoint.passiveListenerCreations && reuses == endpoint.passiveListenerReuses &&
                                                        endpoint.passiveListenerCreations <= 64u;
                                 boundedFixture       = boundedFixture && accounted;
-                                boundedDetail += std::format(
-                                    L"[{};countsMatch={};payload={};nlst={};pendingRetirements={};firstUses={};creations={};reuses={};listenerReuses={}]",
-                                    sourceEndpoint ? L"source" : L"destination",
-                                    commandCountsMatch,
-                                    payload.firstUse + payload.reuse,
-                                    CountCommands(endpoint, "NLST"),
-                                    endpoint.passivePendingRetirements,
-                                    firstUses,
-                                    endpoint.passiveListenerCreations,
-                                    reuses,
-                                    endpoint.passiveListenerReuses);
+                                boundedDetail += std::format(L"[{};countsMatch={};payload={};nlst={};pendingRetirements={};firstUses={};creations={};reuses={};listenerReuses={}]",
+                                                             sourceEndpoint ? L"source" : L"destination",
+                                                             commandCountsMatch,
+                                                             payload.firstUse + payload.reuse,
+                                                             CountCommands(endpoint, "NLST"),
+                                                             endpoint.passivePendingRetirements,
+                                                             firstUses,
+                                                             endpoint.passiveListenerCreations,
+                                                             reuses,
+                                                             endpoint.passiveListenerReuses);
                                 Debug::Perf::Emit(L"FileOps.Curl.NativeCopy.EndpointPassiveListeners",
                                                   endpointDetail.c_str(),
                                                   0u,
@@ -7695,8 +7832,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlCopyTraversa
                                               correct ? S_OK : E_FAIL);
                         }
                         DebugCheck(correct,
-                                   std::format(L"{} preserves exact contents, discovery failure and cooperative cancellation "
-                                               L"({};cooperativeCancel={};cancelUs={};boundedFixture={}{})",
+                                   std::format(L"{} preserves exact contents, discovery failure and cooperative cancellation ({};cooperativeCancel={};cancelUs={};boundedFixture={}{})",
                                                route,
                                                detail,
                                                cooperativeCancel,
@@ -8378,8 +8514,8 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlDirectoryMov
         return E_POINTER;
     }
     *renameFromCount = 0u;
-    *renameToCount   = 0u;
-    *stateCorrect    = FALSE;
+    *renameToCount = 0u;
+    *stateCorrect = FALSE;
     try
     {
         auto& fixture = *static_cast<FakeFtpEndpoint*>(endpoint);
@@ -8399,20 +8535,18 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlDirectoryMov
             return S_OK;
         }
         const EndpointSnapshot snapshot = fixture.Snapshot();
-        *renameFromCount                = static_cast<unsigned int>(CountCommands(snapshot, "RNFR"));
-        *renameToCount                  = static_cast<unsigned int>(CountCommands(snapshot, "RNTO"));
-        const std::string retainedRoot  = refuse != FALSE ? "/br5/source" : "/br5/destination/source";
-        const std::string absentRoot    = refuse != FALSE ? "/br5/destination/source" : "/br5/source";
-        const bool noRelayOrCleanup = CountCommands(snapshot, "RETR") == 0u && CountCommands(snapshot, "STOR") == 0u && CountCommands(snapshot, "DELE") == 0u &&
-                                      CountCommands(snapshot, "RMD") == 0u && CountCommands(snapshot, "MKD") == 0u;
+        *renameFromCount = static_cast<unsigned int>(CountCommands(snapshot, "RNFR"));
+        *renameToCount = static_cast<unsigned int>(CountCommands(snapshot, "RNTO"));
+        const std::string retainedRoot = refuse != FALSE ? "/br5/source" : "/br5/destination/source";
+        const std::string absentRoot = refuse != FALSE ? "/br5/destination/source" : "/br5/source";
+        const bool noRelayOrCleanup = CountCommands(snapshot, "RETR") == 0u && CountCommands(snapshot, "STOR") == 0u &&
+                                      CountCommands(snapshot, "DELE") == 0u && CountCommands(snapshot, "RMD") == 0u && CountCommands(snapshot, "MKD") == 0u;
         *stateCorrect = SUCCEEDED(snapshot.serverHr) && noRelayOrCleanup && snapshot.files.size() == 4u &&
-                                FileEquals(snapshot, retainedRoot + "/a.bin", bytes) && FileEquals(snapshot, retainedRoot + "/nested/deep.bin", bytes) &&
-                                snapshot.directories.contains(retainedRoot + "/empty") && snapshot.directories.contains(retainedRoot + "/nested") &&
-                                ! snapshot.directories.contains(absentRoot) && ! snapshot.files.contains(absentRoot + "/a.bin") &&
-                                ! snapshot.files.contains(absentRoot + "/nested/deep.bin") && FileEquals(snapshot, "/br5/source-peer/keep.bin", bytes) &&
-                                FileEquals(snapshot, "/br5/sibling.bin", bytes) && snapshot.deletedPaths.empty()
-                            ? TRUE
-                            : FALSE;
+                        FileEquals(snapshot, retainedRoot + "/a.bin", bytes) && FileEquals(snapshot, retainedRoot + "/nested/deep.bin", bytes) &&
+                        snapshot.directories.contains(retainedRoot + "/empty") && snapshot.directories.contains(retainedRoot + "/nested") &&
+                        ! snapshot.directories.contains(absentRoot) && ! snapshot.files.contains(absentRoot + "/a.bin") &&
+                        ! snapshot.files.contains(absentRoot + "/nested/deep.bin") && FileEquals(snapshot, "/br5/source-peer/keep.bin", bytes) &&
+                        FileEquals(snapshot, "/br5/sibling.bin", bytes) && snapshot.deletedPaths.empty() ? TRUE : FALSE;
         return S_OK;
     }
     catch (const std::bad_alloc&)
@@ -8476,7 +8610,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlPartialDelet
     {
         return E_POINTER;
     }
-    *requests     = 0u;
+    *requests = 0u;
     *commits      = 0u;
     *stateCorrect = FALSE;
     try
@@ -8574,8 +8708,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlImapTranspor
         std::vector<FilesInformationCurl::Entry> entries;
         const auto listingStarted = std::chrono::steady_clock::now();
         hr                        = ReadDirectoryEntries(conn, L"/INBOX", entries);
-        const uint64_t listingUs =
-            static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - listingStarted).count());
+        const uint64_t listingUs  = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - listingStarted).count());
         ImapEndpointSnapshot snapshot = server.Snapshot();
         const auto findEntry          = [&entries](uint64_t uid) noexcept -> const FilesInformationCurl::Entry*
         {
@@ -8604,11 +8737,12 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlImapTranspor
                    *failed);
         const auto countVerb = [](const ImapEndpointSnapshot& observed, std::string_view verb) noexcept
         {
-            return static_cast<size_t>(
-                std::ranges::count_if(observed.commands, [verb](const CommandRecord& command) noexcept { return command.verb == verb; }));
+            return static_cast<size_t>(std::ranges::count_if(observed.commands, [verb](const CommandRecord& command) noexcept { return command.verb == verb; }));
         };
-        DebugCheck(
-            snapshot.logins >= 1u && countVerb(snapshot, "UID SEARCH") == 1u, L"listing authenticates and enumerates UIDs through libcurl", *passed, *failed);
+        DebugCheck(snapshot.logins >= 1u && countVerb(snapshot, "UID SEARCH") == 1u,
+                   L"listing authenticates and enumerates UIDs through libcurl",
+                   *passed,
+                   *failed);
         Debug::Perf::Emit(L"FileOps.Curl.Imap.TransportWitness", L"listing", listingUs, entries.size(), snapshot.fetchSets.size(), hr);
 
         // 2. Targeted lookup: a single UID is sent as `uid:uid` so libcurl keeps it on the
@@ -8616,21 +8750,25 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlImapTranspor
         FilesInformationCurl::Entry selected{};
         const auto lookupStarted = std::chrono::steady_clock::now();
         hr                       = GetEntryInfo(conn, L"/INBOX/message [777-2].eml", selected);
-        const uint64_t lookupUs =
-            static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - lookupStarted).count());
-        snapshot = server.Snapshot();
+        const uint64_t lookupUs  = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - lookupStarted).count());
+        snapshot                 = server.Snapshot();
         DebugCheck(hr == S_OK && selected.sizeKnown && selected.sizeBytes == 200u && selected.name == BuildImapMessageLeafName(literalSubject, {}, 777u, 2u),
                    L"targeted lookup of a literal-subject message succeeds through libcurl",
                    *passed,
                    *failed);
-        DebugCheck(! snapshot.fetchSets.empty() && snapshot.fetchSets.back() == "2:2", L"targeted lookup sends the one-element range form", *passed, *failed);
+        DebugCheck(! snapshot.fetchSets.empty() && snapshot.fetchSets.back() == "2:2",
+                   L"targeted lookup sends the one-element range form",
+                   *passed,
+                   *failed);
         Debug::Perf::Emit(L"FileOps.Curl.Imap.TransportWitness", L"lookup", lookupUs, 1u, snapshot.fetchSets.size(), hr);
 
         // 3. libcurl contract controls (see ImapResponseCapture).
         std::string bodyCapture;
-        const HRESULT bodyHr =
-            CurlPerformImapCustomRequest(conn, L"/INBOX", "UID FETCH 1,3 (UID RFC822.SIZE)", bodyCapture, nullptr, ImapResponseCapture::Body);
-        DebugCheck(bodyHr == S_OK && bodyCapture.empty(), L"libcurl control: a comma-separated custom UID FETCH writes no body bytes", *passed, *failed);
+        const HRESULT bodyHr = CurlPerformImapCustomRequest(conn, L"/INBOX", "UID FETCH 1,3 (UID RFC822.SIZE)", bodyCapture, nullptr, ImapResponseCapture::Body);
+        DebugCheck(bodyHr == S_OK && bodyCapture.empty(),
+                   L"libcurl control: a comma-separated custom UID FETCH writes no body bytes",
+                   *passed,
+                   *failed);
         std::string wireCapture;
         const HRESULT wireHr =
             CurlPerformImapCustomRequest(conn, L"/INBOX", "UID FETCH 1,3 (UID RFC822.SIZE)", wireCapture, nullptr, ImapResponseCapture::WireLines);
@@ -8650,12 +8788,16 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlImapTranspor
         server.SetDamagedFetchUid(3u);
         FilesInformationCurl::Entry damaged{};
         const HRESULT damagedHr = GetEntryInfo(conn, L"/INBOX/message [777-3].eml", damaged);
-        DebugCheck(
-            damagedHr == HRESULT_FROM_WIN32(ERROR_BAD_NET_RESP), L"a truncated literal in the FETCH row reports a bad server response", *passed, *failed);
+        DebugCheck(damagedHr == HRESULT_FROM_WIN32(ERROR_BAD_NET_RESP),
+                   L"a truncated literal in the FETCH row reports a bad server response",
+                   *passed,
+                   *failed);
         FilesInformationCurl::Entry absent{};
         const HRESULT absentHr = GetEntryInfo(conn, L"/INBOX/message [777-9].eml", absent);
-        DebugCheck(
-            absentHr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND), L"a well-formed reply without the UID reports the message as missing", *passed, *failed);
+        DebugCheck(absentHr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND),
+                   L"a well-formed reply without the UID reports the message as missing",
+                   *passed,
+                   *failed);
 
         snapshot = server.Snapshot();
         DebugCheck(SUCCEEDED(snapshot.serverHr) && snapshot.connections >= 1u, L"fake IMAP server observed no transport fault", *passed, *failed);

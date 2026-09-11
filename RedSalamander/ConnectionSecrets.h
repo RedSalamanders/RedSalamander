@@ -62,7 +62,10 @@ void ClearQuickConnectSecret(SecretKind kind) noexcept;
 // Interactive access is valid only inside `reauthTimeoutMs`; zero always prompts.
 // Background access uses the explicit app-run grant created by the same approval.
 void NoteSecretAccessAuthorized(std::wstring_view connectionId, SecretKind kind) noexcept;
-[[nodiscard]] bool IsSecretAccessAuthorized(std::wstring_view connectionId, SecretKind kind, SecretAccessPurpose purpose, uint64_t reauthTimeoutMs) noexcept;
+[[nodiscard]] bool IsSecretAccessAuthorized(std::wstring_view connectionId,
+                                            SecretKind kind,
+                                            SecretAccessPurpose purpose,
+                                            uint64_t reauthTimeoutMs) noexcept;
 void ClearSecretAccessAuthorization(std::wstring_view connectionId, SecretKind kind) noexcept;
 void ClearSecretAccessAuthorization(std::wstring_view connectionId) noexcept;
 void ClearAllSecretAccessAuthorizations() noexcept;
@@ -77,7 +80,10 @@ enum class CredentialPersistenceFault : uint8_t
 
 void SetCredentialPersistenceFaultForTesting(CredentialPersistenceFault fault) noexcept;
 // Test hook: allows selftests to simulate an expired authorization timestamp without sleeping.
-void SetSecretAccessAuthorizationTickForTesting(std::wstring_view connectionId, SecretKind kind, SecretAccessPurpose purpose, uint64_t tick) noexcept;
+void SetSecretAccessAuthorizationTickForTesting(std::wstring_view connectionId,
+                                                SecretKind kind,
+                                                SecretAccessPurpose purpose,
+                                                uint64_t tick) noexcept;
 [[nodiscard]] bool IsSecretAccessAuthorizationFreshForTesting(uint64_t now, uint64_t authorizedAt, uint64_t timeoutMs) noexcept;
 #endif
 } // namespace RedSalamander::Connections

@@ -15,13 +15,9 @@ ipch/
 # leftovers ignored in case a project is built without Directory.Build.props.
 .build/
 
-# Per-platform intermediate/output directories produced when MSBuild or Visual
-# Studio runs without the repository defaults (no first-party source lives here).
+
+/x64/**/*
 x64/
-ARM64/
-ARM/
-x86/
-Win32/
 
 *.obj
 *.iobj

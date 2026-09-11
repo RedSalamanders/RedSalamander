@@ -146,7 +146,8 @@ struct Utf16CodePoint
     while (cursor < text.size())
     {
         const Utf16CodePoint suffix = ReadCodePointAt(text, cursor);
-        if (! IsVariationSelectorCodePoint(suffix.value) && ! IsEmojiModifierCodePoint(suffix.value) && ! IsCombiningMark(text, cursor, suffix.end))
+        if (! IsVariationSelectorCodePoint(suffix.value) && ! IsEmojiModifierCodePoint(suffix.value) &&
+            ! IsCombiningMark(text, cursor, suffix.end))
         {
             break;
         }
@@ -680,7 +681,7 @@ void ClearSingleLineTextLayoutCache(SingleLineTextLayoutCache& cache, bool secur
 
     if (cache)
     {
-        cache->layout = layout;
+        cache->layout               = layout;
         if (secureCacheText)
         {
             SecureWipe::SecureClear(cache->text);

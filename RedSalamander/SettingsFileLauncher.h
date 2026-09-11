@@ -14,5 +14,8 @@
 // not live in the policy-neutral Common library.
 namespace SettingsFileLauncher
 {
-[[nodiscard]] HRESULT Open(HWND owner, std::wstring_view appId, Common::Settings::Settings settingsToCreate, std::filesystem::path& outPath) noexcept;
+[[nodiscard]] HRESULT Open(HWND owner,
+                           std::wstring_view appId,
+                           Common::Settings::Settings settingsToCreate,
+                           std::filesystem::path& outPath) noexcept;
 }

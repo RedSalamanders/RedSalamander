@@ -3,7 +3,7 @@ SelfTest::RunCase(options,
                   L"host_services_startup_selection",
                   [&](SelfTest::CaseState& state) noexcept
 {
-    const auto started                                        = std::chrono::steady_clock::now();
+    const auto started                                      = std::chrono::steady_clock::now();
     constexpr std::pair<std::wstring_view, bool> selections[] = {
         {L"", true},
         {L"unique", false},
@@ -186,8 +186,10 @@ SelfTest::RunCase(options,
 
 #ifdef ENABLE_TESTS
     // Simulate an expired authorization timestamp to ensure long-running operations (compare/copy) won't re-prompt.
-    RedSalamander::Connections::SetSecretAccessAuthorizationTickForTesting(
-        profile.id, RedSalamander::Connections::SecretKind::Password, RedSalamander::Connections::SecretAccessPurpose::Interactive, 0u);
+    RedSalamander::Connections::SetSecretAccessAuthorizationTickForTesting(profile.id,
+                                                                            RedSalamander::Connections::SecretKind::Password,
+                                                                            RedSalamander::Connections::SecretAccessPurpose::Interactive,
+                                                                            0u);
 
     wil::unique_cotaskmem_string secretExpired;
     hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_PASSWORD, nullptr, secretExpired.put());
@@ -535,7 +537,7 @@ SelfTest::RunCase(options,
     state.Require(configurationView.find("\"pageSize\":321") != std::string_view::npos, L"Google Drive plugin: configuration missing pageSize.");
 
     const char* capabilities = nullptr;
-    hr                       = created.fileSystem->GetPathCapabilities(L"/", FILESYSTEM_COPY, &capabilities);
+    hr = created.fileSystem->GetPathCapabilities(L"/", FILESYSTEM_COPY, &capabilities);
     state.Require(SUCCEEDED(hr) && capabilities, std::format(L"Google Drive plugin: GetCapabilities failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     if (FAILED(hr) || ! capabilities)
     {
@@ -2635,7 +2637,8 @@ SelfTest::RunCase(options,
     // Case: Dummy filesystem paths use plugin I/O for content compare (cross-filesystem support).
     if (dummyFs && dummyIo && dummyOps)
     {
-        const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::CompareDirectories, L"dummy_content");
+        const SelfTest::TestSandbox sandbox =
+            SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::CompareDirectories, L"dummy_content");
         if (! state.Require(sandbox.IsValid(), L"Dummy: failed to acquire TestSandbox root (content compare)."))
         {
             return state.failure.empty();
@@ -2683,8 +2686,8 @@ SelfTest::RunCase(options,
     // Case: Same-side entries that collide after Win32 trailing dot/space normalization must not overwrite each other.
     if (dummyFs && dummyIo && dummyOps)
     {
-        const SelfTest::TestSandbox sandbox =
-            SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::CompareDirectories, L"normalized_name_collision_preserves_same_side_entries");
+        const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::CompareDirectories,
+                                                                           L"normalized_name_collision_preserves_same_side_entries");
         if (! state.Require(sandbox.IsValid(), L"Normalized collision: failed to acquire TestSandbox root."))
         {
             return state.failure.empty();
@@ -2755,7 +2758,8 @@ SelfTest::RunCase(options,
     // Case: Deep directory trees do not overflow the stack (iterative traversal).
     if (dummyFs && dummyIo && dummyOps)
     {
-        const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::CompareDirectories, L"deep_tree");
+        const SelfTest::TestSandbox sandbox =
+            SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::CompareDirectories, L"deep_tree");
         if (! state.Require(sandbox.IsValid(), L"Dummy: failed to acquire TestSandbox root (deep_tree)."))
         {
             return state.failure.empty();
@@ -2825,7 +2829,8 @@ SelfTest::RunCase(options,
     // Case: Version invalidation mid-scan does not cache stale results.
     if (dummyFs && dummyIo && dummyOps)
     {
-        const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::CompareDirectories, L"invalidate");
+        const SelfTest::TestSandbox sandbox =
+            SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::CompareDirectories, L"invalidate");
         if (! state.Require(sandbox.IsValid(), L"Dummy: failed to acquire TestSandbox root (invalidate)."))
         {
             return state.failure.empty();

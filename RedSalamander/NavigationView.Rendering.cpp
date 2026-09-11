@@ -632,8 +632,13 @@ void NavigationView::RenderDriveSection()
 
         if (lineBrush && _separatorFormat)
         {
-            _d2dContext->DrawTextW(
-                &_menuFallbackGlyph, 1u, _separatorFormat.get(), section1RectF, lineBrush, D2D1_DRAW_TEXT_OPTIONS_NO_SNAP, DWRITE_MEASURING_MODE_NATURAL);
+            _d2dContext->DrawTextW(&_menuFallbackGlyph,
+                                   1u,
+                                   _separatorFormat.get(),
+                                   section1RectF,
+                                   lineBrush,
+                                   D2D1_DRAW_TEXT_OPTIONS_NO_SNAP,
+                                   DWRITE_MEASURING_MODE_NATURAL);
         }
     }
 

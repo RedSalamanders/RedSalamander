@@ -7,12 +7,8 @@
 #include <string_view>
 #include <vector>
 
-#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
 #define NOMINMAX
-#endif
 #include <Windows.h>
 
 #ifndef COMMON_API
@@ -95,7 +91,7 @@ struct ValidationIssue
 {
     ValidationSeverity severity = ValidationSeverity::Warning;
     ValidationCode code         = ValidationCode::InvalidJson;
-    size_t fieldIndex           = kNoFieldIndex;
+    size_t fieldIndex            = kNoFieldIndex;
     std::wstring fieldKey;
 };
 
@@ -148,6 +144,11 @@ struct ConfigurationParseResult
 COMMON_API SchemaParseResult ParseSchema(std::string_view schemaJsonUtf8) noexcept;
 COMMON_API ConfigurationParseResult ParseConfiguration(std::span<const Field> fields, std::string_view configurationJsonUtf8) noexcept;
 COMMON_API bool TryGetBoolToggleChoiceIndices(const Field& field, size_t& outOnIndex, size_t& outOffIndex) noexcept;
+
+// Materializes the value a schema field declares as its default. Editors and conformance tests must
+// use this rather than reading Field::default* directly, so that "the schema's own defaults" means
+// exactly one thing across the codec, the Preferences page, and the plugin contract tests.
+COMMON_API FieldValue MakeDefaultValue(const Field& field) noexcept;
 
 // Serializes current values over the original object. Members that are not represented by the schema are
 // copied unchanged and in their original order. Known members retain their original position when updated.

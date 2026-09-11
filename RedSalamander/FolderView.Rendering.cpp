@@ -1,8 +1,8 @@
 #include "FolderViewInternal.h"
 
+#include "DxUi/DxUi.h"
 #include "DxUi/DxUi.FrameRuntime.h"
 #include "DxUi/DxUi.Typography.h"
-#include "DxUi/DxUi.h"
 #include "FluentIcons.h"
 #include "FolderViewThumbnailGeometry.h"
 #ifdef ENABLE_TESTS
@@ -195,15 +195,21 @@ void FolderView::EnsureDeviceResources()
     forceWarp = ShouldForceFolderViewWarpDevice();
 #endif
     D3D_DRIVER_TYPE createdDriverType = D3D_DRIVER_TYPE_UNKNOWN;
-    const HRESULT hrDevice            = RedSalamander::DxUi::CreateD3D11DeviceWithWarpFallback(
-        creationFlags, levels, forceWarp, _d3dDevice.addressof(), &_featureLevel, _d3dContext.addressof(), &createdDriverType);
+    const HRESULT hrDevice = RedSalamander::DxUi::CreateD3D11DeviceWithWarpFallback(creationFlags,
+                                                                                    levels,
+                                                                                    forceWarp,
+                                                                                    _d3dDevice.addressof(),
+                                                                                    &_featureLevel,
+                                                                                    _d3dContext.addressof(),
+                                                                                    &createdDriverType);
     if (! CheckHR(hrDevice, createdDriverType == D3D_DRIVER_TYPE_WARP ? L"D3D11CreateDevice (WARP)" : L"D3D11CreateDevice"))
     {
         return;
     }
     if (forceWarp)
     {
-        Debug::Info(L"FolderView: D3D WARP device forced by REDSALAMANDER_FOLDERVIEW_FORCE_WARP with feature level {:#06x}", static_cast<int>(_featureLevel));
+        Debug::Info(L"FolderView: D3D WARP device forced by REDSALAMANDER_FOLDERVIEW_FORCE_WARP with feature level {:#06x}",
+                    static_cast<int>(_featureLevel));
     }
     else if (createdDriverType == D3D_DRIVER_TYPE_WARP)
     {
@@ -270,7 +276,9 @@ void FolderView::EnsureDeviceResources()
     }
 }
 
-HRESULT FolderView::CreateFolderViewSolidColorBrush(const D2D1_COLOR_F& color, wil::com_ptr<ID2D1SolidColorBrush>& brush, SolidBrushLifetime lifetime) noexcept
+HRESULT FolderView::CreateFolderViewSolidColorBrush(const D2D1_COLOR_F& color,
+                                                    wil::com_ptr<ID2D1SolidColorBrush>& brush,
+                                                    SolidBrushLifetime lifetime) noexcept
 {
     if (! _d2dContext)
     {
@@ -385,10 +393,9 @@ void FolderView::RecreateThemeBrushes()
     }
 
     {
-        D2D1::ColorF unfocusedMetadataColor = metadataColor;
-        unfocusedMetadataColor.a            = Common::PaneVisualState::ResolveNormalTextAlpha(unfocusedMetadataColor.a, false, false);
-        const HRESULT hrUnfocusedMetadataBrush =
-            CreateFolderViewSolidColorBrush(unfocusedMetadataColor, _metadataTextUnfocusedBrush, SolidBrushLifetime::Cached);
+        D2D1::ColorF unfocusedMetadataColor    = metadataColor;
+        unfocusedMetadataColor.a               = Common::PaneVisualState::ResolveNormalTextAlpha(unfocusedMetadataColor.a, false, false);
+        const HRESULT hrUnfocusedMetadataBrush = CreateFolderViewSolidColorBrush(unfocusedMetadataColor, _metadataTextUnfocusedBrush, SolidBrushLifetime::Cached);
         if (! CheckHR(hrUnfocusedMetadataBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(unfocused metadata text)"))
         {
             return;
@@ -425,12 +432,14 @@ void FolderView::RecreateThemeBrushes()
         return;
     }
 
-    const HRESULT hrArtifactFill = CreateFolderViewSolidColorBrush(_theme.warningBackground, _artifactWarningFillBrush, SolidBrushLifetime::Cached);
+    const HRESULT hrArtifactFill =
+        CreateFolderViewSolidColorBrush(_theme.warningBackground, _artifactWarningFillBrush, SolidBrushLifetime::Cached);
     if (! CheckHR(hrArtifactFill, L"ID2D1DeviceContext::CreateSolidColorBrush(artifact warning fill)"))
     {
         return;
     }
-    const HRESULT hrArtifactText = CreateFolderViewSolidColorBrush(_theme.warningText, _artifactWarningTextBrush, SolidBrushLifetime::Cached);
+    const HRESULT hrArtifactText =
+        CreateFolderViewSolidColorBrush(_theme.warningText, _artifactWarningTextBrush, SolidBrushLifetime::Cached);
     if (! CheckHR(hrArtifactText, L"ID2D1DeviceContext::CreateSolidColorBrush(artifact warning text)"))
     {
         return;
@@ -465,19 +474,24 @@ void FolderView::RecreateThemeBrushes()
 
     D2D1::ColorF indicatorShadow = D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f);
 
-    const HRESULT hrIndicatorBg = CreateFolderViewSolidColorBrush(indicatorBackground, _incrementalSearchIndicatorBackgroundBrush, SolidBrushLifetime::Cached);
+    const HRESULT hrIndicatorBg =
+        CreateFolderViewSolidColorBrush(indicatorBackground, _incrementalSearchIndicatorBackgroundBrush, SolidBrushLifetime::Cached);
     static_cast<void>(CheckHR(hrIndicatorBg, L"ID2D1DeviceContext::CreateSolidColorBrush(incremental search indicator background)"));
 
-    const HRESULT hrIndicatorBorder = CreateFolderViewSolidColorBrush(_theme.focusBorder, _incrementalSearchIndicatorBorderBrush, SolidBrushLifetime::Cached);
+    const HRESULT hrIndicatorBorder =
+        CreateFolderViewSolidColorBrush(_theme.focusBorder, _incrementalSearchIndicatorBorderBrush, SolidBrushLifetime::Cached);
     static_cast<void>(CheckHR(hrIndicatorBorder, L"ID2D1DeviceContext::CreateSolidColorBrush(incremental search indicator border)"));
 
-    const HRESULT hrIndicatorText = CreateFolderViewSolidColorBrush(indicatorText, _incrementalSearchIndicatorTextBrush, SolidBrushLifetime::Cached);
+    const HRESULT hrIndicatorText =
+        CreateFolderViewSolidColorBrush(indicatorText, _incrementalSearchIndicatorTextBrush, SolidBrushLifetime::Cached);
     static_cast<void>(CheckHR(hrIndicatorText, L"ID2D1DeviceContext::CreateSolidColorBrush(incremental search indicator text)"));
 
-    const HRESULT hrIndicatorShadow = CreateFolderViewSolidColorBrush(indicatorShadow, _incrementalSearchIndicatorShadowBrush, SolidBrushLifetime::Cached);
+    const HRESULT hrIndicatorShadow =
+        CreateFolderViewSolidColorBrush(indicatorShadow, _incrementalSearchIndicatorShadowBrush, SolidBrushLifetime::Cached);
     static_cast<void>(CheckHR(hrIndicatorShadow, L"ID2D1DeviceContext::CreateSolidColorBrush(incremental search indicator shadow)"));
 
-    const HRESULT hrIndicatorAccent = CreateFolderViewSolidColorBrush(_theme.focusBorder, _incrementalSearchIndicatorAccentBrush, SolidBrushLifetime::Cached);
+    const HRESULT hrIndicatorAccent =
+        CreateFolderViewSolidColorBrush(_theme.focusBorder, _incrementalSearchIndicatorAccentBrush, SolidBrushLifetime::Cached);
     static_cast<void>(CheckHR(hrIndicatorAccent, L"ID2D1DeviceContext::CreateSolidColorBrush(incremental search indicator accent)"));
 }
 
@@ -1067,8 +1081,8 @@ void FolderView::Render(const RECT& invalidRect)
             std::lock_guard lock(_d2dDeviceMutex);
             d2dDeviceDiscarded = _d2dDevice == nullptr;
         }
-        const bool discardedResources =
-            _d3dDevice == nullptr && _d3dContext == nullptr && _d2dFactory == nullptr && d2dDeviceDiscarded && _d2dContext == nullptr && _d2dTarget == nullptr;
+        const bool discardedResources = _d3dDevice == nullptr && _d3dContext == nullptr && _d2dFactory == nullptr && d2dDeviceDiscarded &&
+                                        _d2dContext == nullptr && _d2dTarget == nullptr;
         if (discardedResources)
         {
             ++_debugDeviceLossDiscardedResourcesCount;
@@ -2295,8 +2309,8 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
     D2D1_RECT_F bounds = OffsetRect(item.bounds, -_horizontalOffset, -_scrollOffset);
 
     // Determine item state for color selection
-    const bool isHovered =
-        (_hoveredIndex != static_cast<size_t>(-1) && _hoveredIndex < _items.size() && std::addressof(item) == std::addressof(_items[_hoveredIndex]));
+    const bool isHovered = (_hoveredIndex != static_cast<size_t>(-1) && _hoveredIndex < _items.size() &&
+                            std::addressof(item) == std::addressof(_items[_hoveredIndex]));
 
     const float itemWidth                 = std::max(0.0f, bounds.right - bounds.left);
     const float itemHeight                = std::max(0.0f, bounds.bottom - bounds.top);
@@ -2505,22 +2519,29 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
         }
     }
 
-    if (item.artifactProjection && item.artifactProjection->classification != FileOperationArtifacts::Classification::Ordinary && _artifactWarningFillBrush &&
-        _artifactWarningTextBrush)
+    if (item.artifactProjection &&
+        item.artifactProjection->classification != FileOperationArtifacts::Classification::Ordinary &&
+        _artifactWarningFillBrush && _artifactWarningTextBrush)
     {
-        const float badgeDiameter         = std::clamp(_iconSizeDip * 0.56f, 9.0f, 16.0f);
-        const float badgeRadius           = badgeDiameter * 0.5f;
-        const D2D1_POINT_2F center        = D2D1::Point2F(iconRect.right - badgeRadius * 0.55f, iconRect.bottom - badgeRadius * 0.55f);
-        const D2D1_ELLIPSE badge          = D2D1::Ellipse(center, badgeRadius, badgeRadius);
+        const float badgeDiameter = std::clamp(_iconSizeDip * 0.56f, 9.0f, 16.0f);
+        const float badgeRadius = badgeDiameter * 0.5f;
+        const D2D1_POINT_2F center = D2D1::Point2F(iconRect.right - badgeRadius * 0.55f,
+                                                   iconRect.bottom - badgeRadius * 0.55f);
+        const D2D1_ELLIPSE badge = D2D1::Ellipse(center, badgeRadius, badgeRadius);
         ID2D1SolidColorBrush* const glyph = _artifactWarningTextBrush.get();
         _d2dContext->FillEllipse(badge, _artifactWarningFillBrush.get());
         _d2dContext->DrawEllipse(badge, _artifactWarningTextBrush.get(), 1.25f);
         if (glyph)
         {
             const float stroke = std::max(1.25f, badgeDiameter * 0.12f);
-            _d2dContext->DrawLine(
-                D2D1::Point2F(center.x, center.y - badgeRadius * 0.48f), D2D1::Point2F(center.x, center.y + badgeRadius * 0.16f), glyph, stroke);
-            _d2dContext->FillEllipse(D2D1::Ellipse(D2D1::Point2F(center.x, center.y + badgeRadius * 0.50f), stroke * 0.58f, stroke * 0.58f), glyph);
+            _d2dContext->DrawLine(D2D1::Point2F(center.x, center.y - badgeRadius * 0.48f),
+                                  D2D1::Point2F(center.x, center.y + badgeRadius * 0.16f),
+                                  glyph,
+                                  stroke);
+            _d2dContext->FillEllipse(D2D1::Ellipse(D2D1::Point2F(center.x, center.y + badgeRadius * 0.50f),
+                                                    stroke * 0.58f,
+                                                    stroke * 0.58f),
+                                     glyph);
         }
     }
 

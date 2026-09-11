@@ -662,7 +662,7 @@ the normal schema/configuration persistence pipeline. Supported fields are:
 |---|---|---|---|
 | `defaultShell` | `auto` | `auto`, `powershell`, `cmd` | Windows shell selection |
 | `fontFamily` | `Cascadia Mono` | nonempty, at most 128 UTF-16 code units | DirectWrite family |
-| `fontSizeDip` | `14` | 8 through 32 | text metrics and grid size |
+| `fontSizeDip` | `14` | 8 through 32, JSON integer or real | text metrics and grid size |
 | `maxFormattedMiB` | `8` | 1 through 32 | temporary formatted-screen bound |
 | `pasteMaxBytes` | `4194304` | 4,096 through 8,388,608 | hard UTF-8 bound for one atomic paste |
 | `warnOnUnsafePaste` | on | boolean option | require the plugin-owned nonblocking confirmation overlay for unsafe paste |
@@ -671,9 +671,48 @@ the normal schema/configuration persistence pipeline. Supported fields are:
 | `osc52Policy` | `ask` | `deny`, `ask`, `allow` | policy for decoded terminal-application writes to the standard Windows clipboard |
 | `osc52MaxBytes` | `262144` | 4,096 through 262,144 | hard decoded UTF-8 bound for one application clipboard write; never exceeds the engine option |
 
-Invalid configuration returns `E_INVALIDARG` and is not partially applied.
+Invalid field values return `E_INVALIDARG` and are not partially applied.
+Malformed JSON or a non-object root returns `HRESULT_FROM_WIN32(ERROR_INVALID_DATA)`,
+per the transactional contract in `Specs/Plugins/Plugins_VirtualFileSystem.md`.
+Members this build does not understand are copied through `SetConfiguration` /
+`GetConfiguration` unchanged, so a newer build's settings survive an older one.
 Runtime location, DLL filename, source pin, hashes, or loader flags are never
 user-configurable.
+
+`fontSizeDip` is declared as a schema `value` field, so the shared plugin-configuration
+codec serializes it as a JSON integer while `GetConfiguration` emits a real. Both
+spellings denote the same size and both MUST be accepted; the plugin reads it through
+`Common::Json::GetDoubleMember`. Because validation is transactional, a `fontSizeDip`
+that refused its own stored spelling would discard `fontFamily` with it and silently
+render the pane in the compiled default family.
+
+### Font resolution and the font notice
+
+`fontFamily` names a DirectWrite family that may not be installed, and an installed
+monospace family may still lack the private-use (Nerd Font) glyphs a shell prompt
+draws. Neither condition may degrade silently.
+
+- Resolution walks a monospace-only chain: the configured family, then `Cascadia Mono`,
+  then `Consolas`. Availability is decided by
+  `RedSalamander::DxUi::Typography::IsFontFamilyAvailable`. The shared
+  `Typography::CreateTextFormat` is deliberately **not** used, because its fallback
+  resolves an unknown family to the proportional `Segoe UI`, which cannot hold a
+  character grid.
+- The system font collection is queried with `checkForUpdates = TRUE`, and the memoized
+  availability answers for the plugin's factory are dropped through
+  `Typography::InvalidateFontFamilyAvailability` when the configured family changes, so
+  a font installed while RedSalamander is running is picked up without a restart.
+- Glyph coverage is probed once per resolved family with `IDWriteFontFace::GetGlyphIndices`
+  over U+E0B0, U+E0B4 and U+F07B; glyph index `0` is `.notdef`. Missing coverage is only
+  reported once the screen actually paints a private-use codepoint, so a deliberate plain
+  monospace configuration is never nagged.
+- A non-blocking single-line banner is drawn at the top of the grid: `IDS_TERMINAL_FONT_UNAVAILABLE`
+  names the configured family and the substitute, `IDS_TERMINAL_FONT_MISSING_GLYPHS` names the
+  resolved family. The banner never dims or blocks the grid, is suppressed when the pane is too
+  small to hold it, is dismissed by clicking its button, and re-arms when the configured family
+  changes. Its text is appended to the accessibility snapshot. The fatal `setDiagnostic` channel
+  is reserved for runtime-load failures and MUST NOT be used, because a non-empty diagnostic
+  replaces the entire grid.
 
 ## Dependency identity and upgrade procedure
 
@@ -939,14 +978,7 @@ the builder writes
 `include/red_salamander/terminal_runtime_identity.generated.h` beside the
 platform product. That header contains the exact built DLL size and raw
 SHA-256, and `TerminalRuntimeLoader.cpp` compiles those values into
-`Terminal.dll`. `TerminalRuntimeLoader.h` includes `windows.h` (`WIN32_LEAN_AND_MEAN` /
-`NOMINMAX`) in its own include block before `bcrypt.h` and `wincodec.h`. clang-format
-`SortIncludes` is alphabetical inside a block, so those SDK headers must not share a
-block with `windows.h` or a TU that includes the loader header first fails to compile.
-`Terminal.h` and `TerminalAccessibility.h` include `objbase.h` in their own block after
-`windows.h` so `WIN32_LEAN_AND_MEAN` cannot starve `UIAutomation.h` of COM `interface`
-types after clang-format sorts `UIAutomation.h` before `objbase.h`.
-The shipped `Terminal.dll` and `ghostty-vt.dll` are consequently
+`Terminal.dll`. The shipped `Terminal.dll` and `ghostty-vt.dll` are consequently
 an atomic byte-exact pair even when a later clean build produces another valid
 hash. `terminal-runtime-identity.json` schema 5 records the pair's raw hash,
 size, PE identity, input locks, build arguments, overlay hash, and a diagnostic

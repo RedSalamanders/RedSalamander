@@ -14,7 +14,8 @@ namespace
 {
 [[nodiscard]] bool IsAsciiHex(const wchar_t value) noexcept
 {
-    return (value >= L'0' && value <= L'9') || (value >= L'a' && value <= L'f') || (value >= L'A' && value <= L'F');
+    return (value >= L'0' && value <= L'9') || (value >= L'a' && value <= L'f') ||
+           (value >= L'A' && value <= L'F');
 }
 
 [[nodiscard]] bool IsAsciiHexRun(const std::wstring_view value) noexcept
@@ -39,7 +40,9 @@ namespace
     return true;
 }
 
-[[nodiscard]] bool HasTail(const std::wstring_view leaf, const std::wstring_view marker, bool (*matches)(std::wstring_view) noexcept) noexcept
+[[nodiscard]] bool HasTail(const std::wstring_view leaf,
+                           const std::wstring_view marker,
+                           bool (*matches)(std::wstring_view) noexcept) noexcept
 {
     const size_t offset = leaf.rfind(marker);
     return offset != std::wstring_view::npos && matches(leaf.substr(offset + marker.size()));
@@ -47,13 +50,14 @@ namespace
 
 [[nodiscard]] bool IsBridgeTail(const std::wstring_view value) noexcept
 {
-    return value.size() > 33u && IsAsciiHexRun(value.substr(0u, 32u)) && value[32u] == L'_' && IsAsciiHexRun(value.substr(33u));
+    return value.size() > 33u && IsAsciiHexRun(value.substr(0u, 32u)) && value[32u] == L'_' &&
+           IsAsciiHexRun(value.substr(33u));
 }
 
 [[nodiscard]] bool IsLegacyCopyTail(const std::wstring_view value) noexcept
 {
-    return value.size() == 34u && IsAsciiHexRun(value.substr(0u, 8u)) && value[8u] == L'_' && IsAsciiHexRun(value.substr(9u, 8u)) && value[17u] == L'_' &&
-           IsAsciiHexRun(value.substr(18u, 16u));
+    return value.size() == 34u && IsAsciiHexRun(value.substr(0u, 8u)) && value[8u] == L'_' &&
+           IsAsciiHexRun(value.substr(9u, 8u)) && value[17u] == L'_' && IsAsciiHexRun(value.substr(18u, 16u));
 }
 
 [[nodiscard]] bool IsRenameTail(const std::wstring_view value) noexcept
@@ -73,12 +77,15 @@ namespace
         return false;
     }
     value.remove_suffix(4u);
-    return IsGuidWithBraces(value) || (value.size() == 25u && IsAsciiHexRun(value.substr(0u, 8u)) && value[8u] == L'.' && IsAsciiHexRun(value.substr(9u, 16u)));
+    return IsGuidWithBraces(value) ||
+           (value.size() == 25u && IsAsciiHexRun(value.substr(0u, 8u)) && value[8u] == L'.' &&
+            IsAsciiHexRun(value.substr(9u, 16u)));
 }
 
 [[nodiscard]] bool EndpointEquals(const Endpoint& left, const Endpoint& right) noexcept
 {
-    return left.pluginId == right.pluginId && left.instanceId == right.instanceId && left.profileId == right.profileId && left.rootId == right.rootId;
+    return left.pluginId == right.pluginId && left.instanceId == right.instanceId &&
+           left.profileId == right.profileId && left.rootId == right.rootId;
 }
 
 [[nodiscard]] bool IdentityUsable(const Identity& identity) noexcept
@@ -89,13 +96,17 @@ namespace
 
 bool IdentityEquals(const Identity& left, const Identity& right) noexcept
 {
-    return left.objectId == right.objectId && left.revisionId == right.revisionId && left.pathProfileId == right.pathProfileId && left.kind == right.kind;
+    return left.objectId == right.objectId && left.revisionId == right.revisionId &&
+           left.pathProfileId == right.pathProfileId && left.kind == right.kind;
 }
 
 bool HasPossibleArtifactName(const std::wstring_view leaf) noexcept
 {
-    return HasTail(leaf, L".rs_tmp_", IsBridgeTail) || HasTail(leaf, L".rs_copy_tmp_", IsLegacyCopyTail) || HasTail(leaf, L".~rs-write-", IsWriterTail) ||
-           HasTail(leaf, L".rs_bak_", IsBackupTail) || HasTail(leaf, L".rs_ren_", IsRenameTail);
+    return HasTail(leaf, L".rs_tmp_", IsBridgeTail) ||
+           HasTail(leaf, L".rs_copy_tmp_", IsLegacyCopyTail) ||
+           HasTail(leaf, L".~rs-write-", IsWriterTail) ||
+           HasTail(leaf, L".rs_bak_", IsBackupTail) ||
+           HasTail(leaf, L".rs_ren_", IsRenameTail);
 }
 
 ClassificationResult ClassifyCandidate(const Candidate& candidate) noexcept
@@ -138,8 +149,8 @@ HRESULT BuildTouchGuardRequest(const std::span<const Candidate> candidates, Touc
         {
             continue;
         }
-        out.containsPossible      = true;
-        const bool revalidatable  = candidate.probeState == ProbeState::Present && IdentityUsable(candidate.currentIdentity);
+        out.containsPossible = true;
+        const bool revalidatable = candidate.probeState == ProbeState::Present && IdentityUsable(candidate.currentIdentity);
         out.allItemsRevalidatable = out.allItemsRevalidatable && revalidatable;
         out.items.push_back(TouchGuardItem{
             .classification = classified.classification,
@@ -177,9 +188,11 @@ HRESULT RevalidateTouchGuard(const TouchGuardReceipt& receipt, const std::span<c
     {
         const TouchGuardItem& accepted = receipt.items[index];
         const Candidate& current       = candidates[index];
-        if (! EndpointEquals(accepted.endpoint, current.endpoint) || ! EquivalentPath(accepted.pathIdentity, accepted.path.native(), current.path.native()) ||
+        if (! EndpointEquals(accepted.endpoint, current.endpoint) ||
+            ! EquivalentPath(accepted.pathIdentity, accepted.path.native(), current.path.native()) ||
             current.probeState != ProbeState::Present || ! IdentityUsable(current.currentIdentity) ||
-            ! IdentityEquals(accepted.identity, current.currentIdentity) || ClassifyCandidate(current).classification == Classification::Ordinary)
+            ! IdentityEquals(accepted.identity, current.currentIdentity) ||
+            ClassifyCandidate(current).classification == Classification::Ordinary)
         {
             return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
         }
@@ -187,9 +200,10 @@ HRESULT RevalidateTouchGuard(const TouchGuardReceipt& receipt, const std::span<c
     return S_OK;
 }
 
-HRESULT DebugMeasureArtifactNameShapeProjectionForTests(const size_t ordinaryRowCount,
-                                                        const size_t possibleRowCount,
-                                                        ArtifactNameShapeProjectionDebugResult& out) noexcept
+HRESULT DebugMeasureArtifactNameShapeProjectionForTests(
+    const size_t ordinaryRowCount,
+    const size_t possibleRowCount,
+    ArtifactNameShapeProjectionDebugResult& out) noexcept
 {
     out = {};
     if (ordinaryRowCount == 0u || possibleRowCount == 0u)

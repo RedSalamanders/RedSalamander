@@ -24,7 +24,8 @@ namespace
 {
     if (callback != nullptr)
     {
-        const HRESULT progressHr = callback->DirectorySizeProgress(scannedEntries, result.totalBytes, result.fileCount, result.directoryCount, nullptr, cookie);
+        const HRESULT progressHr =
+            callback->DirectorySizeProgress(scannedEntries, result.totalBytes, result.fileCount, result.directoryCount, nullptr, cookie);
         if (FAILED(progressHr))
         {
             result.status = progressHr;
@@ -42,7 +43,8 @@ void FsS3::RunDebugDirectorySizeCallbackContractSelfTest(unsigned int& passed, u
 {
     struct AbortOnCompletion final : IFileSystemDirectorySizeCallback
     {
-        HRESULT STDMETHODCALLTYPE DirectorySizeProgress(uint64_t, uint64_t, uint64_t, uint64_t, const wchar_t* currentPath, void*) noexcept override
+        HRESULT STDMETHODCALLTYPE DirectorySizeProgress(
+            uint64_t, uint64_t, uint64_t, uint64_t, const wchar_t* currentPath, void*) noexcept override
         {
             ++progressCalls;
             completionPathWasNull = currentPath == nullptr;
@@ -59,11 +61,11 @@ void FsS3::RunDebugDirectorySizeCallbackContractSelfTest(unsigned int& passed, u
     } callback;
 
     FileSystemDirectorySizeResult result{
-        .sizeBytes      = sizeof(FileSystemDirectorySizeResult),
-        .totalBytes     = 42u,
-        .fileCount      = 1u,
+        .sizeBytes = sizeof(FileSystemDirectorySizeResult),
+        .totalBytes = 42u,
+        .fileCount = 1u,
         .directoryCount = 0u,
-        .status         = S_OK,
+        .status = S_OK,
     };
     const HRESULT abortHr = CompleteDirectorySize(1u, &callback, nullptr, result);
     if (abortHr == E_ABORT && result.status == E_ABORT && callback.progressCalls == 1u && callback.completionPathWasNull)
@@ -102,7 +104,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CreateDirectory(const wchar_t* path) noe
     }
 
 #if defined(ENABLE_TESTS)
-    bool debugHandled     = false;
+    bool debugHandled = false;
     const HRESULT debugHr = FsS3::TryCreateDebugDirectoryMarker(path, debugHandled);
     if (debugHandled)
     {
@@ -317,6 +319,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
                     result->status = HRESULT_FROM_WIN32(ERROR_CANCELLED);
                     return result->status;
                 }
+
             }
 
             return CompleteDirectorySize(1u, callback, cookie, *result);
@@ -404,7 +407,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
     while (true)
     {
         const HRESULT pageBoundaryHr = firstPage ? pager.BeginFirstPage(GetTickCount64()) : pager.BeginContinuation(continuationToken, GetTickCount64());
-        firstPage                    = false;
+        firstPage = false;
         if (FAILED(pageBoundaryHr))
         {
             result->status = pageBoundaryHr;
@@ -422,9 +425,11 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
             return result->status;
         }
 
-        const auto& res         = outcome.GetResult();
-        size_t pageBytes        = 0u;
-        const auto addPageBytes = [&pageBytes](size_t bytes) noexcept { pageBytes += (std::min)(bytes, (std::numeric_limits<size_t>::max)() - pageBytes); };
+        const auto& res = outcome.GetResult();
+        size_t pageBytes = 0u;
+        const auto addPageBytes = [&pageBytes](size_t bytes) noexcept {
+            pageBytes += (std::min)(bytes, (std::numeric_limits<size_t>::max)() - pageBytes);
+        };
 
         if (! recursive)
         {
@@ -477,11 +482,11 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
             }
         }
 
-        const bool isTruncated       = res.GetIsTruncated();
+        const bool isTruncated      = res.GetIsTruncated();
         const Aws::String& nextToken = res.GetNextContinuationToken();
         const std::string_view nextTokenView(nextToken.c_str(), nextToken.size());
-        const HRESULT pageHr =
-            pager.CompletePage(res.GetCommonPrefixes().size() + res.GetContents().size(), pageBytes, isTruncated, nextTokenView, GetTickCount64());
+        const HRESULT pageHr = pager.CompletePage(
+            res.GetCommonPrefixes().size() + res.GetContents().size(), pageBytes, isTruncated, nextTokenView, GetTickCount64());
         if (FAILED(pageHr))
         {
             result->status = pageHr;

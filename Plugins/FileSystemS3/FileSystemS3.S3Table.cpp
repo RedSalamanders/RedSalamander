@@ -124,7 +124,7 @@ namespace
     {
         const std::string_view tokenView(token.c_str(), token.size());
         const HRESULT pageBoundaryHr = firstPage ? pager.BeginFirstPage(GetTickCount64()) : pager.BeginContinuation(tokenView, GetTickCount64());
-        firstPage                    = false;
+        firstPage = false;
         if (FAILED(pageBoundaryHr))
         {
             return pageBoundaryHr;
@@ -144,7 +144,7 @@ namespace
         }
 
         const auto& result = outcome.GetResult();
-        size_t pageBytes   = 0u;
+        size_t pageBytes = 0u;
         for (const auto& ns : result.GetNamespaces())
         {
             std::string joined;
@@ -168,8 +168,11 @@ namespace
         }
 
         token = result.GetContinuationToken();
-        const HRESULT pageHr =
-            pager.CompletePage(result.GetNamespaces().size(), pageBytes, ! token.empty(), std::string_view(token.c_str(), token.size()), GetTickCount64());
+        const HRESULT pageHr = pager.CompletePage(result.GetNamespaces().size(),
+                                                  pageBytes,
+                                                  ! token.empty(),
+                                                  std::string_view(token.c_str(), token.size()),
+                                                  GetTickCount64());
         if (FAILED(pageHr))
         {
             return pageHr;
@@ -224,7 +227,7 @@ namespace
     {
         const std::string_view tokenView(token.c_str(), token.size());
         const HRESULT pageBoundaryHr = firstPage ? pager.BeginFirstPage(GetTickCount64()) : pager.BeginContinuation(tokenView, GetTickCount64());
-        firstPage                    = false;
+        firstPage = false;
         if (FAILED(pageBoundaryHr))
         {
             return pageBoundaryHr;
@@ -244,7 +247,7 @@ namespace
         }
 
         const auto& result = outcome.GetResult();
-        size_t pageBytes   = 0u;
+        size_t pageBytes = 0u;
         for (const auto& table : result.GetTables())
         {
             pageBytes += (std::min)(table.GetName().size(), (std::numeric_limits<size_t>::max)() - pageBytes);
@@ -264,8 +267,11 @@ namespace
         }
 
         token = result.GetContinuationToken();
-        const HRESULT pageHr =
-            pager.CompletePage(result.GetTables().size(), pageBytes, ! token.empty(), std::string_view(token.c_str(), token.size()), GetTickCount64());
+        const HRESULT pageHr = pager.CompletePage(result.GetTables().size(),
+                                                  pageBytes,
+                                                  ! token.empty(),
+                                                  std::string_view(token.c_str(), token.size()),
+                                                  GetTickCount64());
         if (FAILED(pageHr))
         {
             return pageHr;

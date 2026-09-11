@@ -1137,6 +1137,7 @@ BEGIN
     IDS_PREFS_PLUGINS_DETAILS_SCHEMA_UNAVAILABLE "🧩\r\nThis plugin does not provide a configuration editor."
     IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NOT_LOADABLE "🚧\r\nThis plugin is not loadable right now, so its configuration editor is unavailable."
     IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NO_FIELDS "This plugin does not expose any configurable settings."
+    IDS_PREFS_PLUGINS_DETAILS_CONFIG_REJECTED "The plugin rejected these settings (error 0x{0:08X}), so they were not saved. Check the highlighted values and try again."
     IDS_PREFS_PLUGINS_EMPTY_TITLE "Nothing to configure"
     IDS_PREFS_PLUGINS_EMPTY_BODY "{0} does not expose any configurable settings."
     IDS_PREFS_PLUGINS_EMPTY_CAPTION "It is ready to use as-is."

@@ -252,16 +252,17 @@ private:
     const FileSystemOptions* _previous = nullptr;
 };
 
-inline constexpr unsigned int kS3RetryMaxRetries                    = 1u;
-inline constexpr unsigned int kS3RetryBackoffScaleMs                = 200u;
-inline constexpr unsigned int kS3RetryMaxBackoffSecs                = 2u;
-inline constexpr unsigned int kS3CrtStallMonitorMinMs               = 3'000u;
-inline constexpr unsigned int kS3CrtStallMonitorTickMs              = 1'000u; // the monitor evaluates once per second
-inline constexpr unsigned int kS3CrtStallMonitorIntervalsPerAttempt = 2u;     // measured: the monitor fires after about two intervals
+inline constexpr unsigned int kS3RetryMaxRetries       = 1u;
+inline constexpr unsigned int kS3RetryBackoffScaleMs   = 200u;
+inline constexpr unsigned int kS3RetryMaxBackoffSecs   = 2u;
+inline constexpr unsigned int kS3CrtStallMonitorMinMs  = 3'000u;
+inline constexpr unsigned int kS3CrtStallMonitorTickMs = 1'000u; // the monitor evaluates once per second
+inline constexpr unsigned int kS3CrtStallMonitorIntervalsPerAttempt = 2u; // measured: the monitor fires after about two intervals
 
 [[nodiscard]] unsigned long S3ProviderWatchdogTimeoutMs(uint32_t connectTimeoutMs, uint32_t requestTimeoutMs) noexcept;
 
-template <typename Request> void ArmS3RequestControl(Request& request) noexcept
+template <typename Request>
+void ArmS3RequestControl(Request& request) noexcept
 {
     const FileSystemOptions* options = S3CurrentOperationOptions();
     if (options == nullptr || (options->operationControl == nullptr && options->deadlineTickCount64 == 0u))
@@ -467,7 +468,7 @@ inline constexpr uint64_t kMultipartMinPartSizeBytes = 64ull * 1024ull * 1024ull
                                             const void* data,
                                             size_t sizeBytes,
                                             bool destinationMustNotExist,
-                                            std::string_view ifMatchEtag          = {},
+                                            std::string_view ifMatchEtag           = {},
                                             S3ObjectRevision* destinationRevision = nullptr) noexcept;
 #if defined(ENABLE_TESTS)
 [[nodiscard]] HRESULT TryCreateDebugDirectoryMarker(std::wstring_view path, bool& handled) noexcept;
@@ -482,7 +483,7 @@ inline constexpr uint64_t kMultipartMinPartSizeBytes = 64ull * 1024ull * 1024ull
                                                 const std::vector<S3MultipartUploadedPart>& parts,
                                                 bool destinationMustNotExist,
                                                 S3ObjectRevision* destinationRevision = nullptr,
-                                                std::string_view ifMatchEtag          = {}) noexcept;
+                                                std::string_view ifMatchEtag = {}) noexcept;
 [[nodiscard]] HRESULT AbortS3MultipartUpload(FileSystemS3& fs, const S3MultipartUploadSession& session) noexcept;
 [[nodiscard]] HRESULT CopyS3ObjectServerSide(FileSystemS3& fs,
                                              const ResolvedAwsContext& destinationCtx,

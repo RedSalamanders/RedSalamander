@@ -7,8 +7,8 @@ namespace RedConfigure::Ui
 StartPageSummary StartPagePresenter::Build(const RedConfigureSession& session) noexcept
 {
     return {.resourceOwnerCount = session.GetWorkspace().resourceOwners.size(),
-            .themeFileCount     = session.GetThemeCatalog().themes.size(),
-            .scanErrorCount     = session.GetWorkspace().errors.size()};
+            .themeFileCount = session.GetThemeCatalog().themes.size(),
+            .scanErrorCount = session.GetWorkspace().errors.size()};
 }
 
 BatchInteraction LocalizationPagePresenter::Execute(RedConfigureSession& session, const Workflow::LocalizationBatchRequest& request)
@@ -21,11 +21,13 @@ BatchInteraction LocalizationPagePresenter::Execute(RedConfigureSession& session
     }
 
     _pending = Workflow::PreviewLocalizationBatch(session.GetLocalizationReviewRows(), request);
-    BatchInteraction interaction{.phase = BatchInteractionPhase::Preview, .result = _pending->result, .changeCount = _pending->changes.size()};
+    BatchInteraction interaction{.phase = BatchInteractionPhase::Preview,
+                                 .result = _pending->result,
+                                 .changeCount = _pending->changes.size()};
     if (! _pending->changes.empty())
     {
         const Workflow::LocalizationBatchChange& first = _pending->changes.front();
-        interaction.firstChange                        = BatchChangeSummary{.identity = first.resourceId, .before = first.before, .after = first.after};
+        interaction.firstChange = BatchChangeSummary{.identity = first.resourceId, .before = first.before, .after = first.after};
     }
     if (_pending->result != Workflow::BatchApprovalResult::Ready)
     {
@@ -49,11 +51,13 @@ BatchInteraction ThemesPagePresenter::Execute(RedConfigureSession& session, cons
     }
 
     _pending = Workflow::PreviewThemeMassChange(session.GetThemePreviewModel(), request);
-    BatchInteraction interaction{.phase = BatchInteractionPhase::Preview, .result = _pending->result, .changeCount = _pending->changes.size()};
+    BatchInteraction interaction{.phase = BatchInteractionPhase::Preview,
+                                 .result = _pending->result,
+                                 .changeCount = _pending->changes.size()};
     if (! _pending->changes.empty())
     {
         const Workflow::ThemeMassChange& first = _pending->changes.front();
-        interaction.firstChange                = BatchChangeSummary{.identity = first.key, .before = first.before, .after = first.after};
+        interaction.firstChange = BatchChangeSummary{.identity = first.key, .before = first.before, .after = first.after};
     }
     if (_pending->result != Workflow::BatchApprovalResult::Ready)
     {

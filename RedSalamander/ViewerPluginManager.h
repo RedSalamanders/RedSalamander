@@ -60,8 +60,8 @@ public:
         // plugin id to request via RedSalamanderCreate().
         std::wstring factoryPluginId;
 
-        bool loadable       = false;
-        bool disabled       = false;
+        bool loadable = false;
+        bool disabled = false;
         bool unloadDeferred = false;
         std::wstring loadError;
 
@@ -95,6 +95,11 @@ public:
     HRESULT GetConfigurationSchema(std::wstring_view pluginId, Common::Settings::Settings& settings, std::string& outSchemaJsonUtf8) noexcept;
     HRESULT GetConfiguration(std::wstring_view pluginId, Common::Settings::Settings& settings, std::string& outConfigurationJsonUtf8) noexcept;
     HRESULT SetConfiguration(std::wstring_view pluginId, std::string_view configurationJsonUtf8, Common::Settings::Settings& settings) noexcept;
+    // Asks the plugin whether it would accept a candidate configuration, without applying it. The
+    // check runs on a throwaway instance, so no live viewer or terminal pane is disturbed. Draft
+    // editors use this before persisting so a configuration the plugin rejects cannot be saved and
+    // then silently revert to compiled defaults on the next instance.
+    HRESULT ValidateConfiguration(std::wstring_view pluginId, std::string_view configurationJsonUtf8) noexcept;
 
     HRESULT TestPlugin(std::wstring_view pluginId) noexcept;
 

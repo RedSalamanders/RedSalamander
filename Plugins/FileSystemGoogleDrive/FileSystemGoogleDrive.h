@@ -5,9 +5,9 @@
 #include <windows.h>
 
 #include <atomic>
-#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <condition_variable>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -22,14 +22,14 @@
 #include <wil/com.h>
 #pragma warning(pop)
 
-#include "FileSystemRouteProviderBase.h"
-#include "Helpers.h"
-#include "PackedFileInfoBuffer.h"
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
+#include "FileSystemRouteProviderBase.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
+#include "Helpers.h"
+#include "PackedFileInfoBuffer.h"
 
 class FilesInformationGoogleDrive final : public IFilesInformation
 {
@@ -167,7 +167,9 @@ public:
                                           IFileSystemCallback* callback    = nullptr,
                                           void* cookie                     = nullptr) noexcept override;
 
-    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
+                                                  FileSystemOperation operation,
+                                                  const char** jsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
                                                FileSystemOperation operationType,
                                                FileSystemTransferEndpoint endpoint,
@@ -196,9 +198,7 @@ public:
 
     // IFileSystemIdentityDelete (C10): a Permanent Delete pins the Drive file id it confirmed and
     // deletes only that id.
-    HRESULT STDMETHODCALLTYPE ResolveDeleteIdentity(const wchar_t* path,
-                                                    const FileSystemOptions* options,
-                                                    FileSystemDeleteIdentity* identity) noexcept override;
+    HRESULT STDMETHODCALLTYPE ResolveDeleteIdentity(const wchar_t* path, const FileSystemOptions* options, FileSystemDeleteIdentity* identity) noexcept override;
     HRESULT STDMETHODCALLTYPE DeleteIfIdentity(const wchar_t* path,
                                                const FileSystemDeleteIdentity* identity,
                                                FileSystemFlags flags,
@@ -265,7 +265,9 @@ public:
 #endif
 
 protected:
-    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path, FileSystemOperation operation, FileSystemRouteDescriptor& descriptor) noexcept override;
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                           FileSystemOperation operation,
+                                           FileSystemRouteDescriptor& descriptor) noexcept override;
 
 private:
     ~FileSystemGoogleDrive();
@@ -323,7 +325,9 @@ private:
         }
         AccessTokenCacheEntry(const AccessTokenCacheEntry&)            = delete;
         AccessTokenCacheEntry& operator=(const AccessTokenCacheEntry&) = delete;
-        AccessTokenCacheEntry(AccessTokenCacheEntry&& other) noexcept : token(std::move(other.token)), expiresAtTickMs(std::exchange(other.expiresAtTickMs, 0u))
+        AccessTokenCacheEntry(AccessTokenCacheEntry&& other) noexcept
+            : token(std::move(other.token)),
+              expiresAtTickMs(std::exchange(other.expiresAtTickMs, 0u))
         {
             SecureWipe::SecureClear(other.token);
         }

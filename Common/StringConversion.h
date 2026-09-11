@@ -5,12 +5,8 @@
 #include <string>
 #include <string_view>
 
-#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
 #define NOMINMAX
-#endif
 #include <Windows.h>
 
 namespace Common::Strings
@@ -28,7 +24,8 @@ namespace Common::Strings
         return false;
     }
 
-    return MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0) > 0;
+    return MultiByteToWideChar(
+               CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0) > 0;
 }
 
 // Converts UTF-8 using the Windows replacement-character policy (flags 0): malformed byte

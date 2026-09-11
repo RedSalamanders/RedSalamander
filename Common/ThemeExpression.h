@@ -10,12 +10,8 @@
 #include <unordered_map>
 #include <vector>
 
-#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
 #define NOMINMAX
-#endif
 #include <Windows.h>
 
 #ifndef COMMON_API
@@ -64,13 +60,11 @@ struct ThemeColorSource
     uint32_t directArgb       = 0xFF000000u;
     std::vector<std::wstring> references;
     std::array<double, 4> parameters{};
-    ThemeSystemColorRole systemRole   = ThemeSystemColorRole::Accent;
+    ThemeSystemColorRole systemRole = ThemeSystemColorRole::Accent;
     bool preserveSystemAccentSpelling = false;
 
     ThemeColorSource() = default;
-    ThemeColorSource(uint32_t argb) noexcept : directArgb(argb)
-    {
-    }
+    ThemeColorSource(uint32_t argb) noexcept : directArgb(argb) {}
 
     bool operator==(const ThemeColorSource&) const = default;
 };

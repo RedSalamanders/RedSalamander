@@ -25,9 +25,9 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
-#include "FileSystemRouteProviderBase.h"
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
+#include "FileSystemRouteProviderBase.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
 
@@ -228,15 +228,19 @@ public:
     HRESULT STDMETHODCALLTYPE GetItemProperties(const wchar_t* path, const char** jsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE DeleteItemStream(const wchar_t* path, const wchar_t* streamName) noexcept override;
 
-    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept override;
-    HRESULT STDMETHODCALLTYPE BindObject(const wchar_t* path, FileSystemBindFlags flags, IFileSystemBoundObject** bound) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
+                                                  FileSystemOperation operation,
+                                                  const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE BindObject(const wchar_t* path,
+                                         FileSystemBindFlags flags,
+                                         IFileSystemBoundObject** bound) noexcept override;
     HRESULT STDMETHODCALLTYPE CreateExclusiveWriter(const wchar_t* stagePath,
-                                                    const FileSystemOptions* options,
-                                                    IFileWriter** writer,
-                                                    IFileSystemBoundObject** ownedStage) noexcept override;
+                                                     const FileSystemOptions* options,
+                                                     IFileWriter** writer,
+                                                     IFileSystemBoundObject** ownedStage) noexcept override;
     HRESULT STDMETHODCALLTYPE CreateExclusiveDirectory(const wchar_t* stagePath,
-                                                       const FileSystemOptions* options,
-                                                       IFileSystemBoundObject** ownedStage) noexcept override;
+                                                        const FileSystemOptions* options,
+                                                        IFileSystemBoundObject** ownedStage) noexcept override;
     HRESULT STDMETHODCALLTYPE ReadBoundLink(IFileSystemBoundObject* boundLink,
                                             const FileSystemLinkTransform* transform,
                                             const FileSystemOptions* options,
@@ -252,7 +256,9 @@ public:
     HRESULT STDMETHODCALLTYPE GetStorageCharacteristics(const wchar_t* path, FileSystemStorageCharacteristics* characteristics) noexcept override;
 
 protected:
-    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path, FileSystemOperation operation, FileSystemRouteDescriptor& descriptor) noexcept override;
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                           FileSystemOperation operation,
+                                           FileSystemRouteDescriptor& descriptor) noexcept override;
 
 private:
     ~FileSystem();

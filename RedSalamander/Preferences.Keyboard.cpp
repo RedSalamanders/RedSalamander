@@ -49,7 +49,11 @@
 #include "resource.h"
 
 [[nodiscard]] uint32_t GetCurrentModifierMask() noexcept;
-void ApplyCapturedShortcut(HWND host, PreferencesDialogState& state, uint32_t vk, uint32_t modifiers, Common::Keyboard::KeyPosition keyPosition) noexcept;
+void ApplyCapturedShortcut(HWND host,
+                           PreferencesDialogState& state,
+                           uint32_t vk,
+                           uint32_t modifiers,
+                           Common::Keyboard::KeyPosition keyPosition) noexcept;
 [[nodiscard]] std::optional<size_t> TryGetSelectedKeyboardRowIndex(const PreferencesDialogState& state) noexcept;
 [[nodiscard]] bool PrefsKeyboardCaptureWantsAllKeys(const PreferencesDialogState* state) noexcept;
 [[nodiscard]] bool PrefsHandleKeyboardCaptureMessage(HWND hostHwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
@@ -130,7 +134,8 @@ constexpr size_t kScopeComboIndexTerminal    = 4u;
     return false;
 }
 
-[[nodiscard]] std::vector<Common::Settings::ShortcutBinding>* GetBindingsForScope(Common::Settings::ShortcutsSettings& shortcuts, ShortcutScope scope) noexcept
+[[nodiscard]] std::vector<Common::Settings::ShortcutBinding>* GetBindingsForScope(
+    Common::Settings::ShortcutsSettings& shortcuts, ShortcutScope scope) noexcept
 {
     switch (scope)
     {
@@ -177,10 +182,10 @@ void AddUnassignedShortcutIfMissing(std::vector<Common::Settings::ShortcutBindin
     }
 
     Common::Settings::ShortcutBinding binding;
-    binding.vk          = vk;
-    binding.modifiers   = modifiers & 0x7u;
+    binding.vk        = vk;
+    binding.modifiers = modifiers & 0x7u;
     binding.keyPosition = keyPosition;
-    binding.commandId   = ShortcutIds::kUnassignedCommandId;
+    binding.commandId = ShortcutIds::kUnassignedCommandId;
     bindings.push_back(std::move(binding));
 }
 
@@ -411,12 +416,12 @@ bool PrefsHandleKeyboardCaptureMessage(HWND hostHwnd, UINT msg, WPARAM wp, LPARA
     {
         case WM_SYSKEYDOWN:
         case WM_KEYDOWN:
-            ApplyCapturedShortcut(
-                hostHwnd,
-                *state,
-                static_cast<uint32_t>(wp),
-                GetCurrentModifierMask(),
-                Common::Keyboard::PositionFromScanCode(Common::Keyboard::ScanCodeFromKeyMessageLParam(lp), Common::Keyboard::IsExtendedKeyMessageLParam(lp)));
+            ApplyCapturedShortcut(hostHwnd,
+                                  *state,
+                                  static_cast<uint32_t>(wp),
+                                  GetCurrentModifierMask(),
+                                  Common::Keyboard::PositionFromScanCode(Common::Keyboard::ScanCodeFromKeyMessageLParam(lp),
+                                                                         Common::Keyboard::IsExtendedKeyMessageLParam(lp)));
             return true;
         case WM_SYSCHAR:
         case WM_CHAR: return true;
@@ -1338,9 +1343,10 @@ bool KeyboardPane::DebugGetVisibleRowChordByCommandId(std::wstring_view commandI
     return false;
 }
 
-bool KeyboardPane::DebugGetVisibleRowPresentationByCommandId(std::wstring_view commandId,
-                                                             std::wstring& outScopeText,
-                                                             std::wstring& outTooltipText) const noexcept
+bool KeyboardPane::DebugGetVisibleRowPresentationByCommandId(
+    std::wstring_view commandId,
+    std::wstring& outScopeText,
+    std::wstring& outTooltipText) const noexcept
 {
     outScopeText.clear();
     outTooltipText.clear();
@@ -1350,9 +1356,10 @@ bool KeyboardPane::DebugGetVisibleRowPresentationByCommandId(std::wstring_view c
     }
     for (const KeyboardGridRow& row : _dxState->page.listModel->GetRows())
     {
-        if (row.tooltipText.starts_with(commandId) && (row.tooltipText.size() == commandId.size() || row.tooltipText[commandId.size()] == L'\n'))
+        if (row.tooltipText.starts_with(commandId) &&
+            (row.tooltipText.size() == commandId.size() || row.tooltipText[commandId.size()] == L'\n'))
         {
-            outScopeText   = row.scopeText;
+            outScopeText = row.scopeText;
             outTooltipText = row.tooltipText;
             return true;
         }
@@ -1455,7 +1462,8 @@ bool KeyboardPane::DebugSetTerminalScope() noexcept
     _dxState->page.scopeCombo->SetSelectedIndex(terminalIndex);
     if (_hostWindow && IsWindow(_hostWindow) != FALSE)
     {
-        static_cast<void>(PrefsUi::PostDeferredAction(_hostWindow, PreferencesDeferredActionKind::KeyboardScopeChanged));
+        static_cast<void>(PrefsUi::PostDeferredAction(
+            _hostWindow, PreferencesDeferredActionKind::KeyboardScopeChanged));
         if (_pageHostDx)
         {
             _pageHostDx->Invalidate();
@@ -1894,9 +1902,11 @@ void KeyboardPane::UpdateHint(HWND host, PreferencesDialogState& state) noexcept
         const std::wstring commandName = ShortcutText::GetCommandDisplayName(state.keyboardCaptureCommandId);
         const bool hasPendingVk        = state.keyboardCapturePendingVk.has_value();
         const uint32_t modifiers       = state.keyboardCapturePendingModifiers;
-        const std::wstring pressedText =
-            hasPendingVk ? ShortcutText::FormatChordText(state.keyboardCapturePendingKeyPosition, state.keyboardCapturePendingVk.value(), modifiers)
-                         : FormatModifiersOnlyText(modifiers);
+        const std::wstring pressedText = hasPendingVk
+                                             ? ShortcutText::FormatChordText(state.keyboardCapturePendingKeyPosition,
+                                                                             state.keyboardCapturePendingVk.value(),
+                                                                             modifiers)
+                                             : FormatModifiersOnlyText(modifiers);
 
         std::wstring conflictName;
         if (! state.keyboardCaptureConflictCommandId.empty())
@@ -1958,7 +1968,7 @@ void KeyboardPane::UpdateHint(HWND host, PreferencesDialogState& state) noexcept
     }
     if (row.overridesGlobal)
     {
-        if (! description.empty())
+        if (!description.empty())
         {
             description.append(L"\n");
         }
@@ -2172,8 +2182,8 @@ void KeyboardPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
     folderByCommand.reserve(shortcuts.folderView.size());
     terminalByCommand.reserve(shortcuts.terminal.size());
 
-    const auto indexBindings =
-        [](const std::vector<Common::Settings::ShortcutBinding>& bindings, std::unordered_map<std::wstring, std::vector<size_t>>& byCommand)
+    const auto indexBindings = [](const std::vector<Common::Settings::ShortcutBinding>& bindings,
+                                  std::unordered_map<std::wstring, std::vector<size_t>>& byCommand)
     {
         for (size_t i = 0; i < bindings.size(); ++i)
         {
@@ -2195,7 +2205,7 @@ void KeyboardPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
     {
         std::wstring id;
         std::wstring displayName;
-        bool known                = false;
+        bool known = false;
         uint8_t shortcutScopeMask = 0u;
     };
 
@@ -2214,9 +2224,9 @@ void KeyboardPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
         }
 
         CommandEntry entry;
-        entry.id                = std::move(id);
-        entry.displayName       = ShortcutText::GetCommandDisplayName(entry.id);
-        entry.known             = true;
+        entry.id          = std::move(id);
+        entry.displayName = ShortcutText::GetCommandDisplayName(entry.id);
+        entry.known       = true;
         entry.shortcutScopeMask = cmd.shortcutScopeMask;
         commands.push_back(std::move(entry));
     }
@@ -2233,13 +2243,14 @@ void KeyboardPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
             if (const auto existing = std::find_if(commands.begin(), commands.end(), [&](const CommandEntry& entry) noexcept { return entry.id == commandId; });
                 existing != commands.end())
             {
-                existing->shortcutScopeMask = static_cast<uint8_t>(existing->shortcutScopeMask | CommandShortcutScopeMask(GetCommandShortcutScope(scope)));
+                existing->shortcutScopeMask = static_cast<uint8_t>(
+                    existing->shortcutScopeMask | CommandShortcutScopeMask(GetCommandShortcutScope(scope)));
             }
             return;
         }
 
         CommandEntry entry;
-        entry.id = commandId;
+        entry.id          = commandId;
         if (ShortcutIds::IsPassThroughCommandId(commandId))
         {
             entry.displayName = LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_PASS_THROUGH);
@@ -2252,7 +2263,7 @@ void KeyboardPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
         {
             entry.displayName = ShortcutText::GetCommandDisplayName(entry.id);
         }
-        entry.known             = FindCommandInfo(entry.id) != nullptr || ShortcutIds::IsPseudoCommandId(commandId);
+        entry.known = FindCommandInfo(entry.id) != nullptr || ShortcutIds::IsPseudoCommandId(commandId);
         entry.shortcutScopeMask = CommandShortcutScopeMask(GetCommandShortcutScope(scope));
         commands.push_back(std::move(entry));
     };
@@ -2398,7 +2409,7 @@ void KeyboardPane::EndCapture(HWND host, PreferencesDialogState& state) noexcept
     state.keyboardCaptureCommandId.clear();
     state.keyboardCaptureBindingIndex.reset();
     state.keyboardCapturePendingVk.reset();
-    state.keyboardCapturePendingModifiers   = 0;
+    state.keyboardCapturePendingModifiers = 0;
     state.keyboardCapturePendingKeyPosition = Common::Keyboard::KeyPosition::None;
     state.keyboardCapturePendingKeyPosition = Common::Keyboard::KeyPosition::None;
     state.keyboardCaptureConflictCommandId.clear();
@@ -2437,7 +2448,7 @@ void KeyboardPane::BeginCapture(HWND host, PreferencesDialogState& state) noexce
     state.keyboardCaptureCommandId    = row.commandId;
     state.keyboardCaptureBindingIndex = row.bindingIndex;
     state.keyboardCapturePendingVk.reset();
-    state.keyboardCapturePendingModifiers   = 0;
+    state.keyboardCapturePendingModifiers = 0;
     state.keyboardCapturePendingKeyPosition = Common::Keyboard::KeyPosition::None;
     state.keyboardCaptureConflictCommandId.clear();
     state.keyboardCaptureConflictBindingIndex.reset();
@@ -2504,7 +2515,11 @@ void KeyboardPane::BeginCapture(HWND host, PreferencesDialogState& state) noexce
     return result;
 }
 
-void ApplyCapturedShortcut(HWND host, PreferencesDialogState& state, uint32_t vk, uint32_t modifiers, Common::Keyboard::KeyPosition keyPosition) noexcept
+void ApplyCapturedShortcut(HWND host,
+                           PreferencesDialogState& state,
+                           uint32_t vk,
+                           uint32_t modifiers,
+                           Common::Keyboard::KeyPosition keyPosition) noexcept
 {
     if (! host || ! state.keyboardCaptureActive)
     {
@@ -2528,7 +2543,7 @@ void ApplyCapturedShortcut(HWND host, PreferencesDialogState& state, uint32_t vk
         vk == VK_RMENU)
     {
         state.keyboardCapturePendingVk.reset();
-        state.keyboardCapturePendingModifiers   = GetCurrentModifierMask();
+        state.keyboardCapturePendingModifiers = GetCurrentModifierMask();
         state.keyboardCapturePendingKeyPosition = Common::Keyboard::KeyPosition::None;
         state.keyboardCaptureConflictCommandId.clear();
         state.keyboardCaptureConflictBindingIndex.reset();
@@ -2568,8 +2583,8 @@ void ApplyCapturedShortcut(HWND host, PreferencesDialogState& state, uint32_t vk
     const uint32_t chordKey = keyPosition == Common::Keyboard::KeyPosition::None ? ShortcutManager::MakeChordKey(vk, modifiers)
                                                                                  : ShortcutManager::MakeChordKey(keyPosition, modifiers);
 
-    state.keyboardCapturePendingVk          = vk;
-    state.keyboardCapturePendingModifiers   = modifiers;
+    state.keyboardCapturePendingVk        = vk;
+    state.keyboardCapturePendingModifiers = modifiers;
     state.keyboardCapturePendingKeyPosition = keyPosition;
     state.keyboardCaptureConflictCommandId.clear();
     state.keyboardCaptureConflictBindingIndex.reset();
@@ -2615,10 +2630,10 @@ void KeyboardPane::CommitCapturedShortcut(HWND host, PreferencesDialogState& sta
         return;
     }
 
-    const uint32_t vk                               = state.keyboardCapturePendingVk.value();
-    const uint32_t modifiers                        = state.keyboardCapturePendingModifiers;
+    const uint32_t vk        = state.keyboardCapturePendingVk.value();
+    const uint32_t modifiers = state.keyboardCapturePendingModifiers;
     const Common::Keyboard::KeyPosition keyPosition = state.keyboardCapturePendingKeyPosition;
-    const uint32_t storedVk                         = keyPosition == Common::Keyboard::KeyPosition::None ? vk : 0u;
+    const uint32_t storedVk = keyPosition == Common::Keyboard::KeyPosition::None ? vk : 0u;
 
     if (! EnsureWorkingShortcuts(state))
     {
@@ -2647,20 +2662,21 @@ void KeyboardPane::CommitCapturedShortcut(HWND host, PreferencesDialogState& sta
         }
     }
 
-    const uint32_t chordKey          = keyPosition == Common::Keyboard::KeyPosition::None ? ShortcutManager::MakeChordKey(vk, modifiers)
-                                                                                          : ShortcutManager::MakeChordKey(keyPosition, modifiers);
-    uint32_t previousTargetVk        = 0u;
-    uint32_t previousTargetModifiers = 0u;
+    const uint32_t chordKey                       = keyPosition == Common::Keyboard::KeyPosition::None
+                                                        ? ShortcutManager::MakeChordKey(vk, modifiers)
+                                                        : ShortcutManager::MakeChordKey(keyPosition, modifiers);
+    uint32_t previousTargetVk                     = 0u;
+    uint32_t previousTargetModifiers              = 0u;
     Common::Keyboard::KeyPosition previousTargetKeyPosition = Common::Keyboard::KeyPosition::None;
-    bool preservePreviousDefaultChordAsUnassigned           = false;
+    bool preservePreviousDefaultChordAsUnassigned = false;
     if (targetIndex != std::numeric_limits<size_t>::max())
     {
         const Common::Settings::ShortcutBinding& targetBinding = (*bindings)[targetIndex];
         previousTargetVk                                       = targetBinding.vk;
         previousTargetModifiers                                = targetBinding.modifiers;
         previousTargetKeyPosition                              = targetBinding.keyPosition;
-        preservePreviousDefaultChordAsUnassigned =
-            IsDefaultBindingForScope(state.keyboardCaptureScope, targetBinding) && ShortcutManager::MakeChordKey(targetBinding) != chordKey;
+        preservePreviousDefaultChordAsUnassigned               = IsDefaultBindingForScope(state.keyboardCaptureScope, targetBinding) &&
+                                                                 ShortcutManager::MakeChordKey(targetBinding) != chordKey;
     }
 
     std::vector<size_t> conflictIndices;
@@ -2704,10 +2720,10 @@ void KeyboardPane::CommitCapturedShortcut(HWND host, PreferencesDialogState& sta
 
     if (targetIndex != std::numeric_limits<size_t>::max())
     {
-        (*bindings)[targetIndex].vk          = storedVk;
-        (*bindings)[targetIndex].modifiers   = modifiers;
+        (*bindings)[targetIndex].vk        = storedVk;
+        (*bindings)[targetIndex].modifiers = modifiers;
         (*bindings)[targetIndex].keyPosition = keyPosition;
-        (*bindings)[targetIndex].commandId   = state.keyboardCaptureCommandId;
+        (*bindings)[targetIndex].commandId = state.keyboardCaptureCommandId;
         if (preservePreviousDefaultChordAsUnassigned)
         {
             AddUnassignedShortcutIfMissing(*bindings, previousTargetKeyPosition, previousTargetVk, previousTargetModifiers);
@@ -2716,10 +2732,10 @@ void KeyboardPane::CommitCapturedShortcut(HWND host, PreferencesDialogState& sta
     else
     {
         Common::Settings::ShortcutBinding binding;
-        binding.vk          = storedVk;
-        binding.modifiers   = modifiers;
+        binding.vk        = storedVk;
+        binding.modifiers = modifiers;
         binding.keyPosition = keyPosition;
-        binding.commandId   = state.keyboardCaptureCommandId;
+        binding.commandId = state.keyboardCaptureCommandId;
         bindings->push_back(std::move(binding));
     }
 
@@ -2736,8 +2752,8 @@ void KeyboardPane::SwapCapturedShortcut(HWND host, PreferencesDialogState& state
         return;
     }
 
-    const uint32_t vk                               = state.keyboardCapturePendingVk.value();
-    const uint32_t modifiers                        = state.keyboardCapturePendingModifiers;
+    const uint32_t vk        = state.keyboardCapturePendingVk.value();
+    const uint32_t modifiers = state.keyboardCapturePendingModifiers;
     const Common::Keyboard::KeyPosition keyPosition = state.keyboardCapturePendingKeyPosition;
 
     if (! EnsureWorkingShortcuts(state))
@@ -2764,16 +2780,16 @@ void KeyboardPane::SwapCapturedShortcut(HWND host, PreferencesDialogState& state
         return;
     }
 
-    const uint32_t oldVk                               = (*bindings)[targetIndex].vk;
-    const uint32_t oldModifiers                        = (*bindings)[targetIndex].modifiers;
+    const uint32_t oldVk        = (*bindings)[targetIndex].vk;
+    const uint32_t oldModifiers = (*bindings)[targetIndex].modifiers;
     const Common::Keyboard::KeyPosition oldKeyPosition = (*bindings)[targetIndex].keyPosition;
 
-    (*bindings)[targetIndex].vk          = keyPosition == Common::Keyboard::KeyPosition::None ? vk : 0u;
-    (*bindings)[targetIndex].modifiers   = modifiers;
+    (*bindings)[targetIndex].vk        = keyPosition == Common::Keyboard::KeyPosition::None ? vk : 0u;
+    (*bindings)[targetIndex].modifiers = modifiers;
     (*bindings)[targetIndex].keyPosition = keyPosition;
 
-    (*bindings)[conflictIndex].vk          = oldVk;
-    (*bindings)[conflictIndex].modifiers   = oldModifiers;
+    (*bindings)[conflictIndex].vk        = oldVk;
+    (*bindings)[conflictIndex].modifiers = oldModifiers;
     (*bindings)[conflictIndex].keyPosition = oldKeyPosition;
 
     EndCapture(host, state);
@@ -3005,9 +3021,9 @@ bool DebugCancelPreferencesKeyboardNextBrowseImpl() noexcept
                 continue;
             }
 
-            const std::string identityText  = binding->keyPosition == Common::Keyboard::KeyPosition::None
-                                                  ? VkToStableName(binding->vk)
-                                                  : std::string(Common::Keyboard::TokenForPosition(binding->keyPosition));
+            const std::string identityText = binding->keyPosition == Common::Keyboard::KeyPosition::None
+                                                 ? VkToStableName(binding->vk)
+                                                 : std::string(Common::Keyboard::TokenForPosition(binding->keyPosition));
             const std::string commandIdUtf8 = Utf8FromUtf16(binding->commandId);
             if (identityText.empty() || commandIdUtf8.empty())
             {
@@ -3168,11 +3184,11 @@ bool DebugCancelPreferencesKeyboardNextBrowseImpl() noexcept
                 continue;
             }
 
-            uint32_t vk                               = 0;
-            uint32_t modifiers                        = 0;
+            uint32_t vk        = 0;
+            uint32_t modifiers = 0;
             Common::Keyboard::KeyPosition keyPosition = Common::Keyboard::KeyPosition::None;
 
-            yyjson_val* vkVal          = yyjson_obj_get(binding, "vk");
+            yyjson_val* vkVal = yyjson_obj_get(binding, "vk");
             yyjson_val* keyPositionVal = yyjson_obj_get(binding, "keyPosition");
             if ((vkVal != nullptr) == (keyPositionVal != nullptr))
             {
@@ -3259,10 +3275,10 @@ bool DebugCancelPreferencesKeyboardNextBrowseImpl() noexcept
             }
 
             Common::Settings::ShortcutBinding entry;
-            entry.vk          = vk;
-            entry.modifiers   = modifiers;
+            entry.vk        = vk;
+            entry.modifiers = modifiers;
             entry.keyPosition = keyPosition;
-            entry.commandId   = commandId;
+            entry.commandId = commandId;
             dest.push_back(std::move(entry));
         }
 
@@ -3389,7 +3405,9 @@ bool DebugCancelPreferencesKeyboardNextBrowse() noexcept
     return DebugCancelPreferencesKeyboardNextBrowseImpl();
 }
 
-bool DebugParsePreferencesShortcutImport(std::string_view jsonText, Common::Settings::ShortcutsSettings& shortcuts, std::wstring& error) noexcept
+bool DebugParsePreferencesShortcutImport(std::string_view jsonText,
+                                         Common::Settings::ShortcutsSettings& shortcuts,
+                                         std::wstring& error) noexcept
 {
     return ParseShortcutsImportJson(jsonText, shortcuts, error);
 }

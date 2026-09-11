@@ -673,10 +673,15 @@ void ReleaseSharedWindowHostAttachment(WindowHost* host, DWORD ownerThreadId) no
 #if defined(_DEBUG)
     creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
-    D3D_FEATURE_LEVEL levels[]        = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1};
+    D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1};
     D3D_DRIVER_TYPE createdDriverType = D3D_DRIVER_TYPE_UNKNOWN;
-    const HRESULT hr                  = CreateD3D11DeviceWithWarpFallback(
-        creationFlags, levels, false, resources.d3dDevice.addressof(), &resources.featureLevel, resources.d3dContext.addressof(), &createdDriverType);
+    const HRESULT hr = CreateD3D11DeviceWithWarpFallback(creationFlags,
+                                                         levels,
+                                                         false,
+                                                         resources.d3dDevice.addressof(),
+                                                         &resources.featureLevel,
+                                                         resources.d3dContext.addressof(),
+                                                         &createdDriverType);
     if (FAILED(hr) || ! resources.d3dDevice || ! resources.d3dContext)
     {
         Debug::Error(L"DxUi::WindowHost: shared D3D11CreateDevice failed: 0x{:08X}", hr);
@@ -1203,8 +1208,8 @@ void ShutdownAllWindowHostsForProcessExit() noexcept
 {
     struct ShutdownTarget final
     {
-        WindowHost* host    = nullptr;
-        HWND hwnd           = nullptr;
+        WindowHost* host = nullptr;
+        HWND hwnd        = nullptr;
         DWORD ownerThreadId = 0u;
     };
 
@@ -1240,7 +1245,13 @@ void ShutdownAllWindowHostsForProcessExit() noexcept
         }
 
         DWORD_PTR detachResult = 0u;
-        if (SendMessageTimeoutW(target.hwnd, WndMsg::kDxUiWindowHostProcessExitDetach, 0u, 0, SMTO_ABORTIFHUNG | SMTO_BLOCK, 5000u, &detachResult) == 0)
+        if (SendMessageTimeoutW(target.hwnd,
+                                WndMsg::kDxUiWindowHostProcessExitDetach,
+                                0u,
+                                0,
+                                SMTO_ABORTIFHUNG | SMTO_BLOCK,
+                                5000u,
+                                &detachResult) == 0)
         {
             Debug::ErrorWithLastError(L"DxUi::WindowHost: owner-thread process-exit detach timed out for thread {}.", target.ownerThreadId);
         }
@@ -1360,7 +1371,9 @@ void WindowHost::Detach(bool processExit) noexcept
 {
     if (_attachmentOwnerThreadId != 0u && _attachmentOwnerThreadId != GetCurrentThreadId())
     {
-        Debug::Error(L"DxUi::WindowHost: refusing foreign-thread detach owner={} current={}.", _attachmentOwnerThreadId, GetCurrentThreadId());
+        Debug::Error(L"DxUi::WindowHost: refusing foreign-thread detach owner={} current={}.",
+                     _attachmentOwnerThreadId,
+                     GetCurrentThreadId());
         return;
     }
     if (_detachInProgress.exchange(true, std::memory_order_acq_rel))
@@ -2486,7 +2499,8 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
         case WM_SIZE:
             handled = true;
             OnSize(static_cast<UINT>(LOWORD(lp)), static_cast<UINT>(HIWORD(lp)));
-            if ((wp == SIZE_RESTORED || wp == SIZE_MAXIMIZED) && _hwnd && IsHostWindowEffectivelyVisible(_hwnd) && _animationSuspendedWhileHidden)
+            if ((wp == SIZE_RESTORED || wp == SIZE_MAXIMIZED) && _hwnd && IsHostWindowEffectivelyVisible(_hwnd) &&
+                _animationSuspendedWhileHidden)
             {
                 _animationSuspendedWhileHidden = false;
                 RequestAnimation();
@@ -2722,7 +2736,7 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
             }
             const bool rightButton                  = msg == WM_RBUTTONUP;
             const std::weak_ptr<int> targetLifetime = target ? target->GetLifetimeToken() : std::weak_ptr<int>{};
-            bool controlHandled                     = false;
+            bool controlHandled                    = false;
             if (target)
             {
                 controlHandled = target->OnMouseUp(*this, point, rightButton, static_cast<UINT>(wp));
@@ -4168,17 +4182,18 @@ void WindowHost::UpdateHover(D2D1_POINT_2F pointDip, UINT modifiers) noexcept
 
 void WindowHost::UpdateSupplementalTooltipTarget(D2D1_POINT_2F pointDip) noexcept
 {
-    Control* const target            = FindSupplementalTooltipTarget(_root.get(), pointDip);
-    const std::wstring targetText    = target ? std::wstring(target->GetTooltipText()) : std::wstring{};
+    Control* const target = FindSupplementalTooltipTarget(_root.get(), pointDip);
+    const std::wstring targetText = target ? std::wstring(target->GetTooltipText()) : std::wstring{};
     const bool targetLifetimeExpired = _supplementalTooltipControl && _supplementalTooltipLifetime.expired();
-    const bool targetChanged         = target != _supplementalTooltipControl || targetLifetimeExpired || targetText != _supplementalTooltipText;
-    _supplementalTooltipPointDip     = pointDip;
+    const bool targetChanged =
+        target != _supplementalTooltipControl || targetLifetimeExpired || targetText != _supplementalTooltipText;
+    _supplementalTooltipPointDip = pointDip;
     if (targetChanged)
     {
         static_cast<void>(ClearTooltip());
-        _supplementalTooltipControl  = target;
+        _supplementalTooltipControl = target;
         _supplementalTooltipLifetime = target ? target->GetLifetimeToken() : std::weak_ptr<int>{};
-        _supplementalTooltipText     = targetText;
+        _supplementalTooltipText = targetText;
     }
 
     if (target && ! targetText.empty())
@@ -4194,7 +4209,8 @@ void WindowHost::ValidateSupplementalTooltipTarget() noexcept
         return;
     }
 
-    if (_supplementalTooltipLifetime.expired() || FindSupplementalTooltipTarget(_root.get(), _supplementalTooltipPointDip) != _supplementalTooltipControl ||
+    if (_supplementalTooltipLifetime.expired() ||
+        FindSupplementalTooltipTarget(_root.get(), _supplementalTooltipPointDip) != _supplementalTooltipControl ||
         _supplementalTooltipControl->GetTooltipText() != _supplementalTooltipText)
     {
         UpdateSupplementalTooltipTarget(_supplementalTooltipPointDip);

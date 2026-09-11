@@ -1,5 +1,5 @@
-#include "FileSystemPathIdentity.h"
 #include "FolderWindow.FileOperations.State.Private.h"
+#include "FileSystemPathIdentity.h"
 
 #include <algorithm>
 #include <limits>
@@ -620,18 +620,22 @@ unsigned long TakeFileOpsInlineRenameExecutionAttemptsForSelfTest() noexcept
 
 namespace
 {
-[[nodiscard]] bool SameInterlockIdentity(const FileOperations::ProviderIdentitySnapshot& left, const FileOperations::ProviderIdentitySnapshot& right) noexcept
+[[nodiscard]] bool SameInterlockIdentity(const FileOperations::ProviderIdentitySnapshot& left,
+                                         const FileOperations::ProviderIdentitySnapshot& right) noexcept
 {
     return ! left.objectId.empty() && left.pathProfileId == right.pathProfileId && left.objectId == right.objectId;
 }
 
-[[nodiscard]] bool ScopeRootAppearsIn(const FileOperations::MutationInterlockScope& needle, const FileOperations::MutationInterlockScope& haystack) noexcept
+[[nodiscard]] bool ScopeRootAppearsIn(const FileOperations::MutationInterlockScope& needle,
+                                      const FileOperations::MutationInterlockScope& haystack) noexcept
 {
     if (! needle.root)
     {
         return false;
     }
-    for (std::shared_ptr<const FileOperations::MutationInterlockAuthorityNode> current = haystack.root; current; current = current->parent)
+    for (std::shared_ptr<const FileOperations::MutationInterlockAuthorityNode> current = haystack.root;
+         current;
+         current = current->parent)
     {
         if (SameInterlockIdentity(needle.root->retained.authority.identity, current->retained.authority.identity))
         {
@@ -641,7 +645,8 @@ namespace
     return false;
 }
 
-[[nodiscard]] bool AnchoredTargetsOverlap(const FileOperations::MutationInterlockScope& left, const FileOperations::MutationInterlockScope& right) noexcept
+[[nodiscard]] bool AnchoredTargetsOverlap(const FileOperations::MutationInterlockScope& left,
+                                          const FileOperations::MutationInterlockScope& right) noexcept
 {
     if (! left.endpoint.pathIdentity.has_value() || ! right.endpoint.pathIdentity.has_value())
     {
@@ -657,7 +662,8 @@ namespace
         for (const FileOperations::MutationInterlockAnchor& rightAnchor : right.anchors)
         {
             if (! rightAnchor.authority ||
-                ! SameInterlockIdentity(leftAnchor.authority->retained.authority.identity, rightAnchor.authority->retained.authority.identity))
+                ! SameInterlockIdentity(leftAnchor.authority->retained.authority.identity,
+                                        rightAnchor.authority->retained.authority.identity))
             {
                 continue;
             }
@@ -675,7 +681,8 @@ namespace
     return false;
 }
 
-[[nodiscard]] bool MutationScopesOverlap(const FileOperations::MutationInterlockScope& left, const FileOperations::MutationInterlockScope& right) noexcept
+[[nodiscard]] bool MutationScopesOverlap(const FileOperations::MutationInterlockScope& left,
+                                         const FileOperations::MutationInterlockScope& right) noexcept
 {
     if (! FileOperations::MutationInterlockAccessesConflict(left.access, right.access))
     {
@@ -694,7 +701,8 @@ namespace
     if (FileOperations::QualifiedEndpointsReferToSameRoot(left.endpoint, right.endpoint))
     {
         const FileSystemPathIdentity& identity = left.endpoint.pathIdentity.value();
-        if (EquivalentPath(identity, left.providerPath, right.providerPath) || IsStrictDescendantPath(identity, left.providerPath, right.providerPath) ||
+        if (EquivalentPath(identity, left.providerPath, right.providerPath) ||
+            IsStrictDescendantPath(identity, left.providerPath, right.providerPath) ||
             IsStrictDescendantPath(identity, right.providerPath, left.providerPath))
         {
             return true;
@@ -749,13 +757,14 @@ namespace
 
 enum class IndexedScopeAccess : uint8_t
 {
-    LeftRead      = 1u << 0u,
-    LeftMutation  = 1u << 1u,
-    RightRead     = 1u << 2u,
+    LeftRead     = 1u << 0u,
+    LeftMutation = 1u << 1u,
+    RightRead    = 1u << 2u,
     RightMutation = 1u << 3u,
 };
 
-[[nodiscard]] constexpr uint8_t IndexedScopeAccessBit(bool leftSide, FileOperations::MutationInterlockAccess access) noexcept
+[[nodiscard]] constexpr uint8_t IndexedScopeAccessBit(bool leftSide,
+                                                       FileOperations::MutationInterlockAccess access) noexcept
 {
     const bool mutation = access != FileOperations::MutationInterlockAccess::ReadSource;
     return static_cast<uint8_t>(leftSide ? (mutation ? IndexedScopeAccess::LeftMutation : IndexedScopeAccess::LeftRead)
@@ -764,12 +773,16 @@ enum class IndexedScopeAccess : uint8_t
 
 [[nodiscard]] constexpr bool IndexedScopeAccessesConflict(uint8_t left, uint8_t right) noexcept
 {
-    constexpr uint8_t leftAny       = static_cast<uint8_t>(IndexedScopeAccess::LeftRead) | static_cast<uint8_t>(IndexedScopeAccess::LeftMutation);
-    constexpr uint8_t rightAny      = static_cast<uint8_t>(IndexedScopeAccess::RightRead) | static_cast<uint8_t>(IndexedScopeAccess::RightMutation);
+    constexpr uint8_t leftAny = static_cast<uint8_t>(IndexedScopeAccess::LeftRead) |
+                                static_cast<uint8_t>(IndexedScopeAccess::LeftMutation);
+    constexpr uint8_t rightAny = static_cast<uint8_t>(IndexedScopeAccess::RightRead) |
+                                 static_cast<uint8_t>(IndexedScopeAccess::RightMutation);
     constexpr uint8_t leftMutation  = static_cast<uint8_t>(IndexedScopeAccess::LeftMutation);
     constexpr uint8_t rightMutation = static_cast<uint8_t>(IndexedScopeAccess::RightMutation);
-    return (((left & leftMutation) != 0u) && ((right & rightAny) != 0u)) || (((left & leftAny) != 0u) && ((right & rightMutation) != 0u)) ||
-           (((right & leftMutation) != 0u) && ((left & rightAny) != 0u)) || (((right & leftAny) != 0u) && ((left & rightMutation) != 0u));
+    return (((left & leftMutation) != 0u) && ((right & rightAny) != 0u)) ||
+           (((left & leftAny) != 0u) && ((right & rightMutation) != 0u)) ||
+           (((right & leftMutation) != 0u) && ((left & rightAny) != 0u)) ||
+           (((right & leftAny) != 0u) && ((left & rightMutation) != 0u));
 }
 
 [[nodiscard]] size_t HashInterlockIdentity(const FileOperations::ProviderIdentitySnapshot& identity) noexcept
@@ -790,23 +803,26 @@ struct IndexedInterlockTarget
 
 struct IndexedInterlockAuthorityGroup
 {
-    const FileOperations::QualifiedEndpoint* endpoint        = nullptr;
+    const FileOperations::QualifiedEndpoint* endpoint = nullptr;
     const FileOperations::ProviderIdentitySnapshot* identity = nullptr;
-    FileSystemPathComponentComparison componentComparison    = FileSystemPathComponentComparison::OrdinalIgnoreCase;
-    wchar_t preferredSeparator                               = L'\\';
+    FileSystemPathComponentComparison componentComparison = FileSystemPathComponentComparison::OrdinalIgnoreCase;
+    wchar_t preferredSeparator = L'\\';
     std::wstring acceptedSeparators;
     std::vector<IndexedInterlockTarget> targets;
-    bool hasLeft  = false;
+    bool hasLeft = false;
     bool hasRight = false;
 };
 
-[[nodiscard]] bool IndexedPathIsStrictAncestor(std::wstring_view ancestor, std::wstring_view candidate, wchar_t separator) noexcept
+[[nodiscard]] bool IndexedPathIsStrictAncestor(std::wstring_view ancestor,
+                                               std::wstring_view candidate,
+                                               wchar_t separator) noexcept
 {
     if (ancestor.empty())
     {
         return ! candidate.empty();
     }
-    return candidate.size() > ancestor.size() && candidate.starts_with(ancestor) && candidate[ancestor.size()] == separator;
+    return candidate.size() > ancestor.size() && candidate.starts_with(ancestor) &&
+           candidate[ancestor.size()] == separator;
 }
 
 [[nodiscard]] bool TryTaskScopesOverlapIndexed(const std::vector<FileOperations::MutationInterlockScope>& left,
@@ -818,7 +834,8 @@ struct IndexedInterlockAuthorityGroup
     std::vector<IndexedInterlockAuthorityGroup> groups;
     std::unordered_multimap<size_t, size_t> groupIndexes;
 
-    const auto addScopes = [&](const std::vector<FileOperations::MutationInterlockScope>& scopes, bool leftSide) noexcept -> bool
+    const auto addScopes = [&](const std::vector<FileOperations::MutationInterlockScope>& scopes,
+                               bool leftSide) noexcept -> bool
     {
         for (const FileOperations::MutationInterlockScope& scope : scopes)
         {
@@ -833,19 +850,21 @@ struct IndexedInterlockAuthorityGroup
                 {
                     return false;
                 }
-                const FileOperations::ProviderIdentitySnapshot& identity = anchor.authority->retained.authority.identity;
+                const FileOperations::ProviderIdentitySnapshot& identity =
+                    anchor.authority->retained.authority.identity;
                 if (identity.objectId.empty())
                 {
                     return false;
                 }
 
                 const size_t identityHash = HashInterlockIdentity(identity);
-                size_t groupIndex         = (std::numeric_limits<size_t>::max)();
-                const auto [begin, end]   = groupIndexes.equal_range(identityHash);
+                size_t groupIndex = (std::numeric_limits<size_t>::max)();
+                const auto [begin, end] = groupIndexes.equal_range(identityHash);
                 for (auto candidate = begin; candidate != end; ++candidate)
                 {
                     IndexedInterlockAuthorityGroup& group = groups[candidate->second];
-                    if (group.endpoint && group.identity && FileOperations::QualifiedEndpointsShareObjectIdentityDomain(*group.endpoint, scope.endpoint) &&
+                    if (group.endpoint && group.identity &&
+                        FileOperations::QualifiedEndpointsShareObjectIdentityDomain(*group.endpoint, scope.endpoint) &&
                         SameInterlockIdentity(*group.identity, identity))
                     {
                         groupIndex = candidate->second;
@@ -867,7 +886,8 @@ struct IndexedInterlockAuthorityGroup
                 }
 
                 IndexedInterlockAuthorityGroup& group = groups[groupIndex];
-                if (group.componentComparison != pathIdentity.componentComparison || group.preferredSeparator != pathIdentity.preferredSeparator ||
+                if (group.componentComparison != pathIdentity.componentComparison ||
+                    group.preferredSeparator != pathIdentity.preferredSeparator ||
                     group.acceptedSeparators != pathIdentity.acceptedSeparators)
                 {
                     return false;
@@ -926,7 +946,9 @@ struct IndexedInterlockAuthorityGroup
                 overlap = true;
                 return true;
             }
-            while (! ancestorStack.empty() && ! IndexedPathIsStrictAncestor(aggregated[ancestorStack.back()].key, target.key, group.preferredSeparator))
+            while (! ancestorStack.empty() &&
+                   ! IndexedPathIsStrictAncestor(
+                       aggregated[ancestorStack.back()].key, target.key, group.preferredSeparator))
             {
                 ancestorStack.pop_back();
             }
@@ -954,11 +976,9 @@ struct IndexedInterlockAuthorityGroup
     {
         return indexedOverlap;
     }
-    return std::ranges::any_of(left,
-                               [&](const FileOperations::MutationInterlockScope& leftScope) noexcept
+    return std::ranges::any_of(left, [&](const FileOperations::MutationInterlockScope& leftScope) noexcept
     {
-        return std::ranges::any_of(right,
-                                   [&](const FileOperations::MutationInterlockScope& rightScope) noexcept
+        return std::ranges::any_of(right, [&](const FileOperations::MutationInterlockScope& rightScope) noexcept
         {
             ++comparisons;
             return MutationScopesOverlap(leftScope, rightScope);
@@ -972,7 +992,7 @@ namespace
 // R4-A02-1: name the concrete problem of the first conflicting scope pair. Read/read never conflicts
 // (MutationInterlockAccessesConflict), so every returned value is a real write-side race.
 [[nodiscard]] FileOperations::SameHostOverlapProblem ClassifySameHostOverlap(const std::vector<FileOperations::MutationInterlockScope>& mine,
-                                                                             const std::vector<FileOperations::MutationInterlockScope>& theirs) noexcept
+                                                                            const std::vector<FileOperations::MutationInterlockScope>& theirs) noexcept
 {
     using FileOperations::MutationInterlockAccess;
     using FileOperations::SameHostOverlapProblem;
@@ -1023,8 +1043,8 @@ namespace
 void FolderWindow::FileOperationState::PublishPreparedMutationInterlock(Task& task) noexcept
 {
     std::scoped_lock lock(_queueMutex);
-    const auto existing =
-        std::ranges::find_if(_preparedMutationInterlocks, [&](const ActiveMutationInterlock& published) noexcept { return published.taskId == task._taskId; });
+    const auto existing = std::ranges::find_if(_preparedMutationInterlocks, [&](const ActiveMutationInterlock& published) noexcept
+    { return published.taskId == task._taskId; });
     if (existing == _preparedMutationInterlocks.end())
     {
         _preparedMutationInterlocks.push_back(ActiveMutationInterlock{
@@ -1039,7 +1059,8 @@ void FolderWindow::FileOperationState::WithdrawPreparedMutationInterlock(Task& t
 {
     {
         std::scoped_lock lock(_queueMutex);
-        std::erase_if(_preparedMutationInterlocks, [&](const ActiveMutationInterlock& published) noexcept { return published.taskId == task._taskId; });
+        std::erase_if(_preparedMutationInterlocks, [&](const ActiveMutationInterlock& published) noexcept
+        { return published.taskId == task._taskId; });
     }
     _queueCv.notify_all();
 }
@@ -1072,12 +1093,14 @@ FolderWindow::FileOperationState::SameHostOverlapAdvice FolderWindow::FileOperat
     };
     const auto consider = [&](const ActiveMutationInterlock& other, bool prepared) noexcept
     {
-        if (other.taskId == task._taskId || other.scopes == nullptr || (prepared && other.taskId > task._taskId && ! newerPeerNameable(other)))
+        if (other.taskId == task._taskId || other.scopes == nullptr ||
+            (prepared && other.taskId > task._taskId && ! newerPeerNameable(other)))
         {
             return;
         }
-        if (std::ranges::find(advice.taskIds.begin(), advice.taskIds.begin() + static_cast<std::ptrdiff_t>(advice.relationCount), other.taskId) !=
-            advice.taskIds.begin() + static_cast<std::ptrdiff_t>(advice.relationCount))
+        if (std::ranges::find(advice.taskIds.begin(),
+                              advice.taskIds.begin() + static_cast<std::ptrdiff_t>(advice.relationCount),
+                              other.taskId) != advice.taskIds.begin() + static_cast<std::ptrdiff_t>(advice.relationCount))
         {
             return;
         }
@@ -1172,10 +1195,8 @@ void FolderWindow::FileOperationState::NoteLiveOutputPublished(Task& task, std::
             }
         }
 
-        const auto end       = _livePublishedScopes.begin() + static_cast<std::ptrdiff_t>(_livePublishedScopeCount);
-        const bool duplicate = plannedScope != nullptr && std::ranges::any_of(_livePublishedScopes.begin(),
-                                                                              end,
-                                                                              [&](const LivePublishedScope& entry) noexcept
+        const auto end = _livePublishedScopes.begin() + static_cast<std::ptrdiff_t>(_livePublishedScopeCount);
+        const bool duplicate = plannedScope != nullptr && std::ranges::any_of(_livePublishedScopes.begin(), end, [&](const LivePublishedScope& entry) noexcept
         {
             if (entry.taskId != task._taskId || entry.plannedScope != plannedScope)
             {
@@ -1228,8 +1249,9 @@ FolderWindow::FileOperationState::LiveOutputConflictAdvice FolderWindow::FileOpe
     const auto ignored = [&](uint64_t taskId) noexcept
     {
         const size_t count = (std::min)(ignoredPublisherTaskIdCount, ignoredPublisherTaskIds.size());
-        return std::ranges::find(ignoredPublisherTaskIds.begin(), ignoredPublisherTaskIds.begin() + static_cast<std::ptrdiff_t>(count), taskId) !=
-               ignoredPublisherTaskIds.begin() + static_cast<std::ptrdiff_t>(count);
+        return std::ranges::find(ignoredPublisherTaskIds.begin(),
+                                 ignoredPublisherTaskIds.begin() + static_cast<std::ptrdiff_t>(count),
+                                 taskId) != ignoredPublisherTaskIds.begin() + static_cast<std::ptrdiff_t>(count);
     };
 
     std::scoped_lock lock(_queueMutex);
@@ -1237,12 +1259,15 @@ FolderWindow::FileOperationState::LiveOutputConflictAdvice FolderWindow::FileOpe
 
     const auto findActive = [&](uint64_t taskId) noexcept -> const ActiveMutationInterlock*
     {
-        const auto found =
-            std::ranges::find_if(_activeMutationInterlocks, [&](const ActiveMutationInterlock& active) noexcept { return active.taskId == taskId; });
+        const auto found = std::ranges::find_if(_activeMutationInterlocks, [&](const ActiveMutationInterlock& active) noexcept
+        { return active.taskId == taskId; });
         return found == _activeMutationInterlocks.end() ? nullptr : std::addressof(*found);
     };
     const auto relationCovered = [&](const ActiveMutationInterlock& publisher) noexcept
-    { return task.AllowsConcurrentOverlapWith(publisher.taskId) || (publisher.task != nullptr && publisher.task->AllowsConcurrentOverlapWith(task._taskId)); };
+    {
+        return task.AllowsConcurrentOverlapWith(publisher.taskId) ||
+               (publisher.task != nullptr && publisher.task->AllowsConcurrentOverlapWith(task._taskId));
+    };
     const auto invalidationOverlapsPublisher = [&](const ActiveMutationInterlock& publisher) noexcept
     {
         if (publisher.scopes == nullptr)
@@ -1256,12 +1281,12 @@ FolderWindow::FileOperationState::LiveOutputConflictAdvice FolderWindow::FileOpe
                 continue;
             }
             FileOperations::MutationInterlockScope probe = currentScope;
-            probe.providerPath                           = providerPath;
+            probe.providerPath                            = providerPath;
             for (const FileOperations::MutationInterlockScope& publishedScope : *publisher.scopes)
             {
-                const bool publishesHere =
-                    publishedScope.access == FileOperations::MutationInterlockAccess::PublishDestination ||
-                    (publishedScope.access == FileOperations::MutationInterlockAccess::WriteSource && publisher.task->_publishesUnderWriteSourceScopes);
+                const bool publishesHere = publishedScope.access == FileOperations::MutationInterlockAccess::PublishDestination ||
+                    (publishedScope.access == FileOperations::MutationInterlockAccess::WriteSource &&
+                     publisher.task->_publishesUnderWriteSourceScopes);
                 if (publishesHere && MutationScopesOverlap(probe, publishedScope))
                 {
                     return true;
@@ -1270,8 +1295,9 @@ FolderWindow::FileOperationState::LiveOutputConflictAdvice FolderWindow::FileOpe
         }
         return false;
     };
-    const auto consider =
-        [&](const ActiveMutationInterlock& publisher, const FileOperations::MutationInterlockScope* publishedScope, std::wstring_view publishedPath) noexcept
+    const auto consider = [&](const ActiveMutationInterlock& publisher,
+                              const FileOperations::MutationInterlockScope* publishedScope,
+                              std::wstring_view publishedPath) noexcept
     {
         if (advice.publisherTaskId != 0u || publisher.taskId == task._taskId || publisher.task == nullptr || ignored(publisher.taskId) ||
             relationCovered(publisher) || ! publisher.task->_hasPublishedLiveOutput.load(std::memory_order_acquire))
@@ -1322,9 +1348,13 @@ bool FolderWindow::FileOperationState::WaitForLiveOutputPublisher(Task& task, ui
     std::unique_lock lock(_queueMutex);
     const auto publisherIsLive = [&]() noexcept
     {
-        return std::ranges::any_of(_activeMutationInterlocks, [&](const ActiveMutationInterlock& active) noexcept { return active.taskId == publisherTaskId; });
+        return std::ranges::any_of(_activeMutationInterlocks, [&](const ActiveMutationInterlock& active) noexcept
+        { return active.taskId == publisherTaskId; });
     };
-    _queueCv.wait(lock, [&]() noexcept { return stopToken.stop_requested() || task._cancelled.load(std::memory_order_acquire) || ! publisherIsLive(); });
+    _queueCv.wait(lock, [&]() noexcept
+    {
+        return stopToken.stop_requested() || task._cancelled.load(std::memory_order_acquire) || ! publisherIsLive();
+    });
     const bool completed = ! publisherIsLive();
     lock.unlock();
     Debug::Perf::EmitValue(L"FileOps.LiveOutput.WaitUs", PerfElapsedUs(startedUs), completed ? S_OK : HRESULT_FROM_WIN32(ERROR_CANCELLED));
@@ -1353,7 +1383,7 @@ void FolderWindow::FileOperationState::DebugForceLiveOutputIndexOverflowForSelfT
         {
             _livePublishedScopes[index] = {};
         }
-        _livePublishedScopeCount    = 0u;
+        _livePublishedScopeCount     = 0u;
         _livePublishedIndexOverflow = true;
         for (const ActiveMutationInterlock& active : _activeMutationInterlocks)
         {
@@ -1366,7 +1396,8 @@ void FolderWindow::FileOperationState::DebugForceLiveOutputIndexOverflowForSelfT
     Debug::Perf::EmitValue(L"FileOps.LiveOutput.IndexOverflow", 1u, HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER));
 }
 
-bool FileOperations::DebugMutationScopesOverlapForSelfTest(const MutationInterlockScope& left, const MutationInterlockScope& right) noexcept
+bool FileOperations::DebugMutationScopesOverlapForSelfTest(const MutationInterlockScope& left,
+                                                           const MutationInterlockScope& right) noexcept
 {
     return MutationScopesOverlap(left, right);
 }
@@ -1420,8 +1451,8 @@ bool FolderWindow::FileOperationState::EnterOperation(Task& task, std::stop_toke
     {
         for (const uint64_t queuedId : _queue)
         {
-            const auto prepared = std::ranges::find_if(_preparedMutationInterlocks,
-                                                       [&](const ActiveMutationInterlock& published) noexcept { return published.taskId == queuedId; });
+            const auto prepared = std::ranges::find_if(_preparedMutationInterlocks, [&](const ActiveMutationInterlock& published) noexcept
+            { return published.taskId == queuedId; });
             if (prepared == _preparedMutationInterlocks.end() || prepared->task == nullptr || ! blockedByPredecessor(*prepared->task))
             {
                 return queuedId;
@@ -1432,15 +1463,14 @@ bool FolderWindow::FileOperationState::EnterOperation(Task& task, std::stop_toke
 
     const auto interlockAvailable = [&]() noexcept
     {
-        const uint64_t checkStartedUs   = PerfNowUs();
-        uint64_t comparisons            = 0u;
+        const uint64_t checkStartedUs = PerfNowUs();
+        uint64_t comparisons = 0u;
         const uint64_t activeCandidates = static_cast<uint64_t>(_activeMutationInterlocks.size());
         if (blockedByPredecessor(task))
         {
             return false;
         }
-        const bool available = std::ranges::none_of(_activeMutationInterlocks,
-                                                    [&](const ActiveMutationInterlock& active) noexcept
+        const bool available = std::ranges::none_of(_activeMutationInterlocks, [&](const ActiveMutationInterlock& active) noexcept
         {
             return active.taskId != task._taskId && ! task.AllowsConcurrentOverlapWith(active.taskId) && active.scopes != nullptr &&
                    TaskScopesOverlap(task._mutationInterlockScopes, *active.scopes, comparisons);
@@ -1455,7 +1485,8 @@ bool FolderWindow::FileOperationState::EnterOperation(Task& task, std::stop_toke
     };
     const auto activate = [&]() noexcept
     {
-        std::erase_if(_preparedMutationInterlocks, [&](const ActiveMutationInterlock& prepared) noexcept { return prepared.taskId == task._taskId; });
+        std::erase_if(_preparedMutationInterlocks, [&](const ActiveMutationInterlock& prepared) noexcept
+        { return prepared.taskId == task._taskId; });
         _activeMutationInterlocks.push_back(ActiveMutationInterlock{
             .taskId = task._taskId,
             .task   = &task,
@@ -1484,7 +1515,10 @@ bool FolderWindow::FileOperationState::EnterOperation(Task& task, std::stop_toke
         const uint64_t interlockWaitStartedUs = PerfNowUs();
         ++task._perf.interlockWaitCount;
         task.SetWaitingInQueue(true);
-        _queueCv.wait(lock, [&]() noexcept { return stopToken.stop_requested() || task._cancelled.load(std::memory_order_acquire) || interlockAvailable(); });
+        _queueCv.wait(lock, [&]() noexcept
+        {
+            return stopToken.stop_requested() || task._cancelled.load(std::memory_order_acquire) || interlockAvailable();
+        });
         task.SetWaitingInQueue(false);
         const uint64_t interlockWaitUs = PerfElapsedUs(interlockWaitStartedUs);
         task._perf.interlockWaitUs += interlockWaitUs;
@@ -1500,7 +1534,8 @@ bool FolderWindow::FileOperationState::EnterOperation(Task& task, std::stop_toke
                                   0u,
                                   HRESULT_FROM_WIN32(ERROR_CANCELLED));
             }
-            std::erase_if(_preparedMutationInterlocks, [&](const ActiveMutationInterlock& prepared) noexcept { return prepared.taskId == task._taskId; });
+            std::erase_if(_preparedMutationInterlocks, [&](const ActiveMutationInterlock& prepared) noexcept
+            { return prepared.taskId == task._taskId; });
             return false;
         }
 
@@ -1508,7 +1543,12 @@ bool FolderWindow::FileOperationState::EnterOperation(Task& task, std::stop_toke
         if (Debug::Perf::IsCaptureEnabled())
         {
             Debug::Perf::Emit(L"FileOps.Queue.WaitUs", L"", 0, 0u, 0u, S_OK);
-            Debug::Perf::Emit(L"FileOps.Interlock.WaitUs", L"overlap", interlockWaitUs, static_cast<uint64_t>(_activeMutationInterlocks.size()), 0u, S_OK);
+            Debug::Perf::Emit(L"FileOps.Interlock.WaitUs",
+                              L"overlap",
+                              interlockWaitUs,
+                              static_cast<uint64_t>(_activeMutationInterlocks.size()),
+                              0u,
+                              S_OK);
             Debug::Perf::Emit(L"FileOps.Queue.ActiveOperations", L"", 0, static_cast<uint64_t>(_activeOperations), 0u, S_OK);
         }
         return true;
@@ -1554,7 +1594,8 @@ bool FolderWindow::FileOperationState::EnterOperation(Task& task, std::stop_toke
             Debug::Perf::Emit(L"FileOps.Queue.WaitUs", L"", waitedUs, static_cast<uint64_t>(_queue.size()), 0u, HRESULT_FROM_WIN32(ERROR_CANCELLED));
         }
         RemoveFromQueue(task._taskId);
-        std::erase_if(_preparedMutationInterlocks, [&](const ActiveMutationInterlock& prepared) noexcept { return prepared.taskId == task._taskId; });
+        std::erase_if(_preparedMutationInterlocks, [&](const ActiveMutationInterlock& prepared) noexcept
+        { return prepared.taskId == task._taskId; });
         return false;
     }
 
@@ -1566,20 +1607,23 @@ bool FolderWindow::FileOperationState::EnterOperation(Task& task, std::stop_toke
         {
             ++task._perf.interlockWaitCount;
             task.SetWaitingInQueue(true);
-            _queueCv.wait(lock,
-                          [&]() noexcept { return stopToken.stop_requested() || task._cancelled.load(std::memory_order_acquire) || interlockAvailable(); });
+            _queueCv.wait(lock, [&]() noexcept
+            {
+                return stopToken.stop_requested() || task._cancelled.load(std::memory_order_acquire) || interlockAvailable();
+            });
             task.SetWaitingInQueue(false);
             const uint64_t interlockWaitUs = PerfElapsedUs(interlockWaitStartedUs);
             task._perf.interlockWaitUs += interlockWaitUs;
             if (stopToken.stop_requested() || task._cancelled.load(std::memory_order_acquire))
             {
                 ++task._perf.queueCancelWhileWaiting;
-                std::erase_if(_preparedMutationInterlocks, [&](const ActiveMutationInterlock& prepared) noexcept { return prepared.taskId == task._taskId; });
+                std::erase_if(_preparedMutationInterlocks, [&](const ActiveMutationInterlock& prepared) noexcept
+                { return prepared.taskId == task._taskId; });
                 return false;
             }
         }
         activate();
-        const uint64_t waitedUs = PerfElapsedUs(queueWaitStartUs);
+        const uint64_t waitedUs          = PerfElapsedUs(queueWaitStartUs);
         task._perf.queueWaitUs += waitedUs;
         if (Debug::Perf::IsCaptureEnabled())
         {
@@ -1593,7 +1637,7 @@ bool FolderWindow::FileOperationState::EnterOperation(Task& task, std::stop_toke
     task._waitForOthers.store(false, std::memory_order_release);
     task.SetWaitingInQueue(false);
     activate();
-    const uint64_t waitedUs = PerfElapsedUs(queueWaitStartUs);
+    const uint64_t waitedUs          = PerfElapsedUs(queueWaitStartUs);
     task._perf.queueWaitUs += waitedUs;
     if (Debug::Perf::IsCaptureEnabled())
     {
@@ -1607,10 +1651,11 @@ void FolderWindow::FileOperationState::LeaveOperation(Task& task) noexcept
 {
     {
         std::scoped_lock lock(_queueMutex);
-        std::erase_if(_activeMutationInterlocks, [&](const ActiveMutationInterlock& active) noexcept { return active.taskId == task._taskId; });
-        const auto indexedEnd  = _livePublishedScopes.begin() + static_cast<std::ptrdiff_t>(_livePublishedScopeCount);
-        const auto retainedEnd = std::remove_if(
-            _livePublishedScopes.begin(), indexedEnd, [&](const LivePublishedScope& published) noexcept { return published.taskId == task._taskId; });
+        std::erase_if(_activeMutationInterlocks, [&](const ActiveMutationInterlock& active) noexcept
+        { return active.taskId == task._taskId; });
+        const auto indexedEnd = _livePublishedScopes.begin() + static_cast<std::ptrdiff_t>(_livePublishedScopeCount);
+        const auto retainedEnd = std::remove_if(_livePublishedScopes.begin(), indexedEnd, [&](const LivePublishedScope& published) noexcept
+        { return published.taskId == task._taskId; });
         for (auto current = retainedEnd; current != indexedEnd; ++current)
         {
             *current = {};
@@ -1619,7 +1664,8 @@ void FolderWindow::FileOperationState::LeaveOperation(Task& task) noexcept
         task._liveOutputIndexOverflowed.store(false, std::memory_order_release);
         if (_livePublishedIndexOverflow)
         {
-            _livePublishedIndexOverflow = std::ranges::any_of(_activeMutationInterlocks, [&](const ActiveMutationInterlock& active) noexcept {
+            _livePublishedIndexOverflow = std::ranges::any_of(_activeMutationInterlocks, [&](const ActiveMutationInterlock& active) noexcept
+            {
                 return active.task != nullptr && active.task->_liveOutputIndexOverflowed.load(std::memory_order_acquire);
             });
         }
@@ -1668,7 +1714,7 @@ void FolderWindow::FileOperationState::PostCompleted(Task& task) noexcept
         return;
     }
 
-    HWND owner                 = _owner.GetHwnd();
+    HWND owner = _owner.GetHwnd();
     bool forceBothPostsFailure = false;
 #ifdef ENABLE_TESTS
     forceBothPostsFailure = _debugForceNextCompletedPostFailure.exchange(false, std::memory_order_acq_rel);
@@ -1713,20 +1759,22 @@ bool FolderWindow::FileOperationState::TryPostCompletedWakeup(const TaskComplete
     return owner && PostMessageW(owner, WndMsg::kFileOperationCompleted, static_cast<WPARAM>(completed.taskId), 0) != FALSE;
 }
 
-bool FolderWindow::FileOperationState::ScheduleOrphanedCompletionDrain(Task& task, const TaskCompletedPayload& completed) noexcept
+bool FolderWindow::FileOperationState::ScheduleOrphanedCompletionDrain(
+    Task& task, const TaskCompletedPayload& completed) noexcept
 {
     auto context = std::unique_ptr<OrphanedCompletionDrainContext>(new (std::nothrow) OrphanedCompletionDrainContext{});
     if (! context)
     {
         return false;
     }
-    context->state     = this;
+    context->state = this;
     context->completed = completed;
 
     // This mutex makes the handle transfer, callback admission, and failure
     // restoration indivisible with Shutdown's scan of Task::_thread.
     std::scoped_lock transferLock(_completionWorkerTransferMutex);
-    if (_completionShutdown.load(std::memory_order_acquire) || ! task._thread.joinable() || task._thread.get_id() != std::this_thread::get_id())
+    if (_completionShutdown.load(std::memory_order_acquire) ||
+        ! task._thread.joinable() || task._thread.get_id() != std::this_thread::get_id())
     {
         return false;
     }
@@ -1746,7 +1794,8 @@ bool FolderWindow::FileOperationState::ScheduleOrphanedCompletionDrain(Task& tas
 #ifdef ENABLE_TESTS
     forceSubmissionFailure = _debugForceNextOrphanedCompletionDrainSubmissionFailure.exchange(false, std::memory_order_acq_rel);
 #endif
-    if (forceSubmissionFailure || TrySubmitThreadpoolCallback(&FileOperationState::OrphanedCompletionDrainCallback, context.get(), nullptr) == FALSE)
+    if (forceSubmissionFailure ||
+        TrySubmitThreadpoolCallback(&FileOperationState::OrphanedCompletionDrainCallback, context.get(), nullptr) == FALSE)
     {
         task._thread = std::move(context->worker);
 #ifdef ENABLE_TESTS
@@ -1800,8 +1849,8 @@ void FolderWindow::FileOperationState::DrainOrphanedCompletion(OrphanedCompletio
 bool FolderWindow::FileOperationState::TakeFallbackCompletedPayload(uint64_t taskId, TaskCompletedPayload& out) noexcept
 {
     std::scoped_lock lock(_fallbackCompletedMutex);
-    const auto found =
-        std::ranges::find_if(_fallbackCompletedPayloads, [taskId](const TaskCompletedPayload& entry) noexcept { return entry.taskId == taskId; });
+    const auto found = std::ranges::find_if(_fallbackCompletedPayloads, [taskId](const TaskCompletedPayload& entry) noexcept
+    { return entry.taskId == taskId; });
     if (found == _fallbackCompletedPayloads.end())
     {
         return false;

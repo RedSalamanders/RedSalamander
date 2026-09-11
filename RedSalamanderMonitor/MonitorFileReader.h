@@ -25,9 +25,9 @@ struct MonitorFileReadResult
 {
     HRESULT hr = E_FAIL;
     MonitorTextSnapshot snapshot;
-    uint64_t bytesRead             = 0u;
-    uint64_t totalBytes            = 0u;
-    size_t lineCount               = 0u;
+    uint64_t bytesRead  = 0u;
+    uint64_t totalBytes = 0u;
+    size_t lineCount    = 0u;
     uint64_t peakRetainedTextBytes = 0u;
 };
 

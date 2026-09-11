@@ -13,8 +13,9 @@
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
-#include <dwrite.h>
 #include <windows.h>
+
+#include <dwrite.h>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 4820 28182)
@@ -213,8 +214,11 @@ template <size_t Capacity> [[nodiscard]] inline bool CopyNullTerminated(std::wst
         return false;
     }
 
+    // checkForUpdates=TRUE so a font installed after this factory was created is visible without
+    // restarting the process. The result is memoized by IsFontFamilyAvailable, so the rescan cost is
+    // paid at most once per (factory, family) until InvalidateFontFamilyAvailability clears it.
     wil::com_ptr<IDWriteFontCollection> fontCollection;
-    if (FAILED(dwriteFactory->GetSystemFontCollection(fontCollection.put())))
+    if (FAILED(dwriteFactory->GetSystemFontCollection(fontCollection.put(), TRUE)))
     {
         return false;
     }
@@ -262,6 +266,22 @@ template <size_t Capacity> [[nodiscard]] inline bool CopyNullTerminated(std::wst
     entry.available  = available;
     GetTypographyFontFamilyCache().push_back(std::move(entry));
     return available;
+}
+
+// Drops the memoized availability answers for one factory so the next IsFontFamilyAvailable call
+// rescans the system font collection. Call this when the user changes a font selection, not per
+// frame: the rescan is the expensive part the cache exists to avoid.
+inline void InvalidateFontFamilyAvailability(IDWriteFactory* dwriteFactory) noexcept
+{
+    std::scoped_lock lock(GetTypographyMeasurementCacheMutex());
+    std::vector<TypographyFontFamilyCacheEntry>& cache = GetTypographyFontFamilyCache();
+    if (dwriteFactory == nullptr)
+    {
+        cache.clear();
+        return;
+    }
+    std::erase_if(cache, [dwriteFactory](const TypographyFontFamilyCacheEntry& entry) noexcept
+                  { return entry.factoryKey == dwriteFactory; });
 }
 
 [[nodiscard]] inline std::wstring ResolveCachedFontFamilyName(IDWriteFactory* dwriteFactory, PCWSTR preferredFamilyName) noexcept

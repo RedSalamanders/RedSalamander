@@ -5,9 +5,7 @@
 #pragma once
 
 #include "targetver.h"
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
+
 // C RunTime Header Files
 #include <format>
 #include <malloc.h>
@@ -15,6 +13,10 @@
 #include <stdlib.h>
 #include <string>
 #include <tchar.h>
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027

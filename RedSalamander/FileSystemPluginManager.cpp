@@ -26,13 +26,11 @@
 
 namespace
 {
-using CreateFactoryFunc                 = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
-using EnumeratePluginsFunc              = HRESULT(__stdcall*)(REFIID, const PluginMetaData**, unsigned int*);
-using GetConfigurationSchemaExportFunc  = HRESULT(__stdcall*)(REFIID, const wchar_t*, const char**);
-using BrowseConnectionTargetsExportFunc = HRESULT(__stdcall*)(REFIID,
-                                                              const wchar_t*,
-                                                              const FactoryConnectionBrowseRequest*,
-                                                              FactoryConnectionBrowseResult*) noexcept;
+using CreateFactoryFunc                            = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
+using EnumeratePluginsFunc                         = HRESULT(__stdcall*)(REFIID, const PluginMetaData**, unsigned int*);
+using GetConfigurationSchemaExportFunc             = HRESULT(__stdcall*)(REFIID, const wchar_t*, const char**);
+using BrowseConnectionTargetsExportFunc =
+    HRESULT(__stdcall*)(REFIID, const wchar_t*, const FactoryConnectionBrowseRequest*, FactoryConnectionBrowseResult*) noexcept;
 
 bool IsDllPath(const std::filesystem::path& path) noexcept
 {
@@ -289,7 +287,9 @@ struct EnumeratedPluginSet
     if (! IsValidEnumeratedPluginRange(metaData, count))
     {
         result.hr        = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-        result.loadError = std::format(L"RedSalamanderEnumeratePlugins returned an invalid metadata range (pointer={}, count={}).", metaData != nullptr, count);
+        result.loadError = std::format(L"RedSalamanderEnumeratePlugins returned an invalid metadata range (pointer={}, count={}).",
+                                       metaData != nullptr,
+                                       count);
         return result;
     }
 
@@ -348,7 +348,8 @@ HRESULT FileSystemPluginManager::ConnectionBrowseWork::Execute(std::vector<Conne
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
-    return kind == Kind::Devices ? ParseConnectionBrowseDevicesJson(json.get(), outDevices) : ParseConnectionBrowseStoragesJson(json.get(), outStorages);
+    return kind == Kind::Devices ? ParseConnectionBrowseDevicesJson(json.get(), outDevices)
+                                 : ParseConnectionBrowseStoragesJson(json.get(), outStorages);
 }
 
 void FileSystemPluginManager::AssertUiThread() const noexcept
@@ -830,6 +831,65 @@ FileSystemPluginManager::GetConfiguration(std::wstring_view pluginId, Common::Se
 
     outConfigurationJsonUtf8 = SafeCoalesce(config);
     return S_OK;
+}
+
+HRESULT
+FileSystemPluginManager::ValidateConfiguration(std::wstring_view pluginId, std::string_view configurationJsonUtf8) noexcept
+{
+    AssertUiThread();
+    PluginEntry* entry = FindMutablePluginById(pluginId);
+    if (! entry)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+    if (entry->unloadDeferred || IsPluginPathDeferred(entry->path))
+    {
+        return HRESULT_FROM_WIN32(ERROR_BUSY);
+    }
+
+    // Validate on a throwaway instance: entry->informations belongs to mounted providers, and
+    // SetConfiguration is allowed to clear their caches.
+    wil::unique_hmodule transientModule;
+    HMODULE moduleHandle = entry->module.get();
+    if (! moduleHandle)
+    {
+        transientModule.reset(LoadLibraryExW(entry->path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH));
+        if (! transientModule)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        moduleHandle = transientModule.get();
+    }
+
+#pragma warning(push)
+#pragma warning(disable : 4191) // unsafe conversion from FARPROC
+    const auto createFactory = reinterpret_cast<CreateFactoryFunc>(GetProcAddress(moduleHandle, "RedSalamanderCreate"));
+#pragma warning(pop)
+    if (! createFactory)
+    {
+        return HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);
+    }
+
+    FactoryOptions options{};
+    options.debugLevel = DEBUG_LEVEL_NONE;
+
+    wil::com_ptr<IFileSystem> fileSystem;
+    const HRESULT createHr =
+        createFactory(__uuidof(IFileSystem), &options, GetHostServices(), entry->factoryPluginId.c_str(), fileSystem.put_void());
+    if (FAILED(createHr))
+    {
+        return createHr;
+    }
+
+    wil::com_ptr<IInformations> infos;
+    const HRESULT qiHr = fileSystem->QueryInterface(__uuidof(IInformations), infos.put_void());
+    if (FAILED(qiHr) || ! infos)
+    {
+        return qiHr;
+    }
+
+    const std::string configText(configurationJsonUtf8);
+    return infos->SetConfiguration(configText.empty() ? nullptr : configText.c_str());
 }
 
 HRESULT
@@ -1529,7 +1589,17 @@ HRESULT FileSystemPluginManager::ApplyConfigurationFromSettings(PluginEntry& ent
         return entry.informations->SetConfiguration(nullptr);
     }
 
-    return entry.informations->SetConfiguration(configText.empty() ? nullptr : configText.c_str());
+    const HRESULT setHr = entry.informations->SetConfiguration(configText.empty() ? nullptr : configText.c_str());
+    if (FAILED(setHr))
+    {
+        // A plugin that rejects its persisted configuration silently reverts to its compiled
+        // defaults, which reads to the user as a setting that will not stick. Say so once here;
+        // callers deliberately continue with defaults rather than failing plugin load.
+        Debug::Warning(L"File system plugin '{}' rejected its persisted configuration (hr=0x{:08X}); compiled defaults are in effect.",
+                       entry.id,
+                       static_cast<unsigned long>(setHr));
+    }
+    return setHr;
 }
 
 void FileSystemPluginManager::PersistConfigurationToSettings(const PluginEntry& entry, Common::Settings::Settings& settings) noexcept

@@ -3,8 +3,6 @@
 #include "FileSystemPathIdentity.h"
 #include "PlugInterfaces/FileSystem.h"
 
-#include <Windows.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -13,6 +11,10 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
 
 namespace FileOperationArtifacts
 {
@@ -65,14 +67,14 @@ struct Candidate final
 struct ClassificationResult final
 {
     Classification classification = Classification::Ordinary;
-    ClassificationReason reason   = ClassificationReason::None;
-    bool possibleNameShape        = false;
+    ClassificationReason reason = ClassificationReason::None;
+    bool possibleNameShape = false;
 };
 
 struct PresentationCapabilities final
 {
-    bool inspect      = false;
-    bool reveal       = false;
+    bool inspect = false;
+    bool reveal = false;
     bool openLocation = false;
 };
 
@@ -81,7 +83,7 @@ struct PresentationCapabilities final
 struct Projection final
 {
     Classification classification = Classification::Ordinary;
-    ClassificationReason reason   = ClassificationReason::None;
+    ClassificationReason reason = ClassificationReason::None;
     PresentationCapabilities capabilities;
     Endpoint endpoint;
     std::filesystem::path qualifiedLocation;
@@ -99,7 +101,7 @@ struct TouchGuardItem final
 struct TouchGuardRequest final
 {
     std::vector<TouchGuardItem> items;
-    bool containsPossible      = false;
+    bool containsPossible = false;
     bool allItemsRevalidatable = true;
 };
 
@@ -112,12 +114,12 @@ struct TouchGuardReceipt final
 
 struct ArtifactNameShapeProjectionDebugResult final
 {
-    uint64_t folderLookupUs         = 0u;
-    uint64_t findLookupUs           = 0u;
+    uint64_t folderLookupUs = 0u;
+    uint64_t findLookupUs = 0u;
     size_t folderOrdinaryProbeCount = 0u;
-    size_t findOrdinaryProbeCount   = 0u;
+    size_t findOrdinaryProbeCount = 0u;
     size_t folderPossibleProbeCount = 0u;
-    size_t findPossibleProbeCount   = 0u;
+    size_t findPossibleProbeCount = 0u;
 };
 
 // The classifier is a pure function of the candidate's leaf name. There is no durable record,
@@ -129,15 +131,21 @@ struct ArtifactNameShapeProjectionDebugResult final
 [[nodiscard]] HRESULT AcceptTouchGuard(const TouchGuardRequest& request, TouchGuardReceipt& out) noexcept;
 [[nodiscard]] HRESULT RevalidateTouchGuard(const TouchGuardReceipt& receipt, std::span<const Candidate> candidates) noexcept;
 
-[[nodiscard]] HRESULT CaptureProviderObjectCandidate(
-    IFileSystem* fileSystem, std::wstring_view providerPath, std::wstring_view pluginId, std::wstring_view instanceContext, Candidate& out) noexcept;
+[[nodiscard]] HRESULT CaptureProviderObjectCandidate(IFileSystem* fileSystem,
+                                                      std::wstring_view providerPath,
+                                                      std::wstring_view pluginId,
+                                                      std::wstring_view instanceContext,
+                                                      Candidate& out) noexcept;
 [[nodiscard]] HRESULT RevalidateProviderTouchGuard(IFileSystem* fileSystem,
-                                                   std::wstring_view pluginId,
-                                                   std::wstring_view instanceContext,
-                                                   const TouchGuardReceipt& receipt,
-                                                   std::span<const std::filesystem::path> providerPaths) noexcept;
-[[nodiscard]] HRESULT ProjectProviderObject(
-    IFileSystem* fileSystem, std::wstring_view providerPath, std::wstring_view pluginId, std::wstring_view instanceContext, Projection& out) noexcept;
+                                                    std::wstring_view pluginId,
+                                                    std::wstring_view instanceContext,
+                                                    const TouchGuardReceipt& receipt,
+                                                    std::span<const std::filesystem::path> providerPaths) noexcept;
+[[nodiscard]] HRESULT ProjectProviderObject(IFileSystem* fileSystem,
+                                            std::wstring_view providerPath,
+                                            std::wstring_view pluginId,
+                                            std::wstring_view instanceContext,
+                                            Projection& out) noexcept;
 [[nodiscard]] HRESULT ProjectProviderChildObject(IFileSystem* fileSystem,
                                                  std::wstring_view providerFolderPath,
                                                  std::wstring_view childLeaf,
@@ -145,7 +153,8 @@ struct ArtifactNameShapeProjectionDebugResult final
                                                  std::wstring_view instanceContext,
                                                  Projection& out) noexcept;
 
-[[nodiscard]] HRESULT DebugMeasureArtifactNameShapeProjectionForTests(size_t ordinaryRowCount,
-                                                                      size_t possibleRowCount,
-                                                                      ArtifactNameShapeProjectionDebugResult& out) noexcept;
+[[nodiscard]] HRESULT DebugMeasureArtifactNameShapeProjectionForTests(
+    size_t ordinaryRowCount,
+    size_t possibleRowCount,
+    ArtifactNameShapeProjectionDebugResult& out) noexcept;
 } // namespace FileOperationArtifacts

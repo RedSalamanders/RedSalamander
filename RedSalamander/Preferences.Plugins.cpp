@@ -1120,8 +1120,8 @@ void PluginsPane::SyncDxControlsFromState(PreferencesDialogState& state) noexcep
             row.stableId    = MakeStableRowId(row.pluginId);
             row.name        = std::wstring(GetPluginDisplayName(item));
             row.typeText    = item.type == PrefsPluginType::FileSystem ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_FILE_SYSTEM)
-                              : item.type == PrefsPluginType::Terminal ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_TERMINAL)
-                                                                       : LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
+                              : item.type == PrefsPluginType::Terminal  ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_TERMINAL)
+                                                                        : LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
             row.originText  = GetPluginOriginText(item);
             row.shortIdText = std::wstring(GetPluginShortIdOrId(item));
             row.enabled     = ! IsPluginDisabledInWorkingSettings(state, pluginId);
@@ -2125,9 +2125,9 @@ void PluginsPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
             const std::wstring_view displayName = GetPluginDisplayName(item);
             const std::wstring_view shortId     = GetPluginShortIdOrId(item);
             const std::wstring originText       = GetPluginOriginText(item);
-            const std::wstring typeText         = item.type == PrefsPluginType::FileSystem ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_FILE_SYSTEM)
-                                                  : item.type == PrefsPluginType::Terminal ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_TERMINAL)
-                                                                                           : LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
+            const std::wstring typeText = item.type == PrefsPluginType::FileSystem ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_FILE_SYSTEM)
+                                          : item.type == PrefsPluginType::Terminal  ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_TERMINAL)
+                                                                                    : LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
             return ! (PrefsUi::ContainsCaseInsensitive(pluginId, filter) || PrefsUi::ContainsCaseInsensitive(displayName, filter) ||
                       PrefsUi::ContainsCaseInsensitive(shortId, filter) || PrefsUi::ContainsCaseInsensitive(originText, filter) ||
                       PrefsUi::ContainsCaseInsensitive(typeText, filter));

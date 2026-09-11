@@ -5,7 +5,7 @@
 
 case SelfTestState::Step::Riptide_MoveDistinctSameSizeFilePreservesSource:
 {
-    using Task              = FolderWindow::FileOperationState::Task;
+    using Task = FolderWindow::FileOperationState::Task;
     const ULONGLONG nowTick = GetTickCount64();
 
     if (HasTimedOut(state, nowTick, 120'000ull))
@@ -14,16 +14,16 @@ case SelfTestState::Step::Riptide_MoveDistinctSameSizeFilePreservesSource:
         return true;
     }
 
-    constexpr size_t kFileBytes         = 16 * 1024;
+    constexpr size_t kFileBytes = 16 * 1024;
     const std::filesystem::path srcRoot = state.tempRoot / L"riptide-same-size-move-src";
     const std::filesystem::path refRoot = state.tempRoot / L"riptide-same-size-move-ref";
     const std::filesystem::path srcFile = srcRoot / L"same.bin";
-    const std::filesystem::path srcRef  = refRoot / L"source.bin";
-    const std::wstring dummyRoot        = L"/riptide-same-size-move-dst";
-    const std::wstring dummyFile        = dummyRoot + L"/same.bin";
+    const std::filesystem::path srcRef = refRoot / L"source.bin";
+    const std::wstring dummyRoot = L"/riptide-same-size-move-dst";
+    const std::wstring dummyFile = dummyRoot + L"/same.bin";
     const std::string destinationBytes(kFileBytes, static_cast<char>(0xA7));
 
-    const auto sourceStillIntact      = [&]() noexcept { return FileSizeEquals(srcFile, kFileBytes) && FilesEqualBytes(srcFile, srcRef); };
+    const auto sourceStillIntact = [&]() noexcept { return FileSizeEquals(srcFile, kFileBytes) && FilesEqualBytes(srcFile, srcRef); };
     const auto destinationStillIntact = [&]() noexcept
     {
         wil::com_ptr<IFileSystemIO> io;
@@ -60,19 +60,19 @@ case SelfTestState::Step::Riptide_MoveDistinctSameSizeFilePreservesSource:
         }
 
         const FileSystemFlags flags = FILESYSTEM_FLAG_NONE;
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_MOVE,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {srcFile},
-                                                                 std::filesystem::path(dummyRoot),
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                 false,
-                                                                 state.fsDummy);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_MOVE,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {srcFile},
+                                                 std::filesystem::path(dummyRoot),
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsDummy);
         if (! state.taskA.has_value())
         {
             Fail(L"Riptide same-size move test failed to start the move task.");
@@ -97,7 +97,7 @@ case SelfTestState::Step::Riptide_MoveDistinctSameSizeFilePreservesSource:
 
                 task->SubmitConflictDecision(Task::ConflictAction::Skip, false);
                 state.markerTick = nowTick;
-                state.stepState  = 2;
+                state.stepState = 2;
                 return false;
             }
         }
@@ -132,8 +132,8 @@ case SelfTestState::Step::Riptide_MoveDistinctSameSizeFilePreservesSource:
 
         if (completed->second.hr != S_FALSE)
         {
-            Fail(std::format(L"Riptide same-size move expected S_FALSE after intentional Skip, got 0x{:08X}.",
-                             static_cast<unsigned long>(completed->second.hr)));
+            Fail(
+                std::format(L"Riptide same-size move expected S_FALSE after intentional Skip, got 0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
             return true;
         }
         if (completed->second.conflictPromptCount != 1u)
@@ -161,11 +161,11 @@ case SelfTestState::Step::Riptide_MoveDistinctSameSizeFilePreservesSource:
 }
 case SelfTestState::Step::Riptide_ReparseNativeMoveRelocatesLinkObject:
 {
-    const std::filesystem::path targetDir  = state.tempRoot / L"riptide-reparse-native-target";
-    const std::filesystem::path srcRoot    = state.tempRoot / L"riptide-reparse-native-src";
-    const std::filesystem::path dstRoot    = state.tempRoot / L"riptide-reparse-native-dst";
-    const std::filesystem::path srcLink    = srcRoot / L"Link";
-    const std::filesystem::path dstFile    = dstRoot / L"Link";
+    const std::filesystem::path targetDir = state.tempRoot / L"riptide-reparse-native-target";
+    const std::filesystem::path srcRoot = state.tempRoot / L"riptide-reparse-native-src";
+    const std::filesystem::path dstRoot = state.tempRoot / L"riptide-reparse-native-dst";
+    const std::filesystem::path srcLink = srcRoot / L"Link";
+    const std::filesystem::path dstFile = dstRoot / L"Link";
     const std::filesystem::path targetFile = targetDir / L"target-sentinel.bin";
 
     if (! RecreateEmptyDirectory(targetDir) || ! RecreateEmptyDirectory(srcRoot) || ! RecreateEmptyDirectory(dstRoot) ||
@@ -180,16 +180,17 @@ case SelfTestState::Step::Riptide_ReparseNativeMoveRelocatesLinkObject:
     options.moveMode  = FILESYSTEM_MOVE_NATIVE_ONLY;
     FileOpsRecursiveProgressRecorder callback{};
     const HRESULT hr = state.fsLocal->MoveItem(srcLink.c_str(),
-                                               dstFile.c_str(),
-                                               static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE),
-                                               &options,
-                                               &callback,
-                                               nullptr);
+                                                dstFile.c_str(),
+                                                static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE),
+                                                &options,
+                                                &callback,
+                                                nullptr);
 
     std::error_code ec;
     const bool sourceStillPresent = std::filesystem::exists(srcLink, ec);
-    if (hr != HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) || callback.issueCount != 1u || callback.lastIssueStatus != HRESULT_FROM_WIN32(ERROR_DATATYPE_MISMATCH) ||
-        ec || ! sourceStillPresent || ! FileSizeEquals(dstFile, 2 * 1024) || ! FileSizeEquals(targetFile, 4 * 1024))
+    if (hr != HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) || callback.issueCount != 1u ||
+        callback.lastIssueStatus != HRESULT_FROM_WIN32(ERROR_DATATYPE_MISMATCH) || ec || ! sourceStillPresent ||
+        ! FileSizeEquals(dstFile, 2 * 1024) || ! FileSizeEquals(targetFile, 4 * 1024))
     {
         Fail(std::format(L"Native-only link-on-file Move must report a typed mismatch, honor Skip, and preserve both objects "
                          L"(hr=0x{:08X}, issue=0x{:08X}, count={}).",
@@ -204,7 +205,12 @@ case SelfTestState::Step::Riptide_ReparseNativeMoveRelocatesLinkObject:
         return true;
     }
 
-    Debug::Perf::Emit(L"FileOps.SelfTest.RiptideReparseNativeRelocation", L"shape=junction-on-file-type-mismatch;source-retained", 1, 0, 0, hr);
+    Debug::Perf::Emit(L"FileOps.SelfTest.RiptideReparseNativeRelocation",
+                      L"shape=junction-on-file-type-mismatch;source-retained",
+                      1,
+                      0,
+                      0,
+                      hr);
     NextStep(state, SelfTestState::Step::Fairstream_ManagedMovePreservesUncopiedNewFiles);
     return false;
 }
@@ -222,14 +228,14 @@ case SelfTestState::Step::Fairstream_ManagedMovePreservesUncopiedNewFiles:
 
     const std::filesystem::path srcRoot = state.tempRoot / L"fairstream-move-window-src";
     const std::filesystem::path dstRoot = state.tempRoot / L"fairstream-move-window-dst";
-    const std::filesystem::path srcFoo  = srcRoot / L"Foo";
-    const std::filesystem::path dstFoo  = dstRoot / L"Foo";
+    const std::filesystem::path srcFoo = srcRoot / L"Foo";
+    const std::filesystem::path dstFoo = dstRoot / L"Foo";
     const std::filesystem::path srcDone = srcFoo / L"aaa_done";
     const std::filesystem::path dstDone = dstFoo / L"aaa_done";
     const std::filesystem::path srcSeed = srcDone / L"seed.bin";
     const std::filesystem::path dstSeed = dstDone / L"seed.bin";
-    const std::filesystem::path srcNew  = srcDone / L"zz_new.bin";
-    const std::filesystem::path dstNew  = dstDone / L"zz_new.bin";
+    const std::filesystem::path srcNew = srcDone / L"zz_new.bin";
+    const std::filesystem::path dstNew = dstDone / L"zz_new.bin";
 
     if (state.stepState == 0)
     {
@@ -251,17 +257,17 @@ case SelfTestState::Step::Fairstream_ManagedMovePreservesUncopiedNewFiles:
         // source and must make the cleanup retain it.
         SetFileOpsBridgeMoveSourceCleanupPauseForSelfTest(true);
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_MOVE,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {srcFoo},
-                                                                 dstRoot,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_MOVE,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {srcFoo},
+                                                 dstRoot,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             SetFileOpsBridgeMoveSourceCleanupPauseForSelfTest(false);
@@ -343,7 +349,8 @@ case SelfTestState::Step::Fairstream_ManagedMovePreservesUncopiedNewFiles:
             return true;
         }
 
-        Debug::Perf::Emit(L"FileOps.SelfTest.FairstreamMoveWindowPreserved", L"shape=new-file-before-exact-cleanup", 1, 0, 0, completed->second.hr);
+        Debug::Perf::Emit(
+            L"FileOps.SelfTest.FairstreamMoveWindowPreserved", L"shape=new-file-before-exact-cleanup", 1, 0, 0, completed->second.hr);
         NextStep(state, SelfTestState::Step::Fairstream_MoveMergeReadonlyDestinationFolder);
         return false;
     }
@@ -352,7 +359,7 @@ case SelfTestState::Step::Fairstream_ManagedMovePreservesUncopiedNewFiles:
 }
 case SelfTestState::Step::Fairstream_MoveMergeReadonlyDestinationFolder:
 {
-    using Task              = FolderWindow::FileOperationState::Task;
+    using Task = FolderWindow::FileOperationState::Task;
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
@@ -362,8 +369,8 @@ case SelfTestState::Step::Fairstream_MoveMergeReadonlyDestinationFolder:
 
     const std::filesystem::path srcRoot = state.tempRoot / L"fairstream-ro-merge-src";
     const std::filesystem::path dstRoot = state.tempRoot / L"fairstream-ro-merge-dst";
-    const std::filesystem::path srcFoo  = srcRoot / L"Foo";
-    const std::filesystem::path dstFoo  = dstRoot / L"Foo";
+    const std::filesystem::path srcFoo = srcRoot / L"Foo";
+    const std::filesystem::path dstFoo = dstRoot / L"Foo";
 
     if (state.stepState == 0)
     {
@@ -385,17 +392,17 @@ case SelfTestState::Step::Fairstream_MoveMergeReadonlyDestinationFolder:
         }
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_MOVE,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {srcFoo},
-                                                                 dstRoot,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_MOVE,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {srcFoo},
+                                                 dstRoot,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             Fail(L"Readonly-merge test failed to start the move task.");
@@ -423,7 +430,7 @@ case SelfTestState::Step::Fairstream_MoveMergeReadonlyDestinationFolder:
             return false;
         }
 
-        const DWORD attributes       = GetFileAttributesW(dstFoo.c_str());
+        const DWORD attributes = GetFileAttributesW(dstFoo.c_str());
         const auto restoreAttributes = wil::scope_exit([&]() noexcept { static_cast<void>(SetFileAttributesW(dstFoo.c_str(), FILE_ATTRIBUTE_NORMAL)); });
 
         if (FAILED(completed->second.hr))
@@ -463,7 +470,7 @@ case SelfTestState::Step::Fairstream_MoveMergeReadonlyDestinationFolder:
 }
 case SelfTestState::Step::Fairstream_OverwriteGrantIsOneShot:
 {
-    using Task              = FolderWindow::FileOperationState::Task;
+    using Task = FolderWindow::FileOperationState::Task;
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 180'000ull))
     {
@@ -473,13 +480,13 @@ case SelfTestState::Step::Fairstream_OverwriteGrantIsOneShot:
 
     const std::filesystem::path srcRoot = state.tempRoot / L"fairstream-oneshot-src";
     const std::filesystem::path dstRoot = state.tempRoot / L"fairstream-oneshot-dst";
-    const std::filesystem::path srcFoo  = srcRoot / L"Foo";
-    const std::filesystem::path dstFoo  = dstRoot / L"Foo";
+    const std::filesystem::path srcFoo = srcRoot / L"Foo";
+    const std::filesystem::path dstFoo = dstRoot / L"Foo";
 
     // Eight colliding children across four workers force every worker to process more than one
     // conflict: a per-worker sticky grant would collapse the prompt count to the worker count.
     constexpr unsigned int kCollidingFileCount = 8u;
-    const auto collidingName                   = [](unsigned int index) noexcept { return std::format(L"f{}.bin", index); };
+    const auto collidingName = [](unsigned int index) noexcept { return std::format(L"f{}.bin", index); };
 
     const auto seedDestination = [&]() noexcept -> bool
     {
@@ -653,7 +660,7 @@ case SelfTestState::Step::Fairstream_OverwriteGrantIsOneShot:
 }
 case SelfTestState::Step::Fairstream_ConflictPromptsSerializedUnderParallelism:
 {
-    using Task              = FolderWindow::FileOperationState::Task;
+    using Task = FolderWindow::FileOperationState::Task;
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
@@ -663,8 +670,8 @@ case SelfTestState::Step::Fairstream_ConflictPromptsSerializedUnderParallelism:
 
     const std::filesystem::path srcRoot = state.tempRoot / L"fairstream-serialize-src";
     const std::filesystem::path dstRoot = state.tempRoot / L"fairstream-serialize-dst";
-    const std::filesystem::path srcFoo  = srcRoot / L"Foo";
-    const std::filesystem::path dstFoo  = dstRoot / L"Foo";
+    const std::filesystem::path srcFoo = srcRoot / L"Foo";
+    const std::filesystem::path dstFoo = dstRoot / L"Foo";
     constexpr std::array<size_t, 4> kSourceBytes{{
         10u * 1024u,
         11u * 1024u,
@@ -677,7 +684,7 @@ case SelfTestState::Step::Fairstream_ConflictPromptsSerializedUnderParallelism:
         3072u,
         4096u,
     }};
-    const auto conflictName         = [](size_t index) { return std::format(L"d{}.bin", index + 1u); };
+    const auto conflictName = [](size_t index) { return std::format(L"d{}.bin", index + 1u); };
     const auto conflictIndexForLeaf = [&](std::wstring_view leaf) noexcept -> std::optional<size_t>
     {
         for (size_t index = 0; index < kSourceBytes.size(); ++index)
@@ -710,17 +717,17 @@ case SelfTestState::Step::Fairstream_ConflictPromptsSerializedUnderParallelism:
         }
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {srcFoo},
-                                                                 dstRoot,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {srcFoo},
+                                                 dstRoot,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             Fail(L"Prompt-serialization test failed to start the copy task.");
@@ -786,7 +793,7 @@ case SelfTestState::Step::Fairstream_ConflictPromptsSerializedUnderParallelism:
 
         for (size_t index = 0; index < kSourceBytes.size(); ++index)
         {
-            const std::wstring name    = conflictName(index);
+            const std::wstring name = conflictName(index);
             const size_t expectedBytes = shouldOverwriteConflict(index) ? kSourceBytes[index] : kDestinationBytes[index];
             if (! FileSizeEquals(dstFoo / name, expectedBytes))
             {
@@ -804,7 +811,7 @@ case SelfTestState::Step::Fairstream_ConflictPromptsSerializedUnderParallelism:
 }
 case SelfTestState::Step::Fairstream_ReparseReplaceNonEmptyDirRequiresConsent:
 {
-    using Task              = FolderWindow::FileOperationState::Task;
+    using Task = FolderWindow::FileOperationState::Task;
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
@@ -812,15 +819,15 @@ case SelfTestState::Step::Fairstream_ReparseReplaceNonEmptyDirRequiresConsent:
         return true;
     }
 
-    const std::filesystem::path targetDir      = state.tempRoot / L"fairstream-junction-target";
-    const std::filesystem::path srcRoot        = state.tempRoot / L"fairstream-junction-src";
-    const std::filesystem::path dstRoot        = state.tempRoot / L"fairstream-junction-dst";
-    const std::filesystem::path srcFoo         = srcRoot / L"Foo";
-    const std::filesystem::path srcLink        = srcFoo / L"Link";
-    const std::filesystem::path dstFoo         = dstRoot / L"Foo";
-    const std::filesystem::path dstLink        = dstFoo / L"Link";
+    const std::filesystem::path targetDir = state.tempRoot / L"fairstream-junction-target";
+    const std::filesystem::path srcRoot = state.tempRoot / L"fairstream-junction-src";
+    const std::filesystem::path dstRoot = state.tempRoot / L"fairstream-junction-dst";
+    const std::filesystem::path srcFoo = srcRoot / L"Foo";
+    const std::filesystem::path srcLink = srcFoo / L"Link";
+    const std::filesystem::path dstFoo = dstRoot / L"Foo";
+    const std::filesystem::path dstLink = dstFoo / L"Link";
     const std::filesystem::path dstLinkSibling = dstFoo / L"Link (2)";
-    const std::filesystem::path dstInner       = dstLink / L"inner.bin";
+    const std::filesystem::path dstInner = dstLink / L"inner.bin";
 
     const auto seedTrees = [&]() noexcept -> bool
     {
@@ -903,7 +910,8 @@ case SelfTestState::Step::Fairstream_ReparseReplaceNonEmptyDirRequiresConsent:
 
         if (completed->second.hr != S_FALSE)
         {
-            Fail(std::format(L"Reparse-consent Skip run expected intentional-Skip S_FALSE, got 0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
+            Fail(std::format(L"Reparse-consent Skip run expected intentional-Skip S_FALSE, got 0x{:08X}.",
+                             static_cast<unsigned long>(completed->second.hr)));
             return true;
         }
         if (completed->second.conflictPromptCount != 1u)
@@ -973,7 +981,8 @@ case SelfTestState::Step::Fairstream_ReparseReplaceNonEmptyDirRequiresConsent:
         {
             std::wstring observedNames;
             std::error_code enumerateEc;
-            for (std::filesystem::directory_iterator iterator(dstFoo, enumerateEc), end; ! enumerateEc && iterator != end; iterator.increment(enumerateEc))
+            for (std::filesystem::directory_iterator iterator(dstFoo, enumerateEc), end; ! enumerateEc && iterator != end;
+                 iterator.increment(enumerateEc))
             {
                 if (! observedNames.empty())
                 {
@@ -997,7 +1006,7 @@ case SelfTestState::Step::Fairstream_ReparseReplaceNonEmptyDirRequiresConsent:
 }
 case SelfTestState::Step::Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate:
 {
-    using Task              = FolderWindow::FileOperationState::Task;
+    using Task = FolderWindow::FileOperationState::Task;
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
@@ -1005,14 +1014,14 @@ case SelfTestState::Step::Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate:
         return true;
     }
 
-    const std::filesystem::path targetDir   = state.tempRoot / L"floodgate-bucket-target";
-    const std::filesystem::path srcRoot     = state.tempRoot / L"floodgate-bucket-src";
-    const std::filesystem::path dstRoot     = state.tempRoot / L"floodgate-bucket-dst";
-    const std::filesystem::path srcPlain    = srcRoot / L"plain.txt";
-    const std::filesystem::path dstPlain    = dstRoot / L"plain.txt";
-    const std::filesystem::path srcLink     = srcRoot / L"RiskLink";
-    const std::filesystem::path dstLink     = dstRoot / L"RiskLink";
-    const std::filesystem::path dstInner    = dstLink / L"inner.bin";
+    const std::filesystem::path targetDir = state.tempRoot / L"floodgate-bucket-target";
+    const std::filesystem::path srcRoot = state.tempRoot / L"floodgate-bucket-src";
+    const std::filesystem::path dstRoot = state.tempRoot / L"floodgate-bucket-dst";
+    const std::filesystem::path srcPlain = srcRoot / L"plain.txt";
+    const std::filesystem::path dstPlain = dstRoot / L"plain.txt";
+    const std::filesystem::path srcLink = srcRoot / L"RiskLink";
+    const std::filesystem::path dstLink = dstRoot / L"RiskLink";
+    const std::filesystem::path dstInner = dstLink / L"inner.bin";
     const std::filesystem::path srcOpposite = srcRoot / L"Opposite";
     const std::filesystem::path dstOpposite = dstRoot / L"Opposite";
 
@@ -1043,17 +1052,17 @@ case SelfTestState::Step::Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate:
         }
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {srcPlain, srcLink, srcOpposite},
-                                                                 dstRoot,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {srcPlain, srcLink, srcOpposite},
+                                                 dstRoot,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             Fail(L"Conflict-bucket apply-to-all test failed to start copy task.");
@@ -1128,9 +1137,9 @@ case SelfTestState::Step::Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate:
         {
             if (const auto prompt = TryGetConflictPromptCopy(task); prompt.has_value())
             {
-                if (prompt->bucket != Task::ConflictBucket::TypeMismatch || ! prompt->sourceMetadata.isDirectory || prompt->destinationMetadata.isDirectory ||
-                    prompt->destinationMetadata.isLink || ! PromptHasAction(prompt.value(), Task::ConflictAction::Skip) ||
-                    PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
+                if (prompt->bucket != Task::ConflictBucket::TypeMismatch || ! prompt->sourceMetadata.isDirectory ||
+                    prompt->destinationMetadata.isDirectory || prompt->destinationMetadata.isLink ||
+                    ! PromptHasAction(prompt.value(), Task::ConflictAction::Skip) || PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
                 {
                     Fail(L"Conflict-bucket apply-to-all test expected the inverse directory-to-file type mismatch to prompt separately.");
                     return true;
@@ -1209,7 +1218,7 @@ case SelfTestState::Step::Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate:
 }
 case SelfTestState::Step::Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent:
 {
-    using Task              = FolderWindow::FileOperationState::Task;
+    using Task = FolderWindow::FileOperationState::Task;
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
@@ -1217,18 +1226,18 @@ case SelfTestState::Step::Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent:
         return true;
     }
 
-    const std::filesystem::path targetDir      = state.tempRoot / L"riptide-empty-dir-reparse-target";
-    const std::filesystem::path srcRoot        = state.tempRoot / L"riptide-empty-dir-reparse-src";
-    const std::filesystem::path dstRoot        = state.tempRoot / L"riptide-empty-dir-reparse-dst";
-    const std::filesystem::path refRoot        = state.tempRoot / L"riptide-empty-dir-reparse-ref";
-    const std::filesystem::path srcFoo         = srcRoot / L"Foo";
-    const std::filesystem::path srcLink        = srcFoo / L"Link";
-    const std::filesystem::path srcSibling     = srcFoo / L"sibling.bin";
-    const std::filesystem::path dstFoo         = dstRoot / L"Foo";
-    const std::filesystem::path dstLink        = dstFoo / L"Link";
-    const std::filesystem::path dstSibling     = dstFoo / L"sibling.bin";
+    const std::filesystem::path targetDir = state.tempRoot / L"riptide-empty-dir-reparse-target";
+    const std::filesystem::path srcRoot = state.tempRoot / L"riptide-empty-dir-reparse-src";
+    const std::filesystem::path dstRoot = state.tempRoot / L"riptide-empty-dir-reparse-dst";
+    const std::filesystem::path refRoot = state.tempRoot / L"riptide-empty-dir-reparse-ref";
+    const std::filesystem::path srcFoo = srcRoot / L"Foo";
+    const std::filesystem::path srcLink = srcFoo / L"Link";
+    const std::filesystem::path srcSibling = srcFoo / L"sibling.bin";
+    const std::filesystem::path dstFoo = dstRoot / L"Foo";
+    const std::filesystem::path dstLink = dstFoo / L"Link";
+    const std::filesystem::path dstSibling = dstFoo / L"sibling.bin";
     const std::filesystem::path targetSentinel = targetDir / L"sentinel.bin";
-    const std::filesystem::path targetRef      = refRoot / L"sentinel.bin";
+    const std::filesystem::path targetRef = refRoot / L"sentinel.bin";
 
     if (state.stepState == 0)
     {
@@ -1262,17 +1271,17 @@ case SelfTestState::Step::Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent:
         }
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {srcFoo},
-                                                                 dstRoot,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {srcFoo},
+                                                 dstRoot,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             Fail(L"Empty-dir reparse consent test failed to start copy task.");
@@ -1290,7 +1299,8 @@ case SelfTestState::Step::Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent:
             if (const auto prompt = TryGetConflictPromptCopy(task); prompt.has_value())
             {
                 if (prompt->bucket != Task::ConflictBucket::TypeMismatch || ! PromptHasAction(prompt.value(), Task::ConflictAction::Skip) ||
-                    ! PromptHasAction(prompt.value(), Task::ConflictAction::KeepBoth) || PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
+                    ! PromptHasAction(prompt.value(), Task::ConflictAction::KeepBoth) ||
+                    PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
                 {
                     Fail(L"Empty-dir reparse consent test expected a type-mismatch prompt offering Skip and Keep Both but not Overwrite.");
                     return true;
@@ -1308,7 +1318,8 @@ case SelfTestState::Step::Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent:
 
         if (completed->second.hr != S_FALSE)
         {
-            Fail(std::format(L"Empty-dir reparse consent Skip run expected S_FALSE, got 0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
+            Fail(std::format(L"Empty-dir reparse consent Skip run expected S_FALSE, got 0x{:08X}.",
+                             static_cast<unsigned long>(completed->second.hr)));
             return true;
         }
         if (completed->second.conflictPromptCount != 1u)
@@ -1352,15 +1363,15 @@ case SelfTestState::Step::Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent:
 }
 case SelfTestState::Step::Riptide_ReparseMoveSourceNeverUsesDirectoryMerge:
 {
-    const std::filesystem::path root           = state.tempRoot / L"riptide-reparse-move-merge";
-    const std::filesystem::path targetDir      = root / L"target";
-    const std::filesystem::path srcRoot        = root / L"src";
-    const std::filesystem::path dstRoot        = root / L"dst";
-    const std::filesystem::path refRoot        = root / L"ref";
-    const std::filesystem::path srcLink        = srcRoot / L"Link";
-    const std::filesystem::path dstLink        = dstRoot / L"Link";
+    const std::filesystem::path root = state.tempRoot / L"riptide-reparse-move-merge";
+    const std::filesystem::path targetDir = root / L"target";
+    const std::filesystem::path srcRoot = root / L"src";
+    const std::filesystem::path dstRoot = root / L"dst";
+    const std::filesystem::path refRoot = root / L"ref";
+    const std::filesystem::path srcLink = srcRoot / L"Link";
+    const std::filesystem::path dstLink = dstRoot / L"Link";
     const std::filesystem::path targetSentinel = targetDir / L"sentinel.bin";
-    const std::filesystem::path targetRef      = refRoot / L"sentinel.bin";
+    const std::filesystem::path targetRef = refRoot / L"sentinel.bin";
 
     if (! RecreateEmptyDirectory(root) || ! RecreateEmptyDirectory(targetDir) || ! RecreateEmptyDirectory(srcRoot) || ! RecreateEmptyDirectory(dstLink) ||
         ! RecreateEmptyDirectory(refRoot))
@@ -1386,8 +1397,8 @@ case SelfTestState::Step::Riptide_ReparseMoveSourceNeverUsesDirectoryMerge:
         Fail(L"Reparse move merge test failed to load the legacy followTargets migration fixture.");
         return true;
     }
-    auto restoreReparsePolicy =
-        wil::scope_exit([&]() noexcept { static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), R"json({"reparsePointPolicy":"preserve"})json")); });
+    auto restoreReparsePolicy = wil::scope_exit([&]() noexcept
+    { static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), R"json({"reparsePointPolicy":"preserve"})json")); });
 
     const HRESULT moveHr =
         state.fsLocal->MoveItem(srcLink.c_str(), dstLink.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE), nullptr, nullptr, nullptr);
@@ -1443,46 +1454,46 @@ case SelfTestState::Step::Fairstream_MovedTreeKeepsLiteralLinks:
     // after a Move), a Keep Both rename of a nested target never rewrites the links naming it, a
     // skipped target leaves a literal link next to a retained source target, and a wide tree of
     // links copies with no link queue or ceiling.
-    const std::filesystem::path srcRoot                = state.tempRoot / L"fairstream-move-links-src";
-    const std::filesystem::path dstRoot                = state.tempRoot / L"fairstream-move-links-dst";
-    const std::filesystem::path srcTree                = srcRoot / L"Tree";
-    const std::filesystem::path dstTree                = dstRoot / L"Tree";
-    const std::filesystem::path srcBackwardTarget      = srcTree / L"00-backward-target";
-    const std::filesystem::path srcBackwardLink        = srcTree / L"10-backward-link";
-    const std::filesystem::path srcForwardLink         = srcTree / L"20-forward-link";
-    const std::filesystem::path srcForwardTarget       = srcTree / L"30-forward-target";
-    const std::filesystem::path srcCycleA              = srcTree / L"40-cycle-a";
-    const std::filesystem::path srcCycleB              = srcTree / L"50-cycle-b";
-    const std::filesystem::path dstBackwardTarget      = dstTree / srcBackwardTarget.filename();
-    const std::filesystem::path dstBackwardLink        = dstTree / srcBackwardLink.filename();
-    const std::filesystem::path dstForwardLink         = dstTree / srcForwardLink.filename();
-    const std::filesystem::path dstForwardCollision    = dstTree / srcForwardTarget.filename();
-    const std::filesystem::path dstForwardTarget       = dstTree / L"30-forward-target (2)";
-    const std::filesystem::path dstCycleA              = dstTree / srcCycleA.filename();
-    const std::filesystem::path dstCycleB              = dstTree / srcCycleB.filename();
-    const std::filesystem::path skipSrcRoot            = state.tempRoot / L"fairstream-move-links-retained-src";
-    const std::filesystem::path skipDstRoot            = state.tempRoot / L"fairstream-move-links-retained-dst";
-    const std::filesystem::path skipSrcTree            = skipSrcRoot / L"Tree";
-    const std::filesystem::path skipDstTree            = skipDstRoot / L"Tree";
-    const std::filesystem::path skipSrcLink            = skipSrcTree / L"10-forward-link";
-    const std::filesystem::path skipSrcTarget          = skipSrcTree / L"20-target";
-    const std::filesystem::path skipDstLink            = skipDstTree / skipSrcLink.filename();
+    const std::filesystem::path srcRoot = state.tempRoot / L"fairstream-move-links-src";
+    const std::filesystem::path dstRoot = state.tempRoot / L"fairstream-move-links-dst";
+    const std::filesystem::path srcTree = srcRoot / L"Tree";
+    const std::filesystem::path dstTree = dstRoot / L"Tree";
+    const std::filesystem::path srcBackwardTarget = srcTree / L"00-backward-target";
+    const std::filesystem::path srcBackwardLink = srcTree / L"10-backward-link";
+    const std::filesystem::path srcForwardLink = srcTree / L"20-forward-link";
+    const std::filesystem::path srcForwardTarget = srcTree / L"30-forward-target";
+    const std::filesystem::path srcCycleA = srcTree / L"40-cycle-a";
+    const std::filesystem::path srcCycleB = srcTree / L"50-cycle-b";
+    const std::filesystem::path dstBackwardTarget = dstTree / srcBackwardTarget.filename();
+    const std::filesystem::path dstBackwardLink = dstTree / srcBackwardLink.filename();
+    const std::filesystem::path dstForwardLink = dstTree / srcForwardLink.filename();
+    const std::filesystem::path dstForwardCollision = dstTree / srcForwardTarget.filename();
+    const std::filesystem::path dstForwardTarget = dstTree / L"30-forward-target (2)";
+    const std::filesystem::path dstCycleA = dstTree / srcCycleA.filename();
+    const std::filesystem::path dstCycleB = dstTree / srcCycleB.filename();
+    const std::filesystem::path skipSrcRoot = state.tempRoot / L"fairstream-move-links-retained-src";
+    const std::filesystem::path skipDstRoot = state.tempRoot / L"fairstream-move-links-retained-dst";
+    const std::filesystem::path skipSrcTree = skipSrcRoot / L"Tree";
+    const std::filesystem::path skipDstTree = skipDstRoot / L"Tree";
+    const std::filesystem::path skipSrcLink = skipSrcTree / L"10-forward-link";
+    const std::filesystem::path skipSrcTarget = skipSrcTree / L"20-target";
+    const std::filesystem::path skipDstLink = skipDstTree / skipSrcLink.filename();
     const std::filesystem::path skipDstTargetCollision = skipDstTree / skipSrcTarget.filename();
-    const std::filesystem::path copySrcRoot            = state.tempRoot / L"fairstream-copy-links-src";
-    const std::filesystem::path copyDstRoot            = state.tempRoot / L"fairstream-copy-links-dst";
-    const std::filesystem::path copySrcTree            = copySrcRoot / L"Tree";
-    const std::filesystem::path copyDstTree            = copyDstRoot / L"Tree";
-    const std::filesystem::path copySrcLink            = copySrcTree / L"10-forward-link";
-    const std::filesystem::path copySrcTarget          = copySrcTree / L"20-target";
-    const std::filesystem::path copyDstLink            = copyDstTree / copySrcLink.filename();
+    const std::filesystem::path copySrcRoot = state.tempRoot / L"fairstream-copy-links-src";
+    const std::filesystem::path copyDstRoot = state.tempRoot / L"fairstream-copy-links-dst";
+    const std::filesystem::path copySrcTree = copySrcRoot / L"Tree";
+    const std::filesystem::path copyDstTree = copyDstRoot / L"Tree";
+    const std::filesystem::path copySrcLink = copySrcTree / L"10-forward-link";
+    const std::filesystem::path copySrcTarget = copySrcTree / L"20-target";
+    const std::filesystem::path copyDstLink = copyDstTree / copySrcLink.filename();
     const std::filesystem::path copyDstTargetCollision = copyDstTree / copySrcTarget.filename();
-    const std::filesystem::path copyDstTarget          = copyDstTree / L"20-target (2)";
-    const std::filesystem::path wideSrcRoot            = state.tempRoot / L"fairstream-copy-wide-links-src";
-    const std::filesystem::path wideDstRoot            = state.tempRoot / L"fairstream-copy-wide-links-dst";
-    const std::filesystem::path wideSrcTree            = wideSrcRoot / L"Tree";
-    const std::filesystem::path wideDstTree            = wideDstRoot / L"Tree";
-    const std::filesystem::path wideTarget             = wideSrcTree / L"target";
-    constexpr unsigned int kWideLinkCount              = 4'200u; // above the retired 4,096-entry link queue
+    const std::filesystem::path copyDstTarget = copyDstTree / L"20-target (2)";
+    const std::filesystem::path wideSrcRoot = state.tempRoot / L"fairstream-copy-wide-links-src";
+    const std::filesystem::path wideDstRoot = state.tempRoot / L"fairstream-copy-wide-links-dst";
+    const std::filesystem::path wideSrcTree = wideSrcRoot / L"Tree";
+    const std::filesystem::path wideDstTree = wideDstRoot / L"Tree";
+    const std::filesystem::path wideTarget = wideSrcTree / L"target";
+    constexpr unsigned int kWideLinkCount = 4'200u; // above the retired 4,096-entry link queue
 
     const auto linkNames = [](const std::filesystem::path& link, const std::filesystem::path& expectedTarget) noexcept -> bool
     {
@@ -1499,31 +1510,34 @@ case SelfTestState::Step::Fairstream_MovedTreeKeepsLiteralLinks:
             Fail(L"Literal-link move test failed to reset directories.");
             return true;
         }
-        if (! WriteTestFile(srcBackwardTarget / L"back.bin", 4 * 1024) || ! WriteTestFile(srcForwardTarget / L"forward.bin", 6 * 1024) ||
+        if (! WriteTestFile(srcBackwardTarget / L"back.bin", 4 * 1024) ||
+            ! WriteTestFile(srcForwardTarget / L"forward.bin", 6 * 1024) ||
             ! WriteTestFile(dstForwardCollision, 2 * 1024))
         {
             Fail(L"Literal-link move test failed to seed the source tree.");
             return true;
         }
-        if (! TryCreateJunction(srcBackwardLink, srcBackwardTarget) || ! TryCreateJunction(srcForwardLink, srcForwardTarget) ||
-            ! TryCreateJunction(srcCycleA, srcCycleB) || ! TryCreateJunction(srcCycleB, srcCycleA))
+        if (! TryCreateJunction(srcBackwardLink, srcBackwardTarget) ||
+            ! TryCreateJunction(srcForwardLink, srcForwardTarget) ||
+            ! TryCreateJunction(srcCycleA, srcCycleB) ||
+            ! TryCreateJunction(srcCycleB, srcCycleA))
         {
             Fail(L"Literal-link move test failed to create its backward, forward, and cycle junctions.");
             return true;
         }
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_MOVE,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {srcTree},
-                                                                 dstRoot,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_MOVE,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {srcTree},
+                                                 dstRoot,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             Fail(L"Literal-link move test failed to start the move task.");
@@ -1536,7 +1550,7 @@ case SelfTestState::Step::Fairstream_MovedTreeKeepsLiteralLinks:
 
     if (state.stepState == 1)
     {
-        auto* task        = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
+        auto* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
         const auto prompt = TryGetConflictPromptCopy(task);
         if (! prompt.has_value())
         {
@@ -1573,8 +1587,8 @@ case SelfTestState::Step::Fairstream_MovedTreeKeepsLiteralLinks:
             Fail(std::format(L"Literal-link move failed: 0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
             return true;
         }
-        if (! linkNames(dstBackwardLink, srcBackwardTarget) || ! linkNames(dstForwardLink, srcForwardTarget) || ! linkNames(dstCycleA, srcCycleB) ||
-            ! linkNames(dstCycleB, srcCycleA))
+        if (! linkNames(dstBackwardLink, srcBackwardTarget) || ! linkNames(dstForwardLink, srcForwardTarget) ||
+            ! linkNames(dstCycleA, srcCycleB) || ! linkNames(dstCycleB, srcCycleA))
         {
             Fail(L"Literal-link move did not keep every junction's stored target text (backward, forward, and cycle links must still name the source tree).");
             return true;
@@ -1586,7 +1600,8 @@ case SelfTestState::Step::Fairstream_MovedTreeKeepsLiteralLinks:
             Fail(L"Literal-link move left the source tree behind.");
             return true;
         }
-        if (! FileSizeEquals(dstBackwardTarget / L"back.bin", 4 * 1024) || ! FileSizeEquals(dstForwardTarget / L"forward.bin", 6 * 1024) ||
+        if (! FileSizeEquals(dstBackwardTarget / L"back.bin", 4 * 1024) ||
+            ! FileSizeEquals(dstForwardTarget / L"forward.bin", 6 * 1024) ||
             ! FileSizeEquals(dstForwardCollision, 2 * 1024))
         {
             Fail(L"Literal-link move destination integrity check failed.");
@@ -1606,25 +1621,27 @@ case SelfTestState::Step::Fairstream_MovedTreeKeepsLiteralLinks:
 
     if (state.stepState == 3)
     {
-        if (! RecreateEmptyDirectory(skipSrcRoot) || ! RecreateEmptyDirectory(skipDstTree) || ! WriteTestFile(skipSrcTarget / L"payload.bin", 3 * 1024) ||
-            ! WriteTestFile(skipDstTargetCollision, 1 * 1024) || ! TryCreateJunction(skipSrcLink, skipSrcTarget))
+        if (! RecreateEmptyDirectory(skipSrcRoot) || ! RecreateEmptyDirectory(skipDstTree) ||
+            ! WriteTestFile(skipSrcTarget / L"payload.bin", 3 * 1024) ||
+            ! WriteTestFile(skipDstTargetCollision, 1 * 1024) ||
+            ! TryCreateJunction(skipSrcLink, skipSrcTarget))
         {
             Fail(L"Literal-link skipped-target test failed to seed its source/destination tree.");
             return true;
         }
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_MOVE,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {skipSrcTree},
-                                                                 skipDstRoot,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_MOVE,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {skipSrcTree},
+                                                 skipDstRoot,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             Fail(L"Literal-link skipped-target test failed to start the move task.");
@@ -1636,7 +1653,7 @@ case SelfTestState::Step::Fairstream_MovedTreeKeepsLiteralLinks:
 
     if (state.stepState == 4)
     {
-        auto* task        = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
+        auto* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
         const auto prompt = TryGetConflictPromptCopy(task);
         if (! prompt.has_value())
         {
@@ -1667,8 +1684,10 @@ case SelfTestState::Step::Fairstream_MovedTreeKeepsLiteralLinks:
         }
         // The link publishes literally (it still names the source target) and its exact source is
         // cleaned; the skipped target and its parent stay in the source; nothing asks a second time.
-        if (completed->second.hr != S_FALSE || completed->second.conflictPromptCount != 1u || ! linkNames(skipDstLink, skipSrcTarget) ||
-            GetFileAttributesW(skipSrcTarget.c_str()) == INVALID_FILE_ATTRIBUTES || GetFileAttributesW(skipSrcLink.c_str()) != INVALID_FILE_ATTRIBUTES ||
+        if (completed->second.hr != S_FALSE || completed->second.conflictPromptCount != 1u ||
+            ! linkNames(skipDstLink, skipSrcTarget) ||
+            GetFileAttributesW(skipSrcTarget.c_str()) == INVALID_FILE_ATTRIBUTES ||
+            GetFileAttributesW(skipSrcLink.c_str()) != INVALID_FILE_ATTRIBUTES ||
             ! FileSizeEquals(skipDstTargetCollision, 1 * 1024))
         {
             Fail(std::format(L"Literal-link skipped-target move was not partial with a literal link and a retained source target: hr=0x{:08X} prompts={}.",
@@ -1689,31 +1708,32 @@ case SelfTestState::Step::Fairstream_MovedTreeKeepsLiteralLinks:
 
     if (state.stepState == 6)
     {
-        if (! RecreateEmptyDirectory(copySrcRoot) || ! RecreateEmptyDirectory(copyDstTree) || ! WriteTestFile(copySrcTarget / L"payload.bin", 5 * 1024) ||
-            ! WriteTestFile(copyDstTargetCollision, 2 * 1024) || ! TryCreateJunction(copySrcLink, copySrcTarget))
+        if (! RecreateEmptyDirectory(copySrcRoot) || ! RecreateEmptyDirectory(copyDstTree) ||
+            ! WriteTestFile(copySrcTarget / L"payload.bin", 5 * 1024) ||
+            ! WriteTestFile(copyDstTargetCollision, 2 * 1024) ||
+            ! TryCreateJunction(copySrcLink, copySrcTarget))
         {
             Fail(L"Literal-link Local Copy test failed to seed its source/destination tree.");
             return true;
         }
-        if (! SetPluginConfiguration(state.infoLocal.get(),
-                                     R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":2,"reparsePointPolicy":"preserve"})json"))
+        if (! SetPluginConfiguration(state.infoLocal.get(), R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":2,"reparsePointPolicy":"preserve"})json"))
         {
             Fail(L"Literal-link Local Copy test failed to configure parallel Preserve.");
             return true;
         }
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {copySrcTree},
-                                                                 copyDstRoot,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {copySrcTree},
+                                                 copyDstRoot,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             Fail(L"Literal-link Local Copy test failed to start the task.");
@@ -1725,7 +1745,7 @@ case SelfTestState::Step::Fairstream_MovedTreeKeepsLiteralLinks:
 
     if (state.stepState == 7)
     {
-        auto* task        = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
+        auto* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
         const auto prompt = TryGetConflictPromptCopy(task);
         if (! prompt.has_value())
         {
@@ -1756,8 +1776,10 @@ case SelfTestState::Step::Fairstream_MovedTreeKeepsLiteralLinks:
         {
             return false;
         }
-        if (FAILED(completed->second.hr) || ! linkNames(copyDstLink, copySrcTarget) || ! FileSizeEquals(copyDstTarget / L"payload.bin", 5 * 1024) ||
-            ! FileSizeEquals(copyDstTargetCollision, 2 * 1024) || ! FileSizeEquals(copySrcTarget / L"payload.bin", 5 * 1024) ||
+        if (FAILED(completed->second.hr) || ! linkNames(copyDstLink, copySrcTarget) ||
+            ! FileSizeEquals(copyDstTarget / L"payload.bin", 5 * 1024) ||
+            ! FileSizeEquals(copyDstTargetCollision, 2 * 1024) ||
+            ! FileSizeEquals(copySrcTarget / L"payload.bin", 5 * 1024) ||
             GetFileAttributesW(copySrcLink.c_str()) == INVALID_FILE_ATTRIBUTES)
         {
             Fail(std::format(L"Literal-link Local Copy did not preserve the source and keep the link's stored text beside the Keep Both target: hr=0x{:08X}.",
@@ -1778,7 +1800,8 @@ case SelfTestState::Step::Fairstream_MovedTreeKeepsLiteralLinks:
     if (state.stepState == 9)
     {
         // No link queue, no 4,096-entry link ceiling: a wide tree of junctions copies whole.
-        if (! RecreateEmptyDirectory(wideSrcRoot) || ! RecreateEmptyDirectory(wideDstRoot) || ! WriteTestFile(wideTarget / L"payload.bin", 1 * 1024))
+        if (! RecreateEmptyDirectory(wideSrcRoot) || ! RecreateEmptyDirectory(wideDstRoot) ||
+            ! WriteTestFile(wideTarget / L"payload.bin", 1 * 1024))
         {
             Fail(L"Literal-link wide Copy test failed to seed its source tree.");
             return true;
@@ -1793,17 +1816,17 @@ case SelfTestState::Step::Fairstream_MovedTreeKeepsLiteralLinks:
         }
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {wideSrcTree},
-                                                                 wideDstRoot,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {wideSrcTree},
+                                                 wideDstRoot,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             Fail(L"Literal-link wide Copy test failed to start the task.");
@@ -1848,8 +1871,12 @@ case SelfTestState::Step::Fairstream_MovedTreeKeepsLiteralLinks:
                              sampledLiteral ? 1 : 0));
             return true;
         }
-        Debug::Perf::Emit(
-            L"FileOps.SelfTest.FairstreamCopyWideLiteralLinks", L"junctions=4200 linkQueue=none", kWideLinkCount, copiedLinks, 0, completed->second.hr);
+        Debug::Perf::Emit(L"FileOps.SelfTest.FairstreamCopyWideLiteralLinks",
+                          L"junctions=4200 linkQueue=none",
+                          kWideLinkCount,
+                          copiedLinks,
+                          0,
+                          completed->second.hr);
         state.taskA.reset();
         NextStep(state, SelfTestState::Step::Fairstream_CrossFsConcurrentMoveUsesBridge);
         return false;
@@ -1866,17 +1893,15 @@ case SelfTestState::Step::Fairstream_CrossFsConcurrentMoveUsesBridge:
         return true;
     }
 
-    const std::filesystem::path localDir  = state.tempRoot / L"fairstream-crossfs-src";
+    const std::filesystem::path localDir = state.tempRoot / L"fairstream-crossfs-src";
     const std::filesystem::path returnDir = state.tempRoot / L"fairstream-crossfs-return";
-    const std::filesystem::path refDir    = state.tempRoot / L"fairstream-crossfs-ref";
-    const std::wstring dummyRoot          = L"/fairstream-crossfs-move";
+    const std::filesystem::path refDir = state.tempRoot / L"fairstream-crossfs-ref";
+    const std::wstring dummyRoot = L"/fairstream-crossfs-move";
 
     if (state.stepState == 0)
     {
         // R3-2: this case covers Copy-only Move into a destination without content proof.
-        static_cast<void>(SetPluginConfiguration(
-            state.infoDummy.get(),
-            R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0","writerProof":false})json"));
+        static_cast<void>(SetPluginConfiguration(state.infoDummy.get(), R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0","writerProof":false})json"));
         if (! RecreateEmptyDirectory(localDir) || ! RecreateEmptyDirectory(returnDir) || ! RecreateEmptyDirectory(refDir))
         {
             Fail(L"Cross-FS concurrent move test failed to reset directories.");
@@ -1909,19 +1934,19 @@ case SelfTestState::Step::Fairstream_CrossFsConcurrentMoveUsesBridge:
         // Two items + PerItem mode drives the concurrent path. With no qualified bound-delete
         // strategy, the admitted Move must use CopyOnly and retain both source objects.
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_MOVE,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {localDir / L"m1.bin", localDir / L"m2.bin"},
-                                                                 std::filesystem::path(dummyRoot),
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                 false,
-                                                                 state.fsDummy);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_MOVE,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {localDir / L"m1.bin", localDir / L"m2.bin"},
+                                                 std::filesystem::path(dummyRoot),
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsDummy);
         if (! state.taskA.has_value())
         {
             Fail(L"Cross-FS concurrent move test failed to start the outbound move task.");
@@ -1942,7 +1967,8 @@ case SelfTestState::Step::Fairstream_CrossFsConcurrentMoveUsesBridge:
 
         if (completed->second.hr != S_FALSE)
         {
-            Fail(std::format(L"Cross-FS concurrent outbound Move expected CopyOnly S_FALSE, got 0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
+            Fail(std::format(L"Cross-FS concurrent outbound Move expected CopyOnly S_FALSE, got 0x{:08X}.",
+                             static_cast<unsigned long>(completed->second.hr)));
             return true;
         }
 
@@ -1953,19 +1979,19 @@ case SelfTestState::Step::Fairstream_CrossFsConcurrentMoveUsesBridge:
         }
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskB                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_MOVE,
-                                                                 FolderWindow::Pane::Right,
-                                                                 FolderWindow::Pane::Left,
-                                                                 state.fsDummy,
-                                                                 {std::filesystem::path(dummyRoot) / L"m1.bin", std::filesystem::path(dummyRoot) / L"m2.bin"},
-                                                                 returnDir,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                 false,
-                                                                 state.fsLocal);
+        state.taskB = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_MOVE,
+                                                 FolderWindow::Pane::Right,
+                                                 FolderWindow::Pane::Left,
+                                                 state.fsDummy,
+                                                 {std::filesystem::path(dummyRoot) / L"m1.bin", std::filesystem::path(dummyRoot) / L"m2.bin"},
+                                                 returnDir,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsLocal);
         if (! state.taskB.has_value())
         {
             Fail(L"Cross-FS concurrent move test failed to start the return move task.");
@@ -1986,7 +2012,8 @@ case SelfTestState::Step::Fairstream_CrossFsConcurrentMoveUsesBridge:
 
         if (completed->second.hr != S_FALSE)
         {
-            Fail(std::format(L"Cross-FS concurrent return Move expected CopyOnly S_FALSE, got 0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
+            Fail(std::format(L"Cross-FS concurrent return Move expected CopyOnly S_FALSE, got 0x{:08X}.",
+                             static_cast<unsigned long>(completed->second.hr)));
             return true;
         }
 
@@ -2006,7 +2033,12 @@ case SelfTestState::Step::Fairstream_CrossFsConcurrentMoveUsesBridge:
             return true;
         }
 
-        Debug::Perf::Emit(L"FileOps.SelfTest.FairstreamCrossFsConcurrentMove", L"shape=2-item-copy-only-roundtrip-source-kept", 2, 2, 2, completed->second.hr);
+        Debug::Perf::Emit(L"FileOps.SelfTest.FairstreamCrossFsConcurrentMove",
+                          L"shape=2-item-copy-only-roundtrip-source-kept",
+                          2,
+                          2,
+                          2,
+                          completed->second.hr);
         NextStep(state, SelfTestState::Step::Fairstream_RerunCopyIdenticalCollisionPrompts);
         return false;
     }
@@ -2015,7 +2047,7 @@ case SelfTestState::Step::Fairstream_CrossFsConcurrentMoveUsesBridge:
 }
 case SelfTestState::Step::Fairstream_RerunCopyIdenticalCollisionPrompts:
 {
-    using Task              = FolderWindow::FileOperationState::Task;
+    using Task = FolderWindow::FileOperationState::Task;
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 180'000ull))
     {
@@ -2025,8 +2057,8 @@ case SelfTestState::Step::Fairstream_RerunCopyIdenticalCollisionPrompts:
 
     const std::filesystem::path srcRoot = state.tempRoot / L"fairstream-rerun-src";
     const std::filesystem::path dstRoot = state.tempRoot / L"fairstream-rerun-dst";
-    const std::filesystem::path srcFoo  = srcRoot / L"Foo";
-    const std::filesystem::path dstFoo  = dstRoot / L"Foo";
+    const std::filesystem::path srcFoo = srcRoot / L"Foo";
+    const std::filesystem::path dstFoo = dstRoot / L"Foo";
     const std::filesystem::path srcFile = srcFoo / L"payload.bin";
     const std::filesystem::path dstFile = dstFoo / L"payload.bin";
 
@@ -2104,7 +2136,8 @@ case SelfTestState::Step::Fairstream_RerunCopyIdenticalCollisionPrompts:
             {
                 if (prompt->bucket != Task::ConflictBucket::RegularFileExists ||
                     NormalizePathForCompare(prompt->sourcePath) != NormalizePathForCompare(srcFile.wstring()) ||
-                    ! PromptHasAction(prompt.value(), Task::ConflictAction::Skip) || ! PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
+                    ! PromptHasAction(prompt.value(), Task::ConflictAction::Skip) ||
+                    ! PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
                 {
                     Fail(L"Re-run identical copy did not expose the exact file through the typed Exists conflict surface.");
                     return true;
@@ -2118,7 +2151,8 @@ case SelfTestState::Step::Fairstream_RerunCopyIdenticalCollisionPrompts:
         const auto completed = state.taskB.has_value() ? state.completedTasks.find(state.taskB.value()) : state.completedTasks.end();
         if (completed != state.completedTasks.end())
         {
-            Fail(std::format(L"Re-run identical copy completed without a conflict decision (hr=0x{:08X}).", static_cast<unsigned long>(completed->second.hr)));
+            Fail(std::format(L"Re-run identical copy completed without a conflict decision (hr=0x{:08X}).",
+                             static_cast<unsigned long>(completed->second.hr)));
             return true;
         }
         return false;
@@ -2139,7 +2173,8 @@ case SelfTestState::Step::Fairstream_RerunCopyIdenticalCollisionPrompts:
         }
         if (completed->second.conflictPromptCount != 1u || ! FilesEqualBytes(srcFile, dstFile))
         {
-            Fail(std::format(L"Re-run identical copy expected one prompt and unchanged bytes, saw {} prompt(s).", completed->second.conflictPromptCount));
+            Fail(std::format(L"Re-run identical copy expected one prompt and unchanged bytes, saw {} prompt(s).",
+                             completed->second.conflictPromptCount));
             return true;
         }
 
@@ -2181,7 +2216,8 @@ case SelfTestState::Step::Fairstream_RerunCopyIdenticalCollisionPrompts:
         const auto completed = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
         if (completed != state.completedTasks.end())
         {
-            Fail(std::format(L"Changed re-run copy completed without a conflict decision (hr=0x{:08X}).", static_cast<unsigned long>(completed->second.hr)));
+            Fail(std::format(L"Changed re-run copy completed without a conflict decision (hr=0x{:08X}).",
+                             static_cast<unsigned long>(completed->second.hr)));
             return true;
         }
         return false;
@@ -2197,7 +2233,8 @@ case SelfTestState::Step::Fairstream_RerunCopyIdenticalCollisionPrompts:
 
         if (FAILED(completed->second.hr))
         {
-            Fail(std::format(L"Changed re-run copy failed after explicit Overwrite: 0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
+            Fail(std::format(L"Changed re-run copy failed after explicit Overwrite: 0x{:08X}.",
+                             static_cast<unsigned long>(completed->second.hr)));
             return true;
         }
         if (completed->second.conflictPromptCount != 1u)
@@ -2225,7 +2262,7 @@ case SelfTestState::Step::Fairstream_RerunCopyIdenticalCollisionPrompts:
 }
 case SelfTestState::Step::Fairstream_MoveSameSizeCollisionPrompts:
 {
-    using Task              = FolderWindow::FileOperationState::Task;
+    using Task = FolderWindow::FileOperationState::Task;
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
@@ -2237,7 +2274,7 @@ case SelfTestState::Step::Fairstream_MoveSameSizeCollisionPrompts:
     const std::filesystem::path dstRoot = state.tempRoot / L"fairstream-same-size-collision-dst";
     const std::filesystem::path srcFile = srcRoot / L"collide.bin";
     const std::filesystem::path dstFile = dstRoot / L"collide.bin";
-    constexpr size_t kBytes             = 24ull * 1024ull;
+    constexpr size_t kBytes = 24ull * 1024ull;
 
     if (state.stepState == 0)
     {
@@ -2293,7 +2330,7 @@ case SelfTestState::Step::Fairstream_MoveSameSizeCollisionPrompts:
         }
 
         const unsigned char differentByte = 0xC3u;
-        DWORD written                     = 0;
+        DWORD written = 0;
         if (! WriteFile(destinationHandle.get(), &differentByte, 1u, &written, nullptr) || written != 1u)
         {
             Fail(L"Same-size collision test failed to mutate the destination bytes.");
@@ -2379,7 +2416,8 @@ case SelfTestState::Step::Fairstream_MoveSameSizeCollisionPrompts:
 
         if (completed->second.hr != S_FALSE)
         {
-            Fail(std::format(L"Same-size collision move expected S_FALSE after Skip, got 0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
+            Fail(std::format(L"Same-size collision move expected S_FALSE after Skip, got 0x{:08X}.",
+                             static_cast<unsigned long>(completed->second.hr)));
             return true;
         }
         if (completed->second.conflictPromptCount != 1u)
@@ -2520,17 +2558,17 @@ case SelfTestState::Step::Fairstream_ManagedMergeMovePreservesChildren:
         // No conflict answerer runs in this case: any prompt would hang the task and time the
         // case out, so completion alone proves the merge stayed prompt-free.
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_MOVE,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {srcTree},
-                                                                 dstRoot,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_MOVE,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {srcTree},
+                                                 dstRoot,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             Fail(L"Merge-move rename test failed to start the move task.");
@@ -2581,7 +2619,8 @@ case SelfTestState::Step::Fairstream_ManagedMergeMovePreservesChildren:
         {
             if (! FileSizeEquals(destinationFiles[index], kExpectedSizes[index]))
             {
-                Fail(std::format(L"Managed merge-move test: destination child {} is missing or has the wrong size.", destinationFiles[index].wstring()));
+                Fail(std::format(L"Managed merge-move test: destination child {} is missing or has the wrong size.",
+                                 destinationFiles[index].wstring()));
                 return true;
             }
         }
@@ -2600,7 +2639,7 @@ case SelfTestState::Step::Fairstream_ManagedMergeMovePreservesChildren:
 }
 case SelfTestState::Step::Fairstream_JunctionMergeTargetRequiresConsent:
 {
-    using Task              = FolderWindow::FileOperationState::Task;
+    using Task = FolderWindow::FileOperationState::Task;
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
@@ -2610,15 +2649,15 @@ case SelfTestState::Step::Fairstream_JunctionMergeTargetRequiresConsent:
 
     // The junction sits one level BELOW the top-level merge target: the host's top-level
     // pre-flight only probes the root, so the child merge in the engine is the only guard.
-    const std::filesystem::path srcRoot              = state.tempRoot / L"fairstream-junctionmerge-src";
-    const std::filesystem::path dstRoot              = state.tempRoot / L"fairstream-junctionmerge-dst";
-    const std::filesystem::path linkTarget           = state.tempRoot / L"fairstream-junctionmerge-target";
-    const std::filesystem::path srcPayload           = srcRoot / L"payload";
-    const std::filesystem::path dstPayload           = dstRoot / L"payload";
-    const std::filesystem::path sourceCollision      = srcPayload / L"z-collision.bin";
+    const std::filesystem::path srcRoot = state.tempRoot / L"fairstream-junctionmerge-src";
+    const std::filesystem::path dstRoot = state.tempRoot / L"fairstream-junctionmerge-dst";
+    const std::filesystem::path linkTarget = state.tempRoot / L"fairstream-junctionmerge-target";
+    const std::filesystem::path srcPayload = srcRoot / L"payload";
+    const std::filesystem::path dstPayload = dstRoot / L"payload";
+    const std::filesystem::path sourceCollision = srcPayload / L"z-collision.bin";
     const std::filesystem::path destinationCollision = dstPayload / L"z-collision.bin";
-    constexpr uint64_t kSourceCollisionBytes         = 2u * 1024u;
-    constexpr uint64_t kDestinationCollisionBytes    = 5u * 1024u;
+    constexpr uint64_t kSourceCollisionBytes = 2u * 1024u;
+    constexpr uint64_t kDestinationCollisionBytes = 5u * 1024u;
 
     if (state.stepState == 0)
     {
@@ -2628,7 +2667,8 @@ case SelfTestState::Step::Fairstream_JunctionMergeTargetRequiresConsent:
             return true;
         }
         if (! WriteTestFile(srcPayload / L"sub" / L"inner.bin", 4 * 1024) || ! WriteTestFile(linkTarget / L"sentinel.bin", 1024) ||
-            ! WriteTestFile(sourceCollision, kSourceCollisionBytes) || ! WriteTestFile(destinationCollision, kDestinationCollisionBytes))
+            ! WriteTestFile(sourceCollision, kSourceCollisionBytes) ||
+            ! WriteTestFile(destinationCollision, kDestinationCollisionBytes))
         {
             Fail(L"Junction-merge test failed to seed files.");
             return true;
@@ -2640,17 +2680,17 @@ case SelfTestState::Step::Fairstream_JunctionMergeTargetRequiresConsent:
         }
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {srcPayload},
-                                                                 dstRoot,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {srcPayload},
+                                                 dstRoot,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             Fail(L"Junction-merge test failed to start the copy task.");
@@ -2668,8 +2708,10 @@ case SelfTestState::Step::Fairstream_JunctionMergeTargetRequiresConsent:
         {
             if (prompt->bucket == Task::ConflictBucket::DestinationLink)
             {
-                if (state.stepState == 2 || ! OrdinalString::EqualsNoCasePath(std::filesystem::path(prompt->destinationPath), dstPayload / L"sub") ||
-                    ! PromptHasAction(prompt.value(), Task::ConflictAction::ReplaceLink) || PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
+                if (state.stepState == 2 ||
+                    ! OrdinalString::EqualsNoCasePath(std::filesystem::path(prompt->destinationPath), dstPayload / L"sub") ||
+                    ! PromptHasAction(prompt.value(), Task::ConflictAction::ReplaceLink) ||
+                    PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
                 {
                     Fail(L"Junction-merge test did not expose exactly one typed Replace Link decision for the destination junction.");
                     return true;
@@ -2680,7 +2722,8 @@ case SelfTestState::Step::Fairstream_JunctionMergeTargetRequiresConsent:
             }
             if (prompt->bucket == Task::ConflictBucket::RegularFileExists)
             {
-                if (state.stepState == 3 || ! OrdinalString::EqualsNoCasePath(std::filesystem::path(prompt->destinationPath), destinationCollision) ||
+                if (state.stepState == 3 ||
+                    ! OrdinalString::EqualsNoCasePath(std::filesystem::path(prompt->destinationPath), destinationCollision) ||
                     ! PromptHasAction(prompt.value(), Task::ConflictAction::Skip))
                 {
                     Fail(L"Junction-merge test did not expose exactly one independent child-file collision after the link decision.");
@@ -2712,11 +2755,12 @@ case SelfTestState::Step::Fairstream_JunctionMergeTargetRequiresConsent:
         }
 
         const HRESULT expectedHr = S_FALSE;
-        if (completed->second.hr != expectedHr || completed->second.conflictPromptCount != 2u || completed->second.conflictExpectedDestinationBoundCount < 1u ||
-            completed->second.conflictExpectedDestinationReturnedCount != 1u || completed->second.conflictExpectedDestinationUnavailableCount != 0u)
+        if (completed->second.hr != expectedHr || completed->second.conflictPromptCount != 2u ||
+            completed->second.conflictExpectedDestinationBoundCount < 1u ||
+            completed->second.conflictExpectedDestinationReturnedCount != 1u ||
+            completed->second.conflictExpectedDestinationUnavailableCount != 0u)
         {
-            Fail(std::format(L"Junction-merge test expected two independent prompts, one exact replacement receipt, and 0x{:08X}; prompts={} bound={} "
-                             L"returned={} unavailable={} hr=0x{:08X}.",
+            Fail(std::format(L"Junction-merge test expected two independent prompts, one exact replacement receipt, and 0x{:08X}; prompts={} bound={} returned={} unavailable={} hr=0x{:08X}.",
                              static_cast<unsigned long>(expectedHr),
                              completed->second.conflictPromptCount,
                              completed->second.conflictExpectedDestinationBoundCount,
@@ -2787,9 +2831,9 @@ case SelfTestState::Step::Fairstream_CopyIntoSelfAliasRejected:
 
     // dstAlias is a junction pointing INSIDE the source tree. Admission must remain streaming;
     // the no-follow identity/ancestor guard rejects it when this item reaches execution.
-    const std::filesystem::path root     = state.tempRoot / L"fairstream-selfcopy";
-    const std::filesystem::path srcTree  = root / L"tree";
-    const std::filesystem::path inside   = srcTree / L"inside";
+    const std::filesystem::path root = state.tempRoot / L"fairstream-selfcopy";
+    const std::filesystem::path srcTree = root / L"tree";
+    const std::filesystem::path inside = srcTree / L"inside";
     const std::filesystem::path dstAlias = root / L"alias";
 
     if (state.stepState == 0)
@@ -2811,17 +2855,17 @@ case SelfTestState::Step::Fairstream_CopyIntoSelfAliasRejected:
         }
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {srcTree},
-                                                                 dstAlias,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {srcTree},
+                                                 dstAlias,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             Fail(L"Copy-into-self alias test: streaming admission rejected the task before just-in-time identity discovery.");
@@ -2849,15 +2893,20 @@ case SelfTestState::Step::Fairstream_CopyIntoSelfAliasRejected:
         return true;
     }
 
-    Debug::Perf::Emit(L"FileOps.SelfTest.FairstreamCopyIntoSelfAlias", L"shape=junction-alias-into-source;jit=1", 1, 0, 0, completed->second.hr);
+    Debug::Perf::Emit(L"FileOps.SelfTest.FairstreamCopyIntoSelfAlias",
+                      L"shape=junction-alias-into-source;jit=1",
+                      1,
+                      0,
+                      0,
+                      completed->second.hr);
     NextStep(state, SelfTestState::Step::Fairstream_StorageKindProbed);
     return false;
 }
 case SelfTestState::Step::Fairstream_StorageKindProbed:
 {
-    const ULONGLONG nowTick                 = GetTickCount64();
+    const ULONGLONG nowTick = GetTickCount64();
     const auto clearAutoConcurrencyOverride = []() noexcept { SetFileOpsAutoConcurrencyOverrideForSelfTest(false, 1u, FILESYSTEM_STORAGE_UNKNOWN); };
-    const auto cancelStorageClampTask       = [&]() noexcept
+    const auto cancelStorageClampTask = [&]() noexcept
     {
         if (state.taskA.has_value())
         {
@@ -2876,21 +2925,21 @@ case SelfTestState::Step::Fairstream_StorageKindProbed:
         return true;
     }
 
-    const std::filesystem::path srcRoot   = state.tempRoot / L"fairstream-storage-clamp-src";
-    const std::filesystem::path dstRoot   = state.tempRoot / L"fairstream-storage-clamp-dst";
-    const std::filesystem::path srcDir    = srcRoot / L"payload";
+    const std::filesystem::path srcRoot = state.tempRoot / L"fairstream-storage-clamp-src";
+    const std::filesystem::path dstRoot = state.tempRoot / L"fairstream-storage-clamp-dst";
+    const std::filesystem::path srcDir = srcRoot / L"payload";
     const std::filesystem::path nestedDir = srcDir / L"nested";
-    constexpr int kFileCount              = 4;
-    constexpr size_t kFileBytes           = 2ull * 1024ull * 1024ull;
+    constexpr int kFileCount = 4;
+    constexpr size_t kFileBytes = 2ull * 1024ull * 1024ull;
 
     const auto fileName = [](int index) noexcept { return std::format(L"storage_clamp_{:02}.bin", index); };
 
     if (state.stepState == 0)
     {
         FileSystemStorageCharacteristics characteristics{};
-        characteristics.sizeBytes    = sizeof(characteristics);
+        characteristics.sizeBytes = sizeof(characteristics);
         const std::wstring probePath = state.tempRoot.wstring();
-        const HRESULT hr             = state.fsLocal->GetStorageCharacteristics(probePath.c_str(), &characteristics);
+        const HRESULT hr = state.fsLocal->GetStorageCharacteristics(probePath.c_str(), &characteristics);
         if (FAILED(hr))
         {
             Fail(std::format(L"Storage-kind probe failed: 0x{:08X}.", static_cast<unsigned long>(hr)));
@@ -3045,7 +3094,7 @@ case SelfTestState::Step::Fairstream_ParallelDeleteContinuesPastLockedChild:
         return true;
     }
 
-    const std::filesystem::path root       = state.tempRoot / L"fairstream-pardel-continue";
+    const std::filesystem::path root = state.tempRoot / L"fairstream-pardel-continue";
     const std::filesystem::path lockedFile = root / L"sub1" / L"locked.bin";
 
     if (state.stepState == 0)
@@ -3080,17 +3129,17 @@ case SelfTestState::Step::Fairstream_ParallelDeleteContinuesPastLockedChild:
         static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), R"json({"concurrencyMode":"manual","deleteMaxConcurrency":8})json"));
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_DELETE,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {root},
-                                                                 {},
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_DELETE,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {root},
+                                                 {},
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             state.holdOpenHandle.reset();
@@ -3159,9 +3208,9 @@ case SelfTestState::Step::Fairstream_ParallelDeleteContinuesPastLockedChild:
 case SelfTestState::Step::Fairstream_BridgePerFileConflictSkips:
 case SelfTestState::Step::Cinderstar_BridgeMovePerFileConflictSkipsParallel:
 {
-    using Task                            = FolderWindow::FileOperationState::Task;
-    const ULONGLONG nowTick               = GetTickCount64();
-    const bool parallelScenario           = state.step == SelfTestState::Step::Cinderstar_BridgeMovePerFileConflictSkipsParallel;
+    using Task = FolderWindow::FileOperationState::Task;
+    const ULONGLONG nowTick = GetTickCount64();
+    const bool parallelScenario = state.step == SelfTestState::Step::Cinderstar_BridgeMovePerFileConflictSkipsParallel;
     const std::wstring_view scenarioLabel = parallelScenario ? L"configured-parallel" : L"serial";
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
@@ -3173,16 +3222,16 @@ case SelfTestState::Step::Cinderstar_BridgeMovePerFileConflictSkipsParallel:
     // pre-existing local file. The host only sees the top-level directory item (no collision),
     // so the CHILD conflict is the bridge's job: it must raise a per-file conflict, honor Skip
     // without touching either colliding copy, move/delete the non-colliding sibling, and end PARTIAL.
-    const std::wstring dummyDir                      = parallelScenario ? L"/csm-p" : L"/csm-s";
-    const std::wstring dummyCollide                  = dummyDir + L"/collide.txt";
-    const std::wstring dummyKeep                     = dummyDir + L"/keep.txt";
-    const std::filesystem::path localDest            = state.tempRoot / (parallelScenario ? L"csm-p-d" : L"csm-s-d");
-    const std::filesystem::path destSubdir           = localDest / (parallelScenario ? L"csm-p" : L"csm-s");
-    const std::filesystem::path destCollide          = destSubdir / L"collide.txt";
-    const std::filesystem::path destKeep             = destSubdir / L"keep.txt";
-    constexpr size_t kSentinelBytes                  = 7u;
+    const std::wstring dummyDir = parallelScenario ? L"/csm-p" : L"/csm-s";
+    const std::wstring dummyCollide = dummyDir + L"/collide.txt";
+    const std::wstring dummyKeep = dummyDir + L"/keep.txt";
+    const std::filesystem::path localDest = state.tempRoot / (parallelScenario ? L"csm-p-d" : L"csm-s-d");
+    const std::filesystem::path destSubdir = localDest / (parallelScenario ? L"csm-p" : L"csm-s");
+    const std::filesystem::path destCollide = destSubdir / L"collide.txt";
+    const std::filesystem::path destKeep = destSubdir / L"keep.txt";
+    constexpr size_t kSentinelBytes = 7u;
     constexpr std::string_view kCollidingSourceBytes = "dummy-collide-content";
-    constexpr std::string_view kMovedSourceBytes     = "dummy-keep-content";
+    constexpr std::string_view kMovedSourceBytes = "dummy-keep-content";
 
     if (state.stepState == 0)
     {
@@ -3199,30 +3248,33 @@ case SelfTestState::Step::Cinderstar_BridgeMovePerFileConflictSkipsParallel:
         // exist yet (it is the proof a sibling still copies past the skipped child).
         if (! RecreateEmptyDirectory(destSubdir) || ! WriteTestFile(destCollide, kSentinelBytes))
         {
-            Fail(std::format(L"Cross-FS MOVE per-file conflict {} scenario failed to seed local child '{}'.", scenarioLabel, destCollide.native()));
+            Fail(std::format(L"Cross-FS MOVE per-file conflict {} scenario failed to seed local child '{}'.",
+                             scenarioLabel,
+                             destCollide.native()));
             return true;
         }
 
         // Exercise both scheduling implementations. The admitted request is CopyOnly, so neither
         // the serial nor parallel executor may remove a source entry.
-        static_cast<void>(SetPluginConfiguration(state.infoLocal.get(),
-                                                 parallelScenario ? R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":4})json"
-                                                                  : R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":1})json"));
+        static_cast<void>(SetPluginConfiguration(
+            state.infoLocal.get(),
+            parallelScenario ? R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":4})json"
+                             : R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":1})json"));
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_MOVE,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsDummy,
-                                                                 {std::filesystem::path(dummyDir)},
-                                                                 localDest,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                 false,
-                                                                 state.fsLocal);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_MOVE,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsDummy,
+                                                 {std::filesystem::path(dummyDir)},
+                                                 localDest,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsLocal);
         if (! state.taskA.has_value())
         {
             Fail(std::format(L"Cross-FS MOVE per-file conflict {} scenario failed to start.", scenarioLabel));
@@ -3269,7 +3321,7 @@ case SelfTestState::Step::Cinderstar_BridgeMovePerFileConflictSkipsParallel:
 
                 task->SubmitConflictDecision(Task::ConflictAction::Skip, false);
                 state.markerTick = nowTick;
-                state.stepState  = 2;
+                state.stepState = 2;
                 return false;
             }
         }
@@ -3305,7 +3357,7 @@ case SelfTestState::Step::Cinderstar_BridgeMovePerFileConflictSkipsParallel:
         }
 
         state.markerTick = 0;
-        state.stepState  = 3;
+        state.stepState = 3;
         return false;
     }
 
@@ -3331,13 +3383,15 @@ case SelfTestState::Step::Cinderstar_BridgeMovePerFileConflictSkipsParallel:
 
         if (completed->second.conflictPromptCount != 1u)
         {
-            Fail(std::format(
-                L"Cross-FS MOVE per-file conflict {} scenario expected exactly one prompt, got {}.", scenarioLabel, completed->second.conflictPromptCount));
+            Fail(std::format(L"Cross-FS MOVE per-file conflict {} scenario expected exactly one prompt, got {}.",
+                             scenarioLabel,
+                             completed->second.conflictPromptCount));
             return true;
         }
         if (completed->second.hr != S_FALSE)
         {
-            Fail(std::format(L"Bridge per-file conflict test expected S_FALSE after Skip, got 0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
+            Fail(std::format(L"Bridge per-file conflict test expected S_FALSE after Skip, got 0x{:08X}.",
+                             static_cast<unsigned long>(completed->second.hr)));
             return true;
         }
 
@@ -3416,7 +3470,7 @@ case SelfTestState::Step::Cinderstar_BridgeMovePerFileConflictSkipsParallel:
 }
 case SelfTestState::Step::Riptide_BridgeNestedDirVsFileSkipContinuesSiblings:
 {
-    using Task              = FolderWindow::FileOperationState::Task;
+    using Task = FolderWindow::FileOperationState::Task;
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
@@ -3424,15 +3478,15 @@ case SelfTestState::Step::Riptide_BridgeNestedDirVsFileSkipContinuesSiblings:
         return true;
     }
 
-    const std::wstring dummyRoot             = L"/riptide-bridge-dir-file-skip-src";
-    const std::wstring dummyBlockedDir       = dummyRoot + L"/blocked";
-    const std::wstring dummyBlockedChild     = dummyBlockedDir + L"/inside.txt";
-    const std::wstring dummySibling          = dummyRoot + L"/sibling.txt";
-    const std::filesystem::path localDest    = state.tempRoot / L"riptide-bridge-dir-file-skip-dst";
-    const std::filesystem::path destRoot     = localDest / L"riptide-bridge-dir-file-skip-src";
-    const std::filesystem::path destBlocker  = destRoot / L"blocked";
-    const std::filesystem::path destSibling  = destRoot / L"sibling.txt";
-    constexpr size_t kBlockerBytes           = 77u;
+    const std::wstring dummyRoot = L"/riptide-bridge-dir-file-skip-src";
+    const std::wstring dummyBlockedDir = dummyRoot + L"/blocked";
+    const std::wstring dummyBlockedChild = dummyBlockedDir + L"/inside.txt";
+    const std::wstring dummySibling = dummyRoot + L"/sibling.txt";
+    const std::filesystem::path localDest = state.tempRoot / L"riptide-bridge-dir-file-skip-dst";
+    const std::filesystem::path destRoot = localDest / L"riptide-bridge-dir-file-skip-src";
+    const std::filesystem::path destBlocker = destRoot / L"blocked";
+    const std::filesystem::path destSibling = destRoot / L"sibling.txt";
+    constexpr size_t kBlockerBytes = 77u;
     constexpr std::string_view kSiblingBytes = "sibling-ok";
 
     if (state.stepState == 0)
@@ -3457,19 +3511,19 @@ case SelfTestState::Step::Riptide_BridgeNestedDirVsFileSkipContinuesSiblings:
         static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":1})json"));
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsDummy,
-                                                                 {std::filesystem::path(dummyRoot)},
-                                                                 localDest,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                 false,
-                                                                 state.fsLocal);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsDummy,
+                                                 {std::filesystem::path(dummyRoot)},
+                                                 localDest,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsLocal);
         if (! state.taskA.has_value())
         {
             Fail(L"Riptide bridge dir-vs-file test failed to start the cross-FS copy.");
@@ -3486,13 +3540,13 @@ case SelfTestState::Step::Riptide_BridgeNestedDirVsFileSkipContinuesSiblings:
         {
             if (const auto prompt = TryGetConflictPromptCopy(task); prompt.has_value())
             {
-                if (prompt->bucket != Task::ConflictBucket::TypeMismatch || PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
+                if (prompt->bucket != Task::ConflictBucket::TypeMismatch ||
+                    PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
                 {
-                    Fail(
-                        std::format(L"Riptide bridge dir-vs-file test expected TypeMismatch without Overwrite, got bucket={} status=0x{:08X} destination='{}'.",
-                                    static_cast<int>(prompt->bucket),
-                                    static_cast<unsigned long>(prompt->status),
-                                    prompt->destinationPath));
+                    Fail(std::format(L"Riptide bridge dir-vs-file test expected TypeMismatch without Overwrite, got bucket={} status=0x{:08X} destination='{}'.",
+                                     static_cast<int>(prompt->bucket),
+                                     static_cast<unsigned long>(prompt->status),
+                                     prompt->destinationPath));
                     return true;
                 }
 
@@ -3540,7 +3594,7 @@ case SelfTestState::Step::Riptide_BridgeNestedDirVsFileSkipContinuesSiblings:
         }
 
         state.markerTick = 0;
-        state.stepState  = 3;
+        state.stepState = 3;
         return false;
     }
 
@@ -3566,7 +3620,8 @@ case SelfTestState::Step::Riptide_BridgeNestedDirVsFileSkipContinuesSiblings:
 
         if (completed->second.hr != S_FALSE)
         {
-            Fail(std::format(L"Riptide bridge dir-vs-file test expected S_FALSE after Skip, got 0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
+            Fail(std::format(L"Riptide bridge dir-vs-file test expected S_FALSE after Skip, got 0x{:08X}.",
+                             static_cast<unsigned long>(completed->second.hr)));
             return true;
         }
         if (completed->second.sourceItemResults.size() != 1u || ! completed->second.sourceItemResults.front().has_value() ||
@@ -3598,15 +3653,15 @@ case SelfTestState::Step::Riptide_BridgeNestedDirVsFileSkipContinuesSiblings:
 }
 case SelfTestState::Step::Riptide_BridgeDirectoryOverReadOnlyFileIsTypeMismatch:
 {
-    using Task                               = FolderWindow::FileOperationState::Task;
-    const ULONGLONG nowTick                  = GetTickCount64();
-    const std::wstring dummyRoot             = L"/riptide-bridge-readonly-dir-src";
-    const std::wstring dummyChild            = dummyRoot + L"/child.txt";
-    const std::filesystem::path localDest    = state.tempRoot / L"riptide-bridge-readonly-dir-dst";
+    using Task = FolderWindow::FileOperationState::Task;
+    const ULONGLONG nowTick = GetTickCount64();
+    const std::wstring dummyRoot = L"/riptide-bridge-readonly-dir-src";
+    const std::wstring dummyChild = dummyRoot + L"/child.txt";
+    const std::filesystem::path localDest = state.tempRoot / L"riptide-bridge-readonly-dir-dst";
     const std::filesystem::path readOnlyPath = localDest / L"riptide-bridge-readonly-dir-src";
     const std::filesystem::path keepBothPath = localDest / L"riptide-bridge-readonly-dir-src (2)";
-    const std::filesystem::path copiedChild  = keepBothPath / L"child.txt";
-    constexpr std::string_view kChildBytes   = "readonly-child";
+    const std::filesystem::path copiedChild = keepBothPath / L"child.txt";
+    constexpr std::string_view kChildBytes = "readonly-child";
 
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
@@ -3640,19 +3695,19 @@ case SelfTestState::Step::Riptide_BridgeDirectoryOverReadOnlyFileIsTypeMismatch:
         static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":1})json"));
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsDummy,
-                                                                 {std::filesystem::path(dummyRoot)},
-                                                                 localDest,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                 false,
-                                                                 state.fsLocal);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsDummy,
+                                                 {std::filesystem::path(dummyRoot)},
+                                                 localDest,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsLocal);
         if (! state.taskA.has_value())
         {
             static_cast<void>(SetFileAttributesW(readOnlyPath.c_str(), FILE_ATTRIBUTE_NORMAL));
@@ -3670,15 +3725,17 @@ case SelfTestState::Step::Riptide_BridgeDirectoryOverReadOnlyFileIsTypeMismatch:
         {
             if (const auto prompt = TryGetConflictPromptCopy(task); prompt.has_value())
             {
-                if (prompt->bucket != Task::ConflictBucket::TypeMismatch || ! PromptHasAction(prompt.value(), Task::ConflictAction::KeepBoth) ||
-                    PromptHasAction(prompt.value(), Task::ConflictAction::ReplaceReadOnly) || PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
+                if (prompt->bucket != Task::ConflictBucket::TypeMismatch ||
+                    ! PromptHasAction(prompt.value(), Task::ConflictAction::KeepBoth) ||
+                    PromptHasAction(prompt.value(), Task::ConflictAction::ReplaceReadOnly) ||
+                    PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
                 {
                     static_cast<void>(SetFileAttributesW(readOnlyPath.c_str(), FILE_ATTRIBUTE_NORMAL));
-                    Fail(std::format(L"Riptide bridge read-only directory test expected TypeMismatch/Keep Both without replacement actions, got bucket={} "
-                                     L"status=0x{:08X} destination='{}'.",
-                                     static_cast<int>(prompt->bucket),
-                                     static_cast<unsigned long>(prompt->status),
-                                     prompt->destinationPath));
+                    Fail(
+                        std::format(L"Riptide bridge read-only directory test expected TypeMismatch/Keep Both without replacement actions, got bucket={} status=0x{:08X} destination='{}'.",
+                                    static_cast<int>(prompt->bucket),
+                                    static_cast<unsigned long>(prompt->status),
+                                    prompt->destinationPath));
                     return true;
                 }
 
@@ -3692,7 +3749,7 @@ case SelfTestState::Step::Riptide_BridgeDirectoryOverReadOnlyFileIsTypeMismatch:
 
                 task->SubmitConflictDecision(Task::ConflictAction::KeepBoth, false);
                 state.markerTick = nowTick;
-                state.stepState  = 2;
+                state.stepState = 2;
                 return false;
             }
         }
@@ -3730,7 +3787,7 @@ case SelfTestState::Step::Riptide_BridgeDirectoryOverReadOnlyFileIsTypeMismatch:
         }
 
         state.markerTick = 0;
-        state.stepState  = 3;
+        state.stepState = 3;
         return false;
     }
 
@@ -3741,10 +3798,11 @@ case SelfTestState::Step::Riptide_BridgeDirectoryOverReadOnlyFileIsTypeMismatch:
             if (const auto prompt = TryGetConflictPromptCopy(task); prompt.has_value())
             {
                 static_cast<void>(SetFileAttributesW(readOnlyPath.c_str(), FILE_ATTRIBUTE_NORMAL));
-                Fail(std::format(L"Riptide bridge read-only directory test raised a second prompt after Keep Both: bucket={} status=0x{:08X} destination='{}'.",
-                                 static_cast<int>(prompt->bucket),
-                                 static_cast<unsigned long>(prompt->status),
-                                 prompt->destinationPath));
+                Fail(std::format(
+                    L"Riptide bridge read-only directory test raised a second prompt after Keep Both: bucket={} status=0x{:08X} destination='{}'.",
+                    static_cast<int>(prompt->bucket),
+                    static_cast<unsigned long>(prompt->status),
+                    prompt->destinationPath));
                 return true;
             }
         }
@@ -3786,15 +3844,15 @@ case SelfTestState::Step::Riptide_BridgeDirectoryOverReadOnlyFileIsTypeMismatch:
 }
 case SelfTestState::Step::Riptide_BridgeCreateDirectoryRaceExistingFilePromptsPartial:
 {
-    using Task                              = FolderWindow::FileOperationState::Task;
-    const ULONGLONG nowTick                 = GetTickCount64();
-    const std::wstring dummyRoot            = L"/riptide-bridge-create-race-src";
-    const std::wstring dummyChild           = dummyRoot + L"/child.txt";
-    const std::filesystem::path localDest   = state.tempRoot / L"riptide-bridge-create-race-dst";
-    const std::filesystem::path racedPath   = localDest / L"riptide-bridge-create-race-src";
+    using Task = FolderWindow::FileOperationState::Task;
+    const ULONGLONG nowTick = GetTickCount64();
+    const std::wstring dummyRoot = L"/riptide-bridge-create-race-src";
+    const std::wstring dummyChild = dummyRoot + L"/child.txt";
+    const std::filesystem::path localDest = state.tempRoot / L"riptide-bridge-create-race-dst";
+    const std::filesystem::path racedPath = localDest / L"riptide-bridge-create-race-src";
     const std::filesystem::path copiedChild = racedPath / L"child.txt";
-    constexpr std::string_view kChildBytes  = "race-child";
-    constexpr const wchar_t* kRaceEnv       = L"REDSALAMANDER_FILEOPS_BRIDGE_CREATE_DIRECTORY_RACE_PATH";
+    constexpr std::string_view kChildBytes = "race-child";
+    constexpr const wchar_t* kRaceEnv = L"REDSALAMANDER_FILEOPS_BRIDGE_CREATE_DIRECTORY_RACE_PATH";
 
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
@@ -3824,19 +3882,19 @@ case SelfTestState::Step::Riptide_BridgeCreateDirectoryRaceExistingFilePromptsPa
         static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":1})json"));
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsDummy,
-                                                                 {std::filesystem::path(dummyRoot)},
-                                                                 localDest,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                 false,
-                                                                 state.fsLocal);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsDummy,
+                                                 {std::filesystem::path(dummyRoot)},
+                                                 localDest,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsLocal);
         if (! state.taskA.has_value())
         {
             static_cast<void>(SetEnvironmentVariableW(kRaceEnv, nullptr));
@@ -3855,13 +3913,13 @@ case SelfTestState::Step::Riptide_BridgeCreateDirectoryRaceExistingFilePromptsPa
             if (const auto prompt = TryGetConflictPromptCopy(task); prompt.has_value())
             {
                 static_cast<void>(SetEnvironmentVariableW(kRaceEnv, nullptr));
-                if (prompt->bucket != Task::ConflictBucket::TypeMismatch || PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
+                if (prompt->bucket != Task::ConflictBucket::TypeMismatch ||
+                    PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
                 {
-                    Fail(std::format(
-                        L"Riptide bridge create-directory race test expected TypeMismatch without Overwrite, got bucket={} status=0x{:08X} destination='{}'.",
-                        static_cast<int>(prompt->bucket),
-                        static_cast<unsigned long>(prompt->status),
-                        prompt->destinationPath));
+                    Fail(std::format(L"Riptide bridge create-directory race test expected TypeMismatch without Overwrite, got bucket={} status=0x{:08X} destination='{}'.",
+                                     static_cast<int>(prompt->bucket),
+                                     static_cast<unsigned long>(prompt->status),
+                                     prompt->destinationPath));
                     return true;
                 }
                 if (! EqualsIgnoreCase(prompt->destinationPath, racedPath.wstring()))
@@ -3873,7 +3931,7 @@ case SelfTestState::Step::Riptide_BridgeCreateDirectoryRaceExistingFilePromptsPa
 
                 task->SubmitConflictDecision(Task::ConflictAction::Skip, false);
                 state.markerTick = nowTick;
-                state.stepState  = 2;
+                state.stepState = 2;
                 return false;
             }
         }
@@ -3911,7 +3969,7 @@ case SelfTestState::Step::Riptide_BridgeCreateDirectoryRaceExistingFilePromptsPa
         }
 
         state.markerTick = 0;
-        state.stepState  = 3;
+        state.stepState = 3;
         return false;
     }
 
@@ -3977,20 +4035,20 @@ case SelfTestState::Step::Fairstream_SaturationConcurrentCopiesMakeProgress:
         return true;
     }
 
-    const std::filesystem::path srcRoot         = state.tempRoot / L"fairstream-saturation-src";
-    const std::filesystem::path dstRoot         = state.tempRoot / L"fairstream-saturation-dst";
-    constexpr unsigned int kTreeCount           = 4u; // distinct top-level dirs => distinct copy jobs
-    constexpr unsigned int kFilesPerTree        = 32u;
+    const std::filesystem::path srcRoot = state.tempRoot / L"fairstream-saturation-src";
+    const std::filesystem::path dstRoot = state.tempRoot / L"fairstream-saturation-dst";
+    constexpr unsigned int kTreeCount = 4u; // distinct top-level dirs => distinct copy jobs
+    constexpr unsigned int kFilesPerTree = 32u;
     constexpr unsigned int kExpectedConcurrency = 4u;
-    constexpr size_t kFileBytes                 = 64ull * 1024ull;
+    constexpr size_t kFileBytes = 64ull * 1024ull;
 
-    const auto treeName                   = [](unsigned int index) { return std::format(L"tree{}", index); };
-    const auto fileName                   = [](unsigned int index) { return std::format(L"file{}.bin", index); };
+    const auto treeName = [](unsigned int index) { return std::format(L"tree{}", index); };
+    const auto fileName = [](unsigned int index) { return std::format(L"file{}.bin", index); };
     const auto countDistinctInFlightTrees = [&](const FileOperationsPopupInternal::TaskSnapshot& snapshot)
     {
         std::array<bool, kTreeCount> seenTrees{};
         size_t distinctTrees = 0;
-        const size_t count   = std::min(snapshot.inFlightFileCount, snapshot.inFlightFiles.size());
+        const size_t count = std::min(snapshot.inFlightFileCount, snapshot.inFlightFiles.size());
         for (size_t i = 0; i < count; ++i)
         {
             const std::wstring& sourcePath = snapshot.inFlightFiles[i].sourcePath;
@@ -4016,7 +4074,7 @@ case SelfTestState::Step::Fairstream_SaturationConcurrentCopiesMakeProgress:
 
         std::vector<PerfMetricSample> dispatchMetrics;
         static_cast<void>(TryReadPerfMetricSamples("FileOps.CopyRecursiveParallel.WorkItemDispatches", dispatchMetrics));
-        state.fairstreamSaturationDispatchMetricBaseline   = dispatchMetrics.size();
+        state.fairstreamSaturationDispatchMetricBaseline = dispatchMetrics.size();
         state.fairstreamSaturationMaxDistinctInFlightTrees = 0;
 
         // Pin local concurrency so the dispatch proof has a stable denominator: each recursive
@@ -4046,17 +4104,17 @@ case SelfTestState::Step::Fairstream_SaturationConcurrentCopiesMakeProgress:
         }
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 std::move(sources),
-                                                                 dstRoot,
-                                                                 flags,
-                                                                 false,
-                                                                 1ull * 1024ull * 1024ull,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 std::move(sources),
+                                                 dstRoot,
+                                                 flags,
+                                                 false,
+                                                 1ull * 1024ull * 1024ull,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             Fail(L"Saturation test failed to start the concurrent directory copy.");
@@ -4172,11 +4230,11 @@ case SelfTestState::Step::Fairstream_DiscoveryAheadOverlapsTransfer:
     const std::filesystem::path srcRoot = state.tempRoot / L"fairstream-earlyadmit-src";
     const std::filesystem::path dstRoot = state.tempRoot / L"fairstream-earlyadmit-dst";
     // A wide tree makes producer/consumer overlap deterministic while modest files keep the run quick.
-    constexpr unsigned int kDirs        = 16u;
+    constexpr unsigned int kDirs = 16u;
     constexpr unsigned int kFilesPerDir = 16u;
-    constexpr size_t kFileBytes         = 8u * 1024u;
+    constexpr size_t kFileBytes = 8u * 1024u;
 
-    const auto dirName  = [](unsigned int i) noexcept { return std::format(L"d{}", i); };
+    const auto dirName = [](unsigned int i) noexcept { return std::format(L"d{}", i); };
     const auto fileName = [](unsigned int i) noexcept { return std::format(L"f{}.bin", i); };
 
     if (state.stepState == 0)
@@ -4213,17 +4271,17 @@ case SelfTestState::Step::Fairstream_DiscoveryAheadOverlapsTransfer:
         }
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {srcRoot},
-                                                                 dstRoot,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {srcRoot},
+                                                 dstRoot,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             if (! state.localConfigOriginal.empty())
@@ -4277,7 +4335,7 @@ case SelfTestState::Step::Fairstream_DiscoveryAheadOverlapsTransfer:
 
     // Correctness: every file of every directory copied intact (no item dropped during the overlap).
     // Copying the source directory into dstRoot nests it under its own leaf name.
-    const std::wstring srcLeaf   = srcRoot.filename().wstring();
+    const std::wstring srcLeaf = srcRoot.filename().wstring();
     const uint64_t expectedBytes = static_cast<uint64_t>(kDirs) * kFilesPerDir * kFileBytes;
     for (unsigned int d = 0; d < kDirs; ++d)
     {
@@ -4296,17 +4354,22 @@ case SelfTestState::Step::Fairstream_DiscoveryAheadOverlapsTransfer:
     if (completed->second.progressCompletedBytes < expectedBytes || completed->second.discoveredTotalBytes != expectedBytes ||
         completed->second.discoveredFiles != static_cast<unsigned long>(kDirs * kFilesPerDir))
     {
-        Fail(std::format(L"Discovery totals did not reconcile: completedBytes={} discoveredBytes={} discoveredFiles={} expectedBytes={} expectedFiles={}.",
-                         completed->second.progressCompletedBytes,
-                         completed->second.discoveredTotalBytes,
-                         completed->second.discoveredFiles,
-                         expectedBytes,
-                         kDirs * kFilesPerDir));
+        Fail(std::format(
+            L"Discovery totals did not reconcile: completedBytes={} discoveredBytes={} discoveredFiles={} expectedBytes={} expectedFiles={}.",
+            completed->second.progressCompletedBytes,
+            completed->second.discoveredTotalBytes,
+            completed->second.discoveredFiles,
+            expectedBytes,
+            kDirs * kFilesPerDir));
         return true;
     }
 
-    Debug::Perf::Emit(
-        L"FileOps.SelfTest.DiscoveryAheadOverlap", L"", completed->second.discoveryDurationUs, completed->second.discoveredTotalBytes, expectedBytes, S_OK);
+    Debug::Perf::Emit(L"FileOps.SelfTest.DiscoveryAheadOverlap",
+                      L"",
+                      completed->second.discoveryDurationUs,
+                      completed->second.discoveredTotalBytes,
+                      expectedBytes,
+                      S_OK);
     NextStep(state, SelfTestState::Step::Riptide_LiveFinishedSnapshotCarriesDiagnostics);
     return false;
 }
@@ -4334,7 +4397,7 @@ case SelfTestState::Step::Riptide_LiveFinishedSnapshotCarriesDiagnostics:
     // A task card is presented only when it is still running at the 500-ms reveal deadline; a
     // finished task is never revealed before its completion summary. Throttle a 4 MiB copy to
     // about two seconds so the row exists before the post-finished pause is observed.
-    constexpr size_t kFileBytes                        = 4u * 1024u * 1024u;
+    constexpr size_t kFileBytes                    = 4u * 1024u * 1024u;
     constexpr uint64_t kRevealSpeedLimitBytesPerSecond = 2ull * 1024ull * 1024ull;
 
     if (state.stepState == 0)
@@ -4357,16 +4420,16 @@ case SelfTestState::Step::Riptide_LiveFinishedSnapshotCarriesDiagnostics:
         SetFileOpsPostFinishedCompletionPauseForSelfTest(true);
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_ALLOW_OVERWRITE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {srcFile},
-                                                                 dstRoot,
-                                                                 flags,
-                                                                 false,
-                                                                 kRevealSpeedLimitBytesPerSecond);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {srcFile},
+                                                 dstRoot,
+                                                 flags,
+                                                 false,
+                                                 kRevealSpeedLimitBytesPerSecond);
         if (! state.taskA.has_value())
         {
             ReleaseFileOpsPostFinishedCompletionPauseForSelfTest();
@@ -4516,9 +4579,9 @@ case SelfTestState::Step::Riptide_BridgeSequentialContinueOnErrorCopiesSiblings:
         return true;
     }
 
-    const std::wstring dummyRoot          = L"/riptide-bridge-seq-coe-src";
+    const std::wstring dummyRoot = L"/riptide-bridge-seq-coe-src";
     const std::filesystem::path localDest = state.tempRoot / L"riptide-bridge-seq-coe-dst";
-    const std::filesystem::path destRoot  = localDest / L"riptide-bridge-seq-coe-src";
+    const std::filesystem::path destRoot = localDest / L"riptide-bridge-seq-coe-src";
     constexpr std::array<std::wstring_view, 4> kFileNames{{
         L"alpha.txt",
         L"bravo.txt",
@@ -4555,19 +4618,19 @@ case SelfTestState::Step::Riptide_BridgeSequentialContinueOnErrorCopiesSiblings:
         SetFileOpsBridgeFailNextFileCopiesForSelfTest(1);
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsDummy,
-                                                                 {std::filesystem::path(dummyRoot)},
-                                                                 localDest,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                 false,
-                                                                 state.fsLocal);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsDummy,
+                                                 {std::filesystem::path(dummyRoot)},
+                                                 localDest,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsLocal);
         if (! state.taskA.has_value())
         {
             SetFileOpsBridgeFailNextFileCopiesForSelfTest(0);
@@ -4645,15 +4708,15 @@ case SelfTestState::Step::Causeway_BridgeRejectsHostileChildNames:
         L"placeholder-06-long-safe-name.txt",
         L"placeholder-07-long-safe-name.txt",
     }};
-    constexpr std::wstring_view kValidSibling      = L"z-valid-sibling.txt";
-    constexpr std::string_view kPayload            = "causeway-hostile-child-name-payload";
-    const unsigned int scenario                    = static_cast<unsigned int>(state.stepState / 2);
-    const FileSystemOperation operation            = scenario == 0u ? FILESYSTEM_COPY : FILESYSTEM_MOVE;
-    const std::wstring rootLeaf                    = std::format(L"causeway-hostile-{}-src", scenario == 0u ? L"copy" : L"move");
-    const std::wstring dummyRoot                   = L"/" + rootLeaf;
-    const std::wstring dummyEscapeFile             = L"/escape.txt";
-    const std::filesystem::path localDest          = state.tempRoot / std::format(L"causeway-hostile-{}-dst", scenario == 0u ? L"copy" : L"move");
-    const std::filesystem::path destinationRoot    = localDest / rootLeaf;
+    constexpr std::wstring_view kValidSibling = L"z-valid-sibling.txt";
+    constexpr std::string_view kPayload        = "causeway-hostile-child-name-payload";
+    const unsigned int scenario                = static_cast<unsigned int>(state.stepState / 2);
+    const FileSystemOperation operation        = scenario == 0u ? FILESYSTEM_COPY : FILESYSTEM_MOVE;
+    const std::wstring rootLeaf                = std::format(L"causeway-hostile-{}-src", scenario == 0u ? L"copy" : L"move");
+    const std::wstring dummyRoot               = L"/" + rootLeaf;
+    const std::wstring dummyEscapeFile         = L"/escape.txt";
+    const std::filesystem::path localDest      = state.tempRoot / std::format(L"causeway-hostile-{}-dst", scenario == 0u ? L"copy" : L"move");
+    const std::filesystem::path destinationRoot = localDest / rootLeaf;
     const std::filesystem::path escapedDestination = localDest / L"escape.txt";
 
     if (scenario >= 2u)
@@ -4697,19 +4760,19 @@ case SelfTestState::Step::Causeway_BridgeRejectsHostileChildNames:
 
         SetFileOpsBridgeInjectHostileChildNamesForSelfTest(true);
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 operation,
-                                                                 FolderWindow::Pane::Right,
-                                                                 FolderWindow::Pane::Left,
-                                                                 state.fsDummy,
-                                                                 {std::filesystem::path(dummyRoot)},
-                                                                 localDest,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                 false,
-                                                                 state.fsLocal);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 operation,
+                                                 FolderWindow::Pane::Right,
+                                                 FolderWindow::Pane::Left,
+                                                 state.fsDummy,
+                                                 {std::filesystem::path(dummyRoot)},
+                                                 localDest,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsLocal);
         if (! state.taskA.has_value())
         {
             SetFileOpsBridgeInjectHostileChildNamesForSelfTest(false);
@@ -4765,15 +4828,15 @@ case SelfTestState::Step::Causeway_BridgeRejectsHostileChildNames:
 
     std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
     state.fileOps->CollectCompletedTasks(summaries);
-    const auto summary = std::find_if(
-        summaries.begin(), summaries.end(), [&](const auto& value) noexcept { return state.taskA.has_value() && value.taskId == state.taskA.value(); });
+    const auto summary = std::find_if(summaries.begin(), summaries.end(), [&](const auto& value) noexcept {
+        return state.taskA.has_value() && value.taskId == state.taskA.value();
+    });
     if (summary == summaries.end())
     {
         Fail(L"Causeway hostile-child-name test could not find its completed summary.");
         return true;
     }
-    const size_t rejectedNameCount =
-        static_cast<size_t>(std::count_if(summary->issueDiagnostics.begin(), summary->issueDiagnostics.end(), [](const auto& issue) noexcept {
+    const size_t rejectedNameCount = static_cast<size_t>(std::count_if(summary->issueDiagnostics.begin(), summary->issueDiagnostics.end(), [](const auto& issue) noexcept {
         return issue.category == L"bridge.source.invalidChildName";
     }));
     constexpr size_t kExpectedRejectedEntries = 7u; // Six invalid components plus the second name in the case-colliding pair.
@@ -4800,8 +4863,8 @@ case SelfTestState::Step::Causeway_BridgeRejectsHostileChildNames:
 }
 case SelfTestState::Step::Causeway_BridgeProviderOutputContracts:
 {
-    constexpr std::array<std::wstring_view, 5> kScenarioNames{
-        {L"read-overreport", L"premature-eof", L"write-underconsume", L"write-overreport", L"null-source-reader"}};
+    constexpr std::array<std::wstring_view, 5> kScenarioNames{{
+        L"read-overreport", L"premature-eof", L"write-underconsume", L"write-overreport", L"null-source-reader"}};
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
@@ -4821,9 +4884,9 @@ case SelfTestState::Step::Causeway_BridgeProviderOutputContracts:
         return false;
     }
 
-    const std::wstring dummyRoot               = L"/causeway-provider-contract-src";
-    const std::wstring dummyFile               = dummyRoot + L"/payload.bin";
-    const std::filesystem::path localDest      = state.tempRoot / std::format(L"causeway-provider-contract-{}", kScenarioNames[scenario]);
+    const std::wstring dummyRoot = L"/causeway-provider-contract-src";
+    const std::wstring dummyFile = dummyRoot + L"/payload.bin";
+    const std::filesystem::path localDest = state.tempRoot / std::format(L"causeway-provider-contract-{}", kScenarioNames[scenario]);
     constexpr std::string_view kSourceContents = "causeway-provider-contract-payload";
 
     const auto resetHooks = []() noexcept
@@ -4934,7 +4997,7 @@ case SelfTestState::Step::Causeway_BridgeSchedulingAndResourceContracts:
     constexpr uint64_t kBridgeBudgetCeilingBytes = 256ull * 1024ull * 1024ull;
     constexpr unsigned int kFilesPerDirectory    = 10u;
     constexpr unsigned int kDirectoryCount       = 2u;
-    const ULONGLONG nowTick                      = GetTickCount64();
+    const ULONGLONG nowTick                       = GetTickCount64();
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
         Fail(L"Causeway_BridgeSchedulingAndResourceContracts timed out.");
@@ -4974,10 +5037,10 @@ case SelfTestState::Step::Causeway_BridgeSchedulingAndResourceContracts:
         return false;
     }
 
-    const FileSystemOperation operation   = scenario == 0u ? FILESYSTEM_COPY : FILESYSTEM_MOVE;
-    const std::wstring rootLeaf           = std::format(L"causeway-resource-{}-src", scenario == 0u ? L"copy" : L"move");
-    const std::wstring dummyRoot          = L"/" + rootLeaf;
-    const std::wstring dummyNested        = dummyRoot + L"/nested";
+    const FileSystemOperation operation = scenario == 0u ? FILESYSTEM_COPY : FILESYSTEM_MOVE;
+    const std::wstring rootLeaf         = std::format(L"causeway-resource-{}-src", scenario == 0u ? L"copy" : L"move");
+    const std::wstring dummyRoot        = L"/" + rootLeaf;
+    const std::wstring dummyNested      = dummyRoot + L"/nested";
     const std::filesystem::path localDest = state.tempRoot / std::format(L"causeway-resource-{}-dst", scenario == 0u ? L"copy" : L"move");
 
     if (((state.stepState - 1u) % 2u) == 0u)
@@ -4991,7 +5054,8 @@ case SelfTestState::Step::Causeway_BridgeSchedulingAndResourceContracts:
             state.infoDummy.get(),
             R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":20,"streamChunkLatencyMs":50,"virtualSpeedLimit":"0"})json"));
 
-        const FileSystemFlags cleanupFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+        const FileSystemFlags cleanupFlags =
+            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
         static_cast<void>(state.fsDummy->DeleteItem(dummyRoot.c_str(), cleanupFlags, nullptr, nullptr, nullptr));
         if (! EnsureDummyFolderExists(state.fsDummy.get(), dummyRoot) || ! EnsureDummyFolderExists(state.fsDummy.get(), dummyNested) ||
             ! RecreateEmptyDirectory(localDest))
@@ -5013,19 +5077,19 @@ case SelfTestState::Step::Causeway_BridgeSchedulingAndResourceContracts:
 
         ResetFileOpsBridgeBufferBudgetPeakForSelfTest();
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 operation,
-                                                                 FolderWindow::Pane::Right,
-                                                                 FolderWindow::Pane::Left,
-                                                                 state.fsDummy,
-                                                                 {std::filesystem::path(dummyRoot)},
-                                                                 localDest,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                 false,
-                                                                 state.fsLocal);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 operation,
+                                                 FolderWindow::Pane::Right,
+                                                 FolderWindow::Pane::Left,
+                                                 state.fsDummy,
+                                                 {std::filesystem::path(dummyRoot)},
+                                                 localDest,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsLocal);
         if (! state.taskA.has_value())
         {
             Fail(L"Causeway scheduling/resource bridge operation did not start.");
@@ -5071,9 +5135,9 @@ case SelfTestState::Step::Causeway_BridgeSchedulingAndResourceContracts:
     if (scenario == 1u)
     {
         wil::com_ptr<IFileSystemIO> sourceIo;
-        const HRESULT ioHr             = state.fsDummy->QueryInterface(IID_PPV_ARGS(sourceIo.addressof()));
+        const HRESULT ioHr = state.fsDummy->QueryInterface(IID_PPV_ARGS(sourceIo.addressof()));
         unsigned long sourceAttributes = 0u;
-        const HRESULT sourceHr         = sourceIo ? sourceIo->GetAttributes(dummyRoot.c_str(), &sourceAttributes) : E_NOINTERFACE;
+        const HRESULT sourceHr = sourceIo ? sourceIo->GetAttributes(dummyRoot.c_str(), &sourceAttributes) : E_NOINTERFACE;
         if (FAILED(ioHr) || ! sourceIo || FAILED(sourceHr) || (sourceAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0u)
         {
             Fail(std::format(L"Causeway CopyOnly MOVE did not retain its source directory (QI=0x{:08X}, source=0x{:08X}).",
@@ -5091,7 +5155,12 @@ case SelfTestState::Step::Causeway_BridgeSchedulingAndResourceContracts:
     }
 
     const std::wstring_view operationName = scenario == 0u ? L"COPY" : L"MOVE";
-    Debug::Perf::Emit(L"FileOps.SelfTest.CausewayBridgeBufferPeakBytes", operationName, 0u, peakBudgetBytes, kBridgeBudgetCeilingBytes, completed->second.hr);
+    Debug::Perf::Emit(L"FileOps.SelfTest.CausewayBridgeBufferPeakBytes",
+                      operationName,
+                      0u,
+                      peakBudgetBytes,
+                      kBridgeBudgetCeilingBytes,
+                      completed->second.hr);
     Debug::Perf::Emit(L"FileOps.SelfTest.CausewaySourceDirectoryEnumerations",
                       operationName,
                       0u,
@@ -5138,7 +5207,8 @@ case SelfTestState::Step::Causeway_BridgeFileReparsePolicy:
         static_cast<void>(SetPluginConfiguration(
             state.infoDummy.get(),
             R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0"})json"));
-        const FileSystemFlags cleanupFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+        const FileSystemFlags cleanupFlags =
+            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
         static_cast<void>(state.fsDummy->DeleteItem(dummyRoot.c_str(), cleanupFlags, nullptr, nullptr, nullptr));
         if (! EnsureDummyFolderExists(state.fsDummy.get(), dummyRoot) ||
             ! DummyWriteTextFile(state.fsDummy.get(), dummyRoot + L"/" + std::wstring(kReparseFile), kPayload, true) ||
@@ -5153,19 +5223,19 @@ case SelfTestState::Step::Causeway_BridgeFileReparsePolicy:
         SetFileOpsBridgeReparsePolicyOverrideForSelfTest(scenario == 0u ? FileOpsBridgeReparsePolicyOverride::Skip
                                                                         : FileOpsBridgeReparsePolicyOverride::Preserve);
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Right,
-                                                                 FolderWindow::Pane::Left,
-                                                                 state.fsDummy,
-                                                                 {std::filesystem::path(dummyRoot)},
-                                                                 localDest,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                 false,
-                                                                 state.fsLocal);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Right,
+                                                 FolderWindow::Pane::Left,
+                                                 state.fsDummy,
+                                                 {std::filesystem::path(dummyRoot)},
+                                                 localDest,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsLocal);
         if (! state.taskA.has_value())
         {
             resetHooks();
@@ -5215,7 +5285,8 @@ case SelfTestState::Step::Causeway_BridgeFileReparsePolicy:
     }
 
     std::error_code ec;
-    if (std::filesystem::exists(copiedRoot / std::wstring(kReparseFile), ec) || ec || ! FileSizeEquals(copiedRoot / std::wstring(kValidFile), kPayload.size()))
+    if (std::filesystem::exists(copiedRoot / std::wstring(kReparseFile), ec) || ec ||
+        ! FileSizeEquals(copiedRoot / std::wstring(kValidFile), kPayload.size()))
     {
         Fail(L"Causeway file-reparse policy copied target bytes or failed to continue with the valid sibling.");
         return true;
@@ -5225,12 +5296,13 @@ case SelfTestState::Step::Causeway_BridgeFileReparsePolicy:
     {
         std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
         state.fileOps->CollectCompletedTasks(summaries);
-        const auto summary = std::find_if(
-            summaries.begin(), summaries.end(), [&](const auto& value) noexcept { return state.taskA.has_value() && value.taskId == state.taskA.value(); });
-        const bool sawUnsupported =
-            summary != summaries.end() && std::any_of(summary->issueDiagnostics.begin(), summary->issueDiagnostics.end(), [](const auto& issue) noexcept {
-            return issue.category == L"bridge.reparse.unsupported" && issue.status == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        const auto summary = std::find_if(summaries.begin(), summaries.end(), [&](const auto& value) noexcept {
+            return state.taskA.has_value() && value.taskId == state.taskA.value();
         });
+        const bool sawUnsupported = summary != summaries.end() &&
+                                    std::any_of(summary->issueDiagnostics.begin(), summary->issueDiagnostics.end(), [](const auto& issue) noexcept {
+                                        return issue.category == L"bridge.reparse.unsupported" && issue.status == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+                                    });
         if (! sawUnsupported)
         {
             Fail(L"Causeway file Preserve scenario did not retain the ERROR_NOT_SUPPORTED diagnostic.");
@@ -5288,8 +5360,8 @@ case SelfTestState::Step::Beeline_CopySkipLinksKeepsPlaceholders:
     if (state.stepState == 0u)
     {
         std::array<wchar_t, 32> fileSystemName{};
-        if (! GetVolumeInformationW(
-                state.tempRoot.root_path().c_str(), nullptr, 0u, nullptr, nullptr, nullptr, fileSystemName.data(), static_cast<DWORD>(fileSystemName.size())))
+        if (! GetVolumeInformationW(state.tempRoot.root_path().c_str(), nullptr, 0u, nullptr, nullptr, nullptr,
+                                   fileSystemName.data(), static_cast<DWORD>(fileSystemName.size())))
         {
             return skipCase(L"primary-filesystem-unavailable");
         }
@@ -5302,14 +5374,8 @@ case SelfTestState::Step::Beeline_CopySkipLinksKeepsPlaceholders:
                 return skipCase(reason);
             }
             state.fileOpsAlternateVolumeRoot = alternate.value();
-            if (! GetVolumeInformationW(alternate.value().root_path().c_str(),
-                                        nullptr,
-                                        0u,
-                                        nullptr,
-                                        nullptr,
-                                        nullptr,
-                                        fileSystemName.data(),
-                                        static_cast<DWORD>(fileSystemName.size())) ||
+            if (! GetVolumeInformationW(alternate.value().root_path().c_str(), nullptr, 0u, nullptr, nullptr, nullptr,
+                                       fileSystemName.data(), static_cast<DWORD>(fileSystemName.size())) ||
                 std::wstring_view(fileSystemName.data()) != L"NTFS")
             {
                 return skipCase(L"authorized-alternate-is-not-ntfs");
@@ -5318,12 +5384,12 @@ case SelfTestState::Step::Beeline_CopySkipLinksKeepsPlaceholders:
     }
     const std::filesystem::path srcRoot =
         (state.fileOpsAlternateVolumeRoot.empty() ? state.tempRoot : state.fileOpsAlternateVolumeRoot) / L"beeline-skip-links-src";
-    const std::filesystem::path srcTree     = srcRoot / L"tree";
+    const std::filesystem::path srcTree    = srcRoot / L"tree";
     const std::filesystem::path placeholder = srcTree / L"placeholder.bin";
-    const std::filesystem::path junction    = srcTree / L"link";
-    const std::filesystem::path linkTarget  = srcRoot / L"target";
-    const std::wstring dummyRoot            = L"/beeline-skip-links";
-    const std::wstring dummyTree            = dummyRoot + L"/tree";
+    const std::filesystem::path junction   = srcTree / L"link";
+    const std::filesystem::path linkTarget = srcRoot / L"target";
+    const std::wstring dummyRoot           = L"/beeline-skip-links";
+    const std::wstring dummyTree           = dummyRoot + L"/tree";
 
     if (state.stepState == 0u)
     {
@@ -5341,10 +5407,10 @@ case SelfTestState::Step::Beeline_CopySkipLinksKeepsPlaceholders:
         // Windows can disguise placeholders for legacy applications. Explicitly expose them
         // in this isolated selftest process (including worker threads) and the UI thread;
         // the WIL fixture owner restores both previous modes on every exit.
-        auto& fixture            = state.placeholderSyncRootStorage;
-        const HMODULE ntdll      = GetModuleHandleW(L"ntdll.dll");
+        auto& fixture = state.placeholderSyncRootStorage;
+        const HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
         const FARPROC setProcess = ntdll ? GetProcAddress(ntdll, "RtlSetProcessPlaceholderCompatibilityMode") : nullptr;
-        const FARPROC setThread  = ntdll ? GetProcAddress(ntdll, "RtlSetThreadPlaceholderCompatibilityMode") : nullptr;
+        const FARPROC setThread = ntdll ? GetProcAddress(ntdll, "RtlSetThreadPlaceholderCompatibilityMode") : nullptr;
         if (! setProcess || ! setThread)
         {
             return skipCase(L"placeholder-compatibility-api-unavailable");
@@ -5352,48 +5418,43 @@ case SelfTestState::Step::Beeline_CopySkipLinksKeepsPlaceholders:
 #pragma warning(push)
 #pragma warning(disable : 4191) // Exact documented NTAPI ABI; ntdll remains loaded for process lifetime.
         fixture.setProcessMode = reinterpret_cast<PlaceholderSyncRoot::SetCompatibilityModeFn>(setProcess);
-        fixture.setThreadMode  = reinterpret_cast<PlaceholderSyncRoot::SetCompatibilityModeFn>(setThread);
+        fixture.setThreadMode = reinterpret_cast<PlaceholderSyncRoot::SetCompatibilityModeFn>(setThread);
 #pragma warning(pop)
         state.placeholderSyncRoot.reset(&fixture);
         constexpr CHAR exposePlaceholders = 2; // PHCM_EXPOSE_PLACEHOLDERS (ntifs.h).
-        fixture.previousProcessMode       = fixture.setProcessMode(exposePlaceholders);
-        fixture.previousThreadMode        = fixture.setThreadMode(exposePlaceholders);
+        fixture.previousProcessMode = fixture.setProcessMode(exposePlaceholders);
+        fixture.previousThreadMode = fixture.setThreadMode(exposePlaceholders);
         if (fixture.previousProcessMode < 0 || fixture.previousThreadMode < 0)
         {
             Fail(L"Placeholder fixture could not expose native reparse metadata.");
             return true;
         }
-        Debug::Perf::Emit(L"FileOps.SelfTest.PlaceholderVisibility",
-                          L"mode=exposed;scope=fixture;restore=required",
-                          0u,
-                          static_cast<uint64_t>(fixture.previousProcessMode),
-                          static_cast<uint64_t>(fixture.previousThreadMode),
-                          S_OK);
+        Debug::Perf::Emit(L"FileOps.SelfTest.PlaceholderVisibility", L"mode=exposed;scope=fixture;restore=required", 0u,
+                          static_cast<uint64_t>(fixture.previousProcessMode), static_cast<uint64_t>(fixture.previousThreadMode), S_OK);
         CF_SYNC_REGISTRATION registration{};
         registration.StructSize      = sizeof(registration);
         registration.ProviderName    = L"RedSalamander FileOps selftest";
         registration.ProviderVersion = L"1";
         registration.ProviderId      = {0x3e5b50c5, 0xe92f, 0x49d4, {0xa2, 0x1d, 0x8d, 0x5e, 0x5e, 0x34, 0xbd, 0x71}};
         CF_SYNC_POLICIES policies{};
-        policies.StructSize                        = sizeof(policies);
-        policies.Hydration.Primary                 = CF_HYDRATION_POLICY_ALWAYS_FULL;
-        policies.Population.Primary                = CF_POPULATION_POLICY_ALWAYS_FULL;
+        policies.StructSize         = sizeof(policies);
+        policies.Hydration.Primary  = CF_HYDRATION_POLICY_ALWAYS_FULL;
+        policies.Population.Primary = CF_POPULATION_POLICY_ALWAYS_FULL;
         state.placeholderSyncRootStorage.path      = srcRoot;
         state.placeholderSyncRootStorage.cleanupHr = S_OK;
-        const HRESULT registerHr                   = CfRegisterSyncRoot(srcRoot.c_str(), &registration, &policies, CF_REGISTER_FLAG_NONE);
+        const HRESULT registerHr = CfRegisterSyncRoot(srcRoot.c_str(), &registration, &policies, CF_REGISTER_FLAG_NONE);
         if (FAILED(registerHr))
         {
             return skipCase(std::format(L"cloud-placeholder-registration-unavailable:0x{:08X}", static_cast<unsigned long>(registerHr)));
         }
         fixture.registered = true;
         {
-            const wil::unique_hfile handle(
-                CreateFileW(placeholder.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+            const wil::unique_hfile handle(CreateFileW(
+                placeholder.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
             constexpr std::array<unsigned char, 4> identity{{1u, 2u, 3u, 4u}};
-            const HRESULT convertHr =
-                handle
-                    ? CfConvertToPlaceholder(handle.get(), identity.data(), static_cast<DWORD>(identity.size()), CF_CONVERT_FLAG_MARK_IN_SYNC, nullptr, nullptr)
-                    : HRESULT_FROM_WIN32(GetLastError());
+            const HRESULT convertHr = handle ? CfConvertToPlaceholder(handle.get(), identity.data(), static_cast<DWORD>(identity.size()),
+                                                                      CF_CONVERT_FLAG_MARK_IN_SYNC, nullptr, nullptr)
+                                             : HRESULT_FROM_WIN32(GetLastError());
             if (FAILED(convertHr))
             {
                 Fail(std::format(L"Placeholder conversion failed after successful registration (hr=0x{:08X}).", static_cast<unsigned long>(convertHr)));
@@ -5401,48 +5462,41 @@ case SelfTestState::Step::Beeline_CopySkipLinksKeepsPlaceholders:
             }
         }
         const DWORD placeholderAttributes = GetFileAttributesW(placeholder.c_str());
-        const wil::unique_hfile tagHandle(CreateFileW(placeholder.c_str(),
-                                                      FILE_READ_ATTRIBUTES,
-                                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                                      nullptr,
-                                                      OPEN_EXISTING,
-                                                      FILE_FLAG_OPEN_REPARSE_POINT,
-                                                      nullptr));
+        const wil::unique_hfile tagHandle(CreateFileW(placeholder.c_str(), FILE_READ_ATTRIBUTES,
+                                                     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                                                     FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
         FILE_ATTRIBUTE_TAG_INFO tagInfo{};
-        const bool tagRead   = tagHandle && GetFileInformationByHandleEx(tagHandle.get(), FileAttributeTagInfo, &tagInfo, sizeof(tagInfo));
+        const bool tagRead = tagHandle && GetFileInformationByHandleEx(tagHandle.get(), FileAttributeTagInfo, &tagInfo, sizeof(tagInfo));
         const DWORD tagError = tagRead ? ERROR_SUCCESS : GetLastError();
         if (placeholderAttributes == INVALID_FILE_ATTRIBUTES || (placeholderAttributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0u || ! tagRead ||
-            (tagInfo.ReparseTag & ~static_cast<DWORD>(IO_REPARSE_TAG_CLOUD_MASK)) != IO_REPARSE_TAG_CLOUD || IsReparseTagNameSurrogate(tagInfo.ReparseTag))
+            (tagInfo.ReparseTag & ~static_cast<DWORD>(IO_REPARSE_TAG_CLOUD_MASK)) != IO_REPARSE_TAG_CLOUD ||
+            IsReparseTagNameSurrogate(tagInfo.ReparseTag))
         {
             Fail(std::format(L"Placeholder fixture must expose a Cloud Files reparse tag that is not a name surrogate "
                              L"(attributes=0x{:08X}, tagRead={}, tagAttributes=0x{:08X}, tag=0x{:08X}, error={}).",
-                             placeholderAttributes,
-                             tagRead,
-                             tagInfo.FileAttributes,
-                             tagInfo.ReparseTag,
-                             tagError));
+                             placeholderAttributes, tagRead, tagInfo.FileAttributes, tagInfo.ReparseTag, tagError));
             return true;
         }
-        Debug::Perf::Emit(
-            L"FileOps.SelfTest.PlaceholderFixture", L"hydrated-cloud-file;filesystem=NTFS;network=none", 0u, tagInfo.ReparseTag, placeholderAttributes, S_OK);
+        Debug::Perf::Emit(L"FileOps.SelfTest.PlaceholderFixture", L"hydrated-cloud-file;filesystem=NTFS;network=none",
+                          0u, tagInfo.ReparseTag, placeholderAttributes, S_OK);
 
         static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), R"json({"reparsePointPolicy":"skip"})json"));
         SetFileOpsAutoConcurrencyOverrideForSelfTest(true, 4u, FILESYSTEM_STORAGE_SSD);
         HostSetAutoAcceptPrompts(false);
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
         state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {srcTree},
-                                                                 std::filesystem::path(dummyRoot),
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                 false,
-                                                                 state.fsDummy);
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {srcTree},
+                                                 std::filesystem::path(dummyRoot),
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsDummy);
         if (! state.taskA.has_value())
         {
             static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), R"json({"reparsePointPolicy":"preserve"})json"));
@@ -5475,7 +5529,7 @@ case SelfTestState::Step::Beeline_CopySkipLinksKeepsPlaceholders:
     unsigned long linkAttributes   = 0u;
     const bool copiedFileExists    = SUCCEEDED(state.fsDummy->QueryInterface(IID_PPV_ARGS(dummyIo.addressof()))) && dummyIo &&
                                      SUCCEEDED(dummyIo->GetAttributes((dummyTree + L"/placeholder.bin").c_str(), &copiedAttributes));
-    const bool linkCopied          = dummyIo && SUCCEEDED(dummyIo->GetAttributes((dummyTree + L"/link").c_str(), &linkAttributes));
+    const bool linkCopied = dummyIo && SUCCEEDED(dummyIo->GetAttributes((dummyTree + L"/link").c_str(), &linkAttributes));
     std::string copiedBytes;
     const bool bytesMatch = copiedFileExists && ReadFileTextFsIo(dummyIo, std::filesystem::path(dummyTree + L"/placeholder.bin"), copiedBytes) &&
                             copiedBytes.size() == 64u * 1024u && std::ranges::all_of(copiedBytes, [](char value) noexcept { return value == 0x5A; });
@@ -5486,20 +5540,12 @@ case SelfTestState::Step::Beeline_CopySkipLinksKeepsPlaceholders:
                          L"(hr=0x{:08X}, copied={}, linkCopied={}, admissions={}, prompts={}, bytes={}).",
                          static_cast<unsigned long>(completed->second.hr),
                          bytesMatch ? 1 : 0,
-                         linkCopied ? 1 : 0,
-                         completed->second.bridgeFileAdmissionCount,
-                         completed->second.conflictPromptCount,
-                         copiedBytes.size()));
+                         linkCopied ? 1 : 0, completed->second.bridgeFileAdmissionCount, completed->second.conflictPromptCount, copiedBytes.size()));
         return true;
     }
     Debug::Perf::Emit(L"FileOps.SelfTest.CopySkipLinksKeepsPlaceholders",
-                      std::format(L"shape=hydrated-cloud-file+junction;policy=skip;sourceVolume={};filesystem=NTFS;bytes={}",
-                                  srcRoot.root_path().native(),
-                                  copiedBytes.size()),
-                      (GetTickCount64() - state.phaseStartTick) * 1000u,
-                      1u,
-                      completed->second.bridgeFileAdmissionCount,
-                      completed->second.hr);
+                      std::format(L"shape=hydrated-cloud-file+junction;policy=skip;sourceVolume={};filesystem=NTFS;bytes={}", srcRoot.root_path().native(), copiedBytes.size()),
+                      (GetTickCount64() - state.phaseStartTick) * 1000u, 1u, completed->second.bridgeFileAdmissionCount, completed->second.hr);
     state.placeholderSyncRoot.reset();
     if (FAILED(state.placeholderSyncRootStorage.cleanupHr))
     {
@@ -5541,7 +5587,8 @@ case SelfTestState::Step::Causeway_BridgeFailureStatusAndPausedReader:
         static_cast<void>(SetPluginConfiguration(
             state.infoDummy.get(),
             R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":10,"streamChunkLatencyMs":20,"virtualSpeedLimit":"0"})json"));
-        const FileSystemFlags cleanupFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+        const FileSystemFlags cleanupFlags =
+            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
         static_cast<void>(state.fsDummy->DeleteItem(std::wstring(kDummyRoot).c_str(), cleanupFlags, nullptr, nullptr, nullptr));
         if (! EnsureDummyFolderExists(state.fsDummy.get(), kDummyRoot) || ! RecreateEmptyDirectory(localDest))
         {
@@ -5560,19 +5607,19 @@ case SelfTestState::Step::Causeway_BridgeFailureStatusAndPausedReader:
 
         SetFileOpsBridgeFailNextFileCopiesForSelfTest(1u);
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Right,
-                                                                 FolderWindow::Pane::Left,
-                                                                 state.fsDummy,
-                                                                 {std::filesystem::path(kDummyRoot)},
-                                                                 localDest,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                 false,
-                                                                 state.fsLocal);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Right,
+                                                 FolderWindow::Pane::Left,
+                                                 state.fsDummy,
+                                                 {std::filesystem::path(kDummyRoot)},
+                                                 localDest,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsLocal);
         if (! state.taskA.has_value())
         {
             SetFileOpsBridgeFailNextFileCopiesForSelfTest(0);
@@ -5642,10 +5689,10 @@ case SelfTestState::Step::Floodgate_CrossFsCopyGetSizeFailureRefusesCommit:
         return true;
     }
 
-    const std::wstring dummyRoot               = L"/floodgate-bridge-copy-getsize-src";
-    const std::wstring dummyFile               = dummyRoot + L"/payload.txt";
-    const std::filesystem::path localDest      = state.tempRoot / L"floodgate-bridge-copy-getsize-dst";
-    const std::filesystem::path localDestFile  = localDest / L"payload.txt";
+    const std::wstring dummyRoot = L"/floodgate-bridge-copy-getsize-src";
+    const std::wstring dummyFile = dummyRoot + L"/payload.txt";
+    const std::filesystem::path localDest = state.tempRoot / L"floodgate-bridge-copy-getsize-dst";
+    const std::filesystem::path localDestFile = localDest / L"payload.txt";
     constexpr std::string_view kSourceContents = "source-must-not-commit-copy-without-size";
 
     if (state.stepState == 0)
@@ -5665,19 +5712,19 @@ case SelfTestState::Step::Floodgate_CrossFsCopyGetSizeFailureRefusesCommit:
 
         SetFileOpsBridgeFailNextSourceGetSizeForSelfTest(1);
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_ALLOW_OVERWRITE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Right,
-                                                                 FolderWindow::Pane::Left,
-                                                                 state.fsDummy,
-                                                                 {std::filesystem::path(dummyFile)},
-                                                                 localDest,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                 false,
-                                                                 state.fsLocal);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Right,
+                                                 FolderWindow::Pane::Left,
+                                                 state.fsDummy,
+                                                 {std::filesystem::path(dummyFile)},
+                                                 localDest,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsLocal);
         if (! state.taskA.has_value())
         {
             SetFileOpsBridgeFailNextSourceGetSizeForSelfTest(0);
@@ -5747,10 +5794,10 @@ case SelfTestState::Step::Floodgate_CrossFsMoveGetSizeFailurePreservesSource:
         return true;
     }
 
-    const std::wstring dummyRoot               = L"/floodgate-bridge-getsize-src";
-    const std::wstring dummyFile               = dummyRoot + L"/payload.txt";
-    const std::filesystem::path localDest      = state.tempRoot / L"floodgate-bridge-getsize-dst";
-    const std::filesystem::path localDestFile  = localDest / L"payload.txt";
+    const std::wstring dummyRoot = L"/floodgate-bridge-getsize-src";
+    const std::wstring dummyFile = dummyRoot + L"/payload.txt";
+    const std::filesystem::path localDest = state.tempRoot / L"floodgate-bridge-getsize-dst";
+    const std::filesystem::path localDestFile = localDest / L"payload.txt";
     constexpr std::string_view kSourceContents = "source-must-survive-getsize-failure";
 
     if (state.stepState == 0)
@@ -5853,10 +5900,10 @@ case SelfTestState::Step::Floodgate_CrossFsMoveDestinationGetSizeFailurePreserve
         return true;
     }
 
-    constexpr std::wstring_view kDummyRoot     = L"/floodgate-bridge-destination-getsize-src";
-    const std::wstring dummyFile               = std::wstring(kDummyRoot) + L"/payload.txt";
-    const std::filesystem::path localDest      = state.tempRoot / L"floodgate-bridge-destination-getsize-dst";
-    const std::filesystem::path localDestFile  = localDest / L"payload.txt";
+    constexpr std::wstring_view kDummyRoot = L"/floodgate-bridge-destination-getsize-src";
+    const std::wstring dummyFile = std::wstring(kDummyRoot) + L"/payload.txt";
+    const std::filesystem::path localDest = state.tempRoot / L"floodgate-bridge-destination-getsize-dst";
+    const std::filesystem::path localDestFile = localDest / L"payload.txt";
     constexpr std::string_view kSourceContents = "source-and-promoted-destination-must-survive-destination-getsize-failure";
 
     if (state.stepState == 0)
@@ -5868,7 +5915,8 @@ case SelfTestState::Step::Floodgate_CrossFsMoveDestinationGetSizeFailurePreserve
             R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0"})json"));
         static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":1})json"));
 
-        const FileSystemFlags cleanupFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+        const FileSystemFlags cleanupFlags =
+            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
         static_cast<void>(state.fsDummy->DeleteItem(std::wstring(kDummyRoot).c_str(), cleanupFlags, nullptr, nullptr, nullptr));
         if (! EnsureDummyFolderExists(state.fsDummy.get(), kDummyRoot) || ! DummyWriteTextFile(state.fsDummy.get(), dummyFile, kSourceContents) ||
             ! RecreateEmptyDirectory(localDest))
@@ -5928,7 +5976,8 @@ case SelfTestState::Step::Floodgate_CrossFsMoveDestinationGetSizeFailurePreserve
     }
     if (completed->second.hr != S_FALSE)
     {
-        Fail(std::format(L"Floodgate CopyOnly MOVE expected truthful source-kept S_FALSE, got 0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
+        Fail(std::format(L"Floodgate CopyOnly MOVE expected truthful source-kept S_FALSE, got 0x{:08X}.",
+                         static_cast<unsigned long>(completed->second.hr)));
         return true;
     }
 
@@ -5967,15 +6016,15 @@ case SelfTestState::Step::Cinderstar_LegacyWriterEventuallyConsistentMove:
 case SelfTestState::Step::Cinderstar_LegacyWriterPermanentMissMove:
 case SelfTestState::Step::Cinderstar_LegacyWriterWrongSizeMove:
 {
-    const bool eventuallyConsistent             = state.step == SelfTestState::Step::Cinderstar_LegacyWriterEventuallyConsistentMove;
-    const bool permanentMiss                    = state.step == SelfTestState::Step::Cinderstar_LegacyWriterPermanentMissMove;
-    const std::wstring_view scenario            = eventuallyConsistent ? L"eventual" : (permanentMiss ? L"permanent" : L"wrong-size");
-    const std::filesystem::path localSource     = state.tempRoot / std::format(L"c20-{}-src", scenario);
+    const bool eventuallyConsistent = state.step == SelfTestState::Step::Cinderstar_LegacyWriterEventuallyConsistentMove;
+    const bool permanentMiss = state.step == SelfTestState::Step::Cinderstar_LegacyWriterPermanentMissMove;
+    const std::wstring_view scenario = eventuallyConsistent ? L"eventual" : (permanentMiss ? L"permanent" : L"wrong-size");
+    const std::filesystem::path localSource = state.tempRoot / std::format(L"c20-{}-src", scenario);
     const std::filesystem::path localSourceFile = localSource / L"payload.txt";
-    const std::wstring dummyDest                = std::format(L"/c20-{}-dst", scenario);
-    const std::wstring dummyDestFile            = dummyDest + L"/payload.txt";
-    constexpr std::string_view kSourceContents  = "cinderstar-legacy-writer-publication-verification";
-    const auto resetHooks                       = []() noexcept
+    const std::wstring dummyDest = std::format(L"/c20-{}-dst", scenario);
+    const std::wstring dummyDestFile = dummyDest + L"/payload.txt";
+    constexpr std::string_view kSourceContents = "cinderstar-legacy-writer-publication-verification";
+    const auto resetHooks = []() noexcept
     {
         SetFileOpsBridgeFailNextDestinationOpenForSelfTest(0, HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND));
         static_cast<void>(TakeFileOpsBridgeFailNextDestinationOpenAttemptsForSelfTest());
@@ -5996,7 +6045,8 @@ case SelfTestState::Step::Cinderstar_LegacyWriterWrongSizeMove:
         if (! ShouldRetryPublishedDestinationVerification(HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)) ||
             ! ShouldRetryPublishedDestinationVerification(HRESULT_FROM_WIN32(ERROR_NETWORK_BUSY)) ||
             ShouldRetryPublishedDestinationVerification(HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED)) ||
-            ShouldRetryPublishedDestinationVerification(HRESULT_FROM_WIN32(ERROR_INVALID_DATA)) || ShouldRetryPublishedDestinationVerification(E_POINTER))
+            ShouldRetryPublishedDestinationVerification(HRESULT_FROM_WIN32(ERROR_INVALID_DATA)) ||
+            ShouldRetryPublishedDestinationVerification(E_POINTER))
         {
             Fail(L"Cinderstar published-destination retry classifier broadened beyond missing/transient failures.");
             return true;
@@ -6006,7 +6056,8 @@ case SelfTestState::Step::Cinderstar_LegacyWriterWrongSizeMove:
             R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0","writerProof":false})json"));
         static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":1})json"));
 
-        const FileSystemFlags cleanupFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+        const FileSystemFlags cleanupFlags =
+            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
         wil::com_ptr<IFileSystemIO> localIo;
         const bool hasLocalIo = SUCCEEDED(state.fsLocal->QueryInterface(IID_PPV_ARGS(localIo.addressof()))) && localIo;
         static_cast<void>(state.fsDummy->DeleteItem(dummyDest.c_str(), cleanupFlags, nullptr, nullptr, nullptr));
@@ -6061,13 +6112,13 @@ case SelfTestState::Step::Cinderstar_LegacyWriterWrongSizeMove:
     }
 
     const unsigned long openFailures = TakeFileOpsBridgeFailNextDestinationOpenAttemptsForSelfTest();
-    const unsigned long wrongSizes   = TakeFileOpsBridgeReportWrongDestinationSizeAttemptsForSelfTest();
+    const unsigned long wrongSizes = TakeFileOpsBridgeReportWrongDestinationSizeAttemptsForSelfTest();
     SetFileOpsBridgeFailNextDestinationOpenForSelfTest(0, HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND));
     SetFileOpsBridgeReportWrongDestinationSizeForSelfTest(0);
-    const uint64_t expectedProbeCount        = eventuallyConsistent ? 2u : (permanentMiss ? 3u : 1u);
+    const uint64_t expectedProbeCount = eventuallyConsistent ? 2u : (permanentMiss ? 3u : 1u);
     const unsigned long expectedOpenFailures = eventuallyConsistent ? 1u : (permanentMiss ? 3u : 0u);
-    const unsigned long expectedWrongSizes   = permanentMiss || eventuallyConsistent ? 0u : 1u;
-    const HRESULT expectedHr                 = eventuallyConsistent ? S_FALSE : HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+    const unsigned long expectedWrongSizes = permanentMiss || eventuallyConsistent ? 0u : 1u;
+    const HRESULT expectedHr = eventuallyConsistent ? S_FALSE : HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
     if (openFailures != expectedOpenFailures || wrongSizes != expectedWrongSizes ||
         completed->second.bridgeImmediateDestinationSizeProbeCount != expectedProbeCount || completed->second.hr != expectedHr)
     {
@@ -6123,16 +6174,16 @@ case SelfTestState::Step::Cinderstar_LegacyWriterWrongSizeMove:
 }
 case SelfTestState::Step::Cinderstar_LegacyWriterConcurrentReplacementCopy:
 {
-    constexpr const wchar_t* kReplacementPathEnv        = L"REDSALAMANDER_FILEOPS_BRIDGE_REPLACE_PUBLISHED_DESTINATION_PATH";
-    constexpr const wchar_t* kReplacementPayloadEnv     = L"REDSALAMANDER_FILEOPS_BRIDGE_REPLACE_PUBLISHED_DESTINATION_PAYLOAD";
-    constexpr std::wstring_view kDummyRoot              = L"/c20-replacement";
-    const std::wstring dummyFile                        = std::wstring(kDummyRoot) + L"/payload.txt";
-    const std::filesystem::path localDest               = state.tempRoot / L"c20-replacement-dst";
-    const std::filesystem::path localDestFile           = localDest / L"payload.txt";
-    constexpr std::string_view kSourceContents          = "operation-owned-published-bytes";
-    constexpr std::wstring_view kReplacementContents    = L"replacement-owned-by-another-writer";
+    constexpr const wchar_t* kReplacementPathEnv = L"REDSALAMANDER_FILEOPS_BRIDGE_REPLACE_PUBLISHED_DESTINATION_PATH";
+    constexpr const wchar_t* kReplacementPayloadEnv = L"REDSALAMANDER_FILEOPS_BRIDGE_REPLACE_PUBLISHED_DESTINATION_PAYLOAD";
+    constexpr std::wstring_view kDummyRoot = L"/c20-replacement";
+    const std::wstring dummyFile = std::wstring(kDummyRoot) + L"/payload.txt";
+    const std::filesystem::path localDest = state.tempRoot / L"c20-replacement-dst";
+    const std::filesystem::path localDestFile = localDest / L"payload.txt";
+    constexpr std::string_view kSourceContents = "operation-owned-published-bytes";
+    constexpr std::wstring_view kReplacementContents = L"replacement-owned-by-another-writer";
     constexpr std::string_view kReplacementContentsUtf8 = "replacement-owned-by-another-writer";
-    const auto clearHooks                               = [&]() noexcept
+    const auto clearHooks = [&]() noexcept
     {
         static_cast<void>(SetEnvironmentVariableW(kReplacementPathEnv, nullptr));
         static_cast<void>(SetEnvironmentVariableW(kReplacementPayloadEnv, nullptr));
@@ -6152,7 +6203,8 @@ case SelfTestState::Step::Cinderstar_LegacyWriterConcurrentReplacementCopy:
         static_cast<void>(SetPluginConfiguration(
             state.infoDummy.get(),
             R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0"})json"));
-        const FileSystemFlags cleanupFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+        const FileSystemFlags cleanupFlags =
+            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
         static_cast<void>(state.fsDummy->DeleteItem(std::wstring(kDummyRoot).c_str(), cleanupFlags, nullptr, nullptr, nullptr));
         if (! EnsureDummyFolderExists(state.fsDummy.get(), kDummyRoot) || ! DummyWriteTextFile(state.fsDummy.get(), dummyFile, kSourceContents) ||
             ! RecreateEmptyDirectory(localDest) || SetEnvironmentVariableW(kReplacementPathEnv, localDestFile.c_str()) == 0 ||
@@ -6232,12 +6284,12 @@ case SelfTestState::Step::Cinderstar_LegacyWriterConcurrentReplacementCopy:
 }
 case SelfTestState::Step::Cinderstar_LegacyWriterCancelDuringBackoff:
 {
-    const std::filesystem::path localSource     = state.tempRoot / L"c20-cancel-src";
+    const std::filesystem::path localSource = state.tempRoot / L"c20-cancel-src";
     const std::filesystem::path localSourceFile = localSource / L"payload.txt";
-    constexpr std::wstring_view kDummyDest      = L"/c20-cancel-dst";
-    const std::wstring dummyDestFile            = std::wstring(kDummyDest) + L"/payload.txt";
-    constexpr std::string_view kSourceContents  = "cancel-during-publication-reverify-backoff";
-    const auto clearHooks                       = []() noexcept
+    constexpr std::wstring_view kDummyDest = L"/c20-cancel-dst";
+    const std::wstring dummyDestFile = std::wstring(kDummyDest) + L"/payload.txt";
+    constexpr std::string_view kSourceContents = "cancel-during-publication-reverify-backoff";
+    const auto clearHooks = []() noexcept
     {
         ReleaseFileOpsBridgePublishedDestinationRetryPauseForSelfTest();
         SetFileOpsBridgePublishedDestinationRetryPauseForSelfTest(false);
@@ -6259,7 +6311,8 @@ case SelfTestState::Step::Cinderstar_LegacyWriterCancelDuringBackoff:
         static_cast<void>(SetPluginConfiguration(
             state.infoDummy.get(),
             R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":0,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0","writerProof":false})json"));
-        const FileSystemFlags cleanupFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+        const FileSystemFlags cleanupFlags =
+            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
         wil::com_ptr<IFileSystemIO> localIo;
         const bool hasLocalIo = SUCCEEDED(state.fsLocal->QueryInterface(IID_PPV_ARGS(localIo.addressof()))) && localIo;
         static_cast<void>(state.fsDummy->DeleteItem(std::wstring(kDummyDest).c_str(), cleanupFlags, nullptr, nullptr, nullptr));
@@ -6367,11 +6420,11 @@ case SelfTestState::Step::Cinderstar_LegacyWriterCancelDuringBackoff:
 }
 case SelfTestState::Step::Floodgate_CrossFsCopyOnlyUsesCopyVerification:
 {
-    constexpr size_t kFileCount                       = 16u;
-    constexpr size_t kFileBytes                       = 256u;
-    constexpr unsigned long kMetadataLatencyMs        = 25u;
+    constexpr size_t kFileCount = 16u;
+    constexpr size_t kFileBytes = 256u;
+    constexpr unsigned long kMetadataLatencyMs = 25u;
     constexpr std::wstring_view kDummyDestinationRoot = L"/floodgate-commit-size-proof-dst";
-    const std::filesystem::path localSourceRoot       = state.tempRoot / L"floodgate-commit-size-proof-src";
+    const std::filesystem::path localSourceRoot = state.tempRoot / L"floodgate-commit-size-proof-src";
 
     if (HasTimedOut(state, GetTickCount64(), 180'000ull))
     {
@@ -6386,7 +6439,8 @@ case SelfTestState::Step::Floodgate_CrossFsCopyOnlyUsesCopyVerification:
             R"json({"maxChildrenPerDirectory":0,"maxDepth":10,"seed":42,"latencyMs":25,"streamChunkLatencyMs":0,"virtualSpeedLimit":"0","writerProof":false})json"));
         static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":4})json"));
 
-        const FileSystemFlags cleanupFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+        const FileSystemFlags cleanupFlags =
+            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
         static_cast<void>(state.fsDummy->DeleteItem(std::wstring(kDummyDestinationRoot).c_str(), cleanupFlags, nullptr, nullptr, nullptr));
         if (! EnsureDummyFolderExists(state.fsDummy.get(), kDummyDestinationRoot) || ! RecreateEmptyDirectory(localSourceRoot))
         {
@@ -6405,19 +6459,19 @@ case SelfTestState::Step::Floodgate_CrossFsCopyOnlyUsesCopyVerification:
         }
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_MOVE,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {localSourceRoot},
-                                                                 std::filesystem::path(kDummyDestinationRoot),
-                                                                 flags,
-                                                                 false,
-                                                                 0u,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                 false,
-                                                                 state.fsDummy);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_MOVE,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {localSourceRoot},
+                                                 std::filesystem::path(kDummyDestinationRoot),
+                                                 flags,
+                                                 false,
+                                                 0u,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsDummy);
         if (! state.taskA.has_value())
         {
             Fail(L"Floodgate commit-size proof test failed to start the local-to-Dummy MOVE.");
@@ -6441,8 +6495,8 @@ case SelfTestState::Step::Floodgate_CrossFsCopyOnlyUsesCopyVerification:
         return true;
     }
 
-    const bool copyOnlyShape =
-        info.bridgeCommitSizeProofCount == 0u && info.bridgeCommitSizeProofFallbackCount == 0u && info.bridgeImmediateDestinationSizeProbeCount == kFileCount;
+    const bool copyOnlyShape = info.bridgeCommitSizeProofCount == 0u && info.bridgeCommitSizeProofFallbackCount == 0u &&
+                               info.bridgeImmediateDestinationSizeProbeCount == kFileCount;
     if (! copyOnlyShape)
     {
         Fail(std::format(L"Floodgate CopyOnly metric shape mismatch: proof={} fallback={} immediate={} files={}.",
@@ -6470,8 +6524,9 @@ case SelfTestState::Step::Floodgate_CrossFsCopyOnlyUsesCopyVerification:
     const std::string expected(kFileBytes, static_cast<char>(0x5a));
     for (size_t index = 0u; index < kFileCount; ++index)
     {
-        const std::filesystem::path destinationFile =
-            std::filesystem::path(kDummyDestinationRoot) / localSourceRoot.filename() / std::format(L"payload-{:02}.bin", index);
+        const std::filesystem::path destinationFile = std::filesystem::path(kDummyDestinationRoot) /
+                                                      localSourceRoot.filename() /
+                                                      std::format(L"payload-{:02}.bin", index);
         std::string actual;
         if (! ReadFileTextFsIo(dummyIo, destinationFile, actual) || actual != expected)
         {
@@ -6481,11 +6536,11 @@ case SelfTestState::Step::Floodgate_CrossFsCopyOnlyUsesCopyVerification:
     }
 
     const std::wstring detail = std::format(L"shape=copy-only files={} metadataLatencyMs={} immediateProbeUs={} proof={} fallback={}",
-                                            kFileCount,
-                                            kMetadataLatencyMs,
-                                            info.bridgeImmediateDestinationSizeProbeUs,
-                                            info.bridgeCommitSizeProofCount,
-                                            info.bridgeCommitSizeProofFallbackCount);
+                                             kFileCount,
+                                             kMetadataLatencyMs,
+                                             info.bridgeImmediateDestinationSizeProbeUs,
+                                             info.bridgeCommitSizeProofCount,
+                                             info.bridgeCommitSizeProofFallbackCount);
     Debug::Perf::Emit(L"FileOps.SelfTest.FloodgateBridgeCommitSizeProof",
                       detail,
                       info.bridgeImmediateDestinationSizeProbeUs,
@@ -6498,7 +6553,7 @@ case SelfTestState::Step::Floodgate_CrossFsCopyOnlyUsesCopyVerification:
 case SelfTestState::Step::Floodgate_CrossFsMoveGetSizeFailuresParallelPreserveSourceTree:
 {
     const ULONGLONG nowTick = GetTickCount64();
-    const auto resetHooks   = []() noexcept
+    const auto resetHooks = []() noexcept
     {
         SetFileOpsBridgeFailNextSourceGetSizeForSelfTest(0);
         static_cast<void>(TakeFileOpsBridgeFailNextSourceGetSizeAttemptsForSelfTest());
@@ -6512,8 +6567,8 @@ case SelfTestState::Step::Floodgate_CrossFsMoveGetSizeFailuresParallelPreserveSo
         return true;
     }
 
-    constexpr std::wstring_view kDummyRoot    = L"/floodgate-bridge-getsize-parallel-src";
-    const std::filesystem::path localDest     = state.tempRoot / L"floodgate-bridge-getsize-parallel-dst";
+    constexpr std::wstring_view kDummyRoot = L"/floodgate-bridge-getsize-parallel-src";
+    const std::filesystem::path localDest = state.tempRoot / L"floodgate-bridge-getsize-parallel-dst";
     const std::filesystem::path localDestRoot = localDest / L"floodgate-bridge-getsize-parallel-src";
     constexpr std::array<std::wstring_view, 8> kFileNames{{
         L"payload-00.bin",
@@ -6537,7 +6592,8 @@ case SelfTestState::Step::Floodgate_CrossFsMoveGetSizeFailuresParallelPreserveSo
             state.infoLocal.get(),
             R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":4,"deleteMaxConcurrency":8,"deleteRecycleBinMaxConcurrency":2,"enumerationSoftMaxBufferMiB":512,"enumerationHardMaxBufferMiB":2048,"reparsePointPolicy":"preserve","searchBackendPreference":"auto","searchMaxDirectoryWalkers":4})json"));
 
-        const FileSystemFlags cleanupFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+        const FileSystemFlags cleanupFlags =
+            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
         static_cast<void>(state.fsDummy->DeleteItem(std::wstring(kDummyRoot).c_str(), cleanupFlags, nullptr, nullptr, nullptr));
         if (! EnsureDummyFolderExists(state.fsDummy.get(), kDummyRoot) || ! RecreateEmptyDirectory(localDest))
         {
@@ -6557,19 +6613,19 @@ case SelfTestState::Step::Floodgate_CrossFsMoveGetSizeFailuresParallelPreserveSo
         SetFileOpsBridgeFailNextSourceGetSizeForSelfTest(1);
         SetFileOpsBridgeFailNextDestinationGetSizeForSelfTest(1);
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_MOVE,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsDummy,
-                                                                 {std::filesystem::path(kDummyRoot)},
-                                                                 localDest,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                 false,
-                                                                 state.fsLocal);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_MOVE,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsDummy,
+                                                 {std::filesystem::path(kDummyRoot)},
+                                                 localDest,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                 false,
+                                                 state.fsLocal);
         if (! state.taskA.has_value())
         {
             resetHooks();
@@ -6587,7 +6643,7 @@ case SelfTestState::Step::Floodgate_CrossFsMoveGetSizeFailuresParallelPreserveSo
         return false;
     }
 
-    const unsigned long sourceAttempts      = TakeFileOpsBridgeFailNextSourceGetSizeAttemptsForSelfTest();
+    const unsigned long sourceAttempts = TakeFileOpsBridgeFailNextSourceGetSizeAttemptsForSelfTest();
     const unsigned long destinationAttempts = TakeFileOpsBridgeFailNextDestinationGetSizeAttemptsForSelfTest();
     SetFileOpsBridgeFailNextSourceGetSizeForSelfTest(0);
     SetFileOpsBridgeFailNextDestinationGetSizeForSelfTest(0);
@@ -6621,17 +6677,17 @@ case SelfTestState::Step::Floodgate_CrossFsMoveGetSizeFailuresParallelPreserveSo
         return true;
     }
 
-    unsigned int sourcePresentCount      = 0;
+    unsigned int sourcePresentCount = 0;
     unsigned int destinationPresentCount = 0;
-    unsigned int sourceOnlyCount         = 0;
-    unsigned int bothPresentCount        = 0;
+    unsigned int sourceOnlyCount = 0;
+    unsigned int bothPresentCount = 0;
     for (const std::wstring_view fileName : kFileNames)
     {
-        const std::filesystem::path sourcePath      = std::filesystem::path(kDummyRoot) / fileName;
+        const std::filesystem::path sourcePath = std::filesystem::path(kDummyRoot) / fileName;
         const std::filesystem::path destinationPath = localDestRoot / fileName;
         std::string sourceText;
         std::string destinationText;
-        const bool sourcePresent      = ReadFileTextFsIo(dummyIo, sourcePath, sourceText);
+        const bool sourcePresent = ReadFileTextFsIo(dummyIo, sourcePath, sourceText);
         const bool destinationPresent = ReadFileTextFsIo(localIo, destinationPath, destinationText);
         if ((sourcePresent && sourceText != kSourceContents) || (destinationPresent && destinationText != kSourceContents) ||
             (! sourcePresent && ! destinationPresent))
@@ -6676,10 +6732,10 @@ case SelfTestState::Step::Floodgate_CrossFsCopyOnlyNeverEntersSourceCleanup:
         return true;
     }
 
-    const std::wstring dummyRoot               = L"/floodgate-crossfs-file-cleanup";
-    const std::wstring dummyFile               = dummyRoot + L"/payload.txt";
-    const std::filesystem::path localDest      = state.tempRoot / L"floodgate-crossfs-file-cleanup-dst";
-    const std::filesystem::path localDestFile  = localDest / L"payload.txt";
+    const std::wstring dummyRoot = L"/floodgate-crossfs-file-cleanup";
+    const std::wstring dummyFile = dummyRoot + L"/payload.txt";
+    const std::filesystem::path localDest = state.tempRoot / L"floodgate-crossfs-file-cleanup-dst";
+    const std::filesystem::path localDestFile = localDest / L"payload.txt";
     constexpr std::string_view kSourceContents = "source-before-move";
 
     wil::com_ptr<IFileSystemIO> dummyIo;
@@ -6745,7 +6801,8 @@ case SelfTestState::Step::Floodgate_CrossFsCopyOnlyNeverEntersSourceCleanup:
 
     if (completed->second.hr != S_FALSE)
     {
-        Fail(std::format(L"Floodgate CopyOnly MOVE expected S_FALSE, got 0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
+        Fail(std::format(L"Floodgate CopyOnly MOVE expected S_FALSE, got 0x{:08X}.",
+                         static_cast<unsigned long>(completed->second.hr)));
         return true;
     }
 
@@ -6781,13 +6838,13 @@ case SelfTestState::Step::Floodgate_CrossFsDirectoryCopyOnlyRetainsSource:
         return true;
     }
 
-    const std::filesystem::path sourceRoot   = state.tempRoot / L"floodgate-crossfs-dir-cleanup-src";
-    const std::filesystem::path sourceTree   = sourceRoot / L"tree";
-    const std::filesystem::path sourceLevel  = sourceTree / L"level-one";
-    const std::filesystem::path stableFile   = sourceLevel / L"stable.txt";
-    const std::wstring dummyRoot             = L"/floodgate-crossfs-dir-cleanup";
-    const std::wstring dummyTree             = dummyRoot + L"/tree";
-    const std::wstring dummyStable           = dummyTree + L"/level-one/stable.txt";
+    const std::filesystem::path sourceRoot = state.tempRoot / L"floodgate-crossfs-dir-cleanup-src";
+    const std::filesystem::path sourceTree = sourceRoot / L"tree";
+    const std::filesystem::path sourceLevel = sourceTree / L"level-one";
+    const std::filesystem::path stableFile = sourceLevel / L"stable.txt";
+    const std::wstring dummyRoot = L"/floodgate-crossfs-dir-cleanup";
+    const std::wstring dummyTree = dummyRoot + L"/tree";
+    const std::wstring dummyStable = dummyTree + L"/level-one/stable.txt";
     constexpr std::string_view kStableBefore = "stable-before-cleanup";
 
     wil::com_ptr<IFileSystemIO> localIo;
@@ -6852,7 +6909,8 @@ case SelfTestState::Step::Floodgate_CrossFsDirectoryCopyOnlyRetainsSource:
 
     if (completed->second.hr != S_FALSE)
     {
-        Fail(std::format(L"Floodgate directory CopyOnly MOVE expected S_FALSE, got 0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
+        Fail(std::format(L"Floodgate directory CopyOnly MOVE expected S_FALSE, got 0x{:08X}.",
+                         static_cast<unsigned long>(completed->second.hr)));
         return true;
     }
 
@@ -6881,8 +6939,12 @@ case SelfTestState::Step::Floodgate_CrossFsDirectoryCopyOnlyRetainsSource:
         Fail(L"Floodgate directory CopyOnly MOVE did not copy the stable file to the destination.");
         return true;
     }
-    Debug::Perf::Emit(
-        L"FileOps.SelfTest.FloodgateCrossFsDirectoryMoveCleanup", L"copy-only;source-retained;no-cleanup-authority", 0, 0, 0, completed->second.hr);
+    Debug::Perf::Emit(L"FileOps.SelfTest.FloodgateCrossFsDirectoryMoveCleanup",
+                      L"copy-only;source-retained;no-cleanup-authority",
+                      0,
+                      0,
+                      0,
+                      completed->second.hr);
     NextStep(state, SelfTestState::Step::Floodgate_LocalWriterOverwriteIsStaged);
     return false;
 }
@@ -6895,13 +6957,13 @@ case SelfTestState::Step::Floodgate_LocalWriterOverwriteIsStaged:
         return true;
     }
 
-    const std::filesystem::path targetPath        = state.tempRoot / L"floodgate-local-overwrite-writer.txt";
+    const std::filesystem::path targetPath = state.tempRoot / L"floodgate-local-overwrite-writer.txt";
     const std::filesystem::path siblingTempPrefix = targetPath.parent_path() / std::filesystem::path(targetPath.filename().wstring() + L".~rs-write-");
     std::error_code ec;
     std::filesystem::remove(targetPath, ec);
 
-    constexpr std::string_view kOriginal    = "original-preserved";
-    constexpr std::string_view kPartial     = "partial-new-bytes";
+    constexpr std::string_view kOriginal = "original-preserved";
+    constexpr std::string_view kPartial = "partial-new-bytes";
     constexpr std::string_view kReplacement = "replacement-bytes";
     if (! WriteFileTextFsIo(localIo, targetPath, kOriginal))
     {
@@ -6912,7 +6974,7 @@ case SelfTestState::Step::Floodgate_LocalWriterOverwriteIsStaged:
     {
         wil::com_ptr<IFileWriter> writer;
         const std::wstring pathText = ToPluginPathText(targetPath);
-        const HRESULT createHr      = localIo->CreateFileWriter(pathText.c_str(), FILESYSTEM_FLAG_ALLOW_OVERWRITE, writer.put());
+        const HRESULT createHr = localIo->CreateFileWriter(pathText.c_str(), FILESYSTEM_FLAG_ALLOW_OVERWRITE, writer.put());
         if (FAILED(createHr) || ! writer)
         {
             Fail(std::format(L"Floodgate local overwrite writer test failed to open overwrite writer. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
@@ -6938,7 +7000,7 @@ case SelfTestState::Step::Floodgate_LocalWriterOverwriteIsStaged:
     {
         wil::com_ptr<IFileWriter> writer;
         const std::wstring pathText = ToPluginPathText(targetPath);
-        const HRESULT createHr      = localIo->CreateFileWriter(pathText.c_str(), FILESYSTEM_FLAG_ALLOW_OVERWRITE, writer.put());
+        const HRESULT createHr = localIo->CreateFileWriter(pathText.c_str(), FILESYSTEM_FLAG_ALLOW_OVERWRITE, writer.put());
         if (FAILED(createHr) || ! writer)
         {
             Fail(std::format(L"Floodgate local overwrite writer test failed to open commit writer. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
@@ -7004,11 +7066,11 @@ case SelfTestState::Step::Floodgate_LocalCopyOverwriteIsStaged:
         return true;
     }
 
-    const std::filesystem::path sourcePath        = state.tempRoot / L"floodgate-local-copy-overwrite-source.txt";
-    const std::filesystem::path targetPath        = state.tempRoot / L"floodgate-local-copy-overwrite-target.txt";
+    const std::filesystem::path sourcePath = state.tempRoot / L"floodgate-local-copy-overwrite-source.txt";
+    const std::filesystem::path targetPath = state.tempRoot / L"floodgate-local-copy-overwrite-target.txt";
     const std::filesystem::path siblingTempPrefix = targetPath.parent_path() / std::filesystem::path(targetPath.filename().wstring() + L".rs_copy_tmp_");
 
-    constexpr std::string_view kOriginal    = "copy-original-preserved";
+    constexpr std::string_view kOriginal = "copy-original-preserved";
     constexpr std::string_view kReplacement = "copy-replacement-bytes";
 
     static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvStagedCopyPromoteFailPath.data(), nullptr));
@@ -7058,7 +7120,7 @@ case SelfTestState::Step::Floodgate_LocalCopyOverwriteIsStaged:
     }
 
     const FileSystemFlags overwriteFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
-    const HRESULT failHr                 = state.fsLocal->CopyItem(sourcePath.c_str(), targetPath.c_str(), overwriteFlags, nullptr, nullptr, nullptr);
+    const HRESULT failHr = state.fsLocal->CopyItem(sourcePath.c_str(), targetPath.c_str(), overwriteFlags, nullptr, nullptr, nullptr);
     if (failHr != HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED))
     {
         Fail(std::format(L"Floodgate local copy overwrite injected failure expected ERROR_ACCESS_DENIED, got 0x{:08X}.", static_cast<unsigned long>(failHr)));
@@ -7107,27 +7169,31 @@ case SelfTestState::Step::Floodgate_LocalCopyOverwriteIsStaged:
         return true;
     }
     FileOpsRecursiveProgressRecorder cleanupUnknownRecorder{};
-    const HRESULT cleanupUnknownHr = state.fsLocal->CopyItem(sourcePath.c_str(), targetPath.c_str(), overwriteFlags, nullptr, &cleanupUnknownRecorder, nullptr);
-    const bool cleanupUnknownReceipt =
-        cleanupUnknownRecorder.completedCount == 1u && cleanupUnknownRecorder.lastCompletedStatus == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) &&
-        cleanupUnknownRecorder.lastMutationResult.has_value() && cleanupUnknownRecorder.lastMutationResult->sizeBytes >= sizeof(FileSystemItemMutationResult) &&
-        cleanupUnknownRecorder.lastMutationResult->outcomeKnown != FALSE && cleanupUnknownRecorder.lastMutationResult->mutationCommitted == FALSE &&
+    const HRESULT cleanupUnknownHr = state.fsLocal->CopyItem(
+        sourcePath.c_str(), targetPath.c_str(), overwriteFlags, nullptr, &cleanupUnknownRecorder, nullptr);
+    const bool cleanupUnknownReceipt = cleanupUnknownRecorder.completedCount == 1u &&
+        cleanupUnknownRecorder.lastCompletedStatus == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) &&
+        cleanupUnknownRecorder.lastMutationResult.has_value() &&
+        cleanupUnknownRecorder.lastMutationResult->sizeBytes >= sizeof(FileSystemItemMutationResult) &&
+        cleanupUnknownRecorder.lastMutationResult->outcomeKnown != FALSE &&
+        cleanupUnknownRecorder.lastMutationResult->mutationCommitted == FALSE &&
         cleanupUnknownRecorder.lastMutationResult->originalStillPresent != FALSE &&
         cleanupUnknownRecorder.lastMutationResult->ownedStageDisposition == FileSystemOwnedStageDisposition::Unknown;
     if (cleanupUnknownHr != HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) || ! cleanupUnknownReceipt ||
         GetEnvVarTrimmed(kSelfTestEnvAbortOwnedStageUnknownFired) != L"1")
     {
-        Fail(std::format(L"Floodgate cleanup-unknown receipt must report known final non-publication plus Unknown stage (hr=0x{0:08X}, receipt={1}).",
-                         static_cast<unsigned long>(cleanupUnknownHr),
-                         cleanupUnknownReceipt));
+        Fail(std::format(
+            L"Floodgate cleanup-unknown receipt must report known final non-publication plus Unknown stage (hr=0x{0:08X}, receipt={1}).",
+            static_cast<unsigned long>(cleanupUnknownHr),
+            cleanupUnknownReceipt));
         return true;
     }
 
-    size_t retainedStageCount          = 0u;
+    size_t retainedStageCount = 0u;
     bool retainedStageCleanupSucceeded = true;
-    DWORD retainedStageAttributeError  = ERROR_SUCCESS;
-    DWORD retainedStageDeleteError     = ERROR_SUCCESS;
-    DWORD retainedStageProbeError      = ERROR_SUCCESS;
+    DWORD retainedStageAttributeError = ERROR_SUCCESS;
+    DWORD retainedStageDeleteError = ERROR_SUCCESS;
+    DWORD retainedStageProbeError = ERROR_SUCCESS;
     ec.clear();
     for (const auto& entry : std::filesystem::directory_iterator(targetPath.parent_path(), ec))
     {
@@ -7177,21 +7243,22 @@ case SelfTestState::Step::Floodgate_LocalCopyOverwriteIsStaged:
             retainedStageCleanupSucceeded = retainedStageCleanupSucceeded && stageGone;
         }
     }
-    const bool finalReadable  = ReadFileTextFsIo(localIo, targetPath, afterFailure);
+    const bool finalReadable = ReadFileTextFsIo(localIo, targetPath, afterFailure);
     const bool finalPreserved = finalReadable && afterFailure == kOriginal;
     if (ec || retainedStageCount != 1u || ! retainedStageCleanupSucceeded || ! finalPreserved)
     {
-        Fail(std::format(L"Floodgate cleanup-unknown fixture did not preserve the final destination or explicitly remove its one possible stage artifact "
-                         L"(enumerationError={0}, stageCount={1}, stageCleanup={2}, finalReadable={3}, finalPreserved={4}, "
-                         L"attributeError={5}, deleteError={6}, probeError={7}).",
-                         ec.value(),
-                         retainedStageCount,
-                         retainedStageCleanupSucceeded,
-                         finalReadable,
-                         finalPreserved,
-                         retainedStageAttributeError,
-                         retainedStageDeleteError,
-                         retainedStageProbeError));
+        Fail(std::format(
+            L"Floodgate cleanup-unknown fixture did not preserve the final destination or explicitly remove its one possible stage artifact "
+            L"(enumerationError={0}, stageCount={1}, stageCleanup={2}, finalReadable={3}, finalPreserved={4}, "
+            L"attributeError={5}, deleteError={6}, probeError={7}).",
+            ec.value(),
+            retainedStageCount,
+            retainedStageCleanupSucceeded,
+            finalReadable,
+            finalPreserved,
+            retainedStageAttributeError,
+            retainedStageDeleteError,
+            retainedStageProbeError));
         return true;
     }
     static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvStagedCopyPromoteFailPath.data(), nullptr));
@@ -7265,7 +7332,7 @@ case SelfTestState::Step::Floodgate_LocalCopyOverwriteIsStaged:
     static_cast<void>(::SetFileAttributesW(sourcePath.c_str(), sourceAttributes));
 
     size_t remainingAddressableStageCount = 0u;
-    DWORD remainingStageProbeError        = ERROR_SUCCESS;
+    DWORD remainingStageProbeError = ERROR_SUCCESS;
     ec.clear();
     for (const auto& entry : std::filesystem::directory_iterator(targetPath.parent_path(), ec))
     {
@@ -7316,16 +7383,16 @@ case SelfTestState::Step::Floodgate_LocalCopyNewNameConcurrentReplacementSurvive
         return true;
     }
 
-    const std::filesystem::path perfSource     = state.tempRoot / L"r0a-direct-final-perf-source.bin";
-    const std::filesystem::path perfTarget     = state.tempRoot / L"r0a-direct-final-perf-target.bin";
+    const std::filesystem::path perfSource = state.tempRoot / L"r0a-direct-final-perf-source.bin";
+    const std::filesystem::path perfTarget = state.tempRoot / L"r0a-direct-final-perf-target.bin";
     const std::filesystem::path perfSourceZone = std::filesystem::path(perfSource.wstring() + L":Zone.Identifier");
     const std::filesystem::path perfTargetZone = std::filesystem::path(perfTarget.wstring() + L":Zone.Identifier");
-    const std::filesystem::path raceSource     = state.tempRoot / L"r0a-direct-final-race-source.bin";
-    const std::filesystem::path raceTarget     = state.tempRoot / L"r0a-direct-final-race-target.bin";
-    const std::filesystem::path raceMoved      = state.tempRoot / L"r0a-direct-final-race-owned-partial.bin";
-    constexpr size_t kPerfBytes                = 64u * 1024u * 1024u;
-    constexpr size_t kRaceBytes                = 8u * 1024u * 1024u;
-    constexpr std::string_view kZonePayload    = "r0a-zone";
+    const std::filesystem::path raceSource = state.tempRoot / L"r0a-direct-final-race-source.bin";
+    const std::filesystem::path raceTarget = state.tempRoot / L"r0a-direct-final-race-target.bin";
+    const std::filesystem::path raceMoved = state.tempRoot / L"r0a-direct-final-race-owned-partial.bin";
+    constexpr size_t kPerfBytes = 64u * 1024u * 1024u;
+    constexpr size_t kRaceBytes = 8u * 1024u * 1024u;
+    constexpr std::string_view kZonePayload = "r0a-zone";
     constexpr std::string_view kForeignPayload = "r0a-foreign-replacement";
 
     static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvDirectFinalRollbackSwapPath.data(), nullptr));
@@ -7350,24 +7417,33 @@ case SelfTestState::Step::Floodgate_LocalCopyNewNameConcurrentReplacementSurvive
         return true;
     }
     const DWORD sourceAttributes = GetFileAttributesW(perfSource.c_str());
-    if (sourceAttributes == INVALID_FILE_ATTRIBUTES || ! SetFileAttributesW(perfSource.c_str(), sourceAttributes | FILE_ATTRIBUTE_HIDDEN))
+    if (sourceAttributes == INVALID_FILE_ATTRIBUTES ||
+        ! SetFileAttributesW(perfSource.c_str(), sourceAttributes | FILE_ATTRIBUTE_HIDDEN))
     {
         Fail(L"R0a new-name Local Copy test could not seed the source attributes.");
         return true;
     }
 
     FileOpsRecursiveProgressRecorder successRecorder{};
-    const auto perfStart  = std::chrono::steady_clock::now();
-    const HRESULT perfHr  = state.fsLocal->CopyItem(perfSource.c_str(), perfTarget.c_str(), FILESYSTEM_FLAG_NONE, nullptr, &successRecorder, nullptr);
-    const uint64_t perfUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - perfStart).count());
-    Debug::Perf::Emit(L"FileOps.SelfTest.R0aLocalDirectFinalCopyUs", L"shape=new-name-local-regular-file", perfUs, kPerfBytes, 0u, perfHr);
+    const auto perfStart = std::chrono::steady_clock::now();
+    const HRESULT perfHr = state.fsLocal->CopyItem(
+        perfSource.c_str(), perfTarget.c_str(), FILESYSTEM_FLAG_NONE, nullptr, &successRecorder, nullptr);
+    const uint64_t perfUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - perfStart).count());
+    Debug::Perf::Emit(L"FileOps.SelfTest.R0aLocalDirectFinalCopyUs",
+                      L"shape=new-name-local-regular-file",
+                      perfUs,
+                      kPerfBytes,
+                      0u,
+                      perfHr);
     std::string copiedZone;
     uintmax_t copiedSize = 0u;
     ec.clear();
-    copiedSize                   = std::filesystem::file_size(perfTarget, ec);
+    copiedSize = std::filesystem::file_size(perfTarget, ec);
     const DWORD copiedAttributes = GetFileAttributesW(perfTarget.c_str());
-    if (FAILED(perfHr) || ec || copiedSize != kPerfBytes || copiedAttributes == INVALID_FILE_ATTRIBUTES || (copiedAttributes & FILE_ATTRIBUTE_HIDDEN) == 0u ||
-        ! ReadFileTextFsIo(localIo, perfTargetZone, copiedZone) || copiedZone != kZonePayload)
+    if (FAILED(perfHr) || ec || copiedSize != kPerfBytes || copiedAttributes == INVALID_FILE_ATTRIBUTES ||
+        (copiedAttributes & FILE_ATTRIBUTE_HIDDEN) == 0u || ! ReadFileTextFsIo(localIo, perfTargetZone, copiedZone) ||
+        copiedZone != kZonePayload)
     {
         Fail(std::format(L"R0a new-name Local Copy success/metadata fixture failed (hr=0x{0:08X}, size={1}, ec={2}, attrs=0x{3:08X}).",
                          static_cast<unsigned long>(perfHr),
@@ -7380,9 +7456,9 @@ case SelfTestState::Step::Floodgate_LocalCopyNewNameConcurrentReplacementSurvive
     // Metadata the destination cannot hold is best effort, exactly as with CopyFileExW: the Copy
     // publishes complete content, and only an EFS source that cannot stay encrypted fails closed.
     {
-        constexpr wchar_t kForcePresentEnv[]   = L"REDSALAMANDER_FILEOPS_METADATA_FORCE_PRESENT_MASK";
-        constexpr wchar_t kFailMaskEnv[]       = L"REDSALAMANDER_FILEOPS_METADATA_FAIL_MASK";
-        const auto clearMetadataEnv            = wil::scope_exit([&]() noexcept
+        constexpr wchar_t kForcePresentEnv[] = L"REDSALAMANDER_FILEOPS_METADATA_FORCE_PRESENT_MASK";
+        constexpr wchar_t kFailMaskEnv[]     = L"REDSALAMANDER_FILEOPS_METADATA_FAIL_MASK";
+        const auto clearMetadataEnv          = wil::scope_exit([&]() noexcept
         {
             static_cast<void>(SetEnvironmentVariableW(kForcePresentEnv, nullptr));
             static_cast<void>(SetEnvironmentVariableW(kFailMaskEnv, nullptr));
@@ -7411,12 +7487,13 @@ case SelfTestState::Step::Floodgate_LocalCopyNewNameConcurrentReplacementSurvive
             return true;
         }
         FileOpsRecursiveProgressRecorder lossRecorder{};
-        const HRESULT lossHr = state.fsLocal->CopyItem(lossSource.c_str(), lossTarget.c_str(), FILESYSTEM_FLAG_NONE, nullptr, &lossRecorder, nullptr);
+        const HRESULT lossHr =
+            state.fsLocal->CopyItem(lossSource.c_str(), lossTarget.c_str(), FILESYSTEM_FLAG_NONE, nullptr, &lossRecorder, nullptr);
         ec.clear();
         const uintmax_t lossSize = std::filesystem::file_size(lossTarget, ec);
         const bool lossReceipt   = lossRecorder.completedCount == 1u && lossRecorder.lastMutationResult.has_value() &&
-                                   lossRecorder.lastMutationResult->mutationCommitted != FALSE &&
-                                   lossRecorder.lastMutationResult->ownedStageDisposition == FileSystemOwnedStageDisposition::Published;
+            lossRecorder.lastMutationResult->mutationCommitted != FALSE &&
+            lossRecorder.lastMutationResult->ownedStageDisposition == FileSystemOwnedStageDisposition::Published;
         if (FAILED(lossHr) || ec || lossSize != kLossBytes || ! lossReceipt)
         {
             Fail(std::format(L"R0a direct-final Copy must publish complete content when the destination cannot hold "
@@ -7478,8 +7555,8 @@ case SelfTestState::Step::Floodgate_LocalCopyNewNameConcurrentReplacementSurvive
             USHORT format    = COMPRESSION_FORMAT_DEFAULT;
             DWORD returned   = 0u;
             volumeCompresses = folder &&
-                               DeviceIoControl(folder.get(), FSCTL_SET_COMPRESSION, &format, sizeof(format), nullptr, 0u, &returned, nullptr) != FALSE &&
-                               isCompressed(compressedDir);
+                DeviceIoControl(folder.get(), FSCTL_SET_COMPRESSION, &format, sizeof(format), nullptr, 0u, &returned, nullptr) != FALSE &&
+                isCompressed(compressedDir);
         }
         if (! volumeCompresses)
         {
@@ -7531,7 +7608,8 @@ case SelfTestState::Step::Floodgate_LocalCopyNewNameConcurrentReplacementSurvive
         }
     }
 
-    if (! WriteTestFile(raceSource, kRaceBytes) || ! SetEnvironmentVariableW(kSelfTestEnvDirectFinalRollbackSwapPath.data(), raceTarget.c_str()) ||
+    if (! WriteTestFile(raceSource, kRaceBytes) ||
+        ! SetEnvironmentVariableW(kSelfTestEnvDirectFinalRollbackSwapPath.data(), raceTarget.c_str()) ||
         ! SetEnvironmentVariableW(kSelfTestEnvDirectFinalRollbackSwapMovedPath.data(), raceMoved.c_str()))
     {
         Fail(L"R0a new-name Local Copy test could not arm the concurrent replacement fixture.");
@@ -7545,12 +7623,13 @@ case SelfTestState::Step::Floodgate_LocalCopyNewNameConcurrentReplacementSurvive
     raceOptions.sizeBytes        = sizeof(raceOptions);
     raceOptions.linkPolicy       = FILESYSTEM_LINK_PRESERVE;
     raceOptions.operationControl = &raceControl;
-    const HRESULT raceHr         = state.fsLocal->CopyItem(raceSource.c_str(), raceTarget.c_str(), FILESYSTEM_FLAG_NONE, &raceOptions, &raceRecorder, nullptr);
+    const HRESULT raceHr = state.fsLocal->CopyItem(
+        raceSource.c_str(), raceTarget.c_str(), FILESYSTEM_FLAG_NONE, &raceOptions, &raceRecorder, nullptr);
     std::string foreignBytes;
     const bool foreignSurvived = ReadFileTextFsIo(localIo, raceTarget, foreignBytes) && foreignBytes == kForeignPayload;
     ec.clear();
     const bool ownedPartialSurvived = std::filesystem::exists(raceMoved, ec) && ! ec;
-    const bool raceFired            = GetEnvVarTrimmed(kSelfTestEnvDirectFinalRollbackSwapFired) == L"1";
+    const bool raceFired = GetEnvVarTrimmed(kSelfTestEnvDirectFinalRollbackSwapFired) == L"1";
     if ((raceHr != HRESULT_FROM_WIN32(ERROR_CANCELLED) && raceHr != E_ABORT) || ! raceFired || ! foreignSurvived || ownedPartialSurvived)
     {
         Fail(std::format(L"R0a exact abort must preserve a foreign replacement and remove only the retained partial "
@@ -7564,9 +7643,9 @@ case SelfTestState::Step::Floodgate_LocalCopyNewNameConcurrentReplacementSurvive
     }
 
     const bool successReceipt = successRecorder.completedCount == 1u && successRecorder.lastMutationResult.has_value() &&
-                                successRecorder.lastMutationResult->outcomeKnown != FALSE && successRecorder.lastMutationResult->mutationCommitted != FALSE &&
-                                successRecorder.lastMutationResult->originalStillPresent != FALSE &&
-                                successRecorder.lastMutationResult->ownedStageDisposition == FileSystemOwnedStageDisposition::Published;
+        successRecorder.lastMutationResult->outcomeKnown != FALSE && successRecorder.lastMutationResult->mutationCommitted != FALSE &&
+        successRecorder.lastMutationResult->originalStillPresent != FALSE &&
+        successRecorder.lastMutationResult->ownedStageDisposition == FileSystemOwnedStageDisposition::Published;
     if (! successReceipt)
     {
         Fail(L"R0a successful direct-final Copy must report exact Published mutation truth.");
@@ -7591,7 +7670,7 @@ case SelfTestState::Step::Floodgate_LocalCopyNewNameAbortFailureIsRetainedIncomp
 {
     const std::filesystem::path sourcePath = state.tempRoot / L"r0a-direct-final-retained-source.bin";
     const std::filesystem::path targetPath = state.tempRoot / L"r0a-direct-final-retained-target.bin";
-    constexpr size_t kSourceBytes          = 8u * 1024u * 1024u;
+    constexpr size_t kSourceBytes = 8u * 1024u * 1024u;
 
     static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvDirectFinalAbortFailPath.data(), nullptr));
     static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvDirectFinalAbortFailFired.data(), nullptr));
@@ -7605,21 +7684,24 @@ case SelfTestState::Step::Floodgate_LocalCopyNewNameAbortFailureIsRetainedIncomp
     std::filesystem::remove(sourcePath, ec);
     ec.clear();
     std::filesystem::remove(targetPath, ec);
-    if (! WriteTestFile(sourcePath, kSourceBytes) || ! SetEnvironmentVariableW(kSelfTestEnvDirectFinalAbortFailPath.data(), targetPath.c_str()))
+    if (! WriteTestFile(sourcePath, kSourceBytes) ||
+        ! SetEnvironmentVariableW(kSelfTestEnvDirectFinalAbortFailPath.data(), targetPath.c_str()))
     {
         Fail(L"R0a retained-incomplete test could not seed or arm the direct-final abort fixture.");
         return true;
     }
 
     FileOpsRecursiveProgressRecorder recorder{};
-    const HRESULT copyHr = state.fsLocal->CopyItem(sourcePath.c_str(), targetPath.c_str(), FILESYSTEM_FLAG_NONE, nullptr, &recorder, nullptr);
+    const HRESULT copyHr = state.fsLocal->CopyItem(
+        sourcePath.c_str(), targetPath.c_str(), FILESYSTEM_FLAG_NONE, nullptr, &recorder, nullptr);
     ec.clear();
     const bool retainedPartial = std::filesystem::exists(targetPath, ec) && ! ec && std::filesystem::file_size(targetPath, ec) > 0u && ! ec;
-    const bool receiptMatches  = recorder.completedCount == 1u && recorder.lastCompletedStatus == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) &&
-                                 recorder.lastMutationResult.has_value() && recorder.lastMutationResult->outcomeKnown != FALSE &&
-                                 recorder.lastMutationResult->mutationCommitted == FALSE && recorder.lastMutationResult->originalStillPresent != FALSE &&
-                                 recorder.lastMutationResult->ownedStageDisposition == FileSystemOwnedStageDisposition::RetainedIncomplete;
-    const bool abortFired      = GetEnvVarTrimmed(kSelfTestEnvDirectFinalAbortFailFired) == L"1";
+    const bool receiptMatches = recorder.completedCount == 1u &&
+        recorder.lastCompletedStatus == HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) && recorder.lastMutationResult.has_value() &&
+        recorder.lastMutationResult->outcomeKnown != FALSE && recorder.lastMutationResult->mutationCommitted == FALSE &&
+        recorder.lastMutationResult->originalStillPresent != FALSE &&
+        recorder.lastMutationResult->ownedStageDisposition == FileSystemOwnedStageDisposition::RetainedIncomplete;
+    const bool abortFired = GetEnvVarTrimmed(kSelfTestEnvDirectFinalAbortFailFired) == L"1";
     if (copyHr != HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) || ! abortFired || ! retainedPartial || ! receiptMatches)
     {
         Fail(std::format(L"R0a failed exact abort must retain partial content with RetainedIncomplete truth "
@@ -7667,7 +7749,7 @@ case SelfTestState::Step::Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedW
     const FARPROC runDebugSelfTestsProc = GetProcAddress(module.get(), "RedSalamanderFileSystemDebugSelfTests");
 #pragma warning(push)
 #pragma warning(disable : 4191) // Win32 exports are resolved as FARPROC; validate null before calling the typed debug-only export.
-    const auto runDebugSelfTests        = reinterpret_cast<PfnRunDebugSelfTests>(runDebugSelfTestsProc);
+    const auto runDebugSelfTests = reinterpret_cast<PfnRunDebugSelfTests>(runDebugSelfTestsProc);
 #pragma warning(pop)
     if (runDebugSelfTests == nullptr)
     {
@@ -7677,7 +7759,7 @@ case SelfTestState::Step::Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedW
 
     unsigned int passed = 0;
     unsigned int failed = 0;
-    const HRESULT hr    = runDebugSelfTests(&passed, &failed);
+    const HRESULT hr = runDebugSelfTests(&passed, &failed);
     if (FAILED(hr) || failed != 0u)
     {
         Fail(std::format(L"Riptide shared scheduler shutdown test expected FileSystem debug selftests to pass, got hr=0x{:08X}, passed={}, failed={}.",
@@ -7727,22 +7809,23 @@ case SelfTestState::Step::Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWor
 }
 case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
 {
-    using Task                                             = FolderWindow::FileOperationState::Task;
-    const ULONGLONG nowTick                                = GetTickCount64();
-    const std::filesystem::path root                       = state.tempRoot / L"floodgate-inline-f2-interlock";
-    const std::filesystem::path firstSource                = root / L"first.txt";
-    const std::filesystem::path firstDestination           = root / L"first-renamed.txt";
-    const std::filesystem::path secondSource               = root / L"second.txt";
-    const std::filesystem::path secondDestination          = root / L"second-renamed.txt";
-    const std::filesystem::path cancelOwnerSource          = root / L"cancel-owner.txt";
-    const std::filesystem::path cancelOwnerDestination     = root / L"cancel-owner-renamed.txt";
-    const std::filesystem::path cancelledWaiterSource      = root / L"cancelled-waiter.txt";
+    using Task = FolderWindow::FileOperationState::Task;
+    const ULONGLONG nowTick = GetTickCount64();
+    const std::filesystem::path root = state.tempRoot / L"floodgate-inline-f2-interlock";
+    const std::filesystem::path firstSource = root / L"first.txt";
+    const std::filesystem::path firstDestination = root / L"first-renamed.txt";
+    const std::filesystem::path secondSource = root / L"second.txt";
+    const std::filesystem::path secondDestination = root / L"second-renamed.txt";
+    const std::filesystem::path cancelOwnerSource = root / L"cancel-owner.txt";
+    const std::filesystem::path cancelOwnerDestination = root / L"cancel-owner-renamed.txt";
+    const std::filesystem::path cancelledWaiterSource = root / L"cancelled-waiter.txt";
     const std::filesystem::path cancelledWaiterDestination = root / L"cancelled-waiter-renamed.txt";
-    const std::filesystem::path silentSource               = root / L"silent-clean.txt";
-    const std::filesystem::path silentDestination          = root / L"silent-clean-renamed.txt";
-    const std::filesystem::path conflictSource             = root / L"conflict-source.txt";
-    const std::filesystem::path conflictDestination        = root / L"conflict-destination.txt";
-    const wil::com_ptr<IFileSystem> paneFileSystem         = state.folderWindow ? state.folderWindow->GetFileSystem(FolderWindow::Pane::Left) : nullptr;
+    const std::filesystem::path silentSource = root / L"silent-clean.txt";
+    const std::filesystem::path silentDestination = root / L"silent-clean-renamed.txt";
+    const std::filesystem::path conflictSource = root / L"conflict-source.txt";
+    const std::filesystem::path conflictDestination = root / L"conflict-destination.txt";
+    const wil::com_ptr<IFileSystem> paneFileSystem =
+        state.folderWindow ? state.folderWindow->GetFileSystem(FolderWindow::Pane::Left) : nullptr;
 
     const auto restoreHarness = [&]() noexcept
     {
@@ -7760,10 +7843,13 @@ case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
         Fail(std::move(message));
         return true;
     };
-    const auto startRename = [&](const std::filesystem::path& source, std::wstring_view finalLeaf, std::optional<uint64_t>& taskId) noexcept -> HRESULT
+    const auto startRename = [&](const std::filesystem::path& source,
+                                 std::wstring_view finalLeaf,
+                                 std::optional<uint64_t>& taskId) noexcept -> HRESULT
     {
-        uint64_t id      = 0u;
-        const HRESULT hr = state.fileOps->AdmitInlineRename(FolderWindow::Pane::Left, paneFileSystem, source, std::wstring(finalLeaf), &id);
+        uint64_t id = 0u;
+        const HRESULT hr = state.fileOps->AdmitInlineRename(
+            FolderWindow::Pane::Left, paneFileSystem, source, std::wstring(finalLeaf), &id);
         if (SUCCEEDED(hr) && id != 0u)
         {
             taskId = id;
@@ -7782,16 +7868,16 @@ case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
 
     if (state.stepState == 0u)
     {
-        if (! RecreateEmptyDirectory(root) || ! WriteFilledTestFile(firstSource, 32u, 0x11) || ! WriteFilledTestFile(secondSource, 32u, 0x22) ||
-            ! WriteFilledTestFile(cancelOwnerSource, 32u, 0x33) || ! WriteFilledTestFile(cancelledWaiterSource, 32u, 0x44) ||
-            ! WriteFilledTestFile(silentSource, 32u, 0x55) || ! WriteFilledTestFile(conflictSource, 32u, 0x66) ||
-            ! WriteFilledTestFile(conflictDestination, 32u, 0x77))
+        if (! RecreateEmptyDirectory(root) || ! WriteFilledTestFile(firstSource, 32u, 0x11) ||
+            ! WriteFilledTestFile(secondSource, 32u, 0x22) || ! WriteFilledTestFile(cancelOwnerSource, 32u, 0x33) ||
+            ! WriteFilledTestFile(cancelledWaiterSource, 32u, 0x44) || ! WriteFilledTestFile(silentSource, 32u, 0x55) ||
+            ! WriteFilledTestFile(conflictSource, 32u, 0x66) || ! WriteFilledTestFile(conflictDestination, 32u, 0x77))
         {
             return failAndRestore(L"Floodgate inline-F2 test failed to seed its local files.");
         }
 
-        state.inlineF2QueueModeOriginal   = state.fileOps->GetQueueNewTasks();
-        state.inlineF2PresentedBaseline   = state.fileOps->DebugTaskPresentedCount();
+        state.inlineF2QueueModeOriginal = state.fileOps->GetQueueNewTasks();
+        state.inlineF2PresentedBaseline = state.fileOps->DebugTaskPresentedCount();
         state.inlineF2SilentCleanBaseline = state.fileOps->DebugInlineRenameSilentCleanCompletionCount();
         state.fileOps->DebugSetTaskPresentationNowTickForSelfTest(1'000u);
         state.fileOps->SetQueueNewTasks(true);
@@ -7803,7 +7889,8 @@ case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
         const HRESULT startHr = startRename(firstSource, firstDestination.filename().native(), state.taskA);
         if (FAILED(startHr) || ! state.taskA.has_value())
         {
-            return failAndRestore(std::format(L"Floodgate inline-F2 test could not admit the first rename: 0x{:08X}.", static_cast<unsigned long>(startHr)));
+            return failAndRestore(std::format(L"Floodgate inline-F2 test could not admit the first rename: 0x{:08X}.",
+                                              static_cast<unsigned long>(startHr)));
         }
         state.stepState = 1u;
         return false;
@@ -7819,8 +7906,9 @@ case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
         const DWORD executionThreadId = TakeFileOpsInlineRenameExecutionThreadIdForSelfTest();
         if (admissionThreadId == 0u || executionThreadId == 0u || admissionThreadId == executionThreadId)
         {
-            return failAndRestore(std::format(
-                L"Floodgate inline-F2 expected distinct admission/worker threads, got admission={} execution={}.", admissionThreadId, executionThreadId));
+            return failAndRestore(std::format(L"Floodgate inline-F2 expected distinct admission/worker threads, got admission={} execution={}.",
+                                              admissionThreadId,
+                                              executionThreadId));
         }
 
         Task* const owner = state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
@@ -7840,7 +7928,8 @@ case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
                 ++retainedAuthorityNodes;
                 if (! node->retained.authority.boundObject || retainedAuthorityNodes > 1024u)
                 {
-                    return failAndRestore(L"Floodgate inline rename retained an invalid or unbounded interlock authority chain before mutation.");
+                    return failAndRestore(
+                        L"Floodgate inline rename retained an invalid or unbounded interlock authority chain before mutation.");
                 }
             }
         }
@@ -7863,7 +7952,8 @@ case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
         }
         state.fileOps->DebugSetTaskPresentationNowTickForSelfTest(1'500u);
         static_cast<void>(state.fileOps->RefreshDeferredTaskPresentation());
-        if (! owner->IsPresentationVisible() || state.fileOps->DebugTaskPresentedCount() != state.inlineF2PresentedBaseline + 1u)
+        if (! owner->IsPresentationVisible() ||
+            state.fileOps->DebugTaskPresentedCount() != state.inlineF2PresentedBaseline + 1u)
         {
             return failAndRestore(L"Floodgate inline rename did not reveal exactly at the fake-clock 500-ms deadline.");
         }
@@ -7871,8 +7961,8 @@ case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
         const HRESULT startHr = startRename(secondSource, secondDestination.filename().native(), state.taskB);
         if (FAILED(startHr) || ! state.taskB.has_value())
         {
-            return failAndRestore(
-                std::format(L"Floodgate inline-F2 test could not admit the overlapping rename: 0x{:08X}.", static_cast<unsigned long>(startHr)));
+            return failAndRestore(std::format(L"Floodgate inline-F2 test could not admit the overlapping rename: 0x{:08X}.",
+                                              static_cast<unsigned long>(startHr)));
         }
         state.stepState = 2u;
         return false;
@@ -7915,7 +8005,7 @@ case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
         {
             return failAndRestore(L"Floodgate inline-F2 success round lost its task ids.");
         }
-        const auto firstCompleted  = state.completedTasks.find(state.taskA.value());
+        const auto firstCompleted = state.completedTasks.find(state.taskA.value());
         const auto secondCompleted = state.completedTasks.find(state.taskB.value());
         if (firstCompleted == state.completedTasks.end() || secondCompleted == state.completedTasks.end())
         {
@@ -7923,9 +8013,9 @@ case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
         }
 
         std::error_code ec;
-        if (FAILED(firstCompleted->second.hr) || FAILED(secondCompleted->second.hr) || ! std::filesystem::exists(firstDestination, ec) || ec ||
-            ! std::filesystem::exists(secondDestination, ec) || ec || std::filesystem::exists(firstSource, ec) || ec ||
-            std::filesystem::exists(secondSource, ec) || ec)
+        if (FAILED(firstCompleted->second.hr) || FAILED(secondCompleted->second.hr) ||
+            ! std::filesystem::exists(firstDestination, ec) || ec || ! std::filesystem::exists(secondDestination, ec) || ec ||
+            std::filesystem::exists(firstSource, ec) || ec || std::filesystem::exists(secondSource, ec) || ec)
         {
             return failAndRestore(std::format(L"Floodgate inline-F2 serialized success round failed (first=0x{:08X}, second=0x{:08X}).",
                                               static_cast<unsigned long>(firstCompleted->second.hr),
@@ -7951,8 +8041,8 @@ case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
         const HRESULT startHr = startRename(cancelOwnerSource, cancelOwnerDestination.filename().native(), state.taskA);
         if (FAILED(startHr) || ! state.taskA.has_value())
         {
-            return failAndRestore(
-                std::format(L"Floodgate inline-F2 cancellation round could not admit its owner: 0x{0:08X}.", static_cast<unsigned long>(startHr)));
+            return failAndRestore(std::format(L"Floodgate inline-F2 cancellation round could not admit its owner: 0x{0:08X}.",
+                                              static_cast<unsigned long>(startHr)));
         }
         state.stepState = 4u;
         return false;
@@ -7967,8 +8057,8 @@ case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
         const HRESULT startHr = startRename(cancelledWaiterSource, cancelledWaiterDestination.filename().native(), state.taskB);
         if (FAILED(startHr) || ! state.taskB.has_value())
         {
-            return failAndRestore(
-                std::format(L"Floodgate inline-F2 cancellation round could not admit its waiter: 0x{0:08X}.", static_cast<unsigned long>(startHr)));
+            return failAndRestore(std::format(L"Floodgate inline-F2 cancellation round could not admit its waiter: 0x{0:08X}.",
+                                              static_cast<unsigned long>(startHr)));
         }
         state.stepState = 5u;
         return false;
@@ -7992,7 +8082,8 @@ case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
         const unsigned long attempts = TakeFileOpsInlineRenameExecutionAttemptsForSelfTest();
         if (attempts != 1u)
         {
-            return failAndRestore(std::format(L"Floodgate inline-F2 cancellation round expected one execution attempt before cancel; saw {0}.", attempts));
+            return failAndRestore(
+                std::format(L"Floodgate inline-F2 cancellation round expected one execution attempt before cancel; saw {0}.", attempts));
         }
 
         waiter->RequestCancel();
@@ -8008,7 +8099,7 @@ case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
         {
             return failAndRestore(L"Floodgate inline-F2 cancellation round lost its task ids.");
         }
-        const auto ownerCompleted  = state.completedTasks.find(state.taskA.value());
+        const auto ownerCompleted = state.completedTasks.find(state.taskA.value());
         const auto waiterCompleted = state.completedTasks.find(state.taskB.value());
         if (ownerCompleted == state.completedTasks.end() || waiterCompleted == state.completedTasks.end())
         {
@@ -8041,8 +8132,8 @@ case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
         const HRESULT startHr = startRename(silentSource, silentDestination.filename().native(), state.taskA);
         if (FAILED(startHr) || ! state.taskA.has_value())
         {
-            return failAndRestore(
-                std::format(L"Floodgate inline-F2 silent-clean round could not admit its rename: 0x{0:08X}.", static_cast<unsigned long>(startHr)));
+            return failAndRestore(std::format(L"Floodgate inline-F2 silent-clean round could not admit its rename: 0x{0:08X}.",
+                                              static_cast<unsigned long>(startHr)));
         }
         state.stepState = 7u;
         return false;
@@ -8062,11 +8153,13 @@ case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
 
         std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
         state.fileOps->CollectCompletedTasks(summaries);
-        const bool retainedCard = std::ranges::any_of(summaries, [&](const auto& summary) noexcept { return summary.taskId == state.taskA.value(); });
+        const bool retainedCard = std::ranges::any_of(summaries, [&](const auto& summary) noexcept
+        { return summary.taskId == state.taskA.value(); });
         std::error_code silentEc;
         if (FAILED(silentCompleted->second.hr) || retainedCard ||
             state.fileOps->DebugInlineRenameSilentCleanCompletionCount() != state.inlineF2SilentCleanBaseline + 1u ||
-            ! std::filesystem::exists(silentDestination, silentEc) || silentEc || std::filesystem::exists(silentSource, silentEc) || silentEc)
+            ! std::filesystem::exists(silentDestination, silentEc) || silentEc ||
+            std::filesystem::exists(silentSource, silentEc) || silentEc)
         {
             return failAndRestore(L"Floodgate inline-F2 clean completion did not stay silent or retain truthful rename output.");
         }
@@ -8082,8 +8175,8 @@ case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
         const HRESULT conflictStartHr = startRename(conflictSource, conflictDestination.filename().native(), state.taskA);
         if (FAILED(conflictStartHr) || ! state.taskA.has_value())
         {
-            return failAndRestore(
-                std::format(L"Floodgate inline-F2 conflict round could not admit its rename: 0x{0:08X}.", static_cast<unsigned long>(conflictStartHr)));
+            return failAndRestore(std::format(L"Floodgate inline-F2 conflict round could not admit its rename: 0x{0:08X}.",
+                                              static_cast<unsigned long>(conflictStartHr)));
         }
         state.stepState = 8u;
         return false;
@@ -8131,11 +8224,12 @@ case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
             {
                 return false;
             }
-            return failAndRestore(std::format(L"Floodgate inline-F2 Overwrite receipt did not make the conditional rename terminal "
-                                              L"(bucket={0}, status=0x{1:08X}, actions={2}).",
-                                              static_cast<unsigned int>(repeatedPrompt->bucket),
-                                              static_cast<unsigned long>(repeatedPrompt->status),
-                                              repeatedPrompt->actionCount));
+            return failAndRestore(std::format(
+                L"Floodgate inline-F2 Overwrite receipt did not make the conditional rename terminal "
+                L"(bucket={0}, status=0x{1:08X}, actions={2}).",
+                static_cast<unsigned int>(repeatedPrompt->bucket),
+                static_cast<unsigned long>(repeatedPrompt->status),
+                repeatedPrompt->actionCount));
         }
     }
     const auto conflictCompleted = state.completedTasks.find(state.taskA.value());
@@ -8145,10 +8239,11 @@ case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
     }
     std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> conflictSummaries;
     state.fileOps->CollectCompletedTasks(conflictSummaries);
-    const bool conflictCardRetained =
-        std::ranges::any_of(conflictSummaries, [&](const auto& summary) noexcept { return summary.taskId == state.taskA.value(); });
+    const bool conflictCardRetained = std::ranges::any_of(conflictSummaries, [&](const auto& summary) noexcept
+    { return summary.taskId == state.taskA.value(); });
     std::error_code conflictEc;
-    if (FAILED(conflictCompleted->second.hr) || ! conflictCardRetained || ! std::filesystem::exists(conflictDestination, conflictEc) || conflictEc ||
+    if (FAILED(conflictCompleted->second.hr) || ! conflictCardRetained ||
+        ! std::filesystem::exists(conflictDestination, conflictEc) || conflictEc ||
         std::filesystem::exists(conflictSource, conflictEc) || conflictEc)
     {
         return failAndRestore(L"Floodgate inline-F2 exact-destination Overwrite did not retain its revealed card and committed result.");
@@ -8173,9 +8268,10 @@ case SelfTestState::Step::C1_InlineRenameNameRefusedOnCard:
     // published; Preparing fails the task with the provider's reason before any mutation, and
     // the source keeps its name. On the baseline the admission refused synchronously and no task
     // existed.
-    const std::filesystem::path root               = state.tempRoot / L"c1-inline-rename-refused";
-    const std::filesystem::path source             = root / L"before.txt";
-    const wil::com_ptr<IFileSystem> paneFileSystem = state.folderWindow ? state.folderWindow->GetFileSystem(FolderWindow::Pane::Left) : nullptr;
+    const std::filesystem::path root   = state.tempRoot / L"c1-inline-rename-refused";
+    const std::filesystem::path source = root / L"before.txt";
+    const wil::com_ptr<IFileSystem> paneFileSystem =
+        state.folderWindow ? state.folderWindow->GetFileSystem(FolderWindow::Pane::Left) : nullptr;
     if (HasTimedOut(state, GetTickCount64(), 60'000ull))
     {
         Fail(std::format(L"C1 inline rename refused timed out at step {}.", state.stepState));
@@ -8212,8 +8308,8 @@ case SelfTestState::Step::C1_InlineRenameNameRefusedOnCard:
         return false;
     }
     std::error_code ec;
-    if (done->second.hr != HRESULT_FROM_WIN32(ERROR_INVALID_NAME) || ! std::filesystem::exists(source, ec) || std::filesystem::exists(root / L"after.", ec) ||
-        std::filesystem::exists(root / L"after", ec))
+    if (done->second.hr != HRESULT_FROM_WIN32(ERROR_INVALID_NAME) || ! std::filesystem::exists(source, ec) ||
+        std::filesystem::exists(root / L"after.", ec) || std::filesystem::exists(root / L"after", ec))
     {
         Fail(std::format(L"C1 inline rename refused: Preparing must fail the task with ERROR_INVALID_NAME and leave the source untouched (hr=0x{:08X}).",
                          static_cast<unsigned long>(done->second.hr)));

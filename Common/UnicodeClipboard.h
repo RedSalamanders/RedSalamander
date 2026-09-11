@@ -4,12 +4,8 @@
 #include <limits>
 #include <string_view>
 
-#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
 #define NOMINMAX
-#endif
 #include <Windows.h>
 
 #pragma warning(push)
@@ -25,9 +21,8 @@ enum class EmptyUnicodeTextPolicy
     Reject,
 };
 
-[[nodiscard]] inline bool TrySetUnicodeText(HWND ownerWindow,
-                                            std::wstring_view text,
-                                            EmptyUnicodeTextPolicy emptyPolicy = EmptyUnicodeTextPolicy::Allow) noexcept
+[[nodiscard]] inline bool TrySetUnicodeText(
+    HWND ownerWindow, std::wstring_view text, EmptyUnicodeTextPolicy emptyPolicy = EmptyUnicodeTextPolicy::Allow) noexcept
 {
     if (text.empty() && emptyPolicy == EmptyUnicodeTextPolicy::Reject)
     {

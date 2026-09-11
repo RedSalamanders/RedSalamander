@@ -6,6 +6,8 @@
 #include <string>
 #include <string_view>
 
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <Windows.h>
 
 #pragma warning(push)
@@ -19,8 +21,8 @@ struct DeleteOnCloseTemporaryFileOptions
 {
     std::wstring_view prefix;
     std::wstring_view directory;
-    DWORD desiredAccess      = GENERIC_READ | GENERIC_WRITE;
-    DWORD shareMode          = FILE_SHARE_READ;
+    DWORD desiredAccess     = GENERIC_READ | GENERIC_WRITE;
+    DWORD shareMode         = FILE_SHARE_READ;
     DWORD flagsAndAttributes = FILE_ATTRIBUTE_TEMPORARY;
 };
 
@@ -48,7 +50,7 @@ namespace Details
 class TemporaryPathReservation final
 {
 public:
-    TemporaryPathReservation()                                           = default;
+    TemporaryPathReservation() = default;
     TemporaryPathReservation(const TemporaryPathReservation&)            = delete;
     TemporaryPathReservation& operator=(const TemporaryPathReservation&) = delete;
     TemporaryPathReservation(TemporaryPathReservation&&)                 = delete;
@@ -121,7 +123,8 @@ private:
 };
 } // namespace Details
 
-[[nodiscard]] inline HRESULT CreateDeleteOnCloseTemporaryFile(const DeleteOnCloseTemporaryFileOptions& options, wil::unique_hfile& outFile) noexcept
+[[nodiscard]] inline HRESULT CreateDeleteOnCloseTemporaryFile(const DeleteOnCloseTemporaryFileOptions& options,
+                                                               wil::unique_hfile& outFile) noexcept
 {
     outFile.reset();
 

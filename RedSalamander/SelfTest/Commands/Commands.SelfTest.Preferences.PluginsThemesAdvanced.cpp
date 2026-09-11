@@ -61,8 +61,7 @@ namespace
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                  L"Failed to focus the Preferences category host for Plugins deferred-search test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Plugins deferred-search test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins), L"Failed to select the Preferences Plugins category for Plugins deferred-search test.");
     PumpPendingMessages();
 
@@ -518,8 +517,7 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                      L"Failed to focus the Preferences category host for Plugins tab-traversal validation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Plugins tab-traversal validation.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
                       L"Failed to select the Preferences Plugins category for Plugins tab-traversal validation.");
         PumpPendingMessages();
@@ -961,7 +959,8 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByNameWithMessagePump(activePage, UIA_ButtonControlTypeId, removeButtonText, L"Preferences Plugins Remove action"),
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      activePage, UIA_ButtonControlTypeId, removeButtonText, L"Preferences Plugins Remove action"),
                   L"Failed to invoke the visible Preferences Plugins custom-paths Remove button through live UIA interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -1205,7 +1204,8 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByNameWithMessagePump(activePage, UIA_ButtonControlTypeId, addButtonText, L"Preferences Plugins Add action"),
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      activePage, UIA_ButtonControlTypeId, addButtonText, L"Preferences Plugins Add action"),
                   L"Failed to invoke the visible Preferences Plugins custom-paths Add button through live UIA cancel-path interaction.");
     state.Require(waitForSnapshot(
                       [](const PreferencesDebugSnapshot& value) noexcept
@@ -1223,7 +1223,8 @@ namespace
 
     state.Require(DebugSetPreferencesPluginsNextCustomPathBrowsePath(addedPath.native()),
                   L"Failed to seed the debug custom-path browse result for Plugins add interaction validation.");
-    state.Require(InvokeVisibleDescendantByNameWithMessagePump(activePage, UIA_ButtonControlTypeId, addButtonText, L"Preferences Plugins repeated Add action"),
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      activePage, UIA_ButtonControlTypeId, addButtonText, L"Preferences Plugins repeated Add action"),
                   L"Failed to invoke the visible Preferences Plugins custom-paths Add button through live UIA interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -1285,9 +1286,9 @@ namespace
 
     state.Require(DebugSetPreferencesPluginsNextCustomPathBrowsePath(addedPath.native()),
                   L"Failed to seed the debug custom-path browse result for Plugins add commit validation after shell Cancel reopen.");
-    state.Require(
-        InvokeVisibleDescendantByNameWithMessagePump(reopenedActivePage, UIA_ButtonControlTypeId, addButtonText, L"Preferences Plugins reopened Add action"),
-        L"Failed to invoke the visible Preferences Plugins custom-paths Add button through live UIA interaction after shell Cancel reopen.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      reopenedActivePage, UIA_ButtonControlTypeId, addButtonText, L"Preferences Plugins reopened Add action"),
+                  L"Failed to invoke the visible Preferences Plugins custom-paths Add button through live UIA interaction after shell Cancel reopen.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
     {
@@ -1512,9 +1513,9 @@ namespace
         return false;
     }
 
-    state.Require(
-        InvokeVisibleDescendantByNameWithMessagePump(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Plugins Configure shell Cancel"),
-        L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Plugins Configure discard validation.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Plugins Configure shell Cancel"),
+                  L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Plugins Configure discard validation.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Plugins Configure discard "
                   L"validation.");
@@ -1761,7 +1762,8 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByNameWithMessagePump(activePage, UIA_ButtonControlTypeId, testButtonText, L"Preferences Plugins Test action"),
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      activePage, UIA_ButtonControlTypeId, testButtonText, L"Preferences Plugins Test action"),
                   L"Failed to invoke the visible Preferences Plugins Test button through live UIA interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -1778,9 +1780,9 @@ namespace
         return false;
     }
 
-    state.Require(
-        InvokeVisibleDescendantByNameWithMessagePump(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Plugins Test shell Cancel"),
-        L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Plugins Test discard validation.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Plugins Test shell Cancel"),
+                  L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Plugins Test discard validation.");
     state.Require(
         WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
         L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Plugins Test discard validation.");
@@ -1832,9 +1834,9 @@ namespace
         return false;
     }
 
-    state.Require(
-        InvokeVisibleDescendantByNameWithMessagePump(reopenedActivePage, UIA_ButtonControlTypeId, testButtonText, L"Preferences Plugins reopened Test action"),
-        L"Failed to invoke the visible Preferences Plugins Test button through reopened live UIA interaction.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      reopenedActivePage, UIA_ButtonControlTypeId, testButtonText, L"Preferences Plugins reopened Test action"),
+                  L"Failed to invoke the visible Preferences Plugins Test button through reopened live UIA interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
     {
@@ -1990,7 +1992,8 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByNameWithMessagePump(activePage, UIA_ButtonControlTypeId, testAllButtonText, L"Preferences Plugins Test All action"),
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      activePage, UIA_ButtonControlTypeId, testAllButtonText, L"Preferences Plugins Test All action"),
                   L"Failed to invoke the visible Preferences Plugins Test All button through live UIA interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -2007,9 +2010,9 @@ namespace
         return false;
     }
 
-    state.Require(
-        InvokeVisibleDescendantByNameWithMessagePump(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Plugins Test All shell Cancel"),
-        L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Plugins Test All discard validation.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Plugins Test All shell Cancel"),
+                  L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Plugins Test All discard validation.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Plugins Test All discard "
                   L"validation.");
@@ -2142,8 +2145,7 @@ namespace
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                  L"Failed to focus the Preferences category host for Themes deferred-search test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes deferred-search test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes), L"Failed to select the Preferences Themes category for Themes deferred-search test.");
     PumpPendingMessages();
 
@@ -2274,9 +2276,11 @@ namespace
 
         state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
                       L"Failed to focus the Preferences category host while navigating to the Themes page.");
-        const bool settled = SelectPreferencesCategoryAndWaitForStableSurface(kPrefCategoryThemes, [](const PreferencesDebugSnapshot& value) noexcept {
-            return value.themesListRowCount > 0u && value.currentPageDxHostResizeFailureCount == 0u;
-        }, outSnapshot);
+        const bool settled = SelectPreferencesCategoryAndWaitForStableSurface(
+            kPrefCategoryThemes,
+            [](const PreferencesDebugSnapshot& value) noexcept
+        { return value.themesListRowCount > 0u && value.currentPageDxHostResizeFailureCount == 0u; },
+            outSnapshot);
         state.Require(settled, L"Preferences Themes page did not reach a stable surface while navigating for live search interaction.");
         return settled;
     };
@@ -2348,13 +2352,14 @@ namespace
             }
 
             PreferencesDebugSnapshot focusedSnapshot{};
-            if (! SelectPreferencesCategoryAndWaitForStableSurface(kPrefCategoryThemes,
-                                                                   [](const PreferencesDebugSnapshot& current) noexcept
+            if (! SelectPreferencesCategoryAndWaitForStableSurface(
+                    kPrefCategoryThemes,
+                    [](const PreferencesDebugSnapshot& current) noexcept
             {
                 return current.themesFocusTarget == PreferencesThemesDebugFocusTarget::SearchField && current.createdPaneWindowCount == 0u &&
                        current.visiblePaneWindowCount == 0u && current.currentPageDxHostResizeFailureCount == 0u;
             },
-                                                                   focusedSnapshot))
+                    focusedSnapshot))
             {
                 SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands,
                                            std::format(L"Preferences Themes search mutation attempt {} did not retain stable search focus.", attempt + 1u));
@@ -2365,9 +2370,8 @@ namespace
             const HWND focusedWindow      = DebugGetPreferencesActivePageDxHostHandle();
             if (! activePageForValue || IsWindow(activePageForValue) == FALSE || ! focusedWindow || IsWindow(focusedWindow) == FALSE)
             {
-                SelfTest::AppendSuiteTrace(
-                    SelfTest::SelfTestSuite::Commands,
-                    std::format(L"Preferences Themes search mutation attempt {} could not resolve the current page hosts.", attempt + 1u));
+                SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands,
+                                           std::format(L"Preferences Themes search mutation attempt {} could not resolve the current page hosts.", attempt + 1u));
                 PumpPendingMessages();
                 continue;
             }
@@ -2670,7 +2674,8 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByNameWithMessagePump(activePage, UIA_ButtonControlTypeId, resetButtonText, L"Preferences Themes Reset action"),
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      activePage, UIA_ButtonControlTypeId, resetButtonText, L"Preferences Themes Reset action"),
                   L"Failed to invoke the visible Preferences Themes Reset Defaults button through live UIA interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -2687,9 +2692,9 @@ namespace
         return false;
     }
 
-    state.Require(
-        InvokeVisibleDescendantByNameWithMessagePump(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Themes reset shell Cancel"),
-        L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Themes reset discard validation.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Themes reset shell Cancel"),
+                  L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Themes reset discard validation.");
     state.Require(
         WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
         L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Themes reset discard validation.");
@@ -2743,9 +2748,9 @@ namespace
         return false;
     }
 
-    state.Require(
-        InvokeVisibleDescendantByNameWithMessagePump(reopenedActivePage, UIA_ButtonControlTypeId, resetButtonText, L"Preferences Themes reopened Reset action"),
-        L"Failed to invoke the visible Preferences Themes Reset Defaults button through live UIA interaction after shell Cancel reopen.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      reopenedActivePage, UIA_ButtonControlTypeId, resetButtonText, L"Preferences Themes reopened Reset action"),
+                  L"Failed to invoke the visible Preferences Themes Reset Defaults button through live UIA interaction after shell Cancel reopen.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
     {
@@ -2931,9 +2936,9 @@ namespace
         return false;
     }
 
-    state.Require(
-        InvokeVisibleDescendantByNameWithMessagePump(activePage, UIA_ButtonControlTypeId, duplicateButtonText, L"Preferences Themes Duplicate action"),
-        L"Failed to invoke the visible Preferences Themes Duplicate button through live UIA interaction.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      activePage, UIA_ButtonControlTypeId, duplicateButtonText, L"Preferences Themes Duplicate action"),
+                  L"Failed to invoke the visible Preferences Themes Duplicate button through live UIA interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
     {
@@ -2957,9 +2962,9 @@ namespace
         return false;
     }
 
-    state.Require(
-        InvokeVisibleDescendantByNameWithMessagePump(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Themes duplicate shell Cancel"),
-        L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Themes duplicate discard validation.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Themes duplicate shell Cancel"),
+                  L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Themes duplicate discard validation.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Themes duplicate discard "
                   L"validation.");
@@ -3122,8 +3127,7 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                      L"Failed to focus the Preferences category host for Themes clear interaction test.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes clear interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       L"Failed to select the Preferences Themes category for Themes clear interaction test.");
         PumpPendingMessages();
@@ -3203,7 +3207,8 @@ namespace
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByNameWithMessagePump(activePage, UIA_ButtonControlTypeId, clearButtonText, L"Preferences Themes Clear action"),
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      activePage, UIA_ButtonControlTypeId, clearButtonText, L"Preferences Themes Clear action"),
                   L"Failed to invoke the visible Preferences Themes Clear button through live UIA interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -3220,9 +3225,9 @@ namespace
         return false;
     }
 
-    state.Require(
-        InvokeVisibleDescendantByNameWithMessagePump(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Themes clear shell Cancel"),
-        L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Themes clear discard validation.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Themes clear shell Cancel"),
+                  L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Themes clear discard validation.");
     state.Require(
         WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
         L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Themes clear discard validation.");
@@ -3276,9 +3281,9 @@ namespace
         return false;
     }
 
-    state.Require(
-        InvokeVisibleDescendantByNameWithMessagePump(reopenedActivePage, UIA_ButtonControlTypeId, clearButtonText, L"Preferences Themes reopened Clear action"),
-        L"Failed to invoke the visible Preferences Themes Clear button through live UIA interaction after shell Cancel reopen.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      reopenedActivePage, UIA_ButtonControlTypeId, clearButtonText, L"Preferences Themes reopened Clear action"),
+                  L"Failed to invoke the visible Preferences Themes Clear button through live UIA interaction after shell Cancel reopen.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
     {
@@ -3411,8 +3416,7 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                      L"Failed to focus the Preferences category host for Themes set interaction test.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes set interaction test.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       L"Failed to select the Preferences Themes category for Themes set interaction test.");
         PumpPendingMessages();
@@ -3508,9 +3512,9 @@ namespace
         return false;
     }
 
-    state.Require(
-        InvokeVisibleDescendantByNameWithMessagePump(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Themes set shell Cancel"),
-        L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Themes set discard validation.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Themes set shell Cancel"),
+                  L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Themes set discard validation.");
     state.Require(
         WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
         L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Themes set discard validation.");
@@ -3591,9 +3595,9 @@ namespace
         return false;
     }
 
-    state.Require(
-        InvokeVisibleDescendantByNameWithMessagePump(reopenedActivePage, UIA_ButtonControlTypeId, setButtonText, L"Preferences Themes reopened Set action"),
-        L"Failed to invoke the visible Preferences Themes Set button through live UIA interaction.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      reopenedActivePage, UIA_ButtonControlTypeId, setButtonText, L"Preferences Themes reopened Set action"),
+                  L"Failed to invoke the visible Preferences Themes Set button through live UIA interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
     {
@@ -3739,9 +3743,9 @@ namespace
         return false;
     }
 
-    state.Require(
-        InvokeVisibleDescendantByNameWithMessagePump(activePage, UIA_ButtonControlTypeId, applyTemporarilyText, L"Preferences Themes Apply Temporarily action"),
-        L"Failed to invoke the visible Preferences Themes Apply Temporarily button through live UIA interaction.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      activePage, UIA_ButtonControlTypeId, applyTemporarilyText, L"Preferences Themes Apply Temporarily action"),
+                  L"Failed to invoke the visible Preferences Themes Apply Temporarily button through live UIA interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
     {
@@ -4000,7 +4004,8 @@ namespace
     }
 
     state.Require(DebugCancelPreferencesThemesNextBrowse(), L"Failed to seed the debug Themes browse cancel result for save interaction validation.");
-    state.Require(InvokeVisibleDescendantByNameWithMessagePump(activePage, UIA_ButtonControlTypeId, saveThemeText, L"Preferences Themes Save Theme action"),
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      activePage, UIA_ButtonControlTypeId, saveThemeText, L"Preferences Themes Save Theme action"),
                   L"Failed to invoke the visible Preferences Themes Save Theme button through live UIA cancel-path interaction.");
     state.Require(! SelfTest::PathExists(exportPath), L"Preferences Themes visible DX Save Theme cancel path should not create an exported theme file.");
     state.Require(waitForSnapshot(
@@ -4018,9 +4023,9 @@ namespace
 
     state.Require(DebugSetPreferencesThemesNextBrowsePath(exportPath.native()),
                   L"Failed to seed the debug Themes browse result for save interaction validation.");
-    state.Require(
-        InvokeVisibleDescendantByNameWithMessagePump(activePage, UIA_ButtonControlTypeId, saveThemeText, L"Preferences Themes repeated Save Theme action"),
-        L"Failed to invoke the visible Preferences Themes Save Theme button through live UIA interaction.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      activePage, UIA_ButtonControlTypeId, saveThemeText, L"Preferences Themes repeated Save Theme action"),
+                  L"Failed to invoke the visible Preferences Themes Save Theme button through live UIA interaction.");
 
     std::string savedJson;
     state.Require(waitForExport(savedJson), L"Preferences Themes visible DX Save Theme action did not create the expected exported theme file.");
@@ -4043,9 +4048,9 @@ namespace
         return false;
     }
 
-    state.Require(
-        InvokeVisibleDescendantByNameWithMessagePump(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Themes save shell Cancel"),
-        L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Themes save reopen validation.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Themes save shell Cancel"),
+                  L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Themes save reopen validation.");
     state.Require(
         WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
         L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Themes save reopen validation.");
@@ -4298,9 +4303,9 @@ namespace
     }
 
     state.Require(DebugCancelPreferencesThemesNextBrowse(), L"Failed to seed the debug Themes browse cancel result for load interaction validation.");
-    state.Require(
-        InvokeVisibleDescendantByNameWithMessagePump(activePage, UIA_ButtonControlTypeId, loadFromFileText, L"Preferences Themes Load From File action"),
-        L"Failed to invoke the visible Preferences Themes Load From File button through live UIA cancel-path interaction.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      activePage, UIA_ButtonControlTypeId, loadFromFileText, L"Preferences Themes Load From File action"),
+                  L"Failed to invoke the visible Preferences Themes Load From File button through live UIA cancel-path interaction.");
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
     {
@@ -4362,9 +4367,9 @@ namespace
         return false;
     }
 
-    state.Require(
-        InvokeVisibleDescendantByNameWithMessagePump(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Themes load shell Cancel"),
-        L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Themes load discard validation.");
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Themes load shell Cancel"),
+                  L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Themes load discard validation.");
     state.Require(
         WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
         L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Themes load discard validation.");
@@ -4494,8 +4499,7 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                      L"Failed to focus the Preferences category host for Advanced navigation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Advanced navigation.");
         PumpPendingMessages();
 
         SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_END, 0);
@@ -4691,8 +4695,7 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                      L"Failed to focus the Preferences category host for Advanced live interaction test.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Advanced live interaction test.");
         PumpPendingMessages();
 
         SendMessageW(treeHost, WM_KEYDOWN, VK_END, 0);
@@ -4755,8 +4758,8 @@ namespace
             const HWND activePage = DebugGetPreferencesActivePageHandle();
             if (activePage && IsWindow(activePage) != FALSE)
             {
-                const auto toggleState =
-                    CollectVisibleDescendantTogglePatternStateByNameWithMessagePump(activePage, expectedName, L"Preferences Advanced toggle state");
+                const auto toggleState = CollectVisibleDescendantTogglePatternStateByNameWithMessagePump(
+                    activePage, expectedName, L"Preferences Advanced toggle state");
                 if (toggleState.has_value() && toggleState->toggleState == expectedState)
                 {
                     return true;
@@ -4772,8 +4775,8 @@ namespace
             return false;
         }
 
-        const auto toggleState =
-            CollectVisibleDescendantTogglePatternStateByNameWithMessagePump(activePage, expectedName, L"Preferences Advanced final toggle state");
+        const auto toggleState = CollectVisibleDescendantTogglePatternStateByNameWithMessagePump(
+            activePage, expectedName, L"Preferences Advanced final toggle state");
         return toggleState.has_value() && toggleState->toggleState == expectedState;
     };
 
@@ -4808,7 +4811,8 @@ namespace
         return valueState.has_value() && valueState->value == expectedValue;
     };
 
-    const auto initialToggleState = CollectVisibleDescendantTogglePatternStateWithMessagePump(getActivePage(), L"Preferences Advanced initial toggle state");
+    const auto initialToggleState = CollectVisibleDescendantTogglePatternStateWithMessagePump(
+        getActivePage(), L"Preferences Advanced initial toggle state");
     state.Require(initialToggleState.has_value(),
                   L"Preferences Advanced page should expose a visible DX toggle descendant during live interaction validation.");
     if (! initialToggleState.has_value())
@@ -4823,8 +4827,8 @@ namespace
         return false;
     }
 
-    const auto initialValueState =
-        CollectVisibleDescendantValuePatternStateWithMessagePump(getActivePage(), UIA_EditControlTypeId, L"Preferences Advanced initial edit value");
+    const auto initialValueState = CollectVisibleDescendantValuePatternStateWithMessagePump(
+        getActivePage(), UIA_EditControlTypeId, L"Preferences Advanced initial edit value");
     state.Require(initialValueState.has_value(), L"Preferences Advanced page should expose a visible DX edit descendant during live interaction validation.");
     if (! initialValueState.has_value())
     {
@@ -4877,20 +4881,22 @@ namespace
         (initialToggleValue == ToggleState_On) ? ToggleState_Off : (initialToggleValue == ToggleState_Off ? ToggleState_On : ToggleState_On);
     const std::wstring cancelButtonText = LoadStringResource(nullptr, IDS_BTN_CANCEL);
 
-    state.Require(ToggleVisibleDescendantByNameWithMessagePump(getActivePage(), toggleName, L"Preferences Advanced toggle mutation"),
+    state.Require(ToggleVisibleDescendantByNameWithMessagePump(
+                      getActivePage(), toggleName, L"Preferences Advanced toggle mutation"),
                   L"Preferences Advanced page visible DX toggle did not accept live UIA TogglePattern mutation.");
     state.Require(waitForToggleState(toggleName, flippedToggleValue),
                   L"Preferences Advanced page visible DX toggle did not settle to the edited state after live UIA mutation.");
 
     const std::wstring editName         = initialValueState->name;
     const std::wstring initialEditValue = initialValueState->value;
-    state.Require(
-        SetVisibleDescendantValueByNameWithMessagePump(getActivePage(), UIA_EditControlTypeId, editName, editedValue, L"Preferences Advanced edit mutation"),
-        L"Preferences Advanced page visible DX edit did not accept live UIA ValuePattern mutation.");
+    state.Require(SetVisibleDescendantValueByNameWithMessagePump(
+                      getActivePage(), UIA_EditControlTypeId, editName, editedValue, L"Preferences Advanced edit mutation"),
+                  L"Preferences Advanced page visible DX edit did not accept live UIA ValuePattern mutation.");
     state.Require(waitForEditValue(editName, editedValue),
                   L"Preferences Advanced page visible DX edit did not settle to the edited value after live UIA mutation.");
 
-    state.Require(InvokeVisibleDescendantByNameWithMessagePump(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Advanced shell Cancel"),
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Advanced shell Cancel"),
                   L"Preferences shell Cancel action did not expose a visible DX button for the Advanced live interaction test.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences window did not close after invoking the shared shell Cancel action during the Advanced live interaction test.");
@@ -4914,11 +4920,13 @@ namespace
     state.Require(waitForEditValue(editName, initialEditValue),
                   L"Preferences shell Cancel action did not discard the Advanced edit mutation before the page was reopened.");
 
-    state.Require(ToggleVisibleDescendantByNameWithMessagePump(getActivePage(), toggleName, L"Preferences Advanced reopened toggle mutation"),
+    state.Require(ToggleVisibleDescendantByNameWithMessagePump(
+                      getActivePage(), toggleName, L"Preferences Advanced reopened toggle mutation"),
                   L"Preferences Advanced page visible DX toggle did not accept reopened live UIA TogglePattern mutation.");
     state.Require(waitForToggleState(toggleName, flippedToggleValue),
                   L"Preferences Advanced page visible DX toggle did not settle to the reopened edited state after live UIA mutation.");
-    state.Require(ToggleVisibleDescendantByNameWithMessagePump(getActivePage(), toggleName, L"Preferences Advanced toggle restoration"),
+    state.Require(ToggleVisibleDescendantByNameWithMessagePump(
+                      getActivePage(), toggleName, L"Preferences Advanced toggle restoration"),
                   L"Preferences Advanced page visible DX toggle did not accept restoration through reopened live UIA TogglePattern.");
     state.Require(waitForToggleState(toggleName, initialToggleValue),
                   L"Preferences Advanced page visible DX toggle did not restore its original state after reopened live UIA mutation.");
@@ -5262,8 +5270,7 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                      L"Failed to focus the Preferences category host for Advanced tab-traversal validation.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Advanced tab-traversal validation.");
         PumpPendingMessages();
 
         SendMessageW(treeHost, WM_KEYDOWN, VK_END, 0);
@@ -5548,8 +5555,7 @@ namespace
         return pagePatternStats;
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                  L"Failed to focus the Preferences category host for Advanced round-trip test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Advanced round-trip test.");
     PumpPendingMessages();
 
     SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_END, 0);
@@ -5705,8 +5711,7 @@ namespace
         return false;
     }
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                  L"Failed to focus the Preferences category host for Editors/Mouse navigation.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Editors/Mouse navigation.");
     PumpPendingMessages();
 
     const auto waitForSnapshot = [&](const auto& predicate, PreferencesDebugSnapshot& outSnapshot) noexcept
@@ -5951,8 +5956,7 @@ namespace
                           std::format(L"Preferences {} page still exposes visible legacy statics after returning from General during {}.", pageLabel, context));
         };
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                      std::format(L"Failed to focus the Preferences category host during {}.", context));
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), std::format(L"Failed to focus the Preferences category host during {}.", context));
         PumpPendingMessages();
 
         verifyNoteRoundTrip(kPrefCategoryEditors, IDS_PREFS_CAT_EDITORS, IDS_PREFS_CAT_EDITORS_DESC, L"Editors");

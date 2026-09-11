@@ -1119,8 +1119,8 @@ SelfTest::RunCase(options,
         session->RequestScanForFolder(std::filesystem::path(L"keep"));
         state.Require(StartScanAndWaitForIdle(session, std::chrono::milliseconds{SelfTest::ScaleTimeout(60'000)}),
                       L"pending budget: scan did not become idle within timeout.");
-        const bool drainedPendingSubdirs = DrainPendingSubdirUpdatesUntilQuiet(
-            session, std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(10'000))});
+        const bool drainedPendingSubdirs =
+            DrainPendingSubdirUpdatesUntilQuiet(session, std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(10'000))});
         if (! drainedPendingSubdirs)
         {
             const CompareDirectoriesPerfStats pendingStats = session->GetPerfStats();
@@ -1973,9 +1973,9 @@ const auto runSmbFileCompare = [&](std::wstring_view caseName) noexcept
         return;
     }
 
-    size_t segmentCount     = 0u;
+    size_t segmentCount = 0u;
     bool hasSelfTestSegment = false;
-    bool hasUnsafeSegment   = false;
+    bool hasUnsafeSegment = false;
     for (size_t i = 2u; i < smbRootText.size();)
     {
         while (i < smbRootText.size() && smbRootText[i] == L'\\')
@@ -1993,7 +1993,7 @@ const auto runSmbFileCompare = [&](std::wstring_view caseName) noexcept
         }
         const std::wstring_view segment = std::wstring_view(smbRootText).substr(start, i - start);
         ++segmentCount;
-        hasUnsafeSegment   = hasUnsafeSegment || segment == L"." || segment == L"..";
+        hasUnsafeSegment = hasUnsafeSegment || segment == L"." || segment == L"..";
         hasSelfTestSegment = hasSelfTestSegment || ContainsIgnoreCase(segment, L"selftest");
     }
 
@@ -2035,22 +2035,25 @@ const auto runSmbFileCompare = [&](std::wstring_view caseName) noexcept
 
         Common::Settings::CompareDirectoriesSettings settings{};
         settings.compareContent = true;
-        auto session            = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, localRoot, smbRoot, settings);
-        auto decision           = session->GetOrComputeDecision(std::filesystem::path{});
+        auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, localRoot, smbRoot, settings);
+        auto decision = session->GetOrComputeDecision(std::filesystem::path{});
         state.Require(static_cast<bool>(decision), L"SMB compare: decision is null.");
         if (! decision)
         {
             return false;
         }
 
-        state.Require(SUCCEEDED(decision->hr), std::format(L"SMB compare failed. hr=0x{0:08X}", static_cast<unsigned long>(decision->hr)));
+        state.Require(SUCCEEDED(decision->hr),
+                      std::format(L"SMB compare failed. hr=0x{0:08X}", static_cast<unsigned long>(decision->hr)));
         state.Require(! decision->rightFolderMissing, L"SMB compare: configured root reported missing.");
         const auto* item = FindItem(*decision, uniqueName);
         state.Require(item != nullptr, L"SMB compare: unique local file missing from decision.");
         if (item)
         {
-            state.Require(item->isDifferent && item->selectLeft && ! item->selectRight, L"SMB compare: unique local file should be selected only on the left.");
-            state.Require(HasFlag(item->differenceMask, CompareDirectoriesDiffBit::OnlyInLeft), L"SMB compare: expected OnlyInLeft difference.");
+            state.Require(item->isDifferent && item->selectLeft && ! item->selectRight,
+                          L"SMB compare: unique local file should be selected only on the left.");
+            state.Require(HasFlag(item->differenceMask, CompareDirectoriesDiffBit::OnlyInLeft),
+                          L"SMB compare: expected OnlyInLeft difference.");
         }
         return state.failure.empty();
     });

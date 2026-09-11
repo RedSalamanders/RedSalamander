@@ -97,7 +97,7 @@ LRESULT NavigationView::OnFullPathPopupNcDestroy(HWND hwnd)
     // before native destruction finishes clearing the retiring window's focus.
     if (_debugFullPathPopupDestroyProbe)
     {
-        auto probe                      = std::move(_debugFullPathPopupDestroyProbe);
+        auto probe = std::move(_debugFullPathPopupDestroyProbe);
         _debugFullPathPopupDestroyProbe = {};
         probe();
     }
@@ -301,8 +301,8 @@ LRESULT NavigationView::OnFullPathPopupActivate(WORD state, HWND activatingWindo
             return 0;
         }
         const HWND popupHwnd = _fullPathPopup.get();
-        if (popupHwnd && activatingWindow &&
-            (activatingWindow == popupHwnd || IsChild(popupHwnd, activatingWindow) != FALSE || GetWindow(activatingWindow, GW_OWNER) == popupHwnd))
+        if (popupHwnd && activatingWindow && (activatingWindow == popupHwnd || IsChild(popupHwnd, activatingWindow) != FALSE ||
+                                               GetWindow(activatingWindow, GW_OWNER) == popupHwnd))
         {
             return 0;
         }
@@ -475,8 +475,9 @@ void NavigationView::ShowFullPathPopupSiblingsDropdown(HWND popupHwnd, size_t se
     if (siblingsTruncated)
     {
         items.push_back(RedSalamander::DxUi::MenuFlyoutItem{.kind = RedSalamander::DxUi::MenuItemKind::Separator});
-        items.push_back(RedSalamander::DxUi::MenuFlyoutItem{
-            .text = LoadStringResource(nullptr, IDS_CMD_NAVIGATE_PATH), .iconGlyph = L"\uE721", .commandId = ID_SIBLING_SEARCH});
+        items.push_back(RedSalamander::DxUi::MenuFlyoutItem{.text = LoadStringResource(nullptr, IDS_CMD_NAVIGATE_PATH),
+                                                            .iconGlyph = L"\uE721",
+                                                            .commandId = ID_SIBLING_SEARCH});
     }
 
     _fullPathPopupActiveSeparatorIndex            = static_cast<int>(separatorIndex);

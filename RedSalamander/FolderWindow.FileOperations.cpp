@@ -1,11 +1,11 @@
-#include "FolderWindow.FileOperations.State.Private.h"
 #include "FolderWindow.FileOperationsInternal.h"
+#include "FolderWindow.FileOperations.State.Private.h"
 #ifdef ENABLE_TESTS
 #include "FolderWindow.FileOperations.SelfTest.h"
 #endif
-#include "FileOperationArtifactRegistry.h"
 #include "FileSystemPathIdentity.h"
 #include "FileSystemRouteContract.h"
+#include "FileOperationArtifactRegistry.h"
 #include "HostServices.h"
 #include "NavigationLocation.h"
 #include "PathUtils.h"
@@ -30,8 +30,10 @@ std::atomic<bool> g_forceVerificationCapabilityBudgetExceeded{false};
     return ! endpoint.pluginId.empty() && ! endpoint.instanceId.empty() && ! endpoint.profileId.empty() && ! endpoint.rootId.empty() &&
            endpoint.pathIdentity.has_value() && endpoint.pathIdentity->pathTextStableIdentity &&
            endpoint.cancellationRouteClass != FileOperations::CancellationRouteClass::Uncontained &&
-           ((endpoint.cancellationRouteClass == FileOperations::CancellationRouteClass::ProviderWatchdog && endpoint.providerWatchdogTimeoutMs != 0u) ||
-            (endpoint.cancellationRouteClass == FileOperations::CancellationRouteClass::Bounded && endpoint.providerWatchdogTimeoutMs == 0u));
+           ((endpoint.cancellationRouteClass == FileOperations::CancellationRouteClass::ProviderWatchdog &&
+             endpoint.providerWatchdogTimeoutMs != 0u) ||
+            (endpoint.cancellationRouteClass == FileOperations::CancellationRouteClass::Bounded &&
+             endpoint.providerWatchdogTimeoutMs == 0u));
 }
 
 [[nodiscard]] bool IsLocalFileSystemEndpointImpl(const FileOperations::QualifiedEndpoint& endpoint) noexcept
@@ -39,19 +41,21 @@ std::atomic<bool> g_forceVerificationCapabilityBudgetExceeded{false};
     return NavigationLocation::EqualsNoCase(endpoint.pluginId, L"builtin/file-system");
 }
 
-[[nodiscard]] bool QualifiedEndpointsMatchImpl(const FileOperations::QualifiedEndpoint& left, const FileOperations::QualifiedEndpoint& right) noexcept
+[[nodiscard]] bool QualifiedEndpointsMatchImpl(const FileOperations::QualifiedEndpoint& left,
+                                                const FileOperations::QualifiedEndpoint& right) noexcept
 {
-    return NavigationLocation::EqualsNoCase(left.pluginId, right.pluginId) && left.instanceId == right.instanceId && left.profileId == right.profileId &&
-           left.rootId == right.rootId;
+    return NavigationLocation::EqualsNoCase(left.pluginId, right.pluginId) && left.instanceId == right.instanceId &&
+           left.profileId == right.profileId && left.rootId == right.rootId;
 }
 
 [[nodiscard]] bool QualifiedEndpointsShareObjectIdentityDomainImpl(const FileOperations::QualifiedEndpoint& left,
-                                                                   const FileOperations::QualifiedEndpoint& right) noexcept
+                                                                    const FileOperations::QualifiedEndpoint& right) noexcept
 {
     // rootId qualifies strategy topology, not the provider's object-ID namespace. Aliases such as
     // a drive path and its UNC administrative share can have different roots while BindObject
     // still returns comparable IDs from one provider instance/path profile.
-    return NavigationLocation::EqualsNoCase(left.pluginId, right.pluginId) && left.instanceId == right.instanceId && left.profileId == right.profileId;
+    return NavigationLocation::EqualsNoCase(left.pluginId, right.pluginId) && left.instanceId == right.instanceId &&
+           left.profileId == right.profileId;
 }
 
 // C1: whether a provider binds objects at all, from its interface alone (no provider I/O). A
@@ -84,7 +88,9 @@ enum class ObjectBindingSupport : uint8_t
     return ObjectBindingSupport::Supported;
 }
 
-[[nodiscard]] bool TryGetFileSystemPluginIdentity(IFileSystem* fileSystem, std::wstring& pluginId, std::wstring& pluginShortId) noexcept
+[[nodiscard]] bool TryGetFileSystemPluginIdentity(IFileSystem* fileSystem,
+                                                   std::wstring& pluginId,
+                                                   std::wstring& pluginShortId) noexcept
 {
     pluginId.clear();
     pluginShortId.clear();
@@ -101,7 +107,7 @@ enum class ObjectBindingSupport : uint8_t
     }
 
     const PluginMetaData* metadata = nullptr;
-    hr                             = informations->GetMetaData(&metadata);
+    hr = informations->GetMetaData(&metadata);
     if (FAILED(hr) || metadata == nullptr || metadata->id == nullptr || metadata->id[0] == L'\0')
     {
         return false;
@@ -124,7 +130,9 @@ enum class ObjectBindingSupport : uint8_t
     return E_INVALIDARG;
 }
 
-[[nodiscard]] HRESULT ValidatePlanImpl(const FileOperationPlan& plan, PlanRejectionBucket* rejectionBucket, bool allowPendingPermanentConsent) noexcept
+[[nodiscard]] HRESULT ValidatePlanImpl(const FileOperationPlan& plan,
+                                       PlanRejectionBucket* rejectionBucket,
+                                       bool allowPendingPermanentConsent) noexcept
 {
     if (rejectionBucket)
     {
@@ -133,270 +141,279 @@ enum class ObjectBindingSupport : uint8_t
 
     return std::visit(
         [&](const auto& typedPlan) noexcept -> HRESULT
-    {
-        using Plan = std::remove_cvref_t<decltype(typedPlan)>;
-        if constexpr (std::is_same_v<Plan, FileOperations::TransferPlan>)
         {
-            if (! IsQualifiedEndpointValid(typedPlan.sourceEndpoint) || ! IsQualifiedEndpointValid(typedPlan.destinationEndpoint))
+            using Plan = std::remove_cvref_t<decltype(typedPlan)>;
+            if constexpr (std::is_same_v<Plan, FileOperations::TransferPlan>)
             {
-                return RejectPlan(PlanRejectionBucket::MalformedEndpoint, rejectionBucket);
-            }
-            if (typedPlan.selectedItems.empty())
-            {
-                return RejectPlan(PlanRejectionBucket::EmptySelection, rejectionBucket);
-            }
-            if ((typedPlan.intent == FileOperations::TransferIntent::Copy && typedPlan.strategy != FileOperations::OperationStrategy::Copy) ||
-                (typedPlan.strategy == FileOperations::OperationStrategy::Native &&
-                 ! QualifiedEndpointsMatchImpl(typedPlan.sourceEndpoint, typedPlan.destinationEndpoint)))
-            {
-                return RejectPlan(PlanRejectionBucket::InvalidStrategy, rejectionBucket);
-            }
-            if (typedPlan.intent == FileOperations::TransferIntent::Move && typedPlan.strategy == FileOperations::OperationStrategy::Copy)
-            {
-                return RejectPlan(PlanRejectionBucket::InvalidStrategy, rejectionBucket);
-            }
-            if (typedPlan.destination.providerFolderPath.empty())
-            {
-                return RejectPlan(PlanRejectionBucket::MalformedDestination, rejectionBucket);
-            }
-            const bool localSource      = IsLocalFileSystemEndpointImpl(typedPlan.sourceEndpoint);
-            const bool localDestination = IsLocalFileSystemEndpointImpl(typedPlan.destinationEndpoint);
-            if ((localDestination && ! Common::Paths::IsSupportedLocalFileOperationPath(typedPlan.destination.providerFolderPath)) ||
-                (localSource && std::ranges::any_of(typedPlan.selectedItems, [](const FileOperations::QualifiedSourceItem& item) noexcept {
-                return ! Common::Paths::IsSupportedLocalFileOperationPath(item.providerPath);
-            })))
-            {
-                return RejectPlan(PlanRejectionBucket::UnsupportedDeviceNamespace, rejectionBucket);
-            }
-            if (std::ranges::any_of(typedPlan.selectedItems,
-                                    [](const FileOperations::QualifiedSourceItem& item) noexcept { return item.providerPath.empty(); }))
-            {
-                return RejectPlan(PlanRejectionBucket::MalformedSource, rejectionBucket);
-            }
-            if (typedPlan.moveClipboardSequence.has_value() &&
-                (typedPlan.intent != FileOperations::TransferIntent::Move || typedPlan.moveClipboardSequence->windowsSequenceNumber == 0u))
-            {
-                return RejectPlan(PlanRejectionBucket::InvalidClipboardSequence, rejectionBucket);
-            }
-            if (! typedPlan.explicitMappings.empty())
-            {
-                if (typedPlan.explicitMappings.size() != typedPlan.selectedItems.size())
+                if (! IsQualifiedEndpointValid(typedPlan.sourceEndpoint) || ! IsQualifiedEndpointValid(typedPlan.destinationEndpoint))
                 {
-                    return RejectPlan(PlanRejectionBucket::InvalidExplicitMappings, rejectionBucket);
+                    return RejectPlan(PlanRejectionBucket::MalformedEndpoint, rejectionBucket);
                 }
-                std::vector<bool> mapped(typedPlan.selectedItems.size(), false);
-                for (const FileOperations::TransferDestinationMapping& mapping : typedPlan.explicitMappings)
+                if (typedPlan.selectedItems.empty())
                 {
-                    if (mapping.sourceIndex >= mapped.size() || mapped[mapping.sourceIndex] || mapping.destinationProviderPath.empty())
-                    {
-                        return RejectPlan(PlanRejectionBucket::InvalidExplicitMappings, rejectionBucket);
-                    }
-                    const FileSystemPathIdentity& destinationIdentity = typedPlan.destinationEndpoint.pathIdentity.value();
-                    const bool mappingInDestination =
-                        EquivalentPath(destinationIdentity, typedPlan.destination.providerFolderPath, mapping.destinationProviderPath) ||
-                        IsStrictDescendantPath(destinationIdentity, typedPlan.destination.providerFolderPath, mapping.destinationProviderPath);
-                    if ((localDestination && ! Common::Paths::IsSupportedLocalFileOperationPath(mapping.destinationProviderPath)) || ! mappingInDestination)
-                    {
-                        return RejectPlan(localDestination && ! Common::Paths::IsSupportedLocalFileOperationPath(mapping.destinationProviderPath)
-                                              ? PlanRejectionBucket::UnsupportedDeviceNamespace
-                                              : PlanRejectionBucket::EscapingDestinationMapping,
-                                          rejectionBucket);
-                    }
-                    mapped[mapping.sourceIndex] = true;
+                    return RejectPlan(PlanRejectionBucket::EmptySelection, rejectionBucket);
                 }
-            }
-            if (QualifiedEndpointsMatchImpl(typedPlan.sourceEndpoint, typedPlan.destinationEndpoint))
-            {
-                const FileSystemPathIdentity& pathIdentity = typedPlan.sourceEndpoint.pathIdentity.value();
-                for (size_t sourceIndex = 0; sourceIndex < typedPlan.selectedItems.size(); ++sourceIndex)
+                if ((typedPlan.intent == FileOperations::TransferIntent::Copy &&
+                     typedPlan.strategy != FileOperations::OperationStrategy::Copy) ||
+                    (typedPlan.strategy == FileOperations::OperationStrategy::Native &&
+                     ! QualifiedEndpointsMatchImpl(typedPlan.sourceEndpoint, typedPlan.destinationEndpoint)))
                 {
-                    const std::wstring& sourcePath = typedPlan.selectedItems[sourceIndex].providerPath;
-                    if (typedPlan.explicitMappings.empty())
-                    {
-                        // The ordinary destination is destinationFolder/sourceLeaf. If the
-                        // folder itself is the source or lies below it, publication must recurse
-                        // into the selected item. Reject this structural envelope before binding.
-                        if (EquivalentPath(pathIdentity, sourcePath, typedPlan.destination.providerFolderPath) ||
-                            IsStrictDescendantPath(pathIdentity, sourcePath, typedPlan.destination.providerFolderPath))
-                        {
-                            return RejectPlan(PlanRejectionBucket::DestinationInsideSource, rejectionBucket);
-                        }
-                        continue;
-                    }
-
-                    const auto mapping = std::ranges::find_if(typedPlan.explicitMappings,
-                                                              [sourceIndex](const auto& candidate) noexcept { return candidate.sourceIndex == sourceIndex; });
-                    if (mapping != typedPlan.explicitMappings.end() && IsStrictDescendantPath(pathIdentity, sourcePath, mapping->destinationProviderPath))
-                    {
-                        return RejectPlan(PlanRejectionBucket::DestinationInsideSource, rejectionBucket);
-                    }
+                    return RejectPlan(PlanRejectionBucket::InvalidStrategy, rejectionBucket);
                 }
-            }
-            if (typedPlan.intent == FileOperations::TransferIntent::Move &&
-                QualifiedEndpointsMatchImpl(typedPlan.sourceEndpoint, typedPlan.destinationEndpoint))
-            {
-                for (size_t sourceIndex = 0; sourceIndex < typedPlan.selectedItems.size(); ++sourceIndex)
+                if (typedPlan.intent == FileOperations::TransferIntent::Move && typedPlan.strategy == FileOperations::OperationStrategy::Copy)
                 {
-                    const std::wstring& sourcePath = typedPlan.selectedItems[sourceIndex].providerPath;
-                    std::wstring destinationParent = typedPlan.destination.providerFolderPath;
-                    if (! typedPlan.explicitMappings.empty())
-                    {
-                        const auto mapping = std::ranges::find_if(
-                            typedPlan.explicitMappings, [sourceIndex](const auto& candidate) noexcept { return candidate.sourceIndex == sourceIndex; });
-                        if (mapping != typedPlan.explicitMappings.end())
-                        {
-                            if (! TryGetFileSystemParentPath(
-                                    typedPlan.destinationEndpoint.pathIdentity.value(), mapping->destinationProviderPath, destinationParent))
-                            {
-                                return RejectPlan(PlanRejectionBucket::InvalidExplicitMappings, rejectionBucket);
-                            }
-                        }
-                    }
-                    std::wstring sourceParent;
-                    if (! TryGetFileSystemParentPath(typedPlan.sourceEndpoint.pathIdentity.value(), sourcePath, sourceParent))
-                    {
-                        return RejectPlan(PlanRejectionBucket::MalformedSource, rejectionBucket);
-                    }
-                    if (EquivalentPath(typedPlan.sourceEndpoint.pathIdentity.value(), sourceParent, destinationParent))
-                    {
-                        return RejectPlan(PlanRejectionBucket::SameFolderMove, rejectionBucket);
-                    }
+                    return RejectPlan(PlanRejectionBucket::InvalidStrategy, rejectionBucket);
                 }
-            }
-            return S_OK;
-        }
-        else if constexpr (std::is_same_v<Plan, FileOperations::DeletePlan>)
-        {
-            if (! IsQualifiedEndpointValid(typedPlan.endpoint))
-            {
-                return RejectPlan(PlanRejectionBucket::MalformedEndpoint, rejectionBucket);
-            }
-            if (typedPlan.selectedItems.empty())
-            {
-                return RejectPlan(PlanRejectionBucket::EmptySelection, rejectionBucket);
-            }
-            if (std::ranges::any_of(typedPlan.selectedItems,
-                                    [](const FileOperations::QualifiedSourceItem& item) noexcept { return item.providerPath.empty(); }))
-            {
-                return RejectPlan(PlanRejectionBucket::MalformedSource, rejectionBucket);
-            }
-            if (IsLocalFileSystemEndpointImpl(typedPlan.endpoint) && std::ranges::any_of(typedPlan.selectedItems,
-                                                                                         [](const FileOperations::QualifiedSourceItem& item) noexcept
-            { return ! Common::Paths::IsSupportedLocalFileOperationPath(item.providerPath); }))
-            {
-                return RejectPlan(PlanRejectionBucket::UnsupportedDeviceNamespace, rejectionBucket);
-            }
-            // C1: a Permanent Delete root is pinned by Preparing, not snapshotted at admission.
-            if (typedPlan.nativeAuthority && std::ranges::any_of(typedPlan.selectedItems, [](const FileOperations::QualifiedSourceItem& item) noexcept {
-                return item.ingressSnapshot.has_value();
-            }))
-            {
-                return RejectPlan(PlanRejectionBucket::MalformedSource, rejectionBucket);
-            }
-            if (typedPlan.mode == FileOperations::DeleteMode::Permanent && ! typedPlan.initialConsent.has_value() && ! allowPendingPermanentConsent)
-            {
-                return RejectPlan(PlanRejectionBucket::MissingDestructiveConsent, rejectionBucket);
-            }
-            if (typedPlan.initialConsent.has_value() && typedPlan.initialConsent->taskNonce == 0u)
-            {
-                return RejectPlan(PlanRejectionBucket::MissingDestructiveConsent, rejectionBucket);
-            }
-            return S_OK;
-        }
-        else
-        {
-            const bool scheduledRename =
-                typedPlan.origin == FileOperations::RenameOrigin::BatchRename || typedPlan.origin == FileOperations::RenameOrigin::ChangeCase;
-            const bool originValid = typedPlan.origin == FileOperations::RenameOrigin::InlineRename || scheduledRename;
-            if (! originValid || ! IsQualifiedEndpointValid(typedPlan.endpoint) || typedPlan.finalMappings.empty())
-            {
-                return RejectPlan(! originValid || typedPlan.finalMappings.empty() ? PlanRejectionBucket::InvalidRename
-                                                                                   : PlanRejectionBucket::MalformedEndpoint,
-                                  rejectionBucket);
-            }
-            for (const FileOperations::RenameStep& step : typedPlan.finalMappings)
-            {
-                // An inline rename publishes with its join and collision key pending; Preparing
-                // fills both from the provider's contract before any interlock or mutation.
-                const bool joinPending =
-                    typedPlan.origin == FileOperations::RenameOrigin::InlineRename && step.providerJoinedPath.empty() && step.providerCollisionKey.empty();
-                if (step.source.providerPath.empty() || step.finalLeafName.empty() ||
-                    (! joinPending && (step.providerJoinedPath.empty() || step.providerCollisionKey.empty())))
+                if (typedPlan.destination.providerFolderPath.empty())
                 {
-                    return RejectPlan(PlanRejectionBucket::InvalidRename, rejectionBucket);
+                    return RejectPlan(PlanRejectionBucket::MalformedDestination, rejectionBucket);
                 }
-                // A leaf never spells a path. This check is lexical and needs no provider I/O, so it
-                // stays at admission even when the provider join is filled in Preparing.
-                const std::wstring_view leafSeparators =
-                    typedPlan.endpoint.pathIdentity.has_value() ? std::wstring_view(typedPlan.endpoint.pathIdentity->acceptedSeparators) : L"\\/";
-                if (step.finalLeafName.find_first_of(leafSeparators) != std::wstring::npos)
-                {
-                    return RejectPlan(PlanRejectionBucket::InvalidRename, rejectionBucket);
-                }
-                if (IsLocalFileSystemEndpointImpl(typedPlan.endpoint) && ! Common::Paths::IsSupportedLocalFileOperationPath(step.source.providerPath))
+                const bool localSource      = IsLocalFileSystemEndpointImpl(typedPlan.sourceEndpoint);
+                const bool localDestination = IsLocalFileSystemEndpointImpl(typedPlan.destinationEndpoint);
+                if ((localDestination && ! Common::Paths::IsSupportedLocalFileOperationPath(typedPlan.destination.providerFolderPath)) ||
+                    (localSource && std::ranges::any_of(typedPlan.selectedItems, [](const FileOperations::QualifiedSourceItem& item) noexcept
+                                                       { return ! Common::Paths::IsSupportedLocalFileOperationPath(item.providerPath); })))
                 {
                     return RejectPlan(PlanRejectionBucket::UnsupportedDeviceNamespace, rejectionBucket);
                 }
-            }
-            if (scheduledRename && std::ranges::any_of(typedPlan.finalMappings,
-                                                       [&](const FileOperations::RenameStep& step) noexcept
-            {
-                return ! step.source.ingressSnapshot.has_value() || step.source.ingressSnapshot->objectId.empty() ||
-                       step.source.ingressSnapshot->pathProfileId != typedPlan.endpoint.profileId || step.providerParentKey.empty() ||
-                       step.providerSourceCollisionKey.empty();
-            }))
-            {
-                return RejectPlan(PlanRejectionBucket::MalformedSource, rejectionBucket);
-            }
-            if (scheduledRename)
-            {
-                std::unordered_set<std::string> sourceIdentities;
-                sourceIdentities.reserve(typedPlan.finalMappings.size());
-                for (const FileOperations::RenameStep& step : typedPlan.finalMappings)
+                if (std::ranges::any_of(typedPlan.selectedItems, [](const FileOperations::QualifiedSourceItem& item) noexcept
+                                        { return item.providerPath.empty(); }))
                 {
-                    const std::vector<std::byte>& objectId = step.source.ingressSnapshot->objectId;
-                    const std::string identityKey(reinterpret_cast<const char*>(objectId.data()), objectId.size());
-                    if (! sourceIdentities.emplace(identityKey).second)
+                    return RejectPlan(PlanRejectionBucket::MalformedSource, rejectionBucket);
+                }
+                if (typedPlan.moveClipboardSequence.has_value() &&
+                    (typedPlan.intent != FileOperations::TransferIntent::Move || typedPlan.moveClipboardSequence->windowsSequenceNumber == 0u))
+                {
+                    return RejectPlan(PlanRejectionBucket::InvalidClipboardSequence, rejectionBucket);
+                }
+                if (! typedPlan.explicitMappings.empty())
+                {
+                    if (typedPlan.explicitMappings.size() != typedPlan.selectedItems.size())
                     {
-                        // A physical object has one state transition. Treat hard-link/path
-                        // aliases as a duplicate source rather than inventing row ordering.
-                        return RejectPlan(PlanRejectionBucket::InvalidRename, rejectionBucket);
+                        return RejectPlan(PlanRejectionBucket::InvalidExplicitMappings, rejectionBucket);
+                    }
+                    std::vector<bool> mapped(typedPlan.selectedItems.size(), false);
+                    for (const FileOperations::TransferDestinationMapping& mapping : typedPlan.explicitMappings)
+                    {
+                        if (mapping.sourceIndex >= mapped.size() || mapped[mapping.sourceIndex] || mapping.destinationProviderPath.empty())
+                        {
+                            return RejectPlan(PlanRejectionBucket::InvalidExplicitMappings, rejectionBucket);
+                        }
+                        const FileSystemPathIdentity& destinationIdentity = typedPlan.destinationEndpoint.pathIdentity.value();
+                        const bool mappingInDestination = EquivalentPath(destinationIdentity,
+                                                                         typedPlan.destination.providerFolderPath,
+                                                                         mapping.destinationProviderPath) ||
+                            IsStrictDescendantPath(destinationIdentity,
+                                                   typedPlan.destination.providerFolderPath,
+                                                   mapping.destinationProviderPath);
+                        if ((localDestination && ! Common::Paths::IsSupportedLocalFileOperationPath(mapping.destinationProviderPath)) || ! mappingInDestination)
+                        {
+                            return RejectPlan(localDestination && ! Common::Paths::IsSupportedLocalFileOperationPath(mapping.destinationProviderPath)
+                                                  ? PlanRejectionBucket::UnsupportedDeviceNamespace
+                                                  : PlanRejectionBucket::EscapingDestinationMapping,
+                                              rejectionBucket);
+                        }
+                        mapped[mapping.sourceIndex] = true;
                     }
                 }
-            }
-            if (typedPlan.origin == FileOperations::RenameOrigin::InlineRename)
-            {
-                if (! typedPlan.schedule.layers.empty() || ! typedPlan.schedule.cycleOperationIndices.empty())
+                if (QualifiedEndpointsMatchImpl(typedPlan.sourceEndpoint, typedPlan.destinationEndpoint))
                 {
-                    return RejectPlan(PlanRejectionBucket::InvalidRename, rejectionBucket);
+                    const FileSystemPathIdentity& pathIdentity = typedPlan.sourceEndpoint.pathIdentity.value();
+                    for (size_t sourceIndex = 0; sourceIndex < typedPlan.selectedItems.size(); ++sourceIndex)
+                    {
+                        const std::wstring& sourcePath = typedPlan.selectedItems[sourceIndex].providerPath;
+                        if (typedPlan.explicitMappings.empty())
+                        {
+                            // The ordinary destination is destinationFolder/sourceLeaf. If the
+                            // folder itself is the source or lies below it, publication must recurse
+                            // into the selected item. Reject this structural envelope before binding.
+                            if (EquivalentPath(pathIdentity, sourcePath, typedPlan.destination.providerFolderPath) ||
+                                IsStrictDescendantPath(pathIdentity, sourcePath, typedPlan.destination.providerFolderPath))
+                            {
+                                return RejectPlan(PlanRejectionBucket::DestinationInsideSource, rejectionBucket);
+                            }
+                            continue;
+                        }
+
+                        const auto mapping = std::ranges::find_if(typedPlan.explicitMappings, [sourceIndex](const auto& candidate) noexcept
+                        { return candidate.sourceIndex == sourceIndex; });
+                        if (mapping != typedPlan.explicitMappings.end() &&
+                            IsStrictDescendantPath(pathIdentity, sourcePath, mapping->destinationProviderPath))
+                        {
+                            return RejectPlan(PlanRejectionBucket::DestinationInsideSource, rejectionBucket);
+                        }
+                    }
+                }
+                if (typedPlan.intent == FileOperations::TransferIntent::Move &&
+                    QualifiedEndpointsMatchImpl(typedPlan.sourceEndpoint, typedPlan.destinationEndpoint))
+                {
+                    for (size_t sourceIndex = 0; sourceIndex < typedPlan.selectedItems.size(); ++sourceIndex)
+                    {
+                        const std::wstring& sourcePath = typedPlan.selectedItems[sourceIndex].providerPath;
+                        std::wstring destinationParent = typedPlan.destination.providerFolderPath;
+                        if (! typedPlan.explicitMappings.empty())
+                        {
+                            const auto mapping = std::ranges::find_if(typedPlan.explicitMappings, [sourceIndex](const auto& candidate) noexcept
+                            { return candidate.sourceIndex == sourceIndex; });
+                            if (mapping != typedPlan.explicitMappings.end())
+                            {
+                                if (! TryGetFileSystemParentPath(typedPlan.destinationEndpoint.pathIdentity.value(),
+                                                                  mapping->destinationProviderPath,
+                                                                  destinationParent))
+                                {
+                                    return RejectPlan(PlanRejectionBucket::InvalidExplicitMappings, rejectionBucket);
+                                }
+                            }
+                        }
+                        std::wstring sourceParent;
+                        if (! TryGetFileSystemParentPath(typedPlan.sourceEndpoint.pathIdentity.value(), sourcePath, sourceParent))
+                        {
+                            return RejectPlan(PlanRejectionBucket::MalformedSource, rejectionBucket);
+                        }
+                        if (EquivalentPath(typedPlan.sourceEndpoint.pathIdentity.value(), sourceParent, destinationParent))
+                        {
+                            return RejectPlan(PlanRejectionBucket::SameFolderMove, rejectionBucket);
+                        }
+                    }
                 }
                 return S_OK;
             }
-            if (! typedPlan.schedule.cycleOperationIndices.empty())
+            else if constexpr (std::is_same_v<Plan, FileOperations::DeletePlan>)
             {
-                return RejectPlan(PlanRejectionBucket::InvalidRename, rejectionBucket);
-            }
-            std::vector<bool> scheduled(typedPlan.finalMappings.size(), false);
-            size_t scheduledCount = 0u;
-            for (const BatchRenameExecutionLayer& layer : typedPlan.schedule.layers)
-            {
-                if (layer.operationIndices.empty())
+                if (! IsQualifiedEndpointValid(typedPlan.endpoint))
                 {
-                    return RejectPlan(PlanRejectionBucket::InvalidRename, rejectionBucket);
+                    return RejectPlan(PlanRejectionBucket::MalformedEndpoint, rejectionBucket);
                 }
-                for (const size_t index : layer.operationIndices)
+                if (typedPlan.selectedItems.empty())
                 {
-                    if (index >= scheduled.size() || scheduled[index])
+                    return RejectPlan(PlanRejectionBucket::EmptySelection, rejectionBucket);
+                }
+                if (std::ranges::any_of(typedPlan.selectedItems, [](const FileOperations::QualifiedSourceItem& item) noexcept
+                                        { return item.providerPath.empty(); }))
+                {
+                    return RejectPlan(PlanRejectionBucket::MalformedSource, rejectionBucket);
+                }
+                if (IsLocalFileSystemEndpointImpl(typedPlan.endpoint) &&
+                    std::ranges::any_of(typedPlan.selectedItems, [](const FileOperations::QualifiedSourceItem& item) noexcept
+                    { return ! Common::Paths::IsSupportedLocalFileOperationPath(item.providerPath); }))
+                {
+                    return RejectPlan(PlanRejectionBucket::UnsupportedDeviceNamespace, rejectionBucket);
+                }
+                // C1: a Permanent Delete root is pinned by Preparing, not snapshotted at admission.
+                if (typedPlan.nativeAuthority &&
+                    std::ranges::any_of(typedPlan.selectedItems, [](const FileOperations::QualifiedSourceItem& item) noexcept
+                    { return item.ingressSnapshot.has_value(); }))
+                {
+                    return RejectPlan(PlanRejectionBucket::MalformedSource, rejectionBucket);
+                }
+                if (typedPlan.mode == FileOperations::DeleteMode::Permanent && ! typedPlan.initialConsent.has_value() &&
+                    ! allowPendingPermanentConsent)
+                {
+                    return RejectPlan(PlanRejectionBucket::MissingDestructiveConsent, rejectionBucket);
+                }
+                if (typedPlan.initialConsent.has_value() && typedPlan.initialConsent->taskNonce == 0u)
+                {
+                    return RejectPlan(PlanRejectionBucket::MissingDestructiveConsent, rejectionBucket);
+                }
+                return S_OK;
+            }
+            else
+            {
+                const bool scheduledRename = typedPlan.origin == FileOperations::RenameOrigin::BatchRename ||
+                                             typedPlan.origin == FileOperations::RenameOrigin::ChangeCase;
+                const bool originValid = typedPlan.origin == FileOperations::RenameOrigin::InlineRename || scheduledRename;
+                if (! originValid || ! IsQualifiedEndpointValid(typedPlan.endpoint) || typedPlan.finalMappings.empty())
+                {
+                    return RejectPlan(! originValid || typedPlan.finalMappings.empty() ? PlanRejectionBucket::InvalidRename
+                                                                                       : PlanRejectionBucket::MalformedEndpoint,
+                                      rejectionBucket);
+                }
+                for (const FileOperations::RenameStep& step : typedPlan.finalMappings)
+                {
+                    // An inline rename publishes with its join and collision key pending; Preparing
+                    // fills both from the provider's contract before any interlock or mutation.
+                    const bool joinPending = typedPlan.origin == FileOperations::RenameOrigin::InlineRename &&
+                        step.providerJoinedPath.empty() && step.providerCollisionKey.empty();
+                    if (step.source.providerPath.empty() || step.finalLeafName.empty() ||
+                        (! joinPending && (step.providerJoinedPath.empty() || step.providerCollisionKey.empty())))
                     {
                         return RejectPlan(PlanRejectionBucket::InvalidRename, rejectionBucket);
                     }
-                    scheduled[index] = true;
-                    ++scheduledCount;
+                    // A leaf never spells a path. This check is lexical and needs no provider I/O, so it
+                    // stays at admission even when the provider join is filled in Preparing.
+                    const std::wstring_view leafSeparators =
+                        typedPlan.endpoint.pathIdentity.has_value() ? std::wstring_view(typedPlan.endpoint.pathIdentity->acceptedSeparators) : L"\\/";
+                    if (step.finalLeafName.find_first_of(leafSeparators) != std::wstring::npos)
+                    {
+                        return RejectPlan(PlanRejectionBucket::InvalidRename, rejectionBucket);
+                    }
+                    if (IsLocalFileSystemEndpointImpl(typedPlan.endpoint) && ! Common::Paths::IsSupportedLocalFileOperationPath(step.source.providerPath))
+                    {
+                        return RejectPlan(PlanRejectionBucket::UnsupportedDeviceNamespace, rejectionBucket);
+                    }
                 }
+                if (scheduledRename &&
+                    std::ranges::any_of(typedPlan.finalMappings, [&](const FileOperations::RenameStep& step) noexcept
+                    {
+                        return ! step.source.ingressSnapshot.has_value() ||
+                               step.source.ingressSnapshot->objectId.empty() ||
+                               step.source.ingressSnapshot->pathProfileId != typedPlan.endpoint.profileId ||
+                               step.providerParentKey.empty() || step.providerSourceCollisionKey.empty();
+                    }))
+                {
+                    return RejectPlan(PlanRejectionBucket::MalformedSource, rejectionBucket);
+                }
+                if (scheduledRename)
+                {
+                    std::unordered_set<std::string> sourceIdentities;
+                    sourceIdentities.reserve(typedPlan.finalMappings.size());
+                    for (const FileOperations::RenameStep& step : typedPlan.finalMappings)
+                    {
+                        const std::vector<std::byte>& objectId = step.source.ingressSnapshot->objectId;
+                        const std::string identityKey(reinterpret_cast<const char*>(objectId.data()), objectId.size());
+                        if (! sourceIdentities.emplace(identityKey).second)
+                        {
+                            // A physical object has one state transition. Treat hard-link/path
+                            // aliases as a duplicate source rather than inventing row ordering.
+                            return RejectPlan(PlanRejectionBucket::InvalidRename, rejectionBucket);
+                        }
+                    }
+                }
+                if (typedPlan.origin == FileOperations::RenameOrigin::InlineRename)
+                {
+                    if (! typedPlan.schedule.layers.empty() || ! typedPlan.schedule.cycleOperationIndices.empty())
+                    {
+                        return RejectPlan(PlanRejectionBucket::InvalidRename, rejectionBucket);
+                    }
+                    return S_OK;
+                }
+                if (! typedPlan.schedule.cycleOperationIndices.empty())
+                {
+                    return RejectPlan(PlanRejectionBucket::InvalidRename, rejectionBucket);
+                }
+                std::vector<bool> scheduled(typedPlan.finalMappings.size(), false);
+                size_t scheduledCount = 0u;
+                for (const BatchRenameExecutionLayer& layer : typedPlan.schedule.layers)
+                {
+                    if (layer.operationIndices.empty())
+                    {
+                        return RejectPlan(PlanRejectionBucket::InvalidRename, rejectionBucket);
+                    }
+                    for (const size_t index : layer.operationIndices)
+                    {
+                        if (index >= scheduled.size() || scheduled[index])
+                        {
+                            return RejectPlan(PlanRejectionBucket::InvalidRename, rejectionBucket);
+                        }
+                        scheduled[index] = true;
+                        ++scheduledCount;
+                    }
+                }
+                return scheduledCount == typedPlan.finalMappings.size()
+                           ? S_OK
+                           : RejectPlan(PlanRejectionBucket::InvalidRename, rejectionBucket);
             }
-            return scheduledCount == typedPlan.finalMappings.size() ? S_OK : RejectPlan(PlanRejectionBucket::InvalidRename, rejectionBucket);
-        }
-    },
+        },
         plan);
 }
 
@@ -428,15 +445,17 @@ enum class ObjectBindingSupport : uint8_t
 
 [[nodiscard]] uint64_t PlanPayloadBytes(const FileOperationPlan& plan) noexcept
 {
-    const auto stringBytes   = [](std::wstring_view value) noexcept -> uint64_t { return static_cast<uint64_t>(value.size()) * sizeof(wchar_t); };
+    const auto stringBytes = [](std::wstring_view value) noexcept -> uint64_t
+    { return static_cast<uint64_t>(value.size()) * sizeof(wchar_t); };
     const auto endpointBytes = [&](const FileOperations::QualifiedEndpoint& endpoint) noexcept -> uint64_t
     {
-        uint64_t bytes = stringBytes(endpoint.pluginId) + stringBytes(endpoint.instanceId) + stringBytes(endpoint.profileId) + stringBytes(endpoint.rootId);
+        uint64_t bytes = stringBytes(endpoint.pluginId) + stringBytes(endpoint.instanceId) + stringBytes(endpoint.profileId) +
+            stringBytes(endpoint.rootId);
         if (endpoint.pathIdentity.has_value())
         {
             bytes += sizeof(endpoint.pathIdentity->pathTextStableIdentity) + sizeof(endpoint.pathIdentity->componentComparison) +
-                     sizeof(endpoint.pathIdentity->preferredSeparator) + stringBytes(endpoint.pathIdentity->acceptedSeparators) +
-                     sizeof(endpoint.pathIdentity->casePreserving) + sizeof(endpoint.pathIdentity->caseOnlyRename);
+                sizeof(endpoint.pathIdentity->preferredSeparator) + stringBytes(endpoint.pathIdentity->acceptedSeparators) +
+                sizeof(endpoint.pathIdentity->casePreserving) + sizeof(endpoint.pathIdentity->caseOnlyRename);
         }
         return bytes;
     };
@@ -453,35 +472,36 @@ enum class ObjectBindingSupport : uint8_t
 
     return std::visit(
         [&](const auto& typedPlan) noexcept -> uint64_t
-    {
-        using Plan     = std::remove_cvref_t<decltype(typedPlan)>;
-        uint64_t bytes = 0;
-        if constexpr (std::is_same_v<Plan, FileOperations::TransferPlan>)
         {
-            bytes += endpointBytes(typedPlan.sourceEndpoint) + endpointBytes(typedPlan.destinationEndpoint);
-            bytes += stringBytes(typedPlan.destination.providerFolderPath);
-            for (const auto& item : typedPlan.selectedItems)
-                bytes += itemBytes(item);
-            for (const auto& mapping : typedPlan.explicitMappings)
-                bytes += sizeof(mapping.sourceIndex) + stringBytes(mapping.destinationProviderPath);
-        }
-        else if constexpr (std::is_same_v<Plan, FileOperations::DeletePlan>)
-        {
-            bytes += endpointBytes(typedPlan.endpoint);
-            for (const auto& item : typedPlan.selectedItems)
-                bytes += itemBytes(item);
-        }
-        else
-        {
-            bytes += endpointBytes(typedPlan.endpoint);
-            for (const auto& step : typedPlan.finalMappings)
-                bytes += itemBytes(step.source) + stringBytes(step.finalLeafName) + stringBytes(step.providerJoinedPath) + stringBytes(step.providerParentKey) +
-                         stringBytes(step.providerSourceCollisionKey) + stringBytes(step.providerCollisionKey);
-            for (const BatchRenameExecutionLayer& layer : typedPlan.schedule.layers)
-                bytes += static_cast<uint64_t>(layer.operationIndices.size()) * sizeof(size_t);
-        }
-        return bytes;
-    },
+            using Plan = std::remove_cvref_t<decltype(typedPlan)>;
+            uint64_t bytes = 0;
+            if constexpr (std::is_same_v<Plan, FileOperations::TransferPlan>)
+            {
+                bytes += endpointBytes(typedPlan.sourceEndpoint) + endpointBytes(typedPlan.destinationEndpoint);
+                bytes += stringBytes(typedPlan.destination.providerFolderPath);
+                for (const auto& item : typedPlan.selectedItems)
+                    bytes += itemBytes(item);
+                for (const auto& mapping : typedPlan.explicitMappings)
+                    bytes += sizeof(mapping.sourceIndex) + stringBytes(mapping.destinationProviderPath);
+            }
+            else if constexpr (std::is_same_v<Plan, FileOperations::DeletePlan>)
+            {
+                bytes += endpointBytes(typedPlan.endpoint);
+                for (const auto& item : typedPlan.selectedItems)
+                    bytes += itemBytes(item);
+            }
+            else
+            {
+                bytes += endpointBytes(typedPlan.endpoint);
+                for (const auto& step : typedPlan.finalMappings)
+                    bytes += itemBytes(step.source) + stringBytes(step.finalLeafName) + stringBytes(step.providerJoinedPath) +
+                             stringBytes(step.providerParentKey) + stringBytes(step.providerSourceCollisionKey) +
+                             stringBytes(step.providerCollisionKey);
+                for (const BatchRenameExecutionLayer& layer : typedPlan.schedule.layers)
+                    bytes += static_cast<uint64_t>(layer.operationIndices.size()) * sizeof(size_t);
+            }
+            return bytes;
+        },
         plan);
 }
 
@@ -489,13 +509,13 @@ enum class ObjectBindingSupport : uint8_t
 {
     return std::visit(
         [](const auto& typedPlan) noexcept -> uint64_t
-    {
-        using Plan = std::remove_cvref_t<decltype(typedPlan)>;
-        if constexpr (std::is_same_v<Plan, FileOperations::RenamePlan>)
-            return static_cast<uint64_t>(typedPlan.finalMappings.size());
-        else
-            return static_cast<uint64_t>(typedPlan.selectedItems.size());
-    },
+        {
+            using Plan = std::remove_cvref_t<decltype(typedPlan)>;
+            if constexpr (std::is_same_v<Plan, FileOperations::RenamePlan>)
+                return static_cast<uint64_t>(typedPlan.finalMappings.size());
+            else
+                return static_cast<uint64_t>(typedPlan.selectedItems.size());
+        },
         plan);
 }
 
@@ -513,35 +533,35 @@ struct FileSystemCapabilitiesV2
     std::wstring providerId;
     std::wstring pathProfileId;
     std::wstring rootId;
-    bool copyOperation                                            = false;
-    bool moveOperation                                            = false;
-    bool nativeMoveOperation                                      = false;
-    bool renameOperation                                          = false;
-    bool createDirectoryOperation                                 = false;
-    bool read                                                     = false;
-    bool write                                                    = false;
-    bool deleteOperation                                          = false;
-    bool properties                                               = false;
-    bool recycleOperation                                         = false;
-    bool boundDelete                                              = false;
-    bool conditionalDelete                                        = false;
-    bool exclusiveStage                                           = false;
-    bool conditionalPublish                                       = false;
-    bool committedSize                                            = false;
-    bool preserveFileLink                                         = false;
-    bool preserveDirectoryLink                                    = false;
-    bool retargetInTree                                           = false;
-    bool exactLinkRemoval                                         = false;
-    bool verificationHostReadback                                 = false;
-    bool verificationProviderBlake3Proof                          = false;
-    bool verificationWriterDigestProof                            = false; // R3-2
-    bool verificationCapabilityCheckDeferred                      = false;
-    bool cancellationAbort                                        = false;
-    bool cancellationDeadline                                     = false;
+    bool copyOperation = false;
+    bool moveOperation = false;
+    bool nativeMoveOperation = false;
+    bool renameOperation = false;
+    bool createDirectoryOperation = false;
+    bool read = false;
+    bool write = false;
+    bool deleteOperation = false;
+    bool properties = false;
+    bool recycleOperation = false;
+    bool boundDelete = false;
+    bool conditionalDelete = false;
+    bool exclusiveStage = false;
+    bool conditionalPublish = false;
+    bool committedSize = false;
+    bool preserveFileLink = false;
+    bool preserveDirectoryLink = false;
+    bool retargetInTree = false;
+    bool exactLinkRemoval = false;
+    bool verificationHostReadback = false;
+    bool verificationProviderBlake3Proof = false;
+    bool verificationWriterDigestProof = false; // R3-2
+    bool verificationCapabilityCheckDeferred = false;
+    bool cancellationAbort = false;
+    bool cancellationDeadline = false;
     FileOperations::CancellationRouteClass cancellationRouteClass = FileOperations::CancellationRouteClass::Uncontained;
-    uint32_t providerWatchdogTimeoutMs                            = 0u;
-    uint64_t maxComponentUtf16                                    = 0u;
-    FileSystemNamespaceKind namespaceKind                         = FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER;
+    uint32_t providerWatchdogTimeoutMs = 0u;
+    uint64_t maxComponentUtf16 = 0u;
+    FileSystemNamespaceKind namespaceKind = FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER;
     std::optional<FileSystemPathIdentity> pathIdentity;
 
     // Retained only while the host is assembling the current plan. It lets pair
@@ -580,23 +600,26 @@ struct FileSystemCapabilitiesV2
     {
         case FILESYSTEM_COPY: return capabilities.copyOperation;
         case FILESYSTEM_MOVE: return capabilities.moveOperation;
-        case FILESYSTEM_DELETE: return (flags & FILESYSTEM_FLAG_USE_RECYCLE_BIN) != 0 ? capabilities.recycleOperation : capabilities.deleteOperation;
+        case FILESYSTEM_DELETE:
+            return (flags & FILESYSTEM_FLAG_USE_RECYCLE_BIN) != 0 ? capabilities.recycleOperation : capabilities.deleteOperation;
         case FILESYSTEM_RENAME: return capabilities.renameOperation;
         case FILESYSTEM_CREATE_DIRECTORY: return capabilities.createDirectoryOperation;
         default: return true;
     }
 }
 
-[[nodiscard]] std::vector<FolderView::RemovalDisposition> BuildDenseRemovedSourceDispositions(const FolderWindow::FileOperationCompletedEvent& event)
+[[nodiscard]] std::vector<FolderView::RemovalDisposition> BuildDenseRemovedSourceDispositions(
+    const FolderWindow::FileOperationCompletedEvent& event)
 {
-    std::vector<FolderView::RemovalDisposition> dispositions(event.sourcePaths.size(), FolderView::RemovalDisposition::Retained);
+    std::vector<FolderView::RemovalDisposition> dispositions(
+        event.sourcePaths.size(), FolderView::RemovalDisposition::Retained);
     for (const FolderWindow::FileOperationItemOutcome& outcome : event.itemOutcomes)
     {
         if (outcome.sourceIndex < dispositions.size())
         {
             dispositions[outcome.sourceIndex] = outcome.sourceDisposition == FileOperations::SourceDisposition::Removed
-                                                    ? FolderView::RemovalDisposition::Removed
-                                                    : FolderView::RemovalDisposition::Retained;
+                ? FolderView::RemovalDisposition::Removed
+                : FolderView::RemovalDisposition::Retained;
         }
     }
     return dispositions;
@@ -627,9 +650,9 @@ void ReportCapabilitiesContractViolationOnce(const IFileSystem* fileSystem, std:
 }
 
 [[nodiscard]] std::optional<FileSystemCapabilitiesV2> TryGetCapabilities(const wil::com_ptr<IFileSystem>& fileSystem,
-                                                                         std::wstring_view path,
-                                                                         FileSystemOperation operation,
-                                                                         std::wstring_view pluginId = {}) noexcept
+                                                                          std::wstring_view path,
+                                                                          FileSystemOperation operation,
+                                                                          std::wstring_view pluginId = {}) noexcept
 {
     if (! fileSystem)
     {
@@ -641,9 +664,10 @@ void ReportCapabilitiesContractViolationOnce(const IFileSystem* fileSystem, std:
         return std::nullopt;
     }
 
-    const ULONGLONG capabilityQueryStart       = GetTickCount64();
-    FileSystemRouteContract::QueryResult query = FileSystemRouteContract::Query(fileSystem.get(), path, operation, pluginId);
-    const ULONGLONG capabilityQueryElapsed     = GetTickCount64() - capabilityQueryStart;
+    const ULONGLONG capabilityQueryStart = GetTickCount64();
+    FileSystemRouteContract::QueryResult query =
+        FileSystemRouteContract::Query(fileSystem.get(), path, operation, pluginId);
+    const ULONGLONG capabilityQueryElapsed = GetTickCount64() - capabilityQueryStart;
     if (query.state != FileSystemRouteContract::QueryState::Available)
     {
         if (query.state == FileSystemRouteContract::QueryState::ContractViolation)
@@ -655,49 +679,49 @@ void ReportCapabilitiesContractViolationOnce(const IFileSystem* fileSystem, std:
 
     const FileSystemRouteContract::Snapshot& facts = query.snapshot;
     FileSystemCapabilitiesV2 capabilities{
-        .providerId                          = facts.providerId,
-        .pathProfileId                       = facts.pathProfileId,
-        .rootId                              = facts.rootId,
-        .copyOperation                       = facts.copyOperation,
-        .moveOperation                       = facts.moveOperation,
-        .nativeMoveOperation                 = facts.nativeMoveOperation,
-        .renameOperation                     = facts.renameOperation,
-        .createDirectoryOperation            = facts.createDirectoryOperation,
-        .read                                = facts.read,
-        .write                               = facts.write,
-        .deleteOperation                     = facts.deleteOperation,
-        .properties                          = facts.properties,
-        .recycleOperation                    = facts.recycleOperation,
-        .boundDelete                         = facts.boundDelete,
-        .conditionalDelete                   = facts.conditionalDelete,
-        .exclusiveStage                      = facts.exclusiveStage,
-        .conditionalPublish                  = facts.conditionalPublish,
-        .committedSize                       = facts.committedSize,
-        .preserveFileLink                    = facts.preserveFileLink,
-        .preserveDirectoryLink               = facts.preserveDirectoryLink,
-        .retargetInTree                      = facts.retargetInTree,
-        .exactLinkRemoval                    = facts.exactLinkRemoval,
-        .verificationHostReadback            = (facts.proofFlags & FILESYSTEM_ROUTE_PROOF_HOST_READBACK) != 0u,
-        .verificationProviderBlake3Proof     = (facts.proofFlags & FILESYSTEM_ROUTE_PROOF_PROVIDER_BLAKE3) != 0u,
-        .verificationWriterDigestProof       = (facts.proofFlags & FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST) != 0u,
+        .providerId = facts.providerId,
+        .pathProfileId = facts.pathProfileId,
+        .rootId = facts.rootId,
+        .copyOperation = facts.copyOperation,
+        .moveOperation = facts.moveOperation,
+        .nativeMoveOperation = facts.nativeMoveOperation,
+        .renameOperation = facts.renameOperation,
+        .createDirectoryOperation = facts.createDirectoryOperation,
+        .read = facts.read,
+        .write = facts.write,
+        .deleteOperation = facts.deleteOperation,
+        .properties = facts.properties,
+        .recycleOperation = facts.recycleOperation,
+        .boundDelete = facts.boundDelete,
+        .conditionalDelete = facts.conditionalDelete,
+        .exclusiveStage = facts.exclusiveStage,
+        .conditionalPublish = facts.conditionalPublish,
+        .committedSize = facts.committedSize,
+        .preserveFileLink = facts.preserveFileLink,
+        .preserveDirectoryLink = facts.preserveDirectoryLink,
+        .retargetInTree = facts.retargetInTree,
+        .exactLinkRemoval = facts.exactLinkRemoval,
+        .verificationHostReadback = (facts.proofFlags & FILESYSTEM_ROUTE_PROOF_HOST_READBACK) != 0u,
+        .verificationProviderBlake3Proof = (facts.proofFlags & FILESYSTEM_ROUTE_PROOF_PROVIDER_BLAKE3) != 0u,
+        .verificationWriterDigestProof = (facts.proofFlags & FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST) != 0u,
         .verificationCapabilityCheckDeferred = capabilityQueryElapsed > kVerificationCapabilityUiBudgetMs
 #ifdef ENABLE_TESTS
-                                               || g_forceVerificationCapabilityBudgetExceeded.load(std::memory_order_acquire)
+            || g_forceVerificationCapabilityBudgetExceeded.load(std::memory_order_acquire)
 #endif
             ,
-        .cancellationAbort    = facts.cancellationAbort,
+        .cancellationAbort = facts.cancellationAbort,
         .cancellationDeadline = facts.cancellationDeadline,
-        .cancellationRouteClass =
-            facts.cancellationRoute == FILESYSTEM_CANCELLATION_BOUNDED
-                ? FileOperations::CancellationRouteClass::Bounded
-                : (facts.cancellationRoute == FILESYSTEM_CANCELLATION_PROVIDER_WATCHDOG ? FileOperations::CancellationRouteClass::ProviderWatchdog
-                                                                                        : FileOperations::CancellationRouteClass::Uncontained),
+        .cancellationRouteClass = facts.cancellationRoute == FILESYSTEM_CANCELLATION_BOUNDED
+            ? FileOperations::CancellationRouteClass::Bounded
+            : (facts.cancellationRoute == FILESYSTEM_CANCELLATION_PROVIDER_WATCHDOG
+                   ? FileOperations::CancellationRouteClass::ProviderWatchdog
+                   : FileOperations::CancellationRouteClass::Uncontained),
         .providerWatchdogTimeoutMs = facts.providerWatchdogTimeoutMs,
-        .maxComponentUtf16         = facts.maxComponentUtf16,
-        .namespaceKind             = facts.namespaceKind,
-        .pathIdentity              = facts.pathIdentity,
-        .routeFileSystem           = fileSystem,
-        .routePath                 = std::wstring(path),
+        .maxComponentUtf16 = facts.maxComponentUtf16,
+        .namespaceKind = facts.namespaceKind,
+        .pathIdentity = facts.pathIdentity,
+        .routeFileSystem = fileSystem,
+        .routePath = std::wstring(path),
     };
     return capabilities;
 }
@@ -718,7 +742,7 @@ void ReportCapabilitiesContractViolationOnce(const IFileSystem* fileSystem, std:
                                                               std::wstring_view providerPath,
                                                               FileSystemOperation operation,
                                                               std::wstring_view pluginId = {},
-                                                              FileSystemFlags flags      = FILESYSTEM_FLAG_NONE) noexcept
+                                                              FileSystemFlags flags = FILESYSTEM_FLAG_NONE) noexcept
 {
     const std::optional<FileSystemCapabilitiesV2> capabilities = TryGetCapabilities(fileSystem, providerPath, operation, pluginId);
     if (! capabilities.has_value() || ! HasContainedCancellationRoute(capabilities.value()))
@@ -733,7 +757,7 @@ void ReportCapabilitiesContractViolationOnce(const IFileSystem* fileSystem, std:
 
     const std::optional<FileSystemCapabilitiesV2> copyCapabilities = TryGetCapabilities(fileSystem, providerPath, FILESYSTEM_COPY, pluginId);
     return copyCapabilities.has_value() && HasContainedCancellationRoute(copyCapabilities.value()) &&
-           CapabilitiesAllowSameFileSystemOperation(copyCapabilities.value(), FILESYSTEM_COPY);
+        CapabilitiesAllowSameFileSystemOperation(copyCapabilities.value(), FILESYSTEM_COPY);
 }
 
 [[nodiscard]] bool TypedPeerAllows(const FileSystemCapabilitiesV2& capabilities,
@@ -745,8 +769,8 @@ void ReportCapabilitiesContractViolationOnce(const IFileSystem* fileSystem, std:
     {
         return false;
     }
-    const FileSystemRouteContract::BooleanResult result =
-        FileSystemRouteContract::QueryTransferPeerAllowed(capabilities.routeFileSystem.get(), capabilities.routePath, operation, role, otherPluginId);
+    const FileSystemRouteContract::BooleanResult result = FileSystemRouteContract::QueryTransferPeerAllowed(
+        capabilities.routeFileSystem.get(), capabilities.routePath, operation, role, otherPluginId);
     return result.state == FileSystemRouteContract::QueryState::Available && result.value;
 }
 
@@ -763,12 +787,14 @@ void ReportCapabilitiesContractViolationOnce(const IFileSystem* fileSystem, std:
         return false;
     }
 
-    const FileSystemOperation pairOperation                  = operation == FILESYSTEM_MOVE ? FILESYSTEM_COPY : operation;
-    const std::optional<FileSystemCapabilitiesV2> sourceCaps = TryGetCapabilities(sourceFileSystem, sourceProviderPath, pairOperation, sourcePluginId);
+    const FileSystemOperation pairOperation = operation == FILESYSTEM_MOVE ? FILESYSTEM_COPY : operation;
+    const std::optional<FileSystemCapabilitiesV2> sourceCaps =
+        TryGetCapabilities(sourceFileSystem, sourceProviderPath, pairOperation, sourcePluginId);
     const std::optional<FileSystemCapabilitiesV2> destCaps =
         TryGetCapabilities(destinationFileSystem, destinationProviderPath, pairOperation, destinationPluginId);
-    if (! sourceCaps.has_value() || ! destCaps.has_value() || ! HasStablePathIdentity(sourceCaps.value()) || ! HasStablePathIdentity(destCaps.value()) ||
-        ! HasContainedCancellationRoute(sourceCaps.value()) || ! HasContainedCancellationRoute(destCaps.value()))
+    if (! sourceCaps.has_value() || ! destCaps.has_value() || ! HasStablePathIdentity(sourceCaps.value()) ||
+        ! HasStablePathIdentity(destCaps.value()) || ! HasContainedCancellationRoute(sourceCaps.value()) ||
+        ! HasContainedCancellationRoute(destCaps.value()))
     {
         return false;
     }
@@ -784,15 +810,15 @@ void ReportCapabilitiesContractViolationOnce(const IFileSystem* fileSystem, std:
             TryGetCapabilities(sourceFileSystem, sourceProviderPath, FILESYSTEM_MOVE, sourcePluginId);
         const std::optional<FileSystemCapabilitiesV2> destinationMoveCaps =
             TryGetCapabilities(destinationFileSystem, destinationProviderPath, FILESYSTEM_MOVE, destinationPluginId);
-        if (! sourceMoveCaps.has_value() || ! destinationMoveCaps.has_value() || ! HasContainedCancellationRoute(sourceMoveCaps.value()) ||
-            ! HasContainedCancellationRoute(destinationMoveCaps.value()))
+        if (! sourceMoveCaps.has_value() || ! destinationMoveCaps.has_value() ||
+            ! HasContainedCancellationRoute(sourceMoveCaps.value()) || ! HasContainedCancellationRoute(destinationMoveCaps.value()))
         {
             return false;
         }
     }
 
     return TypedPeerAllows(sourceCaps.value(), FILESYSTEM_COPY, FILESYSTEM_TRANSFER_PEER_EXPORT, destinationPluginId) &&
-           TypedPeerAllows(destCaps.value(), FILESYSTEM_COPY, FILESYSTEM_TRANSFER_PEER_IMPORT, sourcePluginId);
+        TypedPeerAllows(destCaps.value(), FILESYSTEM_COPY, FILESYSTEM_TRANSFER_PEER_IMPORT, sourcePluginId);
 }
 
 [[nodiscard]] bool CapabilityPairAllowsCrossFileSystemCopyMove(const FileSystemCapabilitiesV2& sourceCaps,
@@ -801,18 +827,20 @@ void ReportCapabilitiesContractViolationOnce(const IFileSystem* fileSystem, std:
                                                                std::wstring_view destinationPluginId,
                                                                FileSystemOperation operation) noexcept
 {
-    if ((operation != FILESYSTEM_COPY && operation != FILESYSTEM_MOVE) || ! HasStablePathIdentity(sourceCaps) || ! HasStablePathIdentity(destinationCaps) ||
-        ! HasContainedCancellationRoute(sourceCaps) || ! HasContainedCancellationRoute(destinationCaps) || ! sourceCaps.read || ! destinationCaps.write)
+    if ((operation != FILESYSTEM_COPY && operation != FILESYSTEM_MOVE) || ! HasStablePathIdentity(sourceCaps) ||
+        ! HasStablePathIdentity(destinationCaps) || ! HasContainedCancellationRoute(sourceCaps) ||
+        ! HasContainedCancellationRoute(destinationCaps) || ! sourceCaps.read || ! destinationCaps.write)
     {
         return false;
     }
 
     return TypedPeerAllows(sourceCaps, operation, FILESYSTEM_TRANSFER_PEER_EXPORT, destinationPluginId) &&
-           TypedPeerAllows(destinationCaps, operation, FILESYSTEM_TRANSFER_PEER_IMPORT, sourcePluginId);
+        TypedPeerAllows(destinationCaps, operation, FILESYSTEM_TRANSFER_PEER_IMPORT, sourcePluginId);
 }
 
-[[nodiscard]] FileOperations::ObjectBindingResult CaptureBoundObjectAuthorityImpl(wil::com_ptr<IFileSystemBoundObject> bound,
-                                                                                  std::wstring_view pathProfileId) noexcept
+[[nodiscard]] FileOperations::ObjectBindingResult CaptureBoundObjectAuthorityImpl(
+    wil::com_ptr<IFileSystemBoundObject> bound,
+    std::wstring_view pathProfileId) noexcept
 {
     FileOperations::ObjectBindingResult result{};
     if (! bound)
@@ -823,11 +851,11 @@ void ReportCapabilitiesContractViolationOnce(const IFileSystem* fileSystem, std:
     }
 
     FileSystemBoundObjectSnapshot snapshot{};
-    snapshot.sizeBytes                        = sizeof(snapshot);
-    const HRESULT snapshotHr                  = bound->GetSnapshot(&snapshot);
+    snapshot.sizeBytes = sizeof(snapshot);
+    const HRESULT snapshotHr = bound->GetSnapshot(&snapshot);
     constexpr uint32_t kMaxIdentityTokenBytes = 64u * 1024u;
-    const bool kindValid                      = snapshot.kind >= FILESYSTEM_BOUND_REGULAR_FILE && snapshot.kind <= FILESYSTEM_BOUND_OTHER;
-    const bool objectValid                    = snapshot.objectId != nullptr && snapshot.objectIdBytes > 0u && snapshot.objectIdBytes <= kMaxIdentityTokenBytes;
+    const bool kindValid = snapshot.kind >= FILESYSTEM_BOUND_REGULAR_FILE && snapshot.kind <= FILESYSTEM_BOUND_OTHER;
+    const bool objectValid = snapshot.objectId != nullptr && snapshot.objectIdBytes > 0u && snapshot.objectIdBytes <= kMaxIdentityTokenBytes;
     const bool revisionValid = (snapshot.revisionIdBytes == 0u && snapshot.revisionId == nullptr) ||
                                (snapshot.revisionIdBytes > 0u && snapshot.revisionIdBytes <= kMaxIdentityTokenBytes && snapshot.revisionId != nullptr);
     if (FAILED(snapshotHr))
@@ -861,9 +889,9 @@ void ReportCapabilitiesContractViolationOnce(const IFileSystem* fileSystem, std:
 }
 
 [[nodiscard]] HRESULT CrossCheckBoundObjectIdentityImpl(const FileOperations::BoundObjectAuthority& expected,
-                                                        const FileOperations::BoundObjectAuthority& current,
-                                                        bool& sameObject,
-                                                        bool& sameRevision) noexcept
+                                                         const FileOperations::BoundObjectAuthority& current,
+                                                         bool& sameObject,
+                                                         bool& sameRevision) noexcept
 {
     sameObject   = false;
     sameRevision = false;
@@ -873,7 +901,7 @@ void ReportCapabilitiesContractViolationOnce(const IFileSystem* fileSystem, std:
         return E_INVALIDARG;
     }
 
-    BOOL providerSame    = FALSE;
+    BOOL providerSame = FALSE;
     const HRESULT sameHr = expected.boundObject->IsSameObject(current.boundObject.get(), &providerSame);
     if (FAILED(sameHr))
     {
@@ -901,9 +929,9 @@ void SetFileOpsVerificationCapabilityBudgetExceededForSelfTest(bool enabled) noe
 #endif
 
 HRESULT FileOperations::CrossCheckBoundObjectIdentity(const BoundObjectAuthority& expected,
-                                                      const BoundObjectAuthority& current,
-                                                      bool& sameObject,
-                                                      bool& sameRevision) noexcept
+                                                       const BoundObjectAuthority& current,
+                                                       bool& sameObject,
+                                                       bool& sameRevision) noexcept
 {
     return CrossCheckBoundObjectIdentityImpl(expected, current, sameObject, sameRevision);
 }
@@ -918,7 +946,8 @@ HRESULT FileOperations::ValidatePlan(const FileOperationPlan& plan, PlanRejectio
     return ValidatePlanImpl(plan, rejectionBucket, allowPendingPermanentConsent);
 }
 
-std::optional<FileOperations::OperationStrategy> FileOperations::SelectMoveStrategy(const MoveStrategyQualificationFacts& facts) noexcept
+std::optional<FileOperations::OperationStrategy> FileOperations::SelectMoveStrategy(
+    const MoveStrategyQualificationFacts& facts) noexcept
 {
     if (facts.nativeMoveQualified)
     {
@@ -933,8 +962,10 @@ std::optional<FileOperations::OperationStrategy> FileOperations::SelectMoveStrat
     // R3-2: a destination without object binding qualifies when its atomic-final writer proves the
     // published content; the bridge then removes each source only after that proof matches.
     const bool destinationQualified =
-        (facts.destinationExclusiveStage && facts.destinationConditionalPublish && facts.destinationBindingAvailable) || facts.destinationWriterDigestProof;
-    if (facts.movePairQualified && facts.sourceBoundDelete && facts.sourceConditionalDelete && facts.sourceBindingAvailable && destinationQualified)
+        (facts.destinationExclusiveStage && facts.destinationConditionalPublish && facts.destinationBindingAvailable) ||
+        facts.destinationWriterDigestProof;
+    if (facts.movePairQualified && facts.sourceBoundDelete && facts.sourceConditionalDelete && facts.sourceBindingAvailable &&
+        destinationQualified)
     {
         return OperationStrategy::Managed;
     }
@@ -943,14 +974,15 @@ std::optional<FileOperations::OperationStrategy> FileOperations::SelectMoveStrat
 }
 
 bool FileOperations::IsProviderKeepBothDestinationEligible(bool providerHandlesNestedKeepBoth,
-                                                           std::wstring_view conflictDestinationPath,
-                                                           std::wstring_view selectedDestinationPath) noexcept
+                                                            std::wstring_view conflictDestinationPath,
+                                                            std::wstring_view selectedDestinationPath) noexcept
 {
     return providerHandlesNestedKeepBoth ||
            (! selectedDestinationPath.empty() && NavigationLocation::EqualsNoCase(conflictDestinationPath, selectedDestinationPath));
 }
 
-FileOperations::ManagedCleanupAttemptDisposition FileOperations::ClassifyManagedCleanupMutation(const ManagedCleanupMutationFacts& facts) noexcept
+FileOperations::ManagedCleanupAttemptDisposition FileOperations::ClassifyManagedCleanupMutation(
+    const ManagedCleanupMutationFacts& facts) noexcept
 {
     if (! facts.outcomeKnown)
     {
@@ -959,7 +991,8 @@ FileOperations::ManagedCleanupAttemptDisposition FileOperations::ClassifyManaged
 
     if (facts.mutationCommitted)
     {
-        return facts.originalStillPresent ? ManagedCleanupAttemptDisposition::ProviderContractViolation : ManagedCleanupAttemptDisposition::Removed;
+        return facts.originalStillPresent ? ManagedCleanupAttemptDisposition::ProviderContractViolation
+                                          : ManagedCleanupAttemptDisposition::Removed;
     }
 
     if (! facts.originalStillPresent)
@@ -977,19 +1010,21 @@ FileOperations::ManagedCleanupAttemptDisposition FileOperations::ClassifyManaged
     return ManagedCleanupAttemptDisposition::Retained;
 }
 
-bool FileOperations::TryResolveTransferDestinationProviderPath(const TransferPlan& plan, const size_t sourceIndex, std::wstring& destinationOut) noexcept
+bool FileOperations::TryResolveTransferDestinationProviderPath(const TransferPlan& plan,
+                                                               const size_t sourceIndex,
+                                                               std::wstring& destinationOut) noexcept
 {
     destinationOut.clear();
-    if (sourceIndex >= plan.selectedItems.size() || ! plan.sourceEndpoint.pathIdentity.has_value() || ! plan.destinationEndpoint.pathIdentity.has_value() ||
-        plan.destination.providerFolderPath.empty())
+    if (sourceIndex >= plan.selectedItems.size() || ! plan.sourceEndpoint.pathIdentity.has_value() ||
+        ! plan.destinationEndpoint.pathIdentity.has_value() || plan.destination.providerFolderPath.empty())
     {
         return false;
     }
 
     if (! plan.explicitMappings.empty())
     {
-        const auto mapping = std::ranges::find_if(
-            plan.explicitMappings, [sourceIndex](const TransferDestinationMapping& candidate) noexcept { return candidate.sourceIndex == sourceIndex; });
+        const auto mapping = std::ranges::find_if(plan.explicitMappings, [sourceIndex](const TransferDestinationMapping& candidate) noexcept
+        { return candidate.sourceIndex == sourceIndex; });
         if (mapping == plan.explicitMappings.end() || mapping->destinationProviderPath.empty())
         {
             return false;
@@ -999,12 +1034,16 @@ bool FileOperations::TryResolveTransferDestinationProviderPath(const TransferPla
     }
 
     std::wstring sourceLeaf;
-    if (! TryGetFileSystemLeafName(plan.sourceEndpoint.pathIdentity.value(), plan.selectedItems[sourceIndex].providerPath, sourceLeaf))
+    if (! TryGetFileSystemLeafName(plan.sourceEndpoint.pathIdentity.value(),
+                                    plan.selectedItems[sourceIndex].providerPath,
+                                    sourceLeaf))
     {
         return false;
     }
 
-    destinationOut = JoinFileSystemPath(plan.destinationEndpoint.pathIdentity.value(), plan.destination.providerFolderPath, sourceLeaf);
+    destinationOut = JoinFileSystemPath(plan.destinationEndpoint.pathIdentity.value(),
+                                        plan.destination.providerFolderPath,
+                                        sourceLeaf);
     return ! destinationOut.empty();
 }
 
@@ -1013,20 +1052,22 @@ bool FileOperations::IsLocalFileSystemEndpoint(const QualifiedEndpoint& endpoint
     return IsLocalFileSystemEndpointImpl(endpoint);
 }
 
-bool FileOperations::QualifiedEndpointsReferToSameRoot(const QualifiedEndpoint& left, const QualifiedEndpoint& right) noexcept
+bool FileOperations::QualifiedEndpointsReferToSameRoot(const QualifiedEndpoint& left,
+                                                       const QualifiedEndpoint& right) noexcept
 {
     return QualifiedEndpointsMatchImpl(left, right);
 }
 
-bool FileOperations::QualifiedEndpointsShareObjectIdentityDomain(const QualifiedEndpoint& left, const QualifiedEndpoint& right) noexcept
+bool FileOperations::QualifiedEndpointsShareObjectIdentityDomain(const QualifiedEndpoint& left,
+                                                                 const QualifiedEndpoint& right) noexcept
 {
     return QualifiedEndpointsShareObjectIdentityDomainImpl(left, right);
 }
 
 FileOperations::ObjectBindingResult FileOperations::BindObjectAuthority(IFileSystem* fileSystem,
-                                                                        std::wstring_view providerPath,
-                                                                        std::wstring_view pathProfileId,
-                                                                        FileSystemBindFlags flags) noexcept
+                                                                         std::wstring_view providerPath,
+                                                                         std::wstring_view pathProfileId,
+                                                                         FileSystemBindFlags flags) noexcept
 {
     Debug::Perf::Scope perf(L"fileops.identity.bind_us");
     perf.SetValue0(static_cast<uint64_t>(providerPath.size()) * sizeof(wchar_t));
@@ -1085,15 +1126,15 @@ FileOperations::ObjectBindingResult FileOperations::BindObjectAuthority(IFileSys
     }
 
     ObjectBindingResult captured = CaptureBoundObjectAuthorityImpl(std::move(bound), pathProfileId);
-    result.authority             = std::move(captured.authority);
+    result.authority = std::move(captured.authority);
     return finish(captured.state, captured.status);
 }
 
 HRESULT FileOperationArtifacts::ProjectProviderObject(IFileSystem* const fileSystem,
-                                                      const std::wstring_view providerPath,
-                                                      const std::wstring_view pluginId,
-                                                      const std::wstring_view instanceContext,
-                                                      Projection& out) noexcept
+                                                       const std::wstring_view providerPath,
+                                                       const std::wstring_view pluginId,
+                                                       const std::wstring_view instanceContext,
+                                                       Projection& out) noexcept
 {
     out = {};
     Candidate candidate{};
@@ -1107,10 +1148,10 @@ HRESULT FileOperationArtifacts::ProjectProviderObject(IFileSystem* const fileSys
 }
 
 HRESULT FileOperationArtifacts::CaptureProviderObjectCandidate(IFileSystem* const fileSystem,
-                                                               const std::wstring_view providerPath,
-                                                               const std::wstring_view pluginId,
-                                                               const std::wstring_view instanceContext,
-                                                               Candidate& out) noexcept
+                                                                const std::wstring_view providerPath,
+                                                                const std::wstring_view pluginId,
+                                                                const std::wstring_view instanceContext,
+                                                                Candidate& out) noexcept
 {
     out = {};
     if (providerPath.empty())
@@ -1119,20 +1160,21 @@ HRESULT FileOperationArtifacts::CaptureProviderObjectCandidate(IFileSystem* cons
     }
 
     const std::wstring canonicalInstance = CanonicalInstanceId(instanceContext);
-    const bool possibleName              = HasPossibleArtifactName(std::filesystem::path(std::wstring(providerPath)).filename().native());
-    const auto possibleFallback          = [&]() noexcept -> HRESULT
+    const bool possibleName = HasPossibleArtifactName(
+        std::filesystem::path(std::wstring(providerPath)).filename().native());
+    const auto possibleFallback = [&]() noexcept -> HRESULT
     {
         if (! possibleName)
         {
             return S_FALSE;
         }
-        out.endpoint.pluginId   = std::wstring(pluginId);
+        out.endpoint.pluginId = std::wstring(pluginId);
         out.endpoint.instanceId = canonicalInstance;
-        out.pathIdentity        = FileSystemPathIdentity{
+        out.pathIdentity = FileSystemPathIdentity{
             .pathTextStableIdentity = false,
-            .componentComparison    = FileSystemPathComponentComparison::OrdinalCaseSensitive,
+            .componentComparison = FileSystemPathComponentComparison::OrdinalCaseSensitive,
         };
-        out.path       = std::wstring(providerPath);
+        out.path = std::wstring(providerPath);
         out.probeState = ProbeState::Indeterminate;
         return S_OK;
     };
@@ -1141,24 +1183,24 @@ HRESULT FileOperationArtifacts::CaptureProviderObjectCandidate(IFileSystem* cons
     {
         return possibleFallback();
     }
-    wil::com_ptr<IFileSystem> retainedFileSystem               = fileSystem;
-    const std::optional<FileSystemCapabilitiesV2> capabilities = TryGetCapabilities(retainedFileSystem, providerPath, FILESYSTEM_RENAME, pluginId);
+    wil::com_ptr<IFileSystem> retainedFileSystem = fileSystem;
+    const std::optional<FileSystemCapabilitiesV2> capabilities =
+        TryGetCapabilities(retainedFileSystem, providerPath, FILESYSTEM_RENAME, pluginId);
     if (! capabilities.has_value() || ! HasStablePathIdentity(capabilities.value()))
     {
         return possibleFallback();
     }
 
     out = Candidate{
-        .endpoint =
-            Endpoint{
-                .pluginId   = std::wstring(pluginId),
-                .instanceId = canonicalInstance,
-                .profileId  = capabilities->pathProfileId,
-                .rootId     = capabilities->rootId,
-            },
+        .endpoint = Endpoint{
+            .pluginId = std::wstring(pluginId),
+            .instanceId = canonicalInstance,
+            .profileId = capabilities->pathProfileId,
+            .rootId = capabilities->rootId,
+        },
         .pathIdentity = capabilities->pathIdentity.value(),
-        .path         = std::wstring(providerPath),
-        .probeState   = ProbeState::Indeterminate,
+        .path = std::wstring(providerPath),
+        .probeState = ProbeState::Indeterminate,
     };
     if (ClassifyCandidate(out).classification == Classification::Ordinary)
     {
@@ -1167,7 +1209,10 @@ HRESULT FileOperationArtifacts::CaptureProviderObjectCandidate(IFileSystem* cons
     }
 
     FileOperations::ObjectBindingResult bound = FileOperations::BindObjectAuthority(
-        fileSystem, providerPath, capabilities->pathProfileId, static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA));
+        fileSystem,
+        providerPath,
+        capabilities->pathProfileId,
+        static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA));
     Debug::Perf::EmitValue(L"fileops.artifact.capture.bind_count", 1u, bound.status);
     if (bound.state == FileOperations::ObjectBindingState::Missing)
     {
@@ -1176,22 +1221,23 @@ HRESULT FileOperationArtifacts::CaptureProviderObjectCandidate(IFileSystem* cons
     }
     if (bound.state == FileOperations::ObjectBindingState::Bound)
     {
-        out.probeState      = ProbeState::Present;
+        out.probeState = ProbeState::Present;
         out.currentIdentity = Identity{
-            .objectId      = std::move(bound.authority.identity.objectId),
-            .revisionId    = std::move(bound.authority.identity.revisionId),
+            .objectId = std::move(bound.authority.identity.objectId),
+            .revisionId = std::move(bound.authority.identity.revisionId),
             .pathProfileId = std::move(bound.authority.identity.pathProfileId),
-            .kind          = bound.authority.kind,
+            .kind = bound.authority.kind,
         };
     }
     return S_OK;
 }
 
-HRESULT FileOperationArtifacts::RevalidateProviderTouchGuard(IFileSystem* const fileSystem,
-                                                             const std::wstring_view pluginId,
-                                                             const std::wstring_view instanceContext,
-                                                             const TouchGuardReceipt& receipt,
-                                                             const std::span<const std::filesystem::path> providerPaths) noexcept
+HRESULT FileOperationArtifacts::RevalidateProviderTouchGuard(
+    IFileSystem* const fileSystem,
+    const std::wstring_view pluginId,
+    const std::wstring_view instanceContext,
+    const TouchGuardReceipt& receipt,
+    const std::span<const std::filesystem::path> providerPaths) noexcept
 {
     Debug::Perf::Scope perf(L"fileops.artifact.touch.direct_revalidate.us");
     perf.SetValue1(static_cast<uint64_t>(providerPaths.size()));
@@ -1214,7 +1260,8 @@ HRESULT FileOperationArtifacts::RevalidateProviderTouchGuard(IFileSystem* const 
     subset.items.reserve(std::min(receipt.items.size(), providerPaths.size()));
     for (const TouchGuardItem& accepted : receipt.items)
     {
-        const bool selected = std::ranges::any_of(providerPaths, [&](const std::filesystem::path& path) noexcept {
+        const bool selected = std::ranges::any_of(providerPaths, [&](const std::filesystem::path& path) noexcept
+        {
             return EquivalentPath(accepted.pathIdentity, accepted.path.native(), path.native());
         });
         if (selected)
@@ -1232,7 +1279,8 @@ HRESULT FileOperationArtifacts::RevalidateProviderTouchGuard(IFileSystem* const 
     for (const TouchGuardItem& accepted : subset.items)
     {
         Candidate candidate{};
-        const HRESULT captureHr = CaptureProviderObjectCandidate(fileSystem, accepted.path.native(), pluginId, instanceContext, candidate);
+        const HRESULT captureHr =
+            CaptureProviderObjectCandidate(fileSystem, accepted.path.native(), pluginId, instanceContext, candidate);
         if (captureHr != S_OK)
         {
             return finish(FAILED(captureHr) ? captureHr : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH), subset.items.size());
@@ -1243,11 +1291,11 @@ HRESULT FileOperationArtifacts::RevalidateProviderTouchGuard(IFileSystem* const 
 }
 
 HRESULT FileOperationArtifacts::ProjectProviderChildObject(IFileSystem* const fileSystem,
-                                                           const std::wstring_view providerFolderPath,
-                                                           const std::wstring_view childLeaf,
-                                                           const std::wstring_view pluginId,
-                                                           const std::wstring_view instanceContext,
-                                                           Projection& out) noexcept
+                                                            const std::wstring_view providerFolderPath,
+                                                            const std::wstring_view childLeaf,
+                                                            const std::wstring_view pluginId,
+                                                            const std::wstring_view instanceContext,
+                                                            Projection& out) noexcept
 {
     out = {};
     if (childLeaf.empty())
@@ -1273,17 +1321,19 @@ HRESULT FileOperationArtifacts::ProjectProviderChildObject(IFileSystem* const fi
     return ProjectProviderObject(fileSystem, childPath, pluginId, instanceContext, out);
 }
 
-FileOperations::ObjectBindingResult FileOperations::CaptureReturnedObjectAuthority(wil::com_ptr<IFileSystemBoundObject> bound,
-                                                                                   std::wstring_view pathProfileId) noexcept
+
+FileOperations::ObjectBindingResult FileOperations::CaptureReturnedObjectAuthority(
+    wil::com_ptr<IFileSystemBoundObject> bound,
+    std::wstring_view pathProfileId) noexcept
 {
     return CaptureBoundObjectAuthorityImpl(std::move(bound), pathProfileId);
 }
 
 FileOperations::ObjectRevalidationResult FileOperations::RevalidateObjectAuthority(IFileSystem* fileSystem,
-                                                                                   std::wstring_view providerPath,
-                                                                                   std::wstring_view pathProfileId,
-                                                                                   FileSystemBindFlags flags,
-                                                                                   const BoundObjectAuthority& expected) noexcept
+                                                                                    std::wstring_view providerPath,
+                                                                                    std::wstring_view pathProfileId,
+                                                                                    FileSystemBindFlags flags,
+                                                                                    const BoundObjectAuthority& expected) noexcept
 {
     Debug::Perf::Scope perf(L"fileops.identity.revalidate_us");
     perf.SetValue0(static_cast<uint64_t>(providerPath.size()) * sizeof(wchar_t));
@@ -1308,30 +1358,36 @@ FileOperations::ObjectRevalidationResult FileOperations::RevalidateObjectAuthori
         case ObjectBindingState::Unsupported: return finish(ObjectRevalidationState::Unsupported, rebound.status);
         case ObjectBindingState::Missing: return finish(ObjectRevalidationState::Missing, rebound.status);
         case ObjectBindingState::Indeterminate: return finish(ObjectRevalidationState::Indeterminate, rebound.status);
-        case ObjectBindingState::ProviderContractViolation: return finish(ObjectRevalidationState::ProviderContractViolation, rebound.status);
+        case ObjectBindingState::ProviderContractViolation:
+            return finish(ObjectRevalidationState::ProviderContractViolation, rebound.status);
         case ObjectBindingState::Bound: break;
     }
 
-    result.current       = std::move(rebound.authority);
-    bool sameObject      = false;
-    bool sameRevision    = false;
+    result.current = std::move(rebound.authority);
+    bool sameObject   = false;
+    bool sameRevision = false;
     const HRESULT sameHr = CrossCheckBoundObjectIdentity(expected, result.current, sameObject, sameRevision);
     if (FAILED(sameHr))
     {
-        return finish(sameHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) || sameHr == E_INVALIDARG ? ObjectRevalidationState::ProviderContractViolation
-                                                                                                 : ObjectRevalidationState::Indeterminate,
+        return finish(sameHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) || sameHr == E_INVALIDARG
+                          ? ObjectRevalidationState::ProviderContractViolation
+                          : ObjectRevalidationState::Indeterminate,
                       sameHr);
     }
-    return finish(sameObject && sameRevision && expected.kind == result.current.kind ? ObjectRevalidationState::Same : ObjectRevalidationState::Changed, S_OK);
+    return finish(sameObject && sameRevision && expected.kind == result.current.kind
+                      ? ObjectRevalidationState::Same
+                      : ObjectRevalidationState::Changed,
+                  S_OK);
 }
 
-FileOperations::TransferMutationGuard FileOperations::PrepareTransferMutationGuard(IFileSystem* sourceFileSystem,
-                                                                                   IFileSystem* destinationFileSystem,
-                                                                                   const QualifiedEndpoint& sourceEndpoint,
-                                                                                   const QualifiedEndpoint& destinationEndpoint,
-                                                                                   TransferIntent intent,
-                                                                                   std::wstring_view sourcePath,
-                                                                                   std::wstring_view destinationPath) noexcept
+FileOperations::TransferMutationGuard FileOperations::PrepareTransferMutationGuard(
+    IFileSystem* sourceFileSystem,
+    IFileSystem* destinationFileSystem,
+    const QualifiedEndpoint& sourceEndpoint,
+    const QualifiedEndpoint& destinationEndpoint,
+    TransferIntent intent,
+    std::wstring_view sourcePath,
+    std::wstring_view destinationPath) noexcept
 {
     Debug::Perf::Scope perf(L"fileops.identity.guard_us");
     perf.SetValue0(static_cast<uint64_t>(sourcePath.size() + destinationPath.size()) * sizeof(wchar_t));
@@ -1345,8 +1401,8 @@ FileOperations::TransferMutationGuard FileOperations::PrepareTransferMutationGua
         perf.SetHr(status);
         return std::move(guard);
     };
-    if (sourceFileSystem == nullptr || sourcePath.empty() || destinationPath.empty() || ! IsQualifiedEndpointValid(sourceEndpoint) ||
-        ! IsQualifiedEndpointValid(destinationEndpoint))
+    if (sourceFileSystem == nullptr || sourcePath.empty() || destinationPath.empty() ||
+        ! IsQualifiedEndpointValid(sourceEndpoint) || ! IsQualifiedEndpointValid(destinationEndpoint))
     {
         return finish(TransferSafetyState::ProviderContractViolation, E_INVALIDARG);
     }
@@ -1355,7 +1411,7 @@ FileOperations::TransferMutationGuard FileOperations::PrepareTransferMutationGua
         destinationFileSystem = sourceFileSystem;
     }
 
-    const bool sameRoot                 = QualifiedEndpointsMatchImpl(sourceEndpoint, destinationEndpoint);
+    const bool sameRoot = QualifiedEndpointsMatchImpl(sourceEndpoint, destinationEndpoint);
     const bool sameObjectIdentityDomain = QualifiedEndpointsShareObjectIdentityDomainImpl(sourceEndpoint, destinationEndpoint);
     if (sameRoot)
     {
@@ -1366,8 +1422,9 @@ FileOperations::TransferMutationGuard FileOperations::PrepareTransferMutationGua
         }
     }
 
-    constexpr FileSystemBindFlags bindFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
-    const auto bindingFailure               = [](ObjectBindingState state, TransferSafetyState missingState) noexcept -> TransferSafetyState
+    constexpr FileSystemBindFlags bindFlags =
+        static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+    const auto bindingFailure = [](ObjectBindingState state, TransferSafetyState missingState) noexcept -> TransferSafetyState
     {
         switch (state)
         {
@@ -1381,11 +1438,11 @@ FileOperations::TransferMutationGuard FileOperations::PrepareTransferMutationGua
     };
     const auto sameObject = [](const BoundObjectAuthority& left, const BoundObjectAuthority& right, BOOL& same) noexcept -> HRESULT
     {
-        same              = FALSE;
+        same = FALSE;
         bool snapshotSame = false;
         bool sameRevision = false;
-        const HRESULT hr  = CrossCheckBoundObjectIdentity(left, right, snapshotSame, sameRevision);
-        same              = SUCCEEDED(hr) && snapshotSame ? TRUE : FALSE;
+        const HRESULT hr = CrossCheckBoundObjectIdentity(left, right, snapshotSame, sameRevision);
+        same = SUCCEEDED(hr) && snapshotSame ? TRUE : FALSE;
         return hr;
     };
 
@@ -1396,7 +1453,8 @@ FileOperations::TransferMutationGuard FileOperations::PrepareTransferMutationGua
     }
     guard.source = std::move(source.authority);
 
-    ObjectBindingResult destination = BindObjectAuthority(destinationFileSystem, destinationPath, destinationEndpoint.profileId, bindFlags);
+    ObjectBindingResult destination =
+        BindObjectAuthority(destinationFileSystem, destinationPath, destinationEndpoint.profileId, bindFlags);
     if (destination.state == ObjectBindingState::Bound)
     {
         // The final destination is a collision object, not part of the traversal ancestry.
@@ -1405,12 +1463,13 @@ FileOperations::TransferMutationGuard FileOperations::PrepareTransferMutationGua
         // hard AncestryLink stop below.
         if (sameObjectIdentityDomain)
         {
-            BOOL same            = FALSE;
+            BOOL same = FALSE;
             const HRESULT sameHr = sameObject(guard.source, destination.authority, same);
             if (FAILED(sameHr))
             {
-                return finish(sameHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) || sameHr == E_INVALIDARG ? TransferSafetyState::ProviderContractViolation
-                                                                                                         : TransferSafetyState::Indeterminate,
+                return finish(sameHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) || sameHr == E_INVALIDARG
+                                  ? TransferSafetyState::ProviderContractViolation
+                                  : TransferSafetyState::Indeterminate,
                               sameHr);
             }
             if (same != FALSE)
@@ -1442,8 +1501,10 @@ FileOperations::TransferMutationGuard FileOperations::PrepareTransferMutationGua
             return finish(TransferSafetyState::Unsupported, HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
         }
 
-        ObjectBindingResult boundSourceParent      = BindObjectAuthority(sourceFileSystem, sourceParent, sourceEndpoint.profileId, bindFlags);
-        ObjectBindingResult boundDestinationParent = BindObjectAuthority(destinationFileSystem, destinationParent, destinationEndpoint.profileId, bindFlags);
+        ObjectBindingResult boundSourceParent =
+            BindObjectAuthority(sourceFileSystem, sourceParent, sourceEndpoint.profileId, bindFlags);
+        ObjectBindingResult boundDestinationParent =
+            BindObjectAuthority(destinationFileSystem, destinationParent, destinationEndpoint.profileId, bindFlags);
         if (boundSourceParent.state != ObjectBindingState::Bound)
         {
             return finish(bindingFailure(boundSourceParent.state, TransferSafetyState::SourceChanged), boundSourceParent.status);
@@ -1465,12 +1526,13 @@ FileOperations::TransferMutationGuard FileOperations::PrepareTransferMutationGua
                 return finish(TransferSafetyState::AncestryLink, HRESULT_FROM_WIN32(ERROR_REPARSE_TAG_INVALID));
             }
 
-            BOOL same            = FALSE;
+            BOOL same = FALSE;
             const HRESULT sameHr = sameObject(guard.sourceParent->authority, boundDestinationParent.authority, same);
             if (FAILED(sameHr))
             {
-                return finish(sameHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) || sameHr == E_INVALIDARG ? TransferSafetyState::ProviderContractViolation
-                                                                                                         : TransferSafetyState::Indeterminate,
+                return finish(sameHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) || sameHr == E_INVALIDARG
+                                  ? TransferSafetyState::ProviderContractViolation
+                                  : TransferSafetyState::Indeterminate,
                               sameHr);
             }
             if (same != FALSE)
@@ -1494,7 +1556,8 @@ FileOperations::TransferMutationGuard FileOperations::PrepareTransferMutationGua
         }
         for (size_t depth = 0u; ! current.empty() && depth < 1024u; ++depth)
         {
-            ObjectBindingResult ancestor = BindObjectAuthority(destinationFileSystem, current, destinationEndpoint.profileId, bindFlags);
+            ObjectBindingResult ancestor =
+                BindObjectAuthority(destinationFileSystem, current, destinationEndpoint.profileId, bindFlags);
             if (ancestor.state == ObjectBindingState::Bound)
             {
                 if (ancestor.authority.kind == FILESYSTEM_BOUND_LINK)
@@ -1503,7 +1566,7 @@ FileOperations::TransferMutationGuard FileOperations::PrepareTransferMutationGua
                 }
                 if (sourceIsDirectory)
                 {
-                    BOOL same            = FALSE;
+                    BOOL same = FALSE;
                     const HRESULT sameHr = sameObject(guard.source, ancestor.authority, same);
                     if (FAILED(sameHr))
                     {
@@ -1545,19 +1608,20 @@ FileOperations::TransferMutationGuard FileOperations::PrepareTransferMutationGua
     return finish(TransferSafetyState::Ready, S_OK);
 }
 
-FileOperations::TransferSafetyState FileOperations::RevalidateTransferMutationGuard(IFileSystem* sourceFileSystem,
-                                                                                    IFileSystem* destinationFileSystem,
-                                                                                    const QualifiedEndpoint& sourceEndpoint,
-                                                                                    const QualifiedEndpoint& destinationEndpoint,
-                                                                                    TransferIntent intent,
-                                                                                    std::wstring_view sourcePath,
-                                                                                    std::wstring_view destinationPath,
-                                                                                    const TransferMutationGuard& guard,
-                                                                                    HRESULT& status,
-                                                                                    bool allowMissingDestinationDirectoryMerge) noexcept
+FileOperations::TransferSafetyState FileOperations::RevalidateTransferMutationGuard(
+    IFileSystem* sourceFileSystem,
+    IFileSystem* destinationFileSystem,
+    const QualifiedEndpoint& sourceEndpoint,
+    const QualifiedEndpoint& destinationEndpoint,
+    TransferIntent intent,
+    std::wstring_view sourcePath,
+    std::wstring_view destinationPath,
+    const TransferMutationGuard& guard,
+    HRESULT& status,
+    bool allowMissingDestinationDirectoryMerge) noexcept
 {
     Debug::Perf::Scope perf(L"fileops.identity.guard_revalidate_us");
-    status            = E_UNEXPECTED;
+    status = E_UNEXPECTED;
     const auto finish = [&](TransferSafetyState state, HRESULT hr) noexcept -> TransferSafetyState
     {
         status = hr;
@@ -1573,8 +1637,9 @@ FileOperations::TransferSafetyState FileOperations::RevalidateTransferMutationGu
     {
         destinationFileSystem = sourceFileSystem;
     }
-    constexpr FileSystemBindFlags bindFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
-    const auto revalidationFailure          = [](ObjectRevalidationState state, bool source) noexcept -> TransferSafetyState
+    constexpr FileSystemBindFlags bindFlags =
+        static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+    const auto revalidationFailure = [](ObjectRevalidationState state, bool source) noexcept -> TransferSafetyState
     {
         switch (state)
         {
@@ -1588,17 +1653,23 @@ FileOperations::TransferSafetyState FileOperations::RevalidateTransferMutationGu
         return TransferSafetyState::Indeterminate;
     };
     const auto revalidationFailureStatus = [](const ObjectRevalidationResult& result) noexcept -> HRESULT
-    { return FAILED(result.status) ? result.status : HRESULT_FROM_WIN32(ERROR_RETRY); };
+    {
+        return FAILED(result.status) ? result.status : HRESULT_FROM_WIN32(ERROR_RETRY);
+    };
 
-    ObjectRevalidationResult source = RevalidateObjectAuthority(sourceFileSystem, sourcePath, sourceEndpoint.profileId, bindFlags, guard.source);
+    ObjectRevalidationResult source = RevalidateObjectAuthority(
+        sourceFileSystem, sourcePath, sourceEndpoint.profileId, bindFlags, guard.source);
     if (source.state != ObjectRevalidationState::Same)
     {
         return finish(revalidationFailure(source.state, true), revalidationFailureStatus(source));
     }
     if (guard.sourceParent.has_value())
     {
-        ObjectRevalidationResult parent =
-            RevalidateObjectAuthority(sourceFileSystem, guard.sourceParent->providerPath, sourceEndpoint.profileId, bindFlags, guard.sourceParent->authority);
+        ObjectRevalidationResult parent = RevalidateObjectAuthority(sourceFileSystem,
+                                                                    guard.sourceParent->providerPath,
+                                                                    sourceEndpoint.profileId,
+                                                                    bindFlags,
+                                                                    guard.sourceParent->authority);
         if (parent.state != ObjectRevalidationState::Same)
         {
             return finish(revalidationFailure(parent.state, true), revalidationFailureStatus(parent));
@@ -1606,8 +1677,11 @@ FileOperations::TransferSafetyState FileOperations::RevalidateTransferMutationGu
     }
     if (guard.destination.has_value())
     {
-        ObjectRevalidationResult destination =
-            RevalidateObjectAuthority(destinationFileSystem, destinationPath, destinationEndpoint.profileId, bindFlags, guard.destination->authority);
+        ObjectRevalidationResult destination = RevalidateObjectAuthority(destinationFileSystem,
+                                                                         destinationPath,
+                                                                         destinationEndpoint.profileId,
+                                                                         bindFlags,
+                                                                         guard.destination->authority);
         if (destination.state != ObjectRevalidationState::Same)
         {
             return finish(revalidationFailure(destination.state, false), revalidationFailureStatus(destination));
@@ -1615,16 +1689,24 @@ FileOperations::TransferSafetyState FileOperations::RevalidateTransferMutationGu
     }
     for (const RetainedPathAuthority& ancestor : guard.destinationAncestors)
     {
-        ObjectRevalidationResult current =
-            RevalidateObjectAuthority(destinationFileSystem, ancestor.providerPath, destinationEndpoint.profileId, bindFlags, ancestor.authority);
+        ObjectRevalidationResult current = RevalidateObjectAuthority(destinationFileSystem,
+                                                                     ancestor.providerPath,
+                                                                     destinationEndpoint.profileId,
+                                                                     bindFlags,
+                                                                     ancestor.authority);
         if (current.state != ObjectRevalidationState::Same)
         {
             return finish(revalidationFailure(current.state, false), revalidationFailureStatus(current));
         }
     }
 
-    TransferMutationGuard current =
-        PrepareTransferMutationGuard(sourceFileSystem, destinationFileSystem, sourceEndpoint, destinationEndpoint, intent, sourcePath, destinationPath);
+    TransferMutationGuard current = PrepareTransferMutationGuard(sourceFileSystem,
+                                                                 destinationFileSystem,
+                                                                 sourceEndpoint,
+                                                                 destinationEndpoint,
+                                                                 intent,
+                                                                 sourcePath,
+                                                                 destinationPath);
     if (current.state != TransferSafetyState::Ready)
     {
         return finish(current.state, current.status);
@@ -1635,7 +1717,8 @@ FileOperations::TransferSafetyState FileOperations::RevalidateTransferMutationGu
         // the same plan may have created that ordinary directory while ensuring its parent.
         // This exception never admits a link or a non-directory and never applies to a file
         // publication, so external destination replacement remains fail-closed everywhere else.
-        if (allowMissingDestinationDirectoryMerge && current.destination.has_value() && current.destination->authority.kind == FILESYSTEM_BOUND_DIRECTORY)
+        if (allowMissingDestinationDirectoryMerge && current.destination.has_value() &&
+            current.destination->authority.kind == FILESYSTEM_BOUND_DIRECTORY)
         {
             return finish(TransferSafetyState::Ready, S_OK);
         }
@@ -1645,8 +1728,9 @@ FileOperations::TransferSafetyState FileOperations::RevalidateTransferMutationGu
 }
 
 #ifdef ENABLE_TESTS
-FileOperations::ObjectBindingResult FileOperations::ValidateSuccessfulBoundObjectForSelfTest(IFileSystemBoundObject* bound,
-                                                                                             std::wstring_view pathProfileId) noexcept
+FileOperations::ObjectBindingResult FileOperations::ValidateSuccessfulBoundObjectForSelfTest(
+    IFileSystemBoundObject* bound,
+    std::wstring_view pathProfileId) noexcept
 {
     wil::com_ptr<IFileSystemBoundObject> retained;
     retained = bound;
@@ -1654,36 +1738,37 @@ FileOperations::ObjectBindingResult FileOperations::ValidateSuccessfulBoundObjec
 }
 
 bool FileOperations::TryQualifyEndpointForSelfTest(const wil::com_ptr<IFileSystem>& fileSystem,
-                                                   std::wstring_view providerPath,
-                                                   FileSystemOperation operation,
-                                                   std::wstring_view pluginId,
-                                                   std::wstring_view instanceId,
-                                                   QualifiedEndpoint& endpoint) noexcept
+                                                    std::wstring_view providerPath,
+                                                    FileSystemOperation operation,
+                                                    std::wstring_view pluginId,
+                                                    std::wstring_view instanceId,
+                                                    QualifiedEndpoint& endpoint) noexcept
 {
     endpoint = {};
     if (pluginId.empty() || instanceId.empty())
     {
         return false;
     }
-    const std::optional<FileSystemCapabilitiesV2> capabilities = TryGetCapabilities(fileSystem, providerPath, operation, pluginId);
+    const std::optional<FileSystemCapabilitiesV2> capabilities =
+        TryGetCapabilities(fileSystem, providerPath, operation, pluginId);
     if (! capabilities.has_value() || ! HasStablePathIdentity(capabilities.value()))
     {
         return false;
     }
     endpoint = QualifiedEndpoint{
-        .pluginId                            = std::wstring(pluginId),
-        .instanceId                          = std::wstring(instanceId),
-        .profileId                           = capabilities->pathProfileId,
-        .rootId                              = capabilities->rootId,
-        .pathIdentity                        = capabilities->pathIdentity,
-        .verificationHostReadback            = capabilities->verificationHostReadback,
-        .verificationProviderBlake3Proof     = capabilities->verificationProviderBlake3Proof,
-        .verificationWriterDigestProof       = capabilities->verificationWriterDigestProof,
+        .pluginId   = std::wstring(pluginId),
+        .instanceId = std::wstring(instanceId),
+        .profileId  = capabilities->pathProfileId,
+        .rootId     = capabilities->rootId,
+        .pathIdentity = capabilities->pathIdentity,
+        .verificationHostReadback = capabilities->verificationHostReadback,
+        .verificationProviderBlake3Proof = capabilities->verificationProviderBlake3Proof,
+        .verificationWriterDigestProof = capabilities->verificationWriterDigestProof,
         .verificationCapabilityCheckDeferred = capabilities->verificationCapabilityCheckDeferred,
-        .cancellationAbort                   = capabilities->cancellationAbort,
-        .cancellationDeadline                = capabilities->cancellationDeadline,
-        .cancellationRouteClass              = capabilities->cancellationRouteClass,
-        .providerWatchdogTimeoutMs           = capabilities->providerWatchdogTimeoutMs,
+        .cancellationAbort = capabilities->cancellationAbort,
+        .cancellationDeadline = capabilities->cancellationDeadline,
+        .cancellationRouteClass = capabilities->cancellationRouteClass,
+        .providerWatchdogTimeoutMs = capabilities->providerWatchdogTimeoutMs,
     };
     return IsQualifiedEndpointValid(endpoint);
 }
@@ -1696,8 +1781,13 @@ bool CanCrossFileSystemCopyMoveForSelfTest(const wil::com_ptr<IFileSystem>& sour
                                            std::wstring_view destinationPluginId,
                                            FileSystemOperation operation) noexcept
 {
-    return CanCrossFileSystemCopyMove(
-        sourceFileSystem, sourceProviderPath, sourcePluginId, destinationFileSystem, destinationProviderPath, destinationPluginId, operation);
+    return CanCrossFileSystemCopyMove(sourceFileSystem,
+                                      sourceProviderPath,
+                                      sourcePluginId,
+                                      destinationFileSystem,
+                                      destinationProviderPath,
+                                      destinationPluginId,
+                                      operation);
 }
 #endif
 
@@ -1715,7 +1805,8 @@ void FolderWindow::FileOperationStateDeleter::operator()(FileOperationState* sta
     std::default_delete<FileOperationState>{}(state);
 }
 
-FolderWindow::FileOperationPromptDispatchScope::FileOperationPromptDispatchScope(FolderWindow& owner) noexcept : _owner(owner)
+FolderWindow::FileOperationPromptDispatchScope::FileOperationPromptDispatchScope(FolderWindow& owner) noexcept
+    : _owner(owner)
 {
     ++_owner._fileOperationPromptDispatchDepth;
 }
@@ -1730,9 +1821,10 @@ FolderWindow::FileOperationPromptDispatchScope::~FileOperationPromptDispatchScop
     }
 }
 
-HRESULT FolderWindow::ConfirmExternalArtifactTouch(const Pane pane,
-                                                   const std::span<const std::filesystem::path> providerPaths,
-                                                   FileOperationArtifacts::TouchGuardReceipt* const receiptOut) noexcept
+HRESULT FolderWindow::ConfirmExternalArtifactTouch(
+    const Pane pane,
+    const std::span<const std::filesystem::path> providerPaths,
+    FileOperationArtifacts::TouchGuardReceipt* const receiptOut) noexcept
 {
     if (providerPaths.empty())
     {
@@ -1748,14 +1840,16 @@ HRESULT FolderWindow::ConfirmExternalArtifactTouch(const Pane pane,
     {
         return E_UNEXPECTED;
     }
-    return ConfirmExternalArtifactTouchForProvider(state.fileSystem.get(), state.pluginId, state.instanceContext, providerPaths, receiptOut);
+    return ConfirmExternalArtifactTouchForProvider(
+        state.fileSystem.get(), state.pluginId, state.instanceContext, providerPaths, receiptOut);
 }
 
-HRESULT FolderWindow::ConfirmExternalArtifactTouchForProvider(IFileSystem* fileSystem,
-                                                              const std::wstring_view pluginId,
-                                                              const std::wstring_view instanceContext,
-                                                              const std::span<const std::filesystem::path> providerPaths,
-                                                              FileOperationArtifacts::TouchGuardReceipt* const receiptOut) noexcept
+HRESULT FolderWindow::ConfirmExternalArtifactTouchForProvider(
+    IFileSystem* fileSystem,
+    const std::wstring_view pluginId,
+    const std::wstring_view instanceContext,
+    const std::span<const std::filesystem::path> providerPaths,
+    FileOperationArtifacts::TouchGuardReceipt* const receiptOut) noexcept
 {
     if (! _fileOperations || ! fileSystem || pluginId.empty() || providerPaths.empty())
     {
@@ -1764,6 +1858,7 @@ HRESULT FolderWindow::ConfirmExternalArtifactTouchForProvider(IFileSystem* fileS
     const FileOperationPromptDispatchScope promptDispatch(*this);
     return _fileOperations->ConfirmExternalArtifactTouch(fileSystem, pluginId, instanceContext, providerPaths, receiptOut);
 }
+
 
 void FolderWindow::EnsureFileOperations()
 {
@@ -1815,12 +1910,12 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
                                                          std::wstring sourcePluginIdOverride,
                                                          std::wstring sourcePluginShortIdOverride,
                                                          std::optional<std::wstring> sourceInstanceIdOverride,
-                                                         FileOperations::DeleteOrigin deleteOrigin,
-                                                         std::optional<FileOperations::ConsentKind> capturedConsentKind,
-                                                         std::optional<uint32_t> moveClipboardSequence,
-                                                         std::function<HRESULT()> preWorkerReleaseBarrier,
-                                                         std::function<HRESULT()> preConsumptionDecisionGate,
-                                                         std::function<void(std::shared_ptr<const FileOperations::PreparationSnapshot>)> preparationObserver)
+                                                          FileOperations::DeleteOrigin deleteOrigin,
+                                                          std::optional<FileOperations::ConsentKind> capturedConsentKind,
+                                                          std::optional<uint32_t> moveClipboardSequence,
+                                                          std::function<HRESULT()> preWorkerReleaseBarrier,
+                                                          std::function<HRESULT()> preConsumptionDecisionGate,
+                                                          std::function<void(std::shared_ptr<const FileOperations::PreparationSnapshot>)> preparationObserver)
 {
     const auto startedAt = std::chrono::steady_clock::now();
     if (taskIdOut)
@@ -1858,10 +1953,11 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
     {
         return reject(E_INVALIDARG, FileOperations::PlanRejectionBucket::MissingDestructiveConsent);
     }
-    const FolderWindow::PaneState& sourceState = sourcePane == FolderWindow::Pane::Left ? _owner._leftPane : _owner._rightPane;
-    const bool sourceUsesPaneFileSystem        = fileSystem.get() == sourceState.fileSystem.get();
-    std::wstring sourcePluginId                = std::move(sourcePluginIdOverride);
-    std::wstring sourcePluginShortId           = std::move(sourcePluginShortIdOverride);
+    const FolderWindow::PaneState& sourceState =
+        sourcePane == FolderWindow::Pane::Left ? _owner._leftPane : _owner._rightPane;
+    const bool sourceUsesPaneFileSystem = fileSystem.get() == sourceState.fileSystem.get();
+    std::wstring sourcePluginId = std::move(sourcePluginIdOverride);
+    std::wstring sourcePluginShortId = std::move(sourcePluginShortIdOverride);
     if (sourcePluginId.empty())
     {
         if (sourceUsesPaneFileSystem)
@@ -1878,8 +1974,9 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
     {
         sourcePluginShortId = sourceState.pluginShortId;
     }
-    const std::wstring sourceInstanceContext =
-        sourceInstanceIdOverride.has_value() ? sourceInstanceIdOverride.value() : (sourceUsesPaneFileSystem ? sourceState.instanceContext : std::wstring{});
+    const std::wstring sourceInstanceContext = sourceInstanceIdOverride.has_value()
+        ? sourceInstanceIdOverride.value()
+        : (sourceUsesPaneFileSystem ? sourceState.instanceContext : std::wstring{});
     const std::wstring sourceInstanceId = CanonicalInstanceId(sourceInstanceContext);
     if (sourcePluginId.empty())
     {
@@ -1896,17 +1993,20 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
     sourcePartitions.reserve(sourcePaths.size());
     for (size_t index = 0; index < sourcePaths.size(); ++index)
     {
-        const std::optional<FileSystemCapabilitiesV2> capabilities = TryGetCapabilities(fileSystem, sourcePaths[index].native(), operation, sourcePluginId);
+        const std::optional<FileSystemCapabilitiesV2> capabilities =
+            TryGetCapabilities(fileSystem, sourcePaths[index].native(), operation, sourcePluginId);
         if (! capabilities.has_value())
         {
             return reject(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), FileOperations::PlanRejectionBucket::MalformedEndpoint);
         }
-        if (! capabilities->pathIdentity.has_value() || ! HasStablePathIdentity(capabilities.value()) || ! HasContainedCancellationRoute(capabilities.value()))
+        if (! capabilities->pathIdentity.has_value() || ! HasStablePathIdentity(capabilities.value()) ||
+            ! HasContainedCancellationRoute(capabilities.value()))
         {
             return reject(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), FileOperations::PlanRejectionBucket::MalformedEndpoint);
         }
 
-        const auto matching = std::ranges::find_if(sourcePartitions, [&](const SourcePartition& partition) noexcept {
+        const auto matching = std::ranges::find_if(sourcePartitions, [&](const SourcePartition& partition) noexcept
+        {
             return partition.endpoint.profileId == capabilities->pathProfileId && partition.endpoint.rootId == capabilities->rootId;
         });
         if (matching != sourcePartitions.end())
@@ -1923,19 +2023,19 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
 
         SourcePartition partition{};
         partition.endpoint = FileOperations::QualifiedEndpoint{
-            .pluginId                            = sourcePluginId,
-            .instanceId                          = sourceInstanceId,
-            .profileId                           = capabilities->pathProfileId,
-            .rootId                              = capabilities->rootId,
-            .pathIdentity                        = capabilities->pathIdentity,
-            .verificationHostReadback            = capabilities->verificationHostReadback,
-            .verificationProviderBlake3Proof     = capabilities->verificationProviderBlake3Proof,
-            .verificationWriterDigestProof       = capabilities->verificationWriterDigestProof,
+            .pluginId   = sourcePluginId,
+            .instanceId = sourceInstanceId,
+            .profileId  = capabilities->pathProfileId,
+            .rootId     = capabilities->rootId,
+            .pathIdentity = capabilities->pathIdentity,
+            .verificationHostReadback = capabilities->verificationHostReadback,
+            .verificationProviderBlake3Proof = capabilities->verificationProviderBlake3Proof,
+            .verificationWriterDigestProof = capabilities->verificationWriterDigestProof,
             .verificationCapabilityCheckDeferred = capabilities->verificationCapabilityCheckDeferred,
-            .cancellationAbort                   = capabilities->cancellationAbort,
-            .cancellationDeadline                = capabilities->cancellationDeadline,
-            .cancellationRouteClass              = capabilities->cancellationRouteClass,
-            .providerWatchdogTimeoutMs           = capabilities->providerWatchdogTimeoutMs,
+            .cancellationAbort = capabilities->cancellationAbort,
+            .cancellationDeadline = capabilities->cancellationDeadline,
+            .cancellationRouteClass = capabilities->cancellationRouteClass,
+            .providerWatchdogTimeoutMs = capabilities->providerWatchdogTimeoutMs,
         };
         partition.originalIndices.push_back(index);
         partition.capabilities.push_back(capabilities.value());
@@ -1948,19 +2048,20 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
         if (operation == FILESYSTEM_COPY)
         {
             // Preserve/Skip is a Copy option. A Move relocates every link object as stored.
-            const auto policy  = FolderWindowFileOperationsStateInternal::GetReparsePointPolicyFromSettings(*_owner._settings, sourcePluginId);
-            options.linkPolicy = policy == FolderWindowFileOperationsStateInternal::ReparsePointPolicy::Preserve ? FileOperations::LinkPolicy::Preserve
-                                                                                                                 : FileOperations::LinkPolicy::Skip;
+            const auto policy = FolderWindowFileOperationsStateInternal::GetReparsePointPolicyFromSettings(*_owner._settings, sourcePluginId);
+            options.linkPolicy = policy == FolderWindowFileOperationsStateInternal::ReparsePointPolicy::Preserve
+                ? FileOperations::LinkPolicy::Preserve
+                : FileOperations::LinkPolicy::Skip;
         }
         if (_owner._settings->fileOperations.has_value())
         {
             options.verifyAfterCopy = _owner._settings->fileOperations->verifyAfterCopy;
         }
     }
-    options.executionMode                  = waitForOthers ? FileOperations::ExecutionMode::Queue : FileOperations::ExecutionMode::Parallel;
+    options.executionMode = waitForOthers ? FileOperations::ExecutionMode::Queue : FileOperations::ExecutionMode::Parallel;
     const uint64_t effectiveBandwidthLimit = initialSpeedLimitBytesPerSecond == 0u
-                                                 ? FolderWindowFileOperationsStateInternal::GetDefaultBandwidthLimitBytesPerSecondFromSettings(_owner._settings)
-                                                 : initialSpeedLimitBytesPerSecond;
+        ? FolderWindowFileOperationsStateInternal::GetDefaultBandwidthLimitBytesPerSecondFromSettings(_owner._settings)
+        : initialSpeedLimitBytesPerSecond;
     if (effectiveBandwidthLimit != 0u)
     {
         options.bandwidthLimitBytesPerSecond = effectiveBandwidthLimit;
@@ -1988,7 +2089,7 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
     groupedSourcePaths.reserve(sourcePaths.size());
     std::vector<FolderWindow::ResolvedFileOperationItem> groupedResolvedItems;
     groupedResolvedItems.reserve(resolvedItems.size());
-    std::wstring destinationPluginShortId   = sourcePluginShortId;
+    std::wstring destinationPluginShortId = sourcePluginShortId;
     std::wstring destinationInstanceContext = sourceInstanceContext;
     if (operation == FILESYSTEM_COPY || operation == FILESYSTEM_MOVE)
     {
@@ -1998,21 +2099,23 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
         }
 
         const wil::com_ptr<IFileSystem>& effectiveDestinationFileSystem = destinationFileSystem ? destinationFileSystem : fileSystem;
-        std::wstring destinationPluginId                                = sourcePluginId;
-        std::wstring destinationInstanceId                              = sourceInstanceId;
-        const FolderWindow::PaneState* destinationState                 = nullptr;
+        std::wstring destinationPluginId = sourcePluginId;
+        std::wstring destinationInstanceId = sourceInstanceId;
+        const FolderWindow::PaneState* destinationState = nullptr;
         if (destinationPane.has_value())
         {
-            destinationState = destinationPane.value() == FolderWindow::Pane::Left ? &_owner._leftPane : &_owner._rightPane;
+            destinationState =
+                destinationPane.value() == FolderWindow::Pane::Left ? &_owner._leftPane : &_owner._rightPane;
             if (effectiveDestinationFileSystem.get() == destinationState->fileSystem.get())
             {
-                destinationPluginId        = destinationState->pluginId;
-                destinationPluginShortId   = destinationState->pluginShortId;
-                destinationInstanceContext = destinationState->instanceContext;
-                destinationInstanceId      = CanonicalInstanceId(destinationState->instanceContext);
+                destinationPluginId          = destinationState->pluginId;
+                destinationPluginShortId     = destinationState->pluginShortId;
+                destinationInstanceContext   = destinationState->instanceContext;
+                destinationInstanceId        = CanonicalInstanceId(destinationState->instanceContext);
             }
         }
-        const bool destinationUsesPaneFileSystem = destinationState != nullptr && effectiveDestinationFileSystem.get() == destinationState->fileSystem.get();
+        const bool destinationUsesPaneFileSystem =
+            destinationState != nullptr && effectiveDestinationFileSystem.get() == destinationState->fileSystem.get();
         if (destinationFileSystem && ! destinationUsesPaneFileSystem)
         {
             if (! TryGetFileSystemPluginIdentity(effectiveDestinationFileSystem.get(), destinationPluginId, destinationPluginShortId))
@@ -2040,36 +2143,39 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
         }
 
         const FileOperations::QualifiedEndpoint destinationEndpoint{
-            .pluginId                            = destinationPluginId,
-            .instanceId                          = std::move(destinationInstanceId),
-            .profileId                           = destinationCapabilities->pathProfileId,
-            .rootId                              = destinationCapabilities->rootId,
-            .pathIdentity                        = destinationCapabilities->pathIdentity,
-            .verificationHostReadback            = destinationCapabilities->verificationHostReadback,
-            .verificationProviderBlake3Proof     = destinationCapabilities->verificationProviderBlake3Proof,
-            .verificationWriterDigestProof       = destinationCapabilities->verificationWriterDigestProof,
+            .pluginId   = destinationPluginId,
+            .instanceId = std::move(destinationInstanceId),
+            .profileId  = destinationCapabilities->pathProfileId,
+            .rootId     = destinationCapabilities->rootId,
+            .pathIdentity = destinationCapabilities->pathIdentity,
+            .verificationHostReadback = destinationCapabilities->verificationHostReadback,
+            .verificationProviderBlake3Proof = destinationCapabilities->verificationProviderBlake3Proof,
+            .verificationWriterDigestProof = destinationCapabilities->verificationWriterDigestProof,
             .verificationCapabilityCheckDeferred = destinationCapabilities->verificationCapabilityCheckDeferred,
-            .cancellationAbort                   = destinationCapabilities->cancellationAbort,
-            .cancellationDeadline                = destinationCapabilities->cancellationDeadline,
-            .cancellationRouteClass              = destinationCapabilities->cancellationRouteClass,
-            .providerWatchdogTimeoutMs           = destinationCapabilities->providerWatchdogTimeoutMs,
+            .cancellationAbort = destinationCapabilities->cancellationAbort,
+            .cancellationDeadline = destinationCapabilities->cancellationDeadline,
+            .cancellationRouteClass = destinationCapabilities->cancellationRouteClass,
+            .providerWatchdogTimeoutMs = destinationCapabilities->providerWatchdogTimeoutMs,
         };
         wil::com_ptr<IFileSystemObjectBinding> sourceBinding;
         wil::com_ptr<IFileSystemObjectBinding> destinationBinding;
         if (operation == FILESYSTEM_MOVE)
         {
             static_cast<void>(fileSystem->QueryInterface(__uuidof(IFileSystemObjectBinding), sourceBinding.put_void()));
-            static_cast<void>(effectiveDestinationFileSystem->QueryInterface(__uuidof(IFileSystemObjectBinding), destinationBinding.put_void()));
+            static_cast<void>(effectiveDestinationFileSystem->QueryInterface(
+                __uuidof(IFileSystemObjectBinding), destinationBinding.put_void()));
         }
+
 
         for (const SourcePartition& partition : sourcePartitions)
         {
             const bool sameEndpoint = QualifiedEndpointsMatchImpl(partition.endpoint, destinationEndpoint);
-            const bool providerNativeMoveAdvertised =
-                operation == FILESYSTEM_MOVE && sameEndpoint && destinationCapabilities->moveOperation && destinationCapabilities->nativeMoveOperation &&
-                std::ranges::all_of(partition.capabilities, [](const FileSystemCapabilitiesV2& sourceCapabilities) noexcept {
-                return sourceCapabilities.moveOperation && sourceCapabilities.nativeMoveOperation;
-            });
+            const bool providerNativeMoveAdvertised = operation == FILESYSTEM_MOVE && sameEndpoint &&
+                destinationCapabilities->moveOperation && destinationCapabilities->nativeMoveOperation &&
+                std::ranges::all_of(partition.capabilities, [](const FileSystemCapabilitiesV2& sourceCapabilities) noexcept
+                {
+                    return sourceCapabilities.moveOperation && sourceCapabilities.nativeMoveOperation;
+                });
             const bool nativeMoveQualified = providerNativeMoveAdvertised;
             std::optional<FileSystemCapabilitiesV2> destinationCopyCapabilities;
             std::vector<FileSystemCapabilitiesV2> sourceCopyCapabilities;
@@ -2077,9 +2183,12 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
             {
                 destinationCopyCapabilities =
                     TryGetCapabilities(effectiveDestinationFileSystem, destinationFolder.native(), FILESYSTEM_COPY, destinationPluginId);
-                if (! destinationCopyCapabilities.has_value() || destinationCopyCapabilities->pathProfileId != destinationCapabilities->pathProfileId ||
-                    destinationCopyCapabilities->rootId != destinationCapabilities->rootId || ! destinationCopyCapabilities->pathIdentity.has_value() ||
-                    ! SamePathIdentityContract(destinationCopyCapabilities->pathIdentity.value(), destinationCapabilities->pathIdentity.value()))
+                if (! destinationCopyCapabilities.has_value() ||
+                    destinationCopyCapabilities->pathProfileId != destinationCapabilities->pathProfileId ||
+                    destinationCopyCapabilities->rootId != destinationCapabilities->rootId ||
+                    ! destinationCopyCapabilities->pathIdentity.has_value() ||
+                    ! SamePathIdentityContract(destinationCopyCapabilities->pathIdentity.value(),
+                                               destinationCapabilities->pathIdentity.value()))
                 {
                     return reject(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), FileOperations::PlanRejectionBucket::MalformedEndpoint);
                 }
@@ -2090,9 +2199,12 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
                     const size_t originalIndex = partition.originalIndices[capabilityIndex];
                     std::optional<FileSystemCapabilitiesV2> sourceCopy =
                         TryGetCapabilities(fileSystem, sourcePaths[originalIndex].native(), FILESYSTEM_COPY, sourcePluginId);
-                    if (! sourceCopy.has_value() || sourceCopy->pathProfileId != partition.capabilities[capabilityIndex].pathProfileId ||
-                        sourceCopy->rootId != partition.capabilities[capabilityIndex].rootId || ! sourceCopy->pathIdentity.has_value() ||
-                        ! SamePathIdentityContract(sourceCopy->pathIdentity.value(), partition.capabilities[capabilityIndex].pathIdentity.value()))
+                    if (! sourceCopy.has_value() ||
+                        sourceCopy->pathProfileId != partition.capabilities[capabilityIndex].pathProfileId ||
+                        sourceCopy->rootId != partition.capabilities[capabilityIndex].rootId ||
+                        ! sourceCopy->pathIdentity.has_value() ||
+                        ! SamePathIdentityContract(sourceCopy->pathIdentity.value(),
+                                                   partition.capabilities[capabilityIndex].pathIdentity.value()))
                     {
                         return reject(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), FileOperations::PlanRejectionBucket::MalformedEndpoint);
                     }
@@ -2103,18 +2215,23 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
             bool copyPairQualified = operation == FILESYSTEM_COPY;
             if (destinationCopyCapabilities.has_value() || operation == FILESYSTEM_COPY)
             {
-                const FileSystemCapabilitiesV2& effectiveDestinationCapabilities =
-                    operation == FILESYSTEM_MOVE ? destinationCopyCapabilities.value() : destinationCapabilities.value();
+                const FileSystemCapabilitiesV2& effectiveDestinationCapabilities = operation == FILESYSTEM_MOVE
+                    ? destinationCopyCapabilities.value()
+                    : destinationCapabilities.value();
                 copyPairQualified = true;
                 for (size_t capabilityIndex = 0u; capabilityIndex < partition.capabilities.size(); ++capabilityIndex)
                 {
-                    const FileSystemCapabilitiesV2& sourceCapabilities =
-                        operation == FILESYSTEM_MOVE ? sourceCopyCapabilities[capabilityIndex] : partition.capabilities[capabilityIndex];
-                    const bool itemCopyQualified =
-                        sameEndpoint ? CapabilitiesAllowSameFileSystemOperation(sourceCapabilities, FILESYSTEM_COPY) &&
-                                           CapabilitiesAllowSameFileSystemOperation(effectiveDestinationCapabilities, FILESYSTEM_COPY)
-                                     : CapabilityPairAllowsCrossFileSystemCopyMove(
-                                           sourceCapabilities, sourcePluginId, effectiveDestinationCapabilities, destinationPluginId, FILESYSTEM_COPY);
+                    const FileSystemCapabilitiesV2& sourceCapabilities = operation == FILESYSTEM_MOVE
+                        ? sourceCopyCapabilities[capabilityIndex]
+                        : partition.capabilities[capabilityIndex];
+                    const bool itemCopyQualified = sameEndpoint
+                        ? CapabilitiesAllowSameFileSystemOperation(sourceCapabilities, FILESYSTEM_COPY) &&
+                              CapabilitiesAllowSameFileSystemOperation(effectiveDestinationCapabilities, FILESYSTEM_COPY)
+                        : CapabilityPairAllowsCrossFileSystemCopyMove(sourceCapabilities,
+                                                                      sourcePluginId,
+                                                                      effectiveDestinationCapabilities,
+                                                                      destinationPluginId,
+                                                                      FILESYSTEM_COPY);
                     if (! itemCopyQualified)
                     {
                         copyPairQualified = false;
@@ -2126,60 +2243,65 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
             FileOperations::OperationStrategy strategy = FileOperations::OperationStrategy::Copy;
             if (operation == FILESYSTEM_MOVE)
             {
-                const bool movePairQualified =
-                    sameEndpoint ? destinationCapabilities->moveOperation &&
-                                       std::ranges::all_of(partition.capabilities,
-                                                           [](const FileSystemCapabilitiesV2& capabilities) noexcept { return capabilities.moveOperation; })
-                                 : std::ranges::all_of(partition.capabilities, [&](const FileSystemCapabilitiesV2& capabilities) noexcept {
-                    return CapabilityPairAllowsCrossFileSystemCopyMove(
-                        capabilities, sourcePluginId, destinationCapabilities.value(), destinationPluginId, FILESYSTEM_MOVE);
-                });
-                const bool sourceBoundDelete =
-                    ! sourceCopyCapabilities.empty() &&
-                    std::ranges::all_of(partition.capabilities,
-                                        [](const FileSystemCapabilitiesV2& capabilities) noexcept { return capabilities.boundDelete; }) &&
-                    std::ranges::all_of(sourceCopyCapabilities, [](const FileSystemCapabilitiesV2& capabilities) noexcept { return capabilities.boundDelete; });
+                const bool movePairQualified = sameEndpoint
+                    ? destinationCapabilities->moveOperation &&
+                          std::ranges::all_of(partition.capabilities, [](const FileSystemCapabilitiesV2& capabilities) noexcept
+                          { return capabilities.moveOperation; })
+                    : std::ranges::all_of(partition.capabilities, [&](const FileSystemCapabilitiesV2& capabilities) noexcept
+                      {
+                          return CapabilityPairAllowsCrossFileSystemCopyMove(capabilities,
+                                                                             sourcePluginId,
+                                                                             destinationCapabilities.value(),
+                                                                             destinationPluginId,
+                                                                             FILESYSTEM_MOVE);
+                      });
+                const bool sourceBoundDelete = ! sourceCopyCapabilities.empty() &&
+                    std::ranges::all_of(partition.capabilities, [](const FileSystemCapabilitiesV2& capabilities) noexcept
+                    { return capabilities.boundDelete; }) &&
+                    std::ranges::all_of(sourceCopyCapabilities, [](const FileSystemCapabilitiesV2& capabilities) noexcept
+                    { return capabilities.boundDelete; });
                 const bool sourceConditionalDelete = ! sourceCopyCapabilities.empty() &&
-                                                     std::ranges::all_of(partition.capabilities, [](const FileSystemCapabilitiesV2& capabilities) noexcept {
-                    return capabilities.conditionalDelete;
-                }) && std::ranges::all_of(sourceCopyCapabilities, [](const FileSystemCapabilitiesV2& capabilities) noexcept {
-                    return capabilities.conditionalDelete;
-                });
-                const bool destinationExclusiveStage =
-                    destinationCopyCapabilities.has_value() && destinationCapabilities->exclusiveStage && destinationCopyCapabilities->exclusiveStage;
-                const bool destinationConditionalPublish =
-                    destinationCopyCapabilities.has_value() && destinationCapabilities->conditionalPublish && destinationCopyCapabilities->conditionalPublish;
+                    std::ranges::all_of(partition.capabilities, [](const FileSystemCapabilitiesV2& capabilities) noexcept
+                    { return capabilities.conditionalDelete; }) &&
+                    std::ranges::all_of(sourceCopyCapabilities, [](const FileSystemCapabilitiesV2& capabilities) noexcept
+                    { return capabilities.conditionalDelete; });
+                const bool destinationExclusiveStage = destinationCopyCapabilities.has_value() &&
+                    destinationCapabilities->exclusiveStage && destinationCopyCapabilities->exclusiveStage;
+                const bool destinationConditionalPublish = destinationCopyCapabilities.has_value() &&
+                    destinationCapabilities->conditionalPublish && destinationCopyCapabilities->conditionalPublish;
                 const FileOperations::MoveStrategyQualificationFacts facts{
-                    .nativeMoveQualified           = nativeMoveQualified,
-                    .copyPairQualified             = copyPairQualified,
-                    .movePairQualified             = movePairQualified,
-                    .sourceBoundDelete             = sourceBoundDelete,
-                    .sourceConditionalDelete       = sourceConditionalDelete,
-                    .destinationExclusiveStage     = destinationExclusiveStage,
+                    .nativeMoveQualified = nativeMoveQualified,
+                    .copyPairQualified = copyPairQualified,
+                    .movePairQualified = movePairQualified,
+                    .sourceBoundDelete = sourceBoundDelete,
+                    .sourceConditionalDelete = sourceConditionalDelete,
+                    .destinationExclusiveStage = destinationExclusiveStage,
                     .destinationConditionalPublish = destinationConditionalPublish,
-                    .sourceBindingAvailable        = static_cast<bool>(sourceBinding),
-                    .destinationBindingAvailable   = static_cast<bool>(destinationBinding),
-                    .destinationWriterDigestProof  = destinationCapabilities->verificationWriterDigestProof,
+                    .sourceBindingAvailable = static_cast<bool>(sourceBinding),
+                    .destinationBindingAvailable = static_cast<bool>(destinationBinding),
+                    .destinationWriterDigestProof = destinationCapabilities->verificationWriterDigestProof,
                 };
                 const std::optional<FileOperations::OperationStrategy> selected = FileOperations::SelectMoveStrategy(facts);
                 if (! selected.has_value())
                 {
-                    return reject(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), FileOperations::PlanRejectionBucket::UnsupportedOperation);
+                    return reject(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
+                                  FileOperations::PlanRejectionBucket::UnsupportedOperation);
                 }
                 strategy = selected.value();
             }
             else if (! copyPairQualified)
             {
-                return reject(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), FileOperations::PlanRejectionBucket::UnsupportedOperation);
+                return reject(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
+                              FileOperations::PlanRejectionBucket::UnsupportedOperation);
             }
 
             FileOperations::TransferPlan transfer{};
-            transfer.intent              = operation == FILESYSTEM_MOVE ? FileOperations::TransferIntent::Move : FileOperations::TransferIntent::Copy;
+            transfer.intent = operation == FILESYSTEM_MOVE ? FileOperations::TransferIntent::Move : FileOperations::TransferIntent::Copy;
             transfer.strategy            = strategy;
             transfer.sourceEndpoint      = partition.endpoint;
             transfer.destinationEndpoint = destinationEndpoint;
             transfer.destination.providerFolderPath = destinationFolder.native();
-            transfer.options                        = options;
+            transfer.options = options;
             transfer.selectedItems.reserve(partition.originalIndices.size());
             if (! resolvedItems.empty())
             {
@@ -2187,7 +2309,7 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
             }
             for (size_t childIndex = 0; childIndex < partition.originalIndices.size(); ++childIndex)
             {
-                const size_t originalIndex              = partition.originalIndices[childIndex];
+                const size_t originalIndex = partition.originalIndices[childIndex];
                 const std::filesystem::path& sourcePath = sourcePaths[originalIndex];
                 transfer.selectedItems.emplace_back(FileOperations::QualifiedSourceItem{.providerPath = sourcePath.native()});
                 groupedSourcePaths.push_back(sourcePath);
@@ -2199,12 +2321,13 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
                         return reject(E_INVALIDARG, FileOperations::PlanRejectionBucket::InvalidExplicitMappings);
                     }
                     transfer.explicitMappings.emplace_back(FileOperations::TransferDestinationMapping{
-                        .sourceIndex             = childIndex,
+                        .sourceIndex = childIndex,
                         .destinationProviderPath = resolvedItems[originalIndex].destinationPath.native(),
                     });
                     groupedResolvedItems.push_back(resolvedItems[originalIndex]);
-                    if (! TryGetFileSystemLeafName(
-                            destinationEndpoint.pathIdentity.value(), resolvedItems[originalIndex].destinationPath.native(), destinationLeaf))
+                    if (! TryGetFileSystemLeafName(destinationEndpoint.pathIdentity.value(),
+                                                   resolvedItems[originalIndex].destinationPath.native(),
+                                                   destinationLeaf))
                     {
                         return reject(E_INVALIDARG, FileOperations::PlanRejectionBucket::InvalidExplicitMappings);
                     }
@@ -2229,16 +2352,19 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
     {
         for (const SourcePartition& partition : sourcePartitions)
         {
-            if (std::ranges::any_of(partition.capabilities, [&](const FileSystemCapabilitiesV2& capabilities) noexcept {
-                return ! CapabilitiesAllowSameFileSystemOperation(capabilities, operation, flags);
-            }))
+            if (std::ranges::any_of(partition.capabilities, [&](const FileSystemCapabilitiesV2& capabilities) noexcept
+                {
+                    return ! CapabilitiesAllowSameFileSystemOperation(capabilities, operation, flags);
+                }))
             {
-                return reject(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), FileOperations::PlanRejectionBucket::UnsupportedOperation);
+                return reject(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
+                              FileOperations::PlanRejectionBucket::UnsupportedOperation);
             }
 
             FileOperations::DeletePlan deletion{};
             deletion.endpoint = partition.endpoint;
-            deletion.mode     = (flags & FILESYSTEM_FLAG_USE_RECYCLE_BIN) != 0 ? FileOperations::DeleteMode::Recycle : FileOperations::DeleteMode::Permanent;
+            deletion.mode = (flags & FILESYSTEM_FLAG_USE_RECYCLE_BIN) != 0 ? FileOperations::DeleteMode::Recycle
+                                                                           : FileOperations::DeleteMode::Permanent;
             if (deletion.mode == FileOperations::DeleteMode::Permanent)
             {
                 // C1: no provider call here. A provider without bound objects runs its
@@ -2275,12 +2401,12 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
         resolvedItems = std::move(groupedResolvedItems);
     }
 
-    uint64_t sourceCount  = 0u;
+    uint64_t sourceCount = 0u;
     uint64_t payloadBytes = 0u;
     for (const FileOperations::FileOperationPlan& plan : plans)
     {
         FileOperations::PlanRejectionBucket rejectionBucket = FileOperations::PlanRejectionBucket::None;
-        const HRESULT validationHr                          = ValidatePlanImpl(plan, &rejectionBucket, true);
+        const HRESULT validationHr = ValidatePlanImpl(plan, &rejectionBucket, true);
         if (FAILED(validationHr))
         {
             return reject(validationHr, rejectionBucket);
@@ -2314,13 +2440,13 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
     admission.sourceInstanceContext      = sourceInstanceContext;
     admission.destinationPluginShortId   = std::move(destinationPluginShortId);
     admission.destinationInstanceContext = std::move(destinationInstanceContext);
-    admission.capturedConsentKind        = capturedConsentKind;
+    admission.capturedConsentKind         = capturedConsentKind;
     admission.preWorkerReleaseBarrier    = std::move(preWorkerReleaseBarrier);
     admission.preConsumptionDecisionGate = std::move(preConsumptionDecisionGate);
     admission.preparationObserver        = std::move(preparationObserver);
 
     const auto admissionStartedAt = std::chrono::steady_clock::now();
-    const HRESULT admissionHr     = StartOperation(std::move(admission), taskIdOut);
+    const HRESULT admissionHr = StartOperation(std::move(admission), taskIdOut);
     Debug::Perf::Emit(L"fileops.plan.admit_us",
                       admissionHr == S_OK ? L"accepted" : L"not-published",
                       Debug::Perf::ElapsedUs(admissionStartedAt),
@@ -2331,11 +2457,11 @@ HRESULT FolderWindow::FileOperationState::AdmitOperation(FileSystemOperation ope
 }
 
 HRESULT FolderWindow::FileOperationState::AdmitInlineRename(FolderWindow::Pane sourcePane,
-                                                            const wil::com_ptr<IFileSystem>& fileSystem,
-                                                            std::filesystem::path sourcePath,
-                                                            std::wstring finalLeafName,
-                                                            uint64_t* taskIdOut,
-                                                            std::filesystem::path* providerParentPathOut)
+                                                             const wil::com_ptr<IFileSystem>& fileSystem,
+                                                             std::filesystem::path sourcePath,
+                                                             std::wstring finalLeafName,
+                                                             uint64_t* taskIdOut,
+                                                             std::filesystem::path* providerParentPathOut)
 {
 #ifdef ENABLE_TESTS
     FolderWindowFileOperationsStateInternal::g_fileOpsInlineRenameAdmissionThreadId.store(GetCurrentThreadId(), std::memory_order_release);
@@ -2357,13 +2483,15 @@ HRESULT FolderWindow::FileOperationState::AdmitInlineRename(FolderWindow::Pane s
         return E_INVALIDARG;
     }
 
-    const FolderWindow::PaneState& sourceState = sourcePane == FolderWindow::Pane::Left ? _owner._leftPane : _owner._rightPane;
+    const FolderWindow::PaneState& sourceState =
+        sourcePane == FolderWindow::Pane::Left ? _owner._leftPane : _owner._rightPane;
     if (sourceState.fileSystem.get() != fileSystem.get() || sourceState.pluginId.empty())
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
-    const std::optional<FileSystemCapabilitiesV2> capabilities = TryGetCapabilities(fileSystem, sourcePath.native(), FILESYSTEM_RENAME, sourceState.pluginId);
+    const std::optional<FileSystemCapabilitiesV2> capabilities =
+        TryGetCapabilities(fileSystem, sourcePath.native(), FILESYSTEM_RENAME, sourceState.pluginId);
     if (! capabilities.has_value() || ! capabilities->renameOperation || ! HasStablePathIdentity(capabilities.value()) ||
         ! HasContainedCancellationRoute(capabilities.value()))
     {
@@ -2381,21 +2509,21 @@ HRESULT FolderWindow::FileOperationState::AdmitInlineRename(FolderWindow::Pane s
     // Admission only proves the leaf is not empty and the source has a parent.
 
     FileOperations::RenamePlan rename{};
-    rename.origin   = FileOperations::RenameOrigin::InlineRename;
+    rename.origin = FileOperations::RenameOrigin::InlineRename;
     rename.endpoint = FileOperations::QualifiedEndpoint{
-        .pluginId                            = sourceState.pluginId,
-        .instanceId                          = CanonicalInstanceId(sourceState.instanceContext),
-        .profileId                           = capabilities->pathProfileId,
-        .rootId                              = capabilities->rootId,
-        .pathIdentity                        = capabilities->pathIdentity,
-        .verificationHostReadback            = capabilities->verificationHostReadback,
-        .verificationProviderBlake3Proof     = capabilities->verificationProviderBlake3Proof,
-        .verificationWriterDigestProof       = capabilities->verificationWriterDigestProof,
+        .pluginId   = sourceState.pluginId,
+        .instanceId = CanonicalInstanceId(sourceState.instanceContext),
+        .profileId  = capabilities->pathProfileId,
+        .rootId     = capabilities->rootId,
+        .pathIdentity = capabilities->pathIdentity,
+        .verificationHostReadback = capabilities->verificationHostReadback,
+        .verificationProviderBlake3Proof = capabilities->verificationProviderBlake3Proof,
+        .verificationWriterDigestProof = capabilities->verificationWriterDigestProof,
         .verificationCapabilityCheckDeferred = capabilities->verificationCapabilityCheckDeferred,
-        .cancellationAbort                   = capabilities->cancellationAbort,
-        .cancellationDeadline                = capabilities->cancellationDeadline,
-        .cancellationRouteClass              = capabilities->cancellationRouteClass,
-        .providerWatchdogTimeoutMs           = capabilities->providerWatchdogTimeoutMs,
+        .cancellationAbort = capabilities->cancellationAbort,
+        .cancellationDeadline = capabilities->cancellationDeadline,
+        .cancellationRouteClass = capabilities->cancellationRouteClass,
+        .providerWatchdogTimeoutMs = capabilities->providerWatchdogTimeoutMs,
     };
     rename.finalMappings.emplace_back(FileOperations::RenameStep{
         .source        = FileOperations::QualifiedSourceItem{.providerPath = sourcePath.native()},
@@ -2406,7 +2534,7 @@ HRESULT FolderWindow::FileOperationState::AdmitInlineRename(FolderWindow::Pane s
     rename.options.executionMode = FileOperations::ExecutionMode::Parallel;
 
     FileOperations::PlanRejectionBucket rejection = FileOperations::PlanRejectionBucket::None;
-    const HRESULT validationHr                    = FileOperations::ValidatePlan(rename, &rejection);
+    const HRESULT validationHr = FileOperations::ValidatePlan(rename, &rejection);
     if (FAILED(validationHr))
     {
         Debug::Perf::EmitValue(L"fileops.plan.rejection_bucket", static_cast<uint64_t>(rejection), validationHr);
@@ -2415,12 +2543,12 @@ HRESULT FolderWindow::FileOperationState::AdmitInlineRename(FolderWindow::Pane s
 
     OperationAdmission admission{};
     admission.plans.emplace_back(std::move(rename));
-    admission.sourcePane            = sourcePane;
-    admission.fileSystem            = fileSystem;
-    admission.executionMode         = ExecutionMode::PerItem;
-    admission.sourcePluginShortId   = sourceState.pluginShortId;
+    admission.sourcePane         = sourcePane;
+    admission.fileSystem         = fileSystem;
+    admission.executionMode      = ExecutionMode::PerItem;
+    admission.sourcePluginShortId = sourceState.pluginShortId;
     admission.sourceInstanceContext = sourceState.instanceContext;
-    const HRESULT startHr           = StartOperation(std::move(admission), taskIdOut);
+    const HRESULT startHr = StartOperation(std::move(admission), taskIdOut);
     if (SUCCEEDED(startHr) && providerParentPathOut)
     {
         *providerParentPathOut = std::filesystem::path(std::move(providerParentPath));
@@ -2437,18 +2565,18 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareBatchRenameAdmission() no
 
     BatchRenameAdmissionInput input = std::move(_pendingBatchRenameAdmission.value());
     _pendingBatchRenameAdmission.reset();
-    const auto workerStartedAt              = std::chrono::steady_clock::now();
-    const uint64_t rowCount                 = static_cast<uint64_t>(input.operations.size());
-    uint64_t capabilityCallCount            = 0u;
-    uint64_t bindCallCount                  = 0u;
-    uint64_t providerNameQueryCount         = 0u;
+    const auto workerStartedAt = std::chrono::steady_clock::now();
+    const uint64_t rowCount = static_cast<uint64_t>(input.operations.size());
+    uint64_t capabilityCallCount = 0u;
+    uint64_t bindCallCount = 0u;
+    uint64_t providerNameQueryCount = 0u;
     uint64_t providerNameArenaFallbackCount = 0u;
-    uint64_t cycleCount                     = 0u;
-    HRESULT result                          = E_UNEXPECTED;
-    std::wstring_view detail                = L"not-published";
-    const auto emitAdmission                = wil::scope_exit([&]() noexcept
+    uint64_t cycleCount = 0u;
+    HRESULT result = E_UNEXPECTED;
+    std::wstring_view detail = L"not-published";
+    const auto emitAdmission = wil::scope_exit([&]() noexcept
     {
-        const uint64_t wallUs       = Debug::Perf::ElapsedUs(input.startedAt);
+        const uint64_t wallUs = Debug::Perf::ElapsedUs(input.startedAt);
         const uint64_t workerWallUs = Debug::Perf::ElapsedUs(workerStartedAt);
         Debug::Perf::Emit(L"batchrename.admit.us", detail, wallUs, rowCount, cycleCount, result);
         Debug::Perf::Emit(L"batchrename.admission.wall_us", detail, wallUs, rowCount, 0u, result);
@@ -2473,7 +2601,9 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareBatchRenameAdmission() no
         {
             const ULONGLONG cancelRequestedTick = _cancelRequestedTick.load(std::memory_order_acquire);
             const ULONGLONG nowTick             = GetTickCount64();
-            const uint64_t cancelLatencyUs = cancelRequestedTick != 0u && nowTick >= cancelRequestedTick ? (nowTick - cancelRequestedTick) * 1'000u : wallUs;
+            const uint64_t cancelLatencyUs      = cancelRequestedTick != 0u && nowTick >= cancelRequestedTick
+                                                      ? (nowTick - cancelRequestedTick) * 1'000u
+                                                      : wallUs;
             Debug::Perf::EmitValue(L"batchrename.admission.cancel_latency_us", cancelLatencyUs, result);
             if (input.origin == FileOperations::RenameOrigin::ChangeCase)
             {
@@ -2499,12 +2629,12 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareBatchRenameAdmission() no
     }
 
     FileOperations::RenamePlan rename{};
-    rename.origin                = input.origin;
+    rename.origin = input.origin;
     rename.options.executionMode = input.executionMode;
     rename.finalMappings.reserve(input.operations.size());
 
-    constexpr FileSystemBindFlags ingressBindFlags =
-        static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_RENAME);
+    constexpr FileSystemBindFlags ingressBindFlags = static_cast<FileSystemBindFlags>(
+        FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_RENAME);
     wil::com_ptr<IFileSystemRouteCapabilities> route;
     const HRESULT routeHr = _fileSystem->QueryInterface(__uuidof(IFileSystemRouteCapabilities), route.put_void());
     if (FAILED(routeHr) || ! route)
@@ -2520,8 +2650,8 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareBatchRenameAdmission() no
             result = HRESULT_FROM_WIN32(ERROR_CANCELLED);
             return result;
         }
-        if (operation.originalSource.empty() || operation.finalLeaf.empty() || operation.providerFinalPath.empty() || operation.providerParentKey.empty() ||
-            operation.providerSourceCollisionKey.empty() || operation.providerFinalCollisionKey.empty())
+        if (operation.originalSource.empty() || operation.finalLeaf.empty() || operation.providerFinalPath.empty() ||
+            operation.providerParentKey.empty() || operation.providerSourceCollisionKey.empty() || operation.providerFinalCollisionKey.empty())
         {
             result = E_INVALIDARG;
             return result;
@@ -2546,7 +2676,8 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareBatchRenameAdmission() no
         {
             firstCapabilities = capabilities;
         }
-        else if (capabilities->pathProfileId != firstCapabilities->pathProfileId || capabilities->rootId != firstCapabilities->rootId ||
+        else if (capabilities->pathProfileId != firstCapabilities->pathProfileId ||
+                 capabilities->rootId != firstCapabilities->rootId ||
                  ! SamePathIdentityContract(capabilities->pathIdentity.value(), firstCapabilities->pathIdentity.value()))
         {
             // One RenamePlan owns one executable identity domain. A mixed-root request must be
@@ -2569,12 +2700,12 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareBatchRenameAdmission() no
             return result;
         }
         ++providerNameQueryCount;
-        const FileSystemRouteContract::ChildNameContractResult sourceName =
-            FileSystemRouteContract::QueryChildNameContract(route.get(), parentPath, sourceLeaf, FILESYSTEM_RENAME, _sourcePluginId);
+        const FileSystemRouteContract::ChildNameContractResult sourceName = FileSystemRouteContract::QueryChildNameContract(
+            route.get(), parentPath, sourceLeaf, FILESYSTEM_RENAME, _sourcePluginId);
         providerNameArenaFallbackCount += sourceName.arenaFallbackCount;
         ++providerNameQueryCount;
-        const FileSystemRouteContract::ChildNameContractResult finalName =
-            FileSystemRouteContract::QueryChildNameContract(route.get(), parentPath, operation.finalLeaf, FILESYSTEM_RENAME, _sourcePluginId);
+        const FileSystemRouteContract::ChildNameContractResult finalName = FileSystemRouteContract::QueryChildNameContract(
+            route.get(), parentPath, operation.finalLeaf, FILESYSTEM_RENAME, _sourcePluginId);
         providerNameArenaFallbackCount += finalName.arenaFallbackCount;
         const auto nameFailure = [](const FileSystemRouteContract::ChildNameContractResult& contract) noexcept
         {
@@ -2604,8 +2735,8 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareBatchRenameAdmission() no
         }
 
         ++bindCallCount;
-        FileOperations::ObjectBindingResult ingress =
-            FileOperations::BindObjectAuthority(_fileSystem.get(), operation.originalSource.native(), capabilities->pathProfileId, ingressBindFlags);
+        FileOperations::ObjectBindingResult ingress = FileOperations::BindObjectAuthority(
+            _fileSystem.get(), operation.originalSource.native(), capabilities->pathProfileId, ingressBindFlags);
         if (_cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested())
         {
             result = HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -2618,42 +2749,41 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareBatchRenameAdmission() no
         }
         operation.isDirectory = ingress.authority.kind == FILESYSTEM_BOUND_DIRECTORY;
         rename.finalMappings.emplace_back(FileOperations::RenameStep{
-            .source =
-                FileOperations::QualifiedSourceItem{
-                    .providerPath    = operation.originalSource.native(),
-                    .ingressSnapshot = std::move(ingress.authority.identity),
-                },
-            .finalLeafName              = operation.finalLeaf,
-            .providerJoinedPath         = finalName.joinedPath,
-            .providerParentKey          = parentKey.value(),
+            .source = FileOperations::QualifiedSourceItem{
+                .providerPath = operation.originalSource.native(),
+                .ingressSnapshot = std::move(ingress.authority.identity),
+            },
+            .finalLeafName = operation.finalLeaf,
+            .providerJoinedPath = finalName.joinedPath,
+            .providerParentKey = parentKey.value(),
             .providerSourceCollisionKey = sourceName.collisionKey,
-            .providerCollisionKey       = finalName.collisionKey,
+            .providerCollisionKey = finalName.collisionKey,
         });
     }
 
     const FileSystemCapabilitiesV2& capabilities = firstCapabilities.value();
-    rename.endpoint                              = FileOperations::QualifiedEndpoint{
-        .pluginId                            = _sourcePluginId,
-        .instanceId                          = CanonicalInstanceId(_sourceInstanceContext),
-        .profileId                           = capabilities.pathProfileId,
-        .rootId                              = capabilities.rootId,
-        .pathIdentity                        = capabilities.pathIdentity,
-        .verificationHostReadback            = capabilities.verificationHostReadback,
-        .verificationProviderBlake3Proof     = capabilities.verificationProviderBlake3Proof,
-        .verificationWriterDigestProof       = capabilities.verificationWriterDigestProof,
+    rename.endpoint = FileOperations::QualifiedEndpoint{
+        .pluginId = _sourcePluginId,
+        .instanceId = CanonicalInstanceId(_sourceInstanceContext),
+        .profileId = capabilities.pathProfileId,
+        .rootId = capabilities.rootId,
+        .pathIdentity = capabilities.pathIdentity,
+        .verificationHostReadback = capabilities.verificationHostReadback,
+        .verificationProviderBlake3Proof = capabilities.verificationProviderBlake3Proof,
+        .verificationWriterDigestProof = capabilities.verificationWriterDigestProof,
         .verificationCapabilityCheckDeferred = capabilities.verificationCapabilityCheckDeferred,
-        .cancellationAbort                   = capabilities.cancellationAbort,
-        .cancellationDeadline                = capabilities.cancellationDeadline,
-        .cancellationRouteClass              = capabilities.cancellationRouteClass,
-        .providerWatchdogTimeoutMs           = capabilities.providerWatchdogTimeoutMs,
+        .cancellationAbort = capabilities.cancellationAbort,
+        .cancellationDeadline = capabilities.cancellationDeadline,
+        .cancellationRouteClass = capabilities.cancellationRouteClass,
+        .providerWatchdogTimeoutMs = capabilities.providerWatchdogTimeoutMs,
     };
 
     // Build the one immutable acyclic schedule after capability and identity qualification. The
     // same builder powers preview and direct execution; a cycle is rejected here before the plan
     // can be published or any mutation interlock can be entered.
     const FileSystemPathIdentity& pathIdentity = capabilities.pathIdentity.value();
-    const HRESULT scheduleHr                   = BuildBatchRenameExecutionSchedule(pathIdentity, input.operations, rename.schedule);
-    cycleCount                                 = static_cast<uint64_t>(rename.schedule.cycleOperationIndices.size());
+    const HRESULT scheduleHr = BuildBatchRenameExecutionSchedule(pathIdentity, input.operations, rename.schedule);
+    cycleCount = static_cast<uint64_t>(rename.schedule.cycleOperationIndices.size());
     if (FAILED(scheduleHr))
     {
         detail = scheduleHr == HRESULT_FROM_WIN32(ERROR_CIRCULAR_DEPENDENCY) ? L"dependency-cycle" : L"invalid-schedule";
@@ -2662,7 +2792,7 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareBatchRenameAdmission() no
     }
 
     FileOperations::PlanRejectionBucket rejection = FileOperations::PlanRejectionBucket::None;
-    const HRESULT validationHr                    = FileOperations::ValidatePlan(rename, &rejection);
+    const HRESULT validationHr = FileOperations::ValidatePlan(rename, &rejection);
     if (FAILED(validationHr))
     {
         Debug::Perf::EmitValue(L"fileops.plan.rejection_bucket", static_cast<uint64_t>(rejection), validationHr);
@@ -2711,7 +2841,8 @@ HRESULT FolderWindow::FileOperationState::AdmitScheduledRename(
         return E_INVALIDARG;
     }
 
-    const FolderWindow::PaneState& sourceState = sourcePane == FolderWindow::Pane::Left ? _owner._leftPane : _owner._rightPane;
+    const FolderWindow::PaneState& sourceState =
+        sourcePane == FolderWindow::Pane::Left ? _owner._leftPane : _owner._rightPane;
     if (sourceState.fileSystem.get() != fileSystem.get() || sourceState.pluginId.empty())
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
@@ -2731,39 +2862,40 @@ HRESULT FolderWindow::FileOperationState::AdmitScheduledRename(
     const FileOperations::ExecutionMode planExecutionMode =
         ShouldQueueNewTask() ? FileOperations::ExecutionMode::Queue : FileOperations::ExecutionMode::Parallel;
     const uint64_t uiCaptureUs = Debug::Perf::ElapsedUs(startedAt);
-    uint64_t admittedTaskId    = 0u;
+    uint64_t admittedTaskId = 0u;
     {
         std::scoped_lock lock(_mutex);
         admittedTaskId = _nextTaskId++;
     }
 
     const ULONGLONG presentationAdmissionTick = TaskPresentationNowTick();
-    auto task                                 = std::make_unique<Task>(*this);
-    task->_taskId                             = admittedTaskId;
+    auto task = std::make_unique<Task>(*this);
+    task->_taskId = admittedTaskId;
     task->_queueOrderKey.store(admittedTaskId, std::memory_order_release);
-    task->_operation             = FILESYSTEM_RENAME;
-    task->_executionMode         = ExecutionMode::PerItem;
-    task->_sourcePane            = sourcePane;
-    task->_sourcePluginId        = sourceState.pluginId;
-    task->_sourcePluginShortId   = sourceState.pluginShortId;
+    task->_operation = FILESYSTEM_RENAME;
+    task->_executionMode = ExecutionMode::PerItem;
+    task->_sourcePane = sourcePane;
+    task->_sourcePluginId = sourceState.pluginId;
+    task->_sourcePluginShortId = sourceState.pluginShortId;
     task->_sourceInstanceContext = sourceState.instanceContext;
-    task->_fileSystem            = fileSystem;
-    task->_sourcePaths           = std::move(sourcePaths);
+    task->_fileSystem = fileSystem;
+    task->_sourcePaths = std::move(sourcePaths);
     task->_waitForOthers.store(planExecutionMode == FileOperations::ExecutionMode::Queue, std::memory_order_release);
-    task->_externalProgressCallback   = std::move(progressCallback);
+    task->_externalProgressCallback = std::move(progressCallback);
     task->_preConsumptionDecisionGate = std::move(preConsumptionDecisionGate);
-    task->_preparationObserver        = std::move(preparationObserver);
+    task->_preparationObserver = std::move(preparationObserver);
     task->_pendingBatchRenameAdmission.emplace(BatchRenameAdmissionInput{
-        .origin        = origin,
-        .operations    = std::move(operations),
+        .origin = origin,
+        .operations = std::move(operations),
         .executionMode = planExecutionMode,
-        .startedAt     = startedAt,
-        .uiCaptureUs   = uiCaptureUs,
+        .startedAt = startedAt,
+        .uiCaptureUs = uiCaptureUs,
     });
     task->_presentationState.store(Task::TaskPresentationState::Hidden, std::memory_order_release);
-    task->_presentationDeadlineTick = presentationAdmissionTick > std::numeric_limits<ULONGLONG>::max() - FileOperations::kTaskCardRevealDelayMs
-                                          ? std::numeric_limits<ULONGLONG>::max()
-                                          : presentationAdmissionTick + FileOperations::kTaskCardRevealDelayMs;
+    task->_presentationDeadlineTick =
+        presentationAdmissionTick > std::numeric_limits<ULONGLONG>::max() - FileOperations::kTaskCardRevealDelayMs
+            ? std::numeric_limits<ULONGLONG>::max()
+            : presentationAdmissionTick + FileOperations::kTaskCardRevealDelayMs;
     task->InitializeSourceItemResultBuilders();
     task->SetWaitingInQueue(false);
 
@@ -2794,9 +2926,12 @@ HRESULT FolderWindow::FileOperationState::AdmitScheduledRename(
     }
     catch (const std::system_error& error)
     {
-        Debug::Error(L"File Operations could not create the Batch Rename admission worker (taskId={}, code={}).", admittedTaskId, error.code().value());
+        Debug::Error(L"File Operations could not create the Batch Rename admission worker (taskId={}, code={}).",
+                     admittedTaskId,
+                     error.code().value());
         std::scoped_lock lock(_mutex);
-        const auto taskIt = std::ranges::find_if(_tasks, [rawTask](const auto& candidate) noexcept { return candidate.get() == rawTask; });
+        const auto taskIt = std::ranges::find_if(_tasks, [rawTask](const auto& candidate) noexcept
+        { return candidate.get() == rawTask; });
         if (taskIt != _tasks.end())
         {
             _tasks.erase(taskIt);
@@ -2825,23 +2960,39 @@ HRESULT FolderWindow::FileOperationState::AdmitScheduledRename(
     }
     rawTask->_workerReleased.store(true, std::memory_order_release);
     rawTask->_workerReleased.notify_all();
-    Debug::Perf::Emit(L"batchrename.admission.ui_capture_us", L"published", uiCaptureUs, uiRowCount, 0u, S_OK);
-    Debug::Perf::Emit(L"batchrename.admission.ui_thread_us", L"published", Debug::Perf::ElapsedUs(startedAt), uiRowCount, 0u, S_OK);
+    Debug::Perf::Emit(L"batchrename.admission.ui_capture_us",
+                      L"published",
+                      uiCaptureUs,
+                      uiRowCount,
+                      0u,
+                      S_OK);
+    Debug::Perf::Emit(L"batchrename.admission.ui_thread_us",
+                      L"published",
+                      Debug::Perf::ElapsedUs(startedAt),
+                      uiRowCount,
+                      0u,
+                      S_OK);
     if (origin == FileOperations::RenameOrigin::ChangeCase)
     {
-        Debug::Perf::Emit(L"changecase.admission.ui_thread_us", L"published", Debug::Perf::ElapsedUs(startedAt), uiRowCount, 0u, S_OK);
+        Debug::Perf::Emit(L"changecase.admission.ui_thread_us",
+                          L"published",
+                          Debug::Perf::ElapsedUs(startedAt),
+                          uiRowCount,
+                          0u,
+                          S_OK);
     }
     return S_OK;
 }
 
-HRESULT FolderWindow::FileOperationState::AdmitBatchRename(FolderWindow::Pane sourcePane,
-                                                           const wil::com_ptr<IFileSystem>& fileSystem,
-                                                           std::vector<BatchRenameExecutionOp> operations,
-                                                           std::function<void(uint64_t completedItems, uint64_t totalItems)> progressCallback,
-                                                           std::function<void(uint64_t taskId)> publishedCallback,
-                                                           uint64_t* taskIdOut,
-                                                           std::function<HRESULT()> preConsumptionDecisionGate,
-                                                           std::function<void(std::shared_ptr<const FileOperations::PreparationSnapshot>)> preparationObserver)
+HRESULT FolderWindow::FileOperationState::AdmitBatchRename(
+    FolderWindow::Pane sourcePane,
+    const wil::com_ptr<IFileSystem>& fileSystem,
+    std::vector<BatchRenameExecutionOp> operations,
+    std::function<void(uint64_t completedItems, uint64_t totalItems)> progressCallback,
+    std::function<void(uint64_t taskId)> publishedCallback,
+    uint64_t* taskIdOut,
+    std::function<HRESULT()> preConsumptionDecisionGate,
+    std::function<void(std::shared_ptr<const FileOperations::PreparationSnapshot>)> preparationObserver)
 {
     return AdmitScheduledRename(sourcePane,
                                 fileSystem,
@@ -2854,18 +3005,25 @@ HRESULT FolderWindow::FileOperationState::AdmitBatchRename(FolderWindow::Pane so
                                 std::move(preparationObserver));
 }
 
-HRESULT FolderWindow::FileOperationState::QualifyCreateDirectory(const wil::com_ptr<IFileSystem>& fileSystem,
-                                                                 std::wstring_view pluginId,
-                                                                 std::wstring_view instanceContext,
-                                                                 const std::filesystem::path& providerParentPath,
-                                                                 std::wstring_view leafName,
-                                                                 FileOperations::CreateDirectoryAdmission& admissionOut) noexcept
+HRESULT FolderWindow::FileOperationState::QualifyCreateDirectory(
+    const wil::com_ptr<IFileSystem>& fileSystem,
+    std::wstring_view pluginId,
+    std::wstring_view instanceContext,
+    const std::filesystem::path& providerParentPath,
+    std::wstring_view leafName,
+    FileOperations::CreateDirectoryAdmission& admissionOut) noexcept
 {
-    const auto startedAt     = std::chrono::steady_clock::now();
-    HRESULT result           = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    const auto startedAt = std::chrono::steady_clock::now();
+    HRESULT result       = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     std::wstring_view detail = L"rejected";
-    const auto emitAdmission = wil::scope_exit([&]() noexcept {
-        Debug::Perf::Emit(L"fileops.create_directory.admit_us", detail, Debug::Perf::ElapsedUs(startedAt), 1u, static_cast<uint64_t>(leafName.size()), result);
+    const auto emitAdmission = wil::scope_exit([&]() noexcept
+    {
+        Debug::Perf::Emit(L"fileops.create_directory.admit_us",
+                          detail,
+                          Debug::Perf::ElapsedUs(startedAt),
+                          1u,
+                          static_cast<uint64_t>(leafName.size()),
+                          result);
     });
 
     admissionOut = {};
@@ -2877,28 +3035,33 @@ HRESULT FolderWindow::FileOperationState::QualifyCreateDirectory(const wil::com_
 
     const std::optional<FileSystemCapabilitiesV2> parentCapabilities =
         TryGetCapabilities(fileSystem, providerParentPath.native(), FILESYSTEM_CREATE_DIRECTORY, pluginId);
-    if (! parentCapabilities.has_value() || ! parentCapabilities->createDirectoryOperation || ! HasStablePathIdentity(parentCapabilities.value()) ||
-        ! HasContainedCancellationRoute(parentCapabilities.value()) || parentCapabilities->rootId.empty())
+    if (! parentCapabilities.has_value() || ! parentCapabilities->createDirectoryOperation ||
+        ! HasStablePathIdentity(parentCapabilities.value()) || ! HasContainedCancellationRoute(parentCapabilities.value()) ||
+        parentCapabilities->rootId.empty())
     {
         return result;
     }
 
     const FileSystemPathIdentity& parentIdentity = parentCapabilities->pathIdentity.value();
-    const FileSystemRouteContract::ChildNameContractResult nameContract =
-        FileSystemRouteContract::QueryChildNameContract(fileSystem.get(), providerParentPath.native(), leafName, FILESYSTEM_CREATE_DIRECTORY, pluginId);
-    if (nameContract.state != FileSystemRouteContract::QueryState::Available || nameContract.nameStatus != FILESYSTEM_CHILD_NAME_VALID)
+    const FileSystemRouteContract::ChildNameContractResult nameContract = FileSystemRouteContract::QueryChildNameContract(
+        fileSystem.get(), providerParentPath.native(), leafName, FILESYSTEM_CREATE_DIRECTORY, pluginId);
+    if (nameContract.state != FileSystemRouteContract::QueryState::Available ||
+        nameContract.nameStatus != FILESYSTEM_CHILD_NAME_VALID)
     {
         result = nameContract.state == FileSystemRouteContract::QueryState::Available && FAILED(nameContract.failureStatus)
-                     ? nameContract.failureStatus
-                     : (FAILED(nameContract.status) ? nameContract.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+            ? nameContract.failureStatus
+            : (FAILED(nameContract.status) ? nameContract.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
         return result;
     }
     const std::wstring& candidatePath = nameContract.joinedPath;
 
-    const std::optional<FileSystemCapabilitiesV2> candidateCapabilities = TryGetCapabilities(fileSystem, candidatePath, FILESYSTEM_CREATE_DIRECTORY, pluginId);
-    if (! candidateCapabilities.has_value() || ! candidateCapabilities->createDirectoryOperation || ! HasStablePathIdentity(candidateCapabilities.value()) ||
-        ! HasContainedCancellationRoute(candidateCapabilities.value()) || candidateCapabilities->rootId.empty() ||
-        candidateCapabilities->pathProfileId != parentCapabilities->pathProfileId || candidateCapabilities->rootId != parentCapabilities->rootId ||
+    const std::optional<FileSystemCapabilitiesV2> candidateCapabilities =
+        TryGetCapabilities(fileSystem, candidatePath, FILESYSTEM_CREATE_DIRECTORY, pluginId);
+    if (! candidateCapabilities.has_value() || ! candidateCapabilities->createDirectoryOperation ||
+        ! HasStablePathIdentity(candidateCapabilities.value()) || ! HasContainedCancellationRoute(candidateCapabilities.value()) ||
+        candidateCapabilities->rootId.empty() ||
+        candidateCapabilities->pathProfileId != parentCapabilities->pathProfileId ||
+        candidateCapabilities->rootId != parentCapabilities->rootId ||
         ! SamePathIdentityContract(candidateCapabilities->pathIdentity.value(), parentIdentity))
     {
         return result;
@@ -2918,25 +3081,25 @@ HRESULT FolderWindow::FileOperationState::QualifyCreateDirectory(const wil::com_
     const bool localEndpoint = NavigationLocation::EqualsNoCase(pluginId, L"builtin/file-system");
 
     admissionOut.endpoint = FileOperations::QualifiedEndpoint{
-        .pluginId                            = std::wstring(pluginId),
-        .instanceId                          = CanonicalInstanceId(instanceContext),
-        .profileId                           = candidateCapabilities->pathProfileId,
-        .rootId                              = candidateCapabilities->rootId,
-        .pathIdentity                        = candidateCapabilities->pathIdentity,
-        .verificationHostReadback            = candidateCapabilities->verificationHostReadback,
-        .verificationProviderBlake3Proof     = candidateCapabilities->verificationProviderBlake3Proof,
-        .verificationWriterDigestProof       = candidateCapabilities->verificationWriterDigestProof,
+        .pluginId   = std::wstring(pluginId),
+        .instanceId = CanonicalInstanceId(instanceContext),
+        .profileId  = candidateCapabilities->pathProfileId,
+        .rootId     = candidateCapabilities->rootId,
+        .pathIdentity = candidateCapabilities->pathIdentity,
+        .verificationHostReadback = candidateCapabilities->verificationHostReadback,
+        .verificationProviderBlake3Proof = candidateCapabilities->verificationProviderBlake3Proof,
+        .verificationWriterDigestProof = candidateCapabilities->verificationWriterDigestProof,
         .verificationCapabilityCheckDeferred = candidateCapabilities->verificationCapabilityCheckDeferred,
-        .cancellationAbort                   = candidateCapabilities->cancellationAbort,
-        .cancellationDeadline                = candidateCapabilities->cancellationDeadline,
-        .cancellationRouteClass              = candidateCapabilities->cancellationRouteClass,
-        .providerWatchdogTimeoutMs           = candidateCapabilities->providerWatchdogTimeoutMs,
+        .cancellationAbort = candidateCapabilities->cancellationAbort,
+        .cancellationDeadline = candidateCapabilities->cancellationDeadline,
+        .cancellationRouteClass = candidateCapabilities->cancellationRouteClass,
+        .providerWatchdogTimeoutMs = candidateCapabilities->providerWatchdogTimeoutMs,
     };
-    admissionOut.candidateProviderPath    = std::filesystem::path(candidatePath);
-    admissionOut.providerCollisionKey     = nameContract.collisionKey;
+    admissionOut.candidateProviderPath = std::filesystem::path(candidatePath);
+    admissionOut.providerCollisionKey = nameContract.collisionKey;
     admissionOut.allowLocalNativeFallback = localEndpoint;
-    result                                = S_OK;
-    detail                                = localEndpoint ? L"accepted-local" : L"accepted-provider";
+    result = S_OK;
+    detail = localEndpoint ? L"accepted-local" : L"accepted-provider";
     return result;
 }
 
@@ -2956,30 +3119,35 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
 
     if (request.operation == FILESYSTEM_RENAME)
     {
-        if (request.origin != FolderView::FileOperationRequest::Origin::InlineF2 || request.sourcePaths.size() != 1u || ! request.renameLeafName.has_value() ||
-            request.renameLeafName->empty() || request.destinationFolder.has_value() || request.moveClipboardSequence.has_value() ||
-            request.preWorkerReleaseBarrier)
+        if (request.origin != FolderView::FileOperationRequest::Origin::InlineF2 || request.sourcePaths.size() != 1u ||
+            ! request.renameLeafName.has_value() || request.renameLeafName->empty() || request.destinationFolder.has_value() ||
+            request.moveClipboardSequence.has_value() || request.preWorkerReleaseBarrier)
         {
             return E_INVALIDARG;
         }
 
         const std::filesystem::path sourcePath = std::move(request.sourcePaths.front());
-        const std::wstring finalLeafName       = std::move(request.renameLeafName.value());
+        const std::wstring finalLeafName = std::move(request.renameLeafName.value());
         std::filesystem::path providerParentPath;
         uint64_t taskId = 0u;
         const FileOperationPromptDispatchScope promptDispatch(*this);
-        const HRESULT startHr = _fileOperations->AdmitInlineRename(pane, destinationState.fileSystem, sourcePath, finalLeafName, &taskId, &providerParentPath);
+        const HRESULT startHr = _fileOperations->AdmitInlineRename(
+            pane, destinationState.fileSystem, sourcePath, finalLeafName, &taskId, &providerParentPath);
         if (SUCCEEDED(startHr) && taskId != 0u)
         {
             std::function<void(HRESULT)> requestCompletion = std::move(request.completionCallback);
             _fileOperationRequestCompletionCallbacks.insert_or_assign(
                 taskId,
-                [this, pane, providerParentPath, finalLeafName, completion = std::move(requestCompletion)](const FileOperationCompletedEvent& event) mutable
+                [this,
+                 pane,
+                 providerParentPath,
+                 finalLeafName,
+                 completion = std::move(requestCompletion)](const FileOperationCompletedEvent& event) mutable
             {
-                const auto renamed = std::ranges::find_if(event.itemOutcomes,
-                                                          [](const FileOperationItemOutcome& outcome) noexcept
+                const auto renamed = std::ranges::find_if(event.itemOutcomes, [](const FileOperationItemOutcome& outcome) noexcept
                 {
-                    return outcome.sourceIndex == 0u && outcome.publication == FileOperations::PublicationState::Published &&
+                    return outcome.sourceIndex == 0u &&
+                           outcome.publication == FileOperations::PublicationState::Published &&
                            outcome.sourceDisposition == FileOperations::SourceDisposition::Removed &&
                            outcome.completion == FileOperations::ItemCompletion::Completed;
                 });
@@ -3022,13 +3190,14 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
 
         const std::filesystem::path destinationCapabilityPath =
             request.destinationFolder.value_or(destinationState.folderView.GetFolderPath().value_or(std::filesystem::path{}));
-        if (destinationCapabilityPath.empty() || ! CanCrossFileSystemCopyMove(localEntry->fileSystem,
-                                                                              request.sourcePaths.front().native(),
-                                                                              localEntry->id,
-                                                                              destinationState.fileSystem,
-                                                                              destinationCapabilityPath.native(),
-                                                                              destinationState.pluginId,
-                                                                              request.operation))
+        if (destinationCapabilityPath.empty() ||
+            ! CanCrossFileSystemCopyMove(localEntry->fileSystem,
+                                         request.sourcePaths.front().native(),
+                                         localEntry->id,
+                                         destinationState.fileSystem,
+                                         destinationCapabilityPath.native(),
+                                         destinationState.pluginId,
+                                         request.operation))
         {
             destinationState.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation,
                                                          FolderView::OverlaySeverity::Error,
@@ -3037,10 +3206,10 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
             return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         }
 
-        fileSystem                  = localEntry->fileSystem;
-        destinationFileSystem       = destinationState.fileSystem;
-        destinationPane             = pane;
-        sourcePluginIdOverride      = localEntry->id;
+        fileSystem                 = localEntry->fileSystem;
+        destinationFileSystem      = destinationState.fileSystem;
+        destinationPane            = pane;
+        sourcePluginIdOverride     = localEntry->id;
         sourcePluginShortIdOverride = localEntry->shortId;
         sourceInstanceIdOverride    = std::wstring{};
     }
@@ -3149,13 +3318,14 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
 
     const bool waitForOthers                = _fileOperations->ShouldQueueNewTask();
     std::filesystem::path destinationFolder = request.destinationFolder.value_or(std::filesystem::path{});
-    PaneState& sourceStateForFocus          = sourcePane == Pane::Left ? _leftPane : _rightPane;
-    const bool tracksRemovalFocus           = request.operation == FILESYSTEM_DELETE || request.operation == FILESYSTEM_MOVE;
+    PaneState& sourceStateForFocus           = sourcePane == Pane::Left ? _leftPane : _rightPane;
+    const bool tracksRemovalFocus = request.operation == FILESYSTEM_DELETE || request.operation == FILESYSTEM_MOVE;
     const std::optional<FileSystemPathIdentity> removalPathIdentity =
         tracksRemovalFocus ? TryGetStablePathIdentity(fileSystem, request.sourcePaths.front().native(), sourcePluginIdForGate) : std::nullopt;
-    const uint64_t removalFocusToken =
-        removalPathIdentity.has_value() ? sourceStateForFocus.folderView.BeginRemovalFocusTracking(request.sourcePaths, removalPathIdentity.value()) : 0u;
-    std::function<void(HRESULT)> requestCompletion  = std::move(request.completionCallback);
+    const uint64_t removalFocusToken = removalPathIdentity.has_value()
+        ? sourceStateForFocus.folderView.BeginRemovalFocusTracking(request.sourcePaths, removalPathIdentity.value())
+        : 0u;
+    std::function<void(HRESULT)> requestCompletion = std::move(request.completionCallback);
     const FileOperations::DeleteOrigin deleteOrigin = [&]() noexcept
     {
         switch (request.origin)
@@ -3170,8 +3340,9 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
         }
         return FileOperations::DeleteOrigin::PaneCommand;
     }();
-    const std::optional<FileOperations::ConsentKind> capturedConsentKind =
-        request.archiveDeleteAfterConfirmed ? std::optional<FileOperations::ConsentKind>{FileOperations::ConsentKind::ArchiveDeleteAfter} : std::nullopt;
+    const std::optional<FileOperations::ConsentKind> capturedConsentKind = request.archiveDeleteAfterConfirmed
+        ? std::optional<FileOperations::ConsentKind>{FileOperations::ConsentKind::ArchiveDeleteAfter}
+        : std::nullopt;
     uint64_t taskId = 0;
     const FileOperationPromptDispatchScope promptDispatch(*this);
     HRESULT startHr = _fileOperations->AdmitOperation(request.operation,
@@ -3202,7 +3373,7 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
             taskId,
             [this, sourcePane, removalFocusToken, completion = std::move(requestCompletion)](const FileOperationCompletedEvent& event) mutable
         {
-            PaneState& sourceState                                         = sourcePane == Pane::Left ? _leftPane : _rightPane;
+            PaneState& sourceState = sourcePane == Pane::Left ? _leftPane : _rightPane;
             const std::vector<FolderView::RemovalDisposition> dispositions = BuildDenseRemovedSourceDispositions(event);
             sourceState.folderView.CompleteRemovalFocusTracking(removalFocusToken, dispositions);
             if (completion)
@@ -3861,12 +4032,15 @@ void FolderWindow::CommandDelete(Pane pane)
     // Recycle deletes go through ONE bulk DeleteItems call: the plugin batches same-parent
     // items into a single IFileOperation (up to 1000 per batch), which per-item routing would
     // degrade to one shell operation + one STA thread per item.
-    const bool waitForOthers                                        = _fileOperations->ShouldQueueNewTask();
-    const std::optional<FileSystemPathIdentity> removalPathIdentity = TryGetStablePathIdentity(state.fileSystem, paths.front().native(), state.pluginId);
-    const uint64_t removalFocusToken = removalPathIdentity.has_value() ? state.folderView.BeginRemovalFocusTracking(paths, removalPathIdentity.value()) : 0u;
+    const bool waitForOthers = _fileOperations->ShouldQueueNewTask();
+    const std::optional<FileSystemPathIdentity> removalPathIdentity =
+        TryGetStablePathIdentity(state.fileSystem, paths.front().native(), state.pluginId);
+    const uint64_t removalFocusToken = removalPathIdentity.has_value()
+        ? state.folderView.BeginRemovalFocusTracking(paths, removalPathIdentity.value())
+        : 0u;
     uint64_t taskId                  = 0u;
     const FileOperationPromptDispatchScope promptDispatch(*this);
-    const HRESULT startHr = _fileOperations->AdmitOperation(FILESYSTEM_DELETE,
+    const HRESULT startHr            = _fileOperations->AdmitOperation(FILESYSTEM_DELETE,
                                                             pane,
                                                             std::nullopt,
                                                             state.fileSystem,
@@ -3881,10 +4055,9 @@ void FolderWindow::CommandDelete(Pane pane)
                                                             &taskId);
     if (SUCCEEDED(startHr) && taskId != 0u && removalFocusToken != 0u)
     {
-        _fileOperationRequestCompletionCallbacks.insert_or_assign(taskId,
-                                                                  [this, pane, removalFocusToken](const FileOperationCompletedEvent& event)
+        _fileOperationRequestCompletionCallbacks.insert_or_assign(taskId, [this, pane, removalFocusToken](const FileOperationCompletedEvent& event)
         {
-            PaneState& sourceState                                         = pane == Pane::Left ? _leftPane : _rightPane;
+            PaneState& sourceState = pane == Pane::Left ? _leftPane : _rightPane;
             const std::vector<FolderView::RemovalDisposition> dispositions = BuildDenseRemovedSourceDispositions(event);
             sourceState.folderView.CompleteRemovalFocusTracking(removalFocusToken, dispositions);
         });
@@ -3924,12 +4097,15 @@ void FolderWindow::CommandPermanentDelete(Pane pane)
         return;
     }
 
-    const bool waitForOthers                                        = _fileOperations->ShouldQueueNewTask();
-    const std::optional<FileSystemPathIdentity> removalPathIdentity = TryGetStablePathIdentity(state.fileSystem, paths.front().native(), state.pluginId);
-    const uint64_t removalFocusToken = removalPathIdentity.has_value() ? state.folderView.BeginRemovalFocusTracking(paths, removalPathIdentity.value()) : 0u;
+    const bool waitForOthers = _fileOperations->ShouldQueueNewTask();
+    const std::optional<FileSystemPathIdentity> removalPathIdentity =
+        TryGetStablePathIdentity(state.fileSystem, paths.front().native(), state.pluginId);
+    const uint64_t removalFocusToken = removalPathIdentity.has_value()
+        ? state.folderView.BeginRemovalFocusTracking(paths, removalPathIdentity.value())
+        : 0u;
     uint64_t taskId                  = 0u;
     const FileOperationPromptDispatchScope promptDispatch(*this);
-    const HRESULT startHr = _fileOperations->AdmitOperation(FILESYSTEM_DELETE,
+    const HRESULT startHr            = _fileOperations->AdmitOperation(FILESYSTEM_DELETE,
                                                             pane,
                                                             std::nullopt,
                                                             state.fileSystem,
@@ -3944,10 +4120,9 @@ void FolderWindow::CommandPermanentDelete(Pane pane)
                                                             &taskId);
     if (SUCCEEDED(startHr) && taskId != 0u && removalFocusToken != 0u)
     {
-        _fileOperationRequestCompletionCallbacks.insert_or_assign(taskId,
-                                                                  [this, pane, removalFocusToken](const FileOperationCompletedEvent& event)
+        _fileOperationRequestCompletionCallbacks.insert_or_assign(taskId, [this, pane, removalFocusToken](const FileOperationCompletedEvent& event)
         {
-            PaneState& sourceState                                         = pane == Pane::Left ? _leftPane : _rightPane;
+            PaneState& sourceState = pane == Pane::Left ? _leftPane : _rightPane;
             const std::vector<FolderView::RemovalDisposition> dispositions = BuildDenseRemovedSourceDispositions(event);
             sourceState.folderView.CompleteRemovalFocusTracking(removalFocusToken, dispositions);
         });
@@ -3960,11 +4135,11 @@ void FolderWindow::CommandPermanentDelete(Pane pane)
 
 bool FolderWindow::SanityCheckBothPanes(FolderWindow::PaneState& src, FolderWindow::PaneState& dest, FileSystemOperation operation)
 {
-    bool ok                                                      = true;
-    bool sameFolder                                              = false;
-    bool contextsDiffer                                          = false;
-    bool destinationUnsettled                                    = false;
-    const std::optional<std::filesystem::path> sourceFolder      = src.folderView.GetFolderPath();
+    bool ok             = true;
+    bool sameFolder     = false;
+    bool contextsDiffer = false;
+    bool destinationUnsettled = false;
+    const std::optional<std::filesystem::path> sourceFolder = src.folderView.GetFolderPath();
     const std::optional<std::filesystem::path> destinationFolder = dest.folderView.GetFolderPath();
     if (! _fileOperations)
     {
@@ -4014,8 +4189,13 @@ bool FolderWindow::SanityCheckBothPanes(FolderWindow::PaneState& src, FolderWind
 
     if (ok && contextsDiffer && (operation == FILESYSTEM_COPY || operation == FILESYSTEM_MOVE))
     {
-        if (! CanCrossFileSystemCopyMove(
-                src.fileSystem, sourceFolder->native(), src.pluginId, dest.fileSystem, destinationFolder->native(), dest.pluginId, operation))
+        if (! CanCrossFileSystemCopyMove(src.fileSystem,
+                                         sourceFolder->native(),
+                                         src.pluginId,
+                                         dest.fileSystem,
+                                         destinationFolder->native(),
+                                         dest.pluginId,
+                                         operation))
         {
             Debug::Error(L"FolderWindow::SanityCheckBothPanes Cross-filesystem operation not allowed src:{} dest:{} op:{}.",
                          src.pluginId,
@@ -4024,7 +4204,8 @@ bool FolderWindow::SanityCheckBothPanes(FolderWindow::PaneState& src, FolderWind
             ok = false;
         }
     }
-    else if (ok && ! contextsDiffer && ! CanSameFileSystemOperation(src.fileSystem, sourceFolder->native(), operation, src.pluginId))
+    else if (ok && ! contextsDiffer &&
+             ! CanSameFileSystemOperation(src.fileSystem, sourceFolder->native(), operation, src.pluginId))
     {
         Debug::Error(L"FolderWindow::SanityCheckBothPanes provider rejected same-filesystem operation plugin:{} op:{}.",
                      src.pluginId,
@@ -4037,9 +4218,9 @@ bool FolderWindow::SanityCheckBothPanes(FolderWindow::PaneState& src, FolderWind
     {
         const std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
         int messageId              = destinationUnsettled ? IDS_MSG_PANE_OP_DESTINATION_LOADING
-                                     : sameFolder         ? IDS_MSG_PANE_OP_REQUIRES_DIFFERENT_FOLDER
-                                     : contextsDiffer     ? IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS
-                                                          : IDS_MSG_PANE_OP_REQUIRES_SAME_FS;
+                                     : sameFolder        ? IDS_MSG_PANE_OP_REQUIRES_DIFFERENT_FOLDER
+                                     : contextsDiffer    ? IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS
+                                                         : IDS_MSG_PANE_OP_REQUIRES_SAME_FS;
         const std::wstring message = LoadStringResource(nullptr, static_cast<UINT>(messageId));
         src.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, title, message);
         return false;
@@ -4117,9 +4298,12 @@ void FolderWindow::CommandMoveToOtherPane(Pane sourcePane, bool withOptions)
     const bool contextSame                          = CompareStringOrdinal(src.pluginId.c_str(), -1, dest.pluginId.c_str(), -1, TRUE) == CSTR_EQUAL &&
                                                       NavigationLocation::EqualsNoCase(src.instanceContext, dest.instanceContext);
     wil::com_ptr<IFileSystem> destinationFileSystem = contextSame ? nullptr : dest.fileSystem;
-    const std::optional<FileSystemPathIdentity> removalPathIdentity = TryGetStablePathIdentity(src.fileSystem, paths.front().native(), src.pluginId);
-    const uint64_t removalFocusToken = removalPathIdentity.has_value() ? src.folderView.BeginRemovalFocusTracking(paths, removalPathIdentity.value()) : 0u;
-    uint64_t taskId                  = 0u;
+    const std::optional<FileSystemPathIdentity> removalPathIdentity =
+        TryGetStablePathIdentity(src.fileSystem, paths.front().native(), src.pluginId);
+    const uint64_t removalFocusToken = removalPathIdentity.has_value()
+        ? src.folderView.BeginRemovalFocusTracking(paths, removalPathIdentity.value())
+        : 0u;
+    uint64_t taskId = 0u;
     const FileOperationPromptDispatchScope promptDispatch(*this);
     const HRESULT startHr = _fileOperations->AdmitOperation(FILESYSTEM_MOVE,
                                                             sourcePane,
@@ -4136,10 +4320,9 @@ void FolderWindow::CommandMoveToOtherPane(Pane sourcePane, bool withOptions)
                                                             &taskId);
     if (SUCCEEDED(startHr) && taskId != 0u && removalFocusToken != 0u)
     {
-        _fileOperationRequestCompletionCallbacks.insert_or_assign(taskId,
-                                                                  [this, sourcePane, removalFocusToken](const FileOperationCompletedEvent& event)
+        _fileOperationRequestCompletionCallbacks.insert_or_assign(taskId, [this, sourcePane, removalFocusToken](const FileOperationCompletedEvent& event)
         {
-            PaneState& sourceState                                         = sourcePane == Pane::Left ? _leftPane : _rightPane;
+            PaneState& sourceState = sourcePane == Pane::Left ? _leftPane : _rightPane;
             const std::vector<FolderView::RemovalDisposition> dispositions = BuildDenseRemovedSourceDispositions(event);
             sourceState.folderView.CompleteRemovalFocusTracking(removalFocusToken, dispositions);
         });
@@ -4171,7 +4354,7 @@ LRESULT FolderWindow::OnFileOperationCompleted(WPARAM wp, LPARAM lp) noexcept
 LRESULT FolderWindow::OnFileOperationBatchRenameArtifactPrompt(const WPARAM wp, const LPARAM lp) noexcept
 {
     const uint64_t taskId = static_cast<uint64_t>(wp);
-    auto payload          = TakeMessagePayload<FileOperationState::BatchRenameArtifactPromptPayload>(lp);
+    auto payload = TakeMessagePayload<FileOperationState::BatchRenameArtifactPromptPayload>(lp);
     if (! _fileOperations)
     {
         return 0;
@@ -4179,7 +4362,8 @@ LRESULT FolderWindow::OnFileOperationBatchRenameArtifactPrompt(const WPARAM wp, 
 
     if (! payload)
     {
-        _fileOperations->CompleteBatchRenameArtifactPromptByTaskId(taskId, HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS));
+        _fileOperations->CompleteBatchRenameArtifactPromptByTaskId(
+            taskId, HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS));
         return 0;
     }
 
@@ -4191,7 +4375,7 @@ LRESULT FolderWindow::OnFileOperationBatchRenameArtifactPrompt(const WPARAM wp, 
 LRESULT FolderWindow::OnFileOperationClipboardMoveReady(const WPARAM wp, const LPARAM lp) noexcept
 {
     const uint64_t taskId = static_cast<uint64_t>(wp);
-    auto payload          = TakeMessagePayload<FileOperationState::ClipboardMoveReadyPayload>(lp);
+    auto payload = TakeMessagePayload<FileOperationState::ClipboardMoveReadyPayload>(lp);
     if (! _fileOperations)
     {
         return 0;
@@ -4199,7 +4383,8 @@ LRESULT FolderWindow::OnFileOperationClipboardMoveReady(const WPARAM wp, const L
 
     if (! payload)
     {
-        _fileOperations->CompleteClipboardMoveAdmissionByTaskId(taskId, HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS));
+        _fileOperations->CompleteClipboardMoveAdmissionByTaskId(
+            taskId, HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS));
         return 0;
     }
 
@@ -4249,7 +4434,8 @@ void FolderWindow::ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, uns
     FileOperationState::Task* task = _fileOperations->FindTask(taskId);
     if (! task)
     {
-        if (auto completionIt = _fileOperationRequestCompletionCallbacks.find(taskId); completionIt != _fileOperationRequestCompletionCallbacks.end())
+        if (auto completionIt = _fileOperationRequestCompletionCallbacks.find(taskId);
+            completionIt != _fileOperationRequestCompletionCallbacks.end())
         {
             FileOperationCompletedCallback completion = std::move(completionIt->second);
             _fileOperationRequestCompletionCallbacks.erase(completionIt);
@@ -4257,16 +4443,16 @@ void FolderWindow::ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, uns
             {
                 FileOperationCompletedEvent missingTaskEvent{};
                 missingTaskEvent.taskId = taskId;
-                missingTaskEvent.hr     = hr;
+                missingTaskEvent.hr = hr;
                 completion(missingTaskEvent);
             }
         }
         return;
     }
 
-    const Pane sourcePane                                                     = task->GetSourcePane();
-    const std::optional<Pane> destinationPane                                 = task->GetDestinationPane();
-    const bool hasResolvedItems                                               = task->_resolvedItems.size() == task->_sourcePaths.size();
+    const Pane sourcePane                     = task->GetSourcePane();
+    const std::optional<Pane> destinationPane = task->GetDestinationPane();
+    const bool hasResolvedItems               = task->_resolvedItems.size() == task->_sourcePaths.size();
     const std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans = task->LoadPlans();
 
     const auto pathIdentityForIndex = [&](size_t index, bool destination) noexcept -> std::optional<FileSystemPathIdentity>
@@ -4318,8 +4504,9 @@ void FolderWindow::ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, uns
         return std::nullopt;
     };
 
-    const auto resolvedProviderParentForIndex =
-        [&](size_t index, const std::filesystem::path& path, bool destination) noexcept -> std::optional<std::filesystem::path>
+    const auto resolvedProviderParentForIndex = [&](size_t index,
+                                                    const std::filesystem::path& path,
+                                                    bool destination) noexcept -> std::optional<std::filesystem::path>
     {
         const std::optional<FileSystemPathIdentity> identity = pathIdentityForIndex(index, destination);
         if (! identity.has_value())
@@ -4355,9 +4542,10 @@ void FolderWindow::ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, uns
                         return std::nullopt;
                     }
                     if (hasResolvedItems &&
-                        (! transfer->destinationEndpoint.pathIdentity.has_value() || ! EquivalentPath(transfer->destinationEndpoint.pathIdentity.value(),
-                                                                                                      destination,
-                                                                                                      task->_resolvedItems[index].destinationPath.native())))
+                        (! transfer->destinationEndpoint.pathIdentity.has_value() ||
+                         ! EquivalentPath(transfer->destinationEndpoint.pathIdentity.value(),
+                                          destination,
+                                          task->_resolvedItems[index].destinationPath.native())))
                     {
                         return std::nullopt;
                     }
@@ -4382,7 +4570,8 @@ void FolderWindow::ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, uns
                 {
                     if (currentIndex == index)
                     {
-                        return step.providerJoinedPath.empty() ? std::nullopt : std::optional<std::filesystem::path>(step.providerJoinedPath);
+                        return step.providerJoinedPath.empty() ? std::nullopt
+                                                               : std::optional<std::filesystem::path>(step.providerJoinedPath);
                     }
                     ++currentIndex;
                 }
@@ -4405,11 +4594,11 @@ void FolderWindow::ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, uns
     { return hasResolvedItems && task->_resolvedItems[index].kind == ResolvedFileOperationItemKind::DirectoryShell; };
 
     FileOperationCompletedEvent e{};
-    e.taskId          = taskId;
-    e.operation       = task->GetOperation();
-    e.sourcePane      = sourcePane;
-    e.destinationPane = destinationPane;
-    e.sourcePaths     = task->_sourcePaths;
+    e.taskId            = taskId;
+    e.operation         = task->GetOperation();
+    e.sourcePane        = sourcePane;
+    e.destinationPane   = destinationPane;
+    e.sourcePaths       = task->_sourcePaths;
     {
         std::scoped_lock lock(task->_sourceItemStatusMutex);
         e.itemOutcomes.reserve(task->_sourceItemResultBuilders.size());
@@ -4419,15 +4608,15 @@ void FolderWindow::ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, uns
             {
                 const FileOperations::FileOperationItemResult& result = builder.terminal.value();
                 e.itemOutcomes.push_back(FileOperationItemOutcome{
-                    .sourceIndex           = result.sourceIndex,
-                    .publication           = result.publication,
-                    .verification          = result.verification,
-                    .sourceDisposition     = result.sourceDisposition,
-                    .completion            = result.completion,
+                    .sourceIndex = result.sourceIndex,
+                    .publication = result.publication,
+                    .verification = result.verification,
+                    .sourceDisposition = result.sourceDisposition,
+                    .completion = result.completion,
                     .ownedStageDisposition = result.ownedStageDisposition,
-                    .status                = result.status,
-                    .finalSourcePath       = std::filesystem::path(result.finalSourcePath),
-                    .finalDestinationPath  = std::filesystem::path(result.finalDestinationPath),
+                    .status = result.status,
+                    .finalSourcePath = std::filesystem::path(result.finalSourcePath),
+                    .finalDestinationPath = std::filesystem::path(result.finalDestinationPath),
                 });
             }
         }
@@ -4447,7 +4636,8 @@ void FolderWindow::ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, uns
     }
     e.hr = hr;
 
-    if (auto completionIt = _fileOperationRequestCompletionCallbacks.find(taskId); completionIt != _fileOperationRequestCompletionCallbacks.end())
+    if (auto completionIt = _fileOperationRequestCompletionCallbacks.find(taskId);
+        completionIt != _fileOperationRequestCompletionCallbacks.end())
     {
         FileOperationCompletedCallback completion = std::move(completionIt->second);
         _fileOperationRequestCompletionCallbacks.erase(completionIt);
@@ -4527,8 +4717,8 @@ void FolderWindow::ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, uns
 
     const auto outcomeForIndex = [&](size_t index) noexcept -> const FileOperationItemOutcome*
     {
-        const auto it =
-            std::ranges::find_if(e.itemOutcomes, [index](const FileOperationItemOutcome& outcome) noexcept { return outcome.sourceIndex == index; });
+        const auto it = std::ranges::find_if(e.itemOutcomes, [index](const FileOperationItemOutcome& outcome) noexcept
+        { return outcome.sourceIndex == index; });
         return it == e.itemOutcomes.end() ? nullptr : std::addressof(*it);
     };
     const auto sourceWasRemoved = [&](size_t index) noexcept

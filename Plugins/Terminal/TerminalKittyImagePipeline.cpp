@@ -15,17 +15,22 @@ namespace
 {
     switch (format)
     {
-        case TerminalKittyPixelFormat::Rgb: return 3u;
-        case TerminalKittyPixelFormat::Rgba: return 4u;
-        case TerminalKittyPixelFormat::GrayAlpha: return 2u;
-        case TerminalKittyPixelFormat::Gray: return 1u;
+    case TerminalKittyPixelFormat::Rgb:
+        return 3u;
+    case TerminalKittyPixelFormat::Rgba:
+        return 4u;
+    case TerminalKittyPixelFormat::GrayAlpha:
+        return 2u;
+    case TerminalKittyPixelFormat::Gray:
+        return 1u;
     }
     return 0u;
 }
 
 [[nodiscard]] uint8_t Premultiply(uint8_t component, uint8_t alpha) noexcept
 {
-    return static_cast<uint8_t>((static_cast<uint32_t>(component) * static_cast<uint32_t>(alpha) + 127u) / 255u);
+    return static_cast<uint8_t>(
+        (static_cast<uint32_t>(component) * static_cast<uint32_t>(alpha) + 127u) / 255u);
 }
 } // namespace
 
@@ -46,9 +51,9 @@ HRESULT TerminalKittyImagePipeline::Start(NotifyReady notifyReady, void* notifyC
         return E_INVALIDARG;
     }
 
-    _notifyReady   = notifyReady;
+    _notifyReady = notifyReady;
     _notifyContext = notifyContext;
-    _stopping      = false;
+    _stopping = false;
     try
     {
         _worker = std::jthread([this](std::stop_token stopToken) noexcept { WorkerMain(stopToken); });
@@ -59,7 +64,7 @@ HRESULT TerminalKittyImagePipeline::Start(NotifyReady notifyReady, void* notifyC
     }
     catch (const std::system_error& error)
     {
-        _notifyReady   = nullptr;
+        _notifyReady = nullptr;
         _notifyContext = nullptr;
         return HRESULT_FROM_WIN32(static_cast<DWORD>(error.code().value()));
     }
@@ -67,9 +72,10 @@ HRESULT TerminalKittyImagePipeline::Start(NotifyReady notifyReady, void* notifyC
     return S_OK;
 }
 
-bool TerminalKittyImagePipeline::ValidateWork(const TerminalKittyGenerationWork& work, size_t& sourceBytes, size_t& convertedBytes) noexcept
+bool TerminalKittyImagePipeline::ValidateWork(
+    const TerminalKittyGenerationWork& work, size_t& sourceBytes, size_t& convertedBytes) noexcept
 {
-    sourceBytes    = 0u;
+    sourceBytes = 0u;
     convertedBytes = 0u;
     if (work.requestId == 0u || work.storageGeneration == 0u)
     {
@@ -77,12 +83,13 @@ bool TerminalKittyImagePipeline::ValidateWork(const TerminalKittyGenerationWork&
     }
     for (const TerminalKittyImageWork& image : work.images)
     {
-        const size_t bytesPerPixel       = SourceBytesPerPixel(image.format);
-        const uint64_t pixels            = static_cast<uint64_t>(image.width) * static_cast<uint64_t>(image.height);
-        const uint64_t expectedSource    = pixels * bytesPerPixel;
+        const size_t bytesPerPixel = SourceBytesPerPixel(image.format);
+        const uint64_t pixels = static_cast<uint64_t>(image.width) * static_cast<uint64_t>(image.height);
+        const uint64_t expectedSource = pixels * bytesPerPixel;
         const uint64_t expectedConverted = pixels * 4u;
-        if (image.imageId == 0u || image.imageGeneration == 0u || image.width == 0u || image.height == 0u || bytesPerPixel == 0u || pixels > MaximumPixels ||
-            expectedSource != image.source.size() || expectedSource > MaximumSourceBytes || expectedConverted > MaximumConvertedBytes ||
+        if (image.imageId == 0u || image.imageGeneration == 0u || image.width == 0u || image.height == 0u ||
+            bytesPerPixel == 0u || pixels > MaximumPixels || expectedSource != image.source.size() ||
+            expectedSource > MaximumSourceBytes || expectedConverted > MaximumConvertedBytes ||
             sourceBytes > MaximumSourceBytes - static_cast<size_t>(expectedSource) ||
             convertedBytes > MaximumConvertedBytes - static_cast<size_t>(expectedConverted))
         {
@@ -96,8 +103,8 @@ bool TerminalKittyImagePipeline::ValidateWork(const TerminalKittyGenerationWork&
 
 bool TerminalKittyImagePipeline::Submit(TerminalKittyGenerationWork work) noexcept
 {
-    const auto startedAt  = std::chrono::steady_clock::now();
-    size_t sourceBytes    = 0u;
+    const auto startedAt = std::chrono::steady_clock::now();
+    size_t sourceBytes = 0u;
     size_t convertedBytes = 0u;
     if (! ValidateWork(work, sourceBytes, convertedBytes))
     {
@@ -115,8 +122,8 @@ bool TerminalKittyImagePipeline::Submit(TerminalKittyGenerationWork work) noexce
             ++_droppedPendingGenerations;
         }
         _latestRequestId = work.requestId;
-        _pending         = std::move(work);
-        _queuedBytes     = sourceBytes;
+        _pending = std::move(work);
+        _queuedBytes = sourceBytes;
         if (_ready.has_value() && _ready->requestId != _latestRequestId)
         {
             _ready.reset();
@@ -125,7 +132,8 @@ bool TerminalKittyImagePipeline::Submit(TerminalKittyGenerationWork work) noexce
         UpdateMemoryHighWaterLocked();
     }
     _workReady.notify_all();
-    Debug::Perf::EmitDurationUs(L"terminal.kitty.submit_us", std::max<uint64_t>(1u, Debug::Perf::ElapsedUs(startedAt)), sourceBytes, convertedBytes);
+    Debug::Perf::EmitDurationUs(
+        L"terminal.kitty.submit_us", std::max<uint64_t>(1u, Debug::Perf::ElapsedUs(startedAt)), sourceBytes, convertedBytes);
     Debug::Perf::EmitValue(L"terminal.kitty.queue_bytes", sourceBytes);
     static_cast<void>(convertedBytes);
     return true;
@@ -158,7 +166,7 @@ void TerminalKittyImagePipeline::Invalidate(uint64_t requestId) noexcept
         _pending.reset();
         _ready.reset();
         _queuedBytes = 0u;
-        _readyBytes  = 0u;
+        _readyBytes = 0u;
     }
     _workReady.notify_all();
 }
@@ -171,7 +179,7 @@ void TerminalKittyImagePipeline::RequestStop() noexcept
         _pending.reset();
         _ready.reset();
         _queuedBytes = 0u;
-        _readyBytes  = 0u;
+        _readyBytes = 0u;
     }
     if (_worker.joinable())
     {
@@ -188,53 +196,55 @@ void TerminalKittyImagePipeline::Stop() noexcept
         _worker.join();
     }
     std::scoped_lock lock(_mutex);
-    _started              = false;
-    _notifyReady          = nullptr;
-    _notifyContext        = nullptr;
-    _activeSourceBytes    = 0u;
+    _started = false;
+    _notifyReady = nullptr;
+    _notifyContext = nullptr;
+    _activeSourceBytes = 0u;
     _activeConvertedBytes = 0u;
-    _activeRequestId      = 0u;
-    _activeWorkers        = 0u;
+    _activeRequestId = 0u;
+    _activeWorkers = 0u;
 }
 
 TerminalKittyPipelineStats TerminalKittyImagePipeline::GetStats() const noexcept
 {
     std::scoped_lock lock(_mutex);
-    return TerminalKittyPipelineStats{.queuedBytes               = _queuedBytes,
-                                      .activeSourceBytes         = _activeSourceBytes,
-                                      .activeConvertedBytes      = _activeConvertedBytes,
-                                      .readyBytes                = _readyBytes,
-                                      .residentBytes             = _queuedBytes + _activeSourceBytes + _activeConvertedBytes + _readyBytes,
-                                      .memoryHighWaterBytes      = _memoryHighWaterBytes,
-                                      .latestRequestId           = _latestRequestId,
-                                      .activeRequestId           = _activeRequestId,
-                                      .droppedPendingGenerations = _droppedPendingGenerations,
-                                      .rejectedStaleGenerations  = _rejectedStaleGenerations,
-                                      .activeWorkers             = _activeWorkers,
-                                      .maximumActiveWorkers      = _maximumActiveWorkers};
+    return TerminalKittyPipelineStats{
+        .queuedBytes = _queuedBytes,
+        .activeSourceBytes = _activeSourceBytes,
+        .activeConvertedBytes = _activeConvertedBytes,
+        .readyBytes = _readyBytes,
+        .residentBytes = _queuedBytes + _activeSourceBytes + _activeConvertedBytes + _readyBytes,
+        .memoryHighWaterBytes = _memoryHighWaterBytes,
+        .latestRequestId = _latestRequestId,
+        .activeRequestId = _activeRequestId,
+        .droppedPendingGenerations = _droppedPendingGenerations,
+        .rejectedStaleGenerations = _rejectedStaleGenerations,
+        .activeWorkers = _activeWorkers,
+        .maximumActiveWorkers = _maximumActiveWorkers};
 }
 
 void TerminalKittyImagePipeline::UpdateMemoryHighWaterLocked() noexcept
 {
     const size_t residentBytes = _queuedBytes + _activeSourceBytes + _activeConvertedBytes + _readyBytes;
-    _memoryHighWaterBytes      = std::max(_memoryHighWaterBytes, residentBytes);
+    _memoryHighWaterBytes = std::max(_memoryHighWaterBytes, residentBytes);
 }
 
-bool TerminalKittyImagePipeline::Convert(TerminalKittyGenerationWork work, TerminalKittyGenerationResult& result) noexcept
+bool TerminalKittyImagePipeline::Convert(
+    TerminalKittyGenerationWork work, TerminalKittyGenerationResult& result) noexcept
 {
-    size_t sourceBytes    = 0u;
+    size_t sourceBytes = 0u;
     size_t convertedBytes = 0u;
     if (! ValidateWork(work, sourceBytes, convertedBytes))
     {
         return false;
     }
 
-    const auto startedAt     = std::chrono::steady_clock::now();
-    result                   = {};
-    result.requestId         = work.requestId;
+    const auto startedAt = std::chrono::steady_clock::now();
+    result = {};
+    result.requestId = work.requestId;
     result.storageGeneration = work.storageGeneration;
-    result.sourceBytes       = sourceBytes;
-    result.convertedBytes    = convertedBytes;
+    result.sourceBytes = sourceBytes;
+    result.convertedBytes = convertedBytes;
 #if defined(ENABLE_TESTS)
     {
         std::unique_lock lock(_mutex);
@@ -249,24 +259,24 @@ bool TerminalKittyImagePipeline::Convert(TerminalKittyGenerationWork work, Termi
         for (TerminalKittyImageWork& image : work.images)
         {
             const size_t sourceBytesPerPixel = SourceBytesPerPixel(image.format);
-            const size_t pixelCount          = static_cast<size_t>(image.width) * image.height;
+            const size_t pixelCount = static_cast<size_t>(image.width) * image.height;
             TerminalKittyConvertedImage converted{};
-            converted.imageId         = image.imageId;
-            converted.width           = image.width;
-            converted.height          = image.height;
+            converted.imageId = image.imageId;
+            converted.width = image.width;
+            converted.height = image.height;
             converted.imageGeneration = image.imageGeneration;
             converted.bgra.resize(pixelCount * 4u);
             for (size_t pixel = 0u; pixel < pixelCount; ++pixel)
             {
                 const size_t sourceOffset = pixel * sourceBytesPerPixel;
-                uint8_t red               = image.source[sourceOffset];
-                uint8_t green             = red;
-                uint8_t blue              = red;
-                uint8_t alpha             = 0xFFu;
+                uint8_t red = image.source[sourceOffset];
+                uint8_t green = red;
+                uint8_t blue = red;
+                uint8_t alpha = 0xFFu;
                 if (image.format == TerminalKittyPixelFormat::Rgb || image.format == TerminalKittyPixelFormat::Rgba)
                 {
                     green = image.source[sourceOffset + 1u];
-                    blue  = image.source[sourceOffset + 2u];
+                    blue = image.source[sourceOffset + 2u];
                     if (image.format == TerminalKittyPixelFormat::Rgba)
                     {
                         alpha = image.source[sourceOffset + 3u];
@@ -276,8 +286,8 @@ bool TerminalKittyImagePipeline::Convert(TerminalKittyGenerationWork work, Termi
                 {
                     alpha = image.source[sourceOffset + 1u];
                 }
-                const size_t destination         = pixel * 4u;
-                converted.bgra[destination]      = Premultiply(blue, alpha);
+                const size_t destination = pixel * 4u;
+                converted.bgra[destination] = Premultiply(blue, alpha);
                 converted.bgra[destination + 1u] = Premultiply(green, alpha);
                 converted.bgra[destination + 2u] = Premultiply(red, alpha);
                 converted.bgra[destination + 3u] = alpha;
@@ -298,7 +308,7 @@ void TerminalKittyImagePipeline::WorkerMain(std::stop_token stopToken) noexcept
     while (! stopToken.stop_requested())
     {
         TerminalKittyGenerationWork work;
-        size_t sourceBytes    = 0u;
+        size_t sourceBytes = 0u;
         size_t convertedBytes = 0u;
         {
             std::unique_lock lock(_mutex);
@@ -318,23 +328,24 @@ void TerminalKittyImagePipeline::WorkerMain(std::stop_token stopToken) noexcept
             _pending.reset();
             _queuedBytes = 0u;
             static_cast<void>(ValidateWork(work, sourceBytes, convertedBytes));
-            _activeSourceBytes    = sourceBytes;
+            _activeSourceBytes = sourceBytes;
             _activeConvertedBytes = 0u;
-            _activeRequestId      = work.requestId;
+            _activeRequestId = work.requestId;
             ++_activeWorkers;
             _maximumActiveWorkers = std::max(_maximumActiveWorkers, _activeWorkers);
             UpdateMemoryHighWaterLocked();
         }
 
         TerminalKittyGenerationResult result;
-        const bool converted                = Convert(std::move(work), result);
-        const uint64_t resultRequestId      = result.requestId;
+        const bool converted = Convert(std::move(work), result);
+        const uint64_t resultRequestId = result.requestId;
         const uint64_t conversionDurationUs = result.conversionDurationUs;
         Debug::Perf::EmitValue(L"terminal.kitty.active_source_bytes", sourceBytes);
-        Debug::Perf::EmitValue(L"terminal.kitty.active_converted_bytes", converted ? result.convertedBytes : 0u);
+        Debug::Perf::EmitValue(
+            L"terminal.kitty.active_converted_bytes", converted ? result.convertedBytes : 0u);
         NotifyReady notifyReady = nullptr;
-        void* notifyContext     = nullptr;
-        bool published          = false;
+        void* notifyContext = nullptr;
+        bool published = false;
         {
             std::unique_lock lock(_mutex);
             _activeConvertedBytes = converted ? result.convertedBytes : 0u;
@@ -343,22 +354,22 @@ void TerminalKittyImagePipeline::WorkerMain(std::stop_token stopToken) noexcept
             _workReady.wait(lock, stopToken, [this] noexcept { return _stopping || ! _pauseBeforePublish; });
 #endif
             const bool stopping = _stopping || stopToken.stop_requested();
-            const bool stale    = ! stopping && result.requestId != _latestRequestId;
+            const bool stale = ! stopping && result.requestId != _latestRequestId;
             if (stale)
             {
                 ++_rejectedStaleGenerations;
             }
             else if (! stopping && converted)
             {
-                _ready        = std::move(result);
-                _readyBytes   = _ready->convertedBytes;
-                notifyReady   = _notifyReady;
+                _ready = std::move(result);
+                _readyBytes = _ready->convertedBytes;
+                notifyReady = _notifyReady;
                 notifyContext = _notifyContext;
-                published     = true;
+                published = true;
             }
-            _activeSourceBytes    = 0u;
+            _activeSourceBytes = 0u;
             _activeConvertedBytes = 0u;
-            _activeRequestId      = 0u;
+            _activeRequestId = 0u;
             --_activeWorkers;
             UpdateMemoryHighWaterLocked();
             if (stopping)
@@ -368,7 +379,11 @@ void TerminalKittyImagePipeline::WorkerMain(std::stop_token stopToken) noexcept
         }
 
         Debug::Perf::EmitDurationUs(
-            L"terminal.kitty.convert_us", std::max<uint64_t>(1u, conversionDurationUs), sourceBytes, convertedBytes, converted ? S_OK : E_INVALIDARG);
+            L"terminal.kitty.convert_us",
+            std::max<uint64_t>(1u, conversionDurationUs),
+            sourceBytes,
+            convertedBytes,
+            converted ? S_OK : E_INVALIDARG);
         const TerminalKittyPipelineStats stats = GetStats();
         Debug::Perf::EmitValue(L"terminal.kitty.memory_high_water_bytes", stats.memoryHighWaterBytes);
         if (published)
@@ -417,7 +432,9 @@ void TerminalKittyImagePipeline::SetPauseAfterConversionStartForTests(bool pause
 bool TerminalKittyImagePipeline::WaitForConversionStartForTests(DWORD timeoutMilliseconds) noexcept
 {
     std::unique_lock lock(_mutex);
-    return _workReady.wait_for(lock, std::chrono::milliseconds(timeoutMilliseconds), [this] noexcept { return _conversionStartedForTests; });
+    return _workReady.wait_for(lock,
+                               std::chrono::milliseconds(timeoutMilliseconds),
+                               [this] noexcept { return _conversionStartedForTests; });
 }
 
 #endif

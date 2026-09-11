@@ -17,12 +17,16 @@ namespace
 {
 [[nodiscard]] uint64_t SaturatingAdd(const uint64_t left, const size_t right) noexcept
 {
-    const uint64_t converted =
-        right > static_cast<size_t>((std::numeric_limits<uint64_t>::max)()) ? (std::numeric_limits<uint64_t>::max)() : static_cast<uint64_t>(right);
-    return converted > (std::numeric_limits<uint64_t>::max)() - left ? (std::numeric_limits<uint64_t>::max)() : left + converted;
+    const uint64_t converted = right > static_cast<size_t>((std::numeric_limits<uint64_t>::max)())
+        ? (std::numeric_limits<uint64_t>::max)()
+        : static_cast<uint64_t>(right);
+    return converted > (std::numeric_limits<uint64_t>::max)() - left
+        ? (std::numeric_limits<uint64_t>::max)()
+        : left + converted;
 }
 
-[[nodiscard]] HRESULT BuildMoveBreadcrumbRecord(const FolderWindow::FileOperationState::Task& task, FileOperationMoveBreadcrumb::Record& out)
+[[nodiscard]] HRESULT BuildMoveBreadcrumbRecord(const FolderWindow::FileOperationState::Task& task,
+                                                FileOperationMoveBreadcrumb::Record& out)
 {
     const std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans = task.LoadPlans();
     if (task._operation != FILESYSTEM_MOVE || ! plans)
@@ -32,12 +36,14 @@ namespace
 
     FileOperationMoveBreadcrumb::Record record{};
     record.taskId = task._taskId;
-    record.sourcePane =
-        task._sourcePane == FolderWindow::Pane::Right ? FileOperationMoveBreadcrumb::PaneHint::Right : FileOperationMoveBreadcrumb::PaneHint::Left;
-    const FolderWindow::Pane destinationPane =
-        task._destinationPane.value_or(task._sourcePane == FolderWindow::Pane::Left ? FolderWindow::Pane::Right : FolderWindow::Pane::Left);
-    record.destinationPane =
-        destinationPane == FolderWindow::Pane::Right ? FileOperationMoveBreadcrumb::PaneHint::Right : FileOperationMoveBreadcrumb::PaneHint::Left;
+    record.sourcePane = task._sourcePane == FolderWindow::Pane::Right
+        ? FileOperationMoveBreadcrumb::PaneHint::Right
+        : FileOperationMoveBreadcrumb::PaneHint::Left;
+    const FolderWindow::Pane destinationPane = task._destinationPane.value_or(
+        task._sourcePane == FolderWindow::Pane::Left ? FolderWindow::Pane::Right : FolderWindow::Pane::Left);
+    record.destinationPane = destinationPane == FolderWindow::Pane::Right
+        ? FileOperationMoveBreadcrumb::PaneHint::Right
+        : FileOperationMoveBreadcrumb::PaneHint::Left;
     std::vector<std::tuple<std::wstring, std::wstring, std::wstring, std::wstring>> uniqueSourceRoots;
     for (const FileOperations::FileOperationPlan& plan : *plans)
     {
@@ -62,19 +68,21 @@ namespace
             case FileOperations::OperationStrategy::Copy: return E_INVALIDARG;
         }
 
-        const auto key = std::make_tuple(
-            transfer->sourceEndpoint.pluginId, transfer->sourceEndpoint.instanceId, transfer->sourceEndpoint.profileId, transfer->sourceEndpoint.rootId);
+        const auto key = std::make_tuple(transfer->sourceEndpoint.pluginId,
+                                         transfer->sourceEndpoint.instanceId,
+                                         transfer->sourceEndpoint.profileId,
+                                         transfer->sourceEndpoint.rootId);
         if (std::ranges::find(uniqueSourceRoots, key) == uniqueSourceRoots.end())
         {
             uniqueSourceRoots.push_back(key);
             if (record.sourceRootSamples.size() < FileOperationMoveBreadcrumb::kMaximumPersistedSourceRootSamples)
             {
                 record.sourceRootSamples.push_back(FileOperationMoveBreadcrumb::QualifiedLocation{
-                    .pluginId           = transfer->sourceEndpoint.pluginId,
-                    .pluginShortId      = task._sourcePluginShortId,
-                    .instanceId         = transfer->sourceEndpoint.instanceId,
-                    .profileId          = transfer->sourceEndpoint.profileId,
-                    .rootId             = transfer->sourceEndpoint.rootId,
+                    .pluginId = transfer->sourceEndpoint.pluginId,
+                    .pluginShortId = task._sourcePluginShortId,
+                    .instanceId = transfer->sourceEndpoint.instanceId,
+                    .profileId = transfer->sourceEndpoint.profileId,
+                    .rootId = transfer->sourceEndpoint.rootId,
                     .representativePath = transfer->selectedItems.front().providerPath,
                 });
             }
@@ -83,34 +91,36 @@ namespace
         if (record.destination.pluginId.empty())
         {
             record.destination = FileOperationMoveBreadcrumb::QualifiedLocation{
-                .pluginId           = transfer->destinationEndpoint.pluginId,
-                .pluginShortId      = task._destinationPluginShortId,
-                .instanceId         = transfer->destinationEndpoint.instanceId,
-                .profileId          = transfer->destinationEndpoint.profileId,
-                .rootId             = transfer->destinationEndpoint.rootId,
+                .pluginId = transfer->destinationEndpoint.pluginId,
+                .pluginShortId = task._destinationPluginShortId,
+                .instanceId = transfer->destinationEndpoint.instanceId,
+                .profileId = transfer->destinationEndpoint.profileId,
+                .rootId = transfer->destinationEndpoint.rootId,
                 .representativePath = transfer->destination.providerFolderPath,
             };
         }
     }
-    record.sourceRootCount            = static_cast<uint64_t>(uniqueSourceRoots.size());
+    record.sourceRootCount = static_cast<uint64_t>(uniqueSourceRoots.size());
     record.sourceRootSamplesTruncated = uniqueSourceRoots.size() > record.sourceRootSamples.size();
-    out                               = std::move(record);
+    out = std::move(record);
     return S_OK;
 }
 
 [[nodiscard]] FileOperationArtifacts::Endpoint ToArtifactEndpoint(const FileOperations::QualifiedEndpoint& endpoint)
 {
     return FileOperationArtifacts::Endpoint{
-        .pluginId   = endpoint.pluginId,
+        .pluginId = endpoint.pluginId,
         .instanceId = endpoint.instanceId,
-        .profileId  = endpoint.profileId,
-        .rootId     = endpoint.rootId,
+        .profileId = endpoint.profileId,
+        .rootId = endpoint.rootId,
     };
 }
 
-[[nodiscard]] bool SameArtifactEndpoint(const FileOperationArtifacts::Endpoint& left, const FileOperationArtifacts::Endpoint& right) noexcept
+[[nodiscard]] bool SameArtifactEndpoint(const FileOperationArtifacts::Endpoint& left,
+                                        const FileOperationArtifacts::Endpoint& right) noexcept
 {
-    return left.pluginId == right.pluginId && left.instanceId == right.instanceId && left.profileId == right.profileId && left.rootId == right.rootId;
+    return left.pluginId == right.pluginId && left.instanceId == right.instanceId &&
+           left.profileId == right.profileId && left.rootId == right.rootId;
 }
 
 HRESULT AppendArtifactTouchCandidate(IFileSystem* fileSystem,
@@ -124,18 +134,20 @@ HRESULT AppendArtifactTouchCandidate(IFileSystem* fileSystem,
     }
 
     FileOperationArtifacts::Candidate candidate{
-        .endpoint     = ToArtifactEndpoint(endpoint),
+        .endpoint = ToArtifactEndpoint(endpoint),
         .pathIdentity = endpoint.pathIdentity.value(),
-        .path         = std::wstring(providerPath),
-        .probeState   = FileOperationArtifacts::ProbeState::Indeterminate,
+        .path = std::wstring(providerPath),
+        .probeState = FileOperationArtifacts::ProbeState::Indeterminate,
     };
     if (FileOperationArtifacts::ClassifyCandidate(candidate).classification == FileOperationArtifacts::Classification::Ordinary)
     {
         return S_FALSE;
     }
 
-    constexpr FileSystemBindFlags bindFlags   = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
-    FileOperations::ObjectBindingResult bound = FileOperations::BindObjectAuthority(fileSystem, providerPath, endpoint.profileId, bindFlags);
+    constexpr FileSystemBindFlags bindFlags =
+        static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+    FileOperations::ObjectBindingResult bound =
+        FileOperations::BindObjectAuthority(fileSystem, providerPath, endpoint.profileId, bindFlags);
     if (bound.state == FileOperations::ObjectBindingState::Missing)
     {
         // A missing publication name is not an artifact object being touched. The normal operation
@@ -144,17 +156,16 @@ HRESULT AppendArtifactTouchCandidate(IFileSystem* fileSystem,
     }
     if (bound.state == FileOperations::ObjectBindingState::Bound)
     {
-        candidate.probeState      = FileOperationArtifacts::ProbeState::Present;
+        candidate.probeState = FileOperationArtifacts::ProbeState::Present;
         candidate.currentIdentity = FileOperationArtifacts::Identity{
-            .objectId      = std::move(bound.authority.identity.objectId),
-            .revisionId    = std::move(bound.authority.identity.revisionId),
+            .objectId = std::move(bound.authority.identity.objectId),
+            .revisionId = std::move(bound.authority.identity.revisionId),
             .pathProfileId = std::move(bound.authority.identity.pathProfileId),
-            .kind          = bound.authority.kind,
+            .kind = bound.authority.kind,
         };
     }
 
-    const auto duplicate = std::ranges::find_if(out,
-                                                [&](const FileOperationArtifacts::Candidate& existing) noexcept
+    const auto duplicate = std::ranges::find_if(out, [&](const FileOperationArtifacts::Candidate& existing) noexcept
     {
         return SameArtifactEndpoint(existing.endpoint, candidate.endpoint) &&
                EquivalentPath(candidate.pathIdentity, existing.path.native(), candidate.path.native());
@@ -178,99 +189,107 @@ HRESULT CollectArtifactTouchCandidates(const FileOperations::FileOperationPlanGr
     {
         const HRESULT planHr = std::visit(
             [&](const auto& typedPlan) -> HRESULT
-        {
-            using Plan = std::remove_cvref_t<decltype(typedPlan)>;
-            if constexpr (std::is_same_v<Plan, FileOperations::TransferPlan>)
             {
-                if (! typedPlan.sourceEndpoint.pathIdentity.has_value() || ! typedPlan.destinationEndpoint.pathIdentity.has_value())
+                using Plan = std::remove_cvref_t<decltype(typedPlan)>;
+                if constexpr (std::is_same_v<Plan, FileOperations::TransferPlan>)
                 {
-                    return E_INVALIDARG;
-                }
-                for (size_t index = 0u; index < typedPlan.selectedItems.size(); ++index)
-                {
-                    const FileOperations::QualifiedSourceItem& item = typedPlan.selectedItems[index];
-                    if (typedPlan.intent == FileOperations::TransferIntent::Move)
+                    if (! typedPlan.sourceEndpoint.pathIdentity.has_value() ||
+                        ! typedPlan.destinationEndpoint.pathIdentity.has_value())
                     {
-                        const HRESULT sourceHr = AppendArtifactTouchCandidate(sourceFileSystem, typedPlan.sourceEndpoint, item.providerPath, out);
+                        return E_INVALIDARG;
+                    }
+                    for (size_t index = 0u; index < typedPlan.selectedItems.size(); ++index)
+                    {
+                        const FileOperations::QualifiedSourceItem& item = typedPlan.selectedItems[index];
+                        if (typedPlan.intent == FileOperations::TransferIntent::Move)
+                        {
+                            const HRESULT sourceHr = AppendArtifactTouchCandidate(
+                                sourceFileSystem, typedPlan.sourceEndpoint, item.providerPath, out);
+                            if (FAILED(sourceHr))
+                            {
+                                return sourceHr;
+                            }
+                        }
+
+                        std::wstring destinationPath;
+                        const auto explicitMapping = std::ranges::find_if(
+                            typedPlan.explicitMappings,
+                            [index](const FileOperations::TransferDestinationMapping& mapping) noexcept
+                            { return mapping.sourceIndex == index; });
+                        if (explicitMapping != typedPlan.explicitMappings.end())
+                        {
+                            destinationPath = explicitMapping->destinationProviderPath;
+                        }
+                        else
+                        {
+                            std::wstring leaf;
+                            if (! TryGetFileSystemLeafName(typedPlan.sourceEndpoint.pathIdentity.value(), item.providerPath, leaf))
+                            {
+                                return E_INVALIDARG;
+                            }
+                            destinationPath = JoinFileSystemPath(typedPlan.destinationEndpoint.pathIdentity.value(),
+                                                                 typedPlan.destination.providerFolderPath,
+                                                                 leaf);
+                        }
+                        const HRESULT destinationHr = AppendArtifactTouchCandidate(
+                            effectiveDestination, typedPlan.destinationEndpoint, destinationPath, out);
+                        if (FAILED(destinationHr))
+                        {
+                            return destinationHr;
+                        }
+                    }
+                    return S_OK;
+                }
+                else if constexpr (std::is_same_v<Plan, FileOperations::RenamePlan>)
+                {
+                    if (! typedPlan.endpoint.pathIdentity.has_value())
+                    {
+                        return E_INVALIDARG;
+                    }
+                    for (const FileOperations::RenameStep& step : typedPlan.finalMappings)
+                    {
+                        const HRESULT sourceHr = AppendArtifactTouchCandidate(
+                            sourceFileSystem, typedPlan.endpoint, step.source.providerPath, out);
+                        if (FAILED(sourceHr))
+                        {
+                            return sourceHr;
+                        }
+                        // An inline rename publishes with its provider join pending until Preparing
+                        // fills it (C1). Until then the destination candidate is the host join of the
+                        // source's parent and the final leaf, as a transfer's implicit destination is.
+                        std::wstring destinationPath = step.providerJoinedPath;
+                        if (destinationPath.empty())
+                        {
+                            std::wstring parent;
+                            if (! TryGetFileSystemParentPath(typedPlan.endpoint.pathIdentity.value(), step.source.providerPath, parent))
+                            {
+                                return E_INVALIDARG;
+                            }
+                            destinationPath = JoinFileSystemPath(typedPlan.endpoint.pathIdentity.value(), parent, step.finalLeafName);
+                        }
+                        const HRESULT destinationHr = AppendArtifactTouchCandidate(
+                            sourceFileSystem, typedPlan.endpoint, destinationPath, out);
+                        if (FAILED(destinationHr))
+                        {
+                            return destinationHr;
+                        }
+                    }
+                    return S_OK;
+                }
+                else
+                {
+                    for (const FileOperations::QualifiedSourceItem& item : typedPlan.selectedItems)
+                    {
+                        const HRESULT sourceHr = AppendArtifactTouchCandidate(
+                            sourceFileSystem, typedPlan.endpoint, item.providerPath, out);
                         if (FAILED(sourceHr))
                         {
                             return sourceHr;
                         }
                     }
-
-                    std::wstring destinationPath;
-                    const auto explicitMapping = std::ranges::find_if(typedPlan.explicitMappings,
-                                                                      [index](const FileOperations::TransferDestinationMapping& mapping) noexcept
-                    { return mapping.sourceIndex == index; });
-                    if (explicitMapping != typedPlan.explicitMappings.end())
-                    {
-                        destinationPath = explicitMapping->destinationProviderPath;
-                    }
-                    else
-                    {
-                        std::wstring leaf;
-                        if (! TryGetFileSystemLeafName(typedPlan.sourceEndpoint.pathIdentity.value(), item.providerPath, leaf))
-                        {
-                            return E_INVALIDARG;
-                        }
-                        destinationPath =
-                            JoinFileSystemPath(typedPlan.destinationEndpoint.pathIdentity.value(), typedPlan.destination.providerFolderPath, leaf);
-                    }
-                    const HRESULT destinationHr = AppendArtifactTouchCandidate(effectiveDestination, typedPlan.destinationEndpoint, destinationPath, out);
-                    if (FAILED(destinationHr))
-                    {
-                        return destinationHr;
-                    }
+                    return S_OK;
                 }
-                return S_OK;
-            }
-            else if constexpr (std::is_same_v<Plan, FileOperations::RenamePlan>)
-            {
-                if (! typedPlan.endpoint.pathIdentity.has_value())
-                {
-                    return E_INVALIDARG;
-                }
-                for (const FileOperations::RenameStep& step : typedPlan.finalMappings)
-                {
-                    const HRESULT sourceHr = AppendArtifactTouchCandidate(sourceFileSystem, typedPlan.endpoint, step.source.providerPath, out);
-                    if (FAILED(sourceHr))
-                    {
-                        return sourceHr;
-                    }
-                    // An inline rename publishes with its provider join pending until Preparing
-                    // fills it (C1). Until then the destination candidate is the host join of the
-                    // source's parent and the final leaf, as a transfer's implicit destination is.
-                    std::wstring destinationPath = step.providerJoinedPath;
-                    if (destinationPath.empty())
-                    {
-                        std::wstring parent;
-                        if (! TryGetFileSystemParentPath(typedPlan.endpoint.pathIdentity.value(), step.source.providerPath, parent))
-                        {
-                            return E_INVALIDARG;
-                        }
-                        destinationPath = JoinFileSystemPath(typedPlan.endpoint.pathIdentity.value(), parent, step.finalLeafName);
-                    }
-                    const HRESULT destinationHr = AppendArtifactTouchCandidate(sourceFileSystem, typedPlan.endpoint, destinationPath, out);
-                    if (FAILED(destinationHr))
-                    {
-                        return destinationHr;
-                    }
-                }
-                return S_OK;
-            }
-            else
-            {
-                for (const FileOperations::QualifiedSourceItem& item : typedPlan.selectedItems)
-                {
-                    const HRESULT sourceHr = AppendArtifactTouchCandidate(sourceFileSystem, typedPlan.endpoint, item.providerPath, out);
-                    if (FAILED(sourceHr))
-                    {
-                        return sourceHr;
-                    }
-                }
-                return S_OK;
-            }
-        },
+            },
             plan);
         if (FAILED(planHr))
         {
@@ -283,28 +302,31 @@ HRESULT CollectArtifactTouchCandidates(const FileOperations::FileOperationPlanGr
     return out.empty() ? S_FALSE : S_OK;
 }
 
-HRESULT ConfirmArtifactTouch(HWND owner, const FileOperationArtifacts::TouchGuardRequest& request, FileOperationArtifacts::TouchGuardReceipt& receipt)
+HRESULT ConfirmArtifactTouch(HWND owner,
+                             const FileOperationArtifacts::TouchGuardRequest& request,
+                             FileOperationArtifacts::TouchGuardReceipt& receipt)
 {
-    receipt                    = {};
-    const uint64_t total       = static_cast<uint64_t>(request.items.size());
-    const std::wstring title   = LoadStringResource(nullptr, IDS_FILEOPS_ARTIFACT_TOUCH_TITLE);
-    const bool blocked         = ! request.allItemsRevalidatable;
-    const std::wstring message = blocked ? FormatStringResource(nullptr, IDS_FMT_FILEOPS_ARTIFACT_TOUCH_BLOCKED, total)
-                                         : FormatStringResource(nullptr, IDS_FMT_FILEOPS_ARTIFACT_TOUCH_WARNING, total);
+    receipt = {};
+    const uint64_t total = static_cast<uint64_t>(request.items.size());
+    const std::wstring title = LoadStringResource(nullptr, IDS_FILEOPS_ARTIFACT_TOUCH_TITLE);
+    const bool blocked = ! request.allItemsRevalidatable;
+    const std::wstring message = blocked
+        ? FormatStringResource(nullptr, IDS_FMT_FILEOPS_ARTIFACT_TOUCH_BLOCKED, total)
+        : FormatStringResource(nullptr, IDS_FMT_FILEOPS_ARTIFACT_TOUCH_WARNING, total);
 
     HostPromptRequest prompt{};
-    prompt.sizeBytes     = sizeof(prompt);
-    prompt.scope         = HOST_ALERT_SCOPE_WINDOW;
-    prompt.severity      = HOST_ALERT_WARNING;
-    prompt.buttons       = blocked ? HOST_PROMPT_BUTTONS_OK : HOST_PROMPT_BUTTONS_OK_CANCEL;
-    prompt.targetWindow  = owner;
-    prompt.title         = title.c_str();
-    prompt.message       = message.c_str();
+    prompt.sizeBytes = sizeof(prompt);
+    prompt.scope = HOST_ALERT_SCOPE_WINDOW;
+    prompt.severity = HOST_ALERT_WARNING;
+    prompt.buttons = blocked ? HOST_PROMPT_BUTTONS_OK : HOST_PROMPT_BUTTONS_OK_CANCEL;
+    prompt.targetWindow = owner;
+    prompt.title = title.c_str();
+    prompt.message = message.c_str();
     prompt.defaultResult = blocked ? HOST_PROMPT_RESULT_OK : HOST_PROMPT_RESULT_CANCEL;
-    prompt.presentation  = blocked ? HOST_PROMPT_PRESENTATION_DEFAULT : HOST_PROMPT_PRESENTATION_ARTIFACT_TOUCH;
+    prompt.presentation = blocked ? HOST_PROMPT_PRESENTATION_DEFAULT : HOST_PROMPT_PRESENTATION_ARTIFACT_TOUCH;
 
     HostPromptResult promptResult = HOST_PROMPT_RESULT_NONE;
-    const HRESULT promptHr        = HostShowPrompt(prompt, nullptr, &promptResult);
+    const HRESULT promptHr = HostShowPrompt(prompt, nullptr, &promptResult);
     if (FAILED(promptHr))
     {
         return promptHr;
@@ -320,9 +342,10 @@ HRESULT ConfirmArtifactTouch(HWND owner, const FileOperationArtifacts::TouchGuar
     return FileOperationArtifacts::AcceptTouchGuard(request, receipt);
 }
 
-[[nodiscard]] bool ValidateRetainedSourceActionItems(IFileSystem* fileSystem,
-                                                     std::span<const FolderWindow::FileOperationState::CompletedTaskSummary::RetainedSourceActionItem> items,
-                                                     std::vector<std::filesystem::path>* exactPaths) noexcept
+[[nodiscard]] bool ValidateRetainedSourceActionItems(
+    IFileSystem* fileSystem,
+    std::span<const FolderWindow::FileOperationState::CompletedTaskSummary::RetainedSourceActionItem> items,
+    std::vector<std::filesystem::path>* exactPaths) noexcept
 {
     if (fileSystem == nullptr || items.empty())
     {
@@ -335,10 +358,12 @@ HRESULT ConfirmArtifactTouch(HWND owner, const FileOperationArtifacts::TouchGuar
     }
     for (const auto& item : items)
     {
-        constexpr FileSystemBindFlags bindFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
-        FileOperations::ObjectBindingResult current =
-            FileOperations::BindObjectAuthority(fileSystem, item.providerPath.native(), item.identity.pathProfileId, bindFlags);
-        if (current.state != FileOperations::ObjectBindingState::Bound || current.authority.identity.pathProfileId != item.identity.pathProfileId ||
+        constexpr FileSystemBindFlags bindFlags =
+            static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+        FileOperations::ObjectBindingResult current = FileOperations::BindObjectAuthority(
+            fileSystem, item.providerPath.native(), item.identity.pathProfileId, bindFlags);
+        if (current.state != FileOperations::ObjectBindingState::Bound ||
+            current.authority.identity.pathProfileId != item.identity.pathProfileId ||
             current.authority.identity.objectId != item.identity.objectId)
         {
             return false;
@@ -411,7 +436,8 @@ void FolderWindow::FileOperationState::LoadInterruptedMoveBreadcrumbs() noexcept
     const HRESULT loadHr = FileOperationMoveBreadcrumb::Breadcrumb::LoadInterrupted(loaded, &stats);
     if (FAILED(loadHr) && loaded.empty())
     {
-        Debug::Warning(L"File Operations could not load interrupted-Move breadcrumbs (hr=0x{:08X}).", static_cast<unsigned long>(loadHr));
+        Debug::Warning(L"File Operations could not load interrupted-Move breadcrumbs (hr=0x{:08X}).",
+                       static_cast<unsigned long>(loadHr));
         return;
     }
     if (FAILED(loadHr))
@@ -424,7 +450,8 @@ void FolderWindow::FileOperationState::LoadInterruptedMoveBreadcrumbs() noexcept
         return;
     }
 
-    std::ranges::sort(loaded, [](const auto& left, const auto& right) noexcept { return left.record.createdFileTime > right.record.createdFileTime; });
+    std::ranges::sort(loaded, [](const auto& left, const auto& right) noexcept
+    { return left.record.createdFileTime > right.record.createdFileTime; });
 
     for (FileOperationMoveBreadcrumb::LoadedRecord& loadedRecord : loaded)
     {
@@ -434,7 +461,8 @@ void FolderWindow::FileOperationState::LoadInterruptedMoveBreadcrumbs() noexcept
             continue;
         }
         const FileOperationMoveBreadcrumb::QualifiedLocation& source = record.sourceRootSamples.front();
-        const std::optional<std::wstring> sourceInstanceContext      = FileOperationMoveBreadcrumb::TryDecodeNavigationInstanceContext(source.instanceId);
+        const std::optional<std::wstring> sourceInstanceContext =
+            FileOperationMoveBreadcrumb::TryDecodeNavigationInstanceContext(source.instanceId);
         const std::optional<std::wstring> destinationInstanceContext =
             FileOperationMoveBreadcrumb::TryDecodeNavigationInstanceContext(record.destination.instanceId);
         if (! sourceInstanceContext.has_value() || ! destinationInstanceContext.has_value())
@@ -442,44 +470,49 @@ void FolderWindow::FileOperationState::LoadInterruptedMoveBreadcrumbs() noexcept
             Debug::Warning(L"File Operations ignored an interrupted-Move breadcrumb with a noncanonical provider instance ID.");
             continue;
         }
-        const UINT phaseStringId   = record.phase == FileOperationMoveBreadcrumb::DurablePhase::Executing ? IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_EXECUTING
-                                                                                                          : IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_ADMITTED;
+        const UINT phaseStringId = record.phase == FileOperationMoveBreadcrumb::DurablePhase::Executing
+            ? IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_EXECUTING
+            : IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_ADMITTED;
         const std::wstring message = FormatStringResource(nullptr,
-                                                          IDS_FMT_FILEOPS_INTERRUPTED_MOVE_SUMMARY,
-                                                          record.taskId,
-                                                          LoadStringResource(nullptr, phaseStringId),
-                                                          record.admittedStrategies.nativeItems,
-                                                          record.admittedStrategies.managedItems,
-                                                          record.admittedStrategies.copyOnlyItems,
-                                                          record.sourceRootCount);
+                                                           IDS_FMT_FILEOPS_INTERRUPTED_MOVE_SUMMARY,
+                                                           record.taskId,
+                                                           LoadStringResource(nullptr, phaseStringId),
+                                                           record.admittedStrategies.nativeItems,
+                                                           record.admittedStrategies.managedItems,
+                                                           record.admittedStrategies.copyOnlyItems,
+                                                           record.sourceRootCount);
 
         CompletedTaskSummary summary{};
-        summary.taskId                 = _nextTaskId++;
+        summary.taskId = _nextTaskId++;
         summary.interruptedOperationId = record.taskId;
-        summary.operation              = FILESYSTEM_MOVE;
-        summary.sourcePane          = record.sourcePane == FileOperationMoveBreadcrumb::PaneHint::Right ? FolderWindow::Pane::Right : FolderWindow::Pane::Left;
-        summary.sourcePluginId      = source.pluginId;
+        summary.operation = FILESYSTEM_MOVE;
+        summary.sourcePane = record.sourcePane == FileOperationMoveBreadcrumb::PaneHint::Right
+            ? FolderWindow::Pane::Right
+            : FolderWindow::Pane::Left;
+        summary.sourcePluginId = source.pluginId;
         summary.sourcePluginShortId = source.pluginShortId;
         summary.sourceInstanceContext = sourceInstanceContext.value();
-        summary.destinationPane = record.destinationPane == FileOperationMoveBreadcrumb::PaneHint::Right ? FolderWindow::Pane::Right : FolderWindow::Pane::Left;
-        summary.destinationPluginId         = record.destination.pluginId;
-        summary.destinationPluginShortId    = record.destination.pluginShortId;
-        summary.destinationInstanceContext  = destinationInstanceContext.value();
-        summary.destinationFolder           = record.destination.representativePath;
-        summary.resultHr                    = HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED);
-        summary.discoveryClosed             = true;
-        summary.sourcePath                  = source.representativePath.native();
-        summary.destinationPath             = record.destination.representativePath.native();
-        summary.warningCount                = 0u;
-        summary.lastDiagnosticMessage       = message;
-        summary.resultSummary               = message;
+        summary.destinationPane = record.destinationPane == FileOperationMoveBreadcrumb::PaneHint::Right
+            ? FolderWindow::Pane::Right
+            : FolderWindow::Pane::Left;
+        summary.destinationPluginId = record.destination.pluginId;
+        summary.destinationPluginShortId = record.destination.pluginShortId;
+        summary.destinationInstanceContext = destinationInstanceContext.value();
+        summary.destinationFolder = record.destination.representativePath;
+        summary.resultHr = HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED);
+        summary.discoveryClosed = true;
+        summary.sourcePath = source.representativePath.native();
+        summary.destinationPath = record.destination.representativePath.native();
+        summary.warningCount = 0u;
+        summary.lastDiagnosticMessage = message;
+        summary.resultSummary = message;
         summary.unknownPublicationItemCount = 1u;
-        summary.unknownSourceCount          = 1u;
-        summary.indeterminateItemCount      = 1u;
+        summary.unknownSourceCount = 1u;
+        summary.indeterminateItemCount = 1u;
         summary.unknownSourcePaths.push_back(source.representativePath);
-        summary.completedTick                 = GetTickCount64();
+        summary.completedTick = GetTickCount64();
         summary.interruptedMoveBreadcrumbPath = std::move(loadedRecord.path);
-        summary.interruptedMoveNotice         = true;
+        summary.interruptedMoveNotice = true;
         _completedTasks.push_back(std::move(summary));
         if (_completedTasks.size() >= kMaxCompletedTaskSummaries)
         {
@@ -497,7 +530,7 @@ void FolderWindow::FileOperationState::QueueSettingsSave(std::wstring_view conte
     }
 
     const uint64_t enqueueStartUs = PerfNowUs();
-    const HRESULT queueHr         = SettingsHotReload::QueueSettingsSave(kFileOpsAppId, *_owner._settings, L"FileOps.Settings.SaveUs", context);
+    const HRESULT queueHr = SettingsHotReload::QueueSettingsSave(kFileOpsAppId, *_owner._settings, L"FileOps.Settings.SaveUs", context);
     if (Debug::Perf::IsCaptureEnabled())
     {
         Debug::Perf::Emit(L"FileOps.Settings.EnqueueUs", context, PerfElapsedUs(enqueueStartUs), SUCCEEDED(queueHr) ? 1u : 0u, 0u, queueHr);
@@ -563,7 +596,7 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
     const auto planOperation = [](const FileOperations::FileOperationPlan& plan) noexcept -> FileSystemOperation
     {
         return std::visit(
-            [](const auto& typedPlan) noexcept -> FileSystemOperation
+        [](const auto& typedPlan) noexcept -> FileSystemOperation
         {
             using Plan = std::remove_cvref_t<decltype(typedPlan)>;
             if constexpr (std::is_same_v<Plan, FileOperations::TransferPlan>)
@@ -572,39 +605,36 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
                 return FILESYSTEM_DELETE;
             else
                 return FILESYSTEM_RENAME;
-        },
-            plan);
+        }, plan);
     };
     const auto planSourcePluginId = [](const FileOperations::FileOperationPlan& plan) -> std::wstring
     {
         return std::visit(
-            [](const auto& typedPlan) -> std::wstring
+        [](const auto& typedPlan) -> std::wstring
         {
             using Plan = std::remove_cvref_t<decltype(typedPlan)>;
             if constexpr (std::is_same_v<Plan, FileOperations::TransferPlan>)
                 return typedPlan.sourceEndpoint.pluginId;
             else
                 return typedPlan.endpoint.pluginId;
-        },
-            plan);
+        }, plan);
     };
     const auto planDestinationPluginId = [](const FileOperations::FileOperationPlan& plan) -> std::wstring
     {
         return std::visit(
-            [](const auto& typedPlan) -> std::wstring
+        [](const auto& typedPlan) -> std::wstring
         {
             using Plan = std::remove_cvref_t<decltype(typedPlan)>;
             if constexpr (std::is_same_v<Plan, FileOperations::TransferPlan>)
                 return typedPlan.destinationEndpoint.pluginId;
             else
                 return {};
-        },
-            plan);
+        }, plan);
     };
     const auto appendPlanSourcePaths = [](const FileOperations::FileOperationPlan& plan, std::vector<std::filesystem::path>& paths)
     {
         std::visit(
-            [&paths](const auto& typedPlan)
+        [&paths](const auto& typedPlan)
         {
             using Plan = std::remove_cvref_t<decltype(typedPlan)>;
             if constexpr (std::is_same_v<Plan, FileOperations::RenamePlan>)
@@ -618,36 +648,35 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
                     paths.emplace_back(item.providerPath);
             }
         },
-            plan);
+        plan);
     };
     const auto planDestinationFolder = [](const FileOperations::FileOperationPlan& plan) -> std::filesystem::path
     {
         return std::visit(
-            [](const auto& typedPlan) -> std::filesystem::path
+        [](const auto& typedPlan) -> std::filesystem::path
         {
             using Plan = std::remove_cvref_t<decltype(typedPlan)>;
             if constexpr (std::is_same_v<Plan, FileOperations::TransferPlan>)
                 return typedPlan.destination.providerFolderPath;
             else
                 return {};
-        },
-            plan);
+        }, plan);
     };
 
     const FileOperations::FileOperationPlan& firstPlan = plans.front();
-    FileOperations::OperationOptions options           = planOptions(firstPlan);
-    const FileSystemOperation operation                = planOperation(firstPlan);
-    const bool archiveDeleteConsentCaptured            = admission.capturedConsentKind == FileOperations::ConsentKind::ArchiveDeleteAfter;
+    FileOperations::OperationOptions options = planOptions(firstPlan);
+    const FileSystemOperation operation = planOperation(firstPlan);
+    const bool archiveDeleteConsentCaptured = admission.capturedConsentKind == FileOperations::ConsentKind::ArchiveDeleteAfter;
     if (admission.capturedConsentKind.has_value())
     {
         const bool validCapturedConsent = archiveDeleteConsentCaptured && operation == FILESYSTEM_DELETE &&
-                                          std::ranges::all_of(plans,
-                                                              [](const FileOperations::FileOperationPlan& plan) noexcept
-        {
-            const auto* deletion = std::get_if<FileOperations::DeletePlan>(&plan);
-            return deletion != nullptr && deletion->mode == FileOperations::DeleteMode::Permanent &&
-                   (deletion->origin == FileOperations::DeleteOrigin::PackCleanup || deletion->origin == FileOperations::DeleteOrigin::UnpackCleanup);
-        });
+            std::ranges::all_of(plans, [](const FileOperations::FileOperationPlan& plan) noexcept
+            {
+                const auto* deletion = std::get_if<FileOperations::DeletePlan>(&plan);
+                return deletion != nullptr && deletion->mode == FileOperations::DeleteMode::Permanent &&
+                       (deletion->origin == FileOperations::DeleteOrigin::PackCleanup ||
+                        deletion->origin == FileOperations::DeleteOrigin::UnpackCleanup);
+            });
         if (! validCapturedConsent)
         {
             Debug::Error(L"FolderWindow StartOperation rejected a captured destructive consent outside archive cleanup.");
@@ -656,20 +685,20 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
     }
     const bool inlineRename = std::visit(
         [](const auto& typedPlan) noexcept
-    {
-        using Plan = std::remove_cvref_t<decltype(typedPlan)>;
-        if constexpr (std::is_same_v<Plan, FileOperations::RenamePlan>)
         {
-            return typedPlan.origin == FileOperations::RenameOrigin::InlineRename;
-        }
-        else
-        {
-            return false;
-        }
-    },
+            using Plan = std::remove_cvref_t<decltype(typedPlan)>;
+            if constexpr (std::is_same_v<Plan, FileOperations::RenamePlan>)
+            {
+                return typedPlan.origin == FileOperations::RenameOrigin::InlineRename;
+            }
+            else
+            {
+                return false;
+            }
+        },
         firstPlan);
-    const std::wstring sourcePluginId       = planSourcePluginId(firstPlan);
-    std::wstring destinationPluginId        = planDestinationPluginId(firstPlan);
+    const std::wstring sourcePluginId = planSourcePluginId(firstPlan);
+    std::wstring destinationPluginId = planDestinationPluginId(firstPlan);
     std::filesystem::path destinationFolder = planDestinationFolder(firstPlan);
     std::vector<std::filesystem::path> sourcePaths;
     std::optional<uint32_t> groupMoveClipboardSequence;
@@ -677,9 +706,10 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
     for (const FileOperations::FileOperationPlan& plan : plans)
     {
         const FileOperations::OperationOptions childOptions = planOptions(plan);
-        if (planOperation(plan) != operation || planSourcePluginId(plan) != sourcePluginId || planDestinationPluginId(plan) != destinationPluginId ||
-            planDestinationFolder(plan) != destinationFolder || childOptions.linkPolicy != options.linkPolicy ||
-            childOptions.verifyAfterCopy != options.verifyAfterCopy || childOptions.executionMode != options.executionMode ||
+        if (planOperation(plan) != operation || planSourcePluginId(plan) != sourcePluginId ||
+            planDestinationPluginId(plan) != destinationPluginId || planDestinationFolder(plan) != destinationFolder ||
+            childOptions.linkPolicy != options.linkPolicy || childOptions.verifyAfterCopy != options.verifyAfterCopy ||
+            childOptions.executionMode != options.executionMode ||
             childOptions.bandwidthLimitBytesPerSecond != options.bandwidthLimitBytesPerSecond)
         {
             Debug::Error(L"FolderWindow StartOperation rejected an inconsistent child plan group.");
@@ -716,27 +746,28 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
     if (groupMoveClipboardSequence.has_value())
     {
         std::scoped_lock lock(_mutex);
-        if (std::ranges::find(_acceptedMoveClipboardSequences, groupMoveClipboardSequence.value()) != _acceptedMoveClipboardSequences.end())
+        if (std::ranges::find(_acceptedMoveClipboardSequences, groupMoveClipboardSequence.value()) !=
+            _acceptedMoveClipboardSequences.end())
         {
             Debug::Warning(L"File Operations rejected an already-consumed clipboard-Move sequence before confirmation.");
             return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
         }
     }
-    FolderWindow::Pane sourcePane                                      = admission.sourcePane;
-    std::optional<FolderWindow::Pane> destinationPane                  = admission.destinationPane;
-    wil::com_ptr<IFileSystem> fileSystem                               = std::move(admission.fileSystem);
-    wil::com_ptr<IFileSystem> destinationFileSystem                    = std::move(admission.destinationFileSystem);
-    const FileSystemFlags flags                                        = admission.flags;
-    bool waitForOthers                                                 = ! inlineRename && options.executionMode == FileOperations::ExecutionMode::Queue;
-    uint64_t initialSpeedLimitBytesPerSecond                           = options.bandwidthLimitBytesPerSecond.value_or(0u);
-    const ExecutionMode executionMode                                  = admission.executionMode;
-    const bool requireConfirmation                                     = admission.requireConfirmation;
+    FolderWindow::Pane sourcePane = admission.sourcePane;
+    std::optional<FolderWindow::Pane> destinationPane = admission.destinationPane;
+    wil::com_ptr<IFileSystem> fileSystem = std::move(admission.fileSystem);
+    wil::com_ptr<IFileSystem> destinationFileSystem = std::move(admission.destinationFileSystem);
+    const FileSystemFlags flags = admission.flags;
+    bool waitForOthers = ! inlineRename && options.executionMode == FileOperations::ExecutionMode::Queue;
+    uint64_t initialSpeedLimitBytesPerSecond = options.bandwidthLimitBytesPerSecond.value_or(0u);
+    const ExecutionMode executionMode = admission.executionMode;
+    const bool requireConfirmation = admission.requireConfirmation;
     std::vector<FolderWindow::ResolvedFileOperationItem> resolvedItems = std::move(admission.resolvedItems);
-    std::wstring confirmationMessage                                   = std::move(admission.confirmationMessage);
-    std::wstring sourcePluginShortId                                   = std::move(admission.sourcePluginShortId);
-    std::wstring sourceInstanceContext                                 = std::move(admission.sourceInstanceContext);
-    std::wstring destinationPluginShortId                              = std::move(admission.destinationPluginShortId);
-    std::wstring destinationInstanceContext                            = std::move(admission.destinationInstanceContext);
+    std::wstring confirmationMessage = std::move(admission.confirmationMessage);
+    std::wstring sourcePluginShortId = std::move(admission.sourcePluginShortId);
+    std::wstring sourceInstanceContext = std::move(admission.sourceInstanceContext);
+    std::wstring destinationPluginShortId = std::move(admission.destinationPluginShortId);
+    std::wstring destinationInstanceContext = std::move(admission.destinationInstanceContext);
 
     const bool useResolvedItems = ! resolvedItems.empty();
     if (useResolvedItems)
@@ -786,7 +817,8 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
     std::optional<FileOperationArtifacts::TouchGuardReceipt> artifactTouchReceipt;
     {
         std::vector<FileOperationArtifacts::Candidate> artifactCandidates;
-        const HRESULT candidatesHr = CollectArtifactTouchCandidates(plans, fileSystem.get(), destinationFileSystem.get(), artifactCandidates);
+        const HRESULT candidatesHr =
+            CollectArtifactTouchCandidates(plans, fileSystem.get(), destinationFileSystem.get(), artifactCandidates);
         if (FAILED(candidatesHr))
         {
             return candidatesHr;
@@ -823,15 +855,13 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
 
     const bool sourceIsLocalFilePlugin  = NavigationLocation::IsFilePluginShortId(sourcePluginShortId);
     const bool deleteBypassesRecycleBin = operation == FILESYSTEM_DELETE && ((flags & FILESYSTEM_FLAG_USE_RECYCLE_BIN) == 0 || ! sourceIsLocalFilePlugin);
-    const bool supportsBandwidthLimit   = operation == FILESYSTEM_COPY || operation == FILESYSTEM_MOVE;
-    uint64_t taskDesiredSpeedLimit      = supportsBandwidthLimit ? initialSpeedLimitBytesPerSecond : 0u;
+    const bool supportsBandwidthLimit    = operation == FILESYSTEM_COPY || operation == FILESYSTEM_MOVE;
+    uint64_t taskDesiredSpeedLimit = supportsBandwidthLimit ? initialSpeedLimitBytesPerSecond : 0u;
 
     std::vector<DWORD> sourcePathAttributesHint;
 
-    const uint64_t knownCopyOnlyMoveCount   = std::accumulate(plans.begin(),
-                                                              plans.end(),
-                                                              uint64_t{0u},
-                                                              [](const uint64_t current, const FileOperations::FileOperationPlan& plan) noexcept
+    const uint64_t knownCopyOnlyMoveCount = std::accumulate(
+        plans.begin(), plans.end(), uint64_t{0u}, [](const uint64_t current, const FileOperations::FileOperationPlan& plan) noexcept
     {
         const auto* transfer = std::get_if<FileOperations::TransferPlan>(&plan);
         if (transfer == nullptr || transfer->intent != FileOperations::TransferIntent::Move ||
@@ -902,55 +932,54 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
         if (transferConfirmationRequired)
         {
             NonRevertableFileOperationPromptCounts counts{};
-            counts.fileCount                 = fileCount;
-            counts.folderCount               = folderCount;
-            counts.unknownCount              = unknownCount;
-            counts.sampleFile                = std::move(sampleFile);
-            counts.hasSampleFile             = hasSampleFile;
+            counts.fileCount     = fileCount;
+            counts.folderCount   = folderCount;
+            counts.unknownCount  = unknownCount;
+            counts.sampleFile    = std::move(sampleFile);
+            counts.hasSampleFile = hasSampleFile;
             const bool consumesClipboardMove = groupMoveClipboardSequence.has_value();
             HostFileOperationPromptOptions promptOptions{};
             promptOptions.sizeBytes = sizeof(promptOptions);
-            promptOptions.linkPolicy =
-                options.linkPolicy == FileOperations::LinkPolicy::Skip ? HOST_FILE_OPERATION_LINK_SKIP : HOST_FILE_OPERATION_LINK_PRESERVE;
+            promptOptions.linkPolicy = options.linkPolicy == FileOperations::LinkPolicy::Skip ? HOST_FILE_OPERATION_LINK_SKIP
+                                                                                              : HOST_FILE_OPERATION_LINK_PRESERVE;
             promptOptions.verifyAfterCopy = options.verifyAfterCopy ? 1u : 0u;
-            promptOptions.executionMode =
-                options.executionMode == FileOperations::ExecutionMode::Parallel ? HOST_FILE_OPERATION_EXECUTION_PARALLEL : HOST_FILE_OPERATION_EXECUTION_QUEUE;
-            promptOptions.clipboardMoveConsumesCutList        = consumesClipboardMove ? 1u : 0u;
-            promptOptions.bandwidthLimitBytesPerSecond        = options.bandwidthLimitBytesPerSecond.value_or(0u);
-            const bool allTransferPlansNative                 = std::ranges::all_of(plans,
-                                                                                    [](const FileOperations::FileOperationPlan& plan) noexcept
+            promptOptions.executionMode = options.executionMode == FileOperations::ExecutionMode::Parallel
+                ? HOST_FILE_OPERATION_EXECUTION_PARALLEL
+                : HOST_FILE_OPERATION_EXECUTION_QUEUE;
+            promptOptions.clipboardMoveConsumesCutList = consumesClipboardMove ? 1u : 0u;
+            promptOptions.bandwidthLimitBytesPerSecond = options.bandwidthLimitBytesPerSecond.value_or(0u);
+            const bool allTransferPlansNative = std::ranges::all_of(plans, [](const FileOperations::FileOperationPlan& plan) noexcept
             {
                 const auto* transfer = std::get_if<FileOperations::TransferPlan>(&plan);
                 return transfer != nullptr && transfer->strategy == FileOperations::OperationStrategy::Native;
             });
-            const bool anyVerificationRoute                   = std::ranges::any_of(plans,
-                                                                                    [](const FileOperations::FileOperationPlan& plan) noexcept
+            const bool anyVerificationRoute = std::ranges::any_of(plans, [](const FileOperations::FileOperationPlan& plan) noexcept
             {
                 const auto* transfer = std::get_if<FileOperations::TransferPlan>(&plan);
                 return transfer != nullptr && transfer->strategy != FileOperations::OperationStrategy::Native &&
-                       (transfer->destinationEndpoint.verificationHostReadback || transfer->destinationEndpoint.verificationProviderBlake3Proof);
+                       (transfer->destinationEndpoint.verificationHostReadback ||
+                        transfer->destinationEndpoint.verificationProviderBlake3Proof);
             });
-            const bool anyVerificationCapabilityCheckDeferred = std::ranges::any_of(plans,
-                                                                                    [](const FileOperations::FileOperationPlan& plan) noexcept
+            const bool anyVerificationCapabilityCheckDeferred =
+                std::ranges::any_of(plans, [](const FileOperations::FileOperationPlan& plan) noexcept
             {
                 const auto* transfer = std::get_if<FileOperations::TransferPlan>(&plan);
                 return transfer != nullptr && transfer->strategy != FileOperations::OperationStrategy::Native &&
                        transfer->destinationEndpoint.verificationCapabilityCheckDeferred;
             });
-            promptOptions.verificationAvailability =
-                allTransferPlansNative
-                    ? HOST_FILE_OPERATION_VERIFICATION_NOT_APPLICABLE
-                    : (anyVerificationCapabilityCheckDeferred
-                           ? HOST_FILE_OPERATION_VERIFICATION_CHECK_DURING_OPERATION
-                           : (anyVerificationRoute ? HOST_FILE_OPERATION_VERIFICATION_SUPPORTED : HOST_FILE_OPERATION_VERIFICATION_UNSUPPORTED));
+            promptOptions.verificationAvailability = allTransferPlansNative
+                ? HOST_FILE_OPERATION_VERIFICATION_NOT_APPLICABLE
+                : (anyVerificationCapabilityCheckDeferred ? HOST_FILE_OPERATION_VERIFICATION_CHECK_DURING_OPERATION
+                    : (anyVerificationRoute ? HOST_FILE_OPERATION_VERIFICATION_SUPPORTED
+                                            : HOST_FILE_OPERATION_VERIFICATION_UNSUPPORTED));
             if (promptOptions.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_UNSUPPORTED ||
                 promptOptions.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_NOT_APPLICABLE)
             {
                 promptOptions.verifyAfterCopy = 0u;
             }
 
-            const bool confirmed =
-                ConfirmNonRevertableFileOperation(_owner.GetHwnd(), operation, sourcePaths, destinationFolder, counts, &promptOptions, confirmationMessage);
+            const bool confirmed = ConfirmNonRevertableFileOperation(
+                _owner.GetHwnd(), operation, sourcePaths, destinationFolder, counts, &promptOptions, confirmationMessage);
             if (_completionShutdown.load(std::memory_order_acquire))
             {
                 return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
@@ -960,22 +989,24 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
                 return S_FALSE;
             }
 
-            options.linkPolicy =
-                promptOptions.linkPolicy == HOST_FILE_OPERATION_LINK_SKIP ? FileOperations::LinkPolicy::Skip : FileOperations::LinkPolicy::Preserve;
+            options.linkPolicy = promptOptions.linkPolicy == HOST_FILE_OPERATION_LINK_SKIP ? FileOperations::LinkPolicy::Skip
+                                                                                           : FileOperations::LinkPolicy::Preserve;
             options.verifyAfterCopy = promptOptions.verifyAfterCopy != 0u &&
                                       promptOptions.verificationAvailability != HOST_FILE_OPERATION_VERIFICATION_UNSUPPORTED &&
                                       promptOptions.verificationAvailability != HOST_FILE_OPERATION_VERIFICATION_NOT_APPLICABLE;
-            options.executionMode   = promptOptions.executionMode == HOST_FILE_OPERATION_EXECUTION_PARALLEL ? FileOperations::ExecutionMode::Parallel
-                                                                                                            : FileOperations::ExecutionMode::Queue;
-            options.bandwidthLimitBytesPerSecond =
-                promptOptions.bandwidthLimitBytesPerSecond == 0u ? std::nullopt : std::optional<uint64_t>(promptOptions.bandwidthLimitBytesPerSecond);
+            options.executionMode = promptOptions.executionMode == HOST_FILE_OPERATION_EXECUTION_PARALLEL
+                ? FileOperations::ExecutionMode::Parallel
+                : FileOperations::ExecutionMode::Queue;
+            options.bandwidthLimitBytesPerSecond = promptOptions.bandwidthLimitBytesPerSecond == 0u
+                ? std::nullopt
+                : std::optional<uint64_t>(promptOptions.bandwidthLimitBytesPerSecond);
             for (FileOperations::FileOperationPlan& plan : plans)
             {
                 std::visit([&options](auto& typedPlan) noexcept { typedPlan.options = options; }, plan);
             }
-            waitForOthers                   = ! inlineRename && options.executionMode == FileOperations::ExecutionMode::Queue;
+            waitForOthers = ! inlineRename && options.executionMode == FileOperations::ExecutionMode::Queue;
             initialSpeedLimitBytesPerSecond = options.bandwidthLimitBytesPerSecond.value_or(0u);
-            taskDesiredSpeedLimit           = supportsBandwidthLimit ? initialSpeedLimitBytesPerSecond : 0u;
+            taskDesiredSpeedLimit = supportsBandwidthLimit ? initialSpeedLimitBytesPerSecond : 0u;
         }
     }
     else if (operation == FILESYSTEM_DELETE && ! archiveDeleteConsentCaptured && (requireConfirmation || deleteBypassesRecycleBin))
@@ -1179,9 +1210,9 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
 
     for (FileOperations::FileOperationPlan& plan : plans)
     {
-        if (auto* deletion = std::get_if<FileOperations::DeletePlan>(&plan); deletion && deletion->mode == FileOperations::DeleteMode::Permanent &&
-                                                                             ! deletion->initialConsent.has_value() &&
-                                                                             ! admission.permanentDeleteConfirmationPending)
+        if (auto* deletion = std::get_if<FileOperations::DeletePlan>(&plan);
+            deletion && deletion->mode == FileOperations::DeleteMode::Permanent && ! deletion->initialConsent.has_value() &&
+            ! admission.permanentDeleteConfirmationPending)
         {
             const FileOperations::ConsentKind consentKind = admission.capturedConsentKind.value_or(
                 deletion->origin == FileOperations::DeleteOrigin::PackCleanup || deletion->origin == FileOperations::DeleteOrigin::UnpackCleanup
@@ -1194,7 +1225,7 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
         }
 
         FileOperations::PlanRejectionBucket finalRejection = FileOperations::PlanRejectionBucket::None;
-        const HRESULT finalValidationHr                    = FileOperations::ValidatePlan(plan, &finalRejection, admission.permanentDeleteConfirmationPending);
+        const HRESULT finalValidationHr = FileOperations::ValidatePlan(plan, &finalRejection, admission.permanentDeleteConfirmationPending);
         if (FAILED(finalValidationHr))
         {
             Debug::Error(L"File Operations rejected a child plan after confirmation but before publication (bucket={}, hr=0x{:08X}).",
@@ -1205,46 +1236,47 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
     }
 
     const ULONGLONG presentationAdmissionTick = TaskPresentationNowTick();
-    auto task                                 = std::make_unique<Task>(*this);
+    auto task = std::make_unique<Task>(*this);
     {
         std::scoped_lock lock(_mutex);
-        task->_taskId = admittedTaskId;
+        task->_taskId                   = admittedTaskId;
         task->_queueOrderKey.store(task->_taskId, std::memory_order_release);
         task->StorePlans(std::make_shared<const FileOperations::FileOperationPlanGroup>(std::move(plans)));
-        task->_operation                          = operation;
-        task->_executionMode                      = executionMode;
-        task->_sourcePane                         = sourcePane;
-        task->_destinationPane                    = destinationPane;
-        task->_sourcePluginId                     = sourcePluginId;
-        task->_sourcePluginShortId                = std::move(sourcePluginShortId);
-        task->_sourceInstanceContext              = std::move(sourceInstanceContext);
-        task->_destinationPluginId                = std::move(destinationPluginId);
-        task->_destinationPluginShortId           = std::move(destinationPluginShortId);
-        task->_destinationInstanceContext         = std::move(destinationInstanceContext);
-        task->_fileSystem                         = fileSystem;
-        task->_destinationFileSystem              = std::move(destinationFileSystem);
-        task->_sourcePaths                        = std::move(sourcePaths);
-        task->_sourcePathAttributesHint           = std::move(sourcePathAttributesHint);
-        task->_destinationFolder                  = std::move(destinationFolder);
-        task->_flags                              = flags;
-        task->_resolvedItems                      = std::move(resolvedItems);
+        task->_operation                = operation;
+        task->_executionMode            = executionMode;
+        task->_sourcePane               = sourcePane;
+        task->_destinationPane          = destinationPane;
+        task->_sourcePluginId           = sourcePluginId;
+        task->_sourcePluginShortId      = std::move(sourcePluginShortId);
+        task->_sourceInstanceContext    = std::move(sourceInstanceContext);
+        task->_destinationPluginId      = std::move(destinationPluginId);
+        task->_destinationPluginShortId = std::move(destinationPluginShortId);
+        task->_destinationInstanceContext = std::move(destinationInstanceContext);
+        task->_fileSystem               = fileSystem;
+        task->_destinationFileSystem    = std::move(destinationFileSystem);
+        task->_sourcePaths              = std::move(sourcePaths);
+        task->_sourcePathAttributesHint = std::move(sourcePathAttributesHint);
+        task->_destinationFolder        = std::move(destinationFolder);
+        task->_flags                    = flags;
+        task->_resolvedItems            = std::move(resolvedItems);
         task->_permanentDeleteConfirmationPending = admission.permanentDeleteConfirmationPending;
         task->_permanentDeleteConsentDetail       = std::move(admission.permanentDeleteConsentDetail);
         task->_permanentDeleteConsentFrom         = std::move(admission.permanentDeleteConsentFrom);
         task->_permanentDeleteTestOverride        = admission.permanentDeleteTestOverride;
-        task->_crossFsBridgeBufferBytes           = GetCrossFsBridgeBufferBytesFromSettings(_owner._settings);
+        task->_crossFsBridgeBufferBytes = GetCrossFsBridgeBufferBytesFromSettings(_owner._settings);
         task->_waitForOthers.store(waitForOthers, std::memory_order_release);
         task->_desiredSpeedLimitBytesPerSecond.store(taskDesiredSpeedLimit, std::memory_order_release);
-        task->_clipboardMoveAdmission     = groupMoveClipboardSequence.has_value();
-        task->_preWorkerReleaseBarrier    = std::move(admission.preWorkerReleaseBarrier);
+        task->_clipboardMoveAdmission = groupMoveClipboardSequence.has_value();
+        task->_preWorkerReleaseBarrier = std::move(admission.preWorkerReleaseBarrier);
         task->_preConsumptionDecisionGate = std::move(admission.preConsumptionDecisionGate);
-        task->_preparationObserver        = std::move(admission.preparationObserver);
-        task->_externalProgressCallback   = std::move(admission.progressCallback);
-        task->_artifactTouchReceipt       = std::move(artifactTouchReceipt);
+        task->_preparationObserver = std::move(admission.preparationObserver);
+        task->_externalProgressCallback = std::move(admission.progressCallback);
+        task->_artifactTouchReceipt = std::move(artifactTouchReceipt);
         task->_presentationState.store(Task::TaskPresentationState::Hidden, std::memory_order_release);
-        task->_presentationDeadlineTick       = presentationAdmissionTick > std::numeric_limits<ULONGLONG>::max() - FileOperations::kTaskCardRevealDelayMs
-                                                    ? std::numeric_limits<ULONGLONG>::max()
-                                                    : presentationAdmissionTick + FileOperations::kTaskCardRevealDelayMs;
+        task->_presentationDeadlineTick =
+            presentationAdmissionTick > std::numeric_limits<ULONGLONG>::max() - FileOperations::kTaskCardRevealDelayMs
+                ? std::numeric_limits<ULONGLONG>::max()
+                : presentationAdmissionTick + FileOperations::kTaskCardRevealDelayMs;
         task->_suppressCleanCompletionSummary = inlineRename;
         // Mark as waiting in queue immediately if queuing, so UI shows "Waiting..." right away
         task->SetWaitingInQueue(waitForOthers);
@@ -1317,7 +1349,8 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
         std::scoped_lock lock(_mutex);
         if (groupMoveClipboardSequence.has_value())
         {
-            if (std::ranges::find(_acceptedMoveClipboardSequences, groupMoveClipboardSequence.value()) != _acceptedMoveClipboardSequences.end())
+            if (std::ranges::find(_acceptedMoveClipboardSequences, groupMoveClipboardSequence.value()) !=
+                _acceptedMoveClipboardSequences.end())
             {
                 Debug::Warning(L"File Operations rejected a duplicate clipboard-Move sequence after an earlier accepted admission.");
                 return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
@@ -1346,9 +1379,12 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
     {
         // std::jthread reports OS thread-admission failure through std::system_error. Roll back
         // the unpublished worker and sequence receipt; the clipboard has not been touched yet.
-        Debug::Error(L"File Operations could not create the admitted worker (taskId={}, code={}).", startedTaskId, error.code().value());
+        Debug::Error(L"File Operations could not create the admitted worker (taskId={}, code={}).",
+                     startedTaskId,
+                     error.code().value());
         std::scoped_lock lock(_mutex);
-        const auto taskIt = std::ranges::find_if(_tasks, [rawTask](const auto& candidate) noexcept { return candidate.get() == rawTask; });
+        const auto taskIt = std::ranges::find_if(_tasks, [rawTask](const auto& candidate) noexcept
+        { return candidate.get() == rawTask; });
         if (taskIt != _tasks.end())
         {
             _tasks.erase(taskIt);
@@ -1384,7 +1420,9 @@ HRESULT FolderWindow::FileOperationState::StartOperation(OperationAdmission admi
     return S_OK;
 }
 
-void FolderWindow::FileOperationState::Task::CompleteClipboardMoveAdmission(const HRESULT status, const bool consumed) noexcept
+void FolderWindow::FileOperationState::Task::CompleteClipboardMoveAdmission(
+    const HRESULT status,
+    const bool consumed) noexcept
 {
     bool expected = false;
     if (! _clipboardMoveBarrierCompleted.compare_exchange_strong(expected, true, std::memory_order_acq_rel))
@@ -1398,18 +1436,26 @@ void FolderWindow::FileOperationState::Task::CompleteClipboardMoveAdmission(cons
     {
         Debug::Warning(L"File Operations could not clear the accepted clipboard-Move cut list; the accepted task will terminate before mutation (hr=0x{:08X}).",
                        static_cast<unsigned long>(status));
-        LogDiagnostic(DiagnosticSeverity::Error, status, L"clipboard.move.consumeFailed", LoadStringResource(nullptr, IDS_FILEOPS_CLIPBOARD_MOVE_CLEAR_FAILED));
+        LogDiagnostic(DiagnosticSeverity::Error,
+                      status,
+                      L"clipboard.move.consumeFailed",
+                      LoadStringResource(nullptr, IDS_FILEOPS_CLIPBOARD_MOVE_CLEAR_FAILED));
     }
     else
     {
-        LogDiagnostic(DiagnosticSeverity::Info, S_OK, L"clipboard.move.consumed", LoadStringResource(nullptr, IDS_FILEOPS_CLIPBOARD_MOVE_QUEUED));
+        LogDiagnostic(DiagnosticSeverity::Info,
+                      S_OK,
+                      L"clipboard.move.consumed",
+                      LoadStringResource(nullptr, IDS_FILEOPS_CLIPBOARD_MOVE_QUEUED));
     }
 
     _workerReleased.store(true, std::memory_order_release);
     _workerReleased.notify_all();
 }
 
-void FolderWindow::FileOperationState::CompleteClipboardMoveAdmissionByTaskId(const uint64_t taskId, const HRESULT status) noexcept
+void FolderWindow::FileOperationState::CompleteClipboardMoveAdmissionByTaskId(
+    const uint64_t taskId,
+    const HRESULT status) noexcept
 {
     if (Task* const task = FindTask(taskId))
     {
@@ -1417,7 +1463,8 @@ void FolderWindow::FileOperationState::CompleteClipboardMoveAdmissionByTaskId(co
     }
 }
 
-void FolderWindow::FileOperationState::OnClipboardMoveReady(std::unique_ptr<ClipboardMoveReadyPayload> payload) noexcept
+void FolderWindow::FileOperationState::OnClipboardMoveReady(
+    std::unique_ptr<ClipboardMoveReadyPayload> payload) noexcept
 {
     if (! payload)
     {
@@ -1425,7 +1472,7 @@ void FolderWindow::FileOperationState::OnClipboardMoveReady(std::unique_ptr<Clip
     }
 
     const uint64_t taskId = payload->taskId;
-    Task* task            = FindTask(taskId);
+    Task* task = FindTask(taskId);
     if (! task)
     {
         return;
@@ -1463,7 +1510,9 @@ void FolderWindow::FileOperationState::OnClipboardMoveReady(std::unique_ptr<Clip
         task->CompleteClipboardMoveAdmission(HRESULT_FROM_WIN32(ERROR_CANCELLED), false);
         return;
     }
-    const HRESULT terminalBarrierHr = barrierHr == S_OK ? S_OK : (FAILED(barrierHr) ? barrierHr : HRESULT_FROM_WIN32(ERROR_CANCELLED));
+    const HRESULT terminalBarrierHr = barrierHr == S_OK
+        ? S_OK
+        : (FAILED(barrierHr) ? barrierHr : HRESULT_FROM_WIN32(ERROR_CANCELLED));
     task->CompleteClipboardMoveAdmission(terminalBarrierHr, barrierHr == S_OK);
 }
 
@@ -1506,21 +1555,26 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareBatchRenameArtifactGuard(
     {
         return E_OUTOFMEMORY;
     }
-    payload->taskId  = _taskId;
+    payload->taskId = _taskId;
     payload->request = std::move(request);
     {
         std::scoped_lock lock(_batchRenameArtifactPromptMutex);
-        _batchRenameArtifactPromptStatus    = E_PENDING;
+        _batchRenameArtifactPromptStatus = E_PENDING;
         _batchRenameArtifactPromptCompleted = false;
     }
-    if (! PostMessagePayload(_state->_owner.GetHwnd(), WndMsg::kFileOperationBatchRenameArtifactPrompt, static_cast<WPARAM>(_taskId), std::move(payload)))
+    if (! PostMessagePayload(_state->_owner.GetHwnd(),
+                             WndMsg::kFileOperationBatchRenameArtifactPrompt,
+                             static_cast<WPARAM>(_taskId),
+                             std::move(payload)))
     {
         return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
     }
 
     std::unique_lock lock(_batchRenameArtifactPromptMutex);
-    _batchRenameArtifactPromptCv.wait(
-        lock, [this]() noexcept { return _batchRenameArtifactPromptCompleted || _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested(); });
+    _batchRenameArtifactPromptCv.wait(lock, [this]() noexcept
+    {
+        return _batchRenameArtifactPromptCompleted || _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested();
+    });
     if (_cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested())
     {
         return HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -1528,8 +1582,9 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareBatchRenameArtifactGuard(
     return _batchRenameArtifactPromptStatus;
 }
 
-void FolderWindow::FileOperationState::Task::CompleteBatchRenameArtifactPrompt(const HRESULT status,
-                                                                               std::optional<FileOperationArtifacts::TouchGuardReceipt> receipt) noexcept
+void FolderWindow::FileOperationState::Task::CompleteBatchRenameArtifactPrompt(
+    const HRESULT status,
+    std::optional<FileOperationArtifacts::TouchGuardReceipt> receipt) noexcept
 {
     {
         std::scoped_lock lock(_batchRenameArtifactPromptMutex);
@@ -1547,9 +1602,10 @@ void FolderWindow::FileOperationState::Task::CompleteBatchRenameArtifactPrompt(c
     _batchRenameArtifactPromptCv.notify_all();
 }
 
-void FolderWindow::FileOperationState::CompleteBatchRenameArtifactPromptByTaskId(const uint64_t taskId,
-                                                                                 const HRESULT status,
-                                                                                 std::optional<FileOperationArtifacts::TouchGuardReceipt> receipt) noexcept
+void FolderWindow::FileOperationState::CompleteBatchRenameArtifactPromptByTaskId(
+    const uint64_t taskId,
+    const HRESULT status,
+    std::optional<FileOperationArtifacts::TouchGuardReceipt> receipt) noexcept
 {
     if (Task* const task = FindTask(taskId))
     {
@@ -1557,7 +1613,8 @@ void FolderWindow::FileOperationState::CompleteBatchRenameArtifactPromptByTaskId
     }
 }
 
-void FolderWindow::FileOperationState::OnBatchRenameArtifactPrompt(std::unique_ptr<BatchRenameArtifactPromptPayload> payload) noexcept
+void FolderWindow::FileOperationState::OnBatchRenameArtifactPrompt(
+    std::unique_ptr<BatchRenameArtifactPromptPayload> payload) noexcept
 {
     if (! payload)
     {
@@ -1618,24 +1675,34 @@ bool FolderWindow::FileOperationState::OpenCompletedTaskSource(uint64_t taskId) 
     CompletedTaskSummary summary{};
     {
         std::scoped_lock lock(_mutex);
-        const auto found = std::ranges::find_if(_completedTasks, [taskId](const CompletedTaskSummary& value) noexcept { return value.taskId == taskId; });
+        const auto found = std::ranges::find_if(_completedTasks, [taskId](const CompletedTaskSummary& value) noexcept
+        { return value.taskId == taskId; });
         if (found == _completedTasks.end())
         {
             return false;
         }
         summary = *found;
     }
-    if ((summary.retainedSourcePaths.empty() && summary.unknownSourcePaths.empty()) || summary.sourcePluginId.empty() || summary.sourcePluginShortId.empty())
+    if ((summary.retainedSourcePaths.empty() && summary.unknownSourcePaths.empty()) ||
+        summary.sourcePluginId.empty() || summary.sourcePluginShortId.empty())
     {
         return false;
     }
 
-    const std::filesystem::path sourcePath = ! summary.retainedSourcePaths.empty() ? summary.retainedSourcePaths.front() : summary.unknownSourcePaths.front();
-    const std::filesystem::path parent     = sourcePath.parent_path();
-    const std::wstring leaf                = sourcePath.filename().wstring();
+    const std::filesystem::path sourcePath = ! summary.retainedSourcePaths.empty()
+        ? summary.retainedSourcePaths.front()
+        : summary.unknownSourcePaths.front();
+    const std::filesystem::path parent = sourcePath.parent_path();
+    const std::wstring leaf = sourcePath.filename().wstring();
     return ! parent.empty() &&
-           SUCCEEDED(_owner.ExecuteInPaneLocation(
-               summary.sourcePane, summary.sourcePluginId, summary.sourcePluginShortId, summary.sourceInstanceContext, parent, leaf, 0u, true));
+           SUCCEEDED(_owner.ExecuteInPaneLocation(summary.sourcePane,
+                                                  summary.sourcePluginId,
+                                                  summary.sourcePluginShortId,
+                                                  summary.sourceInstanceContext,
+                                                  parent,
+                                                  leaf,
+                                                  0u,
+                                                  true));
 }
 
 bool FolderWindow::FileOperationState::SelectCompletedTaskRetainedSources(uint64_t taskId) noexcept
@@ -1653,7 +1720,8 @@ bool FolderWindow::FileOperationState::ExecuteCompletedRetainedSourceAction(uint
     CompletedTaskSummary summary{};
     {
         std::scoped_lock lock(_mutex);
-        const auto found = std::ranges::find_if(_completedTasks, [taskId](const CompletedTaskSummary& value) noexcept { return value.taskId == taskId; });
+        const auto found = std::ranges::find_if(_completedTasks, [taskId](const CompletedTaskSummary& value) noexcept
+        { return value.taskId == taskId; });
         if (found == _completedTasks.end())
         {
             return false;
@@ -1661,14 +1729,15 @@ bool FolderWindow::FileOperationState::ExecuteCompletedRetainedSourceAction(uint
         summary = *found;
     }
 
-    const bool exactCompleteSet = summary.clipboardMoveAdmission && summary.operation == FILESYSTEM_MOVE && summary.retainedSourceCount > 0u &&
-                                  summary.unknownSourceCount == 0u && summary.exactRetainedSourceItems.size() == summary.retainedSourceCount;
+    const bool exactCompleteSet = summary.clipboardMoveAdmission && summary.operation == FILESYSTEM_MOVE &&
+        summary.retainedSourceCount > 0u && summary.unknownSourceCount == 0u &&
+        summary.exactRetainedSourceItems.size() == summary.retainedSourceCount;
     if (! exactCompleteSet || ! NavigationLocation::IsFilePluginShortId(summary.sourcePluginShortId))
     {
         return false;
     }
 
-    const std::filesystem::path firstPath   = summary.exactRetainedSourceItems.front().providerPath;
+    const std::filesystem::path firstPath = summary.exactRetainedSourceItems.front().providerPath;
     const std::filesystem::path firstParent = firstPath.parent_path();
     if (firstParent.empty() || FAILED(_owner.ExecuteInPaneLocation(summary.sourcePane,
                                                                    summary.sourcePluginId,
@@ -1866,11 +1935,12 @@ void FolderWindow::FileOperationState::NotifyQueueChanged()
     _queueCv.notify_all();
 }
 
-HRESULT FolderWindow::FileOperationState::ConfirmExternalArtifactTouch(const wil::com_ptr<IFileSystem>& fileSystem,
-                                                                       const std::wstring_view pluginId,
-                                                                       const std::wstring_view instanceContext,
-                                                                       const std::span<const std::filesystem::path> providerPaths,
-                                                                       FileOperationArtifacts::TouchGuardReceipt* const receiptOut) noexcept
+HRESULT FolderWindow::FileOperationState::ConfirmExternalArtifactTouch(
+    const wil::com_ptr<IFileSystem>& fileSystem,
+    const std::wstring_view pluginId,
+    const std::wstring_view instanceContext,
+    const std::span<const std::filesystem::path> providerPaths,
+    FileOperationArtifacts::TouchGuardReceipt* const receiptOut) noexcept
 {
     Debug::Perf::Scope perf(L"fileops.artifact.touch.external.us");
     if (receiptOut != nullptr)
@@ -1890,8 +1960,8 @@ HRESULT FolderWindow::FileOperationState::ConfirmExternalArtifactTouch(const wil
         for (const std::filesystem::path& path : providerPaths)
         {
             FileOperationArtifacts::Candidate candidate{};
-            const HRESULT captureHr =
-                FileOperationArtifacts::CaptureProviderObjectCandidate(fileSystem.get(), path.native(), pluginId, instanceContext, candidate);
+            const HRESULT captureHr = FileOperationArtifacts::CaptureProviderObjectCandidate(
+                fileSystem.get(), path.native(), pluginId, instanceContext, candidate);
             if (FAILED(captureHr))
             {
                 return captureHr;
@@ -1900,8 +1970,7 @@ HRESULT FolderWindow::FileOperationState::ConfirmExternalArtifactTouch(const wil
             {
                 continue;
             }
-            const auto duplicate = std::ranges::find_if(candidates,
-                                                        [&](const FileOperationArtifacts::Candidate& existing) noexcept
+            const auto duplicate = std::ranges::find_if(candidates, [&](const FileOperationArtifacts::Candidate& existing) noexcept
             {
                 return SameArtifactEndpoint(existing.endpoint, candidate.endpoint) &&
                        EquivalentPath(candidate.pathIdentity, existing.path.native(), candidate.path.native());
@@ -1955,7 +2024,9 @@ HRESULT FolderWindow::FileOperationState::ConfirmExternalArtifactTouch(const wil
     const HRESULT currentCollectHr = collect(currentCandidates);
     if (currentCollectHr != S_OK)
     {
-        const HRESULT status = FAILED(currentCollectHr) ? currentCollectHr : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        const HRESULT status = FAILED(currentCollectHr)
+            ? currentCollectHr
+            : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
         perf.SetHr(status);
         return status;
     }
@@ -2097,7 +2168,8 @@ bool FolderWindow::FileOperationState::MoveQueuedTask(uint64_t taskId, bool move
 
     {
         std::scoped_lock lock(_queueMutex);
-        if ((*current)->HasEnteredOperation() || adjacent->HasEnteredOperation() || (! (*current)->IsWaitingForOthers() && ! (*current)->IsWaitingInQueue()) ||
+        if ((*current)->HasEnteredOperation() || adjacent->HasEnteredOperation() ||
+            (! (*current)->IsWaitingForOthers() && ! (*current)->IsWaitingInQueue()) ||
             (! adjacent->IsWaitingForOthers() && ! adjacent->IsWaitingInQueue()))
         {
             return false;
@@ -2353,7 +2425,8 @@ std::optional<UINT> FolderWindow::FileOperationState::RefreshDeferredTaskPresent
 #endif
                 continue;
             }
-            if (presentation != Task::TaskPresentationState::Hidden || task->_taskFinished.load(std::memory_order_acquire))
+            if (presentation != Task::TaskPresentationState::Hidden ||
+                task->_taskFinished.load(std::memory_order_acquire))
             {
                 continue;
             }
@@ -2362,12 +2435,16 @@ std::optional<UINT> FolderWindow::FileOperationState::RefreshDeferredTaskPresent
             {
                 Task::TaskPresentationState expected = Task::TaskPresentationState::Hidden;
                 if (task->_presentationState.compare_exchange_strong(
-                        expected, Task::TaskPresentationState::Presented, std::memory_order_acq_rel, std::memory_order_acquire))
+                        expected,
+                        Task::TaskPresentationState::Presented,
+                        std::memory_order_acq_rel,
+                        std::memory_order_acquire))
                 {
-                    showPopup                    = true;
-                    const ULONGLONG admittedTick = task->_presentationDeadlineTick >= FileOperations::kTaskCardRevealDelayMs
-                                                       ? task->_presentationDeadlineTick - FileOperations::kTaskCardRevealDelayMs
-                                                       : 0u;
+                    showPopup = true;
+                    const ULONGLONG admittedTick =
+                        task->_presentationDeadlineTick >= FileOperations::kTaskCardRevealDelayMs
+                            ? task->_presentationDeadlineTick - FileOperations::kTaskCardRevealDelayMs
+                            : 0u;
                     Debug::Perf::Emit(L"FileOps.TaskPresentation.RevealMs",
                                       L"deadline",
                                       nowTick >= admittedTick ? nowTick - admittedTick : 0u,
@@ -2381,10 +2458,11 @@ std::optional<UINT> FolderWindow::FileOperationState::RefreshDeferredTaskPresent
                 else if (expected == Task::TaskPresentationState::RevealRequested)
                 {
                     task->_presentationState.store(Task::TaskPresentationState::Presented, std::memory_order_release);
-                    showPopup                    = true;
-                    const ULONGLONG admittedTick = task->_presentationDeadlineTick >= FileOperations::kTaskCardRevealDelayMs
-                                                       ? task->_presentationDeadlineTick - FileOperations::kTaskCardRevealDelayMs
-                                                       : 0u;
+                    showPopup = true;
+                    const ULONGLONG admittedTick =
+                        task->_presentationDeadlineTick >= FileOperations::kTaskCardRevealDelayMs
+                            ? task->_presentationDeadlineTick - FileOperations::kTaskCardRevealDelayMs
+                            : 0u;
                     Debug::Perf::Emit(L"FileOps.TaskPresentation.RevealMs",
                                       L"non-clean-race",
                                       nowTick >= admittedTick ? nowTick - admittedTick : 0u,
@@ -2429,8 +2507,10 @@ void FolderWindow::FileOperationState::RevealPendingTasksImmediately() noexcept
             {
                 continue;
             }
-            const Task::TaskPresentationState previous = task->_presentationState.exchange(Task::TaskPresentationState::Presented, std::memory_order_acq_rel);
-            if (previous == Task::TaskPresentationState::Hidden || previous == Task::TaskPresentationState::RevealRequested)
+            const Task::TaskPresentationState previous =
+                task->_presentationState.exchange(Task::TaskPresentationState::Presented, std::memory_order_acq_rel);
+            if (previous == Task::TaskPresentationState::Hidden ||
+                previous == Task::TaskPresentationState::RevealRequested)
             {
                 showPopup = true;
 #ifdef ENABLE_TESTS
@@ -2450,7 +2530,8 @@ void FolderWindow::FileOperationState::RevealPendingTasksImmediately() noexcept
 }
 
 #ifdef ENABLE_TESTS
-void FolderWindow::FileOperationState::DebugSetTaskPresentationNowTickForSelfTest(std::optional<ULONGLONG> nowTick) noexcept
+void FolderWindow::FileOperationState::DebugSetTaskPresentationNowTickForSelfTest(
+    std::optional<ULONGLONG> nowTick) noexcept
 {
     _debugTaskPresentationNowTick.store(nowTick.value_or(kTaskPresentationLiveClock), std::memory_order_release);
 }
@@ -2470,14 +2551,16 @@ bool FolderWindow::FileOperationState::DebugValidateRetainedSourceActionForSelfT
     CompletedTaskSummary summary{};
     {
         std::scoped_lock lock(_mutex);
-        const auto found = std::ranges::find_if(_completedTasks, [taskId](const CompletedTaskSummary& value) noexcept { return value.taskId == taskId; });
+        const auto found = std::ranges::find_if(_completedTasks, [taskId](const CompletedTaskSummary& value) noexcept
+        { return value.taskId == taskId; });
         if (found == _completedTasks.end())
         {
             return false;
         }
         summary = *found;
     }
-    return summary.clipboardMoveAdmission && summary.operation == FILESYSTEM_MOVE && summary.retainedSourceCount > 0u && summary.unknownSourceCount == 0u &&
+    return summary.clipboardMoveAdmission && summary.operation == FILESYSTEM_MOVE &&
+           summary.retainedSourceCount > 0u && summary.unknownSourceCount == 0u &&
            summary.exactRetainedSourceItems.size() == summary.retainedSourceCount &&
            ValidateRetainedSourceActionItems(fileSystem, summary.exactRetainedSourceItems, nullptr);
 }

@@ -38,7 +38,9 @@ enum class SlashPolicy
     return encoded;
 }
 
-[[nodiscard]] inline bool TryPercentEncodeUtf8(std::wstring_view text, SlashPolicy slashPolicy, std::string& encodedOut) noexcept
+[[nodiscard]] inline bool TryPercentEncodeUtf8(std::wstring_view text,
+                                               SlashPolicy slashPolicy,
+                                               std::string& encodedOut) noexcept
 {
     encodedOut.clear();
     const std::optional<std::string> utf8 = Common::Strings::TryUtf8FromUtf16Strict(text);
@@ -50,7 +52,9 @@ enum class SlashPolicy
     return true;
 }
 
-[[nodiscard]] inline bool TryPercentEncodeUtf8ToWide(std::wstring_view text, SlashPolicy slashPolicy, std::wstring& encodedOut) noexcept
+[[nodiscard]] inline bool TryPercentEncodeUtf8ToWide(std::wstring_view text,
+                                                     SlashPolicy slashPolicy,
+                                                     std::wstring& encodedOut) noexcept
 {
     encodedOut.clear();
     std::string encoded;

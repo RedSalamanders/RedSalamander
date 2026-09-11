@@ -98,7 +98,7 @@ struct FileOperationsDxPage
     void Detach() noexcept
     {
         verificationHeader = nullptr;
-        verifyAfterCopy    = {};
+        verifyAfterCopy     = {};
         bandwidthHeader    = nullptr;
         bandwidthPreset    = {};
         customBandwidth    = {};

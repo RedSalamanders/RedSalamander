@@ -46,7 +46,7 @@ inline constexpr uint64_t kThemeCycleExitCancelRecoveryMs         = 80u;
 
 struct ThemeCycleOverlaySnapshot final
 {
-    uint64_t generation           = 0u;
+    uint64_t generation = 0u;
     ThemeCycleDirection direction = ThemeCycleDirection::Next;
     std::wstring previousThemeId;
     std::wstring previousDisplayName;
@@ -69,15 +69,17 @@ struct ThemeCycleOverlayPlacement final
     RECT windowRectPx{};
 };
 
-[[nodiscard]] ThemeCycleOverlayPlacement ComputeThemeCycleOverlayPlacement(const RECT& ownerClientScreenRectPx,
-                                                                           const RECT& monitorWorkAreaPx,
-                                                                           UINT dpi) noexcept;
+[[nodiscard]] ThemeCycleOverlayPlacement ComputeThemeCycleOverlayPlacement(
+    const RECT& ownerClientScreenRectPx,
+    const RECT& monitorWorkAreaPx,
+    UINT dpi) noexcept;
 
-[[nodiscard]] ThemeCycleOverlaySnapshot BuildThemeCycleOverlaySnapshot(std::span<const ThemeCycleOverlayTheme> ring,
-                                                                       size_t selectedIndex,
-                                                                       ThemeCycleDirection direction,
-                                                                       uint64_t generation,
-                                                                       std::chrono::steady_clock::time_point inputAcceptedAt = {});
+[[nodiscard]] ThemeCycleOverlaySnapshot BuildThemeCycleOverlaySnapshot(
+    std::span<const ThemeCycleOverlayTheme> ring,
+    size_t selectedIndex,
+    ThemeCycleDirection direction,
+    uint64_t generation,
+    std::chrono::steady_clock::time_point inputAcceptedAt = {});
 
 struct ThemeCycleOverlayAccessibility final
 {
@@ -91,51 +93,51 @@ struct ThemeCycleOverlayAccessibility final
 
 struct ThemeCycleOverlayDebugSnapshot final
 {
-    bool created                  = false;
-    bool visible                  = false;
-    bool dismissalTimerArmed      = false;
-    bool fallbackDeadlineArmed    = false;
-    bool animationActive          = false;
-    bool pressed                  = false;
-    bool captured                 = false;
-    bool reducedMotion            = false;
-    bool highContrast             = false;
-    bool backdropCaptured         = false;
-    ThemeCycleOverlayPhase phase  = ThemeCycleOverlayPhase::Hidden;
-    ThemeCycleDirection direction = ThemeCycleDirection::Next;
-    uint64_t generation           = 0u;
-    uint64_t phaseStartTickMs     = 0u;
-    uint64_t steadyVisibleTickMs  = 0u;
-    uint64_t disappearDeadlineMs  = 0u;
-    float progress                = 1.0f;
-    float surfaceOpacity          = 0.0f;
-    float surfaceScale            = 1.0f;
-    float surfaceTranslateYDip    = 0.0f;
+    bool created                    = false;
+    bool visible                    = false;
+    bool dismissalTimerArmed       = false;
+    bool fallbackDeadlineArmed     = false;
+    bool animationActive           = false;
+    bool pressed                   = false;
+    bool captured                  = false;
+    bool reducedMotion             = false;
+    bool highContrast              = false;
+    bool backdropCaptured          = false;
+    ThemeCycleOverlayPhase phase   = ThemeCycleOverlayPhase::Hidden;
+    ThemeCycleDirection direction  = ThemeCycleDirection::Next;
+    uint64_t generation            = 0u;
+    uint64_t phaseStartTickMs      = 0u;
+    uint64_t steadyVisibleTickMs   = 0u;
+    uint64_t disappearDeadlineMs   = 0u;
+    float progress                 = 1.0f;
+    float surfaceOpacity           = 0.0f;
+    float surfaceScale             = 1.0f;
+    float surfaceTranslateYDip     = 0.0f;
     RECT windowRectPx{};
     RECT surfaceRectPx{};
     D2D1_RECT_F previousRectDip{};
     D2D1_RECT_F currentRectDip{};
     D2D1_RECT_F nextRectDip{};
-    UINT dpi = 96u;
+    UINT dpi                       = 96u;
     std::wstring previousThemeId;
     std::wstring previousDisplayName;
     std::wstring currentThemeId;
     std::wstring currentDisplayName;
     std::wstring nextThemeId;
     std::wstring nextDisplayName;
-    uint64_t paintCount                  = 0u;
-    uint64_t textLayoutBuildCount        = 0u;
-    uint64_t textLayoutCreateCount       = 0u;
-    uint64_t explicitDismissCount        = 0u;
-    uint64_t windowCreateCount           = 0u;
-    uint64_t windowReuseCount            = 0u;
-    uint64_t dismissTimerArmCount        = 0u;
-    uint64_t staleTimerIgnoredCount      = 0u;
-    uint64_t droppedGenerationCount      = 0u;
-    uint64_t backdropCaptureCount        = 0u;
+    uint64_t paintCount            = 0u;
+    uint64_t textLayoutBuildCount  = 0u;
+    uint64_t textLayoutCreateCount = 0u;
+    uint64_t explicitDismissCount  = 0u;
+    uint64_t windowCreateCount     = 0u;
+    uint64_t windowReuseCount      = 0u;
+    uint64_t dismissTimerArmCount  = 0u;
+    uint64_t staleTimerIgnoredCount = 0u;
+    uint64_t droppedGenerationCount = 0u;
+    uint64_t backdropCaptureCount   = 0u;
     uint64_t backdropCaptureFailureCount = 0u;
-    UINT backdropWidthPx                 = 0u;
-    UINT backdropHeightPx                = 0u;
+    UINT backdropWidthPx            = 0u;
+    UINT backdropHeightPx           = 0u;
 };
 
 class ThemeCycleOverlayWindow final
@@ -149,7 +151,10 @@ public:
     ThemeCycleOverlayWindow& operator=(const ThemeCycleOverlayWindow&) = delete;
     ThemeCycleOverlayWindow& operator=(ThemeCycleOverlayWindow&&)      = delete;
 
-    HRESULT Show(HWND owner, const DxUi::ThemePalette& palette, ThemeCycleOverlaySnapshot snapshot, ThemeCycleOverlayAccessibility accessibility) noexcept;
+    HRESULT Show(HWND owner,
+                 const DxUi::ThemePalette& palette,
+                 ThemeCycleOverlaySnapshot snapshot,
+                 ThemeCycleOverlayAccessibility accessibility) noexcept;
     void Hide() noexcept;
     void OnOwnerGeometryChanged() noexcept;
     void OnOwnerAvailabilityChanged() noexcept;

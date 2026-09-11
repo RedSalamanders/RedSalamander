@@ -15,8 +15,8 @@
 #include "DxUiThemePalette.h"
 #include "Helpers.h"
 #include "SettingsHotReload.h"
-#include "ShortcutCommandCatalog.h"
 #include "ShortcutManager.h"
+#include "ShortcutCommandCatalog.h"
 #include "ShortcutText.h"
 #include "WindowMaximizeBehavior.h"
 #include "WindowPlacementPersistence.h"
@@ -213,9 +213,9 @@ constexpr uint64_t kGroupStableIdTerminal    = 4u;
 
 struct ShortcutRow final
 {
-    uint64_t stableId                         = 0u;
-    uint32_t vk                               = 0u;
-    uint32_t modifiers                        = 0u;
+    uint64_t stableId  = 0u;
+    uint32_t vk        = 0u;
+    uint32_t modifiers = 0u;
     Common::Keyboard::KeyPosition keyPosition = Common::Keyboard::KeyPosition::None;
     std::wstring commandId;
     std::wstring commandText;
@@ -286,8 +286,9 @@ struct ShortcutKeySortKey final
 
 [[nodiscard]] ShortcutKeySortKey MakeShortcutKeySortKey(const ShortcutRow& row)
 {
-    const uint32_t displayVk =
-        row.keyPosition == Common::Keyboard::KeyPosition::None ? row.vk : Common::Keyboard::VirtualKeyForPosition(row.keyPosition, GetKeyboardLayout(0));
+    const uint32_t displayVk = row.keyPosition == Common::Keyboard::KeyPosition::None
+                                   ? row.vk
+                                   : Common::Keyboard::VirtualKeyForPosition(row.keyPosition, GetKeyboardLayout(0));
     ShortcutKeySortKey key{
         .modifierText = FormatModifierSortText(row.modifiers),
     };
@@ -391,7 +392,8 @@ public:
         const ShortcutRow& row = _rows[rowIndex];
         if (columnIndex == 0u)
         {
-            outCell.kind = row.hasConflict || ! row.iconText.empty() ? RedSalamander::DxUi::GridCellKind::IconText : RedSalamander::DxUi::GridCellKind::Text;
+            outCell.kind        = row.hasConflict || ! row.iconText.empty() ? RedSalamander::DxUi::GridCellKind::IconText
+                                                                            : RedSalamander::DxUi::GridCellKind::Text;
             outCell.iconText    = row.hasConflict ? GetConflictMark() : row.iconText;
             outCell.text        = row.commandText;
             outCell.multiline   = true;
@@ -1243,8 +1245,10 @@ void ShortcutsWindow::RebuildRows() noexcept
     std::vector<ShortcutRow> rows;
     rows.reserve(_shortcuts.application.size() + _shortcuts.functionBar.size() + _shortcuts.folderView.size() + _shortcuts.terminal.size());
 
-    const std::vector<ShortcutCommandCatalogEntry> folderCatalog   = BuildShortcutCommandCatalog(_shortcuts, ShortcutCommandContext::Folder);
-    const std::vector<ShortcutCommandCatalogEntry> terminalCatalog = BuildShortcutCommandCatalog(_shortcuts, ShortcutCommandContext::Terminal);
+    const std::vector<ShortcutCommandCatalogEntry> folderCatalog =
+        BuildShortcutCommandCatalog(_shortcuts, ShortcutCommandContext::Folder);
+    const std::vector<ShortcutCommandCatalogEntry> terminalCatalog =
+        BuildShortcutCommandCatalog(_shortcuts, ShortcutCommandContext::Terminal);
     std::unordered_map<std::wstring, const ShortcutCommandCatalogEntry*> catalogByCommand;
     const auto indexCatalog = [&](const std::vector<ShortcutCommandCatalogEntry>& catalog)
     {
@@ -1280,14 +1284,14 @@ void ShortcutsWindow::RebuildRows() noexcept
             row.hasConflict   = IsConflictChord(ShortcutManager::MakeChordKey(binding), conflicts);
             row.keyText       = ShortcutText::FormatChordText(binding.keyPosition, binding.vk, binding.modifiers);
 
-            const bool isPassThrough       = ShortcutIds::IsPassThroughCommandId(binding.commandId);
-            const auto catalogEntry        = catalogByCommand.find(std::wstring(CanonicalizeCommandId(binding.commandId)));
-            const std::wstring displayName = isPassThrough                            ? LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_PASS_THROUGH)
-                                             : catalogEntry != catalogByCommand.end() ? catalogEntry->second->displayName
-                                                                                      : GetCommandDisplayName(binding.commandId);
-            const std::wstring description = isPassThrough                            ? LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_PASS_THROUGH_DESC)
-                                             : catalogEntry != catalogByCommand.end() ? catalogEntry->second->description
-                                                                                      : GetCommandDescription(binding.commandId);
+            const bool isPassThrough = ShortcutIds::IsPassThroughCommandId(binding.commandId);
+            const auto catalogEntry = catalogByCommand.find(std::wstring(CanonicalizeCommandId(binding.commandId)));
+            const std::wstring displayName = isPassThrough
+                ? LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_PASS_THROUGH)
+                : catalogEntry != catalogByCommand.end() ? catalogEntry->second->displayName : GetCommandDisplayName(binding.commandId);
+            const std::wstring description = isPassThrough
+                ? LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_PASS_THROUGH_DESC)
+                : catalogEntry != catalogByCommand.end() ? catalogEntry->second->description : GetCommandDescription(binding.commandId);
             row.commandText                = displayName;
             if (! description.empty())
             {
@@ -1451,7 +1455,7 @@ bool ShortcutsWindow::DebugGetSnapshot(ShortcutsWindowDebugSnapshot& out) const 
     out.folderViewCollapsed     = _gridModel && _gridModel->IsGroupCollapsed(kGroupStableIdFolderView);
     out.terminalCollapsed       = _gridModel && _gridModel->IsGroupCollapsed(kGroupStableIdTerminal);
     out.collapsedGroupCount     = static_cast<size_t>(out.applicationCollapsed) + static_cast<size_t>(out.functionBarCollapsed) +
-                                  static_cast<size_t>(out.folderViewCollapsed) + static_cast<size_t>(out.terminalCollapsed);
+                              static_cast<size_t>(out.folderViewCollapsed) + static_cast<size_t>(out.terminalCollapsed);
     if (_gridModel)
     {
         out.rowCommandIds.reserve(_gridModel->GetRowCount());

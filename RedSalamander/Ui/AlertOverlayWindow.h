@@ -31,8 +31,8 @@ struct AlertOverlayWindowDebugSnapshot
     uint64_t dismissCount       = 0;
     POINT lastMouseDownPointPx{};
     POINT lastMouseUpPointPx{};
-    int lastMouseDownHitPart                   = -1;
-    int lastMouseUpHitPart                     = -1;
+    int lastMouseDownHitPart = -1;
+    int lastMouseUpHitPart   = -1;
     AlertPresentation presentation             = AlertPresentation::Severity;
     AlertPresentation renderedIconPresentation = AlertPresentation::Severity;
     wchar_t renderedIconGlyph                  = L'\0';

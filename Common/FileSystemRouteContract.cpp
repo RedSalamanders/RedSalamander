@@ -1,12 +1,15 @@
 #include "FileSystemRouteContract.h"
 
-#include <Windows.h>
 
 #include <algorithm>
 #include <array>
 #include <limits>
 #include <memory>
 #include <utility>
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
 
 #include <wil/com.h>
 
@@ -29,7 +32,8 @@ namespace
     {
         return true;
     }
-    return CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE) == CSTR_EQUAL;
+    return CompareStringOrdinal(
+               left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE) == CSTR_EQUAL;
 }
 
 [[nodiscard]] bool IsValidOperation(FileSystemOperation operation) noexcept
@@ -54,7 +58,8 @@ namespace
 
 [[nodiscard]] bool IsValidComparison(FileSystemRouteComponentComparison value) noexcept
 {
-    return value == FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE || value == FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
+    return value == FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE ||
+           value == FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
 }
 
 [[nodiscard]] bool IsValidNormalization(FileSystemRouteNormalization value) noexcept
@@ -69,8 +74,8 @@ namespace
 
 [[nodiscard]] bool IsValidProofFlags(uint32_t value) noexcept
 {
-    constexpr uint32_t known = FILESYSTEM_ROUTE_PROOF_HOST_READBACK | FILESYSTEM_ROUTE_PROOF_PROVIDER_BLAKE3 | FILESYSTEM_ROUTE_PROOF_PROVIDER_REREAD |
-                               FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST;
+    constexpr uint32_t known = FILESYSTEM_ROUTE_PROOF_HOST_READBACK | FILESYSTEM_ROUTE_PROOF_PROVIDER_BLAKE3 |
+                               FILESYSTEM_ROUTE_PROOF_PROVIDER_REREAD | FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST;
     return (value & ~known) == 0u;
 }
 
@@ -83,7 +88,7 @@ namespace
     }
 
     const uintptr_t begin = reinterpret_cast<uintptr_t>(arena.buffer);
-    const uintptr_t end   = begin + arena.usedBytes;
+    const uintptr_t end = begin + arena.usedBytes;
     if (end < begin)
     {
         return false;
@@ -99,7 +104,7 @@ namespace
         return false;
     }
     const size_t remainingCharacters = remainingBytes / sizeof(wchar_t);
-    const wchar_t* terminator        = std::char_traits<wchar_t>::find(value, remainingCharacters, L'\0');
+    const wchar_t* terminator = std::char_traits<wchar_t>::find(value, remainingCharacters, L'\0');
     if (terminator == nullptr)
     {
         return false;
@@ -108,7 +113,9 @@ namespace
     return true;
 }
 
-[[nodiscard]] bool TryMapPathIdentity(const FileSystemRouteFacts& facts, std::wstring acceptedSeparators, FileSystemPathIdentity& identity) noexcept
+[[nodiscard]] bool TryMapPathIdentity(const FileSystemRouteFacts& facts,
+                                      std::wstring acceptedSeparators,
+                                      FileSystemPathIdentity& identity) noexcept
 {
     if (acceptedSeparators.empty() || acceptedSeparators.find(facts.preferredSeparator) == std::wstring::npos)
     {
@@ -116,12 +123,12 @@ namespace
     }
 
     identity.pathTextStableIdentity = facts.pathTextStableIdentity == TRUE;
-    identity.componentComparison    = facts.componentComparison == FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE
-                                          ? FileSystemPathComponentComparison::OrdinalIgnoreCase
-                                          : FileSystemPathComponentComparison::OrdinalCaseSensitive;
-    identity.preferredSeparator     = facts.preferredSeparator;
-    identity.acceptedSeparators     = std::move(acceptedSeparators);
-    identity.casePreserving         = facts.casePreserving == TRUE;
+    identity.componentComparison = facts.componentComparison == FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE
+        ? FileSystemPathComponentComparison::OrdinalIgnoreCase
+        : FileSystemPathComponentComparison::OrdinalCaseSensitive;
+    identity.preferredSeparator = facts.preferredSeparator;
+    identity.acceptedSeparators = std::move(acceptedSeparators);
+    identity.casePreserving = facts.casePreserving == TRUE;
     switch (facts.caseOnlyRename)
     {
         case FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED: identity.caseOnlyRename = FileSystemPathCaseOnlyRename::Supported; break;
@@ -136,24 +143,42 @@ namespace
 [[nodiscard]] bool ValidateFacts(const FileSystemRouteFacts& facts) noexcept
 {
     const std::array strictBooleans{
-        facts.copyOperation,          facts.moveOperation,         facts.nativeMoveOperation,
-        facts.deleteOperation,        facts.renameOperation,       facts.createDirectoryOperation,
-        facts.propertiesOperation,    facts.readOperation,         facts.writeOperation,
-        facts.recycleOperation,       facts.boundDelete,           facts.conditionalDelete,
-        facts.exclusiveStage,         facts.conditionalPublish,    facts.committedSize,
-        facts.preserveFileLink,       facts.preserveDirectoryLink, facts.retargetInTree,
-        facts.exactLinkRemoval,       facts.cancellationAbort,     facts.cancellationDeadline,
-        facts.pathTextStableIdentity, facts.casePreserving,
+        facts.copyOperation,
+        facts.moveOperation,
+        facts.nativeMoveOperation,
+        facts.deleteOperation,
+        facts.renameOperation,
+        facts.createDirectoryOperation,
+        facts.propertiesOperation,
+        facts.readOperation,
+        facts.writeOperation,
+        facts.recycleOperation,
+        facts.boundDelete,
+        facts.conditionalDelete,
+        facts.exclusiveStage,
+        facts.conditionalPublish,
+        facts.committedSize,
+        facts.preserveFileLink,
+        facts.preserveDirectoryLink,
+        facts.retargetInTree,
+        facts.exactLinkRemoval,
+        facts.cancellationAbort,
+        facts.cancellationDeadline,
+        facts.pathTextStableIdentity,
+        facts.casePreserving,
     };
-    if (! std::ranges::all_of(strictBooleans, IsStrictBool) || facts.sizeBytes < sizeof(FileSystemRouteFacts) || ! IsValidAvailability(facts.availability) ||
-        ! IsValidCancellationRoute(facts.cancellationRoute) || ! IsValidNamespaceKind(facts.namespaceKind) || ! IsValidComparison(facts.componentComparison) ||
-        ! IsValidNormalization(facts.normalization) || ! IsValidCaseOnlyRename(facts.caseOnlyRename) || ! IsValidProofFlags(facts.proofFlags) ||
-        facts.copyMoveMaxConcurrency == 0u || facts.deleteMaxConcurrency == 0u || facts.deleteRecycleBinMaxConcurrency == 0u || facts.maxComponentUtf16 == 0u)
+    if (! std::ranges::all_of(strictBooleans, IsStrictBool) || facts.sizeBytes < sizeof(FileSystemRouteFacts) ||
+        ! IsValidAvailability(facts.availability) || ! IsValidCancellationRoute(facts.cancellationRoute) ||
+        ! IsValidNamespaceKind(facts.namespaceKind) || ! IsValidComparison(facts.componentComparison) ||
+        ! IsValidNormalization(facts.normalization) || ! IsValidCaseOnlyRename(facts.caseOnlyRename) ||
+        ! IsValidProofFlags(facts.proofFlags) || facts.copyMoveMaxConcurrency == 0u || facts.deleteMaxConcurrency == 0u ||
+        facts.deleteRecycleBinMaxConcurrency == 0u || facts.maxComponentUtf16 == 0u)
     {
         return false;
     }
 
-    if ((facts.cancellationRoute == FILESYSTEM_CANCELLATION_PROVIDER_WATCHDOG) != (facts.providerWatchdogTimeoutMs != 0u))
+    if ((facts.cancellationRoute == FILESYSTEM_CANCELLATION_PROVIDER_WATCHDOG) !=
+        (facts.providerWatchdogTimeoutMs != 0u))
     {
         return false;
     }
@@ -173,17 +198,20 @@ namespace
     return QueryResult{.state = state, .status = status};
 }
 
-[[nodiscard]] HRESULT QueryFactsOnce(
-    IFileSystemRouteCapabilities* route, std::wstring_view path, FileSystemOperation operation, FileSystemArena& arena, FileSystemRouteFacts& facts) noexcept
+[[nodiscard]] HRESULT QueryFactsOnce(IFileSystemRouteCapabilities* route,
+                                     std::wstring_view path,
+                                     FileSystemOperation operation,
+                                     FileSystemArena& arena,
+                                     FileSystemRouteFacts& facts) noexcept
 {
     const std::wstring pathCopy(path);
     arena.usedBytes = 0u;
-    facts           = {};
+    facts = {};
     facts.sizeBytes = sizeof(facts);
     return route->GetRouteFacts(pathCopy.c_str(), operation, &arena, &facts);
 }
 
-template <typename Invoke>
+template<typename Invoke>
 [[nodiscard]] StringResult QueryString(IFileSystemRouteCapabilities* route, Invoke&& invoke, const bool failFallbackAllocation = false) noexcept
 {
     if (route == nullptr)
@@ -193,10 +221,10 @@ template <typename Invoke>
 
     alignas(wchar_t) std::array<unsigned char, kNormalArenaBytes> stack{};
     FileSystemArena arena{stack.data(), static_cast<unsigned long>(stack.size()), 0u};
-    const wchar_t* value   = nullptr;
+    const wchar_t* value = nullptr;
     unsigned long required = 0u;
-    HRESULT hr             = invoke(route, arena, &value, &required);
-    bool fallback          = false;
+    HRESULT hr = invoke(route, arena, &value, &required);
+    bool fallback = false;
     std::unique_ptr<unsigned char[]> heap;
     if (hr == HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER))
     {
@@ -213,11 +241,11 @@ template <typename Invoke>
         {
             return StringResult{.state = QueryState::ContractViolation, .status = E_OUTOFMEMORY};
         }
-        arena                       = FileSystemArena{heap.get(), required, 0u};
-        value                       = nullptr;
+        arena = FileSystemArena{heap.get(), required, 0u};
+        value = nullptr;
         unsigned long retryRequired = 0u;
-        hr                          = invoke(route, arena, &value, &retryRequired);
-        fallback                    = true;
+        hr = invoke(route, arena, &value, &retryRequired);
+        fallback = true;
         if (retryRequired > required)
         {
             return StringResult{.state = QueryState::ContractViolation, .status = HRESULT_FROM_WIN32(ERROR_INVALID_DATA)};
@@ -226,13 +254,15 @@ template <typename Invoke>
     }
     if (FAILED(hr))
     {
-        const QueryState state = hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) ? QueryState::Unsupported : QueryState::ContractViolation;
+        const QueryState state = hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) ? QueryState::Unsupported
+                                                                               : QueryState::ContractViolation;
         return StringResult{.state = state, .status = hr, .usedArenaFallback = fallback};
     }
     std::wstring copied;
     if (required == 0u || required != arena.usedBytes || required > arena.capacityBytes || ! TryCopyArenaString(arena, value, copied))
     {
-        return StringResult{.state = QueryState::ContractViolation, .status = HRESULT_FROM_WIN32(ERROR_INVALID_DATA), .usedArenaFallback = fallback};
+        return StringResult{
+            .state = QueryState::ContractViolation, .status = HRESULT_FROM_WIN32(ERROR_INVALID_DATA), .usedArenaFallback = fallback};
     }
     return StringResult{.state = QueryState::Available, .status = S_OK, .value = std::move(copied), .usedArenaFallback = fallback};
 }
@@ -250,7 +280,7 @@ template <typename Invoke>
     alignas(wchar_t) std::array<unsigned char, kNormalArenaBytes> stack{};
     FileSystemArena arena{stack.data(), static_cast<unsigned long>(stack.size()), 0u};
     FileSystemRouteFacts facts{};
-    HRESULT hr    = QueryFactsOnce(route, path, operation, arena, facts);
+    HRESULT hr = QueryFactsOnce(route, path, operation, arena, facts);
     bool fallback = false;
     std::unique_ptr<unsigned char[]> heap;
     if (hr == HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER))
@@ -269,9 +299,9 @@ template <typename Invoke>
             return MakeQueryFailure(QueryState::ContractViolation, E_OUTOFMEMORY);
         }
         const unsigned long capacity = facts.requiredArenaBytes;
-        arena                        = FileSystemArena{heap.get(), capacity, 0u};
-        hr                           = QueryFactsOnce(route, path, operation, arena, facts);
-        fallback                     = true;
+        arena = FileSystemArena{heap.get(), capacity, 0u};
+        hr = QueryFactsOnce(route, path, operation, arena, facts);
+        fallback = true;
         if (facts.requiredArenaBytes > capacity)
         {
             return MakeQueryFailure(QueryState::ContractViolation, HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
@@ -279,26 +309,30 @@ template <typename Invoke>
     }
     if (FAILED(hr))
     {
-        const QueryState state    = hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) ? QueryState::Unsupported : QueryState::ContractViolation;
-        QueryResult failure       = MakeQueryFailure(state, hr);
+        const QueryState state = hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) ? QueryState::Unsupported
+                                                                               : QueryState::ContractViolation;
+        QueryResult failure = MakeQueryFailure(state, hr);
         failure.usedArenaFallback = fallback;
         return failure;
     }
-    if (! ValidateFacts(facts) || facts.requiredArenaBytes == 0u || facts.requiredArenaBytes != arena.usedBytes || arena.usedBytes > arena.capacityBytes)
+    if (! ValidateFacts(facts) || facts.requiredArenaBytes == 0u || facts.requiredArenaBytes != arena.usedBytes ||
+        arena.usedBytes > arena.capacityBytes)
     {
-        QueryResult failure       = MakeQueryFailure(QueryState::ContractViolation, HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
+        QueryResult failure = MakeQueryFailure(QueryState::ContractViolation, HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
         failure.usedArenaFallback = fallback;
         return failure;
     }
 
     Snapshot snapshot{};
     std::wstring acceptedSeparators;
-    if (! TryCopyArenaString(arena, facts.acceptedSeparators, acceptedSeparators) || ! TryCopyArenaString(arena, facts.providerId, snapshot.providerId) ||
-        ! TryCopyArenaString(arena, facts.pathProfileId, snapshot.pathProfileId) || ! TryCopyArenaString(arena, facts.rootId, snapshot.rootId) ||
-        acceptedSeparators.empty() || snapshot.providerId.empty() || snapshot.pathProfileId.empty() || snapshot.rootId.empty() ||
+    if (! TryCopyArenaString(arena, facts.acceptedSeparators, acceptedSeparators) ||
+        ! TryCopyArenaString(arena, facts.providerId, snapshot.providerId) ||
+        ! TryCopyArenaString(arena, facts.pathProfileId, snapshot.pathProfileId) ||
+        ! TryCopyArenaString(arena, facts.rootId, snapshot.rootId) || acceptedSeparators.empty() ||
+        snapshot.providerId.empty() || snapshot.pathProfileId.empty() || snapshot.rootId.empty() ||
         ! EqualsNoCase(snapshot.providerId, expectedProviderId))
     {
-        QueryResult failure       = MakeQueryFailure(QueryState::ContractViolation, HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
+        QueryResult failure = MakeQueryFailure(QueryState::ContractViolation, HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
         failure.usedArenaFallback = fallback;
         return failure;
     }
@@ -306,50 +340,49 @@ template <typename Invoke>
     FileSystemPathIdentity identity{};
     if (! TryMapPathIdentity(facts, std::move(acceptedSeparators), identity))
     {
-        QueryResult failure       = MakeQueryFailure(QueryState::ContractViolation, HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
+        QueryResult failure = MakeQueryFailure(QueryState::ContractViolation, HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
         failure.usedArenaFallback = fallback;
         return failure;
     }
 
-    snapshot.availability                   = facts.availability;
-    snapshot.cancellationRoute              = facts.cancellationRoute;
-    snapshot.namespaceKind                  = facts.namespaceKind;
-    snapshot.normalization                  = facts.normalization;
-    snapshot.proofFlags                     = facts.proofFlags;
-    snapshot.providerWatchdogTimeoutMs      = facts.providerWatchdogTimeoutMs;
-    snapshot.copyMoveMaxConcurrency         = facts.copyMoveMaxConcurrency;
-    snapshot.deleteMaxConcurrency           = facts.deleteMaxConcurrency;
+    snapshot.availability = facts.availability;
+    snapshot.cancellationRoute = facts.cancellationRoute;
+    snapshot.namespaceKind = facts.namespaceKind;
+    snapshot.normalization = facts.normalization;
+    snapshot.proofFlags = facts.proofFlags;
+    snapshot.providerWatchdogTimeoutMs = facts.providerWatchdogTimeoutMs;
+    snapshot.copyMoveMaxConcurrency = facts.copyMoveMaxConcurrency;
+    snapshot.deleteMaxConcurrency = facts.deleteMaxConcurrency;
     snapshot.deleteRecycleBinMaxConcurrency = facts.deleteRecycleBinMaxConcurrency;
-    snapshot.maxComponentUtf16              = facts.maxComponentUtf16;
-    snapshot.copyOperation                  = facts.copyOperation == TRUE;
-    snapshot.moveOperation                  = facts.moveOperation == TRUE;
-    snapshot.nativeMoveOperation            = facts.nativeMoveOperation == TRUE;
-    snapshot.deleteOperation                = facts.deleteOperation == TRUE;
-    snapshot.renameOperation                = facts.renameOperation == TRUE;
-    snapshot.createDirectoryOperation       = facts.createDirectoryOperation == TRUE;
-    snapshot.properties                     = facts.propertiesOperation == TRUE;
-    snapshot.read                           = facts.readOperation == TRUE;
-    snapshot.write                          = facts.writeOperation == TRUE;
-    snapshot.recycleOperation               = facts.recycleOperation == TRUE;
-    snapshot.boundDelete                    = facts.boundDelete == TRUE;
-    snapshot.conditionalDelete              = facts.conditionalDelete == TRUE;
-    snapshot.exclusiveStage                 = facts.exclusiveStage == TRUE;
-    snapshot.conditionalPublish             = facts.conditionalPublish == TRUE;
-    snapshot.committedSize                  = facts.committedSize == TRUE;
-    snapshot.preserveFileLink               = facts.preserveFileLink == TRUE;
-    snapshot.preserveDirectoryLink          = facts.preserveDirectoryLink == TRUE;
-    snapshot.retargetInTree                 = facts.retargetInTree == TRUE;
-    snapshot.exactLinkRemoval               = facts.exactLinkRemoval == TRUE;
-    snapshot.cancellationAbort              = facts.cancellationAbort == TRUE;
-    snapshot.cancellationDeadline           = facts.cancellationDeadline == TRUE;
-    snapshot.pathIdentity                   = std::move(identity);
+    snapshot.maxComponentUtf16 = facts.maxComponentUtf16;
+    snapshot.copyOperation = facts.copyOperation == TRUE;
+    snapshot.moveOperation = facts.moveOperation == TRUE;
+    snapshot.nativeMoveOperation = facts.nativeMoveOperation == TRUE;
+    snapshot.deleteOperation = facts.deleteOperation == TRUE;
+    snapshot.renameOperation = facts.renameOperation == TRUE;
+    snapshot.createDirectoryOperation = facts.createDirectoryOperation == TRUE;
+    snapshot.properties = facts.propertiesOperation == TRUE;
+    snapshot.read = facts.readOperation == TRUE;
+    snapshot.write = facts.writeOperation == TRUE;
+    snapshot.recycleOperation = facts.recycleOperation == TRUE;
+    snapshot.boundDelete = facts.boundDelete == TRUE;
+    snapshot.conditionalDelete = facts.conditionalDelete == TRUE;
+    snapshot.exclusiveStage = facts.exclusiveStage == TRUE;
+    snapshot.conditionalPublish = facts.conditionalPublish == TRUE;
+    snapshot.committedSize = facts.committedSize == TRUE;
+    snapshot.preserveFileLink = facts.preserveFileLink == TRUE;
+    snapshot.preserveDirectoryLink = facts.preserveDirectoryLink == TRUE;
+    snapshot.retargetInTree = facts.retargetInTree == TRUE;
+    snapshot.exactLinkRemoval = facts.exactLinkRemoval == TRUE;
+    snapshot.cancellationAbort = facts.cancellationAbort == TRUE;
+    snapshot.cancellationDeadline = facts.cancellationDeadline == TRUE;
+    snapshot.pathIdentity = std::move(identity);
 
-    const QueryState state =
-        facts.availability == FILESYSTEM_ROUTE_AVAILABLE && snapshot.pathIdentity->pathTextStableIdentity ? QueryState::Available : QueryState::Unsupported;
-    return QueryResult{.state             = state,
-                       .status            = state == QueryState::Available ? S_OK : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
-                       .snapshot          = std::move(snapshot),
-                       .usedArenaFallback = fallback};
+    const QueryState state = facts.availability == FILESYSTEM_ROUTE_AVAILABLE && snapshot.pathIdentity->pathTextStableIdentity
+        ? QueryState::Available
+        : QueryState::Unsupported;
+    return QueryResult{.state = state, .status = state == QueryState::Available ? S_OK : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
+                       .snapshot = std::move(snapshot), .usedArenaFallback = fallback};
 }
 
 [[nodiscard]] ChildNameContractResult QueryChildNameContractInternal(IFileSystemRouteCapabilities* route,
@@ -366,8 +399,8 @@ template <typename Invoke>
 
     const QueryResult routeResult = Query(route, parentPath, operation, expectedProviderId);
     ChildNameContractResult result{
-        .state              = routeResult.state,
-        .status             = routeResult.status,
+        .state = routeResult.state,
+        .status = routeResult.status,
         .arenaFallbackCount = routeResult.usedArenaFallback ? 1u : 0u,
     };
     if (routeResult.state != QueryState::Available || ! routeResult.snapshot.pathIdentity.has_value())
@@ -376,10 +409,10 @@ template <typename Invoke>
     }
 
     const ChildNameResult validation = ValidateChildName(route, parentPath, childName, operation);
-    result.state                     = validation.state;
-    result.status                    = validation.status;
-    result.nameStatus                = validation.nameStatus;
-    result.failureStatus             = validation.failureStatus;
+    result.state = validation.state;
+    result.status = validation.status;
+    result.nameStatus = validation.nameStatus;
+    result.failureStatus = validation.failureStatus;
     if (validation.state != QueryState::Available || validation.nameStatus != FILESYSTEM_CHILD_NAME_VALID)
     {
         return result;
@@ -387,26 +420,34 @@ template <typename Invoke>
 
     const std::wstring parentCopy(parentPath);
     const std::wstring childCopy(childName);
-    const StringResult joined =
-        QueryString(route, [&](IFileSystemRouteCapabilities* capabilities, FileSystemArena& arena, const wchar_t** value, unsigned long* required) noexcept {
-        return capabilities->JoinPath(parentCopy.c_str(), childCopy.c_str(), operation, &arena, value, required);
-    }, failFallbackAllocation);
+    const StringResult joined = QueryString(
+        route,
+        [&](IFileSystemRouteCapabilities* capabilities,
+            FileSystemArena& arena,
+            const wchar_t** value,
+            unsigned long* required) noexcept
+        { return capabilities->JoinPath(parentCopy.c_str(), childCopy.c_str(), operation, &arena, value, required); },
+        failFallbackAllocation);
     result.arenaFallbackCount += joined.usedArenaFallback ? 1u : 0u;
     if (joined.state != QueryState::Available)
     {
-        result.state  = joined.state;
+        result.state = joined.state;
         result.status = joined.status;
         return result;
     }
 
-    const StringResult collision =
-        QueryString(route, [&](IFileSystemRouteCapabilities* capabilities, FileSystemArena& arena, const wchar_t** value, unsigned long* required) noexcept {
-        return capabilities->GetChildNameCollisionKey(parentCopy.c_str(), childCopy.c_str(), operation, &arena, value, required);
-    }, failFallbackAllocation);
+    const StringResult collision = QueryString(
+        route,
+        [&](IFileSystemRouteCapabilities* capabilities,
+            FileSystemArena& arena,
+            const wchar_t** value,
+            unsigned long* required) noexcept
+        { return capabilities->GetChildNameCollisionKey(parentCopy.c_str(), childCopy.c_str(), operation, &arena, value, required); },
+        failFallbackAllocation);
     result.arenaFallbackCount += collision.usedArenaFallback ? 1u : 0u;
     if (collision.state != QueryState::Available)
     {
-        result.state  = collision.state;
+        result.state = collision.state;
         result.status = collision.status;
         return result;
     }
@@ -414,24 +455,28 @@ template <typename Invoke>
     const FileSystemPathIdentity& identity = routeResult.snapshot.pathIdentity.value();
     std::wstring joinedParent;
     std::wstring joinedLeaf;
-    if (joined.value.empty() || collision.value.empty() || ! TryGetFileSystemParentPath(identity, joined.value, joinedParent) ||
-        ! TryGetFileSystemLeafName(identity, joined.value, joinedLeaf) || ! EquivalentPath(identity, joinedParent, parentPath) ||
-        ! EquivalentComponent(identity, joinedLeaf, childName))
+    if (joined.value.empty() || collision.value.empty() ||
+        ! TryGetFileSystemParentPath(identity, joined.value, joinedParent) ||
+        ! TryGetFileSystemLeafName(identity, joined.value, joinedLeaf) ||
+        ! EquivalentPath(identity, joinedParent, parentPath) || ! EquivalentComponent(identity, joinedLeaf, childName))
     {
-        result.state  = QueryState::ContractViolation;
+        result.state = QueryState::ContractViolation;
         result.status = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         return result;
     }
 
-    result.state        = QueryState::Available;
-    result.status       = S_OK;
-    result.joinedPath   = joined.value;
+    result.state = QueryState::Available;
+    result.status = S_OK;
+    result.joinedPath = joined.value;
     result.collisionKey = collision.value;
     return result;
 }
-} // namespace
+}
 
-QueryResult Query(IFileSystem* fileSystem, std::wstring_view path, FileSystemOperation operation, std::wstring_view expectedProviderId) noexcept
+QueryResult Query(IFileSystem* fileSystem,
+                  std::wstring_view path,
+                  FileSystemOperation operation,
+                  std::wstring_view expectedProviderId) noexcept
 {
     if (fileSystem == nullptr || path.empty() || expectedProviderId.empty() || ! IsValidOperation(operation))
     {
@@ -447,7 +492,10 @@ QueryResult Query(IFileSystem* fileSystem, std::wstring_view path, FileSystemOpe
     return Query(route.get(), path, operation, expectedProviderId);
 }
 
-QueryResult Query(IFileSystemRouteCapabilities* route, std::wstring_view path, FileSystemOperation operation, std::wstring_view expectedProviderId) noexcept
+QueryResult Query(IFileSystemRouteCapabilities* route,
+                  std::wstring_view path,
+                  FileSystemOperation operation,
+                  std::wstring_view expectedProviderId) noexcept
 {
     return QueryRouteCapabilities(route, path, operation, expectedProviderId, false);
 }
@@ -462,10 +510,14 @@ QueryResult QueryWithAllocationFailureForSelfTest(IFileSystemRouteCapabilities* 
 }
 #endif
 
-BooleanResult QueryTransferPeerAllowed(
-    IFileSystem* fileSystem, std::wstring_view path, FileSystemOperation operation, FileSystemTransferPeerRole role, std::wstring_view peerPluginId) noexcept
+BooleanResult QueryTransferPeerAllowed(IFileSystem* fileSystem,
+                                       std::wstring_view path,
+                                       FileSystemOperation operation,
+                                       FileSystemTransferPeerRole role,
+                                       std::wstring_view peerPluginId) noexcept
 {
-    if (fileSystem == nullptr || path.empty() || peerPluginId.empty() || (operation != FILESYSTEM_COPY && operation != FILESYSTEM_MOVE) ||
+    if (fileSystem == nullptr || path.empty() || peerPluginId.empty() ||
+        (operation != FILESYSTEM_COPY && operation != FILESYSTEM_MOVE) ||
         (role != FILESYSTEM_TRANSFER_PEER_EXPORT && role != FILESYSTEM_TRANSFER_PEER_IMPORT))
     {
         return BooleanResult{.state = QueryState::ContractViolation, .status = E_INVALIDARG};
@@ -485,18 +537,21 @@ BooleanResult QueryTransferPeerAllowed(IFileSystemRouteCapabilities* route,
                                        FileSystemTransferPeerRole role,
                                        std::wstring_view peerPluginId) noexcept
 {
-    if (route == nullptr || path.empty() || peerPluginId.empty() || (operation != FILESYSTEM_COPY && operation != FILESYSTEM_MOVE) ||
+    if (route == nullptr || path.empty() || peerPluginId.empty() ||
+        (operation != FILESYSTEM_COPY && operation != FILESYSTEM_MOVE) ||
         (role != FILESYSTEM_TRANSFER_PEER_EXPORT && role != FILESYSTEM_TRANSFER_PEER_IMPORT))
     {
         return BooleanResult{.state = QueryState::ContractViolation, .status = E_INVALIDARG};
     }
     const std::wstring pathCopy(path);
     const std::wstring peerCopy(peerPluginId);
-    BOOL allowed     = FALSE;
+    BOOL allowed = FALSE;
     const HRESULT hr = route->IsTransferPeerAllowed(pathCopy.c_str(), operation, role, peerCopy.c_str(), &allowed);
     if (FAILED(hr))
     {
-        return BooleanResult{.state = hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) ? QueryState::Unsupported : QueryState::ContractViolation, .status = hr};
+        return BooleanResult{.state = hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) ? QueryState::Unsupported
+                                                                                    : QueryState::ContractViolation,
+                             .status = hr};
     }
     if (! IsStrictBool(allowed))
     {
@@ -505,7 +560,10 @@ BooleanResult QueryTransferPeerAllowed(IFileSystemRouteCapabilities* route,
     return BooleanResult{.state = QueryState::Available, .status = S_OK, .value = allowed == TRUE};
 }
 
-ChildNameResult ValidateChildName(IFileSystem* fileSystem, std::wstring_view parentPath, std::wstring_view childName, FileSystemOperation operation) noexcept
+ChildNameResult ValidateChildName(IFileSystem* fileSystem,
+                                  std::wstring_view parentPath,
+                                  std::wstring_view childName,
+                                  FileSystemOperation operation) noexcept
 {
     if (fileSystem == nullptr || parentPath.empty() || childName.empty() || ! IsValidOperation(operation))
     {
@@ -535,18 +593,23 @@ ChildNameResult ValidateChildName(IFileSystemRouteCapabilities* route,
     const HRESULT hr = route->ValidateChildName(parentCopy.c_str(), childCopy.c_str(), operation, &validation);
     if (FAILED(hr))
     {
-        return ChildNameResult{.state = hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) ? QueryState::Unsupported : QueryState::ContractViolation, .status = hr};
+        return ChildNameResult{.state = hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) ? QueryState::Unsupported
+                                                                                      : QueryState::ContractViolation,
+                               .status = hr};
     }
     const bool statusValid = validation.sizeBytes >= sizeof(validation) && validation.status <= FILESYSTEM_CHILD_NAME_INVALID;
     const bool resultValid = (validation.status == FILESYSTEM_CHILD_NAME_VALID && validation.failureStatus == S_OK) ||
-                             (validation.status == FILESYSTEM_CHILD_NAME_INVALID && FAILED(validation.failureStatus)) ||
-                             (validation.status == FILESYSTEM_CHILD_NAME_UNSUPPORTED && validation.failureStatus == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+        (validation.status == FILESYSTEM_CHILD_NAME_INVALID && FAILED(validation.failureStatus)) ||
+        (validation.status == FILESYSTEM_CHILD_NAME_UNSUPPORTED && validation.failureStatus == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
     if (! statusValid || ! resultValid)
     {
         return ChildNameResult{.state = QueryState::ContractViolation, .status = HRESULT_FROM_WIN32(ERROR_INVALID_DATA)};
     }
     const QueryState state = validation.status == FILESYSTEM_CHILD_NAME_UNSUPPORTED ? QueryState::Unsupported : QueryState::Available;
-    return ChildNameResult{.state = state, .status = S_OK, .nameStatus = validation.status, .failureStatus = validation.failureStatus};
+    return ChildNameResult{.state = state,
+                           .status = S_OK,
+                           .nameStatus = validation.status,
+                           .failureStatus = validation.failureStatus};
 }
 
 ChildNameContractResult QueryChildNameContract(IFileSystem* fileSystem,
@@ -578,11 +641,12 @@ ChildNameContractResult QueryChildNameContract(IFileSystemRouteCapabilities* rou
 }
 
 #ifdef ENABLE_TESTS
-ChildNameContractResult QueryChildNameContractWithAllocationFailureForSelfTest(IFileSystemRouteCapabilities* route,
-                                                                               std::wstring_view parentPath,
-                                                                               std::wstring_view childName,
-                                                                               FileSystemOperation operation,
-                                                                               std::wstring_view expectedProviderId) noexcept
+ChildNameContractResult QueryChildNameContractWithAllocationFailureForSelfTest(
+    IFileSystemRouteCapabilities* route,
+    std::wstring_view parentPath,
+    std::wstring_view childName,
+    FileSystemOperation operation,
+    std::wstring_view expectedProviderId) noexcept
 {
     return QueryChildNameContractInternal(route, parentPath, childName, operation, expectedProviderId, true);
 }
@@ -617,12 +681,17 @@ StringResult QueryChildNameCollisionKey(IFileSystemRouteCapabilities* route,
     {
         return StringResult{.state = QueryState::ContractViolation, .status = E_INVALIDARG};
     }
-    return QueryString(route, [&](IFileSystemRouteCapabilities* capabilities, FileSystemArena& arena, const wchar_t** value, unsigned long* required) noexcept {
-        return capabilities->GetChildNameCollisionKey(parentCopy.c_str(), childCopy.c_str(), operation, &arena, value, required);
-    });
+    return QueryString(route, [&](IFileSystemRouteCapabilities* capabilities,
+                                  FileSystemArena& arena,
+                                       const wchar_t** value,
+                                       unsigned long* required) noexcept
+    { return capabilities->GetChildNameCollisionKey(parentCopy.c_str(), childCopy.c_str(), operation, &arena, value, required); });
 }
 
-StringResult QueryJoinedPath(IFileSystem* fileSystem, std::wstring_view parentPath, std::wstring_view childName, FileSystemOperation operation) noexcept
+StringResult QueryJoinedPath(IFileSystem* fileSystem,
+                             std::wstring_view parentPath,
+                             std::wstring_view childName,
+                             FileSystemOperation operation) noexcept
 {
     if (fileSystem == nullptr)
     {
@@ -648,9 +717,11 @@ StringResult QueryJoinedPath(IFileSystemRouteCapabilities* route,
     {
         return StringResult{.state = QueryState::ContractViolation, .status = E_INVALIDARG};
     }
-    return QueryString(route, [&](IFileSystemRouteCapabilities* capabilities, FileSystemArena& arena, const wchar_t** value, unsigned long* required) noexcept {
-        return capabilities->JoinPath(parentCopy.c_str(), childCopy.c_str(), operation, &arena, value, required);
-    });
+    return QueryString(route, [&](IFileSystemRouteCapabilities* capabilities,
+                                  FileSystemArena& arena,
+                                       const wchar_t** value,
+                                       unsigned long* required) noexcept
+    { return capabilities->JoinPath(parentCopy.c_str(), childCopy.c_str(), operation, &arena, value, required); });
 }
 
-} // namespace FileSystemRouteContract
+}

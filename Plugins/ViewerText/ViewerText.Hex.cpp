@@ -182,7 +182,7 @@ struct HexPaintMetrics
 double ContrastRatio(COLORREF first, COLORREF second) noexcept
 {
     return Common::Colors::ContrastRatioFromRelativeLuminance(Common::Colors::RelativeLuminanceFromColorRef(first),
-                                                              Common::Colors::RelativeLuminanceFromColorRef(second));
+                                                               Common::Colors::RelativeLuminanceFromColorRef(second));
 }
 
 COLORREF ResolveReadableTextColor(COLORREF preferred, COLORREF background) noexcept
@@ -217,15 +217,19 @@ HexByteColorPalette BuildHexByteColorPalette(const ViewerTheme* theme, COLORREF 
     palette.colors[HexByteColorBucketIndex(HexByteColorBucket::Zero)] =
         darkMode ? BlendColorRefTruncate(background, foreground, 96u) : BlendColorRefTruncate(background, foreground, 132u);
 
-    const COLORREF ffAccent =
-        ColorRefFromHsvClampedNegativeHueToZero(355.0f, std::clamp(saturation + (rainbowMode ? 0.12f : 0.18f), 0.0f, 1.0f), darkMode ? 1.0f : 0.68f);
+    const COLORREF ffAccent = ColorRefFromHsvClampedNegativeHueToZero(355.0f, std::clamp(saturation + (rainbowMode ? 0.12f : 0.18f), 0.0f, 1.0f), darkMode ? 1.0f : 0.68f);
     palette.colors[HexByteColorBucketIndex(HexByteColorBucket::FF)] =
         BlendColorRefTruncate(palette.colors[HexByteColorBucketIndex(HexByteColorBucket::LeadingF)], ffAccent, darkMode ? 200u : 220u);
 
     return palette;
 }
 
-void AppendColorizedRun(std::vector<HexColorizedRun>& runs, size_t start, size_t length, size_t columnStart, size_t columnLength, COLORREF color)
+void AppendColorizedRun(std::vector<HexColorizedRun>& runs,
+                        size_t start,
+                        size_t length,
+                        size_t columnStart,
+                        size_t columnLength,
+                        COLORREF color)
 {
     if (length == 0u || columnLength == 0u)
     {
@@ -1072,11 +1076,13 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
 
                             if (hexSpan.length > 0)
                             {
-                                AppendColorizedRun(hexColorRuns, hexSpan.start, hexSpan.length, hexSpan.columnStart, hexSpan.columnLength, byteForeground);
+                                AppendColorizedRun(
+                                    hexColorRuns, hexSpan.start, hexSpan.length, hexSpan.columnStart, hexSpan.columnLength, byteForeground);
                             }
                             if (textSpan.length > 0 && ! asciiText.empty())
                             {
-                                AppendColorizedRun(textColorRuns, textSpan.start, textSpan.length, textSpan.columnStart, textSpan.columnLength, byteForeground);
+                                AppendColorizedRun(
+                                    textColorRuns, textSpan.start, textSpan.length, textSpan.columnStart, textSpan.columnLength, byteForeground);
                             }
 
                             paintMetrics.colorizedBytes += 1u;
@@ -1546,7 +1552,8 @@ void ViewerText::UpdateHexViewScrollBars(HWND hwnd) noexcept
     RECT client{};
     GetClientRect(hwnd, &client);
     const UINT dpi             = GetDpiForWindow(hwnd);
-    const float heightDip      = std::max(1.0f, Common::WindowSizing::PixelToDip(static_cast<float>(client.bottom - client.top), static_cast<float>(dpi)));
+    const float heightDip = std::max(
+        1.0f, Common::WindowSizing::PixelToDip(static_cast<float>(client.bottom - client.top), static_cast<float>(dpi)));
     const float lineH          = (_hexLineHeightDip > 0.0f) ? _hexLineHeightDip : 14.0f;
     const float charW          = (_hexCharWidthDip > 0.0f) ? _hexCharWidthDip : 8.0f;
     const HexViewLayout layout = ComputeHexViewLayout(lineH, charW, _fileSize, HexGroupSize(), dpi);
@@ -2270,8 +2277,9 @@ HRESULT ViewerText::RefillHexCache(uint64_t offset) noexcept
         return seekHr;
     }
 
-    size_t read          = 0u;
-    const HRESULT readHr = ViewerTextSafety::ReadUpTo(_fileReader.get(), std::span<uint8_t>(_hexCache.data(), static_cast<size_t>(want)), read);
+    size_t read = 0u;
+    const HRESULT readHr = ViewerTextSafety::ReadUpTo(
+        _fileReader.get(), std::span<uint8_t>(_hexCache.data(), static_cast<size_t>(want)), read);
     if (FAILED(readHr))
     {
         return readHr;
@@ -2363,8 +2371,8 @@ void ViewerText::FormatHexLine(uint64_t offset,
                 const uint8_t b = bytes[byteIndex];
                 outHex.push_back(kHexDigits[b >> 4]);
                 outHex.push_back(kHexDigits[b & 0x0Fu]);
-                hexSpans[byteIndex].start        = groupCharStart + pos * 2u;
-                hexSpans[byteIndex].length       = 2u;
+                hexSpans[byteIndex].start  = groupCharStart + pos * 2u;
+                hexSpans[byteIndex].length = 2u;
                 hexSpans[byteIndex].columnStart  = hexSpans[byteIndex].start;
                 hexSpans[byteIndex].columnLength = hexSpans[byteIndex].length;
             }
@@ -2440,9 +2448,9 @@ void ViewerText::FormatHexLine(uint64_t offset,
             }
             else
             {
-                const uint32_t value      = scalar.codePoint - 0x10000u;
-                textChars[i]              = static_cast<wchar_t>(0xD800u + (value >> 10u));
-                textChars[i + 1u]         = static_cast<wchar_t>(0xDC00u + (value & 0x3FFu));
+                const uint32_t value = scalar.codePoint - 0x10000u;
+                textChars[i]         = static_cast<wchar_t>(0xD800u + (value >> 10u));
+                textChars[i + 1u]    = static_cast<wchar_t>(0xDC00u + (value & 0x3FFu));
                 textSourceLengths[i]      = 2u;
                 textSourceLengths[i + 1u] = 0u;
                 textColumnLengths[i]      = 2u;
@@ -2818,16 +2826,17 @@ void ViewerText::CopyHexCsvToClipboard(HWND hwnd) noexcept
         GetClientRect(hwnd, &client);
 
         const UINT dpi        = GetDpiForWindow(hwnd);
-        const float heightDip = std::max(1.0f, Common::WindowSizing::PixelToDip(static_cast<float>(client.bottom - client.top), static_cast<float>(dpi)));
+        const float heightDip = std::max(
+            1.0f, Common::WindowSizing::PixelToDip(static_cast<float>(client.bottom - client.top), static_cast<float>(dpi)));
         const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
         const float lineH     = (_hexLineHeightDip > 0.0f) ? _hexLineHeightDip : 14.0f;
         const float headerH   = lineH;
         const float usableDip = std::max(0.0f, heightDip - headerH - 2.0f * marginDip);
         const uint64_t rows   = std::max<uint64_t>(1u, static_cast<uint64_t>(std::ceil(usableDip / std::max(1.0f, lineH))));
 
-        startLine                    = std::min<uint64_t>(_hexTopLine, totalLines - 1u);
+        startLine                   = std::min<uint64_t>(_hexTopLine, totalLines - 1u);
         const uint64_t availableRows = totalLines - startLine;
-        endLine                      = startLine + std::min(rows, availableRows) - 1u;
+        endLine                     = startLine + std::min(rows, availableRows) - 1u;
     }
 
     const ViewerTextSafety::HexClipboardPlan copyPlan = ViewerTextSafety::ComputeHexClipboardPlan(_fileSize, startLine, endLine);

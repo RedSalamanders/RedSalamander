@@ -2,12 +2,8 @@
 
 #include <string_view>
 
-#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
 #define NOMINMAX
-#endif
 #include <Windows.h>
 
 #include "DxUi/DxUi.h"
@@ -17,14 +13,14 @@ namespace Common
 {
 struct ModalWindowCreateOptions
 {
-    HINSTANCE instance    = nullptr;
-    PCWSTR className      = nullptr;
-    PCWSTR caption        = nullptr;
-    int clientWidthDip    = 0;
-    int clientHeightDip   = 0;
-    void* createParameter = nullptr;
-    DWORD style           = WS_CAPTION | WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
-    DWORD extendedStyle   = WS_EX_DLGMODALFRAME;
+    HINSTANCE instance      = nullptr;
+    PCWSTR className        = nullptr;
+    PCWSTR caption          = nullptr;
+    int clientWidthDip      = 0;
+    int clientHeightDip     = 0;
+    void* createParameter   = nullptr;
+    DWORD style             = WS_CAPTION | WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+    DWORD extendedStyle     = WS_EX_DLGMODALFRAME;
 };
 
 class ModalWindowShell final
@@ -98,10 +94,10 @@ public:
 
         ModalLoopContext context{&done, &result};
         RedSalamander::DxUi::DxUiModalLoopOptions loopOptions;
-        loopOptions.diagnosticName                                = diagnosticName;
-        loopOptions.shouldContinue                                = ContinueModalLoop;
-        loopOptions.context                                       = &context;
-        loopOptions.onQuit                                        = OnModalLoopQuit;
+        loopOptions.diagnosticName = diagnosticName;
+        loopOptions.shouldContinue = ContinueModalLoop;
+        loopOptions.context        = &context;
+        loopOptions.onQuit         = OnModalLoopQuit;
         const RedSalamander::DxUi::DxUiModalLoopResult loopResult = RedSalamander::DxUi::RunDxUiModalLoop(hwnd, loopOptions);
         if (loopResult == RedSalamander::DxUi::DxUiModalLoopResult::GetMessageFailed)
         {

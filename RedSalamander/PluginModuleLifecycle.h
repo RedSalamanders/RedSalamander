@@ -21,7 +21,10 @@ enum class ModuleUnloadMode : uint8_t
 
 inline constexpr std::wstring_view kDeferredUnloadError = L"Plugin unload is deferred until the plugin reports it can unload.";
 
-[[nodiscard]] bool UnloadModule(wil::unique_hmodule& module, ModuleUnloadMode mode, const std::filesystem::path& path, std::wstring_view pluginKind) noexcept;
+[[nodiscard]] bool UnloadModule(wil::unique_hmodule& module,
+                                ModuleUnloadMode mode,
+                                const std::filesystem::path& path,
+                                std::wstring_view pluginKind) noexcept;
 
 [[nodiscard]] bool PathsEqualNoCase(const std::filesystem::path& left, const std::filesystem::path& right) noexcept;
 
@@ -67,7 +70,10 @@ template <typename Entry> [[nodiscard]] bool IsPathDeferred(const std::vector<En
 }
 
 template <typename Entry, typename UnloadEntry>
-void UnloadAll(std::vector<Entry>& entries, std::vector<Entry>& deferredEntries, ModuleUnloadMode mode, UnloadEntry&& unloadEntry) noexcept
+void UnloadAll(std::vector<Entry>& entries,
+               std::vector<Entry>& deferredEntries,
+               ModuleUnloadMode mode,
+               UnloadEntry&& unloadEntry) noexcept
 {
     for (auto it = entries.rbegin(); it != entries.rend(); ++it)
     {

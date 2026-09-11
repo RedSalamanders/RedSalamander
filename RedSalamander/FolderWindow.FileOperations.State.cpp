@@ -2,11 +2,12 @@
 #include "FolderWindow.FileOperationsInternal.h"
 
 #include "Blake3Digest.h"
-#include "ConnectionProfileUtils.h"
 #include "ContentDigest.h"
+#include "ConnectionProfileUtils.h"
 #include "FileOperationTraversalPolicy.h"
 #include "FileSystemPathIdentity.h"
 #include "FileSystemRouteContract.h"
+#include "SynchronousIoCancelWatch.h"
 #include "FolderWindow.FileOperations.IssuesPane.h"
 #include "HostServices.h"
 #include "NavigationLocation.h"
@@ -16,7 +17,6 @@
 #include "SettingsHotReload.h"
 #include "SettingsSave.h"
 #include "SettingsStore.h"
-#include "SynchronousIoCancelWatch.h"
 
 #include <algorithm>
 #include <array>
@@ -72,7 +72,8 @@ using FileSystemRouteContract::IsValidItemMutationResultPrefix;
 
 [[nodiscard]] bool OwnedStageDispositionIsIndeterminate(FileOperations::OwnedStageDisposition disposition) noexcept
 {
-    return disposition == FileOperations::OwnedStageDisposition::Unknown || disposition == FileOperations::OwnedStageDisposition::RetainedIncomplete;
+    return disposition == FileOperations::OwnedStageDisposition::Unknown ||
+           disposition == FileOperations::OwnedStageDisposition::RetainedIncomplete;
 }
 
 [[nodiscard]] HRESULT AdvanceValidatedFileInfoEntry(FileInfo* entry, const std::byte* bufferBase, const std::byte* bufferEnd, FileInfo*& nextOut) noexcept;
@@ -2575,10 +2576,11 @@ constexpr uint64_t kDefaultBandwidthLimitBytesPerSecond = 0;
 
 [[nodiscard]] bool UsesOrdinalIgnoreCaseComponents(IFileSystem& fileSystem, std::wstring_view providerPath, std::wstring_view pluginId) noexcept
 {
-    const FileSystemRouteContract::QueryResult route = FileSystemRouteContract::Query(&fileSystem, providerPath, FILESYSTEM_COPY, pluginId);
+    const FileSystemRouteContract::QueryResult route =
+        FileSystemRouteContract::Query(&fileSystem, providerPath, FILESYSTEM_COPY, pluginId);
     return route.state == FileSystemRouteContract::QueryState::Available && route.snapshot.pathIdentity.has_value() &&
-           route.snapshot.pathIdentity->pathTextStableIdentity &&
-           route.snapshot.pathIdentity->componentComparison == FileSystemPathComponentComparison::OrdinalIgnoreCase;
+        route.snapshot.pathIdentity->pathTextStableIdentity &&
+        route.snapshot.pathIdentity->componentComparison == FileSystemPathComponentComparison::OrdinalIgnoreCase;
 }
 
 // Orders one directory's enumerated child names the way the destination compares components:
@@ -2591,7 +2593,7 @@ struct BridgeChildNameLess final
     [[nodiscard]] bool operator()(std::wstring_view left, std::wstring_view right) const noexcept
     {
         return CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), ignoreCase ? TRUE : FALSE) ==
-               CSTR_LESS_THAN;
+            CSTR_LESS_THAN;
     }
 };
 using BridgeChildNameSet = std::set<std::wstring_view, BridgeChildNameLess>;
@@ -3089,7 +3091,8 @@ void SetPopupCompactDensityInSettings(Common::Settings::Settings& settings, bool
         return 1u;
     }
 
-    const FileSystemRouteContract::QueryResult route = FileSystemRouteContract::Query(fileSystem.get(), providerPath, operation, pluginId);
+    const FileSystemRouteContract::QueryResult route =
+        FileSystemRouteContract::Query(fileSystem.get(), providerPath, operation, pluginId);
     if (route.state != FileSystemRouteContract::QueryState::Available)
     {
         return 1u;
@@ -3102,7 +3105,9 @@ void SetPopupCompactDensityInSettings(Common::Settings::Settings& settings, bool
     }
     else if (isDelete)
     {
-        concurrency = (flags & FILESYSTEM_FLAG_USE_RECYCLE_BIN) != 0 ? route.snapshot.deleteRecycleBinMaxConcurrency : route.snapshot.deleteMaxConcurrency;
+        concurrency = (flags & FILESYSTEM_FLAG_USE_RECYCLE_BIN) != 0
+            ? route.snapshot.deleteRecycleBinMaxConcurrency
+            : route.snapshot.deleteMaxConcurrency;
     }
 
     return std::clamp(concurrency, 1u, uiMax);
@@ -4557,13 +4562,14 @@ struct ConflictActionPolicy
     return false;
 }
 
-[[nodiscard]] ConflictActionPolicy BuildConflictActionPolicy(ConflictBucket bucket,
-                                                             bool allowRetry,
-                                                             bool allowKeepBoth,
-                                                             bool applyToAllEligible,
-                                                             bool allowDestructiveReplacement,
-                                                             bool allowConcurrentRun    = false,
-                                                             bool allowLiveInvalidation = true) noexcept
+[[nodiscard]] ConflictActionPolicy BuildConflictActionPolicy(
+    ConflictBucket bucket,
+    bool allowRetry,
+    bool allowKeepBoth,
+    bool applyToAllEligible,
+    bool allowDestructiveReplacement,
+    bool allowConcurrentRun = false,
+    bool allowLiveInvalidation = true) noexcept
 {
     ConflictActionPolicy policy{};
 
@@ -4697,7 +4703,8 @@ struct ConflictActionPolicy
 [[nodiscard]] bool IsCacheableConflictDecision(ConflictAction action) noexcept
 {
     return action != ConflictAction::Retry && action != ConflictAction::Cancel && action != ConflictAction::None && action != ConflictAction::SkipAll &&
-           action != ConflictAction::RunConcurrently && action != ConflictAction::QueueUntilOtherTaskFinishes && action != ConflictAction::InvalidateLiveOutput;
+           action != ConflictAction::RunConcurrently && action != ConflictAction::QueueUntilOtherTaskFinishes &&
+           action != ConflictAction::InvalidateLiveOutput;
 }
 
 [[nodiscard]] bool IsCachedConflictDecisionEligible(const Task& task,
@@ -5043,13 +5050,14 @@ struct ConflictPromptBeginResult
         decisionScope.destinationRootId  = consentFacts->destinationRootId;
         decisionScope.applyToAllEligible = consentFacts->applyToAllEligible;
     }
-    const ConflictActionPolicy actionPolicy = BuildConflictActionPolicy(bucket,
-                                                                        allowRetry,
-                                                                        allowKeepBoth,
-                                                                        decisionScope.applyToAllEligible,
-                                                                        allowDestructiveReplacement,
-                                                                        consentFacts != nullptr && consentFacts->allowConcurrentRun,
-                                                                        consentFacts == nullptr || consentFacts->allowLiveInvalidation);
+    const ConflictActionPolicy actionPolicy =
+        BuildConflictActionPolicy(bucket,
+                                  allowRetry,
+                                  allowKeepBoth,
+                                  decisionScope.applyToAllEligible,
+                                  allowDestructiveReplacement,
+                                  consentFacts != nullptr && consentFacts->allowConcurrentRun,
+                                  consentFacts == nullptr || consentFacts->allowLiveInvalidation);
 
     lock.lock();
 
@@ -5201,9 +5209,9 @@ struct ConflictPromptBeginResult
 
 struct DeferredConsentRequest
 {
-    FileOperations::DeferredConsentRisk risk = FileOperations::DeferredConsentRisk::InsufficientSpace;
-    uint8_t overlapProblem                   = 0u; // R4-A02-1
-    uint64_t overlapTaskId                   = 0u;
+    FileOperations::DeferredConsentRisk risk         = FileOperations::DeferredConsentRisk::InsufficientSpace;
+    uint8_t overlapProblem                           = 0u; // R4-A02-1
+    uint64_t overlapTaskId                           = 0u;
     std::array<uint64_t, FileOperations::kMaxSameHostOverlapRelations> overlapTaskIds{};
     size_t overlapTaskIdCount                        = 0u;
     bool allowConcurrentRun                          = false;
@@ -5247,7 +5255,7 @@ struct DeferredConsentResult
         related->taskIdCount = request.overlapTaskIdCount;
         receipt.relatedTasks = std::move(related);
     }
-    receipt.decision = action;
+    receipt.decision            = action;
 
     std::scoped_lock lock(task._conflictArbiter.mutex);
     for (std::optional<FileOperations::DeferredConsentReceipt>& existing : task._conflictArbiter.consentReceipts)
@@ -5272,21 +5280,21 @@ struct DeferredConsentResult
 [[nodiscard]] DeferredConsentResult RequestDeferredConsent(Task& task, const DeferredConsentRequest& request) noexcept
 {
     DeferredConsentPromptFacts facts{};
-    facts.risk                  = request.risk;
-    facts.overlapProblem        = request.overlapProblem;
-    facts.overlapTaskId         = request.overlapTaskId;
-    facts.allowConcurrentRun    = request.allowConcurrentRun;
+    facts.risk                = request.risk;
+    facts.overlapProblem      = request.overlapProblem;
+    facts.overlapTaskId       = request.overlapTaskId;
+    facts.allowConcurrentRun  = request.allowConcurrentRun;
     facts.allowLiveInvalidation = request.allowLiveInvalidation;
-    facts.itemIndex             = request.itemIndex;
-    facts.destinationRootId     = request.destinationRootId;
-    facts.applyToAllEligible    = request.applyToAllEligible && request.risk != FileOperations::DeferredConsentRisk::RecycleEscalation;
-    facts.itemCountKnown        = request.itemCountKnown;
-    facts.itemCount             = request.itemCount;
-    facts.bytesKnown            = request.bytesKnown;
-    facts.bytes                 = request.bytes;
-    facts.sourceIdentity        = request.sourceIdentity;
-    facts.destinationIdentity   = request.destinationIdentity;
-    facts.consentDetail         = request.consentDetail;
+    facts.itemIndex           = request.itemIndex;
+    facts.destinationRootId   = request.destinationRootId;
+    facts.applyToAllEligible  = request.applyToAllEligible && request.risk != FileOperations::DeferredConsentRisk::RecycleEscalation;
+    facts.itemCountKnown      = request.itemCountKnown;
+    facts.itemCount           = request.itemCount;
+    facts.bytesKnown          = request.bytesKnown;
+    facts.bytes               = request.bytes;
+    facts.sourceIdentity      = request.sourceIdentity;
+    facts.destinationIdentity = request.destinationIdentity;
+    facts.consentDetail       = request.consentDetail;
 
     const ConflictPromptBeginResult promptBegin = BeginConflictPrompt(task,
                                                                       request.perItemCookie,
@@ -5929,7 +5937,7 @@ private:
             const uint64_t processStartUs = PerfNowUs();
             // R0f: a provider call wedged on a dead share returns once this task is canceled.
             const Common::SynchronousIoCancelWatch::Scope cancelWatch(job->task != nullptr ? &Task::ShouldCancelSynchronousIo : nullptr, job->task);
-            const HRESULT itemHr = job->itemPolicy->Process(index);
+            const HRESULT itemHr          = job->itemPolicy->Process(index);
             recordItemResult(*job, itemHr);
             const uint64_t processUs = PerfElapsedUs(processStartUs);
             _perfProcessIndexUs.fetch_add(processUs, std::memory_order_relaxed);
@@ -6069,7 +6077,8 @@ bool RunFileOpsPerItemSchedulerShutdownQuietPointSelfTestForSelfTestInternal(Fol
     };
     ReferencedPerItemExecutionPolicy blockedWorkerPolicy(blockedWorker);
     std::atomic<HRESULT> firstFailure{S_OK};
-    const auto job = scheduler.StartJob(&task, 1u, 1u, blockedWorkerPolicy, firstFailure, PerItemTaskScheduler::FailurePolicy::RecordOnly);
+    const auto job = scheduler.StartJob(
+        &task, 1u, 1u, blockedWorkerPolicy, firstFailure, PerItemTaskScheduler::FailurePolicy::RecordOnly);
 
     const auto waitFor = [&](auto predicate, std::chrono::milliseconds timeout) noexcept -> bool
     {
@@ -6203,7 +6212,8 @@ bool RunFileOpsPerItemSchedulerNestedSaturationSelfTestForSelfTestInternal(Folde
         };
         ReferencedPerItemExecutionPolicy nestedPolicy(nestedWorker);
         std::atomic<HRESULT> nestedFirstFailure{S_OK};
-        const auto nestedJob = scheduler.StartJob(&task, 1u, 1u, nestedPolicy, nestedFirstFailure, PerItemTaskScheduler::FailurePolicy::RecordOnly);
+        const auto nestedJob = scheduler.StartJob(
+            &task, 1u, 1u, nestedPolicy, nestedFirstFailure, PerItemTaskScheduler::FailurePolicy::RecordOnly);
         scheduler.WaitJob(nestedJob);
         return S_OK;
     };
@@ -6213,7 +6223,8 @@ bool RunFileOpsPerItemSchedulerNestedSaturationSelfTestForSelfTestInternal(Folde
     outerJobs.reserve(workerCount);
     for (unsigned int outerIndex = 0u; outerIndex < workerCount; ++outerIndex)
     {
-        outerJobs.push_back(scheduler.StartJob(&task, 1u, 1u, outerPolicy, outerFirstFailure, PerItemTaskScheduler::FailurePolicy::RecordOnly));
+        outerJobs.push_back(scheduler.StartJob(
+            &task, 1u, 1u, outerPolicy, outerFirstFailure, PerItemTaskScheduler::FailurePolicy::RecordOnly));
     }
 
     for (const auto& outerJob : outerJobs)
@@ -6255,20 +6266,31 @@ bool RunFileOpsPerItemSchedulerFailurePolicySelfTestForSelfTestInternal(FolderWi
     };
     ReferencedPerItemExecutionPolicy recordOnlyPolicy(recordOnlyWorker);
     std::atomic<HRESULT> recordOnlyFailure{S_OK};
-    const auto recordOnlyJob =
-        scheduler.StartJob(&recordOnlyTask, 2u, 2u, recordOnlyPolicy, recordOnlyFailure, PerItemTaskScheduler::FailurePolicy::RecordOnly);
+    const auto recordOnlyJob = scheduler.StartJob(&recordOnlyTask,
+                                                  2u,
+                                                  2u,
+                                                  recordOnlyPolicy,
+                                                  recordOnlyFailure,
+                                                  PerItemTaskScheduler::FailurePolicy::RecordOnly);
     scheduler.WaitJob(recordOnlyJob);
 
     Task cancelTask(state);
     const auto cancelWorker = [](size_t) noexcept -> HRESULT { return E_OUTOFMEMORY; };
     ReferencedPerItemExecutionPolicy cancelPolicy(cancelWorker);
     std::atomic<HRESULT> cancelFailure{S_OK};
-    const auto cancelJob = scheduler.StartJob(&cancelTask, 1u, 1u, cancelPolicy, cancelFailure, PerItemTaskScheduler::FailurePolicy::CancelTask);
+    const auto cancelJob = scheduler.StartJob(&cancelTask,
+                                              1u,
+                                              1u,
+                                              cancelPolicy,
+                                              cancelFailure,
+                                              PerItemTaskScheduler::FailurePolicy::CancelTask);
     scheduler.WaitJob(cancelJob);
     scheduler.Shutdown();
 
-    const bool passed = recordOnlyFailure.load(std::memory_order_acquire) == E_OUTOFMEMORY && recordOnlyProcessed.load(std::memory_order_acquire) == 2u &&
-                        ! recordOnlyTask._cancelled.load(std::memory_order_acquire) && cancelFailure.load(std::memory_order_acquire) == E_OUTOFMEMORY &&
+    const bool passed = recordOnlyFailure.load(std::memory_order_acquire) == E_OUTOFMEMORY &&
+                        recordOnlyProcessed.load(std::memory_order_acquire) == 2u &&
+                        ! recordOnlyTask._cancelled.load(std::memory_order_acquire) &&
+                        cancelFailure.load(std::memory_order_acquire) == E_OUTOFMEMORY &&
                         cancelTask._cancelled.load(std::memory_order_acquire);
     if (! passed)
     {
@@ -6310,7 +6332,8 @@ bool RunFileOpsWorkerStartGateCancellationSelfTestForSelfTestInternal(FolderWind
             }
             return predicate();
         };
-        const bool entered = waitUntil([&]() noexcept { return task._debugWorkerStartGateWaiting.load(std::memory_order_acquire); }, 2s);
+        const bool entered = waitUntil(
+            [&]() noexcept { return task._debugWorkerStartGateWaiting.load(std::memory_order_acquire); }, 2s);
         if (requestStop)
         {
             worker.request_stop();
@@ -6333,7 +6356,9 @@ bool RunFileOpsWorkerStartGateCancellationSelfTestForSelfTestInternal(FolderWind
     const bool stopPassed   = runScenario(true);
     if (! cancelPassed || ! stopPassed)
     {
-        Debug::Error(L"FileOps worker start-gate selftest failed: cancelWake={}, stopWake={}.", cancelPassed ? 1u : 0u, stopPassed ? 1u : 0u);
+        Debug::Error(L"FileOps worker start-gate selftest failed: cancelWake={}, stopWake={}.",
+                     cancelPassed ? 1u : 0u,
+                     stopPassed ? 1u : 0u);
     }
     return cancelPassed && stopPassed;
 }
@@ -6428,7 +6453,9 @@ bool RunFileOpsBridgePausedReaderStopSelfTestForSelfTestInternal(FolderWindow::F
     // before that peer can sleep, giving the RED control an explicit lost-wake ordering.
     {
         std::unique_lock lock(mutex);
-        static_cast<void>(cv.wait_for(lock, std::chrono::milliseconds(100), [&]() noexcept { return cancelReturned.load(std::memory_order_acquire); }));
+        static_cast<void>(cv.wait_for(lock, std::chrono::milliseconds(100), [&]() noexcept {
+            return cancelReturned.load(std::memory_order_acquire);
+        }));
     }
     const bool notifiedBeforeSleep = cancelReturned.load(std::memory_order_acquire);
     conflictTask._dbgConflictWaitBeforeSleepGate.store(false, std::memory_order_release);
@@ -6450,18 +6477,12 @@ bool RunFileOpsBridgePausedReaderStopSelfTestForSelfTestInternal(FolderWindow::F
     peer.join();
     canceller.join();
     const bool conflictPassed = reachedGate && ! notifiedBeforeSleep && peerReturned;
-    Debug::Perf::Emit(L"FileOps.SelfTest.ConflictCancelWake",
-                      L"peer-held-between-predicate-and-sleep",
-                      0u,
-                      conflictPassed ? 1u : 0u,
-                      notifiedBeforeSleep ? 1u : 0u,
-                      conflictPassed ? S_OK : E_FAIL);
+    Debug::Perf::Emit(L"FileOps.SelfTest.ConflictCancelWake", L"peer-held-between-predicate-and-sleep",
+                      0u, conflictPassed ? 1u : 0u, notifiedBeforeSleep ? 1u : 0u, conflictPassed ? S_OK : E_FAIL);
     if (! conflictPassed)
     {
         Debug::Error(L"FileOps conflict cancellation lost-wake selftest failed: reached={}, earlyNotify={}, returned={}.",
-                     reachedGate ? 1u : 0u,
-                     notifiedBeforeSleep ? 1u : 0u,
-                     peerReturned ? 1u : 0u);
+                     reachedGate ? 1u : 0u, notifiedBeforeSleep ? 1u : 0u, peerReturned ? 1u : 0u);
     }
     return conflictPassed;
 }
@@ -6812,7 +6833,10 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
                          false,
                          ConflictAction::Proceed) &&
            matchesPolicy(liveBounded,
-                         {ConflictAction::QueueUntilOtherTaskFinishes, ConflictAction::Skip, ConflictAction::InvalidateLiveOutput, ConflictAction::Cancel},
+                         {ConflictAction::QueueUntilOtherTaskFinishes,
+                          ConflictAction::Skip,
+                          ConflictAction::InvalidateLiveOutput,
+                          ConflictAction::Cancel},
                          {ConflictAction::QueueUntilOtherTaskFinishes, ConflictAction::InvalidateLiveOutput, ConflictAction::Cancel},
                          {ConflictAction::Skip},
                          false,
@@ -6836,23 +6860,26 @@ FolderWindow::FileOperationState::Task::Task(FileOperationState& state) noexcept
     _conflictArbiter.decisionEvent.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
 }
 
-std::shared_ptr<const FileOperations::FileOperationPlanGroup> FolderWindow::FileOperationState::Task::LoadPlans() const noexcept
+std::shared_ptr<const FileOperations::FileOperationPlanGroup>
+FolderWindow::FileOperationState::Task::LoadPlans() const noexcept
 {
     return _plans.load(std::memory_order_acquire);
 }
 
-void FolderWindow::FileOperationState::Task::StorePlans(std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans) noexcept
+void FolderWindow::FileOperationState::Task::StorePlans(
+    std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans) noexcept
 {
     _plans.store(std::move(plans), std::memory_order_release);
 }
 
-FolderWindow::FileOperationState::Task::TaskLifecyclePhase FolderWindow::FileOperationState::Task::GetLifecyclePhase() const noexcept
+FolderWindow::FileOperationState::Task::TaskLifecyclePhase
+FolderWindow::FileOperationState::Task::GetLifecyclePhase() const noexcept
 {
     return _lifecyclePhase.load(std::memory_order_acquire);
 }
 
-std::shared_ptr<const FolderWindow::FileOperationState::Task::PreparationSnapshot> FolderWindow::FileOperationState::Task::LoadPreparationSnapshot()
-    const noexcept
+std::shared_ptr<const FolderWindow::FileOperationState::Task::PreparationSnapshot>
+FolderWindow::FileOperationState::Task::LoadPreparationSnapshot() const noexcept
 {
     return _preparationSnapshot.load(std::memory_order_acquire);
 }
@@ -6860,7 +6887,8 @@ std::shared_ptr<const FolderWindow::FileOperationState::Task::PreparationSnapsho
 void FolderWindow::FileOperationState::Task::PublishLifecyclePhase(const TaskLifecyclePhase phase) noexcept
 {
     TaskLifecyclePhase current = _lifecyclePhase.load(std::memory_order_acquire);
-    while (current < phase && ! _lifecyclePhase.compare_exchange_weak(current, phase, std::memory_order_acq_rel, std::memory_order_acquire))
+    while (current < phase &&
+           ! _lifecyclePhase.compare_exchange_weak(current, phase, std::memory_order_acq_rel, std::memory_order_acquire))
     {
     }
 }
@@ -6958,10 +6986,10 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemProg
         {
             ++_perf.progressLockContentionCount;
         }
-        const uint64_t progressLockHoldStartUs   = PerfNowUs();
-        const auto progressLockHoldScope         = wil::scope_exit([&] noexcept { _perf.progressLockHoldUs += PerfElapsedUs(progressLockHoldStartUs); });
-        trackProgressStreamPerf                  = true;
-        const uint64_t completedBytesBefore      = _progressCompletedBytes;
+        const uint64_t progressLockHoldStartUs = PerfNowUs();
+        const auto progressLockHoldScope       = wil::scope_exit([&] noexcept { _perf.progressLockHoldUs += PerfElapsedUs(progressLockHoldStartUs); });
+        trackProgressStreamPerf                = true;
+        const uint64_t completedBytesBefore    = _progressCompletedBytes;
         const unsigned long completedItemsBefore = _progressCompletedItems;
         // A transfer callback while traversal is open proves the one-pass scheduler admitted a
         // safe mutation without waiting for a whole-tree total.
@@ -7029,10 +7057,13 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemProg
 
         if (discoveryOpenAtCallback)
         {
-            const uint64_t completedBytesDelta = _progressCompletedBytes >= completedBytesBefore ? _progressCompletedBytes - completedBytesBefore : 0u;
-            const uint64_t completedItemsDelta =
-                _progressCompletedItems >= completedItemsBefore ? static_cast<uint64_t>(_progressCompletedItems - completedItemsBefore) : 0u;
-            NoteDiscoveryCompletionWhileOpen(perfStartUs, completedBytesDelta, currentItemTotalBytes == 0u ? completedItemsDelta : 0u);
+            const uint64_t completedBytesDelta =
+                _progressCompletedBytes >= completedBytesBefore ? _progressCompletedBytes - completedBytesBefore : 0u;
+            const uint64_t completedItemsDelta = _progressCompletedItems >= completedItemsBefore
+                ? static_cast<uint64_t>(_progressCompletedItems - completedItemsBefore)
+                : 0u;
+            NoteDiscoveryCompletionWhileOpen(
+                perfStartUs, completedBytesDelta, currentItemTotalBytes == 0u ? completedItemsDelta : 0u);
         }
 
         _progressItemTotalBytes          = currentItemTotalBytes;
@@ -7220,13 +7251,14 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemItem
             _sourceItemResultBuilders.resize(_sourcePaths.size());
         }
         SourceItemResultBuilder& builder = _sourceItemResultBuilders[sourceIndex];
-        builder.status                   = status;
+        builder.status                  = status;
         if (mutationResult != nullptr)
         {
-            logRetainedCleanupDebt = ! builder.mutation.has_value() && mutationResult->outcomeKnown == TRUE && mutationResult->mutationCommitted == TRUE &&
+            logRetainedCleanupDebt = ! builder.mutation.has_value() && mutationResult->outcomeKnown == TRUE &&
+                                     mutationResult->mutationCommitted == TRUE &&
                                      FileSystemItemMutationResultHasOwnedStageDisposition(*mutationResult) &&
                                      mutationResult->ownedStageDisposition == FileSystemOwnedStageDisposition::Retained;
-            builder.mutation       = mutationSnapshot;
+            builder.mutation = mutationSnapshot;
         }
         else
         {
@@ -7447,8 +7479,8 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemIssu
     // Replace link stays bound-only: a link needs exact identity. Files on an identity-less route
     // are replaced conditionally through the writer contract instead.
     const bool allowDestructiveReplacement = static_cast<bool>(exactDestination) || (atomicReplaceEligible && bucket != ConflictBucket::DestinationLink);
-    const ConflictPromptBeginResult promptBegin =
-        BeginConflictPrompt(*this, perItemCookie, bucket, status, sourceText, destinationText, allowRetry, attemptCount, false, allowDestructiveReplacement);
+    const ConflictPromptBeginResult promptBegin = BeginConflictPrompt(
+        *this, perItemCookie, bucket, status, sourceText, destinationText, allowRetry, attemptCount, false, allowDestructiveReplacement);
     bucket                           = promptBegin.bucket;
     const size_t resolvedBucketIndex = static_cast<size_t>(bucket);
     ConflictAction decision          = promptBegin.action;
@@ -7462,8 +7494,12 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemIssu
     {
         switch (GuardLiveOutputBeforeInvalidation(destinationText, FileOperations::MutationInterlockAccess::PublishDestination))
         {
-            case LiveOutputGuardDisposition::Skip: *action = FileSystemIssueAction::Skip; return S_OK;
-            case LiveOutputGuardDisposition::RetryCurrentMutation: *action = FileSystemIssueAction::Retry; return S_OK;
+            case LiveOutputGuardDisposition::Skip:
+                *action = FileSystemIssueAction::Skip;
+                return S_OK;
+            case LiveOutputGuardDisposition::RetryCurrentMutation:
+                *action = FileSystemIssueAction::Retry;
+                return S_OK;
             case LiveOutputGuardDisposition::Cancel: return HRESULT_FROM_WIN32(ERROR_CANCELLED);
             case LiveOutputGuardDisposition::Proceed: break;
         }
@@ -7574,8 +7610,8 @@ void FolderWindow::FileOperationState::Task::BeginDiscovery() noexcept
 }
 
 void FolderWindow::FileOperationState::Task::NoteDiscoveryCompletionWhileOpen(const uint64_t observedAtPerfUs,
-                                                                              const uint64_t completedBytes,
-                                                                              const uint64_t completedMutations) noexcept
+                                                                               const uint64_t completedBytes,
+                                                                               const uint64_t completedMutations) noexcept
 {
     if ((completedBytes == 0u && completedMutations == 0u) || _discoveryClosed.load(std::memory_order_acquire))
     {
@@ -7584,10 +7620,10 @@ void FolderWindow::FileOperationState::Task::NoteDiscoveryCompletionWhileOpen(co
 
     uint64_t noFirstMutation            = 0u;
     const uint64_t discoveryStartPerfUs = _discoveryStartPerfUs.load(std::memory_order_acquire);
-    const uint64_t firstMutationUs =
-        (std::max)(uint64_t{1u}, observedAtPerfUs >= discoveryStartPerfUs ? observedAtPerfUs - discoveryStartPerfUs : uint64_t{0u});
-    static_cast<void>(
-        _discoveryFirstMutationUs.compare_exchange_strong(noFirstMutation, firstMutationUs, std::memory_order_acq_rel, std::memory_order_acquire));
+    const uint64_t firstMutationUs = (std::max)(
+        uint64_t{1u}, observedAtPerfUs >= discoveryStartPerfUs ? observedAtPerfUs - discoveryStartPerfUs : uint64_t{0u});
+    static_cast<void>(_discoveryFirstMutationUs.compare_exchange_strong(
+        noFirstMutation, firstMutationUs, std::memory_order_acq_rel, std::memory_order_acquire));
     _firstMutationBeforeDiscoveryClosed.store(true, std::memory_order_release);
     SaturatingAtomicAdd(_discoveryCompletedBytesWhileOpen, completedBytes);
     SaturatingAtomicAdd(_discoveryCompletedMutationsWhileOpen, completedMutations);
@@ -8186,7 +8222,7 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareMutationInterlockScopes()
 
 HRESULT FolderWindow::FileOperationState::Task::BuildPreparationSnapshot(const uint64_t selectedRootReadinessUs) noexcept
 {
-    const uint64_t startedUs                                                  = PerfNowUs();
+    const uint64_t startedUs = PerfNowUs();
     const std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans = LoadPlans();
     if (! plans || plans->empty())
     {
@@ -8202,15 +8238,17 @@ HRESULT FolderWindow::FileOperationState::Task::BuildPreparationSnapshot(const u
     std::array<uint64_t, 4u> strategyCounts{};
     const auto addCount = [](uint64_t& target, const size_t count) noexcept
     {
-        const uint64_t converted =
-            count > static_cast<size_t>((std::numeric_limits<uint64_t>::max)()) ? (std::numeric_limits<uint64_t>::max)() : static_cast<uint64_t>(count);
-        target = converted > (std::numeric_limits<uint64_t>::max)() - target ? (std::numeric_limits<uint64_t>::max)() : target + converted;
+        const uint64_t converted = count > static_cast<size_t>((std::numeric_limits<uint64_t>::max)())
+            ? (std::numeric_limits<uint64_t>::max)()
+            : static_cast<uint64_t>(count);
+        target = converted > (std::numeric_limits<uint64_t>::max)() - target
+            ? (std::numeric_limits<uint64_t>::max)()
+            : target + converted;
     };
 
     for (const FileOperations::FileOperationPlan& plan : *plans)
     {
-        std::visit(
-            [&](const auto& typedPlan) noexcept
+        std::visit([&](const auto& typedPlan) noexcept
         {
             using Plan = std::remove_cvref_t<decltype(typedPlan)>;
             if constexpr (std::is_same_v<Plan, FileOperations::TransferPlan>)
@@ -8234,8 +8272,7 @@ HRESULT FolderWindow::FileOperationState::Task::BuildPreparationSnapshot(const u
             {
                 addCount(snapshot.selectedRootCount, typedPlan.finalMappings.size());
             }
-        },
-            plan);
+        }, plan);
     }
 
     for (size_t strategyIndex = 0u; strategyIndex < strategyCounts.size(); ++strategyIndex)
@@ -8245,20 +8282,19 @@ HRESULT FolderWindow::FileOperationState::Task::BuildPreparationSnapshot(const u
             continue;
         }
         snapshot.strategies.emplace_back(FileOperations::PreparationStrategyFact{
-            .strategy          = static_cast<FileOperations::OperationStrategy>(strategyIndex),
+            .strategy = static_cast<FileOperations::OperationStrategy>(strategyIndex),
             .selectedRootCount = strategyCounts[strategyIndex],
         });
     }
 
     for (const FileOperations::MutationInterlockScope& scope : _mutationInterlockScopes)
     {
-        const auto endpointIt = std::ranges::find_if(snapshot.endpoints,
-                                                     [&](const FileOperations::PreparationEndpointFact& endpoint) noexcept
+        const auto endpointIt = std::ranges::find_if(snapshot.endpoints, [&](const FileOperations::PreparationEndpointFact& endpoint) noexcept
         {
             return endpoint.pluginId == scope.endpoint.pluginId && endpoint.instanceId == scope.endpoint.instanceId &&
                    endpoint.profileId == scope.endpoint.profileId && endpoint.rootId == scope.endpoint.rootId;
         });
-        size_t endpointIndex  = static_cast<size_t>(endpointIt - snapshot.endpoints.begin());
+        size_t endpointIndex = static_cast<size_t>(endpointIt - snapshot.endpoints.begin());
         if (endpointIt == snapshot.endpoints.end())
         {
             endpointIndex = snapshot.endpoints.size();
@@ -8274,10 +8310,10 @@ HRESULT FolderWindow::FileOperationState::Task::BuildPreparationSnapshot(const u
             });
         }
         snapshot.scopes.emplace_back(FileOperations::PreparationScopeFact{
-            .endpointIndex              = static_cast<uint32_t>(endpointIndex),
-            .providerPath               = scope.providerPath,
-            .access                     = scope.access,
-            .exactDeleteAuthority       = scope.exactDeleteAuthority,
+            .endpointIndex = static_cast<uint32_t>(endpointIndex),
+            .providerPath = scope.providerPath,
+            .access = scope.access,
+            .exactDeleteAuthority = scope.exactDeleteAuthority,
             .conservativeIdentityDomain = scope.conservativeIdentityDomain,
         });
     }
@@ -8286,9 +8322,8 @@ HRESULT FolderWindow::FileOperationState::Task::BuildPreparationSnapshot(const u
     retainedBytes += static_cast<uint64_t>(snapshot.endpoints.capacity()) * sizeof(FileOperations::PreparationEndpointFact);
     for (const FileOperations::PreparationEndpointFact& endpoint : snapshot.endpoints)
     {
-        retainedBytes +=
-            static_cast<uint64_t>(endpoint.pluginId.capacity() + endpoint.instanceId.capacity() + endpoint.profileId.capacity() + endpoint.rootId.capacity()) *
-            sizeof(wchar_t);
+        retainedBytes += static_cast<uint64_t>(endpoint.pluginId.capacity() + endpoint.instanceId.capacity() +
+                                               endpoint.profileId.capacity() + endpoint.rootId.capacity()) * sizeof(wchar_t);
     }
     retainedBytes += static_cast<uint64_t>(snapshot.scopes.capacity()) * sizeof(FileOperations::PreparationScopeFact);
     for (const FileOperations::PreparationScopeFact& scope : snapshot.scopes)
@@ -8298,11 +8333,11 @@ HRESULT FolderWindow::FileOperationState::Task::BuildPreparationSnapshot(const u
     retainedBytes += static_cast<uint64_t>(snapshot.strategies.capacity()) * sizeof(FileOperations::PreparationStrategyFact);
     snapshot.retainedBytes = retainedBytes;
 
-    auto published                                             = std::make_shared<PreparationSnapshot>(std::move(snapshot));
-    published->buildSnapshotUs                                 = PerfElapsedUs(startedUs);
-    published->selectedRootReadinessUs                         = selectedRootReadinessUs > (std::numeric_limits<uint64_t>::max)() - published->buildSnapshotUs
-                                                                     ? (std::numeric_limits<uint64_t>::max)()
-                                                                     : selectedRootReadinessUs + published->buildSnapshotUs;
+    auto published = std::make_shared<PreparationSnapshot>(std::move(snapshot));
+    published->buildSnapshotUs = PerfElapsedUs(startedUs);
+    published->selectedRootReadinessUs = selectedRootReadinessUs > (std::numeric_limits<uint64_t>::max)() - published->buildSnapshotUs
+        ? (std::numeric_limits<uint64_t>::max)()
+        : selectedRootReadinessUs + published->buildSnapshotUs;
     const std::shared_ptr<const PreparationSnapshot> immutable = std::move(published);
     _preparationSnapshot.store(immutable, std::memory_order_release);
     if (_preparationObserver)
@@ -8322,22 +8357,16 @@ HRESULT FolderWindow::FileOperationState::Task::BuildPreparationSnapshot(const u
                       immutable->selectedRootCount,
                       static_cast<uint64_t>(immutable->scopes.size()),
                       S_OK);
-    Debug::Perf::Emit(
-        L"FileOps.Preparing.SelectedRootCount", OperationToString(_operation), 0u, immutable->selectedRootCount, immutable->selectedRootCount, S_OK);
-    Debug::Perf::Emit(L"FileOps.Preparing.ScopeFactCount",
-                      OperationToString(_operation),
-                      0u,
-                      static_cast<uint64_t>(immutable->scopes.size()),
-                      immutable->selectedRootCount,
-                      S_OK);
-    Debug::Perf::Emit(L"FileOps.Preparing.StrategyFactCount",
-                      OperationToString(_operation),
-                      0u,
-                      static_cast<uint64_t>(immutable->strategies.size()),
-                      immutable->selectedRootCount,
-                      S_OK);
-    Debug::Perf::Emit(L"FileOps.Preparing.CopyOnlyCount", OperationToString(_operation), 0u, immutable->copyOnlyCount, immutable->selectedRootCount, S_OK);
-    Debug::Perf::Emit(L"FileOps.Preparing.RetainedBytes", OperationToString(_operation), 0u, immutable->retainedBytes, 64u * 1024u * 1024u, S_OK);
+    Debug::Perf::Emit(L"FileOps.Preparing.SelectedRootCount", OperationToString(_operation), 0u,
+                      immutable->selectedRootCount, immutable->selectedRootCount, S_OK);
+    Debug::Perf::Emit(L"FileOps.Preparing.ScopeFactCount", OperationToString(_operation), 0u,
+                      static_cast<uint64_t>(immutable->scopes.size()), immutable->selectedRootCount, S_OK);
+    Debug::Perf::Emit(L"FileOps.Preparing.StrategyFactCount", OperationToString(_operation), 0u,
+                      static_cast<uint64_t>(immutable->strategies.size()), immutable->selectedRootCount, S_OK);
+    Debug::Perf::Emit(L"FileOps.Preparing.CopyOnlyCount", OperationToString(_operation), 0u,
+                      immutable->copyOnlyCount, immutable->selectedRootCount, S_OK);
+    Debug::Perf::Emit(L"FileOps.Preparing.RetainedBytes", OperationToString(_operation), 0u,
+                      immutable->retainedBytes, 64u * 1024u * 1024u, S_OK);
     return S_OK;
 }
 
@@ -8391,8 +8420,7 @@ HRESULT FolderWindow::FileOperationState::Task::PinNativeDeleteIdentity(const Fi
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
-    const auto scope = std::ranges::find_if(_mutationInterlockScopes,
-                                            [&](const FileOperations::MutationInterlockScope& existing) noexcept
+    const auto scope = std::ranges::find_if(_mutationInterlockScopes, [&](const FileOperations::MutationInterlockScope& existing) noexcept
     {
         return FileOperations::QualifiedEndpointsReferToSameRoot(existing.endpoint, endpoint) &&
                EquivalentPath(endpoint.pathIdentity.value(), existing.providerPath, providerPath);
@@ -8453,10 +8481,10 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
     if (action == ConflictAction::None)
     {
         DeferredConsentRequest request{};
-        request.risk          = FileOperations::DeferredConsentRisk::PermanentDelete;
-        request.status        = S_OK;
-        request.sourcePath    = _permanentDeleteConsentFrom;
-        request.consentDetail = _permanentDeleteConsentDetail;
+        request.risk           = FileOperations::DeferredConsentRisk::PermanentDelete;
+        request.status         = S_OK;
+        request.sourcePath     = _permanentDeleteConsentFrom;
+        request.consentDetail  = _permanentDeleteConsentDetail;
         if (PermanentDeleteRunsByNameOnly())
         {
             // C10: a route with neither object binding nor an identity contract deletes whatever
@@ -8467,8 +8495,8 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
             }
             request.consentDetail += LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_PERMANENT_DELETE_BY_NAME);
         }
-        request.itemCountKnown             = true;
-        request.itemCount                  = _sourcePaths.size();
+        request.itemCountKnown = true;
+        request.itemCount      = _sourcePaths.size();
         const DeferredConsentResult result = RequestDeferredConsent(*this, request);
         if (FAILED(result.status))
         {
@@ -8490,7 +8518,8 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
         {
             continue;
         }
-        constexpr FileSystemBindFlags identityFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+        constexpr FileSystemBindFlags identityFlags = static_cast<FileSystemBindFlags>(
+            FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
         const FileOperations::ObjectBindingResult current =
             FileOperations::BindObjectAuthority(_fileSystem.get(), scope.providerPath, scope.endpoint.profileId, identityFlags);
         const FileOperations::ProviderIdentitySnapshot& pinned = scope.root->retained.authority.identity;
@@ -8526,7 +8555,7 @@ HRESULT FolderWindow::FileOperationState::Task::RunPermanentDeleteConfirmation()
         _dbgCallbackActiveScopeCount.fetch_add(1u, std::memory_order_relaxed);
         const auto dbgCallbackScope = wil::scope_exit([&] noexcept { _dbgCallbackActiveScopeCount.fetch_sub(1u, std::memory_order_relaxed); });
 #endif
-        const HRESULT hr                                   = identityDelete->ResolveDeleteIdentity(scope.providerPath.c_str(), &options, &current);
+        const HRESULT hr = identityDelete->ResolveDeleteIdentity(scope.providerPath.c_str(), &options, &current);
         current.identity[std::size(current.identity) - 1u] = L'\0';
         if (FAILED(hr) || current.isDirectory != scope.pinnedDeleteIdentity->isDirectory ||
             std::wstring_view(current.identity) != std::wstring_view(scope.pinnedDeleteIdentity->identity))
@@ -8586,17 +8615,17 @@ HRESULT FolderWindow::FileOperationState::Task::RunSameHostOverlapAdvisory() noe
     const std::wstring sourcePath      = _sourcePaths.empty() ? std::wstring() : _sourcePaths.front().native();
     const std::wstring destinationPath = GetDestinationFolder().native();
     DeferredConsentRequest request{};
-    request.risk                       = FileOperations::DeferredConsentRisk::SameHostOverlap;
-    request.status                     = HRESULT_FROM_WIN32(ERROR_BUSY);
-    request.sourcePath                 = sourcePath;
-    request.destinationPath            = destinationPath;
-    request.itemCountKnown             = true;
-    request.itemCount                  = advice.taskCount;
-    request.overlapProblem             = static_cast<uint8_t>(advice.problem);
-    request.overlapTaskId              = advice.firstTaskId;
-    request.overlapTaskIds             = advice.taskIds;
-    request.overlapTaskIdCount         = advice.relationCount;
-    request.allowConcurrentRun         = advice.CanRunConcurrently();
+    request.risk            = FileOperations::DeferredConsentRisk::SameHostOverlap;
+    request.status          = HRESULT_FROM_WIN32(ERROR_BUSY);
+    request.sourcePath      = sourcePath;
+    request.destinationPath = destinationPath;
+    request.itemCountKnown  = true;
+    request.itemCount       = advice.taskCount;
+    request.overlapProblem  = static_cast<uint8_t>(advice.problem);
+    request.overlapTaskId   = advice.firstTaskId;
+    request.overlapTaskIds  = advice.taskIds;
+    request.overlapTaskIdCount = advice.relationCount;
+    request.allowConcurrentRun = advice.CanRunConcurrently();
     const DeferredConsentResult result = RequestDeferredConsent(*this, request);
     if (FAILED(result.status) || (result.action != ConflictAction::Proceed && result.action != ConflictAction::RunConcurrently))
     {
@@ -8654,8 +8683,10 @@ void FolderWindow::FileOperationState::Task::DebugClearConcurrentOverlapRelation
 }
 #endif
 
-FolderWindow::FileOperationState::Task::LiveOutputGuardDisposition FolderWindow::FileOperationState::Task::GuardLiveOutputBeforeInvalidation(
-    std::wstring_view providerPath, FileOperations::MutationInterlockAccess access) noexcept
+FolderWindow::FileOperationState::Task::LiveOutputGuardDisposition
+FolderWindow::FileOperationState::Task::GuardLiveOutputBeforeInvalidation(
+    std::wstring_view providerPath,
+    FileOperations::MutationInterlockAccess access) noexcept
 {
     if (_state == nullptr || providerPath.empty())
     {
@@ -8676,14 +8707,14 @@ FolderWindow::FileOperationState::Task::LiveOutputGuardDisposition FolderWindow:
 
         Debug::Perf::EmitValue(L"FileOps.LiveOutput.GateCount", 1u, S_OK);
         DeferredConsentRequest request{};
-        request.risk                       = FileOperations::DeferredConsentRisk::SameHostLiveOutput;
-        request.status                     = HRESULT_FROM_WIN32(ERROR_BUSY);
-        request.sourcePath                 = providerPath;
-        request.destinationPath            = providerPath;
-        request.overlapTaskId              = advice.publisherTaskId;
-        request.itemCountKnown             = true;
-        request.itemCount                  = 1u;
-        request.allowLiveInvalidation      = ! advice.indexOverflow && approvedPublisherCount < approvedPublishers.size();
+        request.risk                  = FileOperations::DeferredConsentRisk::SameHostLiveOutput;
+        request.status                = HRESULT_FROM_WIN32(ERROR_BUSY);
+        request.sourcePath            = providerPath;
+        request.destinationPath       = providerPath;
+        request.overlapTaskId         = advice.publisherTaskId;
+        request.itemCountKnown        = true;
+        request.itemCount             = 1u;
+        request.allowLiveInvalidation = ! advice.indexOverflow && approvedPublisherCount < approvedPublishers.size();
         const DeferredConsentResult result = RequestDeferredConsent(*this, request);
         if (FAILED(result.status) || result.action == ConflictAction::Cancel)
         {
@@ -8741,13 +8772,13 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareTransferDestinationNames(
         {
             return E_INVALIDARG;
         }
-        const FileSystemRouteContract::ChildNameContractResult contract =
-            FileSystemRouteContract::QueryChildNameContract(_fileSystem.get(), parentPath, step.finalLeafName, FILESYSTEM_RENAME, rename->endpoint.pluginId);
+        const FileSystemRouteContract::ChildNameContractResult contract = FileSystemRouteContract::QueryChildNameContract(
+            _fileSystem.get(), parentPath, step.finalLeafName, FILESYSTEM_RENAME, rename->endpoint.pluginId);
         if (contract.state != FileSystemRouteContract::QueryState::Available || contract.nameStatus != FILESYSTEM_CHILD_NAME_VALID)
         {
             const HRESULT hr = contract.state == FileSystemRouteContract::QueryState::Available && FAILED(contract.failureStatus)
-                                   ? contract.failureStatus
-                                   : (FAILED(contract.status) ? contract.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+                ? contract.failureStatus
+                : (FAILED(contract.status) ? contract.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
             Debug::Perf::EmitValue(L"fileops.plan.rejection_bucket", static_cast<uint64_t>(FileOperations::PlanRejectionBucket::InvalidRename), hr);
             LogDiagnostic(DiagnosticSeverity::Error,
                           hr,
@@ -8757,7 +8788,7 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareTransferDestinationNames(
                           parentPath);
             return hr;
         }
-        auto filled        = std::make_shared<FileOperations::FileOperationPlanGroup>(plans);
+        auto filled = std::make_shared<FileOperations::FileOperationPlanGroup>(plans);
         auto* filledRename = std::get_if<FileOperations::RenamePlan>(&(*filled)[planIndex]);
         if (filledRename == nullptr)
         {
@@ -8792,18 +8823,21 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareTransferDestinationNames(
                     return E_INVALIDARG;
                 }
             }
-            else if (! TryGetFileSystemLeafName(
-                         transfer->sourceEndpoint.pathIdentity.value(), transfer->selectedItems[sourceIndex].providerPath, destinationLeaf))
+            else if (! TryGetFileSystemLeafName(transfer->sourceEndpoint.pathIdentity.value(),
+                                                transfer->selectedItems[sourceIndex].providerPath,
+                                                destinationLeaf))
             {
                 return E_INVALIDARG;
             }
             const FileSystemRouteContract::ChildNameContractResult destinationName = FileSystemRouteContract::QueryChildNameContract(
                 destinationFileSystem, transfer->destination.providerFolderPath, destinationLeaf, _operation, _destinationPluginId);
-            if (destinationName.state == FileSystemRouteContract::QueryState::Available && destinationName.nameStatus == FILESYSTEM_CHILD_NAME_INVALID)
+            if (destinationName.state == FileSystemRouteContract::QueryState::Available &&
+                destinationName.nameStatus == FILESYSTEM_CHILD_NAME_INVALID)
             {
                 const HRESULT hr = FAILED(destinationName.failureStatus) ? destinationName.failureStatus : HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
-                Debug::Perf::EmitValue(
-                    L"fileops.plan.rejection_bucket", static_cast<uint64_t>(FileOperations::PlanRejectionBucket::InvalidDestinationName), hr);
+                Debug::Perf::EmitValue(L"fileops.plan.rejection_bucket",
+                                       static_cast<uint64_t>(FileOperations::PlanRejectionBucket::InvalidDestinationName),
+                                       hr);
                 LogDiagnostic(DiagnosticSeverity::Error,
                               hr,
                               L"preparation.destinationName",
@@ -8846,7 +8880,7 @@ HRESULT FolderWindow::FileOperationState::Task::PrepareForExecution() noexcept
     for (const FileOperations::FileOperationPlan& plan : *plans)
     {
         FileOperations::PlanRejectionBucket rejection = FileOperations::PlanRejectionBucket::None;
-        const HRESULT validationHr                    = FileOperations::ValidatePlan(plan, &rejection, _permanentDeleteConfirmationPending);
+        const HRESULT validationHr = FileOperations::ValidatePlan(plan, &rejection, _permanentDeleteConfirmationPending);
         if (FAILED(validationHr))
         {
             Debug::Perf::EmitValue(L"fileops.plan.rejection_bucket", static_cast<uint64_t>(rejection), validationHr);
@@ -8927,7 +8961,8 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
     {
         PublishLifecyclePhase(TaskLifecyclePhase::Stopping);
         HRESULT pendingReadiness = E_PENDING;
-        if (_selectedRootReadinessStatus.compare_exchange_strong(pendingReadiness, HRESULT_FROM_WIN32(ERROR_CANCELLED), std::memory_order_acq_rel))
+        if (_selectedRootReadinessStatus.compare_exchange_strong(
+                pendingReadiness, HRESULT_FROM_WIN32(ERROR_CANCELLED), std::memory_order_acq_rel))
         {
             _selectedRootReadinessComplete.store(true, std::memory_order_release);
             _selectedRootReadinessComplete.notify_all();
@@ -8981,7 +9016,10 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
             else
             {
                 payload->taskId = _taskId;
-                if (! PostMessagePayload(_state->_owner.GetHwnd(), WndMsg::kFileOperationClipboardMoveReady, static_cast<WPARAM>(_taskId), std::move(payload)))
+                if (! PostMessagePayload(_state->_owner.GetHwnd(),
+                                         WndMsg::kFileOperationClipboardMoveReady,
+                                         static_cast<WPARAM>(_taskId),
+                                         std::move(payload)))
                 {
                     CompleteClipboardMoveAdmission(HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS), false);
                 }
@@ -9024,8 +9062,9 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         LogDiagnostic(IsCancellationStatus(readinessHr) ? DiagnosticSeverity::Info : DiagnosticSeverity::Error,
                       readinessHr,
                       L"preparation.failed",
-                      IsCancellationStatus(readinessHr) ? L"Task preparation was canceled before any mutation was attempted."
-                                                        : L"Task preparation failed before any mutation was attempted.");
+                      IsCancellationStatus(readinessHr)
+                          ? L"Task preparation was canceled before any mutation was attempted."
+                          : L"Task preparation failed before any mutation was attempted.");
         completeAndPost(readinessHr);
         return;
     }
@@ -9033,7 +9072,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
     if (_clipboardMoveAdmission)
     {
         const HRESULT consumptionHr = _clipboardMoveConsumptionStatus.load(std::memory_order_acquire);
-        const bool consumed         = _clipboardMoveConsumed.load(std::memory_order_acquire);
+        const bool consumed = _clipboardMoveConsumed.load(std::memory_order_acquire);
         if (! ClipboardMutationGateAllows(readinessHr, consumptionHr, consumed))
         {
             _state->WithdrawPreparedMutationInterlock(*this);
@@ -9139,11 +9178,10 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
     // requested cancel that is the cancellation itself, not a provider fault. Items that carry
     // that status are mapped the same way by FinalizeTypedItemResults, whatever the execution
     // path returned around them.
-    const bool abortedByCancelWatch = cancellationRequested && executionHr == HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED);
-    const HRESULT terminalExecutionHr =
-        (SUCCEEDED(executionHr) || abortedByCancelWatch) && cancellationRequested ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : executionHr;
+    const bool abortedByCancelWatch   = cancellationRequested && executionHr == HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED);
+    const HRESULT terminalExecutionHr = (SUCCEEDED(executionHr) || abortedByCancelWatch) && cancellationRequested ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : executionHr;
     PublishLifecyclePhase(TaskLifecyclePhase::Stopping);
-    const HRESULT hr = FinalizeTypedItemResults(terminalExecutionHr);
+    const HRESULT hr                  = FinalizeTypedItemResults(terminalExecutionHr);
     _resultHr.store(hr, std::memory_order_release);
     if (FAILED(hr))
     {
@@ -9672,7 +9710,8 @@ void FolderWindow::FileOperationState::Task::RequestCancel() noexcept
     }
     _cancelled.store(true, std::memory_order_release);
     HRESULT pendingReadiness = E_PENDING;
-    if (_selectedRootReadinessStatus.compare_exchange_strong(pendingReadiness, HRESULT_FROM_WIN32(ERROR_CANCELLED), std::memory_order_acq_rel))
+    if (_selectedRootReadinessStatus.compare_exchange_strong(
+            pendingReadiness, HRESULT_FROM_WIN32(ERROR_CANCELLED), std::memory_order_acq_rel))
     {
         _selectedRootReadinessComplete.store(true, std::memory_order_release);
         _selectedRootReadinessComplete.notify_all();
@@ -9740,12 +9779,12 @@ void FolderWindow::FileOperationState::Task::SetDesiredSpeedLimit(uint64_t bytes
 
 void FolderWindow::FileOperationState::Task::InitializeFileSystemOptions(FileSystemOptions& options, void* operationControlCookie) const noexcept
 {
-    options                                                                   = {};
-    options.sizeBytes                                                         = sizeof(FileSystemOptions);
-    options.bandwidthLimitBytesPerSecond                                      = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
-    options.copyMoveMaxConcurrency                                            = 0;
-    options.operationControl                                                  = const_cast<Task*>(this);
-    options.operationControlCookie                                            = operationControlCookie;
+    options                              = {};
+    options.sizeBytes                    = sizeof(FileSystemOptions);
+    options.bandwidthLimitBytesPerSecond = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+    options.copyMoveMaxConcurrency       = 0;
+    options.operationControl             = const_cast<Task*>(this);
+    options.operationControlCookie       = operationControlCookie;
     const std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans = LoadPlans();
     if (plans && ! plans->empty())
     {
@@ -9815,12 +9854,14 @@ bool FolderWindow::FileOperationState::Task::IsPresentationVisible() const noexc
 void FolderWindow::FileOperationState::Task::RequestPresentationReveal() noexcept
 {
     TaskPresentationState expected = TaskPresentationState::Hidden;
-    if (_presentationState.compare_exchange_strong(expected, TaskPresentationState::RevealRequested, std::memory_order_acq_rel, std::memory_order_acquire) &&
+    if (_presentationState.compare_exchange_strong(
+            expected, TaskPresentationState::RevealRequested, std::memory_order_acq_rel, std::memory_order_acquire) &&
         _state)
     {
-        const ULONGLONG nowTick = _state->TaskPresentationNowTick();
-        const ULONGLONG admittedTick =
-            _presentationDeadlineTick >= FileOperations::kTaskCardRevealDelayMs ? _presentationDeadlineTick - FileOperations::kTaskCardRevealDelayMs : 0u;
+        const ULONGLONG nowTick      = _state->TaskPresentationNowTick();
+        const ULONGLONG admittedTick = _presentationDeadlineTick >= FileOperations::kTaskCardRevealDelayMs
+                                           ? _presentationDeadlineTick - FileOperations::kTaskCardRevealDelayMs
+                                           : 0u;
         Debug::Perf::Emit(L"FileOps.TaskPresentation.RevealMs",
                           L"non-clean",
                           nowTick >= admittedTick ? nowTick - admittedTick : 0u,
@@ -10014,9 +10055,10 @@ void FolderWindow::FileOperationState::Task::MarkSourceItemsMutationPossible() n
     }
 }
 
-bool FolderWindow::FileOperationState::Task::ClipboardMutationGateAllows(const HRESULT readinessStatus,
-                                                                         const HRESULT consumptionStatus,
-                                                                         const bool consumed) noexcept
+bool FolderWindow::FileOperationState::Task::ClipboardMutationGateAllows(
+    const HRESULT readinessStatus,
+    const HRESULT consumptionStatus,
+    const bool consumed) noexcept
 {
     return SUCCEEDED(readinessStatus) && consumptionStatus == S_OK && consumed;
 }
@@ -10054,8 +10096,9 @@ bool FolderWindow::FileOperationState::Task::StoreTypedItemResult(FileOperations
     if (duplicate)
     {
         _duplicateTerminalStoreRejectCount.fetch_add(1u, std::memory_order_relaxed);
-        Debug::Warning(
-            L"File Operations rejected a duplicate terminal item result; first truth was retained (taskId={}, sourceIndex={}).", _taskId, result.sourceIndex);
+        Debug::Warning(L"File Operations rejected a duplicate terminal item result; first truth was retained (taskId={}, sourceIndex={}).",
+                       _taskId,
+                       result.sourceIndex);
         return false;
     }
     return true;
@@ -10155,7 +10198,8 @@ HRESULT FolderWindow::FileOperationState::Task::FinalizeTypedItemResults(HRESULT
         {
             result.publication       = FileOperations::PublicationState::NotAttempted;
             result.sourceDisposition = FileOperations::SourceDisposition::Retained;
-            result.completion        = IsCancellationStatus(result.status) ? FileOperations::ItemCompletion::Canceled : FileOperations::ItemCompletion::Failed;
+            result.completion = IsCancellationStatus(result.status) ? FileOperations::ItemCompletion::Canceled
+                                                                     : FileOperations::ItemCompletion::Failed;
         }
         else if (validMutation)
         {
@@ -10214,7 +10258,8 @@ HRESULT FolderWindow::FileOperationState::Task::FinalizeTypedItemResults(HRESULT
             // A root that reached MutationPossible without its own terminal receipt has no
             // publication or source truth even when the task as a whole succeeded. Success
             // without per-item evidence is never reported as Completed.
-            result.publication = (_operation == FILESYSTEM_DELETE) ? FileOperations::PublicationState::NotAttempted : FileOperations::PublicationState::Unknown;
+            result.publication =
+                (_operation == FILESYSTEM_DELETE) ? FileOperations::PublicationState::NotAttempted : FileOperations::PublicationState::Unknown;
             result.sourceDisposition =
                 (_operation == FILESYSTEM_COPY) ? FileOperations::SourceDisposition::Retained : FileOperations::SourceDisposition::Unknown;
             result.completion = FileOperations::ItemCompletion::Indeterminate;
@@ -10256,13 +10301,13 @@ HRESULT FolderWindow::FileOperationState::Task::FinalizeTypedItemResults(HRESULT
         // An unknown publication or source axis makes the task indeterminate, except on an item the
         // user or host canceled: the cancel is that item's terminal cause, the unknown axis stays
         // visible on the item and still blocks Retry, and the task ends Canceled.
-        anyIndeterminate =
-            anyIndeterminate || item->completion == FileOperations::ItemCompletion::Indeterminate ||
-            (item->completion != FileOperations::ItemCompletion::Canceled &&
-             (item->publication == FileOperations::PublicationState::Unknown || item->sourceDisposition == FileOperations::SourceDisposition::Unknown));
-        anyCompleted = anyCompleted || item->completion == FileOperations::ItemCompletion::Completed;
-        anySkipped   = anySkipped || item->completion == FileOperations::ItemCompletion::Skipped;
-        anyCanceled  = anyCanceled || item->completion == FileOperations::ItemCompletion::Canceled;
+        anyIndeterminate = anyIndeterminate || item->completion == FileOperations::ItemCompletion::Indeterminate ||
+                           (item->completion != FileOperations::ItemCompletion::Canceled &&
+                            (item->publication == FileOperations::PublicationState::Unknown ||
+                             item->sourceDisposition == FileOperations::SourceDisposition::Unknown));
+        anyCompleted     = anyCompleted || item->completion == FileOperations::ItemCompletion::Completed;
+        anySkipped       = anySkipped || item->completion == FileOperations::ItemCompletion::Skipped;
+        anyCanceled      = anyCanceled || item->completion == FileOperations::ItemCompletion::Canceled;
         if (item->completion == FileOperations::ItemCompletion::Failed)
         {
             anyFailed = true;
@@ -10418,7 +10463,7 @@ bool ShouldRetryPublishedDestinationVerification(HRESULT hr) noexcept
 
 HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
 {
-    const uint64_t executeStartedUs                                           = PerfNowUs();
+    const uint64_t executeStartedUs = PerfNowUs();
     const std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans = LoadPlans();
     if (! plans || plans->size() != 1u || ! _fileSystem)
     {
@@ -10426,7 +10471,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
     }
     const auto* rename = std::get_if<FileOperations::RenamePlan>(&plans->front());
     if (rename == nullptr || rename->origin != FileOperations::RenameOrigin::InlineRename || rename->finalMappings.size() != 1u ||
-        ! rename->schedule.layers.empty() || ! rename->schedule.cycleOperationIndices.empty() || ! rename->endpoint.pathIdentity.has_value())
+        ! rename->schedule.layers.empty() || ! rename->schedule.cycleOperationIndices.empty() ||
+        ! rename->endpoint.pathIdentity.has_value())
     {
         return E_UNEXPECTED;
     }
@@ -10445,19 +10491,21 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
     }
     const auto queryNameContract = [&]() noexcept
     {
-        return FileSystemRouteContract::QueryChildNameContract(_fileSystem.get(), parentPath, step.finalLeafName, FILESYSTEM_RENAME, rename->endpoint.pluginId);
+        return FileSystemRouteContract::QueryChildNameContract(
+            _fileSystem.get(), parentPath, step.finalLeafName, FILESYSTEM_RENAME, rename->endpoint.pluginId);
     };
     const auto nameContractMatchesAdmission = [&](const FileSystemRouteContract::ChildNameContractResult& contract) noexcept
     {
-        return contract.state == FileSystemRouteContract::QueryState::Available && contract.nameStatus == FILESYSTEM_CHILD_NAME_VALID &&
-               contract.joinedPath == step.providerJoinedPath && contract.collisionKey == step.providerCollisionKey;
+        return contract.state == FileSystemRouteContract::QueryState::Available &&
+               contract.nameStatus == FILESYSTEM_CHILD_NAME_VALID && contract.joinedPath == step.providerJoinedPath &&
+               contract.collisionKey == step.providerCollisionKey;
     };
     const FileSystemRouteContract::ChildNameContractResult initialNameContract = queryNameContract();
     if (! nameContractMatchesAdmission(initialNameContract))
     {
         return initialNameContract.state == FileSystemRouteContract::QueryState::Available && FAILED(initialNameContract.failureStatus)
-                   ? initialNameContract.failureStatus
-                   : (FAILED(initialNameContract.status) ? initialNameContract.status : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
+            ? initialNameContract.failureStatus
+            : (FAILED(initialNameContract.status) ? initialNameContract.status : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
     }
     const std::wstring destinationPath = initialNameContract.joinedPath;
     if (destinationPath.empty() || destinationPath == sourcePath)
@@ -10595,9 +10643,10 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteInlineRename() noexcept
         const FileSystemRouteContract::ChildNameContractResult currentNameContract = queryNameContract();
         if (! nameContractMatchesAdmission(currentNameContract) || currentNameContract.joinedPath != destinationPath)
         {
-            const HRESULT status = currentNameContract.state == FileSystemRouteContract::QueryState::Available && FAILED(currentNameContract.failureStatus)
-                                       ? currentNameContract.failureStatus
-                                       : (FAILED(currentNameContract.status) ? currentNameContract.status : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
+            const HRESULT status = currentNameContract.state == FileSystemRouteContract::QueryState::Available &&
+                    FAILED(currentNameContract.failureStatus)
+                ? currentNameContract.failureStatus
+                : (FAILED(currentNameContract.status) ? currentNameContract.status : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
             recordStatus(status, false);
             return status;
         }
@@ -10815,9 +10864,10 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRenameMutation(const
         return E_UNEXPECTED;
     }
     const auto* rename = std::get_if<FileOperations::RenamePlan>(&plans->front());
-    const bool scheduledRename =
-        rename != nullptr && (rename->origin == FileOperations::RenameOrigin::BatchRename || rename->origin == FileOperations::RenameOrigin::ChangeCase);
-    if (! scheduledRename || ! rename->endpoint.pathIdentity.has_value() || operationIndex >= rename->finalMappings.size())
+    const bool scheduledRename = rename != nullptr &&
+        (rename->origin == FileOperations::RenameOrigin::BatchRename || rename->origin == FileOperations::RenameOrigin::ChangeCase);
+    if (! scheduledRename || ! rename->endpoint.pathIdentity.has_value() ||
+        operationIndex >= rename->finalMappings.size())
     {
         return E_UNEXPECTED;
     }
@@ -10833,8 +10883,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRenameMutation(const
     std::wstring admittedSourceLeaf;
     const std::optional<std::wstring> admittedParentKey =
         TryGetFileSystemParentPath(rename->endpoint.pathIdentity.value(), sourcePath.native(), admittedParentPath)
-            ? TryMakePathKey(rename->endpoint.pathIdentity.value(), admittedParentPath)
-            : std::nullopt;
+        ? TryMakePathKey(rename->endpoint.pathIdentity.value(), admittedParentPath)
+        : std::nullopt;
     if (! admittedParentKey.has_value() || admittedParentKey.value() != admittedStep.providerParentKey ||
         ! TryGetFileSystemLeafName(rename->endpoint.pathIdentity.value(), sourcePath.native(), admittedSourceLeaf) ||
         destinationPath.native() != admittedStep.providerJoinedPath)
@@ -10855,9 +10905,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRenameMutation(const
         const FileSystemRouteContract::ChildNameContractResult current = FileSystemRouteContract::QueryChildNameContract(
             _fileSystem.get(), admittedParentPath, admittedStep.finalLeafName, FILESYSTEM_RENAME, rename->endpoint.pluginId);
         if (source.state == FileSystemRouteContract::QueryState::Available && source.nameStatus == FILESYSTEM_CHILD_NAME_VALID &&
-            source.collisionKey == admittedStep.providerSourceCollisionKey && current.state == FileSystemRouteContract::QueryState::Available &&
-            current.nameStatus == FILESYSTEM_CHILD_NAME_VALID && current.joinedPath == admittedStep.providerJoinedPath &&
-            current.collisionKey == admittedStep.providerCollisionKey)
+            source.collisionKey == admittedStep.providerSourceCollisionKey &&
+            current.state == FileSystemRouteContract::QueryState::Available && current.nameStatus == FILESYSTEM_CHILD_NAME_VALID &&
+            current.joinedPath == admittedStep.providerJoinedPath && current.collisionKey == admittedStep.providerCollisionKey)
         {
             return S_OK;
         }
@@ -11078,9 +11128,10 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRename() noexcept
         return E_UNEXPECTED;
     }
     const auto* rename = std::get_if<FileOperations::RenamePlan>(&plans->front());
-    const bool scheduledRename =
-        rename != nullptr && (rename->origin == FileOperations::RenameOrigin::BatchRename || rename->origin == FileOperations::RenameOrigin::ChangeCase);
-    if (! scheduledRename || ! rename->endpoint.pathIdentity.has_value() || rename->finalMappings.size() != _sourcePaths.size())
+    const bool scheduledRename = rename != nullptr &&
+        (rename->origin == FileOperations::RenameOrigin::BatchRename || rename->origin == FileOperations::RenameOrigin::ChangeCase);
+    if (! scheduledRename || ! rename->endpoint.pathIdentity.has_value() ||
+        rename->finalMappings.size() != _sourcePaths.size())
     {
         return E_UNEXPECTED;
     }
@@ -11162,10 +11213,10 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRename() noexcept
             return E_INVALIDARG;
         }
         const std::optional<std::wstring> parentKey = TryMakePathKey(rename->endpoint.pathIdentity.value(), parentPath);
-        const FileSystemRouteContract::ChildNameContractResult sourceName =
-            FileSystemRouteContract::QueryChildNameContract(_fileSystem.get(), parentPath, sourceLeaf, FILESYSTEM_RENAME, rename->endpoint.pluginId);
-        const FileSystemRouteContract::ChildNameContractResult finalName =
-            FileSystemRouteContract::QueryChildNameContract(_fileSystem.get(), parentPath, step.finalLeafName, FILESYSTEM_RENAME, rename->endpoint.pluginId);
+        const FileSystemRouteContract::ChildNameContractResult sourceName = FileSystemRouteContract::QueryChildNameContract(
+            _fileSystem.get(), parentPath, sourceLeaf, FILESYSTEM_RENAME, rename->endpoint.pluginId);
+        const FileSystemRouteContract::ChildNameContractResult finalName = FileSystemRouteContract::QueryChildNameContract(
+            _fileSystem.get(), parentPath, step.finalLeafName, FILESYSTEM_RENAME, rename->endpoint.pluginId);
         if (! parentKey.has_value() || sourceName.state != FileSystemRouteContract::QueryState::Available ||
             sourceName.nameStatus != FILESYSTEM_CHILD_NAME_VALID || sourceName.collisionKey.empty() ||
             finalName.state != FileSystemRouteContract::QueryState::Available || finalName.nameStatus != FILESYSTEM_CHILD_NAME_VALID ||
@@ -11175,23 +11226,24 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRename() noexcept
             const HRESULT status = sourceName.state == FileSystemRouteContract::QueryState::Available &&
                                            sourceName.nameStatus == FILESYSTEM_CHILD_NAME_INVALID && FAILED(sourceName.failureStatus)
                                        ? sourceName.failureStatus
-                                   : FAILED(sourceName.status) ? sourceName.status
+                                   : FAILED(sourceName.status)
+                                       ? sourceName.status
                                    : finalName.state == FileSystemRouteContract::QueryState::Available &&
-                                           finalName.nameStatus == FILESYSTEM_CHILD_NAME_INVALID && FAILED(finalName.failureStatus)
+                                             finalName.nameStatus == FILESYSTEM_CHILD_NAME_INVALID && FAILED(finalName.failureStatus)
                                        ? finalName.failureStatus
                                        : (FAILED(finalName.status) ? finalName.status : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
             storePreMutationFailure(index, status);
             return status;
         }
         operations.push_back(BatchRenameExecutionOp{
-            .originalSource             = sourcePath,
-            .finalLeaf                  = step.finalLeafName,
-            .providerFinalPath          = step.providerJoinedPath,
-            .providerParentKey          = parentKey.value(),
+            .originalSource = sourcePath,
+            .finalLeaf      = step.finalLeafName,
+            .providerFinalPath = step.providerJoinedPath,
+            .providerParentKey = parentKey.value(),
             .providerSourceCollisionKey = sourceName.collisionKey,
-            .providerFinalCollisionKey  = finalName.collisionKey,
-            .depth                      = PathDepthKey(sourcePath),
-            .isDirectory                = isDirectory,
+            .providerFinalCollisionKey = finalName.collisionKey,
+            .depth          = PathDepthKey(sourcePath),
+            .isDirectory    = isDirectory,
         });
     }
 
@@ -11202,8 +11254,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRename() noexcept
     for (size_t index = 0u; index < operations.size(); ++index)
     {
         const BatchRenameExecutionOp& operation = operations[index];
-        const bool destinationIsPlannedSource   = std::ranges::any_of(operations, [&](const BatchRenameExecutionOp& candidate) noexcept {
-            return operation.providerParentKey == candidate.providerParentKey && operation.providerFinalCollisionKey == candidate.providerSourceCollisionKey;
+        const bool destinationIsPlannedSource = std::ranges::any_of(operations, [&](const BatchRenameExecutionOp& candidate) noexcept {
+            return operation.providerParentKey == candidate.providerParentKey &&
+                   operation.providerFinalCollisionKey == candidate.providerSourceCollisionKey;
         });
         if (destinationIsPlannedSource)
         {
@@ -11228,8 +11281,10 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRename() noexcept
         Task* task                                                     = nullptr;
         std::vector<FileOperations::BoundObjectAuthority>* authorities = nullptr;
     } context{.task = this, .authorities = &authorities};
-    const auto mutation =
-        [](void* raw, const size_t operationIndex, const std::filesystem::path& sourcePath, const std::filesystem::path& destinationPath) noexcept -> HRESULT
+    const auto mutation = [](void* raw,
+                             const size_t operationIndex,
+                             const std::filesystem::path& sourcePath,
+                             const std::filesystem::path& destinationPath) noexcept -> HRESULT
     {
         auto* const execution = static_cast<ExecutionContext*>(raw);
         return execution != nullptr && execution->task != nullptr && execution->authorities != nullptr
@@ -11260,7 +11315,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteBatchRename() noexcept
         }
     };
 
-    const auto executionStartedAt        = std::chrono::steady_clock::now();
+    const auto executionStartedAt = std::chrono::steady_clock::now();
     BatchRenameExecutionResult execution = RunBatchRenameExecutionEngine(_cancelled,
                                                                          rename->endpoint.pathIdentity.value(),
                                                                          std::move(operations),
@@ -11364,7 +11419,7 @@ enum class QualifiedItemFailurePhase : uint8_t
 // Exact no-follow classification; a profile without object binding falls back to attributes.
 [[nodiscard]] bool IsRegularDirectoryObject(IFileSystem& fileSystem, IFileSystemIO& io, std::wstring_view pathProfileId, const std::wstring& path) noexcept
 {
-    constexpr FileSystemBindFlags bindFlags           = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+    constexpr FileSystemBindFlags bindFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
     const FileOperations::ObjectBindingResult binding = FileOperations::BindObjectAuthority(&fileSystem, path, pathProfileId, bindFlags);
     if (binding.state == FileOperations::ObjectBindingState::Bound)
     {
@@ -11495,16 +11550,17 @@ struct CrossFileSystemBridge
         FileOperations::BoundObjectAuthority copyAuthority{};
         wil::com_ptr<IFileSystemBoundObject> expectedDestination;
         FileSystemBasicInformation basicInformation{};
-        bool hasBasicInformation    = false;
-        bool overwriteGranted       = false;
-        bool replaceReadOnlyGranted = false;
-        bool replaceLinkGranted     = false;
+        bool hasBasicInformation       = false;
+        bool overwriteGranted          = false;
+        bool replaceReadOnlyGranted    = false;
+        bool replaceLinkGranted        = false;
 
         [[nodiscard]] FileOperations::BoundObjectAuthority* ReadAuthority() noexcept
         {
             return cleanupRecord.armed ? &cleanupRecord.authority : &copyAuthority;
         }
     };
+
 
     struct ConnectionLimit final
     {
@@ -11590,7 +11646,8 @@ struct CrossFileSystemBridge
           verificationHostReadback(verificationHostReadbackIn),
           verificationProviderBlake3Proof(verificationProviderBlake3ProofIn),
           verificationWriterDigestProof(verificationWriterDigestProofIn),
-          verificationState(verificationRequestedIn ? FileOperations::VerificationState::NotApplicable : FileOperations::VerificationState::NotRequested)
+          verificationState(verificationRequestedIn ? FileOperations::VerificationState::NotApplicable
+                                                    : FileOperations::VerificationState::NotRequested)
     {
         if (verificationRequested)
         {
@@ -11622,8 +11679,9 @@ struct CrossFileSystemBridge
         const uint64_t reservationBytes = static_cast<uint64_t>(bufferBytes) * 2ull;
         if (! bufferBudgetLease.Acquire(reservationBytes, task._cancelled, task._stopToken))
         {
-            bufferAllocationHr =
-                (task._cancelled.load(std::memory_order_acquire) || task._stopToken.stop_requested()) ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : E_OUTOFMEMORY;
+            bufferAllocationHr = (task._cancelled.load(std::memory_order_acquire) || task._stopToken.stop_requested())
+                                     ? HRESULT_FROM_WIN32(ERROR_CANCELLED)
+                                     : E_OUTOFMEMORY;
             return;
         }
         buffer.reset(new (std::nothrow) std::byte[bufferBytes]);
@@ -11694,13 +11752,14 @@ struct CrossFileSystemBridge
                                                HRESULT status) noexcept
     {
         task._bridgeTraversalLimitHitCount.fetch_add(1u, std::memory_order_acq_rel);
-        task.LogDiagnostic(
-            FileOperationState::DiagnosticSeverity::Error,
-            status,
-            std::wstring(code),
-            std::format(L"Traversal stopped at this item after reaching the {} limit ({:L}). Prior completed items remain published.", limitName, limit),
-            sourcePath,
-            destinationPath);
+        task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
+                           status,
+                           std::wstring(code),
+                           std::format(L"Traversal stopped at this item after reaching the {} limit ({:L}). Prior completed items remain published.",
+                                       limitName,
+                                       limit),
+                           sourcePath,
+                           destinationPath);
         return status;
     }
 
@@ -11749,7 +11808,8 @@ struct CrossFileSystemBridge
         const bool entryLimit = rejection == Rejection::EntryCount;
         return ReportTraversalLimit(entryLimit ? L"bridge.traversal.entryLimit" : L"bridge.traversal.pathBudget",
                                     entryLimit ? L"queued work entries" : L"queued UTF-16 path bytes",
-                                    entryLimit ? Common::FileOperations::kTraversalMaxQueuedEntries : Common::FileOperations::kTraversalMaxQueuedPathBytes,
+                                    entryLimit ? Common::FileOperations::kTraversalMaxQueuedEntries
+                                               : Common::FileOperations::kTraversalMaxQueuedPathBytes,
                                     sourcePath,
                                     destinationPath,
                                     HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY));
@@ -11787,7 +11847,10 @@ struct CrossFileSystemBridge
         return std::format(L"{} because {}", renameMerge ? L"Moved; source folder kept" : L"Copied; source kept", detail);
     }
 
-    void MarkManagedSourceRetained(const std::wstring& sourcePath, const std::wstring& destinationPath, HRESULT status, std::wstring_view reason) noexcept
+    void MarkManagedSourceRetained(const std::wstring& sourcePath,
+                                   const std::wstring& destinationPath,
+                                   HRESULT status,
+                                   std::wstring_view reason) noexcept
     {
         if (! sourceCleanupPermitted)
         {
@@ -11827,7 +11890,9 @@ struct CrossFileSystemBridge
         return RequestDeferredConsent(task, request);
     }
 
-    void ReportMetadataOutcome(const std::wstring& sourcePath, const std::wstring& destinationPath, const FileSystemMetadataTransferResult& result) noexcept
+    void ReportMetadataOutcome(const std::wstring& sourcePath,
+                               const std::wstring& destinationPath,
+                               const FileSystemMetadataTransferResult& result) noexcept
     {
         struct Feature final
         {
@@ -11896,7 +11961,8 @@ struct CrossFileSystemBridge
             return S_FALSE;
         }
 
-        FileSystemBindFlags bindFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_DELETE);
+        FileSystemBindFlags bindFlags =
+            static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_DELETE);
         if (expectedKind == FILESYSTEM_BOUND_REGULAR_FILE)
         {
             bindFlags = static_cast<FileSystemBindFlags>(bindFlags | FILESYSTEM_BIND_READ_CONTENT);
@@ -12045,9 +12111,16 @@ struct CrossFileSystemBridge
 
             const ConflictBucket bucket                 = ClassifyManagedCleanupConflictBucket(deleteHr);
             const bool allowRetry                       = IsRetryableConflictBucket(bucket) && cleanupRecord.retryCount == 0u;
-            const ConflictPromptBeginResult promptBegin = BeginConflictPrompt(
-                task, static_cast<PerItemCallbackCookie*>(cookie), bucket, deleteHr, sourcePath, destinationPath, allowRetry, cleanupRecord.retryCount, false);
-            ConflictAction action = promptBegin.action;
+            const ConflictPromptBeginResult promptBegin = BeginConflictPrompt(task,
+                                                                              static_cast<PerItemCallbackCookie*>(cookie),
+                                                                              bucket,
+                                                                              deleteHr,
+                                                                              sourcePath,
+                                                                              destinationPath,
+                                                                              allowRetry,
+                                                                              cleanupRecord.retryCount,
+                                                                              false);
+            ConflictAction action                       = promptBegin.action;
             if (promptBegin.ownsPrompt)
             {
                 action = WaitForConflictDecision(task, cookie, promptBegin.decisionScope).first;
@@ -12365,7 +12438,7 @@ struct CrossFileSystemBridge
     {
         mutationAttemptFlags.fetch_or(kStageCleanupAttemptedFlag, std::memory_order_acq_rel);
         FileSystemConditionalMutationResult abortResult{};
-        abortResult.sizeBytes                  = sizeof(abortResult);
+        abortResult.sizeBytes = sizeof(abortResult);
         const FileSystemOptions cleanupOptions = MakeOwnedStageCleanupOptions(&options);
         const HRESULT abortHr                  = ownedStage.AbortOwnedObject(&cleanupOptions, &abortResult);
         if (abortResult.outcomeKnown == FALSE)
@@ -12569,8 +12642,14 @@ struct CrossFileSystemBridge
             task._dbgCallbackActiveScopeCount.fetch_add(1u, std::memory_order_relaxed);
             const auto dbgCallbackScope = wil::scope_exit([&] noexcept { task._dbgCallbackActiveScopeCount.fetch_sub(1u, std::memory_order_relaxed); });
 #endif
-            issueHr = task.FileSystemIssue(
-                task.GetOperation(), sourcePath.c_str(), destinationPath.c_str(), issueStatus, &action, expectedDestination.put(), &issueOptions, cookie);
+            issueHr = task.FileSystemIssue(task.GetOperation(),
+                                           sourcePath.c_str(),
+                                           destinationPath.c_str(),
+                                           issueStatus,
+                                           &action,
+                                           expectedDestination.put(),
+                                           &issueOptions,
+                                           cookie);
             if (perItemCookie != nullptr && perItemCookie->keepBothRequested)
             {
                 keepBothRequested                = true;
@@ -12658,9 +12737,10 @@ struct CrossFileSystemBridge
 
     [[nodiscard]] HRESULT ClassifyExistingDestinationObject(const std::wstring& destinationPath, FileSystemBoundObjectKind& kind) noexcept
     {
-        kind                                        = FILESYSTEM_BOUND_OTHER;
-        constexpr FileSystemBindFlags bindFlags     = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
-        FileOperations::ObjectBindingResult binding = FileOperations::BindObjectAuthority(&destinationFs, destinationPath, destinationPathProfileId, bindFlags);
+        kind                                    = FILESYSTEM_BOUND_OTHER;
+        constexpr FileSystemBindFlags bindFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA);
+        FileOperations::ObjectBindingResult binding =
+            FileOperations::BindObjectAuthority(&destinationFs, destinationPath, destinationPathProfileId, bindFlags);
         if (binding.state == FileOperations::ObjectBindingState::Missing)
         {
             return S_FALSE;
@@ -12764,7 +12844,8 @@ struct CrossFileSystemBridge
         }
         if (deleteHr == HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY))
         {
-            MarkManagedSourceRetained(sourcePath, destinationPath, deleteHr, SourceKeptReason(L"the source directory gained or retained an unselected child."));
+            MarkManagedSourceRetained(
+                sourcePath, destinationPath, deleteHr, SourceKeptReason(L"the source directory gained or retained an unselected child."));
             return S_OK;
         }
         NoteFailure(QualifiedItemFailurePhase::SourceCleanup, deleteHr);
@@ -12973,7 +13054,10 @@ struct CrossFileSystemBridge
         }
     }
 
-    [[nodiscard]] HRESULT MarkReparseSkipped(const std::wstring& sourcePath, const std::wstring& destinationPath, bool isDirectory, bool isRoot) noexcept
+    [[nodiscard]] HRESULT MarkReparseSkipped(const std::wstring& sourcePath,
+                                             const std::wstring& destinationPath,
+                                             bool isDirectory,
+                                             bool isRoot) noexcept
     {
         if (isDirectory)
         {
@@ -13007,7 +13091,8 @@ struct CrossFileSystemBridge
 
     [[nodiscard]] static bool IsMissingPathHr(HRESULT hr) noexcept
     {
-        return hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || hr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND) || hr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+        return hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || hr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND) ||
+               hr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
     }
 
     [[nodiscard]] HRESULT VerifyPublishedDestinationSize(const std::wstring& destinationPath,
@@ -13198,15 +13283,17 @@ struct CrossFileSystemBridge
             Debug::Perf::Emit(L"FileOps.Verification", L"proof=writer-digest", PerfElapsedUs(verificationStartUs), expectedSizeBytes, 0u, S_OK);
             return S_OK;
         }
-        HRESULT hr = task.ReportVerificationProgress(
+        HRESULT hr                         = task.ReportVerificationProgress(
             sourcePath.c_str(), destinationPath.c_str(), expectedSizeBytes, 0u, verificationCompletedBytes.load(std::memory_order_acquire), true);
         if (FAILED(hr))
         {
             StoreVerificationState(FileOperations::VerificationState::Canceled);
             if (managedCleanupRecord.armed)
             {
-                MarkManagedSourceRetained(
-                    sourcePath, destinationPath, HRESULT_FROM_WIN32(ERROR_CANCELLED), LoadStringResource(nullptr, IDS_FILEOPS_RETAINED_VERIFICATION_CANCELED));
+                MarkManagedSourceRetained(sourcePath,
+                                          destinationPath,
+                                          HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                                          LoadStringResource(nullptr, IDS_FILEOPS_RETAINED_VERIFICATION_CANCELED));
             }
             managedCleanupRecord = {};
             return HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -13218,8 +13305,8 @@ struct CrossFileSystemBridge
 #ifdef ENABLE_TESTS
         const bool forceUnavailable =
             ConsumeBridgeCounterForSelfTest(g_fileOpsVerificationForceUnavailableCount, g_fileOpsVerificationForceUnavailableAttempts);
-        const bool forceHostReadback =
-            ! forceUnavailable && ConsumeBridgeCounterForSelfTest(g_fileOpsVerificationForceHostReadbackCount, g_fileOpsVerificationForceHostReadbackAttempts);
+        const bool forceHostReadback = ! forceUnavailable && ConsumeBridgeCounterForSelfTest(g_fileOpsVerificationForceHostReadbackCount,
+                                                                                             g_fileOpsVerificationForceHostReadbackAttempts);
 #else
         constexpr bool forceUnavailable  = false;
         constexpr bool forceHostReadback = false;
@@ -13336,8 +13423,10 @@ struct CrossFileSystemBridge
             StoreVerificationState(FileOperations::VerificationState::Canceled);
             if (managedCleanupRecord.armed)
             {
-                MarkManagedSourceRetained(
-                    sourcePath, destinationPath, HRESULT_FROM_WIN32(ERROR_CANCELLED), LoadStringResource(nullptr, IDS_FILEOPS_RETAINED_VERIFICATION_CANCELED));
+                MarkManagedSourceRetained(sourcePath,
+                                          destinationPath,
+                                          HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                                          LoadStringResource(nullptr, IDS_FILEOPS_RETAINED_VERIFICATION_CANCELED));
             }
             managedCleanupRecord = {};
             return HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -13377,7 +13466,8 @@ struct CrossFileSystemBridge
             // An opaque provider proof may complete in one callback, but its verified byte
             // count still shares the configured data budget with transfer work.
             ThrottleThreadSafe(transferredBytes + completedAfter);
-            hr = task.ReportVerificationProgress(sourcePath.c_str(), destinationPath.c_str(), expectedSizeBytes, expectedSizeBytes, completedAfter, true);
+            hr = task.ReportVerificationProgress(
+                sourcePath.c_str(), destinationPath.c_str(), expectedSizeBytes, expectedSizeBytes, completedAfter, true);
             if (FAILED(hr))
             {
                 StoreVerificationState(FileOperations::VerificationState::Canceled);
@@ -13486,7 +13576,8 @@ struct CrossFileSystemBridge
         initSide(destinationPath, false);
     }
 
-    [[nodiscard]] HRESULT AcquireCopyMovePermits(ConnectionConcurrencyLimiter::Permit& outFirst, ConnectionConcurrencyLimiter::Permit& outSecond) noexcept
+    [[nodiscard]] HRESULT AcquireCopyMovePermits(ConnectionConcurrencyLimiter::Permit& outFirst,
+                                                 ConnectionConcurrencyLimiter::Permit& outSecond) noexcept
     {
         outFirst  = {};
         outSecond = {};
@@ -13673,8 +13764,14 @@ struct CrossFileSystemBridge
         bool keepBothRequested        = false;
         const HRESULT collisionStatus = linkCollision ? HRESULT_FROM_WIN32(ERROR_REPARSE_POINT_ENCOUNTERED)
                                                       : HRESULT_FROM_WIN32(readonlyCollision ? ERROR_ACCESS_DENIED : ERROR_ALREADY_EXISTS);
-        const HRESULT promptHr        = PromptDestinationCollision(
-            sourcePath, destinationPath, collisionStatus, overwriteGranted, replaceReadOnlyGranted, replaceLinkGranted, keepBothRequested, expectedDestination);
+        const HRESULT promptHr        = PromptDestinationCollision(sourcePath,
+                                                                   destinationPath,
+                                                                   collisionStatus,
+                                                                   overwriteGranted,
+                                                                   replaceReadOnlyGranted,
+                                                                   replaceLinkGranted,
+                                                                   keepBothRequested,
+                                                                   expectedDestination);
         if (! keepBothRequested)
         {
             if (SUCCEEDED(promptHr) && promptHr != S_FALSE && overwriteGranted && ! expectedDestination)
@@ -13733,9 +13830,9 @@ struct CrossFileSystemBridge
                                     .replaceReadOnlyGranted = replaceReadOnlyGranted,
                                     .replaceLinkGranted     = replaceLinkGranted,
                                     .unknownCategory        = L"bridge.publication.unknown",
-                                    .unknownMessage         = L"Publication outcome is unknown; destination and visible stage are retained for reconciliation.",
-                                    .partialCategory        = L"bridge.publication.cleanupPartial",
-                                    .partialMessage         = L"Destination was published, but exact post-publication cleanup was incomplete."},
+                                    .unknownMessage = L"Publication outcome is unknown; destination and visible stage are retained for reconciliation.",
+                                    .partialCategory = L"bridge.publication.cleanupPartial",
+                                    .partialMessage  = L"Destination was published, but exact post-publication cleanup was incomplete."},
                                    publishedAuthority,
                                    promoted,
                                    ownedStageCleanupAllowed);
@@ -13774,13 +13871,13 @@ struct CrossFileSystemBridge
         publicationResult.sizeBytes       = sizeof(publicationResult);
         const uint64_t publicationStartUs = PerfNowUs();
         mutationAttemptFlags.fetch_or(kFinalPublishAttemptedFlag, std::memory_order_acq_rel);
-        const HRESULT publishHr =
-            ownedStage->PublishAs(destinationPath.c_str(),
-                                  publication.expectedDestination,
-                                  BuildPublicationFlags(publication.overwriteGranted, publication.replaceReadOnlyGranted, publication.replaceLinkGranted),
-                                  &options,
-                                  &publicationResult,
-                                  publishedAuthority.put());
+        const HRESULT publishHr = ownedStage->PublishAs(
+            destinationPath.c_str(),
+            publication.expectedDestination,
+            BuildPublicationFlags(publication.overwriteGranted, publication.replaceReadOnlyGranted, publication.replaceLinkGranted),
+            &options,
+            &publicationResult,
+            publishedAuthority.put());
         task._perf.bridgePublicationUs.fetch_add(PerfElapsedUs(publicationStartUs), std::memory_order_relaxed);
         task._perf.bridgePublicationCount.fetch_add(1u, std::memory_order_relaxed);
 
@@ -13939,9 +14036,9 @@ struct CrossFileSystemBridge
                 return HRESULT_FROM_WIN32(ERROR_CANCELLED);
             }
 
-            unsigned long bytesWritten = 0;
-            const unsigned long toWrite =
-                static_cast<unsigned long>(std::min(static_cast<size_t>(chunkBytes - offset), static_cast<size_t>(std::numeric_limits<unsigned long>::max())));
+            unsigned long bytesWritten  = 0;
+            const unsigned long toWrite = static_cast<unsigned long>(
+                std::min(static_cast<size_t>(chunkBytes - offset), static_cast<size_t>(std::numeric_limits<unsigned long>::max())));
             const uint64_t writeStartUs = PerfNowUs();
             const HRESULT hrWrite       = writer.Write(chunk + offset, toWrite, &bytesWritten);
             writeUs += PerfElapsedUs(writeStartUs);
@@ -14065,8 +14162,7 @@ struct CrossFileSystemBridge
         std::optional<bool> writerProofMatched;
 
         PublicationTransaction(const std::wstring& sourcePathIn, std::wstring destinationPathIn) noexcept
-            : sourcePath(sourcePathIn),
-              destinationPath(std::move(destinationPathIn))
+            : sourcePath(sourcePathIn), destinationPath(std::move(destinationPathIn))
         {
             sourceMetadataSnapshot.sizeBytes = sizeof(sourceMetadataSnapshot);
             sourceBasicInfo.sizeBytes        = sizeof(FileSystemBasicInformation);
@@ -14137,19 +14233,19 @@ struct CrossFileSystemBridge
     // record, the source reader, and the sizes the transfer will be held to.
     [[nodiscard]] HRESULT BindSource(PublicationTransaction& txn, bool adoptFileSizeAsTotalWhenUnknown) noexcept
     {
-        const std::wstring& sourcePath                                = txn.sourcePath;
-        const std::wstring& destinationPath                           = txn.destinationPath;
-        FileOperations::BoundObjectAuthority& sourceMetadataAuthority = txn.sourceMetadataAuthority;
-        bool& legacySourceReaderAllowed                               = txn.legacySourceReaderAllowed;
-        wil::com_ptr<IFileSystemBoundMetadata>& sourceMetadata        = txn.sourceMetadata;
-        FileSystemMetadataSnapshot& sourceMetadataSnapshot            = txn.sourceMetadataSnapshot;
-        bool& hasSourceMetadataSnapshot                               = txn.hasSourceMetadataSnapshot;
-        bool& retainSourceByConsent                                   = txn.retainSourceByConsent;
-        ManagedSourceCleanupRecord& managedCleanupRecord              = txn.managedCleanupRecord;
+        const std::wstring& sourcePath                                 = txn.sourcePath;
+        const std::wstring& destinationPath                            = txn.destinationPath;
+        FileOperations::BoundObjectAuthority& sourceMetadataAuthority  = txn.sourceMetadataAuthority;
+        bool& legacySourceReaderAllowed                                = txn.legacySourceReaderAllowed;
+        wil::com_ptr<IFileSystemBoundMetadata>& sourceMetadata         = txn.sourceMetadata;
+        FileSystemMetadataSnapshot& sourceMetadataSnapshot             = txn.sourceMetadataSnapshot;
+        bool& hasSourceMetadataSnapshot                                = txn.hasSourceMetadataSnapshot;
+        bool& retainSourceByConsent                                    = txn.retainSourceByConsent;
+        ManagedSourceCleanupRecord& managedCleanupRecord               = txn.managedCleanupRecord;
 
         {
-            constexpr FileSystemBindFlags metadataFlags =
-                static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_CONTENT | FILESYSTEM_BIND_READ_METADATA);
+            constexpr FileSystemBindFlags metadataFlags = static_cast<FileSystemBindFlags>(
+                FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_CONTENT | FILESYSTEM_BIND_READ_METADATA);
             FileOperations::ObjectBindingResult metadataBinding =
                 FileOperations::BindObjectAuthority(&sourceFs, sourcePath, sourcePathProfileId, metadataFlags);
             if (metadataBinding.state == FileOperations::ObjectBindingState::Bound)
@@ -14170,13 +14266,13 @@ struct CrossFileSystemBridge
             }
         }
 
-        if (sourceMetadataAuthority.boundObject && SUCCEEDED(sourceMetadataAuthority.boundObject->QueryInterface(IID_PPV_ARGS(sourceMetadata.addressof()))) &&
-            sourceMetadata)
+        if (sourceMetadataAuthority.boundObject &&
+            SUCCEEDED(sourceMetadataAuthority.boundObject->QueryInterface(IID_PPV_ARGS(sourceMetadata.addressof()))) && sourceMetadata)
         {
-            const uint64_t inspectStartUs = PerfNowUs();
-            const HRESULT snapshotHr      = sourceMetadata->GetMetadataSnapshot(&options, &sourceMetadataSnapshot);
-            const std::wstring inspectDetail =
-                std::format(L"operation={} supported=0x{:X}", task._operation == FILESYSTEM_MOVE ? L"move" : L"copy", sourceMetadataSnapshot.supportedFeatures);
+            const uint64_t inspectStartUs    = PerfNowUs();
+            const HRESULT snapshotHr         = sourceMetadata->GetMetadataSnapshot(&options, &sourceMetadataSnapshot);
+            const std::wstring inspectDetail = std::format(
+                L"operation={} supported=0x{:X}", task._operation == FILESYSTEM_MOVE ? L"move" : L"copy", sourceMetadataSnapshot.supportedFeatures);
             Debug::Perf::Emit(L"FileOps.Metadata.InspectUs",
                               inspectDetail,
                               PerfElapsedUs(inspectStartUs),
@@ -14267,7 +14363,8 @@ struct CrossFileSystemBridge
         }
         else if (hrGetBasic != E_NOTIMPL && hrGetBasic != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
         {
-            Debug::Warning(L"CrossFileSystemBridge: GetFileBasicInformation failed for '{}' (hr={:#x})", sourcePath, static_cast<unsigned long>(hrGetBasic));
+            Debug::Warning(
+                L"CrossFileSystemBridge: GetFileBasicInformation failed for '{}' (hr={:#x})", sourcePath, static_cast<unsigned long>(hrGetBasic));
             task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Warning,
                                hrGetBasic,
                                L"bridge.metadata.read",
@@ -14317,7 +14414,8 @@ struct CrossFileSystemBridge
 
         wil::com_ptr<IFileSystemAtomicWriter> atomicWriterCapability;
         static_cast<void>(destinationFs.QueryInterface(IID_PPV_ARGS(atomicWriterCapability.addressof())));
-        txn.writerRoute = ResolveAtomicWriterRoute(atomicWriterCapability.get(), destinationPath.c_str(), flags, overwriteGranted, txn.replaceReadOnlyGranted);
+        txn.writerRoute =
+            ResolveAtomicWriterRoute(atomicWriterCapability.get(), destinationPath.c_str(), flags, overwriteGranted, txn.replaceReadOnlyGranted);
         const AtomicWriterRoute& writerRoute = txn.writerRoute;
 
         txn.identityLess     = ! destinationBinding;
@@ -14334,9 +14432,9 @@ struct CrossFileSystemBridge
         // provider's atomic-final writer, which carries the occupant the user saw.
         // R3-2: on such a route requested verification and Managed Move also use that writer,
         // proved by the provider's own digest of the published object.
-        txn.identityLessReplace   = overwriteGranted && ! txn.expectedDestination && txn.identityLess;
-        txn.useAtomicFinalWriter  = writerRoute.useAtomicFinalWriter && (! managedCleanupRecord.armed || txn.writerProofRoute) &&
-                                    (! overwriteGranted || txn.identityLessReplace) && (! verificationRequested || txn.writerProofRoute);
+        txn.identityLessReplace  = overwriteGranted && ! txn.expectedDestination && txn.identityLess;
+        txn.useAtomicFinalWriter = writerRoute.useAtomicFinalWriter && (! managedCleanupRecord.armed || txn.writerProofRoute) &&
+                                   (! overwriteGranted || txn.identityLessReplace) && (! verificationRequested || txn.writerProofRoute);
         txn.useIdentityOwnedStage = ! txn.identityLess && (managedCleanupRecord.armed || ! txn.useAtomicFinalWriter);
         if (! txn.useAtomicFinalWriter && ! txn.useIdentityOwnedStage)
         {
@@ -14362,13 +14460,13 @@ struct CrossFileSystemBridge
     // hashers it can answer) or an identity-owned stage, plus the stage's metadata interface.
     [[nodiscard]] HRESULT PrepareStage(PublicationTransaction& txn, uint64_t progressStreamId, bool& replaceRefused) noexcept
     {
-        const std::wstring& sourcePath                                                  = txn.sourcePath;
-        const std::wstring& destinationPath                                             = txn.destinationPath;
-        ManagedSourceCleanupRecord& managedCleanupRecord                                = txn.managedCleanupRecord;
-        wil::com_ptr<IFileWriter>& writer                                               = txn.writer;
-        wil::com_ptr<IFileWriterContentProof>& writerProof                              = txn.writerProof;
+        const std::wstring& sourcePath                   = txn.sourcePath;
+        const std::wstring& destinationPath              = txn.destinationPath;
+        ManagedSourceCleanupRecord& managedCleanupRecord = txn.managedCleanupRecord;
+        wil::com_ptr<IFileWriter>& writer                = txn.writer;
+        wil::com_ptr<IFileWriterContentProof>& writerProof = txn.writerProof;
         std::vector<std::unique_ptr<Common::Crypto::ContentHasher>>& writerProofHashers = txn.writerProofHashers;
-        HRESULT hr                                                                      = S_OK;
+        HRESULT hr                                       = S_OK;
 
         if (txn.useAtomicFinalWriter)
         {
@@ -14489,12 +14587,13 @@ struct CrossFileSystemBridge
         {
             // Compression is never transferred (the destination folder's state is inherited,
             // as in File Explorer), so it is never a pre-content loss.
-            const uint32_t preContentFeatures = sourceMetadataSnapshot.presentFeatures & (FILESYSTEM_METADATA_SPARSE | FILESYSTEM_METADATA_EFS);
+            const uint32_t preContentFeatures =
+                sourceMetadataSnapshot.presentFeatures & (FILESYSTEM_METADATA_SPARSE | FILESYSTEM_METADATA_EFS);
             if (txn.destinationStageMetadata)
             {
                 const uint64_t metadataStartUs = PerfNowUs();
-                const HRESULT metadataHr =
-                    txn.sourceMetadata->TransferMetadataTo(txn.ownedStage.get(), FILESYSTEM_METADATA_TRANSFER_PREPARE_CONTENT, &options, &metadataResult);
+                const HRESULT metadataHr = txn.sourceMetadata->TransferMetadataTo(
+                    txn.ownedStage.get(), FILESYSTEM_METADATA_TRANSFER_PREPARE_CONTENT, &options, &metadataResult);
                 Debug::Perf::Emit(L"FileOps.Metadata.ApplyUs",
                                   L"phase=prepare",
                                   PerfElapsedUs(metadataStartUs),
@@ -14573,25 +14672,25 @@ struct CrossFileSystemBridge
                                uint64_t progressStreamId,
                                std::atomic<uint64_t>& overallCompletedBytes) noexcept
     {
-        const std::wstring& sourcePath                                                  = txn.sourcePath;
-        const std::wstring& destinationPath                                             = txn.destinationPath;
-        ManagedSourceCleanupRecord& managedCleanupRecord                                = txn.managedCleanupRecord;
-        wil::com_ptr<IFileWriter>& writer                                               = txn.writer;
-        wil::com_ptr<IFileReader>& reader                                               = txn.reader;
-        const uint64_t fileTotalBytes                                                   = txn.fileTotalBytes;
-        const bool hasKnownFileTotalBytes                                               = txn.hasKnownFileTotalBytes;
-        uint64_t& fileCompletedBytes                                                    = txn.fileCompletedBytes;
-        std::optional<Common::Crypto::Blake3Hasher>& sourceHasher                       = txn.sourceHasher;
+        const std::wstring& sourcePath                   = txn.sourcePath;
+        const std::wstring& destinationPath              = txn.destinationPath;
+        ManagedSourceCleanupRecord& managedCleanupRecord = txn.managedCleanupRecord;
+        wil::com_ptr<IFileWriter>& writer                = txn.writer;
+        wil::com_ptr<IFileReader>& reader                = txn.reader;
+        const uint64_t fileTotalBytes                    = txn.fileTotalBytes;
+        const bool hasKnownFileTotalBytes                = txn.hasKnownFileTotalBytes;
+        uint64_t& fileCompletedBytes                     = txn.fileCompletedBytes;
+        std::optional<Common::Crypto::Blake3Hasher>& sourceHasher = txn.sourceHasher;
         std::vector<std::unique_ptr<Common::Crypto::ContentHasher>>& writerProofHashers = txn.writerProofHashers;
-        BridgeCopyPerf& copyPerf                                                        = txn.copyPerf;
-        HRESULT hr                                                                      = S_OK;
+        BridgeCopyPerf& copyPerf                         = txn.copyPerf;
+        HRESULT hr                                       = S_OK;
 
         const bool isMove         = managedCleanupRecord.armed;
         txn.isMove                = isMove;
         bool queryCommitSizeProof = isMove;
 #ifdef ENABLE_TESTS
         constexpr const wchar_t* kDisableCommitSizeProofEnv = L"REDSALAMANDER_FILEOPS_BRIDGE_DISABLE_COMMIT_SIZE_PROOF";
-        queryCommitSizeProof                                = queryCommitSizeProof && ! EnvironmentVariables::IsTruthyFlagSet(kDisableCommitSizeProofEnv);
+        queryCommitSizeProof = queryCommitSizeProof && ! EnvironmentVariables::IsTruthyFlagSet(kDisableCommitSizeProofEnv);
 #endif
         if (queryCommitSizeProof)
         {
@@ -14803,7 +14902,8 @@ struct CrossFileSystemBridge
                     {
                         std::unique_lock lock(pipelineMutex);
                         pipelineCv.wait(lock, [&]() noexcept {
-                            return pipelineStop.load(std::memory_order_acquire) || readerFinished.load(std::memory_order_acquire) || slots[writeIndex].ready;
+                            return pipelineStop.load(std::memory_order_acquire) || readerFinished.load(std::memory_order_acquire) ||
+                                   slots[writeIndex].ready;
                         });
                     }
                     writerWaitUs += PerfElapsedUs(waitStartUs);
@@ -14824,7 +14924,8 @@ struct CrossFileSystemBridge
 
                     if (! slotReady)
                     {
-                        hr = (stopped || CancelRequested()) ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : (finished ? S_OK : HRESULT_FROM_WIN32(ERROR_CANCELLED));
+                        hr = (stopped || CancelRequested()) ? HRESULT_FROM_WIN32(ERROR_CANCELLED)
+                                                            : (finished ? S_OK : HRESULT_FROM_WIN32(ERROR_CANCELLED));
                         break;
                     }
 
@@ -14892,8 +14993,9 @@ struct CrossFileSystemBridge
 
         if (hasKnownFileTotalBytes && fileCompletedBytes != fileTotalBytes)
         {
-            const HRESULT hrMismatch   = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
-            const std::wstring message = std::format(L"File copy size mismatch: expected {:L} bytes but wrote {:L} bytes.", fileTotalBytes, fileCompletedBytes);
+            const HRESULT hrMismatch = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+            const std::wstring message =
+                std::format(L"File copy size mismatch: expected {:L} bytes but wrote {:L} bytes.", fileTotalBytes, fileCompletedBytes);
             task.LogDiagnostic(
                 FileOperationState::DiagnosticSeverity::Error, hrMismatch, L"bridge.integrity.sizeMismatch", message, sourcePath, destinationPath);
             NoteFailure(QualifiedItemFailurePhase::StageWrite, hrMismatch);
@@ -14908,13 +15010,17 @@ struct CrossFileSystemBridge
         {
             const HRESULT partialHr = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
             const std::wstring message =
-                FAILED(positionHr)
-                    ? std::format(L"Destination writer position could not be verified before commit (hr=0x{:08X}).", static_cast<unsigned long>(positionHr))
-                    : std::format(L"Destination writer position mismatch before commit: reported {:L} bytes but persisted {:L} bytes.",
-                                  fileCompletedBytes,
-                                  writerPositionBytes);
-            task.LogDiagnostic(
-                FileOperationState::DiagnosticSeverity::Error, partialHr, L"bridge.integrity.writerPositionMismatch", message, sourcePath, destinationPath);
+                FAILED(positionHr) ? std::format(L"Destination writer position could not be verified before commit (hr=0x{:08X}).",
+                                                 static_cast<unsigned long>(positionHr))
+                                   : std::format(L"Destination writer position mismatch before commit: reported {:L} bytes but persisted {:L} bytes.",
+                                                 fileCompletedBytes,
+                                                 writerPositionBytes);
+            task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
+                               partialHr,
+                               L"bridge.integrity.writerPositionMismatch",
+                               message,
+                               sourcePath,
+                               destinationPath);
             NoteFailure(QualifiedItemFailurePhase::StageWrite, partialHr);
             return partialHr;
         }
@@ -15062,11 +15168,11 @@ struct CrossFileSystemBridge
             }
         }
 
-        const bool isMove                                         = txn.isMove;
-        const bool hasKnownFileTotalBytes                         = txn.hasKnownFileTotalBytes;
-        const uint64_t fileTotalBytes                             = txn.fileTotalBytes;
+        const bool isMove                                          = txn.isMove;
+        const bool hasKnownFileTotalBytes                          = txn.hasKnownFileTotalBytes;
+        const uint64_t fileTotalBytes                              = txn.fileTotalBytes;
         wil::com_ptr<IFileWriterCommitSizeProof>& commitSizeProof = txn.commitSizeProof;
-        bool committedSizeProven                                  = false;
+        bool committedSizeProven                                   = false;
         if (hasKnownFileTotalBytes && commitSizeProof)
         {
             uint64_t committedSizeBytes = 0u;
@@ -15193,10 +15299,11 @@ struct CrossFileSystemBridge
                         ? std::format(L"Cross-filesystem {} could not re-stat destination after promote (hr=0x{:08X}).",
                                       isMove ? L"MOVE" : L"COPY",
                                       static_cast<unsigned long>(hrDestinationSize))
-                        : std::format(L"Cross-filesystem {} destination size mismatch after promote: expected {:L} bytes but destination has {:L} bytes.",
-                                      isMove ? L"MOVE" : L"COPY",
-                                      txn.fileTotalBytes,
-                                      destinationSizeBytes);
+                        : std::format(
+                              L"Cross-filesystem {} destination size mismatch after promote: expected {:L} bytes but destination has {:L} bytes.",
+                              isMove ? L"MOVE" : L"COPY",
+                              txn.fileTotalBytes,
+                              destinationSizeBytes);
                 task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
                                    partialHr,
                                    L"bridge.integrity.destinationSizeMismatch",
@@ -15219,8 +15326,9 @@ struct CrossFileSystemBridge
                 txn.publishedAuthority ? txn.publishedAuthority->SetBasicInformation(&txn.sourceBasicInfo) : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
             if (FAILED(hrSetBasic) && hrSetBasic != E_NOTIMPL && hrSetBasic != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
             {
-                Debug::Warning(
-                    L"CrossFileSystemBridge: SetFileBasicInformation failed for '{}' (hr={:#x})", destinationPath, static_cast<unsigned long>(hrSetBasic));
+                Debug::Warning(L"CrossFileSystemBridge: SetFileBasicInformation failed for '{}' (hr={:#x})",
+                               destinationPath,
+                               static_cast<unsigned long>(hrSetBasic));
                 task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Warning,
                                    hrSetBasic,
                                    L"bridge.metadata.write",
@@ -15442,7 +15550,8 @@ struct CrossFileSystemBridge
         }
         // Literal Preserve: the provider reports the stored text with the outside-root mapping and
         // no source-relative component.
-        if (payload.information.targetMapping != FILESYSTEM_LINK_TARGET_OUTSIDE_SOURCE_ROOT || payload.information.sourceRelativeTargetLengthUtf16 != 0u)
+        if (payload.information.targetMapping != FILESYSTEM_LINK_TARGET_OUTSIDE_SOURCE_ROOT ||
+            payload.information.sourceRelativeTargetLengthUtf16 != 0u)
         {
             return E_UNEXPECTED;
         }
@@ -15450,7 +15559,7 @@ struct CrossFileSystemBridge
         payload.targetBuffer.assign(static_cast<size_t>(payload.information.targetLengthUtf16) + 1u, L'\0');
         payload.information.targetBuffer        = payload.targetBuffer.data();
         payload.information.targetCapacityUtf16 = static_cast<uint32_t>(payload.targetBuffer.size());
-        hr                                      = sourceBinding->ReadBoundLink(authority->boundObject.get(), &transform, &options, &payload.information);
+        hr = sourceBinding->ReadBoundLink(authority->boundObject.get(), &transform, &options, &payload.information);
         if (FAILED(hr))
         {
             return hr;
@@ -15547,9 +15656,9 @@ struct CrossFileSystemBridge
     HRESULT CopyLink(const std::wstring& sourcePath,
                      std::wstring destinationPath,
                      bool sourceIsDirectory,
-                     uint64_t directoryDepth   = 0u,
-                     bool* traverseAsDirectory = nullptr,
-                     bool* enqueueAsFile       = nullptr) noexcept
+                     uint64_t directoryDepth      = 0u,
+                     bool* traverseAsDirectory     = nullptr,
+                     bool* enqueueAsFile           = nullptr) noexcept
     {
         const bool isRoot   = traverseAsDirectory == nullptr;
         const auto skipLink = [&]() noexcept -> HRESULT
@@ -15629,8 +15738,9 @@ struct CrossFileSystemBridge
         }
         if (! destinationBinding)
         {
-            return unsupported(destinationBindingQueryHr == E_NOINTERFACE ? HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)
-                                                                          : (FAILED(destinationBindingQueryHr) ? destinationBindingQueryHr : E_UNEXPECTED),
+            return unsupported(destinationBindingQueryHr == E_NOINTERFACE
+                                   ? HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)
+                                   : (FAILED(destinationBindingQueryHr) ? destinationBindingQueryHr : E_UNEXPECTED),
                                L"Destination provider cannot create an exact owned link stage; Preserve cannot continue.");
         }
 
@@ -15722,11 +15832,12 @@ struct CrossFileSystemBridge
     // through the task itself; a provider that only reports the collision gets the bridge's prompt.
     HRESULT RelocateChild(const std::wstring& sourcePath, std::wstring destinationPath, bool isDirectory, bool isReparse, bool& traverseAsDirectory) noexcept
     {
-        traverseAsDirectory                 = false;
-        const bool sourceIsRegularDirectory = isDirectory && (! isReparse || IsRegularDirectoryObject(sourceFs, sourceIo, sourcePathProfileId, sourcePath));
-        FileSystemOptions moveOptions       = options;
-        moveOptions.moveMode                = FILESYSTEM_MOVE_NATIVE_ONLY;
-        FileSystemFlags moveFlags           = flags;
+        traverseAsDirectory = false;
+        const bool sourceIsRegularDirectory =
+            isDirectory && (! isReparse || IsRegularDirectoryObject(sourceFs, sourceIo, sourcePathProfileId, sourcePath));
+        FileSystemOptions moveOptions = options;
+        moveOptions.moveMode          = FILESYSTEM_MOVE_NATIVE_ONLY;
+        FileSystemFlags moveFlags     = flags;
         for (;;)
         {
             task.WaitWhilePaused();
@@ -15735,7 +15846,7 @@ struct CrossFileSystemBridge
                 return HRESULT_FROM_WIN32(ERROR_CANCELLED);
             }
             moveOptions.bandwidthLimitBytesPerSecond = bandwidthLimitBytesPerSecond.load(std::memory_order_acquire);
-            const HRESULT hr                         = sourceFs.MoveItem(sourcePath.c_str(), destinationPath.c_str(), moveFlags, &moveOptions, &task, cookie);
+            const HRESULT hr = sourceFs.MoveItem(sourcePath.c_str(), destinationPath.c_str(), moveFlags, &moveOptions, &task, cookie);
             if (SUCCEEDED(hr))
             {
                 anyDestinationPublished.store(true, std::memory_order_release);
@@ -15830,15 +15941,18 @@ struct CrossFileSystemBridge
         wil::com_ptr<IFilesInformation> info; // owns the FileInfo buffer the child views point into
         std::vector<FileInfo*> childEntries;
         std::vector<std::wstring_view> childNames;
-        size_t childIndex = 0u;
+        size_t childIndex         = 0u;
     };
 
     void RestoreSequentialDirectoryMetadata(SequentialDirectoryFrame& frame) noexcept
     {
         if (! frame.directoryMetadataRestored)
         {
-            RestoreCreatedDirectoryMetadata(
-                frame.sourcePath, frame.destinationPath, frame.directoryMetadataCaptured, frame.directoryBasicInfo, frame.createdDestinationAuthority.get());
+            RestoreCreatedDirectoryMetadata(frame.sourcePath,
+                                            frame.destinationPath,
+                                            frame.directoryMetadataCaptured,
+                                            frame.directoryBasicInfo,
+                                            frame.createdDestinationAuthority.get());
             frame.directoryMetadataRestored = true;
         }
     }
@@ -15881,8 +15995,8 @@ struct CrossFileSystemBridge
         frame.metadataReserved     = true;
         frame.registeredChildNames = MakeChildNameSet();
 
-        const bool continueOnError      = (flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) != 0;
-        frame.retentionGenerationBefore = managedSourceRetentionGeneration.load(std::memory_order_acquire);
+        const bool continueOnError       = (flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) != 0;
+        frame.retentionGenerationBefore  = managedSourceRetentionGeneration.load(std::memory_order_acquire);
 
         hr = PrepareManagedSourceAuthority(sourcePath, destinationPath, FILESYSTEM_BOUND_DIRECTORY, frame.managedDirectoryCleanup);
         if (FAILED(hr))
@@ -16120,13 +16234,13 @@ struct CrossFileSystemBridge
                     return HRESULT_FROM_WIN32(ERROR_CANCELLED);
                 }
 
-                const size_t childIndex        = frame.childIndex++;
-                const FileInfo* const entry    = frame.childEntries[childIndex];
-                const std::wstring_view name   = frame.childNames[childIndex];
-                const bool isDirectory         = (entry->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                const bool isReparse           = (entry->FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
-                const std::wstring childSource = JoinFolderAndLeaf(frame.sourcePath, name);
-                const std::wstring childDest   = JoinFolderAndLeaf(frame.destinationPath, name);
+                const size_t childIndex             = frame.childIndex++;
+                const FileInfo* const entry          = frame.childEntries[childIndex];
+                const std::wstring_view name         = frame.childNames[childIndex];
+                const bool isDirectory               = (entry->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+                const bool isReparse                 = (entry->FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+                const std::wstring childSource       = JoinFolderAndLeaf(frame.sourcePath, name);
+                const std::wstring childDest         = JoinFolderAndLeaf(frame.destinationPath, name);
 
                 if (isDirectory)
                 {
@@ -16254,10 +16368,10 @@ struct CrossFileSystemBridge
             CrossFsBridgeBufferLease localBufferBudgetLease;
             const uint64_t reservationBytes = static_cast<uint64_t>(bufferBytes) * 2ull;
             const bool acquiredBudget       = localBufferBudgetLease.Acquire(reservationBytes, task._cancelled, task._stopToken);
-            const HRESULT allocationHr =
-                acquiredBudget ? S_OK
-                               : ((task._cancelled.load(std::memory_order_acquire) || task._stopToken.stop_requested()) ? HRESULT_FROM_WIN32(ERROR_CANCELLED)
-                                                                                                                        : E_OUTOFMEMORY);
+            const HRESULT allocationHr      = acquiredBudget ? S_OK
+                                                             : ((task._cancelled.load(std::memory_order_acquire) || task._stopToken.stop_requested())
+                                                                    ? HRESULT_FROM_WIN32(ERROR_CANCELLED)
+                                                                    : E_OUTOFMEMORY);
             std::unique_ptr<std::byte[]> localBuffer;
             if (acquiredBudget)
             {
@@ -16381,8 +16495,12 @@ struct CrossFileSystemBridge
 
         ReferencedPerItemExecutionPolicy workerPolicy(workerProc);
         std::atomic<HRESULT> schedulerFirstFailure{S_OK};
-        auto job = scheduler.StartJob(
-            &task, withinFolderBudget, withinFolderBudget, workerPolicy, schedulerFirstFailure, PerItemTaskScheduler::FailurePolicy::RecordOnly);
+        auto job = scheduler.StartJob(&task,
+                                      withinFolderBudget,
+                                      withinFolderBudget,
+                                      workerPolicy,
+                                      schedulerFirstFailure,
+                                      PerItemTaskScheduler::FailurePolicy::RecordOnly);
 
         const auto recordProducerFailure = [&](HRESULT failure) noexcept
         {
@@ -16421,8 +16539,8 @@ struct CrossFileSystemBridge
             { return Common::FileOperations::DiscoveryQueueTarget(static_cast<size_t>(withinFolderBudget), DiscoveryAheadEnabled()); };
 
             std::unique_lock lock(workMutex);
-            while (workItems.size() >= queueTarget() && ! producerDone.load(std::memory_order_acquire) && ! stopRequested.load(std::memory_order_acquire) &&
-                   ! CancelRequested())
+            while (workItems.size() >= queueTarget() && ! producerDone.load(std::memory_order_acquire) &&
+                   ! stopRequested.load(std::memory_order_acquire) && ! CancelRequested())
             {
                 workCv.wait_for(lock, 50ms);
             }
@@ -16490,10 +16608,10 @@ struct CrossFileSystemBridge
             bool directoryMetadataCaptured = false;
             bool directoryMetadataRestored = false;
             wil::com_ptr<IFilesInformation> info; // owns the FileInfo buffer
-            FileInfo* entry       = nullptr;
-            std::byte* base       = nullptr;
-            std::byte* end        = nullptr;
-            bool entriesExhausted = false;
+            FileInfo* entry                = nullptr;
+            std::byte* base                = nullptr;
+            std::byte* end                 = nullptr;
+            bool entriesExhausted          = false;
             BridgeChildNameSet registeredChildNames;
         };
         std::vector<std::unique_ptr<ProducerDirectoryFrame>> producerFrames;
@@ -16573,8 +16691,9 @@ struct CrossFileSystemBridge
             }
             ++directoryEnsureCount;
 
-            frame.directoryMetadataCaptured = CaptureCreatedDirectoryMetadata(currentSource, currentDest, frame.createdDestination, frame.directoryBasicInfo);
-            frame.started                   = true;
+            frame.directoryMetadataCaptured =
+                CaptureCreatedDirectoryMetadata(currentSource, currentDest, frame.createdDestination, frame.directoryBasicInfo);
+            frame.started = true;
 
             task._bridgeSourceDirectoryEnumerationCount.fetch_add(1u, std::memory_order_relaxed);
             hr = sourceFs.ReadDirectoryInfo(currentSource.c_str(), frame.info.addressof());
@@ -16649,7 +16768,7 @@ struct CrossFileSystemBridge
             }
 
             bool pushedChild = false;
-            hr               = ValidateAndRegisterChildName(name, frame.registeredChildNames);
+            hr = ValidateAndRegisterChildName(name, frame.registeredChildNames);
             if (FAILED(hr))
             {
                 NoteInvalidEnumeratedChildName(currentSource, currentDest);
@@ -16681,8 +16800,8 @@ struct CrossFileSystemBridge
                 uint32_t discoveryQueueDepth = 0u;
                 {
                     std::scoped_lock lock(workMutex);
-                    discoveryQueueDepth =
-                        static_cast<uint32_t>((std::min)(workItems.size() + activeWorkItems, static_cast<size_t>(std::numeric_limits<uint32_t>::max())));
+                    discoveryQueueDepth = static_cast<uint32_t>(
+                        (std::min)(workItems.size() + activeWorkItems, static_cast<size_t>(std::numeric_limits<uint32_t>::max())));
                 }
                 hr = ReportDiscovery(discoveryQueueDepth, false);
                 if (FAILED(hr))
@@ -16691,7 +16810,7 @@ struct CrossFileSystemBridge
                 }
 
                 bool traverseChildTree = false;
-                bool enqueueChildFile  = false;
+                bool enqueueChildFile = false;
                 if (isReparse)
                 {
                     const HRESULT linkHr = CopyLink(childSource, childDest, isDirectory, frame.depth + 1u, &traverseChildTree, &enqueueChildFile);
@@ -17068,8 +17187,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 #ifdef ENABLE_TESTS
     _dbgConfiguredMaxConcurrency =
         DeterminePerItemMaxConcurrency(_fileSystem, _sourcePaths, _sourcePluginId, _operation, _flags, static_cast<unsigned int>(kMaxInFlightFiles));
-    _dbgConfiguredMaxConcurrency         = std::max(1u, _dbgConfiguredMaxConcurrency);
-    _dbgSingleInFlightStartTick          = 0;
+    _dbgConfiguredMaxConcurrency = std::max(1u, _dbgConfiguredMaxConcurrency);
+    _dbgSingleInFlightStartTick  = 0;
     _dbgLastSingleInFlightWarnTick       = 0;
     _dbgObservedMultipleInFlightFiles    = false;
     _dbgLastPerItemInFlightEvictWarnTick = 0;
@@ -17231,7 +17350,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
     }
     const bool hasManagedMovePlans  = _operation == FILESYSTEM_MOVE && std::ranges::any_of(transferPlanBySourceIndex,
                                                                                            [](const FileOperations::TransferPlan* plan) noexcept
-    { return plan != nullptr && plan->strategy == FileOperations::OperationStrategy::Managed; });
+    {
+        return plan != nullptr && plan->strategy == FileOperations::OperationStrategy::Managed;
+    });
     const bool hasVerificationPlans = isTransferOperation && std::ranges::any_of(transferPlanBySourceIndex,
                                                                                  [](const FileOperations::TransferPlan* plan) noexcept
     { return plan != nullptr && plan->options.verifyAfterCopy && plan->strategy != FileOperations::OperationStrategy::Native; });
@@ -17257,7 +17378,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
         if (sourceIndex < _sourcePaths.size())
         {
             SourceItemResultBuilder& builder = _sourceItemResultBuilders[sourceIndex];
-            builder.status                   = status;
+            builder.status                  = status;
             if (mutationResult.has_value())
             {
                 builder.mutation = mutationResult.value();
@@ -17376,13 +17497,15 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
             result.status            = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
         }
         else if (succeeded && ! partiallySkipped &&
-                 (_operation == FILESYSTEM_DELETE || (_operation == FILESYSTEM_MOVE && strategy == FileOperations::OperationStrategy::Native)))
+                 (_operation == FILESYSTEM_DELETE ||
+                  (_operation == FILESYSTEM_MOVE && strategy == FileOperations::OperationStrategy::Native)))
         {
             // A successful destructive provider call without a valid receipt proves neither
             // which object was consumed nor whether the accepted source still exists. An explicit
             // user Skip answered at the provider's conflict prompt (ERROR_PARTIAL_COPY with the skip
             // observed) is a user decision, not an unproven mutation: it stays Skipped below.
-            result.publication = _operation == FILESYSTEM_DELETE ? FileOperations::PublicationState::NotAttempted : FileOperations::PublicationState::Unknown;
+            result.publication = _operation == FILESYSTEM_DELETE ? FileOperations::PublicationState::NotAttempted
+                                                                  : FileOperations::PublicationState::Unknown;
             result.sourceDisposition = FileOperations::SourceDisposition::Unknown;
             result.completion        = FileOperations::ItemCompletion::Indeterminate;
             result.status            = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
@@ -17519,7 +17642,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 
         switch (GuardLiveOutputBeforeInvalidation(sourcePath, FileOperations::MutationInterlockAccess::WriteSource))
         {
-            case LiveOutputGuardDisposition::Skip: storeSourceMutationTruth(sourceIndex, S_FALSE, recycleMutation); return S_FALSE;
+            case LiveOutputGuardDisposition::Skip:
+                storeSourceMutationTruth(sourceIndex, S_FALSE, recycleMutation);
+                return S_FALSE;
             case LiveOutputGuardDisposition::Cancel: return HRESULT_FROM_WIN32(ERROR_CANCELLED);
             case LiveOutputGuardDisposition::RetryCurrentMutation:
             case LiveOutputGuardDisposition::Proceed: break;
@@ -17689,8 +17814,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
             providerMutationAttempted = true;
             // C10: a root pinned by identity while preparing is deleted only while the live identity
             // still equals it; the provider refuses a different object with ERROR_REVISION_MISMATCH.
-            const auto pinnedScope = std::ranges::find_if(_mutationInterlockScopes,
-                                                          [&](const FileOperations::MutationInterlockScope& scope) noexcept
+            const auto pinnedScope = std::ranges::find_if(_mutationInterlockScopes, [&](const FileOperations::MutationInterlockScope& scope) noexcept
             {
                 return scope.pinnedDeleteIdentity.has_value() && FileOperations::QualifiedEndpointsReferToSameRoot(scope.endpoint, deletePlan.endpoint) &&
                        EquivalentPath(deletePlan.endpoint.pathIdentity.value(), scope.providerPath, sourcePath);
@@ -17702,8 +17826,12 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 {
                     return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
                 }
-                return identityDelete->DeleteIfIdentity(
-                    nativeSourcePath.c_str(), &pinnedScope->pinnedDeleteIdentity.value(), nativeFlags, &nativeOptions, this, static_cast<void*>(perItemCookie));
+                return identityDelete->DeleteIfIdentity(nativeSourcePath.c_str(),
+                                                        &pinnedScope->pinnedDeleteIdentity.value(),
+                                                        nativeFlags,
+                                                        &nativeOptions,
+                                                        this,
+                                                        static_cast<void*>(perItemCookie));
             }
             return _fileSystem->DeleteItem(nativeSourcePath.c_str(), nativeFlags, &nativeOptions, this, static_cast<void*>(perItemCookie));
         }
@@ -17735,7 +17863,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
         }
         FileSystemConditionalMutationResult mutationResult{sizeof(FileSystemConditionalMutationResult), FALSE, TRUE, FALSE};
         _permanentDeleteConditionalAttemptCount.fetch_add(1u, std::memory_order_relaxed);
-        HRESULT deleteHr          = E_PENDING;
+        HRESULT deleteHr = E_PENDING;
         providerMutationAttempted = true;
 #ifdef ENABLE_TESTS
         if (ConsumeBridgeCounterForSelfTest(g_fileOpsPermanentDeleteKnownNonCommitCount, g_fileOpsPermanentDeleteKnownNonCommitAttempts))
@@ -17945,12 +18073,17 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
         // per-item conflict handling may tweak `itemFlags`, but delete-only flag-sensitive keys are never consulted here.
         const unsigned int bridgeSourceMaxConcurrencyBudget =
             useCrossFileSystemBridge
-                ? DeterminePerItemMaxConcurrency(_fileSystem, _sourcePaths, _sourcePluginId, _operation, _flags, static_cast<unsigned int>(kMaxInFlightFiles))
+                ? DeterminePerItemMaxConcurrency(
+                      _fileSystem, _sourcePaths, _sourcePluginId, _operation, _flags, static_cast<unsigned int>(kMaxInFlightFiles))
                 : 1u;
         const unsigned int bridgeDestinationMaxConcurrencyBudget =
             useCrossFileSystemBridge
-                ? DeterminePerItemMaxConcurrency(
-                      _destinationFileSystem, destinationFolder, _destinationPluginId, _operation, _flags, static_cast<unsigned int>(kMaxInFlightFiles))
+                ? DeterminePerItemMaxConcurrency(_destinationFileSystem,
+                                                 destinationFolder,
+                                                 _destinationPluginId,
+                                                 _operation,
+                                                 _flags,
+                                                 static_cast<unsigned int>(kMaxInFlightFiles))
                 : 1u;
         const Common::Settings::Settings* settingsSnapshot = (_folderWindow != nullptr) ? _folderWindow->_settings : nullptr;
         const bool sourceUsesAutoConcurrency               = ShouldUseAutoPerItemConcurrency(_fileSystem, _operation, _flags);
@@ -17990,12 +18123,18 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 
         _perItemTotalItems = static_cast<unsigned long>(count64);
         _perItemMaxConcurrencyBudget =
-            DeterminePerItemMaxConcurrency(_fileSystem, _sourcePaths, _sourcePluginId, _operation, _flags, static_cast<unsigned int>(kMaxInFlightFiles));
+            DeterminePerItemMaxConcurrency(
+                _fileSystem, _sourcePaths, _sourcePluginId, _operation, _flags, static_cast<unsigned int>(kMaxInFlightFiles));
         _perItemMaxConcurrencyBudget = std::max(1u, _perItemMaxConcurrencyBudget);
         if (useCrossFileSystemBridge)
         {
-            const unsigned int destinationMaxConcurrencyBudget = DeterminePerItemMaxConcurrency(
-                _destinationFileSystem, destinationFolder, _destinationPluginId, _operation, _flags, static_cast<unsigned int>(kMaxInFlightFiles));
+            const unsigned int destinationMaxConcurrencyBudget =
+                DeterminePerItemMaxConcurrency(_destinationFileSystem,
+                                               destinationFolder,
+                                               _destinationPluginId,
+                                               _operation,
+                                               _flags,
+                                               static_cast<unsigned int>(kMaxInFlightFiles));
             _perItemMaxConcurrencyBudget = std::min(_perItemMaxConcurrencyBudget, destinationMaxConcurrencyBudget);
             _perItemMaxConcurrencyBudget = std::max(1u, _perItemMaxConcurrencyBudget);
         }
@@ -18316,6 +18455,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
             }
         };
 
+
         const auto ensureResolvedDirectoryShell = [&]([[maybe_unused]] const std::wstring& sourceText,
                                                       const std::wstring& destinationText,
                                                       const FileSystemPathIdentity& destinationIdentity,
@@ -18548,7 +18688,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                         cookie.explicitSkipObserved.store(true, std::memory_order_release);
                         result.hr = S_FALSE;
                         return result;
-                    case LiveOutputGuardDisposition::Cancel: result.hr = HRESULT_FROM_WIN32(ERROR_CANCELLED); return result;
+                    case LiveOutputGuardDisposition::Cancel:
+                        result.hr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                        return result;
                     case LiveOutputGuardDisposition::RetryCurrentMutation:
                     case LiveOutputGuardDisposition::Proceed: break;
                 }
@@ -18572,11 +18714,12 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     // destination folder exists and the source folder, which keeps every unlisted
                     // child, is untouched. Record that truth as the item's receipt so the result
                     // reducer never treats the shell as an unproven destructive call.
-                    storeSourceMutationTruth(
-                        index,
-                        result.hr,
-                        FileSystemItemMutationResult{
-                            .sizeBytes = sizeof(FileSystemItemMutationResult), .outcomeKnown = TRUE, .mutationCommitted = TRUE, .originalStillPresent = TRUE});
+                    storeSourceMutationTruth(index,
+                                             result.hr,
+                                             FileSystemItemMutationResult{.sizeBytes            = sizeof(FileSystemItemMutationResult),
+                                                                          .outcomeKnown         = TRUE,
+                                                                          .mutationCommitted    = TRUE,
+                                                                          .originalStillPresent = TRUE});
                 }
                 return result;
             }
@@ -18687,7 +18830,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 #endif
                     FileSystemOptions options{};
                     InitializeFileSystemOptions(options, static_cast<void*>(&cookie));
-                    options.moveMode                 = FILESYSTEM_MOVE_NATIVE_ONLY;
+                    options.moveMode = FILESYSTEM_MOVE_NATIVE_ONLY;
                     result.providerMutationAttempted = true;
                     return _fileSystem->MoveItem(sourceText.c_str(), destinationItemText.c_str(), itemFlags, &options, this, static_cast<void*>(&cookie));
                 });
@@ -18735,13 +18878,14 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                                                       false,
                                                       false,
                                                       true);
-                    const HRESULT mergeHr              = mergeBridge.RenameMergeDirectory(sourceText, destinationItemText);
-                    const bool anyChildRelocated       = mergeBridge.anyDestinationPublished.load(std::memory_order_acquire);
-                    result.managedSourceRetained       = mergeBridge.managedSourceRetained.load(std::memory_order_acquire);
+                    const HRESULT mergeHr             = mergeBridge.RenameMergeDirectory(sourceText, destinationItemText);
+                    const bool anyChildRelocated      = mergeBridge.anyDestinationPublished.load(std::memory_order_acquire);
+                    result.managedSourceRetained      = mergeBridge.managedSourceRetained.load(std::memory_order_acquire);
                     result.managedCleanupIndeterminate = mergeBridge.managedCleanupIndeterminate.load(std::memory_order_acquire);
-                    result.bridgePublication = anyChildRelocated ? FileOperations::PublicationState::Published : FileOperations::PublicationState::NotPublished;
-                    result.failurePhase      = mergeBridge.failurePhase.load(std::memory_order_acquire);
-                    result.failureStatus     = mergeBridge.failureStatus.load(std::memory_order_acquire);
+                    result.bridgePublication =
+                        anyChildRelocated ? FileOperations::PublicationState::Published : FileOperations::PublicationState::NotPublished;
+                    result.failurePhase         = mergeBridge.failurePhase.load(std::memory_order_acquire);
+                    result.failureStatus        = mergeBridge.failureStatus.load(std::memory_order_acquire);
                     result.mutationAttemptFlags = mergeBridge.mutationAttemptFlags.load(std::memory_order_acquire);
                     if (FAILED(mergeHr) && result.failurePhase == QualifiedItemFailurePhase::None)
                     {
@@ -18751,13 +18895,12 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     // The per-child provider receipts under this cookie described children. The merge
                     // supplies the selected root's truth: known, committed once any child relocated,
                     // and the original present unless its emptied directory was removed.
-                    storeSourceMutationTruth(
-                        index,
-                        mergeHr,
-                        FileSystemItemMutationResult{.sizeBytes            = sizeof(FileSystemItemMutationResult),
-                                                     .outcomeKnown         = TRUE,
-                                                     .mutationCommitted    = anyChildRelocated ? TRUE : FALSE,
-                                                     .originalStillPresent = mergeBridge.rootSourceRemoved.load(std::memory_order_acquire) ? FALSE : TRUE});
+                    storeSourceMutationTruth(index,
+                                             mergeHr,
+                                             FileSystemItemMutationResult{.sizeBytes            = sizeof(FileSystemItemMutationResult),
+                                                                               .outcomeKnown         = TRUE,
+                                                                               .mutationCommitted    = anyChildRelocated ? TRUE : FALSE,
+                                                                               .originalStillPresent = mergeBridge.rootSourceRemoved.load(std::memory_order_acquire) ? FALSE : TRUE});
                     return mergeHr;
                 });
                 return result;
@@ -18784,7 +18927,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 {
                     switch (GuardLiveOutputBeforeInvalidation(sourceText, FileOperations::MutationInterlockAccess::WriteSource))
                     {
-                        case LiveOutputGuardDisposition::Skip: cookie.explicitSkipObserved.store(true, std::memory_order_release); return S_FALSE;
+                        case LiveOutputGuardDisposition::Skip:
+                            cookie.explicitSkipObserved.store(true, std::memory_order_release);
+                            return S_FALSE;
                         case LiveOutputGuardDisposition::Cancel: return HRESULT_FROM_WIN32(ERROR_CANCELLED);
                         case LiveOutputGuardDisposition::RetryCurrentMutation:
                         case LiveOutputGuardDisposition::Proceed: break;
@@ -19192,7 +19337,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                                     (! receipt.has_value() || classification == FileSystemRouteContract::MutationClassification::RetryableNoCommit ||
                                      classification == FileSystemRouteContract::MutationClassification::FailedKnown);
                                 if (! handledPartial && task.IsCancellationOutcome(mutationResult.hr) &&
-                                    (! receipt.has_value() || classification == FileSystemRouteContract::MutationClassification::RetryableNoCommit))
+                                    (! receipt.has_value() ||
+                                     classification == FileSystemRouteContract::MutationClassification::RetryableNoCommit))
                                 {
                                     // Cancel is a user/host decision. A proved no-commit receipt keeps
                                     // the item Canceled (no Retry, Keep Both, escalation, or replay).
@@ -19578,8 +19724,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                         }
 
                         if (itemSucceeded && _operation == FILESYSTEM_DELETE &&
-                            NavigationLocation::EqualsNoCase(task._sourcePluginId, L"builtin/file-system") && index < deletePlanBySourceIndex.size() &&
-                            deletePlanBySourceIndex[index] != nullptr && deletePlanBySourceIndex[index]->mode == FileOperations::DeleteMode::Permanent)
+                            NavigationLocation::EqualsNoCase(task._sourcePluginId, L"builtin/file-system") &&
+                            index < deletePlanBySourceIndex.size() && deletePlanBySourceIndex[index] != nullptr &&
+                            deletePlanBySourceIndex[index]->mode == FileOperations::DeleteMode::Permanent)
                         {
                             // Exact Local deletion has no legacy progress callback. The retained-object
                             // result is the first point where the host knows this selected-root mutation
@@ -19693,8 +19840,12 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 const auto schedulerStart           = scheduler.CapturePerfSnapshot();
                 const uint64_t schedulerWallStartUs = PerfNowUs();
 
-                auto job = scheduler.StartJob(
-                    this, _perItemMaxConcurrency, _sourcePaths.size(), itemPolicy, firstFailure, PerItemTaskScheduler::FailurePolicy::CancelTask);
+                auto job = scheduler.StartJob(this,
+                                              _perItemMaxConcurrency,
+                                              _sourcePaths.size(),
+                                              itemPolicy,
+                                              firstFailure,
+                                              PerItemTaskScheduler::FailurePolicy::CancelTask);
 
                 scheduler.WaitJob(job);
 
@@ -19838,7 +19989,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
             for (size_t index = 0u; index < _sourcePaths.size(); ++index)
             {
                 everyItemSucceeded = index < _sourceItemResultBuilders.size() && _sourceItemResultBuilders[index].status.has_value() &&
-                                     SUCCEEDED(_sourceItemResultBuilders[index].status.value()) && _sourceItemResultBuilders[index].status.value() != S_FALSE;
+                                     SUCCEEDED(_sourceItemResultBuilders[index].status.value()) &&
+                                     _sourceItemResultBuilders[index].status.value() != S_FALSE;
                 if (! everyItemSucceeded)
                 {
                     break;
