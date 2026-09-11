@@ -195,9 +195,9 @@ Describe 'Vcpkg install safety helper' {
         $override = @($manifest.overrides | Where-Object { $_.name -eq 'aws-sdk-cpp' })
 
         $dependency.Count | Should Be 1
-        $dependency[0].'version>=' | Should Be '1.11.840'
+        $dependency[0].'version>=' | Should Be '1.11.880'
         $override.Count | Should Be 1
-        $override[0].version | Should Be '1.11.840'
+        $override[0].version | Should Be '1.11.880'
     }
 
     It 'merges a single source file while StrictMode is active' {
