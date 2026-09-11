@@ -2,7 +2,7 @@
   "name": "red-salamander",
   "description": "RedSalamander Project",
   "homepage": "https://github.com/Redsalamanderse/RedSalamander",
-  "builtin-baseline": "9e593bb18ea69cc5095e012465dcd675a822ed0d",
+  "builtin-baseline": "1391150599c0b9dc6f2a3c79c50eff6c94b077d1",
   "dependencies": [
     {
       "name": "7zip",
@@ -71,7 +71,7 @@
   "overrides": [
     {
       "name": "aws-sdk-cpp",
-      "version": "1.11.840"
+      "version": "1.11.880"
     }
   ],
   "features": {

@@ -292,7 +292,7 @@ listing became stale. A single-object transfer uses the identity returned by its
 #### CopySource has one escaping boundary
 
 `CopyObject` and `UploadPartCopy` pass the logical UTF-8 `bucket/key[?versionId=value]` value to the AWS SDK. The
-provider MUST NOT percent-encode that value first. The pinned aws-sdk-cpp 1.11.840 request serializers own the sole
+provider MUST NOT percent-encode that value first. The pinned aws-sdk-cpp 1.11.880 request serializers own the sole
 wire boundary: both `GetRequestSpecificHeaders()` implementations apply `URI::URLEncodePath` while creating the
 `x-amz-copy-source` header. Pre-encoding in the provider would therefore encode `%` a second time, corrupt reserved,
 Unicode, nested, and versioned keys, and can turn a valid direct copy into an avoidable relay fallback.
@@ -301,8 +301,11 @@ An SDK version change requires re-auditing both generated serializers before cha
 tests MUST inspect the SDK-produced header bytes for ordinary, space, `%`, `+`, `/`, Unicode, and VersionId inputs;
 request-object getters alone are insufficient. The deterministic transfer graph must additionally prove reserved and
 versioned keys preserve bytes and select direct single-request and multipart routes with no relay.
-The manifest floor and exact override therefore remain `aws-sdk-cpp` 1.11.840
-until that audit is performed. A floor alone is not a pin: a newer baseline may
+The manifest floor and exact override therefore remain `aws-sdk-cpp` 1.11.880
+until the next audit is performed. The 1.11.840 -> 1.11.880 move was audited against the generated
+`aws-cpp-sdk-s3-crt` sources: `CopyObjectRequest` and `UploadPartCopyRequest` each still emit exactly one
+`x-amz-copy-source` header through `URI::URLEncodePath`, and that helper is byte-identical between the two
+releases, so provider-side ownership is unchanged. A floor alone is not a pin: a newer baseline may
 select a later default. The governed vcpkg installer must reject either constraint
 when its exact entry is absent from the selected `builtin-baseline` registry before
 dependency mutation.
