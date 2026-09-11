@@ -36,7 +36,7 @@ jobs:
       portable_toolchain_identity_digest: ${{ steps.portable_attestation.outputs.toolchain_identity_digest }}
     runs-on: windows-latest
     env:
-      VCPKG_ROOT: ${{ github.workspace }}\vcpkg
+      VCPKG_ROOT: ${{ github.workspace }}\.build\vcpkg
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}\.build\vcpkg_installed\${{ inputs.platform == 'ARM64' && 'arm64' || 'x64' }}
       VCPKG_DEFAULT_TRIPLET: ${{ inputs.platform == 'ARM64' && 'arm64-windows' || 'x64-windows' }}
     steps:
@@ -183,7 +183,7 @@ jobs:
         with:
           path: |
             ${{ env.VCPKG_INSTALLED_DIR }}
-            vcpkg/downloads
+            .build/vcpkg/downloads
           key: ${{ runner.os }}-vcpkg-${{ env.VCPKG_DEFAULT_TRIPLET }}-${{ steps.toolchain_identity.outputs.digest }}-${{ hashFiles('vcpkg.json', 'vcpkg-tool.json') }}
 
       - name: Cache pinned Terminal runtime inputs and product
@@ -232,11 +232,14 @@ jobs:
           }
           Write-Host "vcpkg tool commit: $toolCommit"
 
-          # Cache may restore vcpkg\downloads without the vcpkg repo itself.
-          $bootstrap = Join-Path $env:GITHUB_WORKSPACE "vcpkg\\bootstrap-vcpkg.bat"
-          $gitDir = Join-Path $env:GITHUB_WORKSPACE "vcpkg\\.git"
+          # Cache may restore the downloads directory without the vcpkg repo itself.
+          # The checkout lives under ignored .build so repository identity stays clean;
+          # an untracked nested repository at the workspace root fails build evidence.
+          $vcpkgRoot = $env:VCPKG_ROOT
+          $bootstrap = Join-Path $vcpkgRoot "bootstrap-vcpkg.bat"
+          $gitDir = Join-Path $vcpkgRoot ".git"
           if (-not (Test-Path $bootstrap) -or -not (Test-Path $gitDir)) {
-            $downloads = Join-Path $env:GITHUB_WORKSPACE "vcpkg\\downloads"
+            $downloads = Join-Path $vcpkgRoot "downloads"
             $downloadsStash = $null
 
             if (Test-Path $downloads) {
@@ -245,8 +248,9 @@ jobs:
               Move-Item -Path $downloads -Destination $downloadsStash
             }
 
-            if (Test-Path .\\vcpkg) { Remove-Item .\\vcpkg -Recurse -Force }
-            git clone $toolRepository .\\vcpkg
+            if (Test-Path $vcpkgRoot) { Remove-Item $vcpkgRoot -Recurse -Force }
+            New-Item -ItemType Directory -Path (Split-Path -Parent $vcpkgRoot) -Force | Out-Null
+            git clone $toolRepository $vcpkgRoot
             if ($LASTEXITCODE -ne 0) { throw "git clone vcpkg failed with exit code $LASTEXITCODE" }
 
             if ($downloadsStash) {
@@ -255,7 +259,7 @@ jobs:
             }
           }
 
-          Push-Location .\\vcpkg
+          Push-Location $vcpkgRoot
 
           # vcpkg port versioning needs git objects that are typically missing in shallow clones.
           # Unshallow to avoid "failed to unpack tree object" during `vcpkg install`.
@@ -322,7 +326,7 @@ jobs:
       - name: Install dependencies
         shell: pwsh
         run: |
-          .\vcpkg\vcpkg.exe install --triplet $env:VCPKG_DEFAULT_TRIPLET --x-manifest-root $env:GITHUB_WORKSPACE --x-install-root $env:VCPKG_INSTALLED_DIR
+          & "$env:VCPKG_ROOT\vcpkg.exe" install --triplet $env:VCPKG_DEFAULT_TRIPLET --x-manifest-root $env:GITHUB_WORKSPACE --x-install-root $env:VCPKG_INSTALLED_DIR
 
       - name: Normalize vcpkg install root
         shell: pwsh
@@ -337,8 +341,8 @@ jobs:
           }
 
           $candidates = @(
-            (Join-Path $env:GITHUB_WORKSPACE "vcpkg\installed\$triplet"),
-            (Join-Path $env:GITHUB_WORKSPACE "vcpkg\installed\${triplet}-release")
+            (Join-Path $env:VCPKG_ROOT "installed\$triplet"),
+            (Join-Path $env:VCPKG_ROOT "installed\${triplet}-release")
           )
 
           $source = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
@@ -349,7 +353,7 @@ jobs:
             Write-Host "$env:VCPKG_INSTALLED_DIR contents:" -ForegroundColor Yellow
             Get-ChildItem -Path $env:VCPKG_INSTALLED_DIR -ErrorAction SilentlyContinue | Select-Object Name
             Write-Host "vcpkg contents:" -ForegroundColor Yellow
-            Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE "vcpkg") -ErrorAction SilentlyContinue | Select-Object Name
+            Get-ChildItem -Path $env:VCPKG_ROOT -ErrorAction SilentlyContinue | Select-Object Name
             throw "vcpkg install root not found to normalize."
           }
 
@@ -387,7 +391,7 @@ jobs:
           # Import the pinned checkout's MSBuild integration for this build only. The targets add
           # the installed libraries themselves (not merely /LIBPATH), without mutating user-wide
           # MSBuild state.
-          $vcpkgMsbuildRoot = Join-Path $env:GITHUB_WORKSPACE "vcpkg\scripts\buildsystems\msbuild"
+          $vcpkgMsbuildRoot = Join-Path $env:VCPKG_ROOT "scripts\buildsystems\msbuild"
           $vcpkgProps = Join-Path $vcpkgMsbuildRoot "vcpkg.props"
           $vcpkgTargets = Join-Path $vcpkgMsbuildRoot "vcpkg.targets"
           if (-not (Test-Path $vcpkgProps)) { throw "Pinned vcpkg MSBuild props not found: $vcpkgProps" }
@@ -395,7 +399,7 @@ jobs:
 
           $env:ForceImportBeforeCppTargets = $vcpkgProps
           $env:ForceImportAfterCppTargets = $vcpkgTargets
-          $env:VcpkgRoot = Join-Path $env:GITHUB_WORKSPACE "vcpkg"
+          $env:VcpkgRoot = $env:VCPKG_ROOT
           $env:VcpkgConfiguration = $vcpkgConfiguration
           $env:VcpkgManifestInstall = "false"
           # BuildEvidence consumes the vcpkg tlog as an output declaration.

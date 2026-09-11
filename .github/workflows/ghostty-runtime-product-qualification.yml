@@ -46,7 +46,16 @@ jobs:
         id: test-root
         shell: pwsh
         run: |
-          $root = Join-Path ([IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE)) 'RedSalamander.Perf'
+          $ErrorActionPreference = 'Stop'
+          # This lane launches native harnesses directly (outside Run-AllTests), so the
+          # fail-closed sandbox root must be initialized explicitly with its ownership
+          # marker before any direct launch can acquire scratch.
+          Import-Module (Join-Path $env:GITHUB_WORKSPACE 'Tools\Modules\Testing\TestRunPlan.psm1') -Force -ErrorAction Stop
+          $candidate = Join-Path ([IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE)) 'RedSalamander.Perf'
+          $root = Initialize-RSTestSandboxRoot `
+            -TestRoot $candidate `
+            -RepoRoot $env:GITHUB_WORKSPACE `
+            -AllowExternalInitialization
           "REDSALAMANDER_TEST_ROOT=$root" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           "path=$root" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
 

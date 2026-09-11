@@ -339,6 +339,19 @@ baseline's positive `schema-version`. A manifest-baseline update that raises thi
 schema therefore also updates `vcpkg-tool.json`; an older executable fails with a
 pin-specific diagnostic before dependency mutation.
 
+A caller that materializes only one checkout supplies the version database from
+that working tree while `builtin-baseline` is still resolved through git. The two
+pins must then name the same commit: a baseline newer than the checked-out tool
+commit selects baseline default versions whose exact entries are absent from the
+on-disk `versions` database, and vcpkg fails with `no version database entry`. A
+lane that needs the pins to diverge MUST materialize the baseline as a separate
+registry checkout and pass it through `--vcpkg-root`.
+
+Every auxiliary Git checkout a lane materializes (the executable tool, a ports
+registry, or a combined checkout) MUST live beneath an excluded path such as
+`.build`. An untracked nested repository elsewhere in the workspace is reported by
+Git as a single directory entry and fails repository identity before MSBuild runs.
+
 The selected registry must also contain an exact version-database entry for every
 object-form manifest dependency that declares `version>=` and every exact manifest
 override. The governed local installer validates those constraints before it
