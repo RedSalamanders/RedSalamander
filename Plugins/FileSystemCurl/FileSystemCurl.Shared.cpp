@@ -1,9 +1,9 @@
-#include "CurlProcessRuntime.h"
 #include "FileSystemCurl.Internal.h"
 #include "FileSystemCurlResources.h"
 #include "HandleIo.h"
-#include "StringConversion.h"
+#include "CurlProcessRuntime.h"
 #include "YyjsonHelpers.h"
+#include "StringConversion.h"
 
 using namespace FileSystemCurlInternal;
 
@@ -110,20 +110,22 @@ namespace FileSystemCurlInternal
 
 [[nodiscard]] std::optional<std::wstring> TryGetJsonString(yyjson_val* obj, const char* key) noexcept
 {
-    const Common::Json::MemberResult<std::wstring> value = Common::Json::GetUtf16StringMemberStrict(obj, key, Common::Json::MemberRequirement::Optional);
+    const Common::Json::MemberResult<std::wstring> value =
+        Common::Json::GetUtf16StringMemberStrict(obj, key, Common::Json::MemberRequirement::Optional);
     return value.HasValue() ? std::optional<std::wstring>{value.value} : std::nullopt;
 }
 
 [[nodiscard]] std::optional<uint64_t> TryGetJsonUInt(yyjson_val* obj, const char* key) noexcept
 {
-    const Common::Json::MemberResult<uint64_t> value = Common::Json::GetUInt64Member(obj, key, Common::Json::MemberRequirement::Optional);
+    const Common::Json::MemberResult<uint64_t> value =
+        Common::Json::GetUInt64Member(obj, key, Common::Json::MemberRequirement::Optional);
     return value.HasValue() ? std::optional<uint64_t>{value.value} : std::nullopt;
 }
 
 [[nodiscard]] std::optional<bool> TryGetJsonBool(yyjson_val* obj, const char* key) noexcept
 {
-    const Common::Json::MemberResult<bool> value =
-        Common::Json::GetBoolMember(obj, key, Common::Json::MemberRequirement::Optional, Common::Json::BooleanIntegerPolicy::AllowZeroAndNonzero);
+    const Common::Json::MemberResult<bool> value = Common::Json::GetBoolMember(
+        obj, key, Common::Json::MemberRequirement::Optional, Common::Json::BooleanIntegerPolicy::AllowZeroAndNonzero);
     return value.HasValue() ? std::optional<bool>{value.value} : std::nullopt;
 }
 } // namespace FileSystemCurlInternal
@@ -545,10 +547,8 @@ namespace FileSystemCurlInternal
     return TryLocalSystemTimeToFileTime(localTime, fileTime);
 }
 
-[[nodiscard]] bool TryParseUnixListLine(std::string_view line,
-                                        FilesInformationCurl::Entry& out,
-                                        bool includeDotEntries          = false,
-                                        std::wstring_view timestampLeaf = {}) noexcept
+[[nodiscard]] bool TryParseUnixListLine(std::string_view line, FilesInformationCurl::Entry& out, bool includeDotEntries = false,
+                                       std::wstring_view timestampLeaf = {}) noexcept
 {
     if (line.size() < 2)
     {
@@ -560,13 +560,13 @@ namespace FileSystemCurlInternal
         return false;
     }
 
-    const char type      = line[0];
+    const char type = line[0];
     const bool directory = type == 'd';
     const bool symlink   = type == 'l';
     const bool regular   = type == '-';
     // Device, socket, fifo, and door names are real directory entries. Accept
     // them as Unix so they cannot fall through to the DOS size-token heuristic.
-    const bool special = type == 'c' || type == 'b' || type == 's' || type == 'p' || type == 'D';
+    const bool special   = type == 'c' || type == 'b' || type == 's' || type == 'p' || type == 'D';
     if (! directory && ! symlink && ! regular && ! special)
     {
         return false;
@@ -643,8 +643,8 @@ namespace FileSystemCurlInternal
     // every metadata field; a previous occupant's size/times are not evidence.
     std::wstring reusableName = std::move(out.name);
     reusableName.clear();
-    out      = {};
-    out.name = std::move(reusableName);
+    out                       = {};
+    out.name                  = std::move(reusableName);
     if (directory)
     {
         out.attributes = FILE_ATTRIBUTE_DIRECTORY;
@@ -657,7 +657,7 @@ namespace FileSystemCurlInternal
     {
         out.attributes = FILE_ATTRIBUTE_NORMAL;
     }
-    out.sizeBytes = sizeBytes;
+    out.sizeBytes  = sizeBytes;
     // The size column is meaningful for regular files and symlink payloads.
     // Device/socket/fifo rows often carry major,minor or a dummy 0.
     out.sizeKnown = (regular || symlink) && sizeParsed;
@@ -674,10 +674,8 @@ namespace FileSystemCurlInternal
     return ! out.name.empty();
 }
 
-[[nodiscard]] bool TryParseDosListLine(std::string_view line,
-                                       FilesInformationCurl::Entry& out,
-                                       bool includeDotEntries          = false,
-                                       std::wstring_view timestampLeaf = {}) noexcept
+[[nodiscard]] bool TryParseDosListLine(std::string_view line, FilesInformationCurl::Entry& out, bool includeDotEntries = false,
+                                      std::wstring_view timestampLeaf = {}) noexcept
 {
     // Example:
     // 01-02-24  03:04PM       <DIR>          Folder
@@ -734,8 +732,8 @@ namespace FileSystemCurlInternal
     // Preserve only name storage, never metadata from a previous parsed row.
     std::wstring reusableName = std::move(out.name);
     reusableName.clear();
-    out      = {};
-    out.name = std::move(reusableName);
+    out                       = {};
+    out.name                  = std::move(reusableName);
     if (EqualsAsciiIgnoreCase(sizeOrDir.value(), "<DIR>"))
     {
         out.attributes = FILE_ATTRIBUTE_DIRECTORY;
@@ -1839,7 +1837,8 @@ namespace
     {
         return HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IN_PROGRESS);
     }
-    return GetCurlRuntimeLease().Acquire([]() noexcept -> HRESULT { return curl_global_init(CURL_GLOBAL_DEFAULT) == CURLE_OK ? S_OK : E_FAIL; });
+    return GetCurlRuntimeLease().Acquire(
+        []() noexcept -> HRESULT { return curl_global_init(CURL_GLOBAL_DEFAULT) == CURLE_OK ? S_OK : E_FAIL; });
 }
 
 void CleanupSharedCurlRuntime() noexcept
@@ -2104,7 +2103,8 @@ namespace
 {
 void TryCompleteFileSystemCurlShutdown() noexcept
 {
-    if (! g_fileSystemCurlShutdownRequested.load(std::memory_order_acquire) || g_fileSystemCurlInstanceCount.load(std::memory_order_acquire) != 0u)
+    if (! g_fileSystemCurlShutdownRequested.load(std::memory_order_acquire) ||
+        g_fileSystemCurlInstanceCount.load(std::memory_order_acquire) != 0u)
     {
         return;
     }
@@ -2136,8 +2136,9 @@ void BeginFileSystemCurlShutdown() noexcept
 bool CanUnloadFileSystemCurlNow() noexcept
 {
     TryCompleteFileSystemCurlShutdown();
-    return g_fileSystemCurlShutdownRequested.load(std::memory_order_acquire) && g_fileSystemCurlInstanceCount.load(std::memory_order_acquire) == 0u &&
-           GetCurlEasyPool().CanUnloadNow() && ! GetCurlRuntimeLease().IsAcquired();
+    return g_fileSystemCurlShutdownRequested.load(std::memory_order_acquire) &&
+           g_fileSystemCurlInstanceCount.load(std::memory_order_acquire) == 0u && GetCurlEasyPool().CanUnloadNow() &&
+           ! GetCurlRuntimeLease().IsAcquired();
 }
 
 bool CanCreateFileSystemCurl() noexcept
@@ -2207,8 +2208,8 @@ long CurlLowSpeedTimeSeconds(unsigned long operationTimeoutMs) noexcept
 uint32_t CurlProviderWatchdogTimeoutMs(unsigned long connectTimeoutMs, unsigned long operationTimeoutMs) noexcept
 {
     constexpr unsigned long kDefaultConnectTimeoutMs = 10'000ul;
-    const unsigned long lowSpeedMs                   = static_cast<unsigned long>(CurlLowSpeedTimeSeconds(operationTimeoutMs)) * 1000ul;
-    const unsigned long bound                        = (std::max)(connectTimeoutMs == 0u ? kDefaultConnectTimeoutMs : connectTimeoutMs, lowSpeedMs);
+    const unsigned long lowSpeedMs = static_cast<unsigned long>(CurlLowSpeedTimeSeconds(operationTimeoutMs)) * 1000ul;
+    const unsigned long bound      = (std::max)(connectTimeoutMs == 0u ? kDefaultConnectTimeoutMs : connectTimeoutMs, lowSpeedMs);
     return static_cast<uint32_t>((std::min)(bound, static_cast<unsigned long>(std::numeric_limits<uint32_t>::max())));
 }
 
@@ -2978,9 +2979,9 @@ HRESULT CurlDirectoryCursor::Next(FilesInformationCurl::Entry& entry, std::wstri
 
 #ifdef ENABLE_TESTS
 HRESULT CurlDirectoryCursor::ParseChunksForSelfTest(std::span<const std::string_view> chunks,
-                                                    std::vector<FilesInformationCurl::Entry>& entries,
-                                                    std::wstring_view lookupLeaf,
-                                                    uint64_t* inspectedRows) noexcept
+                                                   std::vector<FilesInformationCurl::Entry>& entries,
+                                                   std::wstring_view lookupLeaf,
+                                                   uint64_t* inspectedRows) noexcept
 {
     // Deterministic callback/framing seam: no socket, pool borrow, or alternate
     // parser. Production Next owns transport completion and cancellation proof.
@@ -3527,8 +3528,8 @@ int CaptureFtpControlReply(CURL* /*curl*/, curl_infotype type, char* data, size_
     }
 
     curl_off_t contentLength = -1;
-    const bool contentLengthKnown =
-        code == CURLE_OK && curl_easy_getinfo(curl.get(), CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &contentLength) == CURLE_OK && contentLength >= 0;
+    const bool contentLengthKnown = code == CURLE_OK &&
+                                    curl_easy_getinfo(curl.get(), CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &contentLength) == CURLE_OK && contentLength >= 0;
     if (contentLengthKnown)
     {
         sizeOut      = ClampCurlOffToUInt64(contentLength);
@@ -3570,8 +3571,11 @@ int CaptureFtpControlReply(CURL* /*curl*/, curl_infotype type, char* data, size_
     return S_OK;
 }
 
-[[nodiscard]] HRESULT ResolveCurlSourceSizeCommitment(
-    const ConnectionInfo& conn, std::wstring_view pluginPath, uint64_t listedSizeBytes, bool listedSizeKnown, CurlSourceSizeCommitment& commitmentOut) noexcept
+[[nodiscard]] HRESULT ResolveCurlSourceSizeCommitment(const ConnectionInfo& conn,
+                                                      std::wstring_view pluginPath,
+                                                      uint64_t listedSizeBytes,
+                                                      bool listedSizeKnown,
+                                                      CurlSourceSizeCommitment& commitmentOut) noexcept
 {
     commitmentOut = CurlSourceSizeCommitment{.sizeBytes = listedSizeBytes, .known = listedSizeKnown};
 
@@ -3939,12 +3943,13 @@ void PrepareProgressContextForRetry(TransferProgressContext* progressCtx) noexce
 }
 } // namespace
 
-[[nodiscard]] HRESULT CurlDownloadToFile(const ConnectionInfo& conn,
-                                         std::wstring_view pluginPath,
-                                         HANDLE file,
-                                         const FileSystemOptions* options,
-                                         TransferProgressContext* progressCtx,
-                                         std::optional<uint64_t> expectedSizeBytes) noexcept
+[[nodiscard]] HRESULT CurlDownloadToFile(
+    const ConnectionInfo& conn,
+    std::wstring_view pluginPath,
+    HANDLE file,
+    const FileSystemOptions* options,
+    TransferProgressContext* progressCtx,
+    std::optional<uint64_t> expectedSizeBytes) noexcept
 {
     HRESULT hr = EnsureCurlInitialized();
     if (FAILED(hr))
@@ -4243,16 +4248,21 @@ void FileSystemCurl::ObserveCurlCleanupDebt(const CurlPublicationResult& result)
                    result.cleanupDebtCount,
                    result.cleanupDebtMask,
                    static_cast<unsigned long>(result.cleanupHr));
-    Debug::Perf::Emit(
-        L"FileOps.Curl.CleanupDebt", L"aggregate retained remote recovery items", 0u, result.cleanupDebtCount, result.cleanupDebtMask, result.cleanupHr);
+    Debug::Perf::Emit(L"FileOps.Curl.CleanupDebt",
+                      L"aggregate retained remote recovery items",
+                      0u,
+                      result.cleanupDebtCount,
+                      result.cleanupDebtMask,
+                      result.cleanupHr);
 
     if (! _hostAlerts)
     {
         return;
     }
 
-    const std::wstring title   = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_CLEANUP_DEBT_TITLE);
-    const std::wstring message = FormatStringResource(g_hInstance, IDS_FILESYSTEMCURL_CLEANUP_DEBT_MESSAGE, result.cleanupDebtCount);
+    const std::wstring title = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_CLEANUP_DEBT_TITLE);
+    const std::wstring message =
+        FormatStringResource(g_hInstance, IDS_FILESYSTEMCURL_CLEANUP_DEBT_MESSAGE, result.cleanupDebtCount);
     if (message.empty())
     {
         return;
@@ -4775,7 +4785,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::SetConfiguration(const char* configura
     if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
     {
         nextConfiguration = configurationJsonUtf8;
-        parsed            = Common::Json::ParseObjectDocument(nextConfiguration, YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
+        parsed = Common::Json::ParseObjectDocument(nextConfiguration, YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
         if (! parsed)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
@@ -5124,7 +5134,9 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::ExecuteDriveMenuCommand(unsigned int /
     return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemCurl::GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemCurl::GetPathCapabilities(const wchar_t* path,
+                                                               FileSystemOperation operation,
+                                                               const char** jsonUtf8) noexcept
 {
     if (jsonUtf8 == nullptr)
     {
@@ -5244,7 +5256,9 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetPathCapabilities(const wchar_t* pat
     return S_OK;
 }
 
-HRESULT FileSystemCurl::BuildFileSystemRouteDescriptor(const wchar_t* path, FileSystemOperation operation, FileSystemRouteDescriptor& descriptor) noexcept
+HRESULT FileSystemCurl::BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                                        FileSystemOperation operation,
+                                                        FileSystemRouteDescriptor& descriptor) noexcept
 {
     static_cast<void>(operation);
     if (path == nullptr || path[0] == L'\0')
@@ -5253,34 +5267,34 @@ HRESULT FileSystemCurl::BuildFileSystemRouteDescriptor(const wchar_t* path, File
     }
 
     std::lock_guard lock(_stateMutex);
-    const bool imap          = _protocol == FileSystemCurlProtocol::Imap;
-    descriptor               = {};
-    descriptor.providerId    = _metaData.id != nullptr ? _metaData.id : L"";
+    const bool imap = _protocol == FileSystemCurlProtocol::Imap;
+    descriptor = {};
+    descriptor.providerId = _metaData.id != nullptr ? _metaData.id : L"";
     descriptor.pathProfileId = imap ? L"imap-mailbox" : L"curl-remote-path";
-    descriptor.rootId        = imap ? L"configured-mailbox-root" : L"configured-connection-root";
-    descriptor.availability  = FILESYSTEM_ROUTE_AVAILABLE;
+    descriptor.rootId = imap ? L"configured-mailbox-root" : L"configured-connection-root";
+    descriptor.availability = FILESYSTEM_ROUTE_AVAILABLE;
     // R0f-Curl: FTP/SFTP/SCP transfers poll the operation control from libcurl's progress callback
     // and the transport timeouts bound a server that stops answering. IMAP stays read-only and
     // uncontained (no mutation is ever admitted on a mailbox).
-    descriptor.cancellationRoute              = imap ? FILESYSTEM_CANCELLATION_UNCONTAINED : FILESYSTEM_CANCELLATION_PROVIDER_WATCHDOG;
-    descriptor.providerWatchdogTimeoutMs      = imap ? 0u : CurlProviderWatchdogTimeoutMs(_settings.connectTimeoutMs, _settings.operationTimeoutMs);
-    descriptor.cancellationDeadline           = ! imap;
-    descriptor.namespaceKind                  = FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER;
-    descriptor.componentComparison            = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
-    descriptor.caseOnlyRename                 = FILESYSTEM_ROUTE_CASE_ONLY_NOT_APPLICABLE;
-    descriptor.copyMoveMaxConcurrency         = imap ? 1u : std::clamp(_settings.copyMoveMaxConcurrency, 1u, 8u);
-    descriptor.deleteMaxConcurrency           = imap ? 1u : std::clamp(_settings.deleteMaxConcurrency, 1u, 8u);
+    descriptor.cancellationRoute = imap ? FILESYSTEM_CANCELLATION_UNCONTAINED : FILESYSTEM_CANCELLATION_PROVIDER_WATCHDOG;
+    descriptor.providerWatchdogTimeoutMs = imap ? 0u : CurlProviderWatchdogTimeoutMs(_settings.connectTimeoutMs, _settings.operationTimeoutMs);
+    descriptor.cancellationDeadline = ! imap;
+    descriptor.namespaceKind = FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER;
+    descriptor.componentComparison = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
+    descriptor.caseOnlyRename = FILESYSTEM_ROUTE_CASE_ONLY_NOT_APPLICABLE;
+    descriptor.copyMoveMaxConcurrency = imap ? 1u : std::clamp(_settings.copyMoveMaxConcurrency, 1u, 8u);
+    descriptor.deleteMaxConcurrency = imap ? 1u : std::clamp(_settings.deleteMaxConcurrency, 1u, 8u);
     descriptor.deleteRecycleBinMaxConcurrency = 1u;
-    descriptor.copyOperation                  = ! imap;
-    descriptor.moveOperation                  = ! imap;
-    descriptor.nativeMoveOperation            = ! imap;
-    descriptor.deleteOperation                = ! imap;
-    descriptor.renameOperation                = ! imap;
-    descriptor.createDirectoryOperation       = ! imap;
-    descriptor.propertiesOperation            = true;
-    descriptor.readOperation                  = true;
-    descriptor.writeOperation                 = ! imap;
-    descriptor.exportCopyAll                  = true;
+    descriptor.copyOperation = ! imap;
+    descriptor.moveOperation = ! imap;
+    descriptor.nativeMoveOperation = ! imap;
+    descriptor.deleteOperation = ! imap;
+    descriptor.renameOperation = ! imap;
+    descriptor.createDirectoryOperation = ! imap;
+    descriptor.propertiesOperation = true;
+    descriptor.readOperation = true;
+    descriptor.writeOperation = ! imap;
+    descriptor.exportCopyAll = true;
     // R0f-Curl: cross-provider Copy into FTP/SFTP/SCP is a full file-manager destination. Move
     // export/import stay denied until the source can be deleted conditionally (no bound delete).
     descriptor.importCopyAll = ! imap;

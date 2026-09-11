@@ -46,9 +46,9 @@
 #include <AccCtrl.h>
 #include <AclAPI.h>
 #include <TlHelp32.h>
+#include <winioctl.h>
 #include <cfapi.h>
 #include <winhttp.h>
-#include <winioctl.h>
 
 #pragma comment(lib, "CldApi.lib") // Test-only, fully hydrated placeholder fixture; no cloud account or callback provider.
 
@@ -67,9 +67,9 @@
 #include "ConnectionProfileUtils.h"
 #include "ContentDigest.h"
 #include "DirectoryInfoCache.h"
-#include "FileSystemPluginManager.h"
 #include "FileSystemRouteContract.h"
 #include "FileSystemRouteProviderBase.h"
+#include "FileSystemPluginManager.h"
 #include "FluentIcons.h"
 #include "FolderView.h"
 #include "FolderWindow.FileOperations.Popup.h"
@@ -117,7 +117,7 @@ class UncontainedNeverReturningFileSystem final : public IFileSystem, public Fil
 {
 public:
     explicit UncontainedNeverReturningFileSystem(std::string capabilitiesJson,
-                                                 bool exposeTypedRoute   = true,
+                                                 bool exposeTypedRoute = true,
                                                  bool typedCopyOperation = true,
                                                  bool boundedBlockedRead = false) noexcept
         : _capabilitiesJson(std::move(capabilitiesJson)),
@@ -223,7 +223,9 @@ public:
         return remaining;
     }
 
-    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept override
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
+                                                  FileSystemOperation operation,
+                                                  const char** jsonUtf8) noexcept override
     {
         if (! jsonUtf8)
         {
@@ -242,44 +244,83 @@ public:
     {
         return _boundedBlockedRead ? E_NOTIMPL : WaitForeverAfterProviderOperationCall();
     }
-    HRESULT STDMETHODCALLTYPE CopyItem(const wchar_t*, const wchar_t*, FileSystemFlags, const FileSystemOptions*, IFileSystemCallback*, void*) noexcept override
+    HRESULT STDMETHODCALLTYPE CopyItem(const wchar_t*,
+                                       const wchar_t*,
+                                       FileSystemFlags,
+                                       const FileSystemOptions*,
+                                       IFileSystemCallback*,
+                                       void*) noexcept override
     {
         return WaitForeverAfterProviderOperationCall();
     }
-    HRESULT STDMETHODCALLTYPE MoveItem(const wchar_t*, const wchar_t*, FileSystemFlags, const FileSystemOptions*, IFileSystemCallback*, void*) noexcept override
+    HRESULT STDMETHODCALLTYPE MoveItem(const wchar_t*,
+                                       const wchar_t*,
+                                       FileSystemFlags,
+                                       const FileSystemOptions*,
+                                       IFileSystemCallback*,
+                                       void*) noexcept override
     {
         return WaitForeverAfterProviderOperationCall();
     }
-    HRESULT STDMETHODCALLTYPE DeleteItem(const wchar_t*, FileSystemFlags, const FileSystemOptions*, IFileSystemCallback*, void*) noexcept override
+    HRESULT STDMETHODCALLTYPE DeleteItem(const wchar_t*,
+                                         FileSystemFlags,
+                                         const FileSystemOptions*,
+                                         IFileSystemCallback*,
+                                         void*) noexcept override
     {
         return WaitForeverAfterProviderOperationCall();
     }
-    HRESULT STDMETHODCALLTYPE
-    RenameItem(const wchar_t*, const wchar_t*, FileSystemFlags, const FileSystemOptions*, IFileSystemCallback*, void*) noexcept override
+    HRESULT STDMETHODCALLTYPE RenameItem(const wchar_t*,
+                                         const wchar_t*,
+                                         FileSystemFlags,
+                                         const FileSystemOptions*,
+                                         IFileSystemCallback*,
+                                         void*) noexcept override
     {
         return WaitForeverAfterProviderOperationCall();
     }
-    HRESULT STDMETHODCALLTYPE
-    CopyItems(const wchar_t* const*, unsigned long, const wchar_t*, FileSystemFlags, const FileSystemOptions*, IFileSystemCallback*, void*) noexcept override
+    HRESULT STDMETHODCALLTYPE CopyItems(const wchar_t* const*,
+                                        unsigned long,
+                                        const wchar_t*,
+                                        FileSystemFlags,
+                                        const FileSystemOptions*,
+                                        IFileSystemCallback*,
+                                        void*) noexcept override
     {
         return WaitForeverAfterProviderOperationCall();
     }
-    HRESULT STDMETHODCALLTYPE
-    MoveItems(const wchar_t* const*, unsigned long, const wchar_t*, FileSystemFlags, const FileSystemOptions*, IFileSystemCallback*, void*) noexcept override
+    HRESULT STDMETHODCALLTYPE MoveItems(const wchar_t* const*,
+                                        unsigned long,
+                                        const wchar_t*,
+                                        FileSystemFlags,
+                                        const FileSystemOptions*,
+                                        IFileSystemCallback*,
+                                        void*) noexcept override
     {
         return WaitForeverAfterProviderOperationCall();
     }
-    HRESULT STDMETHODCALLTYPE
-    DeleteItems(const wchar_t* const*, unsigned long, FileSystemFlags, const FileSystemOptions*, IFileSystemCallback*, void*) noexcept override
+    HRESULT STDMETHODCALLTYPE DeleteItems(const wchar_t* const*,
+                                          unsigned long,
+                                          FileSystemFlags,
+                                          const FileSystemOptions*,
+                                          IFileSystemCallback*,
+                                          void*) noexcept override
     {
         return WaitForeverAfterProviderOperationCall();
     }
-    HRESULT STDMETHODCALLTYPE
-    RenameItems(const FileSystemRenamePair*, unsigned long, FileSystemFlags, const FileSystemOptions*, IFileSystemCallback*, void*) noexcept override
+    HRESULT STDMETHODCALLTYPE RenameItems(const FileSystemRenamePair*,
+                                          unsigned long,
+                                          FileSystemFlags,
+                                          const FileSystemOptions*,
+                                          IFileSystemCallback*,
+                                          void*) noexcept override
     {
         return WaitForeverAfterProviderOperationCall();
     }
-    HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t*, FileSystemOperation, FileSystemTransferEndpoint, FileSystemTransferHints*) noexcept override
+    HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t*,
+                                               FileSystemOperation,
+                                               FileSystemTransferEndpoint,
+                                               FileSystemTransferHints*) noexcept override
     {
         return _boundedBlockedRead ? E_NOTIMPL : WaitForeverAfterProviderOperationCall();
     }
@@ -289,22 +330,24 @@ public:
     }
 
 protected:
-    HRESULT BuildFileSystemRouteDescriptor(const wchar_t*, FileSystemOperation, FileSystemRouteDescriptor& descriptor) noexcept override
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t*,
+                                           FileSystemOperation,
+                                           FileSystemRouteDescriptor& descriptor) noexcept override
     {
-        descriptor.providerId             = _boundedBlockedRead ? L"selftest/bounded-blocked-read" : L"selftest/uncontained-never-return";
-        descriptor.pathProfileId          = _boundedBlockedRead ? L"selftest-bounded-blocked-read" : L"selftest-uncontained";
-        descriptor.rootId                 = _boundedBlockedRead ? L"selftest-bounded-blocked-read/root" : L"selftest-uncontained/root";
-        descriptor.availability           = FILESYSTEM_ROUTE_AVAILABLE;
-        descriptor.cancellationRoute      = _boundedBlockedRead ? FILESYSTEM_CANCELLATION_BOUNDED : FILESYSTEM_CANCELLATION_UNCONTAINED;
-        descriptor.namespaceKind          = FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER;
-        descriptor.componentComparison    = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
-        descriptor.caseOnlyRename         = FILESYSTEM_ROUTE_CASE_ONLY_UNSUPPORTED;
-        descriptor.copyOperation          = _typedCopyOperation;
-        descriptor.readOperation          = true;
-        descriptor.writeOperation         = true;
+        descriptor.providerId = _boundedBlockedRead ? L"selftest/bounded-blocked-read" : L"selftest/uncontained-never-return";
+        descriptor.pathProfileId = _boundedBlockedRead ? L"selftest-bounded-blocked-read" : L"selftest-uncontained";
+        descriptor.rootId = _boundedBlockedRead ? L"selftest-bounded-blocked-read/root" : L"selftest-uncontained/root";
+        descriptor.availability = FILESYSTEM_ROUTE_AVAILABLE;
+        descriptor.cancellationRoute = _boundedBlockedRead ? FILESYSTEM_CANCELLATION_BOUNDED : FILESYSTEM_CANCELLATION_UNCONTAINED;
+        descriptor.namespaceKind = FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER;
+        descriptor.componentComparison = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
+        descriptor.caseOnlyRename = FILESYSTEM_ROUTE_CASE_ONLY_UNSUPPORTED;
+        descriptor.copyOperation = _typedCopyOperation;
+        descriptor.readOperation = true;
+        descriptor.writeOperation = true;
         descriptor.pathTextStableIdentity = true;
-        descriptor.exportCopyAll          = true;
-        descriptor.importCopyAll          = true;
+        descriptor.exportCopyAll = true;
+        descriptor.importCopyAll = true;
         return S_OK;
     }
 
@@ -334,7 +377,7 @@ private:
     wil::unique_handle _pipeRead;
     wil::unique_handle _pipeWrite;
     std::string _capabilitiesJson;
-    bool _exposeTypedRoute   = true;
+    bool _exposeTypedRoute = true;
     bool _typedCopyOperation = true;
     bool _boundedBlockedRead = false;
 };
@@ -373,7 +416,7 @@ struct RecycleBinBatchTestSnapshot final
     // The plugin manager can hold a live module independently of its staged pathname. Resolve the
     // module from this exact implementation's vtable so the snapshot always matches the object that
     // performed the operation.
-    const auto objectWords    = reinterpret_cast<const void* const*>(fileSystem);
+    const auto objectWords = reinterpret_cast<const void* const*>(fileSystem);
     const void* vtableAddress = objectWords[0];
     if (vtableAddress == nullptr)
     {
@@ -483,60 +526,60 @@ struct WatchCallback;
 
 struct CompletedTaskInfo
 {
-    HRESULT hr                                           = S_OK;
-    ULONGLONG completionTick                             = 0;
-    bool discoveryClosed                                 = false;
-    bool firstMutationBeforeDiscoveryClosed              = false;
-    bool discoverySkipped                                = false;
-    uint64_t discoveredTotalBytes                        = 0;
-    unsigned long discoveredFiles                        = 0;
-    unsigned long discoveredDirectories                  = 0;
-    uint64_t discoveryDurationUs                         = 0;
-    uint64_t discoveryMaxQueueDepth                      = 0;
-    uint64_t discoveryStarvationCount                    = 0;
-    uint64_t discoveryCallbackCount                      = 0;
-    uint64_t discoveryCallbackUs                         = 0;
-    uint64_t discoveryLockWaitUs                         = 0;
-    uint64_t discoveryFirstMutationUs                    = (std::numeric_limits<uint64_t>::max)();
-    uint64_t discoveryBytesCompletedWhileOpen            = (std::numeric_limits<uint64_t>::max)();
-    uint64_t discoveryMutationsCompletedWhileOpen        = (std::numeric_limits<uint64_t>::max)();
-    uint64_t progressCallbackCount                       = 0;
-    bool started                                         = false;
-    unsigned long progressTotalItems                     = 0;
-    unsigned long progressCompletedItems                 = 0;
-    uint64_t progressCompletedBytes                      = 0;
-    unsigned long completedFiles                         = 0;
-    unsigned long completedFolders                       = 0;
-    uint64_t conflictWaitUs                              = 0;
-    uint64_t conflictConvergenceWaitUs                   = 0;
-    uint64_t conflictPromptCount                         = 0;
-    uint64_t interlockWaitUs                             = 0;
-    uint64_t interlockWaitCount                          = 0;
-    uint64_t bridgeDirectoryEnsureCount                  = 0;
-    uint64_t bridgeSourceDirectoryEnumerationCount       = 0;
-    uint64_t bridgeFileAdmissionCount                    = 0;
-    uint64_t bridgeEarlyFileStartCount                   = 0;
-    uint64_t bridgeAdmissionMaxQueueDepth                = 0;
-    uint64_t bridgeTraversalMaxDepth                     = 0;
-    uint64_t bridgeTraversalMaxRetainedEntries           = 0;
-    uint64_t bridgeTraversalMaxQueuedPathBytes           = 0;
-    uint64_t bridgeTraversalMaxMetadataBytes             = 0;
-    uint64_t bridgeTraversalLimitHitCount                = 0;
-    uint64_t conflictExpectedDestinationBoundCount       = 0;
+    HRESULT hr                            = S_OK;
+    ULONGLONG completionTick              = 0;
+    bool discoveryClosed                 = false;
+    bool firstMutationBeforeDiscoveryClosed   = false;
+    bool discoverySkipped                   = false;
+    uint64_t discoveredTotalBytes            = 0;
+    unsigned long discoveredFiles            = 0;
+    unsigned long discoveredDirectories      = 0;
+    uint64_t discoveryDurationUs            = 0;
+    uint64_t discoveryMaxQueueDepth       = 0;
+    uint64_t discoveryStarvationCount     = 0;
+    uint64_t discoveryCallbackCount       = 0;
+    uint64_t discoveryCallbackUs          = 0;
+    uint64_t discoveryLockWaitUs          = 0;
+    uint64_t discoveryFirstMutationUs = (std::numeric_limits<uint64_t>::max)();
+    uint64_t discoveryBytesCompletedWhileOpen = (std::numeric_limits<uint64_t>::max)();
+    uint64_t discoveryMutationsCompletedWhileOpen = (std::numeric_limits<uint64_t>::max)();
+    uint64_t progressCallbackCount             = 0;
+    bool started                          = false;
+    unsigned long progressTotalItems      = 0;
+    unsigned long progressCompletedItems  = 0;
+    uint64_t progressCompletedBytes       = 0;
+    unsigned long completedFiles          = 0;
+    unsigned long completedFolders        = 0;
+    uint64_t conflictWaitUs               = 0;
+    uint64_t conflictConvergenceWaitUs    = 0;
+    uint64_t conflictPromptCount          = 0;
+    uint64_t interlockWaitUs              = 0;
+    uint64_t interlockWaitCount           = 0;
+    uint64_t bridgeDirectoryEnsureCount   = 0;
+    uint64_t bridgeSourceDirectoryEnumerationCount = 0;
+    uint64_t bridgeFileAdmissionCount     = 0;
+    uint64_t bridgeEarlyFileStartCount    = 0;
+    uint64_t bridgeAdmissionMaxQueueDepth = 0;
+    uint64_t bridgeTraversalMaxDepth = 0;
+    uint64_t bridgeTraversalMaxRetainedEntries = 0;
+    uint64_t bridgeTraversalMaxQueuedPathBytes = 0;
+    uint64_t bridgeTraversalMaxMetadataBytes = 0;
+    uint64_t bridgeTraversalLimitHitCount = 0;
+    uint64_t conflictExpectedDestinationBoundCount = 0;
     uint64_t conflictExpectedDestinationUnavailableCount = 0;
-    uint64_t conflictExpectedDestinationReturnedCount    = 0;
-    uint64_t bridgeImmediateDestinationSizeProbeUs       = 0;
-    uint64_t bridgeImmediateDestinationSizeProbeCount    = 0;
-    uint64_t bridgeCommitSizeProofCount                  = 0;
-    uint64_t bridgeCommitSizeProofFallbackCount          = 0;
-    uint64_t verificationUs                              = 0;
-    uint64_t verificationReadBytes                       = 0;
-    uint64_t verificationReadCalls                       = 0;
-    uint64_t verificationProviderProofCount              = 0;
-    uint64_t verificationHostReadbackCount               = 0;
-    uint64_t verificationTotalBytes                      = 0;
-    uint64_t verificationCompletedBytes                  = 0;
-    unsigned int configuredMaxConcurrency                = 0;
+    uint64_t conflictExpectedDestinationReturnedCount = 0;
+    uint64_t bridgeImmediateDestinationSizeProbeUs = 0;
+    uint64_t bridgeImmediateDestinationSizeProbeCount = 0;
+    uint64_t bridgeCommitSizeProofCount = 0;
+    uint64_t bridgeCommitSizeProofFallbackCount = 0;
+    uint64_t verificationUs = 0;
+    uint64_t verificationReadBytes = 0;
+    uint64_t verificationReadCalls = 0;
+    uint64_t verificationProviderProofCount = 0;
+    uint64_t verificationHostReadbackCount = 0;
+    uint64_t verificationTotalBytes = 0;
+    uint64_t verificationCompletedBytes = 0;
+    unsigned int configuredMaxConcurrency = 0;
     std::vector<std::optional<HRESULT>> sourceItemStatuses;
     std::vector<std::optional<FileOperations::FileOperationItemResult>> sourceItemResults;
 };
@@ -547,17 +590,17 @@ struct PlaceholderSyncRoot final
 {
     using SetCompatibilityModeFn = CHAR(NTAPI*)(CHAR);
     std::filesystem::path path;
-    HRESULT cleanupHr                     = S_OK;
-    bool registered                       = false;
+    HRESULT cleanupHr = S_OK;
+    bool registered = false;
     SetCompatibilityModeFn setProcessMode = nullptr;
-    SetCompatibilityModeFn setThreadMode  = nullptr;
-    CHAR previousProcessMode              = -1;
-    CHAR previousThreadMode               = -1;
+    SetCompatibilityModeFn setThreadMode = nullptr;
+    CHAR previousProcessMode = -1;
+    CHAR previousThreadMode = -1;
 };
 
 void UnregisterPlaceholderSyncRoot(PlaceholderSyncRoot* root) noexcept
 {
-    root->cleanupHr  = root->registered ? CfUnregisterSyncRoot(root->path.c_str()) : S_OK;
+    root->cleanupHr = root->registered ? CfUnregisterSyncRoot(root->path.c_str()) : S_OK;
     root->registered = false;
     if (root->previousThreadMode >= 0 && root->setThreadMode(root->previousThreadMode) < 0)
     {
@@ -567,7 +610,7 @@ void UnregisterPlaceholderSyncRoot(PlaceholderSyncRoot* root) noexcept
     {
         root->cleanupHr = E_FAIL;
     }
-    root->previousThreadMode  = -1;
+    root->previousThreadMode = -1;
     root->previousProcessMode = -1;
     if (FAILED(root->cleanupHr))
     {
@@ -905,13 +948,13 @@ struct SelfTestState
     bool r4a02ConcurrentAdmissionObserved = false;
     uint32_t r4a02LiveOutputScenario      = 0u;
     bool r4a02LiveOutputQueueObserved     = false;
-    bool inlineF2QueueModeOriginal        = true;
-    bool r4a02QueueModeOriginal           = true;
-    HWND c1DeferredCloseTarget            = nullptr;
-    ULONGLONG c1HeartbeatStartTick        = 0;
-    unsigned c1HeartbeatTicks             = 0u;
-    uint64_t inlineF2PresentedBaseline    = 0;
-    uint64_t inlineF2SilentCleanBaseline  = 0;
+    bool inlineF2QueueModeOriginal = true;
+    bool r4a02QueueModeOriginal    = true;
+    HWND c1DeferredCloseTarget     = nullptr;
+    ULONGLONG c1HeartbeatStartTick = 0;
+    unsigned c1HeartbeatTicks      = 0u;
+    uint64_t inlineF2PresentedBaseline = 0;
+    uint64_t inlineF2SilentCleanBaseline = 0;
     std::optional<std::uint64_t> queuePausedTask;
     RECT popupOriginalRect{};
     bool popupOriginalRectValid = false;
@@ -944,11 +987,11 @@ struct SelfTestState
     bool phase10ClipboardReturnedBeforeReadiness = false;
     std::atomic<bool> r1dPreparingGateEntered{false};
     std::atomic<bool> r1dPreparingGateRelease{false};
-    bool r1dAdmissionReturnedBeforeReadiness   = false;
+    bool r1dAdmissionReturnedBeforeReadiness = false;
     bool r1dMoveBreadcrumbPublishedBeforeReady = false;
-    uint64_t r1dPresentationBaseline           = 0u;
-    bool phase10MetadataSparseSeeded           = false;
-    int64_t phase10MetadataExpectedWriteTime   = 0;
+    uint64_t r1dPresentationBaseline = 0u;
+    bool phase10MetadataSparseSeeded              = false;
+    int64_t phase10MetadataExpectedWriteTime       = 0;
 
     std::wstring failureMessage;
     bool autoDismissSuccessOriginal            = false;
@@ -997,20 +1040,20 @@ struct SelfTestState
     size_t fairstreamSaturationMaxDistinctInFlightTrees = 0;
     size_t storageClampMaxInFlight                      = 0;
 
-    ULONGLONG parallelBandwidthRunStartTick                  = 0;
-    uint64_t parallelBandwidthBaselineUs                     = 0;
-    uint64_t parallelBandwidthCandidateUs                    = 0;
-    uint64_t parallelBandwidthBaselineMaxSkewBytes           = 0;
-    uint64_t parallelBandwidthCandidateMaxSkewBytes          = 0;
+    ULONGLONG parallelBandwidthRunStartTick         = 0;
+    uint64_t parallelBandwidthBaselineUs            = 0;
+    uint64_t parallelBandwidthCandidateUs           = 0;
+    uint64_t parallelBandwidthBaselineMaxSkewBytes  = 0;
+    uint64_t parallelBandwidthCandidateMaxSkewBytes = 0;
     uint64_t parallelBandwidthBaselineMaxCallbackDeltaBytes  = 0;
     uint64_t parallelBandwidthCandidateMaxCallbackDeltaBytes = 0;
-    size_t parallelBandwidthBaselineMaxActive                = 0;
-    size_t parallelBandwidthCandidateMaxActive               = 0;
-    uint64_t parallelBandwidthBaselineSamples                = 0;
-    uint64_t parallelBandwidthCandidateSamples               = 0;
-    ULONGLONG defaultSpeedLimitRunStartTick                  = 0;
-    uint64_t defaultSpeedLimitBaselineUs                     = 0;
-    uint64_t defaultSpeedLimitCandidateUs                    = 0;
+    size_t parallelBandwidthBaselineMaxActive       = 0;
+    size_t parallelBandwidthCandidateMaxActive      = 0;
+    uint64_t parallelBandwidthBaselineSamples       = 0;
+    uint64_t parallelBandwidthCandidateSamples      = 0;
+    ULONGLONG defaultSpeedLimitRunStartTick         = 0;
+    uint64_t defaultSpeedLimitBaselineUs            = 0;
+    uint64_t defaultSpeedLimitCandidateUs           = 0;
     std::string defaultSpeedLimitDummyConfigSnapshot;
     ULONGLONG recycleBinBatchRunStartTick                   = 0;
     uint64_t recycleBinBatchBaselineUs                      = 0;
@@ -1098,9 +1141,11 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::Fairstream_StorageKindProbed: return L"Fairstream_StorageKindProbed";
         case SelfTestState::Step::Fairstream_ParallelDeleteContinuesPastLockedChild: return L"Fairstream_ParallelDeleteContinuesPastLockedChild";
         case SelfTestState::Step::Fairstream_BridgePerFileConflictSkips: return L"Fairstream_BridgePerFileConflictSkips";
-        case SelfTestState::Step::Cinderstar_BridgeMovePerFileConflictSkipsParallel: return L"Cinderstar_BridgeMovePerFileConflictSkipsParallel";
+        case SelfTestState::Step::Cinderstar_BridgeMovePerFileConflictSkipsParallel:
+            return L"Cinderstar_BridgeMovePerFileConflictSkipsParallel";
         case SelfTestState::Step::Riptide_BridgeNestedDirVsFileSkipContinuesSiblings: return L"Riptide_BridgeNestedDirVsFileSkipContinuesSiblings";
-        case SelfTestState::Step::Riptide_BridgeDirectoryOverReadOnlyFileIsTypeMismatch: return L"Riptide_BridgeDirectoryOverReadOnlyFileIsTypeMismatch";
+        case SelfTestState::Step::Riptide_BridgeDirectoryOverReadOnlyFileIsTypeMismatch:
+            return L"Riptide_BridgeDirectoryOverReadOnlyFileIsTypeMismatch";
         case SelfTestState::Step::Riptide_BridgeCreateDirectoryRaceExistingFilePromptsPartial:
             return L"Riptide_BridgeCreateDirectoryRaceExistingFilePromptsPartial";
         case SelfTestState::Step::Fairstream_SaturationConcurrentCopiesMakeProgress: return L"Fairstream_SaturationConcurrentCopiesMakeProgress";
@@ -1117,26 +1162,32 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::Floodgate_CrossFsMoveGetSizeFailurePreservesSource: return L"Floodgate_CrossFsMoveGetSizeFailurePreservesSource";
         case SelfTestState::Step::Floodgate_CrossFsMoveDestinationGetSizeFailurePreservesSource:
             return L"Floodgate_CrossFsMoveDestinationGetSizeFailurePreservesSource";
-        case SelfTestState::Step::Cinderstar_LegacyWriterEventuallyConsistentMove: return L"Cinderstar_LegacyWriterEventuallyConsistentMove";
+        case SelfTestState::Step::Cinderstar_LegacyWriterEventuallyConsistentMove:
+            return L"Cinderstar_LegacyWriterEventuallyConsistentMove";
         case SelfTestState::Step::Cinderstar_LegacyWriterPermanentMissMove: return L"Cinderstar_LegacyWriterPermanentMissMove";
         case SelfTestState::Step::Cinderstar_LegacyWriterWrongSizeMove: return L"Cinderstar_LegacyWriterWrongSizeMove";
-        case SelfTestState::Step::Cinderstar_LegacyWriterConcurrentReplacementCopy: return L"Cinderstar_LegacyWriterConcurrentReplacementCopy";
+        case SelfTestState::Step::Cinderstar_LegacyWriterConcurrentReplacementCopy:
+            return L"Cinderstar_LegacyWriterConcurrentReplacementCopy";
         case SelfTestState::Step::Cinderstar_LegacyWriterCancelDuringBackoff: return L"Cinderstar_LegacyWriterCancelDuringBackoff";
-        case SelfTestState::Step::Floodgate_CrossFsCopyOnlyUsesCopyVerification: return L"Floodgate_CrossFsCopyOnlyUsesCopyVerification";
+        case SelfTestState::Step::Floodgate_CrossFsCopyOnlyUsesCopyVerification:
+            return L"Floodgate_CrossFsCopyOnlyUsesCopyVerification";
         case SelfTestState::Step::Floodgate_CrossFsMoveGetSizeFailuresParallelPreserveSourceTree:
             return L"Floodgate_CrossFsMoveGetSizeFailuresParallelPreserveSourceTree";
         case SelfTestState::Step::Floodgate_CrossFsCopyOnlyNeverEntersSourceCleanup: return L"Floodgate_CrossFsCopyOnlyNeverEntersSourceCleanup";
-        case SelfTestState::Step::Floodgate_CrossFsDirectoryCopyOnlyRetainsSource: return L"Floodgate_CrossFsDirectoryCopyOnlyRetainsSource";
+        case SelfTestState::Step::Floodgate_CrossFsDirectoryCopyOnlyRetainsSource:
+            return L"Floodgate_CrossFsDirectoryCopyOnlyRetainsSource";
         case SelfTestState::Step::Floodgate_LocalWriterOverwriteIsStaged: return L"Floodgate_LocalWriterOverwriteIsStaged";
         case SelfTestState::Step::Floodgate_LocalCopyOverwriteIsStaged: return L"Floodgate_LocalCopyOverwriteIsStaged";
-        case SelfTestState::Step::Floodgate_LocalCopyNewNameConcurrentReplacementSurvives: return L"Floodgate_LocalCopyNewNameConcurrentReplacementSurvives";
+        case SelfTestState::Step::Floodgate_LocalCopyNewNameConcurrentReplacementSurvives:
+            return L"Floodgate_LocalCopyNewNameConcurrentReplacementSurvives";
         case SelfTestState::Step::Floodgate_LocalCopyNewNameAbortFailureIsRetainedIncomplete:
             return L"Floodgate_LocalCopyNewNameAbortFailureIsRetainedIncomplete";
         case SelfTestState::Step::Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker:
             return L"Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker";
         case SelfTestState::Step::Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker:
             return L"Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker";
-        case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock: return L"Floodgate_InlineF2WorkerQueueBypassAndInterlock";
+        case SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock:
+            return L"Floodgate_InlineF2WorkerQueueBypassAndInterlock";
         case SelfTestState::Step::C1_InlineRenameNameRefusedOnCard: return L"C1_InlineRenameNameRefusedOnCard";
         case SelfTestState::Step::R4A19_DiscoveryMeasurementFacts: return L"R4A19_DiscoveryMeasurementFacts";
         case SelfTestState::Step::R4A19_DiscoveryProviderControls: return L"R4A19_DiscoveryProviderControls";
@@ -1228,7 +1279,8 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::Phase8_PerItemOrchestration: return L"Phase8_PerItemOrchestration";
         case SelfTestState::Step::Phase9_ConflictPrompt_OverwriteReplaceReadonly: return L"Phase9_ConflictPrompt_OverwriteReplaceReadonly";
         case SelfTestState::Step::Phase9_ConflictPrompt_ApplyToAllUiCache: return L"Phase9_ConflictPrompt_ApplyToAllUiCache";
-        case SelfTestState::Step::Phase9_ConflictPrompt_KeepBothNestedCacheEligibility: return L"Phase9_ConflictPrompt_KeepBothNestedCacheEligibility";
+        case SelfTestState::Step::Phase9_ConflictPrompt_KeepBothNestedCacheEligibility:
+            return L"Phase9_ConflictPrompt_KeepBothNestedCacheEligibility";
         case SelfTestState::Step::Phase9_ConflictPrompt_TypeMismatchNoOverwrite: return L"Phase9_ConflictPrompt_TypeMismatchNoOverwrite";
         case SelfTestState::Step::Phase9_ConflictPrompt_LocalFileOntoDirectory: return L"Phase9_ConflictPrompt_LocalFileOntoDirectory";
         case SelfTestState::Step::Phase9_ConflictPrompt_SkipApplyToAll: return L"Phase9_ConflictPrompt_SkipApplyToAll";
@@ -1236,8 +1288,10 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::Phase9_ConflictPrompt_SkipContinuesDirectoryCopy: return L"Phase9_ConflictPrompt_SkipContinuesDirectoryCopy";
         case SelfTestState::Step::Phase9_PerItemConcurrency: return L"Phase9_PerItemConcurrency";
         case SelfTestState::Step::Phase10_PermanentDelete: return L"Phase10_PermanentDelete";
-        case SelfTestState::Step::Phase10_DeferredConsentAndRecycleEscalation: return L"Phase10_DeferredConsentAndRecycleEscalation";
-        case SelfTestState::Step::Phase10_MetadataPreservationAndSourceRetention: return L"Phase10_MetadataPreservationAndSourceRetention";
+        case SelfTestState::Step::Phase10_DeferredConsentAndRecycleEscalation:
+            return L"Phase10_DeferredConsentAndRecycleEscalation";
+        case SelfTestState::Step::Phase10_MetadataPreservationAndSourceRetention:
+            return L"Phase10_MetadataPreservationAndSourceRetention";
         case SelfTestState::Step::Phase10_TypedResultsAndConsumers: return L"Phase10_TypedResultsAndConsumers";
         case SelfTestState::Step::Phase10_ClipboardAdmissionAndRetainedActions: return L"Phase10_ClipboardAdmissionAndRetainedActions";
         case SelfTestState::Step::Phase10_ContentVerification: return L"Phase10_ContentVerification";
@@ -1295,7 +1349,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::FileOps_ProviderCapabilityMatrix,                // Clearflow Phase 7 - provider capability matrix and offline conformance
     SelfTestState::Step::FileOps_ParallelGraphFairColorWeight,            // Clearflow Phase 3 - parallel graph hue weights are fair
     SelfTestState::Step::FileOps_CrossVolumeMovePartialFailureStatus,     // Clearflow Phase 4 - partial move status is explicit
-    SelfTestState::Step::FileOps_ReparseLiteralCopyKeepsTargets,          // Clearflow Phase 4 - copied reparse links keep their stored targets (C3 literal)
+    SelfTestState::Step::FileOps_ReparseLiteralCopyKeepsTargets,   // Clearflow Phase 4 - copied reparse links keep their stored targets (C3 literal)
     SelfTestState::Step::FileOps_DeleteToctouSwapGuard,                   // Clearflow Phase 4 - delete path rejects stale check/act swaps
     SelfTestState::Step::FileOps_ResolvedItemsExactDestinations,          // Clearflow Phase 4 - resolved compare-sync items use exact destinations
     SelfTestState::Step::Riptide_MoveDistinctSameSizeFilePreservesSource, // Riptide R0-1 - same size/mtime move conflict must preserve source
@@ -1308,7 +1362,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate,   // Floodgate FS-Track-C - apply-to-all decisions stay within one risk bucket
     SelfTestState::Step::Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent,   // Riptide R2-1 - empty real dir cannot be silently converted to a junction
     SelfTestState::Step::Riptide_ReparseMoveSourceNeverUsesDirectoryMerge,     // Riptide R2-1 - source junction never uses directory-merge rename path
-    SelfTestState::Step::Fairstream_MovedTreeKeepsLiteralLinks,                // Fairstream 1E - moved trees keep literal link text
+    SelfTestState::Step::Fairstream_MovedTreeKeepsLiteralLinks,           // Fairstream 1E - moved trees keep literal link text
     SelfTestState::Step::Fairstream_CrossFsConcurrentMoveUsesBridge,           // Fairstream 1B - concurrent cross-FS move uses the bridge
     SelfTestState::Step::Fairstream_RerunCopyIdenticalCollisionPrompts, // Fairstream 2D - identical destinations require an explicit typed conflict decision
     SelfTestState::Step::Fairstream_MoveSameSizeCollisionPrompts,       // Fairstream 2D - same-size/same-mtime collisions still prompt when bytes differ
@@ -1358,7 +1412,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker,   // Riptide R2-9 - host per-item scheduler shutdown waits for active
                                                                                       // callbacks
     SelfTestState::Step::Floodgate_InlineF2WorkerQueueBypassAndInterlock, // P1.5 - worker-only F2 bypasses Queue but waits on exact parent interlock
-    SelfTestState::Step::C1_InlineRenameNameRefusedOnCard,                // C1 (b0) - an inline rename the provider refuses fails on its card, not in admission
+    SelfTestState::Step::C1_InlineRenameNameRefusedOnCard,               // C1 (b0) - an inline rename the provider refuses fails on its card, not in admission
     SelfTestState::Step::R4A19_DiscoveryMeasurementFacts,                 // R4-A19 - observation-only discovery baseline facts
     SelfTestState::Step::R4A19_DiscoveryProviderControls,                 // R4-A19 - delayed Dummy and serialized fake-MTP controls
     SelfTestState::Step::R4A19_DiscoveryIndependentVolumes,               // R4-A19 - marked C/D independent task overlap
@@ -1367,14 +1421,14 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::R0fCurl_FakeFtpReadWriteCreateDelete,            // R0f-Curl - cross-provider copy both ways, create/rename/delete on fake FTP
     SelfTestState::Step::BR5_CurlHostDirectoryMove,
     SelfTestState::Step::BR5_CurlHostDirectoryMoveRefused,
-    SelfTestState::Step::R0fS3_FakeS3ReadWriteCreateDelete,              // R0f-S3 - cross-provider copy both ways, create/rename/delete on fake S3
-    SelfTestState::Step::R0fGraph_FakeGraphReadWriteCreateRenameRecycle, // R0f-Graph - cross-provider copy both ways, create/rename/recycle on fake Graph
-    SelfTestState::Step::R0fGDrive_FakeDriveReadWriteCreateMoveDelete,   // R0f-GDrive - cross-provider copy both ways, create/rename/move/delete on fake Drive
-    SelfTestState::Step::C0_GDriveCommittedCopyResponseLost,             // C0/C2 - committed remote copy must never be replayed after response loss
+    SelfTestState::Step::R0fS3_FakeS3ReadWriteCreateDelete,               // R0f-S3 - cross-provider copy both ways, create/rename/delete on fake S3
+    SelfTestState::Step::R0fGraph_FakeGraphReadWriteCreateRenameRecycle,  // R0f-Graph - cross-provider copy both ways, create/rename/recycle on fake Graph
+    SelfTestState::Step::R0fGDrive_FakeDriveReadWriteCreateMoveDelete,    // R0f-GDrive - cross-provider copy both ways, create/rename/move/delete on fake Drive
+    SelfTestState::Step::C0_GDriveCommittedCopyResponseLost,              // C0/C2 - committed remote copy must never be replayed after response loss
     SelfTestState::Step::C0_GDriveCommittedDeleteResponseLost,
     SelfTestState::Step::C0_NativeCopyFailurePreservesKnownAxes,
     SelfTestState::Step::C0_MutationReceiptPrefixBoundary,
-    SelfTestState::Step::C0_LocalKnownNoCommitReceipts, // C0 - Local Cancel/refused-rename/merge-cancel receipts stay known, never uncertain
+    SelfTestState::Step::C0_LocalKnownNoCommitReceipts,                   // C0 - Local Cancel/refused-rename/merge-cancel receipts stay known, never uncertain
     SelfTestState::Step::C0_CurlNativeDeleteGuards,
     SelfTestState::Step::C0_CurlCommittedMutationResponseLost,
     SelfTestState::Step::C0_CurlHostCommittedDeleteResponseLost,
@@ -1387,10 +1441,10 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::C0_CurlCopyTraversalTruth,
     SelfTestState::Step::C0_CurlEntryLookupTruth,
     SelfTestState::Step::C0_CurlImapListingTruth,
-    SelfTestState::Step::C0_CurlImapTransportTruth,     // C0 - production IMAP owners through real libcurl against a loopback server
-    SelfTestState::Step::R3_1_IdentityLessReplaceDummy, // R3-1 - conditional replace through an atomic-final writer without bound authority
-    SelfTestState::Step::R3_2_WriterProofDummy,         // R3-2 - writer content proof: Verified Copy without readback, Managed Move cleanup after proof
-    SelfTestState::Step::R3_3_PublicationFaultMatrix,   // R3-3 - every bridge fault hook x route x Copy/Move against the publication invariants
+    SelfTestState::Step::C0_CurlImapTransportTruth,                       // C0 - production IMAP owners through real libcurl against a loopback server
+    SelfTestState::Step::R3_1_IdentityLessReplaceDummy,                   // R3-1 - conditional replace through an atomic-final writer without bound authority
+    SelfTestState::Step::R3_2_WriterProofDummy,       // R3-2 - writer content proof: Verified Copy without readback, Managed Move cleanup after proof
+    SelfTestState::Step::R3_3_PublicationFaultMatrix, // R3-3 - every bridge fault hook x route x Copy/Move against the publication invariants
     SelfTestState::Step::R3_4_ReplaceWithoutOccupantTokenRefused, // R0-RC3 - a granted replacement without an occupant token is refused, nothing written
     SelfTestState::Step::RC3_9_TransferDestinationNameRefused,    // R0-RC3 (9) - a destination leaf the provider rejects is refused at admission
     SelfTestState::Step::R4T_DeepTreeCopyCompletesIteratively,    // R4-T1 - a 300-level tree copies and moves through the iterative bridge walkers
@@ -1403,33 +1457,31 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::R4A02_RunConcurrentSameDestinationStaysSafe, // R4-A02-2 - Run admits only the disclosed overlap and both result sets stay truthful
     SelfTestState::Step::R4A02_LiveOutputGuardChoices,                // R4-A02-2 - uncovered live output parks; Skip/Queue/destructive and overflow stay safe
     SelfTestState::Step::R4A02_DisjointWritesDoNotWarn,               // R4-A02-1 - disjoint source and destination roots warn nothing
-    SelfTestState::Step::R4A02_RenamePublishKeepsIndexPrecise, // Step 3 (2026-09-06) - a rename publication is indexed under its parent scope, no host-wide
-                                                               // overflow
-    SelfTestState::Step::R4A02_LatePublisherStillWarns, // Step 4 (2026-09-06) - a task that publishes after a newer peer prepared still warns and queues after
-                                                        // it
-    SelfTestState::Step::Phase5_DiscoverySingleTraversal,                  // Phase 5 — one traversal feeds execution and closes totals
-    SelfTestState::Step::Phase5_DiscoveryCancelReleasesSlot,               // Phase 5 — cancel releases discovery/execution capacity
-    SelfTestState::Step::Phase5_DiscoveryCancelLatencyLocal,               // Phase 5 — local discovery/transfer observes bounded cancellation
-    SelfTestState::Step::Phase5_DiscoverySkipContinues,                    // Phase 5 — Skip switches to just-in-time and completes the same selection
-    SelfTestState::Step::BR3_CancelQueuePausedTransfer,                    // Cancellation drains independently of the paused queue predecessor
-    SelfTestState::Step::Phase5_CancelQueuedTask,                          // Phase 5 â€” canceling a queued (not-yet-running) task
-    SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery,       // Phase 5 — mode switch parallel→wait while discovery remains open
-    SelfTestState::Step::Phase5_SwitchWaitToParallelResume,                // Phase 5 â€” mode switch waitâ†’parallel and resume
-    SelfTestState::Step::Phase6_PopupRateSmoothing,                        // Phase 6 - popup rate/ETA smoothing contract
-    SelfTestState::Step::Phase6_PopupSmokeResizeAndPause,                  // Phase 6 â€” popup resize and pause-button interaction
-    SelfTestState::Step::Phase6_DeleteBytesMeaningful,                     // Phase 6 â€” delete reports meaningful byte counts in progress
-    SelfTestState::Step::Phase6_LocalBandwidthThrottle,                    // Phase 6 â€” local CopyFileEx bandwidth throttle duration and cancel latency
-    SelfTestState::Step::Phase6_ParallelBandwidthThrottleFairness,         // Phase 6 â€” parallel throttle fairness: shared-only vs per-worker budget
-    SelfTestState::Step::Phase7_WatcherChurn,                              // Phase 7 â€” directory watcher fires correctly under heavy churn
-    SelfTestState::Step::Phase7_CacheBorrowNoWatchInvalidation,            // Phase 7 â€” cached-but-unwatched folders still invalidate on routed mutations
-    SelfTestState::Step::Phase7_CrossPaneVisibleRefreshLocal,              // Phase 7 â€” visible local panes auto-refresh on watcher-driven changes
-    SelfTestState::Step::Phase7_CrossPaneVisibleRefreshDummy,              // Phase 7 â€” visible dummy panes stay in sync after in-app mutation routing
-    SelfTestState::Step::Phase7_CrossPaneRelocateLocal,                    // Phase 7 â€” deleting a visible subtree relocates impacted panes
-    SelfTestState::Step::Phase7_LargeDirectoryEnumeration,                 // Phase 7 â€” enumerate a directory with many entries
-    SelfTestState::Step::Phase7_ParallelCopyMoveKnobs,                     // Phase 7 â€” speed limits and parallelism knobs for copy/move
-    SelfTestState::Step::Phase7_CopyMoveConcurrency16Perf,                 // Phase 7 / 8.2 â€” compare copy/move cap 8 vs 16 on the same machine
-    SelfTestState::Step::Phase7_AutoConcurrencyHints,                      // Phase 7 â€” auto mode resolves copy/delete concurrency from storage hints
-    SelfTestState::Step::Phase7_PerItemDirectoryCopyInFlightLines,         // Phase 7 â€” per-item directory copy uses internal parallelism (popup lines)
+    SelfTestState::Step::R4A02_RenamePublishKeepsIndexPrecise,         // Step 3 (2026-09-06) - a rename publication is indexed under its parent scope, no host-wide overflow
+    SelfTestState::Step::R4A02_LatePublisherStillWarns,               // Step 4 (2026-09-06) - a task that publishes after a newer peer prepared still warns and queues after it
+    SelfTestState::Step::Phase5_DiscoverySingleTraversal,             // Phase 5 — one traversal feeds execution and closes totals
+    SelfTestState::Step::Phase5_DiscoveryCancelReleasesSlot,          // Phase 5 — cancel releases discovery/execution capacity
+    SelfTestState::Step::Phase5_DiscoveryCancelLatencyLocal,          // Phase 5 — local discovery/transfer observes bounded cancellation
+    SelfTestState::Step::Phase5_DiscoverySkipContinues,               // Phase 5 — Skip switches to just-in-time and completes the same selection
+    SelfTestState::Step::BR3_CancelQueuePausedTransfer,               // Cancellation drains independently of the paused queue predecessor
+    SelfTestState::Step::Phase5_CancelQueuedTask,                     // Phase 5 â€” canceling a queued (not-yet-running) task
+    SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery,  // Phase 5 — mode switch parallel→wait while discovery remains open
+    SelfTestState::Step::Phase5_SwitchWaitToParallelResume,           // Phase 5 â€” mode switch waitâ†’parallel and resume
+    SelfTestState::Step::Phase6_PopupRateSmoothing,                   // Phase 6 - popup rate/ETA smoothing contract
+    SelfTestState::Step::Phase6_PopupSmokeResizeAndPause,             // Phase 6 â€” popup resize and pause-button interaction
+    SelfTestState::Step::Phase6_DeleteBytesMeaningful,                // Phase 6 â€” delete reports meaningful byte counts in progress
+    SelfTestState::Step::Phase6_LocalBandwidthThrottle,               // Phase 6 â€” local CopyFileEx bandwidth throttle duration and cancel latency
+    SelfTestState::Step::Phase6_ParallelBandwidthThrottleFairness,    // Phase 6 â€” parallel throttle fairness: shared-only vs per-worker budget
+    SelfTestState::Step::Phase7_WatcherChurn,                         // Phase 7 â€” directory watcher fires correctly under heavy churn
+    SelfTestState::Step::Phase7_CacheBorrowNoWatchInvalidation,       // Phase 7 â€” cached-but-unwatched folders still invalidate on routed mutations
+    SelfTestState::Step::Phase7_CrossPaneVisibleRefreshLocal,         // Phase 7 â€” visible local panes auto-refresh on watcher-driven changes
+    SelfTestState::Step::Phase7_CrossPaneVisibleRefreshDummy,         // Phase 7 â€” visible dummy panes stay in sync after in-app mutation routing
+    SelfTestState::Step::Phase7_CrossPaneRelocateLocal,               // Phase 7 â€” deleting a visible subtree relocates impacted panes
+    SelfTestState::Step::Phase7_LargeDirectoryEnumeration,            // Phase 7 â€” enumerate a directory with many entries
+    SelfTestState::Step::Phase7_ParallelCopyMoveKnobs,                // Phase 7 â€” speed limits and parallelism knobs for copy/move
+    SelfTestState::Step::Phase7_CopyMoveConcurrency16Perf,            // Phase 7 / 8.2 â€” compare copy/move cap 8 vs 16 on the same machine
+    SelfTestState::Step::Phase7_AutoConcurrencyHints,                 // Phase 7 â€” auto mode resolves copy/delete concurrency from storage hints
+    SelfTestState::Step::Phase7_PerItemDirectoryCopyInFlightLines,    // Phase 7 â€” per-item directory copy uses internal parallelism (popup lines)
     SelfTestState::Step::Phase7_CopyItemsSingleFolderRecursiveParallelism, // Phase 7 - plugin CopyItem/CopyItems(count==1) use recursive internal parallelism
     SelfTestState::Step::Phase7_CopyItemsMultiRootUnevenRecursiveParallelism,  // Phase 7 - multi-root copies rebalance uneven recursive subtrees
     SelfTestState::Step::Phase7_CopyRecursiveParallelismMatrix,                // Phase 7 - recursive copy/move matrix shapes and edge paths
@@ -1459,44 +1511,42 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::Phase10_ContentVerification,                          // Phase 10 / P4.6 — optional BLAKE3 verification and truthful outcomes
     SelfTestState::Step::Phase10_ArtifactTouchGuard,                           // Phase 10 / P5.4 — external launch artifact warning and exact revalidation
     SelfTestState::Step::R1d_PreparingLifecycle,                               // R1d — common pre-consumption lifecycle and immutable preparation facts
-    SelfTestState::Step::C1_ExitCloseDeferredUntilTasksQuiet, // C1 - application exit drains cancellation off the UI thread; the close resumes after the last
-                                                              // reap
-    SelfTestState::Step::Beeline_SameVolumeTreeMoveIsRename,  // Beeline - a same-volume file and tree Move is one Native rename per item, identity preserved
-    SelfTestState::Step::Beeline_LoopbackShareMoveIsRename,   // Beeline - the SMB profile takes the same route: a Move inside the loopback share alias is one
-                                                              // Native rename per item
-    SelfTestState::Step::C1_PermanentDeleteConfirmsOnCard,    // C1 - the permanent-delete confirmation is a card consent after Preparing pins the roots
-    SelfTestState::Step::Phase11_CrossFileSystemBridge,       // Phase 11 â€” copy/move across different file-system plugins
-    SelfTestState::Step::Phase11_BridgeSingleFolderParallelCopyInFlightLines, // Phase 11 â€” bridge: single-folder copy uses within-folder parallelism
-    SelfTestState::Step::Phase11_BridgeMultiFolderParallelCopyInFlightLines,  // Phase 11 â€” bridge: multi-folder copy keeps bounded early file admission
-    SelfTestState::Step::Phase11_BridgePipelineDummyToDummyPerf,              // Phase 11 â€” bridge: pipeline overlaps dummy read/write chunk latency
-    SelfTestState::Step::Phase11_ConnectionOverridePrecedence,                // Phase 11 / 8 â€” non-zero @conn override takes precedence over plugin default
-    SelfTestState::Step::Phase11_ConnectionOverrideGlobalGate,                // Phase 11 â€” connection overrides apply globally across tasks
-    SelfTestState::Step::Phase11_ConnectionOverrideClamp,                     // Phase 11 â€” connection manager overrides clamp per-task concurrency
-    SelfTestState::Step::Phase12_ReparsePointPolicy,                          // Phase 12 â€” reparse-point (symlink/junction) handling policy
-    SelfTestState::Step::Phase13_PostMortemDiagnostics,                       // Phase 13 â€” post-mortem diagnostics on task failure
-    SelfTestState::Step::Phase14_PopupHostLifetimeGuard,                      // Phase 14 â€” popup host lifetime guard (no UAF on late input)
-    SelfTestState::Step::Phase15_FileSystem7zReadSeekSmoke,                   // Phase 15 â€” 7z IFileReader read/seek smoke on a large (>32MB) entry
-    SelfTestState::Step::Phase15_FileSystem7zMountPathImpact,                 // Phase 15 â€” 7z mounted panes retarget/exit on backing archive changes
-    SelfTestState::Step::Phase16_RemoteWatchContractExposure,                 // Phase 16 â€” mutable remote plugins expose the watch contract offline
-    SelfTestState::Step::Phase16_RemoteFtpSecret,                             // Phase 16 â€” secure secret retrieval (FTP)
-    SelfTestState::Step::Phase16_RemoteFtpSandbox,                            // Phase 16 â€” remote sandbox root configuration (FTP)
-    SelfTestState::Step::Phase16_RemoteSftpSecret,                            // Phase 16 â€” secure secret retrieval (SFTP)
-    SelfTestState::Step::Phase16_RemoteSftpSandbox,                           // Phase 16 â€” remote sandbox root configuration (SFTP)
-    SelfTestState::Step::Phase16_RemoteScpSecret,                             // Phase 16 â€” secure secret retrieval (SCP)
-    SelfTestState::Step::Phase16_RemoteScpSandbox,                            // Phase 16 â€” remote sandbox root configuration (SCP)
-    SelfTestState::Step::Phase16_RemoteImapSecret,                            // Phase 16 â€” secure secret retrieval (IMAP)
-    SelfTestState::Step::Phase16_RemoteImapSandbox,                           // Phase 16 â€” remote sandbox root configuration (IMAP)
-    SelfTestState::Step::Phase16_RemoteS3Secret,                              // Phase 16 â€” secure secret retrieval (S3)
-    SelfTestState::Step::Phase16_RemoteS3Sandbox,                             // Phase 16 â€” remote sandbox root configuration (S3)
-    SelfTestState::Step::Phase16_RemoteS3FileOps,                             // Phase 16 â€” sandboxed CRUD/copy-move coverage (S3)
-    SelfTestState::Step::Phase16_RemoteOneDrivePersonalSecret,                // Phase 16 â€” secure secret retrieval (OneDrive Personal)
-    SelfTestState::Step::Phase16_RemoteOneDrivePersonalSandbox,               // Phase 16 â€” remote sandbox root configuration (OneDrive Personal)
-    SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps,               // Phase 16 â€” sandboxed CRUD/copy-move coverage (OneDrive Personal)
-    SelfTestState::Step::Phase16_RemoteOneDriveBusinessSecret,                // Phase 16 â€” secure secret retrieval (OneDrive Business)
-    SelfTestState::Step::Phase16_RemoteOneDriveBusinessSandbox,               // Phase 16 â€” remote sandbox root configuration (OneDrive Business)
-    SelfTestState::Step::Phase16_RemoteSharePointSecret,                      // Phase 16 â€” secure secret retrieval (SharePoint)
-    SelfTestState::Step::Phase16_RemoteSharePointSandbox,                     // Phase 16 â€” remote sandbox root configuration (SharePoint)
-    SelfTestState::Step::Cleanup_RestorePluginConfig                          // Restore plugin config and delete temp files
+    SelfTestState::Step::C1_ExitCloseDeferredUntilTasksQuiet,                  // C1 - application exit drains cancellation off the UI thread; the close resumes after the last reap
+    SelfTestState::Step::Beeline_SameVolumeTreeMoveIsRename,                   // Beeline - a same-volume file and tree Move is one Native rename per item, identity preserved
+    SelfTestState::Step::Beeline_LoopbackShareMoveIsRename,                    // Beeline - the SMB profile takes the same route: a Move inside the loopback share alias is one Native rename per item
+    SelfTestState::Step::C1_PermanentDeleteConfirmsOnCard,                     // C1 - the permanent-delete confirmation is a card consent after Preparing pins the roots
+    SelfTestState::Step::Phase11_CrossFileSystemBridge,                        // Phase 11 â€” copy/move across different file-system plugins
+    SelfTestState::Step::Phase11_BridgeSingleFolderParallelCopyInFlightLines,  // Phase 11 â€” bridge: single-folder copy uses within-folder parallelism
+    SelfTestState::Step::Phase11_BridgeMultiFolderParallelCopyInFlightLines,   // Phase 11 â€” bridge: multi-folder copy keeps bounded early file admission
+    SelfTestState::Step::Phase11_BridgePipelineDummyToDummyPerf,               // Phase 11 â€” bridge: pipeline overlaps dummy read/write chunk latency
+    SelfTestState::Step::Phase11_ConnectionOverridePrecedence,                 // Phase 11 / 8 â€” non-zero @conn override takes precedence over plugin default
+    SelfTestState::Step::Phase11_ConnectionOverrideGlobalGate,                 // Phase 11 â€” connection overrides apply globally across tasks
+    SelfTestState::Step::Phase11_ConnectionOverrideClamp,                      // Phase 11 â€” connection manager overrides clamp per-task concurrency
+    SelfTestState::Step::Phase12_ReparsePointPolicy,                           // Phase 12 â€” reparse-point (symlink/junction) handling policy
+    SelfTestState::Step::Phase13_PostMortemDiagnostics,                        // Phase 13 â€” post-mortem diagnostics on task failure
+    SelfTestState::Step::Phase14_PopupHostLifetimeGuard,                       // Phase 14 â€” popup host lifetime guard (no UAF on late input)
+    SelfTestState::Step::Phase15_FileSystem7zReadSeekSmoke,                    // Phase 15 â€” 7z IFileReader read/seek smoke on a large (>32MB) entry
+    SelfTestState::Step::Phase15_FileSystem7zMountPathImpact,                  // Phase 15 â€” 7z mounted panes retarget/exit on backing archive changes
+    SelfTestState::Step::Phase16_RemoteWatchContractExposure,                  // Phase 16 â€” mutable remote plugins expose the watch contract offline
+    SelfTestState::Step::Phase16_RemoteFtpSecret,                              // Phase 16 â€” secure secret retrieval (FTP)
+    SelfTestState::Step::Phase16_RemoteFtpSandbox,                             // Phase 16 â€” remote sandbox root configuration (FTP)
+    SelfTestState::Step::Phase16_RemoteSftpSecret,                             // Phase 16 â€” secure secret retrieval (SFTP)
+    SelfTestState::Step::Phase16_RemoteSftpSandbox,                            // Phase 16 â€” remote sandbox root configuration (SFTP)
+    SelfTestState::Step::Phase16_RemoteScpSecret,                              // Phase 16 â€” secure secret retrieval (SCP)
+    SelfTestState::Step::Phase16_RemoteScpSandbox,                             // Phase 16 â€” remote sandbox root configuration (SCP)
+    SelfTestState::Step::Phase16_RemoteImapSecret,                             // Phase 16 â€” secure secret retrieval (IMAP)
+    SelfTestState::Step::Phase16_RemoteImapSandbox,                            // Phase 16 â€” remote sandbox root configuration (IMAP)
+    SelfTestState::Step::Phase16_RemoteS3Secret,                               // Phase 16 â€” secure secret retrieval (S3)
+    SelfTestState::Step::Phase16_RemoteS3Sandbox,                              // Phase 16 â€” remote sandbox root configuration (S3)
+    SelfTestState::Step::Phase16_RemoteS3FileOps,                              // Phase 16 â€” sandboxed CRUD/copy-move coverage (S3)
+    SelfTestState::Step::Phase16_RemoteOneDrivePersonalSecret,                 // Phase 16 â€” secure secret retrieval (OneDrive Personal)
+    SelfTestState::Step::Phase16_RemoteOneDrivePersonalSandbox,                // Phase 16 â€” remote sandbox root configuration (OneDrive Personal)
+    SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps,                // Phase 16 â€” sandboxed CRUD/copy-move coverage (OneDrive Personal)
+    SelfTestState::Step::Phase16_RemoteOneDriveBusinessSecret,                 // Phase 16 â€” secure secret retrieval (OneDrive Business)
+    SelfTestState::Step::Phase16_RemoteOneDriveBusinessSandbox,                // Phase 16 â€” remote sandbox root configuration (OneDrive Business)
+    SelfTestState::Step::Phase16_RemoteSharePointSecret,                       // Phase 16 â€” secure secret retrieval (SharePoint)
+    SelfTestState::Step::Phase16_RemoteSharePointSandbox,                      // Phase 16 â€” remote sandbox root configuration (SharePoint)
+    SelfTestState::Step::Cleanup_RestorePluginConfig                           // Restore plugin config and delete temp files
 });
 
 constexpr std::array<SelfTestState::Step, 4> kFileOpsFamilyClearflowPhase01{{
@@ -2221,17 +2271,17 @@ bool SetPluginConfiguration(IInformations* info, std::string_view configUtf8) no
         {
             if (info == state.infoLocal.get())
             {
-                state.localConfigDirty                                                   = true;
+                state.localConfigDirty = true;
                 g_settings.plugins.configurationByPluginId[std::wstring(kPluginIdLocal)] = std::move(parsedConfiguration);
             }
             else if (info == state.infoDummy.get())
             {
-                state.dummyConfigDirty                                                   = true;
+                state.dummyConfigDirty = true;
                 g_settings.plugins.configurationByPluginId[std::wstring(kPluginIdDummy)] = std::move(parsedConfiguration);
             }
             else if (info == state.info7z.get())
             {
-                state.config7zDirty                                                   = true;
+                state.config7zDirty = true;
                 g_settings.plugins.configurationByPluginId[std::wstring(kPluginId7z)] = std::move(parsedConfiguration);
             }
         }
@@ -2718,29 +2768,29 @@ bool EnsureDummyFolderExists(IFileSystem* fs, std::wstring_view destinationFolde
 
 struct ProviderCapabilitySnapshot
 {
-    bool copyOperation            = false;
-    bool moveOperation            = false;
-    bool nativeMoveOperation      = false;
-    bool deleteOperation          = false;
-    bool renameOperation          = false;
-    bool recycleOperation         = false;
+    bool copyOperation       = false;
+    bool moveOperation       = false;
+    bool nativeMoveOperation = false;
+    bool deleteOperation     = false;
+    bool renameOperation     = false;
+    bool recycleOperation    = false;
     bool createDirectoryOperation = false;
-    bool properties               = false;
-    bool read                     = false;
-    bool write                    = false;
-    uint64_t copyMoveMax          = 0;
-    uint64_t deleteMax            = 0;
-    uint64_t deleteRecycleMax     = 0;
-    bool exportCopyWildcard       = false;
-    bool exportMoveWildcard       = false;
-    bool importCopyWildcard       = false;
-    bool importMoveWildcard       = false;
-    bool preserveFileLink         = false;
-    bool preserveDirectoryLink    = false;
-    bool retargetInTree           = false;
-    bool exactLinkRemoval         = false;
-    bool pathIdentityPresent      = false;
-    bool pathTextStableIdentity   = false;
+    bool properties          = false;
+    bool read                = false;
+    bool write               = false;
+    uint64_t copyMoveMax        = 0;
+    uint64_t deleteMax          = 0;
+    uint64_t deleteRecycleMax   = 0;
+    bool exportCopyWildcard     = false;
+    bool exportMoveWildcard     = false;
+    bool importCopyWildcard     = false;
+    bool importMoveWildcard     = false;
+    bool preserveFileLink       = false;
+    bool preserveDirectoryLink  = false;
+    bool retargetInTree         = false;
+    bool exactLinkRemoval       = false;
+    bool pathIdentityPresent    = false;
+    bool pathTextStableIdentity = false;
     std::wstring componentComparison;
     wchar_t preferredSeparator = L'\0';
     std::wstring acceptedSeparators;
@@ -2751,9 +2801,7 @@ struct ProviderCapabilitySnapshot
 class FlagSensitiveAtomicWriter final : public IFileSystemAtomicWriter
 {
 public:
-    explicit FlagSensitiveAtomicWriter(FileSystemFlags expectedFlags) noexcept : _expectedFlags(expectedFlags)
-    {
-    }
+    explicit FlagSensitiveAtomicWriter(FileSystemFlags expectedFlags) noexcept : _expectedFlags(expectedFlags) {}
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) noexcept override
     {
@@ -2895,12 +2943,13 @@ private:
 
     std::string jsonCopy(jsonUtf8);
     std::unique_ptr<yyjson_doc, decltype(&yyjson_doc_free)> doc(
-        yyjson_read_opts(jsonCopy.data(), jsonCopy.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, nullptr), &yyjson_doc_free);
+        yyjson_read_opts(jsonCopy.data(), jsonCopy.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, nullptr),
+        &yyjson_doc_free);
     if (! doc)
     {
         return false;
     }
-    yyjson_val* root    = yyjson_doc_get_root(doc.get());
+    yyjson_val* root = yyjson_doc_get_root(doc.get());
     yyjson_val* version = root ? yyjson_obj_get(root, "version") : nullptr;
     if (! root || ! yyjson_is_obj(root) || ! version || ! yyjson_is_int(version) || yyjson_get_int(version) != 2)
     {
@@ -2908,17 +2957,8 @@ private:
     }
 
     constexpr std::array<const char*, 11u> requiredObjects{{
-        "operations",
-        "concurrency",
-        "transfer",
-        "names",
-        "identity",
-        "publication",
-        "links",
-        "metadata",
-        "verification",
-        "cancellation",
-        "directories",
+        "operations", "concurrency", "transfer", "names", "identity", "publication", "links",
+        "metadata", "verification", "cancellation", "directories",
     }};
     for (const char* name : requiredObjects)
     {
@@ -2942,7 +2982,7 @@ private:
     }
 
     yyjson_val* operations = yyjson_obj_get(root, "operations");
-    bool ignored           = false;
+    bool ignored = false;
     for (const char* name : {"copy", "move", "nativeMove", "delete", "rename", "createDirectory", "properties", "read", "write", "recycle"})
     {
         if (! TryGetJsonBool(operations, name, ignored))
@@ -2977,20 +3017,21 @@ private:
     }
 
     yyjson_val* routeClass = yyjson_obj_get(cancellation, "routeClass");
-    yyjson_val* watchdog   = yyjson_obj_get(cancellation, "providerWatchdogTimeoutMs");
-    uint64_t watchdogMs    = 0u;
+    yyjson_val* watchdog = yyjson_obj_get(cancellation, "providerWatchdogTimeoutMs");
+    uint64_t watchdogMs = 0u;
     if (! routeClass || ! yyjson_is_str(routeClass) || ! TryGetJsonUInt(cancellation, "providerWatchdogTimeoutMs", watchdogMs) ||
         watchdog != yyjson_obj_get(cancellation, "providerWatchdogTimeoutMs"))
     {
         return false;
     }
     const std::string_view routeText(yyjson_get_str(routeClass), yyjson_get_len(routeClass));
-    if ((routeText == "providerWatchdog") != (watchdogMs != 0u) || (routeText != "bounded" && routeText != "uncontained" && routeText != "providerWatchdog"))
+    if ((routeText == "providerWatchdog") != (watchdogMs != 0u) ||
+        (routeText != "bounded" && routeText != "uncontained" && routeText != "providerWatchdog"))
     {
         return false;
     }
 
-    yyjson_val* names     = yyjson_obj_get(root, "names");
+    yyjson_val* names = yyjson_obj_get(root, "names");
     uint64_t maxComponent = 0u;
     if (! TryGetJsonUInt(names, "maxComponentUtf16", maxComponent) || maxComponent == 0u)
     {
@@ -3103,7 +3144,7 @@ struct PerfMetricSample
     }
 
     const char* jsonUtf8 = nullptr;
-    const HRESULT hr     = fs->GetPathCapabilities(L"/", FILESYSTEM_COPY, &jsonUtf8);
+    const HRESULT hr = fs->GetPathCapabilities(L"/", FILESYSTEM_COPY, &jsonUtf8);
     if (FAILED(hr) || ! jsonUtf8 || jsonUtf8[0] == '\0')
     {
         reasonOut = std::format(L"GetPathCapabilities failed hr=0x{:08X}", static_cast<unsigned long>(hr));
@@ -3148,11 +3189,11 @@ struct PerfMetricSample
     }
 
     if (! TryGetJsonBool(operations, "copy", snapshot.copyOperation) || ! TryGetJsonBool(operations, "move", snapshot.moveOperation) ||
-        ! TryGetJsonBool(operations, "nativeMove", snapshot.nativeMoveOperation) || ! TryGetJsonBool(operations, "delete", snapshot.deleteOperation) ||
-        ! TryGetJsonBool(operations, "rename", snapshot.renameOperation) ||
-        ! TryGetJsonBool(operations, "createDirectory", snapshot.createDirectoryOperation) || ! TryGetJsonBool(operations, "properties", snapshot.properties) ||
-        ! TryGetJsonBool(operations, "read", snapshot.read) || ! TryGetJsonBool(operations, "write", snapshot.write) ||
-        ! TryGetJsonBool(operations, "recycle", snapshot.recycleOperation))
+        ! TryGetJsonBool(operations, "nativeMove", snapshot.nativeMoveOperation) ||
+        ! TryGetJsonBool(operations, "delete", snapshot.deleteOperation) || ! TryGetJsonBool(operations, "rename", snapshot.renameOperation) ||
+        ! TryGetJsonBool(operations, "createDirectory", snapshot.createDirectoryOperation) ||
+        ! TryGetJsonBool(operations, "properties", snapshot.properties) || ! TryGetJsonBool(operations, "read", snapshot.read) ||
+        ! TryGetJsonBool(operations, "write", snapshot.write) || ! TryGetJsonBool(operations, "recycle", snapshot.recycleOperation))
     {
         reasonOut = L"capabilities operations object is missing required boolean fields";
         return false;
@@ -3186,9 +3227,11 @@ struct PerfMetricSample
     snapshot.importMoveWildcard = CapabilityListContainsWildcard(yyjson_obj_get(importNode, "move"));
 
     yyjson_val* links = yyjson_obj_get(root, "links");
-    if (! links || ! yyjson_is_obj(links) || ! TryGetJsonBool(links, "preserveFileLink", snapshot.preserveFileLink) ||
+    if (! links || ! yyjson_is_obj(links) ||
+        ! TryGetJsonBool(links, "preserveFileLink", snapshot.preserveFileLink) ||
         ! TryGetJsonBool(links, "preserveDirectoryLink", snapshot.preserveDirectoryLink) ||
-        ! TryGetJsonBool(links, "retargetInTree", snapshot.retargetInTree) || ! TryGetJsonBool(links, "exactLinkRemoval", snapshot.exactLinkRemoval))
+        ! TryGetJsonBool(links, "retargetInTree", snapshot.retargetInTree) ||
+        ! TryGetJsonBool(links, "exactLinkRemoval", snapshot.exactLinkRemoval))
     {
         reasonOut = L"capabilities links object is missing required boolean fields";
         return false;
@@ -3202,8 +3245,11 @@ struct PerfMetricSample
     return true;
 }
 
-[[nodiscard]] bool TryReadTypedProviderCapabilities(
-    IFileSystem* fs, std::wstring_view providerId, ProviderCapabilitySnapshot& snapshot, std::wstring& reasonOut, bool* usedArenaFallback = nullptr) noexcept
+[[nodiscard]] bool TryReadTypedProviderCapabilities(IFileSystem* fs,
+                                                    std::wstring_view providerId,
+                                                    ProviderCapabilitySnapshot& snapshot,
+                                                    std::wstring& reasonOut,
+                                                    bool* usedArenaFallback = nullptr) noexcept
 {
     snapshot = {};
     reasonOut.clear();
@@ -3211,11 +3257,13 @@ struct PerfMetricSample
     {
         *usedArenaFallback = false;
     }
-    const FileSystemRouteContract::QueryResult route = FileSystemRouteContract::Query(fs, L"/", FILESYSTEM_COPY, providerId);
+    const FileSystemRouteContract::QueryResult route =
+        FileSystemRouteContract::Query(fs, L"/", FILESYSTEM_COPY, providerId);
     if (route.state != FileSystemRouteContract::QueryState::Available || ! route.snapshot.pathIdentity.has_value())
     {
-        reasonOut =
-            std::format(L"typed route query failed state={} hr=0x{:08X}", static_cast<unsigned int>(route.state), static_cast<unsigned long>(route.status));
+        reasonOut = std::format(L"typed route query failed state={} hr=0x{:08X}",
+                                static_cast<unsigned int>(route.state),
+                                static_cast<unsigned long>(route.status));
         return false;
     }
     if (usedArenaFallback != nullptr)
@@ -3224,30 +3272,31 @@ struct PerfMetricSample
     }
 
     const FileSystemRouteContract::Snapshot& facts = route.snapshot;
-    snapshot.copyOperation                         = facts.copyOperation;
-    snapshot.moveOperation                         = facts.moveOperation;
-    snapshot.nativeMoveOperation                   = facts.nativeMoveOperation;
-    snapshot.deleteOperation                       = facts.deleteOperation;
-    snapshot.renameOperation                       = facts.renameOperation;
-    snapshot.recycleOperation                      = facts.recycleOperation;
-    snapshot.createDirectoryOperation              = facts.createDirectoryOperation;
-    snapshot.properties                            = facts.properties;
-    snapshot.read                                  = facts.read;
-    snapshot.write                                 = facts.write;
-    snapshot.copyMoveMax                           = facts.copyMoveMaxConcurrency;
-    snapshot.deleteMax                             = facts.deleteMaxConcurrency;
-    snapshot.deleteRecycleMax                      = facts.deleteRecycleBinMaxConcurrency;
-    snapshot.preserveFileLink                      = facts.preserveFileLink;
-    snapshot.preserveDirectoryLink                 = facts.preserveDirectoryLink;
-    snapshot.retargetInTree                        = facts.retargetInTree;
-    snapshot.exactLinkRemoval                      = facts.exactLinkRemoval;
-    snapshot.pathIdentityPresent                   = true;
-    snapshot.pathTextStableIdentity                = facts.pathIdentity->pathTextStableIdentity;
-    snapshot.componentComparison =
-        facts.pathIdentity->componentComparison == FileSystemPathComponentComparison::OrdinalIgnoreCase ? L"ordinalIgnoreCase" : L"ordinalCaseSensitive";
+    snapshot.copyOperation = facts.copyOperation;
+    snapshot.moveOperation = facts.moveOperation;
+    snapshot.nativeMoveOperation = facts.nativeMoveOperation;
+    snapshot.deleteOperation = facts.deleteOperation;
+    snapshot.renameOperation = facts.renameOperation;
+    snapshot.recycleOperation = facts.recycleOperation;
+    snapshot.createDirectoryOperation = facts.createDirectoryOperation;
+    snapshot.properties = facts.properties;
+    snapshot.read = facts.read;
+    snapshot.write = facts.write;
+    snapshot.copyMoveMax = facts.copyMoveMaxConcurrency;
+    snapshot.deleteMax = facts.deleteMaxConcurrency;
+    snapshot.deleteRecycleMax = facts.deleteRecycleBinMaxConcurrency;
+    snapshot.preserveFileLink = facts.preserveFileLink;
+    snapshot.preserveDirectoryLink = facts.preserveDirectoryLink;
+    snapshot.retargetInTree = facts.retargetInTree;
+    snapshot.exactLinkRemoval = facts.exactLinkRemoval;
+    snapshot.pathIdentityPresent = true;
+    snapshot.pathTextStableIdentity = facts.pathIdentity->pathTextStableIdentity;
+    snapshot.componentComparison = facts.pathIdentity->componentComparison == FileSystemPathComponentComparison::OrdinalIgnoreCase
+        ? L"ordinalIgnoreCase"
+        : L"ordinalCaseSensitive";
     snapshot.preferredSeparator = facts.pathIdentity->preferredSeparator;
     snapshot.acceptedSeparators = facts.pathIdentity->acceptedSeparators;
-    snapshot.casePreserving     = facts.pathIdentity->casePreserving;
+    snapshot.casePreserving = facts.pathIdentity->casePreserving;
     switch (facts.pathIdentity->caseOnlyRename)
     {
         case FileSystemPathCaseOnlyRename::Supported: snapshot.caseOnlyRename = L"supported"; break;
@@ -3258,7 +3307,8 @@ struct PerfMetricSample
 
     const auto peerAllowed = [&](FileSystemOperation operation, FileSystemTransferPeerRole role) noexcept
     {
-        const FileSystemRouteContract::BooleanResult peer = FileSystemRouteContract::QueryTransferPeerAllowed(fs, L"/", operation, role, L"selftest/peer");
+        const FileSystemRouteContract::BooleanResult peer =
+            FileSystemRouteContract::QueryTransferPeerAllowed(fs, L"/", operation, role, L"selftest/peer");
         return peer.state == FileSystemRouteContract::QueryState::Available && peer.value;
     };
     snapshot.exportCopyWildcard = peerAllowed(FILESYSTEM_COPY, FILESYSTEM_TRANSFER_PEER_EXPORT);
@@ -3512,8 +3562,11 @@ struct PerfMetricSample
     return path.generic_wstring();
 }
 
-[[nodiscard]] bool WriteFileBytesFsIo(
-    const wil::com_ptr<IFileSystemIO>& io, const std::filesystem::path& path, const void* data, size_t sizeBytes, bool allowOverwrite = false) noexcept
+[[nodiscard]] bool WriteFileBytesFsIo(const wil::com_ptr<IFileSystemIO>& io,
+                                      const std::filesystem::path& path,
+                                      const void* data,
+                                      size_t sizeBytes,
+                                      bool allowOverwrite = false) noexcept
 {
     if (! io)
     {
@@ -4331,7 +4384,7 @@ bool RecreateEmptyDirectory(const std::filesystem::path& path) noexcept
     }
 
     constexpr DWORD kRetryDelayMs = 50u;
-    const ULONGLONG deadline      = ::GetTickCount64() + SelfTest::ScaleTimeout(6'000u);
+    const ULONGLONG deadline       = ::GetTickCount64() + SelfTest::ScaleTimeout(6'000u);
     do
     {
         static_cast<void>(SelfTest::RemoveAll(path));
@@ -4421,12 +4474,12 @@ struct FileOpsRecursiveProgressRecorder final : IFileSystemCallback
     std::wstring matchingNeedle;
     std::array<uint64_t, 32> streamIds{};
     std::array<uint64_t, 32> matchingStreamIds{};
-    size_t streamCount          = 0;
-    size_t matchingStreamCount  = 0;
-    uint64_t progressCount      = 0;
-    uint64_t matchingProgress   = 0;
-    uint64_t completedCount     = 0;
-    HRESULT lastCompletedStatus = E_PENDING;
+    size_t streamCount                = 0;
+    size_t matchingStreamCount        = 0;
+    uint64_t progressCount            = 0;
+    uint64_t matchingProgress         = 0;
+    uint64_t completedCount           = 0;
+    HRESULT lastCompletedStatus       = E_PENDING;
     std::optional<FileSystemItemMutationResult> lastMutationResult;
     uint64_t issueCount               = 0;
     HRESULT lastIssueStatus           = E_PENDING;
@@ -4498,7 +4551,7 @@ struct FileOpsRecursiveProgressRecorder final : IFileSystemCallback
         std::scoped_lock lock(mutex);
         ++completedCount;
         lastCompletedStatus = status;
-        lastMutationResult  = FileSystemRouteContract::SnapshotItemMutationResult(mutationResult);
+        lastMutationResult = FileSystemRouteContract::SnapshotItemMutationResult(mutationResult);
         return S_OK;
     }
 
@@ -4532,16 +4585,14 @@ struct FileOpsRecursiveProgressRecorder final : IFileSystemCallback
         std::scoped_lock lock(mutex);
         ++issueCount;
         lastIssueStatus = status;
-        *action         = issueAction;
+        *action = issueAction;
         return S_OK;
     }
 };
 
 struct FileOpsRecorderOperationControl final : IFileSystemOperationControl
 {
-    explicit FileOpsRecorderOperationControl(FileOpsRecursiveProgressRecorder& recorder) noexcept : _recorder(recorder)
-    {
-    }
+    explicit FileOpsRecorderOperationControl(FileOpsRecursiveProgressRecorder& recorder) noexcept : _recorder(recorder) {}
 
     HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, [[maybe_unused]] void* cookie) noexcept override
     {
@@ -4558,7 +4609,8 @@ struct FileOpsRecorderOperationControl final : IFileSystemOperationControl
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress* progress, [[maybe_unused]] void* cookie) noexcept override
+    HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress* progress,
+                                                                 [[maybe_unused]] void* cookie) noexcept override
     {
         return progress != nullptr && progress->sizeBytes == sizeof(FileSystemDiscoveryProgress) ? S_OK : E_INVALIDARG;
     }
@@ -4602,13 +4654,8 @@ bool WriteTestFile(const std::filesystem::path& path, size_t bytes) noexcept
     wil::unique_handle h;
     for (int attempt = 0; attempt < 20; ++attempt)
     {
-        h.reset(CreateFileW(extendedPath.c_str(),
-                            GENERIC_WRITE,
-                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                            nullptr,
-                            CREATE_ALWAYS,
-                            FILE_ATTRIBUTE_NORMAL,
-                            nullptr));
+        h.reset(CreateFileW(
+            extendedPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
         if (h)
         {
             break;
@@ -5714,10 +5761,12 @@ void PruneEmptyAlternateVolumeSandboxParents(const std::filesystem::path& sandbo
         const std::filesystem::path runsRoot    = runRoot.parent_path();
         const std::filesystem::path testRoot    = runsRoot.parent_path();
 
-        const std::optional<std::filesystem::path> authorizedRoot =
-            Common::Testing::GetDedicatedExternalTestSandboxBase(testRoot, Common::Testing::kTestSandboxDirectoryName);
-        if (suiteRoot.empty() || scratchRoot.filename() != L"scratch" || runsRoot.filename() != L"runs" || ! authorizedRoot.has_value() ||
-            ! Common::Testing::TestSandboxPathEquals(testRoot, authorizedRoot.value()) || ! Common::Testing::HasValidTestSandboxMarker(testRoot))
+        const std::optional<std::filesystem::path> authorizedRoot = Common::Testing::GetDedicatedExternalTestSandboxBase(
+            testRoot,
+            Common::Testing::kTestSandboxDirectoryName);
+        if (suiteRoot.empty() || scratchRoot.filename() != L"scratch" || runsRoot.filename() != L"runs" ||
+            ! authorizedRoot.has_value() || ! Common::Testing::TestSandboxPathEquals(testRoot, authorizedRoot.value()) ||
+            ! Common::Testing::HasValidTestSandboxMarker(testRoot))
         {
             return;
         }
@@ -5778,8 +5827,9 @@ void PruneEmptyAlternateVolumeSandboxParents(const std::filesystem::path& sandbo
     detail.clear();
 
     std::array<wchar_t, 2> alternateVolumeAuthorization{};
-    if (GetEnvironmentVariableW(
-            L"REDSALAMANDER_TEST_ALLOW_ALTERNATE_VOLUME", alternateVolumeAuthorization.data(), static_cast<DWORD>(alternateVolumeAuthorization.size())) != 1u ||
+    if (GetEnvironmentVariableW(L"REDSALAMANDER_TEST_ALLOW_ALTERNATE_VOLUME",
+                                alternateVolumeAuthorization.data(),
+                                static_cast<DWORD>(alternateVolumeAuthorization.size())) != 1u ||
         alternateVolumeAuthorization[0] != L'1')
     {
         detail = L"alternate-volume-test-root-not-authorized";
@@ -5823,7 +5873,7 @@ void PruneEmptyAlternateVolumeSandboxParents(const std::filesystem::path& sandbo
         }
 
         const std::filesystem::path& candidate = alternateVolumeSandbox.root;
-        const std::filesystem::path probe      = candidate / L"probe.tmp";
+        const std::filesystem::path probe = candidate / L"probe.tmp";
         {
             std::ofstream out(probe, std::ios::binary | std::ios::trunc);
             if (! out)
@@ -5846,8 +5896,9 @@ void PruneEmptyAlternateVolumeSandboxParents(const std::filesystem::path& sandbo
     if (! configuredRootText.empty())
     {
         const std::filesystem::path configuredRoot = std::filesystem::path(configuredRootText).lexically_normal();
-        const std::optional<std::filesystem::path> authorizedRoot =
-            Common::Testing::GetDedicatedExternalTestSandboxBase(configuredRoot, Common::Testing::kTestSandboxDirectoryName);
+        const std::optional<std::filesystem::path> authorizedRoot = Common::Testing::GetDedicatedExternalTestSandboxBase(
+            configuredRoot,
+            Common::Testing::kTestSandboxDirectoryName);
         if (! authorizedRoot.has_value() || ! Common::Testing::TestSandboxPathEquals(configuredRoot, authorizedRoot.value()))
         {
             detail = L"configured-alternate-test-root-unauthorized";
@@ -5966,29 +6017,29 @@ std::optional<std::uint64_t> StartFileOperationAndGetId(
     }
 
     uint64_t startedTaskId = 0;
-    const HRESULT hrStart  = fileOps->AdmitOperation(operation,
-                                                     sourcePane,
-                                                     destinationPane,
-                                                     fileSystem,
-                                                     std::move(sourcePaths),
-                                                     std::move(destinationFolder),
-                                                     flags,
-                                                     waitForOthers,
-                                                     initialSpeedLimitBytesPerSecond,
-                                                     executionMode,
-                                                     requireConfirmation,
-                                                     std::move(destinationFileSystem),
-                                                     &startedTaskId,
-                                                     std::move(resolvedItems),
-                                                     {},
-                                                     {},
-                                                     {},
-                                                     std::nullopt,
-                                                     FileOperations::DeleteOrigin::PaneCommand,
-                                                     std::nullopt,
-                                                     moveClipboardSequence,
-                                                     std::move(preWorkerReleaseBarrier),
-                                                     std::move(preConsumptionDecisionGate));
+    const HRESULT hrStart = fileOps->AdmitOperation(operation,
+                                                    sourcePane,
+                                                    destinationPane,
+                                                    fileSystem,
+                                                    std::move(sourcePaths),
+                                                    std::move(destinationFolder),
+                                                    flags,
+                                                    waitForOthers,
+                                                    initialSpeedLimitBytesPerSecond,
+                                                    executionMode,
+                                                    requireConfirmation,
+                                                    std::move(destinationFileSystem),
+                                                    &startedTaskId,
+                                                    std::move(resolvedItems),
+                                                    {},
+                                                    {},
+                                                    {},
+                                                    std::nullopt,
+                                                    FileOperations::DeleteOrigin::PaneCommand,
+                                                    std::nullopt,
+                                                    moveClipboardSequence,
+                                                    std::move(preWorkerReleaseBarrier),
+                                                    std::move(preConsumptionDecisionGate));
     if (FAILED(hrStart) || startedTaskId == 0)
     {
         return std::nullopt;
@@ -6144,8 +6195,8 @@ void FileOperationsSelfTest::Start(HWND mainWindow, const SelfTest::SelfTestOpti
     state.phase10ClipboardReadinessBarrierCalled.store(false, std::memory_order_release);
     state.phase10ClipboardSlowGateRelease.store(false, std::memory_order_release);
     state.phase10ClipboardReturnedBeforeReadiness = false;
-    state.autoDismissSuccessOriginal              = false;
-    state.fileOperationsBackedUp                  = false;
+    state.autoDismissSuccessOriginal          = false;
+    state.fileOperationsBackedUp              = false;
     state.fileOperationsOriginal.reset();
     state.appThemeBackedUp = false;
     state.appThemeOriginal.reset();
@@ -6161,20 +6212,20 @@ void FileOperationsSelfTest::Start(HWND mainWindow, const SelfTest::SelfTestOpti
     state.bandwidthThrottleWorkerModeEnvBackedUp    = false;
     state.bandwidthThrottleWorkerModeEnvHadOriginal = false;
     state.bandwidthThrottleWorkerModeEnvOriginal.clear();
-    state.parallelBandwidthRunStartTick                   = 0;
-    state.parallelBandwidthBaselineUs                     = 0;
-    state.parallelBandwidthCandidateUs                    = 0;
-    state.parallelBandwidthBaselineMaxSkewBytes           = 0;
-    state.parallelBandwidthCandidateMaxSkewBytes          = 0;
+    state.parallelBandwidthRunStartTick          = 0;
+    state.parallelBandwidthBaselineUs            = 0;
+    state.parallelBandwidthCandidateUs           = 0;
+    state.parallelBandwidthBaselineMaxSkewBytes  = 0;
+    state.parallelBandwidthCandidateMaxSkewBytes = 0;
     state.parallelBandwidthBaselineMaxCallbackDeltaBytes  = 0;
     state.parallelBandwidthCandidateMaxCallbackDeltaBytes = 0;
-    state.parallelBandwidthBaselineMaxActive              = 0;
-    state.parallelBandwidthCandidateMaxActive             = 0;
-    state.parallelBandwidthBaselineSamples                = 0;
-    state.parallelBandwidthCandidateSamples               = 0;
-    state.defaultSpeedLimitRunStartTick                   = 0;
-    state.defaultSpeedLimitBaselineUs                     = 0;
-    state.defaultSpeedLimitCandidateUs                    = 0;
+    state.parallelBandwidthBaselineMaxActive     = 0;
+    state.parallelBandwidthCandidateMaxActive    = 0;
+    state.parallelBandwidthBaselineSamples       = 0;
+    state.parallelBandwidthCandidateSamples      = 0;
+    state.defaultSpeedLimitRunStartTick          = 0;
+    state.defaultSpeedLimitBaselineUs            = 0;
+    state.defaultSpeedLimitCandidateUs           = 0;
     state.defaultSpeedLimitDummyConfigSnapshot.clear();
     state.completedTasks.clear();
     state.phase14InfoTask.reset();
@@ -6425,8 +6476,8 @@ using TickResult = std::optional<bool>;
     switch (state.step)
     {
 #include "FolderWindow.FileOperations.SelfTest.Phases14_16.cpp"
-        return std::nullopt;
-    }
+    return std::nullopt;
+}
 
 #pragma warning(pop)
 } // namespace
@@ -6449,7 +6500,10 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
     // Keep the very large phase-local test fixtures off this dispatcher frame. In Debug builds,
     // placing every included phase in this one switch made Tick reserve roughly 780 KiB and left
     // too little of the default 1 MiB UI-thread stack for nested popup rendering.
-    const auto dispatchPhase = [&](const auto& tickPhase) noexcept -> TickResult { return tickPhase(state); };
+    const auto dispatchPhase = [&](const auto& tickPhase) noexcept -> TickResult
+    {
+        return tickPhase(state);
+    };
     if (const TickResult result = dispatchPhase(TickFairstreamA); result.has_value())
     {
         return result.value();
@@ -6557,17 +6611,17 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 return false;
             }
             AppendLog(L"Setup: resolved file-operations state");
-            state.autoDismissSuccessOriginal               = state.fileOps->GetAutoDismissSuccess();
-            state.fileOperationsOriginal                   = g_settings.fileOperations;
-            state.fileOperationsBackedUp                   = true;
-            state.appThemeOriginal                         = state.folderWindow->GetTheme();
-            state.appThemeBackedUp                         = true;
-            AppTheme deterministicMotionTheme              = state.appThemeOriginal.value();
+            state.autoDismissSuccessOriginal = state.fileOps->GetAutoDismissSuccess();
+            state.fileOperationsOriginal     = g_settings.fileOperations;
+            state.fileOperationsBackedUp     = true;
+            state.appThemeOriginal           = state.folderWindow->GetTheme();
+            state.appThemeBackedUp           = true;
+            AppTheme deterministicMotionTheme = state.appThemeOriginal.value();
             deterministicMotionTheme.reducedMotionOverride = false;
             state.folderWindow->ApplyTheme(deterministicMotionTheme);
             Common::Settings::FileOperationsSettings& fileOperations = EnsureFileOperationsSettingsForSelfTest();
-            fileOperations.crossFsBridgeBufferSizeKB                 = 4096u;
-            fileOperations.defaultBandwidthLimitBytesPerSecond       = 0;
+            fileOperations.crossFsBridgeBufferSizeKB                    = 4096u;
+            fileOperations.defaultBandwidthLimitBytesPerSecond          = 0;
 
             if (! LoadPlugins(state))
             {
@@ -6795,16 +6849,16 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 }
                 AppendLog(std::format(L"Setup: temp root created at {}", state.tempRoot.wstring()));
 
-                const std::filesystem::path src      = state.tempRoot / L"copy-src";
-                const std::filesystem::path dst      = state.tempRoot / L"copy-dst";
-                const std::filesystem::path del      = state.tempRoot / L"delete-tree";
-                const std::filesystem::path en       = state.tempRoot / L"enum";
-                const std::filesystem::path watch    = state.tempRoot / L"watch";
-                const std::filesystem::path preA     = state.tempRoot / L"discovery-a";
-                const std::filesystem::path preB     = state.tempRoot / L"discovery-b";
-                const bool needsDeleteTree           = IsPhaseSelected(state, SelfTestState::Step::Phase6_DeleteBytesMeaningful);
-                const bool needsDiscoverySwitchTrees = IsPhaseSelected(state, SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery) ||
-                                                       IsPhaseSelected(state, SelfTestState::Step::Phase5_SwitchWaitToParallelResume);
+                const std::filesystem::path src                     = state.tempRoot / L"copy-src";
+                const std::filesystem::path dst                     = state.tempRoot / L"copy-dst";
+                const std::filesystem::path del                     = state.tempRoot / L"delete-tree";
+                const std::filesystem::path en                      = state.tempRoot / L"enum";
+                const std::filesystem::path watch                   = state.tempRoot / L"watch";
+                const std::filesystem::path preA                    = state.tempRoot / L"discovery-a";
+                const std::filesystem::path preB                    = state.tempRoot / L"discovery-b";
+                const bool needsDeleteTree                          = IsPhaseSelected(state, SelfTestState::Step::Phase6_DeleteBytesMeaningful);
+                const bool needsDiscoverySwitchTrees                  = IsPhaseSelected(state, SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery) ||
+                                                                      IsPhaseSelected(state, SelfTestState::Step::Phase5_SwitchWaitToParallelResume);
 
                 std::error_code ec;
                 if (! SeedCopyKnobSourceFiles(src))
@@ -6950,155 +7004,161 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 }
 #pragma warning(pop)
 
-void FileOperationsSelfTest::NotifyTaskCompleted(std::uint64_t taskId, HRESULT hr) noexcept
-{
-    SelfTestState& state = GetState();
-    if (! state.running.load(std::memory_order_acquire))
+    void FileOperationsSelfTest::NotifyTaskCompleted(std::uint64_t taskId, HRESULT hr) noexcept
     {
-        return;
-    }
-
-    CompletedTaskInfo info{};
-    info.hr             = hr;
-    info.completionTick = GetTickCount64();
-    if (state.fileOps)
-    {
-        if (auto* task = state.fileOps->FindTask(taskId))
+        SelfTestState& state = GetState();
+        if (! state.running.load(std::memory_order_acquire))
         {
-            info.discoveryClosed                             = task->_discoveryClosed.load(std::memory_order_acquire);
-            info.firstMutationBeforeDiscoveryClosed          = task->_firstMutationBeforeDiscoveryClosed.load(std::memory_order_acquire);
-            info.discoverySkipped                            = task->_discoverySkipped.load(std::memory_order_acquire);
-            info.discoveredTotalBytes                        = task->_discoveredTotalBytes.load(std::memory_order_acquire);
-            info.discoveredFiles                             = task->_discoveredFileCount.load(std::memory_order_acquire);
-            info.discoveredDirectories                       = task->_discoveredDirectoryCount.load(std::memory_order_acquire);
-            info.discoveryDurationUs                         = task->_perf.discoveryOpenUs.load(std::memory_order_acquire);
-            info.discoveryMaxQueueDepth                      = task->_discoveryMaxQueueDepth.load(std::memory_order_acquire);
-            info.discoveryStarvationCount                    = task->_discoveryStarvationCount.load(std::memory_order_acquire);
-            info.discoveryCallbackCount                      = task->_perf.discoveryCallbackCount.load(std::memory_order_acquire);
-            info.discoveryCallbackUs                         = task->_perf.discoveryCallbackUs.load(std::memory_order_acquire);
-            info.discoveryLockWaitUs                         = task->_perf.discoveryLockWaitUs.load(std::memory_order_acquire);
-            info.discoveryFirstMutationUs                    = task->_discoveryFirstMutationUs.load(std::memory_order_acquire);
-            info.discoveryBytesCompletedWhileOpen            = task->_discoveryCompletedBytesWhileOpen.load(std::memory_order_acquire);
-            info.discoveryMutationsCompletedWhileOpen        = task->_discoveryCompletedMutationsWhileOpen.load(std::memory_order_acquire);
-            info.progressCallbackCount                       = task->_progressCallbackCount.load(std::memory_order_acquire);
-            info.started                                     = task->HasStarted();
-            info.conflictWaitUs                              = task->_perf.conflictWaitUs;
-            info.conflictConvergenceWaitUs                   = task->_perf.conflictConvergenceWaitUs;
-            info.conflictPromptCount                         = task->_perf.conflictPromptCount;
-            info.interlockWaitUs                             = task->_perf.interlockWaitUs;
-            info.interlockWaitCount                          = task->_perf.interlockWaitCount;
-            info.bridgeDirectoryEnsureCount                  = task->_bridgeDirectoryEnsureCount.load(std::memory_order_acquire);
-            info.bridgeSourceDirectoryEnumerationCount       = task->_bridgeSourceDirectoryEnumerationCount.load(std::memory_order_acquire);
-            info.bridgeFileAdmissionCount                    = task->_bridgeFileAdmissionCount.load(std::memory_order_acquire);
-            info.bridgeEarlyFileStartCount                   = task->_bridgeFileStartedBeforeProducerDone.load(std::memory_order_acquire);
-            info.bridgeAdmissionMaxQueueDepth                = task->_bridgeAdmissionMaxQueueDepth.load(std::memory_order_acquire);
-            info.bridgeTraversalMaxDepth                     = task->_bridgeTraversalMaxDepth.load(std::memory_order_acquire);
-            info.bridgeTraversalMaxRetainedEntries           = task->_bridgeTraversalMaxRetainedEntries.load(std::memory_order_acquire);
-            info.bridgeTraversalMaxQueuedPathBytes           = task->_bridgeTraversalMaxQueuedPathBytes.load(std::memory_order_acquire);
-            info.bridgeTraversalMaxMetadataBytes             = task->_bridgeTraversalMaxMetadataBytes.load(std::memory_order_acquire);
-            info.bridgeTraversalLimitHitCount                = task->_bridgeTraversalLimitHitCount.load(std::memory_order_acquire);
-            info.conflictExpectedDestinationBoundCount       = task->_conflictExpectedDestinationBoundCount.load(std::memory_order_acquire);
-            info.conflictExpectedDestinationUnavailableCount = task->_conflictExpectedDestinationUnavailableCount.load(std::memory_order_acquire);
-            info.conflictExpectedDestinationReturnedCount    = task->_conflictExpectedDestinationReturnedCount.load(std::memory_order_acquire);
-            info.bridgeImmediateDestinationSizeProbeUs       = task->_perf.bridgeImmediateDestinationSizeProbeUs.load(std::memory_order_acquire);
-            info.bridgeImmediateDestinationSizeProbeCount    = task->_perf.bridgeImmediateDestinationSizeProbeCount.load(std::memory_order_acquire);
-            info.bridgeCommitSizeProofCount                  = task->_perf.bridgeCommitSizeProofCount.load(std::memory_order_acquire);
-            info.bridgeCommitSizeProofFallbackCount          = task->_perf.bridgeCommitSizeProofFallbackCount.load(std::memory_order_acquire);
-            info.verificationUs                              = task->_perf.verificationUs.load(std::memory_order_acquire);
-            info.verificationReadBytes                       = task->_perf.verificationReadBytes.load(std::memory_order_acquire);
-            info.verificationReadCalls                       = task->_perf.verificationReadCalls.load(std::memory_order_acquire);
-            info.verificationProviderProofCount              = task->_perf.verificationProviderProofCount.load(std::memory_order_acquire);
-            info.verificationHostReadbackCount               = task->_perf.verificationHostReadbackCount.load(std::memory_order_acquire);
-            info.verificationTotalBytes                      = task->_verificationTotalBytes.load(std::memory_order_acquire);
-            info.verificationCompletedBytes                  = task->_verificationCompletedBytes.load(std::memory_order_acquire);
-            info.configuredMaxConcurrency                    = task->_effectiveConcurrencyBudget.load(std::memory_order_acquire);
-            if (info.configuredMaxConcurrency == 0u)
+            return;
+        }
+
+        CompletedTaskInfo info{};
+        info.hr             = hr;
+        info.completionTick = GetTickCount64();
+        if (state.fileOps)
+        {
+            if (auto* task = state.fileOps->FindTask(taskId))
             {
-                info.configuredMaxConcurrency = task->_perItemMaxConcurrencyBudget;
-            }
-            {
-                std::scoped_lock lock(task->_progressMutex);
-                info.progressTotalItems     = task->_progressTotalItems;
-                info.progressCompletedItems = task->_progressCompletedItems;
-                info.progressCompletedBytes = task->_progressCompletedBytes;
-                info.completedFiles         = task->_completedTopLevelFiles;
-                info.completedFolders       = task->_completedTopLevelFolders;
-            }
-            {
-                std::scoped_lock lock(task->_sourceItemStatusMutex);
-                info.sourceItemStatuses.reserve(task->_sourceItemResultBuilders.size());
-                info.sourceItemResults.reserve(task->_sourceItemResultBuilders.size());
-                for (const FolderWindow::FileOperationState::Task::SourceItemResultBuilder& builder : task->_sourceItemResultBuilders)
+                info.discoveryClosed               = task->_discoveryClosed.load(std::memory_order_acquire);
+                info.firstMutationBeforeDiscoveryClosed = task->_firstMutationBeforeDiscoveryClosed.load(std::memory_order_acquire);
+                info.discoverySkipped                 = task->_discoverySkipped.load(std::memory_order_acquire);
+                info.discoveredTotalBytes              = task->_discoveredTotalBytes.load(std::memory_order_acquire);
+                info.discoveredFiles                   = task->_discoveredFileCount.load(std::memory_order_acquire);
+                info.discoveredDirectories             = task->_discoveredDirectoryCount.load(std::memory_order_acquire);
+                info.discoveryDurationUs              = task->_perf.discoveryOpenUs.load(std::memory_order_acquire);
+                info.discoveryMaxQueueDepth         = task->_discoveryMaxQueueDepth.load(std::memory_order_acquire);
+                info.discoveryStarvationCount       = task->_discoveryStarvationCount.load(std::memory_order_acquire);
+                info.discoveryCallbackCount         = task->_perf.discoveryCallbackCount.load(std::memory_order_acquire);
+                info.discoveryCallbackUs            = task->_perf.discoveryCallbackUs.load(std::memory_order_acquire);
+                info.discoveryLockWaitUs            = task->_perf.discoveryLockWaitUs.load(std::memory_order_acquire);
+                info.discoveryFirstMutationUs = task->_discoveryFirstMutationUs.load(std::memory_order_acquire);
+                info.discoveryBytesCompletedWhileOpen = task->_discoveryCompletedBytesWhileOpen.load(std::memory_order_acquire);
+                info.discoveryMutationsCompletedWhileOpen = task->_discoveryCompletedMutationsWhileOpen.load(std::memory_order_acquire);
+                info.progressCallbackCount          = task->_progressCallbackCount.load(std::memory_order_acquire);
+                info.started                        = task->HasStarted();
+                info.conflictWaitUs                 = task->_perf.conflictWaitUs;
+                info.conflictConvergenceWaitUs      = task->_perf.conflictConvergenceWaitUs;
+                info.conflictPromptCount            = task->_perf.conflictPromptCount;
+                info.interlockWaitUs                 = task->_perf.interlockWaitUs;
+                info.interlockWaitCount              = task->_perf.interlockWaitCount;
+                info.bridgeDirectoryEnsureCount     = task->_bridgeDirectoryEnsureCount.load(std::memory_order_acquire);
+                info.bridgeSourceDirectoryEnumerationCount = task->_bridgeSourceDirectoryEnumerationCount.load(std::memory_order_acquire);
+                info.bridgeFileAdmissionCount       = task->_bridgeFileAdmissionCount.load(std::memory_order_acquire);
+                info.bridgeEarlyFileStartCount      = task->_bridgeFileStartedBeforeProducerDone.load(std::memory_order_acquire);
+                info.bridgeAdmissionMaxQueueDepth   = task->_bridgeAdmissionMaxQueueDepth.load(std::memory_order_acquire);
+                info.bridgeTraversalMaxDepth = task->_bridgeTraversalMaxDepth.load(std::memory_order_acquire);
+                info.bridgeTraversalMaxRetainedEntries = task->_bridgeTraversalMaxRetainedEntries.load(std::memory_order_acquire);
+                info.bridgeTraversalMaxQueuedPathBytes = task->_bridgeTraversalMaxQueuedPathBytes.load(std::memory_order_acquire);
+                info.bridgeTraversalMaxMetadataBytes = task->_bridgeTraversalMaxMetadataBytes.load(std::memory_order_acquire);
+                info.bridgeTraversalLimitHitCount = task->_bridgeTraversalLimitHitCount.load(std::memory_order_acquire);
+                info.conflictExpectedDestinationBoundCount =
+                    task->_conflictExpectedDestinationBoundCount.load(std::memory_order_acquire);
+                info.conflictExpectedDestinationUnavailableCount =
+                    task->_conflictExpectedDestinationUnavailableCount.load(std::memory_order_acquire);
+                info.conflictExpectedDestinationReturnedCount =
+                    task->_conflictExpectedDestinationReturnedCount.load(std::memory_order_acquire);
+                info.bridgeImmediateDestinationSizeProbeUs =
+                    task->_perf.bridgeImmediateDestinationSizeProbeUs.load(std::memory_order_acquire);
+                info.bridgeImmediateDestinationSizeProbeCount =
+                    task->_perf.bridgeImmediateDestinationSizeProbeCount.load(std::memory_order_acquire);
+                info.bridgeCommitSizeProofCount = task->_perf.bridgeCommitSizeProofCount.load(std::memory_order_acquire);
+                info.bridgeCommitSizeProofFallbackCount = task->_perf.bridgeCommitSizeProofFallbackCount.load(std::memory_order_acquire);
+                info.verificationUs = task->_perf.verificationUs.load(std::memory_order_acquire);
+                info.verificationReadBytes = task->_perf.verificationReadBytes.load(std::memory_order_acquire);
+                info.verificationReadCalls = task->_perf.verificationReadCalls.load(std::memory_order_acquire);
+                info.verificationProviderProofCount = task->_perf.verificationProviderProofCount.load(std::memory_order_acquire);
+                info.verificationHostReadbackCount = task->_perf.verificationHostReadbackCount.load(std::memory_order_acquire);
+                info.verificationTotalBytes = task->_verificationTotalBytes.load(std::memory_order_acquire);
+                info.verificationCompletedBytes = task->_verificationCompletedBytes.load(std::memory_order_acquire);
+                info.configuredMaxConcurrency       = task->_effectiveConcurrencyBudget.load(std::memory_order_acquire);
+                if (info.configuredMaxConcurrency == 0u)
                 {
-                    info.sourceItemStatuses.push_back(builder.status);
-                    info.sourceItemResults.push_back(builder.terminal);
+                    info.configuredMaxConcurrency = task->_perItemMaxConcurrencyBudget;
+                }
+                {
+                    std::scoped_lock lock(task->_progressMutex);
+                    info.progressTotalItems     = task->_progressTotalItems;
+                    info.progressCompletedItems = task->_progressCompletedItems;
+                    info.progressCompletedBytes = task->_progressCompletedBytes;
+                    info.completedFiles         = task->_completedTopLevelFiles;
+                    info.completedFolders       = task->_completedTopLevelFolders;
+                }
+                {
+                    std::scoped_lock lock(task->_sourceItemStatusMutex);
+                    info.sourceItemStatuses.reserve(task->_sourceItemResultBuilders.size());
+                    info.sourceItemResults.reserve(task->_sourceItemResultBuilders.size());
+                    for (const FolderWindow::FileOperationState::Task::SourceItemResultBuilder& builder : task->_sourceItemResultBuilders)
+                    {
+                        info.sourceItemStatuses.push_back(builder.status);
+                        info.sourceItemResults.push_back(builder.terminal);
+                    }
                 }
             }
         }
+
+        state.completedTasks[taskId] = info;
     }
 
-    state.completedTasks[taskId] = info;
-}
-
-bool FileOperationsSelfTest::IsRunning() noexcept
-{
-    return GetState().running.load(std::memory_order_acquire);
-}
-
-bool FileOperationsSelfTest::IsDone() noexcept
-{
-    return GetState().done.load(std::memory_order_acquire);
-}
-
-SelfTest::SelfTestSuiteResult FileOperationsSelfTest::GetSuiteResult() noexcept
-{
-    SelfTestState& state = GetState();
-
-    SelfTest::SelfTestSuiteResult result{};
-    result.suite = SelfTest::SelfTestSuite::FileOperations;
-
-    const ULONGLONG nowTick = GetTickCount64();
-    if (state.runStartTick != 0 && nowTick >= static_cast<ULONGLONG>(state.runStartTick))
+    bool FileOperationsSelfTest::IsRunning() noexcept
     {
-        result.durationMs = static_cast<uint64_t>(nowTick - static_cast<ULONGLONG>(state.runStartTick));
+        return GetState().running.load(std::memory_order_acquire);
     }
 
-    result.failureMessage = state.failureMessage;
-
-    std::span<const SelfTestState::Step> reportedPhases = kFileOpsPhaseOrder;
-    if (! state.reportedPhaseOrder.empty())
+    bool FileOperationsSelfTest::IsDone() noexcept
     {
-        reportedPhases = state.reportedPhaseOrder;
+        return GetState().done.load(std::memory_order_acquire);
     }
 
-    result.cases.reserve(reportedPhases.size());
-    for (const SelfTestState::Step step : reportedPhases)
+    SelfTest::SelfTestSuiteResult FileOperationsSelfTest::GetSuiteResult() noexcept
     {
-        const std::wstring_view expected = StepToString(step);
-        const auto it                    = std::find_if(
-            state.phaseResults.begin(), state.phaseResults.end(), [&](const SelfTest::SelfTestCaseResult& item) noexcept { return item.name == expected; });
-        if (it != state.phaseResults.end())
+        SelfTestState& state = GetState();
+
+        SelfTest::SelfTestSuiteResult result{};
+        result.suite = SelfTest::SelfTestSuite::FileOperations;
+
+        const ULONGLONG nowTick = GetTickCount64();
+        if (state.runStartTick != 0 && nowTick >= static_cast<ULONGLONG>(state.runStartTick))
         {
-            SelfTest::AppendCaseResult(result, *it);
-            continue;
+            result.durationMs = static_cast<uint64_t>(nowTick - static_cast<ULONGLONG>(state.runStartTick));
         }
 
-        const std::wstring_view reason = state.failed.load(std::memory_order_acquire) ? L"not reached (aborted due to failure)" : L"not reached";
-        SelfTest::AppendCaseResult(result, expected, SelfTest::SelfTestCaseResult::Status::skipped, reason, 0);
+        result.failureMessage = state.failureMessage;
+
+        std::span<const SelfTestState::Step> reportedPhases = kFileOpsPhaseOrder;
+        if (! state.reportedPhaseOrder.empty())
+        {
+            reportedPhases = state.reportedPhaseOrder;
+        }
+
+        result.cases.reserve(reportedPhases.size());
+        for (const SelfTestState::Step step : reportedPhases)
+        {
+            const std::wstring_view expected = StepToString(step);
+            const auto it                    = std::find_if(
+                state.phaseResults.begin(), state.phaseResults.end(), [&](const SelfTest::SelfTestCaseResult& item) noexcept { return item.name == expected; });
+            if (it != state.phaseResults.end())
+            {
+                SelfTest::AppendCaseResult(result, *it);
+                continue;
+            }
+
+            const std::wstring_view reason =
+                state.failed.load(std::memory_order_acquire) ? L"not reached (aborted due to failure)" : L"not reached";
+            SelfTest::AppendCaseResult(result, expected, SelfTest::SelfTestCaseResult::Status::skipped, reason, 0);
+        }
+
+        return result;
     }
 
-    return result;
-}
+    bool FileOperationsSelfTest::DidFail() noexcept
+    {
+        return GetState().failed.load(std::memory_order_acquire);
+    }
 
-bool FileOperationsSelfTest::DidFail() noexcept
-{
-    return GetState().failed.load(std::memory_order_acquire);
-}
-
-std::wstring_view FileOperationsSelfTest::FailureMessage() noexcept
-{
-    return GetState().failureMessage;
-}
+    std::wstring_view FileOperationsSelfTest::FailureMessage() noexcept
+    {
+        return GetState().failureMessage;
+    }
 
 #pragma warning(pop)
 

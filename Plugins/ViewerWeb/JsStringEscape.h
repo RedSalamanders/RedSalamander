@@ -31,10 +31,11 @@ namespace ViewerWebDetail
 
 // Appends directly to the publication buffer so JSONL rendering never keeps a
 // second, fully escaped copy of attacker-controlled fields beside the HTML.
-[[nodiscard]] inline bool TryAppendEscapedJavaScriptStringUtf8(std::string_view text, std::string& output, size_t limit) noexcept
+[[nodiscard]] inline bool TryAppendEscapedJavaScriptStringUtf8(
+    std::string_view text, std::string& output, size_t limit) noexcept
 {
     constexpr char kHex[] = "0123456789ABCDEF";
-    const auto append     = [&](std::string_view value) noexcept { return TryAppendWithinLimit(output, value, limit); };
+    const auto append = [&](std::string_view value) noexcept { return TryAppendWithinLimit(output, value, limit); };
 
     const size_t size = text.size();
     for (size_t i = 0u; i < size;)

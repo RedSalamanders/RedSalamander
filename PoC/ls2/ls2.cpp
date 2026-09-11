@@ -1,11 +1,13 @@
-// ntfastwalk.cpp — super-fast directory lister using NtQueryDirectoryFile
+// ntfastwalk.cpp ï¿½ super-fast directory lister using NtQueryDirectoryFile
 // Build: cl /O2 /std:c++20 ntfastwalk.cpp
 #include <cstdio>
 #include <string>
 #include <vector>
+
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+
 #include <winternl.h> // NTSTATUS, IO_STATUS_BLOCK, FILE_INFORMATION_CLASS, etc.
 
 #ifndef NT_SUCCESS
@@ -16,7 +18,7 @@
 #define STATUS_NO_MORE_FILES ((NTSTATUS)0x80000006L)
 #endif
 
-// NtQueryDirectoryFile typedef (we’ll fetch from ntdll at runtime)
+// NtQueryDirectoryFile typedef (weï¿½ll fetch from ntdll at runtime)
 using NtQueryDirectoryFile_t = NTSTATUS(NTAPI*)(HANDLE FileHandle,
                                                 HANDLE Event,
                                                 PIO_APC_ROUTINE ApcRoutine,
@@ -29,7 +31,7 @@ using NtQueryDirectoryFile_t = NTSTATUS(NTAPI*)(HANDLE FileHandle,
                                                 PUNICODE_STRING FileName,
                                                 BOOLEAN RestartScan);
 
-// We’ll use FILE_BOTH_DIR_INFORMATION for broad compatibility (NTFS & ReFS).
+// Weï¿½ll use FILE_BOTH_DIR_INFORMATION for broad compatibility (NTFS & ReFS).
 // (If you want 128-bit IDs, switch to FileIdExtdDirectoryInformation
 typedef struct _FILE_BOTH_DIR_INFORMATION
 {

@@ -27,9 +27,12 @@ namespace
         default: return ERROR_GEN_FAILURE;
     }
 }
-} // namespace
+}
 
-HRESULT SettingsFileLauncher::Open(HWND owner, std::wstring_view appId, Common::Settings::Settings settingsToCreate, std::filesystem::path& outPath) noexcept
+HRESULT SettingsFileLauncher::Open(HWND owner,
+                                   std::wstring_view appId,
+                                   Common::Settings::Settings settingsToCreate,
+                                   std::filesystem::path& outPath) noexcept
 {
     outPath.clear();
     if (appId.empty())

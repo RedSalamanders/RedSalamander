@@ -7,6 +7,8 @@
 #include <string>
 #include <string_view>
 
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <windows.h>
 
 namespace Common::Settings

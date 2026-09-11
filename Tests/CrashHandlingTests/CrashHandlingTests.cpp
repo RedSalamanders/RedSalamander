@@ -18,15 +18,17 @@
 // result in. Testing the bool directly keeps the unit free of file I/O and the un-injectable
 // AppDataPaths root.
 
-#include <exception>
 #include <filesystem>
+#include <exception>
 #include <iostream>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <vector>
 
-#include <Windows.h>
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
 
 #include "CrashHandler.h"
 #include "CrashQuarantine.h"
@@ -68,8 +70,11 @@ void Check(bool condition, const wchar_t* message, bool& success) noexcept
 
 [[nodiscard]] std::filesystem::path AcquireCrashHandlingTestSandbox(std::wstring_view caseName, std::error_code& ec) noexcept
 {
-    return RedSalamander::TestSupport::AcquireTestDirectory(
-        {.harnessSegment = kCrashHandlingHarnessSegment, .leafSegment = caseName, .fallbackRunIdPrefix = L"crash-handling", .cleanExisting = false}, ec);
+    return RedSalamander::TestSupport::AcquireTestDirectory({.harnessSegment      = kCrashHandlingHarnessSegment,
+                                                             .leafSegment         = caseName,
+                                                             .fallbackRunIdPrefix = L"crash-handling",
+                                                             .cleanExisting       = false},
+                                                            ec);
 }
 
 // Case 1: No marker file -> decision returns "no offer"; settings untouched.

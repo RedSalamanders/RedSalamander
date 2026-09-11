@@ -3,7 +3,8 @@
 // Batch Rename test family: pure planning engine first, UI/command cases as the window lands.
 
 void CloseBatchRenameWindowIfOpen() noexcept;
-[[nodiscard]] HRESULT CreateDirectoryJunctionForCommandsSelfTest(const std::filesystem::path& junctionPath, const std::filesystem::path& targetPath) noexcept;
+[[nodiscard]] HRESULT CreateDirectoryJunctionForCommandsSelfTest(const std::filesystem::path& junctionPath,
+                                                                 const std::filesystem::path& targetPath) noexcept;
 [[nodiscard]] bool SetupBatchRenamePaneFixture(CaseState& state,
                                                const std::filesystem::path& root,
                                                std::initializer_list<std::wstring_view> files,
@@ -28,13 +29,13 @@ void SettleBatchRenameWindowBeforeFilesystemExecution() noexcept
 [[nodiscard]] bool AcquireBatchRenameCommandsSandboxRoot(CaseState& state, std::wstring_view caseName, std::filesystem::path& root) noexcept
 {
     const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, caseName);
-    root                                = sandbox.root;
+    root = sandbox.root;
     return state.Require(sandbox.IsValid(), L"Batch Rename TestSandbox root should be available.");
 }
 
 [[nodiscard]] HRESULT PopulateBatchRenameExecutionProviderFactsForTest(IFileSystem* fileSystem,
-                                                                       const FileSystemPathIdentity& pathIdentity,
-                                                                       BatchRenameExecutionOp& operation) noexcept
+                                                                        const FileSystemPathIdentity& pathIdentity,
+                                                                        BatchRenameExecutionOp& operation) noexcept
 {
     if (fileSystem == nullptr || operation.originalSource.empty() || operation.finalLeaf.empty())
     {
@@ -54,48 +55,52 @@ void SettleBatchRenameWindowBeforeFilesystemExecution() noexcept
         return E_INVALIDARG;
     }
 
-    const FileSystemRouteContract::ChildNameContractResult sourceContract =
-        FileSystemRouteContract::QueryChildNameContract(fileSystem, parentPath, sourceLeaf, FILESYSTEM_RENAME, L"builtin/file-system");
-    const FileSystemRouteContract::ChildNameContractResult finalContract =
-        FileSystemRouteContract::QueryChildNameContract(fileSystem, parentPath, operation.finalLeaf, FILESYSTEM_RENAME, L"builtin/file-system");
+    const FileSystemRouteContract::ChildNameContractResult sourceContract = FileSystemRouteContract::QueryChildNameContract(
+        fileSystem, parentPath, sourceLeaf, FILESYSTEM_RENAME, L"builtin/file-system");
+    const FileSystemRouteContract::ChildNameContractResult finalContract = FileSystemRouteContract::QueryChildNameContract(
+        fileSystem, parentPath, operation.finalLeaf, FILESYSTEM_RENAME, L"builtin/file-system");
     const auto statusFor = [](const FileSystemRouteContract::ChildNameContractResult& result) noexcept
     {
-        if (result.state == FileSystemRouteContract::QueryState::Available && result.nameStatus == FILESYSTEM_CHILD_NAME_INVALID &&
-            FAILED(result.failureStatus))
+        if (result.state == FileSystemRouteContract::QueryState::Available &&
+            result.nameStatus == FILESYSTEM_CHILD_NAME_INVALID && FAILED(result.failureStatus))
         {
             return result.failureStatus;
         }
         return FAILED(result.status) ? result.status : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     };
-    if (sourceContract.state != FileSystemRouteContract::QueryState::Available || sourceContract.nameStatus != FILESYSTEM_CHILD_NAME_VALID ||
-        sourceContract.collisionKey.empty())
+    if (sourceContract.state != FileSystemRouteContract::QueryState::Available ||
+        sourceContract.nameStatus != FILESYSTEM_CHILD_NAME_VALID || sourceContract.collisionKey.empty())
     {
         return statusFor(sourceContract);
     }
-    if (finalContract.state != FileSystemRouteContract::QueryState::Available || finalContract.nameStatus != FILESYSTEM_CHILD_NAME_VALID ||
-        finalContract.joinedPath.empty() || finalContract.collisionKey.empty())
+    if (finalContract.state != FileSystemRouteContract::QueryState::Available ||
+        finalContract.nameStatus != FILESYSTEM_CHILD_NAME_VALID || finalContract.joinedPath.empty() || finalContract.collisionKey.empty())
     {
         return statusFor(finalContract);
     }
 
-    operation.providerFinalPath          = std::filesystem::path(finalContract.joinedPath);
-    operation.providerParentKey          = parentKey.value();
+    operation.providerFinalPath = std::filesystem::path(finalContract.joinedPath);
+    operation.providerParentKey = parentKey.value();
     operation.providerSourceCollisionKey = sourceContract.collisionKey;
-    operation.providerFinalCollisionKey  = finalContract.collisionKey;
+    operation.providerFinalCollisionKey = finalContract.collisionKey;
     return S_OK;
 }
 
-[[nodiscard]] bool PopulateLocalBatchRenameExecutionProviderFactsForTest(CaseState& state,
-                                                                         IFileSystem* fileSystem,
-                                                                         std::span<BatchRenameExecutionOp> operations,
-                                                                         std::wstring_view scenario) noexcept
+[[nodiscard]] bool PopulateLocalBatchRenameExecutionProviderFactsForTest(
+    CaseState& state,
+    IFileSystem* fileSystem,
+    std::span<BatchRenameExecutionOp> operations,
+    std::wstring_view scenario) noexcept
 {
     const FileSystemPathIdentity pathIdentity = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem();
     for (size_t index = 0u; index < operations.size(); ++index)
     {
         const HRESULT hr = PopulateBatchRenameExecutionProviderFactsForTest(fileSystem, pathIdentity, operations[index]);
         state.Require(SUCCEEDED(hr),
-                      std::format(L"{} should populate provider facts for row {}: hr=0x{:08X}.", scenario, index + 1u, static_cast<unsigned long>(hr)));
+                      std::format(L"{} should populate provider facts for row {}: hr=0x{:08X}.",
+                                  scenario,
+                                  index + 1u,
+                                  static_cast<unsigned long>(hr)));
         if (FAILED(hr))
         {
             return false;
@@ -271,7 +276,9 @@ void SettleBatchRenameWindowBeforeFilesystemExecution() noexcept
     return maxValue;
 }
 
-class BatchRenameCountingReadDirectoryFileSystem final : public IFileSystem, public IFileSystemObjectBinding, public FileSystemRouteCapabilitiesBase
+class BatchRenameCountingReadDirectoryFileSystem final : public IFileSystem,
+                                                        public IFileSystemObjectBinding,
+                                                        public FileSystemRouteCapabilitiesBase
 {
 public:
     BatchRenameCountingReadDirectoryFileSystem(wil::com_ptr<IFileSystem> base,
@@ -360,12 +367,14 @@ public:
         _returnEmptyReadDirectoryInfo = true;
     }
 
-    void SetProviderNamePolicy(std::wstring rejectedLeaf, std::wstring collapsedLeafA = {}, std::wstring collapsedLeafB = {}) noexcept
+    void SetProviderNamePolicy(std::wstring rejectedLeaf,
+                               std::wstring collapsedLeafA = {},
+                               std::wstring collapsedLeafB = {}) noexcept
     {
-        _providerNameRejectedLeaf   = std::move(rejectedLeaf);
+        _providerNameRejectedLeaf = std::move(rejectedLeaf);
         _providerNameCollapsedLeafA = std::move(collapsedLeafA);
         _providerNameCollapsedLeafB = std::move(collapsedLeafB);
-        _providerNamePolicyEnabled  = true;
+        _providerNamePolicyEnabled = true;
     }
 
     void SetProviderNameJoinRevision(const uint32_t revision) noexcept
@@ -381,11 +390,11 @@ public:
                                    std::atomic_bool* destroyed) noexcept
     {
         _admissionProviderDelayUs = delayUs;
-        _capabilityCalls          = capabilityCalls;
-        _bindCalls                = bindCalls;
-        _capabilityThreadId       = capabilityThreadId;
-        _bindThreadId             = bindThreadId;
-        _destroyed                = destroyed;
+        _capabilityCalls = capabilityCalls;
+        _bindCalls = bindCalls;
+        _capabilityThreadId = capabilityThreadId;
+        _bindThreadId = bindThreadId;
+        _destroyed = destroyed;
     }
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) noexcept override
@@ -608,8 +617,9 @@ public:
                 const std::filesystem::path destinationPath = sourcePath.parent_path() / (items[index].newName ? items[index].newName : L"");
                 if (callback)
                 {
-                    static_cast<void>(callback->FileSystemItemCompleted(
-                        FILESYSTEM_RENAME, index, sourcePath.c_str(), destinationPath.c_str(), S_OK, nullptr, nullptr, cookie));
+                    static_cast<void>(
+                        callback->FileSystemItemCompleted(
+                            FILESYSTEM_RENAME, index, sourcePath.c_str(), destinationPath.c_str(), S_OK, nullptr, nullptr, cookie));
                 }
             }
             return S_OK;
@@ -643,8 +653,9 @@ public:
 
                 if (callback && (_omitCompletionLeaf.empty() || sourcePath.filename().native() != _omitCompletionLeaf))
                 {
-                    static_cast<void>(callback->FileSystemItemCompleted(
-                        FILESYSTEM_RENAME, index, sourcePath.c_str(), destinationPath.c_str(), itemHr, nullptr, nullptr, cookie));
+                    static_cast<void>(
+                        callback->FileSystemItemCompleted(
+                            FILESYSTEM_RENAME, index, sourcePath.c_str(), destinationPath.c_str(), itemHr, nullptr, nullptr, cookie));
                 }
                 if (FAILED(itemHr) && SUCCEEDED(firstFailure))
                 {
@@ -660,7 +671,9 @@ public:
         return _base ? _base->RenameItems(items, count, flags, options, callback, cookie) : E_POINTER;
     }
 
-    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept override
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
+                                                  FileSystemOperation operation,
+                                                  const char** jsonUtf8) noexcept override
     {
         if (_capabilityCalls)
         {
@@ -696,7 +709,9 @@ public:
         return _base ? _base->GetStorageCharacteristics(path, characteristics) : E_POINTER;
     }
 
-    HRESULT STDMETHODCALLTYPE BindObject(const wchar_t* path, FileSystemBindFlags flags, IFileSystemBoundObject** bound) noexcept override
+    HRESULT STDMETHODCALLTYPE BindObject(const wchar_t* path,
+                                         FileSystemBindFlags flags,
+                                         IFileSystemBoundObject** bound) noexcept override
     {
         if (_bindCalls)
         {
@@ -713,9 +728,9 @@ public:
     }
 
     HRESULT STDMETHODCALLTYPE CreateExclusiveWriter(const wchar_t* stagePath,
-                                                    const FileSystemOptions* options,
-                                                    IFileWriter** writer,
-                                                    IFileSystemBoundObject** ownedStage) noexcept override
+                                                     const FileSystemOptions* options,
+                                                     IFileWriter** writer,
+                                                     IFileSystemBoundObject** ownedStage) noexcept override
     {
         wil::com_ptr<IFileSystemObjectBinding> binding;
         const HRESULT queryHr = _base ? _base->QueryInterface(__uuidof(IFileSystemObjectBinding), binding.put_void()) : E_POINTER;
@@ -723,8 +738,8 @@ public:
     }
 
     HRESULT STDMETHODCALLTYPE CreateExclusiveDirectory(const wchar_t* stagePath,
-                                                       const FileSystemOptions* options,
-                                                       IFileSystemBoundObject** ownedStage) noexcept override
+                                                        const FileSystemOptions* options,
+                                                        IFileSystemBoundObject** ownedStage) noexcept override
     {
         wil::com_ptr<IFileSystemObjectBinding> binding;
         const HRESULT queryHr = _base ? _base->QueryInterface(__uuidof(IFileSystemObjectBinding), binding.put_void()) : E_POINTER;
@@ -742,9 +757,9 @@ public:
     }
 
     HRESULT STDMETHODCALLTYPE CreateExclusiveLink(const wchar_t* stagePath,
-                                                  const FileSystemLinkInformation* information,
-                                                  const FileSystemOptions* options,
-                                                  IFileSystemBoundObject** ownedStage) noexcept override
+                                                   const FileSystemLinkInformation* information,
+                                                   const FileSystemOptions* options,
+                                                   IFileSystemBoundObject** ownedStage) noexcept override
     {
         wil::com_ptr<IFileSystemObjectBinding> binding;
         const HRESULT queryHr = _base ? _base->QueryInterface(__uuidof(IFileSystemObjectBinding), binding.put_void()) : E_POINTER;
@@ -766,7 +781,7 @@ public:
             {
                 return E_INVALIDARG;
             }
-            validation->status        = FILESYSTEM_CHILD_NAME_INVALID;
+            validation->status = FILESYSTEM_CHILD_NAME_INVALID;
             validation->failureStatus = HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
             return S_OK;
         }
@@ -790,10 +805,12 @@ public:
         {
             wil::com_ptr<IFileSystemRouteCapabilities> route;
             const HRESULT queryHr = _base ? _base->QueryInterface(__uuidof(IFileSystemRouteCapabilities), route.put_void()) : E_POINTER;
-            return SUCCEEDED(queryHr) && route ? route->GetChildNameCollisionKey(parentPath, childName, operation, arena, key, requiredArenaBytes) : queryHr;
+            return SUCCEEDED(queryHr) && route
+                ? route->GetChildNameCollisionKey(parentPath, childName, operation, arena, key, requiredArenaBytes)
+                : queryHr;
         }
-        const bool collapse =
-            _providerNamePolicyEnabled && childName != nullptr && (childName == _providerNameCollapsedLeafA || childName == _providerNameCollapsedLeafB);
+        const bool collapse = _providerNamePolicyEnabled && childName != nullptr &&
+            (childName == _providerNameCollapsedLeafA || childName == _providerNameCollapsedLeafB);
         return FileSystemRouteCapabilitiesBase::GetChildNameCollisionKey(
             parentPath, collapse ? L"provider-collision" : childName, operation, arena, key, requiredArenaBytes);
     }
@@ -809,13 +826,18 @@ public:
         {
             wil::com_ptr<IFileSystemRouteCapabilities> route;
             const HRESULT queryHr = _base ? _base->QueryInterface(__uuidof(IFileSystemRouteCapabilities), route.put_void()) : E_POINTER;
-            return SUCCEEDED(queryHr) && route ? route->JoinPath(parentPath, childName, operation, arena, joinedPath, requiredArenaBytes) : queryHr;
+            return SUCCEEDED(queryHr) && route
+                ? route->JoinPath(parentPath, childName, operation, arena, joinedPath, requiredArenaBytes)
+                : queryHr;
         }
-        return FileSystemRouteCapabilitiesBase::JoinPath(parentPath, childName, operation, arena, joinedPath, requiredArenaBytes);
+        return FileSystemRouteCapabilitiesBase::JoinPath(
+            parentPath, childName, operation, arena, joinedPath, requiredArenaBytes);
     }
 
 protected:
-    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path, FileSystemOperation operation, FileSystemRouteDescriptor& descriptor) noexcept override
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                           FileSystemOperation operation,
+                                           FileSystemRouteDescriptor& descriptor) noexcept override
     {
         if (_capabilityCalls)
         {
@@ -836,28 +858,29 @@ protected:
         {
             const FileSystemRouteContract::QueryResult baseRoute =
                 FileSystemRouteContract::Query(_base.get(), path ? std::wstring_view(path) : std::wstring_view{}, operation, L"builtin/file-system");
-            if (baseRoute.state != FileSystemRouteContract::QueryState::Available || FAILED(baseRoute.status) || ! baseRoute.snapshot.pathIdentity.has_value())
+            if (baseRoute.state != FileSystemRouteContract::QueryState::Available || FAILED(baseRoute.status) ||
+                ! baseRoute.snapshot.pathIdentity.has_value())
             {
                 _providerDescriptorStatus = FAILED(baseRoute.status) ? baseRoute.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-                _providerDescriptorReady  = true;
+                _providerDescriptorReady = true;
                 return _providerDescriptorStatus;
             }
 
             const FileSystemRouteContract::Snapshot& snapshot = baseRoute.snapshot;
-            const FileSystemPathIdentity& identity            = snapshot.pathIdentity.value();
-            _providerDescriptor                               = {};
-            _providerDescriptor.providerId                    = snapshot.providerId;
-            _providerDescriptor.pathProfileId                 = snapshot.pathProfileId;
-            _providerDescriptor.rootId                        = snapshot.rootId;
-            _providerDescriptor.preferredSeparator            = identity.preferredSeparator;
-            _providerDescriptor.acceptedSeparators            = identity.acceptedSeparators;
-            _providerDescriptor.availability                  = snapshot.availability;
-            _providerDescriptor.cancellationRoute             = snapshot.cancellationRoute;
-            _providerDescriptor.namespaceKind                 = snapshot.namespaceKind;
-            _providerDescriptor.componentComparison           = identity.componentComparison == FileSystemPathComponentComparison::OrdinalIgnoreCase
-                                                                    ? FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE
-                                                                    : FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
-            _providerDescriptor.normalization                 = snapshot.normalization;
+            const FileSystemPathIdentity& identity = snapshot.pathIdentity.value();
+            _providerDescriptor = {};
+            _providerDescriptor.providerId = snapshot.providerId;
+            _providerDescriptor.pathProfileId = snapshot.pathProfileId;
+            _providerDescriptor.rootId = snapshot.rootId;
+            _providerDescriptor.preferredSeparator = identity.preferredSeparator;
+            _providerDescriptor.acceptedSeparators = identity.acceptedSeparators;
+            _providerDescriptor.availability = snapshot.availability;
+            _providerDescriptor.cancellationRoute = snapshot.cancellationRoute;
+            _providerDescriptor.namespaceKind = snapshot.namespaceKind;
+            _providerDescriptor.componentComparison = identity.componentComparison == FileSystemPathComponentComparison::OrdinalIgnoreCase
+                ? FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE
+                : FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
+            _providerDescriptor.normalization = snapshot.normalization;
             switch (identity.caseOnlyRename)
             {
                 case FileSystemPathCaseOnlyRename::Supported: _providerDescriptor.caseOnlyRename = FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED; break;
@@ -865,38 +888,38 @@ protected:
                 case FileSystemPathCaseOnlyRename::Unsupported: _providerDescriptor.caseOnlyRename = FILESYSTEM_ROUTE_CASE_ONLY_UNSUPPORTED; break;
                 case FileSystemPathCaseOnlyRename::NotApplicable: _providerDescriptor.caseOnlyRename = FILESYSTEM_ROUTE_CASE_ONLY_NOT_APPLICABLE; break;
             }
-            _providerDescriptor.proofFlags                     = snapshot.proofFlags;
-            _providerDescriptor.providerWatchdogTimeoutMs      = snapshot.providerWatchdogTimeoutMs;
-            _providerDescriptor.copyMoveMaxConcurrency         = snapshot.copyMoveMaxConcurrency;
-            _providerDescriptor.deleteMaxConcurrency           = snapshot.deleteMaxConcurrency;
+            _providerDescriptor.proofFlags = snapshot.proofFlags;
+            _providerDescriptor.providerWatchdogTimeoutMs = snapshot.providerWatchdogTimeoutMs;
+            _providerDescriptor.copyMoveMaxConcurrency = snapshot.copyMoveMaxConcurrency;
+            _providerDescriptor.deleteMaxConcurrency = snapshot.deleteMaxConcurrency;
             _providerDescriptor.deleteRecycleBinMaxConcurrency = snapshot.deleteRecycleBinMaxConcurrency;
-            _providerDescriptor.maxComponentUtf16              = snapshot.maxComponentUtf16;
-            _providerDescriptor.copyOperation                  = snapshot.copyOperation;
-            _providerDescriptor.moveOperation                  = snapshot.moveOperation;
-            _providerDescriptor.nativeMoveOperation            = snapshot.nativeMoveOperation;
-            _providerDescriptor.deleteOperation                = snapshot.deleteOperation;
-            _providerDescriptor.renameOperation                = snapshot.renameOperation;
-            _providerDescriptor.createDirectoryOperation       = snapshot.createDirectoryOperation;
-            _providerDescriptor.propertiesOperation            = snapshot.properties;
-            _providerDescriptor.readOperation                  = snapshot.read;
-            _providerDescriptor.writeOperation                 = snapshot.write;
-            _providerDescriptor.recycleOperation               = snapshot.recycleOperation;
-            _providerDescriptor.boundDelete                    = snapshot.boundDelete;
-            _providerDescriptor.conditionalDelete              = snapshot.conditionalDelete;
-            _providerDescriptor.exclusiveStage                 = snapshot.exclusiveStage;
-            _providerDescriptor.conditionalPublish             = snapshot.conditionalPublish;
-            _providerDescriptor.committedSize                  = snapshot.committedSize;
-            _providerDescriptor.preserveFileLink               = snapshot.preserveFileLink;
-            _providerDescriptor.preserveDirectoryLink          = snapshot.preserveDirectoryLink;
-            _providerDescriptor.retargetInTree                 = snapshot.retargetInTree;
-            _providerDescriptor.exactLinkRemoval               = snapshot.exactLinkRemoval;
-            _providerDescriptor.cancellationAbort              = snapshot.cancellationAbort;
-            _providerDescriptor.cancellationDeadline           = snapshot.cancellationDeadline;
-            _providerDescriptor.pathTextStableIdentity         = identity.pathTextStableIdentity;
-            _providerDescriptor.casePreserving                 = identity.casePreserving;
-            _providerDescriptor.windowsChildNames              = false;
-            _providerDescriptorStatus                          = S_OK;
-            _providerDescriptorReady                           = true;
+            _providerDescriptor.maxComponentUtf16 = snapshot.maxComponentUtf16;
+            _providerDescriptor.copyOperation = snapshot.copyOperation;
+            _providerDescriptor.moveOperation = snapshot.moveOperation;
+            _providerDescriptor.nativeMoveOperation = snapshot.nativeMoveOperation;
+            _providerDescriptor.deleteOperation = snapshot.deleteOperation;
+            _providerDescriptor.renameOperation = snapshot.renameOperation;
+            _providerDescriptor.createDirectoryOperation = snapshot.createDirectoryOperation;
+            _providerDescriptor.propertiesOperation = snapshot.properties;
+            _providerDescriptor.readOperation = snapshot.read;
+            _providerDescriptor.writeOperation = snapshot.write;
+            _providerDescriptor.recycleOperation = snapshot.recycleOperation;
+            _providerDescriptor.boundDelete = snapshot.boundDelete;
+            _providerDescriptor.conditionalDelete = snapshot.conditionalDelete;
+            _providerDescriptor.exclusiveStage = snapshot.exclusiveStage;
+            _providerDescriptor.conditionalPublish = snapshot.conditionalPublish;
+            _providerDescriptor.committedSize = snapshot.committedSize;
+            _providerDescriptor.preserveFileLink = snapshot.preserveFileLink;
+            _providerDescriptor.preserveDirectoryLink = snapshot.preserveDirectoryLink;
+            _providerDescriptor.retargetInTree = snapshot.retargetInTree;
+            _providerDescriptor.exactLinkRemoval = snapshot.exactLinkRemoval;
+            _providerDescriptor.cancellationAbort = snapshot.cancellationAbort;
+            _providerDescriptor.cancellationDeadline = snapshot.cancellationDeadline;
+            _providerDescriptor.pathTextStableIdentity = identity.pathTextStableIdentity;
+            _providerDescriptor.casePreserving = identity.casePreserving;
+            _providerDescriptor.windowsChildNames = false;
+            _providerDescriptorStatus = S_OK;
+            _providerDescriptorReady = true;
         }
         if (FAILED(_providerDescriptorStatus))
         {
@@ -959,13 +982,13 @@ private:
     HANDLE _readDirectoryInfoGate       = nullptr;
     bool _returnEmptyReadDirectoryInfo  = false;
     std::atomic_uint32_t _readDirectoryInfoCalls{0u};
-    uint32_t _admissionProviderDelayUs      = 0u;
-    std::atomic_uint32_t* _capabilityCalls  = nullptr;
-    std::atomic_uint32_t* _bindCalls        = nullptr;
+    uint32_t _admissionProviderDelayUs = 0u;
+    std::atomic_uint32_t* _capabilityCalls = nullptr;
+    std::atomic_uint32_t* _bindCalls = nullptr;
     std::atomic<DWORD>* _capabilityThreadId = nullptr;
-    std::atomic<DWORD>* _bindThreadId       = nullptr;
-    std::atomic_bool* _destroyed            = nullptr;
-    bool _providerNamePolicyEnabled         = false;
+    std::atomic<DWORD>* _bindThreadId = nullptr;
+    std::atomic_bool* _destroyed = nullptr;
+    bool _providerNamePolicyEnabled = false;
     std::wstring _providerNameRejectedLeaf;
     std::wstring _providerNameCollapsedLeafA;
     std::wstring _providerNameCollapsedLeafB;
@@ -973,7 +996,7 @@ private:
     std::mutex _providerDescriptorMutex;
     FileSystemRouteDescriptor _providerDescriptor;
     HRESULT _providerDescriptorStatus = E_PENDING;
-    bool _providerDescriptorReady     = false;
+    bool _providerDescriptorReady = false;
 };
 
 [[nodiscard]] wil::com_ptr<IFileSystem> CreateBatchRenameCountingReadDirectoryFileSystem(const wil::com_ptr<IFileSystem>& base,
@@ -1019,8 +1042,8 @@ private:
 }
 
 [[nodiscard]] wil::com_ptr<IFileSystem> CreateBatchRenameGatedReadDirectoryFileSystem(const wil::com_ptr<IFileSystem>& base,
-                                                                                      std::atomic_uint32_t* counter,
-                                                                                      const HANDLE gate) noexcept
+                                                                                       std::atomic_uint32_t* counter,
+                                                                                       const HANDLE gate) noexcept
 {
     wil::com_ptr<IFileSystem> wrapped;
     auto* wrapper = new (std::nothrow) BatchRenameCountingReadDirectoryFileSystem(base, counter);
@@ -1120,8 +1143,8 @@ private:
 }
 
 [[nodiscard]] wil::com_ptr<IFileSystem> CreateBatchRenameCapabilitiesOverrideFileSystem(const wil::com_ptr<IFileSystem>& base,
-                                                                                        std::atomic_uint32_t* renameItemsCounter,
-                                                                                        std::string capabilitiesJson) noexcept
+                                                                                         std::atomic_uint32_t* renameItemsCounter,
+                                                                                         std::string capabilitiesJson) noexcept
 {
     wil::com_ptr<IFileSystem> wrapped;
     auto* wrapper = new (std::nothrow) BatchRenameCountingReadDirectoryFileSystem(base, nullptr, nullptr, renameItemsCounter);
@@ -1134,13 +1157,14 @@ private:
     return wrapped;
 }
 
-[[nodiscard]] wil::com_ptr<IFileSystem> CreateBatchRenameDelayedAdmissionFileSystem(const wil::com_ptr<IFileSystem>& base,
-                                                                                    const uint32_t delayUs,
-                                                                                    std::atomic_uint32_t* capabilityCalls,
-                                                                                    std::atomic_uint32_t* bindCalls,
-                                                                                    std::atomic<DWORD>* capabilityThreadId,
-                                                                                    std::atomic<DWORD>* bindThreadId,
-                                                                                    std::atomic_bool* destroyed) noexcept
+[[nodiscard]] wil::com_ptr<IFileSystem> CreateBatchRenameDelayedAdmissionFileSystem(
+    const wil::com_ptr<IFileSystem>& base,
+    const uint32_t delayUs,
+    std::atomic_uint32_t* capabilityCalls,
+    std::atomic_uint32_t* bindCalls,
+    std::atomic<DWORD>* capabilityThreadId,
+    std::atomic<DWORD>* bindThreadId,
+    std::atomic_bool* destroyed) noexcept
 {
     wil::com_ptr<IFileSystem> wrapped;
     auto* wrapper = new (std::nothrow) BatchRenameCountingReadDirectoryFileSystem(base, nullptr);
@@ -1148,7 +1172,8 @@ private:
     {
         return {};
     }
-    wrapper->SetAdmissionProviderDelay(delayUs, capabilityCalls, bindCalls, capabilityThreadId, bindThreadId, destroyed);
+    wrapper->SetAdmissionProviderDelay(
+        delayUs, capabilityCalls, bindCalls, capabilityThreadId, bindThreadId, destroyed);
     wrapped.attach(wrapper);
     return wrapped;
 }
@@ -1176,6 +1201,7 @@ private:
     return context;
 }
 
+
 [[nodiscard]] bool TestFileOperationDurableStoreSafeMechanics(CaseState& state) noexcept
 {
     std::filesystem::path root;
@@ -1183,72 +1209,104 @@ private:
     {
         return false;
     }
-    const std::filesystem::path storeRoot  = root / L"missing-parent" / L"state";
+    const std::filesystem::path storeRoot = root / L"missing-parent" / L"state";
     const std::filesystem::path recordPath = storeRoot / L"record.json";
-    constexpr uint64_t kMaximumBytes       = 1024u;
-    constexpr std::string_view original    = R"({"generation":0})";
+    constexpr uint64_t kMaximumBytes = 1024u;
+    constexpr std::string_view original = R"({"generation":0})";
     constexpr std::string_view replacement = R"({"generation":1})";
 
     state.Require(SUCCEEDED(FileOperationDurableStore::PersistDirectChild(
-                      storeRoot, recordPath, original, kMaximumBytes, Common::Files::ExistingTargetPolicy::FailIfExists)) &&
+                      storeRoot,
+                      recordPath,
+                      original,
+                      kMaximumBytes,
+                      Common::Files::ExistingTargetPolicy::FailIfExists)) &&
                       std::filesystem::is_directory(storeRoot),
                   L"The durable-store helper should create its configured parent and exclusively publish the first record.");
-    state.Require(
-        FileOperationDurableStore::PersistDirectChild(storeRoot, recordPath, replacement, kMaximumBytes, Common::Files::ExistingTargetPolicy::FailIfExists) ==
-            HRESULT_FROM_WIN32(ERROR_FILE_EXISTS),
-        L"Exclusive durable-store publication must reject an existing record without replacing it.");
+    state.Require(FileOperationDurableStore::PersistDirectChild(
+                      storeRoot,
+                      recordPath,
+                      replacement,
+                      kMaximumBytes,
+                      Common::Files::ExistingTargetPolicy::FailIfExists) == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS),
+                  L"Exclusive durable-store publication must reject an existing record without replacing it.");
 
     std::string loaded;
-    state.Require(SUCCEEDED(FileOperationDurableStore::ReadBoundedRegularFile(recordPath, kMaximumBytes, loaded)) && loaded == original,
+    state.Require(SUCCEEDED(FileOperationDurableStore::ReadBoundedRegularFile(
+                      recordPath, kMaximumBytes, loaded)) && loaded == original,
                   L"A failed exclusive create must preserve the previous complete record.");
 
     const HRESULT publishFailure = HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
     Common::Files::Testing::FailNextLocalFileTransactionPublish(publishFailure);
     state.Require(FileOperationDurableStore::PersistDirectChild(
-                      storeRoot, recordPath, replacement, kMaximumBytes, Common::Files::ExistingTargetPolicy::Replace) == publishFailure &&
-                      SUCCEEDED(FileOperationDurableStore::ReadBoundedRegularFile(recordPath, kMaximumBytes, loaded)) && loaded == original,
+                      storeRoot,
+                      recordPath,
+                      replacement,
+                      kMaximumBytes,
+                      Common::Files::ExistingTargetPolicy::Replace) == publishFailure &&
+                      SUCCEEDED(FileOperationDurableStore::ReadBoundedRegularFile(
+                          recordPath, kMaximumBytes, loaded)) && loaded == original,
                   L"A failed atomic publish must preserve the previous complete record.");
     std::vector<std::filesystem::path> storedFiles;
-    state.Require(
-        SUCCEEDED(FileOperationDurableStore::EnumerateDirectRegularFiles(storeRoot, 16u, storedFiles)) && storedFiles.size() == 1u &&
-            Common::Paths::NormalizedWindowsPathEqualsNoCase(storedFiles.front().native(), std::filesystem::absolute(recordPath).lexically_normal().native()),
-        L"A failed atomic publish must remove its private temporary sibling.");
+    state.Require(SUCCEEDED(FileOperationDurableStore::EnumerateDirectRegularFiles(
+                      storeRoot, 16u, storedFiles)) && storedFiles.size() == 1u &&
+                      Common::Paths::NormalizedWindowsPathEqualsNoCase(
+                          storedFiles.front().native(), std::filesystem::absolute(recordPath).lexically_normal().native()),
+                  L"A failed atomic publish must remove its private temporary sibling.");
     state.Require(SUCCEEDED(FileOperationDurableStore::PersistDirectChild(
-                      storeRoot, recordPath, replacement, kMaximumBytes, Common::Files::ExistingTargetPolicy::Replace)) &&
-                      SUCCEEDED(FileOperationDurableStore::ReadBoundedRegularFile(recordPath, kMaximumBytes, loaded)) && loaded == replacement,
+                      storeRoot,
+                      recordPath,
+                      replacement,
+                      kMaximumBytes,
+                      Common::Files::ExistingTargetPolicy::Replace)) &&
+                      SUCCEEDED(FileOperationDurableStore::ReadBoundedRegularFile(
+                          recordPath, kMaximumBytes, loaded)) && loaded == replacement,
                   L"A successful atomic replacement should publish one complete new record.");
 
     const std::filesystem::path directoryRecord = storeRoot / L"directory.json";
     state.Require(SelfTest::EnsureDirectory(directoryRecord) &&
-                      FileOperationDurableStore::ReadBoundedRegularFile(directoryRecord, kMaximumBytes, loaded) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
-                      FileOperationDurableStore::RemoveDirectRegularFile(storeRoot, directoryRecord) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+                      FileOperationDurableStore::ReadBoundedRegularFile(
+                          directoryRecord, kMaximumBytes, loaded) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
+                      FileOperationDurableStore::RemoveDirectRegularFile(
+                          storeRoot, directoryRecord) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
                   L"Durable-store reads and removal must reject directories.");
 
-    const std::filesystem::path outside                = root / L"outside.json";
-    const std::filesystem::path reparseRecord          = storeRoot / L"reparse.json";
+    const std::filesystem::path outside = root / L"outside.json";
+    const std::filesystem::path reparseRecord = storeRoot / L"reparse.json";
     const std::filesystem::path reparseTargetDirectory = root / L"reparse-target-directory";
-    constexpr std::string_view replacementOverReparse  = R"({"generation":"reparse-replaced"})";
-    state.Require(SelfTest::WriteTextFile(outside, "outside-owned") && SelfTest::WriteTextFile(reparseTargetDirectory / L"sentinel.txt", "target-owned") &&
+    constexpr std::string_view replacementOverReparse = R"({"generation":"reparse-replaced"})";
+    state.Require(SelfTest::WriteTextFile(outside, "outside-owned") &&
+                      SelfTest::WriteTextFile(reparseTargetDirectory / L"sentinel.txt", "target-owned") &&
                       SUCCEEDED(CreateDirectoryJunctionForCommandsSelfTest(reparseRecord, reparseTargetDirectory)),
                   L"The durable-store reparse fixture should create a deterministic directory junction.");
-    state.Require(FileOperationDurableStore::ReadBoundedRegularFile(reparseRecord, kMaximumBytes, loaded) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
-                      FileOperationDurableStore::RemoveDirectRegularFile(storeRoot, reparseRecord) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
+    state.Require(FileOperationDurableStore::ReadBoundedRegularFile(
+                      reparseRecord, kMaximumBytes, loaded) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
+                      FileOperationDurableStore::RemoveDirectRegularFile(
+                          storeRoot, reparseRecord) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
                       std::filesystem::exists(reparseTargetDirectory / L"sentinel.txt"),
                   L"Durable-store reads and acknowledgement must reject a reparse entry without touching its target.");
     state.Require(SUCCEEDED(FileOperationDurableStore::PersistDirectChild(
-                      storeRoot, reparseRecord, replacementOverReparse, kMaximumBytes, Common::Files::ExistingTargetPolicy::Replace)) &&
-                      SUCCEEDED(FileOperationDurableStore::ReadBoundedRegularFile(reparseRecord, kMaximumBytes, loaded)) && loaded == replacementOverReparse &&
+                      storeRoot,
+                      reparseRecord,
+                      replacementOverReparse,
+                      kMaximumBytes,
+                      Common::Files::ExistingTargetPolicy::Replace)) &&
+                      SUCCEEDED(FileOperationDurableStore::ReadBoundedRegularFile(
+                          reparseRecord, kMaximumBytes, loaded)) &&
+                      loaded == replacementOverReparse &&
                       std::filesystem::exists(reparseTargetDirectory / L"sentinel.txt"),
                   L"Replace publication must replace the reparse directory entry without following or mutating its target.");
-    state.Require(FileOperationDurableStore::RemoveDirectRegularFile(storeRoot, outside) == E_INVALIDARG && std::filesystem::exists(outside),
+    state.Require(FileOperationDurableStore::RemoveDirectRegularFile(storeRoot, outside) == E_INVALIDARG &&
+                      std::filesystem::exists(outside),
                   L"Durable-store acknowledgement must reject a matching file outside its configured root.");
 
     const std::filesystem::path oversized = storeRoot / L"oversized.json";
     state.Require(SelfTest::WriteTextFile(oversized, "123456789") &&
-                      FileOperationDurableStore::ReadBoundedRegularFile(oversized, 8u, loaded) == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE),
+                      FileOperationDurableStore::ReadBoundedRegularFile(oversized, 8u, loaded) ==
+                          HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE),
                   L"Durable-store reads must reject a file before allocating beyond the configured byte limit.");
-    state.Require(FileOperationDurableStore::EnumerateDirectRegularFiles(storeRoot, 2u, storedFiles) == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) &&
-                      storedFiles.empty(),
+    state.Require(FileOperationDurableStore::EnumerateDirectRegularFiles(
+                      storeRoot, 2u, storedFiles) == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE) && storedFiles.empty(),
                   L"Durable-store enumeration must fail closed when the configured direct-child count limit is exceeded.");
 
     const std::filesystem::path outsideDirectory = root / L"outside-directory";
@@ -1257,12 +1315,17 @@ private:
                   L"The durable-store root-reparse fixture should create its outside directory.");
     state.Require(SUCCEEDED(CreateDirectoryJunctionForCommandsSelfTest(reparseStoreRoot, outsideDirectory)),
                   L"The durable-store root-reparse fixture should create a deterministic directory junction.");
-    state.Require(FileOperationDurableStore::EnumerateDirectRegularFiles(reparseStoreRoot, 16u, storedFiles) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
+    state.Require(FileOperationDurableStore::EnumerateDirectRegularFiles(
+                      reparseStoreRoot, 16u, storedFiles) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
                       storedFiles.empty(),
                   L"Durable-store enumeration must reject a reparse store root instead of following it.");
 
     state.Require(SUCCEEDED(FileOperationDurableStore::PersistDirectChild(
-                      storeRoot, recordPath, R"({"generation":2})", kMaximumBytes, Common::Files::ExistingTargetPolicy::Replace)),
+                      storeRoot,
+                      recordPath,
+                      R"({"generation":2})",
+                      kMaximumBytes,
+                      Common::Files::ExistingTargetPolicy::Replace)),
                   L"The concurrent reader fixture should publish its starting record.");
     std::atomic_bool readerFailed{false};
     std::atomic<HRESULT> concurrencyFailure{S_OK};
@@ -1276,10 +1339,13 @@ private:
             while (! stopToken.stop_requested())
             {
                 std::string current;
-                const HRESULT readHr = FileOperationDurableStore::ReadBoundedRegularFile(recordPath, kMaximumBytes, current);
+                const HRESULT readHr = FileOperationDurableStore::ReadBoundedRegularFile(
+                    recordPath, kMaximumBytes, current);
                 if (FAILED(readHr) || ! current.starts_with(R"({"generation":)"))
                 {
-                    concurrencyFailure.store(FAILED(readHr) ? readHr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA), std::memory_order_release);
+                    concurrencyFailure.store(
+                        FAILED(readHr) ? readHr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+                        std::memory_order_release);
                     readerFailed.store(true, std::memory_order_release);
                     return;
                 }
@@ -1288,15 +1354,20 @@ private:
         });
     }
     const auto readerDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds{2});
-    while (readCount.load(std::memory_order_acquire) < 8u && std::chrono::steady_clock::now() < readerDeadline)
+    while (readCount.load(std::memory_order_acquire) < 8u &&
+           std::chrono::steady_clock::now() < readerDeadline)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds{1});
     }
     for (uint32_t generation = 3u; generation < 35u && ! readerFailed.load(std::memory_order_acquire); ++generation)
     {
         const std::string json = std::format("{{\"generation\":{}}}", generation);
-        const HRESULT persistHr =
-            FileOperationDurableStore::PersistDirectChild(storeRoot, recordPath, json, kMaximumBytes, Common::Files::ExistingTargetPolicy::Replace);
+        const HRESULT persistHr = FileOperationDurableStore::PersistDirectChild(
+                storeRoot,
+                recordPath,
+                json,
+                kMaximumBytes,
+                Common::Files::ExistingTargetPolicy::Replace);
         if (FAILED(persistHr))
         {
             concurrencyFailure.store(persistHr, std::memory_order_release);
@@ -1309,11 +1380,14 @@ private:
     }
     readers.clear();
     const HRESULT observedConcurrencyFailure = concurrencyFailure.load(std::memory_order_acquire);
-    const std::wstring concurrencyMessage = std::format(L"Concurrent readers must observe only complete records while the schema owner serializes one writer "
-                                                        L"(HRESULT=0x{:08X}, reads={}).",
-                                                        static_cast<uint32_t>(observedConcurrencyFailure),
-                                                        readCount.load(std::memory_order_acquire));
-    state.Require(! readerFailed.load(std::memory_order_acquire) && readCount.load(std::memory_order_acquire) >= 8u, concurrencyMessage);
+    const std::wstring concurrencyMessage = std::format(
+        L"Concurrent readers must observe only complete records while the schema owner serializes one writer "
+        L"(HRESULT=0x{:08X}, reads={}).",
+        static_cast<uint32_t>(observedConcurrencyFailure),
+        readCount.load(std::memory_order_acquire));
+    state.Require(! readerFailed.load(std::memory_order_acquire) &&
+                      readCount.load(std::memory_order_acquire) >= 8u,
+                  concurrencyMessage);
 
     state.Require(SUCCEEDED(FileOperationDurableStore::RemoveDirectRegularFile(storeRoot, recordPath)) &&
                       FileOperationDurableStore::RemoveDirectRegularFile(storeRoot, recordPath) == S_FALSE,
@@ -1332,52 +1406,55 @@ private:
     FileOperationMoveBreadcrumb::SetRootForSelfTest(breadcrumbRoot);
     const auto clearRoot = wil::scope_exit([]() noexcept { FileOperationMoveBreadcrumb::ClearRootForSelfTest(); });
 
-    const std::filesystem::path source      = root / L"source.txt";
+    const std::filesystem::path source = root / L"source.txt";
     const std::filesystem::path destination = root / L"destination";
     state.Require(SelfTest::WriteTextFile(source, "source-owned") && SelfTest::WriteTextFile(destination / L"sentinel.txt", "destination-owned"),
                   L"Move breadcrumb test could not create source/destination sentinels.");
 
     FileOperationMoveBreadcrumb::Record record{};
-    record.taskId                           = 0x5001u;
-    record.sourcePane                       = FileOperationMoveBreadcrumb::PaneHint::Right;
-    record.destinationPane                  = FileOperationMoveBreadcrumb::PaneHint::Left;
-    record.admittedStrategies.nativeItems   = 2u;
-    record.admittedStrategies.managedItems  = 3u;
+    record.taskId = 0x5001u;
+    record.sourcePane = FileOperationMoveBreadcrumb::PaneHint::Right;
+    record.destinationPane = FileOperationMoveBreadcrumb::PaneHint::Left;
+    record.admittedStrategies.nativeItems = 2u;
+    record.admittedStrategies.managedItems = 3u;
     record.admittedStrategies.copyOnlyItems = 1u;
-    record.sourceRootCount                  = 17u;
-    record.sourceRootSamplesTruncated       = true;
+    record.sourceRootCount = 17u;
+    record.sourceRootSamplesTruncated = true;
     for (size_t index = 0u; index < FileOperationMoveBreadcrumb::kMaximumPersistedSourceRootSamples; ++index)
     {
         record.sourceRootSamples.push_back(FileOperationMoveBreadcrumb::QualifiedLocation{
-            .pluginId           = L"builtin/file-system",
-            .pluginShortId      = L"file",
-            .instanceId         = L"host/default",
-            .profileId          = L"local",
-            .rootId             = std::format(L"root-{0}", index),
+            .pluginId = L"builtin/file-system",
+            .pluginShortId = L"file",
+            .instanceId = L"host/default",
+            .profileId = L"local",
+            .rootId = std::format(L"root-{0}", index),
             .representativePath = source,
         });
     }
     record.destination = FileOperationMoveBreadcrumb::QualifiedLocation{
-        .pluginId           = L"builtin/file-system",
-        .pluginShortId      = L"file",
-        .instanceId         = L"host/default",
-        .profileId          = L"local",
-        .rootId             = L"destination-root",
+        .pluginId = L"builtin/file-system",
+        .pluginShortId = L"file",
+        .instanceId = L"host/default",
+        .profileId = L"local",
+        .rootId = L"destination-root",
         .representativePath = destination,
     };
 
-    const std::optional<std::wstring> defaultInstanceContext = FileOperationMoveBreadcrumb::TryDecodeNavigationInstanceContext(L"host/default");
-    const std::optional<std::wstring> namedInstanceContext   = FileOperationMoveBreadcrumb::TryDecodeNavigationInstanceContext(L"host/context/profile-a");
-    state.Require(defaultInstanceContext.has_value() && defaultInstanceContext.value().empty() && namedInstanceContext.has_value() &&
-                      namedInstanceContext.value() == L"profile-a" && ! FileOperationMoveBreadcrumb::TryDecodeNavigationInstanceContext(L"local").has_value(),
+    const std::optional<std::wstring> defaultInstanceContext =
+        FileOperationMoveBreadcrumb::TryDecodeNavigationInstanceContext(L"host/default");
+    const std::optional<std::wstring> namedInstanceContext =
+        FileOperationMoveBreadcrumb::TryDecodeNavigationInstanceContext(L"host/context/profile-a");
+    state.Require(defaultInstanceContext.has_value() && defaultInstanceContext.value().empty() &&
+                      namedInstanceContext.has_value() && namedInstanceContext.value() == L"profile-a" &&
+                      ! FileOperationMoveBreadcrumb::TryDecodeNavigationInstanceContext(L"local").has_value(),
                   L"Move breadcrumb comparison identities must decode to pane contexts without treating canonical identity text as navigation state.");
 
-    FileOperationMoveBreadcrumb::Record invalidInstanceRecord  = record;
-    invalidInstanceRecord.taskId                               = 0x50F0u;
+    FileOperationMoveBreadcrumb::Record invalidInstanceRecord = record;
+    invalidInstanceRecord.taskId = 0x50F0u;
     invalidInstanceRecord.sourceRootSamples.front().instanceId = L"local";
     FileOperationMoveBreadcrumb::Breadcrumb invalidInstanceBreadcrumb;
-    state.Require(FileOperationMoveBreadcrumb::Breadcrumb::Create(invalidInstanceRecord, invalidInstanceBreadcrumb) == E_INVALIDARG &&
-                      invalidInstanceBreadcrumb.GetPath().empty(),
+    state.Require(FileOperationMoveBreadcrumb::Breadcrumb::Create(invalidInstanceRecord, invalidInstanceBreadcrumb) ==
+                      E_INVALIDARG && invalidInstanceBreadcrumb.GetPath().empty(),
                   L"Move breadcrumb admission must reject a noncanonical comparison instance ID before publication.");
 
     FileOperationMoveBreadcrumb::Breadcrumb breadcrumb;
@@ -1389,10 +1466,13 @@ private:
     std::vector<FileOperationMoveBreadcrumb::LoadedRecord> loaded;
     FileOperationMoveBreadcrumb::LoadStats stats{};
     state.Require(SUCCEEDED(FileOperationMoveBreadcrumb::Breadcrumb::LoadInterrupted(loaded, &stats)) && loaded.size() == 1u &&
-                      loaded.front().record.phase == FileOperationMoveBreadcrumb::DurablePhase::Admitted && loaded.front().record.sourceRootCount == 17u &&
-                      loaded.front().record.sourceRootSamples.size() == FileOperationMoveBreadcrumb::kMaximumPersistedSourceRootSamples &&
-                      loaded.front().record.sourceRootSamplesTruncated && loaded.front().record.admittedStrategies.nativeItems == 2u &&
-                      loaded.front().record.admittedStrategies.managedItems == 3u && loaded.front().record.admittedStrategies.copyOnlyItems == 1u &&
+                      loaded.front().record.phase == FileOperationMoveBreadcrumb::DurablePhase::Admitted &&
+                      loaded.front().record.sourceRootCount == 17u && loaded.front().record.sourceRootSamples.size() ==
+                          FileOperationMoveBreadcrumb::kMaximumPersistedSourceRootSamples &&
+                      loaded.front().record.sourceRootSamplesTruncated &&
+                      loaded.front().record.admittedStrategies.nativeItems == 2u &&
+                      loaded.front().record.admittedStrategies.managedItems == 3u &&
+                      loaded.front().record.admittedStrategies.copyOnlyItems == 1u &&
                       loaded.front().record.sourcePane == FileOperationMoveBreadcrumb::PaneHint::Right &&
                       loaded.front().record.destinationPane == FileOperationMoveBreadcrumb::PaneHint::Left,
                   L"Restart loading must preserve the admitted phase, pane roles, bounded root samples, and strategy counts.");
@@ -1416,65 +1496,72 @@ private:
                       reloaded.phase == FileOperationMoveBreadcrumb::DurablePhase::Executing,
                   L"The worker should durably advance the breadcrumb once before mutation.");
 
-    const std::filesystem::path malformed        = breadcrumbRoot / L"malformed.move.json";
-    const std::filesystem::path truncated        = breadcrumbRoot / L"truncated.move.json";
-    const std::filesystem::path invalidUtf8      = breadcrumbRoot / L"invalid-utf8.move.json";
-    const std::filesystem::path wrongVersion     = breadcrumbRoot / L"wrong-version.move.json";
-    const std::filesystem::path oversized        = breadcrumbRoot / L"oversized.move.json";
+    const std::filesystem::path malformed = breadcrumbRoot / L"malformed.move.json";
+    const std::filesystem::path truncated = breadcrumbRoot / L"truncated.move.json";
+    const std::filesystem::path invalidUtf8 = breadcrumbRoot / L"invalid-utf8.move.json";
+    const std::filesystem::path wrongVersion = breadcrumbRoot / L"wrong-version.move.json";
+    const std::filesystem::path oversized = breadcrumbRoot / L"oversized.move.json";
     const std::filesystem::path directorySibling = breadcrumbRoot / L"directory.move.json";
-    const std::filesystem::path reparseSibling   = breadcrumbRoot / L"reparse.move.json";
-    const std::filesystem::path reparseTarget    = root / L"reparse-target";
+    const std::filesystem::path reparseSibling = breadcrumbRoot / L"reparse.move.json";
+    const std::filesystem::path reparseTarget = root / L"reparse-target";
     std::string invalidUtf8Bytes{"{\"kind\":\""};
     invalidUtf8Bytes.push_back(static_cast<char>(0xff));
     invalidUtf8Bytes.append("\"}");
-    state.Require(SelfTest::WriteTextFile(malformed, "{not-json") && SelfTest::WriteTextFile(truncated, R"({"kind":"move-task-breadcrumb")") &&
+    state.Require(SelfTest::WriteTextFile(malformed, "{not-json") &&
+                      SelfTest::WriteTextFile(truncated, R"({"kind":"move-task-breadcrumb")") &&
                       SelfTest::WriteTextFile(invalidUtf8, invalidUtf8Bytes) &&
-                      SelfTest::WriteTextFile(wrongVersion, R"({"kind":"move-task-breadcrumb","schemaVersion":999})") &&
-                      SelfTest::WriteTextFile(oversized, std::string(FileOperationMoveBreadcrumb::kMaximumRecordBytes + 1u, 'x')) &&
-                      SelfTest::EnsureDirectory(directorySibling) && SelfTest::WriteTextFile(reparseTarget / L"sentinel.txt", "target-owned") &&
+                      SelfTest::WriteTextFile(
+                          wrongVersion, R"({"kind":"move-task-breadcrumb","schemaVersion":999})") &&
+                      SelfTest::WriteTextFile(
+                          oversized, std::string(FileOperationMoveBreadcrumb::kMaximumRecordBytes + 1u, 'x')) &&
+                      SelfTest::EnsureDirectory(directorySibling) &&
+                      SelfTest::WriteTextFile(reparseTarget / L"sentinel.txt", "target-owned") &&
                       SUCCEEDED(CreateDirectoryJunctionForCommandsSelfTest(reparseSibling, reparseTarget)),
                   L"Move breadcrumb test could not create malformed, truncated, UTF-8, version, oversize, and directory siblings.");
     loaded.clear();
-    state.Require(FileOperationMoveBreadcrumb::Breadcrumb::LoadInterrupted(loaded, &stats) == S_FALSE && loaded.size() == 1u && stats.recordsScanned == 8u &&
-                      stats.rejectedRecords == 7u && std::filesystem::exists(malformed) && std::filesystem::is_directory(directorySibling),
+    state.Require(FileOperationMoveBreadcrumb::Breadcrumb::LoadInterrupted(loaded, &stats) == S_FALSE && loaded.size() == 1u &&
+                      stats.recordsScanned == 8u && stats.rejectedRecords == 7u &&
+                      std::filesystem::exists(malformed) && std::filesystem::is_directory(directorySibling),
                   L"Malformed, directory, and reparse breadcrumbs must be rejected independently without discarding a valid sibling.");
     state.Require(FileOperationMoveBreadcrumb::Acknowledge(directorySibling) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
                       std::filesystem::is_directory(directorySibling),
                   L"Move breadcrumb acknowledgement must reject a directory sibling.");
     FileOperationMoveBreadcrumb::Record rejectedReparse{};
-    state.Require(FileOperationMoveBreadcrumb::Breadcrumb::Load(reparseSibling, rejectedReparse) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
-                      FileOperationMoveBreadcrumb::Acknowledge(reparseSibling) == HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
+    state.Require(FileOperationMoveBreadcrumb::Breadcrumb::Load(reparseSibling, rejectedReparse) ==
+                      HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
+                      FileOperationMoveBreadcrumb::Acknowledge(reparseSibling) ==
+                          HRESULT_FROM_WIN32(ERROR_INVALID_DATA) &&
                       std::filesystem::exists(reparseTarget / L"sentinel.txt"),
                   L"Move breadcrumb loading, scanning, and acknowledgement must reject a reparse entry without touching its target.");
     state.Require(ReadUtf8TextFileForCommandSelfTest(source) == L"source-owned" &&
                       ReadUtf8TextFileForCommandSelfTest(destination / L"sentinel.txt") == L"destination-owned",
                   L"Loading interrupted Move breadcrumbs must not mutate source or destination content.");
 
-    const std::filesystem::path secondSource      = root / L"second-source.txt";
+    const std::filesystem::path secondSource = root / L"second-source.txt";
     const std::filesystem::path secondDestination = root / L"second-destination";
     state.Require(SelfTest::WriteTextFile(secondSource, "second-source-owned") &&
                       SelfTest::WriteTextFile(secondDestination / L"sentinel.txt", "second-destination-owned"),
                   L"Multiple interrupted-Move projection could not create its second source/destination sentinels.");
     FileOperationMoveBreadcrumb::Record secondRecord = record;
-    secondRecord.taskId                              = 0x5002u;
-    secondRecord.sourcePane                          = FileOperationMoveBreadcrumb::PaneHint::Left;
-    secondRecord.destinationPane                     = FileOperationMoveBreadcrumb::PaneHint::Right;
-    secondRecord.sourceRootCount                     = 1u;
-    secondRecord.sourceRootSamplesTruncated          = false;
-    secondRecord.sourceRootSamples                   = {FileOperationMoveBreadcrumb::QualifiedLocation{
-        .pluginId           = L"builtin/file-system",
-        .pluginShortId      = L"file",
-        .instanceId         = L"host/default",
-        .profileId          = L"local",
-        .rootId             = L"second-source-root",
+    secondRecord.taskId = 0x5002u;
+    secondRecord.sourcePane = FileOperationMoveBreadcrumb::PaneHint::Left;
+    secondRecord.destinationPane = FileOperationMoveBreadcrumb::PaneHint::Right;
+    secondRecord.sourceRootCount = 1u;
+    secondRecord.sourceRootSamplesTruncated = false;
+    secondRecord.sourceRootSamples = {FileOperationMoveBreadcrumb::QualifiedLocation{
+        .pluginId = L"builtin/file-system",
+        .pluginShortId = L"file",
+        .instanceId = L"host/default",
+        .profileId = L"local",
+        .rootId = L"second-source-root",
         .representativePath = secondSource,
     }};
-    secondRecord.destination                         = FileOperationMoveBreadcrumb::QualifiedLocation{
-        .pluginId           = L"builtin/file-system",
-        .pluginShortId      = L"file",
-        .instanceId         = L"host/default",
-        .profileId          = L"local",
-        .rootId             = L"second-destination-root",
+    secondRecord.destination = FileOperationMoveBreadcrumb::QualifiedLocation{
+        .pluginId = L"builtin/file-system",
+        .pluginShortId = L"file",
+        .instanceId = L"host/default",
+        .profileId = L"local",
+        .rootId = L"second-destination-root",
         .representativePath = secondDestination,
     };
     FileOperationMoveBreadcrumb::Breadcrumb secondBreadcrumb;
@@ -1488,44 +1575,46 @@ private:
     FolderWindow::FileOperationState::CompletedTaskSummary secondProjected{};
     if (fileOps)
     {
-        const std::filesystem::path admissionSource      = root / L"admission-source.txt";
+        const std::filesystem::path admissionSource = root / L"admission-source.txt";
         const std::filesystem::path admissionDestination = root / L"admission-destination";
         state.Require(SelfTest::WriteTextFile(admissionSource, "admission-source") &&
                           SelfTest::WriteTextFile(admissionDestination / L"sentinel.txt", "admission-destination"),
                       L"Move breadcrumb admission test could not create its Local source/destination.");
         wil::com_ptr<IFileSystem> admissionFileSystem = SelfTest::GetFileSystem(L"builtin/file-system");
-        state.Require(admissionFileSystem != nullptr, L"Move breadcrumb admission test requires the built-in Local provider.");
+        state.Require(admissionFileSystem != nullptr,
+                      L"Move breadcrumb admission test requires the built-in Local provider.");
         std::vector<FolderWindow::FileOperationState::Task*> tasksBefore;
         fileOps->CollectTasks(tasksBefore);
         std::atomic<bool> clipboardBarrierCalled{false};
         uint64_t breadcrumbFailureTaskId = 0u;
         Common::Files::Testing::FailNextLocalFileTransactionWrite(HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED));
-        const HRESULT breadcrumbFailureAdmissionHr = fileOps->AdmitOperation(FILESYSTEM_MOVE,
-                                                                             FolderWindow::Pane::Right,
-                                                                             FolderWindow::Pane::Left,
-                                                                             admissionFileSystem,
-                                                                             {admissionSource},
-                                                                             admissionDestination,
-                                                                             FILESYSTEM_FLAG_NONE,
-                                                                             false,
-                                                                             0u,
-                                                                             FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                             false,
-                                                                             admissionFileSystem,
-                                                                             &breadcrumbFailureTaskId,
-                                                                             {},
-                                                                             {},
-                                                                             L"builtin/file-system",
-                                                                             L"file",
-                                                                             std::nullopt,
-                                                                             FileOperations::DeleteOrigin::PaneCommand,
-                                                                             std::nullopt,
-                                                                             0x5001CAFEu,
-                                                                             [&clipboardBarrierCalled]() noexcept -> HRESULT
-        {
-            clipboardBarrierCalled.store(true, std::memory_order_release);
-            return S_OK;
-        });
+        const HRESULT breadcrumbFailureAdmissionHr = fileOps->AdmitOperation(
+            FILESYSTEM_MOVE,
+            FolderWindow::Pane::Right,
+            FolderWindow::Pane::Left,
+            admissionFileSystem,
+            {admissionSource},
+            admissionDestination,
+            FILESYSTEM_FLAG_NONE,
+            false,
+            0u,
+            FolderWindow::FileOperationState::ExecutionMode::PerItem,
+            false,
+            admissionFileSystem,
+            &breadcrumbFailureTaskId,
+            {},
+            {},
+            L"builtin/file-system",
+            L"file",
+            std::nullopt,
+            FileOperations::DeleteOrigin::PaneCommand,
+            std::nullopt,
+            0x5001CAFEu,
+            [&clipboardBarrierCalled]() noexcept -> HRESULT
+            {
+                clipboardBarrierCalled.store(true, std::memory_order_release);
+                return S_OK;
+            });
         // Admission publishes the task. The worker prepares, the clipboard barrier runs after
         // preparation and the decision gate, and only then does the accepted Move persist its
         // breadcrumb; that failure terminates the task before queue admission or any mutation.
@@ -1541,8 +1630,8 @@ private:
                 PumpPendingMessages();
                 std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> completedTasks;
                 fileOps->CollectCompletedTasks(completedTasks);
-                const auto found = std::ranges::find_if(
-                    completedTasks, [breadcrumbFailureTaskId](const auto& candidate) noexcept { return candidate.taskId == breadcrumbFailureTaskId; });
+                const auto found = std::ranges::find_if(completedTasks, [breadcrumbFailureTaskId](const auto& candidate) noexcept
+                { return candidate.taskId == breadcrumbFailureTaskId; });
                 if (found != completedTasks.end())
                 {
                     breadcrumbFailureSummary   = *found;
@@ -1557,90 +1646,107 @@ private:
         state.Require(breadcrumbFailureCompleted && breadcrumbFailureSummary.resultHr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) &&
                           breadcrumbFailureSummary.publishedItemCount == 0u && breadcrumbFailureSummary.completedItems == 0u &&
                           breadcrumbFailureSummary.indeterminateItemCount == 0u && breadcrumbFailureSummary.retainedSourceCount == 1u &&
-                          clipboardBarrierCalled.load(std::memory_order_acquire) && std::filesystem::exists(admissionSource) &&
+                          clipboardBarrierCalled.load(std::memory_order_acquire) &&
+                          std::filesystem::exists(admissionSource) &&
                           ! std::filesystem::exists(admissionDestination / admissionSource.filename()),
-                      L"Initial breadcrumb persistence failure must terminate the accepted Move after the clipboard receipt with the exact status, no "
-                      L"publication, and every source retained.");
+                      L"Initial breadcrumb persistence failure must terminate the accepted Move after the clipboard receipt with the exact status, no publication, and every source retained.");
         if (breadcrumbFailureCompleted)
         {
             fileOps->DismissCompletedTask(breadcrumbFailureTaskId);
         }
         std::vector<FolderWindow::FileOperationState::Task*> tasksAfter;
         fileOps->CollectTasks(tasksAfter);
-        state.Require(tasksAfter.size() == tasksBefore.size(), L"A Move terminated by its breadcrumb failure must leave no live task behind.");
+        state.Require(tasksAfter.size() == tasksBefore.size(),
+                      L"A Move terminated by its breadcrumb failure must leave no live task behind.");
 
         fileOps->DebugLoadInterruptedMoveBreadcrumbsForSelfTest();
         std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
         fileOps->CollectCompletedTasks(summaries);
-        const auto projectedIt = std::ranges::find_if(
-            summaries, [&breadcrumbPath](const auto& summary) noexcept { return summary.interruptedMoveBreadcrumbPath == breadcrumbPath; });
-        const auto secondProjectedIt = std::ranges::find_if(
-            summaries, [&secondBreadcrumbPath](const auto& summary) noexcept { return summary.interruptedMoveBreadcrumbPath == secondBreadcrumbPath; });
-        state.Require(projectedIt != summaries.end(), L"A valid non-terminal Move breadcrumb should project as a completed restart notice.");
-        state.Require(secondProjectedIt != summaries.end(), L"Multiple non-terminal Move breadcrumbs should project as independent restart notices.");
+        const auto projectedIt = std::ranges::find_if(summaries, [&breadcrumbPath](const auto& summary) noexcept
+        { return summary.interruptedMoveBreadcrumbPath == breadcrumbPath; });
+        const auto secondProjectedIt = std::ranges::find_if(summaries, [&secondBreadcrumbPath](const auto& summary) noexcept
+        { return summary.interruptedMoveBreadcrumbPath == secondBreadcrumbPath; });
+        state.Require(projectedIt != summaries.end(),
+                      L"A valid non-terminal Move breadcrumb should project as a completed restart notice.");
+        state.Require(secondProjectedIt != summaries.end(),
+                      L"Multiple non-terminal Move breadcrumbs should project as independent restart notices.");
         if (secondProjectedIt != summaries.end())
         {
             secondProjected = *secondProjectedIt;
-            state.Require(secondProjected.taskId != secondRecord.taskId && secondProjected.interruptedOperationId == secondRecord.taskId &&
-                              secondProjected.sourcePane == FolderWindow::Pane::Left && secondProjected.destinationPane == FolderWindow::Pane::Right &&
+            state.Require(secondProjected.taskId != secondRecord.taskId &&
+                              secondProjected.interruptedOperationId == secondRecord.taskId &&
+                              secondProjected.sourcePane == FolderWindow::Pane::Left &&
+                              secondProjected.destinationPane == FolderWindow::Pane::Right &&
                               secondProjected.sourcePluginId == secondRecord.sourceRootSamples.front().pluginId &&
                               secondProjected.sourcePluginShortId == secondRecord.sourceRootSamples.front().pluginShortId &&
-                              secondProjected.sourceInstanceContext.empty() && secondProjected.destinationPluginId == secondRecord.destination.pluginId &&
+                              secondProjected.sourceInstanceContext.empty() &&
+                              secondProjected.destinationPluginId == secondRecord.destination.pluginId &&
                               secondProjected.destinationPluginShortId == secondRecord.destination.pluginShortId &&
                               secondProjected.destinationInstanceContext.empty(),
-                          L"Each restart notice must keep its session card key separate from its explicitly named durable operation ID and preserve "
-                          L"pane/plugin navigation roles.");
+                          L"Each restart notice must keep its session card key separate from its explicitly named durable operation ID and preserve pane/plugin navigation roles.");
         }
         if (projectedIt != summaries.end())
         {
-            projected                          = *projectedIt;
-            const std::wstring expectedSummary = FormatStringResource(nullptr,
-                                                                      IDS_FMT_FILEOPS_INTERRUPTED_MOVE_SUMMARY,
-                                                                      record.taskId,
-                                                                      LoadStringResource(nullptr, IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_EXECUTING),
-                                                                      record.admittedStrategies.nativeItems,
-                                                                      record.admittedStrategies.managedItems,
-                                                                      record.admittedStrategies.copyOnlyItems,
-                                                                      record.sourceRootCount);
-            state.Require(projected.resultHr == HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && projected.indeterminateItemCount == 1u &&
-                              projected.interruptedMoveNotice && projected.interruptedOperationId == record.taskId && projected.taskId != record.taskId &&
-                              (secondProjected.taskId == 0u || projected.taskId != secondProjected.taskId) && projected.warningCount == 0u &&
-                              projected.errorCount == 0u && projected.sourcePane == FolderWindow::Pane::Right &&
-                              projected.destinationPane == FolderWindow::Pane::Left && projected.sourcePluginId == record.sourceRootSamples.front().pluginId &&
-                              projected.sourcePluginShortId == record.sourceRootSamples.front().pluginShortId && projected.sourceInstanceContext.empty() &&
+            projected = *projectedIt;
+            const std::wstring expectedSummary = FormatStringResource(
+                nullptr,
+                IDS_FMT_FILEOPS_INTERRUPTED_MOVE_SUMMARY,
+                record.taskId,
+                LoadStringResource(nullptr, IDS_FILEOPS_INTERRUPTED_MOVE_PHASE_EXECUTING),
+                record.admittedStrategies.nativeItems,
+                record.admittedStrategies.managedItems,
+                record.admittedStrategies.copyOnlyItems,
+                record.sourceRootCount);
+            state.Require(projected.resultHr == HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) &&
+                              projected.indeterminateItemCount == 1u && projected.interruptedMoveNotice &&
+                              projected.interruptedOperationId == record.taskId && projected.taskId != record.taskId &&
+                              (secondProjected.taskId == 0u || projected.taskId != secondProjected.taskId) &&
+                              projected.warningCount == 0u && projected.errorCount == 0u &&
+                              projected.sourcePane == FolderWindow::Pane::Right &&
+                              projected.destinationPane == FolderWindow::Pane::Left &&
+                              projected.sourcePluginId == record.sourceRootSamples.front().pluginId &&
+                              projected.sourcePluginShortId == record.sourceRootSamples.front().pluginShortId &&
+                              projected.sourceInstanceContext.empty() &&
                               projected.destinationPluginId == record.destination.pluginId &&
-                              projected.destinationPluginShortId == record.destination.pluginShortId && projected.destinationInstanceContext.empty() &&
-                              ! projected.clipboardMoveAdmission && projected.exactRetainedSourceItems.empty() && projected.resultSummary == expectedSummary,
-                          L"The restart notice must use a distinct session card key and named durable operation ID while remaining pane-faithful, "
-                          L"strategy-aware, indeterminate, and free of synthetic Issues.");
+                              projected.destinationPluginShortId == record.destination.pluginShortId &&
+                              projected.destinationInstanceContext.empty() &&
+                              ! projected.clipboardMoveAdmission && projected.exactRetainedSourceItems.empty() &&
+                              projected.resultSummary == expectedSummary,
+                          L"The restart notice must use a distinct session card key and named durable operation ID while remaining pane-faithful, strategy-aware, indeterminate, and free of synthetic Issues.");
 
             const bool sourceOpened = fileOps->OpenCompletedTaskSource(projected.taskId);
-            state.Require(sourceOpened && WaitForPanePath(FolderWindow::Pane::Right, source.parent_path(), SelfTest::Scale(std::chrono::milliseconds{3000})),
+            state.Require(sourceOpened &&
+                              WaitForPanePath(FolderWindow::Pane::Right,
+                                              source.parent_path(),
+                                              SelfTest::Scale(std::chrono::milliseconds{3000})),
                           L"Interrupted-Move source navigation must use the session card key and recorded source pane/plugin location.");
-            const bool destinationOpened =
-                projected.destinationPane.has_value() && SUCCEEDED(g_folderWindow.ExecuteInPaneLocation(projected.destinationPane.value(),
-                                                                                                        projected.destinationPluginId,
-                                                                                                        projected.destinationPluginShortId,
-                                                                                                        projected.destinationInstanceContext,
-                                                                                                        projected.destinationFolder,
-                                                                                                        {},
-                                                                                                        0u,
-                                                                                                        true));
-            state.Require(destinationOpened && WaitForPanePath(FolderWindow::Pane::Left, destination, SelfTest::Scale(std::chrono::milliseconds{3000})),
+            const bool destinationOpened = projected.destinationPane.has_value() &&
+                SUCCEEDED(g_folderWindow.ExecuteInPaneLocation(projected.destinationPane.value(),
+                                                               projected.destinationPluginId,
+                                                               projected.destinationPluginShortId,
+                                                               projected.destinationInstanceContext,
+                                                               projected.destinationFolder,
+                                                               {},
+                                                               0u,
+                                                               true));
+            state.Require(destinationOpened &&
+                              WaitForPanePath(FolderWindow::Pane::Left,
+                                              destination,
+                                              SelfTest::Scale(std::chrono::milliseconds{3000})),
                           L"Interrupted-Move destination navigation must use the recorded destination pane/plugin location without changing durable state.");
 
             fileOps->DebugEnsurePopupVisibleForSelfTest();
-            const HWND popup =
-                WaitForWindow([fileOps]() noexcept { return fileOps->GetPopupHwndForSelfTest(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
+            const HWND popup = WaitForWindow([fileOps]() noexcept { return fileOps->GetPopupHwndForSelfTest(); },
+                                             SelfTest::Scale(std::chrono::milliseconds{5000}));
             FileOperationsPopupInternal::TaskSnapshot popupTask{};
-            state.Require(popup && DebugGetFileOperationsPopupTaskSnapshot(popup, projected.taskId, popupTask) && popupTask.finished &&
-                              popupTask.interruptedMoveNotice && popupTask.hasIndeterminateResult && popupTask.taskId == projected.taskId &&
-                              popupTask.interruptedOperationId == record.taskId && ! popupTask.conflict.active &&
-                              ! popupTask.exactRetainedSourceActionAvailable &&
-                              popupTask.statusKind == FileOperationsPopupInternal::TaskSnapshot::StatusKind::Indeterminate && popupTask.warningCount == 0u &&
-                              popupTask.errorCount == 0u && popupTask.destinationPane == FolderWindow::Pane::Left,
-                          L"The popup must preserve the named identity split and render the interrupted Move as an indeterminate, non-retryable notice rather "
-                          L"than a fabricated failed-item set.");
+            state.Require(popup && DebugGetFileOperationsPopupTaskSnapshot(popup, projected.taskId, popupTask) &&
+                              popupTask.finished && popupTask.interruptedMoveNotice && popupTask.hasIndeterminateResult &&
+                              popupTask.taskId == projected.taskId && popupTask.interruptedOperationId == record.taskId &&
+                              ! popupTask.conflict.active && ! popupTask.exactRetainedSourceActionAvailable &&
+                              popupTask.statusKind == FileOperationsPopupInternal::TaskSnapshot::StatusKind::Indeterminate &&
+                              popupTask.warningCount == 0u && popupTask.errorCount == 0u &&
+                              popupTask.destinationPane == FolderWindow::Pane::Left,
+                          L"The popup must preserve the named identity split and render the interrupted Move as an indeterminate, non-retryable notice rather than a fabricated failed-item set.");
 
             FileOperationsPopupInternal::PopupLayoutDebugSnapshot layout{};
             layout.taskId = projected.taskId;
@@ -1651,7 +1757,8 @@ private:
                 expandInvoke.taskId = projected.taskId;
                 state.Require(DebugInvokeFileOperationsPopup(popup, expandInvoke),
                               L"Interrupted Move action coverage could not expand the auto-collapsed restart notice.");
-                const auto expandDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds{3000});
+                const auto expandDeadline =
+                    std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds{3000});
                 while (state.failure.empty() && std::chrono::steady_clock::now() < expandDeadline)
                 {
                     PumpPendingMessages();
@@ -1666,16 +1773,18 @@ private:
             }
             layout        = {};
             layout.taskId = projected.taskId;
-            state.Require(popup && DebugGetFileOperationsPopupLayoutSnapshot(popup, layout) && ! layout.completedFailedItemsActionVisible &&
-                              ! layout.completedShowLogVisible && ! layout.completedExportIssuesVisible && layout.completedOpenDestinationActionVisible &&
-                              ! layout.completedRevealDestinationActionVisible && layout.completedDismissVisible && ! layout.taskStartNowVisible &&
-                              ! layout.taskPauseVisible && ! layout.taskCancelVisible && ! fileOps->SelectCompletedTaskRetainedSources(projected.taskId) &&
+            state.Require(popup && DebugGetFileOperationsPopupLayoutSnapshot(popup, layout) &&
+                              ! layout.completedFailedItemsActionVisible && ! layout.completedShowLogVisible &&
+                              ! layout.completedExportIssuesVisible && layout.completedOpenDestinationActionVisible &&
+                              ! layout.completedRevealDestinationActionVisible && layout.completedDismissVisible &&
+                              ! layout.taskStartNowVisible && ! layout.taskPauseVisible && ! layout.taskCancelVisible &&
+                              ! fileOps->SelectCompletedTaskRetainedSources(projected.taskId) &&
                               ! fileOps->CutCompletedTaskRetainedSourcesAgain(projected.taskId),
-                          L"Interrupted Move actions should offer navigation and exact dismissal without Resume, retry, rollback, cleanup, Cut-again, fake "
-                          L"diagnostics, or item reveal.");
+                          L"Interrupted Move actions should offer navigation and exact dismissal without Resume, retry, rollback, cleanup, Cut-again, fake diagnostics, or item reveal.");
 
             fileOps->DismissCompletedTask(projected.taskId);
-            state.Require(! std::filesystem::exists(breadcrumbPath) && std::filesystem::exists(secondBreadcrumbPath),
+            state.Require(! std::filesystem::exists(breadcrumbPath) &&
+                              std::filesystem::exists(secondBreadcrumbPath),
                           L"Dismissing one session card must acknowledge only its exact breadcrumb and leave a sibling notice durable.");
         }
         if (secondProjected.taskId != 0u)
@@ -1683,17 +1792,19 @@ private:
             fileOps->DismissCompletedTask(secondProjected.taskId);
         }
     }
-    state.Require(! std::filesystem::exists(breadcrumbPath) && ! std::filesystem::exists(secondBreadcrumbPath) && std::filesystem::exists(source) &&
-                      std::filesystem::exists(destination / L"sentinel.txt") && std::filesystem::exists(secondSource) &&
+    state.Require(! std::filesystem::exists(breadcrumbPath) && ! std::filesystem::exists(secondBreadcrumbPath) &&
+                      std::filesystem::exists(source) && std::filesystem::exists(destination / L"sentinel.txt") &&
+                      std::filesystem::exists(secondSource) &&
                       std::filesystem::exists(secondDestination / L"sentinel.txt"),
                   L"Dismissing restart notices may remove only their exact JSON breadcrumbs and must never mutate provider objects.");
     const std::filesystem::path outsideBreadcrumbRoot = root / L"outside.move.json";
     state.Require(SelfTest::WriteTextFile(outsideBreadcrumbRoot, "not-a-breadcrumb") &&
-                      FileOperationMoveBreadcrumb::Acknowledge(outsideBreadcrumbRoot) == E_INVALIDARG && std::filesystem::exists(outsideBreadcrumbRoot),
+                      FileOperationMoveBreadcrumb::Acknowledge(outsideBreadcrumbRoot) == E_INVALIDARG &&
+                      std::filesystem::exists(outsideBreadcrumbRoot),
                   L"Breadcrumb acknowledgement must reject a matching filename outside the breadcrumb store.");
 
-    record.taskId                     = 0x5003u;
-    record.sourceRootCount            = record.sourceRootSamples.size();
+    record.taskId = 0x5003u;
+    record.sourceRootCount = record.sourceRootSamples.size();
     record.sourceRootSamplesTruncated = false;
     FileOperationMoveBreadcrumb::Breadcrumb completed;
     state.Require(SUCCEEDED(FileOperationMoveBreadcrumb::Breadcrumb::Create(record, completed)),
@@ -1704,26 +1815,30 @@ private:
     return state.failure.empty();
 }
 
+
 [[nodiscard]] bool TestFileOperationArtifactNameShapeProjectionScaling(CaseState& state) noexcept
 {
     constexpr size_t kOrdinaryRowCount = 10'000u;
     constexpr size_t kPossibleRowCount = 100u;
 
     FileOperationArtifacts::ArtifactNameShapeProjectionDebugResult measured{};
-    const HRESULT measureHr = FileOperationArtifacts::DebugMeasureArtifactNameShapeProjectionForTests(kOrdinaryRowCount, kPossibleRowCount, measured);
-    const bool correct      = measureHr == S_OK && measured.folderOrdinaryProbeCount == 0u && measured.findOrdinaryProbeCount == 0u &&
-                              measured.folderPossibleProbeCount == kPossibleRowCount && measured.findPossibleProbeCount == kPossibleRowCount;
-    state.Require(
-        correct,
-        std::format(L"Artifact name-shape projection scaling failed: hr=0x{:08X}, folderOrdinary={}, findOrdinary={}, folderPossible={}, findPossible={}.",
-                    static_cast<unsigned long>(measureHr),
-                    measured.folderOrdinaryProbeCount,
-                    measured.findOrdinaryProbeCount,
-                    measured.folderPossibleProbeCount,
-                    measured.findPossibleProbeCount));
+    const HRESULT measureHr = FileOperationArtifacts::DebugMeasureArtifactNameShapeProjectionForTests(
+        kOrdinaryRowCount, kPossibleRowCount, measured);
+    const bool correct = measureHr == S_OK && measured.folderOrdinaryProbeCount == 0u &&
+                         measured.findOrdinaryProbeCount == 0u &&
+                         measured.folderPossibleProbeCount == kPossibleRowCount &&
+                         measured.findPossibleProbeCount == kPossibleRowCount;
+    state.Require(correct,
+                  std::format(
+                      L"Artifact name-shape projection scaling failed: hr=0x{:08X}, folderOrdinary={}, findOrdinary={}, folderPossible={}, findPossible={}.",
+                      static_cast<unsigned long>(measureHr),
+                      measured.folderOrdinaryProbeCount,
+                      measured.findOrdinaryProbeCount,
+                      measured.folderPossibleProbeCount,
+                      measured.findPossibleProbeCount));
 
     const std::wstring detail = std::format(L"ordinaryRows={} possibleRows={}", kOrdinaryRowCount, kPossibleRowCount);
-    const HRESULT evidenceHr  = correct ? S_OK : E_FAIL;
+    const HRESULT evidenceHr = correct ? S_OK : E_FAIL;
     Debug::Perf::Emit(L"fileops.artifact.folder_name_shape_lookup_10k.us",
                       detail,
                       measured.folderLookupUs,
@@ -1740,17 +1855,19 @@ private:
     return state.failure.empty();
 }
 
+
 class BatchRenameCentralTestProviderCallback final : public IFileSystemCallback
 {
 public:
-    explicit BatchRenameCentralTestProviderCallback(const std::atomic_bool& cancelRequested) noexcept : _cancelRequested(cancelRequested)
+    explicit BatchRenameCentralTestProviderCallback(const std::atomic_bool& cancelRequested) noexcept
+        : _cancelRequested(cancelRequested)
     {
     }
 
-    BatchRenameCentralTestProviderCallback(const BatchRenameCentralTestProviderCallback&)            = delete;
-    BatchRenameCentralTestProviderCallback(BatchRenameCentralTestProviderCallback&&)                 = delete;
+    BatchRenameCentralTestProviderCallback(const BatchRenameCentralTestProviderCallback&) = delete;
+    BatchRenameCentralTestProviderCallback(BatchRenameCentralTestProviderCallback&&) = delete;
     BatchRenameCentralTestProviderCallback& operator=(const BatchRenameCentralTestProviderCallback&) = delete;
-    BatchRenameCentralTestProviderCallback& operator=(BatchRenameCentralTestProviderCallback&&)      = delete;
+    BatchRenameCentralTestProviderCallback& operator=(BatchRenameCentralTestProviderCallback&&) = delete;
 
     HRESULT STDMETHODCALLTYPE FileSystemProgress(FileSystemOperation,
                                                  unsigned long,
@@ -1815,7 +1932,7 @@ public:
         {
             return E_POINTER;
         }
-        *action              = FileSystemIssueAction::Cancel;
+        *action = FileSystemIssueAction::Cancel;
         *expectedDestination = nullptr;
         return S_OK;
     }
@@ -1828,11 +1945,11 @@ private:
 
 struct BatchRenameCentralTestTask final
 {
-    BatchRenameCentralTestTask()                                             = default;
-    BatchRenameCentralTestTask(const BatchRenameCentralTestTask&)            = delete;
-    BatchRenameCentralTestTask(BatchRenameCentralTestTask&&)                 = delete;
+    BatchRenameCentralTestTask() = default;
+    BatchRenameCentralTestTask(const BatchRenameCentralTestTask&) = delete;
+    BatchRenameCentralTestTask(BatchRenameCentralTestTask&&) = delete;
     BatchRenameCentralTestTask& operator=(const BatchRenameCentralTestTask&) = delete;
-    BatchRenameCentralTestTask& operator=(BatchRenameCentralTestTask&&)      = delete;
+    BatchRenameCentralTestTask& operator=(BatchRenameCentralTestTask&&) = delete;
 
     uint64_t id = 0u;
     wil::com_ptr<IFileSystem> fileSystem;
@@ -1899,7 +2016,10 @@ void ShutdownBatchRenameCentralTestTasks() noexcept
     retained.clear();
 }
 
-HRESULT ApplyBatchRenameCentralTestMutation(void* raw, size_t, const std::filesystem::path& sourcePath, const std::filesystem::path& destinationPath) noexcept
+HRESULT ApplyBatchRenameCentralTestMutation(void* raw,
+                                            size_t,
+                                            const std::filesystem::path& sourcePath,
+                                            const std::filesystem::path& destinationPath) noexcept
 {
     auto* const task = static_cast<BatchRenameCentralTestTask*>(raw);
     if (! task || ! task->fileSystem)
@@ -1908,9 +2028,9 @@ HRESULT ApplyBatchRenameCentralTestMutation(void* raw, size_t, const std::filesy
     }
     const std::wstring newName = destinationPath.filename().native();
     const FileSystemRenamePair pair{
-        .sizeBytes  = sizeof(FileSystemRenamePair),
+        .sizeBytes = sizeof(FileSystemRenamePair),
         .sourcePath = sourcePath.c_str(),
-        .newName    = newName.c_str(),
+        .newName = newName.c_str(),
     };
     FileSystemOptions options{};
     options.sizeBytes = sizeof(options);
@@ -1929,7 +2049,10 @@ HRESULT ApplyBatchRenameCentralTestMutation(void* raw, size_t, const std::filesy
     return callback.ItemStatus();
 }
 
-void ReportBatchRenameCentralTestProgress(void* raw, const uint64_t completedItems, const uint64_t totalItems, bool) noexcept
+void ReportBatchRenameCentralTestProgress(void* raw,
+                                          const uint64_t completedItems,
+                                          const uint64_t totalItems,
+                                          bool) noexcept
 {
     auto* const task = static_cast<BatchRenameCentralTestTask*>(raw);
     if (task && task->request.onProgress)
@@ -1946,7 +2069,7 @@ void ReportBatchRenameCentralTestProgress(void* raw, const uint64_t completedIte
     if (! context.onStartRename)
     {
         const wil::com_ptr<IFileSystem> fileSystem = context.fileSystem;
-        context.onStartRename                      = [fileSystem](BatchRenamePaneContext::CentralExecutionRequest request, uint64_t* taskIdOut) -> HRESULT
+        context.onStartRename = [fileSystem](BatchRenamePaneContext::CentralExecutionRequest request, uint64_t* taskIdOut) -> HRESULT
         {
             ReapBatchRenameCentralTestTasks();
             if (taskIdOut)
@@ -1972,7 +2095,7 @@ void ReportBatchRenameCentralTestProgress(void* raw, const uint64_t completedIte
             for (const BatchRenameExecutionOp& operation : request.operations)
             {
                 unsigned long sourceAttributes = 0u;
-                const HRESULT sourceHr         = fileSystemIo->GetAttributes(operation.originalSource.c_str(), &sourceAttributes);
+                const HRESULT sourceHr = fileSystemIo->GetAttributes(operation.originalSource.c_str(), &sourceAttributes);
                 if (FAILED(sourceHr))
                 {
                     return sourceHr;
@@ -1983,36 +2106,40 @@ void ReportBatchRenameCentralTestProgress(void* raw, const uint64_t completedIte
                 {
                     return E_INVALIDARG;
                 }
-                if (operation.providerFinalPath.empty() || operation.providerParentKey.empty() || operation.providerSourceCollisionKey.empty() ||
-                    operation.providerFinalCollisionKey.empty())
+                if (operation.providerFinalPath.empty() || operation.providerParentKey.empty() ||
+                    operation.providerSourceCollisionKey.empty() || operation.providerFinalCollisionKey.empty())
                 {
                     return E_INVALIDARG;
                 }
-                const bool destinationIsPlannedSource = std::ranges::any_of(request.operations, [&](const BatchRenameExecutionOp& candidate) noexcept {
-                    return operation.providerParentKey == candidate.providerParentKey &&
-                           operation.providerFinalCollisionKey == candidate.providerSourceCollisionKey;
-                });
+                const bool destinationIsPlannedSource = std::ranges::any_of(
+                    request.operations,
+                    [&](const BatchRenameExecutionOp& candidate) noexcept
+                    {
+                        return operation.providerParentKey == candidate.providerParentKey &&
+                               operation.providerFinalCollisionKey == candidate.providerSourceCollisionKey;
+                    });
                 if (destinationIsPlannedSource)
                 {
                     continue;
                 }
 
                 unsigned long destinationAttributes = 0u;
-                const HRESULT destinationHr         = fileSystemIo->GetAttributes(operation.providerFinalPath.c_str(), &destinationAttributes);
+                const HRESULT destinationHr = fileSystemIo->GetAttributes(operation.providerFinalPath.c_str(), &destinationAttributes);
                 if (SUCCEEDED(destinationHr))
                 {
                     return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
                 }
-                if (destinationHr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) && destinationHr != HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND))
+                if (destinationHr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) &&
+                    destinationHr != HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND))
                 {
                     return destinationHr;
                 }
             }
 
-            auto task        = std::make_shared<BatchRenameCentralTestTask>();
-            task->id         = g_nextBatchRenameCentralTestTaskId.fetch_add(1u, std::memory_order_relaxed);
+            auto task = std::make_shared<BatchRenameCentralTestTask>();
+            task->id = g_nextBatchRenameCentralTestTaskId.fetch_add(1u, std::memory_order_relaxed);
             task->fileSystem = fileSystem;
-            task->request    = std::move(request);
+            task->request = std::move(request);
             {
                 std::scoped_lock lock(g_batchRenameCentralTestTasksMutex);
                 g_batchRenameCentralTestTasks.emplace(task->id, task);
@@ -2021,15 +2148,16 @@ void ReportBatchRenameCentralTestProgress(void* raw, const uint64_t completedIte
             {
                 task->worker = std::jthread([task]() noexcept
                 {
-                    BatchRenameExecutionResult result = RunBatchRenameExecutionEngine(task->cancelRequested,
-                                                                                      task->request.pathIdentity.value(),
-                                                                                      std::move(task->request.operations),
-                                                                                      BatchRenameExecutionOptions{
-                                                                                          .progressCallback = &ReportBatchRenameCentralTestProgress,
-                                                                                          .progressContext  = task.get(),
-                                                                                          .mutationCallback = &ApplyBatchRenameCentralTestMutation,
-                                                                                          .mutationContext  = task.get(),
-                                                                                      });
+                    BatchRenameExecutionResult result = RunBatchRenameExecutionEngine(
+                        task->cancelRequested,
+                        task->request.pathIdentity.value(),
+                        std::move(task->request.operations),
+                        BatchRenameExecutionOptions{
+                            .progressCallback = &ReportBatchRenameCentralTestProgress,
+                            .progressContext = task.get(),
+                            .mutationCallback = &ApplyBatchRenameCentralTestMutation,
+                            .mutationContext = task.get(),
+                        });
                     if (task->request.onCompleted)
                     {
                         task->request.onCompleted(std::move(result));
@@ -2378,8 +2506,8 @@ struct BatchRenameLocalStampParts final
         return false;
     }
 
-    const uint64_t collectDurationBefore        = CountBatchRenamePerfRowsWithMetric("batchrename.collect.us");
-    const uint64_t collectTargetsBefore         = CountBatchRenamePerfRowsWithMetric("batchrename.collect.targets");
+    const uint64_t collectDurationBefore = CountBatchRenamePerfRowsWithMetric("batchrename.collect.us");
+    const uint64_t collectTargetsBefore  = CountBatchRenamePerfRowsWithMetric("batchrename.collect.targets");
     const uint64_t destinationListingRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.preview.destination_directory_listings");
 
     context.fileSystem      = countingFileSystem;
@@ -2447,8 +2575,8 @@ struct BatchRenameLocalStampParts final
     state.Require(readDirectoryInfoCalls.load(std::memory_order_relaxed) > 0u,
                   L"Batch Rename folder-scope collection should enumerate through IFileSystem::ReadDirectoryInfo when a provider is available.");
 
-    const uint64_t collectDurationAfter        = CountBatchRenamePerfRowsWithMetric("batchrename.collect.us");
-    const uint64_t collectTargetsAfter         = CountBatchRenamePerfRowsWithMetric("batchrename.collect.targets");
+    const uint64_t collectDurationAfter = CountBatchRenamePerfRowsWithMetric("batchrename.collect.us");
+    const uint64_t collectTargetsAfter  = CountBatchRenamePerfRowsWithMetric("batchrename.collect.targets");
     const uint64_t destinationListingRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.preview.destination_directory_listings");
     state.Require(collectDurationAfter > collectDurationBefore,
                   std::format(L"Batch Rename folder-scope collection should emit batchrename.collect.us; before={} after={}.",
@@ -2460,8 +2588,8 @@ struct BatchRenameLocalStampParts final
                               collectTargetsAfter));
     state.Require(destinationListingRowsAfter > destinationListingRowsBefore,
                   L"Batch Rename preview should emit cached destination-directory listing metrics.");
-    const std::optional<uint64_t> maxDirectoryListings =
-        TryReadMaxBatchRenamePerfUintField("batchrename.preview.destination_directory_listings", "value0", destinationListingRowsBefore);
+    const std::optional<uint64_t> maxDirectoryListings = TryReadMaxBatchRenamePerfUintField(
+        "batchrename.preview.destination_directory_listings", "value0", destinationListingRowsBefore);
     state.Require(maxDirectoryListings.has_value() && maxDirectoryListings.value() <= 2u,
                   std::format(L"Each preview refresh should enumerate at most once for each of the fixture's two distinct parent directories; listings={}.",
                               maxDirectoryListings.value_or((std::numeric_limits<uint64_t>::max)())));
@@ -2502,9 +2630,9 @@ struct BatchRenameLocalStampParts final
     context.instanceContext = L"batch-rename-async-provider-collection";
     context.rootPluginPath  = root;
 
-    const AppTheme theme          = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-async-provider-collection");
-    const ULONGLONG started       = GetTickCount64();
-    const bool shown              = ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context));
+    const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-async-provider-collection");
+    const ULONGLONG started = GetTickCount64();
+    const bool shown = ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context));
     const ULONGLONG showElapsedMs = GetTickCount64() - started;
     state.Require(shown, L"Batch Rename should open while provider enumeration is blocked.");
     state.Require(showElapsedMs < SelfTest::ScaleTimeout(1000u),
@@ -2516,8 +2644,10 @@ struct BatchRenameLocalStampParts final
         PumpPendingMessages();
         std::this_thread::yield();
     }
-    state.Require(readDirectoryInfoCalls.load(std::memory_order_acquire) > 0u, L"The provider collection worker should enter ReadDirectoryInfo off-thread.");
-    state.Require(GetBatchRenameWindowHandle() != nullptr, L"The Batch Rename window should remain available while provider collection is blocked.");
+    state.Require(readDirectoryInfoCalls.load(std::memory_order_acquire) > 0u,
+                  L"The provider collection worker should enter ReadDirectoryInfo off-thread.");
+    state.Require(GetBatchRenameWindowHandle() != nullptr,
+                  L"The Batch Rename window should remain available while provider collection is blocked.");
 
     static_cast<void>(SetEvent(gate.get()));
     BatchRenameDebugSnapshot snapshot{};
@@ -2527,7 +2657,7 @@ struct BatchRenameLocalStampParts final
     CloseBatchRenameWindowIfOpen();
 
     state.Require(ResetEvent(gate.get()) != FALSE, L"Async collection teardown fixture should reset its provider gate.");
-    const uint32_t callsBeforeBlockedClose       = readDirectoryInfoCalls.load(std::memory_order_acquire);
+    const uint32_t callsBeforeBlockedClose = readDirectoryInfoCalls.load(std::memory_order_acquire);
     const uint64_t collectRowsBeforeBlockedClose = CountBatchRenamePerfRowsWithMetric("batchrename.collect.us");
 
     BatchRenamePaneContext blockedCloseContext{};
@@ -2540,7 +2670,8 @@ struct BatchRenameLocalStampParts final
                   L"Batch Rename should reopen for blocked-provider teardown testing.");
 
     const ULONGLONG blockedCloseEnteredDeadline = GetTickCount64() + SelfTest::ScaleTimeout(2000u);
-    while (readDirectoryInfoCalls.load(std::memory_order_acquire) == callsBeforeBlockedClose && GetTickCount64() < blockedCloseEnteredDeadline)
+    while (readDirectoryInfoCalls.load(std::memory_order_acquire) == callsBeforeBlockedClose &&
+           GetTickCount64() < blockedCloseEnteredDeadline)
     {
         PumpPendingMessages();
         std::this_thread::yield();
@@ -2553,11 +2684,13 @@ struct BatchRenameLocalStampParts final
     const ULONGLONG closeElapsedMs = GetTickCount64() - closeStarted;
     state.Require(closeElapsedMs < SelfTest::ScaleTimeout(1000u),
                   std::format(L"Closing Batch Rename must not wait for a blocked provider worker; elapsedMs={}.", closeElapsedMs));
-    state.Require(GetBatchRenameWindowHandle() == nullptr, L"Batch Rename should be destroyed while its provider collection worker remains blocked.");
+    state.Require(GetBatchRenameWindowHandle() == nullptr,
+                  L"Batch Rename should be destroyed while its provider collection worker remains blocked.");
 
     static_cast<void>(SetEvent(gate.get()));
     const ULONGLONG workerCompletionDeadline = GetTickCount64() + SelfTest::ScaleTimeout(3000u);
-    while (CountBatchRenamePerfRowsWithMetric("batchrename.collect.us") == collectRowsBeforeBlockedClose && GetTickCount64() < workerCompletionDeadline)
+    while (CountBatchRenamePerfRowsWithMetric("batchrename.collect.us") == collectRowsBeforeBlockedClose &&
+           GetTickCount64() < workerCompletionDeadline)
     {
         PumpPendingMessages();
         std::this_thread::yield();
@@ -3843,7 +3976,7 @@ struct BatchRenameLocalStampParts final
         return false;
     }
 
-    const uint64_t refreshBefore           = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
+    const uint64_t refreshBefore = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
     const uint64_t admissionPerfRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.admit.us");
     g_folderWindow.CommandBatchRename(FolderWindow::Pane::Left);
     const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
@@ -3881,7 +4014,8 @@ struct BatchRenameLocalStampParts final
     return state.failure.empty();
 }
 
-[[nodiscard]] bool TestBatchRenameProductionRejectsSourceReplacementAfterAdmission([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+[[nodiscard]] bool TestBatchRenameProductionRejectsSourceReplacementAfterAdmission([[maybe_unused]] HWND mainWindow,
+                                                                                   CaseState& state) noexcept
 {
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
     state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
@@ -3932,7 +4066,8 @@ struct BatchRenameLocalStampParts final
 
     g_folderWindow.CommandBatchRename(FolderWindow::Pane::Left);
     const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
-    state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Pane command should open Batch Rename for source-replacement testing.");
+    state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE,
+                  L"Pane command should open Batch Rename for source-replacement testing.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
     {
         return false;
@@ -3949,8 +4084,8 @@ struct BatchRenameLocalStampParts final
         return false;
     }
 
-    const std::filesystem::path source      = root / L"source.batch";
-    const std::filesystem::path original    = root / L"source-original.batch";
+    const std::filesystem::path source = root / L"source.batch";
+    const std::filesystem::path original = root / L"source-original.batch";
     const std::filesystem::path destination = root / L"source-replacement.batch";
     std::atomic<bool> pauseObserved{false};
     std::atomic<bool> replacementSucceeded{false};
@@ -3963,7 +4098,8 @@ struct BatchRenameLocalStampParts final
     std::jthread replacementThread([&](std::stop_token stopToken) noexcept
     {
         const ULONGLONG waitStarted = GetTickCount64();
-        while (! stopToken.stop_requested() && ! HasFileOpsBatchRenameBeforeExecutionPauseEnteredForSelfTest() && GetTickCount64() - waitStarted < 5'000ull)
+        while (! stopToken.stop_requested() && ! HasFileOpsBatchRenameBeforeExecutionPauseEnteredForSelfTest() &&
+               GetTickCount64() - waitStarted < 5'000ull)
         {
             Sleep(1u);
         }
@@ -3972,32 +4108,40 @@ struct BatchRenameLocalStampParts final
             pauseObserved.store(true, std::memory_order_release);
             std::error_code renameEc;
             std::filesystem::rename(source, original, renameEc);
-            replacementSucceeded.store(! renameEc && SelfTest::WriteTextFile(source, "replacement object"), std::memory_order_release);
+            replacementSucceeded.store(
+                ! renameEc && SelfTest::WriteTextFile(source, "replacement object"), std::memory_order_release);
         }
         ReleaseFileOpsBatchRenameBeforeExecutionPauseForSelfTest();
     });
 
     const HRESULT executeHr = DebugExecuteBatchRenameWindow();
     replacementThread.join();
-    state.Require(pauseObserved.load(std::memory_order_acquire), L"Batch Rename source-replacement test should reach the post-admission execution pause.");
-    state.Require(replacementSucceeded.load(std::memory_order_acquire), L"Batch Rename source-replacement test should replace the admitted source object.");
+    state.Require(pauseObserved.load(std::memory_order_acquire),
+                  L"Batch Rename source-replacement test should reach the post-admission execution pause.");
+    state.Require(replacementSucceeded.load(std::memory_order_acquire),
+                  L"Batch Rename source-replacement test should replace the admitted source object.");
     state.Require(executeHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH),
-                  std::format(L"Batch Rename should reject a replaced source with ERROR_REVISION_MISMATCH: 0x{:08X}.", static_cast<unsigned long>(executeHr)));
+                  std::format(L"Batch Rename should reject a replaced source with ERROR_REVISION_MISMATCH: 0x{:08X}.",
+                              static_cast<unsigned long>(executeHr)));
     state.Require(SelfTest::PathExists(source), L"Batch Rename should retain the replacement object at the admitted source path.");
     state.Require(SelfTest::PathExists(original), L"Batch Rename should retain the originally admitted object under its raced-away name.");
     state.Require(! SelfTest::PathExists(destination), L"Batch Rename should not publish a destination after source identity changes.");
 
     fileOps->CollectCompletedTasks(summaries);
-    const auto completed =
-        std::ranges::find_if(summaries, [&](const auto& summary) noexcept { return summary.taskId > lastTaskId && summary.operation == FILESYSTEM_RENAME; });
-    state.Require(completed != summaries.end(), L"Batch Rename should retain an ordinary completed task card for a production identity failure.");
+    const auto completed = std::ranges::find_if(summaries, [&](const auto& summary) noexcept
+    {
+        return summary.taskId > lastTaskId && summary.operation == FILESYSTEM_RENAME;
+    });
+    state.Require(completed != summaries.end(),
+                  L"Batch Rename should retain an ordinary completed task card for a production identity failure.");
     if (completed != summaries.end())
     {
         state.Require(completed->resultHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH),
                       L"Batch Rename completed task should preserve the source identity failure.");
         state.Require(completed->totalItems == 1u && completed->completedItems == 0u,
                       L"Batch Rename identity failure should report one retained, uncompleted row.");
-        state.Require(completed->publishedItemCount == 0u && completed->removedSourceCount == 0u && completed->retainedSourceCount == 1u,
+        state.Require(completed->publishedItemCount == 0u && completed->removedSourceCount == 0u &&
+                          completed->retainedSourceCount == 1u,
                       L"Batch Rename identity failure should report no publication/removal and one retained source.");
     }
 
@@ -4815,11 +4959,13 @@ struct BatchRenameLocalStampParts final
 
     const HRESULT executeHr = DebugExecuteBatchRenameWindow();
     state.Require(executeHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
-                  std::format(L"Unsupported central Batch Rename mutation should fail closed, hr=0x{:08X}.", static_cast<unsigned long>(executeHr)));
+                  std::format(L"Unsupported central Batch Rename mutation should fail closed, hr=0x{:08X}.",
+                              static_cast<unsigned long>(executeHr)));
     state.Require(renameItemsCalls.load(std::memory_order_relaxed) == 2u,
                   std::format(L"Unsupported central Batch Rename mutation should be attempted once per independent row; saw {} calls.",
                               renameItemsCalls.load(std::memory_order_relaxed)));
-    state.Require(renameItemCalls.load(std::memory_order_relaxed) == 0u, L"Batch Rename must not fall back to a direct provider RenameItem bypass.");
+    state.Require(renameItemCalls.load(std::memory_order_relaxed) == 0u,
+                  L"Batch Rename must not fall back to a direct provider RenameItem bypass.");
 
     state.Require(std::filesystem::exists(root / L"first.txt"), L"Fail-closed execution should preserve first source path.");
     state.Require(std::filesystem::exists(root / L"second.txt"), L"Fail-closed execution should preserve second source path.");
@@ -5312,8 +5458,8 @@ struct BatchRenameLocalStampParts final
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create Batch Rename legacy-sibling root.");
     state.Require(SelfTest::WriteTextFile(source, "alpha"), L"Failed to create Batch Rename legacy-sibling input.");
     {
-        const wil::unique_hfile legacy(
-            CreateFileW(legacySibling.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_DELETE, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
+        const wil::unique_hfile legacy(CreateFileW(
+            legacySibling.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_DELETE, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
         state.Require(static_cast<bool>(legacy), L"Failed to create the trailing-dot legacy sibling through the extended prefix.");
     }
     if (! state.failure.empty())
@@ -5349,7 +5495,8 @@ struct BatchRenameLocalStampParts final
     context.initialPaths    = {source};
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-legacy-sibling-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open beside a legacy-named sibling.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
+                  L"Batch Rename window should open beside a legacy-named sibling.");
 
     const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename legacy-sibling test window should become visible.");
@@ -5365,9 +5512,10 @@ struct BatchRenameLocalStampParts final
 
     BatchRenameDebugSnapshot snapshot{};
     state.Require(DebugGetBatchRenameWindowSnapshot(snapshot), L"Batch Rename legacy-sibling preview should be available.");
-    state.Require(snapshot.newNames == std::vector<std::wstring>{L"renamed_001.txt"}, L"Legacy-sibling preview should propose the expected new name.");
-    const bool probeFailed =
-        std::ranges::any_of(snapshot.newNameTooltips, [](const std::wstring& tooltip) noexcept { return tooltip.contains(L"name_destination_probe_failed"); });
+    state.Require(snapshot.newNames == std::vector<std::wstring>{L"renamed_001.txt"},
+                  L"Legacy-sibling preview should propose the expected new name.");
+    const bool probeFailed = std::ranges::any_of(snapshot.newNameTooltips, [](const std::wstring& tooltip) noexcept
+    { return tooltip.contains(L"name_destination_probe_failed"); });
     state.Require(! probeFailed, L"A sibling the provider cannot key must not fail the parent listing for every row.");
     state.Require(snapshot.renameButtonEnabled, L"Legacy-sibling preview must remain executable.");
 
@@ -6193,7 +6341,8 @@ private:
 
     rules.nameTemplate       = L"same{ext}";
     const Plan duplicatePlan = BuildPlan({duplicate, duplicateCase}, rules);
-    state.Require(duplicatePlan.stats.errorRows == 0u, L"The transform engine must leave duplicate-target policy to the typed provider preview stage.");
+    state.Require(duplicatePlan.stats.errorRows == 0u,
+                  L"The transform engine must leave duplicate-target policy to the typed provider preview stage.");
 
     rules.nameTemplate          = L"{unknown}";
     const Plan unknownMacroPlan = BuildPlan({alpha}, rules);
@@ -6219,12 +6368,13 @@ private:
     second.sourcePath = L"C:\\root\\second.txt";
 
     Rules rules{};
-    rules.mode        = Mode::Manual;
+    rules.mode = Mode::Manual;
     rules.manualNames = {L"A.txt", L"a.txt"};
 
     const FileSystemPathIdentity caseInsensitive = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem();
     const Plan caseInsensitivePlan               = BuildPlan({first, second}, rules, caseInsensitive);
-    state.Require(caseInsensitivePlan.stats.errorRows == 0u, L"Provider collision keys, not the transform engine path profile, own sibling target collisions.");
+    state.Require(caseInsensitivePlan.stats.errorRows == 0u,
+                  L"Provider collision keys, not the transform engine path profile, own sibling target collisions.");
 
     FileSystemPathIdentity caseSensitive = caseInsensitive;
     caseSensitive.componentComparison    = FileSystemPathComponentComparison::OrdinalCaseSensitive;
@@ -6232,8 +6382,8 @@ private:
     state.Require(caseSensitivePlan.stats.errorRows == 0u, L"Case-sensitive provider identity should allow sibling targets that differ only by case.");
 
     Target mixed{};
-    mixed.sourcePath = L"C:\\root\\Readme.txt";
-    rules.mode       = Mode::Rules;
+    mixed.sourcePath         = L"C:\\root\\Readme.txt";
+    rules.mode               = Mode::Rules;
     rules.manualNames.clear();
     rules.nameTemplate       = L"{name}";
     rules.fileNameCaseStyle  = CaseTransform::Upper;
@@ -6277,7 +6427,8 @@ private:
                       L"ordinalIgnoreCase profile should normalize every accepted separator before path comparison.");
 
         std::wstring providerParent;
-        state.Require(TryGetFileSystemParentPath(ignoreCase.value(), L"C:\\root/Alpha\\Leaf.txt", providerParent) && providerParent == L"C:\\root/Alpha",
+        state.Require(TryGetFileSystemParentPath(ignoreCase.value(), L"C:\\root/Alpha\\Leaf.txt", providerParent) &&
+                          providerParent == L"C:\\root/Alpha",
                       L"provider parent derivation should honor every accepted separator without rewriting the retained parent text.");
         state.Require(TryGetFileSystemParentPath(ignoreCase.value(), L"C:\\root\\", providerParent) && providerParent == L"C:\\",
                       L"provider parent derivation should trim a trailing separator and retain the local drive root.");
@@ -6286,7 +6437,8 @@ private:
         state.Require(TryGetFileSystemParentPath(ignoreCase.value(), L"\\\\server\\share\\dir\\leaf.txt", providerParent) &&
                           providerParent == L"\\\\server\\share\\dir",
                       L"provider parent derivation should walk UNC paths like any other path below the share root.");
-        state.Require(TryGetFileSystemParentPath(ignoreCase.value(), L"\\\\server\\share\\dir", providerParent) && providerParent == L"\\\\server\\share",
+        state.Require(TryGetFileSystemParentPath(ignoreCase.value(), L"\\\\server\\share\\dir", providerParent) &&
+                          providerParent == L"\\\\server\\share",
                       L"a direct child of a UNC share should report the share root as its parent.");
         state.Require(! TryGetFileSystemParentPath(ignoreCase.value(), L"\\\\server\\share", providerParent) &&
                           ! TryGetFileSystemParentPath(ignoreCase.value(), L"\\\\server\\share\\", providerParent),
@@ -6295,11 +6447,14 @@ private:
                       L"an extended UNC share root has no parent either.");
 
         std::wstring providerLeaf;
-        state.Require(TryGetFileSystemLeafName(ignoreCase.value(), L"C:\\root/Alpha\\Leaf.txt", providerLeaf) && providerLeaf == L"Leaf.txt",
+        state.Require(TryGetFileSystemLeafName(ignoreCase.value(), L"C:\\root/Alpha\\Leaf.txt", providerLeaf) &&
+                          providerLeaf == L"Leaf.txt",
                       L"provider leaf derivation should honor every accepted separator.");
-        state.Require(TryGetFileSystemLeafName(ignoreCase.value(), L"C:\\root\\folder\\", providerLeaf) && providerLeaf == L"folder",
+        state.Require(TryGetFileSystemLeafName(ignoreCase.value(), L"C:\\root\\folder\\", providerLeaf) &&
+                          providerLeaf == L"folder",
                       L"provider leaf derivation should trim trailing accepted separators.");
-        state.Require(! TryGetFileSystemLeafName(ignoreCase.value(), L"\\", providerLeaf), L"a provider root should not produce an empty leaf.");
+        state.Require(! TryGetFileSystemLeafName(ignoreCase.value(), L"\\", providerLeaf),
+                      L"a provider root should not produce an empty leaf.");
 
         std::wstring providerRelative;
         state.Require(TryGetFileSystemRelativePath(ignoreCase.value(), L"C:\\", L"C:\\Root\\Leaf.txt", providerRelative) &&
@@ -6308,7 +6463,8 @@ private:
         state.Require(TryGetFileSystemRelativePath(ignoreCase.value(), L"C:\\Root", L"c:/root/Child/Leaf.txt", providerRelative) &&
                           providerRelative == L"Child\\Leaf.txt",
                       L"provider-relative derivation should honor provider case and separator identity.");
-        state.Require(TryGetFileSystemRelativePath(ignoreCase.value(), L"C:\\Root", L"c:/root", providerRelative) && providerRelative.empty(),
+        state.Require(TryGetFileSystemRelativePath(ignoreCase.value(), L"C:\\Root", L"c:/root", providerRelative) &&
+                          providerRelative.empty(),
                       L"provider-relative derivation should represent the root itself with an empty path.");
         state.Require(! TryGetFileSystemRelativePath(ignoreCase.value(), L"C:\\Root", L"C:\\Outside\\Leaf.txt", providerRelative),
                       L"provider-relative derivation should reject a path outside the requested root.");
@@ -6388,7 +6544,8 @@ private:
 }
 )json";
 
-    const std::optional<FileSystemPathIdentity> caseSensitive = ParseDiagnosticFileSystemPathIdentity(kCaseSensitiveJson, L"test-sensitive");
+    const std::optional<FileSystemPathIdentity> caseSensitive =
+        ParseDiagnosticFileSystemPathIdentity(kCaseSensitiveJson, L"test-sensitive");
     state.Require(caseSensitive.has_value(), L"Valid ordinalCaseSensitive path identity should parse.");
     if (caseSensitive.has_value())
     {
@@ -6400,9 +6557,11 @@ private:
                       L"ordinalCaseSensitive profile should not accept separators the provider did not advertise.");
 
         std::wstring providerParent;
-        state.Require(TryGetFileSystemParentPath(caseSensitive.value(), L"//user@host:2121/dir", providerParent) && providerParent == L"//user@host:2121",
+        state.Require(TryGetFileSystemParentPath(caseSensitive.value(), L"//user@host:2121/dir", providerParent) &&
+                          providerParent == L"//user@host:2121",
                       L"a slash-only provider path that starts with two separators is not a UNC root; its parent is the endpoint component (R0f-Curl).");
-        state.Require(TryGetFileSystemParentPath(caseSensitive.value(), L"/bucket/folder/item.txt", providerParent) && providerParent == L"/bucket/folder",
+        state.Require(TryGetFileSystemParentPath(caseSensitive.value(), L"/bucket/folder/item.txt", providerParent) &&
+                          providerParent == L"/bucket/folder",
                       L"provider parent derivation should use a slash-only profile.");
         state.Require(TryGetFileSystemParentPath(caseSensitive.value(), L"/bucket/folder/", providerParent) && providerParent == L"/bucket",
                       L"provider parent derivation should treat a trailing provider separator as directory syntax.");
@@ -6410,9 +6569,11 @@ private:
                       L"provider parent derivation should reject host separators absent from the path profile.");
 
         std::wstring providerLeaf;
-        state.Require(TryGetFileSystemLeafName(caseSensitive.value(), L"/bucket/folder/item.txt", providerLeaf) && providerLeaf == L"item.txt",
+        state.Require(TryGetFileSystemLeafName(caseSensitive.value(), L"/bucket/folder/item.txt", providerLeaf) &&
+                          providerLeaf == L"item.txt",
                       L"provider leaf derivation should use the slash-only path profile.");
-        state.Require(TryGetFileSystemLeafName(caseSensitive.value(), L"bucket\\folder\\item.txt", providerLeaf) && providerLeaf == L"bucket\\folder\\item.txt",
+        state.Require(TryGetFileSystemLeafName(caseSensitive.value(), L"bucket\\folder\\item.txt", providerLeaf) &&
+                          providerLeaf == L"bucket\\folder\\item.txt",
                       L"provider leaf derivation must not reinterpret an unadvertised host separator.");
 
         std::wstring providerRelative;
@@ -6456,7 +6617,7 @@ private:
 }
 )json";
     state.Require(! ParseDiagnosticFileSystemPathIdentity(kUnknownJson, L"test-unknown").has_value(),
-                  L"Plugin-emitted names.comparison=unknown should be rejected as a contract violation.");
+                   L"Plugin-emitted names.comparison=unknown should be rejected as a contract violation.");
 
     constexpr std::string_view kUnstableJson = R"json(
 {
@@ -6683,12 +6844,12 @@ private:
     {
         return false;
     }
-    context.pluginId        = L"builtin/file-system";
-    context.pluginShortId   = L"local";
+    context.pluginId = L"builtin/file-system";
+    context.pluginShortId = L"local";
     context.instanceContext = L"batch-rename-manual-line-validation";
-    context.rootPluginPath  = root;
+    context.rootPluginPath = root;
 
-    rules.manualNames    = {L"uno.txt", L""};
+    rules.manualNames = {L"uno.txt", L""};
     const Plan emptyLine = DebugBuildBatchRenamePlanForContextForTests(context, {first, second}, rules);
     state.Require(emptyLine.stats.errorRows == 1u, L"Manual mode should block empty target names.");
 
@@ -7073,7 +7234,7 @@ private:
     for (const std::wstring& proposedName : providerOwnedNames)
     {
         providerOwnedRules.manualNames = {proposedName};
-        const Plan providerOwnedPlan   = BuildPlan({providerOwnedTarget}, providerOwnedRules);
+        const Plan providerOwnedPlan = BuildPlan({providerOwnedTarget}, providerOwnedRules);
         state.Require(providerOwnedPlan.rows.size() == 1u && providerOwnedPlan.stats.errorRows == 0u,
                       L"The transform engine must not impose Windows separator, character, or length policy on provider-owned names.");
     }
@@ -7144,7 +7305,7 @@ private:
 
     for (const std::wstring_view proposedName : {L"CON.txt", L"NUL", L"com1.log", L"CONIN$.txt", L"conout$", L"CONSOLE.txt"})
     {
-        manualRules.manualNames      = {std::wstring(proposedName)};
+        manualRules.manualNames = {std::wstring(proposedName)};
         const Plan providerOwnedPlan = BuildPlan({source}, manualRules);
         state.Require(providerOwnedPlan.rows.size() == 1u && providerOwnedPlan.stats.errorRows == 0u,
                       L"DOS device-name policy belongs to the active provider, not the transform engine.");
@@ -7194,7 +7355,7 @@ private:
     {
         return false;
     }
-    const auto cleanupFiles                         = wil::scope_exit([providerRoot]() noexcept
+    const auto cleanupFiles = wil::scope_exit([providerRoot]() noexcept
     {
         std::error_code ec;
         std::filesystem::remove_all(providerRoot, ec);
@@ -7227,16 +7388,16 @@ private:
         targets.push_back(std::move(target));
     }
 
-    const uint64_t buildPerfRowsBefore        = CountBatchRenamePerfRowsWithMetric("batchrename.preview.build_plan_us");
-    const uint64_t countPerfRowsBefore        = CountBatchRenamePerfRowsWithMetric("batchrename.preview.rows");
-    const uint64_t changedPerfRowsBefore      = CountBatchRenamePerfRowsWithMetric("batchrename.preview.changed");
-    const uint64_t errorPerfRowsBefore        = CountBatchRenamePerfRowsWithMetric("batchrename.preview.errors");
-    const uint64_t providerPerfRowsBefore     = CountBatchRenamePerfRowsWithMetric("batchrename.preview.provider_name_validation.us");
-    const uint64_t providerQueryRowsBefore    = CountBatchRenamePerfRowsWithMetric("batchrename.preview.provider_name_queries");
+    const uint64_t buildPerfRowsBefore   = CountBatchRenamePerfRowsWithMetric("batchrename.preview.build_plan_us");
+    const uint64_t countPerfRowsBefore   = CountBatchRenamePerfRowsWithMetric("batchrename.preview.rows");
+    const uint64_t changedPerfRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.preview.changed");
+    const uint64_t errorPerfRowsBefore   = CountBatchRenamePerfRowsWithMetric("batchrename.preview.errors");
+    const uint64_t providerPerfRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.preview.provider_name_validation.us");
+    const uint64_t providerQueryRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.preview.provider_name_queries");
     const uint64_t providerFallbackRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.preview.provider_name_arena_fallbacks");
     const uint64_t providerRejectedRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.preview.provider_name_rejected");
     const uint64_t providerKeyBytesRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.preview.provider_name_key_bytes");
-    const uint64_t providerListingRowsBefore  = CountBatchRenamePerfRowsWithMetric("batchrename.preview.destination_directory_listings");
+    const uint64_t providerListingRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.preview.destination_directory_listings");
 
     Rules rules{};
     rules.nameTemplate       = L"R\u00E9sum\u00E9_{counter:00000}_{stem}_{date:yyyyMMdd}_{time:HHmmss}{ext}";
@@ -7248,12 +7409,12 @@ private:
     rules.extensionCaseStyle = CaseTransform::Lower;
 
     BatchRenamePaneContext context{};
-    context.fileSystem      = scriptedFileSystem;
-    context.pluginId        = L"builtin/file-system";
-    context.pluginShortId   = L"local";
+    context.fileSystem = scriptedFileSystem;
+    context.pluginId = L"builtin/file-system";
+    context.pluginShortId = L"local";
     context.instanceContext = L"batch-rename-large-provider-preview";
-    context.rootPluginPath  = providerRoot;
-    const Plan plan         = DebugBuildBatchRenamePlanForContextForTests(context, targets, rules);
+    context.rootPluginPath = providerRoot;
+    const Plan plan = DebugBuildBatchRenamePlanForContextForTests(context, targets, rules);
 
     state.Require(plan.rows.size() == kTargetCount, L"Large Batch Rename preview should preserve one row per synthetic target.");
     state.Require(plan.stats.totalRows == kTargetCount, L"Large Batch Rename preview stats should count every synthetic target.");
@@ -7281,16 +7442,16 @@ private:
                       L"Large preview last row should keep deterministic counter and local-time expansion.");
     }
 
-    const uint64_t buildPerfRowsAfter        = CountBatchRenamePerfRowsWithMetric("batchrename.preview.build_plan_us");
-    const uint64_t countPerfRowsAfter        = CountBatchRenamePerfRowsWithMetric("batchrename.preview.rows");
-    const uint64_t changedPerfRowsAfter      = CountBatchRenamePerfRowsWithMetric("batchrename.preview.changed");
-    const uint64_t errorPerfRowsAfter        = CountBatchRenamePerfRowsWithMetric("batchrename.preview.errors");
-    const uint64_t providerPerfRowsAfter     = CountBatchRenamePerfRowsWithMetric("batchrename.preview.provider_name_validation.us");
-    const uint64_t providerQueryRowsAfter    = CountBatchRenamePerfRowsWithMetric("batchrename.preview.provider_name_queries");
+    const uint64_t buildPerfRowsAfter   = CountBatchRenamePerfRowsWithMetric("batchrename.preview.build_plan_us");
+    const uint64_t countPerfRowsAfter   = CountBatchRenamePerfRowsWithMetric("batchrename.preview.rows");
+    const uint64_t changedPerfRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.preview.changed");
+    const uint64_t errorPerfRowsAfter   = CountBatchRenamePerfRowsWithMetric("batchrename.preview.errors");
+    const uint64_t providerPerfRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.preview.provider_name_validation.us");
+    const uint64_t providerQueryRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.preview.provider_name_queries");
     const uint64_t providerFallbackRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.preview.provider_name_arena_fallbacks");
     const uint64_t providerRejectedRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.preview.provider_name_rejected");
     const uint64_t providerKeyBytesRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.preview.provider_name_key_bytes");
-    const uint64_t providerListingRowsAfter  = CountBatchRenamePerfRowsWithMetric("batchrename.preview.destination_directory_listings");
+    const uint64_t providerListingRowsAfter = CountBatchRenamePerfRowsWithMetric("batchrename.preview.destination_directory_listings");
     state.Require(buildPerfRowsAfter > buildPerfRowsBefore,
                   std::format(L"Large Batch Rename preview should emit batchrename.preview.build_plan_us perf metrics; before={} after={}.",
                               buildPerfRowsBefore,
@@ -7319,16 +7480,17 @@ private:
         TryReadMaxBatchRenamePerfUintField("batchrename.preview.provider_name_rejected", "value0", providerRejectedRowsBefore);
     const std::optional<uint64_t> maxProviderListings =
         TryReadMaxBatchRenamePerfUintField("batchrename.preview.destination_directory_listings", "value0", providerListingRowsBefore);
-    state.Require(
-        maxProviderQueries.has_value() && maxProviderQueries.value() == kTargetCount * 2u,
-        std::format(L"Large typed-provider preview should issue exactly two child-name contracts per row; queries={}.", maxProviderQueries.value_or(0u)));
+    state.Require(maxProviderQueries.has_value() && maxProviderQueries.value() == kTargetCount * 2u,
+                  std::format(L"Large typed-provider preview should issue exactly two child-name contracts per row; queries={}.",
+                              maxProviderQueries.value_or(0u)));
     state.Require(maxProviderFallbacks.has_value() && maxProviderFallbacks.value() == 0u,
                   std::format(L"Large typed-provider preview should not require arena fallback; fallbacks={}.",
                               maxProviderFallbacks.value_or((std::numeric_limits<uint64_t>::max)())));
     state.Require(maxProviderRejected.has_value() && maxProviderRejected.value() == 0u,
                   std::format(L"Large typed-provider preview should reject no scripted rows; rejected={}.",
                               maxProviderRejected.value_or((std::numeric_limits<uint64_t>::max)())));
-    state.Require(maxProviderListings.has_value() && maxProviderListings.value() == 1u && readDirectoryCalls.load(std::memory_order_relaxed) == 1u,
+    state.Require(maxProviderListings.has_value() && maxProviderListings.value() == 1u &&
+                      readDirectoryCalls.load(std::memory_order_relaxed) == 1u,
                   std::format(L"Large typed-provider preview should enumerate its one parent exactly once; metric={} calls={}.",
                               maxProviderListings.value_or(0u),
                               readDirectoryCalls.load(std::memory_order_relaxed)));
@@ -7354,10 +7516,10 @@ private:
 {
     constexpr size_t kNameCount       = 65'536u;
     constexpr size_t kComponentLength = 240u;
-    constexpr uint64_t kMaximumBytes  = 64ull * 1024ull * 1024ull;
+    constexpr uint64_t kMaximumBytes   = 64ull * 1024ull * 1024ull;
 
     uint64_t retainedBytes = 0u;
-    const bool built       = DebugMeasureBatchRenameCollisionNameIndexForTests(kNameCount, kComponentLength, retainedBytes);
+    const bool built = DebugMeasureBatchRenameCollisionNameIndexForTests(kNameCount, kComponentLength, retainedBytes);
     state.Require(built, L"Batch Rename collision index should preserve folded and exact component semantics at the deterministic bound.");
     state.Require(retainedBytes <= kMaximumBytes,
                   std::format(L"Batch Rename collision index retained {} bytes; maximum is {} bytes.", retainedBytes, kMaximumBytes));
@@ -7422,7 +7584,8 @@ private:
     const uint64_t validationRowsAfter  = CountBatchRenamePerfRowsWithMetric("batchrename.validation.us");
 
     state.Require(plan.rows.size() == 2u, L"Validation perf test should keep one row per target.");
-    state.Require(plan.stats.errorRows == 0u, L"Transform validation must leave duplicate-target policy to the typed-provider preview stage.");
+    state.Require(plan.stats.errorRows == 0u,
+                  L"Transform validation must leave duplicate-target policy to the typed-provider preview stage.");
     state.Require(
         validationRowsAfter > validationRowsBefore,
         std::format(L"Batch Rename preview validation should emit batchrename.validation.us; before={} after={}.", validationRowsBefore, validationRowsAfter));
@@ -7459,7 +7622,7 @@ void RecordBatchRenameExecutionProgress(void* context, const uint64_t completedI
 
 struct BatchRenameExecutionMutationTestContext final
 {
-    IFileSystem* fileSystem                 = nullptr;
+    IFileSystem* fileSystem = nullptr;
     const std::atomic_bool* cancelRequested = nullptr;
 };
 
@@ -7475,9 +7638,9 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     }
     const std::wstring newName = destinationPath.filename().native();
     const FileSystemRenamePair pair{
-        .sizeBytes  = sizeof(FileSystemRenamePair),
+        .sizeBytes = sizeof(FileSystemRenamePair),
         .sourcePath = sourcePath.c_str(),
-        .newName    = newName.c_str(),
+        .newName = newName.c_str(),
     };
     FileSystemOptions options{};
     options.sizeBytes = sizeof(options);
@@ -7551,11 +7714,11 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
         sortOps(ops);
         cancelRequested.store(false, std::memory_order_release);
         BatchRenameExecutionMutationTestContext mutation{
-            .fileSystem      = fs.get(),
+            .fileSystem = fs.get(),
             .cancelRequested = &cancelRequested,
         };
         options.mutationCallback = &ApplyBatchRenameExecutionMutationForTest;
-        options.mutationContext  = &mutation;
+        options.mutationContext = &mutation;
         return RunBatchRenameExecutionEngine(cancelRequested, pathIdentity, std::move(ops), options);
     };
 
@@ -7579,11 +7742,14 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     BatchRenameExecutionResult swapResult =
         runEngine(swapFs, {makeOp(swapRoot / L"swap-a.txt", L"swap-b.txt"), makeOp(swapRoot / L"swap-b.txt", L"swap-a.txt")}, swapOptions);
     state.Require(swapResult.hr == HRESULT_FROM_WIN32(ERROR_CIRCULAR_DEPENDENCY),
-                  std::format(L"Direct engine swap should fail closed before mutation: 0x{:08X}.", static_cast<unsigned long>(swapResult.hr)));
+                  std::format(L"Direct engine swap should fail closed before mutation: 0x{:08X}.",
+                              static_cast<unsigned long>(swapResult.hr)));
     state.Require(swapResult.report.completedRows == 0u && swapResult.report.undoEntries.empty(),
                   L"Direct engine swap rejection must not report completed rows or undo entries.");
-    state.Require(swapRenameItemsCalls.load(std::memory_order_relaxed) == 0u, L"Direct engine swap rejection must not call the mutation provider.");
-    state.Require(ReadBatchRenameFileText(swapRoot / L"swap-a.txt") == "alpha-content" && ReadBatchRenameFileText(swapRoot / L"swap-b.txt") == "beta-content",
+    state.Require(swapRenameItemsCalls.load(std::memory_order_relaxed) == 0u,
+                  L"Direct engine swap rejection must not call the mutation provider.");
+    state.Require(ReadBatchRenameFileText(swapRoot / L"swap-a.txt") == "alpha-content" &&
+                      ReadBatchRenameFileText(swapRoot / L"swap-b.txt") == "beta-content",
                   L"Direct engine swap rejection must leave both source objects unchanged.");
     state.Require(swapProgress.events.empty(), L"Direct engine swap rejection must not publish mutation progress.");
 
@@ -7605,11 +7771,14 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
                                                         makeOp(cycleRoot / L"cycle-b.txt", L"cycle-c.txt"),
                                                         makeOp(cycleRoot / L"cycle-c.txt", L"cycle-a.txt")});
     state.Require(cycleResult.hr == HRESULT_FROM_WIN32(ERROR_CIRCULAR_DEPENDENCY),
-                  std::format(L"Direct engine three-cycle should fail closed before mutation: 0x{:08X}.", static_cast<unsigned long>(cycleResult.hr)));
+                  std::format(L"Direct engine three-cycle should fail closed before mutation: 0x{:08X}.",
+                              static_cast<unsigned long>(cycleResult.hr)));
     state.Require(cycleResult.report.completedRows == 0u && cycleResult.report.undoEntries.empty(),
                   L"Direct engine three-cycle rejection must not report completed rows or undo entries.");
-    state.Require(cycleRenameItemsCalls.load(std::memory_order_relaxed) == 0u, L"Direct engine three-cycle rejection must not call the mutation provider.");
-    state.Require(ReadBatchRenameFileText(cycleRoot / L"cycle-a.txt") == "a" && ReadBatchRenameFileText(cycleRoot / L"cycle-b.txt") == "b" &&
+    state.Require(cycleRenameItemsCalls.load(std::memory_order_relaxed) == 0u,
+                  L"Direct engine three-cycle rejection must not call the mutation provider.");
+    state.Require(ReadBatchRenameFileText(cycleRoot / L"cycle-a.txt") == "a" &&
+                      ReadBatchRenameFileText(cycleRoot / L"cycle-b.txt") == "b" &&
                       ReadBatchRenameFileText(cycleRoot / L"cycle-c.txt") == "c",
                   L"Direct engine three-cycle rejection must leave every source object unchanged.");
 
@@ -7628,8 +7797,10 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
         return false;
     }
 
-    BatchRenameExecutionResult partialResult = runEngine(
-        partialFs, {makeOp(partialRoot / L"successful-first.txt", L"successful-first-renamed.txt"), makeOp(partialRoot / L"fail.txt", L"fail-renamed.txt")});
+    BatchRenameExecutionResult partialResult =
+        runEngine(partialFs,
+                  {makeOp(partialRoot / L"successful-first.txt", L"successful-first-renamed.txt"),
+                   makeOp(partialRoot / L"fail.txt", L"fail-renamed.txt")});
     state.Require(partialResult.hr == failHr,
                   std::format(L"Direct engine partial failure should surface access denied; saw 0x{:08X}.", static_cast<unsigned long>(partialResult.hr)));
     state.Require(partialResult.report.completedRows == 1u && partialResult.report.failedRows == 1u,
@@ -7669,8 +7840,8 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
 
 [[nodiscard]] bool TestBatchRenameExecutionEngineLargeIndependentPerf(CaseState& state) noexcept
 {
-    constexpr size_t kOperationCount           = 1'024u;
-    const uint64_t metricRowsBefore            = CountBatchRenamePerfRowsWithMetric("batchrename.execute.us");
+    constexpr size_t kOperationCount = 1'024u;
+    const uint64_t metricRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.execute.us");
     const wil::com_ptr<IFileSystem> fileSystem = GetBatchRenameLocalFileSystem(state);
     state.Require(fileSystem != nullptr, L"Large independent Batch Rename scheduler scenario requires Local File System.");
     if (! fileSystem)
@@ -7682,16 +7853,17 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     operations.reserve(kOperationCount);
     for (size_t index = 0u; index < kOperationCount; ++index)
     {
-        const std::filesystem::path source = std::filesystem::path(L"C:\\batch-rename-execution-perf") / std::format(L"source-{0:04}.txt", index);
+        const std::filesystem::path source = std::filesystem::path(L"C:\\batch-rename-execution-perf") /
+                                             std::format(L"source-{0:04}.txt", index);
         BatchRenameExecutionOp operation{
             .originalSource = source,
-            .finalLeaf      = std::format(L"target-{0:04}.txt", index),
-            .depth          = PathDepthKey(source),
+            .finalLeaf = std::format(L"target-{0:04}.txt", index),
+            .depth = PathDepthKey(source),
         };
         const HRESULT providerFactsHr = PopulateBatchRenameExecutionProviderFactsForTest(fileSystem.get(), pathIdentity, operation);
-        state.Require(
-            SUCCEEDED(providerFactsHr),
-            std::format(L"Large independent Batch Rename scheduler provider-name setup failed: 0x{:08X}.", static_cast<unsigned long>(providerFactsHr)));
+        state.Require(SUCCEEDED(providerFactsHr),
+                      std::format(L"Large independent Batch Rename scheduler provider-name setup failed: 0x{:08X}.",
+                                  static_cast<unsigned long>(providerFactsHr)));
         operations.push_back(std::move(operation));
     }
     if (! state.failure.empty())
@@ -7700,7 +7872,10 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     }
 
     uint64_t mutationCount = 0u;
-    const auto mutation    = [](void* raw, size_t, const std::filesystem::path&, const std::filesystem::path&) noexcept -> HRESULT
+    const auto mutation = [](void* raw,
+                             size_t,
+                             const std::filesystem::path&,
+                             const std::filesystem::path&) noexcept -> HRESULT
     {
         if (raw == nullptr)
         {
@@ -7710,30 +7885,34 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
         return S_OK;
     };
     std::atomic_bool cancelRequested{false};
-    BatchRenameExecutionResult result = RunBatchRenameExecutionEngine(cancelRequested,
-                                                                      pathIdentity,
-                                                                      std::move(operations),
-                                                                      BatchRenameExecutionOptions{
-                                                                          .mutationCallback = mutation,
-                                                                          .mutationContext  = &mutationCount,
-                                                                      });
+    BatchRenameExecutionResult result = RunBatchRenameExecutionEngine(
+        cancelRequested,
+        pathIdentity,
+        std::move(operations),
+        BatchRenameExecutionOptions{
+            .mutationCallback = mutation,
+            .mutationContext = &mutationCount,
+        });
 
     state.Require(SUCCEEDED(result.hr),
-                  std::format(L"Large independent Batch Rename scheduler scenario should succeed: 0x{:08X}.", static_cast<unsigned long>(result.hr)));
+                  std::format(L"Large independent Batch Rename scheduler scenario should succeed: 0x{:08X}.",
+                              static_cast<unsigned long>(result.hr)));
     state.Require(result.report.completedRows == kOperationCount && result.report.failedRows == 0u && mutationCount == kOperationCount,
                   std::format(L"Large independent Batch Rename scheduler scenario should complete all {} rows; completed={}, failed={}, calls={}.",
                               kOperationCount,
                               result.report.completedRows,
                               result.report.failedRows,
                               mutationCount));
-    const std::optional<uint64_t> executionUs = TryReadMaxBatchRenamePerfDurationUs("batchrename.execute.us", metricRowsBefore);
+    const std::optional<uint64_t> executionUs =
+        TryReadMaxBatchRenamePerfDurationUs("batchrename.execute.us", metricRowsBefore);
     state.Require(executionUs.has_value(), L"Large independent Batch Rename scheduler scenario should emit batchrename.execute.us.");
     if (executionUs.has_value())
     {
         const uint64_t budgetUs = static_cast<uint64_t>(SelfTest::ScaleTimeout(5'000u)) * 1'000u;
-        state.Require(
-            executionUs.value() <= budgetUs,
-            std::format(L"Large independent Batch Rename scheduler exceeded the timeout-scaled budget: {} us > {} us.", executionUs.value(), budgetUs));
+        state.Require(executionUs.value() <= budgetUs,
+                      std::format(L"Large independent Batch Rename scheduler exceeded the timeout-scaled budget: {} us > {} us.",
+                                  executionUs.value(),
+                                  budgetUs));
     }
     return state.failure.empty();
 }
@@ -7753,7 +7932,8 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create Batch Rename cycle-preview root.");
     state.Require(SelfTest::WriteTextFile(root / L"cycle-a.txt", "alpha-content"), L"Failed to create first Batch Rename cycle input.");
     state.Require(SelfTest::WriteTextFile(root / L"cycle-b.txt", "beta-content"), L"Failed to create second Batch Rename cycle input.");
-    state.Require(SelfTest::WriteTextFile(root / L"independent.txt", "independent-content"), L"Failed to create independent Batch Rename input.");
+    state.Require(SelfTest::WriteTextFile(root / L"independent.txt", "independent-content"),
+                  L"Failed to create independent Batch Rename input.");
     if (! state.failure.empty())
     {
         return false;
@@ -7772,8 +7952,8 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     BatchRename::Target independent{};
     independent.sourcePath = root / L"independent.txt";
     BatchRename::Rules rules{};
-    rules.mode                                 = BatchRename::Mode::Manual;
-    rules.manualNames                          = {L"cycle-b.txt", L"cycle-a.txt", L"independent-renamed.txt"};
+    rules.mode        = BatchRename::Mode::Manual;
+    rules.manualNames = {L"cycle-b.txt", L"cycle-a.txt", L"independent-renamed.txt"};
     const wil::com_ptr<IFileSystem> fileSystem = GetBatchRenameLocalFileSystem(state);
     if (! fileSystem)
     {
@@ -7796,7 +7976,8 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     context.initialPaths    = {first.sourcePath, second.sourcePath, independent.sourcePath};
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-cycle-preview-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)), L"Batch Rename window should open for cycle-preview testing.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(context)),
+                  L"Batch Rename window should open for cycle-preview testing.");
     const HWND batchWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds(5000)));
     state.Require(batchWindow != nullptr && IsWindow(batchWindow) != FALSE, L"Batch Rename cycle-preview window should become visible.");
     if (! batchWindow || IsWindow(batchWindow) == FALSE)
@@ -7821,8 +8002,10 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
                   std::format(L"Cycle admission should reject the plan before mutation; saw 0x{:08X}.", static_cast<unsigned long>(executeHr)));
     state.Require(renameItemsCalls.load(std::memory_order_relaxed) == 0u,
                   std::format(L"Cycle preview/admission must not call RenameItems; saw {} calls.", renameItemsCalls.load(std::memory_order_relaxed)));
-    state.Require(ReadBatchRenameFileText(root / L"cycle-a.txt") == "alpha-content" && ReadBatchRenameFileText(root / L"cycle-b.txt") == "beta-content" &&
-                      ReadBatchRenameFileText(root / L"independent.txt") == "independent-content" && ! SelfTest::PathExists(root / L"independent-renamed.txt"),
+    state.Require(ReadBatchRenameFileText(root / L"cycle-a.txt") == "alpha-content" &&
+                      ReadBatchRenameFileText(root / L"cycle-b.txt") == "beta-content" &&
+                      ReadBatchRenameFileText(root / L"independent.txt") == "independent-content" &&
+                      ! SelfTest::PathExists(root / L"independent-renamed.txt"),
                   L"Cycle rejection must leave every selected path and byte unchanged.");
     return state.failure.empty();
 }
@@ -7830,7 +8013,7 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
 [[nodiscard]] bool TestBatchRenameAdmissionRejectsCycle(CaseState& state) noexcept
 {
     const FileSystemPathIdentity pathIdentity = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem();
-    const auto makeOp                         = [](const std::filesystem::path& source, std::wstring finalLeaf) noexcept
+    const auto makeOp = [](const std::filesystem::path& source, std::wstring finalLeaf) noexcept
     {
         return BatchRenameExecutionOp{
             .originalSource = source,
@@ -7846,16 +8029,21 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     state.Require(fileSystem != nullptr, L"Worker admission cycle test requires Local File System.");
     for (BatchRenameExecutionOp& operation : operations)
     {
-        const HRESULT providerFactsHr = PopulateBatchRenameExecutionProviderFactsForTest(fileSystem.get(), pathIdentity, operation);
+        const HRESULT providerFactsHr =
+            PopulateBatchRenameExecutionProviderFactsForTest(fileSystem.get(), pathIdentity, operation);
         state.Require(SUCCEEDED(providerFactsHr),
-                      std::format(L"Worker admission cycle provider-name setup failed: 0x{:08X}.", static_cast<unsigned long>(providerFactsHr)));
+                      std::format(L"Worker admission cycle provider-name setup failed: 0x{:08X}.",
+                                  static_cast<unsigned long>(providerFactsHr)));
     }
     if (! state.failure.empty())
     {
         return false;
     }
     uint64_t mutationCount = 0u;
-    const auto mutation    = [](void* raw, size_t, const std::filesystem::path&, const std::filesystem::path&) noexcept -> HRESULT
+    const auto mutation = [](void* raw,
+                             size_t,
+                             const std::filesystem::path&,
+                             const std::filesystem::path&) noexcept -> HRESULT
     {
         if (raw == nullptr)
         {
@@ -7865,18 +8053,20 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
         return S_OK;
     };
     std::atomic_bool cancelRequested{false};
-    BatchRenameExecutionResult result = RunBatchRenameExecutionEngine(cancelRequested,
-                                                                      pathIdentity,
-                                                                      std::move(operations),
-                                                                      BatchRenameExecutionOptions{
-                                                                          .mutationCallback = mutation,
-                                                                          .mutationContext  = &mutationCount,
-                                                                      });
-    const HRESULT expected            = HRESULT_FROM_WIN32(ERROR_CIRCULAR_DEPENDENCY);
-    state.Require(
-        result.hr == expected,
-        std::format(L"Worker admission should reject a dependency cycle with ERROR_CIRCULAR_DEPENDENCY; saw 0x{:08X}.", static_cast<unsigned long>(result.hr)));
-    state.Require(mutationCount == 0u, std::format(L"Worker admission must reject the full cycle before the first mutation; saw {} calls.", mutationCount));
+    BatchRenameExecutionResult result = RunBatchRenameExecutionEngine(
+        cancelRequested,
+        pathIdentity,
+        std::move(operations),
+        BatchRenameExecutionOptions{
+            .mutationCallback = mutation,
+            .mutationContext  = &mutationCount,
+        });
+    const HRESULT expected = HRESULT_FROM_WIN32(ERROR_CIRCULAR_DEPENDENCY);
+    state.Require(result.hr == expected,
+                  std::format(L"Worker admission should reject a dependency cycle with ERROR_CIRCULAR_DEPENDENCY; saw 0x{:08X}.",
+                              static_cast<unsigned long>(result.hr)));
+    state.Require(mutationCount == 0u,
+                  std::format(L"Worker admission must reject the full cycle before the first mutation; saw {} calls.", mutationCount));
     state.Require(result.report.completedRows == 0u && result.report.failedRows == 2u,
                   L"Rejected cycle admission should report zero completed rows and both rows failed.");
     return state.failure.empty();
@@ -7913,16 +8103,19 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
         state.Require(! source.empty(), std::format(L"Could not read retirement owner '{}'.", owner.native()));
         state.Require(source.find("BatchRenameRecovery") == std::string::npos,
                       std::format(L"Retired recovery authority remains referenced by '{}'.", owner.native()));
-        state.Require(source.find("ArtifactRecovery") == std::string::npos, std::format(L"Retired recovery UI remains referenced by '{}'.", owner.native()));
+        state.Require(source.find("ArtifactRecovery") == std::string::npos,
+                      std::format(L"Retired recovery UI remains referenced by '{}'.", owner.native()));
     }
 
     const std::string menus       = ReadBatchRenameFileText(productRoot / L"FolderView.Menus.cpp");
     const std::string interaction = ReadBatchRenameFileText(productRoot / L"FolderView.Interaction.cpp");
     state.Require(menus.find("CmdArtifactResume") == std::string::npos && menus.find("CmdArtifactRollBack") == std::string::npos,
                   L"FolderView must not offer Resume or Roll back for retired Batch Rename journals.");
-    state.Require(interaction.find("ArtifactRecoveryAction") == std::string::npos, L"FolderView must not dispatch retired Batch Rename recovery actions.");
+    state.Require(interaction.find("ArtifactRecoveryAction") == std::string::npos,
+                  L"FolderView must not dispatch retired Batch Rename recovery actions.");
     return state.failure.empty();
 }
+
 
 [[nodiscard]] bool TestBatchRenameWindowExecutesChainRename(HWND mainWindow, CaseState& state) noexcept
 {
@@ -8430,9 +8623,9 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     state.Require(SUCCEEDED(executeHr),
                   std::format(L"Identity-owned Batch Rename should use each exact mutation result rather than legacy provider item callbacks; saw 0x{:08X}.",
                               static_cast<unsigned long>(executeHr)));
-    state.Require(
-        renameItemsCalls.load(std::memory_order_relaxed) == 3u,
-        std::format(L"The compatibility test host should issue one exact mutation per row; saw {}.", renameItemsCalls.load(std::memory_order_relaxed)));
+    state.Require(renameItemsCalls.load(std::memory_order_relaxed) == 3u,
+                  std::format(L"The compatibility test host should issue one exact mutation per row; saw {}.",
+                              renameItemsCalls.load(std::memory_order_relaxed)));
 
     BatchRenameDebugSnapshot after{};
     state.Require(DebugGetBatchRenameWindowSnapshot(after), L"Batch Rename omitted-completion snapshot should be available after executing.");
@@ -8449,7 +8642,8 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
 
     state.Require(callbackCalls == 1u,
                   std::format(L"Omitted item completion should still invoke the success callback for confirmed rows; saw {} calls.", callbackCalls));
-    state.Require(callbackSources.size() == 3u && callbackTargets.size() == 3u, L"The engine success callback should report all three exact committed rows.");
+    state.Require(callbackSources.size() == 3u && callbackTargets.size() == 3u,
+                  L"The engine success callback should report all three exact committed rows.");
     state.Require(std::ranges::find(callbackSources, root / L"omit-b.txt") != callbackSources.end(),
                   L"Legacy provider callback omission must not hide an exact committed row from engine consumers.");
 
@@ -8462,6 +8656,10 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
 
     return state.failure.empty();
 }
+
+
+
+
 
 [[nodiscard]] bool TestBatchRenameCancelMidBatchTracksCompletedRows(HWND mainWindow, CaseState& state) noexcept
 {
@@ -9043,8 +9241,9 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
 [[nodiscard]] bool TestChangeCaseUsesCentralRenamePlan(CaseState& state) noexcept
 {
     const wil::com_ptr<IFileSystem> localFileSystem = GetBatchRenameLocalFileSystem(state);
-    auto* const fileOps                             = g_folderWindow.DebugGetFileOperationState();
-    state.Require(localFileSystem != nullptr && fileOps != nullptr, L"Change Case central-plan testing requires the Local provider and File Operations state.");
+    auto* const fileOps = g_folderWindow.DebugGetFileOperationState();
+    state.Require(localFileSystem != nullptr && fileOps != nullptr,
+                  L"Change Case central-plan testing requires the Local provider and File Operations state.");
     if (! localFileSystem || ! fileOps)
     {
         return false;
@@ -9055,14 +9254,15 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     const std::wstring savedPluginShortId(g_folderWindow.GetFileSystemPluginShortId(FolderWindow::Pane::Left));
     const std::wstring savedInstanceContext(g_folderWindow.GetFileSystemInstanceContext(FolderWindow::Pane::Left));
     const bool savedAutoDismissSuccess = fileOps->GetAutoDismissSuccess();
-    const auto restorePane             = wil::scope_exit([&]() noexcept
+    const auto restorePane = wil::scope_exit([&]() noexcept
     {
         fileOps->SetAutoDismissSuccess(savedAutoDismissSuccess);
-        static_cast<void>(
-            g_folderWindow.SetFileSystemInstanceForPane(FolderWindow::Pane::Left, savedFileSystem, savedPluginId, savedPluginShortId, savedInstanceContext));
+        static_cast<void>(g_folderWindow.SetFileSystemInstanceForPane(
+            FolderWindow::Pane::Left, savedFileSystem, savedPluginId, savedPluginShortId, savedInstanceContext));
     });
     fileOps->SetAutoDismissSuccess(false);
-    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemInstanceForPane(FolderWindow::Pane::Left, localFileSystem, L"builtin/file-system", L"local", L"")),
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemInstanceForPane(
+                      FolderWindow::Pane::Left, localFileSystem, L"builtin/file-system", L"local", L"")),
                   L"Change Case central-plan test should install the Local provider in the originating pane.");
 
     std::filesystem::path root;
@@ -9078,7 +9278,8 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
 
     const std::filesystem::path source = root / L"change-case.txt";
     const std::filesystem::path target = root / L"CHANGE-CASE.TXT";
-    state.Require(SelfTest::WriteTextFile(source, "central-change-case"), L"Change Case central-plan source fixture should be created.");
+    state.Require(SelfTest::WriteTextFile(source, "central-change-case"),
+                  L"Change Case central-plan source fixture should be created.");
     if (! state.failure.empty())
     {
         return false;
@@ -9087,43 +9288,47 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     std::vector<BatchRenameExecutionOp> operations;
     operations.push_back(BatchRenameExecutionOp{
         .originalSource = source,
-        .finalLeaf      = target.filename().native(),
-        .depth          = PathDepthKey(source),
+        .finalLeaf = target.filename().native(),
+        .depth = PathDepthKey(source),
     });
-    if (! PopulateLocalBatchRenameExecutionProviderFactsForTest(state, localFileSystem.get(), operations, L"Change Case central plan"))
+    if (! PopulateLocalBatchRenameExecutionProviderFactsForTest(
+            state, localFileSystem.get(), operations, L"Change Case central plan"))
     {
         return false;
     }
 
-    const uint64_t admissionUiRowsBefore     = CountBatchRenamePerfRowsWithMetric("changecase.admission.ui_thread_us");
-    const uint64_t admissionWallRowsBefore   = CountBatchRenamePerfRowsWithMetric("changecase.admission.wall_us");
+    const uint64_t admissionUiRowsBefore = CountBatchRenamePerfRowsWithMetric("changecase.admission.ui_thread_us");
+    const uint64_t admissionWallRowsBefore = CountBatchRenamePerfRowsWithMetric("changecase.admission.wall_us");
     const uint64_t admissionWorkerRowsBefore = CountBatchRenamePerfRowsWithMetric("changecase.admission.worker_wall_us");
-    const uint64_t executeRowsBefore         = CountBatchRenamePerfRowsWithMetric("changecase.execute.us");
+    const uint64_t executeRowsBefore = CountBatchRenamePerfRowsWithMetric("changecase.execute.us");
 
     std::atomic_bool publishedCallbackRan{false};
     std::atomic_bool decisionGateEntered{false};
     std::atomic_bool decisionGateRelease{false};
     std::atomic<std::shared_ptr<const FileOperations::PreparationSnapshot>> preparationSnapshot;
-    uint64_t taskId       = 0u;
-    const HRESULT admitHr = fileOps->AdmitScheduledRename(FolderWindow::Pane::Left,
-                                                          localFileSystem,
-                                                          FileOperations::RenameOrigin::ChangeCase,
-                                                          std::move(operations),
-                                                          {},
-                                                          [&](const uint64_t publishedTaskId) noexcept
-    { publishedCallbackRan.store(publishedTaskId != 0u, std::memory_order_release); },
-                                                          &taskId,
-                                                          [&]() noexcept
-    {
-        decisionGateEntered.store(true, std::memory_order_release);
-        decisionGateEntered.notify_all();
-        decisionGateRelease.wait(false, std::memory_order_acquire);
-        return S_OK;
-    },
-                                                          [&](std::shared_ptr<const FileOperations::PreparationSnapshot> snapshot) noexcept
-    { preparationSnapshot.store(std::move(snapshot), std::memory_order_release); });
+    uint64_t taskId = 0u;
+    const HRESULT admitHr = fileOps->AdmitScheduledRename(
+        FolderWindow::Pane::Left,
+        localFileSystem,
+        FileOperations::RenameOrigin::ChangeCase,
+        std::move(operations),
+        {},
+        [&](const uint64_t publishedTaskId) noexcept
+        { publishedCallbackRan.store(publishedTaskId != 0u, std::memory_order_release); },
+        &taskId,
+        [&]() noexcept
+        {
+            decisionGateEntered.store(true, std::memory_order_release);
+            decisionGateEntered.notify_all();
+            decisionGateRelease.wait(false, std::memory_order_acquire);
+            return S_OK;
+        },
+        [&](std::shared_ptr<const FileOperations::PreparationSnapshot> snapshot) noexcept
+        { preparationSnapshot.store(std::move(snapshot), std::memory_order_release); });
     state.Require(admitHr == S_OK && taskId != 0u && publishedCallbackRan.load(std::memory_order_acquire),
-                  std::format(L"Change Case central plan should publish one task: hr=0x{:08X}, taskId={}.", static_cast<unsigned long>(admitHr), taskId));
+                  std::format(L"Change Case central plan should publish one task: hr=0x{:08X}, taskId={}.",
+                              static_cast<unsigned long>(admitHr),
+                              taskId));
     if (admitHr != S_OK || taskId == 0u)
     {
         decisionGateRelease.store(true, std::memory_order_release);
@@ -9137,28 +9342,30 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
         PumpPendingMessages();
         Sleep(1u);
     }
-    const FolderWindow::FileOperationState::Task* preparingTask                        = fileOps->FindTask(taskId);
-    const std::shared_ptr<const FileOperations::PreparationSnapshot> preparingSnapshot = preparationSnapshot.load(std::memory_order_acquire);
+    const FolderWindow::FileOperationState::Task* preparingTask = fileOps->FindTask(taskId);
+    const std::shared_ptr<const FileOperations::PreparationSnapshot> preparingSnapshot =
+        preparationSnapshot.load(std::memory_order_acquire);
     state.Require(decisionGateEntered.load(std::memory_order_acquire) && preparingTask != nullptr && preparingSnapshot != nullptr &&
                       preparingTask->GetLifecyclePhase() == FileOperations::TaskLifecyclePhase::AwaitingAcceptance &&
-                      preparingSnapshot->selectedRootCount == 1u && preparingSnapshot->scopes.size() == 1u && preparingSnapshot->strategies.empty() &&
-                      preparingSnapshot->status == S_OK,
+                      preparingSnapshot->selectedRootCount == 1u && preparingSnapshot->scopes.size() == 1u &&
+                      preparingSnapshot->strategies.empty() && preparingSnapshot->status == S_OK,
                   L"Change Case must publish the common AwaitingAcceptance phase and immutable selected-root snapshot before its decision gate.");
     decisionGateRelease.store(true, std::memory_order_release);
     decisionGateRelease.notify_all();
 
     FolderWindow::FileOperationState::CompletedTaskSummary summary{};
-    bool completed      = false;
+    bool completed = false;
     const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds{10});
     while (std::chrono::steady_clock::now() < deadline)
     {
         PumpPendingMessages();
         std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
         fileOps->CollectCompletedTasks(summaries);
-        const auto found = std::ranges::find_if(summaries, [taskId](const auto& candidate) noexcept { return candidate.taskId == taskId; });
+        const auto found = std::ranges::find_if(summaries, [taskId](const auto& candidate) noexcept
+        { return candidate.taskId == taskId; });
         if (found != summaries.end())
         {
-            summary   = *found;
+            summary = *found;
             completed = true;
             break;
         }
@@ -9178,7 +9385,8 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
         resultingLeaves.push_back(entry.path().filename().native());
     }
     state.Require(! enumerateEc && resultingLeaves == std::vector<std::wstring>{target.filename().native()},
-                  std::format(L"Change Case central plan should preserve the exact target casing; saw {} directory entries.", resultingLeaves.size()));
+                  std::format(L"Change Case central plan should preserve the exact target casing; saw {} directory entries.",
+                              resultingLeaves.size()));
     state.Require(CountBatchRenamePerfRowsWithMetric("changecase.admission.ui_thread_us") > admissionUiRowsBefore &&
                       CountBatchRenamePerfRowsWithMetric("changecase.admission.wall_us") > admissionWallRowsBefore &&
                       CountBatchRenamePerfRowsWithMetric("changecase.admission.worker_wall_us") > admissionWorkerRowsBefore &&
@@ -9198,8 +9406,9 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     }
 
     const wil::com_ptr<IFileSystem> localFileSystem = GetBatchRenameLocalFileSystem(state);
-    auto* const fileOps                             = g_folderWindow.DebugGetFileOperationState();
-    state.Require(localFileSystem != nullptr && fileOps != nullptr, L"Batch Rename admission testing requires the Local provider and File Operations state.");
+    auto* const fileOps = g_folderWindow.DebugGetFileOperationState();
+    state.Require(localFileSystem != nullptr && fileOps != nullptr,
+                  L"Batch Rename admission testing requires the Local provider and File Operations state.");
     if (! localFileSystem || ! fileOps)
     {
         return false;
@@ -9211,8 +9420,8 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     const std::wstring savedInstanceContext(g_folderWindow.GetFileSystemInstanceContext(FolderWindow::Pane::Left));
     const auto restorePane = wil::scope_exit([&]() noexcept
     {
-        static_cast<void>(
-            g_folderWindow.SetFileSystemInstanceForPane(FolderWindow::Pane::Left, savedFileSystem, savedPluginId, savedPluginShortId, savedInstanceContext));
+        static_cast<void>(g_folderWindow.SetFileSystemInstanceForPane(
+            FolderWindow::Pane::Left, savedFileSystem, savedPluginId, savedPluginShortId, savedInstanceContext));
     });
 
     std::filesystem::path root;
@@ -9226,8 +9435,9 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
         std::filesystem::remove_all(root, removeEc);
     });
 
-    const auto waitForSummary =
-        [&](const uint64_t taskId, FolderWindow::FileOperationState::CompletedTaskSummary& summary, const std::chrono::milliseconds timeout) noexcept
+    const auto waitForSummary = [&](const uint64_t taskId,
+                                    FolderWindow::FileOperationState::CompletedTaskSummary& summary,
+                                    const std::chrono::milliseconds timeout) noexcept
     {
         const auto deadline = std::chrono::steady_clock::now() + timeout;
         while (std::chrono::steady_clock::now() < deadline)
@@ -9235,7 +9445,8 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
             PumpPendingMessages();
             std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
             fileOps->CollectCompletedTasks(summaries);
-            const auto found = std::ranges::find_if(summaries, [taskId](const auto& candidate) noexcept { return candidate.taskId == taskId; });
+            const auto found = std::ranges::find_if(summaries, [taskId](const auto& candidate) noexcept
+            { return candidate.taskId == taskId; });
             if (found != summaries.end())
             {
                 summary = *found;
@@ -9252,7 +9463,8 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     {
         for (const size_t rowCount : rowCounts)
         {
-            const std::filesystem::path scenarioRoot = root / std::format(L"{}-{}", delayed ? L"delayed" : L"local", rowCount);
+            const std::filesystem::path scenarioRoot =
+                root / std::format(L"{}-{}", delayed ? L"delayed" : L"local", rowCount);
             state.Require(SelfTest::EnsureDirectory(scenarioRoot), L"Batch Rename admission scenario root should be created.");
             std::vector<BatchRenameExecutionOp> operations;
             operations.reserve(rowCount);
@@ -9263,7 +9475,7 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
                               std::format(L"Batch Rename admission fixture should create row {} of {}.", index + 1u, rowCount));
                 operations.push_back(BatchRenameExecutionOp{
                     .originalSource = source,
-                    .finalLeaf      = std::format(L"renamed-{:04}.txt", index),
+                    .finalLeaf = std::format(L"renamed-{:04}.txt", index),
                 });
             }
             if (! state.failure.empty())
@@ -9277,16 +9489,26 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
             std::atomic<DWORD> bindThreadId{0u};
             std::atomic_bool providerDestroyed{false};
             wil::com_ptr<IFileSystem> scenarioFileSystem = CreateBatchRenameDelayedAdmissionFileSystem(
-                localFileSystem, delayed ? 100u : 0u, &capabilityCalls, &bindCalls, &capabilityThreadId, &bindThreadId, &providerDestroyed);
+                localFileSystem,
+                delayed ? 100u : 0u,
+                &capabilityCalls,
+                &bindCalls,
+                &capabilityThreadId,
+                &bindThreadId,
+                &providerDestroyed);
             state.Require(scenarioFileSystem != nullptr, L"Batch Rename admission provider wrapper should be created.");
             if (! scenarioFileSystem)
             {
                 return false;
             }
-            state.Require(SUCCEEDED(g_folderWindow.SetFileSystemInstanceForPane(
-                              FolderWindow::Pane::Left, scenarioFileSystem, L"builtin/file-system", L"local", L"batch-rename-admission-selftest")),
+            state.Require(SUCCEEDED(g_folderWindow.SetFileSystemInstanceForPane(FolderWindow::Pane::Left,
+                                                                                scenarioFileSystem,
+                                                                                L"builtin/file-system",
+                                                                                L"local",
+                                                                                L"batch-rename-admission-selftest")),
                           L"Batch Rename admission provider should be installed in the originating pane.");
-            if (! PopulateLocalBatchRenameExecutionProviderFactsForTest(state, scenarioFileSystem.get(), operations, L"Batch Rename worker admission"))
+            if (! PopulateLocalBatchRenameExecutionProviderFactsForTest(
+                    state, scenarioFileSystem.get(), operations, L"Batch Rename worker admission"))
             {
                 return false;
             }
@@ -9295,9 +9517,9 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
             bindCalls.store(0u, std::memory_order_release);
             capabilityThreadId.store(0u, std::memory_order_release);
             bindThreadId.store(0u, std::memory_order_release);
-            const uint64_t uiMetricRowsBefore       = CountBatchRenamePerfRowsWithMetric("batchrename.admission.ui_thread_us");
-            const uint64_t wallMetricRowsBefore     = CountBatchRenamePerfRowsWithMetric("batchrename.admission.wall_us");
-            const uint64_t workerMetricRowsBefore   = CountBatchRenamePerfRowsWithMetric("batchrename.admission.worker_wall_us");
+            const uint64_t uiMetricRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.admission.ui_thread_us");
+            const uint64_t wallMetricRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.admission.wall_us");
+            const uint64_t workerMetricRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.admission.worker_wall_us");
             const uint64_t retainedMetricRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.admission.retained_bindings");
 
             SetFileOpsBatchRenameBeforeExecutionPauseForSelfTest(true);
@@ -9307,14 +9529,20 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
                 SetFileOpsBatchRenameBeforeExecutionPauseForSelfTest(false);
             });
             std::atomic_bool publishedCallbackRan{false};
-            uint64_t taskId       = 0u;
-            const auto uiStarted  = std::chrono::steady_clock::now();
+            uint64_t taskId = 0u;
+            const auto uiStarted = std::chrono::steady_clock::now();
             const HRESULT admitHr = fileOps->AdmitBatchRename(
-                FolderWindow::Pane::Left, scenarioFileSystem, std::move(operations), {}, [&](const uint64_t publishedTaskId) noexcept {
-                publishedCallbackRan.store(publishedTaskId != 0u, std::memory_order_release);
-            }, &taskId);
-            const uint64_t uiReturnUs =
-                static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - uiStarted).count());
+                FolderWindow::Pane::Left,
+                scenarioFileSystem,
+                std::move(operations),
+                {},
+                [&](const uint64_t publishedTaskId) noexcept
+                {
+                    publishedCallbackRan.store(publishedTaskId != 0u, std::memory_order_release);
+                },
+                &taskId);
+            const uint64_t uiReturnUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - uiStarted).count());
             state.Require(admitHr == S_OK && taskId != 0u && publishedCallbackRan.load(std::memory_order_acquire),
                           std::format(L"Batch Rename {} {}-row admission should publish a gated task: hr=0x{:08X}, taskId={}.",
                                       delayed ? L"delayed" : L"Local",
@@ -9326,16 +9554,19 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
                 return false;
             }
 
-            const auto pauseDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(delayed ? std::chrono::seconds{30} : std::chrono::seconds{10});
+            const auto pauseDeadline = std::chrono::steady_clock::now() +
+                SelfTest::Scale(delayed ? std::chrono::seconds{30} : std::chrono::seconds{10});
             while (! HasFileOpsBatchRenameBeforeExecutionPauseEnteredForSelfTest() && std::chrono::steady_clock::now() < pauseDeadline)
             {
                 PumpPendingMessages();
                 std::this_thread::sleep_for(std::chrono::milliseconds{2});
             }
             state.Require(HasFileOpsBatchRenameBeforeExecutionPauseEnteredForSelfTest(),
-                          std::format(L"Batch Rename {} {}-row admission should reach the pre-mutation barrier.", delayed ? L"delayed" : L"Local", rowCount));
+                          std::format(L"Batch Rename {} {}-row admission should reach the pre-mutation barrier.",
+                                      delayed ? L"delayed" : L"Local",
+                                      rowCount));
 
-            FolderWindow::FileOperationState::Task* task                              = fileOps->FindTask(taskId);
+            FolderWindow::FileOperationState::Task* task = fileOps->FindTask(taskId);
             const std::shared_ptr<const FileOperations::FileOperationPlanGroup> plans = task ? task->LoadPlans() : nullptr;
             state.Require(task != nullptr && plans && plans->size() == 1u,
                           L"Worker admission should publish exactly one immutable identity-domain plan before execution.");
@@ -9354,8 +9585,10 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
                           std::format(L"Worker admission should no-follow bind every row; expected-at-least={} actual={}.",
                                       rowCount,
                                       bindCalls.load(std::memory_order_acquire)));
-            state.Require(capabilityThreadId.load(std::memory_order_acquire) != 0u && capabilityThreadId.load(std::memory_order_acquire) != uiThreadId &&
-                              bindThreadId.load(std::memory_order_acquire) != 0u && bindThreadId.load(std::memory_order_acquire) != uiThreadId,
+            state.Require(capabilityThreadId.load(std::memory_order_acquire) != 0u &&
+                              capabilityThreadId.load(std::memory_order_acquire) != uiThreadId &&
+                              bindThreadId.load(std::memory_order_acquire) != 0u &&
+                              bindThreadId.load(std::memory_order_acquire) != uiThreadId,
                           L"Row-proportional capability and binding I/O must run off the UI thread.");
             for (size_t index = 0u; index < rowCount; ++index)
             {
@@ -9364,25 +9597,29 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
                               L"Batch Rename admission must not mutate any row before every mapping qualifies.");
             }
 
-            const std::optional<uint64_t> uiMetricUs   = TryReadMaxBatchRenamePerfDurationUs("batchrename.admission.ui_thread_us", uiMetricRowsBefore);
-            const std::optional<uint64_t> workerWallUs = TryReadMaxBatchRenamePerfDurationUs("batchrename.admission.worker_wall_us", workerMetricRowsBefore);
-            const std::optional<uint64_t> wallUs       = TryReadMaxBatchRenamePerfDurationUs("batchrename.admission.wall_us", wallMetricRowsBefore);
+            const std::optional<uint64_t> uiMetricUs =
+                TryReadMaxBatchRenamePerfDurationUs("batchrename.admission.ui_thread_us", uiMetricRowsBefore);
+            const std::optional<uint64_t> workerWallUs =
+                TryReadMaxBatchRenamePerfDurationUs("batchrename.admission.worker_wall_us", workerMetricRowsBefore);
+            const std::optional<uint64_t> wallUs =
+                TryReadMaxBatchRenamePerfDurationUs("batchrename.admission.wall_us", wallMetricRowsBefore);
             const std::optional<uint64_t> retainedBindings =
                 TryReadMaxBatchRenamePerfUintField("batchrename.admission.retained_bindings", "value0", retainedMetricRowsBefore);
-            state.Require(uiMetricUs.has_value() && wallUs.has_value() && workerWallUs.has_value() && retainedBindings.value_or(1u) == 0u,
+            state.Require(uiMetricUs.has_value() && wallUs.has_value() && workerWallUs.has_value() &&
+                              retainedBindings.value_or(1u) == 0u,
                           L"Batch Rename admission should archive UI time, end-to-end wall time, worker time, and zero retained bindings.");
             if (rowCount == rowCounts.back() && uiMetricUs.has_value())
             {
                 state.Require(uiMetricUs.value() <= 50'000u,
-                              std::format(L"The full 1024-row Batch Rename UI admission must stay within the 50ms budget; ui={}us.", uiMetricUs.value()));
+                              std::format(L"The full 1024-row Batch Rename UI admission must stay within the 50ms budget; ui={}us.",
+                                          uiMetricUs.value()));
             }
             if (delayed && rowCount == rowCounts.back() && workerWallUs.has_value())
             {
-                state.Require(
-                    uiReturnUs * 4u < workerWallUs.value(),
-                    std::format(L"The 1024-row delayed provider should return from UI admission well before worker qualification; ui={}us worker={}us.",
-                                uiReturnUs,
-                                workerWallUs.value()));
+                state.Require(uiReturnUs * 4u < workerWallUs.value(),
+                              std::format(L"The 1024-row delayed provider should return from UI admission well before worker qualification; ui={}us worker={}us.",
+                                          uiReturnUs,
+                                          workerWallUs.value()));
             }
 
             ReleaseFileOpsBatchRenameBeforeExecutionPauseForSelfTest();
@@ -9393,7 +9630,11 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
                           L"Cancel at the pre-mutation barrier should publish no renamed object.");
             fileOps->DismissCompletedTask(taskId);
 
-            static_cast<void>(g_folderWindow.SetFileSystemInstanceForPane(FolderWindow::Pane::Left, localFileSystem, L"builtin/file-system", L"local", L""));
+            static_cast<void>(g_folderWindow.SetFileSystemInstanceForPane(FolderWindow::Pane::Left,
+                                                                          localFileSystem,
+                                                                          L"builtin/file-system",
+                                                                          L"local",
+                                                                          L""));
             scenarioFileSystem.reset();
             const auto destroyDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds{5});
             while (! providerDestroyed.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < destroyDeadline)
@@ -9416,7 +9657,7 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
         state.Require(SelfTest::WriteTextFile(source, "cancel"), L"Batch Rename cancel-admission source should be created.");
         cancelOperations.push_back(BatchRenameExecutionOp{
             .originalSource = source,
-            .finalLeaf      = std::format(L"canceled-{:03}.txt", index),
+            .finalLeaf = std::format(L"canceled-{:03}.txt", index),
         });
     }
     std::atomic_uint32_t cancelCapabilityCalls{0u};
@@ -9425,22 +9666,34 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     std::atomic<DWORD> cancelBindThreadId{0u};
     std::atomic_bool cancelProviderDestroyed{false};
     wil::com_ptr<IFileSystem> cancelFileSystem = CreateBatchRenameDelayedAdmissionFileSystem(
-        localFileSystem, 10'000u, &cancelCapabilityCalls, &cancelBindCalls, &cancelCapabilityThreadId, &cancelBindThreadId, &cancelProviderDestroyed);
+        localFileSystem,
+        10'000u,
+        &cancelCapabilityCalls,
+        &cancelBindCalls,
+        &cancelCapabilityThreadId,
+        &cancelBindThreadId,
+        &cancelProviderDestroyed);
     state.Require(cancelFileSystem != nullptr &&
-                      SUCCEEDED(g_folderWindow.SetFileSystemInstanceForPane(
-                          FolderWindow::Pane::Left, cancelFileSystem, L"builtin/file-system", L"local", L"batch-rename-cancel-admission-selftest")),
+                      SUCCEEDED(g_folderWindow.SetFileSystemInstanceForPane(FolderWindow::Pane::Left,
+                                                                            cancelFileSystem,
+                                                                            L"builtin/file-system",
+                                                                            L"local",
+                                                                            L"batch-rename-cancel-admission-selftest")),
                   L"Batch Rename cancel-admission provider should be installed.");
-    if (! PopulateLocalBatchRenameExecutionProviderFactsForTest(state, cancelFileSystem.get(), cancelOperations, L"Batch Rename cancel admission"))
+    if (! PopulateLocalBatchRenameExecutionProviderFactsForTest(
+            state, cancelFileSystem.get(), cancelOperations, L"Batch Rename cancel admission"))
     {
         return false;
     }
     const uint32_t cancelCapabilityCallsBeforeAdmission = cancelCapabilityCalls.load(std::memory_order_acquire);
-    const uint64_t cancelMetricRowsBefore               = CountBatchRenamePerfRowsWithMetric("batchrename.admission.cancel_latency_us");
-    uint64_t cancelTaskId                               = 0u;
-    const HRESULT cancelAdmitHr = fileOps->AdmitBatchRename(FolderWindow::Pane::Left, cancelFileSystem, std::move(cancelOperations), {}, {}, &cancelTaskId);
+    const uint64_t cancelMetricRowsBefore = CountBatchRenamePerfRowsWithMetric("batchrename.admission.cancel_latency_us");
+    uint64_t cancelTaskId = 0u;
+    const HRESULT cancelAdmitHr = fileOps->AdmitBatchRename(
+        FolderWindow::Pane::Left, cancelFileSystem, std::move(cancelOperations), {}, {}, &cancelTaskId);
     state.Require(cancelAdmitHr == S_OK && cancelTaskId != 0u,
                   L"Batch Rename cancel-during-admission task should publish before provider qualification completes.");
-    const auto cancelAdmissionStartedDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds{2});
+    const auto cancelAdmissionStartedDeadline =
+        std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds{2});
     while (cancelCapabilityCalls.load(std::memory_order_acquire) == cancelCapabilityCallsBeforeAdmission &&
            std::chrono::steady_clock::now() < cancelAdmissionStartedDeadline)
     {
@@ -9457,8 +9710,8 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     FolderWindow::FileOperationState::CompletedTaskSummary cancelSummary{};
     state.Require(waitForSummary(cancelTaskId, cancelSummary, SelfTest::Scale(std::chrono::seconds{5})),
                   L"Cancel during Batch Rename admission should drain to a terminal summary.");
-    const uint64_t observedCancelUs =
-        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - cancelStarted).count());
+    const uint64_t observedCancelUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - cancelStarted).count());
     const auto cancelMetricDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds{2});
     while (CountBatchRenamePerfRowsWithMetric("batchrename.admission.cancel_latency_us") == cancelMetricRowsBefore &&
            std::chrono::steady_clock::now() < cancelMetricDeadline)
@@ -9468,8 +9721,8 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     }
     const std::optional<uint64_t> archivedCancelUs =
         TryReadMaxBatchRenamePerfUintField("batchrename.admission.cancel_latency_us", "value0", cancelMetricRowsBefore);
-    state.Require(cancelSummary.resultHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) && cancelSummary.publishedItemCount == 0u && archivedCancelUs.has_value() &&
-                      observedCancelUs < 1'000'000u,
+    state.Require(cancelSummary.resultHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) && cancelSummary.publishedItemCount == 0u &&
+                      archivedCancelUs.has_value() && observedCancelUs < 1'000'000u,
                   std::format(L"Cancel during delayed admission should be bounded and archived; observed={}us archived={}us hr=0x{:08X}.",
                               observedCancelUs,
                               archivedCancelUs.value_or(0u),
@@ -9481,7 +9734,8 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
                       L"Cancel during admission must leave every source untouched.");
     }
     fileOps->DismissCompletedTask(cancelTaskId);
-    static_cast<void>(g_folderWindow.SetFileSystemInstanceForPane(FolderWindow::Pane::Left, localFileSystem, L"builtin/file-system", L"local", L""));
+    static_cast<void>(g_folderWindow.SetFileSystemInstanceForPane(
+        FolderWindow::Pane::Left, localFileSystem, L"builtin/file-system", L"local", L""));
     cancelFileSystem.reset();
     const auto cancelDestroyDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds{5});
     while (! cancelProviderDestroyed.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < cancelDestroyDeadline)
@@ -9489,7 +9743,8 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
         PumpPendingMessages();
         std::this_thread::sleep_for(std::chrono::milliseconds{2});
     }
-    state.Require(cancelProviderDestroyed.load(std::memory_order_acquire), L"The canceled delayed admission provider should reach its unload quiet point.");
+    state.Require(cancelProviderDestroyed.load(std::memory_order_acquire),
+                  L"The canceled delayed admission provider should reach its unload quiet point.");
 
     const std::filesystem::path closeRoot = root / L"close-during-admission";
     state.Require(SelfTest::EnsureDirectory(closeRoot), L"Batch Rename close-admission root should be created.");
@@ -9507,31 +9762,42 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     std::atomic<DWORD> closeBindThreadId{0u};
     std::atomic_bool closeProviderDestroyed{false};
     wil::com_ptr<IFileSystem> closeFileSystem = CreateBatchRenameDelayedAdmissionFileSystem(
-        localFileSystem, 10'000u, &closeCapabilityCalls, &closeBindCalls, &closeCapabilityThreadId, &closeBindThreadId, &closeProviderDestroyed);
+        localFileSystem,
+        10'000u,
+        &closeCapabilityCalls,
+        &closeBindCalls,
+        &closeCapabilityThreadId,
+        &closeBindThreadId,
+        &closeProviderDestroyed);
     state.Require(closeFileSystem != nullptr &&
-                      SUCCEEDED(g_folderWindow.SetFileSystemInstanceForPane(
-                          FolderWindow::Pane::Left, closeFileSystem, L"builtin/file-system", L"local", L"batch-rename-close-admission-selftest")),
+                      SUCCEEDED(g_folderWindow.SetFileSystemInstanceForPane(FolderWindow::Pane::Left,
+                                                                            closeFileSystem,
+                                                                            L"builtin/file-system",
+                                                                            L"local",
+                                                                            L"batch-rename-close-admission-selftest")),
                   L"Batch Rename close-admission provider wrapper should be installed.");
 
     std::atomic_uint64_t closeTaskId{0u};
     BatchRenamePaneContext closeContext{};
-    closeContext.fileSystem      = closeFileSystem;
-    closeContext.pluginId        = L"builtin/file-system";
-    closeContext.pluginShortId   = L"local";
+    closeContext.fileSystem = closeFileSystem;
+    closeContext.pluginId = L"builtin/file-system";
+    closeContext.pluginShortId = L"local";
     closeContext.instanceContext = L"batch-rename-close-admission-selftest";
-    closeContext.rootPluginPath  = closeRoot;
-    closeContext.initialPaths    = closePaths;
-    closeContext.onStartRename   = [fileOps, closeFileSystem, &closeTaskId](BatchRenamePaneContext::CentralExecutionRequest request,
-                                                                            uint64_t* taskIdOut) mutable -> HRESULT
+    closeContext.rootPluginPath = closeRoot;
+    closeContext.initialPaths = closePaths;
+    closeContext.onStartRename = [fileOps, closeFileSystem, &closeTaskId](
+                                     BatchRenamePaneContext::CentralExecutionRequest request,
+                                     uint64_t* taskIdOut) mutable -> HRESULT
     {
         uint64_t admittedTaskId = 0u;
-        const HRESULT hr        = fileOps->AdmitBatchRename(FolderWindow::Pane::Left,
-                                                            closeFileSystem,
-                                                            std::move(request.operations),
-                                                            std::move(request.onProgress),
-                                                            [&closeTaskId](const uint64_t publishedTaskId) noexcept
-        { closeTaskId.store(publishedTaskId, std::memory_order_release); },
-                                                     &admittedTaskId);
+        const HRESULT hr = fileOps->AdmitBatchRename(
+            FolderWindow::Pane::Left,
+            closeFileSystem,
+            std::move(request.operations),
+            std::move(request.onProgress),
+            [&closeTaskId](const uint64_t publishedTaskId) noexcept
+            { closeTaskId.store(publishedTaskId, std::memory_order_release); },
+            &admittedTaskId);
         if (taskIdOut)
         {
             *taskIdOut = admittedTaskId;
@@ -9546,34 +9812,43 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
         }
     };
     const AppTheme closeTheme = ResolveAppTheme(ThemeMode::Dark, L"batch-rename-close-admission-window-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, closeTheme, std::move(closeContext)), L"Batch Rename close-admission window should open.");
-    const HWND closeWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5'000}));
-    state.Require(closeWindow != nullptr && IsWindow(closeWindow) != FALSE, L"Batch Rename close-admission window should become visible.");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, closeTheme, std::move(closeContext)),
+                  L"Batch Rename close-admission window should open.");
+    const HWND closeWindow = WaitForWindow(
+        []() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5'000}));
+    state.Require(closeWindow != nullptr && IsWindow(closeWindow) != FALSE,
+                  L"Batch Rename close-admission window should become visible.");
     BatchRename::Rules closeRules{};
     closeRules.nameTemplate = L"closed-{counter:000}{ext}";
-    state.Require(DebugSetBatchRenameWindowRules(closeRules), L"Batch Rename close-admission preview should contain changed rows.");
+    state.Require(DebugSetBatchRenameWindowRules(closeRules),
+                  L"Batch Rename close-admission preview should contain changed rows.");
     const HRESULT closeStartHr = DebugStartBatchRenameWindowExecution();
     state.Require(closeStartHr == S_OK && closeTaskId.load(std::memory_order_acquire) != 0u,
                   std::format(L"Batch Rename close-admission task should publish: hr=0x{:08X}, taskId={}.",
                               static_cast<unsigned long>(closeStartHr),
                               closeTaskId.load(std::memory_order_acquire)));
     const ULONGLONG closeStartedTick = GetTickCount64();
-    state.Require(PostMessageW(closeWindow, WM_CLOSE, 0u, 0) != FALSE && WaitForWindowClosed(closeWindow, SelfTest::Scale(std::chrono::milliseconds{5'000})),
+    state.Require(PostMessageW(closeWindow, WM_CLOSE, 0u, 0) != FALSE &&
+                      WaitForWindowClosed(closeWindow, SelfTest::Scale(std::chrono::milliseconds{5'000})),
                   L"Closing Batch Rename during worker admission should destroy the modeless window promptly.");
     state.Require(GetTickCount64() - closeStartedTick < SelfTest::ScaleTimeout(1'000u),
                   L"Closing Batch Rename during worker admission must not join the provider worker on the UI thread.");
     FolderWindow::FileOperationState::CompletedTaskSummary closeSummary{};
-    state.Require(waitForSummary(closeTaskId.load(std::memory_order_acquire), closeSummary, SelfTest::Scale(std::chrono::seconds{5})),
+    state.Require(waitForSummary(closeTaskId.load(std::memory_order_acquire),
+                                 closeSummary,
+                                 SelfTest::Scale(std::chrono::seconds{5})),
                   L"Close during Batch Rename admission should drain the central task.");
     state.Require(closeSummary.resultHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) && closeSummary.publishedItemCount == 0u,
                   L"Close during Batch Rename admission must cancel before publishing a renamed object.");
     for (size_t index = 0u; index < closePaths.size(); ++index)
     {
-        state.Require(SelfTest::PathExists(closePaths[index]) && ! SelfTest::PathExists(closeRoot / std::format(L"closed-{:03}.txt", index + 1u)),
+        state.Require(SelfTest::PathExists(closePaths[index]) &&
+                          ! SelfTest::PathExists(closeRoot / std::format(L"closed-{:03}.txt", index + 1u)),
                       L"Close during Batch Rename admission must leave every captured source untouched.");
     }
     fileOps->DismissCompletedTask(closeTaskId.load(std::memory_order_acquire));
-    static_cast<void>(g_folderWindow.SetFileSystemInstanceForPane(FolderWindow::Pane::Left, localFileSystem, L"builtin/file-system", L"local", L""));
+    static_cast<void>(g_folderWindow.SetFileSystemInstanceForPane(
+        FolderWindow::Pane::Left, localFileSystem, L"builtin/file-system", L"local", L""));
     closeFileSystem.reset();
     const auto closeDestroyDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds{5});
     while (! closeProviderDestroyed.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < closeDestroyDeadline)
@@ -9581,44 +9856,49 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
         PumpPendingMessages();
         std::this_thread::sleep_for(std::chrono::milliseconds{2});
     }
-    state.Require(closeProviderDestroyed.load(std::memory_order_acquire), L"The close-canceled admission provider should reach its unload quiet point.");
+    state.Require(closeProviderDestroyed.load(std::memory_order_acquire),
+                  L"The close-canceled admission provider should reach its unload quiet point.");
 
-    const std::filesystem::path duplicateRoot   = root / L"hard-link-duplicate";
+    const std::filesystem::path duplicateRoot = root / L"hard-link-duplicate";
     const std::filesystem::path duplicateSource = duplicateRoot / L"physical-source.txt";
-    const std::filesystem::path duplicateAlias  = duplicateRoot / L"physical-alias.txt";
-    state.Require(SelfTest::WriteTextFile(duplicateSource, "duplicate") && CreateHardLinkW(duplicateAlias.c_str(), duplicateSource.c_str(), nullptr) != FALSE,
+    const std::filesystem::path duplicateAlias = duplicateRoot / L"physical-alias.txt";
+    state.Require(SelfTest::WriteTextFile(duplicateSource, "duplicate") &&
+                      CreateHardLinkW(duplicateAlias.c_str(), duplicateSource.c_str(), nullptr) != FALSE,
                   L"Batch Rename admission should create two pathnames for one physical source object.");
     std::vector<BatchRenameExecutionOp> duplicateOperations{
         BatchRenameExecutionOp{
             .originalSource = duplicateSource,
-            .finalLeaf      = L"duplicate-one.txt",
+            .finalLeaf = L"duplicate-one.txt",
         },
         BatchRenameExecutionOp{
             .originalSource = duplicateAlias,
-            .finalLeaf      = L"duplicate-two.txt",
+            .finalLeaf = L"duplicate-two.txt",
         },
     };
-    if (! PopulateLocalBatchRenameExecutionProviderFactsForTest(state, localFileSystem.get(), duplicateOperations, L"Batch Rename duplicate-source admission"))
+    if (! PopulateLocalBatchRenameExecutionProviderFactsForTest(
+            state, localFileSystem.get(), duplicateOperations, L"Batch Rename duplicate-source admission"))
     {
         return false;
     }
     uint64_t duplicateTaskId = 0u;
-    const HRESULT duplicateAdmitHr =
-        fileOps->AdmitBatchRename(FolderWindow::Pane::Left, localFileSystem, std::move(duplicateOperations), {}, {}, &duplicateTaskId);
-    state.Require(duplicateAdmitHr == S_OK && duplicateTaskId != 0u, L"Hard-link duplicate detection should run inside the published worker admission task.");
+    const HRESULT duplicateAdmitHr = fileOps->AdmitBatchRename(
+        FolderWindow::Pane::Left, localFileSystem, std::move(duplicateOperations), {}, {}, &duplicateTaskId);
+    state.Require(duplicateAdmitHr == S_OK && duplicateTaskId != 0u,
+                  L"Hard-link duplicate detection should run inside the published worker admission task.");
     FolderWindow::FileOperationState::CompletedTaskSummary duplicateSummary{};
     state.Require(waitForSummary(duplicateTaskId, duplicateSummary, SelfTest::Scale(std::chrono::seconds{10})),
                   L"Hard-link duplicate admission should reach a terminal summary.");
-    state.Require(
-        duplicateSummary.resultHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) && SelfTest::PathExists(duplicateSource) && SelfTest::PathExists(duplicateAlias) &&
-            ! SelfTest::PathExists(duplicateRoot / L"duplicate-one.txt") && ! SelfTest::PathExists(duplicateRoot / L"duplicate-two.txt"),
-        std::format(L"Worker admission must reject both aliases of one physical object before mutation and reduce two failed rows as partial: hr=0x{:08X}.",
-                    static_cast<unsigned long>(duplicateSummary.resultHr)));
+    state.Require(duplicateSummary.resultHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) &&
+                      SelfTest::PathExists(duplicateSource) && SelfTest::PathExists(duplicateAlias) &&
+                      ! SelfTest::PathExists(duplicateRoot / L"duplicate-one.txt") &&
+                      ! SelfTest::PathExists(duplicateRoot / L"duplicate-two.txt"),
+                  std::format(L"Worker admission must reject both aliases of one physical object before mutation and reduce two failed rows as partial: hr=0x{:08X}.",
+                              static_cast<unsigned long>(duplicateSummary.resultHr)));
     fileOps->DismissCompletedTask(duplicateTaskId);
 
-    const std::filesystem::path capturedRoot        = root / L"captured-intent";
-    const std::filesystem::path navigatedRoot       = root / L"navigated-away";
-    const std::filesystem::path capturedSource      = capturedRoot / L"captured.txt";
+    const std::filesystem::path capturedRoot = root / L"captured-intent";
+    const std::filesystem::path navigatedRoot = root / L"navigated-away";
+    const std::filesystem::path capturedSource = capturedRoot / L"captured.txt";
     const std::filesystem::path capturedDestination = capturedRoot / L"captured-renamed.txt";
     state.Require(SelfTest::WriteTextFile(capturedSource, "captured") && SelfTest::EnsureDirectory(navigatedRoot),
                   L"Batch Rename captured-intent fixture should be created.");
@@ -9631,17 +9911,19 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     std::vector<BatchRenameExecutionOp> capturedOperations{
         BatchRenameExecutionOp{
             .originalSource = capturedSource,
-            .finalLeaf      = capturedDestination.filename().native(),
+            .finalLeaf = capturedDestination.filename().native(),
         },
     };
-    if (! PopulateLocalBatchRenameExecutionProviderFactsForTest(state, localFileSystem.get(), capturedOperations, L"Batch Rename captured-intent admission"))
+    if (! PopulateLocalBatchRenameExecutionProviderFactsForTest(
+            state, localFileSystem.get(), capturedOperations, L"Batch Rename captured-intent admission"))
     {
         return false;
     }
     uint64_t capturedTaskId = 0u;
-    const HRESULT capturedAdmitHr =
-        fileOps->AdmitBatchRename(FolderWindow::Pane::Left, localFileSystem, std::move(capturedOperations), {}, {}, &capturedTaskId);
-    state.Require(capturedAdmitHr == S_OK && capturedTaskId != 0u, L"Captured-intent Batch Rename task should publish.");
+    const HRESULT capturedAdmitHr = fileOps->AdmitBatchRename(
+        FolderWindow::Pane::Left, localFileSystem, std::move(capturedOperations), {}, {}, &capturedTaskId);
+    state.Require(capturedAdmitHr == S_OK && capturedTaskId != 0u,
+                  L"Captured-intent Batch Rename task should publish.");
     const auto capturedPauseDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds{10});
     while (! HasFileOpsBatchRenameBeforeExecutionPauseEnteredForSelfTest() && std::chrono::steady_clock::now() < capturedPauseDeadline)
     {
@@ -9655,8 +9937,8 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     FolderWindow::FileOperationState::CompletedTaskSummary capturedSummary{};
     state.Require(waitForSummary(capturedTaskId, capturedSummary, SelfTest::Scale(std::chrono::seconds{10})),
                   L"Captured-intent Batch Rename task should complete after pane navigation.");
-    state.Require(capturedSummary.resultHr == S_OK && ! SelfTest::PathExists(capturedSource) && SelfTest::PathExists(capturedDestination) &&
-                      ! SelfTest::PathExists(navigatedRoot / capturedDestination.filename()),
+    state.Require(capturedSummary.resultHr == S_OK && ! SelfTest::PathExists(capturedSource) &&
+                      SelfTest::PathExists(capturedDestination) && ! SelfTest::PathExists(navigatedRoot / capturedDestination.filename()),
                   L"Pane navigation after admission must not retarget captured Batch Rename intent.");
     fileOps->DismissCompletedTask(capturedTaskId);
 
@@ -9672,7 +9954,7 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     }
 
     const wil::com_ptr<IFileSystem> localFileSystem = GetBatchRenameLocalFileSystem(state);
-    auto* const fileOps                             = g_folderWindow.DebugGetFileOperationState();
+    auto* const fileOps = g_folderWindow.DebugGetFileOperationState();
     state.Require(localFileSystem != nullptr && fileOps != nullptr,
                   L"Artifact-prompt shutdown testing requires Local File System and live File Operations state.");
     if (! localFileSystem || ! fileOps)
@@ -9686,11 +9968,14 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     const std::wstring savedInstanceContext(g_folderWindow.GetFileSystemInstanceContext(FolderWindow::Pane::Left));
     const auto restorePane = wil::scope_exit([&]() noexcept
     {
-        static_cast<void>(
-            g_folderWindow.SetFileSystemInstanceForPane(FolderWindow::Pane::Left, savedFileSystem, savedPluginId, savedPluginShortId, savedInstanceContext));
+        static_cast<void>(g_folderWindow.SetFileSystemInstanceForPane(
+            FolderWindow::Pane::Left, savedFileSystem, savedPluginId, savedPluginShortId, savedInstanceContext));
     });
-    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemInstanceForPane(
-                      FolderWindow::Pane::Left, localFileSystem, L"builtin/file-system", L"local", L"batch-rename-artifact-prompt-selftest")),
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemInstanceForPane(FolderWindow::Pane::Left,
+                                                                        localFileSystem,
+                                                                        L"builtin/file-system",
+                                                                        L"local",
+                                                                        L"batch-rename-artifact-prompt-selftest")),
                   L"Artifact-prompt shutdown testing should install Local File System in the originating pane.");
     if (! state.failure.empty())
     {
@@ -9704,18 +9989,19 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     }
     const std::filesystem::path source = root / L"artifact-source.txt";
     const std::filesystem::path target = root / L"artifact-renamed.txt";
-    state.Require(SelfTest::WriteTextFile(source, "artifact-prompt-shutdown"), L"Artifact-prompt shutdown fixture should create its source.");
+    state.Require(SelfTest::WriteTextFile(source, "artifact-prompt-shutdown"),
+                  L"Artifact-prompt shutdown fixture should create its source.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    const auto cleanupFiles       = wil::scope_exit([root]() noexcept
+    const auto cleanupFiles = wil::scope_exit([root]() noexcept
     {
         std::error_code ec;
         std::filesystem::remove_all(root, ec);
     });
-    const bool autoAcceptBefore   = HostGetAutoAcceptPrompts();
+    const bool autoAcceptBefore = HostGetAutoAcceptPrompts();
     const auto restorePromptState = wil::scope_exit([autoAcceptBefore]() noexcept
     {
         HostResetPromptShutdown();
@@ -9737,14 +10023,18 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
             .finalLeaf      = target.filename().native(),
         },
     };
-    if (! PopulateLocalBatchRenameExecutionProviderFactsForTest(state, localFileSystem.get(), operations, L"Batch Rename artifact-prompt admission"))
+    if (! PopulateLocalBatchRenameExecutionProviderFactsForTest(
+            state, localFileSystem.get(), operations, L"Batch Rename artifact-prompt admission"))
     {
         return false;
     }
-    uint64_t taskId       = 0u;
-    const HRESULT admitHr = fileOps->AdmitBatchRename(FolderWindow::Pane::Left, localFileSystem, std::move(operations), {}, {}, &taskId);
+    uint64_t taskId = 0u;
+    const HRESULT admitHr = fileOps->AdmitBatchRename(
+        FolderWindow::Pane::Left, localFileSystem, std::move(operations), {}, {}, &taskId);
     state.Require(admitHr == S_OK && taskId != 0u,
-                  std::format(L"Artifact-prompt shutdown task should publish: hr=0x{:08X}, taskId={}.", static_cast<unsigned long>(admitHr), taskId));
+                  std::format(L"Artifact-prompt shutdown task should publish: hr=0x{:08X}, taskId={}.",
+                              static_cast<unsigned long>(admitHr),
+                              taskId));
     if (admitHr != S_OK || taskId == 0u)
     {
         return false;
@@ -9756,13 +10046,14 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
         PumpPendingMessages();
         std::this_thread::sleep_for(std::chrono::milliseconds{2});
     }
-    state.Require(HasFileOpsBatchRenameBeforeExecutionPauseEnteredForSelfTest(), L"Artifact-prompt shutdown task should reach the pre-mutation barrier.");
+    state.Require(HasFileOpsBatchRenameBeforeExecutionPauseEnteredForSelfTest(),
+                  L"Artifact-prompt shutdown task should reach the pre-mutation barrier.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    auto payload    = std::make_unique<FolderWindow::FileOperationState::BatchRenameArtifactPromptPayload>();
+    auto payload = std::make_unique<FolderWindow::FileOperationState::BatchRenameArtifactPromptPayload>();
     payload->taskId = taskId;
     FileOperationArtifacts::TouchGuardItem item{};
     item.classification = FileOperationArtifacts::Classification::Possible;
@@ -9773,7 +10064,10 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
 
     const HWND folderWindow = g_folderWindow.GetHwnd();
     state.Require(folderWindow != nullptr &&
-                      PostMessagePayload(folderWindow, WndMsg::kFileOperationBatchRenameArtifactPrompt, static_cast<WPARAM>(taskId), std::move(payload)) &&
+                      PostMessagePayload(folderWindow,
+                                         WndMsg::kFileOperationBatchRenameArtifactPrompt,
+                                         static_cast<WPARAM>(taskId),
+                                         std::move(payload)) &&
                       PostMessageW(folderWindow, WndMsg::kFileOperationShutdownForSelfTest, static_cast<WPARAM>(taskId), 0) != FALSE,
                   L"Artifact-prompt shutdown test should queue the prompt before nested shutdown.");
     if (! state.failure.empty())
@@ -9787,11 +10081,13 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     auto* const replacementState = g_folderWindow.DebugGetFileOperationState();
     state.Require(replacementState != nullptr && replacementState->FindTask(taskId) == nullptr,
                   L"Nested artifact-prompt shutdown should unwind safely and allow a fresh File Operations state.");
-    state.Require(SelfTest::PathExists(source) && ! SelfTest::PathExists(target), L"Nested artifact-prompt shutdown must cancel before Batch Rename mutation.");
+    state.Require(SelfTest::PathExists(source) && ! SelfTest::PathExists(target),
+                  L"Nested artifact-prompt shutdown must cancel before Batch Rename mutation.");
 
     const std::filesystem::path missingPayloadSource = root / L"missing-payload-source.txt";
     const std::filesystem::path missingPayloadTarget = root / L"missing-payload-renamed.txt";
-    state.Require(SelfTest::WriteTextFile(missingPayloadSource, "missing-payload"), L"Artifact-prompt missing-payload fixture should create its source.");
+    state.Require(SelfTest::WriteTextFile(missingPayloadSource, "missing-payload"),
+                  L"Artifact-prompt missing-payload fixture should create its source.");
     SetFileOpsBatchRenameBeforeExecutionPauseForSelfTest(true);
     std::vector<BatchRenameExecutionOp> missingPayloadOperations{
         BatchRenameExecutionOp{
@@ -9805,25 +10101,31 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
         return false;
     }
     uint64_t missingPayloadTaskId = 0u;
-    const HRESULT missingPayloadAdmitHr =
-        replacementState
-            ? replacementState->AdmitBatchRename(FolderWindow::Pane::Left, localFileSystem, std::move(missingPayloadOperations), {}, {}, &missingPayloadTaskId)
-            : E_HANDLE;
-    state.Require(missingPayloadAdmitHr == S_OK && missingPayloadTaskId != 0u, L"Artifact-prompt missing-payload task should publish.");
+    const HRESULT missingPayloadAdmitHr = replacementState
+        ? replacementState->AdmitBatchRename(
+              FolderWindow::Pane::Left, localFileSystem, std::move(missingPayloadOperations), {}, {}, &missingPayloadTaskId)
+        : E_HANDLE;
+    state.Require(missingPayloadAdmitHr == S_OK && missingPayloadTaskId != 0u,
+                  L"Artifact-prompt missing-payload task should publish.");
     const auto missingPayloadPauseDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds{10});
-    while (! HasFileOpsBatchRenameBeforeExecutionPauseEnteredForSelfTest() && std::chrono::steady_clock::now() < missingPayloadPauseDeadline)
+    while (! HasFileOpsBatchRenameBeforeExecutionPauseEnteredForSelfTest() &&
+           std::chrono::steady_clock::now() < missingPayloadPauseDeadline)
     {
         PumpPendingMessages();
         std::this_thread::sleep_for(std::chrono::milliseconds{2});
     }
     state.Require(HasFileOpsBatchRenameBeforeExecutionPauseEnteredForSelfTest(),
                   L"Artifact-prompt missing-payload task should reach the pre-mutation barrier.");
-    state.Require(PostMessageW(folderWindow, WndMsg::kFileOperationBatchRenameArtifactPrompt, static_cast<WPARAM>(missingPayloadTaskId), 0) != FALSE,
+    state.Require(PostMessageW(folderWindow,
+                               WndMsg::kFileOperationBatchRenameArtifactPrompt,
+                               static_cast<WPARAM>(missingPayloadTaskId),
+                               0) != FALSE,
                   L"Artifact-prompt missing-payload test should post its documented payload-less fallback.");
     PumpPendingMessages();
-    FolderWindow::FileOperationState::Task* const missingPayloadTask = replacementState ? replacementState->FindTask(missingPayloadTaskId) : nullptr;
-    bool missingPayloadCompleted                                     = false;
-    HRESULT missingPayloadStatus                                     = E_PENDING;
+    FolderWindow::FileOperationState::Task* const missingPayloadTask =
+        replacementState ? replacementState->FindTask(missingPayloadTaskId) : nullptr;
+    bool missingPayloadCompleted = false;
+    HRESULT missingPayloadStatus = E_PENDING;
     if (missingPayloadTask)
     {
         {
@@ -9837,21 +10139,23 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
                   L"A missing registered artifact-prompt payload should wake the live task by taskId with shutdown status.");
     ReleaseFileOpsBatchRenameBeforeExecutionPauseForSelfTest();
     SetFileOpsBatchRenameBeforeExecutionPauseForSelfTest(false);
-    bool missingPayloadTaskFinished             = false;
+    bool missingPayloadTaskFinished = false;
     const auto missingPayloadCompletionDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds{10});
     while (std::chrono::steady_clock::now() < missingPayloadCompletionDeadline)
     {
         PumpPendingMessages();
         std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
         replacementState->CollectCompletedTasks(summaries);
-        if (std::ranges::any_of(summaries, [missingPayloadTaskId](const auto& summary) noexcept { return summary.taskId == missingPayloadTaskId; }))
+        if (std::ranges::any_of(summaries, [missingPayloadTaskId](const auto& summary) noexcept
+            { return summary.taskId == missingPayloadTaskId; }))
         {
             missingPayloadTaskFinished = true;
             break;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds{2});
     }
-    state.Require(missingPayloadTaskFinished, L"Artifact-prompt missing-payload task should drain after the taskId-addressed wake and cancel.");
+    state.Require(missingPayloadTaskFinished,
+                  L"Artifact-prompt missing-payload task should drain after the taskId-addressed wake and cancel.");
     if (missingPayloadTaskFinished)
     {
         replacementState->DismissCompletedTask(missingPayloadTaskId);
@@ -9872,7 +10176,8 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     }
 
     const wil::com_ptr<IFileSystem> localFileSystem = GetBatchRenameLocalFileSystem(state);
-    state.Require(localFileSystem != nullptr, L"StartOperation artifact-prompt shutdown testing requires Local File System.");
+    state.Require(localFileSystem != nullptr,
+                  L"StartOperation artifact-prompt shutdown testing requires Local File System.");
     if (! localFileSystem)
     {
         return false;
@@ -9882,14 +10187,17 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     const std::wstring savedPluginId(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
     const std::wstring savedPluginShortId(g_folderWindow.GetFileSystemPluginShortId(FolderWindow::Pane::Left));
     const std::wstring savedInstanceContext(g_folderWindow.GetFileSystemInstanceContext(FolderWindow::Pane::Left));
-    const auto restorePane                       = wil::scope_exit([&]() noexcept
+    const auto restorePane = wil::scope_exit([&]() noexcept
     {
-        static_cast<void>(
-            g_folderWindow.SetFileSystemInstanceForPane(FolderWindow::Pane::Left, savedFileSystem, savedPluginId, savedPluginShortId, savedInstanceContext));
+        static_cast<void>(g_folderWindow.SetFileSystemInstanceForPane(
+            FolderWindow::Pane::Left, savedFileSystem, savedPluginId, savedPluginShortId, savedInstanceContext));
     });
     constexpr std::wstring_view kInstanceContext = L"start-operation-artifact-prompt-selftest";
-    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemInstanceForPane(
-                      FolderWindow::Pane::Left, localFileSystem, L"builtin/file-system", L"local", std::wstring(kInstanceContext))),
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemInstanceForPane(FolderWindow::Pane::Left,
+                                                                        localFileSystem,
+                                                                        L"builtin/file-system",
+                                                                        L"local",
+                                                                        std::wstring(kInstanceContext))),
                   L"StartOperation artifact-prompt shutdown testing should install Local File System.");
     if (! state.failure.empty())
     {
@@ -9901,7 +10209,8 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     {
         return false;
     }
-    const std::filesystem::path source = root / L"source.rs_ren_0123456789abcdef0123456789abcdef";
+    const std::filesystem::path source =
+        root / L"source.rs_ren_0123456789abcdef0123456789abcdef";
     state.Require(SelfTest::WriteTextFile(source, "start-operation-artifact-prompt-shutdown"),
                   L"StartOperation artifact-prompt shutdown fixture should create its source.");
     if (! state.failure.empty())
@@ -9909,12 +10218,12 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
         return false;
     }
 
-    const auto cleanupFiles       = wil::scope_exit([root]() noexcept
+    const auto cleanupFiles = wil::scope_exit([root]() noexcept
     {
         std::error_code ec;
         std::filesystem::remove_all(root, ec);
     });
-    const bool autoAcceptBefore   = HostGetAutoAcceptPrompts();
+    const bool autoAcceptBefore = HostGetAutoAcceptPrompts();
     const auto restorePromptState = wil::scope_exit([autoAcceptBefore]() noexcept
     {
         HostResetPromptShutdown();
@@ -9930,11 +10239,18 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
         return false;
     }
 
-    uint64_t taskId       = 0u;
-    const auto startedAt  = std::chrono::steady_clock::now();
+    uint64_t taskId = 0u;
+    const auto startedAt = std::chrono::steady_clock::now();
     const HRESULT startHr = g_folderWindow.StartFileOperationForResolvedPaths(
-        L"builtin/file-system", kInstanceContext, FILESYSTEM_DELETE, {source}, FILESYSTEM_FLAG_NONE, false, &taskId);
-    const bool retainedDuringShutdown = g_folderWindow.DebugWasFileOperationStateRetainedDuringNestedPromptShutdown();
+        L"builtin/file-system",
+        kInstanceContext,
+        FILESYSTEM_DELETE,
+        {source},
+        FILESYSTEM_FLAG_NONE,
+        false,
+        &taskId);
+    const bool retainedDuringShutdown =
+        g_folderWindow.DebugWasFileOperationStateRetainedDuringNestedPromptShutdown();
     Debug::Perf::Emit(L"FileOps.SelfTest.ArtifactPromptNestedShutdownUs",
                       L"start-operation-direct-admission",
                       Debug::Perf::ElapsedUs(startedAt),
@@ -9947,9 +10263,12 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
                   std::format(L"Nested shutdown should reject direct admission without publishing a task: hr=0x{:08X}, taskId={}.",
                               static_cast<unsigned long>(startHr),
                               taskId));
-    state.Require(retainedDuringShutdown, L"Nested shutdown must retain FileOperationState until direct StartOperation admission unwinds.");
-    state.Require(g_folderWindow.DebugGetFileOperationState() != nullptr, L"Direct StartOperation nested shutdown should allow a fresh File Operations state.");
-    state.Require(SelfTest::PathExists(source), L"Direct StartOperation nested shutdown must preserve the guarded source.");
+    state.Require(retainedDuringShutdown,
+                  L"Nested shutdown must retain FileOperationState until direct StartOperation admission unwinds.");
+    state.Require(g_folderWindow.DebugGetFileOperationState() != nullptr,
+                  L"Direct StartOperation nested shutdown should allow a fresh File Operations state.");
+    state.Require(SelfTest::PathExists(source),
+                  L"Direct StartOperation nested shutdown must preserve the guarded source.");
     return state.failure.empty();
 }
 
@@ -9993,7 +10312,7 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     }
 
     const auto cleanupBatchWindow = wil::scope_exit([]() noexcept { CloseBatchRenameWindowIfOpen(); });
-    const auto cleanupFiles       = wil::scope_exit([root]() noexcept
+    const auto cleanupFiles = wil::scope_exit([root]() noexcept
     {
         std::error_code removeEc;
         std::filesystem::remove_all(root, removeEc);
@@ -10150,20 +10469,20 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
         std::filesystem::remove_all(root, ec);
     });
 
-    const std::filesystem::path batchA                     = root / L"batch-a.txt";
-    const std::filesystem::path batchB                     = root / L"batch-b.txt";
-    const std::filesystem::path driftSource                = root / L"drift-source.txt";
-    const std::filesystem::path inlineSource               = root / L"inline-source.txt";
-    const std::filesystem::path changeSource               = root / L"change.txt";
-    const std::filesystem::path duplicateA                 = root / L"one.txt";
-    const std::filesystem::path duplicateB                 = root / L"two.txt";
-    const std::filesystem::path unchangedCollision         = root / L"STEADY.TXT";
+    const std::filesystem::path batchA = root / L"batch-a.txt";
+    const std::filesystem::path batchB = root / L"batch-b.txt";
+    const std::filesystem::path driftSource = root / L"drift-source.txt";
+    const std::filesystem::path inlineSource = root / L"inline-source.txt";
+    const std::filesystem::path changeSource = root / L"change.txt";
+    const std::filesystem::path duplicateA = root / L"one.txt";
+    const std::filesystem::path duplicateB = root / L"two.txt";
+    const std::filesystem::path unchangedCollision = root / L"STEADY.TXT";
     const std::filesystem::path createDirectoryNameBlocker = root / L"provider-name-blocker.txt";
-    state.Require(SelfTest::WriteTextFile(createDirectoryNameBlocker, "blocker") && SelfTest::WriteTextFile(batchA, "a") &&
-                      SelfTest::WriteTextFile(batchB, "b") && SelfTest::WriteTextFile(driftSource, "drift") &&
-                      SelfTest::WriteTextFile(inlineSource, "inline") && SelfTest::WriteTextFile(changeSource, "change") &&
-                      SelfTest::WriteTextFile(duplicateA, "one") && SelfTest::WriteTextFile(duplicateB, "two") &&
-                      SelfTest::WriteTextFile(unchangedCollision, "steady"),
+    state.Require(SelfTest::WriteTextFile(createDirectoryNameBlocker, "blocker") &&
+                      SelfTest::WriteTextFile(batchA, "a") && SelfTest::WriteTextFile(batchB, "b") &&
+                      SelfTest::WriteTextFile(driftSource, "drift") && SelfTest::WriteTextFile(inlineSource, "inline") &&
+                      SelfTest::WriteTextFile(changeSource, "change") && SelfTest::WriteTextFile(duplicateA, "one") &&
+                      SelfTest::WriteTextFile(duplicateB, "two") && SelfTest::WriteTextFile(unchangedCollision, "steady"),
                   L"Provider-name ingress fixtures should be created.");
     if (! state.failure.empty())
     {
@@ -10171,7 +10490,7 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     }
 
     const wil::com_ptr<IFileSystem> localFileSystem = GetBatchRenameLocalFileSystem(state);
-    auto* const fileOps                             = g_folderWindow.DebugGetFileOperationState();
+    auto* const fileOps = g_folderWindow.DebugGetFileOperationState();
     state.Require(localFileSystem != nullptr && fileOps != nullptr,
                   L"Provider-name ingress testing requires Local File System and live File Operations state.");
     if (! localFileSystem || ! fileOps)
@@ -10182,8 +10501,8 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     std::atomic_uint32_t readDirectoryCalls{0u};
     std::atomic_uint32_t renameItemCalls{0u};
     std::atomic_uint32_t renameItemsCalls{0u};
-    auto* const scriptedRaw =
-        new (std::nothrow) BatchRenameCountingReadDirectoryFileSystem(localFileSystem, &readDirectoryCalls, &renameItemCalls, &renameItemsCalls);
+    auto* const scriptedRaw = new (std::nothrow) BatchRenameCountingReadDirectoryFileSystem(
+        localFileSystem, &readDirectoryCalls, &renameItemCalls, &renameItemsCalls);
     state.Require(scriptedRaw != nullptr, L"Provider-name ingress scripted provider should be created.");
     if (! scriptedRaw)
     {
@@ -10200,11 +10519,14 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     const auto restorePane = wil::scope_exit([&]() noexcept
     {
         CloseBatchRenameWindowIfOpen();
-        static_cast<void>(
-            g_folderWindow.SetFileSystemInstanceForPane(FolderWindow::Pane::Left, savedFileSystem, savedPluginId, savedPluginShortId, savedInstanceContext));
+        static_cast<void>(g_folderWindow.SetFileSystemInstanceForPane(
+            FolderWindow::Pane::Left, savedFileSystem, savedPluginId, savedPluginShortId, savedInstanceContext));
     });
-    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemInstanceForPane(
-                      FolderWindow::Pane::Left, scriptedFileSystem, L"builtin/file-system", L"local", L"provider-name-ingress-selftest")),
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemInstanceForPane(FolderWindow::Pane::Left,
+                                                                        scriptedFileSystem,
+                                                                        L"builtin/file-system",
+                                                                        L"local",
+                                                                        L"provider-name-ingress-selftest")),
                   L"Provider-name ingress scripted provider should be installed in the originating pane.");
     if (! state.failure.empty())
     {
@@ -10214,98 +10536,120 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     std::wstring initialDirectoryName;
     const HRESULT initialNameHr = FolderWindowFileSystemInternal::DebugResolveInitialCreateDirectoryNameForTests(
         scriptedFileSystem, root, L"New Folder", L"builtin/file-system", initialDirectoryName);
-    state.Require(initialNameHr == S_OK && initialDirectoryName == L"New Folder (1)" && readDirectoryCalls.load(std::memory_order_relaxed) == 1u,
+    state.Require(initialNameHr == S_OK && initialDirectoryName == L"New Folder (1)" &&
+                      readDirectoryCalls.load(std::memory_order_relaxed) == 1u,
                   std::format(L"F7 initial suffix selection must enumerate once and use provider collision keys; hr=0x{:08X}, name='{}'.",
                               static_cast<unsigned long>(initialNameHr),
                               initialDirectoryName));
 
     FileOperations::CreateDirectoryAdmission acceptedDirectory{};
-    const HRESULT acceptedDirectoryHr =
-        fileOps->QualifyCreateDirectory(scriptedFileSystem, L"builtin/file-system", L"provider-name-ingress-selftest", root, L"CON", acceptedDirectory);
+    const HRESULT acceptedDirectoryHr = fileOps->QualifyCreateDirectory(scriptedFileSystem,
+                                                                         L"builtin/file-system",
+                                                                         L"provider-name-ingress-selftest",
+                                                                         root,
+                                                                         L"CON",
+                                                                         acceptedDirectory);
     state.Require(acceptedDirectoryHr == S_OK && acceptedDirectory.candidateProviderPath.native().ends_with(L"/CON"),
                   std::format(L"F7 must accept a provider-valid Windows-reserved leaf and preserve the provider join; hr=0x{:08X}, path='{}'.",
                               static_cast<unsigned long>(acceptedDirectoryHr),
                               acceptedDirectory.candidateProviderPath.native()));
     FileOperations::CreateDirectoryAdmission rejectedDirectory{};
-    const HRESULT rejectedDirectoryHr = fileOps->QualifyCreateDirectory(
-        scriptedFileSystem, L"builtin/file-system", L"provider-name-ingress-selftest", root, L"REJECTED.TXT", rejectedDirectory);
+    const HRESULT rejectedDirectoryHr = fileOps->QualifyCreateDirectory(scriptedFileSystem,
+                                                                         L"builtin/file-system",
+                                                                         L"provider-name-ingress-selftest",
+                                                                         root,
+                                                                         L"REJECTED.TXT",
+                                                                         rejectedDirectory);
     state.Require(rejectedDirectoryHr == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) && rejectedDirectory.candidateProviderPath.empty(),
                   L"F7 must preserve the provider's exact invalid-name HRESULT before mutation.");
 
     BatchRenamePaneContext acceptedContext{};
-    acceptedContext.fileSystem      = scriptedFileSystem;
-    acceptedContext.pluginId        = L"builtin/file-system";
-    acceptedContext.pluginShortId   = L"local";
+    acceptedContext.fileSystem = scriptedFileSystem;
+    acceptedContext.pluginId = L"builtin/file-system";
+    acceptedContext.pluginShortId = L"local";
     acceptedContext.instanceContext = L"provider-name-ingress-selftest";
-    acceptedContext.rootPluginPath  = root;
-    acceptedContext.initialPaths    = {batchA};
-    const AppTheme theme            = ResolveAppTheme(ThemeMode::Dark, L"provider-name-ingress-selftest");
-    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(acceptedContext)), L"Provider-name Batch Rename preview should open.");
-    const HWND acceptedWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5'000}));
-    state.Require(acceptedWindow != nullptr && IsWindow(acceptedWindow) != FALSE, L"Provider-name Batch Rename preview should become visible.");
+    acceptedContext.rootPluginPath = root;
+    acceptedContext.initialPaths = {batchA};
+    const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"provider-name-ingress-selftest");
+    state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(acceptedContext)),
+                  L"Provider-name Batch Rename preview should open.");
+    const HWND acceptedWindow = WaitForWindow(
+        []() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5'000}));
+    state.Require(acceptedWindow != nullptr && IsWindow(acceptedWindow) != FALSE,
+                  L"Provider-name Batch Rename preview should become visible.");
     if (acceptedWindow && IsWindow(acceptedWindow) != FALSE)
     {
         state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual) && DebugSetBatchRenameWindowManualText(L"CON"),
                       L"Provider-name Batch Rename preview should accept manual text.");
         BatchRenameDebugSnapshot acceptedSnapshot{};
-        state.Require(DebugGetBatchRenameWindowSnapshot(acceptedSnapshot) && acceptedSnapshot.errorRowCount == 0u && acceptedSnapshot.renameButtonEnabled,
+        state.Require(DebugGetBatchRenameWindowSnapshot(acceptedSnapshot) && acceptedSnapshot.errorRowCount == 0u &&
+                          acceptedSnapshot.renameButtonEnabled,
                       L"Batch Rename preview must accept provider-valid CON without applying Windows reserved-name rules.");
 
         state.Require(DebugSetBatchRenameWindowManualText(L"REJECTED.TXT"),
                       L"Provider-name Batch Rename preview should accept rejected-name input for validation.");
         BatchRenameDebugSnapshot rejectedSnapshot{};
-        state.Require(DebugGetBatchRenameWindowSnapshot(rejectedSnapshot) && rejectedSnapshot.errorRowCount == 1u && ! rejectedSnapshot.renameButtonEnabled,
+        state.Require(DebugGetBatchRenameWindowSnapshot(rejectedSnapshot) && rejectedSnapshot.errorRowCount == 1u &&
+                          ! rejectedSnapshot.renameButtonEnabled,
                       L"Batch Rename preview must surface provider-invalid names before Run.");
     }
     CloseBatchRenameWindowIfOpen();
 
     scriptedRaw->SetProviderNamePolicy(L"REJECTED.TXT", L"ONE.TXT", L"TWO.TXT");
     BatchRenamePaneContext duplicateContext{};
-    duplicateContext.fileSystem      = scriptedFileSystem;
-    duplicateContext.pluginId        = L"builtin/file-system";
-    duplicateContext.pluginShortId   = L"local";
+    duplicateContext.fileSystem = scriptedFileSystem;
+    duplicateContext.pluginId = L"builtin/file-system";
+    duplicateContext.pluginShortId = L"local";
     duplicateContext.instanceContext = L"provider-name-ingress-selftest";
-    duplicateContext.rootPluginPath  = root;
-    duplicateContext.initialPaths    = {batchA, batchB};
+    duplicateContext.rootPluginPath = root;
+    duplicateContext.initialPaths = {batchA, batchB};
     state.Require(ShowBatchRenameWindow(mainWindow, g_settings, theme, std::move(duplicateContext)),
                   L"Provider-key duplicate Batch Rename preview should open.");
-    const HWND duplicateWindow = WaitForWindow([]() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5'000}));
-    state.Require(duplicateWindow != nullptr && IsWindow(duplicateWindow) != FALSE, L"Provider-key duplicate Batch Rename preview should become visible.");
+    const HWND duplicateWindow = WaitForWindow(
+        []() noexcept { return GetBatchRenameWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5'000}));
+    state.Require(duplicateWindow != nullptr && IsWindow(duplicateWindow) != FALSE,
+                  L"Provider-key duplicate Batch Rename preview should become visible.");
     if (duplicateWindow && IsWindow(duplicateWindow) != FALSE)
     {
-        state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual) && DebugSetBatchRenameWindowManualText(L"ONE.TXT\nTWO.TXT"),
+        state.Require(DebugSwitchBatchRenameWindowMode(BatchRename::Mode::Manual) &&
+                          DebugSetBatchRenameWindowManualText(L"ONE.TXT\nTWO.TXT"),
                       L"Provider-key duplicate Batch Rename preview should accept manual targets.");
         BatchRenameDebugSnapshot duplicateSnapshot{};
-        state.Require(DebugGetBatchRenameWindowSnapshot(duplicateSnapshot) && duplicateSnapshot.errorRowCount == 2u && ! duplicateSnapshot.renameButtonEnabled,
+        state.Require(DebugGetBatchRenameWindowSnapshot(duplicateSnapshot) && duplicateSnapshot.errorRowCount == 2u &&
+                          ! duplicateSnapshot.renameButtonEnabled,
                       L"Batch Rename duplicate detection must use provider collision keys for every row.");
     }
     CloseBatchRenameWindowIfOpen();
 
     BatchRenameExecutionOp driftOperation{
         .originalSource = driftSource,
-        .finalLeaf      = L"drift-target.txt",
+        .finalLeaf = L"drift-target.txt",
     };
     const FileSystemPathIdentity localIdentity = FileSystemPathIdentity::OrdinalIgnoreCaseForLocalFileSystem();
-    const HRESULT driftSetupHr                 = PopulateBatchRenameExecutionProviderFactsForTest(scriptedFileSystem.get(), localIdentity, driftOperation);
+    const HRESULT driftSetupHr =
+        PopulateBatchRenameExecutionProviderFactsForTest(scriptedFileSystem.get(), localIdentity, driftOperation);
     state.Require(SUCCEEDED(driftSetupHr) && driftOperation.providerFinalPath.native().ends_with(L"/drift-target.txt"),
                   L"Batch Rename drift fixture should capture the first provider join generation.");
     scriptedRaw->SetProviderNameJoinRevision(1u);
     const uint32_t renameCallsBeforeDrift = renameItemCalls.load(std::memory_order_relaxed) + renameItemsCalls.load(std::memory_order_relaxed);
-    uint64_t driftTaskId                  = 0u;
-    const HRESULT driftAdmitHr = fileOps->AdmitBatchRename(FolderWindow::Pane::Left, scriptedFileSystem, {std::move(driftOperation)}, {}, {}, &driftTaskId);
-    state.Require(driftAdmitHr == S_OK && driftTaskId != 0u, L"Batch Rename drift test should publish its worker-owned admission task.");
+    uint64_t driftTaskId = 0u;
+    const HRESULT driftAdmitHr = fileOps->AdmitBatchRename(
+        FolderWindow::Pane::Left, scriptedFileSystem, {std::move(driftOperation)}, {}, {}, &driftTaskId);
+    state.Require(driftAdmitHr == S_OK && driftTaskId != 0u,
+                  L"Batch Rename drift test should publish its worker-owned admission task.");
     FolderWindow::FileOperationState::CompletedTaskSummary driftSummary{};
-    bool driftCompleted      = false;
+    bool driftCompleted = false;
     const auto driftDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds{10});
     while (std::chrono::steady_clock::now() < driftDeadline)
     {
         PumpPendingMessages();
         std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
         fileOps->CollectCompletedTasks(summaries);
-        const auto found = std::ranges::find_if(summaries, [driftTaskId](const auto& summary) noexcept { return summary.taskId == driftTaskId; });
+        const auto found = std::ranges::find_if(summaries, [driftTaskId](const auto& summary) noexcept
+        { return summary.taskId == driftTaskId; });
         if (found != summaries.end())
         {
-            driftSummary   = *found;
+            driftSummary = *found;
             driftCompleted = true;
             break;
         }
@@ -10324,23 +10668,26 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     scriptedRaw->SetProviderNameJoinRevision(0u);
 
     const uint32_t renameCallsBeforeInline = renameItemCalls.load(std::memory_order_relaxed) + renameItemsCalls.load(std::memory_order_relaxed);
-    uint64_t inlineTaskId                  = 0u;
-    const HRESULT inlineHr = fileOps->AdmitInlineRename(FolderWindow::Pane::Left, scriptedFileSystem, inlineSource, L"REJECTED.TXT", &inlineTaskId);
+    uint64_t inlineTaskId = 0u;
+    const HRESULT inlineHr = fileOps->AdmitInlineRename(
+        FolderWindow::Pane::Left, scriptedFileSystem, inlineSource, L"REJECTED.TXT", &inlineTaskId);
     // C1: the provider's child-name contract runs in Preparing on the task thread, so admission
     // publishes the task and the provider-invalid truth surfaces as that task's result.
-    state.Require(inlineHr == S_OK && inlineTaskId != 0u, L"Inline F2 must publish its task and leave the provider name contract to Preparing (C1).");
+    state.Require(inlineHr == S_OK && inlineTaskId != 0u,
+                  L"Inline F2 must publish its task and leave the provider name contract to Preparing (C1).");
     FolderWindow::FileOperationState::CompletedTaskSummary inlineSummary{};
-    bool inlineCompleted      = false;
+    bool inlineCompleted = false;
     const auto inlineDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::seconds{10});
     while (std::chrono::steady_clock::now() < inlineDeadline)
     {
         PumpPendingMessages();
         std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
         fileOps->CollectCompletedTasks(summaries);
-        const auto found = std::ranges::find_if(summaries, [inlineTaskId](const auto& summary) noexcept { return summary.taskId == inlineTaskId; });
+        const auto found = std::ranges::find_if(summaries, [inlineTaskId](const auto& summary) noexcept
+        { return summary.taskId == inlineTaskId; });
         if (found != summaries.end())
         {
-            inlineSummary   = *found;
+            inlineSummary = *found;
             inlineCompleted = true;
             break;
         }
@@ -10358,11 +10705,12 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
     }
 
     ChangeCase::Options upper{};
-    upper.style  = ChangeCase::CaseStyle::Upper;
+    upper.style = ChangeCase::CaseStyle::Upper;
     upper.target = ChangeCase::ChangeTarget::WholeFilename;
     scriptedRaw->SetProviderNamePolicy(L"CHANGE.TXT");
     const uint32_t renameCallsBeforeInvalidChange = renameItemCalls.load(std::memory_order_relaxed) + renameItemsCalls.load(std::memory_order_relaxed);
-    const HRESULT invalidChangeHr                 = ChangeCase::DebugApplyToPathsForTests(*scriptedFileSystem, L"builtin/file-system", {changeSource}, upper);
+    const HRESULT invalidChangeHr = ChangeCase::DebugApplyToPathsForTests(
+        *scriptedFileSystem, L"builtin/file-system", {changeSource}, upper);
     state.Require(invalidChangeHr == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) &&
                       renameItemCalls.load(std::memory_order_relaxed) + renameItemsCalls.load(std::memory_order_relaxed) == renameCallsBeforeInvalidChange &&
                       SelfTest::PathExists(changeSource),
@@ -10370,16 +10718,18 @@ HRESULT ApplyBatchRenameExecutionMutationForTest(void* context,
 
     scriptedRaw->SetProviderNamePolicy(L"REJECTED.TXT", L"ONE.TXT", L"TWO.TXT");
     const uint32_t renameCallsBeforeDuplicateChange = renameItemCalls.load(std::memory_order_relaxed) + renameItemsCalls.load(std::memory_order_relaxed);
-    const HRESULT duplicateChangeHr = ChangeCase::DebugApplyToPathsForTests(*scriptedFileSystem, L"builtin/file-system", {duplicateA, duplicateB}, upper);
+    const HRESULT duplicateChangeHr = ChangeCase::DebugApplyToPathsForTests(
+        *scriptedFileSystem, L"builtin/file-system", {duplicateA, duplicateB}, upper);
     state.Require(duplicateChangeHr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) &&
                       renameItemCalls.load(std::memory_order_relaxed) + renameItemsCalls.load(std::memory_order_relaxed) == renameCallsBeforeDuplicateChange &&
                       SelfTest::PathExists(duplicateA) && SelfTest::PathExists(duplicateB),
                   L"Change Case duplicate preflight must use provider collision keys and perform zero mutation.");
 
     scriptedRaw->SetProviderNamePolicy(L"REJECTED.TXT", L"ONE.TXT", L"STEADY.TXT");
-    const uint32_t renameCallsBeforeUnchangedCollision = renameItemCalls.load(std::memory_order_relaxed) + renameItemsCalls.load(std::memory_order_relaxed);
-    const HRESULT unchangedCollisionHr =
-        ChangeCase::DebugApplyToPathsForTests(*scriptedFileSystem, L"builtin/file-system", {duplicateA, unchangedCollision}, upper);
+    const uint32_t renameCallsBeforeUnchangedCollision =
+        renameItemCalls.load(std::memory_order_relaxed) + renameItemsCalls.load(std::memory_order_relaxed);
+    const HRESULT unchangedCollisionHr = ChangeCase::DebugApplyToPathsForTests(
+        *scriptedFileSystem, L"builtin/file-system", {duplicateA, unchangedCollision}, upper);
     state.Require(unchangedCollisionHr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) &&
                       renameItemCalls.load(std::memory_order_relaxed) + renameItemsCalls.load(std::memory_order_relaxed) ==
                           renameCallsBeforeUnchangedCollision &&
@@ -10408,9 +10758,11 @@ void RunBatchRenameCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTe
     };
 
     runCase(L"cmd_pane_batchRename_command_registered", [](CaseState& state) noexcept { return TestBatchRenameCommandRegistered(state); });
-    runCase(L"file_system_provider_name_policy_ingresses",
-            [mainWindow](CaseState& state) noexcept { return TestProviderNamePolicyConsumptionAcrossRenameIngresses(mainWindow, state); });
-    runCase(L"cmd_pane_changeCase_central_rename_plan", [](CaseState& state) noexcept { return TestChangeCaseUsesCentralRenamePlan(state); });
+    runCase(L"file_system_provider_name_policy_ingresses", [mainWindow](CaseState& state) noexcept {
+        return TestProviderNamePolicyConsumptionAcrossRenameIngresses(mainWindow, state);
+    });
+    runCase(L"cmd_pane_changeCase_central_rename_plan",
+            [](CaseState& state) noexcept { return TestChangeCaseUsesCentralRenamePlan(state); });
     runCase(L"cmd_pane_batchRename_opens_from_active_pane",
             [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowOpensFromPaneContext(mainWindow, state); });
     runCase(L"cmd_pane_batchRename_folder_scope_collects_local_children_metadata",
@@ -10451,8 +10803,9 @@ void RunBatchRenameCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTe
             [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowExecutesLocalRename(mainWindow, state); });
     runCase(L"cmd_pane_batchRename_window_refreshes_pane_after_success",
             [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowRefreshesPaneAfterSuccess(mainWindow, state); });
-    runCase(L"cmd_pane_batchRename_production_rejects_source_replacement_after_admission",
-            [mainWindow](CaseState& state) noexcept { return TestBatchRenameProductionRejectsSourceReplacementAfterAdmission(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_production_rejects_source_replacement_after_admission", [mainWindow](CaseState& state) noexcept {
+        return TestBatchRenameProductionRejectsSourceReplacementAfterAdmission(mainWindow, state);
+    });
     runCase(L"cmd_pane_batchRename_window_invokes_success_callback",
             [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowInvokesSuccessCallback(mainWindow, state); });
     runCase(L"cmd_pane_batchRename_window_success_callback_parent_child_execution_order",
@@ -10470,11 +10823,13 @@ void RunBatchRenameCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTe
             [mainWindow](CaseState& state) noexcept { return TestBatchRenameDestinationProbeFailureIssueId(mainWindow, state); });
     runCase(L"cmd_pane_batchRename_cancel_does_not_apply_remaining_rows",
             [mainWindow](CaseState& state) noexcept { return TestBatchRenameCancelDoesNotApplyRemainingRows(mainWindow, state); });
-    runCase(L"cmd_pane_batchRename_window_does_not_bypass_central_mutation_when_unsupported",
-            [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowDoesNotBypassCentralMutationWhenBulkUnsupported(mainWindow, state); });
+    runCase(L"cmd_pane_batchRename_window_does_not_bypass_central_mutation_when_unsupported", [mainWindow](CaseState& state) noexcept {
+        return TestBatchRenameWindowDoesNotBypassCentralMutationWhenBulkUnsupported(mainWindow, state);
+    });
     runCase(L"cmd_pane_batchRename_cycle_preview_blocks_run",
             [mainWindow](CaseState& state) noexcept { return TestBatchRenameCyclePreviewBlocksRun(mainWindow, state); });
-    runCase(L"cmd_pane_batchRename_admission_rejects_cycle", [](CaseState& state) noexcept { return TestBatchRenameAdmissionRejectsCycle(state); });
+    runCase(L"cmd_pane_batchRename_admission_rejects_cycle",
+            [](CaseState& state) noexcept { return TestBatchRenameAdmissionRejectsCycle(state); });
     runCase(L"cmd_pane_batchRename_window_executes_chain_rename",
             [mainWindow](CaseState& state) noexcept { return TestBatchRenameWindowExecutesChainRename(mainWindow, state); });
     runCase(L"cmd_pane_batchRename_window_directory_chain_undo_plan",
@@ -10561,11 +10916,14 @@ void RunBatchRenameCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTe
             [](CaseState& state) noexcept { return TestBatchRenameEngineRegexCompileEmitsPerfMetric(state); });
     runCase(L"cmd_pane_batchRename_engine_validation_perf", [](CaseState& state) noexcept { return TestBatchRenameEngineValidationEmitsPerfMetric(state); });
     runCase(L"cmd_pane_batchRename_execution_engine_direct", [](CaseState& state) noexcept { return TestBatchRenameExecutionEngineDirectScenarios(state); });
-    runCase(L"cmd_fileops_durable_store_safe_mechanics", [](CaseState& state) noexcept { return TestFileOperationDurableStoreSafeMechanics(state); });
-    runCase(L"cmd_fileops_move_breadcrumb_durable_lifecycle", [](CaseState& state) noexcept { return TestMoveBreadcrumbDurableLifecycle(state); });
+    runCase(L"cmd_fileops_durable_store_safe_mechanics",
+            [](CaseState& state) noexcept { return TestFileOperationDurableStoreSafeMechanics(state); });
+    runCase(L"cmd_fileops_move_breadcrumb_durable_lifecycle",
+            [](CaseState& state) noexcept { return TestMoveBreadcrumbDurableLifecycle(state); });
     runCase(L"cmd_fileops_artifact_name_shape_projection_scaling",
             [](CaseState& state) noexcept { return TestFileOperationArtifactNameShapeProjectionScaling(state); });
-    runCase(L"cmd_pane_batchRename_no_journal_or_recovery_surface", [](CaseState& state) noexcept { return TestBatchRenameNoJournalOrRecoverySurface(state); });
+    runCase(L"cmd_pane_batchRename_no_journal_or_recovery_surface",
+            [](CaseState& state) noexcept { return TestBatchRenameNoJournalOrRecoverySurface(state); });
     runCase(L"cmd_pane_batchRename_execution_engine_large_independent_perf",
             [](CaseState& state) noexcept { return TestBatchRenameExecutionEngineLargeIndependentPerf(state); });
 }

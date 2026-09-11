@@ -1,11 +1,13 @@
 #include "ShortcutDefaults.h"
 
-#include <Windows.h>
-
 #include <algorithm>
 #include <format>
 #include <string_view>
 #include <tuple>
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
 
 #include "ShortcutManager.h"
 
@@ -152,7 +154,10 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.application, VK_OEM_COMMA, ShortcutManager::kModCtrl, L"cmd/app/preferences");
     AddBinding(shortcuts.application, VK_OEM_COMMA, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/app/openSettingsFile");
     AddBinding(shortcuts.application, static_cast<uint32_t>('P'), ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/app/commandPalette");
-    AddBinding(shortcuts.application, static_cast<uint32_t>('J'), ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/app/showFileOperations");
+    AddBinding(shortcuts.application,
+               static_cast<uint32_t>('J'),
+               ShortcutManager::kModCtrl | ShortcutManager::kModShift,
+               L"cmd/app/showFileOperations");
 
     // Function bar bindings (F1..F12).
     AddBinding(shortcuts.functionBar, VK_F1, 0, L"cmd/app/showShortcuts");
@@ -233,8 +238,14 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('A'), ShortcutManager::kModCtrl, L"cmd/pane/selection/selectAll");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('F'), ShortcutManager::kModCtrl, L"cmd/pane/find");
     AddBinding(shortcuts.folderView, VK_ESCAPE, 0, L"cmd/pane/selection/unselectAll");
-    AddPositionBinding(shortcuts.folderView, Common::Keyboard::KeyPosition::NumberRowPlus, ShortcutManager::kModCtrl, L"cmd/pane/selection/selectDialog");
-    AddPositionBinding(shortcuts.folderView, Common::Keyboard::KeyPosition::NumberRowMinus, ShortcutManager::kModCtrl, L"cmd/pane/selection/unselectDialog");
+    AddPositionBinding(shortcuts.folderView,
+                       Common::Keyboard::KeyPosition::NumberRowPlus,
+                       ShortcutManager::kModCtrl,
+                       L"cmd/pane/selection/selectDialog");
+    AddPositionBinding(shortcuts.folderView,
+                       Common::Keyboard::KeyPosition::NumberRowMinus,
+                       ShortcutManager::kModCtrl,
+                       L"cmd/pane/selection/unselectDialog");
     AddPositionBinding(shortcuts.folderView,
                        Common::Keyboard::KeyPosition::NumberRowPlus,
                        ShortcutManager::kModCtrl | ShortcutManager::kModShift,
@@ -254,7 +265,10 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.folderView, VK_UP, ShortcutManager::kModAlt, L"cmd/pane/selection/goToPreviousSelectedName");
     AddBinding(shortcuts.folderView, VK_LEFT, ShortcutManager::kModAlt, L"cmd/pane/historyBack");
     AddBinding(shortcuts.folderView, VK_RIGHT, ShortcutManager::kModAlt, L"cmd/pane/historyForward");
-    AddBinding(shortcuts.folderView, static_cast<uint32_t>('T'), ShortcutManager::kModCtrl | ShortcutManager::kModAlt, L"cmd/terminal/openFloatingWindow");
+    AddBinding(shortcuts.folderView,
+               static_cast<uint32_t>('T'),
+               ShortcutManager::kModCtrl | ShortcutManager::kModAlt,
+               L"cmd/terminal/openFloatingWindow");
     AddBinding(shortcuts.folderView, VK_OEM_2, ShortcutManager::kModAlt, L"cmd/app/about");
     AddBinding(shortcuts.folderView, VK_OEM_2, ShortcutManager::kModAlt | ShortcutManager::kModShift, L"cmd/app/about");
 
@@ -346,8 +360,14 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.terminal, VK_PRIOR, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/scroll/pageUp");
     AddBinding(shortcuts.terminal, VK_HOME, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/scroll/top");
     AddBinding(shortcuts.terminal, VK_END, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/terminal/scroll/bottom");
-    AddPositionBinding(shortcuts.terminal, Common::Keyboard::KeyPosition::NumberRowPlus, ShortcutManager::kModCtrl, L"cmd/terminal/font/increase");
-    AddPositionBinding(shortcuts.terminal, Common::Keyboard::KeyPosition::NumberRowMinus, ShortcutManager::kModCtrl, L"cmd/terminal/font/decrease");
+    AddPositionBinding(shortcuts.terminal,
+                       Common::Keyboard::KeyPosition::NumberRowPlus,
+                       ShortcutManager::kModCtrl,
+                       L"cmd/terminal/font/increase");
+    AddPositionBinding(shortcuts.terminal,
+                       Common::Keyboard::KeyPosition::NumberRowMinus,
+                       ShortcutManager::kModCtrl,
+                       L"cmd/terminal/font/decrease");
     AddBinding(shortcuts.terminal, VK_ADD, ShortcutManager::kModCtrl, L"cmd/terminal/font/increase");
     AddBinding(shortcuts.terminal, VK_SUBTRACT, ShortcutManager::kModCtrl, L"cmd/terminal/font/decrease");
     AddBinding(shortcuts.terminal, static_cast<uint32_t>('0'), ShortcutManager::kModCtrl, L"cmd/terminal/font/reset");
@@ -362,9 +382,10 @@ bool ShortcutDefaults::AreShortcutsDefault(const Common::Settings::ShortcutsSett
     return NormalizeBindings(shortcuts.application) == NormalizeBindings(defaults.application) &&
            NormalizeBindings(shortcuts.functionBar) == NormalizeBindings(defaults.functionBar) &&
            NormalizeBindings(shortcuts.folderView) == NormalizeBindings(defaults.folderView) &&
-           NormalizeBindings(shortcuts.terminal) == NormalizeBindings(defaults.terminal) && shortcuts.applicationCollapsed == defaults.applicationCollapsed &&
-           shortcuts.functionBarCollapsed == defaults.functionBarCollapsed && shortcuts.folderViewCollapsed == defaults.folderViewCollapsed &&
-           shortcuts.terminalCollapsed == defaults.terminalCollapsed && shortcuts.migrationVersion == defaults.migrationVersion &&
+           NormalizeBindings(shortcuts.terminal) == NormalizeBindings(defaults.terminal) &&
+           shortcuts.applicationCollapsed == defaults.applicationCollapsed && shortcuts.functionBarCollapsed == defaults.functionBarCollapsed &&
+           shortcuts.folderViewCollapsed == defaults.folderViewCollapsed && shortcuts.terminalCollapsed == defaults.terminalCollapsed &&
+           shortcuts.migrationVersion == defaults.migrationVersion &&
            shortcuts.sortColumnId == defaults.sortColumnId && shortcuts.sortDescending == defaults.sortDescending &&
            GridLayoutEqual(shortcuts.gridLayout, defaults.gridLayout);
 }

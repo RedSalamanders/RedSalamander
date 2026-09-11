@@ -1,13 +1,15 @@
 #pragma once
 
+#include <cstdint>
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <Windows.h>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 28182)
 #include <wil/resource.h>
 #pragma warning(pop)
-
-#include <cstdint>
 
 namespace RedSalamander::TestSupport
 {
@@ -18,7 +20,7 @@ namespace RedSalamander::TestSupport
 class ScopedWindowActivationBlocker final
 {
 public:
-    ScopedWindowActivationBlocker()                                                = default;
+    ScopedWindowActivationBlocker()                                              = default;
     ScopedWindowActivationBlocker(const ScopedWindowActivationBlocker&)            = delete;
     ScopedWindowActivationBlocker& operator=(const ScopedWindowActivationBlocker&) = delete;
     ScopedWindowActivationBlocker(ScopedWindowActivationBlocker&&)                 = delete;

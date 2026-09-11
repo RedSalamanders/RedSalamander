@@ -28,7 +28,7 @@ void SendScaledHeaderResizeDrag(HWND activePage, const RECT& headerRect) noexcep
 
     constexpr size_t kRequiredStableSamples = 24u;
 
-    const auto deadline              = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+    const auto deadline          = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
     uint64_t previousRenderCount     = 0u;
     uint64_t previousInvalidateCount = 0u;
     size_t stableSamples             = 0u;
@@ -72,11 +72,11 @@ void SendScaledHeaderResizeDrag(HWND activePage, const RECT& headerRect) noexcep
 }
 
 template <typename Predicate>
-[[nodiscard]] bool SelectPreferencesCategoryAndWaitForStableSurface(
-    const PrefCategory category,
-    Predicate&& predicate,
-    PreferencesDebugSnapshot& outSnapshot,
-    std::chrono::milliseconds timeout = SelfTest::Scale(std::chrono::milliseconds(3000))) noexcept
+[[nodiscard]] bool SelectPreferencesCategoryAndWaitForStableSurface(const PrefCategory category,
+                                                                    Predicate&& predicate,
+                                                                    PreferencesDebugSnapshot& outSnapshot,
+                                                                    std::chrono::milliseconds timeout =
+                                                                        SelfTest::Scale(std::chrono::milliseconds(3000))) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -86,8 +86,8 @@ template <typename Predicate>
     // debug selection. Require several stable samples and reassert the category
     // if initialization temporarily moves it away from the requested page.
     constexpr size_t kRequiredStableSamples = 3u;
-    const auto deadline                     = std::chrono::steady_clock::now() + timeout;
-    size_t stableSamples                    = 0u;
+    const auto deadline                      = std::chrono::steady_clock::now() + timeout;
+    size_t stableSamples                     = 0u;
 
     while (std::chrono::steady_clock::now() < deadline)
     {
@@ -134,8 +134,8 @@ template <typename Predicate>
         return false;
     }
 
-    const HWND ancestor       = GetAncestor(hwnd, GA_ROOT);
-    const HWND root           = ancestor ? ancestor : hwnd;
+    const HWND ancestor = GetAncestor(hwnd, GA_ROOT);
+    const HWND root     = ancestor ? ancestor : hwnd;
     const auto targetHasFocus = [&]() noexcept
     {
         const HWND focused = GetFocus();
@@ -360,13 +360,13 @@ private:
 [[nodiscard]] HWND WaitForPreferencesKeyboardSearchInputTarget(std::chrono::milliseconds timeout, PreferencesDebugSnapshot& outSnapshot) noexcept
 {
     using namespace std::chrono_literals;
-    const auto deadline  = std::chrono::steady_clock::now() + timeout;
-    HWND previousTarget  = nullptr;
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    HWND previousTarget = nullptr;
     size_t stableSamples = 0u;
     while (std::chrono::steady_clock::now() < deadline)
     {
         PumpPendingMessages();
-        outSnapshot                = {};
+        outSnapshot = {};
         const bool snapshotMatches = DebugGetPreferencesDialogSnapshot(outSnapshot) && outSnapshot.currentCategory == kPrefCategoryKeyboard &&
                                      outSnapshot.keyboardFocusTarget == PreferencesKeyboardDebugFocusTarget::SearchField &&
                                      outSnapshot.createdPaneWindowCount == 0u && outSnapshot.visiblePaneWindowCount == 0u &&
@@ -376,7 +376,7 @@ private:
         const HWND inputTarget = DebugGetPreferencesActivePageDxHostHandle();
         if (snapshotMatches && inputTarget && IsWindow(inputTarget) != FALSE && GetFocus() == inputTarget)
         {
-            stableSamples  = previousTarget == inputTarget ? stableSamples + 1u : 1u;
+            stableSamples = previousTarget == inputTarget ? stableSamples + 1u : 1u;
             previousTarget = inputTarget;
             if (stableSamples >= 3u)
             {
@@ -385,7 +385,7 @@ private:
         }
         else
         {
-            stableSamples  = 0u;
+            stableSamples = 0u;
             previousTarget = nullptr;
             if (snapshotMatches)
             {
@@ -444,7 +444,7 @@ private:
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    HWND prefs                        = nullptr;
+    HWND prefs = nullptr;
     const auto closePreferencesOnExit = wil::scope_exit([&]() noexcept
     {
         if (prefs && IsWindow(prefs) != FALSE)
@@ -527,8 +527,8 @@ private:
     state.Require(GetWindowRect(prefs, &initialRect) != FALSE, L"Could not read the initial Preferences rectangle.");
 
     MONITORINFO monitorInfo{};
-    monitorInfo.cbSize     = sizeof(monitorInfo);
-    const HMONITOR monitor = MonitorFromWindow(prefs, MONITOR_DEFAULTTONEAREST);
+    monitorInfo.cbSize       = sizeof(monitorInfo);
+    const HMONITOR monitor   = MonitorFromWindow(prefs, MONITOR_DEFAULTTONEAREST);
     state.Require(monitor != nullptr && GetMonitorInfoW(monitor, &monitorInfo) != FALSE,
                   L"Could not resolve the Preferences monitor work area for placement validation.");
     if (! state.failure.empty())
@@ -562,7 +562,8 @@ private:
     if (savedPlacement != g_settings.windows.end())
     {
         const auto& bounds = savedPlacement->second.bounds;
-        state.Require(savedPlacement->second.state == Common::Settings::WindowState::Normal, L"A normally shown Preferences window must persist normal state.");
+        state.Require(savedPlacement->second.state == Common::Settings::WindowState::Normal,
+                      L"A normally shown Preferences window must persist normal state.");
         state.Require(std::abs(bounds.x - savedRect.left) <= kRectTolerancePx && std::abs(bounds.y - savedRect.top) <= kRectTolerancePx &&
                           std::abs(bounds.width - (savedRect.right - savedRect.left)) <= kRectTolerancePx &&
                           std::abs(bounds.height - (savedRect.bottom - savedRect.top)) <= kRectTolerancePx,
@@ -584,13 +585,13 @@ private:
     }
 
     Common::Settings::WindowPlacement offscreenPlacement{};
-    offscreenPlacement.state                    = Common::Settings::WindowState::Normal;
-    offscreenPlacement.bounds.x                 = 1'000'000;
-    offscreenPlacement.bounds.y                 = 1'000'000;
-    offscreenPlacement.bounds.width             = 1;
-    offscreenPlacement.bounds.height            = 1;
-    offscreenPlacement.dpi                      = GetDpiForWindow(mainWindow);
-    offscreenPlacement.monitorDeviceName        = L"\\\\.\\DISPLAY-SELFTEST-DISCONNECTED";
+    offscreenPlacement.state             = Common::Settings::WindowState::Normal;
+    offscreenPlacement.bounds.x          = 1'000'000;
+    offscreenPlacement.bounds.y          = 1'000'000;
+    offscreenPlacement.bounds.width      = 1;
+    offscreenPlacement.bounds.height     = 1;
+    offscreenPlacement.dpi               = GetDpiForWindow(mainWindow);
+    offscreenPlacement.monitorDeviceName = L"\\\\.\\DISPLAY-SELFTEST-DISCONNECTED";
     g_settings.windows[std::wstring(kWindowId)] = std::move(offscreenPlacement);
 
     prefs = openPreferences(L"off-screen placement recovery");
@@ -762,9 +763,9 @@ private:
 } // namespace
 
 #include "Commands.SelfTest.Preferences.ChromeAndPlugins.cpp"
-#include "Commands.SelfTest.Preferences.Dispatch.cpp"
 #include "Commands.SelfTest.Preferences.FileOpsCompareAndTree.cpp"
 #include "Commands.SelfTest.Preferences.HotPathsAndKeyboard.cpp"
 #include "Commands.SelfTest.Preferences.PluginsThemesAdvanced.cpp"
 #include "Commands.SelfTest.Preferences.ThemesGeneralPanes.cpp"
 #include "Commands.SelfTest.Preferences.ViewersAndKeyboardLists.cpp"
+#include "Commands.SelfTest.Preferences.Dispatch.cpp"

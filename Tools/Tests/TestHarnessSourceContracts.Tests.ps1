@@ -4946,12 +4946,56 @@ Specs\TestRuns\local_scratch
         $curlFactory = Get-RSText -Path 'Plugins\FileSystemCurl\Factory.cpp'
         $googleFactory = Get-RSText -Path 'Plugins\FileSystemGoogleDrive\Factory.cpp'
         $pluginTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContractTests.cpp'
+        $terminalConfig = Get-RSText -Path 'Plugins\Terminal\Terminal.cpp'
+        $terminalVt = Get-RSText -Path 'Plugins\Terminal\TerminalVt.cpp'
+        $typography = Get-RSText -Path 'Common\DxUi\DxUi.Typography.h'
+        $prefsPluginConfig = Get-RSText -Path 'RedSalamander\Preferences.Plugin.Configuration.cpp'
+        $viewerManager = Get-RSText -Path 'RedSalamander\ViewerPluginManager.cpp'
+        $fileSystemManager = Get-RSText -Path 'RedSalamander\FileSystemPluginManager.cpp'
 
         $jsonHelpers | Should Match 'ParseObjectDocument'
         $jsonHelpers | Should Match 'WriteObjectWithoutMembers'
         $pluginTests | Should Match 'malformed configuration preserves live state'
         $pluginTests | Should Match 'wrong-root configuration preserves live state'
         $pluginTests | Should Match 'legacy configuration secrets are imported but not persisted'
+
+        # A JSON integer is a valid value for a fractional member: `14` and `14.0` denote the same
+        # number, and the shared plugin-configuration codec serializes schema `value` fields as
+        # integers. GetDoubleMember is the only accessor allowed to read a real member, because a
+        # bare yyjson_get_real silently yields 0.0 for integer storage and makes a transactional
+        # SetConfiguration reject every other field with it.
+        $jsonHelpers | Should Match 'GetDoubleMember'
+        $jsonHelpers | Should Match 'reading a real member must accept sint/uint/real uniformly'
+        $terminalConfig | Should Not Match 'yyjson_get_real'
+        $terminalConfig | Should Match 'Common::Json::GetDoubleMember'
+        $terminalConfig | Should Match 'kTerminalConfigurationKeys'
+
+        # Every plugin must accept the defaults its own schema declares, and the Terminal owes the
+        # same transactional proofs as the file system providers.
+        $pluginTests | Should Match 'SetConfiguration accepts its own schema defaults'
+        $pluginTests | Should Match 'persisted configuration still matches the declared schema'
+        $pluginTests | Should Match 'SetConfiguration round-trips its own GetConfiguration output'
+        $pluginTests | Should Match 'MakeDefaultValue'
+        $pluginTests | Should Match 'transactional configuration surface exposes IInformations'
+
+        # A draft editor must not persist a configuration the owning plugin would reject.
+        $prefsPluginConfig | Should Match 'ValidateConfiguration'
+        $prefsPluginConfig | Should Match 'IDS_PREFS_PLUGINS_DETAILS_CONFIG_REJECTED'
+
+        # A plugin that rejects its persisted configuration reverts to compiled defaults; that must
+        # never be silent.
+        $viewerManager | Should Match 'rejected its persisted configuration'
+        $fileSystemManager | Should Match 'rejected its persisted configuration'
+
+        # A configured terminal font that cannot render is reported to the user, not silently
+        # downgraded to a family without the requested glyphs.
+        $terminalVt | Should Match 'resolveFontFamily'
+        $terminalVt | Should Match 'IsFontFamilyAvailable'
+        $terminalVt | Should Match 'drawFontNotice'
+        $terminalVt | Should Match 'IDS_TERMINAL_FONT_UNAVAILABLE'
+        $terminalVt | Should Match 'IDS_TERMINAL_FONT_MISSING_GLYPHS'
+        $typography | Should Match 'GetSystemFontCollection\(fontCollection\.put\(\), TRUE\)'
+        $typography | Should Match 'InvalidateFontFamilyAvailability'
 
         $curlRuntime | Should Match 'class ProcessLease final'
         $curlRuntime | Should Match 'final participant performs curl_global_cleanup outside loader lock'

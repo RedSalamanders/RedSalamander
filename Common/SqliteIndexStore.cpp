@@ -309,8 +309,7 @@ constexpr wchar_t kEnumerateFailAfterEmittedRowsEnvVar[] = L"REDSALAMANDER_TEST_
 
     if (sqliteResult != SQLITE_OK)
     {
-        Debug::Error(
-            L"SqliteIndexStore: {} failed. code={} message='{}'", context, sqliteResult, sqliteError.empty() ? GetSqliteErrorMessage(db) : sqliteError);
+        Debug::Error(L"SqliteIndexStore: {} failed. code={} message='{}'", context, sqliteResult, sqliteError.empty() ? GetSqliteErrorMessage(db) : sqliteError);
         return E_FAIL;
     }
 

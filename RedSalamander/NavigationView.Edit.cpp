@@ -1760,11 +1760,10 @@ void NavigationView::EnsureEditSuggestPopupD2DResources()
         }
         if (! _editSuggestPopupHoverBrush)
         {
-            const COLORREF surface        = _appTheme.systemHighContrast ? GetSysColor(COLOR_WINDOW) : _appTheme.menu.background;
-            const int highlightWeight     = _appTheme.dark ? 30 : 18;
-            const COLORREF highlightColor = _appTheme.systemHighContrast
-                                                ? GetSysColor(COLOR_HIGHLIGHT)
-                                                : UiMetrics::BlendColorRefWeightedTruncate(surface, _appTheme.menu.text, highlightWeight, 255);
+            const COLORREF surface    = _appTheme.systemHighContrast ? GetSysColor(COLOR_WINDOW) : _appTheme.menu.background;
+            const int highlightWeight = _appTheme.dark ? 30 : 18;
+            const COLORREF highlightColor =
+                _appTheme.systemHighContrast ? GetSysColor(COLOR_HIGHLIGHT) : UiMetrics::BlendColorRefWeightedTruncate(surface, _appTheme.menu.text, highlightWeight, 255);
             _editSuggestPopupTarget->CreateSolidColorBrush(ColorFromCOLORREF(highlightColor), _editSuggestPopupHoverBrush.addressof());
         }
         if (! _editSuggestPopupBorderBrush)

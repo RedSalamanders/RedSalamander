@@ -185,7 +185,8 @@ struct AcpRange
 class DxUiTextStoreACP final : public ITextStoreACP, public ITextStoreACP2, public ITfContextOwnerCompositionSink
 {
 public:
-    DxUiTextStoreACP(WindowHost& host, Control& control) noexcept : _host(&host), _control(&control), _controlLifetime(GetControlLifetimeToken(control))
+    DxUiTextStoreACP(WindowHost& host, Control& control) noexcept :
+        _host(&host), _control(&control), _controlLifetime(GetControlLifetimeToken(control))
     {
     }
 
@@ -1144,8 +1145,8 @@ private:
     WindowHost* _host = nullptr;
     Control* _control = nullptr;
     std::weak_ptr<int> _controlLifetime;
-    DWORD _lockFlags = 0u;
-    DWORD _sinkMask  = 0u;
+    DWORD _lockFlags  = 0u;
+    DWORD _sinkMask   = 0u;
     wil::com_ptr_nothrow<ITextStoreACPSink> _sink;
     TextInputState _observedState;
     D2D1_RECT_F _observedViewport = D2D1::RectF();

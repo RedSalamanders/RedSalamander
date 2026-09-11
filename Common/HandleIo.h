@@ -6,12 +6,8 @@
 #include <limits>
 #include <span>
 
-#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
 #define NOMINMAX
-#endif
 #include <Windows.h>
 
 namespace Common::HandleIo
@@ -23,7 +19,7 @@ namespace Common::HandleIo
 
 namespace Detail
 {
-template <typename ByteT, typename Operation>
+template<typename ByteT, typename Operation>
 [[nodiscard]] inline HRESULT TransferAll(std::span<ByteT> bytes, DWORD noProgressError, Operation&& operation) noexcept
 {
     size_t offset = 0u;
@@ -52,8 +48,7 @@ template <typename ByteT, typename Operation>
     {
         return E_HANDLE;
     }
-    return Detail::TransferAll<const std::byte>(bytes,
-                                                ERROR_WRITE_FAULT,
+    return Detail::TransferAll<const std::byte>(bytes, ERROR_WRITE_FAULT,
                                                 [file](const std::byte* data, DWORD requested, DWORD& transferred) noexcept
     {
         if (WriteFile(file, data, requested, &transferred, nullptr) == FALSE)
@@ -80,8 +75,7 @@ template <typename ByteT, typename Operation>
     {
         return E_HANDLE;
     }
-    return Detail::TransferAll<std::byte>(bytes,
-                                          ERROR_HANDLE_EOF,
+    return Detail::TransferAll<std::byte>(bytes, ERROR_HANDLE_EOF,
                                           [file](std::byte* data, DWORD requested, DWORD& transferred) noexcept
     {
         if (ReadFile(file, data, requested, &transferred, nullptr) == FALSE)

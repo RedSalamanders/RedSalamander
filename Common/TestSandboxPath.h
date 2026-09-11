@@ -1,7 +1,5 @@
 #pragma once
 
-#include <Windows.h>
-
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -11,6 +9,10 @@
 #include <string_view>
 #include <system_error>
 #include <vector>
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
 
 namespace Common::Testing
 {
@@ -34,7 +36,8 @@ inline constexpr std::wstring_view kTestSandboxDirectoryName{L"RedSalamander.Per
     return firstColon != 1u || text.find(L':', firstColon + 1u) != std::wstring::npos;
 }
 
-[[nodiscard]] inline bool IsSameOrDescendantTestSandboxPath(const std::filesystem::path& candidate, const std::filesystem::path& parent) noexcept
+[[nodiscard]] inline bool IsSameOrDescendantTestSandboxPath(const std::filesystem::path& candidate,
+                                                            const std::filesystem::path& parent) noexcept
 {
     if (candidate.empty() || parent.empty())
     {
@@ -63,7 +66,8 @@ inline constexpr std::wstring_view kTestSandboxDirectoryName{L"RedSalamander.Per
     return candidateText[parentText.size()] == L'\\' || candidateText[parentText.size()] == L'/';
 }
 
-[[nodiscard]] inline std::filesystem::path NormalizeAbsoluteTestSandboxPath(const std::filesystem::path& path, std::error_code& ec) noexcept
+[[nodiscard]] inline std::filesystem::path NormalizeAbsoluteTestSandboxPath(const std::filesystem::path& path,
+                                                                            std::error_code& ec) noexcept
 {
     ec.clear();
     if (path.empty())
@@ -236,8 +240,9 @@ inline constexpr std::wstring_view kTestSandboxDirectoryName{L"RedSalamander.Per
     return ! root.empty() && GetDriveTypeW(root.c_str()) == DRIVE_FIXED;
 }
 
-[[nodiscard]] inline std::optional<std::filesystem::path> GetDedicatedExternalTestSandboxBase(const std::filesystem::path& candidate,
-                                                                                              std::wstring_view expectedDirectoryName) noexcept
+[[nodiscard]] inline std::optional<std::filesystem::path> GetDedicatedExternalTestSandboxBase(
+    const std::filesystem::path& candidate,
+    std::wstring_view expectedDirectoryName) noexcept
 {
     if (candidate.empty() || expectedDirectoryName.empty())
     {
@@ -278,7 +283,8 @@ inline constexpr std::wstring_view kTestSandboxDirectoryName{L"RedSalamander.Per
     // authorization is intentionally independent of repository placement.
     static_cast<void>(repositoryRoot);
 
-    const std::optional<std::filesystem::path> externalBase = GetDedicatedExternalTestSandboxBase(normalizedCandidate, kTestSandboxDirectoryName);
+    const std::optional<std::filesystem::path> externalBase =
+        GetDedicatedExternalTestSandboxBase(normalizedCandidate, kTestSandboxDirectoryName);
     if (! externalBase.has_value() || (requireExactExternalBase && ! TestSandboxPathEquals(normalizedCandidate, externalBase.value())) ||
         ! HasValidTestSandboxMarker(externalBase.value()))
     {

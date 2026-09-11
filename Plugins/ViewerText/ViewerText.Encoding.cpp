@@ -29,7 +29,7 @@ struct EncodingCatalogEntry final
 struct EncodingPickerState final
 {
     std::span<const EncodingCatalogEntry> entries;
-    UINT currentCommandId  = 0u;
+    UINT currentCommandId = 0u;
     UINT acceptedCommandId = 0u;
     std::chrono::steady_clock::time_point openStarted{};
 };
@@ -155,11 +155,11 @@ void CollectEncodingCatalogEntries(HMENU menu, std::vector<EncodingCatalogEntry>
         }
 
         EncodingCatalogEntry entry{};
-        entry.commandId  = info.wID;
-        entry.codePage   = DisplayCodePageForCatalogCommand(info.wID);
-        entry.label      = StripMenuPresentation(std::wstring_view(rawText, static_cast<size_t>(textLength)));
+        entry.commandId = info.wID;
+        entry.codePage  = DisplayCodePageForCatalogCommand(info.wID);
+        entry.label     = StripMenuPresentation(std::wstring_view(rawText, static_cast<size_t>(textLength)));
         entry.searchText = Lowercase(std::format(L"{} cp{} {}", entry.label, entry.codePage, entry.codePage));
-        entry.rowText    = FormatEmbeddedStringResource(g_hInstance, IDS_VIEWERTEXT_CODEPAGE_FORMAT, entry.codePage);
+        entry.rowText = FormatEmbeddedStringResource(g_hInstance, IDS_VIEWERTEXT_CODEPAGE_FORMAT, entry.codePage);
         entry.rowText.append(L"  ");
         entry.rowText.append(entry.label);
         entries.push_back(std::move(entry));
@@ -232,9 +232,11 @@ void PopulateEncodingPickerList(HWND dialog, EncodingPickerState& state) noexcep
     {
         catalogTextCharacters += entry.rowText.size() + 1u;
     }
-    static_cast<void>(
-        SendMessageW(list, LB_INITSTORAGE, static_cast<WPARAM>(state.entries.size()), static_cast<LPARAM>(catalogTextCharacters * sizeof(wchar_t))));
-    int selectedIndex    = LB_ERR;
+    static_cast<void>(SendMessageW(list,
+                                   LB_INITSTORAGE,
+                                   static_cast<WPARAM>(state.entries.size()),
+                                   static_cast<LPARAM>(catalogTextCharacters * sizeof(wchar_t))));
+    int selectedIndex = LB_ERR;
     size_t filteredCount = 0u;
     for (const EncodingCatalogEntry& entry : state.entries)
     {
@@ -307,7 +309,7 @@ INT_PTR CALLBACK EncodingPickerDialogProc(HWND dialog, UINT message, WPARAM wp, 
         }
         if (controlId == IDOK || (controlId == IDC_VIEWERTEXT_ENCODING_LIST && notify == LBN_DBLCLK))
         {
-            HWND list              = GetDlgItem(dialog, IDC_VIEWERTEXT_ENCODING_LIST);
+            HWND list = GetDlgItem(dialog, IDC_VIEWERTEXT_ENCODING_LIST);
             const LRESULT selected = list ? SendMessageW(list, LB_GETCURSEL, 0, 0) : LB_ERR;
             if (selected != LB_ERR)
             {
@@ -542,8 +544,8 @@ void ViewerText::CommandChooseDisplayEncoding(HWND hwnd) noexcept
     }
 
     EncodingPickerState state{};
-    state.openStarted      = std::chrono::steady_clock::now();
-    state.entries          = EncodingCatalog();
+    state.openStarted     = std::chrono::steady_clock::now();
+    state.entries         = EncodingCatalog();
     state.currentCommandId = EffectiveDisplayEncodingMenuSelection();
     if (state.entries.empty())
     {

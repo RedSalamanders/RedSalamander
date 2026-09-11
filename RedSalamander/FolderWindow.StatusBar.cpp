@@ -2,8 +2,8 @@
 
 #include "ConnectionProfileUtils.h"
 #include "DxUi/DxUi.Typography.h"
-#include "FileMetadataFormatting.h"
 #include "FileOperationArtifactRegistry.h"
+#include "FileMetadataFormatting.h"
 #include "FluentIcons.h"
 #include "Helpers.h"
 #include "HwndRenderTargetResources.h"
@@ -909,7 +909,8 @@ namespace
 std::wstring BuildSingleItemSummaryText(const FolderView::SelectionStats::SelectedItemDetails& details, std::wstring_view directorySizeText)
 {
     const auto fields = Common::FileMetadata::FormatDisplayFields(
-        {.lastWriteTime100nsSince1601 = details.lastWriteTime, .fileAttributes = details.fileAttributes}, Common::FileMetadata::DisplayProfile::CompactDetails);
+        {.lastWriteTime100nsSince1601 = details.lastWriteTime, .fileAttributes = details.fileAttributes},
+        Common::FileMetadata::DisplayProfile::CompactDetails);
 
     if (details.isDirectory)
     {
@@ -921,7 +922,8 @@ std::wstring BuildSingleItemSummaryText(const FolderView::SelectionStats::Select
 
         if (! fields.localTime.empty())
         {
-            return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_DIR_TIME_ATTRS, sizeText, fields.localTime, fields.attributes);
+            return FormatEmbeddedStringResource(
+                nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_DIR_TIME_ATTRS, sizeText, fields.localTime, fields.attributes);
         }
         return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_DIR_ATTRS, sizeText, fields.attributes);
     }
@@ -929,7 +931,8 @@ std::wstring BuildSingleItemSummaryText(const FolderView::SelectionStats::Select
     const std::wstring sizeText = FormatBytesCompact(details.sizeBytes);
     if (! fields.localTime.empty())
     {
-        return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_TIME_ATTRS, sizeText, fields.localTime, fields.attributes);
+        return FormatEmbeddedStringResource(
+            nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_TIME_ATTRS, sizeText, fields.localTime, fields.attributes);
     }
     return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_ATTRS, sizeText, fields.attributes);
 }
@@ -1102,7 +1105,8 @@ void FolderWindow::UpdatePaneStatusBar(Pane pane)
         state.statusSelectionText = BuildSelectionSummaryText(state.selectionStats, selectionSizeText, focusedItemDetails);
         if (state.selectionStats.selectedFiles == 0 && state.selectionStats.selectedFolders == 0)
         {
-            const std::shared_ptr<const FileOperationArtifacts::Projection> projection = state.folderView.GetFocusedArtifactProjection();
+            const std::shared_ptr<const FileOperationArtifacts::Projection> projection =
+                state.folderView.GetFocusedArtifactProjection();
             if (projection && projection->classification != FileOperationArtifacts::Classification::Ordinary)
             {
                 const std::wstring badge = LoadStringResource(nullptr, IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE);

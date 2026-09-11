@@ -101,6 +101,7 @@ struct IssuesRow
     return true;
 }
 
+
 class IssuesGridModel final : public IDxGridModel
 {
 public:

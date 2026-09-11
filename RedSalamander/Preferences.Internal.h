@@ -279,12 +279,12 @@ struct KeyboardShortcutRow
     std::wstring commandDisplayName;
     std::wstring chordText;
     std::optional<size_t> bindingIndex;
-    uint32_t vk                               = 0;
-    uint32_t modifiers                        = 0;
+    uint32_t vk        = 0;
+    uint32_t modifiers = 0;
     Common::Keyboard::KeyPosition keyPosition = Common::Keyboard::KeyPosition::None;
-    bool placeholder                          = false;
-    bool hasConflict                          = false;
-    bool overridesGlobal                      = false;
+    bool placeholder   = false;
+    bool hasConflict   = false;
+    bool overridesGlobal = false;
 };
 
 struct PreferencesDialogState
@@ -408,7 +408,7 @@ struct PreferencesDialogState
     std::wstring keyboardCaptureCommandId;
     std::optional<size_t> keyboardCaptureBindingIndex;
     std::optional<uint32_t> keyboardCapturePendingVk;
-    uint32_t keyboardCapturePendingModifiers                        = 0;
+    uint32_t keyboardCapturePendingModifiers = 0;
     Common::Keyboard::KeyPosition keyboardCapturePendingKeyPosition = Common::Keyboard::KeyPosition::None;
     std::wstring keyboardCaptureConflictCommandId;
     std::optional<size_t> keyboardCaptureConflictBindingIndex;
@@ -437,6 +437,9 @@ struct PreferencesDialogState
     std::wstring pluginsStatusBodyText;
     PrefsInlineMessageSeverity pluginsStatusSeverity = PrefsInlineMessageSeverity::Info;
     std::wstring pluginsDetailsConfigPluginId;
+    // Which manager owns pluginsDetailsConfigPluginId. Recorded when the editor is built so that
+    // committing can ask the right manager to validate the candidate configuration.
+    bool pluginsDetailsConfigIsFileSystem = false;
     std::string pluginsDetailsConfigSourceJsonUtf8;
     std::vector<PrefsPluginConfigFieldControls> pluginsDetailsConfigFields;
     RedSalamander::DxUi::Panel* pluginsDetailsConfigDxPanel = nullptr;

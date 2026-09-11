@@ -35,18 +35,26 @@ struct FileSystemPathIdentity final
 
 // Diagnostics/tests only. Executable route and path-identity decisions must use
 // FileSystemRouteContract and IFileSystemRouteCapabilities.
-[[nodiscard]] std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentityContract(std::string_view jsonUtf8,
-                                                                                                  std::wstring_view pluginId) noexcept;
-[[nodiscard]] std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentityContractFromRoot(yyjson_val* root,
-                                                                                                          std::wstring_view pluginId) noexcept;
-[[nodiscard]] std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentity(std::string_view jsonUtf8, std::wstring_view pluginId) noexcept;
-[[nodiscard]] std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemRenamePathIdentity(std::string_view jsonUtf8, std::wstring_view pluginId) noexcept;
+[[nodiscard]] std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentityContract(
+    std::string_view jsonUtf8, std::wstring_view pluginId) noexcept;
+[[nodiscard]] std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentityContractFromRoot(
+    yyjson_val* root, std::wstring_view pluginId) noexcept;
+[[nodiscard]] std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemPathIdentity(
+    std::string_view jsonUtf8, std::wstring_view pluginId) noexcept;
+[[nodiscard]] std::optional<FileSystemPathIdentity> ParseDiagnosticFileSystemRenamePathIdentity(
+    std::string_view jsonUtf8, std::wstring_view pluginId) noexcept;
 [[nodiscard]] bool EquivalentComponent(const FileSystemPathIdentity& identity, std::wstring_view lhs, std::wstring_view rhs) noexcept;
 [[nodiscard]] bool EquivalentPath(const FileSystemPathIdentity& identity, std::wstring_view lhs, std::wstring_view rhs) noexcept;
-[[nodiscard]] bool TryGetFileSystemParentPath(const FileSystemPathIdentity& identity, std::wstring_view path, std::wstring& parentOut) noexcept;
-[[nodiscard]] bool TryGetFileSystemLeafName(const FileSystemPathIdentity& identity, std::wstring_view path, std::wstring& leafOut) noexcept;
+[[nodiscard]] bool TryGetFileSystemParentPath(const FileSystemPathIdentity& identity,
+                                              std::wstring_view path,
+                                              std::wstring& parentOut) noexcept;
+[[nodiscard]] bool TryGetFileSystemLeafName(const FileSystemPathIdentity& identity,
+                                            std::wstring_view path,
+                                            std::wstring& leafOut) noexcept;
 [[nodiscard]] std::wstring JoinFileSystemPath(const FileSystemPathIdentity& identity, std::wstring_view folder, std::wstring_view leaf);
-[[nodiscard]] bool IsStrictDescendantPath(const FileSystemPathIdentity& identity, std::wstring_view prefix, std::wstring_view candidate) noexcept;
+[[nodiscard]] bool IsStrictDescendantPath(const FileSystemPathIdentity& identity,
+                                          std::wstring_view prefix,
+                                          std::wstring_view candidate) noexcept;
 [[nodiscard]] bool TryGetFileSystemRelativePath(const FileSystemPathIdentity& identity,
                                                 std::wstring_view root,
                                                 std::wstring_view candidate,

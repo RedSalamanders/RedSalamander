@@ -168,7 +168,8 @@ void TestTooltipDeadlinesUseCurrentDispatcherClockAfterIdleHostTick()
 
     WindowHost host;
     static_cast<void>(host.DebugAnimationTickForTest(staleTickMs));
-    Require(host.SetTooltip(L"Tracking tooltip", D2D1::Point2F(24.0f, 24.0f)), "tooltip stale-tick regression starts with a visible tracking tooltip");
+    Require(host.SetTooltip(L"Tracking tooltip", D2D1::Point2F(24.0f, 24.0f)),
+            "tooltip stale-tick regression starts with a visible tracking tooltip");
     Require(host.BeginTooltipHideDelay(hideDelayMs), "tooltip stale-tick regression schedules a long hide delay");
     static_cast<void>(host.DebugAnimationTickForTest(currentTickMs));
     Require(host.HasTooltip(), "tracking tooltip hide delay is based on the current dispatcher clock instead of the host's stale last tick");
@@ -179,7 +180,8 @@ void TestTooltipDeadlinesUseCurrentDispatcherClockAfterIdleHostTick()
             "tooltip stale-tick regression schedules a delayed supplemental tooltip");
     static_cast<void>(host.DebugAnimationTickForTest(currentTickMs));
     Require(! host.HasTooltip(), "supplemental tooltip show delay does not expire from the host's stale last tick");
-    Require(host.DebugGetPendingTooltipText() == L"Supplemental tooltip", "supplemental tooltip remains pending until the current dispatcher-clock deadline");
+    Require(host.DebugGetPendingTooltipText() == L"Supplemental tooltip",
+            "supplemental tooltip remains pending until the current dispatcher-clock deadline");
 }
 
 void TestTooltipLayerTrackingMoveCancelsPendingHideDelay()
@@ -260,9 +262,9 @@ void TestInteractiveTooltipSurvivesEmptySupplementalTargetPass()
     grid->SetModel(&model);
 
     const GridCellLayoutMetrics metrics = grid->GetCellLayoutMetrics(window.Host(), 0u, 0u);
-    const int dpi                       = static_cast<int>(GetDpiForWindow(window.Hwnd()));
-    const LONG x                        = MulDiv(static_cast<int>((metrics.cellRect.left + metrics.cellRect.right) * 0.5f), dpi, USER_DEFAULT_SCREEN_DPI);
-    const LONG y                        = MulDiv(static_cast<int>((metrics.cellRect.top + metrics.cellRect.bottom) * 0.5f), dpi, USER_DEFAULT_SCREEN_DPI);
+    const int dpi = static_cast<int>(GetDpiForWindow(window.Hwnd()));
+    const LONG x = MulDiv(static_cast<int>((metrics.cellRect.left + metrics.cellRect.right) * 0.5f), dpi, USER_DEFAULT_SCREEN_DPI);
+    const LONG y = MulDiv(static_cast<int>((metrics.cellRect.top + metrics.cellRect.bottom) * 0.5f), dpi, USER_DEFAULT_SCREEN_DPI);
 
     SendMessageW(window.Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
     Require(window.Host().HasTooltip() && window.Host().GetTooltipText() == tooltipText,

@@ -15,9 +15,9 @@
 
 namespace SearchServiceBroker
 {
-inline constexpr uint32_t kProtocolVersion                 = 3u;
-inline constexpr wchar_t kPipeNameEnvVar[]                 = L"REDSALAMANDER_SEARCH_SERVICE_PIPE";
-inline constexpr wchar_t kDiscoverRootsEnvVar[]            = L"REDSALAMANDER_SEARCH_SERVICE_DISCOVER_ROOTS";
+inline constexpr uint32_t kProtocolVersion      = 3u;
+inline constexpr wchar_t kPipeNameEnvVar[]      = L"REDSALAMANDER_SEARCH_SERVICE_PIPE";
+inline constexpr wchar_t kDiscoverRootsEnvVar[] = L"REDSALAMANDER_SEARCH_SERVICE_DISCOVER_ROOTS";
 inline constexpr wchar_t kClientMissingPipeRetryMsEnvVar[] = L"REDSALAMANDER_SEARCH_SERVICE_CLIENT_MISSING_PIPE_RETRY_MS";
 
 #ifdef _DEBUG
@@ -198,11 +198,11 @@ struct ServerOptions final
     std::wstring storageRootDirectory;
     LocalSearchIndexCore::PersistentStoreKind persistentStoreKind = LocalSearchIndexCore::PersistentStoreKind::Sqlite;
     std::wstring sqliteDatabasePath;
-    uint32_t protocolVersion        = kProtocolVersion;
-    uint32_t maxRequestsBeforeExit  = 0u;
-    uint32_t disconnectAfterBatches = 0u;
-    bool allowRebuildRequests       = true;
-    bool allowShutdownRequests      = false;
+    uint32_t protocolVersion            = kProtocolVersion;
+    uint32_t maxRequestsBeforeExit      = 0u;
+    uint32_t disconnectAfterBatches     = 0u;
+    bool allowRebuildRequests           = true;
+    bool allowShutdownRequests          = false;
 #if defined(RS_SEARCH_TEST_HOOKS)
     ServerTestHook testHook = ServerTestHook::None;
 #endif

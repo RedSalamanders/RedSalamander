@@ -244,9 +244,9 @@ bool ConfirmNonRevertableFileOperation(HWND owner,
     const UINT messageId = operation == FILESYSTEM_COPY ? static_cast<UINT>(IDS_FMT_FILEOPS_CONFIRM_COPY) : static_cast<UINT>(IDS_FMT_FILEOPS_CONFIRM_MOVE);
     const std::wstring message = FormatStringResource(nullptr, messageId, what, fromText, toText);
 
-    const bool isCopy                         = operation == FILESYSTEM_COPY;
-    const UINT operationLabelId               = isCopy ? static_cast<UINT>(IDS_FILEOP_OPERATION_COPY) : static_cast<UINT>(IDS_FILEOP_OPERATION_MOVE);
-    const std::wstring caption                = LoadStringResource(nullptr, operationLabelId);
+    const bool isCopy = operation == FILESYSTEM_COPY;
+    const UINT operationLabelId = isCopy ? static_cast<UINT>(IDS_FILEOP_OPERATION_COPY) : static_cast<UINT>(IDS_FILEOP_OPERATION_MOVE);
+    const std::wstring caption = LoadStringResource(nullptr, operationLabelId);
     const HostPromptPresentation presentation = isCopy ? HOST_PROMPT_PRESENTATION_COPY : HOST_PROMPT_PRESENTATION_MOVE;
     HostPromptRequest prompt{};
     prompt.sizeBytes     = sizeof(prompt);
@@ -398,8 +398,8 @@ std::wstring PadLeftToWidth(std::wstring_view text, size_t width)
 
 std::wstring BuildDetailsText(bool isDirectory, uint64_t sizeBytes, int64_t lastWriteTime, DWORD fileAttributes, size_t sizeSlotChars)
 {
-    const auto fields = Common::FileMetadata::FormatDisplayFields({.lastWriteTime100nsSince1601 = lastWriteTime, .fileAttributes = fileAttributes},
-                                                                  Common::FileMetadata::DisplayProfile::CompactDetails);
+    const auto fields = Common::FileMetadata::FormatDisplayFields(
+        {.lastWriteTime100nsSince1601 = lastWriteTime, .fileAttributes = fileAttributes}, Common::FileMetadata::DisplayProfile::CompactDetails);
 
     if (isDirectory)
     {

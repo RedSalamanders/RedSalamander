@@ -2,6 +2,7 @@
 #include <chrono>
 #include <stop_token>
 #include <string_view>
+
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>

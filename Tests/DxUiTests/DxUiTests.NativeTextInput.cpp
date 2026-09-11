@@ -65,18 +65,22 @@ void TestNativeTextInputTsfDeactivateRestoresFocusAssociationBeforePoppingDocume
     Require(nativeSourceInput.good(), "native text input source is readable for TSF teardown guard");
     const std::string nativeSource((std::istreambuf_iterator<char>(nativeSourceInput)), std::istreambuf_iterator<char>());
 
-    const size_t activate   = nativeSource.find("bool WindowHost::ActivateNativeTextInputTsf");
+    const size_t activate = nativeSource.find("bool WindowHost::ActivateNativeTextInputTsf");
     const size_t deactivate = nativeSource.find("void WindowHost::DeactivateNativeTextInputTsf", activate);
     Require(activate != std::string::npos && deactivate != std::string::npos && activate < deactivate,
             "native TSF activate/deactivate source blocks are found");
-    const std::string activateBlock           = nativeSource.substr(activate, deactivate - activate);
-    const size_t associateHostFocus           = activateBlock.find("threadMgr->AssociateFocus(_hwnd, documentMgr.get()");
-    const size_t focusDocument                = activateBlock.find("threadMgr->SetFocus(documentMgr.get())");
-    const size_t capturePreviousFocusDocument = activateBlock.find("threadMgr->AssociateFocus(_hwnd, documentMgr.get(), previousFocusDocumentMgr.put())");
-    const size_t storePreviousFocusDocument   = activateBlock.find("previousFocusDocumentMgr.query_to(_nativeTextInputTsfPreviousFocusDocumentMgr.put())");
+    const std::string activateBlock = nativeSource.substr(activate, deactivate - activate);
+    const size_t associateHostFocus = activateBlock.find("threadMgr->AssociateFocus(_hwnd, documentMgr.get()");
+    const size_t focusDocument      = activateBlock.find("threadMgr->SetFocus(documentMgr.get())");
+    const size_t capturePreviousFocusDocument =
+        activateBlock.find("threadMgr->AssociateFocus(_hwnd, documentMgr.get(), previousFocusDocumentMgr.put())");
+    const size_t storePreviousFocusDocument =
+        activateBlock.find("previousFocusDocumentMgr.query_to(_nativeTextInputTsfPreviousFocusDocumentMgr.put())");
     Require(associateHostFocus != std::string::npos, "native TSF activate associates the host HWND with the active document manager");
-    Require(capturePreviousFocusDocument != std::string::npos, "native TSF activate captures the previous HWND focus document manager");
-    Require(storePreviousFocusDocument != std::string::npos, "native TSF activate keeps the previous HWND focus document manager alive until deactivation");
+    Require(capturePreviousFocusDocument != std::string::npos,
+            "native TSF activate captures the previous HWND focus document manager");
+    Require(storePreviousFocusDocument != std::string::npos,
+            "native TSF activate keeps the previous HWND focus document manager alive until deactivation");
     Require(focusDocument != std::string::npos, "native TSF activate sets thread-manager focus to the active document manager");
     Require(associateHostFocus < focusDocument, "native TSF activate associates the host HWND before setting TSF focus");
     Require(capturePreviousFocusDocument < storePreviousFocusDocument && storePreviousFocusDocument < focusDocument,
@@ -87,7 +91,7 @@ void TestNativeTextInputTsfDeactivateRestoresFocusAssociationBeforePoppingDocume
     const std::string deactivateBlock = nativeSource.substr(deactivate, nextMethod - deactivate);
 
     const size_t earlyDisconnect        = deactivateBlock.find("DisconnectNativeTextInputTextStore(textStoreToDisconnect.get())");
-    const size_t lateDisconnect         = deactivateBlock.find("DisconnectNativeTextInputTextStore(textStoreToDisconnect.get())", earlyDisconnect + 1u);
+    const size_t lateDisconnect = deactivateBlock.find("DisconnectNativeTextInputTextStore(textStoreToDisconnect.get())", earlyDisconnect + 1u);
     const size_t pop                    = deactivateBlock.find("documentMgr->Pop");
     const size_t clearThreadMgrFocus    = deactivateBlock.find("threadMgr->SetFocus(nullptr)");
     const size_t loadPreviousFocus      = deactivateBlock.find("_nativeTextInputTsfPreviousFocusDocumentMgr.query_to(previousFocusDocumentMgr.put())");

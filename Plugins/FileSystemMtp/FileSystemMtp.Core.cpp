@@ -20,8 +20,8 @@
 #include <yyjson.h>
 #pragma warning(pop)
 
-#include "DeleteOnCloseTemporaryFile.h"
 #include "FileSystemMtpResources.h"
+#include "DeleteOnCloseTemporaryFile.h"
 #include "HandleIo.h"
 #include "Helpers.h"
 #include "YyjsonHelpers.h"
@@ -59,7 +59,7 @@ static const int kFileSystemMtpModuleAnchor = 0;
 
 struct OverwriteJournalContext
 {
-    bool failWrites      = false;
+    bool failWrites = false;
     bool mutatingCommand = false;
     std::wstring deviceIdentity;
 };
@@ -69,7 +69,7 @@ struct OverwriteJournalToken
     std::wstring path;
     std::wstring deviceIdentity;
     uint64_t cacheGeneration = 0u;
-    bool recorded            = false;
+    bool recorded = false;
 };
 
 struct OverwriteJournalEntry
@@ -244,12 +244,15 @@ HRESULT VerifyCommittedOverwrite(IMtpBackend& backend,
         return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
     }
 
-    const std::wstring parent         = ParentPath(normalized);
-    const std::wstring leaf           = LeafName(normalized);
+    const std::wstring parent = ParentPath(normalized);
+    const std::wstring leaf   = LeafName(normalized);
     const std::wstring readablePrefix = std::wstring(L".") + leaf;
     std::wstring tempLeaf;
-    const HRESULT hr = Common::Paths::BuildUniqueSiblingName(
-        std::wstring_view(readablePrefix), std::wstring_view(L".rs-mtp-overwrite-"), std::wstring_view(L".tmp"), 255u, tempLeaf);
+    const HRESULT hr = Common::Paths::BuildUniqueSiblingName(std::wstring_view(readablePrefix),
+                                                              std::wstring_view(L".rs-mtp-overwrite-"),
+                                                              std::wstring_view(L".tmp"),
+                                                              255u,
+                                                              tempLeaf);
     if (FAILED(hr))
     {
         return hr;
@@ -359,7 +362,8 @@ HRESULT CommitWriterOverwriteWithTempSwap(IMtpBackend& backend,
     }
 
     OverwriteJournalToken journalToken;
-    hr = RecordOverwriteJournalIntent(journalContext, L"", normalizedPath, tempPath, sizeBytes, HashHex(transmitHash), journalToken);
+    hr = RecordOverwriteJournalIntent(
+        journalContext, L"", normalizedPath, tempPath, sizeBytes, HashHex(transmitHash), journalToken);
     if (FAILED(hr))
     {
         return hr;
@@ -425,7 +429,7 @@ HRESULT CommitWriterOverwriteWithTempSwap(IMtpBackend& backend,
     // R0c-OR3: the replaced object is deleted only when its live identity is the journaled one; a
     // different occupant at that name (a concurrent writer) refuses the commit with
     // ERROR_REVISION_MISMATCH and nothing is deleted.
-    hr = backend.DeleteItemByIdentity(normalizedPath, destinationPersistentId, false);
+    hr          = backend.DeleteItemByIdentity(normalizedPath, destinationPersistentId, false);
     if (FAILED(hr))
     {
         // R0c-OR2: the verified temp and its identified journal entry survive. The device may have
@@ -545,7 +549,7 @@ HRESULT CommitDeviceSourceOverwriteWithTempSwap(IMtpBackend& backend,
 
     cleanupTemp = false;
     // R0c-OR3: identity-matched delete, never a path delete (see the writer path).
-    hr = backend.DeleteItemByIdentity(destinationPath, destinationPersistentId, false);
+    hr          = backend.DeleteItemByIdentity(destinationPath, destinationPersistentId, false);
     if (FAILED(hr))
     {
         // R0c-OR2: retain the verified temp and its identified journal entry (see the writer path).
@@ -580,7 +584,8 @@ HRESULT CommitDeviceSourceOverwriteWithTempSwap(IMtpBackend& backend,
 
 [[nodiscard]] bool TryGetJsonBool(yyjson_val* root, const char* key, bool& out) noexcept
 {
-    const Common::Json::MemberResult<bool> value = Common::Json::GetBoolMember(root, key, Common::Json::MemberRequirement::Required);
+    const Common::Json::MemberResult<bool> value =
+        Common::Json::GetBoolMember(root, key, Common::Json::MemberRequirement::Required);
     if (! value.HasValue())
     {
         return false;
@@ -612,7 +617,8 @@ HRESULT CommitDeviceSourceOverwriteWithTempSwap(IMtpBackend& backend,
 
 [[nodiscard]] bool TryGetJsonString(yyjson_val* root, const char* key, std::string& out) noexcept
 {
-    const Common::Json::MemberResult<std::string_view> value = Common::Json::GetStringMember(root, key, Common::Json::MemberRequirement::Required);
+    const Common::Json::MemberResult<std::string_view> value =
+        Common::Json::GetStringMember(root, key, Common::Json::MemberRequirement::Required);
     if (! value.HasValue())
     {
         return false;
@@ -868,7 +874,7 @@ HRESULT CommitDeviceSourceOverwriteWithTempSwap(IMtpBackend& backend,
         return HRESULT_FROM_WIN32(GetLastError());
     }
 
-    uint64_t fileSize    = 0u;
+    uint64_t fileSize      = 0u;
     const HRESULT sizeHr = Common::HandleIo::GetFileSizeBounded(file.get(), 256u * 1024u, fileSize);
     if (FAILED(sizeHr))
     {
@@ -930,7 +936,8 @@ HRESULT CommitDeviceSourceOverwriteWithTempSwap(IMtpBackend& backend,
     }
 
     if (! TryGetJsonString(firstEntry, "phase", entry.phase) || ! TryGetJsonStringWide(firstEntry, "devicePuid", entry.deviceIdentity) ||
-        ! TryGetJsonStringWide(firstEntry, "destinationPath", entry.destinationPath) || ! TryGetJsonStringWide(firstEntry, "tempPath", entry.tempPath))
+        ! TryGetJsonStringWide(firstEntry, "destinationPath", entry.destinationPath) ||
+        ! TryGetJsonStringWide(firstEntry, "tempPath", entry.tempPath))
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
@@ -992,8 +999,8 @@ HRESULT CommitDeviceSourceOverwriteWithTempSwap(IMtpBackend& backend,
     if (SUCCEEDED(GetLocalAppDataPath(localAppData)) && ! localAppData.empty())
     {
         std::replace(localAppData.begin(), localAppData.end(), L'/', L'\\');
-        std::transform(
-            localAppData.begin(), localAppData.end(), localAppData.begin(), [](wchar_t ch) noexcept { return static_cast<wchar_t>(std::towlower(ch)); });
+        std::transform(localAppData.begin(), localAppData.end(), localAppData.begin(), [](wchar_t ch) noexcept
+        { return static_cast<wchar_t>(std::towlower(ch)); });
         identity.reserve(localAppData.size() + deviceIdentity.size() + 1u);
         identity.append(localAppData);
         identity.push_back(L'|');
@@ -1050,9 +1057,9 @@ HRESULT CommitDeviceSourceOverwriteWithTempSwap(IMtpBackend& backend,
         return hr;
     }
 
-    const std::string phase                 = entry.phase.empty() ? "planned" : entry.phase;
-    const uint64_t declaredSizeBytes        = entry.hasDeclaredSizeBytes ? entry.declaredSizeBytes : 0u;
-    const __int64 journalTimestamp          = entry.hasJournalTimestampFileTimeUtc ? entry.journalTimestampFileTimeUtc : NowFileTime64();
+    const std::string phase = entry.phase.empty() ? "planned" : entry.phase;
+    const uint64_t declaredSizeBytes = entry.hasDeclaredSizeBytes ? entry.declaredSizeBytes : 0u;
+    const __int64 journalTimestamp   = entry.hasJournalTimestampFileTimeUtc ? entry.journalTimestampFileTimeUtc : NowFileTime64();
     const std::string sourceTransmitHashHex = entry.sourceTransmitHashHex.empty() ? "replay-retry" : entry.sourceTransmitHashHex;
     std::string tempPuidJson;
     if (! entry.tempPuid.empty())
@@ -1124,17 +1131,17 @@ HRESULT CommitDeviceSourceOverwriteWithTempSwap(IMtpBackend& backend,
 {
     token = {};
     OverwriteJournalEntry entry{
-        .schemaVersion                  = 3u,
-        .phase                          = "planned",
-        .deviceIdentity                 = context.deviceIdentity,
-        .sourcePath                     = NormalizeMtpPath(sourcePath),
-        .destinationPath                = NormalizeMtpPath(destinationPath),
-        .tempPath                       = NormalizeMtpPath(tempPath),
-        .hasDeclaredSizeBytes           = true,
-        .declaredSizeBytes              = declaredSizeBytes,
+        .schemaVersion              = 3u,
+        .phase                      = "planned",
+        .deviceIdentity             = context.deviceIdentity,
+        .sourcePath                 = NormalizeMtpPath(sourcePath),
+        .destinationPath            = NormalizeMtpPath(destinationPath),
+        .tempPath                   = NormalizeMtpPath(tempPath),
+        .hasDeclaredSizeBytes       = true,
+        .declaredSizeBytes          = declaredSizeBytes,
         .hasJournalTimestampFileTimeUtc = true,
-        .journalTimestampFileTimeUtc    = NowFileTime64(),
-        .sourceTransmitHashHex          = std::string(sourceTransmitHashHex),
+        .journalTimestampFileTimeUtc = NowFileTime64(),
+        .sourceTransmitHashHex      = std::string(sourceTransmitHashHex),
     };
     const HRESULT hr = WriteOverwriteJournalEntry(context, entry, 0u, token);
     if (FAILED(hr))
@@ -1163,19 +1170,19 @@ HRESULT CommitDeviceSourceOverwriteWithTempSwap(IMtpBackend& backend,
     }
 
     OverwriteJournalEntry entry{
-        .schemaVersion                  = 3u,
-        .phase                          = "identified",
-        .deviceIdentity                 = context.deviceIdentity,
-        .sourcePath                     = NormalizeMtpPath(sourcePath),
-        .destinationPath                = NormalizeMtpPath(destinationPath),
-        .tempPath                       = NormalizeMtpPath(tempPath),
-        .hasDeclaredSizeBytes           = true,
-        .declaredSizeBytes              = declaredSizeBytes,
+        .schemaVersion              = 3u,
+        .phase                      = "identified",
+        .deviceIdentity             = context.deviceIdentity,
+        .sourcePath                 = NormalizeMtpPath(sourcePath),
+        .destinationPath            = NormalizeMtpPath(destinationPath),
+        .tempPath                   = NormalizeMtpPath(tempPath),
+        .hasDeclaredSizeBytes       = true,
+        .declaredSizeBytes          = declaredSizeBytes,
         .hasJournalTimestampFileTimeUtc = true,
-        .journalTimestampFileTimeUtc    = NowFileTime64(),
-        .sourceTransmitHashHex          = std::string(sourceTransmitHashHex),
-        .tempPuid                       = std::wstring(tempPuid),
-        .destinationPuid                = std::wstring(destinationPuid),
+        .journalTimestampFileTimeUtc = NowFileTime64(),
+        .sourceTransmitHashHex      = std::string(sourceTransmitHashHex),
+        .tempPuid                   = std::wstring(tempPuid),
+        .destinationPuid            = std::wstring(destinationPuid),
     };
     const HRESULT hr = WriteOverwriteJournalEntry(context, entry, 0u, token);
     if (SUCCEEDED(hr))
@@ -1242,15 +1249,24 @@ HRESULT ExecuteDeviceSourceOperation(IMtpBackend& backend,
             return blockedHr;
         }
 
-        return CommitDeviceSourceOverwriteWithTempSwap(
-            backend, sourcePath, destinationPath, operation != DeviceSourceOperation::Copy, verifyLevel, journalContext, tempPuidMissing, tempPuidPresent);
+        return CommitDeviceSourceOverwriteWithTempSwap(backend,
+                                                       sourcePath,
+                                                       destinationPath,
+                                                       operation != DeviceSourceOperation::Copy,
+                                                       verifyLevel,
+                                                       journalContext,
+                                                       tempPuidMissing,
+                                                       tempPuidPresent);
     }
 
     switch (operation)
     {
-        case DeviceSourceOperation::Copy: return backend.CopyItem(sourcePath, destinationPath, false);
-        case DeviceSourceOperation::Move: return backend.MoveItem(sourcePath, destinationPath, false);
-        case DeviceSourceOperation::Rename: return backend.RenameItem(sourcePath, destinationPath, false);
+    case DeviceSourceOperation::Copy:
+        return backend.CopyItem(sourcePath, destinationPath, false);
+    case DeviceSourceOperation::Move:
+        return backend.MoveItem(sourcePath, destinationPath, false);
+    case DeviceSourceOperation::Rename:
+        return backend.RenameItem(sourcePath, destinationPath, false);
     }
     return E_UNEXPECTED;
 }
@@ -1321,12 +1337,14 @@ struct ExactJournalObject
     uint32_t matchCount = 0u;
     std::wstring destinationPuid;
     uint32_t destinationPathMatchCount = 0u;
-    uint32_t enumeratedCount           = 0u;
+    uint32_t enumeratedCount = 0u;
 };
 
-[[nodiscard]] HRESULT FindExactJournalObject(IMtpBackend& backend, const OverwriteJournalEntry& entry, ExactJournalObject& exactObject) noexcept
+[[nodiscard]] HRESULT FindExactJournalObject(IMtpBackend& backend,
+                                             const OverwriteJournalEntry& entry,
+                                             ExactJournalObject& exactObject) noexcept
 {
-    exactObject                   = {};
+    exactObject = {};
     const std::wstring parentPath = ParentPath(entry.tempPath);
     if (parentPath.empty() || parentPath == entry.tempPath || ParentPath(entry.destinationPath) != parentPath)
     {
@@ -1426,7 +1444,8 @@ struct ExactJournalObject
         return hr;
     }
 
-    OverwriteJournalToken token{.path = journalPath, .deviceIdentity = context.deviceIdentity, .cacheGeneration = cacheState.generation, .recorded = true};
+    OverwriteJournalToken token{
+        .path = journalPath, .deviceIdentity = context.deviceIdentity, .cacheGeneration = cacheState.generation, .recorded = true};
     OverwriteJournalEntry entry;
     hr = ParseOverwriteJournalEntry(jsonUtf8, entry);
     if (FAILED(hr))
@@ -1473,10 +1492,12 @@ struct ExactJournalObject
         return S_OK;
     }
 
-    if (exactObject.destinationPathMatchCount > 1u || (exactObject.destinationPathMatchCount == 1u && exactObject.destinationPuid != entry.destinationPuid))
+    if (exactObject.destinationPathMatchCount > 1u ||
+        (exactObject.destinationPathMatchCount == 1u && exactObject.destinationPuid != entry.destinationPuid))
     {
-        Debug::Perf::EmitValue(
-            L"mtp.overwrite.journal_replay_destination_identity_rejected", exactObject.destinationPathMatchCount, HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
+        Debug::Perf::EmitValue(L"mtp.overwrite.journal_replay_destination_identity_rejected",
+                               exactObject.destinationPathMatchCount,
+                               HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
         return QuarantineOverwriteJournalIntent(token);
     }
 
@@ -1516,11 +1537,14 @@ struct ExactJournalObject
 class MtpStagedPayload final
 {
 public:
-    MtpStagedPayload()                                   = default;
+    MtpStagedPayload() = default;
     MtpStagedPayload(const MtpStagedPayload&)            = delete;
     MtpStagedPayload& operator=(const MtpStagedPayload&) = delete;
 
-    [[nodiscard]] static HRESULT Create(wil::unique_hfile file, uint64_t sizeBytes, uint64_t transmitHash, std::shared_ptr<MtpStagedPayload>& payload) noexcept
+    [[nodiscard]] static HRESULT Create(wil::unique_hfile file,
+                                        uint64_t sizeBytes,
+                                        uint64_t transmitHash,
+                                        std::shared_ptr<MtpStagedPayload>& payload) noexcept
     {
         payload.reset();
         if (! file)
@@ -1532,9 +1556,9 @@ public:
             return HRESULT_FROM_WIN32(GetLastError());
         }
 
-        auto created           = std::make_shared<MtpStagedPayload>();
-        created->_file         = std::move(file);
-        created->_sizeBytes    = sizeBytes;
+        auto created = std::make_shared<MtpStagedPayload>();
+        created->_file = std::move(file);
+        created->_sizeBytes = sizeBytes;
         created->_transmitHash = transmitHash;
 
         payload = std::move(created);
@@ -1558,7 +1582,7 @@ public:
 
 private:
     wil::unique_hfile _file;
-    uint64_t _sizeBytes    = 0u;
+    uint64_t _sizeBytes = 0u;
     uint64_t _transmitHash = 1469598103934665603ull;
 };
 
@@ -1566,10 +1590,7 @@ class MtpBufferedWriter final : public IFileWriter, public IFileWriterExpectedRe
 {
 public:
     MtpBufferedWriter(FileSystemMtp* owner, std::wstring path, FileSystemFlags flags, wil::unique_hfile stagingFile) noexcept
-        : _owner(owner),
-          _path(std::move(path)),
-          _flags(flags),
-          _stagingFile(std::move(stagingFile))
+        : _owner(owner), _path(std::move(path)), _flags(flags), _stagingFile(std::move(stagingFile))
     {
     }
 
@@ -1734,10 +1755,10 @@ private:
     std::wstring _path;
     FileSystemFlags _flags = FILESYSTEM_FLAG_NONE;
     wil::unique_hfile _stagingFile;
-    uint64_t _position     = 0u;
+    uint64_t _position = 0u;
     uint64_t _transmitHash = 1469598103934665603ull;
-    HRESULT _failedHr      = S_OK;
-    bool _committed        = false;
+    HRESULT _failedHr = S_OK;
+    bool _committed   = false;
     std::wstring _expectedDestinationPersistentId; // C9: the occupant the host showed, resolved live at SetExpectedReplacement
 };
 
@@ -1803,7 +1824,9 @@ public:
                                               FileSystemOptions* options,
                                               void* cookie) noexcept override
     {
-        return _inner ? _inner->FileSystemIssue(operationType, sourcePath, destinationPath, status, action, expectedDestination, options, cookie) : E_POINTER;
+        return _inner ? _inner->FileSystemIssue(
+                            operationType, sourcePath, destinationPath, status, action, expectedDestination, options, cookie)
+                      : E_POINTER;
     }
 
 private:
@@ -1862,11 +1885,11 @@ struct MtpQuarantinedCommand
 
 struct MtpBackendCancelRequest
 {
-    MtpBackendCancelRequest()                                          = default;
-    MtpBackendCancelRequest(const MtpBackendCancelRequest&)            = delete;
+    MtpBackendCancelRequest() = default;
+    MtpBackendCancelRequest(const MtpBackendCancelRequest&) = delete;
     MtpBackendCancelRequest& operator=(const MtpBackendCancelRequest&) = delete;
-    MtpBackendCancelRequest(MtpBackendCancelRequest&&)                 = delete;
-    MtpBackendCancelRequest& operator=(MtpBackendCancelRequest&&)      = delete;
+    MtpBackendCancelRequest(MtpBackendCancelRequest&&) = delete;
+    MtpBackendCancelRequest& operator=(MtpBackendCancelRequest&&) = delete;
 
     std::shared_ptr<IMtpBackend> backend;
     wil::unique_hmodule moduleKeepAlive;
@@ -1923,8 +1946,8 @@ void QueueBackendCancel(std::shared_ptr<IMtpBackend> backend) noexcept
         return;
     }
 
-    auto request             = std::make_unique<MtpBackendCancelRequest>();
-    request->backend         = std::move(backend);
+    auto request     = std::make_unique<MtpBackendCancelRequest>();
+    request->backend = std::move(backend);
     request->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kFileSystemMtpModuleAnchor);
     if (! request->moduleKeepAlive)
     {
@@ -2025,9 +2048,9 @@ public:
         // Thread creation is an ABI-boundary failure: surface it as a command error instead of terminating this noexcept constructor.
         catch (const std::system_error& error)
         {
-            _startHr          = HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY);
-            _state->accepting = false;
-            _state->failureHr = _startHr;
+            _startHr             = HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY);
+            _state->accepting    = false;
+            _state->failureHr    = _startHr;
             Debug::Error(L"FileSystemMtp: failed to start the backend command worker: {}", Utf16FromUtf8(error.what()));
         }
     }
@@ -2147,8 +2170,8 @@ private:
         std::condition_variable cv;
         std::deque<QueuedCommand> queue;
         std::shared_ptr<MtpBackendCommandStatus> exitStatus;
-        bool accepting    = true;
-        bool stop         = false;
+        bool accepting = true;
+        bool stop      = false;
         HRESULT failureHr = HRESULT_FROM_WIN32(ERROR_DEVICE_NOT_CONNECTED);
     };
 
@@ -2206,9 +2229,9 @@ private:
                 if (! queued.recoveryDeviceIdentity.empty())
                 {
                     const OverwriteJournalContext recoveryContext{
-                        .failWrites      = false,
+                        .failWrites     = false,
                         .mutatingCommand = queued.kind == MtpBackendCommandKind::Mutating,
-                        .deviceIdentity  = queued.recoveryDeviceIdentity,
+                        .deviceIdentity = queued.recoveryDeviceIdentity,
                     };
                     hr = ReplayOverwriteJournal(*state->backend, recoveryContext);
                 }
@@ -2250,7 +2273,7 @@ public:
         }
 
         std::vector<std::byte> scratch;
-        uint64_t scalar           = 0u;
+        uint64_t scalar = 0u;
         unsigned long transferred = 0u;
     };
 
@@ -2322,10 +2345,12 @@ public:
         {
             return FAILED(_terminalHr) ? _terminalHr : E_OUTOFMEMORY;
         }
-        _requestState->scalar                                      = 0u;
+        _requestState->scalar = 0u;
         const std::shared_ptr<IMtpBackendFileReader> backendReader = _backendReader;
         const std::shared_ptr<ReusableRequestState> requestState   = _requestState;
-        const HRESULT hr                                           = _owner->RunBackendCommand([backendReader, requestState](IMtpBackend&) noexcept {
+        const HRESULT hr = _owner->RunBackendCommand(
+            [backendReader, requestState](IMtpBackend&) noexcept
+        {
             return backendReader->GetSize(requestState->scalar);
         }, {}, MtpBackendCommandKind::ReadOnly, _backendGeneration);
         if (FAILED(hr))
@@ -2358,10 +2383,12 @@ public:
         {
             return FAILED(_terminalHr) ? _terminalHr : E_OUTOFMEMORY;
         }
-        _requestState->scalar                                      = 0u;
+        _requestState->scalar = 0u;
         const std::shared_ptr<IMtpBackendFileReader> backendReader = _backendReader;
         const std::shared_ptr<ReusableRequestState> requestState   = _requestState;
-        const HRESULT hr = _owner->RunBackendCommand([backendReader, offset, origin, requestState](IMtpBackend&) noexcept {
+        const HRESULT hr = _owner->RunBackendCommand(
+            [backendReader, offset, origin, requestState](IMtpBackend&) noexcept
+        {
             return backendReader->Seek(offset, origin, requestState->scalar);
         }, {}, MtpBackendCommandKind::ReadOnly, _backendGeneration);
         if (FAILED(hr))
@@ -2405,13 +2432,16 @@ public:
 
         const std::shared_ptr<IMtpBackendFileReader> backendReader = _backendReader;
         const std::shared_ptr<ReusableRequestState> requestState   = _requestState;
-        auto* output                                               = static_cast<std::byte*>(buffer);
-        unsigned long totalRead                                    = 0u;
+        auto* output = static_cast<std::byte*>(buffer);
+        unsigned long totalRead = 0u;
         while (totalRead < bytesToRead)
         {
-            const unsigned long requested = static_cast<unsigned long>((std::min)(static_cast<size_t>(bytesToRead - totalRead), requestState->scratch.size()));
-            requestState->transferred     = 0u;
-            const HRESULT hr              = _owner->RunBackendCommand([backendReader, requestState, requested](IMtpBackend&) noexcept {
+            const unsigned long requested = static_cast<unsigned long>(
+                (std::min)(static_cast<size_t>(bytesToRead - totalRead), requestState->scratch.size()));
+            requestState->transferred = 0u;
+            const HRESULT hr = _owner->RunBackendCommand(
+                [backendReader, requestState, requested](IMtpBackend&) noexcept
+            {
                 return backendReader->Read(std::span<std::byte>(requestState->scratch), requested, requestState->transferred);
             }, {}, MtpBackendCommandKind::ReadOnly, _backendGeneration);
             if (FAILED(hr))
@@ -2500,7 +2530,7 @@ HRESULT FileSystemMtp::CreateBackendWorkerLocked() noexcept
         return _backendWorkerCreationHr;
     }
 
-    auto worker              = std::make_shared<MtpBackendCommandQueue>(_backend);
+    auto worker = std::make_shared<MtpBackendCommandQueue>(_backend);
     _backendWorkerCreationHr = worker->StartResult();
     if (FAILED(_backendWorkerCreationHr))
     {
@@ -2947,7 +2977,9 @@ HRESULT STDMETHODCALLTYPE FileSystemMtp::ReadDirectoryInfo(const wchar_t* path, 
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemMtp::GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemMtp::GetPathCapabilities(const wchar_t* path,
+                                                              FileSystemOperation operation,
+                                                              const char** jsonUtf8) noexcept
 {
     if (! jsonUtf8)
     {
@@ -2964,7 +2996,9 @@ HRESULT STDMETHODCALLTYPE FileSystemMtp::GetPathCapabilities(const wchar_t* path
     return S_OK;
 }
 
-HRESULT FileSystemMtp::BuildFileSystemRouteDescriptor(const wchar_t* path, FileSystemOperation operation, FileSystemRouteDescriptor& descriptor) noexcept
+HRESULT FileSystemMtp::BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                                       FileSystemOperation operation,
+                                                       FileSystemRouteDescriptor& descriptor) noexcept
 {
     static_cast<void>(operation);
     if (path == nullptr || path[0] == L'\0')
@@ -2975,10 +3009,10 @@ HRESULT FileSystemMtp::BuildFileSystemRouteDescriptor(const wchar_t* path, FileS
     Settings settings;
     std::wstring configuredRoot;
     bool backendSupportsWrite = false;
-    bool disconnected         = false;
+    bool disconnected = false;
     {
         std::lock_guard lock(_stateMutex);
-        settings       = _settings;
+        settings = _settings;
         configuredRoot = _rootPath;
         if (_backend)
         {
@@ -2987,39 +3021,38 @@ HRESULT FileSystemMtp::BuildFileSystemRouteDescriptor(const wchar_t* path, FileS
         disconnected = _disconnected;
     }
 
-    const bool read  = ! disconnected;
+    const bool read = ! disconnected;
     const bool write = read && ! settings.readOnly && backendSupportsWrite;
-    const std::wstring_view deviceIdentity =
-        ! settings.connectionDevicePuid.empty()
-            ? std::wstring_view(settings.connectionDevicePuid)
-            : (! settings.connectionHost.empty() ? std::wstring_view(settings.connectionHost) : std::wstring_view(L"unconfigured-device"));
+    const std::wstring_view deviceIdentity = ! settings.connectionDevicePuid.empty()
+        ? std::wstring_view(settings.connectionDevicePuid)
+        : (! settings.connectionHost.empty() ? std::wstring_view(settings.connectionHost) : std::wstring_view(L"unconfigured-device"));
     const std::wstring_view storageIdentity = configuredRoot.empty() ? std::wstring_view(path) : std::wstring_view(configuredRoot);
 
-    descriptor                           = {};
-    descriptor.providerId                = kPluginId;
-    descriptor.pathProfileId             = L"mtp-device-storage";
-    descriptor.rootId                    = std::format(L"mtp-storage:{}:{}", deviceIdentity, storageIdentity);
-    descriptor.availability              = FILESYSTEM_ROUTE_AVAILABLE;
-    descriptor.cancellationRoute         = FILESYSTEM_CANCELLATION_PROVIDER_WATCHDOG;
+    descriptor = {};
+    descriptor.providerId = kPluginId;
+    descriptor.pathProfileId = L"mtp-device-storage";
+    descriptor.rootId = std::format(L"mtp-storage:{}:{}", deviceIdentity, storageIdentity);
+    descriptor.availability = FILESYSTEM_ROUTE_AVAILABLE;
+    descriptor.cancellationRoute = FILESYSTEM_CANCELLATION_PROVIDER_WATCHDOG;
     descriptor.providerWatchdogTimeoutMs = 30'000u;
-    descriptor.namespaceKind             = FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER;
-    descriptor.componentComparison       = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
-    descriptor.caseOnlyRename            = FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED;
-    descriptor.copyMoveMaxConcurrency    = 1u;
-    descriptor.deleteMaxConcurrency      = 1u;
+    descriptor.namespaceKind = FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER;
+    descriptor.componentComparison = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
+    descriptor.caseOnlyRename = FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED;
+    descriptor.copyMoveMaxConcurrency = 1u;
+    descriptor.deleteMaxConcurrency = 1u;
     // The typed record keeps every concurrency bound positive. Recycle remains
     // unavailable through recycleOperation=false, so this bound is never an
     // availability grant.
     descriptor.deleteRecycleBinMaxConcurrency = 1u;
-    descriptor.copyOperation                  = write;
-    descriptor.moveOperation                  = write;
-    descriptor.createDirectoryOperation       = write;
-    descriptor.propertiesOperation            = read;
-    descriptor.readOperation                  = read;
-    descriptor.writeOperation                 = write;
-    descriptor.committedSize                  = true;
-    descriptor.exportCopyAll                  = true;
-    descriptor.importCopyAll                  = write;
+    descriptor.copyOperation = write;
+    descriptor.moveOperation = write;
+    descriptor.createDirectoryOperation = write;
+    descriptor.propertiesOperation = read;
+    descriptor.readOperation = read;
+    descriptor.writeOperation = write;
+    descriptor.committedSize = true;
+    descriptor.exportCopyAll = true;
+    descriptor.importCopyAll = write;
     return descriptor.rootId.empty() ? HRESULT_FROM_WIN32(ERROR_INVALID_DATA) : S_OK;
 }
 
@@ -3130,9 +3163,8 @@ HRESULT STDMETHODCALLTYPE FileSystemMtp::CreateFileReader(const wchar_t* path, I
     auto backendReaderResult = std::make_shared<std::shared_ptr<IMtpBackendFileReader>>();
     {
         const std::wstring commandPath = normalized;
-        hr                             = RunBackendCommand([commandPath, backendReaderResult](IMtpBackend& backend) noexcept {
-            return backend.CreateFileReader(commandPath, *backendReaderResult);
-        }, OverwriteJournalIdentityForPath(commandPath));
+        hr = RunBackendCommand([commandPath, backendReaderResult](IMtpBackend& backend) noexcept { return backend.CreateFileReader(commandPath, *backendReaderResult); },
+                               OverwriteJournalIdentityForPath(commandPath));
     }
     if (FAILED(hr))
     {
@@ -3144,7 +3176,7 @@ HRESULT STDMETHODCALLTYPE FileSystemMtp::CreateFileReader(const wchar_t* path, I
     }
 
     constexpr size_t kMtpReaderScratchBytes = 8u * 1024u * 1024u;
-    auto requestState                       = std::make_shared<MtpBackendReader::ReusableRequestState>(kMtpReaderScratchBytes);
+    auto requestState = std::make_shared<MtpBackendReader::ReusableRequestState>(kMtpReaderScratchBytes);
     Debug::Perf::EmitValue(L"mtp.reader.reusable_request_bytes", kMtpReaderScratchBytes, S_OK);
     auto* instance = new (std::nothrow) MtpBackendReader(this, *backendReaderResult, backendGeneration, std::move(requestState));
     if (! instance)
@@ -3383,16 +3415,8 @@ HRESULT FileSystemMtp::CommitFileWriter(std::wstring_view normalizedPath,
             return unsupportedHr;
         }
 
-        return CommitWriterOverwriteWithTempSwap(backend,
-                                                 commandPath,
-                                                 decidedDestinationPersistentId,
-                                                 stagingFile,
-                                                 sizeBytes,
-                                                 transmitHash,
-                                                 verifyLevel,
-                                                 journalContext,
-                                                 tempPuidMissing,
-                                                 tempPuidPresent);
+        return CommitWriterOverwriteWithTempSwap(
+            backend, commandPath, decidedDestinationPersistentId, stagingFile, sizeBytes, transmitHash, verifyLevel, journalContext, tempPuidMissing, tempPuidPresent);
     },
         journalContext.deviceIdentity,
         MtpBackendCommandKind::Mutating);
@@ -3517,9 +3541,9 @@ HRESULT STDMETHODCALLTYPE FileSystemMtp::CreateDirectory(const wchar_t* path) no
     }
 
     const std::wstring commandPath = normalized;
-    return RunBackendCommand([commandPath](IMtpBackend& backend) noexcept {
-        return backend.CreateDirectory(commandPath);
-    }, OverwriteJournalIdentityForPath(commandPath), MtpBackendCommandKind::Mutating);
+    return RunBackendCommand([commandPath](IMtpBackend& backend) noexcept { return backend.CreateDirectory(commandPath); },
+                             OverwriteJournalIdentityForPath(commandPath),
+                             MtpBackendCommandKind::Mutating);
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemMtp::GetDirectorySize(
@@ -3729,9 +3753,9 @@ FileSystemMtp::DeleteItem(const wchar_t* path, FileSystemFlags flags, const File
             {
                 const std::wstring commandPath = normalized;
                 const bool recursive           = (flags & FILESYSTEM_FLAG_RECURSIVE) != 0;
-                hr                             = RunBackendCommand([commandPath, recursive](IMtpBackend& backend) noexcept {
-                    return backend.DeleteItem(commandPath, recursive);
-                }, OverwriteJournalIdentityForPath(commandPath), MtpBackendCommandKind::Mutating);
+                hr = RunBackendCommand([commandPath, recursive](IMtpBackend& backend) noexcept { return backend.DeleteItem(commandPath, recursive); },
+                                       OverwriteJournalIdentityForPath(commandPath),
+                                       MtpBackendCommandKind::Mutating);
             }
         }
     }
@@ -3759,7 +3783,7 @@ HRESULT STDMETHODCALLTYPE FileSystemMtp::RenameItem(const wchar_t* sourcePath,
         std::wstring source;
         std::wstring dest;
         const bool allowOverwrite = (flags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) != 0;
-        hr                        = NormalizeInputPath(sourcePath, source);
+        hr = NormalizeInputPath(sourcePath, source);
         if (SUCCEEDED(hr))
         {
             hr = NormalizeInputPath(destinationPath, dest);
@@ -4168,7 +4192,7 @@ std::string FileSystemMtp::BuildCapabilitiesJson(std::wstring_view path) const
     bool disconnected         = false;
     {
         std::lock_guard lock(_stateMutex);
-        settings       = _settings;
+        settings = _settings;
         configuredRoot = _rootPath;
         if (_backend)
         {
@@ -4181,12 +4205,13 @@ std::string FileSystemMtp::BuildCapabilitiesJson(std::wstring_view path) const
 
     const bool read  = ! disconnected;
     const bool write = read && ! settings.readOnly && backendSupportsWrite;
-    const std::wstring_view deviceIdentity =
-        ! settings.connectionDevicePuid.empty()
-            ? std::wstring_view(settings.connectionDevicePuid)
-            : (! settings.connectionHost.empty() ? std::wstring_view(settings.connectionHost) : std::wstring_view(L"unconfigured-device"));
+    const std::wstring_view deviceIdentity = ! settings.connectionDevicePuid.empty()
+        ? std::wstring_view(settings.connectionDevicePuid)
+        : (! settings.connectionHost.empty() ? std::wstring_view(settings.connectionHost) : std::wstring_view(L"unconfigured-device"));
     const std::wstring_view storageIdentity = configuredRoot.empty() ? path : std::wstring_view(configuredRoot);
-    const std::string rootId = std::format("mtp-storage:{}:{}", JsonEscapeUtf8(Utf8FromUtf16(deviceIdentity)), JsonEscapeUtf8(Utf8FromUtf16(storageIdentity)));
+    const std::string rootId = std::format("mtp-storage:{}:{}",
+                                           JsonEscapeUtf8(Utf8FromUtf16(deviceIdentity)),
+                                           JsonEscapeUtf8(Utf8FromUtf16(storageIdentity)));
     return std::format(
         R"json(
 {{

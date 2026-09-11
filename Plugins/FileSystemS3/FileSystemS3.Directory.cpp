@@ -241,7 +241,8 @@ void EmitSourceRevisionMetrics(std::wstring_view detail, const SourceRevisionMet
     Debug::Perf::Emit(L"FileOps.S3.DirectoryTransfer.ExactOwnedDeleteCount", detail, 0u, metrics.exactOwnedDeleteCount, plannedObjectCount, result);
 }
 
-void EmitVirtualFolderDeleteMetrics(const VirtualFolderDeleteMetrics& metrics, std::chrono::steady_clock::time_point startedAt, HRESULT result) noexcept
+void EmitVirtualFolderDeleteMetrics(
+    const VirtualFolderDeleteMetrics& metrics, std::chrono::steady_clock::time_point startedAt, HRESULT result) noexcept
 {
     constexpr std::wstring_view detail = L"ordinary-recursive-prefix";
     Debug::Perf::Emit(L"FileOps.S3.VirtualFolderDelete.ElapsedUs", detail, Debug::Perf::ElapsedUs(startedAt), metrics.observedObjectCount, 0u, result);
@@ -249,7 +250,8 @@ void EmitVirtualFolderDeleteMetrics(const VirtualFolderDeleteMetrics& metrics, s
     Debug::Perf::Emit(L"FileOps.S3.VirtualFolderDelete.ObservedObjectCount", detail, 0u, metrics.observedObjectCount, metrics.passCount, result);
     Debug::Perf::Emit(
         L"FileOps.S3.VirtualFolderDelete.ConditionalRequestCount", detail, 0u, metrics.conditionalRequestCount, metrics.observedObjectCount, result);
-    Debug::Perf::Emit(L"FileOps.S3.VirtualFolderDelete.RevisionMismatchCount", detail, 0u, metrics.revisionMismatchCount, metrics.observedObjectCount, result);
+    Debug::Perf::Emit(
+        L"FileOps.S3.VirtualFolderDelete.RevisionMismatchCount", detail, 0u, metrics.revisionMismatchCount, metrics.observedObjectCount, result);
     Debug::Perf::Emit(L"FileOps.S3.VirtualFolderDelete.ResidualObjectCount", detail, 0u, metrics.residualObjectCount, metrics.passCount, result);
 }
 
@@ -318,9 +320,10 @@ struct S3TransferCommitResult
     HRESULT rollbackStatus        = S_OK;
 };
 
-[[nodiscard]] const FileSystemItemMutationResult* BuildTransferMutationResult(const S3TransferCommitResult& commitResult,
-                                                                              bool originalStillPresent,
-                                                                              FileSystemItemMutationResult& itemMutationResult) noexcept
+[[nodiscard]] const FileSystemItemMutationResult* BuildTransferMutationResult(
+    const S3TransferCommitResult& commitResult,
+    bool originalStillPresent,
+    FileSystemItemMutationResult& itemMutationResult) noexcept
 {
     if (! commitResult.primaryMutationCommitted)
     {
@@ -331,8 +334,8 @@ struct S3TransferCommitResult
     itemMutationResult.outcomeKnown         = TRUE;
     itemMutationResult.mutationCommitted    = TRUE;
     itemMutationResult.originalStillPresent = originalStillPresent ? TRUE : FALSE;
-    itemMutationResult.ownedStageDisposition =
-        FAILED(commitResult.cleanupStatus) ? FileSystemOwnedStageDisposition::Retained : FileSystemOwnedStageDisposition::NotApplicable;
+    itemMutationResult.ownedStageDisposition = FAILED(commitResult.cleanupStatus) ? FileSystemOwnedStageDisposition::Retained
+                                                                                   : FileSystemOwnedStageDisposition::NotApplicable;
     return &itemMutationResult;
 }
 
@@ -377,7 +380,9 @@ inline constexpr unsigned int kMaxS3PerObjectConflictRetries = 16u;
     return hr;
 }
 
-[[nodiscard]] HRESULT CheckOperationCancellation(const FileSystemOptions* options, IFileSystemCallback* callback, void* cookie) noexcept
+[[nodiscard]] HRESULT CheckOperationCancellation(const FileSystemOptions* options,
+                                                 IFileSystemCallback* callback,
+                                                 void* cookie) noexcept
 {
     const HRESULT operationControlHr = FileSystemCheckOperationControl(options);
     if (FAILED(operationControlHr))
@@ -389,7 +394,7 @@ inline constexpr unsigned int kMaxS3PerObjectConflictRetries = 16u;
         return S_OK;
     }
 
-    BOOL cancel              = FALSE;
+    BOOL cancel = FALSE;
     const HRESULT callbackHr = NormalizeCallbackResult(callback->FileSystemShouldCancel(&cancel, cookie));
     if (FAILED(callbackHr))
     {
@@ -804,10 +809,8 @@ public:
         return S_OK;
     }
 
-    [[nodiscard]] HRESULT ListRecursive(std::string_view bucket,
-                                        std::string_view prefix,
-                                        std::vector<PlannedTransferObject>& outObjects,
-                                        uint64_t& outTotalBytes) const noexcept
+    [[nodiscard]] HRESULT ListRecursive(
+        std::string_view bucket, std::string_view prefix, std::vector<PlannedTransferObject>& outObjects, uint64_t& outTotalBytes) const noexcept
     {
         if (! IsExpectedBucket(bucket))
         {
@@ -984,7 +987,8 @@ public:
         return S_OK;
     }
 
-    [[nodiscard]] HRESULT DeleteObject(std::string_view key, const FsS3::S3ObjectRevision& sourceRevision = {}, S3DeleteResult* deleteResult = nullptr) noexcept
+    [[nodiscard]] HRESULT DeleteObject(
+        std::string_view key, const FsS3::S3ObjectRevision& sourceRevision = {}, S3DeleteResult* deleteResult = nullptr) noexcept
     {
         return DeleteObject({}, key, sourceRevision, deleteResult);
     }
@@ -1321,7 +1325,8 @@ private:
     return FsS3::TryGetS3ObjectSummary(fs, bucketCtx, bucket, key, outSizeBytes, outLastWriteTime, outFound, outRevision);
 }
 
-[[nodiscard]] HRESULT BuildCurrentKeyDeleteCondition(const FsS3::S3ObjectRevision& observedRevision, FsS3::S3ObjectRevision& outCondition) noexcept
+[[nodiscard]] HRESULT BuildCurrentKeyDeleteCondition(
+    const FsS3::S3ObjectRevision& observedRevision, FsS3::S3ObjectRevision& outCondition) noexcept
 {
     outCondition = {};
     if (observedRevision.etag.empty())
@@ -1484,7 +1489,7 @@ private:
     req.SetPrefix(Aws::String(prefix.data(), prefix.size()));
     req.SetMaxKeys(1);
 
-    const auto client = FsS3::GetS3Client(fs, ctx);
+    const auto client  = FsS3::GetS3Client(fs, ctx);
     FsS3::ArmS3RequestControl(req);
     const auto outcome = client->ListObjectsV2(req);
     if (! outcome.IsSuccess())
@@ -2435,8 +2440,7 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
     const std::string prefix = MakeDirectoryPrefix(path.key);
     const auto startedAt     = std::chrono::steady_clock::now();
     VirtualFolderDeleteMetrics metrics{};
-    const auto complete = [&](HRESULT result) noexcept -> HRESULT
-    {
+    const auto complete = [&](HRESULT result) noexcept -> HRESULT {
         EmitVirtualFolderDeleteMetrics(metrics, startedAt, result);
         return result;
     };
@@ -2492,7 +2496,7 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
     }
 
     std::vector<PlannedTransferObject> residualObjects;
-    uint64_t residualBytes       = 0u;
+    uint64_t residualBytes = 0u;
     const HRESULT residualListHr = ListRecursiveObjects(fs, path, prefix, residualObjects, residualBytes);
     if (FAILED(residualListHr))
     {
@@ -2688,10 +2692,11 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
             return false;
         }
 
-        const PlannedTransferObject& object      = plan.objects[index];
+        const PlannedTransferObject& object = plan.objects[index];
         const DestinationState& destinationState = destinationStates[index];
-        return object.sourceKey == plan.sourcePrefix && object.destinationKey == plan.destinationPrefix && object.sizeBytes == 0u && destinationState.exists &&
-               ! destinationState.ancestorConflict && destinationState.sizeBytes == 0u;
+        return object.sourceKey == plan.sourcePrefix && object.destinationKey == plan.destinationPrefix &&
+               object.sizeBytes == 0u && destinationState.exists && ! destinationState.ancestorConflict &&
+               destinationState.sizeBytes == 0u;
     };
     bool requiresFailClosedDestinationPreflight = ! allowOverwrite && ! reportIssue;
 #if defined(ENABLE_TESTS)
@@ -3881,7 +3886,7 @@ void FsS3::RunSourceRevisionTransferContractSelfTest(unsigned int& passed, unsig
 
     for (const bool forceMultipart : {false, true})
     {
-        constexpr std::string_view kReservedSourceKey      = "src/space % +/snowman-\xE2\x98\x83.txt";
+        constexpr std::string_view kReservedSourceKey = "src/space % +/snowman-\xE2\x98\x83.txt";
         constexpr std::string_view kReservedDestinationKey = "dest/copied-\xE2\x98\x83.txt";
         DebugS3Graph graph;
         graph.SetVersioningEnabled(true);
@@ -3903,7 +3908,8 @@ void FsS3::RunSourceRevisionTransferContractSelfTest(unsigned int& passed, unsig
                                                 []() noexcept -> HRESULT { return S_OK; },
                                                 [](uint64_t, uint64_t) noexcept -> HRESULT { return S_OK; },
                                                 totalBytes);
-        check(hr == S_OK && graph.BytesEqual(kReservedSourceKey, "reserved-key-bytes") && graph.BytesEqual(kReservedDestinationKey, "reserved-key-bytes"),
+        check(hr == S_OK && graph.BytesEqual(kReservedSourceKey, "reserved-key-bytes") &&
+                  graph.BytesEqual(kReservedDestinationKey, "reserved-key-bytes"),
               std::format(L"reserved and Unicode versioned keys should preserve bytes through {} direct copy",
                           forceMultipart ? L"multipart" : L"single-request"));
         check(graph.ServerSideCopyRequestCount() == 1u && graph.RelayPublicationRequestCount() == 0u &&
@@ -4143,8 +4149,7 @@ void FsS3::RunSourceRevisionTransferContractSelfTest(unsigned int& passed, unsig
 #if defined(ENABLE_TESTS)
 void RunR0bDeleteResourceContractSelfTest(unsigned int& passed, unsigned int& failed)
 {
-    const auto check = [&](bool condition, std::wstring_view message) noexcept
-    {
+    const auto check = [&](bool condition, std::wstring_view message) noexcept {
         if (condition)
         {
             ++passed;
@@ -4451,8 +4456,11 @@ void RunDebugPaginationGuardSelfTest(unsigned int& passed, unsigned int& failed)
     DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"S3 pagination guard rejects truncation with an empty continuation token", passed, failed);
 }
 
-[[nodiscard]] HRESULT RunDebugDeleteResolvedPath(
-    FileSystemS3& fs, DebugS3Graph& graph, const wchar_t* pathText, FileSystemFlags flags, const std::function<HRESULT()>& checkCancel = {})
+[[nodiscard]] HRESULT RunDebugDeleteResolvedPath(FileSystemS3& fs,
+                                                 DebugS3Graph& graph,
+                                                 const wchar_t* pathText,
+                                                 FileSystemFlags flags,
+                                                 const std::function<HRESULT()>& checkCancel = {})
 {
     DebugS3GraphScope scope(graph);
     ResolvedS3Path path{};
@@ -4487,7 +4495,10 @@ void RunDebugR0bOrdinaryObjectGenerationSelfTest(unsigned int& passed, unsigned 
                L"S3.R0b.OrdinaryObjectGeneration: same-key replacement rejects the stale ordinary delete",
                passed,
                failed);
-    DebugCheck(graph.BytesEqual("object.txt", "replacement"), L"S3.R0b.OrdinaryObjectGeneration: same-key replacement remains authoritative", passed, failed);
+    DebugCheck(graph.BytesEqual("object.txt", "replacement"),
+               L"S3.R0b.OrdinaryObjectGeneration: same-key replacement remains authoritative",
+               passed,
+               failed);
     DebugCheck(graph.SourceReplacementInjectionCount() == 1u && graph.DeleteRequestCount() == 1u && graph.ConditionalDeleteRequestCount() == 1u,
                L"S3.R0b.OrdinaryObjectGeneration: one ETag-conditioned request observes the replacement race",
                passed,
@@ -4512,7 +4523,10 @@ void RunDebugR0bRecursiveReplacementConvergenceSelfTest(unsigned int& passed, un
                L"S3.R0b.RecursiveReplacementConvergence: changed and unchanged observations converge through a fresh listing",
                passed,
                failed);
-    DebugCheck(graph.RevisionMismatchCount() == 1u, L"S3.R0b.RecursiveReplacementConvergence: stale ETag deletes no replacement generation", passed, failed);
+    DebugCheck(graph.RevisionMismatchCount() == 1u,
+               L"S3.R0b.RecursiveReplacementConvergence: stale ETag deletes no replacement generation",
+               passed,
+               failed);
     DebugCheck(graph.ConditionalDeleteRequestCount() == 3u,
                L"S3.R0b.RecursiveReplacementConvergence: each observed generation has one conditional request",
                passed,
@@ -4559,8 +4573,14 @@ void RunDebugR0bMarkerAndVersioningTruthSelfTest(unsigned int& passed, unsigned 
         DebugS3Graph graph;
         graph.AddObject("marker/", {});
         const HRESULT hr = RunDebugDeleteResolvedPath(*fs, graph, L"/bucket/marker/", FILESYSTEM_FLAG_RECURSIVE);
-        DebugCheck(hr == S_OK && ! graph.Exists("marker/"), L"S3.R0b.MarkerAndVersioningTruth: marker-only virtual folder converges to empty", passed, failed);
-        DebugCheck(graph.ConditionalDeleteRequestCount() == 1u, L"S3.R0b.MarkerAndVersioningTruth: marker removal consumes its observed ETag", passed, failed);
+        DebugCheck(hr == S_OK && ! graph.Exists("marker/"),
+                   L"S3.R0b.MarkerAndVersioningTruth: marker-only virtual folder converges to empty",
+                   passed,
+                   failed);
+        DebugCheck(graph.ConditionalDeleteRequestCount() == 1u,
+                   L"S3.R0b.MarkerAndVersioningTruth: marker removal consumes its observed ETag",
+                   passed,
+                   failed);
     }
 
     {
@@ -4599,9 +4619,9 @@ void RunDebugR0bMarkerAndVersioningTruthSelfTest(unsigned int& passed, unsigned 
         DebugS3Graph graph;
         graph.SetVersioningEnabled(true);
         graph.AddVersionedObject("exact.txt", "historical");
-        uint64_t sizeBytes    = 0u;
+        uint64_t sizeBytes = 0u;
         __int64 lastWriteTime = 0;
-        bool found            = false;
+        bool found = false;
         FsS3::S3ObjectRevision historicalRevision;
         HRESULT hr = graph.TryGetObjectSummary({}, "exact.txt", sizeBytes, lastWriteTime, found, &historicalRevision);
         graph.AddVersionedObject("exact.txt", "current");
@@ -4647,12 +4667,7 @@ void RunDebugR0bTerminationSelfTest(unsigned int& passed, unsigned int& failed)
         graph.AddObject("cancel/a.txt", "a");
         graph.AddObject("cancel/b.txt", "b");
         size_t cancelChecks = 0u;
-        const HRESULT hr    = RunDebugDeleteResolvedPath(*fs,
-                                                         graph,
-                                                         L"/bucket/cancel/",
-                                                         FILESYSTEM_FLAG_RECURSIVE,
-                                                         [&]() noexcept -> HRESULT
-        {
+        const HRESULT hr    = RunDebugDeleteResolvedPath(*fs, graph, L"/bucket/cancel/", FILESYSTEM_FLAG_RECURSIVE, [&]() noexcept -> HRESULT {
             ++cancelChecks;
             return cancelChecks >= 3u ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
         });
@@ -4752,8 +4767,9 @@ void RunDebugCommittedCleanupDebtSelfTest(unsigned int& passed, unsigned int& fa
                failed);
     FileSystemItemMutationResult itemMutationResult{};
     const FileSystemItemMutationResult* mutationResult = BuildTransferMutationResult(commitResult, true, itemMutationResult);
-    DebugCheck(mutationResult == &itemMutationResult && mutationResult->outcomeKnown == TRUE && mutationResult->mutationCommitted == TRUE &&
-                   mutationResult->originalStillPresent == TRUE && mutationResult->ownedStageDisposition == FileSystemOwnedStageDisposition::Retained,
+    DebugCheck(mutationResult == &itemMutationResult && mutationResult->outcomeKnown == TRUE &&
+                   mutationResult->mutationCommitted == TRUE && mutationResult->originalStillPresent == TRUE &&
+                   mutationResult->ownedStageDisposition == FileSystemOwnedStageDisposition::Retained,
                L"S3 committed copy cleanup debt should produce a known committed Retained callback receipt",
                passed,
                failed);
@@ -4771,23 +4787,29 @@ void RunDebugNativeOnlyMoveModeSelfTest(unsigned int& passed, unsigned int& fail
     }
 
     FileSystemOptions invalidOptions{};
-    invalidOptions.sizeBytes     = sizeof(FileSystemOptions);
-    invalidOptions.moveMode      = static_cast<FileSystemMoveMode>(2u);
-    const HRESULT invalidHr      = fs->MoveItem(L"/bucket/source.txt", L"/bucket/destination.txt", FILESYSTEM_FLAG_NONE, &invalidOptions, nullptr, nullptr);
+    invalidOptions.sizeBytes = sizeof(FileSystemOptions);
+    invalidOptions.moveMode  = static_cast<FileSystemMoveMode>(2u);
+    const HRESULT invalidHr =
+        fs->MoveItem(L"/bucket/source.txt", L"/bucket/destination.txt", FILESYSTEM_FLAG_NONE, &invalidOptions, nullptr, nullptr);
     const HRESULT invalidBatchHr = fs->MoveItems(nullptr, 0u, L"/bucket", FILESYSTEM_FLAG_NONE, &invalidOptions, nullptr, nullptr);
     DebugCheck(invalidHr == E_INVALIDARG, L"S3 Move should reject an unknown moveMode before provider I/O", passed, failed);
-    DebugCheck(invalidBatchHr == E_INVALIDARG, L"S3 MoveItems should reject an unknown moveMode before provider I/O", passed, failed);
+    DebugCheck(invalidBatchHr == E_INVALIDARG,
+               L"S3 MoveItems should reject an unknown moveMode before provider I/O",
+               passed,
+               failed);
 
     DebugS3Graph graph;
     graph.AddObject("source.txt", "native-only");
     graph.AddObject("source-batch.txt", "native-only-batch");
     DebugS3GraphScope scope(graph);
     FileSystemOptions nativeOnlyOptions{};
-    nativeOnlyOptions.sizeBytes   = sizeof(FileSystemOptions);
-    nativeOnlyOptions.moveMode    = FILESYSTEM_MOVE_NATIVE_ONLY;
-    const HRESULT nativeHr        = fs->MoveItem(L"/bucket/source.txt", L"/bucket/destination.txt", FILESYSTEM_FLAG_NONE, &nativeOnlyOptions, nullptr, nullptr);
+    nativeOnlyOptions.sizeBytes = sizeof(FileSystemOptions);
+    nativeOnlyOptions.moveMode  = FILESYSTEM_MOVE_NATIVE_ONLY;
+    const HRESULT nativeHr =
+        fs->MoveItem(L"/bucket/source.txt", L"/bucket/destination.txt", FILESYSTEM_FLAG_NONE, &nativeOnlyOptions, nullptr, nullptr);
     const wchar_t* batchSources[] = {L"/bucket/source-batch.txt"};
-    const HRESULT nativeBatchHr   = fs->MoveItems(batchSources, 1u, L"/bucket/moved", FILESYSTEM_FLAG_NONE, &nativeOnlyOptions, nullptr, nullptr);
+    const HRESULT nativeBatchHr =
+        fs->MoveItems(batchSources, 1u, L"/bucket/moved", FILESYSTEM_FLAG_NONE, &nativeOnlyOptions, nullptr, nullptr);
     DebugCheck(nativeHr == S_OK && nativeBatchHr == S_OK && ! graph.Exists("source.txt") && ! graph.Exists("source-batch.txt") &&
                    graph.BytesEqual("destination.txt", "native-only") && graph.BytesEqual("moved/source-batch.txt", "native-only-batch"),
                L"S3 NativeOnly single and batch Move should publish each pinned revision and remove only that source revision",
@@ -4810,18 +4832,19 @@ void RunDebugDurableDirectoryMarkerSelfTest(unsigned int& passed, unsigned int& 
     DebugS3Graph graph;
     DebugS3GraphScope scope(graph);
     unsigned long missingAttributes = 0u;
-    const HRESULT missingHr         = fs->GetAttributes(L"/bucket/photos/", &missingAttributes);
+    const HRESULT missingHr = fs->GetAttributes(L"/bucket/photos/", &missingAttributes);
     DebugCheck(missingHr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) && ! graph.Exists("photos/"),
                L"S3 trailing-slash GetAttributes must not invent a directory before its marker or prefix exists",
                passed,
                failed);
 
-    const HRESULT createHr              = fs->CreateDirectory(L"/bucket/photos/");
-    const HRESULT collisionHr           = fs->CreateDirectory(L"/bucket/photos");
-    unsigned long publishedAttributes   = 0u;
+    const HRESULT createHr = fs->CreateDirectory(L"/bucket/photos/");
+    const HRESULT collisionHr = fs->CreateDirectory(L"/bucket/photos");
+    unsigned long publishedAttributes = 0u;
     const HRESULT publishedAttributesHr = fs->GetAttributes(L"/bucket/photos/", &publishedAttributes);
-    DebugCheck(createHr == S_OK && graph.BytesEqual("photos/", std::string_view{}) && fs->HasFreshWritableDirectoryValidation(L"/bucket/photos/") &&
-                   publishedAttributesHr == S_OK && (publishedAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u,
+    DebugCheck(createHr == S_OK && graph.BytesEqual("photos/", std::string_view{}) &&
+                   fs->HasFreshWritableDirectoryValidation(L"/bucket/photos/") && publishedAttributesHr == S_OK &&
+                   (publishedAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u,
                L"S3 flat-prefix Create Directory should conditionally publish a durable zero-byte trailing-slash marker",
                passed,
                failed);
@@ -4830,27 +4853,28 @@ void RunDebugDurableDirectoryMarkerSelfTest(unsigned int& passed, unsigned int& 
                passed,
                failed);
 
-    const HRESULT mergeSourceHr      = fs->CreateDirectory(L"/bucket/merge-source");
+    const HRESULT mergeSourceHr = fs->CreateDirectory(L"/bucket/merge-source");
     const HRESULT mergeDestinationHr = fs->CreateDirectory(L"/bucket/merge-destination");
-    uint64_t totalBytes              = 0u;
-    const HRESULT mergeHr            = ExecuteCopyOrMove(*fs,
-                                                         FileSystemS3Mode::S3,
-                                                         nullptr,
-                                                         FileSystemS3::Settings{},
-                                                         L"/bucket/merge-source",
-                                                         L"/bucket/merge-destination",
-                                                         FILESYSTEM_FLAG_RECURSIVE,
-                                                         false,
-                                                         []() noexcept -> HRESULT { return S_OK; },
-                                                         [](uint64_t, uint64_t) noexcept -> HRESULT { return S_OK; },
-                                                         totalBytes);
-    DebugCheck(mergeSourceHr == S_OK && mergeDestinationHr == S_OK && mergeHr == S_OK && graph.BytesEqual("merge-source/", std::string_view{}) &&
+    uint64_t totalBytes = 0u;
+    const HRESULT mergeHr = ExecuteCopyOrMove(*fs,
+                                              FileSystemS3Mode::S3,
+                                              nullptr,
+                                              FileSystemS3::Settings{},
+                                              L"/bucket/merge-source",
+                                              L"/bucket/merge-destination",
+                                              FILESYSTEM_FLAG_RECURSIVE,
+                                              false,
+                                              []() noexcept -> HRESULT { return S_OK; },
+                                              [](uint64_t, uint64_t) noexcept -> HRESULT { return S_OK; },
+                                              totalBytes);
+    DebugCheck(mergeSourceHr == S_OK && mergeDestinationHr == S_OK && mergeHr == S_OK &&
+                   graph.BytesEqual("merge-source/", std::string_view{}) &&
                    graph.BytesEqual("merge-destination/", std::string_view{}),
                L"S3 flat-prefix marker-on-marker Copy should preserve ordinary folder merge semantics",
                passed,
                failed);
 
-    totalBytes           = 0u;
+    totalBytes = 0u;
     const HRESULT copyHr = ExecuteCopyOrMove(*fs,
                                              FileSystemS3Mode::S3,
                                              nullptr,
@@ -4867,7 +4891,7 @@ void RunDebugDurableDirectoryMarkerSelfTest(unsigned int& passed, unsigned int& 
                passed,
                failed);
 
-    totalBytes           = 0u;
+    totalBytes = 0u;
     const HRESULT moveHr = ExecuteCopyOrMove(*fs,
                                              FileSystemS3Mode::S3,
                                              nullptr,
@@ -4884,7 +4908,7 @@ void RunDebugDurableDirectoryMarkerSelfTest(unsigned int& passed, unsigned int& 
                passed,
                failed);
 
-    totalBytes                   = 0u;
+    totalBytes = 0u;
     const HRESULT canceledCopyHr = ExecuteCopyOrMove(*fs,
                                                      FileSystemS3Mode::S3,
                                                      nullptr,
@@ -4896,7 +4920,8 @@ void RunDebugDurableDirectoryMarkerSelfTest(unsigned int& passed, unsigned int& 
                                                      []() noexcept -> HRESULT { return HRESULT_FROM_WIN32(ERROR_CANCELLED); },
                                                      [](uint64_t, uint64_t) noexcept -> HRESULT { return S_OK; },
                                                      totalBytes);
-    DebugCheck(canceledCopyHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) && graph.Exists("photos-moved/") && ! graph.Exists("photos-canceled/"),
+    DebugCheck(canceledCopyHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) && graph.Exists("photos-moved/") &&
+                   ! graph.Exists("photos-canceled/"),
                L"S3 empty-prefix cancellation should retain the source marker and publish no destination marker",
                passed,
                failed);
@@ -4991,7 +5016,10 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CopyItem(const wchar_t* sourcePath,
         settings = _settings;
     }
 
-    const auto checkCancel = [&]() noexcept -> HRESULT { return CheckOperationCancellation(&optionsState, callback, cookie); };
+    const auto checkCancel = [&]() noexcept -> HRESULT
+    {
+        return CheckOperationCancellation(&optionsState, callback, cookie);
+    };
 
     uint64_t totalBytes    = 0;
     const auto reportBytes = [&](uint64_t completedBytes, uint64_t totalBytesInner) noexcept -> HRESULT
@@ -5019,8 +5047,8 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CopyItem(const wchar_t* sourcePath,
         wil::com_ptr<IFileSystemBoundObject> expectedDestination;
         const HRESULT issueHr = callback->FileSystemIssue(
             FILESYSTEM_COPY, conflictSource, conflictDestination, status, &action, expectedDestination.put(), callbackOptions, cookie);
-        if (SUCCEEDED(issueHr) &&
-            (action == FileSystemIssueAction::Overwrite || action == FileSystemIssueAction::ReplaceReadOnly || action == FileSystemIssueAction::ReplaceLink))
+        if (SUCCEEDED(issueHr) && (action == FileSystemIssueAction::Overwrite || action == FileSystemIssueAction::ReplaceReadOnly ||
+                                  action == FileSystemIssueAction::ReplaceLink))
         {
             return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         }
@@ -5057,7 +5085,8 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CopyItem(const wchar_t* sourcePath,
     {
         FileSystemItemMutationResult itemMutationResult{};
         const FileSystemItemMutationResult* mutationResult = BuildTransferMutationResult(commitResult, true, itemMutationResult);
-        hr = callback->FileSystemItemCompleted(FILESYSTEM_COPY, 0, sourcePath, destinationPath, itemHr, mutationResult, callbackOptions, cookie);
+        hr = callback->FileSystemItemCompleted(
+            FILESYSTEM_COPY, 0, sourcePath, destinationPath, itemHr, mutationResult, callbackOptions, cookie);
         hr = NormalizeCallbackResult(hr);
         if (FAILED(hr))
         {
@@ -5121,7 +5150,10 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItem(const wchar_t* sourcePath,
         settings = _settings;
     }
 
-    const auto checkCancel = [&]() noexcept -> HRESULT { return CheckOperationCancellation(&optionsState, callback, cookie); };
+    const auto checkCancel = [&]() noexcept -> HRESULT
+    {
+        return CheckOperationCancellation(&optionsState, callback, cookie);
+    };
 
     uint64_t totalBytes    = 0;
     const auto reportBytes = [&](uint64_t completedBytes, uint64_t totalBytesInner) noexcept -> HRESULT
@@ -5149,8 +5181,8 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItem(const wchar_t* sourcePath,
         wil::com_ptr<IFileSystemBoundObject> expectedDestination;
         const HRESULT issueHr = callback->FileSystemIssue(
             FILESYSTEM_MOVE, conflictSource, conflictDestination, status, &action, expectedDestination.put(), callbackOptions, cookie);
-        if (SUCCEEDED(issueHr) &&
-            (action == FileSystemIssueAction::Overwrite || action == FileSystemIssueAction::ReplaceReadOnly || action == FileSystemIssueAction::ReplaceLink))
+        if (SUCCEEDED(issueHr) && (action == FileSystemIssueAction::Overwrite || action == FileSystemIssueAction::ReplaceReadOnly ||
+                                  action == FileSystemIssueAction::ReplaceLink))
         {
             return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         }
@@ -5187,7 +5219,8 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItem(const wchar_t* sourcePath,
     {
         FileSystemItemMutationResult itemMutationResult{};
         const FileSystemItemMutationResult* mutationResult = BuildTransferMutationResult(commitResult, false, itemMutationResult);
-        hr = callback->FileSystemItemCompleted(FILESYSTEM_MOVE, 0, sourcePath, destinationPath, itemHr, mutationResult, callbackOptions, cookie);
+        hr = callback->FileSystemItemCompleted(
+            FILESYSTEM_MOVE, 0, sourcePath, destinationPath, itemHr, mutationResult, callbackOptions, cookie);
         hr = NormalizeCallbackResult(hr);
         if (FAILED(hr))
         {
@@ -5260,9 +5293,7 @@ FileSystemS3::DeleteItem(const wchar_t* path, FileSystemFlags flags, const FileS
     return DeleteItemWithPinnedIdentity(path, nullptr, flags, options, callback, cookie);
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemS3::ResolveDeleteIdentity(const wchar_t* path,
-                                                              const FileSystemOptions* options,
-                                                              FileSystemDeleteIdentity* identity) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemS3::ResolveDeleteIdentity(const wchar_t* path, const FileSystemOptions* options, FileSystemDeleteIdentity* identity) noexcept
 {
     const FsS3::S3OperationOptionsScope operationOptionsScope(options);
     if (path == nullptr || identity == nullptr)
@@ -5386,7 +5417,10 @@ HRESULT FileSystemS3::DeleteItemWithPinnedIdentity(const wchar_t* path,
         return hr;
     };
 
-    const auto checkCancel = [&]() noexcept -> HRESULT { return CheckOperationCancellation(&optionsState, callback, cookie); };
+    const auto checkCancel = [&]() noexcept -> HRESULT
+    {
+        return CheckOperationCancellation(&optionsState, callback, cookie);
+    };
 
     const auto reportProgress = [&](unsigned long completedItems, std::wstring_view currentPath) noexcept -> HRESULT
     {
@@ -5626,7 +5660,10 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CopyItems(const wchar_t* const* sourcePa
         }
     }
 
-    const auto checkCancel = [&]() noexcept -> HRESULT { return CheckOperationCancellation(&optionsState, callback, cookie); };
+    const auto checkCancel = [&]() noexcept -> HRESULT
+    {
+        return CheckOperationCancellation(&optionsState, callback, cookie);
+    };
 
     uint64_t progressBytes       = 0;
     unsigned long completedItems = 0;
@@ -5706,7 +5743,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CopyItems(const wchar_t* const* sourcePa
                 const HRESULT issueHr = callback->FileSystemIssue(
                     FILESYSTEM_COPY, conflictSource, conflictDestination, status, &action, expectedDestination.put(), callbackOptions, cookie);
                 if (SUCCEEDED(issueHr) && (action == FileSystemIssueAction::Overwrite || action == FileSystemIssueAction::ReplaceReadOnly ||
-                                           action == FileSystemIssueAction::ReplaceLink))
+                                          action == FileSystemIssueAction::ReplaceLink))
                 {
                     return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
                 }
@@ -5733,7 +5770,8 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CopyItems(const wchar_t* const* sourcePa
         {
             FileSystemItemMutationResult itemMutationResult{};
             const FileSystemItemMutationResult* mutationResult = BuildTransferMutationResult(commitResult, true, itemMutationResult);
-            hr = callback->FileSystemItemCompleted(FILESYSTEM_COPY, index, sourcePath, destinationPath, itemHr, mutationResult, callbackOptions, cookie);
+            hr = callback->FileSystemItemCompleted(
+                FILESYSTEM_COPY, index, sourcePath, destinationPath, itemHr, mutationResult, callbackOptions, cookie);
             hr = NormalizeCallbackResult(hr);
             if (FAILED(hr))
             {
@@ -5847,7 +5885,10 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItems(const wchar_t* const* sourcePa
         }
     }
 
-    const auto checkCancel = [&]() noexcept -> HRESULT { return CheckOperationCancellation(&optionsState, callback, cookie); };
+    const auto checkCancel = [&]() noexcept -> HRESULT
+    {
+        return CheckOperationCancellation(&optionsState, callback, cookie);
+    };
 
     uint64_t progressBytes       = 0;
     unsigned long completedItems = 0;
@@ -5927,7 +5968,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItems(const wchar_t* const* sourcePa
                 const HRESULT issueHr = callback->FileSystemIssue(
                     FILESYSTEM_MOVE, conflictSource, conflictDestination, status, &action, expectedDestination.put(), callbackOptions, cookie);
                 if (SUCCEEDED(issueHr) && (action == FileSystemIssueAction::Overwrite || action == FileSystemIssueAction::ReplaceReadOnly ||
-                                           action == FileSystemIssueAction::ReplaceLink))
+                                          action == FileSystemIssueAction::ReplaceLink))
                 {
                     return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
                 }
@@ -5954,7 +5995,8 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItems(const wchar_t* const* sourcePa
         {
             FileSystemItemMutationResult itemMutationResult{};
             const FileSystemItemMutationResult* mutationResult = BuildTransferMutationResult(commitResult, false, itemMutationResult);
-            hr = callback->FileSystemItemCompleted(FILESYSTEM_MOVE, index, sourcePath, destinationPath, itemHr, mutationResult, callbackOptions, cookie);
+            hr = callback->FileSystemItemCompleted(
+                FILESYSTEM_MOVE, index, sourcePath, destinationPath, itemHr, mutationResult, callbackOptions, cookie);
             hr = NormalizeCallbackResult(hr);
             if (FAILED(hr))
             {
@@ -6038,7 +6080,10 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
         return hr;
     };
 
-    const auto checkCancel = [&]() noexcept -> HRESULT { return CheckOperationCancellation(&optionsState, callback, cookie); };
+    const auto checkCancel = [&]() noexcept -> HRESULT
+    {
+        return CheckOperationCancellation(&optionsState, callback, cookie);
+    };
 
     const auto reportProgress = [&](unsigned long completedItems, const wchar_t* currentPath) noexcept -> HRESULT
     {
@@ -6060,7 +6105,8 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
 
         FileSystemItemMutationResult itemMutationResult{};
         const FileSystemItemMutationResult* mutationResult = BuildDeleteMutationResult(status, itemMutationResult);
-        HRESULT hr = callback->FileSystemItemCompleted(FILESYSTEM_DELETE, itemIndex, currentPath, nullptr, status, mutationResult, callbackOptions, cookie);
+        HRESULT hr = callback->FileSystemItemCompleted(
+            FILESYSTEM_DELETE, itemIndex, currentPath, nullptr, status, mutationResult, callbackOptions, cookie);
         hr         = normalizeCancellation(hr);
         return hr;
     };
@@ -6258,7 +6304,10 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::RenameItems(const FileSystemRenamePair* 
         return hr;
     };
 
-    const auto checkCancel = [&]() noexcept -> HRESULT { return CheckOperationCancellation(&optionsState, callback, cookie); };
+    const auto checkCancel = [&]() noexcept -> HRESULT
+    {
+        return CheckOperationCancellation(&optionsState, callback, cookie);
+    };
 
     const auto reportProgress = [&](const wchar_t* currentSource, const wchar_t* currentDestination) noexcept -> HRESULT
     {

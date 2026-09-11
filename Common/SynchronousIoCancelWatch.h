@@ -24,12 +24,8 @@
 #include <utility>
 #include <vector>
 
-#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
 #define NOMINMAX
-#endif
 #include <Windows.h>
 
 #pragma warning(push)
@@ -51,7 +47,7 @@ using UniqueThreadpoolTimer = wil::unique_any<PTP_TIMER, decltype(&::CloseThread
 
 struct Node final
 {
-    Node() noexcept              = default;
+    Node() noexcept = default;
     Node(const Node&)            = delete;
     Node& operator=(const Node&) = delete;
     Node(Node&&)                 = delete;
@@ -59,8 +55,8 @@ struct Node final
 
     wil::unique_handle thread;
     ShouldCancelFn shouldCancel = nullptr;
-    void* context               = nullptr;
-    ULONGLONG cancelSinceTick   = 0u;
+    void* context             = nullptr;
+    ULONGLONG cancelSinceTick = 0u;
     std::atomic<unsigned int> cancelIssued{0u};
 };
 
@@ -92,7 +88,7 @@ public:
             // Relative due time in 100-ns units; negative means "from now".
             FILETIME dueTime{};
             LARGE_INTEGER due{};
-            due.QuadPart           = -static_cast<LONGLONG>(kPollIntervalMs) * 10'000;
+            due.QuadPart        = -static_cast<LONGLONG>(kPollIntervalMs) * 10'000;
             dueTime.dwLowDateTime  = due.LowPart;
             dueTime.dwHighDateTime = static_cast<DWORD>(due.HighPart);
             SetThreadpoolTimer(_timer.get(), &dueTime, kPollIntervalMs, 0u);

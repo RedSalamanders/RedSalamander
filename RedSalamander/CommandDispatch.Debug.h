@@ -26,7 +26,9 @@ void DebugAdvanceThemeCycleOverlayTo(uint64_t nowTickMs) noexcept;
 void DebugDismissThemeCycleOverlay() noexcept;
 void DebugSetForceThemeCycleDismissTimerFailure(bool force) noexcept;
 void DebugSimulateThemeCycleOverlayDeviceLoss() noexcept;
-void DebugSelectThemeTarget(HWND ownerWindow, std::wstring_view themeId, RedSalamander::Ui::CommandInvocationSource source) noexcept;
+void DebugSelectThemeTarget(HWND ownerWindow,
+                            std::wstring_view themeId,
+                            RedSalamander::Ui::CommandInvocationSource source) noexcept;
 [[nodiscard]] std::vector<RedSalamander::Ui::ThemeCycleOverlayTheme> DebugBuildThemeCycleRing();
 
 // Debug-only hook for self-tests that temporarily replace shortcut settings.

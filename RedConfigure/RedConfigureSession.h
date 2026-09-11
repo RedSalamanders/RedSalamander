@@ -12,12 +12,8 @@
 #include <string_view>
 #include <vector>
 
-#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
 #define NOMINMAX
-#endif
 #include <Windows.h>
 
 namespace RedConfigure
@@ -193,8 +189,8 @@ private:
         Themes::ThemeCatalog themeCatalog;
         Common::Settings::ThemeDefinition loadedThemeBaseline;
         size_t activeThemeIndex = 0u;
-        bool hasLocalization    = true;
-        bool hasThemeCatalog    = true;
+        bool hasLocalization = true;
+        bool hasThemeCatalog = true;
     };
 
     void RecordUndoSnapshot();

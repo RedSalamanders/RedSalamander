@@ -37,7 +37,8 @@ namespace Detail
     return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? fallback : error);
 }
 
-[[nodiscard]] inline HRESULT NormalizePath(const std::filesystem::path& path, std::filesystem::path& normalized) noexcept
+[[nodiscard]] inline HRESULT NormalizePath(const std::filesystem::path& path,
+                                           std::filesystem::path& normalized) noexcept
 {
     normalized.clear();
     if (path.empty())
@@ -58,9 +59,11 @@ namespace Detail
     return std::filesystem::path(Common::Paths::ToExtendedWin32Path(path.native()));
 }
 
-[[nodiscard]] inline bool SameFileIdentity(const BY_HANDLE_FILE_INFORMATION& left, const BY_HANDLE_FILE_INFORMATION& right) noexcept
+[[nodiscard]] inline bool SameFileIdentity(const BY_HANDLE_FILE_INFORMATION& left,
+                                           const BY_HANDLE_FILE_INFORMATION& right) noexcept
 {
-    return left.dwVolumeSerialNumber == right.dwVolumeSerialNumber && left.nFileIndexHigh == right.nFileIndexHigh && left.nFileIndexLow == right.nFileIndexLow;
+    return left.dwVolumeSerialNumber == right.dwVolumeSerialNumber &&
+           left.nFileIndexHigh == right.nFileIndexHigh && left.nFileIndexLow == right.nFileIndexLow;
 }
 
 [[nodiscard]] inline HRESULT OpenStoreRoot(const std::filesystem::path& normalizedRoot,
@@ -82,25 +85,33 @@ namespace Detail
     {
         return HrFromLastError(ERROR_READ_FAULT);
     }
-    if ((information.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0u || (information.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+    if ((information.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0u ||
+        (information.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
     return S_OK;
 }
 
-[[nodiscard]] inline HRESULT ValidateCurrentRootIdentity(const std::filesystem::path& normalizedRoot, const BY_HANDLE_FILE_INFORMATION& expected) noexcept
+[[nodiscard]] inline HRESULT ValidateCurrentRootIdentity(
+    const std::filesystem::path& normalizedRoot,
+    const BY_HANDLE_FILE_INFORMATION& expected) noexcept
 {
     wil::unique_hfile current;
     BY_HANDLE_FILE_INFORMATION information{};
     const HRESULT openHr = OpenStoreRoot(normalizedRoot, current, information);
-    return FAILED(openHr) ? openHr : (SameFileIdentity(expected, information) ? S_OK : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
+    return FAILED(openHr) ? openHr
+                          : (SameFileIdentity(expected, information)
+                                 ? S_OK
+                                 : HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
 }
 
-[[nodiscard]] inline bool IsDirectChild(const std::filesystem::path& normalizedRoot, const std::filesystem::path& normalizedPath) noexcept
+[[nodiscard]] inline bool IsDirectChild(const std::filesystem::path& normalizedRoot,
+                                        const std::filesystem::path& normalizedPath) noexcept
 {
     return ! normalizedPath.filename().empty() &&
-           Common::Paths::NormalizedWindowsPathEqualsNoCase(normalizedRoot.native(), normalizedPath.parent_path().native());
+           Common::Paths::NormalizedWindowsPathEqualsNoCase(
+               normalizedRoot.native(), normalizedPath.parent_path().native());
 }
 
 [[nodiscard]] inline HRESULT OpenRegularFileNoFollow(const std::filesystem::path& normalizedPath,
@@ -114,7 +125,8 @@ namespace Detail
                            shareMode,
                            nullptr,
                            OPEN_EXISTING,
-                           FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_SEQUENTIAL_SCAN,
+                           FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS |
+                               FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_SEQUENTIAL_SCAN,
                            nullptr));
     if (! file)
     {
@@ -136,14 +148,15 @@ namespace Detail
     return S_OK;
 }
 
-[[nodiscard]] inline HRESULT OpenDirectChildRegularFileNoFollow(const std::filesystem::path& rootPath,
-                                                                const std::filesystem::path& path,
-                                                                const DWORD desiredAccess,
-                                                                const DWORD shareMode,
-                                                                std::filesystem::path& normalizedRoot,
-                                                                std::filesystem::path& normalizedPath,
-                                                                wil::unique_hfile& root,
-                                                                wil::unique_hfile& file) noexcept
+[[nodiscard]] inline HRESULT OpenDirectChildRegularFileNoFollow(
+    const std::filesystem::path& rootPath,
+    const std::filesystem::path& path,
+    const DWORD desiredAccess,
+    const DWORD shareMode,
+    std::filesystem::path& normalizedRoot,
+    std::filesystem::path& normalizedPath,
+    wil::unique_hfile& root,
+    wil::unique_hfile& file) noexcept
 {
     HRESULT hr = NormalizePath(rootPath, normalizedRoot);
     if (SUCCEEDED(hr))
@@ -236,7 +249,9 @@ namespace Detail
     return hr;
 }
 
-[[nodiscard]] inline HRESULT ReadBoundedRegularFile(const std::filesystem::path& path, const uint64_t maximumBytes, std::string& bytes) noexcept
+[[nodiscard]] inline HRESULT ReadBoundedRegularFile(const std::filesystem::path& path,
+                                                    const uint64_t maximumBytes,
+                                                    std::string& bytes) noexcept
 {
     bytes.clear();
     if (maximumBytes == 0u)
@@ -250,14 +265,18 @@ namespace Detail
         return hr;
     }
     wil::unique_hfile file;
-    hr = Detail::OpenRegularFileNoFollow(normalizedPath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, file);
+    hr = Detail::OpenRegularFileNoFollow(
+        normalizedPath,
+        GENERIC_READ,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        file);
     if (FAILED(hr))
     {
         return hr;
     }
 
     uint64_t size = 0u;
-    hr            = Common::HandleIo::GetFileSizeBounded(file.get(), maximumBytes, size);
+    hr = Common::HandleIo::GetFileSizeBounded(file.get(), maximumBytes, size);
     if (FAILED(hr))
     {
         return hr;
@@ -278,7 +297,7 @@ namespace Detail
         return hr;
     }
     uint64_t finalSize = 0u;
-    hr                 = Common::HandleIo::GetFileSizeBounded(file.get(), maximumBytes, finalSize);
+    hr = Common::HandleIo::GetFileSizeBounded(file.get(), maximumBytes, finalSize);
     if (FAILED(hr) || finalSize != size)
     {
         bytes.clear();
@@ -312,14 +331,17 @@ namespace Detail
     hr = Detail::OpenStoreRoot(normalizedRoot, root, rootInformation);
     if (FAILED(hr))
     {
-        return hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || hr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND) ? S_FALSE : hr;
+        return hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || hr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND)
+            ? S_FALSE
+            : hr;
     }
 
     alignas(FILE_ID_BOTH_DIR_INFO) std::array<std::byte, 64u * 1024u> storage{};
     size_t entryCount = 0u;
     for (;;)
     {
-        if (GetFileInformationByHandleEx(root.get(), FileIdBothDirectoryInfo, storage.data(), static_cast<DWORD>(storage.size())) == FALSE)
+        if (GetFileInformationByHandleEx(
+                root.get(), FileIdBothDirectoryInfo, storage.data(), static_cast<DWORD>(storage.size())) == FALSE)
         {
             const DWORD error = GetLastError();
             if (error == ERROR_NO_MORE_FILES)
@@ -348,7 +370,7 @@ namespace Detail
                 return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
             }
             const auto* const entry = reinterpret_cast<const FILE_ID_BOTH_DIR_INFO*>(storage.data() + offset);
-            const size_t nameBytes  = static_cast<size_t>(entry->FileNameLength);
+            const size_t nameBytes = static_cast<size_t>(entry->FileNameLength);
             if ((nameBytes % sizeof(wchar_t)) != 0u || nameBytes > storage.size() - offset - kHeaderBytes)
             {
                 files.clear();
@@ -381,7 +403,7 @@ namespace Detail
                     else if (rejectedChildren != nullptr)
                     {
                         rejectedChildren->push_back(RejectedDirectChild{
-                            .path       = path,
+                            .path = path,
                             .attributes = entry->FileAttributes,
                         });
                     }
@@ -416,14 +438,22 @@ namespace Detail
     return hr;
 }
 
-[[nodiscard]] inline HRESULT RemoveDirectRegularFile(const std::filesystem::path& rootPath, const std::filesystem::path& path) noexcept
+[[nodiscard]] inline HRESULT RemoveDirectRegularFile(const std::filesystem::path& rootPath,
+                                                     const std::filesystem::path& path) noexcept
 {
     std::filesystem::path normalizedRoot;
     std::filesystem::path normalizedPath;
     wil::unique_hfile root;
     wil::unique_hfile file;
     HRESULT hr = Detail::OpenDirectChildRegularFileNoFollow(
-        rootPath, path, DELETE | FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, normalizedRoot, normalizedPath, root, file);
+        rootPath,
+        path,
+        DELETE | FILE_READ_ATTRIBUTES,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        normalizedRoot,
+        normalizedPath,
+        root,
+        file);
     if (hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || hr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND))
     {
         return S_FALSE;

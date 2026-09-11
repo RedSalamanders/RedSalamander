@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <unknwn.h>
 #include <wchar.h>
+
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
@@ -16,7 +17,7 @@
 // fail the call with `E_INVALIDARG`.
 // For [out] structs, the caller MUST initialize `sizeBytes` before calling into the callee, and the callee MUST NOT
 // write beyond `sizeBytes`.
-//
+// 
 #pragma warning(push)
 #pragma warning(disable : 4820) // padding in data structure
 struct FileInfo
@@ -39,9 +40,9 @@ struct FileInfo
 
 enum FileSystemOperation : uint32_t
 {
-    FILESYSTEM_COPY             = 1,
-    FILESYSTEM_MOVE             = 2,
-    FILESYSTEM_DELETE           = 3,
+    FILESYSTEM_COPY   = 1,
+    FILESYSTEM_MOVE   = 2,
+    FILESYSTEM_DELETE = 3,
     FILESYSTEM_RENAME           = 4,
     FILESYSTEM_CREATE_DIRECTORY = 5,
 };
@@ -57,7 +58,7 @@ enum FileSystemFlags : uint32_t
     // Valid only with ALLOW_OVERWRITE and an exact expectedDestination whose no-follow
     // snapshot kind is LINK. This is the typed Replace Link receipt; ordinary Overwrite
     // must never remove a link object.
-    FILESYSTEM_FLAG_ALLOW_REPLACE_LINK = 0x20,
+    FILESYSTEM_FLAG_ALLOW_REPLACE_LINK     = 0x20,
 };
 
 enum FileSystemLinkPolicy : uint32_t
@@ -100,9 +101,10 @@ struct FileSystemDiscoveryProgress
 // keeps it alive until the provider call and every object opened with the corresponding options are released.
 interface __declspec(novtable) IFileSystemOperationControl
 {
-    virtual HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL * abort, void* cookie) noexcept                                            = 0;
-    virtual HRESULT STDMETHODCALLTYPE FileSystemGetDiscoveryMode(FileSystemDiscoveryMode * mode, void* cookie) noexcept                     = 0;
-    virtual HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress* progress, void* cookie) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void* cookie) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE FileSystemGetDiscoveryMode(FileSystemDiscoveryMode* mode, void* cookie) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress* progress,
+                                                                         void* cookie) noexcept = 0;
 };
 
 enum class FileSystemIssueAction : uint8_t
@@ -146,21 +148,26 @@ struct FileSystemItemMutationResult
     FileSystemOwnedStageDisposition ownedStageDisposition = FileSystemOwnedStageDisposition::NotApplicable;
 };
 
-inline constexpr uint32_t FILESYSTEM_ITEM_MUTATION_RESULT_V1_SIZE = static_cast<uint32_t>(offsetof(FileSystemItemMutationResult, ownedStageDisposition));
+inline constexpr uint32_t FILESYSTEM_ITEM_MUTATION_RESULT_V1_SIZE =
+    static_cast<uint32_t>(offsetof(FileSystemItemMutationResult, ownedStageDisposition));
 
-[[nodiscard]] inline bool FileSystemItemMutationResultHasSupportedSize(const FileSystemItemMutationResult& result) noexcept
+[[nodiscard]] inline bool FileSystemItemMutationResultHasSupportedSize(
+    const FileSystemItemMutationResult& result) noexcept
 {
-    return result.sizeBytes == FILESYSTEM_ITEM_MUTATION_RESULT_V1_SIZE || result.sizeBytes >= sizeof(FileSystemItemMutationResult);
+    return result.sizeBytes == FILESYSTEM_ITEM_MUTATION_RESULT_V1_SIZE ||
+           result.sizeBytes >= sizeof(FileSystemItemMutationResult);
 }
 
-[[nodiscard]] inline bool FileSystemItemMutationResultHasOwnedStageDisposition(const FileSystemItemMutationResult& result) noexcept
+[[nodiscard]] inline bool FileSystemItemMutationResultHasOwnedStageDisposition(
+    const FileSystemItemMutationResult& result) noexcept
 {
     return result.sizeBytes >= sizeof(FileSystemItemMutationResult);
 }
 
 [[nodiscard]] inline bool FileSystemOwnedStageDispositionIsValid(FileSystemOwnedStageDisposition disposition) noexcept
 {
-    return disposition >= FileSystemOwnedStageDisposition::NotApplicable && disposition <= FileSystemOwnedStageDisposition::RetainedIncomplete;
+    return disposition >= FileSystemOwnedStageDisposition::NotApplicable &&
+           disposition <= FileSystemOwnedStageDisposition::RetainedIncomplete;
 }
 
 struct FileSystemOptions
@@ -193,8 +200,9 @@ struct FileSystemOptions
 
 [[nodiscard]] inline bool FileSystemOptionsHaveValidHeader(const FileSystemOptions* options) noexcept
 {
-    return options == nullptr || (options->sizeBytes == sizeof(FileSystemOptions) &&
-                                  (options->linkPolicy == FILESYSTEM_LINK_PRESERVE || options->linkPolicy == FILESYSTEM_LINK_SKIP));
+    return options == nullptr ||
+           (options->sizeBytes == sizeof(FileSystemOptions) &&
+            (options->linkPolicy == FILESYSTEM_LINK_PRESERVE || options->linkPolicy == FILESYSTEM_LINK_SKIP));
 }
 
 inline constexpr uint64_t FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS = 2'000u;
@@ -212,9 +220,11 @@ inline constexpr uint64_t FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS = 2'000u;
     cleanupOptions.sizeBytes              = sizeof(cleanupOptions);
     cleanupOptions.operationControl       = nullptr;
     cleanupOptions.operationControlCookie = nullptr;
-    const uint64_t now                    = GetTickCount64();
+    const uint64_t now                     = GetTickCount64();
     cleanupOptions.deadlineTickCount64 =
-        now > UINT64_MAX - FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS ? UINT64_MAX : now + FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS;
+        now > UINT64_MAX - FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS
+            ? UINT64_MAX
+            : now + FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS;
     return cleanupOptions;
 }
 
@@ -241,7 +251,7 @@ inline constexpr uint64_t FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS = 2'000u;
         return S_OK;
     }
 
-    BOOL abort            = FALSE;
+    BOOL abort = FALSE;
     const HRESULT abortHr = options->operationControl->FileSystemShouldAbort(&abort, options->operationControlCookie);
     if (FAILED(abortHr))
     {
@@ -355,12 +365,12 @@ enum FileSystemNamespaceKind : uint32_t
 {
     FILESYSTEM_NAMESPACE_REAL_CONTAINER          = 1,
     FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER = 2,
-    FILESYSTEM_NAMESPACE_FIXED_OBJECT_SET        = 3,
+    FILESYSTEM_NAMESPACE_FIXED_OBJECT_SET         = 3,
 };
 
 enum FileSystemRouteComponentComparison : uint32_t
 {
-    FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE    = 1,
+    FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE = 1,
     FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE = 2,
 };
 
@@ -706,12 +716,12 @@ interface __declspec(novtable) IFileSystemCallback
     // - This callback may block (host-driven inline conflict UI).
     virtual HRESULT STDMETHODCALLTYPE FileSystemIssue(FileSystemOperation operationType,
                                                       const wchar_t* sourcePath,
-                                                      const wchar_t* destinationPath,
-                                                      HRESULT status,
-                                                      FileSystemIssueAction* action,
-                                                      IFileSystemBoundObject** expectedDestination,
-                                                      FileSystemOptions* options,
-                                                      void* cookie) noexcept = 0;
+                                                       const wchar_t* destinationPath,
+                                                       HRESULT status,
+                                                       FileSystemIssueAction* action,
+                                                       IFileSystemBoundObject** expectedDestination,
+                                                       FileSystemOptions* options,
+                                                       void* cookie) noexcept = 0;
 };
 
 // Mandatory path-scoped capability interface for ABI v2. The returned UTF-8 JSON is owned by the
@@ -721,31 +731,40 @@ interface __declspec(novtable) IFileSystemCallback
 // never infer nativeMove from move.
 interface __declspec(uuid("9be5ee85-f247-4a95-953b-5f18ed76719d")) __declspec(novtable) IFileSystemPathCapabilities2 : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
+                                                           FileSystemOperation operation,
+                                                           const char** jsonUtf8) noexcept = 0;
 };
 
 // The sole executable route-capability authority. Capability JSON remains available
 // through IFileSystemPathCapabilities2 for diagnostics/extensions only.
 interface __declspec(uuid("1e924d87-2e62-4ab4-9f37-c565d465f25e")) __declspec(novtable) IFileSystemRouteCapabilities : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE GetRouteFacts(
-        const wchar_t* path, FileSystemOperation operation, FileSystemArena* arena, FileSystemRouteFacts* facts) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE IsTransferPeerAllowed(
-        const wchar_t* path, FileSystemOperation operation, FileSystemTransferPeerRole role, const wchar_t* peerPluginId, BOOL* allowed) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE ValidateChildName(
-        const wchar_t* parentPath, const wchar_t* childName, FileSystemOperation operation, FileSystemChildNameValidation* validation) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetRouteFacts(const wchar_t* path,
+                                                     FileSystemOperation operation,
+                                                     FileSystemArena* arena,
+                                                     FileSystemRouteFacts* facts) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE IsTransferPeerAllowed(const wchar_t* path,
+                                                            FileSystemOperation operation,
+                                                            FileSystemTransferPeerRole role,
+                                                            const wchar_t* peerPluginId,
+                                                            BOOL* allowed) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE ValidateChildName(const wchar_t* parentPath,
+                                                        const wchar_t* childName,
+                                                        FileSystemOperation operation,
+                                                        FileSystemChildNameValidation* validation) noexcept = 0;
     virtual HRESULT STDMETHODCALLTYPE GetChildNameCollisionKey(const wchar_t* parentPath,
                                                                const wchar_t* childName,
                                                                FileSystemOperation operation,
                                                                FileSystemArena* arena,
                                                                const wchar_t** key,
-                                                               unsigned long* requiredArenaBytes) noexcept                                      = 0;
+                                                               unsigned long* requiredArenaBytes) noexcept = 0;
     virtual HRESULT STDMETHODCALLTYPE JoinPath(const wchar_t* parentPath,
                                                const wchar_t* childName,
                                                FileSystemOperation operation,
                                                FileSystemArena* arena,
                                                const wchar_t** joinedPath,
-                                               unsigned long* requiredArenaBytes) noexcept                                                      = 0;
+                                               unsigned long* requiredArenaBytes) noexcept = 0;
 };
 
 interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21")) __declspec(novtable) IFileSystem : public IFileSystemPathCapabilities2
@@ -848,13 +867,15 @@ interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21")) __declspec(no
 interface __declspec(novtable) IFileSystemDirectoryEnumerationCallback
 {
     virtual HRESULT STDMETHODCALLTYPE DirectoryEnumerationProgress(uint64_t scannedEntries, uint64_t totalEntries, void* cookie) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE DirectoryEnumerationShouldCancel(BOOL * pCancel, void* cookie) noexcept                             = 0;
+    virtual HRESULT STDMETHODCALLTYPE DirectoryEnumerationShouldCancel(BOOL * pCancel, void* cookie) noexcept                              = 0;
 };
 
 interface __declspec(uuid("32f1b16a-fb45-4e59-98ca-61e16445c527")) __declspec(novtable) IFileSystemCancellableDirectoryEnumeration : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE ReadDirectoryInfoCancellable(
-        const wchar_t* path, IFileSystemDirectoryEnumerationCallback* callback, void* cookie, IFilesInformation** ppFilesInformation) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE ReadDirectoryInfoCancellable(const wchar_t* path,
+                                                                   IFileSystemDirectoryEnumerationCallback* callback,
+                                                                   void* cookie,
+                                                                   IFilesInformation** ppFilesInformation) noexcept = 0;
 };
 
 // Minimal Win32-like file reader for filesystem plugins.
@@ -939,7 +960,7 @@ interface __declspec(uuid("bcf04a7a-9c62-4aa8-9847-d756cf432669")) __declspec(no
 // refers to when the mutation runs, and the host's card says so before the answer.
 struct FileSystemDeleteIdentity
 {
-    uint32_t sizeBytes; // sizeof(FileSystemDeleteIdentity)
+    uint32_t sizeBytes;    // sizeof(FileSystemDeleteIdentity)
     BOOL isDirectory;
     wchar_t identity[256]; // provider-defined, NUL-terminated; empty = cannot be named
 };
@@ -948,14 +969,15 @@ interface IFileSystemCallback;
 
 interface __declspec(uuid("7c2d9a4e-5b31-4f8e-9a6d-0e3f1b7c8d52")) __declspec(novtable) IFileSystemIdentityDelete : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE ResolveDeleteIdentity(
-        const wchar_t* path, const FileSystemOptions* options, FileSystemDeleteIdentity* identity) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE ResolveDeleteIdentity(const wchar_t* path,
+                                                            const FileSystemOptions* options,
+                                                            FileSystemDeleteIdentity* identity) noexcept = 0;
     virtual HRESULT STDMETHODCALLTYPE DeleteIfIdentity(const wchar_t* path,
                                                        const FileSystemDeleteIdentity* identity,
                                                        FileSystemFlags flags,
                                                        const FileSystemOptions* options,
                                                        IFileSystemCallback* callback,
-                                                       void* cookie) noexcept                               = 0;
+                                                       void* cookie) noexcept = 0;
 };
 
 struct FileSystemBasicInformation
@@ -1082,10 +1104,10 @@ enum FileSystemBoundObjectKind : uint32_t
 struct FileSystemBoundObjectSnapshot
 {
     uint32_t sizeBytes;
-    uint32_t kind;        // FileSystemBoundObjectKind
-    const void* objectId; // Provider-owned; immutable for the bound-object lifetime.
+    uint32_t kind;               // FileSystemBoundObjectKind
+    const void* objectId;        // Provider-owned; immutable for the bound-object lifetime.
     uint32_t objectIdBytes;
-    const void* revisionId; // Empty only when the path profile declares no revision token.
+    const void* revisionId;      // Empty only when the path profile declares no revision token.
     uint32_t revisionIdBytes;
     uint64_t committedSizeBytes; // UINT64_MAX when not applicable or unknown.
 };
@@ -1140,19 +1162,24 @@ struct FileSystemConditionalMutationResult
 // that return ERROR_NOT_SUPPORTED. A successful CreateExclusiveWriter returns both non-null outputs.
 interface __declspec(uuid("d8ae290a-b84c-42ec-982c-7c01dedc7603")) __declspec(novtable) IFileSystemObjectBinding : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE BindObject(const wchar_t* path, FileSystemBindFlags flags, IFileSystemBoundObject** bound) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE CreateExclusiveWriter(
-        const wchar_t* stagePath, const FileSystemOptions* options, IFileWriter** writer, IFileSystemBoundObject** ownedStage) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE CreateExclusiveDirectory(
-        const wchar_t* stagePath, const FileSystemOptions* options, IFileSystemBoundObject** ownedStage) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE ReadBoundLink(IFileSystemBoundObject * boundLink,
+    virtual HRESULT STDMETHODCALLTYPE BindObject(const wchar_t* path,
+                                                 FileSystemBindFlags flags,
+                                                 IFileSystemBoundObject** bound) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE CreateExclusiveWriter(const wchar_t* stagePath,
+                                                             const FileSystemOptions* options,
+                                                             IFileWriter** writer,
+                                                             IFileSystemBoundObject** ownedStage) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE CreateExclusiveDirectory(const wchar_t* stagePath,
+                                                                const FileSystemOptions* options,
+                                                                IFileSystemBoundObject** ownedStage) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE ReadBoundLink(IFileSystemBoundObject* boundLink,
                                                     const FileSystemLinkTransform* transform,
                                                     const FileSystemOptions* options,
-                                                    FileSystemLinkInformation* information) noexcept              = 0;
+                                                    FileSystemLinkInformation* information) noexcept = 0;
     virtual HRESULT STDMETHODCALLTYPE CreateExclusiveLink(const wchar_t* stagePath,
                                                           const FileSystemLinkInformation* information,
                                                           const FileSystemOptions* options,
-                                                          IFileSystemBoundObject** ownedStage) noexcept           = 0;
+                                                          IFileSystemBoundObject** ownedStage) noexcept = 0;
 };
 
 // Optional immutable object/revision token used for publication and exact conditional mutation.
@@ -1160,26 +1187,28 @@ interface __declspec(uuid("d8ae290a-b84c-42ec-982c-7c01dedc7603")) __declspec(no
 // expectedDestination means "only if absent"; replacement requires the exact bound destination.
 interface __declspec(uuid("5ed3921d-a486-42cc-a5c3-33d97f75c5b5")) __declspec(novtable) IFileSystemBoundObject : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE GetSnapshot(FileSystemBoundObjectSnapshot * snapshot) noexcept              = 0;
-    virtual HRESULT STDMETHODCALLTYPE IsSameObject(IFileSystemBoundObject * other, BOOL * same) noexcept          = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetSnapshot(FileSystemBoundObjectSnapshot* snapshot) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE IsSameObject(IFileSystemBoundObject* other, BOOL* same) noexcept = 0;
     virtual HRESULT STDMETHODCALLTYPE OpenReader(const FileSystemOptions* options, IFileReader** reader) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE GetBasicInformation(FileSystemBasicInformation * info) noexcept             = 0;
-    virtual HRESULT STDMETHODCALLTYPE SetBasicInformation(const FileSystemBasicInformation* info) noexcept        = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetBasicInformation(FileSystemBasicInformation* info) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE SetBasicInformation(const FileSystemBasicInformation* info) noexcept = 0;
     virtual HRESULT STDMETHODCALLTYPE PublishAs(const wchar_t* finalPath,
                                                 IFileSystemBoundObject* expectedDestination,
                                                 FileSystemFlags flags,
                                                 const FileSystemOptions* options,
                                                 FileSystemConditionalMutationResult* result,
-                                                IFileSystemBoundObject** published) noexcept                      = 0;
+                                                IFileSystemBoundObject** published) noexcept = 0;
     virtual HRESULT STDMETHODCALLTYPE RenameIfUnchanged(const wchar_t* destinationPath,
                                                         IFileSystemBoundObject* expectedDestination,
                                                         FileSystemFlags flags,
                                                         const FileSystemOptions* options,
                                                         FileSystemConditionalMutationResult* result,
-                                                        IFileSystemBoundObject** renamed) noexcept                = 0;
-    virtual HRESULT STDMETHODCALLTYPE DeleteIfUnchanged(
-        FileSystemFlags flags, const FileSystemOptions* options, FileSystemConditionalMutationResult* result) noexcept                         = 0;
-    virtual HRESULT STDMETHODCALLTYPE AbortOwnedObject(const FileSystemOptions* options, FileSystemConditionalMutationResult* result) noexcept = 0;
+                                                        IFileSystemBoundObject** renamed) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE DeleteIfUnchanged(FileSystemFlags flags,
+                                                        const FileSystemOptions* options,
+                                                        FileSystemConditionalMutationResult* result) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE AbortOwnedObject(const FileSystemOptions* options,
+                                                       FileSystemConditionalMutationResult* result) noexcept = 0;
 };
 
 // Optional exact-object content proof. The provider must read the already-bound object/revision;
@@ -1187,7 +1216,8 @@ interface __declspec(uuid("5ed3921d-a486-42cc-a5c3-33d97f75c5b5")) __declspec(no
 // verification and can never authorize overwrite, skip, cleanup, or source deletion.
 interface __declspec(uuid("ed24d2c9-3377-468a-a8b2-72862353f7d1")) __declspec(novtable) IFileSystemBoundContentProof : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE GetContentProof(const FileSystemOptions* options, FileSystemContentProof* proof) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetContentProof(const FileSystemOptions* options,
+                                                      FileSystemContentProof* proof) noexcept = 0;
 };
 
 // R3-2: writer-side content proof for atomic-final routes without bound objects. Before the first
@@ -1201,8 +1231,8 @@ interface __declspec(uuid("ed24d2c9-3377-468a-a8b2-72862353f7d1")) __declspec(no
 // FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST.
 interface __declspec(uuid("122eb65f-ef47-4d11-8c8d-d2fb144df1e3")) __declspec(novtable) IFileWriterContentProof : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE GetContentProofAlgorithms(uint32_t* algorithmMask) noexcept       = 0;
-    virtual HRESULT STDMETHODCALLTYPE GetCommittedContentProof(FileSystemContentProof * proof) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetContentProofAlgorithms(uint32_t* algorithmMask) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetCommittedContentProof(FileSystemContentProof* proof) noexcept = 0;
 };
 
 // Exact-object metadata contract used by the host bridge. The interface is optional and is
@@ -1254,11 +1284,12 @@ struct FileSystemMetadataTransferResult
 
 interface __declspec(uuid("145b7908-1876-4c76-9900-88961d43f2ab")) __declspec(novtable) IFileSystemBoundMetadata : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE GetMetadataSnapshot(const FileSystemOptions* options, FileSystemMetadataSnapshot* snapshot) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE TransferMetadataTo(IFileSystemBoundObject * destination,
+    virtual HRESULT STDMETHODCALLTYPE GetMetadataSnapshot(const FileSystemOptions* options,
+                                                          FileSystemMetadataSnapshot* snapshot) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE TransferMetadataTo(IFileSystemBoundObject* destination,
                                                          FileSystemMetadataTransferPhase phase,
                                                          const FileSystemOptions* options,
-                                                         FileSystemMetadataTransferResult* result) noexcept                                = 0;
+                                                         FileSystemMetadataTransferResult* result) noexcept = 0;
 };
 
 // Optional item stream operations interface for filesystem plugins.
@@ -1444,9 +1475,7 @@ class PackedFileInfoCursor final
 {
 public:
     PackedFileInfoCursor(const FileInfo* buffer, unsigned long bufferSize, unsigned long count) noexcept
-        : _buffer(reinterpret_cast<const unsigned char*>(buffer)),
-          _bufferSize(bufferSize),
-          _count(count)
+        : _buffer(reinterpret_cast<const unsigned char*>(buffer)), _bufferSize(bufferSize), _count(count)
     {
     }
 
@@ -1461,27 +1490,29 @@ public:
         {
             return HRESULT_FROM_WIN32(ERROR_NO_MORE_FILES);
         }
-        if (! _buffer || _bufferSize == 0u || (reinterpret_cast<uintptr_t>(_buffer) % alignof(FileInfo)) != 0u || (_offset % alignof(FileInfo)) != 0u ||
-            _offset > _bufferSize)
+        if (! _buffer || _bufferSize == 0u ||
+            (reinterpret_cast<uintptr_t>(_buffer) % alignof(FileInfo)) != 0u ||
+            (_offset % alignof(FileInfo)) != 0u || _offset > _bufferSize)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
         constexpr size_t headerBytes = offsetof(FileInfo, FileName);
-        const size_t remaining       = static_cast<size_t>(_bufferSize) - _offset;
+        const size_t remaining = static_cast<size_t>(_bufferSize) - _offset;
         if (remaining < headerBytes)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
         const auto* entry = reinterpret_cast<const FileInfo*>(_buffer + _offset);
-        if ((entry->FileNameSize % sizeof(wchar_t)) != 0u || static_cast<size_t>(entry->FileNameSize) > remaining - headerBytes)
+        if ((entry->FileNameSize % sizeof(wchar_t)) != 0u ||
+            static_cast<size_t>(entry->FileNameSize) > remaining - headerBytes)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
         const size_t requiredBytes = headerBytes + static_cast<size_t>(entry->FileNameSize);
-        const bool finalRecord     = _index + 1u == _count;
-        const size_t advance       = static_cast<size_t>(entry->NextEntryOffset);
+        const bool finalRecord = _index + 1u == _count;
+        const size_t advance = static_cast<size_t>(entry->NextEntryOffset);
         if (finalRecord)
         {
             if (advance != 0u)
@@ -1489,7 +1520,8 @@ public:
                 return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
             }
         }
-        else if (advance == 0u || (advance % alignof(FileInfo)) != 0u || advance < requiredBytes || advance > remaining || remaining - advance < headerBytes)
+        else if (advance == 0u || (advance % alignof(FileInfo)) != 0u ||
+                 advance < requiredBytes || advance > remaining || remaining - advance < headerBytes)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
@@ -1505,14 +1537,17 @@ public:
 
 private:
     const unsigned char* _buffer = nullptr;
-    size_t _bufferSize           = 0u;
-    size_t _offset               = 0u;
-    unsigned long _count         = 0u;
-    unsigned long _index         = 0u;
+    size_t _bufferSize = 0u;
+    size_t _offset = 0u;
+    unsigned long _count = 0u;
+    unsigned long _index = 0u;
 };
 
-[[nodiscard]] inline HRESULT LocatePackedFileInfoRecord(
-    const FileInfo* buffer, unsigned long bufferSize, unsigned long count, unsigned long index, const FileInfo** result) noexcept
+[[nodiscard]] inline HRESULT LocatePackedFileInfoRecord(const FileInfo* buffer,
+                                                        unsigned long bufferSize,
+                                                        unsigned long count,
+                                                        unsigned long index,
+                                                        const FileInfo** result) noexcept
 {
     if (! result)
     {
@@ -1528,7 +1563,7 @@ private:
     for (unsigned long current = 0u; current < count; ++current)
     {
         const FileInfo* entry = nullptr;
-        const HRESULT hr      = cursor.Next(&entry);
+        const HRESULT hr = cursor.Next(&entry);
         if (FAILED(hr))
         {
             return hr;
@@ -1699,7 +1734,7 @@ inline HRESULT BuildFileSystemPathListArenaFromFilesInformation(
     for (unsigned long index = 0; index < entryCount; ++index)
     {
         const FileInfo* entry = nullptr;
-        hr                    = sizingCursor.Next(&entry);
+        hr = sizingCursor.Next(&entry);
         if (FAILED(hr))
         {
             return hr;
@@ -1724,6 +1759,7 @@ inline HRESULT BuildFileSystemPathListArenaFromFilesInformation(
         {
             return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
         }
+
     }
 
     hr = InitializeFileSystemArena(arena, static_cast<unsigned long>(totalBytes));
@@ -1752,7 +1788,7 @@ inline HRESULT BuildFileSystemPathListArenaFromFilesInformation(
     for (unsigned long index = 0; index < entryCount; ++index)
     {
         const FileInfo* entry = nullptr;
-        hr                    = copyCursor.Next(&entry);
+        hr = copyCursor.Next(&entry);
         if (FAILED(hr))
         {
             DestroyFileSystemArena(arena);
@@ -1804,6 +1840,7 @@ inline HRESULT BuildFileSystemPathListArenaFromFilesInformation(
 
         sourcePath[pathOffset + nameChars] = L'\0';
         paths[index]                       = sourcePath;
+
     }
 
     *outPaths = paths;

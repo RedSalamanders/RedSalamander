@@ -4,16 +4,16 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
-#include "ContentDigest.h"
 #include "FileSystemS3.Internal.h"
+#include "ContentDigest.h"
 
 #include <algorithm>
 #include <atomic>
 #include <cctype>
 #include <charconv>
 #include <chrono>
-#include <cstdint>
 #include <cstdio>
+#include <cstdint>
 #include <format>
 #include <limits>
 #include <map>
@@ -247,7 +247,7 @@ constexpr std::string_view kS3Xmlns   = "http://s3.amazonaws.com/doc/2006-03-01/
 struct HttpRequest final
 {
     std::string method;
-    std::string path;                           // percent-decoded, always starts with '/'
+    std::string path; // percent-decoded, always starts with '/'
     std::map<std::string, std::string> query;   // decoded
     std::map<std::string, std::string> headers; // lower-case names
     std::vector<uint8_t> body;
@@ -274,8 +274,8 @@ struct HttpResponse final
     int status = 200;
     std::vector<std::pair<std::string, std::string>> headers;
     std::vector<uint8_t> body;
-    bool headOnly = false; // send the body's Content-Length but no body (HEAD)
-    bool dripBody = false; // send the body in slow slices (bytes still flowing)
+    bool headOnly    = false; // send the body's Content-Length but no body (HEAD)
+    bool dripBody    = false; // send the body in slow slices (bytes still flowing)
 };
 
 [[nodiscard]] std::string_view ReasonPhrase(int status) noexcept
@@ -301,12 +301,12 @@ struct HttpResponse final
 [[nodiscard]] HttpResponse MakeErrorResponse(int status, std::string_view code, std::string_view message, std::string_view resource)
 {
     HttpResponse response;
-    response.status       = status;
-    const std::string xml = std::format(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>{}</Code><Message>{}</Message><Resource>{}</Resource><RequestId>fake</RequestId></Error>",
-        code,
-        XmlEscape(message),
-        XmlEscape(resource));
+    response.status = status;
+    const std::string xml =
+        std::format("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>{}</Code><Message>{}</Message><Resource>{}</Resource><RequestId>fake</RequestId></Error>",
+                    code,
+                    XmlEscape(message),
+                    XmlEscape(resource));
     response.body.assign(xml.begin(), xml.end());
     response.headers.emplace_back("Content-Type", "application/xml");
     return response;
@@ -346,7 +346,7 @@ struct HttpResponse final
         {
             sizeText = sizeText.substr(0, ext);
         }
-        size_t chunkSize  = 0u;
+        size_t chunkSize = 0u;
         const auto parsed = std::from_chars(sizeText.data(), sizeText.data() + sizeText.size(), chunkSize, 16);
         if (parsed.ec != std::errc{})
         {
@@ -537,7 +537,7 @@ private:
         object.etag            = ComputeEtag(bytes);
         object.crc64NvmeBase64 = ComputeCrc64NvmeBase64(bytes);
         object.modified        = NowSeconds();
-        object.bytes           = std::move(bytes);
+        object.bytes    = std::move(bytes);
         _objects.insert_or_assign(ObjectId(bucket, key), std::move(object));
     }
 
@@ -622,10 +622,10 @@ private:
         {
             return false;
         }
-        request.method                 = std::string(requestLine.substr(0, firstSpace));
-        const std::string_view target  = requestLine.substr(firstSpace + 1u, lastSpace - firstSpace - 1u);
-        const std::string_view version = requestLine.substr(lastSpace + 1u);
-        request.closeAfter             = version == "HTTP/1.0";
+        request.method                  = std::string(requestLine.substr(0, firstSpace));
+        const std::string_view target   = requestLine.substr(firstSpace + 1u, lastSpace - firstSpace - 1u);
+        const std::string_view version  = requestLine.substr(lastSpace + 1u);
+        request.closeAfter              = version == "HTTP/1.0";
         // The CRT sends some requests in absolute form (`PUT http://host:port/bucket/key HTTP/1.1`).
         std::string_view relativeTarget = target;
         if (const size_t scheme = relativeTarget.find("://"); scheme != std::string_view::npos && scheme < 8u)
@@ -633,8 +633,8 @@ private:
             const size_t pathStart = relativeTarget.find('/', scheme + 3u);
             relativeTarget         = pathStart == std::string_view::npos ? std::string_view("/") : relativeTarget.substr(pathStart);
         }
-        const size_t queryStart = relativeTarget.find('?');
-        request.path            = PercentDecode(relativeTarget.substr(0, queryStart));
+        const size_t queryStart         = relativeTarget.find('?');
+        request.path                    = PercentDecode(relativeTarget.substr(0, queryStart));
         if (request.path.empty() || request.path.front() != '/')
         {
             request.path.insert(request.path.begin(), '/');
@@ -647,15 +647,14 @@ private:
                 const size_t amp            = query.find('&');
                 const std::string_view pair = query.substr(0, amp);
                 const size_t eq             = pair.find('=');
-                request.query.insert_or_assign(PercentDecode(pair.substr(0, eq)),
-                                               eq == std::string_view::npos ? std::string{} : PercentDecode(pair.substr(eq + 1u)));
+                request.query.insert_or_assign(PercentDecode(pair.substr(0, eq)), eq == std::string_view::npos ? std::string{} : PercentDecode(pair.substr(eq + 1u)));
                 query = amp == std::string_view::npos ? std::string_view{} : query.substr(amp + 1u);
             }
         }
         size_t index = lineEnd + 2u;
         while (index < head.size())
         {
-            const size_t end            = head.find("\r\n", index);
+            const size_t end = head.find("\r\n", index);
             const std::string_view line = head.substr(index, end == std::string_view::npos ? std::string_view::npos : end - index);
             if (line.empty())
             {
@@ -691,7 +690,7 @@ private:
     // One request per call; `buffer` keeps pipelined bytes between calls.
     [[nodiscard]] HRESULT ReadRequest(SOCKET socketValue, std::stop_token stopToken, std::string& buffer, HttpRequest& request)
     {
-        request        = {};
+        request = {};
         size_t headEnd = std::string::npos;
         while ((headEnd = buffer.find("\r\n\r\n")) == std::string::npos)
         {
@@ -767,8 +766,7 @@ private:
         return S_OK;
     }
 
-    [[nodiscard]] HRESULT SendResponse(
-        SOCKET socketValue, std::stop_token stopToken, const HttpResponse& response, size_t dripBytesPerTick, unsigned int dripTickMs)
+    [[nodiscard]] HRESULT SendResponse(SOCKET socketValue, std::stop_token stopToken, const HttpResponse& response, size_t dripBytesPerTick, unsigned int dripTickMs)
     {
         std::string head = std::format("HTTP/1.1 {} {}\r\nDate: {}\r\nServer: RedSalamanderFakeS3\r\nx-amz-request-id: {}\r\nContent-Length: {}\r\n",
                                        response.status,
@@ -872,9 +870,9 @@ private:
     {
         std::string_view rest(request.path);
         rest.remove_prefix(1); // leading '/'
-        const size_t slash       = rest.find('/');
-        const std::string bucket = std::string(rest.substr(0, slash));
-        const std::string key    = slash == std::string_view::npos ? std::string{} : std::string(rest.substr(slash + 1u));
+        const size_t slash            = rest.find('/');
+        const std::string bucket      = std::string(rest.substr(0, slash));
+        const std::string key         = slash == std::string_view::npos ? std::string{} : std::string(rest.substr(slash + 1u));
 
         std::scoped_lock lock(_stateMutex);
         if (bucket.empty())
@@ -914,9 +912,7 @@ private:
 
     [[nodiscard]] HttpResponse ListBucketsLocked() const
     {
-        std::string xml = std::format("<?xml version=\"1.0\" encoding=\"UTF-8\"?><ListAllMyBucketsResult "
-                                      "xmlns=\"{}\"><Owner><ID>fake</ID><DisplayName>fake</DisplayName></Owner><Buckets>",
-                                      kS3Xmlns);
+        std::string xml = std::format("<?xml version=\"1.0\" encoding=\"UTF-8\"?><ListAllMyBucketsResult xmlns=\"{}\"><Owner><ID>fake</ID><DisplayName>fake</DisplayName></Owner><Buckets>", kS3Xmlns);
         for (const std::string& bucket : _buckets)
         {
             xml += std::format("<Bucket><Name>{}</Name><CreationDate>{}</CreationDate></Bucket>", XmlEscape(bucket), Iso8601(NowSeconds()));
@@ -934,8 +930,7 @@ private:
         }
         if (! _buckets.contains(bucket))
         {
-            return request.method == "HEAD" ? MakeEmptyResponse(404)
-                                            : MakeErrorResponse(404, "NoSuchBucket", "The specified bucket does not exist", request.path);
+            return request.method == "HEAD" ? MakeEmptyResponse(404) : MakeErrorResponse(404, "NoSuchBucket", "The specified bucket does not exist", request.path);
         }
         if (request.method == "HEAD")
         {
@@ -945,8 +940,7 @@ private:
         {
             if (request.HasQuery("location"))
             {
-                return MakeXmlResponse(
-                    200, std::format("<?xml version=\"1.0\" encoding=\"UTF-8\"?><LocationConstraint xmlns=\"{}\">us-east-1</LocationConstraint>", kS3Xmlns));
+                return MakeXmlResponse(200, std::format("<?xml version=\"1.0\" encoding=\"UTF-8\"?><LocationConstraint xmlns=\"{}\">us-east-1</LocationConstraint>", kS3Xmlns));
             }
             return ListObjectsLocked(request, bucket);
         }
@@ -1016,18 +1010,16 @@ private:
                 truncated = true;
                 break;
             }
-            contents += std::format(
-                "<Contents><Key>{}</Key><LastModified>{}</LastModified><ETag>{}</ETag><Size>{}</Size><StorageClass>STANDARD</StorageClass></Contents>",
-                XmlEscape(key),
-                Iso8601(it->second.modified),
-                XmlEscape(it->second.etag),
-                it->second.bytes.size());
+            contents += std::format("<Contents><Key>{}</Key><LastModified>{}</LastModified><ETag>{}</ETag><Size>{}</Size><StorageClass>STANDARD</StorageClass></Contents>",
+                                    XmlEscape(key),
+                                    Iso8601(it->second.modified),
+                                    XmlEscape(it->second.etag),
+                                    it->second.bytes.size());
             ++emitted;
             lastIncludedKey = std::string(key);
         }
 
-        std::string xml = std::format("<?xml version=\"1.0\" encoding=\"UTF-8\"?><ListBucketResult "
-                                      "xmlns=\"{}\"><Name>{}</Name><Prefix>{}</Prefix><KeyCount>{}</KeyCount><MaxKeys>{}</MaxKeys>",
+        std::string xml = std::format("<?xml version=\"1.0\" encoding=\"UTF-8\"?><ListBucketResult xmlns=\"{}\"><Name>{}</Name><Prefix>{}</Prefix><KeyCount>{}</KeyCount><MaxKeys>{}</MaxKeys>",
                                       kS3Xmlns,
                                       XmlEscape(bucket),
                                       XmlEscape(prefix),
@@ -1065,10 +1057,7 @@ private:
     }
 
     // Returns nullptr when the request's If-Match / If-None-Match preconditions hold.
-    [[nodiscard]] static std::optional<HttpResponse> CheckPreconditions(const HttpRequest& request,
-                                                                        const StoredObject* existing,
-                                                                        std::string_view ifMatchName,
-                                                                        std::string_view ifNoneMatchName)
+    [[nodiscard]] static std::optional<HttpResponse> CheckPreconditions(const HttpRequest& request, const StoredObject* existing, std::string_view ifMatchName, std::string_view ifNoneMatchName)
     {
         if (const std::string* ifMatch = request.Header(ifMatchName); ifMatch != nullptr)
         {
@@ -1211,8 +1200,8 @@ private:
             {
                 return MakeErrorResponse(404, "NoSuchUpload", "The specified upload does not exist.", request.path);
             }
-            unsigned int partNumber    = 0u;
-            const std::string partText = request.Query("partNumber");
+            unsigned int partNumber       = 0u;
+            const std::string partText    = request.Query("partNumber");
             static_cast<void>(std::from_chars(partText.data(), partText.data() + partText.size(), partNumber));
             std::vector<uint8_t> partBytes;
             if (request.Header("x-amz-copy-source") != nullptr)
@@ -1240,11 +1229,7 @@ private:
                 partBytes.assign(source->bytes.begin() + static_cast<ptrdiff_t>(first), source->bytes.begin() + static_cast<ptrdiff_t>(last + 1u));
                 const std::string etag = ComputeEtag(partBytes);
                 upload->second.parts.insert_or_assign(partNumber, std::move(partBytes));
-                HttpResponse response = MakeXmlResponse(
-                    200,
-                    std::format("<?xml version=\"1.0\" encoding=\"UTF-8\"?><CopyPartResult><LastModified>{}</LastModified><ETag>{}</ETag></CopyPartResult>",
-                                Iso8601(NowSeconds()),
-                                XmlEscape(etag)));
+                HttpResponse response = MakeXmlResponse(200, std::format("<?xml version=\"1.0\" encoding=\"UTF-8\"?><CopyPartResult><LastModified>{}</LastModified><ETag>{}</ETag></CopyPartResult>", Iso8601(NowSeconds()), XmlEscape(etag)));
                 return response;
             }
             partBytes              = request.body;
@@ -1255,7 +1240,7 @@ private:
             return response;
         }
 
-        const auto existing         = _objects.find(ObjectId(bucket, key));
+        const auto existing       = _objects.find(ObjectId(bucket, key));
         const StoredObject* current = existing == _objects.end() ? nullptr : &existing->second;
         if (auto failed = CheckPreconditions(request, current, "if-match", "if-none-match"); failed.has_value())
         {
@@ -1272,11 +1257,7 @@ private:
             std::vector<uint8_t> copy = source->bytes;
             StoreLocked(bucket, key, std::move(copy));
             const StoredObject& stored = _objects.at(ObjectId(bucket, key));
-            return MakeXmlResponse(
-                200,
-                std::format("<?xml version=\"1.0\" encoding=\"UTF-8\"?><CopyObjectResult><LastModified>{}</LastModified><ETag>{}</ETag></CopyObjectResult>",
-                            Iso8601(stored.modified),
-                            XmlEscape(stored.etag)));
+            return MakeXmlResponse(200, std::format("<?xml version=\"1.0\" encoding=\"UTF-8\"?><CopyObjectResult><LastModified>{}</LastModified><ETag>{}</ETag></CopyObjectResult>", Iso8601(stored.modified), XmlEscape(stored.etag)));
         }
         StoreLocked(bucket, key, request.body);
         HttpResponse response = MakeEmptyResponse(200);
@@ -1313,13 +1294,11 @@ private:
         {
             const std::string uploadId = std::format("{:016x}", ++_uploadSerial);
             _uploads.insert_or_assign(uploadId, PendingUpload{.bucket = bucket, .key = key, .parts = {}});
-            return MakeXmlResponse(200,
-                                   std::format("<?xml version=\"1.0\" encoding=\"UTF-8\"?><InitiateMultipartUploadResult "
-                                               "xmlns=\"{}\"><Bucket>{}</Bucket><Key>{}</Key><UploadId>{}</UploadId></InitiateMultipartUploadResult>",
-                                               kS3Xmlns,
-                                               XmlEscape(bucket),
-                                               XmlEscape(key),
-                                               uploadId));
+            return MakeXmlResponse(200, std::format("<?xml version=\"1.0\" encoding=\"UTF-8\"?><InitiateMultipartUploadResult xmlns=\"{}\"><Bucket>{}</Bucket><Key>{}</Key><UploadId>{}</UploadId></InitiateMultipartUploadResult>",
+                                                    kS3Xmlns,
+                                                    XmlEscape(bucket),
+                                                    XmlEscape(key),
+                                                    uploadId));
         }
         if (request.HasQuery("uploadId"))
         {
@@ -1363,19 +1342,15 @@ private:
             _uploads.erase(upload);
             StoreLocked(bucket, key, std::move(assembled));
             const StoredObject& stored = _objects.at(ObjectId(bucket, key));
-            return MakeXmlResponse(
-                200,
-                std::format("<?xml version=\"1.0\" encoding=\"UTF-8\"?><CompleteMultipartUploadResult "
-                            "xmlns=\"{}\"><Location>http://127.0.0.1:{}/{}/{}</Location><Bucket>{}</Bucket><Key>{}</Key><ETag>{}</ETag><ChecksumCRC64NVME>{}</"
-                            "ChecksumCRC64NVME><ChecksumType>FULL_OBJECT</ChecksumType></CompleteMultipartUploadResult>",
-                            kS3Xmlns,
-                            _port,
-                            XmlEscape(bucket),
-                            XmlEscape(key),
-                            XmlEscape(bucket),
-                            XmlEscape(key),
-                            XmlEscape(stored.etag),
-                            XmlEscape(stored.crc64NvmeBase64)));
+            return MakeXmlResponse(200, std::format("<?xml version=\"1.0\" encoding=\"UTF-8\"?><CompleteMultipartUploadResult xmlns=\"{}\"><Location>http://127.0.0.1:{}/{}/{}</Location><Bucket>{}</Bucket><Key>{}</Key><ETag>{}</ETag><ChecksumCRC64NVME>{}</ChecksumCRC64NVME><ChecksumType>FULL_OBJECT</ChecksumType></CompleteMultipartUploadResult>",
+                                                    kS3Xmlns,
+                                                    _port,
+                                                    XmlEscape(bucket),
+                                                    XmlEscape(key),
+                                                    XmlEscape(bucket),
+                                                    XmlEscape(key),
+                                                    XmlEscape(stored.etag),
+                                                    XmlEscape(stored.crc64NvmeBase64)));
         }
         return MakeErrorResponse(405, "MethodNotAllowed", request.method, request.path);
     }
@@ -1436,11 +1411,10 @@ public:
 
 [[nodiscard]] std::string FixtureConfiguration(unsigned short port, unsigned int connectTimeoutMs, unsigned int requestTimeoutMs)
 {
-    return std::format(
-        R"({{"defaultRegion":"us-east-1","defaultEndpointOverride":"http://127.0.0.1:{}","useHttps":false,"verifyTls":false,"useVirtualAddressing":false,"anonymous":true,"connectTimeoutMs":{},"requestTimeoutMs":{}}})",
-        port,
-        connectTimeoutMs,
-        requestTimeoutMs);
+    return std::format(R"({{"defaultRegion":"us-east-1","defaultEndpointOverride":"http://127.0.0.1:{}","useHttps":false,"verifyTls":false,"useVirtualAddressing":false,"anonymous":true,"connectTimeoutMs":{},"requestTimeoutMs":{}}})",
+                       port,
+                       connectTimeoutMs,
+                       requestTimeoutMs);
 }
 } // namespace
 
@@ -1473,10 +1447,7 @@ void RunS3StalledRequestCancelSelfTests(unsigned int& passed, unsigned int& fail
 
         wil::com_ptr<FileSystemS3> fileSystem;
         fileSystem.attach(new (std::nothrow) FileSystemS3(FileSystemS3Mode::S3, nullptr));
-        if (! DebugCheck(static_cast<bool>(fileSystem) && SUCCEEDED(fileSystem->InitializationStatus()),
-                         L"S3 stalled-request proof should create an S3 instance",
-                         passed,
-                         failed))
+        if (! DebugCheck(static_cast<bool>(fileSystem) && SUCCEEDED(fileSystem->InitializationStatus()), L"S3 stalled-request proof should create an S3 instance", passed, failed))
         {
             return;
         }
@@ -1524,10 +1495,7 @@ void RunS3StalledRequestCancelSelfTests(unsigned int& passed, unsigned int& fail
             deleter.join();
             DebugCheck(listingReached, L"the recursive Delete must list the prefix on the fixture", passed, failed);
             DebugCheck(returned, L"a request whose body is still arriving must return after Cancel", passed, failed);
-            DebugCheck(deleteHr.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_CANCELLED),
-                       L"a canceled streaming request must report ERROR_CANCELLED",
-                       passed,
-                       failed);
+            DebugCheck(deleteHr.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_CANCELLED), L"a canceled streaming request must report ERROR_CANCELLED", passed, failed);
             std::fwprintf(stderr, L"[S3] streaming request returned %llu ms after Cancel\n", static_cast<unsigned long long>(cancelMs));
             DebugCheck(cancelMs < 3'000u, L"Cancel must return a streaming request within a few body callbacks", passed, failed);
             DebugCheck(endpoint.RequestCount("DELETE") == 0u, L"a Delete canceled while listing must not delete anything", passed, failed);
@@ -1562,12 +1530,8 @@ void RunS3StalledRequestCancelSelfTests(unsigned int& passed, unsigned int& fail
             deleter.join();
             DebugCheck(deleteReached, L"the stalled DELETE must reach the fixture", passed, failed);
             DebugCheck(returned, L"a request the server never answers must return after Cancel", passed, failed);
-            DebugCheck(deleteHr.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_CANCELLED),
-                       L"a canceled stalled request must report ERROR_CANCELLED",
-                       passed,
-                       failed);
-            std::fwprintf(
-                stderr, L"[S3] stalled request returned %llu ms after Cancel (declared bound %lu ms)\n", static_cast<unsigned long long>(cancelMs), boundMs);
+            DebugCheck(deleteHr.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_CANCELLED), L"a canceled stalled request must report ERROR_CANCELLED", passed, failed);
+            std::fwprintf(stderr, L"[S3] stalled request returned %llu ms after Cancel (declared bound %lu ms)\n", static_cast<unsigned long long>(cancelMs), boundMs);
             DebugCheck(cancelMs <= boundMs + 5'000u, L"Cancel on a silent server must return within the declared provider-owned bound", passed, failed);
             if (! returned)
             {
@@ -1595,8 +1559,7 @@ void RunS3StalledRequestCancelSelfTests(unsigned int& passed, unsigned int& fail
                 readerOptions.operationControl = &control;
                 if (readerControl)
                 {
-                    DebugCheck(
-                        SUCCEEDED(readerControl->SetOperationControl(&readerOptions)), L"the ranged reader must accept the host control", passed, failed);
+                    DebugCheck(SUCCEEDED(readerControl->SetOperationControl(&readerOptions)), L"the ranged reader must accept the host control", passed, failed);
                 }
                 std::atomic<HRESULT> readHr{E_PENDING};
                 std::thread readerThread([&]() noexcept
@@ -1627,10 +1590,7 @@ void RunS3StalledRequestCancelSelfTests(unsigned int& passed, unsigned int& fail
                            L"a canceled stalled reader GET must report ERROR_CANCELLED",
                            passed,
                            failed);
-                std::fwprintf(stderr,
-                              L"[S3] stalled reader GET returned %llu ms after Cancel (declared bound %lu ms)\n",
-                              static_cast<unsigned long long>(cancelMs),
-                              boundMs);
+                std::fwprintf(stderr, L"[S3] stalled reader GET returned %llu ms after Cancel (declared bound %lu ms)\n", static_cast<unsigned long long>(cancelMs), boundMs);
                 DebugCheck(cancelMs <= boundMs + 5'000u, L"Cancel on a silent reader GET must return within the declared provider-owned bound", passed, failed);
                 if (! returned)
                 {
@@ -1650,10 +1610,7 @@ void RunS3StalledRequestCancelSelfTests(unsigned int& passed, unsigned int& fail
                        L"an un-canceled stalled request must fail through the transport bound, not as a cancel",
                        passed,
                        failed);
-            std::fwprintf(stderr,
-                          L"[S3] stalled request returned on its own after %llu ms (declared bound %lu ms)\n",
-                          static_cast<unsigned long long>(elapsedMs),
-                          boundMs);
+            std::fwprintf(stderr, L"[S3] stalled request returned on its own after %llu ms (declared bound %lu ms)\n", static_cast<unsigned long long>(elapsedMs), boundMs);
             DebugCheck(elapsedMs <= boundMs + 5'000u, L"the provider-owned bound must return a stalled request on its own", passed, failed);
         }
         endpoint.SetStallMethod({}, 0u);
@@ -1773,10 +1730,7 @@ void RunS3ZeroTimestampReplaceSelfTests(unsigned int& passed, unsigned int& fail
 
         wil::com_ptr<FileSystemS3> fileSystem;
         fileSystem.attach(new (std::nothrow) FileSystemS3(FileSystemS3Mode::S3, nullptr));
-        if (! DebugCheck(static_cast<bool>(fileSystem) && SUCCEEDED(fileSystem->InitializationStatus()),
-                         L"R0-RC4 S3 proof should create an S3 instance",
-                         passed,
-                         failed))
+        if (! DebugCheck(static_cast<bool>(fileSystem) && SUCCEEDED(fileSystem->InitializationStatus()), L"R0-RC4 S3 proof should create an S3 instance", passed, failed))
         {
             return;
         }

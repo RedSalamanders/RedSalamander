@@ -93,6 +93,8 @@ Remaining deterministic stress validation for the File Operations popup, large l
 
 Plugin coverage must validate public ABI size/version negotiation, capability honesty, factory/enumeration behavior, callback cookies, configuration transactions, unknown-member round trips, secret handling, unload quiet points, and module/callback lifetime.
 
+Every plugin exposing `IInformations` must prove it accepts the defaults its own schema declares. `Tests/PluginContractTests` drives `GetConfigurationSchema` through `Common::PluginConfiguration::ParseSchema` + `MakeDefaultValue` + `SerializeConfiguration` — the exact path the Preferences page uses — requires `SetConfiguration` to return `S_OK`, and then requires the resulting `GetConfiguration` output to still satisfy the schema and be re-acceptable. This closes the gap where a plugin declares an integer-serialized `value` field and rejects the integer the shared codec emits for it, making a transactional `SetConfiguration` discard every other member and silently revert to compiled defaults. The Terminal is covered by the same transactional proofs as the file-system providers (unknown-member preservation, malformed and non-object roots reporting `ERROR_INVALID_DATA`, `{}` restoring defaults). Host-side plumbing is covered by the `settings_terminal_plugin_roundtrip` Commands case, which stores an integer `fontSizeDip` alongside a `fontFamily` and asserts the family survives `CreateTerminalInstance` → `ApplyConfigurationFromSettings`.
+
 Each shipped file-system provider must cover its distinctive identity, paging/listing, metadata, read/write, copy/move/delete, cancellation, retry, error, and configuration behavior. Live remote cases stay declared and skip with a specific prerequisite reason when credentials or environment capabilities are absent; they must not disappear from inventory.
 
 Shared provider temporary-file coverage must prove reservation cleanup when reopen fails, delete-on-close behavior, concurrent pathname uniqueness, and preservation of provider-selected prefixes and flags. Source-contract coverage may enforce consolidation and static flag policy, but runtime handle behavior requires a native test.
@@ -105,6 +107,15 @@ suppression, independent application-mouse button chords and teardown release,
 canonical extended/device path classification, source-generation transitions,
 unsupported-provider fail-closed behavior, and a real typed plugin-backed pane
 location through the staged Terminal DLL.
+
+Terminal font coverage must prove that a configured family which is not installed, or
+which lacks private-use (Nerd Font) glyph coverage, reaches the user as the non-blocking
+in-grid notice rather than degrading silently: the monospace-only fallback chain, the
+one-shot glyph probe that fires only once such a codepoint is painted, banner dismissal
+and re-arming when the configured family changes, and the accessibility snapshot text.
+`Tests/DxUiTests` covers the shared typography side: availability memoization, the
+`checkForUpdates` rescan, and `InvalidateFontFamilyAvailability` dropping cached answers
+for one factory.
 
 ### DxUi, graphics, and viewers
 

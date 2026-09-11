@@ -295,7 +295,8 @@ void RemoveOverlaySampleSubmenu(HMENU menu, UINT sampleErrorCommandId) noexcept
     }
 }
 
-void AppendArtifactContextMenu(HMENU menu, const std::shared_ptr<const FileOperationArtifacts::Projection>& projection) noexcept
+void AppendArtifactContextMenu(HMENU menu,
+                               const std::shared_ptr<const FileOperationArtifacts::Projection>& projection) noexcept
 {
     if (! menu || ! projection || projection->classification == FileOperationArtifacts::Classification::Ordinary)
     {
@@ -328,7 +329,11 @@ void AppendArtifactContextMenu(HMENU menu, const std::shared_ptr<const FileOpera
     const std::wstring title = LoadStringResource(nullptr, IDS_FILEOPS_ARTIFACT_MENU_TITLE);
     const int propertiesPos  = FindMenuItemPosById(menu, IDM_FOLDERVIEW_CONTEXT_PROPERTIES);
     if (title.empty() || propertiesPos < 0 ||
-        InsertMenuW(menu, static_cast<UINT>(propertiesPos), MF_BYPOSITION | MF_POPUP, reinterpret_cast<UINT_PTR>(artifactMenu.get()), title.c_str()) == FALSE)
+        InsertMenuW(menu,
+                    static_cast<UINT>(propertiesPos),
+                    MF_BYPOSITION | MF_POPUP,
+                    reinterpret_cast<UINT_PTR>(artifactMenu.get()),
+                    title.c_str()) == FALSE)
     {
         return;
     }
@@ -442,7 +447,7 @@ void FolderView::OnContextMenu(POINT screenPt, const bool keyboardInvocation)
     bool allowItemTarget = keyboardInvocation && _focusedIndex < _items.size();
     if (! keyboardInvocation)
     {
-        const POINT clientPt            = ScreenToClientPoint(screenPt);
+        const POINT clientPt = ScreenToClientPoint(screenPt);
         const std::optional<size_t> hit = HitTest(clientPt);
         if (hit.has_value())
         {
@@ -465,8 +470,8 @@ void FolderView::OnContextMenu(POINT screenPt, const bool keyboardInvocation)
         }
     }
 
-    HMENU rootMenu =
-        Localization::LoadMenuResource(GetModuleHandleW(nullptr), allowItemTarget ? IDR_FOLDERVIEW_ITEM_CONTEXT : IDR_FOLDERVIEW_BACKGROUND_CONTEXT);
+    HMENU rootMenu = Localization::LoadMenuResource(
+        GetModuleHandleW(nullptr), allowItemTarget ? IDR_FOLDERVIEW_ITEM_CONTEXT : IDR_FOLDERVIEW_BACKGROUND_CONTEXT);
     if (! rootMenu)
         return;
 
@@ -484,7 +489,8 @@ void FolderView::OnContextMenu(POINT screenPt, const bool keyboardInvocation)
         }
     }
 
-    const std::vector<std::wstring> selectionTargetSnapshot = allowItemTarget ? GetSelectedOrFocusedDisplayNames() : std::vector<std::wstring>{};
+    const std::vector<std::wstring> selectionTargetSnapshot =
+        allowItemTarget ? GetSelectedOrFocusedDisplayNames() : std::vector<std::wstring>{};
     const std::optional<std::wstring> currentTargetSnapshot =
         allowItemTarget && _focusedIndex < _items.size() ? std::optional<std::wstring>{_items[_focusedIndex].displayName} : std::nullopt;
 
@@ -505,8 +511,8 @@ void FolderView::OnContextMenu(POINT screenPt, const bool keyboardInvocation)
     }
     if (result.has_value())
     {
-        const UINT commandId                     = static_cast<UINT>(result.value());
-        const bool itemTargetCommand             = IsItemTargetContextCommand(commandId);
+        const UINT commandId = static_cast<UINT>(result.value());
+        const bool itemTargetCommand = IsItemTargetContextCommand(commandId);
         const auto selectionSnapshotStillMatches = [&]() noexcept
         {
             const std::vector<std::wstring> currentTargets = GetSelectedOrFocusedDisplayNames();
@@ -519,15 +525,14 @@ void FolderView::OnContextMenu(POINT screenPt, const bool keyboardInvocation)
                                        currentTargets.begin(),
                                        currentTargets.end(),
                                        [this](const std::wstring& expected, const std::wstring& current) noexcept
-            { return EquivalentProviderComponent(expected, current); });
+                                       { return EquivalentProviderComponent(expected, current); });
         };
         const auto currentSnapshotStillMatches = [&]() noexcept
         {
             return currentTargetSnapshot.has_value() && _focusedIndex < _items.size() &&
-                   EquivalentProviderComponent(currentTargetSnapshot.value(), _items[_focusedIndex].displayName);
+                EquivalentProviderComponent(currentTargetSnapshot.value(), _items[_focusedIndex].displayName);
         };
-        const bool targetStillMatches =
-            ! itemTargetCommand ||
+        const bool targetStillMatches = ! itemTargetCommand ||
             (allowItemTarget && (IsSelectionAwareContextCommand(commandId) ? selectionSnapshotStillMatches() : currentSnapshotStillMatches()));
         if (targetStillMatches)
         {

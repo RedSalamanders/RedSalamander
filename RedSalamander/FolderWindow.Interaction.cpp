@@ -34,16 +34,20 @@ void FolderWindow::OnSetFocus()
 
 void FolderWindow::UpdatePaneFocusStates() noexcept
 {
-    const HWND focusedHwnd   = GetFocus();
+    const HWND focusedHwnd = GetFocus();
     const auto containsFocus = [focusedHwnd](HWND paneWindow) noexcept
-    { return paneWindow && focusedHwnd && IsWindow(paneWindow) != FALSE && (focusedHwnd == paneWindow || IsChild(paneWindow, focusedHwnd) != FALSE); };
+    {
+        return paneWindow && focusedHwnd && IsWindow(paneWindow) != FALSE &&
+            (focusedHwnd == paneWindow || IsChild(paneWindow, focusedHwnd) != FALSE);
+    };
     const auto inPane = [&](const PaneState& state) noexcept
     {
-        return containsFocus(state.hFolderView.get()) || containsFocus(state.hNavigationView.get()) || containsFocus(state.hFilterBar.get()) ||
-               containsFocus(state.hStatusBar.get()) || containsFocus(state.hPreviewTabs.get()) || containsFocus(state.hPreviewContent.get()) ||
-               containsFocus(state.terminalHwnd);
+        return containsFocus(state.hFolderView.get()) || containsFocus(state.hNavigationView.get()) ||
+            containsFocus(state.hFilterBar.get()) || containsFocus(state.hStatusBar.get()) ||
+            containsFocus(state.hPreviewTabs.get()) || containsFocus(state.hPreviewContent.get()) ||
+            containsFocus(state.terminalHwnd);
     };
-    const bool inLeftPane  = inPane(_leftPane);
+    const bool inLeftPane = inPane(_leftPane);
     const bool inRightPane = inPane(_rightPane);
     if (focusedHwnd && (inLeftPane || inRightPane))
     {
@@ -170,22 +174,27 @@ bool FolderWindow::IsTerminalInputTarget(HWND targetWindow) const noexcept
     }
 
     const auto containsTarget = [targetWindow](HWND terminalWindow) noexcept
-    { return terminalWindow && IsWindow(terminalWindow) != FALSE && (targetWindow == terminalWindow || IsChild(terminalWindow, targetWindow) != FALSE); };
+    {
+        return terminalWindow && IsWindow(terminalWindow) != FALSE &&
+            (targetWindow == terminalWindow || IsChild(terminalWindow, targetWindow) != FALSE);
+    };
     return containsTarget(_leftPane.terminalHwnd) || containsTarget(_rightPane.terminalHwnd);
 }
 
-bool FolderWindow::QueryTerminalHostCommandState(HWND invocationOrigin, std::wstring_view commandId, CommandRuntimeState& state) noexcept
+bool FolderWindow::QueryTerminalHostCommandState(HWND invocationOrigin,
+                                                 std::wstring_view commandId,
+                                                 CommandRuntimeState& state) noexcept
 {
-    state               = {};
-    state.enabled       = false;
+    state = {};
+    state.enabled = false;
     const auto contains = [invocationOrigin](HWND window) noexcept
     {
         return invocationOrigin != nullptr && window != nullptr && IsWindow(window) != FALSE &&
-               (invocationOrigin == window || IsChild(window, invocationOrigin) != FALSE);
+            (invocationOrigin == window || IsChild(window, invocationOrigin) != FALSE);
     };
-    const std::optional<Pane> terminalPane = contains(_leftPane.terminalHwnd)    ? std::optional{Pane::Left}
-                                             : contains(_rightPane.terminalHwnd) ? std::optional{Pane::Right}
-                                                                                 : std::nullopt;
+    const std::optional<Pane> terminalPane = contains(_leftPane.terminalHwnd) ? std::optional{Pane::Left}
+        : contains(_rightPane.terminalHwnd) ? std::optional{Pane::Right}
+                                            : std::nullopt;
     if (! terminalPane.has_value())
     {
         // The application-level opener must work from a folder before any
@@ -198,15 +207,15 @@ bool FolderWindow::QueryTerminalHostCommandState(HWND invocationOrigin, std::wst
     }
 
     const Pane contextPane = terminalPane.value();
-    PaneState& context     = contextPane == Pane::Left ? _leftPane : _rightPane;
+    PaneState& context = contextPane == Pane::Left ? _leftPane : _rightPane;
     TerminalViewState view{};
     view.sizeBytes = sizeof(view);
     if (context.terminal && SUCCEEDED(context.terminal->GetViewState(&view)))
     {
         wil::unique_cotaskmem_string title(view.title.data);
         wil::unique_cotaskmem_string status(view.status.data);
-        state.terminalIdentityPresent   = true;
-        state.terminalInstanceId        = view.instanceId;
+        state.terminalIdentityPresent = true;
+        state.terminalInstanceId = view.instanceId;
         state.terminalSessionGeneration = view.sessionGeneration;
 
         const bool pluginAction = IsTerminalPluginActionId(commandId);
@@ -218,9 +227,9 @@ bool FolderWindow::QueryTerminalHostCommandState(HWND invocationOrigin, std::wst
                 return true;
             }
             TerminalActionRequest request{};
-            request.sizeBytes         = sizeof(request);
-            request.commandId         = {commandId.data(), static_cast<uint32_t>(commandId.size())};
-            request.instanceId        = view.instanceId;
+            request.sizeBytes = sizeof(request);
+            request.commandId = {commandId.data(), static_cast<uint32_t>(commandId.size())};
+            request.instanceId = view.instanceId;
             request.sessionGeneration = view.sessionGeneration;
             TerminalActionState actionState{};
             actionState.sizeBytes = sizeof(actionState);
@@ -233,7 +242,8 @@ bool FolderWindow::QueryTerminalHostCommandState(HWND invocationOrigin, std::wst
         }
     }
 
-    if (commandId == L"cmd/terminal/close" || commandId == L"cmd/terminal/contextMenu" || commandId == L"cmd/terminal/sessionMenu")
+    if (commandId == L"cmd/terminal/close" || commandId == L"cmd/terminal/contextMenu" ||
+        commandId == L"cmd/terminal/sessionMenu")
     {
         state.enabled = context.terminal != nullptr && context.terminalOpen;
         return true;
@@ -248,7 +258,8 @@ bool FolderWindow::QueryTerminalHostCommandState(HWND invocationOrigin, std::wst
         state.enabled = ResolveTerminalCommandWorkingDirectory(contextPane).has_value();
         return true;
     }
-    if (commandId == L"cmd/terminal/tab/next" || commandId == L"cmd/terminal/tab/previous" || commandId == L"cmd/terminal/tab/last")
+    if (commandId == L"cmd/terminal/tab/next" || commandId == L"cmd/terminal/tab/previous" ||
+        commandId == L"cmd/terminal/tab/last")
     {
         state.enabled = true;
         return true;
@@ -271,14 +282,16 @@ bool FolderWindow::QueryTerminalHostCommandState(HWND invocationOrigin, std::wst
 
 bool FolderWindow::ExecuteTerminalHostCommand(std::wstring_view commandId) noexcept
 {
-    const HWND focus    = GetFocus();
+    const HWND focus = GetFocus();
     const auto contains = [focus](HWND window) noexcept
-    { return focus && window && IsWindow(window) != FALSE && (focus == window || IsChild(window, focus) != FALSE); };
-    const std::optional<Pane> terminalPane = contains(_leftPane.terminalHwnd)    ? std::optional{Pane::Left}
-                                             : contains(_rightPane.terminalHwnd) ? std::optional{Pane::Right}
-                                                                                 : std::nullopt;
-    const Pane contextPane                 = terminalPane.value_or(_activePane);
-    PaneState& context                     = contextPane == Pane::Left ? _leftPane : _rightPane;
+    {
+        return focus && window && IsWindow(window) != FALSE && (focus == window || IsChild(window, focus) != FALSE);
+    };
+    const std::optional<Pane> terminalPane = contains(_leftPane.terminalHwnd) ? std::optional{Pane::Left}
+        : contains(_rightPane.terminalHwnd) ? std::optional{Pane::Right}
+                                            : std::nullopt;
+    const Pane contextPane = terminalPane.value_or(_activePane);
+    PaneState& context = contextPane == Pane::Left ? _leftPane : _rightPane;
 
     const auto executePluginAction = [&]() noexcept
     {
@@ -300,9 +313,9 @@ bool FolderWindow::ExecuteTerminalHostCommand(std::wstring_view commandId) noexc
         CoTaskMemFree(view.title.data);
         CoTaskMemFree(view.status.data);
         TerminalActionRequest request{};
-        request.sizeBytes         = sizeof(request);
-        request.commandId         = {commandId.data(), static_cast<uint32_t>(commandId.size())};
-        request.instanceId        = view.instanceId;
+        request.sizeBytes = sizeof(request);
+        request.commandId = {commandId.data(), static_cast<uint32_t>(commandId.size())};
+        request.instanceId = view.instanceId;
         request.sessionGeneration = view.sessionGeneration;
         return actions->ExecuteAction(&request) == S_OK;
     };
@@ -333,11 +346,12 @@ bool FolderWindow::ExecuteTerminalHostCommand(std::wstring_view commandId) noexc
                 continue;
             }
             const CommandInfo* info = FindCommandInfo(actionId);
-            std::wstring label =
-                info != nullptr && info->displayNameStringId != 0u ? LoadStringResource(nullptr, info->displayNameStringId) : std::wstring(actionId);
+            std::wstring label = info != nullptr && info->displayNameStringId != 0u
+                ? LoadStringResource(nullptr, info->displayNameStringId)
+                : std::wstring(actionId);
             CommandRuntimeState actionState{};
             const bool enabled = QueryTerminalHostCommandState(focus, actionId, actionState) && actionState.enabled;
-            const UINT flags   = static_cast<UINT>(MF_STRING | (enabled ? MF_ENABLED : MF_GRAYED));
+            const UINT flags = static_cast<UINT>(MF_STRING | (enabled ? MF_ENABLED : MF_GRAYED));
             if (AppendMenuW(menu.get(), flags, kFirstTerminalMenuCommand + static_cast<UINT>(index), label.c_str()) == FALSE)
             {
                 return false;
@@ -372,8 +386,8 @@ bool FolderWindow::ExecuteTerminalHostCommand(std::wstring_view commandId) noexc
         }
 
         SetForegroundWindow(owner);
-        const UINT selected =
-            static_cast<UINT>(TrackPopupMenuEx(menu.get(), TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, anchor.x, anchor.y, owner, nullptr));
+        const UINT selected = static_cast<UINT>(TrackPopupMenuEx(
+            menu.get(), TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, anchor.x, anchor.y, owner, nullptr));
         if (selected < kFirstTerminalMenuCommand || selected >= kFirstTerminalMenuCommand + actionIds.size())
         {
             return true;
@@ -424,7 +438,7 @@ bool FolderWindow::ExecuteTerminalHostCommand(std::wstring_view commandId) noexc
     if (commandId == L"cmd/terminal/tab/new")
     {
         const std::optional<std::filesystem::path> workingDirectory = ResolveTerminalCommandWorkingDirectory(contextPane);
-        const Pane targetPane                                       = OppositePane(contextPane);
+        const Pane targetPane = OppositePane(contextPane);
         return workingDirectory.has_value() && SUCCEEDED(OpenTerminalPane(targetPane, workingDirectory.value()));
     }
     if (commandId == L"cmd/terminal/openFloatingWindow")
@@ -434,7 +448,9 @@ bool FolderWindow::ExecuteTerminalHostCommand(std::wstring_view commandId) noexc
         {
             return false;
         }
-        return DispatchApplicationCommand(owner, commandId, RedSalamander::Ui::CommandInvocationSource::Programmatic);
+        return DispatchApplicationCommand(owner,
+                                          commandId,
+                                          RedSalamander::Ui::CommandInvocationSource::Programmatic);
     }
 
     const auto selectContent = [&](size_t index) noexcept
@@ -460,11 +476,12 @@ bool FolderWindow::ExecuteTerminalHostCommand(std::wstring_view commandId) noexc
         {
             available.push_back(2u);
         }
-        const size_t current       = context.terminalTabSelected ? 2u : context.previewTabSelected ? 1u : 0u;
-        const auto currentIt       = std::ranges::find(available, current);
+        const size_t current = context.terminalTabSelected ? 2u : context.previewTabSelected ? 1u : 0u;
+        const auto currentIt = std::ranges::find(available, current);
         const size_t currentOffset = currentIt == available.end() ? 0u : static_cast<size_t>(currentIt - available.begin());
-        const bool forward         = commandId == L"cmd/terminal/tab/next";
-        const size_t targetOffset  = forward ? (currentOffset + 1u) % available.size() : (currentOffset + available.size() - 1u) % available.size();
+        const bool forward = commandId == L"cmd/terminal/tab/next";
+        const size_t targetOffset = forward ? (currentOffset + 1u) % available.size()
+                                            : (currentOffset + available.size() - 1u) % available.size();
         return selectContent(available[targetOffset]);
     }
     constexpr std::wstring_view selectPrefix = L"cmd/terminal/tab/select/";
@@ -485,15 +502,17 @@ bool FolderWindow::ExecuteTerminalHostCommand(std::wstring_view commandId) noexc
     }
     if (commandId == L"cmd/pane/focus/left" || commandId == L"cmd/pane/focus/right" || commandId == L"cmd/pane/switchPaneFocus")
     {
-        const Pane target = commandId == L"cmd/pane/focus/left" ? Pane::Left : commandId == L"cmd/pane/focus/right" ? Pane::Right : OppositePane(contextPane);
+        const Pane target = commandId == L"cmd/pane/focus/left" ? Pane::Left
+            : commandId == L"cmd/pane/focus/right" ? Pane::Right
+                                                    : OppositePane(contextPane);
         SetActivePane(target);
         FocusPanePreferredTarget(target);
         return true;
     }
     if (commandId == L"cmd/pane/resizeSplitter/left" || commandId == L"cmd/pane/resizeSplitter/right")
     {
-        const float widthPx   = static_cast<float>(std::max<LONG>(1, _clientSize.cx));
-        const float stepPx    = static_cast<float>(MulDiv(16, static_cast<int>(_dpi), USER_DEFAULT_SCREEN_DPI));
+        const float widthPx = static_cast<float>(std::max<LONG>(1, _clientSize.cx));
+        const float stepPx = static_cast<float>(MulDiv(16, static_cast<int>(_dpi), USER_DEFAULT_SCREEN_DPI));
         const float direction = commandId == L"cmd/pane/resizeSplitter/left" ? -1.0f : 1.0f;
         SetSplitRatio(_splitRatio + (direction * stepPx / widthPx));
         return true;
@@ -503,8 +522,8 @@ bool FolderWindow::ExecuteTerminalHostCommand(std::wstring_view commandId) noexc
 
 void STDMETHODCALLTYPE FolderWindow::OnTerminalEvent(const TerminalEvent* event, void* cookie) noexcept
 {
-    if (cookie != this || event == nullptr || event->sizeBytes < sizeof(TerminalEvent) || event->kind != TerminalEventKind::RootSessionExited ||
-        event->finalSnapshotComplete == 0u || ! _hWnd)
+    if (cookie != this || event == nullptr || event->sizeBytes < sizeof(TerminalEvent) ||
+        event->kind != TerminalEventKind::RootSessionExited || event->finalSnapshotComplete == 0u || ! _hWnd)
     {
         return;
     }
@@ -520,8 +539,8 @@ void STDMETHODCALLTYPE FolderWindow::OnTerminalEvent(const TerminalEvent* event,
 
 void FolderWindow::HandleTerminalSessionExited(const TerminalEvent& event) noexcept
 {
-    if (event.sizeBytes < sizeof(TerminalEvent) || event.kind != TerminalEventKind::RootSessionExited || event.exitCodePresent == 0u ||
-        event.finalSnapshotComplete == 0u)
+    if (event.sizeBytes < sizeof(TerminalEvent) || event.kind != TerminalEventKind::RootSessionExited ||
+        event.exitCodePresent == 0u || event.finalSnapshotComplete == 0u)
     {
         return;
     }
@@ -533,11 +552,12 @@ void FolderWindow::HandleTerminalSessionExited(const TerminalEvent& event) noexc
             return false;
         }
         TerminalViewState view{};
-        view.sizeBytes        = sizeof(view);
+        view.sizeBytes = sizeof(view);
         const HRESULT stateHr = state.terminal->GetViewState(&view);
-        const bool matches    = SUCCEEDED(stateHr) && memcmp(view.instanceId.bytes, event.instanceId.bytes, sizeof(event.instanceId.bytes)) == 0 &&
-                                view.sessionGeneration == event.sessionGeneration && view.activity.lifecycleState == TerminalLifecycleState::Exited &&
-                                view.exitCodePresent != 0u && view.exitCode == event.exitCode && view.finalSnapshotComplete != 0u;
+        const bool matches = SUCCEEDED(stateHr) &&
+            memcmp(view.instanceId.bytes, event.instanceId.bytes, sizeof(event.instanceId.bytes)) == 0 &&
+            view.sessionGeneration == event.sessionGeneration && view.activity.lifecycleState == TerminalLifecycleState::Exited &&
+            view.exitCodePresent != 0u && view.exitCode == event.exitCode && view.finalSnapshotComplete != 0u;
         CoTaskMemFree(view.title.data);
         CoTaskMemFree(view.status.data);
         if (! matches)
@@ -558,8 +578,11 @@ void FolderWindow::HandleTerminalSessionExited(const TerminalEvent& event) noexc
     }
 }
 
-HRESULT FolderWindow::RouteTerminalShortcut(
-    HWND targetWindow, std::wstring_view commandId, const MSG& message, uint32_t normalizedModifiers, TerminalShortcutRoute& route) noexcept
+HRESULT FolderWindow::RouteTerminalShortcut(HWND targetWindow,
+                                            std::wstring_view commandId,
+                                            const MSG& message,
+                                            uint32_t normalizedModifiers,
+                                            TerminalShortcutRoute& route) noexcept
 {
     route = TerminalShortcutRoute::PassThrough;
     if (! targetWindow || commandId.empty() || commandId.size() > (std::numeric_limits<uint32_t>::max)())
@@ -568,8 +591,12 @@ HRESULT FolderWindow::RouteTerminalShortcut(
     }
 
     const auto containsTarget = [targetWindow](HWND terminalWindow) noexcept
-    { return terminalWindow && IsWindow(terminalWindow) != FALSE && (targetWindow == terminalWindow || IsChild(terminalWindow, targetWindow) != FALSE); };
-    PaneState* pane = containsTarget(_leftPane.terminalHwnd) ? &_leftPane : containsTarget(_rightPane.terminalHwnd) ? &_rightPane : nullptr;
+    {
+        return terminalWindow && IsWindow(terminalWindow) != FALSE &&
+            (targetWindow == terminalWindow || IsChild(terminalWindow, targetWindow) != FALSE);
+    };
+    PaneState* pane = containsTarget(_leftPane.terminalHwnd) ? &_leftPane
+                                                            : containsTarget(_rightPane.terminalHwnd) ? &_rightPane : nullptr;
     if (pane == nullptr || ! pane->terminal)
     {
         return E_HANDLE;
@@ -583,8 +610,8 @@ HRESULT FolderWindow::RouteTerminalShortcut(
     }
 
     TerminalViewState view{};
-    view.sizeBytes          = sizeof(view);
-    hr                      = pane->terminal->GetViewState(&view);
+    view.sizeBytes = sizeof(view);
+    hr = pane->terminal->GetViewState(&view);
     const auto freeViewText = wil::scope_exit([&]() noexcept
     {
         CoTaskMemFree(view.title.data);
@@ -611,17 +638,17 @@ HRESULT FolderWindow::RouteTerminalShortcut(
     addModifier(VK_RSHIFT, TerminalShortcutModifierRightShift);
 
     TerminalShortcutRequest request{};
-    request.sizeBytes         = sizeof(request);
-    request.commandId         = TerminalUtf16Span{.data = commandId.data(), .length = static_cast<uint32_t>(commandId.size())};
-    request.message           = message.message;
-    request.virtualKey        = static_cast<uint32_t>(message.wParam);
-    request.scanCode          = Common::Keyboard::ScanCodeFromKeyMessageLParam(message.lParam);
-    request.extended          = Common::Keyboard::IsExtendedKeyMessageLParam(message.lParam) ? 1u : 0u;
-    request.systemKey         = message.message == WM_SYSKEYDOWN ? 1u : 0u;
-    request.repeatCount       = static_cast<uint32_t>(static_cast<ULONG_PTR>(message.lParam) & 0xFFFFu);
-    request.previousDown      = (static_cast<ULONG_PTR>(message.lParam) & (1ull << 30u)) != 0u ? 1u : 0u;
-    request.modifierFlags     = modifierFlags;
-    request.instanceId        = view.instanceId;
+    request.sizeBytes = sizeof(request);
+    request.commandId = TerminalUtf16Span{.data = commandId.data(), .length = static_cast<uint32_t>(commandId.size())};
+    request.message = message.message;
+    request.virtualKey = static_cast<uint32_t>(message.wParam);
+    request.scanCode = Common::Keyboard::ScanCodeFromKeyMessageLParam(message.lParam);
+    request.extended = Common::Keyboard::IsExtendedKeyMessageLParam(message.lParam) ? 1u : 0u;
+    request.systemKey = message.message == WM_SYSKEYDOWN ? 1u : 0u;
+    request.repeatCount = static_cast<uint32_t>(static_cast<ULONG_PTR>(message.lParam) & 0xFFFFu);
+    request.previousDown = (static_cast<ULONG_PTR>(message.lParam) & (1ull << 30u)) != 0u ? 1u : 0u;
+    request.modifierFlags = modifierFlags;
+    request.instanceId = view.instanceId;
     request.sessionGeneration = view.sessionGeneration;
     return actions->RouteShortcut(&request, &route);
 }
@@ -634,7 +661,8 @@ bool FolderWindow::HandlePanePointerFocus(HWND targetWindow) noexcept
     }
 
     const Common::Settings::MouseSettings mouse = _settings->mouse.value_or(Common::Settings::MouseSettings{});
-    const bool terminalDisplayed = (_leftPane.terminalOpen && _leftPane.terminalTabSelected) || (_rightPane.terminalOpen && _rightPane.terminalTabSelected);
+    const bool terminalDisplayed = (_leftPane.terminalOpen && _leftPane.terminalTabSelected) ||
+        (_rightPane.terminalOpen && _rightPane.terminalTabSelected);
     if (! Common::Settings::ShouldPaneFocusFollowPointer(mouse, terminalDisplayed))
     {
         return false;
@@ -647,12 +675,16 @@ bool FolderWindow::HandlePanePointerFocus(HWND targetWindow) noexcept
     }
 
     const auto containsTarget = [targetWindow](HWND paneWindow) noexcept
-    { return paneWindow && IsWindow(paneWindow) != FALSE && (targetWindow == paneWindow || IsChild(paneWindow, targetWindow) != FALSE); };
+    {
+        return paneWindow && IsWindow(paneWindow) != FALSE &&
+            (targetWindow == paneWindow || IsChild(paneWindow, targetWindow) != FALSE);
+    };
     const auto targetBelongsToPane = [&](const PaneState& state) noexcept
     {
-        return containsTarget(state.hNavigationView.get()) || containsTarget(state.hFolderView.get()) || containsTarget(state.hFilterBar.get()) ||
-               containsTarget(state.hStatusBar.get()) || containsTarget(state.hPreviewTabs.get()) || containsTarget(state.hPreviewContent.get()) ||
-               containsTarget(state.terminalHwnd);
+        return containsTarget(state.hNavigationView.get()) || containsTarget(state.hFolderView.get()) ||
+            containsTarget(state.hFilterBar.get()) || containsTarget(state.hStatusBar.get()) ||
+            containsTarget(state.hPreviewTabs.get()) || containsTarget(state.hPreviewContent.get()) ||
+            containsTarget(state.terminalHwnd);
     };
 
     std::optional<Pane> targetPane;
@@ -675,13 +707,15 @@ bool FolderWindow::HandlePanePointerFocus(HWND targetWindow) noexcept
         return false;
     }
 
-    const HWND currentFocus  = GetFocus();
+    const HWND currentFocus = GetFocus();
     const auto containsFocus = [currentFocus](HWND paneWindow) noexcept
-    { return paneWindow && currentFocus && (currentFocus == paneWindow || IsChild(paneWindow, currentFocus) != FALSE); };
+    {
+        return paneWindow && currentFocus &&
+            (currentFocus == paneWindow || IsChild(paneWindow, currentFocus) != FALSE);
+    };
     const bool focusAlreadyInTargetPane = containsFocus(targetState.hNavigationView.get()) || containsFocus(targetState.hFolderView.get()) ||
-                                          containsFocus(targetState.hFilterBar.get()) || containsFocus(targetState.hStatusBar.get()) ||
-                                          containsFocus(targetState.hPreviewTabs.get()) || containsFocus(targetState.hPreviewContent.get()) ||
-                                          containsFocus(targetState.terminalHwnd);
+        containsFocus(targetState.hFilterBar.get()) || containsFocus(targetState.hStatusBar.get()) || containsFocus(targetState.hPreviewTabs.get()) ||
+        containsFocus(targetState.hPreviewContent.get()) || containsFocus(targetState.terminalHwnd);
     if (focusAlreadyInTargetPane)
     {
         return false;
@@ -803,9 +837,13 @@ FolderWindow::Pane FolderWindow::GetPaneFromChild(HWND child) const noexcept
     const auto belongsTo = [child](const PaneState& state) noexcept
     {
         const auto contains = [child](HWND paneWindow) noexcept
-        { return paneWindow && IsWindow(paneWindow) != FALSE && (child == paneWindow || IsChild(paneWindow, child) != FALSE); };
-        return contains(state.hFolderView.get()) || contains(state.hNavigationView.get()) || contains(state.hFilterBar.get()) ||
-               contains(state.hStatusBar.get()) || contains(state.hPreviewTabs.get()) || contains(state.hPreviewContent.get()) || contains(state.terminalHwnd);
+        {
+            return paneWindow && IsWindow(paneWindow) != FALSE &&
+                (child == paneWindow || IsChild(paneWindow, child) != FALSE);
+        };
+        return contains(state.hFolderView.get()) || contains(state.hNavigationView.get()) ||
+            contains(state.hFilterBar.get()) || contains(state.hStatusBar.get()) ||
+            contains(state.hPreviewTabs.get()) || contains(state.hPreviewContent.get()) || contains(state.terminalHwnd);
     };
 
     if (belongsTo(_leftPane))

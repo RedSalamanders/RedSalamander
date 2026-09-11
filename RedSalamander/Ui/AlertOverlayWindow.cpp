@@ -2,6 +2,7 @@
 #include "AnimationDispatcher.h"
 #include "Win32CallbackHelpers.h"
 
+#include <UIAutomation.h>
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -9,11 +10,8 @@
 #include <cwctype>
 #include <format>
 #include <new>
-#include <vector>
-
 #include <oleauto.h>
-
-#include <UIAutomation.h>
+#include <vector>
 #include <windowsx.h>
 
 #pragma comment(lib, "uiautomationcore.lib")
@@ -2066,8 +2064,8 @@ bool DebugGetAlertOverlayWindowSnapshot(HWND hwnd, AlertOverlayWindowDebugSnapsh
     out.optionValues.reserve(model.options.size());
     for (const AlertOption& option : model.options)
     {
-        out.optionValues.push_back((! option.choices.empty() && option.selectedIndex < option.choices.size()) ? option.choices[option.selectedIndex].value
-                                                                                                              : 0u);
+        out.optionValues.push_back(
+            (! option.choices.empty() && option.selectedIndex < option.choices.size()) ? option.choices[option.selectedIndex].value : 0u);
     }
     out.primaryButtonLabel.clear();
     for (const AlertButton& button : model.buttons)

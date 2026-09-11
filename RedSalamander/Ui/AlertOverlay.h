@@ -12,12 +12,8 @@
 #pragma warning(push)
 // Windows headers: C4710 (not inlined), C4711 (auto inline), C4514 (unreferenced inline)
 #pragma warning(disable : 4710 4711 4514)
-#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
 #define NOMINMAX
-#endif
 #include <windows.h>
 
 #include <d2d1.h>
@@ -80,7 +76,7 @@ struct AlertOption
 
 struct AlertModel
 {
-    AlertSeverity severity         = AlertSeverity::Error;
+    AlertSeverity severity = AlertSeverity::Error;
     AlertPresentation presentation = AlertPresentation::Severity;
     std::wstring title;
     std::wstring message;
@@ -262,7 +258,7 @@ public:
         if (_model.buttons.empty())
         {
             const bool changed = _focusedControl.part == AlertHitTest::Part::Button;
-            _focusedControl    = {};
+            _focusedControl = {};
             return changed;
         }
 
@@ -326,7 +322,7 @@ public:
         if (controls.empty())
         {
             const bool changed = _focusedControl.part != AlertHitTest::Part::None;
-            _focusedControl    = {};
+            _focusedControl = {};
             return changed;
         }
 
@@ -492,10 +488,11 @@ public:
             textHeightDip += _bodyLayoutHeightDip;
         }
 
-        const float buttonRowHeightDip      = _model.buttons.empty() ? 0.0f : kButtonHeightDip;
-        const float optionBlockHeightDip    = _model.options.empty() ? 0.0f
-                                                                     : static_cast<float>(_model.options.size()) * kOptionHeightDip +
-                                                                           static_cast<float>(_model.options.size() - 1u) * kOptionGapDip;
+        const float buttonRowHeightDip = _model.buttons.empty() ? 0.0f : kButtonHeightDip;
+        const float optionBlockHeightDip = _model.options.empty()
+            ? 0.0f
+            : static_cast<float>(_model.options.size()) * kOptionHeightDip +
+                  static_cast<float>(_model.options.size() - 1u) * kOptionGapDip;
         const float textAndOptionsHeightDip = textHeightDip + (optionBlockHeightDip > 0.0f ? kOptionsTextGapDip + optionBlockHeightDip : 0.0f);
         const float contentHeightDip        = std::max(showIcon ? kIconSizeDip : 0.0f, textAndOptionsHeightDip);
 
@@ -656,7 +653,7 @@ public:
 #if defined(ENABLE_TESTS)
         _debugUsesSharedCloseChrome  = false;
         _debugUsesSharedButtonChrome = false;
-        _debugLastDrawnCloseGlyph    = L'\0';
+        _debugLastDrawnCloseGlyph     = L'\0';
 #endif
         if (! target || ! dwriteFactory)
         {
@@ -847,10 +844,10 @@ private:
         ResetTextResources();
         _dwriteIdentity = dwriteFactory;
 
-        constexpr float kTitleSizeDip     = 18.0f;
-        constexpr float kBodySizeDip      = 14.0f;
-        constexpr float kButtonSizeDip    = 13.0f;
-        constexpr float kIconSizeDip      = 56.0f;
+        constexpr float kTitleSizeDip  = 18.0f;
+        constexpr float kBodySizeDip   = 14.0f;
+        constexpr float kButtonSizeDip = 13.0f;
+        constexpr float kIconSizeDip   = 56.0f;
         constexpr float kCloseIconSizeDip = 16.0f;
 
         static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
@@ -883,8 +880,8 @@ private:
                 static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
                     dwriteFactory,
                     RedSalamander::DxUi::Typography::TypographySpec{.familyName = RedSalamander::DxUi::Typography::kSegoeMdl2AssetsFamily,
-                                                                    .weight     = DWRITE_FONT_WEIGHT_NORMAL,
-                                                                    .sizeDip    = kCloseIconSizeDip},
+                                                                    .weight = DWRITE_FONT_WEIGHT_NORMAL,
+                                                                    .sizeDip = kCloseIconSizeDip},
                     _closeIconFormat.put(),
                     L""));
             }
@@ -1366,7 +1363,7 @@ private:
 
         for (const auto& option : _optionRects)
         {
-            const bool hot     = _hot.part == AlertHitTest::Part::Option && _hot.buttonId == option.id;
+            const bool hot = _hot.part == AlertHitTest::Part::Option && _hot.buttonId == option.id;
             const bool focused = _focusedControl.part == AlertHitTest::Part::Option && _focusedControl.buttonId == option.id;
             ButtonRect chromeSource{};
             chromeSource.id      = option.id;
@@ -1382,7 +1379,8 @@ private:
             chrome.focused         = focused;
             chrome.keyboardFocused = focused;
             chrome.customStyle     = MakeOverlayButtonChromeStyle(chromeSource, hot, focused, cornerDip);
-            RedSalamander::DxUi::DrawButtonChrome(target, _backgroundBrush.get(), _buttonFormat.get(), nullptr, MakeChromeThemePalette(), chrome);
+            RedSalamander::DxUi::DrawButtonChrome(
+                target, _backgroundBrush.get(), _buttonFormat.get(), nullptr, MakeChromeThemePalette(), chrome);
 #if defined(ENABLE_TESTS)
             _debugUsesSharedButtonChrome = true;
 #endif
@@ -1432,14 +1430,14 @@ private:
                 return;
             }
 
-            const float cardWidth   = size * 0.52f;
-            const float cardHeight  = size * 0.62f;
-            const float offset      = size * 0.13f;
-            const float radius      = std::max(2.0f, size * 0.05f);
-            const D2D1_RECT_F back  = D2D1::RectF(center.x - cardWidth * 0.5f - offset,
-                                                  center.y - cardHeight * 0.5f - offset,
-                                                  center.x + cardWidth * 0.5f - offset,
-                                                  center.y + cardHeight * 0.5f - offset);
+            const float cardWidth  = size * 0.52f;
+            const float cardHeight = size * 0.62f;
+            const float offset     = size * 0.13f;
+            const float radius     = std::max(2.0f, size * 0.05f);
+            const D2D1_RECT_F back = D2D1::RectF(center.x - cardWidth * 0.5f - offset,
+                                                 center.y - cardHeight * 0.5f - offset,
+                                                 center.x + cardWidth * 0.5f - offset,
+                                                 center.y + cardHeight * 0.5f - offset);
             const D2D1_RECT_F front = D2D1::RectF(center.x - cardWidth * 0.5f + offset,
                                                   center.y - cardHeight * 0.5f + offset,
                                                   center.x + cardWidth * 0.5f + offset,
@@ -1453,7 +1451,8 @@ private:
         {
             if (_iconFormat && _iconGlyphSet != IconGlyphSet::None)
             {
-                const wchar_t glyph = _iconGlyphSet == IconGlyphSet::Fluent ? FluentIcons::kMoveToFolder : FluentIcons::kFallbackMoveToFolder;
+                const wchar_t glyph =
+                    _iconGlyphSet == IconGlyphSet::Fluent ? FluentIcons::kMoveToFolder : FluentIcons::kFallbackMoveToFolder;
 #if defined(ENABLE_TESTS)
                 _debugLastDrawnIconGlyph = glyph;
 #endif
@@ -1665,13 +1664,13 @@ private:
     AlertHitTest _focusedControl{};
     uint64_t _startTickMs = 0;
 #if defined(ENABLE_TESTS)
-    float _debugLastDrawOpacity                       = 0.0f;
-    float _debugLastDrawScrimOpacity                  = 0.0f;
-    bool _debugUsesSharedCloseChrome                  = false;
-    bool _debugUsesSharedButtonChrome                 = false;
+    float _debugLastDrawOpacity       = 0.0f;
+    float _debugLastDrawScrimOpacity  = 0.0f;
+    bool _debugUsesSharedCloseChrome  = false;
+    bool _debugUsesSharedButtonChrome = false;
     AlertPresentation _debugLastDrawnIconPresentation = AlertPresentation::Severity;
-    wchar_t _debugLastDrawnIconGlyph                  = L'\0';
-    wchar_t _debugLastDrawnCloseGlyph                 = L'\0';
+    wchar_t _debugLastDrawnIconGlyph = L'\0';
+    wchar_t _debugLastDrawnCloseGlyph = L'\0';
 #endif
 };
 } // namespace RedSalamander::Ui

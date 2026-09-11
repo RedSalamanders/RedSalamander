@@ -87,7 +87,9 @@ namespace
     return depth;
 }
 
-[[nodiscard]] HRESULT ClassifyDirectoryReadResult(const HRESULT readHr, const bool hasInformation, const bool /*provenDirectory*/) noexcept
+[[nodiscard]] HRESULT ClassifyDirectoryReadResult(const HRESULT readHr,
+                                                  const bool hasInformation,
+                                                  const bool /*provenDirectory*/) noexcept
 {
     if (FAILED(readHr))
     {
@@ -106,7 +108,9 @@ namespace
 namespace ChangeCase
 {
 #ifdef ENABLE_TESTS
-HRESULT DebugClassifyDirectoryReadResult(const HRESULT readHr, const bool hasInformation, const bool provenDirectory) noexcept
+HRESULT DebugClassifyDirectoryReadResult(const HRESULT readHr,
+                                         const bool hasInformation,
+                                         const bool provenDirectory) noexcept
 {
     return ClassifyDirectoryReadResult(readHr, hasInformation, provenDirectory);
 }
@@ -208,14 +212,15 @@ std::wstring TransformLeafName(std::wstring_view leafName, const Options& option
     {
         return FAILED(routeInterfaceHr) ? routeInterfaceHr : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
-    const FileSystemRouteContract::QueryResult routeResult = FileSystemRouteContract::Query(route.get(), firstPath->native(), FILESYSTEM_RENAME, pluginId);
+    const FileSystemRouteContract::QueryResult routeResult =
+        FileSystemRouteContract::Query(route.get(), firstPath->native(), FILESYSTEM_RENAME, pluginId);
     if (routeResult.state != FileSystemRouteContract::QueryState::Available || ! routeResult.snapshot.renameOperation ||
         ! routeResult.snapshot.pathIdentity.has_value())
     {
         return FAILED(routeResult.status) ? routeResult.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
     const FileSystemPathIdentity pathIdentity = routeResult.snapshot.pathIdentity.value();
-    const auto childNameFailure               = [](const FileSystemRouteContract::ChildNameContractResult& contract) noexcept
+    const auto childNameFailure = [](const FileSystemRouteContract::ChildNameContractResult& contract) noexcept
     {
         if (contract.state == FileSystemRouteContract::QueryState::Available && contract.nameStatus == FILESYSTEM_CHILD_NAME_INVALID &&
             FAILED(contract.failureStatus))
@@ -274,10 +279,10 @@ std::wstring TransformLeafName(std::wstring_view leafName, const Options& option
         pending.reserve(inputPaths.size());
         for (const auto& root : inputPaths)
         {
-            constexpr FileSystemBindFlags selectedRootBindFlags =
-                static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_RENAME);
-            FileOperations::ObjectBindingResult selectedRoot =
-                FileOperations::BindObjectAuthority(&fileSystem, root.native(), routeResult.snapshot.pathProfileId, selectedRootBindFlags);
+            constexpr FileSystemBindFlags selectedRootBindFlags = static_cast<FileSystemBindFlags>(
+                FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_RENAME);
+            FileOperations::ObjectBindingResult selectedRoot = FileOperations::BindObjectAuthority(
+                &fileSystem, root.native(), routeResult.snapshot.pathProfileId, selectedRootBindFlags);
             if (selectedRoot.state != FileOperations::ObjectBindingState::Bound)
             {
                 return FAILED(selectedRoot.status) ? selectedRoot.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
@@ -307,8 +312,9 @@ std::wstring TransformLeafName(std::wstring_view leafName, const Options& option
             }
 
             wil::com_ptr<IFilesInformation> info;
-            const HRESULT readHr          = fileSystem.ReadDirectoryInfo(directory.c_str(), info.addressof());
-            const HRESULT readDisposition = ClassifyDirectoryReadResult(readHr, static_cast<bool>(info), candidate.provenDirectory);
+            const HRESULT readHr = fileSystem.ReadDirectoryInfo(directory.c_str(), info.addressof());
+            const HRESULT readDisposition =
+                ClassifyDirectoryReadResult(readHr, static_cast<bool>(info), candidate.provenDirectory);
             if (FAILED(readDisposition))
             {
                 return readDisposition;
@@ -430,12 +436,13 @@ std::wstring TransformLeafName(std::wstring_view leafName, const Options& option
     {
         std::wstring parentPath;
         std::wstring oldLeaf;
-        if (! TryGetFileSystemParentPath(pathIdentity, path.native(), parentPath) || ! TryGetFileSystemLeafName(pathIdentity, path.native(), oldLeaf))
+        if (! TryGetFileSystemParentPath(pathIdentity, path.native(), parentPath) ||
+            ! TryGetFileSystemLeafName(pathIdentity, path.native(), oldLeaf))
         {
             return E_INVALIDARG;
         }
 
-        const std::wstring newLeaf                  = TransformLeafName(oldLeaf, options);
+        const std::wstring newLeaf = TransformLeafName(oldLeaf, options);
         const std::optional<std::wstring> parentKey = TryMakePathKey(pathIdentity, parentPath);
         if (! parentKey.has_value())
         {
@@ -443,7 +450,8 @@ std::wstring TransformLeafName(std::wstring_view leafName, const Options& option
         }
         const FileSystemRouteContract::StringResult sourceCollisionKey =
             FileSystemRouteContract::QueryChildNameCollisionKey(route.get(), parentPath, oldLeaf, FILESYSTEM_RENAME);
-        if (sourceCollisionKey.state != FileSystemRouteContract::QueryState::Available || FAILED(sourceCollisionKey.status) || sourceCollisionKey.value.empty())
+        if (sourceCollisionKey.state != FileSystemRouteContract::QueryState::Available ||
+            FAILED(sourceCollisionKey.status) || sourceCollisionKey.value.empty())
         {
             return FAILED(sourceCollisionKey.status) ? sourceCollisionKey.status : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         }
@@ -456,9 +464,11 @@ std::wstring TransformLeafName(std::wstring_view leafName, const Options& option
         }
         else
         {
-            nameContract = FileSystemRouteContract::QueryChildNameContract(route.get(), parentPath, newLeaf, FILESYSTEM_RENAME, pluginId);
-            if (nameContract->state != FileSystemRouteContract::QueryState::Available || nameContract->nameStatus != FILESYSTEM_CHILD_NAME_VALID ||
-                nameContract->joinedPath.empty() || nameContract->collisionKey.empty())
+            nameContract = FileSystemRouteContract::QueryChildNameContract(
+                route.get(), parentPath, newLeaf, FILESYSTEM_RENAME, pluginId);
+            if (nameContract->state != FileSystemRouteContract::QueryState::Available ||
+                nameContract->nameStatus != FILESYSTEM_CHILD_NAME_VALID || nameContract->joinedPath.empty() ||
+                nameContract->collisionKey.empty())
             {
                 return childNameFailure(nameContract.value());
             }
@@ -480,13 +490,13 @@ std::wstring TransformLeafName(std::wstring_view leafName, const Options& option
         }
 
         BatchRenameExecutionOp op{};
-        op.originalSource             = path;
-        op.finalLeaf                  = std::move(newLeaf);
-        op.providerFinalPath          = std::filesystem::path(nameContract->joinedPath);
-        op.providerParentKey          = parentKey.value();
+        op.originalSource = path;
+        op.finalLeaf    = std::move(newLeaf);
+        op.providerFinalPath = std::filesystem::path(nameContract->joinedPath);
+        op.providerParentKey = parentKey.value();
         op.providerSourceCollisionKey = sourceCollisionKey.value;
-        op.providerFinalCollisionKey  = nameContract->collisionKey;
-        op.depth                      = ChangeCasePathDepthKey(path);
+        op.providerFinalCollisionKey = nameContract->collisionKey;
+        op.depth      = ChangeCasePathDepthKey(path);
         renames.push_back(std::move(op));
     }
 
@@ -510,7 +520,10 @@ std::wstring TransformLeafName(std::wstring_view leafName, const Options& option
     {
         std::vector<std::filesystem::path> mutationPaths;
         mutationPaths.reserve(renames.size());
-        std::ranges::transform(renames, std::back_inserter(mutationPaths), [](const BatchRenameExecutionOp& op) { return op.originalSource; });
+        std::ranges::transform(renames, std::back_inserter(mutationPaths), [](const BatchRenameExecutionOp& op)
+        {
+            return op.originalSource;
+        });
         const HRESULT guardHr = mutationGuard->prepare(mutationPaths, mutationGuard->cookie);
         if (guardHr != S_OK)
         {
@@ -558,9 +571,13 @@ std::wstring TransformLeafName(std::wstring_view leafName, const Options& option
             {
                 std::vector<std::filesystem::path> mutationPaths;
                 mutationPaths.reserve(batchEnd - batchStart);
-                std::ranges::transform(std::span<const BatchRenameExecutionOp>(renames.data() + batchStart, batchEnd - batchStart),
-                                       std::back_inserter(mutationPaths),
-                                       [](const BatchRenameExecutionOp& op) { return op.originalSource; });
+                std::ranges::transform(
+                    std::span<const BatchRenameExecutionOp>(renames.data() + batchStart, batchEnd - batchStart),
+                    std::back_inserter(mutationPaths),
+                    [](const BatchRenameExecutionOp& op)
+                    {
+                        return op.originalSource;
+                    });
                 const HRESULT guardHr = mutationGuard->revalidate(mutationPaths, mutationGuard->cookie);
                 if (guardHr != S_OK)
                 {
@@ -576,13 +593,14 @@ std::wstring TransformLeafName(std::wstring_view leafName, const Options& option
                 {
                     return E_INVALIDARG;
                 }
-                const FileSystemRouteContract::ChildNameContractResult current =
-                    FileSystemRouteContract::QueryChildNameContract(route.get(), providerParentPath, operation.finalLeaf, FILESYSTEM_RENAME, pluginId);
-                if (current.state != FileSystemRouteContract::QueryState::Available || current.nameStatus != FILESYSTEM_CHILD_NAME_VALID ||
-                    current.joinedPath != operation.providerFinalPath.native() || current.collisionKey != operation.providerFinalCollisionKey)
+                const FileSystemRouteContract::ChildNameContractResult current = FileSystemRouteContract::QueryChildNameContract(
+                    route.get(), providerParentPath, operation.finalLeaf, FILESYSTEM_RENAME, pluginId);
+                if (current.state != FileSystemRouteContract::QueryState::Available ||
+                    current.nameStatus != FILESYSTEM_CHILD_NAME_VALID || current.joinedPath != operation.providerFinalPath.native() ||
+                    current.collisionKey != operation.providerFinalCollisionKey)
                 {
-                    if (current.state == FileSystemRouteContract::QueryState::Available && current.nameStatus == FILESYSTEM_CHILD_NAME_INVALID &&
-                        FAILED(current.failureStatus))
+                    if (current.state == FileSystemRouteContract::QueryState::Available &&
+                        current.nameStatus == FILESYSTEM_CHILD_NAME_INVALID && FAILED(current.failureStatus))
                     {
                         return current.failureStatus;
                     }
@@ -607,13 +625,13 @@ std::wstring TransformLeafName(std::wstring_view leafName, const Options& option
                     return E_INVALIDARG;
                 }
                 legacyBatch.emplace_back(FileSystemRenameBatch::RenameOp{
-                    .sourcePath              = operation.originalSource,
-                    .newLeaf                 = operation.finalLeaf,
+                    .sourcePath = operation.originalSource,
+                    .newLeaf = operation.finalLeaf,
                     .providerDestinationPath = operation.providerFinalPath,
-                    .providerParentPath      = std::move(providerParentPath),
-                    .providerParentKey       = operation.providerParentKey,
-                    .providerCollisionKey    = operation.providerFinalCollisionKey,
-                    .depth                   = operation.depth,
+                    .providerParentPath = std::move(providerParentPath),
+                    .providerParentKey = operation.providerParentKey,
+                    .providerCollisionKey = operation.providerFinalCollisionKey,
+                    .depth = operation.depth,
                 });
             }
             const HRESULT hr = FileSystemRenameBatch::Execute(fileSystem, legacyBatch, flags);
@@ -648,7 +666,8 @@ HRESULT BuildRenameOperations(IFileSystem& fileSystem,
                               void* progressCookie) noexcept
 {
     operationsOut.clear();
-    return BuildOrApplyToPaths(fileSystem, pluginId, inputPaths, options, &operationsOut, stopToken, progress, progressCookie, nullptr);
+    return BuildOrApplyToPaths(
+        fileSystem, pluginId, inputPaths, options, &operationsOut, stopToken, progress, progressCookie, nullptr);
 }
 
 #ifdef ENABLE_TESTS
@@ -661,7 +680,8 @@ HRESULT DebugApplyToPathsForTests(IFileSystem& fileSystem,
                                   void* progressCookie,
                                   const MutationGuardCallbacks* const mutationGuard) noexcept
 {
-    return BuildOrApplyToPaths(fileSystem, pluginId, inputPaths, options, nullptr, stopToken, progress, progressCookie, mutationGuard);
+    return BuildOrApplyToPaths(
+        fileSystem, pluginId, inputPaths, options, nullptr, stopToken, progress, progressCookie, mutationGuard);
 }
 #endif
 } // namespace ChangeCase

@@ -22,8 +22,8 @@
 #include "FileSystemCurlResources.h"
 #include "Helpers.h"
 
-#include "FileSystemCurl.Internal.h"
 #include "FileSystemCurl.h"
+#include "FileSystemCurl.Internal.h"
 
 #include "PlugInterfaces/FactoryImpl.h"
 
@@ -199,8 +199,8 @@ HRESULT CreateFtpSelfTestInstance(IFileSystem** result, IHost* host) noexcept
         return E_POINTER;
     }
 
-    *result          = nullptr;
-    void* raw        = nullptr;
+    *result = nullptr;
+    void* raw = nullptr;
     const HRESULT hr = CreateInstanceFtp(nullptr, host, &raw);
     if (SUCCEEDED(hr))
     {

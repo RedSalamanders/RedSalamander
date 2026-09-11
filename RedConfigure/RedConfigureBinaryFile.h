@@ -7,12 +7,8 @@
 #include <limits>
 #include <vector>
 
-#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
 #define NOMINMAX
-#endif
 #include <Windows.h>
 
 #pragma warning(push)
@@ -31,8 +27,13 @@ inline constexpr uint64_t kMaximumBinaryFileBytes = 64ull * 1024ull * 1024ull;
 {
     outBytes.clear();
 
-    wil::unique_handle file(::CreateFileW(
-        path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    wil::unique_handle file(::CreateFileW(path.c_str(),
+                                          GENERIC_READ,
+                                          FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                          nullptr,
+                                          OPEN_EXISTING,
+                                          FILE_ATTRIBUTE_NORMAL,
+                                          nullptr));
     if (! file)
     {
         const DWORD error = ::GetLastError();

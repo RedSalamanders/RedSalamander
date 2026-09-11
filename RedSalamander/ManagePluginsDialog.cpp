@@ -381,7 +381,7 @@ struct PluginConfigDialogState
     bool usesDxUiCommandButtons = false;
     std::vector<PluginConfigFieldControls> controls;
 #ifdef ENABLE_TESTS
-    HWND lastDebugFocusedHost        = nullptr;
+    HWND lastDebugFocusedHost = nullptr;
     size_t lastDebugFocusedHostIndex = kInvalidPluginConfigDebugFocusIndex;
 #endif
 };
@@ -556,7 +556,8 @@ int MeasureInfoHeight(HWND dlg, int width, const std::wstring& text) noexcept
 }
 
 #ifdef ENABLE_TESTS
-template <typename ControlT> [[nodiscard]] bool IsPluginConfigDebugFieldHostInteractive(const PluginConfigDxHostSlot& slot, ControlT* control) noexcept
+template <typename ControlT>
+[[nodiscard]] bool IsPluginConfigDebugFieldHostInteractive(const PluginConfigDxHostSlot& slot, ControlT* control) noexcept
 {
     return control && slot.hostHwnd && IsWindowVisible(slot.hostHwnd.get()) != FALSE && control->IsVisible() && control->IsEnabled();
 }
@@ -624,8 +625,9 @@ template <typename Visitor> [[nodiscard]] bool VisitPluginConfigDebugInteractive
         return false;
     }
 
-    return VisitPluginConfigDebugInteractiveHosts(state,
-                                                  [&](const size_t index, const HWND candidate) noexcept
+    return VisitPluginConfigDebugInteractiveHosts(
+        state,
+        [&](const size_t index, const HWND candidate) noexcept
     {
         if (candidate != host)
         {
@@ -645,8 +647,9 @@ template <typename Visitor> [[nodiscard]] bool VisitPluginConfigDebugInteractive
         return false;
     }
 
-    return VisitPluginConfigDebugInteractiveHosts(state,
-                                                  [&](const size_t index, const HWND candidate) noexcept
+    return VisitPluginConfigDebugInteractiveHosts(
+        state,
+        [&](const size_t index, const HWND candidate) noexcept
     {
         if (index != state.lastDebugFocusedHostIndex)
         {
@@ -2424,7 +2427,9 @@ std::string BuildConfigurationJson(const std::vector<PluginConfigFieldControls>&
     return serialized;
 }
 
-void ApplyFieldValueToControls(const PluginConfigField& field, const Common::PluginConfiguration::FieldValue& value, PluginConfigFieldControls& out)
+void ApplyFieldValueToControls(const PluginConfigField& field,
+                               const Common::PluginConfiguration::FieldValue& value,
+                               PluginConfigFieldControls& out)
 {
     out.field = field;
     switch (field.type)
@@ -2526,7 +2531,7 @@ INT_PTR OnPluginConfigDialogInit(HWND dlg, PluginConfigDialogState* state)
     LayoutPluginConfigDialog(dlg, *state);
 
     const Common::PluginConfiguration::SchemaParseResult schema = ParseConfigurationSchema(state->schemaJsonUtf8);
-    const std::vector<PluginConfigField>& fields                = schema.fields;
+    const std::vector<PluginConfigField>& fields                 = schema.fields;
     const Common::PluginConfiguration::ConfigurationParseResult configuration =
         Common::PluginConfiguration::ParseConfiguration(fields, state->configurationJsonUtf8);
 

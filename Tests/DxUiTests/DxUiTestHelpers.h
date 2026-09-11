@@ -3,11 +3,9 @@
 #include "DxUi/DxUi.Internal.h"
 #include "DxUi/DxUi.h"
 #include "Helpers.h"
-#include "TestSupport/TestSupport.h"
 #include "TestWindowActivationGuard.h"
 #include "WindowMessages.h"
-
-#include <objbase.h>
+#include "TestSupport/TestSupport.h"
 
 #include <UIAutomation.h>
 #include <imm.h>
@@ -781,11 +779,12 @@ public:
     AttachedHostWindow& operator=(AttachedHostWindow&&)      = delete;
 
     explicit AttachedHostWindow(
-        RedSalamander::DxUi::WindowHost::PresentationMode presentationMode = RedSalamander::DxUi::WindowHost::PresentationMode::HwndSwapChain)
+        RedSalamander::DxUi::WindowHost::PresentationMode presentationMode =
+            RedSalamander::DxUi::WindowHost::PresentationMode::HwndSwapChain)
     {
         static_cast<void>(EnsureWindowClass());
         const DWORD exStyle = DxUiTestWindowsCanActivateFlag() ? 0u : WS_EX_NOACTIVATE;
-        HWND hwnd           = CreateWindowExW(
+        HWND hwnd = CreateWindowExW(
             exStyle, kWindowClassName, L"DxUiTestsHost", WS_OVERLAPPED, -32000, -32000, 320, 200, nullptr, nullptr, GetModuleHandleW(nullptr), this);
         Require(hwnd != nullptr, "attached host window created");
         _hwnd.reset(hwnd);

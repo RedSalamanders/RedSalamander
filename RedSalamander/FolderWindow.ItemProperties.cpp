@@ -79,12 +79,12 @@ enum class ItemPropertiesArtifactObjectState : uint8_t
 
 struct ItemPropertiesArtifactExplanation
 {
-    bool possibleNameShape                        = false;
+    bool possibleNameShape = false;
     ItemPropertiesArtifactObjectState objectState = ItemPropertiesArtifactObjectState::NotApplicable;
-    uint32_t classifierQueryCount                 = 0u;
+    uint32_t classifierQueryCount = 0u;
 };
 
-using ItemPropertiesOpenStreamCallback    = std::function<HRESULT(std::wstring_view streamName)>;
+using ItemPropertiesOpenStreamCallback = std::function<HRESULT(std::wstring_view streamName)>;
 using ItemPropertiesMutationGuardCallback = std::function<HRESULT()>;
 
 struct ItemPropertiesLoadResult
@@ -837,14 +837,16 @@ void NormalizeItemPropertiesSectionOrder(ItemPropertiesDocument& doc)
     return (std::max)(kFallbackHeightDip, std::ceil(metrics.height));
 }
 
-void AppendItemPropertiesArtifactExplanation(ItemPropertiesDocument& doc, const ItemPropertiesArtifactExplanation& explanation)
+void AppendItemPropertiesArtifactExplanation(ItemPropertiesDocument& doc,
+                                             const ItemPropertiesArtifactExplanation& explanation)
 {
     if (! explanation.possibleNameShape)
     {
         return;
     }
 
-    const auto text                = [](UINT id, std::wstring_view fallback) { return LoadItemPropertiesString(id, fallback); };
+    const auto text = [](UINT id, std::wstring_view fallback)
+    { return LoadItemPropertiesString(id, fallback); };
     const std::wstring unavailable = text(IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_UNAVAILABLE, L"Unavailable");
 
     ItemPropertiesSection section{
@@ -852,7 +854,8 @@ void AppendItemPropertiesArtifactExplanation(ItemPropertiesDocument& doc, const 
     };
     const auto append = [&](UINT keyId, std::wstring_view keyFallback, std::wstring value)
     { section.fields.push_back(ItemPropertiesField{.key = text(keyId, keyFallback), .value = std::move(value)}); };
-    const auto appendUnavailable = [&](UINT keyId, std::wstring_view keyFallback) { append(keyId, keyFallback, unavailable); };
+    const auto appendUnavailable = [&](UINT keyId, std::wstring_view keyFallback)
+    { append(keyId, keyFallback, unavailable); };
 
     append(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CLASSIFICATION,
            L"Classification",
@@ -1208,16 +1211,16 @@ public:
 #ifdef ENABLE_TESTS
     [[nodiscard]] bool DebugGetSnapshot(ItemPropertiesWindowDebugSnapshot& out) const noexcept
     {
-        const HWND hwnd                  = _hWnd.get();
-        out.usesDxUiHost                 = hwnd && ::IsWindow(hwnd) != FALSE;
-        out.visibleChildWindowCount      = hwnd ? CountVisibleItemPropertiesChildWindows(hwnd) : 0u;
-        out.sectionCount                 = _doc.sections.size();
-        out.fieldCount                   = _fieldCount;
-        out.streamCount                  = _doc.streams.size();
-        out.removableStreamCount         = _removableStreamCount;
-        out.viewableStreamCount          = _viewableStreamCount;
-        out.loading                      = _loading;
-        out.loadFailed                   = _loadFailed;
+        const HWND hwnd             = _hWnd.get();
+        out.usesDxUiHost            = hwnd && ::IsWindow(hwnd) != FALSE;
+        out.visibleChildWindowCount = hwnd ? CountVisibleItemPropertiesChildWindows(hwnd) : 0u;
+        out.sectionCount            = _doc.sections.size();
+        out.fieldCount              = _fieldCount;
+        out.streamCount             = _doc.streams.size();
+        out.removableStreamCount    = _removableStreamCount;
+        out.viewableStreamCount     = _viewableStreamCount;
+        out.loading                 = _loading;
+        out.loadFailed              = _loadFailed;
         out.artifactClassifierQueryCount = _artifactExplanation.classifierQueryCount;
         if (_contentScroll)
         {
@@ -1912,14 +1915,14 @@ private:
             return;
         }
 
-        work->hwnd            = _hWnd.get();
-        work->window          = this;
-        work->windowToken     = _windowToken;
-        work->generation      = _loadGeneration;
-        work->itemPath        = _itemPath;
-        work->itemIo          = _itemIo;
-        work->fileSystem      = _fileSystem;
-        work->pluginId        = _pluginId;
+        work->hwnd        = _hWnd.get();
+        work->window      = this;
+        work->windowToken = _windowToken;
+        work->generation  = _loadGeneration;
+        work->itemPath    = _itemPath;
+        work->itemIo      = _itemIo;
+        work->fileSystem  = _fileSystem;
+        work->pluginId    = _pluginId;
         work->instanceContext = _instanceContext;
 #ifdef ENABLE_TESTS
         work->delayMs = g_nextItemPropertiesLoadDelayMs.exchange(0u, std::memory_order_relaxed);
@@ -1953,11 +1956,15 @@ private:
 
             if (FileOperationArtifacts::HasPossibleArtifactName(workItem->itemPath.filename().native()))
             {
-                result->artifact.possibleNameShape    = true;
+                result->artifact.possibleNameShape = true;
                 result->artifact.classifierQueryCount = 1u;
                 FileOperationArtifacts::Candidate candidate{};
                 const HRESULT artifactHr = FileOperationArtifacts::CaptureProviderObjectCandidate(
-                    workItem->fileSystem.get(), workItem->itemPath.native(), workItem->pluginId, workItem->instanceContext, candidate);
+                    workItem->fileSystem.get(),
+                    workItem->itemPath.native(),
+                    workItem->pluginId,
+                    workItem->instanceContext,
+                    candidate);
                 if (artifactHr == S_FALSE)
                 {
                     result->artifact.objectState = ItemPropertiesArtifactObjectState::Missing;
@@ -2042,7 +2049,7 @@ private:
             return 0;
         }
 
-        _doc = doc.value();
+        _doc        = doc.value();
         AppendItemPropertiesArtifactExplanation(_doc, _artifactExplanation);
         _loading    = false;
         _loadFailed = false;
@@ -2921,9 +2928,10 @@ HRESULT FolderWindow::ShowItemPropertiesFromFolderView(Pane pane, std::filesyste
         return OpenViewerWithPlugin(L"builtin/viewer-text", context);
     };
 
-    const std::wstring pluginId                       = state.pluginId;
-    const std::wstring instanceContext                = state.instanceContext;
-    ItemPropertiesMutationGuardCallback mutationGuard = [this, fileSystem, pluginId, instanceContext, itemPath = path]() noexcept -> HRESULT
+    const std::wstring pluginId = state.pluginId;
+    const std::wstring instanceContext = state.instanceContext;
+    ItemPropertiesMutationGuardCallback mutationGuard =
+        [this, fileSystem, pluginId, instanceContext, itemPath = path]() noexcept -> HRESULT
     {
         EnsureFileOperations();
         if (! _fileOperations)
@@ -2931,7 +2939,8 @@ HRESULT FolderWindow::ShowItemPropertiesFromFolderView(Pane pane, std::filesyste
             return E_UNEXPECTED;
         }
         const std::array paths{itemPath};
-        return ConfirmExternalArtifactTouchForProvider(fileSystem.get(), pluginId, instanceContext, paths);
+        return ConfirmExternalArtifactTouchForProvider(
+            fileSystem.get(), pluginId, instanceContext, paths);
     };
 
     return ShowItemPropertiesWindow(_hWnd.get(),

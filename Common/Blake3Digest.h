@@ -11,7 +11,7 @@
 namespace Common::Crypto
 {
 inline constexpr size_t kBlake3DigestBytes = BLAKE3_OUT_LEN;
-using Blake3Digest                         = std::array<std::byte, kBlake3DigestBytes>;
+using Blake3Digest = std::array<std::byte, kBlake3DigestBytes>;
 
 // Canonical streaming BLAKE3 primitive. File Operations owns I/O, cancellation, progress, and
 // exact-object authority; this helper owns only byte-order-preserving digest state.

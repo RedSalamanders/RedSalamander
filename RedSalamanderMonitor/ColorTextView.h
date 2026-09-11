@@ -24,7 +24,10 @@
 #include <utility>
 #include <vector>
 
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <windows.h>
+
 #include <wrl/implements.h>
 
 #pragma warning(push)
@@ -122,10 +125,10 @@ public:
     void QueueEtwEvent(const Debug::InfoParam& info, std::wstring message);
     struct RetentionLimits
     {
-        size_t maxQueuedEvents        = 4'096u;
-        size_t maxRetainedLines       = 100'000u;
+        size_t maxQueuedEvents      = 4'096u;
+        size_t maxRetainedLines     = 100'000u;
         uint64_t maxRetainedTextBytes = 64u * 1024u * 1024u;
-        size_t maxSearchMatches       = 100'000u;
+        size_t maxSearchMatches     = 100'000u;
     };
     void SetRetentionLimits(const RetentionLimits& limits) noexcept;
     [[nodiscard]] uint64_t GetDroppedEventCount() const noexcept
@@ -423,7 +426,7 @@ private:
     std::wstring _search;
     bool _searchCaseSensitive = false;
     std::vector<Line::ColorSpan> _matches;
-    __int64 _matchIndex      = -1;
+    __int64 _matchIndex = -1;
     size_t _searchScanLine   = 0u;
     size_t _searchScanOffset = 0u;
     enum class FindStartMode : uint8_t

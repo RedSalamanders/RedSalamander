@@ -1,8 +1,5 @@
 #pragma once
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-
 #include <array>
 #include <cstdint>
 #include <optional>
@@ -10,6 +7,8 @@
 
 #include "AppTheme.h"
 
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <Windows.h>
 
 #pragma warning(push)

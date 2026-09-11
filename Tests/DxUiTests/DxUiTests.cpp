@@ -34,7 +34,7 @@ int wmain(int argc, wchar_t** argv)
     std::optional<std::filesystem::path> galleryOutputPath;
     std::optional<std::filesystem::path> galleryOutputDirectory;
     std::optional<std::filesystem::path> buttonAuditOutputPath;
-    bool writeBaselines  = false;
+    bool writeBaselines = false;
     bool blockActivation = false;
     for (int argIndex = 1; argIndex < argc; ++argIndex)
     {
@@ -144,9 +144,13 @@ int wmain(int argc, wchar_t** argv)
         return _wcsicmp(wideName.c_str(), suiteFilter->c_str()) == 0;
     };
 
-    const auto suiteCanActivate = [](const char* name) noexcept { return _stricmp(name, "Menu") == 0 || _stricmp(name, "NativeTextInput") == 0; };
-    const bool selectedSuiteCanActivate =
-        suiteFilter.has_value() && (_wcsicmp(suiteFilter->c_str(), L"Menu") == 0 || _wcsicmp(suiteFilter->c_str(), L"NativeTextInput") == 0);
+    const auto suiteCanActivate = [](const char* name) noexcept
+    {
+        return _stricmp(name, "Menu") == 0 || _stricmp(name, "NativeTextInput") == 0;
+    };
+    const bool selectedSuiteCanActivate = suiteFilter.has_value() &&
+                                          (_wcsicmp(suiteFilter->c_str(), L"Menu") == 0 ||
+                                           _wcsicmp(suiteFilter->c_str(), L"NativeTextInput") == 0);
     if (blockActivation && (! suiteFilter.has_value() || selectedSuiteCanActivate))
     {
         std::wcerr << L"--no-activate cannot run a DxUi suite whose contract requires real focus.\n";
@@ -161,7 +165,7 @@ int wmain(int argc, wchar_t** argv)
     }
 
     bool warningFailed = false;
-    auto runSuite      = [&](const char* name, void (*fn)())
+    auto runSuite = [&](const char* name, void (*fn)())
     {
         const bool needsInputWarning = suiteCanActivate(name);
         const RedSalamander::TestSupport::DirectedSelfTestInputWarning inputWarning(nullptr, needsInputWarning);

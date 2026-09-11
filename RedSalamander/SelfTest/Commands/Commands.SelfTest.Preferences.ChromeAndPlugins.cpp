@@ -369,16 +369,15 @@ namespace
             return;
         }
 
-        state.Require(
-            snapshot.currentCategory == expectedCategory,
-            std::format(L"Preferences category-tree UIA selection test saw the wrong active category during {}; expected={} actual={} title='{}' selected='{}' "
-                        L"selectionCount={}.",
-                        context,
-                        static_cast<int>(expectedCategory),
-                        static_cast<int>(snapshot.currentCategory),
-                        snapshot.pageTitle,
-                        selectionState.has_value() ? selectionState->selectedName : L"<none>",
-                        selectionState.has_value() ? selectionState->selectionCount : 0u));
+        state.Require(snapshot.currentCategory == expectedCategory,
+                      std::format(L"Preferences category-tree UIA selection test saw the wrong active category during {}; expected={} actual={} title='{}' selected='{}' "
+                                  L"selectionCount={}.",
+                                  context,
+                                  static_cast<int>(expectedCategory),
+                                  static_cast<int>(snapshot.currentCategory),
+                                  snapshot.pageTitle,
+                                  selectionState.has_value() ? selectionState->selectedName : L"<none>",
+                                  selectionState.has_value() ? selectionState->selectionCount : 0u));
         state.Require(snapshot.pageTitle == LoadStringResource(nullptr, expectedTitleId),
                       std::format(L"Preferences page title did not match the expected category during {}.", context));
 
@@ -572,24 +571,24 @@ namespace
         const std::wstring expectedGeneralTitle = LoadStringResource(nullptr, IDS_PREFS_CAT_GENERAL);
         if (snapshot.pageTitle != expectedGeneralTitle)
         {
-            SelfTest::AppendSelfTestTrace(
-                std::format(L"Preferences shell chrome: title mismatch during {}; category={} title='{}' expected='{}' description='{}' shellUsesDxUi={} "
-                            L"pageHostUsesDxUi={} categoryTreeUsesDxUi={} visibleChildren={} currentPageChildren={} shellRenderedHosts={} pageRenderedHosts={} "
-                            L"shellResizeFailures={} pageResizeFailures={}",
-                            context,
-                            static_cast<unsigned>(snapshot.currentCategory),
-                            snapshot.pageTitle,
-                            expectedGeneralTitle,
-                            snapshot.pageDescription,
-                            snapshot.shellUsesDxUiHost ? 1 : 0,
-                            snapshot.pageHostUsesDxUiHost ? 1 : 0,
-                            snapshot.categoryTreeUsesDxUiHost ? 1 : 0,
-                            snapshot.visibleChildWindowCount,
-                            snapshot.visibleCurrentPageChildWindowCount,
-                            snapshot.visibleShellRenderedDxHostCount,
-                            snapshot.currentPageRenderedDxHostCount,
-                            snapshot.shellDxHostResizeFailureCount,
-                            snapshot.currentPageDxHostResizeFailureCount));
+            SelfTest::AppendSelfTestTrace(std::format(
+                L"Preferences shell chrome: title mismatch during {}; category={} title='{}' expected='{}' description='{}' shellUsesDxUi={} "
+                L"pageHostUsesDxUi={} categoryTreeUsesDxUi={} visibleChildren={} currentPageChildren={} shellRenderedHosts={} pageRenderedHosts={} "
+                L"shellResizeFailures={} pageResizeFailures={}",
+                context,
+                static_cast<unsigned>(snapshot.currentCategory),
+                snapshot.pageTitle,
+                expectedGeneralTitle,
+                snapshot.pageDescription,
+                snapshot.shellUsesDxUiHost ? 1 : 0,
+                snapshot.pageHostUsesDxUiHost ? 1 : 0,
+                snapshot.categoryTreeUsesDxUiHost ? 1 : 0,
+                snapshot.visibleChildWindowCount,
+                snapshot.visibleCurrentPageChildWindowCount,
+                snapshot.visibleShellRenderedDxHostCount,
+                snapshot.currentPageRenderedDxHostCount,
+                snapshot.shellDxHostResizeFailureCount,
+                snapshot.currentPageDxHostResizeFailureCount));
         }
         state.Require(snapshot.pageTitle == expectedGeneralTitle,
                       std::format(L"Preferences shell title did not initialize to the active General page during {}; category={} title='{}' expected='{}' "
@@ -837,8 +836,7 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                      std::format(L"Failed to focus the Preferences category host during {}.", context));
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), std::format(L"Failed to focus the Preferences category host during {}.", context));
         PumpPendingMessages();
 
         for (int i = 0; i < 2; ++i)
@@ -1503,8 +1501,7 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                      L"Failed to focus the Preferences category host for Plugins theme-cycle validation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Plugins theme-cycle validation.");
         if (waitForSnapshot(hasPluginsPageSurfaceState, outSnapshot))
         {
             if (! hasStablePluginsPageState(outSnapshot))
@@ -2326,8 +2323,7 @@ namespace
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                  L"Failed to focus the Preferences category host for Viewers search round-trip test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Viewers search round-trip test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryViewers),
                   L"Failed to select the Preferences Viewers category for Viewers search round-trip test.");
     PumpPendingMessages();
@@ -2450,8 +2446,7 @@ namespace
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                  L"Failed to focus the Preferences category host for Viewers deferred-search test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Viewers deferred-search test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryViewers), L"Failed to select the Preferences Viewers category for deferred-search test.");
     PumpPendingMessages();
 
@@ -2587,8 +2582,7 @@ namespace
 
     const auto navigateToViewersPage = [&](HWND targetPrefs, PreferencesDebugSnapshot& outSnapshot) noexcept
     {
-        const auto describeSnapshot = [](const PreferencesDebugSnapshot& value)
-        {
+        const auto describeSnapshot = [](const PreferencesDebugSnapshot& value) {
             return std::format(L"currentCategory={}, pageTitle='{}', viewersRows={}, viewersSearch='{}', selectedExtension='{}', focusTarget={}, "
                                L"pluginItemSelected={}, pluginsDetailsActive={}, resizeFailures={}, visiblePaneWindows={}, visibleCurrentPageChildren={}",
                                static_cast<unsigned>(value.currentCategory),
@@ -2642,9 +2636,9 @@ namespace
 
         if (! hasStableViewersPageState(outSnapshot))
         {
-            state.Require(
-                DebugSetPreferencesViewersSearchText(L""),
-                std::format(L"Failed to clear retained Viewers search text before live search interaction validation: {}", describeSnapshot(outSnapshot)));
+            state.Require(DebugSetPreferencesViewersSearchText(L""),
+                          std::format(L"Failed to clear retained Viewers search text before live search interaction validation: {}",
+                                      describeSnapshot(outSnapshot)));
             state.Require(waitForSnapshot(hasStableViewersPageState, outSnapshot),
                           std::format(L"Preferences Viewers page did not restore an unfiltered list baseline before live search interaction validation: {}",
                                       describeSnapshot(outSnapshot)));
@@ -3508,8 +3502,7 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                      L"Failed to focus the Preferences category host for Viewers Add / Update interaction test.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Viewers Add / Update interaction test.");
         SendMessageW(treeHost, WM_KEYDOWN, VK_HOME, 0);
         SendMessageW(treeHost, WM_KEYUP, VK_HOME, 0);
         PumpPendingMessages();
@@ -3759,8 +3752,7 @@ namespace
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                  L"Failed to focus the Preferences category host for Viewers retained-selection test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Viewers retained-selection test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryViewers), L"Failed to select the Preferences Viewers category for retained-selection test.");
     PumpPendingMessages();
 
@@ -3905,8 +3897,7 @@ namespace
         return pagePatternStats;
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                  L"Failed to focus the Preferences category host for plugin-tree switch test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for plugin-tree switch test.");
     PumpPendingMessages();
 
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins), L"Failed to select the Preferences Plugins category for plugin-tree switch test.");
@@ -4128,8 +4119,7 @@ namespace
         return pagePatternStats;
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                  L"Failed to focus the Preferences category host for plugin-tree left/right navigation test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for plugin-tree left/right navigation test.");
     PumpPendingMessages();
 
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
@@ -4337,8 +4327,7 @@ namespace
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                  L"Failed to focus the Preferences category host for Plugins search round-trip test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Plugins search round-trip test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
                   L"Failed to select the Preferences Plugins category for Plugins search round-trip test.");
     PumpPendingMessages();
@@ -4873,8 +4862,7 @@ namespace
         return false;
     }
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                  L"Failed to focus the Preferences category host for Plugins retained checkbox validation.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Plugins retained checkbox validation.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
                   L"Failed to select the Preferences Plugins category for Plugins retained checkbox validation.");
     PumpPendingMessages();
@@ -5005,8 +4993,7 @@ namespace
         return false;
     }
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                  L"Failed to focus the Preferences category host for Plugins live checkbox-space validation.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Plugins live checkbox-space validation.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
                   L"Failed to select the Preferences Plugins category for Plugins live checkbox-space validation.");
     PumpPendingMessages();
@@ -5373,8 +5360,7 @@ namespace
         return false;
     }
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                  L"Failed to focus the Preferences category host for Plugins grid UIA selection test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Plugins grid UIA selection test.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
                   L"Failed to select the Preferences Plugins category for Plugins grid UIA selection test.");
     PumpPendingMessages();
@@ -5402,8 +5388,8 @@ namespace
 
     const auto hasPluginsGridSurface = [](const PreferencesDebugSnapshot& value) noexcept
     {
-        return value.currentCategory == kPrefCategoryPlugins && ! value.pluginItemSelected && ! value.pluginsDetailsActive && value.pluginsPaneVisible &&
-               value.pluginsMainListRowCount > 0u;
+        return value.currentCategory == kPrefCategoryPlugins && ! value.pluginItemSelected && ! value.pluginsDetailsActive &&
+               value.pluginsPaneVisible && value.pluginsMainListRowCount > 0u;
     };
 
     PreferencesDebugSnapshot snapshot{};
@@ -5518,8 +5504,7 @@ namespace
         return false;
     }
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                  L"Failed to focus the Preferences category host for Plugins header-reorder validation.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Plugins header-reorder validation.");
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
                   L"Failed to select the Preferences Plugins category for Plugins header-reorder validation.");
     PumpPendingMessages();
@@ -6392,8 +6377,8 @@ namespace
 
     const std::wstring expectedNameText = std::wstring(PrefsPlugins::GetDisplayName(selectedPlugin.value()));
     const std::wstring expectedTypeText = selectedPlugin->type == PrefsPluginType::FileSystem ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_FILE_SYSTEM)
-                                          : selectedPlugin->type == PrefsPluginType::Terminal ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_TERMINAL)
-                                                                                              : LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
+                                           : selectedPlugin->type == PrefsPluginType::Terminal ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_TERMINAL)
+                                                                                               : LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
 
     const LONG reorderStartX  = typeHeaderRect.left + ((typeHeaderRect.right - typeHeaderRect.left) / 2);
     const LONG reorderY       = typeHeaderRect.top + ((typeHeaderRect.bottom - typeHeaderRect.top) / 2);
@@ -7145,8 +7130,7 @@ namespace
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
-                      std::format(L"Failed to focus the Preferences category host for {}.", context));
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), std::format(L"Failed to focus the Preferences category host for {}.", context));
         if (! state.failure.empty())
         {
             return false;
@@ -7505,8 +7489,8 @@ namespace
 
     const std::wstring expectedNameText = std::wstring(PrefsPlugins::GetDisplayName(selectedPlugin.value()));
     const std::wstring expectedTypeText = selectedPlugin->type == PrefsPluginType::FileSystem ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_FILE_SYSTEM)
-                                          : selectedPlugin->type == PrefsPluginType::Terminal ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_TERMINAL)
-                                                                                              : LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
+                                           : selectedPlugin->type == PrefsPluginType::Terminal ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_TERMINAL)
+                                                                                               : LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
     ClearClipboardContents(prefs);
     SendMessageW(activePage, WM_KEYDOWN, VK_CONTROL, 0);
     SendMessageW(activePage, WM_KEYDOWN, static_cast<WPARAM>(L'C'), 0);

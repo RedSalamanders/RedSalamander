@@ -142,7 +142,7 @@ void TestButtonDisclosureChevronAnimatesAndHonorsReducedMotion()
     palette.reducedMotion = false;
     host.SetTheme(palette);
 
-    auto root    = std::make_unique<Panel>();
+    auto root   = std::make_unique<Panel>();
     auto* button = root->AddChild<Button>();
     button->SetBounds(D2D1::RectF(0.0f, 0.0f, 32.0f, 28.0f));
     button->SetDisclosureExpanded(false);
@@ -151,7 +151,8 @@ void TestButtonDisclosureChevronAnimatesAndHonorsReducedMotion()
     const DisclosureChevronVisualState collapsedVisual = ResolveDisclosureChevronVisualState(button->DebugGetDisclosureAnimationProgress());
     Require(collapsedVisual.direction == ChevronDirection::Right && collapsedVisual.rotationDegrees == 0.0f,
             "collapsed disclosure button starts with a crisp right-facing Fluent chevron");
-    Require(button->DebugGetDisclosureAnimationProgress() == 0.0f, "collapsed disclosure button starts at the collapsed animation endpoint");
+    Require(button->DebugGetDisclosureAnimationProgress() == 0.0f,
+            "collapsed disclosure button starts at the collapsed animation endpoint");
     const uint64_t animationStart = GetTickCount64();
     button->SetDisclosureExpanded(true);
     Require(button->DebugIsDisclosureAnimationActive(), "disclosure button starts a bounded expand rotation");
@@ -168,9 +169,12 @@ void TestButtonDisclosureChevronAnimatesAndHonorsReducedMotion()
     Require(expandedVisual.direction == ChevronDirection::Down && expandedVisual.rotationDegrees == 0.0f,
             "expanded disclosure button uses the native down glyph without a residual transform");
 
-    const DisclosureChevronVisualState leftCollapsedVisual    = ResolveDisclosureChevronVisualState(0.0f, ChevronDirection::Left);
-    const DisclosureChevronVisualState leftIntermediateVisual = ResolveDisclosureChevronVisualState(0.5f, ChevronDirection::Left);
-    const DisclosureChevronVisualState leftExpandedVisual     = ResolveDisclosureChevronVisualState(1.0f, ChevronDirection::Left);
+    const DisclosureChevronVisualState leftCollapsedVisual =
+        ResolveDisclosureChevronVisualState(0.0f, ChevronDirection::Left);
+    const DisclosureChevronVisualState leftIntermediateVisual =
+        ResolveDisclosureChevronVisualState(0.5f, ChevronDirection::Left);
+    const DisclosureChevronVisualState leftExpandedVisual =
+        ResolveDisclosureChevronVisualState(1.0f, ChevronDirection::Left);
     Require(leftCollapsedVisual.direction == ChevronDirection::Left && leftCollapsedVisual.rotationDegrees == 0.0f,
             "trailing-edge disclosures can rest as a crisp left-facing chevron");
     Require(leftIntermediateVisual.direction == ChevronDirection::Left && leftIntermediateVisual.rotationDegrees == -45.0f,
@@ -178,7 +182,8 @@ void TestButtonDisclosureChevronAnimatesAndHonorsReducedMotion()
     Require(leftExpandedVisual.direction == ChevronDirection::Down && leftExpandedVisual.rotationDegrees == 0.0f,
             "both collapsed orientations converge on the same crisp expanded down glyph");
 
-    const DisclosureChevronVisualState unsupportedCollapsedVisual = ResolveDisclosureChevronVisualState(0.0f, ChevronDirection::Down);
+    const DisclosureChevronVisualState unsupportedCollapsedVisual =
+        ResolveDisclosureChevronVisualState(0.0f, ChevronDirection::Down);
     Require(unsupportedCollapsedVisual.direction == ChevronDirection::Right && unsupportedCollapsedVisual.rotationDegrees == 0.0f,
             "disclosure collapsed direction is constrained to the supported left/right choices");
 
@@ -237,8 +242,8 @@ void TestSelectorButtonChromeUsesStableCurrentValueTreatment()
     RequireFloatNear(idle.textOffsetXDip, 0.0f, 0.001f, "selector value does not shift horizontally at rest");
     RequireFloatNear(idle.chevron.r, theme.subduedText.r, 0.001f, "selector chevron is quieter than the current value at rest");
 
-    spec.hovered                              = true;
-    spec.hoverStrength                        = 0.5f;
+    spec.hovered       = true;
+    spec.hoverStrength = 0.5f;
     const ButtonChromeResolvedStyle halfHover = ResolveButtonChromeResolvedStyle(theme, spec);
     Require(halfHover.showBorder, "selector hover animation introduces shared button feedback across the whole click target");
     RequireFloatNear(halfHover.chevron.r,
@@ -246,7 +251,7 @@ void TestSelectorButtonChromeUsesStableCurrentValueTreatment()
                      0.001f,
                      "selector hover animation gradually emphasizes the chevron glyph");
 
-    spec.pressed                            = true;
+    spec.pressed = true;
     const ButtonChromeResolvedStyle pressed = ResolveButtonChromeResolvedStyle(theme, spec);
     RequireFloatNear(pressed.textOffsetXDip, 0.0f, 0.001f, "selector value remains stable while pressed");
     RequireFloatNear(pressed.textOffsetYDip, 0.0f, 0.001f, "selector value does not jump vertically while pressed");
@@ -335,8 +340,8 @@ void TestSelectorButtonUsesOneWholeSurfaceFlyoutAction()
     button->SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 28.0f));
     button->SetVariant(ButtonVariant::Selector);
 
-    size_t clickCount  = 0u;
-    size_t flyoutCount = 0u;
+    size_t clickCount    = 0u;
+    size_t flyoutCount   = 0u;
     button->SetOnClick([&] { ++clickCount; });
     button->SetOnDropDownClick([&] { ++flyoutCount; });
     host.SetRoot(std::move(root));
@@ -1269,7 +1274,8 @@ void TestTabControlHiddenTabsKeepStableIndicesAndLeaveTheHeader()
     Require(tabControl->GetSelectedPage() == terminalPage && terminalPage->IsVisible() && ! folderPage->IsVisible(),
             "a visible tab after a hidden stable index remains directly selectable");
     Require(tabControl->OnKeyDown(host, VK_LEFT, 0), "keyboard navigation handles a visible set containing a hidden tab");
-    Require(tabControl->GetSelectedIndex().has_value() && tabControl->GetSelectedIndex().value() == 0u, "keyboard navigation skips a hidden tab");
+    Require(tabControl->GetSelectedIndex().has_value() && tabControl->GetSelectedIndex().value() == 0u,
+            "keyboard navigation skips a hidden tab");
 
     tabControl->SetTabVisible(0u, false);
     Require(tabControl->GetSelectedIndex().has_value() && tabControl->GetSelectedIndex().value() == 2u && terminalPage->IsVisible(),
@@ -1280,7 +1286,8 @@ void TestTabControlHiddenTabsKeepStableIndicesAndLeaveTheHeader()
             "removing the last visible tab clears selection instead of selecting a hidden page");
 
     auto* searchPage = tabControl->AddTab<Label>(L"Search", L"Search page");
-    Require(tabControl->GetSelectedIndex().has_value() && tabControl->GetSelectedIndex().value() == 2u && tabControl->GetSelectedPage() == searchPage,
+    Require(tabControl->GetSelectedIndex().has_value() && tabControl->GetSelectedIndex().value() == 2u &&
+                tabControl->GetSelectedPage() == searchPage,
             "adding a visible tab after hidden pages selects the new stable index");
 }
 

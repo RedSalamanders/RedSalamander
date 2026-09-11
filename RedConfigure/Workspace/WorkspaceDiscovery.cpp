@@ -8,7 +8,6 @@
 #include <string_view>
 
 #include <objidl.h>
-
 #include <XmlLite.h>
 
 #pragma warning(push)

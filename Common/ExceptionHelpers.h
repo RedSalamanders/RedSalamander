@@ -7,6 +7,8 @@
 #pragma warning(push)
 #pragma warning(disable : 4514) // unreferenced inline function has been removed
 
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <Windows.h>
 
 namespace exception

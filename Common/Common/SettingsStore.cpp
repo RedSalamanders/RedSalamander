@@ -51,8 +51,8 @@
 #include "Helpers.h"
 #include "LocalFileTransaction.h"
 #include "PathUtils.h"
-#include "TestSandboxPath.h"
 #include "ThemeDefinitionIo.h"
+#include "TestSandboxPath.h"
 #include "Version.h"
 
 namespace
@@ -103,7 +103,10 @@ std::atomic_bool g_useFixedSettingsBackupTimestampForTest{false};
         return false;
     }
 
-    return std::all_of(value.begin(), value.end(), [](const wchar_t ch) noexcept {
+    return std::all_of(value.begin(),
+                       value.end(),
+                       [](const wchar_t ch) noexcept
+    {
         return (ch >= L'0' && ch <= L'9') || (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') || ch == L'-' || ch == L'_';
     });
 }
@@ -362,7 +365,9 @@ std::filesystem::path MakeBackupPath(const std::filesystem::path& settingsPath) 
 
     std::filesystem::path candidate = settingsPath.parent_path() / backupName;
     std::error_code ec;
-    for (int i = 1; std::filesystem::exists(std::filesystem::path(Common::Paths::ToExtendedWin32Path(candidate.native())), ec) && ! ec && i < 100; ++i)
+    for (int i = 1;
+         std::filesystem::exists(std::filesystem::path(Common::Paths::ToExtendedWin32Path(candidate.native())), ec) && ! ec && i < 100;
+         ++i)
     {
         backupName = std::format(L"{}.bad.{}.{}", baseName, stamp, i);
         candidate  = settingsPath.parent_path() / backupName;
@@ -380,8 +385,8 @@ std::filesystem::path MakeBackupPath(const std::filesystem::path& settingsPath) 
 HRESULT ReadFileBytes(const std::filesystem::path& path,
                       std::string& out,
                       std::optional<Common::Settings::SettingsFileStamp>* sourceStamp = nullptr,
-                      wil::unique_hfile* sourceFile                                   = nullptr,
-                      bool* sourceExists                                              = nullptr) noexcept
+                      wil::unique_hfile* sourceFile = nullptr,
+                      bool* sourceExists = nullptr) noexcept
 {
     out.clear();
     if (sourceStamp)
@@ -403,16 +408,22 @@ HRESULT ReadFileBytes(const std::filesystem::path& path,
     // spurious load failures. Recovery acquires a separate delete-capable handle and
     // proves that it names this retained read handle's exact file identity.
     constexpr DWORD desiredAccess = GENERIC_READ;
-    wil::unique_hfile file(CreateFileW(
-        extendedPath.c_str(), desiredAccess, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    wil::unique_hfile file(CreateFileW(extendedPath.c_str(),
+                                      desiredAccess,
+                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                      nullptr,
+                                      OPEN_EXISTING,
+                                      FILE_ATTRIBUTE_NORMAL,
+                                      nullptr));
     if (! file)
     {
         const DWORD openError = GetLastError();
         if (sourceExists)
         {
-            const DWORD attributes     = GetFileAttributesW(extendedPath.c_str());
+            const DWORD attributes = GetFileAttributesW(extendedPath.c_str());
             const DWORD attributeError = attributes == INVALID_FILE_ATTRIBUTES ? GetLastError() : ERROR_SUCCESS;
-            *sourceExists = attributes != INVALID_FILE_ATTRIBUTES || (attributeError != ERROR_FILE_NOT_FOUND && attributeError != ERROR_PATH_NOT_FOUND);
+            *sourceExists = attributes != INVALID_FILE_ATTRIBUTES ||
+                (attributeError != ERROR_FILE_NOT_FOUND && attributeError != ERROR_PATH_NOT_FOUND);
         }
         SetLastError(openError);
         Debug::ErrorWithLastError(L"Failed to open file '{}'", path.c_str());
@@ -474,7 +485,9 @@ HRESULT ReadFileBytes(const std::filesystem::path& path,
         const HRESULT stampHr = GetFileStampByHandle(file.get(), stamp);
         if (FAILED(stampHr))
         {
-            Debug::Error(L"Failed to capture settings source identity for '{}' (hr=0x{:08X})", path.c_str(), static_cast<unsigned long>(stampHr));
+            Debug::Error(L"Failed to capture settings source identity for '{}' (hr=0x{:08X})",
+                         path.c_str(),
+                         static_cast<unsigned long>(stampHr));
             return stampHr;
         }
         *sourceStamp = stamp;
@@ -535,7 +548,7 @@ HRESULT ReadFileBytes(const std::filesystem::path& path,
 class SettingsCommitLock final
 {
 public:
-    SettingsCommitLock()                                     = default;
+    SettingsCommitLock() = default;
     SettingsCommitLock(const SettingsCommitLock&)            = delete;
     SettingsCommitLock(SettingsCommitLock&&)                 = delete;
     SettingsCommitLock& operator=(const SettingsCommitLock&) = delete;
@@ -549,12 +562,12 @@ public:
 
         const std::wstring extendedLockPath = Common::Paths::ToExtendedWin32Path(lockPath.native());
         wil::unique_hfile file(CreateFileW(extendedLockPath.c_str(),
-                                           GENERIC_READ | GENERIC_WRITE,
-                                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                           nullptr,
-                                           OPEN_ALWAYS,
-                                           FILE_ATTRIBUTE_HIDDEN,
-                                           nullptr));
+                                          GENERIC_READ | GENERIC_WRITE,
+                                          FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                          nullptr,
+                                          OPEN_ALWAYS,
+                                          FILE_ATTRIBUTE_HIDDEN,
+                                          nullptr));
         if (! file)
         {
             const DWORD error = GetLastError();
@@ -563,7 +576,7 @@ public:
 
         OVERLAPPED overlapped{};
         constexpr ULONGLONG kTimeoutMs = 5000u;
-        const ULONGLONG startedAt      = GetTickCount64();
+        const ULONGLONG startedAt       = GetTickCount64();
         for (;;)
         {
             if (LockFileEx(file.get(), LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0u, MAXDWORD, MAXDWORD, &overlapped) != FALSE)
@@ -590,17 +603,18 @@ private:
     wil::unique_hfile _file;
 };
 
-[[nodiscard]] HRESULT TryGetFileStampForPath(const std::filesystem::path& path, std::optional<Common::Settings::SettingsFileStamp>& out) noexcept
+[[nodiscard]] HRESULT TryGetFileStampForPath(const std::filesystem::path& path,
+                                             std::optional<Common::Settings::SettingsFileStamp>& out) noexcept
 {
     out.reset();
     const std::wstring extendedPath = Common::Paths::ToExtendedWin32Path(path.native());
     wil::unique_hfile file(CreateFileW(extendedPath.c_str(),
-                                       FILE_READ_ATTRIBUTES,
-                                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                       nullptr,
-                                       OPEN_EXISTING,
-                                       FILE_ATTRIBUTE_NORMAL,
-                                       nullptr));
+                                      FILE_READ_ATTRIBUTES,
+                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                      nullptr,
+                                      OPEN_EXISTING,
+                                      FILE_ATTRIBUTE_NORMAL,
+                                      nullptr));
     if (! file)
     {
         const DWORD error = GetLastError();
@@ -622,8 +636,8 @@ private:
 }
 
 [[nodiscard]] HRESULT SnapshotDiagnosedSettingsFile(HANDLE diagnosedFile,
-                                                    const Common::Settings::SettingsFileStamp& diagnosedStamp,
-                                                    const std::filesystem::path& backupPath) noexcept
+                                                     const Common::Settings::SettingsFileStamp& diagnosedStamp,
+                                                     const std::filesystem::path& backupPath) noexcept
 {
     if (diagnosedStamp.fileSize > kMaxSettingsFileBytes || diagnosedStamp.fileSize > (std::numeric_limits<size_t>::max)())
     {
@@ -644,7 +658,8 @@ private:
     }
 
     Common::Files::LocalFileTransaction transaction;
-    hr = Common::Files::LocalFileTransaction::Create(backupPath, Common::Files::ExistingTargetPolicy::FailIfExists, true, transaction);
+    hr = Common::Files::LocalFileTransaction::Create(
+        backupPath, Common::Files::ExistingTargetPolicy::FailIfExists, true, transaction);
     if (FAILED(hr))
     {
         return hr;
@@ -657,10 +672,11 @@ private:
     return transaction.Commit(diagnosedStamp.fileSize);
 }
 
-[[nodiscard]] HRESULT BackupSettingsFileGuarded(const std::filesystem::path& path,
-                                                const std::optional<Common::Settings::SettingsFileStamp>& expectedStamp,
-                                                HANDLE diagnosedFile,
-                                                std::filesystem::path& backupPath) noexcept
+[[nodiscard]] HRESULT BackupSettingsFileGuarded(
+    const std::filesystem::path& path,
+    const std::optional<Common::Settings::SettingsFileStamp>& expectedStamp,
+    HANDLE diagnosedFile,
+    std::filesystem::path& backupPath) noexcept
 {
     backupPath.clear();
     if (! expectedStamp.has_value() || diagnosedFile == nullptr || diagnosedFile == INVALID_HANDLE_VALUE)
@@ -688,12 +704,12 @@ private:
 
     const std::wstring extendedPath = Common::Paths::ToExtendedWin32Path(path.native());
     wil::unique_hfile renameFile(CreateFileW(extendedPath.c_str(),
-                                             FILE_READ_ATTRIBUTES | DELETE,
-                                             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                             nullptr,
-                                             OPEN_EXISTING,
-                                             FILE_ATTRIBUTE_NORMAL,
-                                             nullptr));
+                                            FILE_READ_ATTRIBUTES | DELETE,
+                                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                            nullptr,
+                                            OPEN_EXISTING,
+                                            FILE_ATTRIBUTE_NORMAL,
+                                            nullptr));
     if (! renameFile)
     {
         const DWORD error = GetLastError();
@@ -734,8 +750,8 @@ private:
     {
         return HRESULT_FROM_WIN32(ERROR_CANNOT_MAKE);
     }
-    const std::wstring backupNative    = Common::Paths::ToExtendedWin32Path(backup.native());
-    const size_t fileNameBytes         = backupNative.size() * sizeof(wchar_t);
+    const std::wstring backupNative = Common::Paths::ToExtendedWin32Path(backup.native());
+    const size_t fileNameBytes = backupNative.size() * sizeof(wchar_t);
     constexpr size_t renameHeaderBytes = offsetof(FILE_RENAME_INFO, FileName);
     if (fileNameBytes > (std::numeric_limits<DWORD>::max)() - renameHeaderBytes - sizeof(wchar_t) ||
         fileNameBytes > (std::numeric_limits<size_t>::max)() - renameHeaderBytes - sizeof(wchar_t))
@@ -743,14 +759,16 @@ private:
         return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
     }
     std::vector<std::byte> renameStorage(renameHeaderBytes + fileNameBytes + sizeof(wchar_t));
-    auto* rename           = reinterpret_cast<FILE_RENAME_INFO*>(renameStorage.data());
-    rename->Flags          = 0u;
-    rename->RootDirectory  = nullptr;
+    auto* rename = reinterpret_cast<FILE_RENAME_INFO*>(renameStorage.data());
+    rename->Flags = 0u;
+    rename->RootDirectory = nullptr;
     rename->FileNameLength = static_cast<DWORD>(fileNameBytes);
     std::memcpy(rename->FileName, backupNative.data(), fileNameBytes);
-    if (SetFileInformationByHandle(renameFile.get(), FileRenameInfoEx, rename, static_cast<DWORD>(renameStorage.size())) == FALSE)
+    if (SetFileInformationByHandle(
+            renameFile.get(), FileRenameInfoEx, rename, static_cast<DWORD>(renameStorage.size())) == FALSE)
     {
-        const DWORD error = Debug::ErrorWithLastError(L"Failed to back up the diagnosed settings file from '{}' to '{}'", path.c_str(), backup.c_str());
+        const DWORD error = Debug::ErrorWithLastError(
+            L"Failed to back up the diagnosed settings file from '{}' to '{}'", path.c_str(), backup.c_str());
         return HRESULT_FROM_WIN32(error == ERROR_SUCCESS ? ERROR_CANNOT_MAKE : error);
     }
 
@@ -770,7 +788,7 @@ private:
 HRESULT WriteFileBytesAtomic(const std::filesystem::path& path,
                              std::string_view bytes,
                              const std::optional<Common::Settings::SettingsFileStamp>* expectedStamp = nullptr,
-                             Common::Settings::SettingsFileStamp* writtenStamp                       = nullptr) noexcept
+                             Common::Settings::SettingsFileStamp* writtenStamp = nullptr) noexcept
 {
     if (writtenStamp)
     {
@@ -1010,16 +1028,26 @@ bool TryParseVkFromText(std::string_view text, uint32_t& outVk) noexcept
     };
 
     constexpr std::array<NamedVk, 20> kNamedVks = {
-        NamedVk{"Backspace", static_cast<uint32_t>(VK_BACK)},  NamedVk{"Tab", static_cast<uint32_t>(VK_TAB)},
-        NamedVk{"Enter", static_cast<uint32_t>(VK_RETURN)},    NamedVk{"Return", static_cast<uint32_t>(VK_RETURN)},
-        NamedVk{"Space", static_cast<uint32_t>(VK_SPACE)},     NamedVk{"PageUp", static_cast<uint32_t>(VK_PRIOR)},
-        NamedVk{"PageDown", static_cast<uint32_t>(VK_NEXT)},   NamedVk{"End", static_cast<uint32_t>(VK_END)},
-        NamedVk{"Home", static_cast<uint32_t>(VK_HOME)},       NamedVk{"Left", static_cast<uint32_t>(VK_LEFT)},
-        NamedVk{"Up", static_cast<uint32_t>(VK_UP)},           NamedVk{"Right", static_cast<uint32_t>(VK_RIGHT)},
-        NamedVk{"Down", static_cast<uint32_t>(VK_DOWN)},       NamedVk{"Insert", static_cast<uint32_t>(VK_INSERT)},
-        NamedVk{"Delete", static_cast<uint32_t>(VK_DELETE)},   NamedVk{"Escape", static_cast<uint32_t>(VK_ESCAPE)},
-        NamedVk{"NumpadPlus", static_cast<uint32_t>(VK_ADD)},  NamedVk{"NumpadMinus", static_cast<uint32_t>(VK_SUBTRACT)},
-        NamedVk{"Numpad0", static_cast<uint32_t>(VK_NUMPAD0)}, NamedVk{"Menu", static_cast<uint32_t>(VK_APPS)},
+        NamedVk{"Backspace", static_cast<uint32_t>(VK_BACK)},
+        NamedVk{"Tab", static_cast<uint32_t>(VK_TAB)},
+        NamedVk{"Enter", static_cast<uint32_t>(VK_RETURN)},
+        NamedVk{"Return", static_cast<uint32_t>(VK_RETURN)},
+        NamedVk{"Space", static_cast<uint32_t>(VK_SPACE)},
+        NamedVk{"PageUp", static_cast<uint32_t>(VK_PRIOR)},
+        NamedVk{"PageDown", static_cast<uint32_t>(VK_NEXT)},
+        NamedVk{"End", static_cast<uint32_t>(VK_END)},
+        NamedVk{"Home", static_cast<uint32_t>(VK_HOME)},
+        NamedVk{"Left", static_cast<uint32_t>(VK_LEFT)},
+        NamedVk{"Up", static_cast<uint32_t>(VK_UP)},
+        NamedVk{"Right", static_cast<uint32_t>(VK_RIGHT)},
+        NamedVk{"Down", static_cast<uint32_t>(VK_DOWN)},
+        NamedVk{"Insert", static_cast<uint32_t>(VK_INSERT)},
+        NamedVk{"Delete", static_cast<uint32_t>(VK_DELETE)},
+        NamedVk{"Escape", static_cast<uint32_t>(VK_ESCAPE)},
+        NamedVk{"NumpadPlus", static_cast<uint32_t>(VK_ADD)},
+        NamedVk{"NumpadMinus", static_cast<uint32_t>(VK_SUBTRACT)},
+        NamedVk{"Numpad0", static_cast<uint32_t>(VK_NUMPAD0)},
+        NamedVk{"Menu", static_cast<uint32_t>(VK_APPS)},
     };
 
     for (const auto& item : kNamedVks)
@@ -1505,7 +1533,8 @@ yyjson_mut_val* NewYyjsonFromJsonValue(yyjson_mut_doc* doc, const Common::Settin
     }
 }
 
-[[nodiscard]] bool TryParseWindowPlacement(yyjson_val* value, Common::Settings::WindowPlacement& placement, bool strictOptionalFields) noexcept
+[[nodiscard]] bool TryParseWindowPlacement(
+    yyjson_val* value, Common::Settings::WindowPlacement& placement, bool strictOptionalFields) noexcept
 {
     if (value == nullptr || ! yyjson_is_obj(value))
     {
@@ -1517,7 +1546,8 @@ yyjson_mut_val* NewYyjsonFromJsonValue(yyjson_mut_doc* doc, const Common::Settin
     {
         return false;
     }
-    placement.state = stateText.value() == "maximized" ? Common::Settings::WindowState::Maximized : Common::Settings::WindowState::Normal;
+    placement.state = stateText.value() == "maximized" ? Common::Settings::WindowState::Maximized
+                                                        : Common::Settings::WindowState::Normal;
 
     yyjson_val* bounds = GetObj(value, "bounds");
     if (bounds == nullptr)
@@ -1539,27 +1569,32 @@ yyjson_mut_val* NewYyjsonFromJsonValue(yyjson_mut_doc* doc, const Common::Settin
             return yyjson_get_sint(number);
         }
         const uint64_t value = yyjson_get_uint(number);
-        return value <= static_cast<uint64_t>((std::numeric_limits<int64_t>::max)()) ? std::optional<int64_t>{static_cast<int64_t>(value)} : std::nullopt;
+        return value <= static_cast<uint64_t>((std::numeric_limits<int64_t>::max)())
+            ? std::optional<int64_t>{static_cast<int64_t>(value)}
+            : std::nullopt;
     };
-    const auto xValue      = getInt64(vx);
-    const auto yValue      = getInt64(vy);
-    const auto widthValue  = getInt64(vw);
+    const auto xValue = getInt64(vx);
+    const auto yValue = getInt64(vy);
+    const auto widthValue = getInt64(vw);
     const auto heightValue = getInt64(vh);
     if (! xValue.has_value() || ! yValue.has_value() || ! widthValue.has_value() || ! heightValue.has_value())
     {
         return false;
     }
-    const int64_t x      = xValue.value();
-    const int64_t y      = yValue.value();
-    const int64_t width  = widthValue.value();
+    const int64_t x = xValue.value();
+    const int64_t y = yValue.value();
+    const int64_t width = widthValue.value();
     const int64_t height = heightValue.value();
-    if (x < (std::numeric_limits<int>::min)() || x > (std::numeric_limits<int>::max)() || y < (std::numeric_limits<int>::min)() ||
-        y > (std::numeric_limits<int>::max)() || width <= 0 || width > (std::numeric_limits<int>::max)() || height <= 0 ||
-        height > (std::numeric_limits<int>::max)())
+    if (x < (std::numeric_limits<int>::min)() || x > (std::numeric_limits<int>::max)() ||
+        y < (std::numeric_limits<int>::min)() || y > (std::numeric_limits<int>::max)() || width <= 0 ||
+        width > (std::numeric_limits<int>::max)() || height <= 0 || height > (std::numeric_limits<int>::max)())
     {
         return false;
     }
-    placement.bounds = {.x = static_cast<int>(x), .y = static_cast<int>(y), .width = static_cast<int>(width), .height = static_cast<int>(height)};
+    placement.bounds = {.x = static_cast<int>(x),
+                        .y = static_cast<int>(y),
+                        .width = static_cast<int>(width),
+                        .height = static_cast<int>(height)};
 
     if (yyjson_val* dpi = yyjson_obj_get(value, "dpi"); dpi != nullptr)
     {
@@ -1680,8 +1715,12 @@ void ParseTheme(yyjson_val* root, Common::Settings::Settings& out)
 
         Common::Settings::ThemeDefinition def;
         uint32_t skippedColorEntries = 0u;
-        if (FAILED(Common::Settings::ParseThemeDefinitionFromValue(
-                itemJson, def, Common::Settings::ThemeDefinitionParseMode::LenientInline, nullptr, nullptr, &skippedColorEntries)))
+        if (FAILED(Common::Settings::ParseThemeDefinitionFromValue(itemJson,
+                                                                   def,
+                                                                   Common::Settings::ThemeDefinitionParseMode::LenientInline,
+                                                                   nullptr,
+                                                                   nullptr,
+                                                                   &skippedColorEntries)))
         {
             ++unusableThemeEntryCount;
             out.theme.opaqueThemeEntries.push_back({.originalIndex = i, .value = std::move(itemJson)});
@@ -1689,7 +1728,8 @@ void ParseTheme(yyjson_val* root, Common::Settings::Settings& out)
         }
         skippedColorEntryCount += skippedColorEntries;
 
-        const auto duplicate = std::find_if(out.theme.themes.begin(), out.theme.themes.end(), [&](const Common::Settings::ThemeDefinition& existing) noexcept {
+        const auto duplicate = std::find_if(out.theme.themes.begin(), out.theme.themes.end(), [&](const Common::Settings::ThemeDefinition& existing) noexcept
+        {
             return existing.id == def.id;
         });
         if (duplicate != out.theme.themes.end())
@@ -2285,7 +2325,9 @@ void ParseExtensions(yyjson_val* root, Common::Settings::Settings& out)
     return ParseStringArray(appliesTo, "computerNames", action.appliesTo.computerNames);
 }
 
-[[nodiscard]] HRESULT ValidateFileActionDefinition(Common::Settings::FileActionDefinition& action, bool pluginIdPresent, bool executablePathPresent) noexcept
+[[nodiscard]] HRESULT ValidateFileActionDefinition(Common::Settings::FileActionDefinition& action,
+                                                   bool pluginIdPresent,
+                                                   bool executablePathPresent) noexcept
 {
     if (! IsValidFileActionId(action.id))
     {
@@ -3424,11 +3466,10 @@ void ParseMonitor(yyjson_val* root, Common::Settings::Settings& out)
         GetUInt64(retention, "maxRetainedTextBytes", settings.retention.maxRetainedTextBytes);
         GetUInt32(retention, "maxSearchMatches", settings.retention.maxSearchMatches);
 
-        settings.retention.maxQueuedEvents  = std::clamp(settings.retention.maxQueuedEvents, 200u, 1'000'000u);
-        settings.retention.maxRetainedLines = std::clamp(settings.retention.maxRetainedLines, 1'000u, 5'000'000u);
-        settings.retention.maxRetainedTextBytes =
-            std::clamp<uint64_t>(settings.retention.maxRetainedTextBytes, 1u * 1024u * 1024u, 4ull * 1024u * 1024u * 1024u);
-        settings.retention.maxSearchMatches = std::clamp(settings.retention.maxSearchMatches, 1'000u, 1'000'000u);
+        settings.retention.maxQueuedEvents      = std::clamp(settings.retention.maxQueuedEvents, 200u, 1'000'000u);
+        settings.retention.maxRetainedLines     = std::clamp(settings.retention.maxRetainedLines, 1'000u, 5'000'000u);
+        settings.retention.maxRetainedTextBytes = std::clamp<uint64_t>(settings.retention.maxRetainedTextBytes, 1u * 1024u * 1024u, 4ull * 1024u * 1024u * 1024u);
+        settings.retention.maxSearchMatches     = std::clamp(settings.retention.maxSearchMatches, 1'000u, 1'000'000u);
     }
 
     out.monitor = std::move(settings);
@@ -3746,8 +3787,9 @@ HRESULT ParseConnections(yyjson_val* root,
     {
         std::wstring canonicalId;
         const HRESULT normalizeHr = Common::Settings::NormalizeConnectionProfileId(profile.id, canonicalId);
-        const bool canonical      = SUCCEEDED(normalizeHr) && canonicalId == profile.id && canonicalId != Common::Settings::kQuickConnectConnectionId &&
-                                    normalizedIdCounts[canonicalId] == 1u && ! usedIds.contains(canonicalId);
+        const bool canonical = SUCCEEDED(normalizeHr) && canonicalId == profile.id &&
+                               canonicalId != Common::Settings::kQuickConnectConnectionId && normalizedIdCounts[canonicalId] == 1u &&
+                               ! usedIds.contains(canonicalId);
         if (canonical)
         {
             usedIds.insert(std::move(canonicalId));
@@ -3864,8 +3906,10 @@ void ParseFileOperations(yyjson_val* root, Common::Settings::Settings& out)
     }
     GetBool(fileOperations, "issuesPaneSortDescending", settings.issuesPaneSortDescending);
 
-    ParseGridColumnLayout(
-        fileOperations, "issuesPaneGridLayout", settings.issuesPaneGridLayout, [](std::string_view columnId) noexcept { return Utf16FromUtf8(columnId); });
+    ParseGridColumnLayout(fileOperations,
+                          "issuesPaneGridLayout",
+                          settings.issuesPaneGridLayout,
+                          [](std::string_view columnId) noexcept { return Utf16FromUtf8(columnId); });
 
     out.fileOperations = std::move(settings);
 }
@@ -4246,7 +4290,10 @@ void ParseSearchSettings(yyjson_val* root, Common::Settings::Settings& out)
     }
     GetBool(search, "sortDescending", settings.sortDescending);
 
-    ParseGridColumnLayout(search, "resultsGridLayout", settings.resultsGridLayout, [](std::string_view columnId) noexcept { return Utf16FromUtf8(columnId); });
+    ParseGridColumnLayout(search,
+                          "resultsGridLayout",
+                          settings.resultsGridLayout,
+                          [](std::string_view columnId) noexcept { return Utf16FromUtf8(columnId); });
 
     SanitizeSearchDialogSettings(settings);
 
@@ -4427,9 +4474,11 @@ void ParseBatchRenameSettings(yyjson_val* root, Common::Settings::Settings& out)
     }
     GetBool(batchRename, "previewSortDescending", settings.previewSortDescending);
 
-    ParseGridColumnLayout(batchRename, "previewGridLayout", settings.previewGridLayout, [](std::string_view columnId) noexcept {
-        return StripSearchSingleLineControlCharacters(Utf16FromUtf8(columnId));
-    });
+    ParseGridColumnLayout(batchRename,
+                          "previewGridLayout",
+                          settings.previewGridLayout,
+                          [](std::string_view columnId) noexcept
+    { return StripSearchSingleLineControlCharacters(Utf16FromUtf8(columnId)); });
 
     SanitizeBatchRenameSettings(settings);
 
@@ -4492,10 +4541,10 @@ HRESULT ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out) noexce
                 return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
             }
 
-            uint32_t vk                               = 0;
-            uint32_t modifiers                        = 0;
+            uint32_t vk              = 0;
+            uint32_t modifiers       = 0;
             Common::Keyboard::KeyPosition keyPosition = Common::Keyboard::KeyPosition::None;
-            const auto commandIdText                  = GetString(binding, "commandId");
+            const auto commandIdText = GetString(binding, "commandId");
 
             yyjson_val* const vkVal          = yyjson_obj_get(binding, "vk");
             yyjson_val* const keyPositionVal = yyjson_obj_get(binding, "keyPosition");
@@ -4626,14 +4675,16 @@ HRESULT ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out) noexce
             }
             if (keyPosition != Common::Keyboard::KeyPosition::None && std::string_view(name) == "functionBar")
             {
-                Debug::Error(L"Invalid shortcuts binding at '{}[{}]': physical key positions are not dispatchable in Function Bar scope", scopeName.c_str(), i);
+                Debug::Error(L"Invalid shortcuts binding at '{}[{}]': physical key positions are not dispatchable in Function Bar scope",
+                             scopeName.c_str(),
+                             i);
                 return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
             }
 
             Common::Settings::ShortcutBinding entry;
-            entry.vk          = vk;
-            entry.modifiers   = modifiers;
-            entry.commandId   = commandId;
+            entry.vk        = vk;
+            entry.modifiers = modifiers;
+            entry.commandId = commandId;
             entry.keyPosition = keyPosition;
             dest.push_back(std::move(entry));
         }
@@ -4675,7 +4726,10 @@ HRESULT ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out) noexce
     }
     GetBool(shortcuts, "sortDescending", settings.sortDescending);
 
-    ParseGridColumnLayout(shortcuts, "gridLayout", settings.gridLayout, [](std::string_view columnId) noexcept { return Utf16FromUtf8(columnId); });
+    ParseGridColumnLayout(shortcuts,
+                          "gridLayout",
+                          settings.gridLayout,
+                          [](std::string_view columnId) noexcept { return Utf16FromUtf8(columnId); });
 
     out.shortcuts = std::move(settings);
     return S_OK;
@@ -4683,7 +4737,8 @@ HRESULT ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out) noexce
 
 [[nodiscard]] bool IsValidTerminalPersistenceText(std::wstring_view text, size_t maximumLength) noexcept
 {
-    return ! text.empty() && text.size() <= maximumLength && std::ranges::none_of(text, [](wchar_t value) noexcept { return value == L'\0' || value < L' '; });
+    return ! text.empty() && text.size() <= maximumLength && std::ranges::none_of(text, [](wchar_t value) noexcept
+    { return value == L'\0' || value < L' '; });
 }
 
 HRESULT ParseTerminalSettings(yyjson_val* root, Common::Settings::Settings& out) noexcept
@@ -4742,9 +4797,9 @@ HRESULT ParseTerminalSettings(yyjson_val* root, Common::Settings::Settings& out)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
-        const auto tabId         = GetString(item, "tabId");
-        const auto profileId     = GetString(item, "profileId");
-        const auto providerId    = GetString(item, "providerId");
+        const auto tabId = GetString(item, "tabId");
+        const auto profileId = GetString(item, "profileId");
+        const auto providerId = GetString(item, "providerId");
         const auto canonicalPath = GetString(item, "canonicalPath");
         if (! tabId.has_value() || ! profileId.has_value() || ! providerId.has_value() || ! canonicalPath.has_value())
         {
@@ -4752,9 +4807,9 @@ HRESULT ParseTerminalSettings(yyjson_val* root, Common::Settings::Settings& out)
         }
 
         Common::Settings::FloatingTerminalTabSettings tab{};
-        tab.tabId         = Utf16FromUtf8(tabId.value());
-        tab.profileId     = Utf16FromUtf8(profileId.value());
-        tab.providerId    = Utf16FromUtf8(providerId.value());
+        tab.tabId = Utf16FromUtf8(tabId.value());
+        tab.profileId = Utf16FromUtf8(profileId.value());
+        tab.providerId = Utf16FromUtf8(providerId.value());
         tab.canonicalPath = Utf16FromUtf8(canonicalPath.value());
         if (! IsValidTerminalPersistenceText(tab.tabId, 128u) || ! IsValidTerminalPersistenceText(tab.profileId, 256u) ||
             ! IsValidTerminalPersistenceText(tab.providerId, 256u) || ! IsValidTerminalPersistenceText(tab.canonicalPath, 32'767u) ||
@@ -4774,7 +4829,7 @@ HRESULT ParseTerminalSettings(yyjson_val* root, Common::Settings::Settings& out)
     }
 
     settings.floatingWindow = std::move(window);
-    out.terminal            = std::move(settings);
+    out.terminal = std::move(settings);
     return S_OK;
 }
 
@@ -4853,7 +4908,9 @@ void ParseCache(yyjson_val* root, Common::Settings::Settings& out)
     return S_OK;
 }
 
-[[nodiscard]] HRESULT NewWindowPlacementObject(yyjson_mut_doc* doc, const Common::Settings::WindowPlacement& placement, yyjson_mut_val*& out) noexcept
+[[nodiscard]] HRESULT NewWindowPlacementObject(yyjson_mut_doc* doc,
+                                               const Common::Settings::WindowPlacement& placement,
+                                               yyjson_mut_val*& out) noexcept
 {
     out = yyjson_mut_obj(doc);
     if (! out)
@@ -4870,9 +4927,11 @@ void ParseCache(yyjson_val* root, Common::Settings::Settings& out)
     {
         return E_OUTOFMEMORY;
     }
-    if (! yyjson_mut_obj_add_int(doc, bounds, "x", placement.bounds.x) || ! yyjson_mut_obj_add_int(doc, bounds, "y", placement.bounds.y) ||
+    if (! yyjson_mut_obj_add_int(doc, bounds, "x", placement.bounds.x) ||
+        ! yyjson_mut_obj_add_int(doc, bounds, "y", placement.bounds.y) ||
         ! yyjson_mut_obj_add_int(doc, bounds, "width", std::max(1, placement.bounds.width)) ||
-        ! yyjson_mut_obj_add_int(doc, bounds, "height", std::max(1, placement.bounds.height)) || ! yyjson_mut_obj_add_val(doc, out, "bounds", bounds))
+        ! yyjson_mut_obj_add_int(doc, bounds, "height", std::max(1, placement.bounds.height)) ||
+        ! yyjson_mut_obj_add_val(doc, out, "bounds", bounds))
     {
         return E_OUTOFMEMORY;
     }
@@ -5456,7 +5515,7 @@ HRESULT NormalizeConnectionProfileId(std::wstring_view id, std::wstring& canonic
     canonicalIdOut.reserve(id.size());
     for (size_t index = 0u; index < id.size(); ++index)
     {
-        const wchar_t ch            = id[index];
+        const wchar_t ch = id[index];
         const bool isHyphenPosition = std::ranges::find(hyphenPositions, index) != hyphenPositions.end();
         if (isHyphenPosition)
         {
@@ -5518,13 +5577,12 @@ bool HasNonDefaultFileOperationsSettings(const FileOperationsSettings& fileOpera
            fileOperations.popupCompactDensity != defaults.popupCompactDensity || fileOperations.verifyAfterCopy != defaults.verifyAfterCopy ||
            fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
            fileOperations.defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
-           fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles ||
-           fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
+           fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles || fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
            fileOperations.diagnosticsDebugEnabled != defaults.diagnosticsDebugEnabled || fileOperations.maxIssueReportFiles.has_value() ||
            fileOperations.maxDiagnosticsInMemory.has_value() || fileOperations.maxDiagnosticsPerFlush.has_value() ||
-           fileOperations.diagnosticsFlushIntervalMs.has_value() || fileOperations.diagnosticsCleanupIntervalMs.has_value() ||
-           ! fileOperations.issuesPaneSortColumnId.empty() || fileOperations.issuesPaneSortDescending != defaults.issuesPaneSortDescending ||
-           ! fileOperations.issuesPaneGridLayout.empty();
+            fileOperations.diagnosticsFlushIntervalMs.has_value() || fileOperations.diagnosticsCleanupIntervalMs.has_value() ||
+            ! fileOperations.issuesPaneSortColumnId.empty() ||
+            fileOperations.issuesPaneSortDescending != defaults.issuesPaneSortDescending || ! fileOperations.issuesPaneGridLayout.empty();
 }
 
 namespace
@@ -5645,7 +5703,7 @@ void MaybeStallSettingsRecoveryBeforeBackupForTest() noexcept
     }
 
     const std::wstring extendedPath = Common::Paths::ToExtendedWin32Path(path.native());
-    const DWORD attrs               = GetFileAttributesW(extendedPath.c_str());
+    const DWORD attrs = GetFileAttributesW(extendedPath.c_str());
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         return false;
@@ -5789,10 +5847,31 @@ void ResetSettingsLoadRecoveryInfo(SettingsLoadRecoveryInfo* recovery) noexcept
 [[nodiscard]] bool IsKnownSettingsTopLevelMember(std::string_view key) noexcept
 {
     static constexpr std::array<std::string_view, 25> kKnownMembers{{
-        "$schema",  "schemaVersion",  "windows",   "theme",       "plugins",     "extensions",     "fileActions",
-        "userMenu", "makeFileList",   "shortcuts", "terminal",    "cache",       "folders",        "monitor",
-        "mainMenu", "startup",        "ui",        "mouse",       "connections", "fileOperations", "compareDirectories",
-        "hotPaths", "selectionMasks", "search",    "batchRename",
+        "$schema",
+        "schemaVersion",
+        "windows",
+        "theme",
+        "plugins",
+        "extensions",
+        "fileActions",
+        "userMenu",
+        "makeFileList",
+        "shortcuts",
+        "terminal",
+        "cache",
+        "folders",
+        "monitor",
+        "mainMenu",
+        "startup",
+        "ui",
+        "mouse",
+        "connections",
+        "fileOperations",
+        "compareDirectories",
+        "hotPaths",
+        "selectionMasks",
+        "search",
+        "batchRename",
     }};
     return std::ranges::find(kKnownMembers, key) != kKnownMembers.end();
 }
@@ -5869,12 +5948,12 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
                                                  SettingsLoadRecoveryReason reason,
                                                  HRESULT hr,
                                                  bool backupBadFile,
-                                                 bool fallbackToDefaults,
-                                                 SettingsLoadRecoveryInfo* recovery,
-                                                 const std::optional<SettingsFileStamp>& sourceStamp,
-                                                 HANDLE diagnosedFile,
-                                                 bool sourceExists,
-                                                 int64_t unsupportedSchemaVersion = 0) noexcept
+                                                  bool fallbackToDefaults,
+                                                  SettingsLoadRecoveryInfo* recovery,
+                                                  const std::optional<SettingsFileStamp>& sourceStamp,
+                                                  HANDLE diagnosedFile,
+                                                  bool sourceExists,
+                                                  int64_t unsupportedSchemaVersion = 0) noexcept
 {
     if (recovery)
     {
@@ -5889,7 +5968,7 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
         return hr;
     }
 
-    out                               = Settings{};
+    out = Settings{};
     out.persistence.expectedFileStamp = sourceStamp;
     if (recovery)
     {
@@ -5919,7 +5998,7 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
             if (! backupPath.empty() && recovery)
             {
                 recovery->backupPath = backupPath;
-                recovery->backedUp   = true;
+                recovery->backedUp = true;
             }
             out.persistence.savePermission = SettingsSavePermission::ExplicitReplacementRequired;
             if (recovery)
@@ -5945,12 +6024,20 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
     std::string bytes;
     std::optional<SettingsFileStamp> sourceStamp;
     wil::unique_hfile sourceFile;
-    bool sourceExists    = false;
+    bool sourceExists = false;
     const HRESULT readHr = ReadFileBytes(path, bytes, &sourceStamp, std::addressof(sourceFile), &sourceExists);
     if (FAILED(readHr))
     {
-        return RecoverSettingsLoadFailure(
-            path, out, SettingsLoadRecoveryReason::ReadFailed, readHr, false, fallbackToDefaults, recovery, sourceStamp, sourceFile.get(), sourceExists);
+        return RecoverSettingsLoadFailure(path,
+                                          out,
+                                          SettingsLoadRecoveryReason::ReadFailed,
+                                          readHr,
+                                          false,
+                                          fallbackToDefaults,
+                                          recovery,
+                                          sourceStamp,
+                                          sourceFile.get(),
+                                          sourceExists);
     }
 
     yyjson_read_err err{};
@@ -6010,10 +6097,10 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
         Debug::Error(L"Unsupported schema version in settings file '{}'", path.c_str());
         if (schemaVersion > 16 && fallbackToDefaults)
         {
-            out                                 = Settings{};
-            out.persistence.expectedFileStamp   = sourceStamp;
-            out.persistence.savePermission      = SettingsSavePermission::ExplicitReplacementRequired;
-            out.persistence.sourceSchemaVersion = schemaVersion;
+            out = Settings{};
+            out.persistence.expectedFileStamp     = sourceStamp;
+            out.persistence.savePermission       = SettingsSavePermission::ExplicitReplacementRequired;
+            out.persistence.sourceSchemaVersion  = schemaVersion;
             if (recovery)
             {
                 recovery->reason                   = SettingsLoadRecoveryReason::UnsupportedSchemaVersion;
@@ -6038,8 +6125,8 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
     }
 
     Settings parsed{};
-    parsed.schemaVersion                   = static_cast<uint32_t>(schemaVersion);
-    parsed.persistence.expectedFileStamp   = sourceStamp;
+    parsed.schemaVersion                    = static_cast<uint32_t>(schemaVersion);
+    parsed.persistence.expectedFileStamp    = sourceStamp;
     parsed.persistence.sourceSchemaVersion = schemaVersion;
 
     const HRESULT preserveUnknownHr = PreserveUnknownTopLevelMembers(root, parsed);
@@ -6075,7 +6162,7 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
     const HRESULT fileActionsHr = ParseFileActions(root, parsed);
     if (FAILED(fileActionsHr))
     {
-        parsed.fileActions       = DefaultFileActionsSettings();
+        parsed.fileActions = DefaultFileActionsSettings();
         const HRESULT preserveHr = PreserveOpaqueTopLevelMember(root, "fileActions", parsed);
         if (FAILED(preserveHr))
         {
@@ -6087,7 +6174,7 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
     const HRESULT userMenuHr = ParseUserMenuSettings(root, parsed.userMenu);
     if (FAILED(userMenuHr))
     {
-        parsed.userMenu          = UserMenuSettings{};
+        parsed.userMenu = UserMenuSettings{};
         const HRESULT preserveHr = PreserveOpaqueTopLevelMember(root, "userMenu", parsed);
         if (FAILED(preserveHr))
         {
@@ -6128,7 +6215,8 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
     ParseStartup(root, parsed);
     ParseUi(root, parsed);
     ParseMouse(root, parsed);
-    const HRESULT connectionsHr = ParseConnections(root, parsed, fallbackToDefaults, recovery ? &recovery->connectionProfileIdMigrations : nullptr);
+    const HRESULT connectionsHr = ParseConnections(
+        root, parsed, fallbackToDefaults, recovery ? &recovery->connectionProfileIdMigrations : nullptr);
     if (FAILED(connectionsHr))
     {
         return connectionsHr;
@@ -6169,12 +6257,12 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
 
     const std::wstring extendedPath = Common::Paths::ToExtendedWin32Path(path.native());
     wil::unique_handle file(CreateFileW(extendedPath.c_str(),
-                                        FILE_READ_ATTRIBUTES,
-                                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                        nullptr,
-                                        OPEN_EXISTING,
-                                        FILE_ATTRIBUTE_NORMAL,
-                                        nullptr));
+                                       FILE_READ_ATTRIBUTES,
+                                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                       nullptr,
+                                       OPEN_EXISTING,
+                                       FILE_ATTRIBUTE_NORMAL,
+                                       nullptr));
     if (! file)
     {
         const DWORD lastError = GetLastError();
@@ -6196,7 +6284,9 @@ void RecordSectionRecovery(SettingsLoadRecoveryInfo* recovery, SettingsLoadRecov
     return S_OK;
 }
 
-void PrepareLoadedSettingsForSaveTarget(std::wstring_view appId, const std::filesystem::path& loadedPath, Settings& settings) noexcept
+void PrepareLoadedSettingsForSaveTarget(std::wstring_view appId,
+                                        const std::filesystem::path& loadedPath,
+                                        Settings& settings) noexcept
 {
     const std::filesystem::path saveTarget = GetSettingsPath(appId);
     if (saveTarget.empty() || Common::Paths::NormalizedWindowsPathEqualsNoCase(loadedPath.native(), saveTarget.native()))
@@ -6342,12 +6432,12 @@ HRESULT BackupSettingsForExplicitReplacement(std::wstring_view appId,
 
     const std::wstring extendedPath = Common::Paths::ToExtendedWin32Path(path.native());
     wil::unique_hfile diagnosedFile(CreateFileW(extendedPath.c_str(),
-                                                FILE_READ_ATTRIBUTES | DELETE,
-                                                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                                nullptr,
-                                                OPEN_EXISTING,
-                                                FILE_ATTRIBUTE_NORMAL,
-                                                nullptr));
+                                               FILE_READ_ATTRIBUTES | DELETE,
+                                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                               nullptr,
+                                               OPEN_EXISTING,
+                                               FILE_ATTRIBUTE_NORMAL,
+                                               nullptr));
     if (! diagnosedFile)
     {
         const DWORD error = GetLastError();
@@ -6403,7 +6493,7 @@ namespace
             return E_OUTOFMEMORY;
         }
 
-        HRESULT valueHr        = S_OK;
+        HRESULT valueHr       = S_OK;
         yyjson_mut_val* member = NewYyjsonFromJsonValue(doc, value, valueHr);
         if (FAILED(valueHr) || ! member)
         {
@@ -6418,7 +6508,10 @@ namespace
 }
 } // namespace
 
-HRESULT SaveSettingsImpl(std::wstring_view appId, Settings& settings, bool writeBaseSchema, SettingsFileStamp* writtenStamp = nullptr) noexcept
+HRESULT SaveSettingsImpl(std::wstring_view appId,
+                         Settings& settings,
+                         bool writeBaseSchema,
+                         SettingsFileStamp* writtenStamp = nullptr) noexcept
 {
     if (settings.persistence.savePermission != SettingsSavePermission::Automatic)
     {
@@ -6485,7 +6578,7 @@ HRESULT SaveSettingsImpl(std::wstring_view appId, Settings& settings, bool write
             }
 
             const WindowPlacement& wp = it->second;
-            yyjson_mut_val* wpObj     = nullptr;
+            yyjson_mut_val* wpObj = nullptr;
             if (const HRESULT placementHr = NewWindowPlacementObject(doc, wp, wpObj); FAILED(placementHr))
             {
                 return placementHr;
@@ -6574,7 +6667,8 @@ HRESULT SaveSettingsImpl(std::wstring_view appId, Settings& settings, bool write
                 {
                     opaqueEntries.push_back(&opaqueEntry);
                 }
-                std::stable_sort(opaqueEntries.begin(), opaqueEntries.end(), [](const auto* first, const auto* second) noexcept {
+                std::stable_sort(opaqueEntries.begin(), opaqueEntries.end(), [](const auto* first, const auto* second) noexcept
+                {
                     return first->originalIndex < second->originalIndex;
                 });
                 for (const ThemeSettings::OpaqueEntry* opaqueEntry : opaqueEntries)
@@ -6598,7 +6692,7 @@ HRESULT SaveSettingsImpl(std::wstring_view appId, Settings& settings, bool write
                     }
 
                     const ThemeDefinition* def = std::get<const ThemeDefinition*>(entry);
-                    yyjson_mut_val* defObj     = yyjson_mut_obj(doc);
+                    yyjson_mut_val* defObj = yyjson_mut_obj(doc);
                     if (! defObj)
                     {
                         return E_OUTOFMEMORY;
@@ -6620,7 +6714,8 @@ HRESULT SaveSettingsImpl(std::wstring_view appId, Settings& settings, bool write
                         return hr;
                     }
 
-                    const auto addSources = [&](const char* memberName, const std::unordered_map<std::wstring, ThemeColorSource>& sources) noexcept -> HRESULT
+                    const auto addSources = [&](const char* memberName,
+                                                const std::unordered_map<std::wstring, ThemeColorSource>& sources) noexcept -> HRESULT
                     {
                         yyjson_mut_val* object = yyjson_mut_obj(doc);
                         if (! object || ! yyjson_mut_obj_add_val(doc, defObj, memberName, object))
@@ -6646,7 +6741,7 @@ HRESULT SaveSettingsImpl(std::wstring_view appId, Settings& settings, bool write
                             {
                                 return conversionHr;
                             }
-                            yyjson_mut_val* key   = yyjson_mut_strncpy(doc, keyUtf8.data(), keyUtf8.size());
+                            yyjson_mut_val* key = yyjson_mut_strncpy(doc, keyUtf8.data(), keyUtf8.size());
                             yyjson_mut_val* value = nullptr;
                             if (! key)
                             {
@@ -7004,7 +7099,7 @@ HRESULT SaveSettingsImpl(std::wstring_view appId, Settings& settings, bool write
                 }
                 else
                 {
-                    const std::string vkText    = VkToStableName(binding->vk);
+                    const std::string vkText = VkToStableName(binding->vk);
                     yyjson_mut_val* const vkVal = yyjson_mut_strncpy(doc, vkText.c_str(), vkText.size());
                     if (! vkVal)
                     {
@@ -7141,10 +7236,10 @@ HRESULT SaveSettingsImpl(std::wstring_view appId, Settings& settings, bool write
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
-        yyjson_mut_val* terminal  = yyjson_mut_obj(doc);
-        yyjson_mut_val* floating  = yyjson_mut_obj(doc);
+        yyjson_mut_val* terminal = yyjson_mut_obj(doc);
+        yyjson_mut_val* floating = yyjson_mut_obj(doc);
         yyjson_mut_val* placement = nullptr;
-        yyjson_mut_val* tabs      = yyjson_mut_arr(doc);
+        yyjson_mut_val* tabs = yyjson_mut_arr(doc);
         if (! terminal || ! floating || ! tabs)
         {
             return E_OUTOFMEMORY;
@@ -7153,7 +7248,8 @@ HRESULT SaveSettingsImpl(std::wstring_view appId, Settings& settings, bool write
         {
             return placementHr;
         }
-        if (! yyjson_mut_obj_add_val(doc, root, "terminal", terminal) || ! yyjson_mut_obj_add_val(doc, terminal, "floatingWindow", floating) ||
+        if (! yyjson_mut_obj_add_val(doc, root, "terminal", terminal) ||
+            ! yyjson_mut_obj_add_val(doc, terminal, "floatingWindow", floating) ||
             ! yyjson_mut_obj_add_val(doc, floating, "placement", placement) ||
             ! yyjson_mut_obj_add_bool(doc, floating, "wasOpenAtCleanShutdown", savedWindow.wasOpenAtCleanShutdown) ||
             ! yyjson_mut_obj_add_val(doc, floating, "tabs", tabs))
@@ -7293,7 +7389,8 @@ HRESULT SaveSettingsImpl(std::wstring_view appId, Settings& settings, bool write
             }
             if (writeFocusFollowsPointerWhenTerminalOpen)
             {
-                yyjson_mut_obj_add_bool(doc, mouse, "focusFollowsPointerWhenTerminalOpen", settings.mouse->focusFollowsPointerWhenTerminalOpen);
+                yyjson_mut_obj_add_bool(
+                    doc, mouse, "focusFollowsPointerWhenTerminalOpen", settings.mouse->focusFollowsPointerWhenTerminalOpen);
             }
         }
     }
@@ -8732,7 +8829,9 @@ HRESULT SaveSettingsValuesOnly(std::wstring_view appId, Settings& settings) noex
     return SaveSettingsImpl(appId, settings, false);
 }
 
-HRESULT SaveSettingsValuesOnlyWithStamp(std::wstring_view appId, Settings& settings, SettingsFileStamp& writtenStamp) noexcept
+HRESULT SaveSettingsValuesOnlyWithStamp(std::wstring_view appId,
+                                        Settings& settings,
+                                        SettingsFileStamp& writtenStamp) noexcept
 {
     return SaveSettingsImpl(appId, settings, false, &writtenStamp);
 }
@@ -9097,8 +9196,8 @@ WindowPlacement NormalizeWindowPlacement(const WindowPlacement& saved, unsigned 
         if (GetMonitorInfoW(hMonitor, &mi))
         {
             WorkArea area{};
-            area.work       = mi.rcWork;
-            area.primary    = (mi.dwFlags & MONITORINFOF_PRIMARY) != 0;
+            area.work    = mi.rcWork;
+            area.primary = (mi.dwFlags & MONITORINFOF_PRIMARY) != 0;
             area.deviceName = mi.szDevice;
             areas.push_back(area);
         }
@@ -9133,8 +9232,8 @@ WindowPlacement NormalizeWindowPlacement(const WindowPlacement& saved, unsigned 
     {
         if (contains(workAreas[index].work, desired) && (! preferredMonitor.has_value() || preferredMonitor.value() == index))
         {
-            result.bounds.width      = width;
-            result.bounds.height     = height;
+            result.bounds.width  = width;
+            result.bounds.height = height;
             result.monitorDeviceName = workAreas[index].deviceName;
             return result;
         }
@@ -9192,10 +9291,10 @@ WindowPlacement NormalizeWindowPlacement(const WindowPlacement& saved, unsigned 
     const LONG x = std::clamp(desired.left, work.left, maxX);
     const LONG y = std::clamp(desired.top, work.top, maxY);
 
-    result.bounds.x          = x;
-    result.bounds.y          = y;
-    result.bounds.width      = width;
-    result.bounds.height     = height;
+    result.bounds.x      = x;
+    result.bounds.y      = y;
+    result.bounds.width  = width;
+    result.bounds.height = height;
     result.monitorDeviceName = workAreas[bestIndex].deviceName;
 
     return result;

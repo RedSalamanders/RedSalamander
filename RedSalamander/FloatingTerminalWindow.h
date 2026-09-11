@@ -4,9 +4,9 @@
 #include "PlugInterfaces/Terminal.h"
 #include "SettingsStore.h"
 
-#include <optional>
 #include <string>
 #include <string_view>
+#include <optional>
 #include <vector>
 
 #define WIN32_LEAN_AND_MEAN
@@ -26,13 +26,18 @@ struct FloatingTerminalOpenRequest final
                                                  Common::Settings::Settings& settings,
                                                  const FloatingTerminalOpenRequest& request,
                                                  const AppTheme& theme) noexcept;
-[[nodiscard]] HRESULT RestoreFloatingTerminalWindowAfterStartup(HWND activationSource, Common::Settings::Settings& settings, const AppTheme& theme) noexcept;
+[[nodiscard]] HRESULT RestoreFloatingTerminalWindowAfterStartup(HWND activationSource,
+                                                                Common::Settings::Settings& settings,
+                                                                const AppTheme& theme) noexcept;
 void PrepareFloatingTerminalWindowForAppShutdown() noexcept;
 void UpdateFloatingTerminalWindowTheme(const AppTheme& theme) noexcept;
 [[nodiscard]] HWND GetFloatingTerminalWindowHandle() noexcept;
 [[nodiscard]] bool IsFloatingTerminalInputTarget(HWND targetWindow) noexcept;
-[[nodiscard]] HRESULT RouteFloatingTerminalShortcut(
-    HWND targetWindow, std::wstring_view commandId, const MSG& message, uint32_t modifiers, TerminalShortcutRoute& route) noexcept;
+[[nodiscard]] HRESULT RouteFloatingTerminalShortcut(HWND targetWindow,
+                                                    std::wstring_view commandId,
+                                                    const MSG& message,
+                                                    uint32_t modifiers,
+                                                    TerminalShortcutRoute& route) noexcept;
 [[nodiscard]] bool ExecuteFloatingTerminalCommand(std::wstring_view commandId) noexcept;
 [[nodiscard]] bool QueryFloatingTerminalCommandState(std::wstring_view commandId, CommandRuntimeState& state) noexcept;
 [[nodiscard]] std::optional<FloatingTerminalOpenRequest> GetActiveFloatingTerminalRequest() noexcept;
@@ -40,16 +45,16 @@ void UpdateFloatingTerminalWindowTheme(const AppTheme& theme) noexcept;
 #if defined(ENABLE_TESTS)
 struct FloatingTerminalDebugSnapshot final
 {
-    HWND root                                   = nullptr;
-    HWND selectedChild                          = nullptr;
-    TerminalLifecycleState selectedLifecycle    = TerminalLifecycleState::Created;
+    HWND root = nullptr;
+    HWND selectedChild = nullptr;
+    TerminalLifecycleState selectedLifecycle = TerminalLifecycleState::Created;
     TerminalActivityTrust selectedActivityTrust = TerminalActivityTrust::Untrusted;
-    uint64_t selectedSessionGeneration          = 0u;
-    uint64_t pendingExitPayloadCount            = 0u;
-    bool selectedFinalSnapshotComplete          = false;
-    bool selectedIdleAtPrimaryPrompt            = false;
-    size_t tabCount                             = 0u;
-    size_t selectedIndex                        = 0u;
+    uint64_t selectedSessionGeneration = 0u;
+    uint64_t pendingExitPayloadCount = 0u;
+    bool selectedFinalSnapshotComplete = false;
+    bool selectedIdleAtPrimaryPrompt = false;
+    size_t tabCount = 0u;
+    size_t selectedIndex = 0u;
     std::vector<std::wstring> tabIds;
     std::vector<std::wstring> paths;
 };

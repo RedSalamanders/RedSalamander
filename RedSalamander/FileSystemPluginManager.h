@@ -82,13 +82,14 @@ public:
             Storages,
         };
 
-        ConnectionBrowseWork()                                           = default;
-        ConnectionBrowseWork(const ConnectionBrowseWork&)                = delete;
-        ConnectionBrowseWork& operator=(const ConnectionBrowseWork&)     = delete;
-        ConnectionBrowseWork(ConnectionBrowseWork&&) noexcept            = default;
+        ConnectionBrowseWork() = default;
+        ConnectionBrowseWork(const ConnectionBrowseWork&) = delete;
+        ConnectionBrowseWork& operator=(const ConnectionBrowseWork&) = delete;
+        ConnectionBrowseWork(ConnectionBrowseWork&&) noexcept = default;
         ConnectionBrowseWork& operator=(ConnectionBrowseWork&&) noexcept = default;
 
-        [[nodiscard]] HRESULT Execute(std::vector<ConnectionBrowseDevice>& outDevices, std::vector<ConnectionBrowseStorage>& outStorages) noexcept;
+        [[nodiscard]] HRESULT Execute(std::vector<ConnectionBrowseDevice>& outDevices,
+                                      std::vector<ConnectionBrowseStorage>& outStorages) noexcept;
 
         Kind kind = Kind::Devices;
         std::wstring pluginId;
@@ -124,8 +125,15 @@ public:
     HRESULT GetConfigurationSchema(std::wstring_view pluginId, Common::Settings::Settings& settings, std::string& outSchemaJsonUtf8) noexcept;
     HRESULT GetConfiguration(std::wstring_view pluginId, Common::Settings::Settings& settings, std::string& outConfigurationJsonUtf8) noexcept;
     HRESULT SetConfiguration(std::wstring_view pluginId, std::string_view configurationJsonUtf8, Common::Settings::Settings& settings) noexcept;
+    // Asks the plugin whether it would accept a candidate configuration, without applying it. The
+    // check runs on a throwaway instance, so no mounted provider is disturbed. Draft editors use
+    // this before persisting so a configuration the plugin rejects cannot be saved and then
+    // silently revert to compiled defaults on the next load.
+    HRESULT ValidateConfiguration(std::wstring_view pluginId, std::string_view configurationJsonUtf8) noexcept;
     HRESULT PrepareConnectionBrowseDevices(std::wstring_view pluginId, ConnectionBrowseWork& outWork) noexcept;
-    HRESULT PrepareConnectionBrowseStorages(std::wstring_view pluginId, std::wstring_view parentDeviceId, ConnectionBrowseWork& outWork) noexcept;
+    HRESULT PrepareConnectionBrowseStorages(std::wstring_view pluginId,
+                                            std::wstring_view parentDeviceId,
+                                            ConnectionBrowseWork& outWork) noexcept;
 
     HRESULT TestPlugin(std::wstring_view pluginId) noexcept;
 

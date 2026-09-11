@@ -247,6 +247,24 @@ settings or clearing caches, preserve unknown object members for forward compati
 only after all validation succeeds. Malformed JSON or a non-object root returns
 `HRESULT_FROM_WIN32(ERROR_INVALID_DATA)` and leaves the prior configuration and derived state unchanged.
 
+`SetConfiguration()` MUST accept every value form the plugin's own declared schema can produce. In particular
+**a JSON integer is a valid value for any numeric member**: `14` and `14.0` denote the same number, and the shared
+plugin-configuration codec (`Common::PluginConfiguration`) serializes a `value` field as a JSON integer, while
+`GetConfiguration()` implementations commonly emit a real. Read numeric members through
+`Common::Json::GetDoubleMember` / `GetInt64Member` / `GetUInt64Member`, never through a bare `yyjson_get_real`
+(which returns `0.0` for integer storage). Because validation is transactional, one member that refuses a legal
+spelling of its own default discards the whole candidate, and the plugin silently reverts every other member to
+its compiled defaults. `Tests/PluginContractTests` enforces this for every plugin exposing `IInformations`: the
+schema's declared defaults, serialized through the shared codec, must be accepted with `S_OK`, and the resulting
+`GetConfiguration()` output must itself still satisfy the schema and be re-acceptable.
+
+Hosts MUST NOT persist a plugin configuration the owning plugin has not accepted. A draft editor validates a
+candidate through `FileSystemPluginManager::ValidateConfiguration` / `ViewerPluginManager::ValidateConfiguration`
+— which run the check on a throwaway instance so no mounted provider or open pane is disturbed — and reports a
+rejection to the user instead of saving it. A rejection observed while applying a persisted configuration MUST be
+logged (`Debug::Warning`) naming the plugin id and `HRESULT`, because the visible symptom is otherwise only a
+setting that appears saved and never takes effect.
+
 Passwords, passphrases, refresh tokens, access tokens, and equivalent credentials MUST NOT be emitted by
 `GetConfiguration()` or declared as ordinary persisted schema fields. Connection-scoped secrets use the host
 secret service and persisted JSON contains only stable non-secret profile identity/intent. A provider may import

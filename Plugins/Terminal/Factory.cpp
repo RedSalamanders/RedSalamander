@@ -27,12 +27,12 @@ struct PluginMetaDataStorage final
         : name(LoadStringResource(g_hInstance, IDS_TERMINAL_NAME)),
           description(LoadStringResource(g_hInstance, IDS_TERMINAL_DESCRIPTION)),
           metaData{
-              .id          = L"builtin/terminal",
-              .shortId     = L"terminal",
-              .name        = name.c_str(),
+              .id = L"builtin/terminal",
+              .shortId = L"terminal",
+              .name = name.c_str(),
               .description = description.c_str(),
-              .author      = L"RedSalamander",
-              .version     = VERSINFO_PLUGIN_VERSION,
+              .author = L"RedSalamander",
+              .version = VERSINFO_PLUGIN_VERSION,
           }
     {
     }
@@ -82,7 +82,8 @@ extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const Pl
     return FactoryEnumeratePlugins<ITerminal>(kEntries, riid, metaData, count);
 }
 
-extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* factoryOptions, IHost* host, const wchar_t* pluginId, void** result)
+extern "C" HRESULT __stdcall RedSalamanderCreate(
+    REFIID riid, const FactoryOptions* factoryOptions, IHost* host, const wchar_t* pluginId, void** result)
 {
     return FactoryCreate<ITerminal>(kEntries, riid, factoryOptions, host, pluginId, result);
 }

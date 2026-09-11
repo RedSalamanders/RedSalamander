@@ -1,10 +1,13 @@
 #pragma once
 
-#include <Windows.h>
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
 
 #include "AppTheme.h"
 #include "SettingsStore.h"

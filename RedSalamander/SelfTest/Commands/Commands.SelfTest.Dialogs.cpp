@@ -36,11 +36,14 @@ template <typename Task> [[nodiscard]] auto RunDialogUiaTaskWithMessagePump(std:
     };
 
     constexpr uint32_t kDialogUiaTimeoutBudgetMs = 7000u;
-    auto sharedState                             = std::make_shared<SharedState>();
-    auto sharedTask                              = std::make_shared<TaskType>(std::forward<Task>(task));
+    auto sharedState                                = std::make_shared<SharedState>();
+    auto sharedTask                                 = std::make_shared<TaskType>(std::forward<Task>(task));
 
     std::jthread worker([sharedState, sharedTask](const std::stop_token stopToken) noexcept
-    { ExecuteBoundedUiaWorker(sharedState, stopToken, kDialogUiaTimeoutBudgetMs, [&]() noexcept { sharedState->result = (*sharedTask)(); }); });
+    {
+        ExecuteBoundedUiaWorker(sharedState, stopToken, kDialogUiaTimeoutBudgetMs, [&]() noexcept
+        { sharedState->result = (*sharedTask)(); });
+    });
 
     if (! WaitForBoundedUiaWorker(worker, sharedState->lifetime, kDialogUiaTimeoutBudgetMs, L"dialog UIA task", label))
     {
@@ -94,11 +97,12 @@ template <typename WorkerFunc> void RunCreateDirectoryPromptModalCycle(HWND main
     worker.join();
 }
 
-[[nodiscard]] bool WaitForCreateDirectoryPromptSelectedTextSnapshot(HWND prompt,
-                                                                    const std::filesystem::path& expectedCreateInPath,
-                                                                    std::wstring_view expectedText,
-                                                                    std::chrono::milliseconds timeout,
-                                                                    FolderViewCreateDirectoryPromptDebugSnapshot& outSnapshot) noexcept
+[[nodiscard]] bool WaitForCreateDirectoryPromptSelectedTextSnapshot(
+    HWND prompt,
+    const std::filesystem::path& expectedCreateInPath,
+    std::wstring_view expectedText,
+    std::chrono::milliseconds timeout,
+    FolderViewCreateDirectoryPromptDebugSnapshot& outSnapshot) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -113,9 +117,10 @@ template <typename WorkerFunc> void RunCreateDirectoryPromptModalCycle(HWND main
     {
         PumpPendingMessages();
         outSnapshot = {};
-        if (DebugGetFolderViewCreateDirectoryPromptSnapshot(outSnapshot) && outSnapshot.usesDxUiHost && outSnapshot.visibleChildWindowCount <= 1u &&
-            outSnapshot.createInPath == expectedPath && outSnapshot.text == expectedText && outSnapshot.nameFieldFocused && outSnapshot.selectionStart == 0u &&
-            outSnapshot.selectionEnd == expectedText.size() && outSnapshot.validationText.empty())
+        if (DebugGetFolderViewCreateDirectoryPromptSnapshot(outSnapshot) && outSnapshot.usesDxUiHost &&
+            outSnapshot.visibleChildWindowCount <= 1u && outSnapshot.createInPath == expectedPath && outSnapshot.text == expectedText &&
+            outSnapshot.nameFieldFocused && outSnapshot.selectionStart == 0u && outSnapshot.selectionEnd == expectedText.size() &&
+            outSnapshot.validationText.empty())
         {
             return true;
         }
@@ -124,9 +129,10 @@ template <typename WorkerFunc> void RunCreateDirectoryPromptModalCycle(HWND main
     }
 
     outSnapshot = {};
-    return DebugGetFolderViewCreateDirectoryPromptSnapshot(outSnapshot) && outSnapshot.usesDxUiHost && outSnapshot.visibleChildWindowCount <= 1u &&
-           outSnapshot.createInPath == expectedPath && outSnapshot.text == expectedText && outSnapshot.nameFieldFocused && outSnapshot.selectionStart == 0u &&
-           outSnapshot.selectionEnd == expectedText.size() && outSnapshot.validationText.empty();
+    return DebugGetFolderViewCreateDirectoryPromptSnapshot(outSnapshot) && outSnapshot.usesDxUiHost &&
+           outSnapshot.visibleChildWindowCount <= 1u && outSnapshot.createInPath == expectedPath && outSnapshot.text == expectedText &&
+           outSnapshot.nameFieldFocused && outSnapshot.selectionStart == 0u && outSnapshot.selectionEnd == expectedText.size() &&
+           outSnapshot.validationText.empty();
 }
 
 template <typename WorkerFunc> void RunEditNewPromptModalCycle(HWND mainWindow, WorkerFunc&& workerFunc) noexcept
@@ -783,7 +789,7 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
             cycleResult.ownerDisabled           = IsWindowEnabled(mainWindow) == FALSE;
             cycleResult.visibleChildWindowCount = CountVisibleChildWindows(about);
             cycleResult.exposesUiaProvider      = WindowExposesUiaProvider(about);
-            const auto collectReadableSurface   = [&]() noexcept
+            const auto collectReadableSurface = [&]() noexcept
             {
                 cycleResult.uiaPatternStats = CollectVisibleUiaDescendantPatternStats(about);
                 cycleResult.aboutTextState  = CollectVisibleDescendantNamedElementState(about, UIA_TextControlTypeId);
@@ -910,13 +916,13 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
                                WPARAM closeKey,
                                HostPromptResult expectedResult,
                                std::wstring_view operationName,
-                               std::wstring_view invokeButtonName                        = {},
-                               HostPromptPresentation presentation                       = HOST_PROMPT_PRESENTATION_DEFAULT,
+                               std::wstring_view invokeButtonName = {},
+                               HostPromptPresentation presentation = HOST_PROMPT_PRESENTATION_DEFAULT,
                                RedSalamander::Ui::AlertPresentation expectedPresentation = RedSalamander::Ui::AlertPresentation::Severity,
-                               std::wstring_view expectedPrimaryButtonLabel              = {},
-                               HostFileOperationPromptOptions* fileOperationOptions      = nullptr,
-                               std::wstring_view invokeOptionName                        = {},
-                               std::optional<uint64_t> expectedInvokedOptionValue        = std::nullopt) noexcept
+                               std::wstring_view expectedPrimaryButtonLabel = {},
+                               HostFileOperationPromptOptions* fileOperationOptions = nullptr,
+                               std::wstring_view invokeOptionName = {},
+                               std::optional<uint64_t> expectedInvokedOptionValue = std::nullopt) noexcept
     {
         PromptAutomationResult promptResult{};
 
@@ -962,7 +968,8 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
                                       overlayChrome.usesSharedButtonChrome ? 1 : 0,
                                       overlayChrome.usesSharedCloseChrome ? 1 : 0,
                                       overlayChrome.paintCount));
-            state.Require(overlayChrome.renderedCloseGlyph == FluentIcons::kClear || overlayChrome.renderedCloseGlyph == FluentIcons::kFallbackClear,
+            state.Require(overlayChrome.renderedCloseGlyph == FluentIcons::kClear ||
+                              overlayChrome.renderedCloseGlyph == FluentIcons::kFallbackClear,
                           std::format(L"Alert overlay close action should render a Segoe Fluent or Unicode fallback glyph during {}; saw U+{:04X}.",
                                       operationName,
                                       static_cast<unsigned int>(overlayChrome.renderedCloseGlyph)));
@@ -974,7 +981,8 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
                                       static_cast<unsigned int>(expectedPresentation)));
             if (expectedPresentation == RedSalamander::Ui::AlertPresentation::Copy)
             {
-                state.Require(overlayChrome.renderedIconGlyph == FluentIcons::kCopyTo || overlayChrome.renderedIconGlyph == FluentIcons::kFallbackCopyTo,
+                state.Require(overlayChrome.renderedIconGlyph == FluentIcons::kCopyTo ||
+                                  overlayChrome.renderedIconGlyph == FluentIcons::kFallbackCopyTo,
                               std::format(L"Copy confirmation should render a Segoe Fluent or Unicode fallback glyph; saw U+{:04X}.",
                                           static_cast<unsigned int>(overlayChrome.renderedIconGlyph)));
             }
@@ -987,7 +995,8 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
             }
             else if (expectedPresentation == RedSalamander::Ui::AlertPresentation::Delete)
             {
-                state.Require(overlayChrome.renderedIconGlyph == FluentIcons::kDelete || overlayChrome.renderedIconGlyph == FluentIcons::kFallbackDelete,
+                state.Require(overlayChrome.renderedIconGlyph == FluentIcons::kDelete ||
+                                  overlayChrome.renderedIconGlyph == FluentIcons::kFallbackDelete,
                               std::format(L"Delete confirmation should render a Segoe Fluent or Unicode fallback glyph; saw U+{:04X}.",
                                           static_cast<unsigned int>(overlayChrome.renderedIconGlyph)));
             }
@@ -1018,7 +1027,7 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
                 // value appears only after that post is delivered; wait for it with a bound instead of
                 // reading the snapshot after one pump.
                 RedSalamander::Ui::AlertOverlayWindowDebugSnapshot changed{};
-                bool changedRead         = false;
+                bool changedRead = false;
                 const auto cycleDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
                 while (true)
                 {
@@ -1033,7 +1042,8 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
                     }
                     std::this_thread::sleep_for(20ms);
                 }
-                state.Require(changedRead, std::format(L"Failed to read changed file-operation confirmation option during {}.", operationName));
+                state.Require(changedRead,
+                              std::format(L"Failed to read changed file-operation confirmation option during {}.", operationName));
                 if (expectedInvokedOptionValue.has_value())
                 {
                     state.Require(! changed.optionValues.empty() && changed.optionValues.front() == expectedInvokedOptionValue.value(),
@@ -1079,15 +1089,15 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
         });
 
         HostPromptRequest request{};
-        request.sizeBytes            = sizeof(request);
-        request.scope                = HOST_ALERT_SCOPE_APPLICATION;
-        request.severity             = HOST_ALERT_INFO;
-        request.buttons              = HOST_PROMPT_BUTTONS_OK_CANCEL;
-        request.targetWindow         = nullptr;
-        request.title                = title.data();
-        request.message              = message.data();
-        request.defaultResult        = HOST_PROMPT_RESULT_OK;
-        request.presentation         = presentation;
+        request.sizeBytes     = sizeof(request);
+        request.scope         = HOST_ALERT_SCOPE_APPLICATION;
+        request.severity      = HOST_ALERT_INFO;
+        request.buttons       = HOST_PROMPT_BUTTONS_OK_CANCEL;
+        request.targetWindow  = nullptr;
+        request.title         = title.data();
+        request.message       = message.data();
+        request.defaultResult = HOST_PROMPT_RESULT_OK;
+        request.presentation  = presentation;
         request.fileOperationOptions = fileOperationOptions;
 
         promptResult.hr = HostShowPrompt(request, nullptr, &promptResult.result);
@@ -1133,13 +1143,14 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
 
     const std::wstring copyLabel = LoadStringResource(nullptr, IDS_FILEOP_OPERATION_COPY);
     HostFileOperationPromptOptions copyOptions{};
-    copyOptions.sizeBytes                    = sizeof(copyOptions);
-    copyOptions.linkPolicy                   = HOST_FILE_OPERATION_LINK_PRESERVE;
-    copyOptions.verifyAfterCopy              = 0u;
-    copyOptions.executionMode                = HOST_FILE_OPERATION_EXECUTION_QUEUE;
+    copyOptions.sizeBytes = sizeof(copyOptions);
+    copyOptions.linkPolicy = HOST_FILE_OPERATION_LINK_PRESERVE;
+    copyOptions.verifyAfterCopy = 0u;
+    copyOptions.executionMode = HOST_FILE_OPERATION_EXECUTION_QUEUE;
     copyOptions.bandwidthLimitBytesPerSecond = 5ull << 20u;
-    const std::wstring preserveLinkOptionName =
-        std::format(L"{}: {}", LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_LINKS), LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_LINKS_PRESERVE));
+    const std::wstring preserveLinkOptionName = std::format(L"{}: {}",
+                                                            LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_LINKS),
+                                                            LoadStringResource(nullptr, IDS_FILEOPS_CONFIRM_LINKS_PRESERVE));
     runPrompt(copyLabel,
               L"Verify the Copy confirmation presentation.",
               VK_RETURN,
@@ -1195,7 +1206,7 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
     PromptAutomationResult shutdownPromptResult{};
     std::jthread shutdownAutomation([&](std::stop_token) noexcept
     {
-        const HWND overlay           = WaitForWindow(getOverlayWindow, SelfTest::Scale(5000ms));
+        const HWND overlay = WaitForWindow(getOverlayWindow, SelfTest::Scale(5000ms));
         shutdownPromptResult.overlay = overlay;
         if (! overlay || IsWindow(overlay) == FALSE)
         {
@@ -1218,12 +1229,17 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
     shutdownPromptResult.hr       = HostShowPrompt(shutdownRequest, nullptr, &shutdownPromptResult.result);
     shutdownAutomation.join();
 
-    state.Require(shutdownPromptResult.sawOverlay.load(std::memory_order_acquire), L"Shutdown-unwind validation did not observe the live host prompt overlay.");
+    state.Require(shutdownPromptResult.sawOverlay.load(std::memory_order_acquire),
+                  L"Shutdown-unwind validation did not observe the live host prompt overlay.");
     state.Require(SUCCEEDED(shutdownPromptResult.hr),
-                  std::format(L"Active host prompt shutdown should unwind normally; hr=0x{:08X}.", static_cast<unsigned int>(shutdownPromptResult.hr)));
-    state.Require(shutdownPromptResult.result == HOST_PROMPT_RESULT_CANCEL, L"Active host prompt shutdown must return its escape/cancel result.");
-    state.Require(IsWindow(mainWindow) != FALSE, L"Active host prompt shutdown must return to its caller before owner-window teardown.");
-    state.Require(getOverlayWindow() == nullptr, L"Shutdown-unwind validation left the host prompt overlay alive after returning to its caller.");
+                  std::format(L"Active host prompt shutdown should unwind normally; hr=0x{:08X}.",
+                              static_cast<unsigned int>(shutdownPromptResult.hr)));
+    state.Require(shutdownPromptResult.result == HOST_PROMPT_RESULT_CANCEL,
+                  L"Active host prompt shutdown must return its escape/cancel result.");
+    state.Require(IsWindow(mainWindow) != FALSE,
+                  L"Active host prompt shutdown must return to its caller before owner-window teardown.");
+    state.Require(getOverlayWindow() == nullptr,
+                  L"Shutdown-unwind validation left the host prompt overlay alive after returning to its caller.");
     return state.failure.empty();
 }
 
@@ -3268,14 +3284,16 @@ struct FatalErrorReadableSurfaceProbe final
         while (std::chrono::steady_clock::now() < snapshotDeadline)
         {
             PumpPendingMessages();
-            if (DebugGetFolderViewChangeCasePromptSnapshot(editedSnapshot) && editedSnapshot.includeSubdirsChecked == (expectedState == ToggleState_On))
+            if (DebugGetFolderViewChangeCasePromptSnapshot(editedSnapshot) &&
+                editedSnapshot.includeSubdirsChecked == (expectedState == ToggleState_On))
             {
                 return true;
             }
             std::this_thread::sleep_for(20ms);
         }
 
-        return DebugGetFolderViewChangeCasePromptSnapshot(editedSnapshot) && editedSnapshot.includeSubdirsChecked == (expectedState == ToggleState_On);
+        return DebugGetFolderViewChangeCasePromptSnapshot(editedSnapshot) &&
+               editedSnapshot.includeSubdirsChecked == (expectedState == ToggleState_On);
     };
 
     constexpr size_t kUpperStyleIndex          = 1u;
@@ -4022,7 +4040,7 @@ struct FatalErrorReadableSurfaceProbe final
     state.Require(upperNames.contains(L"FOO.TXT"), L"Expected FOO.TXT after change case upper.");
     state.Require(upperNames.contains(L"BAR.BAZ"), L"Expected BAR.BAZ after change case upper.");
 
-    const std::filesystem::path guardRoot   = suiteRoot / L"work" / L"change_case_guard";
+    const std::filesystem::path guardRoot = suiteRoot / L"work" / L"change_case_guard";
     const std::filesystem::path guardNested = guardRoot / L"NestedGuard.TXT";
     ec.clear();
     std::filesystem::remove_all(guardRoot, ec);
@@ -4032,10 +4050,10 @@ struct FatalErrorReadableSurfaceProbe final
     struct GuardCapture final
     {
         std::filesystem::path expectedNested;
-        bool prepareCalled       = false;
-        bool prepareSawNested    = false;
+        bool prepareCalled = false;
+        bool prepareSawNested = false;
         uint64_t revalidateCalls = 0u;
-        HRESULT prepareResult    = S_OK;
+        HRESULT prepareResult = S_OK;
         HRESULT revalidateResult = S_OK;
     };
     const auto prepareGuard = [](const std::span<const std::filesystem::path> paths, void* cookie) noexcept -> HRESULT
@@ -4045,9 +4063,11 @@ struct FatalErrorReadableSurfaceProbe final
         {
             return E_POINTER;
         }
-        guard->prepareCalled    = true;
-        guard->prepareSawNested = std::ranges::any_of(
-            paths, [&](const std::filesystem::path& path) noexcept { return OrdinalString::EqualsNoCasePath(path, guard->expectedNested); });
+        guard->prepareCalled = true;
+        guard->prepareSawNested = std::ranges::any_of(paths, [&](const std::filesystem::path& path) noexcept
+        {
+            return OrdinalString::EqualsNoCasePath(path, guard->expectedNested);
+        });
         return guard->prepareResult;
     };
     const auto revalidateGuard = [](const std::span<const std::filesystem::path>, void* cookie) noexcept -> HRESULT
@@ -4063,17 +4083,17 @@ struct FatalErrorReadableSurfaceProbe final
 
     GuardCapture canceledGuard{
         .expectedNested = guardNested,
-        .prepareResult  = S_FALSE,
+        .prepareResult = S_FALSE,
     };
     const ChangeCase::MutationGuardCallbacks canceledCallbacks{
-        .prepare    = prepareGuard,
+        .prepare = prepareGuard,
         .revalidate = revalidateGuard,
-        .cookie     = &canceledGuard,
+        .cookie = &canceledGuard,
     };
     ChangeCase::Options guardedRecursive = upper;
-    guardedRecursive.includeSubdirs      = true;
-    const HRESULT canceledGuardHr =
-        ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {guardRoot}, guardedRecursive, {}, nullptr, nullptr, &canceledCallbacks);
+    guardedRecursive.includeSubdirs = true;
+    const HRESULT canceledGuardHr = ChangeCase::DebugApplyToPathsForTests(
+        *fs, L"builtin/file-system", {guardRoot}, guardedRecursive, {}, nullptr, nullptr, &canceledCallbacks);
     state.Require(canceledGuardHr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
                   std::format(L"Recursive Change Case guard Cancel returned 0x{:08X}.", static_cast<unsigned long>(canceledGuardHr)));
     state.Require(canceledGuard.prepareCalled && canceledGuard.prepareSawNested,
@@ -4096,17 +4116,18 @@ struct FatalErrorReadableSurfaceProbe final
         .expectedNested = guardNested,
     };
     const ChangeCase::MutationGuardCallbacks acceptedCallbacks{
-        .prepare    = prepareGuard,
+        .prepare = prepareGuard,
         .revalidate = revalidateGuard,
-        .cookie     = &acceptedGuard,
+        .cookie = &acceptedGuard,
     };
-    const HRESULT acceptedGuardHr =
-        ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {guardRoot}, guardedRecursive, {}, nullptr, nullptr, &acceptedCallbacks);
+    const HRESULT acceptedGuardHr = ChangeCase::DebugApplyToPathsForTests(
+        *fs, L"builtin/file-system", {guardRoot}, guardedRecursive, {}, nullptr, nullptr, &acceptedCallbacks);
     state.Require(SUCCEEDED(acceptedGuardHr),
                   std::format(L"Recursive Change Case accepted guard returned 0x{:08X}.", static_cast<unsigned long>(acceptedGuardHr)));
     state.Require(acceptedGuard.prepareCalled && acceptedGuard.prepareSawNested,
                   L"Recursive Change Case accepted guard did not retain the discovered nested mutation set.");
-    state.Require(acceptedGuard.revalidateCalls >= 1u, L"Recursive Change Case accepted guard was not revalidated before its rename batch.");
+    state.Require(acceptedGuard.revalidateCalls >= 1u,
+                  L"Recursive Change Case accepted guard was not revalidated before its rename batch.");
     guardNames.clear();
     ec.clear();
     for (const auto& entry : std::filesystem::directory_iterator(guardRoot, ec))
@@ -4117,8 +4138,10 @@ struct FatalErrorReadableSurfaceProbe final
         }
         guardNames.insert(entry.path().filename().wstring());
     }
-    state.Require(guardNames.contains(L"NESTEDGUARD.TXT"), L"Recursive Change Case did not publish the accepted exact-object rename.");
-    state.Require(! guardNames.contains(L"NestedGuard.TXT"), L"Recursive Change Case retained the old name after the accepted exact-object rename.");
+    state.Require(guardNames.contains(L"NESTEDGUARD.TXT"),
+                  L"Recursive Change Case did not publish the accepted exact-object rename.");
+    state.Require(! guardNames.contains(L"NestedGuard.TXT"),
+                  L"Recursive Change Case retained the old name after the accepted exact-object rename.");
 
     const std::filesystem::path raceSource = guardRoot / L"race.txt";
     state.Require(SelfTest::WriteTextFile(raceSource, "race"), L"Failed to create Change Case revalidation fixture.");
@@ -4127,9 +4150,10 @@ struct FatalErrorReadableSurfaceProbe final
     };
     const ChangeCase::MutationGuardCallbacks racedCallbacks{
         .revalidate = revalidateGuard,
-        .cookie     = &racedGuard,
+        .cookie = &racedGuard,
     };
-    const HRESULT racedGuardHr = ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {raceSource}, upper, {}, nullptr, nullptr, &racedCallbacks);
+    const HRESULT racedGuardHr =
+        ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {raceSource}, upper, {}, nullptr, nullptr, &racedCallbacks);
     state.Require(racedGuardHr == HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH),
                   std::format(L"Change Case replacement guard returned 0x{:08X}.", static_cast<unsigned long>(racedGuardHr)));
     state.Require(racedGuard.revalidateCalls == 1u, L"Change Case did not revalidate immediately before its rename batch.");
@@ -4150,7 +4174,8 @@ struct FatalErrorReadableSurfaceProbe final
     state.Require(SelfTest::WriteTextFile(canceledSource, "cancel"), L"Failed to create Change Case worker-cancellation fixture.");
     std::stop_source canceledWorker;
     canceledWorker.request_stop();
-    const HRESULT canceledWorkerHr = ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {canceledSource}, upper, canceledWorker.get_token());
+    const HRESULT canceledWorkerHr =
+        ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {canceledSource}, upper, canceledWorker.get_token());
     state.Require(canceledWorkerHr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
                   std::format(L"Change Case pre-canceled worker returned 0x{:08X}.", static_cast<unsigned long>(canceledWorkerHr)));
     guardNames.clear();
@@ -4166,14 +4191,15 @@ struct FatalErrorReadableSurfaceProbe final
     state.Require(guardNames.contains(L"cancel.txt"), L"Change Case removed the source after worker cancellation.");
     state.Require(! guardNames.contains(L"CANCEL.TXT"), L"Change Case mutated a path after worker cancellation.");
 
-    constexpr size_t kScalingFileCount      = 1'024u;
+    constexpr size_t kScalingFileCount = 1'024u;
     const std::filesystem::path scalingRoot = suiteRoot / L"work" / L"change_case_scaling";
     ec.clear();
     std::filesystem::remove_all(scalingRoot, ec);
     state.Require(SelfTest::EnsureDirectory(scalingRoot), L"Failed to create Change Case scaling root.");
     for (size_t index = 0u; index < kScalingFileCount && state.failure.empty(); ++index)
     {
-        state.Require(SelfTest::WriteTextFile(scalingRoot / std::format(L"MiXeD_{:04}.TXT", index), "scale"), L"Failed to seed the Change Case scaling tree.");
+        state.Require(SelfTest::WriteTextFile(scalingRoot / std::format(L"MiXeD_{:04}.TXT", index), "scale"),
+                      L"Failed to seed the Change Case scaling tree.");
     }
     if (! state.failure.empty())
     {
@@ -4193,22 +4219,24 @@ struct FatalErrorReadableSurfaceProbe final
     };
     std::vector<BatchRenameExecutionOp> scalingOperations;
     const auto scalingStartedAt = std::chrono::steady_clock::now();
-    const HRESULT scalingHr =
-        ChangeCase::BuildRenameOperations(*fs, L"builtin/file-system", {scalingRoot}, apply, scalingOperations, {}, captureScalingProgress, &scalingProgress);
-    const uint64_t scalingUs =
-        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - scalingStartedAt).count());
+    const HRESULT scalingHr = ChangeCase::BuildRenameOperations(
+        *fs, L"builtin/file-system", {scalingRoot}, apply, scalingOperations, {}, captureScalingProgress, &scalingProgress);
+    const uint64_t scalingUs = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - scalingStartedAt).count());
     Debug::Perf::Emit(L"Commands.SelfTest.E5.ChangeCaseDiscoveryUs",
                       L"local-1024",
                       scalingUs,
                       scalingProgress.scannedEntries,
                       static_cast<uint64_t>(scalingOperations.size()),
                       scalingHr);
-    state.Require(scalingHr == S_OK && scalingOperations.size() == kScalingFileCount && scalingProgress.scannedEntries >= kScalingFileCount,
+    state.Require(scalingHr == S_OK && scalingOperations.size() == kScalingFileCount &&
+                      scalingProgress.scannedEntries >= kScalingFileCount,
                   std::format(L"Change Case scaling discovery returned hr=0x{:08X}, scanned={}, operations={}.",
                               static_cast<unsigned long>(scalingHr),
                               scalingProgress.scannedEntries,
                               scalingOperations.size()));
-    state.Require(scalingUs < 5'000'000u, std::format(L"Change Case scaling discovery exceeded the 5 s invariant ceiling ({} us).", scalingUs));
+    state.Require(scalingUs < 5'000'000u,
+                  std::format(L"Change Case scaling discovery exceeded the 5 s invariant ceiling ({} us).", scalingUs));
     return state.failure.empty();
 }
 
@@ -4247,8 +4275,15 @@ struct FatalErrorReadableSurfaceProbe final
     state.Require(SelfTest::EnsureDirectory(nested), L"Failed to create unreadable Change Case directory fixture.");
     state.Require(SelfTest::WriteTextFile(leaf, "truth"), L"Failed to create unreadable Change Case file fixture.");
 
-    wil::unique_handle denyShare(CreateFileW(nested.c_str(), FILE_LIST_DIRECTORY, 0, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr));
-    state.Require(static_cast<bool>(denyShare), std::format(L"Failed to lock nested Change Case directory (error={}).", GetLastError()));
+    wil::unique_handle denyShare(CreateFileW(nested.c_str(),
+                                             FILE_LIST_DIRECTORY,
+                                             0,
+                                             nullptr,
+                                             OPEN_EXISTING,
+                                             FILE_FLAG_BACKUP_SEMANTICS,
+                                             nullptr));
+    state.Require(static_cast<bool>(denyShare),
+                  std::format(L"Failed to lock nested Change Case directory (error={}).", GetLastError()));
     if (! denyShare)
     {
         return false;
@@ -4257,7 +4292,8 @@ struct FatalErrorReadableSurfaceProbe final
     wil::com_ptr<IFilesInformation> blockedInfo;
     const HRESULT expectedReadHr = fs->ReadDirectoryInfo(nested.c_str(), blockedInfo.put());
     state.Require(FAILED(expectedReadHr),
-                  std::format(L"Locked nested directory unexpectedly remained readable (hr=0x{:08X}).", static_cast<unsigned long>(expectedReadHr)));
+                  std::format(L"Locked nested directory unexpectedly remained readable (hr=0x{:08X}).",
+                              static_cast<unsigned long>(expectedReadHr)));
     if (SUCCEEDED(expectedReadHr))
     {
         return false;
@@ -4268,13 +4304,14 @@ struct FatalErrorReadableSurfaceProbe final
     options.target         = ChangeTarget::WholeFilename;
     options.includeSubdirs = true;
     std::vector<BatchRenameExecutionOp> selectedOperations;
-    const HRESULT selectedHr = ChangeCase::BuildRenameOperations(*fs, L"builtin/file-system", {nested}, options, selectedOperations);
+    const HRESULT selectedHr = ChangeCase::BuildRenameOperations(
+        *fs, L"builtin/file-system", {nested}, options, selectedOperations);
     state.Require(selectedHr == expectedReadHr && selectedOperations.empty(),
                   std::format(L"Unreadable selected directory must fail discovery exactly with 0x{:08X}; got 0x{:08X} and {} operations.",
                               static_cast<unsigned long>(expectedReadHr),
                               static_cast<unsigned long>(selectedHr),
                               selectedOperations.size()));
-    const HRESULT hr = ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {root}, options);
+    const HRESULT hr       = ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {root}, options);
 
     state.Require(hr == expectedReadHr,
                   std::format(L"Unreadable descendant must return exact provider failure 0x{:08X}; got 0x{:08X}.",
@@ -4324,7 +4361,7 @@ struct FatalErrorReadableSurfaceProbe final
 
     struct RevalidationFault final
     {
-        uint32_t calls  = 0u;
+        uint32_t calls = 0u;
         HRESULT failure = HRESULT_FROM_WIN32(ERROR_DISK_FULL);
     } fault;
     const auto revalidate = [](std::span<const std::filesystem::path>, void* cookie) noexcept -> HRESULT
@@ -4339,14 +4376,15 @@ struct FatalErrorReadableSurfaceProbe final
     };
     const ChangeCase::MutationGuardCallbacks callbacks{
         .revalidate = revalidate,
-        .cookie     = &fault,
+        .cookie = &fault,
     };
     ChangeCase::Options options{};
     options.style          = ChangeCase::CaseStyle::Upper;
     options.target         = ChangeCase::ChangeTarget::WholeFilename;
     options.includeSubdirs = true;
 
-    const HRESULT partialHr = ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {root}, options, {}, nullptr, nullptr, &callbacks);
+    const HRESULT partialHr =
+        ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {root}, options, {}, nullptr, nullptr, &callbacks);
     state.Require(partialHr == fault.failure,
                   std::format(L"Partial Change Case must retain exact failure 0x{:08X}; got 0x{:08X}.",
                               static_cast<unsigned long>(fault.failure),
@@ -4381,7 +4419,8 @@ struct FatalErrorReadableSurfaceProbe final
     state.Require(SelfTest::WriteTextFile(canceledSource, "cancel"), L"Failed to create Change Case cancel fixture.");
     std::stop_source cancelSource;
     cancelSource.request_stop();
-    const HRESULT cancelHr = ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {canceledSource}, options, cancelSource.get_token());
+    const HRESULT cancelHr =
+        ChangeCase::DebugApplyToPathsForTests(*fs, L"builtin/file-system", {canceledSource}, options, cancelSource.get_token());
     state.Require(cancelHr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
                   std::format(L"Pre-canceled Change Case returned 0x{:08X}.", static_cast<unsigned long>(cancelHr)));
     state.Require(std::filesystem::exists(canceledSource, ec), L"Pre-canceled Change Case mutated its source.");
@@ -4403,7 +4442,8 @@ struct FatalErrorReadableSurfaceProbe final
         return false;
     }
     const HWND folderWindowHwnd = g_folderWindow.GetHwnd();
-    state.Require(folderWindowHwnd != nullptr && IsWindow(folderWindowHwnd) != FALSE, L"Folder window handle unavailable for Change Case task payload test.");
+    state.Require(folderWindowHwnd != nullptr && IsWindow(folderWindowHwnd) != FALSE,
+                  L"Folder window handle unavailable for Change Case task payload test.");
     if (! folderWindowHwnd || IsWindow(folderWindowHwnd) == FALSE)
     {
         return false;
@@ -4412,7 +4452,7 @@ struct FatalErrorReadableSurfaceProbe final
     {
         auto failedPostReceipt = std::make_shared<FolderWindowFileSystemInternal::ChangeCaseTaskReceipt>();
         std::weak_ptr<FolderWindowFileSystemInternal::ChangeCaseTaskReceipt> weakFailedPostReceipt = failedPostReceipt;
-        auto payload     = std::make_unique<FolderWindowFileSystemInternal::ChangeCaseTaskPayload>();
+        auto payload = std::make_unique<FolderWindowFileSystemInternal::ChangeCaseTaskPayload>();
         payload->receipt = failedPostReceipt;
         state.Require(! PostMessagePayload(nullptr, WndMsg::kChangeCaseTaskUpdate, 0, std::move(payload)),
                       L"A Change Case payload post with no target unexpectedly succeeded.");
@@ -4421,22 +4461,25 @@ struct FatalErrorReadableSurfaceProbe final
     }
 
     {
-        wil::unique_hwnd drainWindow(CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr));
+        wil::unique_hwnd drainWindow(CreateWindowExW(
+            0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr));
         state.Require(static_cast<bool>(drainWindow), L"Failed to create Change Case payload-drain test window.");
         if (drainWindow)
         {
             InitPostedPayloadWindow(drainWindow.get());
             auto drainedReceipt = std::make_shared<FolderWindowFileSystemInternal::ChangeCaseTaskReceipt>();
             std::weak_ptr<FolderWindowFileSystemInternal::ChangeCaseTaskReceipt> weakDrainedReceipt = drainedReceipt;
-            auto payload     = std::make_unique<FolderWindowFileSystemInternal::ChangeCaseTaskPayload>();
+            auto payload = std::make_unique<FolderWindowFileSystemInternal::ChangeCaseTaskPayload>();
             payload->receipt = drainedReceipt;
             state.Require(PostMessagePayload(drainWindow.get(), WndMsg::kChangeCaseTaskUpdate, 0, std::move(payload)),
                           L"Failed to queue Change Case payload for drain coverage.");
 
             MSG staleMessage{};
-            state.Require(PeekMessageW(&staleMessage, drainWindow.get(), WndMsg::kChangeCaseTaskUpdate, WndMsg::kChangeCaseTaskUpdate, PM_REMOVE) != FALSE,
+            state.Require(PeekMessageW(
+                              &staleMessage, drainWindow.get(), WndMsg::kChangeCaseTaskUpdate, WndMsg::kChangeCaseTaskUpdate, PM_REMOVE) != FALSE,
                           L"Failed to capture queued Change Case payload token before drain.");
-            state.Require(DrainPostedPayloadsForWindow(drainWindow.get()) == 1u, L"Change Case payload drain did not release exactly one queued payload.");
+            state.Require(DrainPostedPayloadsForWindow(drainWindow.get()) == 1u,
+                          L"Change Case payload drain did not release exactly one queued payload.");
             drainedReceipt.reset();
             state.Require(weakDrainedReceipt.expired(), L"A drained Change Case payload retained its shared receipt.");
             auto stalePayload = TakeMessagePayload<FolderWindowFileSystemInternal::ChangeCaseTaskPayload>(staleMessage.lParam);
@@ -4449,16 +4492,17 @@ struct FatalErrorReadableSurfaceProbe final
     uint64_t taskCreateCount         = 0u;
     uint64_t taskUpdateCount         = 0u;
     uint64_t nextTaskId              = 1u;
-    auto perfReceipt                 = std::make_shared<FolderWindowFileSystemInternal::ChangeCaseTaskReceipt>();
+    auto perfReceipt = std::make_shared<FolderWindowFileSystemInternal::ChangeCaseTaskReceipt>();
     std::weak_ptr<FolderWindowFileSystemInternal::ChangeCaseTaskReceipt> weakPerfReceipt = perfReceipt;
-    const auto perfStarted                                                               = std::chrono::steady_clock::now();
+    const auto perfStarted = std::chrono::steady_clock::now();
     for (uint64_t index = 0u; index < kPayloadCount; ++index)
     {
         FolderWindowFileSystemInternal::ChangeCaseTaskPayload payload{};
         payload.receipt       = perfReceipt;
         payload.update.taskId = 0u;
-        static_cast<void>(FolderWindowFileSystemInternal::ResolveChangeCaseTaskUpdate(payload,
-                                                                                      [&](const FolderWindow::InformationalTaskUpdate& update) noexcept
+        static_cast<void>(FolderWindowFileSystemInternal::ResolveChangeCaseTaskUpdate(
+            payload,
+            [&](const FolderWindow::InformationalTaskUpdate& update) noexcept
         {
             if (update.taskId == 0u)
             {
@@ -4469,8 +4513,8 @@ struct FatalErrorReadableSurfaceProbe final
             return update.taskId;
         }));
     }
-    const uint64_t dispatchUs =
-        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - perfStarted).count());
+    const uint64_t dispatchUs = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - perfStarted).count());
     perfReceipt.reset();
     const uint64_t outstandingReceiptCount = weakPerfReceipt.expired() ? 0u : 1u;
     Debug::Perf::Emit(L"Commands.SelfTest.R1b.ChangeCaseTaskDispatchUs", L"shared-receipt", dispatchUs, kPayloadCount, taskCreateCount, S_OK);
@@ -4479,7 +4523,8 @@ struct FatalErrorReadableSurfaceProbe final
     Debug::Perf::Emit(L"Commands.SelfTest.R1b.TaskUpdateCount", L"one-operation", 0u, taskUpdateCount, kPayloadCount - 1u, S_OK);
     Debug::Perf::Emit(L"Commands.SelfTest.R1b.ProviderCallCount", L"no-provider", 0u, 0u, 0u, S_OK);
     Debug::Perf::Emit(L"Commands.SelfTest.R1b.OutstandingReceiptCount", L"after-drain", 0u, outstandingReceiptCount, 0u, S_OK);
-    state.Require(taskCreateCount == 1u, std::format(L"Shared Change Case receipt created {} simulated tasks instead of one.", taskCreateCount));
+    state.Require(taskCreateCount == 1u,
+                  std::format(L"Shared Change Case receipt created {} simulated tasks instead of one.", taskCreateCount));
     state.Require(taskUpdateCount == kPayloadCount - 1u,
                   std::format(L"Shared Change Case receipt applied {} simulated updates instead of {}.", taskUpdateCount, kPayloadCount - 1u));
     state.Require(outstandingReceiptCount == 0u, L"Change Case task dispatch retained its receipt after payload drain.");
@@ -4495,18 +4540,18 @@ struct FatalErrorReadableSurfaceProbe final
     }
 
     const std::wstring title = L"R1b Change Case task payload truth";
-    auto receipt             = std::make_shared<FolderWindowFileSystemInternal::ChangeCaseTaskReceipt>();
-    const auto postUpdate    = [&](const uint64_t completed, const bool finished) noexcept
+    auto receipt = std::make_shared<FolderWindowFileSystemInternal::ChangeCaseTaskReceipt>();
+    const auto postUpdate = [&](const uint64_t completed, const bool finished) noexcept
     {
-        auto payload                               = std::make_unique<FolderWindowFileSystemInternal::ChangeCaseTaskPayload>();
-        payload->receipt                           = receipt;
-        payload->update.kind                       = FolderWindow::InformationalTaskUpdate::Kind::ChangeCase;
-        payload->update.title                      = title;
-        payload->update.changeCaseRenaming         = ! finished;
-        payload->update.changeCasePlannedRenames   = 2u;
-        payload->update.changeCaseCompletedRenames = completed;
-        payload->update.finished                   = finished;
-        payload->update.resultHr                   = S_OK;
+        auto payload = std::make_unique<FolderWindowFileSystemInternal::ChangeCaseTaskPayload>();
+        payload->receipt                            = receipt;
+        payload->update.kind                        = FolderWindow::InformationalTaskUpdate::Kind::ChangeCase;
+        payload->update.title                       = title;
+        payload->update.changeCaseRenaming          = ! finished;
+        payload->update.changeCasePlannedRenames    = 2u;
+        payload->update.changeCaseCompletedRenames  = completed;
+        payload->update.finished                    = finished;
+        payload->update.resultHr                    = S_OK;
         return PostMessagePayload(folderWindowHwnd, WndMsg::kChangeCaseTaskUpdate, 0, std::move(payload));
     };
 
@@ -4521,12 +4566,12 @@ struct FatalErrorReadableSurfaceProbe final
     std::vector<FolderWindow::InformationalTaskUpdate> tasks;
     fileOps->CollectInformationalTasks(tasks);
     std::vector<FolderWindow::InformationalTaskUpdate> matching;
-    std::ranges::copy_if(tasks, std::back_inserter(matching), [&](const FolderWindow::InformationalTaskUpdate& task) noexcept {
-        return task.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeCase && task.title == title;
-    });
+    std::ranges::copy_if(tasks, std::back_inserter(matching), [&](const FolderWindow::InformationalTaskUpdate& task) noexcept
+    { return task.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeCase && task.title == title; });
 
     const uint64_t resolvedTaskId = receipt->taskId.load(std::memory_order_acquire);
-    state.Require(matching.size() == 1u, std::format(L"One Change Case operation must own one informational task; found {}.", matching.size()));
+    state.Require(matching.size() == 1u,
+                  std::format(L"One Change Case operation must own one informational task; found {}.", matching.size()));
     if (matching.size() == 1u)
     {
         state.Require(matching.front().taskId == resolvedTaskId,
@@ -4674,10 +4719,11 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
     state.Require(SelfTest::WriteTextFile(root / L"a.txt", "a"), L"Failed to create pane-filter prompt test file.");
 
     const std::optional<Common::Settings::SelectionMasksSettings> selectionMasksBefore = g_settings.selectionMasks;
-    const auto restoreSelectionMasks                        = wil::scope_exit([&]() noexcept { g_settings.selectionMasks = selectionMasksBefore; });
-    Common::Settings::SelectionMasksSettings selectionMasks = g_settings.selectionMasks.value_or(Common::Settings::SelectionMasksSettings{});
-    selectionMasks.filterHistory                            = {L"*.txt", L"*.log"};
-    g_settings.selectionMasks                               = std::move(selectionMasks);
+    const auto restoreSelectionMasks = wil::scope_exit([&]() noexcept { g_settings.selectionMasks = selectionMasksBefore; });
+    Common::Settings::SelectionMasksSettings selectionMasks =
+        g_settings.selectionMasks.value_or(Common::Settings::SelectionMasksSettings{});
+    selectionMasks.filterHistory = {L"*.txt", L"*.log"};
+    g_settings.selectionMasks    = std::move(selectionMasks);
 
     const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const auto restorePath                                = wil::scope_exit([&]
@@ -6860,7 +6906,8 @@ void AutomateChangeCasePrompt(
         return false;
     }
 
-    const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"pane_rename_long_selection");
+    const SelfTest::TestSandbox sandbox =
+        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"pane_rename_long_selection");
     state.Require(sandbox.IsValid(), L"Pane-rename long-selection TestSandbox root unavailable.");
     if (! sandbox.IsValid())
     {
@@ -7752,7 +7799,7 @@ void AutomateChangeCasePrompt(
             }
 
             FolderViewEditNewPromptDebugSnapshot snapshot{};
-            bool captured                 = false;
+            bool captured = false;
             const auto validationDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(1000ms);
             while (std::chrono::steady_clock::now() < validationDeadline)
             {
@@ -7797,9 +7844,9 @@ void AutomateChangeCasePrompt(
                               formatNameList(probe.missingValidationForNames)));
     state.Require(probe.closedForNames.empty(),
                   std::format(L"Edit New should keep the dialog open after invalid file names; closed for: {}.", formatNameList(probe.closedForNames)));
-    state.Require(
-        probe.unfocusedForNames.empty(),
-        std::format(L"Edit New should refocus the file-name field after invalid file names; unfocused for: {}.", formatNameList(probe.unfocusedForNames)));
+    state.Require(probe.unfocusedForNames.empty(),
+                  std::format(L"Edit New should refocus the file-name field after invalid file names; unfocused for: {}.",
+                              formatNameList(probe.unfocusedForNames)));
     state.Require(probe.cancelled, L"Failed to cancel Edit New validation prompt.");
 
     ec.clear();
@@ -9314,8 +9361,8 @@ void AutomateChangeCasePrompt(
             return;
         }
 
-        confirmCycle.capturedSnapshot =
-            WaitForCreateDirectoryPromptSelectedTextSnapshot(prompt, root, suggestedOne, SelfTest::Scale(3000ms), confirmCycle.snapshot);
+        confirmCycle.capturedSnapshot = WaitForCreateDirectoryPromptSelectedTextSnapshot(
+            prompt, root, suggestedOne, SelfTest::Scale(3000ms), confirmCycle.snapshot);
         if (! confirmCycle.capturedSnapshot)
         {
             return;
@@ -9363,8 +9410,8 @@ void AutomateChangeCasePrompt(
             return;
         }
 
-        reopenCycle.capturedSnapshot =
-            WaitForCreateDirectoryPromptSelectedTextSnapshot(prompt, root, suggestedTwo, SelfTest::Scale(3000ms), reopenCycle.snapshot);
+        reopenCycle.capturedSnapshot = WaitForCreateDirectoryPromptSelectedTextSnapshot(
+            prompt, root, suggestedTwo, SelfTest::Scale(3000ms), reopenCycle.snapshot);
         if (! reopenCycle.capturedSnapshot)
         {
             return;
@@ -9607,15 +9654,17 @@ void AutomateChangeCasePrompt(
             cycleResult.ownedByMainWindow = IsOwnedBy(prompt, mainWindow);
             cycleResult.capturedSnapshot  = WaitForCreateDirectoryPromptSelectedTextSnapshot(
                 prompt, root, LoadStringResource(nullptr, IDS_NEW_FOLDER_DEFAULT_NAME), SelfTest::Scale(3000ms), cycleResult.snapshot);
-            cycleResult.uiaPatternStats = WaitForVisiblePromptButtonStats(prompt, SelfTest::Scale(3000ms));
-            cycleResult.valueStateMatchesSnapshot =
-                WaitForVisibleDescendantValuePatternState(prompt, UIA_EditControlTypeId, [&](const UiaValuePatternState& state) noexcept {
-                return state.value == cycleResult.snapshot.text;
-            }, cycleResult.valueState, std::format(L"Create-directory prompt cycle {} initial ValuePattern read", cycle));
-            cycleResult.buttonState     = CollectVisibleDescendantNamedElementState(prompt, UIA_ButtonControlTypeId);
-            cycleResult.setText         = DebugSetFolderViewCreateDirectoryPromptText(requestedName);
-            cycleResult.actionTriggered = accept ? DebugConfirmFolderViewCreateDirectoryPrompt() : DebugCancelFolderViewCreateDirectoryPrompt();
-            cycleResult.closed          = WaitForWindowClosed(prompt, SelfTest::Scale(3000ms));
+            cycleResult.uiaPatternStats   = WaitForVisiblePromptButtonStats(prompt, SelfTest::Scale(3000ms));
+            cycleResult.valueStateMatchesSnapshot = WaitForVisibleDescendantValuePatternState(
+                prompt,
+                UIA_EditControlTypeId,
+                [&](const UiaValuePatternState& state) noexcept { return state.value == cycleResult.snapshot.text; },
+                cycleResult.valueState,
+                std::format(L"Create-directory prompt cycle {} initial ValuePattern read", cycle));
+            cycleResult.buttonState       = CollectVisibleDescendantNamedElementState(prompt, UIA_ButtonControlTypeId);
+            cycleResult.setText           = DebugSetFolderViewCreateDirectoryPromptText(requestedName);
+            cycleResult.actionTriggered   = accept ? DebugConfirmFolderViewCreateDirectoryPrompt() : DebugCancelFolderViewCreateDirectoryPrompt();
+            cycleResult.closed            = WaitForWindowClosed(prompt, SelfTest::Scale(3000ms));
         });
 
         state.Require(cycleResult.sawPrompt, std::format(L"Create-directory prompt did not open during cycle {}.", cycle));
@@ -9744,10 +9793,10 @@ void AutomateChangeCasePrompt(
         return false;
     }
 
-    const std::filesystem::path root         = suiteRoot / L"work" / (L"item_properties_" + NewGuidText());
-    const std::filesystem::path filePath     = root / L"alpha.txt";
+    const std::filesystem::path root     = suiteRoot / L"work" / (L"item_properties_" + NewGuidText());
+    const std::filesystem::path filePath = root / L"alpha.txt";
     const std::filesystem::path artifactPath = root / L"payload.rs_ren_0123456789abcdef0123456789abcdef";
-    constexpr uint64_t kFileSizeBytes        = 1536u;
+    constexpr uint64_t kFileSizeBytes    = 1536u;
     const std::string filePayload(static_cast<size_t>(kFileSizeBytes), 'x');
 
     std::error_code ec;
@@ -9798,7 +9847,9 @@ void AutomateChangeCasePrompt(
                   L"Failed to set local file-system plugin for item-properties test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for item-properties test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"payload.rs_ren_0123456789abcdef0123456789abcdef"}, SelfTest::Scale(3000ms)),
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left,
+                                   {L"alpha.txt", L"payload.rs_ren_0123456789abcdef0123456789abcdef"},
+                                   SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for item-properties test.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"alpha.txt"), L"Failed to focus alpha.txt.");
     if (! state.failure.empty())
@@ -10214,9 +10265,9 @@ void AutomateChangeCasePrompt(
         return false;
     }
 
-    const std::filesystem::path root         = suiteRoot / L"work" / (L"item_properties_streams_" + NewGuidText());
-    const std::filesystem::path filePath     = root / L"alpha.txt";
-    const std::filesystem::path dirPath      = root / L"beta";
+    const std::filesystem::path root     = suiteRoot / L"work" / (L"item_properties_streams_" + NewGuidText());
+    const std::filesystem::path filePath = root / L"alpha.txt";
+    const std::filesystem::path dirPath  = root / L"beta";
     const std::filesystem::path artifactPath = root / L"payload.rs_ren_0123456789abcdef0123456789abcdef";
 
     std::error_code ec;
@@ -10231,9 +10282,9 @@ void AutomateChangeCasePrompt(
         return false;
     }
 
-    const HRESULT hrFileZone     = WriteAlternateStreamForItemPropertiesTest(filePath, L"Zone.Identifier", "zone-id");
-    const HRESULT hrFileNotes    = WriteAlternateStreamForItemPropertiesTest(filePath, L"notes", "stream-notes");
-    const HRESULT hrFolderNote   = WriteAlternateStreamForItemPropertiesTest(dirPath, L"folder-note", "folder-stream");
+    const HRESULT hrFileZone   = WriteAlternateStreamForItemPropertiesTest(filePath, L"Zone.Identifier", "zone-id");
+    const HRESULT hrFileNotes  = WriteAlternateStreamForItemPropertiesTest(filePath, L"notes", "stream-notes");
+    const HRESULT hrFolderNote = WriteAlternateStreamForItemPropertiesTest(dirPath, L"folder-note", "folder-stream");
     const HRESULT hrArtifactNote = WriteAlternateStreamForItemPropertiesTest(artifactPath, L"artifact-note", "guarded-stream");
     if (FAILED(hrFileZone) || FAILED(hrFileNotes) || FAILED(hrFolderNote) || FAILED(hrArtifactNote))
     {
@@ -10295,9 +10346,10 @@ void AutomateChangeCasePrompt(
                   L"Failed to set local file-system plugin for item-properties streams test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for stream properties test.");
-    state.Require(
-        WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"beta", L"payload.rs_ren_0123456789abcdef0123456789abcdef"}, SelfTest::Scale(3000ms)),
-        L"Pane contents not ready for stream properties test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left,
+                                   {L"alpha.txt", L"beta", L"payload.rs_ren_0123456789abcdef0123456789abcdef"},
+                                   SelfTest::Scale(3000ms)),
+                  L"Pane contents not ready for stream properties test.");
     if (! state.failure.empty())
     {
         return false;
@@ -10403,9 +10455,10 @@ void AutomateChangeCasePrompt(
                   std::format(L"Folder properties should expose one viewable stream; saw {}.", snapshot.viewableStreamCount));
     state.Require(snapshot.contentText.find(L"folder-note: 13 bytes") != std::wstring::npos, L"Folder properties should include folder stream name and size.");
     const std::wstring removeButtonText = LoadStringResource(nullptr, IDS_PROPERTIES_STREAM_REMOVE);
-    const bool invokedRemoveButton      = RunDialogUiaTaskWithMessagePump(L"Item Properties stream Remove invoke", [properties, removeButtonText]() noexcept {
-        return InvokeVisibleDescendantByName(properties, UIA_ButtonControlTypeId, removeButtonText);
-    });
+    const bool invokedRemoveButton      = RunDialogUiaTaskWithMessagePump(
+        L"Item Properties stream Remove invoke",
+        [properties, removeButtonText]() noexcept
+        { return InvokeVisibleDescendantByName(properties, UIA_ButtonControlTypeId, removeButtonText); });
     state.Require(invokedRemoveButton, L"Failed to invoke the visible stream Remove button from properties.");
     state.Require(waitForStreamCount(0u, snapshot), L"Folder properties did not refresh to zero streams after invoking the Remove button.");
     state.Require(FindAlternateStreamSizeForItemPropertiesTest(dirPath, L"folder-note") == std::nullopt,
@@ -10430,8 +10483,10 @@ void AutomateChangeCasePrompt(
     const HRESULT cancelArtifactRemoveHr = DebugRemoveItemPropertiesStream(L"artifact-note");
     HostClearTestPromptResultOverride();
     HostPromptDebugSnapshot artifactPrompt{};
-    state.Require(cancelArtifactRemoveHr == S_FALSE && HostGetTestPromptRequestCount() == 1u && HostGetTestLastPromptDebugSnapshot(artifactPrompt) &&
-                      artifactPrompt.presentation == HOST_PROMPT_PRESENTATION_ARTIFACT_TOUCH && artifactPrompt.defaultResult == HOST_PROMPT_RESULT_CANCEL,
+    state.Require(cancelArtifactRemoveHr == S_FALSE && HostGetTestPromptRequestCount() == 1u &&
+                      HostGetTestLastPromptDebugSnapshot(artifactPrompt) &&
+                      artifactPrompt.presentation == HOST_PROMPT_PRESENTATION_ARTIFACT_TOUCH &&
+                      artifactPrompt.defaultResult == HOST_PROMPT_RESULT_CANCEL,
                   L"Possible artifact stream removal should show one Cancel-default exact-object warning.");
     state.Require(FindAlternateStreamSizeForItemPropertiesTest(artifactPath, L"artifact-note").value_or(0u) == 14u,
                   L"Canceling the Possible artifact stream warning removed or changed the stream.");
@@ -10456,8 +10511,7 @@ namespace
 struct ItemPropertiesFailureFixture final
 {
     explicit ItemPropertiesFailureFixture(CaseState& caseState, HWND mainWindowHandle, std::wstring_view rootPrefix) noexcept
-        : state(caseState),
-          mainWindow(mainWindowHandle)
+        : state(caseState), mainWindow(mainWindowHandle)
     {
         using namespace std::chrono_literals;
         const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
@@ -10603,13 +10657,9 @@ struct ItemPropertiesFailureFixture final
                                   snapshot.sectionCount,
                                   snapshot.artifactClassifierQueryCount));
         state.Require(snapshot.contentText.find(failureMessage(expectedHr)) != std::wstring::npos,
-                      std::format(L"{}: the failure text should carry the provider result 0x{:08X}; text='{}'.",
-                                  context,
-                                  static_cast<unsigned long>(expectedHr),
-                                  snapshot.contentText));
-        state.Require(
-            snapshot.contentText.find(sectionTitle) != std::wstring::npos && snapshot.contentText.find(objectText) != std::wstring::npos,
-            std::format(L"{}: the explanation should name the section and the object state '{}'; text='{}'.", context, objectText, snapshot.contentText));
+                      std::format(L"{}: the failure text should carry the provider result 0x{:08X}; text='{}'.", context, static_cast<unsigned long>(expectedHr), snapshot.contentText));
+        state.Require(snapshot.contentText.find(sectionTitle) != std::wstring::npos && snapshot.contentText.find(objectText) != std::wstring::npos,
+                      std::format(L"{}: the explanation should name the section and the object state '{}'; text='{}'.", context, objectText, snapshot.contentText));
     };
 
     DebugSetNextItemPropertiesLoadFault(2u);
@@ -10685,9 +10735,7 @@ struct ItemPropertiesFailureFixture final
         return false;
     }
     state.Require(before.streamCount == 2u && before.artifactClassifierQueryCount == 0u,
-                  std::format(L"The ordinary file should load two streams and no classifier query (streams={}, queries={}).",
-                              before.streamCount,
-                              before.artifactClassifierQueryCount));
+                  std::format(L"The ordinary file should load two streams and no classifier query (streams={}, queries={}).", before.streamCount, before.artifactClassifierQueryCount));
 
     DebugSetNextItemPropertiesLoadDelayMs(500u);
     state.Require(SUCCEEDED(DebugRemoveItemPropertiesStream(L"Zone.Identifier")), L"Failed to remove Zone.Identifier from Properties.");
@@ -10707,10 +10755,7 @@ struct ItemPropertiesFailureFixture final
         }
         std::this_thread::sleep_for(20ms);
     }
-    state.Require(
-        refreshed,
-        std::format(
-            L"The refresh should read the fresh object: streams={} loading={} text='{}'.", after.streamCount, after.loading ? 1 : 0, after.contentText));
+    state.Require(refreshed, std::format(L"The refresh should read the fresh object: streams={} loading={} text='{}'.", after.streamCount, after.loading ? 1 : 0, after.contentText));
     state.Require(after.contentText.find(L"Zone.Identifier") == std::wstring::npos && after.contentText.find(L"notes: 12 bytes") != std::wstring::npos,
                   L"The refreshed document should drop the removed stream and keep the remaining one.");
     state.Require(FindAlternateStreamSizeForItemPropertiesTest(fixture.filePath, L"Zone.Identifier") == std::nullopt,
@@ -10785,10 +10830,7 @@ struct ItemPropertiesFailureFixture final
     if (fixture.Open(L"alpha.txt", L"reopen after close") != nullptr && fixture.WaitLoaded(reopened, L"reopen after close"))
     {
         state.Require(! reopened.loadFailed && reopened.sectionCount >= 1u && reopened.streamCount == 0u,
-                      std::format(L"A reopened window must load normally (failed={}, sections={}, streams={}).",
-                                  reopened.loadFailed ? 1 : 0,
-                                  reopened.sectionCount,
-                                  reopened.streamCount));
+                      std::format(L"A reopened window must load normally (failed={}, sections={}, streams={}).", reopened.loadFailed ? 1 : 0, reopened.sectionCount, reopened.streamCount));
     }
     return state.failure.empty();
 }
@@ -10900,9 +10942,11 @@ struct ItemPropertiesFailureFixture final
         }
 
         Trace(std::format(L"item_properties_live_dx: collecting UIA pattern stats during '{}'", context));
-        const auto uiaPatternStats = RunDialogUiaTaskWithMessagePump(std::format(L"{} pattern stats", context),
-                                                                     [properties]() noexcept { return CollectVisibleUiaDescendantPatternStats(properties); });
-        Trace(std::format(L"item_properties_live_dx: collected UIA pattern stats during '{}' hasValue={}", context, uiaPatternStats.has_value() ? 1 : 0));
+        const auto uiaPatternStats = RunDialogUiaTaskWithMessagePump(
+            std::format(L"{} pattern stats", context), [properties]() noexcept { return CollectVisibleUiaDescendantPatternStats(properties); });
+        Trace(std::format(L"item_properties_live_dx: collected UIA pattern stats during '{}' hasValue={}",
+                          context,
+                          uiaPatternStats.has_value() ? 1 : 0));
         state.Require(uiaPatternStats.has_value(), std::format(L"Failed to collect live UI Automation stats for Item Properties during {}.", context));
         if (uiaPatternStats.has_value())
         {
@@ -10914,18 +10958,20 @@ struct ItemPropertiesFailureFixture final
         }
 
         Trace(std::format(L"item_properties_live_dx: finding file-name UIA element during '{}'", context));
-        wil::com_ptr<IUIAutomationElement> fileNameElement = RunDialogUiaTaskWithMessagePump(std::format(L"{} file-name element", context),
-                                                                                             [properties]() noexcept
-        {
-            wil::com_ptr<IUIAutomationElement> element;
-            if (! FindMatchingVisibleDescendantElement(properties, UIA_TextControlTypeId, L"alpha.txt", element.put()))
+        wil::com_ptr<IUIAutomationElement> fileNameElement = RunDialogUiaTaskWithMessagePump(
+            std::format(L"{} file-name element", context),
+            [properties]() noexcept
             {
-                return wil::com_ptr<IUIAutomationElement>{};
-            }
-            return element;
-        });
+                wil::com_ptr<IUIAutomationElement> element;
+                if (! FindMatchingVisibleDescendantElement(properties, UIA_TextControlTypeId, L"alpha.txt", element.put()))
+                {
+                    return wil::com_ptr<IUIAutomationElement>{};
+                }
+                return element;
+            });
         Trace(std::format(L"item_properties_live_dx: found file-name UIA element during '{}' hasValue={}", context, fileNameElement ? 1 : 0));
-        state.Require(fileNameElement != nullptr, std::format(L"Item Properties visible card rows should include the selected file name during {}.", context));
+        state.Require(fileNameElement != nullptr,
+                      std::format(L"Item Properties visible card rows should include the selected file name during {}.", context));
         SelfTest::AppendSelfTestTrace(std::format(L"Item Properties live DX: validation complete during {}.", context));
         return state.failure.empty();
     };
@@ -10940,11 +10986,13 @@ struct ItemPropertiesFailureFixture final
     const auto closePropertiesWindow = [&](const HWND properties, std::wstring_view context) noexcept
     {
         Trace(std::format(L"item_properties_live_dx: invoking close UIA element during '{}'", context));
-        const bool invoked = RunDialogUiaTaskWithMessagePump(std::format(L"{} close invoke", context), [properties, closeButtonText]() noexcept {
-            return InvokeVisibleDescendantByName(properties, UIA_ButtonControlTypeId, closeButtonText);
-        });
+        const bool invoked = RunDialogUiaTaskWithMessagePump(
+            std::format(L"{} close invoke", context),
+            [properties, closeButtonText]() noexcept
+            { return InvokeVisibleDescendantByName(properties, UIA_ButtonControlTypeId, closeButtonText); });
         Trace(std::format(L"item_properties_live_dx: invoked close UIA element during '{}' result={}", context, invoked ? 1 : 0));
-        state.Require(invoked, std::format(L"Failed to invoke the visible DX close button on Item Properties during {}.", context));
+        state.Require(invoked,
+                      std::format(L"Failed to invoke the visible DX close button on Item Properties during {}.", context));
         state.Require(WaitForWindowClosed(properties, SelfTest::Scale(3000ms)),
                       std::format(L"Item Properties window did not close after live UIA InvokePattern interaction during {}.", context));
         SelfTest::AppendSelfTestTrace(std::format(L"Item Properties live DX: close complete during {}.", context));
@@ -11137,7 +11185,8 @@ struct ItemPropertiesFailureFixture final
         return false;
     }
 
-    const SelfTest::TestSandbox sandbox = SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"item_properties_scroll");
+    const SelfTest::TestSandbox sandbox =
+        SelfTest::AcquireTestSandbox(SelfTest::SelfTestSuite::Commands, L"item_properties_scroll");
     state.Require(sandbox.IsValid(), L"Item-properties scroll TestSandbox root unavailable.");
     if (! sandbox.IsValid())
     {
@@ -11882,8 +11931,7 @@ struct ItemPropertiesFailureFixture final
     leftAlert  = {};
     rightAlert = {};
     state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, leftAlert), L"Left pane alert snapshot should be available after clear.");
-    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Right, rightAlert),
-                  L"Right pane alert snapshot should be available after clear.");
+    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Right, rightAlert), L"Right pane alert snapshot should be available after clear.");
     state.Require(leftAlert.visible && leftAlert.message == L"Left pane alert should stay",
                   L"Clearing the right host alert cookie should not dismiss the left pane alert.");
     state.Require(! rightAlert.visible, L"Clearing the right host alert cookie should dismiss only the right pane alert.");
@@ -11962,8 +12010,9 @@ void RunDialogsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOp
     SelfTest::RunCase(options, suite, L"cmd_pane_changeCase_unreadable_descendant_truth", [](CaseState& state) noexcept {
         return TestChangeCaseUnreadableDescendantTruth(state);
     });
-    SelfTest::RunCase(
-        options, suite, L"cmd_pane_changeCase_partial_cancel_truth", [](CaseState& state) noexcept { return TestChangeCasePartialCancelTruth(state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_changeCase_partial_cancel_truth", [](CaseState& state) noexcept {
+        return TestChangeCasePartialCancelTruth(state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_pane_changeCase_task_payload_truth", [=](CaseState& state) noexcept {
         return TestChangeCaseTaskPayloadTruth(mainWindow, state);
     });

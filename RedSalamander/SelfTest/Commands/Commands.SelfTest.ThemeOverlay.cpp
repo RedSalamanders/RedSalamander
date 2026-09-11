@@ -4,7 +4,9 @@
 
 namespace
 {
-[[nodiscard]] uint8_t GetThemeOverlayCaptureAlpha(const RedSalamander::DxUi::WindowHostBitmapCapture& capture, LONG x, LONG y) noexcept
+[[nodiscard]] uint8_t GetThemeOverlayCaptureAlpha(const RedSalamander::DxUi::WindowHostBitmapCapture& capture,
+                                                  LONG x,
+                                                  LONG y) noexcept
 {
     if (x < 0 || y < 0 || static_cast<UINT>(x) >= capture.widthPx || static_cast<UINT>(y) >= capture.heightPx)
     {
@@ -48,8 +50,10 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
 
     std::array<ThemeCycleOverlayTheme, 1u> one{{ThemeCycleOverlayTheme{L"user/one", L"One"}}};
     const ThemeCycleOverlaySnapshot only = BuildThemeCycleOverlaySnapshot(one, 99u, ThemeCycleDirection::Next, 42u);
-    state.Require(only.currentThemeId == L"user/one" && only.currentDisplayName == L"One", L"A one-entry ring should clamp selection to its only entry.");
-    state.Require(only.previousThemeId.empty() && only.nextThemeId.empty(), L"A one-entry ring should omit duplicate previous/next semantics.");
+    state.Require(only.currentThemeId == L"user/one" && only.currentDisplayName == L"One",
+                  L"A one-entry ring should clamp selection to its only entry.");
+    state.Require(only.previousThemeId.empty() && only.nextThemeId.empty(),
+                  L"A one-entry ring should omit duplicate previous/next semantics.");
 
     std::array<ThemeCycleOverlayTheme, 2u> two{{
         ThemeCycleOverlayTheme{L"user/a", L"A"},
@@ -69,7 +73,8 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     for (size_t index = 0u; index < ring.size(); ++index)
     {
         const ThemeCycleOverlaySnapshot item = BuildThemeCycleOverlaySnapshot(ring, index, ThemeCycleDirection::Next, 100u + index);
-        state.Require(item.currentThemeId == ring[index].themeId && item.previousThemeId == ring[(index + ring.size() - 1u) % ring.size()].themeId &&
+        state.Require(item.currentThemeId == ring[index].themeId &&
+                          item.previousThemeId == ring[(index + ring.size() - 1u) % ring.size()].themeId &&
                           item.nextThemeId == ring[(index + 1u) % ring.size()].themeId,
                       L"Every built-in ring position should wrap to its exact previous/current/next IDs.");
     }
@@ -80,10 +85,10 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
         ThemeCycleOverlayTheme{L"user/rtl", L"\u0645\u0648\u0636\u0648\u0639 \U0001F319"},
     }};
     const ThemeCycleOverlaySnapshot owned = BuildThemeCycleOverlaySnapshot(unicode, 1u, ThemeCycleDirection::Direct, 51u);
-    unicode[0].displayName                = L"mutated previous";
-    unicode[1].themeId                    = L"mutated/current";
-    unicode[1].displayName                = L"mutated current";
-    unicode[2].displayName                = L"mutated next";
+    unicode[0].displayName = L"mutated previous";
+    unicode[1].themeId = L"mutated/current";
+    unicode[1].displayName = L"mutated current";
+    unicode[2].displayName = L"mutated next";
     state.Require(owned.previousDisplayName == L"Creme\u0301 brulee\u0301" && owned.currentThemeId == L"user/japanese" &&
                       owned.currentDisplayName == L"\u591C\u660E\u3051 \U0001F308" && owned.nextDisplayName == L"\u0645\u0648\u0636\u0648\u0639 \U0001F319",
                   L"Snapshots must own and preserve combining, Japanese, supplementary, and RTL UTF-16 names.");
@@ -108,8 +113,8 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     const ThemeCycleOverlayPlacement tooSmall = ComputeThemeCycleOverlayPlacement(RECT{0, 0, 191, 127}, RECT{0, 0, 1920, 1080}, 96u);
     state.Require(! tooSmall.visible, L"Owners below the defensive minimum should suppress the overlay.");
     const ThemeCycleOverlayPlacement clamped = ComputeThemeCycleOverlayPlacement(RECT{-700, -500, 300, 200}, RECT{0, 0, 1920, 1040}, 96u);
-    state.Require(clamped.visible && clamped.windowRectPx.left >= 0 && clamped.windowRectPx.top >= 0 && clamped.windowRectPx.right <= 1920 &&
-                      clamped.windowRectPx.bottom <= 1040,
+    state.Require(clamped.visible && clamped.windowRectPx.left >= 0 && clamped.windowRectPx.top >= 0 &&
+                      clamped.windowRectPx.right <= 1920 && clamped.windowRectPx.bottom <= 1040,
                   L"Defensive placement should clamp a displaced owner to the monitor work area.");
     return state.failure.empty();
 }
@@ -123,7 +128,7 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     }
 
     const std::wstring originalThemeId = g_settings.theme.currentThemeId;
-    const auto restore                 = wil::scope_exit([&]() noexcept
+    const auto restore = wil::scope_exit([&]() noexcept
     {
         DebugHideThemeCycleOverlay();
         g_settings.theme.currentThemeId = originalThemeId;
@@ -132,7 +137,7 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     });
 
     SetThemeWithoutOverlay(mainWindow, L"builtin/system", state);
-    const HWND focusBefore  = GetFocus();
+    const HWND focusBefore = GetFocus();
     const HWND activeBefore = GetActiveWindow();
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/app/theme/selectNext"), L"Keyboard-style Next Theme dispatch failed.");
 
@@ -147,7 +152,8 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     if (overlayWindow)
     {
         const LONG_PTR exStyle = GetWindowLongPtrW(overlayWindow, GWL_EXSTYLE);
-        state.Require((exStyle & WS_EX_NOACTIVATE) != 0 && (exStyle & WS_EX_TOOLWINDOW) != 0, L"Overlay must be a no-activate tool window.");
+        state.Require((exStyle & WS_EX_NOACTIVATE) != 0 && (exStyle & WS_EX_TOOLWINDOW) != 0,
+                      L"Overlay must be a no-activate tool window.");
         state.Require(GetWindow(overlayWindow, GW_OWNER) == mainWindow, L"Overlay must be owned by the main window.");
     }
     state.Require(GetFocus() == focusBefore && GetActiveWindow() == activeBefore, L"Showing the overlay must preserve focus and activation.");
@@ -180,7 +186,7 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
 [[nodiscard]] bool TestThemeCycleOverlayMenuNoOpAndReuse(HWND mainWindow, CaseState& state) noexcept
 {
     const std::wstring originalThemeId = g_settings.theme.currentThemeId;
-    const auto restore                 = wil::scope_exit([&]() noexcept
+    const auto restore = wil::scope_exit([&]() noexcept
     {
         DebugHideThemeCycleOverlay();
         g_settings.theme.currentThemeId = originalThemeId;
@@ -190,7 +196,7 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
 
     SetThemeWithoutOverlay(mainWindow, L"builtin/system", state);
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_VIEW_THEME_LIGHT, 0), 0);
-    auto first               = DebugGetThemeCycleOverlaySnapshot();
+    auto first = DebugGetThemeCycleOverlaySnapshot();
     const HWND overlayWindow = DebugGetThemeCycleOverlayWindowHandle();
     state.Require(first.visible && first.direction == RedSalamander::Ui::ThemeCycleDirection::Direct,
                   L"A direct View -> Theme choice should use neutral Direct motion.");
@@ -209,20 +215,21 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
                   L"A different direct menu theme should replace content through a transition.");
     state.Require(changed.direction == RedSalamander::Ui::ThemeCycleDirection::Direct,
                   L"Direct menu replacement must remain neutral rather than imply adjacency.");
-    state.Require(DebugGetThemeCycleOverlayWindowHandle() == overlayWindow, L"Direct replacements must reuse the same popup HWND.");
+    state.Require(DebugGetThemeCycleOverlayWindowHandle() == overlayWindow,
+                  L"Direct replacements must reuse the same popup HWND.");
     state.Require(! changed.dismissalTimerArmed, L"A new transition must cancel the old disappearance timer.");
     return state.failure.empty();
 }
 
 [[nodiscard]] bool TestThemeCycleOverlaySourcesAndCustomThemes(HWND mainWindow, CaseState& state) noexcept
 {
-    const std::wstring originalThemeId                                  = g_settings.theme.currentThemeId;
+    const std::wstring originalThemeId = g_settings.theme.currentThemeId;
     const std::vector<Common::Settings::ThemeDefinition> originalThemes = g_settings.theme.themes;
-    const auto restore                                                  = wil::scope_exit([&]() noexcept
+    const auto restore = wil::scope_exit([&]() noexcept
     {
         DebugSetForceThemeCycleDismissTimerFailure(false);
         DebugHideThemeCycleOverlay();
-        g_settings.theme.themes         = originalThemes;
+        g_settings.theme.themes = originalThemes;
         g_settings.theme.currentThemeId = originalThemeId;
         SendMessageW(mainWindow, WM_THEMECHANGED, 0, 0);
         PumpPendingMessages();
@@ -232,18 +239,14 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     emptyName.id          = L"user/aurora-empty";
     emptyName.baseThemeId = L"builtin/light";
     Common::Settings::ThemeDefinition richName{};
-    richName.id             = L"user/aurora-unicode";
-    richName.name           = L"Ze\u0301phyr - \u65E5\u672C\u8A9E - \u0645\u0648\u0636\u0648\u0639 - \U0001F308";
-    richName.baseThemeId    = L"builtin/dark";
+    richName.id          = L"user/aurora-unicode";
+    richName.name        = L"Ze\u0301phyr - \u65E5\u672C\u8A9E - \u0645\u0648\u0636\u0648\u0639 - \U0001F308";
+    richName.baseThemeId = L"builtin/dark";
     g_settings.theme.themes = {emptyName, richName};
 
     const std::vector<RedSalamander::Ui::ThemeCycleOverlayTheme> ring = DebugBuildThemeCycleRing();
     constexpr std::array<std::wstring_view, 5u> expectedBuiltIns{{
-        L"builtin/system",
-        L"builtin/light",
-        L"builtin/dark",
-        L"builtin/rainbow",
-        L"builtin/highContrast",
+        L"builtin/system", L"builtin/light", L"builtin/dark", L"builtin/rainbow", L"builtin/highContrast",
     }};
     state.Require(ring.size() >= expectedBuiltIns.size() + 2u, L"The live cycle ring should contain built-ins and both inline custom themes.");
     if (ring.size() >= expectedBuiltIns.size() + 2u)
@@ -264,8 +267,8 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     SetThemeWithoutOverlay(mainWindow, L"builtin/system", state);
     DebugSelectThemeTarget(mainWindow, richName.id, RedSalamander::Ui::CommandInvocationSource::ThemeMenu);
     auto snapshot = DebugGetThemeCycleOverlaySnapshot();
-    state.Require(snapshot.visible && snapshot.direction == RedSalamander::Ui::ThemeCycleDirection::Direct && snapshot.currentThemeId == richName.id &&
-                      snapshot.currentDisplayName == richName.name,
+    state.Require(snapshot.visible && snapshot.direction == RedSalamander::Ui::ThemeCycleDirection::Direct &&
+                      snapshot.currentThemeId == richName.id && snapshot.currentDisplayName == richName.name,
                   L"A custom View -> Theme choice should show its exact Unicode name with neutral motion.");
     state.Require(snapshot.previousThemeId == emptyName.id && snapshot.nextThemeId == L"builtin/system",
                   L"A selected final settings theme should expose its exact ring neighbors and wrap forward.");
@@ -276,14 +279,15 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
 
     DebugSelectThemeTarget(mainWindow, emptyName.id, RedSalamander::Ui::CommandInvocationSource::FunctionBarPointer);
     snapshot = DebugGetThemeCycleOverlaySnapshot();
-    state.Require(snapshot.visible && snapshot.direction == RedSalamander::Ui::ThemeCycleDirection::Direct && snapshot.currentDisplayName == emptyName.id &&
-                      snapshot.nextThemeId == richName.id,
+    state.Require(snapshot.visible && snapshot.direction == RedSalamander::Ui::ThemeCycleDirection::Direct &&
+                      snapshot.currentDisplayName == emptyName.id && snapshot.nextThemeId == richName.id,
                   L"A Function Bar direct custom theme should show neutral feedback and the empty-name ID fallback.");
 
     SetThemeWithoutOverlay(mainWindow, L"builtin/system", state);
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_VIEW_THEME_PREV, 0), 0);
     snapshot = DebugGetThemeCycleOverlaySnapshot();
-    state.Require(snapshot.visible && snapshot.direction == RedSalamander::Ui::ThemeCycleDirection::Previous && snapshot.currentThemeId == richName.id,
+    state.Require(snapshot.visible && snapshot.direction == RedSalamander::Ui::ThemeCycleDirection::Previous &&
+                      snapshot.currentThemeId == richName.id,
                   L"View -> Theme -> Previous should show directional feedback and wrap to the final custom theme.");
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_VIEW_THEME_NEXT, 0), 0);
     snapshot = DebugGetThemeCycleOverlaySnapshot();
@@ -291,7 +295,8 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
                   L"View -> Theme -> Next should use the same directional ring and wrap back to System.");
 
     DebugHideThemeCycleOverlay();
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/app/theme/select/builtin/dark"), L"Parameterized ordinary shortcut setup should dispatch.");
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/app/theme/select/builtin/dark"),
+                  L"Parameterized ordinary shortcut setup should dispatch.");
     state.Require(g_settings.theme.currentThemeId == L"builtin/dark" && ! DebugGetThemeCycleOverlaySnapshot().visible,
                   L"A parameterized ordinary shortcut should apply its theme without showing the overlay.");
 
@@ -310,7 +315,7 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
 [[nodiscard]] bool TestThemeCycleOverlayFunctionBarAndDismiss(HWND mainWindow, CaseState& state) noexcept
 {
     const std::wstring originalThemeId = g_settings.theme.currentThemeId;
-    const auto restore                 = wil::scope_exit([&]() noexcept
+    const auto restore = wil::scope_exit([&]() noexcept
     {
         DebugHideThemeCycleOverlay();
         g_settings.theme.currentThemeId = originalThemeId;
@@ -326,12 +331,12 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     state.Require(g_settings.theme.currentThemeId == L"builtin/light", L"The Function Bar command should apply the next theme.");
 
     const uint64_t dismissCount = snapshot.explicitDismissCount;
-    const HWND focusBefore      = GetFocus();
-    const HWND activeBefore     = GetActiveWindow();
-    const LONG clickX           = (snapshot.surfaceRectPx.left + snapshot.surfaceRectPx.right) / 2;
-    const LONG clickY           = (snapshot.surfaceRectPx.top + snapshot.surfaceRectPx.bottom) / 2;
-    const LPARAM clickPoint     = MAKELPARAM(static_cast<WORD>(clickX), static_cast<WORD>(clickY));
-    const HWND overlayWindow    = DebugGetThemeCycleOverlayWindowHandle();
+    const HWND focusBefore = GetFocus();
+    const HWND activeBefore = GetActiveWindow();
+    const LONG clickX = (snapshot.surfaceRectPx.left + snapshot.surfaceRectPx.right) / 2;
+    const LONG clickY = (snapshot.surfaceRectPx.top + snapshot.surfaceRectPx.bottom) / 2;
+    const LPARAM clickPoint = MAKELPARAM(static_cast<WORD>(clickX), static_cast<WORD>(clickY));
+    const HWND overlayWindow = DebugGetThemeCycleOverlayWindowHandle();
     SendMessageW(overlayWindow, WM_LBUTTONDOWN, MK_LBUTTON, clickPoint);
     state.Require(DebugGetThemeCycleOverlaySnapshot().pressed && GetCapture() == overlayWindow,
                   L"A primary down inside the popup should consume and capture the full click.");
@@ -347,39 +352,41 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
 
 [[nodiscard]] bool TestThemeCycleOverlayRenderingGeometryAndRecovery(HWND mainWindow, CaseState& state) noexcept
 {
-    const std::wstring originalThemeId                           = g_settings.theme.currentThemeId;
+    const std::wstring originalThemeId = g_settings.theme.currentThemeId;
     const std::optional<Common::Settings::UiSettings> originalUi = g_settings.ui;
-    const LONG_PTR originalOwnerExStyle                          = GetWindowLongPtrW(mainWindow, GWL_EXSTYLE);
-    const auto restore                                           = wil::scope_exit([&]() noexcept
+    const LONG_PTR originalOwnerExStyle = GetWindowLongPtrW(mainWindow, GWL_EXSTYLE);
+    const auto restore = wil::scope_exit([&]() noexcept
     {
         DebugHideThemeCycleOverlay();
         SetWindowLongPtrW(mainWindow, GWL_EXSTYLE, originalOwnerExStyle);
         g_settings.theme.currentThemeId = originalThemeId;
-        g_settings.ui                   = originalUi;
+        g_settings.ui = originalUi;
         SendMessageW(mainWindow, WM_THEMECHANGED, 0, 0);
         PumpPendingMessages();
     });
 
     Common::Settings::UiSettings ui = g_settings.ui.value_or(Common::Settings::UiSettings{});
-    ui.windowBackdrop               = Common::Settings::WindowBackdropMode::Acrylic;
-    g_settings.ui                   = ui;
+    ui.windowBackdrop                = Common::Settings::WindowBackdropMode::Acrylic;
+    g_settings.ui                    = ui;
     SetThemeWithoutOverlay(mainWindow, L"builtin/system", state);
-    const auto countersBefore   = DebugGetThemeCycleOverlaySnapshot();
+    const auto countersBefore = DebugGetThemeCycleOverlaySnapshot();
     const HWND focusBefore      = GetFocus();
     const HWND activeBefore     = GetActiveWindow();
     const HWND foregroundBefore = GetForegroundWindow();
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_VIEW_THEME_DARK, 0), 0);
-    auto snapshot            = DebugGetThemeCycleOverlaySnapshot();
+    auto snapshot = DebugGetThemeCycleOverlaySnapshot();
     const HWND overlayWindow = DebugGetThemeCycleOverlayWindowHandle();
     state.Require(snapshot.visible && overlayWindow != nullptr && snapshot.paintCount >= 1u && snapshot.textLayoutCreateCount >= 3u,
                   L"The first show should synchronously prime a complete painted snapshot and its three text layouts.");
-    const LONG transformedWidthPx       = snapshot.surfaceRectPx.right - snapshot.surfaceRectPx.left;
-    const LONG transformedHeightPx      = snapshot.surfaceRectPx.bottom - snapshot.surfaceRectPx.top;
-    const float surfaceScale            = std::max(0.01f, snapshot.surfaceScale);
-    const LONG expectedBackdropWidthPx  = static_cast<LONG>(std::lround(static_cast<float>(transformedWidthPx) / surfaceScale));
+    const LONG transformedWidthPx = snapshot.surfaceRectPx.right - snapshot.surfaceRectPx.left;
+    const LONG transformedHeightPx = snapshot.surfaceRectPx.bottom - snapshot.surfaceRectPx.top;
+    const float surfaceScale = std::max(0.01f, snapshot.surfaceScale);
+    const LONG expectedBackdropWidthPx = static_cast<LONG>(std::lround(static_cast<float>(transformedWidthPx) / surfaceScale));
     const LONG expectedBackdropHeightPx = static_cast<LONG>(std::lround(static_cast<float>(transformedHeightPx) / surfaceScale));
-    const auto withinCaptureRounding    = [](UINT actual, LONG expected) noexcept
-    { return std::abs(static_cast<int64_t>(actual) - static_cast<int64_t>(expected)) <= 2; };
+    const auto withinCaptureRounding = [](UINT actual, LONG expected) noexcept
+    {
+        return std::abs(static_cast<int64_t>(actual) - static_cast<int64_t>(expected)) <= 2;
+    };
     state.Require(snapshot.backdropCaptured && snapshot.backdropCaptureCount == countersBefore.backdropCaptureCount + 1u &&
                       snapshot.backdropCaptureFailureCount == countersBefore.backdropCaptureFailureCount &&
                       withinCaptureRounding(snapshot.backdropWidthPx, expectedBackdropWidthPx) &&
@@ -406,7 +413,7 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     state.Require((style & (WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS)) == (WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS),
                   L"The popup should use the required clipped borderless styles.");
     state.Require((exStyle & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_NOREDIRECTIONBITMAP)) ==
-                          (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_NOREDIRECTIONBITMAP) &&
+                      (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_NOREDIRECTIONBITMAP) &&
                       (exStyle & WS_EX_APPWINDOW) == 0,
                   L"The popup should be a non-activating, non-taskbar composition tool window.");
     const std::optional<Common::WindowBackdrop::Kind> appliedBackdrop = Common::WindowBackdrop::TryGetAppliedWindowBackdropKind(overlayWindow);
@@ -418,8 +425,10 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     GetClientRect(mainWindow, &ownerClient);
     POINT ownerOrigin{ownerClient.left, ownerClient.top};
     ClientToScreen(mainWindow, &ownerOrigin);
-    ownerClient =
-        RECT{ownerOrigin.x, ownerOrigin.y, ownerOrigin.x + (ownerClient.right - ownerClient.left), ownerOrigin.y + (ownerClient.bottom - ownerClient.top)};
+    ownerClient = RECT{ownerOrigin.x,
+                       ownerOrigin.y,
+                       ownerOrigin.x + (ownerClient.right - ownerClient.left),
+                       ownerOrigin.y + (ownerClient.bottom - ownerClient.top)};
     const LONG ownerCenterX = ownerClient.left + ((ownerClient.right - ownerClient.left) / 2);
     const LONG ownerCenterY = ownerClient.top + ((ownerClient.bottom - ownerClient.top) / 2);
     const LONG popupCenterX = snapshot.windowRectPx.left + ((snapshot.windowRectPx.right - snapshot.windowRectPx.left) / 2);
@@ -435,7 +444,8 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
                       L"The live popup should remain inside the monitor work area.");
     }
 
-    POINT centerClient{(snapshot.surfaceRectPx.left + snapshot.surfaceRectPx.right) / 2, (snapshot.surfaceRectPx.top + snapshot.surfaceRectPx.bottom) / 2};
+    POINT centerClient{(snapshot.surfaceRectPx.left + snapshot.surfaceRectPx.right) / 2,
+                       (snapshot.surfaceRectPx.top + snapshot.surfaceRectPx.bottom) / 2};
     POINT centerScreen = centerClient;
     ClientToScreen(overlayWindow, &centerScreen);
     const LPARAM centerScreenParam = MAKELPARAM(static_cast<WORD>(centerScreen.x), static_cast<WORD>(centerScreen.y));
@@ -454,31 +464,41 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
                       midCapture.bgraPixels.size() == static_cast<size_t>(midCapture.widthPx) * static_cast<size_t>(midCapture.heightPx) * 4u,
                   L"A frozen appearance frame should produce a complete composition bitmap.");
     snapshot = DebugGetThemeCycleOverlaySnapshot();
-    state.Require(snapshot.textLayoutCreateCount == initialLayouts, L"Rendering an animation-only appearance frame must not recreate DirectWrite layouts.");
+    state.Require(snapshot.textLayoutCreateCount == initialLayouts,
+                  L"Rendering an animation-only appearance frame must not recreate DirectWrite layouts.");
     state.Require(GetThemeOverlayCaptureAlpha(midCapture, centerClient.x, centerClient.y) > 0u,
                   L"A visible appearance frame should contain nontransparent material at its center.");
-    const POINT midInsideClient{snapshot.surfaceRectPx.right - 2, (snapshot.surfaceRectPx.top + snapshot.surfaceRectPx.bottom) / 2};
+    const POINT midInsideClient{snapshot.surfaceRectPx.right - 2,
+                                (snapshot.surfaceRectPx.top + snapshot.surfaceRectPx.bottom) / 2};
     const POINT midOutsideClient{snapshot.surfaceRectPx.right + 2, midInsideClient.y};
-    POINT midInsideScreen  = midInsideClient;
+    POINT midInsideScreen = midInsideClient;
     POINT midOutsideScreen = midOutsideClient;
     ClientToScreen(overlayWindow, &midInsideScreen);
     ClientToScreen(overlayWindow, &midOutsideScreen);
-    state.Require(SendMessageW(overlayWindow, WM_NCHITTEST, 0, MAKELPARAM(static_cast<WORD>(midInsideScreen.x), static_cast<WORD>(midInsideScreen.y))) ==
-                          HTCLIENT &&
-                      SendMessageW(overlayWindow, WM_NCHITTEST, 0, MAKELPARAM(static_cast<WORD>(midOutsideScreen.x), static_cast<WORD>(midOutsideScreen.y))) ==
-                          HTTRANSPARENT,
+    state.Require(SendMessageW(overlayWindow,
+                               WM_NCHITTEST,
+                               0,
+                               MAKELPARAM(static_cast<WORD>(midInsideScreen.x), static_cast<WORD>(midInsideScreen.y))) == HTCLIENT &&
+                      SendMessageW(overlayWindow,
+                                   WM_NCHITTEST,
+                                   0,
+                                   MAKELPARAM(static_cast<WORD>(midOutsideScreen.x), static_cast<WORD>(midOutsideScreen.y))) == HTTRANSPARENT,
                   L"Mid-animation hit testing must follow the same transformed surface edge that paint uses.");
 
     DebugAdvanceThemeCycleOverlayTo(snapshot.phaseStartTickMs + RedSalamander::Ui::kThemeCycleAppearDurationMs);
     RedSalamander::DxUi::WindowHostBitmapCapture stableCapture{};
     state.Require(DebugCaptureThemeCycleOverlayBitmap(stableCapture), L"The fully visible overlay bitmap capture should succeed.");
     snapshot = DebugGetThemeCycleOverlaySnapshot();
-    state.Require(snapshot.phase == RedSalamander::Ui::ThemeCycleOverlayPhase::FullyVisible && snapshot.textLayoutCreateCount == initialLayouts,
+    state.Require(snapshot.phase == RedSalamander::Ui::ThemeCycleOverlayPhase::FullyVisible &&
+                      snapshot.textLayoutCreateCount == initialLayouts,
                   L"Settling appearance should preserve cached layouts and enter the steady phase.");
-    state.Require(GetThemeOverlayCaptureAlpha(stableCapture, centerClient.x, centerClient.y) > 0u && GetThemeOverlayCaptureAlpha(stableCapture, 0, 0) == 0u,
+    state.Require(GetThemeOverlayCaptureAlpha(stableCapture, centerClient.x, centerClient.y) > 0u &&
+                      GetThemeOverlayCaptureAlpha(stableCapture, 0, 0) == 0u,
                   L"The stable composition capture should contain an opaque surface and transparent outer gutter.");
-    state.Require((snapshot.currentRectDip.bottom - snapshot.currentRectDip.top) > (snapshot.previousRectDip.bottom - snapshot.previousRectDip.top) &&
-                      (snapshot.currentRectDip.bottom - snapshot.currentRectDip.top) > (snapshot.nextRectDip.bottom - snapshot.nextRectDip.top),
+    state.Require((snapshot.currentRectDip.bottom - snapshot.currentRectDip.top) >
+                      (snapshot.previousRectDip.bottom - snapshot.previousRectDip.top) &&
+                      (snapshot.currentRectDip.bottom - snapshot.currentRectDip.top) >
+                          (snapshot.nextRectDip.bottom - snapshot.nextRectDip.top),
                   L"The semantic current-theme region should be visibly larger than both neighbor regions.");
 
     const uint64_t steadyPaintCount = snapshot.paintCount;
@@ -494,7 +514,8 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     const uint64_t staleBefore = replacement.staleTimerIgnoredCount;
     SendMessageW(overlayWindow, WM_TIMER, 1u, 0);
     replacement = DebugGetThemeCycleOverlaySnapshot();
-    state.Require(replacement.visible && replacement.generation > snapshot.generation && replacement.staleTimerIgnoredCount == staleBefore + 1u,
+    state.Require(replacement.visible && replacement.generation > snapshot.generation &&
+                      replacement.staleTimerIgnoredCount == staleBefore + 1u,
                   L"A delivered old dismissal timer should be rejected without hiding the newest generation.");
     const uint64_t replacementLayouts = replacement.textLayoutCreateCount;
     DebugAdvanceThemeCycleOverlayTo(replacement.phaseStartTickMs + (RedSalamander::Ui::kThemeCycleAdjacentTransitionDurationMs / 2u));
@@ -507,16 +528,18 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     DebugAdvanceThemeCycleOverlayTo(replacement.disappearDeadlineMs);
     auto disappearing = DebugGetThemeCycleOverlaySnapshot();
     DebugAdvanceThemeCycleOverlayTo(disappearing.phaseStartTickMs + (RedSalamander::Ui::kThemeCycleDisappearDurationMs / 2u));
-    disappearing                   = DebugGetThemeCycleOverlaySnapshot();
+    disappearing = DebugGetThemeCycleOverlaySnapshot();
     const float interruptedOpacity = disappearing.surfaceOpacity;
     const float interruptedScale   = disappearing.surfaceScale;
     const float interruptedY       = disappearing.surfaceTranslateYDip;
-    state.Require(interruptedOpacity > 0.0f && interruptedOpacity < 1.0f, L"The frozen exit midpoint should expose an intermediate composed opacity.");
+    state.Require(interruptedOpacity > 0.0f && interruptedOpacity < 1.0f,
+                  L"The frozen exit midpoint should expose an intermediate composed opacity.");
 
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/app/theme/selectNext"), L"Exit-cancel replacement dispatch failed.");
     auto recovered = DebugGetThemeCycleOverlaySnapshot();
     state.Require(recovered.visible && recovered.phase == RedSalamander::Ui::ThemeCycleOverlayPhase::ContentTransition &&
-                      std::abs(recovered.surfaceOpacity - interruptedOpacity) < 0.01f && std::abs(recovered.surfaceScale - interruptedScale) < 0.01f &&
+                      std::abs(recovered.surfaceOpacity - interruptedOpacity) < 0.01f &&
+                      std::abs(recovered.surfaceScale - interruptedScale) < 0.01f &&
                       std::abs(recovered.surfaceTranslateYDip - interruptedY) < 0.01f,
                   L"Input during exit should preserve the sampled surface opacity/scale/translation without a flash.");
     DebugAdvanceThemeCycleOverlayTo(recovered.phaseStartTickMs + (RedSalamander::Ui::kThemeCycleExitCancelRecoveryMs / 2u));
@@ -531,7 +554,7 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
 
     SetWindowLongPtrW(mainWindow, GWL_EXSTYLE, originalOwnerExStyle | WS_EX_LAYOUTRTL);
     DebugSelectThemeTarget(mainWindow, L"builtin/light", RedSalamander::Ui::CommandInvocationSource::ThemeMenu);
-    auto rtl                   = DebugGetThemeCycleOverlaySnapshot();
+    auto rtl = DebugGetThemeCycleOverlaySnapshot();
     const float currentCenterX = (rtl.currentRectDip.left + rtl.currentRectDip.right) * 0.5f;
     state.Require(rtl.previousRectDip.left > currentCenterX && rtl.nextRectDip.right < currentCenterX,
                   L"RTL flow should mirror logical previous to top-leading and next to bottom-trailing.");
@@ -543,7 +566,8 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     RedSalamander::DxUi::WindowHostBitmapCapture highContrastCapture{};
     state.Require(DebugCaptureThemeCycleOverlayBitmap(highContrastCapture), L"The app High Contrast popup capture should succeed.");
     highContrast = DebugGetThemeCycleOverlaySnapshot();
-    state.Require(highContrast.highContrast && highContrast.surfaceOpacity == 1.0f && ! highContrast.backdropCaptured &&
+    state.Require(highContrast.highContrast && highContrast.surfaceOpacity == 1.0f &&
+                      ! highContrast.backdropCaptured &&
                       GetThemeOverlayCaptureAlpha(highContrastCapture,
                                                   (highContrast.surfaceRectPx.left + highContrast.surfaceRectPx.right) / 2,
                                                   (highContrast.surfaceRectPx.top + highContrast.surfaceRectPx.bottom) / 2) > 0u &&
@@ -557,10 +581,10 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     state.Require(DebugGetThemeCycleOverlaySnapshot().paintCount > paintBeforeDeviceLoss,
                   L"Device-loss recovery should repaint the current generation without changing the theme.");
 
-    highContrast         = DebugGetThemeCycleOverlaySnapshot();
-    const LONG insideX   = (highContrast.surfaceRectPx.left + highContrast.surfaceRectPx.right) / 2;
-    const LONG insideY   = (highContrast.surfaceRectPx.top + highContrast.surfaceRectPx.bottom) / 2;
-    const LPARAM inside  = MAKELPARAM(static_cast<WORD>(insideX), static_cast<WORD>(insideY));
+    highContrast = DebugGetThemeCycleOverlaySnapshot();
+    const LONG insideX = (highContrast.surfaceRectPx.left + highContrast.surfaceRectPx.right) / 2;
+    const LONG insideY = (highContrast.surfaceRectPx.top + highContrast.surfaceRectPx.bottom) / 2;
+    const LPARAM inside = MAKELPARAM(static_cast<WORD>(insideX), static_cast<WORD>(insideY));
     const LPARAM outside = MAKELPARAM(static_cast<WORD>(highContrast.surfaceRectPx.right + 1), static_cast<WORD>(insideY));
     SendMessageW(overlayWindow, WM_LBUTTONDOWN, MK_LBUTTON, inside);
     SendMessageW(overlayWindow, WM_LBUTTONUP, 0, outside);
@@ -571,19 +595,20 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     state.Require(DebugGetThemeCycleOverlaySnapshot().visible && ! DebugGetThemeCycleOverlaySnapshot().pressed && GetCapture() == nullptr,
                   L"WM_CANCELMODE should clear the pressed/capture state without dismissal.");
     state.Require(SendMessageW(overlayWindow, WM_RBUTTONDOWN, MK_RBUTTON, inside) == 0 &&
-                      SendMessageW(overlayWindow, WM_MOUSEWHEEL, MAKEWPARAM(0, WHEEL_DELTA), inside) == 0 && DebugGetThemeCycleOverlaySnapshot().visible,
+                      SendMessageW(overlayWindow, WM_MOUSEWHEEL, MAKEWPARAM(0, WHEEL_DELTA), inside) == 0 &&
+                      DebugGetThemeCycleOverlaySnapshot().visible,
                   L"Secondary and wheel input over the popup should be consumed without invoking or dismissing it.");
     return state.failure.empty();
 }
 
 [[nodiscard]] bool TestThemeCycleOverlayReducedMotion(HWND mainWindow, CaseState& state) noexcept
 {
-    const std::wstring originalThemeId                           = g_settings.theme.currentThemeId;
+    const std::wstring originalThemeId = g_settings.theme.currentThemeId;
     const std::optional<Common::Settings::UiSettings> originalUi = g_settings.ui;
-    const auto restore                                           = wil::scope_exit([&]() noexcept
+    const auto restore = wil::scope_exit([&]() noexcept
     {
         DebugHideThemeCycleOverlay();
-        g_settings.ui                   = originalUi;
+        g_settings.ui = originalUi;
         g_settings.theme.currentThemeId = originalThemeId;
         SendMessageW(mainWindow, WM_THEMECHANGED, 0, 0);
         PumpPendingMessages();
@@ -613,7 +638,7 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
 [[nodiscard]] bool TestThemeCycleOverlayTimerFallback(HWND mainWindow, CaseState& state) noexcept
 {
     const std::wstring originalThemeId = g_settings.theme.currentThemeId;
-    const auto restore                 = wil::scope_exit([&]() noexcept
+    const auto restore = wil::scope_exit([&]() noexcept
     {
         DebugSetForceThemeCycleDismissTimerFailure(false);
         DebugHideThemeCycleOverlay();
@@ -632,11 +657,11 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     auto snapshot = DebugGetThemeCycleOverlaySnapshot();
     DebugAdvanceThemeCycleOverlayTo(snapshot.phaseStartTickMs + RedSalamander::Ui::kThemeCycleAppearDurationMs);
     snapshot = DebugGetThemeCycleOverlaySnapshot();
-    state.Require(snapshot.visible && snapshot.phase == RedSalamander::Ui::ThemeCycleOverlayPhase::FullyVisible && ! snapshot.dismissalTimerArmed &&
-                      snapshot.fallbackDeadlineArmed,
+    state.Require(snapshot.visible && snapshot.phase == RedSalamander::Ui::ThemeCycleOverlayPhase::FullyVisible &&
+                      ! snapshot.dismissalTimerArmed && snapshot.fallbackDeadlineArmed,
                   L"A forced SetTimer failure should arm the physical thread-pool deadline fallback.");
 
-    const HWND overlayWindow   = DebugGetThemeCycleOverlayWindowHandle();
+    const HWND overlayWindow = DebugGetThemeCycleOverlayWindowHandle();
     const uint64_t staleBefore = snapshot.staleTimerIgnoredCount;
     SendMessageW(overlayWindow, WndMsg::kThemeCycleOverlayFallbackDeadline, 0u, 0);
     snapshot = DebugGetThemeCycleOverlaySnapshot();
@@ -647,14 +672,14 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     state.Require(WaitForThemeOverlayHidden(std::chrono::milliseconds(3'000)),
                   L"The real thread-pool fallback should post, disappear, and hide within the bounded test timeout.");
     const uint64_t observedDelay = GetTickCount64() - steadyStart;
-    snapshot                     = DebugGetThemeCycleOverlaySnapshot();
+    snapshot = DebugGetThemeCycleOverlaySnapshot();
     state.Require(observedDelay >= RedSalamander::Ui::kThemeCycleDisappearDelayMs,
                   std::format(L"The physical fallback must never begin an early disappearance; observed={0}ms required={1}ms steadyStart={2}ms.",
                               observedDelay,
                               RedSalamander::Ui::kThemeCycleDisappearDelayMs,
                               steadyStart));
-    state.Require(! snapshot.visible && snapshot.phase == RedSalamander::Ui::ThemeCycleOverlayPhase::Hidden && ! snapshot.dismissalTimerArmed &&
-                      ! snapshot.fallbackDeadlineArmed && ! snapshot.animationActive,
+    state.Require(! snapshot.visible && snapshot.phase == RedSalamander::Ui::ThemeCycleOverlayPhase::Hidden &&
+                      ! snapshot.dismissalTimerArmed && ! snapshot.fallbackDeadlineArmed && ! snapshot.animationActive,
                   L"Fallback completion should converge to hidden with no timer or animation subscription retained.");
     return state.failure.empty();
 }
@@ -662,7 +687,7 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
 [[nodiscard]] bool TestThemeCycleOverlayAccessibility(HWND mainWindow, CaseState& state) noexcept
 {
     const std::wstring originalThemeId = g_settings.theme.currentThemeId;
-    const auto restore                 = wil::scope_exit([&]() noexcept
+    const auto restore = wil::scope_exit([&]() noexcept
     {
         DebugHideThemeCycleOverlay();
         g_settings.theme.currentThemeId = originalThemeId;
@@ -701,20 +726,22 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
                   L"Theme overlay Status should remain outside keyboard focus order.");
     VariantClear(&value);
 
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/app/theme/selectNext"), L"Accessibility most-recent generation replacement failed.");
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/app/theme/selectNext"),
+                  L"Accessibility most-recent generation replacement failed.");
     const auto latest = DebugGetThemeCycleOverlaySnapshot();
     VariantInit(&value);
-    const std::wstring expectedRootName =
-        FormatStringResource(nullptr, IDS_THEME_CYCLE_OVERLAY_UIA_FULL, latest.currentDisplayName, latest.previousDisplayName, latest.nextDisplayName);
+    const std::wstring expectedRootName = FormatStringResource(nullptr,
+                                                               IDS_THEME_CYCLE_OVERLAY_UIA_FULL,
+                                                               latest.currentDisplayName,
+                                                               latest.previousDisplayName,
+                                                               latest.nextDisplayName);
     state.Require(SUCCEEDED(simple->GetPropertyValue(UIA_NamePropertyId, &value)) && value.vt == VT_BSTR &&
                       std::wstring_view(value.bstrVal ? value.bstrVal : L"") == expectedRootName,
                   L"The retained root provider should expose the newest generation's full live-region text.");
     VariantClear(&value);
 
     const std::array<std::wstring_view, 3u> expectedAutomationIds{{
-        L"ThemeCycleOverlay.Previous",
-        L"ThemeCycleOverlay.Current",
-        L"ThemeCycleOverlay.Next",
+        L"ThemeCycleOverlay.Previous", L"ThemeCycleOverlay.Current", L"ThemeCycleOverlay.Next",
     }};
     const std::array<std::wstring, 3u> expectedNames{{
         FormatStringResource(nullptr, IDS_THEME_CYCLE_OVERLAY_PREVIOUS_NAME, latest.previousDisplayName),
@@ -722,7 +749,8 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
         FormatStringResource(nullptr, IDS_THEME_CYCLE_OVERLAY_NEXT_NAME, latest.nextDisplayName),
     }};
     wil::com_ptr_nothrow<IRawElementProviderFragment> rootFragment;
-    state.Require(SUCCEEDED(root.query_to(rootFragment.put())) && rootFragment != nullptr, L"The Status root should also expose fragment navigation.");
+    state.Require(SUCCEEDED(root.query_to(rootFragment.put())) && rootFragment != nullptr,
+                  L"The Status root should also expose fragment navigation.");
     wil::com_ptr_nothrow<IRawElementProviderFragment> child;
     state.Require(rootFragment && SUCCEEDED(rootFragment->Navigate(NavigateDirection_FirstChild, child.put())) && child != nullptr,
                   L"The Status root should expose its first semantic text child.");
@@ -756,7 +784,8 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
                       L"Only the Status root should expose the dismiss Invoke pattern.");
 
         wil::com_ptr_nothrow<IRawElementProviderFragment> next;
-        state.Require(SUCCEEDED(child->Navigate(NavigateDirection_NextSibling, next.put())), L"Semantic child sibling navigation should succeed.");
+        state.Require(SUCCEEDED(child->Navigate(NavigateDirection_NextSibling, next.put())),
+                      L"Semantic child sibling navigation should succeed.");
         child = std::move(next);
     }
     state.Require(child == nullptr, L"The Status root should expose exactly Previous, Current, and Next semantic children.");
@@ -780,7 +809,7 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
 [[nodiscard]] bool TestThemeCycleOverlayRetention(HWND mainWindow, CaseState& state) noexcept
 {
     const std::wstring originalThemeId = g_settings.theme.currentThemeId;
-    const auto restore                 = wil::scope_exit([&]() noexcept
+    const auto restore = wil::scope_exit([&]() noexcept
     {
         DebugHideThemeCycleOverlay();
         g_settings.theme.currentThemeId = originalThemeId;
@@ -790,10 +819,10 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
 
     SetThemeWithoutOverlay(mainWindow, L"builtin/system", state);
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/app/theme/selectNext"), L"Retention warmup dispatch failed.");
-    const HWND stableWindow   = DebugGetThemeCycleOverlayWindowHandle();
+    const HWND stableWindow = DebugGetThemeCycleOverlayWindowHandle();
     const auto countersBefore = DebugGetThemeCycleOverlaySnapshot();
-    const DWORD gdiBefore     = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
-    const DWORD userBefore    = GetGuiResources(GetCurrentProcess(), GR_USEROBJECTS);
+    const DWORD gdiBefore   = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
+    const DWORD userBefore  = GetGuiResources(GetCurrentProcess(), GR_USEROBJECTS);
     PROCESS_MEMORY_COUNTERS_EX memoryBefore{};
     memoryBefore.cb = sizeof(memoryBefore);
     static_cast<void>(GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&memoryBefore), sizeof(memoryBefore)));
@@ -814,7 +843,8 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     const DWORD gdiAfter  = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
     const DWORD userAfter = GetGuiResources(GetCurrentProcess(), GR_USEROBJECTS);
     const auto snapshot   = DebugGetThemeCycleOverlaySnapshot();
-    state.Require(DebugGetThemeCycleOverlayWindowHandle() == stableWindow, L"A 1,000-command burst must reuse one overlay HWND.");
+    state.Require(DebugGetThemeCycleOverlayWindowHandle() == stableWindow,
+                  L"A 1,000-command burst must reuse one overlay HWND.");
     state.Require(gdiAfter <= gdiBefore + 2u && userAfter <= userBefore + 2u, L"A 1,000-command burst must not retain GDI/USER handles.");
     state.Require(memoryAfter.PrivateUsage <= memoryBefore.PrivateUsage + (8u * 1024u * 1024u),
                   L"A 1,000-command burst must keep private-memory growth bounded.");
@@ -827,18 +857,20 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
                   L"Synchronous matching-generation presentation should drop no accepted burst generation.");
     DebugHideThemeCycleOverlay();
     const auto hidden = DebugGetThemeCycleOverlaySnapshot();
-    state.Require(! hidden.visible && ! hidden.animationActive && ! hidden.dismissalTimerArmed && ! hidden.fallbackDeadlineArmed && ! hidden.captured &&
-                      ! hidden.pressed,
+    state.Require(! hidden.visible && ! hidden.animationActive && ! hidden.dismissalTimerArmed && ! hidden.fallbackDeadlineArmed &&
+                      ! hidden.captured && ! hidden.pressed,
                   L"Retention teardown should leave no animation, timer, pointer capture, or pressed state.");
 
     const uint64_t createCountBeforeExternalDestroy = hidden.windowCreateCount;
-    state.Require(stableWindow && DestroyWindow(stableWindow) != FALSE, L"The retained overlay HWND should support owner-equivalent external teardown.");
+    state.Require(stableWindow && DestroyWindow(stableWindow) != FALSE,
+                  L"The retained overlay HWND should support owner-equivalent external teardown.");
     const auto externallyDestroyed = DebugGetThemeCycleOverlaySnapshot();
     state.Require(! externallyDestroyed.created && ! externallyDestroyed.visible && ! externallyDestroyed.animationActive &&
                       ! externallyDestroyed.dismissalTimerArmed && ! externallyDestroyed.fallbackDeadlineArmed,
                   L"WM_NCDESTROY should clear the retained control view, HWND ownership, animation, and deadlines.");
     DebugHideThemeCycleOverlay();
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/app/theme/selectNext"), L"The overlay should recreate cleanly after external HWND teardown.");
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/app/theme/selectNext"),
+                  L"The overlay should recreate cleanly after external HWND teardown.");
     const auto recreated = DebugGetThemeCycleOverlaySnapshot();
     state.Require(recreated.created && recreated.visible && recreated.windowCreateCount == createCountBeforeExternalDestroy + 1u,
                   L"A post-teardown theme change should create exactly one fresh overlay window.");
@@ -863,7 +895,8 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     DebugHideThemeCycleOverlay();
     if (const HWND retainedOverlay = DebugGetThemeCycleOverlayWindowHandle(); retainedOverlay)
     {
-        state.Require(DestroyWindow(retainedOverlay) != FALSE, L"Failed to reset the retained theme-cycle overlay HWND before performance validation.");
+        state.Require(DestroyWindow(retainedOverlay) != FALSE,
+                      L"Failed to reset the retained theme-cycle overlay HWND before performance validation.");
     }
     PumpPendingMessages();
     if (! state.failure.empty())
@@ -871,21 +904,21 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
         return false;
     }
 
-    constexpr uint64_t kIterationCount                           = 240u;
-    const std::wstring originalThemeId                           = g_settings.theme.currentThemeId;
+    constexpr uint64_t kIterationCount = 240u;
+    const std::wstring originalThemeId = g_settings.theme.currentThemeId;
     const std::optional<Common::Settings::UiSettings> originalUi = g_settings.ui;
-    const auto restore                                           = wil::scope_exit([&]() noexcept
+    const auto restore = wil::scope_exit([&]() noexcept
     {
         DebugHideThemeCycleOverlay();
         g_settings.theme.currentThemeId = originalThemeId;
-        g_settings.ui                   = originalUi;
+        g_settings.ui = originalUi;
         SendMessageW(mainWindow, WM_THEMECHANGED, 0, 0);
         PumpPendingMessages();
     });
 
     Common::Settings::UiSettings ui = g_settings.ui.value_or(Common::Settings::UiSettings{});
-    ui.windowBackdrop               = Common::Settings::WindowBackdropMode::Acrylic;
-    g_settings.ui                   = ui;
+    ui.windowBackdrop                = Common::Settings::WindowBackdropMode::Acrylic;
+    g_settings.ui                    = ui;
     // Exercise the retained hidden HWND path used by the broad Commands run so
     // the fixture is self-contained when selected as an exact retry.
     SetThemeWithoutOverlay(mainWindow, L"builtin/system", state);
@@ -895,8 +928,8 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     const auto before = DebugGetThemeCycleOverlaySnapshot();
     for (uint64_t iteration = 0u; iteration < kIterationCount; ++iteration)
     {
-        const std::wstring_view commandId =
-            (iteration % 16u) < 12u ? std::wstring_view{L"cmd/app/theme/selectNext"} : std::wstring_view{L"cmd/app/theme/selectPrev"};
+        const std::wstring_view commandId = (iteration % 16u) < 12u ? std::wstring_view{L"cmd/app/theme/selectNext"}
+                                                                    : std::wstring_view{L"cmd/app/theme/selectPrev"};
         state.Require(DebugDispatchShortcutCommand(mainWindow, commandId), L"Theme-cycle perf command dispatch failed.");
         if (! state.failure.empty())
         {
@@ -904,12 +937,12 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
         }
     }
 
-    auto after                                 = DebugGetThemeCycleOverlaySnapshot();
-    const uint64_t createDelta                 = after.windowCreateCount - before.windowCreateCount;
-    const uint64_t reuseDelta                  = after.windowReuseCount - before.windowReuseCount;
-    const uint64_t renderDelta                 = after.paintCount - before.paintCount;
-    const uint64_t layoutDelta                 = after.textLayoutCreateCount - before.textLayoutCreateCount;
-    const uint64_t backdropCaptureDelta        = after.backdropCaptureCount - before.backdropCaptureCount;
+    auto after = DebugGetThemeCycleOverlaySnapshot();
+    const uint64_t createDelta = after.windowCreateCount - before.windowCreateCount;
+    const uint64_t reuseDelta = after.windowReuseCount - before.windowReuseCount;
+    const uint64_t renderDelta = after.paintCount - before.paintCount;
+    const uint64_t layoutDelta = after.textLayoutCreateCount - before.textLayoutCreateCount;
+    const uint64_t backdropCaptureDelta = after.backdropCaptureCount - before.backdropCaptureCount;
     const uint64_t backdropCaptureFailureDelta = after.backdropCaptureFailureCount - before.backdropCaptureFailureCount;
     state.Require(createDelta <= 1u && createDelta + reuseDelta == kIterationCount,
                   L"The perf burst should create at most one lazy HWND and account for every later update as reuse.");
@@ -922,12 +955,13 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
                               after.backdropCaptured,
                               after.backdropWidthPx,
                               after.backdropHeightPx));
-    state.Require(renderDelta >= kIterationCount, L"Every accepted perf generation should synchronously render a matching complete frame.");
+    state.Require(renderDelta >= kIterationCount,
+                  L"Every accepted perf generation should synchronously render a matching complete frame.");
     state.Require(after.droppedGenerationCount == before.droppedGenerationCount,
                   L"The synchronous perf burst should not drop an accepted generation before presentation.");
 
     DebugAdvanceThemeCycleOverlayTo(after.phaseStartTickMs + RedSalamander::Ui::kThemeCycleAdjacentTransitionDurationMs);
-    after                           = DebugGetThemeCycleOverlaySnapshot();
+    after = DebugGetThemeCycleOverlaySnapshot();
     const uint64_t steadyPaintCount = after.paintCount;
     DebugAdvanceThemeCycleOverlayTo(after.disappearDeadlineMs - 1u);
     state.Require(DebugGetThemeCycleOverlaySnapshot().paintCount == steadyPaintCount,
@@ -946,15 +980,27 @@ void SetThemeWithoutOverlay(HWND mainWindow, std::wstring_view themeId, CaseStat
     Debug::Perf::Emit(L"theme.cycle.overlay.layout_create_count", L"case-aggregate", 0u, layoutDelta);
     Debug::Perf::Emit(L"theme.cycle.overlay.backdrop_capture_count", L"case-aggregate", 0u, backdropCaptureDelta);
     Debug::Perf::Emit(L"theme.cycle.overlay.backdrop_capture_failure_count", L"case-aggregate", 0u, backdropCaptureFailureDelta);
-    Debug::Perf::Emit(L"theme.cycle.overlay.dismiss_timer_arm_count", L"case-aggregate", 0u, after.dismissTimerArmCount - before.dismissTimerArmCount);
-    Debug::Perf::Emit(L"theme.cycle.overlay.stale_timer_ignored_count", L"case-aggregate", 0u, after.staleTimerIgnoredCount - before.staleTimerIgnoredCount);
-    Debug::Perf::Emit(L"theme.cycle.overlay.dropped_generation_count", L"case-aggregate", 0u, after.droppedGenerationCount - before.droppedGenerationCount);
-    state.Require(g_settings.theme.currentThemeId == L"builtin/system", L"The deterministic theme-cycle burst should end on the built-in system theme.");
+    Debug::Perf::Emit(L"theme.cycle.overlay.dismiss_timer_arm_count",
+                      L"case-aggregate",
+                      0u,
+                      after.dismissTimerArmCount - before.dismissTimerArmCount);
+    Debug::Perf::Emit(L"theme.cycle.overlay.stale_timer_ignored_count",
+                      L"case-aggregate",
+                      0u,
+                      after.staleTimerIgnoredCount - before.staleTimerIgnoredCount);
+    Debug::Perf::Emit(L"theme.cycle.overlay.dropped_generation_count",
+                      L"case-aggregate",
+                      0u,
+                      after.droppedGenerationCount - before.droppedGenerationCount);
+    state.Require(g_settings.theme.currentThemeId == L"builtin/system",
+                  L"The deterministic theme-cycle burst should end on the built-in system theme.");
     return state.failure.empty();
 }
 } // namespace
 
-void RunThemeCycleOverlayCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
+void RunThemeCycleOverlayCommandsSelfTestCases(HWND mainWindow,
+                                               const SelfTest::SelfTestOptions& options,
+                                               SelfTest::SelfTestSuiteResult& suite) noexcept
 {
     SelfTest::RunCase(options, suite, L"theme_cycle_overlay_pure_state_geometry", [=](CaseState& state) noexcept {
         return TestThemeCycleOverlayPureStateAndGeometry(mainWindow, state);
@@ -974,16 +1020,19 @@ void RunThemeCycleOverlayCommandsSelfTestCases(HWND mainWindow, const SelfTest::
     SelfTest::RunCase(options, suite, L"theme_cycle_overlay_rendering_geometry_recovery", [=](CaseState& state) noexcept {
         return TestThemeCycleOverlayRenderingGeometryAndRecovery(mainWindow, state);
     });
-    SelfTest::RunCase(
-        options, suite, L"theme_cycle_overlay_accessibility", [=](CaseState& state) noexcept { return TestThemeCycleOverlayAccessibility(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"theme_cycle_overlay_accessibility", [=](CaseState& state) noexcept {
+        return TestThemeCycleOverlayAccessibility(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"theme_cycle_overlay_reduced_motion", [=](CaseState& state) noexcept {
         return TestThemeCycleOverlayReducedMotion(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"theme_cycle_overlay_timer_fallback", [=](CaseState& state) noexcept {
         return TestThemeCycleOverlayTimerFallback(mainWindow, state);
     });
-    SelfTest::RunCase(
-        options, suite, L"theme_cycle_overlay_retention", [=](CaseState& state) noexcept { return TestThemeCycleOverlayRetention(mainWindow, state); });
-    SelfTest::RunCase(
-        options, suite, L"theme_cycle_overlay_perf", [=](CaseState& state) noexcept { return TestThemeCycleOverlayPerfBaseline(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"theme_cycle_overlay_retention", [=](CaseState& state) noexcept {
+        return TestThemeCycleOverlayRetention(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"theme_cycle_overlay_perf", [=](CaseState& state) noexcept {
+        return TestThemeCycleOverlayPerfBaseline(mainWindow, state);
+    });
 }

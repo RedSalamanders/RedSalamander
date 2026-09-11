@@ -10,15 +10,18 @@
 #include <chrono>
 #include <unordered_map>
 
-std::vector<ShortcutCommandCatalogEntry> BuildShortcutCommandCatalog(const Common::Settings::ShortcutsSettings& shortcuts, ShortcutCommandContext context)
+std::vector<ShortcutCommandCatalogEntry> BuildShortcutCommandCatalog(
+    const Common::Settings::ShortcutsSettings& shortcuts,
+    ShortcutCommandContext context)
 {
     const auto startedAt = std::chrono::steady_clock::now();
-    const uint8_t eligibleMask =
-        context == ShortcutCommandContext::Terminal
-            ? static_cast<uint8_t>(CommandShortcutScopeMask(CommandShortcutScope::Application) | CommandShortcutScopeMask(CommandShortcutScope::FunctionBar) |
-                                   CommandShortcutScopeMask(CommandShortcutScope::Terminal))
-            : static_cast<uint8_t>(CommandShortcutScopeMask(CommandShortcutScope::Application) | CommandShortcutScopeMask(CommandShortcutScope::FunctionBar) |
-                                   CommandShortcutScopeMask(CommandShortcutScope::FolderView));
+    const uint8_t eligibleMask = context == ShortcutCommandContext::Terminal
+        ? static_cast<uint8_t>(CommandShortcutScopeMask(CommandShortcutScope::Application) |
+                               CommandShortcutScopeMask(CommandShortcutScope::FunctionBar) |
+                               CommandShortcutScopeMask(CommandShortcutScope::Terminal))
+        : static_cast<uint8_t>(CommandShortcutScopeMask(CommandShortcutScope::Application) |
+                               CommandShortcutScopeMask(CommandShortcutScope::FunctionBar) |
+                               CommandShortcutScopeMask(CommandShortcutScope::FolderView));
 
     std::vector<ShortcutCommandCatalogEntry> result;
     std::unordered_map<std::wstring, size_t> indexByCommand;
@@ -29,15 +32,15 @@ std::vector<ShortcutCommandCatalogEntry> BuildShortcutCommandCatalog(const Commo
             continue;
         }
         ShortcutCommandCatalogEntry entry;
-        entry.commandId   = command.id;
+        entry.commandId = command.id;
         entry.displayName = ShortcutText::GetCommandDisplayName(command.id);
         if (command.descriptionStringId != 0u)
         {
             entry.description = LoadStringResource(nullptr, command.descriptionStringId);
         }
-        entry.searchText     = std::format(L"{} {} {} {}", entry.displayName, entry.description, command.id, command.searchKeywords);
-        entry.visualId       = command.visualId;
-        entry.stateSource    = command.stateSource;
+        entry.searchText = std::format(L"{} {} {} {}", entry.displayName, entry.description, command.id, command.searchKeywords);
+        entry.visualId = command.visualId;
+        entry.stateSource = command.stateSource;
         entry.paletteVisible = command.paletteVisible;
         indexByCommand.emplace(entry.commandId, result.size());
         result.push_back(std::move(entry));
@@ -86,7 +89,8 @@ std::vector<ShortcutCommandCatalogEntry> BuildShortcutCommandCatalog(const Commo
             {
                 continue;
             }
-            result[found->second].shortcutTexts.push_back(ShortcutText::FormatChordText(binding.keyPosition, binding.vk, binding.modifiers));
+            result[found->second].shortcutTexts.push_back(
+                ShortcutText::FormatChordText(binding.keyPosition, binding.vk, binding.modifiers));
         }
     };
     if (context == ShortcutCommandContext::Terminal)
@@ -102,11 +106,10 @@ std::vector<ShortcutCommandCatalogEntry> BuildShortcutCommandCatalog(const Commo
         addEffectiveBindings(shortcuts.folderView);
     }
 
-    std::ranges::sort(result,
-                      [](const auto& left, const auto& right) noexcept
+    std::ranges::sort(result, [](const auto& left, const auto& right) noexcept
     {
-        const int nameOrder = CompareStringOrdinal(
-            left.displayName.data(), static_cast<int>(left.displayName.size()), right.displayName.data(), static_cast<int>(right.displayName.size()), TRUE);
+        const int nameOrder = CompareStringOrdinal(left.displayName.data(), static_cast<int>(left.displayName.size()),
+                                                   right.displayName.data(), static_cast<int>(right.displayName.size()), TRUE);
         return nameOrder == CSTR_LESS_THAN || (nameOrder == CSTR_EQUAL && left.commandId < right.commandId);
     });
     Debug::Perf::EmitDurationUs(L"shortcut.catalog.rebuild_us", Debug::Perf::ElapsedUs(startedAt), result.size(), 0u);

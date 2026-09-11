@@ -21,20 +21,20 @@ namespace RedSalamander::Ui
 {
 namespace
 {
-constexpr wchar_t kWindowClassName[]   = L"RedSalamander.ThemeCycleOverlayWindow";
-constexpr UINT_PTR kDismissTimerId     = 1u;
-constexpr float kGutterDip             = 12.0f;
-constexpr float kSmallGutterDip        = 4.0f;
-constexpr float kCornerRadiusDip       = 18.0f;
-constexpr float kMinimumOwnerWidthDip  = 192.0f;
+constexpr wchar_t kWindowClassName[] = L"RedSalamander.ThemeCycleOverlayWindow";
+constexpr UINT_PTR kDismissTimerId    = 1u;
+constexpr float kGutterDip            = 12.0f;
+constexpr float kSmallGutterDip       = 4.0f;
+constexpr float kCornerRadiusDip      = 18.0f;
+constexpr float kMinimumOwnerWidthDip = 192.0f;
 constexpr float kMinimumOwnerHeightDip = 128.0f;
 
 using UniqueThreadpoolTimer = wil::unique_any<PTP_TIMER, decltype(&::CloseThreadpoolTimer), ::CloseThreadpoolTimer>;
 
 struct FallbackDeadlineContext final
 {
-    HWND hwnd       = nullptr;
-    uint64_t cookie = 0u;
+    HWND hwnd        = nullptr;
+    uint64_t cookie  = 0u;
 };
 
 [[nodiscard]] float ClampUnit(float value) noexcept
@@ -92,10 +92,10 @@ struct LayoutGroup final
 
 struct RootCallbacks final
 {
-    void* context                               = nullptr;
+    void* context = nullptr;
     void (*onSettled)(void*, uint64_t) noexcept = nullptr;
-    void (*onHidden)(void*) noexcept            = nullptr;
-    void (*onExplicitDismiss)(void*) noexcept   = nullptr;
+    void (*onHidden)(void*) noexcept = nullptr;
+    void (*onExplicitDismiss)(void*) noexcept = nullptr;
 };
 
 class ThemeCycleOverlayControl final : public DxUi::Panel
@@ -106,13 +106,14 @@ public:
         SetAccessibilityRole(DxUi::AccessibilityRole::Status);
         SetAccessibleAutomationId(L"ThemeCycleOverlay");
         SetFocusable(false);
-        SetAccessibleInvoke([this](DxUi::WindowHost&)
-        {
-            if (_callbacks.onExplicitDismiss)
+        SetAccessibleInvoke(
+            [this](DxUi::WindowHost&)
             {
-                _callbacks.onExplicitDismiss(_callbacks.context);
-            }
-        });
+                if (_callbacks.onExplicitDismiss)
+                {
+                    _callbacks.onExplicitDismiss(_callbacks.context);
+                }
+            });
 
         _previousSemantic = AddChild<DxUi::Label>();
         _currentSemantic  = AddChild<DxUi::Label>();
@@ -125,16 +126,20 @@ public:
         _nextSemantic->SetFocusable(false);
     }
 
-    void SetSnapshot(
-        ThemeCycleOverlaySnapshot snapshot, ThemeCycleOverlayAccessibility accessibility, bool alreadyVisible, bool reducedMotion, uint64_t nowTickMs)
+    void SetSnapshot(ThemeCycleOverlaySnapshot snapshot,
+                     ThemeCycleOverlayAccessibility accessibility,
+                     bool alreadyVisible,
+                     bool reducedMotion,
+                     uint64_t nowTickMs)
     {
         const float preservedOpacity   = _surfaceOpacity;
         const float preservedScale     = _surfaceScale;
         const float preservedTranslate = _surfaceTranslateYDip;
-        const bool recoverSurface      = alreadyVisible && ! reducedMotion &&
-                                         (preservedOpacity < 0.999f || std::abs(preservedScale - 1.0f) > 0.001f || std::abs(preservedTranslate) > 0.001f);
-        _reducedMotion                 = reducedMotion;
-        _accessibility                 = std::move(accessibility);
+        const bool recoverSurface = alreadyVisible && ! reducedMotion &&
+                                    (preservedOpacity < 0.999f || std::abs(preservedScale - 1.0f) > 0.001f ||
+                                     std::abs(preservedTranslate) > 0.001f);
+        _reducedMotion = reducedMotion;
+        _accessibility = std::move(accessibility);
         SetAccessibleName(_accessibility.notification);
         SetAccessibleHelpText(_accessibility.dismissHelp);
 
@@ -158,23 +163,23 @@ public:
             _hasOutgoing      = false;
         }
 
-        _incomingSnapshot                 = std::move(snapshot);
-        _hasIncoming                      = true;
-        _layoutsDirty                     = true;
-        _phaseStartTickMs                 = nowTickMs;
-        _progress                         = reducedMotion ? 1.0f : 0.0f;
-        _surfaceRecoveryActive            = recoverSurface;
-        _surfaceRecoveryFromOpacity       = recoverSurface ? preservedOpacity : 1.0f;
-        _surfaceRecoveryFromScale         = recoverSurface ? preservedScale : 1.0f;
+        _incomingSnapshot = std::move(snapshot);
+        _hasIncoming      = true;
+        _layoutsDirty     = true;
+        _phaseStartTickMs = nowTickMs;
+        _progress         = reducedMotion ? 1.0f : 0.0f;
+        _surfaceRecoveryActive = recoverSurface;
+        _surfaceRecoveryFromOpacity = recoverSurface ? preservedOpacity : 1.0f;
+        _surfaceRecoveryFromScale = recoverSurface ? preservedScale : 1.0f;
         _surfaceRecoveryFromTranslateYDip = recoverSurface ? preservedTranslate : 0.0f;
-        _surfaceOpacity                   = reducedMotion ? 1.0f : (alreadyVisible ? _surfaceRecoveryFromOpacity : 0.0f);
-        _surfaceScale                     = reducedMotion ? 1.0f : (alreadyVisible ? _surfaceRecoveryFromScale : 0.94f);
-        _surfaceTranslateYDip             = reducedMotion ? 0.0f : (alreadyVisible ? _surfaceRecoveryFromTranslateYDip : 8.0f);
+        _surfaceOpacity   = reducedMotion ? 1.0f : (alreadyVisible ? _surfaceRecoveryFromOpacity : 0.0f);
+        _surfaceScale     = reducedMotion ? 1.0f : (alreadyVisible ? _surfaceRecoveryFromScale : 0.94f);
+        _surfaceTranslateYDip = reducedMotion ? 0.0f : (alreadyVisible ? _surfaceRecoveryFromTranslateYDip : 8.0f);
 
         if (reducedMotion)
         {
-            _phase                 = ThemeCycleOverlayPhase::FullyVisible;
-            _hasOutgoing           = false;
+            _phase = ThemeCycleOverlayPhase::FullyVisible;
+            _hasOutgoing = false;
             _surfaceRecoveryActive = false;
         }
         else
@@ -189,10 +194,10 @@ public:
         _reducedMotion = reducedMotion;
         if (reducedMotion)
         {
-            _phase                = ThemeCycleOverlayPhase::Hidden;
-            _progress             = 1.0f;
-            _surfaceOpacity       = 0.0f;
-            _surfaceScale         = 1.0f;
+            _phase              = ThemeCycleOverlayPhase::Hidden;
+            _progress           = 1.0f;
+            _surfaceOpacity     = 0.0f;
+            _surfaceScale       = 1.0f;
             _surfaceTranslateYDip = 0.0f;
             NotifyHidden();
             return;
@@ -361,14 +366,14 @@ public:
 
         D2D1_MATRIX_3X2_F oldTransform{};
         dc->GetTransform(&oldTransform);
-        const float centerX               = (_surfaceRect.left + _surfaceRect.right) * 0.5f;
-        const float centerY               = (_surfaceRect.top + _surfaceRect.bottom) * 0.5f;
+        const float centerX = (_surfaceRect.left + _surfaceRect.right) * 0.5f;
+        const float centerY = (_surfaceRect.top + _surfaceRect.bottom) * 0.5f;
         const D2D1_MATRIX_3X2_F transform = D2D1::Matrix3x2F::Scale(_surfaceScale, _surfaceScale, D2D1::Point2F(centerX, centerY)) *
-                                            D2D1::Matrix3x2F::Translation(0.0f, _surfaceTranslateYDip) * oldTransform;
+                                           D2D1::Matrix3x2F::Translation(0.0f, _surfaceTranslateYDip) * oldTransform;
         dc->SetTransform(transform);
 
-        const D2D1_LAYER_PARAMETERS1 layerParameters =
-            D2D1::LayerParameters1(GetBounds(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1::Matrix3x2F::Identity(), ClampUnit(_surfaceOpacity));
+        const D2D1_LAYER_PARAMETERS1 layerParameters = D2D1::LayerParameters1(
+            GetBounds(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1::Matrix3x2F::Identity(), ClampUnit(_surfaceOpacity));
         dc->PushLayer(layerParameters, nullptr);
         PaintSurface(host);
         PaintContent(host);
@@ -384,16 +389,15 @@ public:
             case ThemeCycleOverlayPhase::Appearing: durationMs = kThemeCycleAppearDurationMs; break;
             case ThemeCycleOverlayPhase::ContentTransition:
                 durationMs = _incomingSnapshot.direction == ThemeCycleDirection::Direct ? kThemeCycleDirectTransitionDurationMs
-                                                                                        : kThemeCycleAdjacentTransitionDurationMs;
+                                                                                         : kThemeCycleAdjacentTransitionDurationMs;
                 break;
             case ThemeCycleOverlayPhase::Disappearing: durationMs = kThemeCycleDisappearDurationMs; break;
             case ThemeCycleOverlayPhase::Hidden:
             case ThemeCycleOverlayPhase::FullyVisible: return false;
         }
 
-        const float linear =
-            durationMs == 0u ? 1.0f : ClampUnit(static_cast<float>(ElapsedMilliseconds(nowTickMs, _phaseStartTickMs)) / static_cast<float>(durationMs));
-        _progress         = linear;
+        const float linear = durationMs == 0u ? 1.0f : ClampUnit(static_cast<float>(ElapsedMilliseconds(nowTickMs, _phaseStartTickMs)) / static_cast<float>(durationMs));
+        _progress = linear;
         const float eased = FastDecelerate(linear);
 
         if (_phase == ThemeCycleOverlayPhase::Appearing)
@@ -406,13 +410,13 @@ public:
         {
             if (_surfaceRecoveryActive)
             {
-                const float recoveryLinear =
-                    ClampUnit(static_cast<float>(ElapsedMilliseconds(nowTickMs, _phaseStartTickMs)) / static_cast<float>(kThemeCycleExitCancelRecoveryMs));
+                const float recoveryLinear = ClampUnit(static_cast<float>(ElapsedMilliseconds(nowTickMs, _phaseStartTickMs)) /
+                                                       static_cast<float>(kThemeCycleExitCancelRecoveryMs));
                 const float recoveryEased = FastDecelerate(recoveryLinear);
-                _surfaceOpacity           = Lerp(_surfaceRecoveryFromOpacity, 1.0f, recoveryEased);
-                _surfaceScale             = Lerp(_surfaceRecoveryFromScale, 1.0f, recoveryEased);
-                _surfaceTranslateYDip     = Lerp(_surfaceRecoveryFromTranslateYDip, 0.0f, recoveryEased);
-                _surfaceRecoveryActive    = recoveryLinear < 1.0f;
+                _surfaceOpacity = Lerp(_surfaceRecoveryFromOpacity, 1.0f, recoveryEased);
+                _surfaceScale = Lerp(_surfaceRecoveryFromScale, 1.0f, recoveryEased);
+                _surfaceTranslateYDip = Lerp(_surfaceRecoveryFromTranslateYDip, 0.0f, recoveryEased);
+                _surfaceRecoveryActive = recoveryLinear < 1.0f;
             }
             else
             {
@@ -435,7 +439,7 @@ public:
 
         if (_phase == ThemeCycleOverlayPhase::Disappearing)
         {
-            _phase          = ThemeCycleOverlayPhase::Hidden;
+            _phase = ThemeCycleOverlayPhase::Hidden;
             _surfaceOpacity = 0.0f;
             NotifyHidden();
         }
@@ -476,7 +480,7 @@ public:
         }
 
         const bool invoke = _pressed && Contains(GetTransformedSurfaceRect(), point);
-        _pressed          = false;
+        _pressed = false;
         Invalidate(host);
         if (invoke && _callbacks.onExplicitDismiss)
         {
@@ -513,24 +517,39 @@ protected:
         const float gutter       = width < 384.0f ? kSmallGutterDip : kGutterDip;
         _surfaceRect             = D2D1::RectF(bounds.left + gutter, bounds.top + gutter, bounds.right - gutter, bounds.bottom - gutter);
 
-        const float inset         = (_surfaceRect.right - _surfaceRect.left) < 420.0f ? 16.0f : 24.0f;
-        const D2D1_RECT_F content = D2D1::RectF(_surfaceRect.left + inset, _surfaceRect.top + inset, _surfaceRect.right - inset, _surfaceRect.bottom - inset);
+        const float inset        = (_surfaceRect.right - _surfaceRect.left) < 420.0f ? 16.0f : 24.0f;
+        const D2D1_RECT_F content = D2D1::RectF(_surfaceRect.left + inset,
+                                                _surfaceRect.top + inset,
+                                                _surfaceRect.right - inset,
+                                                _surfaceRect.bottom - inset);
         const float contentWidth  = std::max(1.0f, content.right - content.left);
         const float contentHeight = std::max(1.0f, content.bottom - content.top);
         const float neighborWidth = contentWidth * 0.44f;
         if (IsRightToLeft())
         {
-            _previousRect = D2D1::RectF(content.right - neighborWidth, content.top, content.right, std::min(content.bottom, content.top + 42.0f));
-            _nextRect     = D2D1::RectF(content.left, std::max(content.top, content.bottom - 42.0f), content.left + neighborWidth, content.bottom);
+            _previousRect = D2D1::RectF(content.right - neighborWidth,
+                                        content.top,
+                                        content.right,
+                                        std::min(content.bottom, content.top + 42.0f));
+            _nextRect = D2D1::RectF(content.left,
+                                    std::max(content.top, content.bottom - 42.0f),
+                                    content.left + neighborWidth,
+                                    content.bottom);
         }
         else
         {
-            _previousRect = D2D1::RectF(content.left, content.top, content.left + neighborWidth, std::min(content.bottom, content.top + 42.0f));
-            _nextRect     = D2D1::RectF(content.right - neighborWidth, std::max(content.top, content.bottom - 42.0f), content.right, content.bottom);
+            _previousRect = D2D1::RectF(content.left,
+                                        content.top,
+                                        content.left + neighborWidth,
+                                        std::min(content.bottom, content.top + 42.0f));
+            _nextRect = D2D1::RectF(content.right - neighborWidth,
+                                    std::max(content.top, content.bottom - 42.0f),
+                                    content.right,
+                                    content.bottom);
         }
         const float centerHeight = std::min(76.0f, std::max(48.0f, contentHeight * 0.42f));
         const float centerY      = (content.top + content.bottom) * 0.5f;
-        _currentRect             = D2D1::RectF(content.left + 32.0f, centerY - (centerHeight * 0.5f), content.right - 32.0f, centerY + (centerHeight * 0.5f));
+        _currentRect = D2D1::RectF(content.left + 32.0f, centerY - (centerHeight * 0.5f), content.right - 32.0f, centerY + (centerHeight * 0.5f));
 
         _previousSemantic->SetBounds(_previousRect);
         _currentSemantic->SetBounds(_currentRect);
@@ -571,20 +590,21 @@ private:
     }
 
     [[nodiscard]] wil::com_ptr<IDWriteTextLayout> CreateLayout(DxUi::WindowHost& host,
-                                                               std::wstring_view text,
-                                                               DxUi::FontRole role,
-                                                               const D2D1_RECT_F& rect,
-                                                               DWRITE_TEXT_ALIGNMENT alignment,
-                                                               DWRITE_PARAGRAPH_ALIGNMENT paragraphAlignment) const noexcept
+                                                                std::wstring_view text,
+                                                                DxUi::FontRole role,
+                                                                const D2D1_RECT_F& rect,
+                                                                DWRITE_TEXT_ALIGNMENT alignment,
+                                                                DWRITE_PARAGRAPH_ALIGNMENT paragraphAlignment) const noexcept
     {
         if (text.empty())
         {
             return {};
         }
 
-        IDWriteFactory* const factory                   = host.GetWriteFactory();
-        const DWRITE_READING_DIRECTION readingDirection = IsRightToLeft() ? DWRITE_READING_DIRECTION_RIGHT_TO_LEFT : DWRITE_READING_DIRECTION_LEFT_TO_RIGHT;
-        IDWriteTextFormat* const format                 = host.GetTextFormat(role, alignment, paragraphAlignment, false, readingDirection);
+        IDWriteFactory* const factory = host.GetWriteFactory();
+        const DWRITE_READING_DIRECTION readingDirection =
+            IsRightToLeft() ? DWRITE_READING_DIRECTION_RIGHT_TO_LEFT : DWRITE_READING_DIRECTION_LEFT_TO_RIGHT;
+        IDWriteTextFormat* const format = host.GetTextFormat(role, alignment, paragraphAlignment, false, readingDirection);
         if (! factory || ! format)
         {
             return {};
@@ -633,12 +653,20 @@ private:
     {
         LayoutGroup group{};
         group.previous.rect   = _previousRect;
-        group.previous.layout = CreateLayout(
-            host, snapshot.previousDisplayName, DxUi::FontRole::BodyStrong, _previousRect, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
-        group.current   = CreateCurrentLayout(host, snapshot.currentDisplayName);
-        group.next.rect = _nextRect;
-        group.next.layout =
-            CreateLayout(host, snapshot.nextDisplayName, DxUi::FontRole::BodyStrong, _nextRect, DWRITE_TEXT_ALIGNMENT_TRAILING, DWRITE_PARAGRAPH_ALIGNMENT_FAR);
+        group.previous.layout = CreateLayout(host,
+                                             snapshot.previousDisplayName,
+                                             DxUi::FontRole::BodyStrong,
+                                             _previousRect,
+                                             DWRITE_TEXT_ALIGNMENT_LEADING,
+                                             DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+        group.current = CreateCurrentLayout(host, snapshot.currentDisplayName);
+        group.next.rect   = _nextRect;
+        group.next.layout = CreateLayout(host,
+                                         snapshot.nextDisplayName,
+                                         DxUi::FontRole::BodyStrong,
+                                         _nextRect,
+                                         DWRITE_TEXT_ALIGNMENT_TRAILING,
+                                         DWRITE_PARAGRAPH_ALIGNMENT_FAR);
         return group;
     }
 
@@ -663,14 +691,18 @@ private:
                                     _surfaceRect,
                                     DxUi::TransientSurfaceOptions{
                                         .cornerRadiusDip = kCornerRadiusDip,
-                                        .drawShadow      = true,
-                                        .pressed         = _pressed,
-                                        .backdrop        = &_surfaceBackdrop,
+                                        .drawShadow       = true,
+                                        .pressed          = _pressed,
+                                        .backdrop         = &_surfaceBackdrop,
                                     });
     }
 
-    void DrawLayout(
-        DxUi::WindowHost& host, const TextLayout& text, const D2D1_RECT_F& targetRect, const D2D1_COLOR_F& color, float opacity, float scale = 1.0f) const
+    void DrawLayout(DxUi::WindowHost& host,
+                    const TextLayout& text,
+                    const D2D1_RECT_F& targetRect,
+                    const D2D1_COLOR_F& color,
+                    float opacity,
+                    float scale = 1.0f) const
     {
         ID2D1DeviceContext* const dc = host.GetDeviceContext();
         if (! dc || ! text.layout || opacity <= 0.001f)
@@ -686,18 +718,18 @@ private:
 
         D2D1_MATRIX_3X2_F oldTransform{};
         dc->GetTransform(&oldTransform);
-        const float sourceCenterX     = (text.rect.left + text.rect.right) * 0.5f;
-        const float sourceCenterY     = (text.rect.top + text.rect.bottom) * 0.5f;
-        const float targetCenterX     = (targetRect.left + targetRect.right) * 0.5f;
-        const float targetCenterY     = (targetRect.top + targetRect.bottom) * 0.5f;
+        const float sourceCenterX = (text.rect.left + text.rect.right) * 0.5f;
+        const float sourceCenterY = (text.rect.top + text.rect.bottom) * 0.5f;
+        const float targetCenterX = (targetRect.left + targetRect.right) * 0.5f;
+        const float targetCenterY = (targetRect.top + targetRect.bottom) * 0.5f;
         const D2D1_MATRIX_3X2_F local = D2D1::Matrix3x2F::Scale(scale, scale, D2D1::Point2F(sourceCenterX, sourceCenterY)) *
-                                        D2D1::Matrix3x2F::Translation(targetCenterX - sourceCenterX, targetCenterY - sourceCenterY) * oldTransform;
+                                       D2D1::Matrix3x2F::Translation(targetCenterX - sourceCenterX, targetCenterY - sourceCenterY) * oldTransform;
         dc->SetTransform(local);
         const bool useOpacityLayer = opacity < 0.999f;
         if (useOpacityLayer)
         {
-            const D2D1_LAYER_PARAMETERS1 layerParameters =
-                D2D1::LayerParameters1(GetBounds(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1::Matrix3x2F::Identity(), ClampUnit(opacity));
+            const D2D1_LAYER_PARAMETERS1 layerParameters = D2D1::LayerParameters1(
+                GetBounds(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1::Matrix3x2F::Identity(), ClampUnit(opacity));
             dc->PushLayer(layerParameters, nullptr);
         }
         dc->DrawTextLayout(D2D1::Point2F(text.rect.left, text.rect.top), text.layout.get(), brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
@@ -727,12 +759,12 @@ private:
         const DxUi::ThemePalette& theme = host.GetTheme();
         if (_phase == ThemeCycleOverlayPhase::Appearing)
         {
-            const float eased            = FastDecelerate(_progress);
-            const float neighborProgress = FastDecelerate(
-                ClampUnit(((_progress * static_cast<float>(kThemeCycleAppearDurationMs)) - 24.0f) / static_cast<float>(kThemeCycleAppearDurationMs - 24u)));
+            const float eased = FastDecelerate(_progress);
+            const float neighborProgress = FastDecelerate(ClampUnit(((_progress * static_cast<float>(kThemeCycleAppearDurationMs)) - 24.0f) /
+                                                                    static_cast<float>(kThemeCycleAppearDurationMs - 24u)));
             DrawLayout(host, _incomingLayouts.current, _currentRect, theme.text, eased, Lerp(0.97f, 1.0f, eased));
             const float logicalOffset = IsRightToLeft() ? 8.0f : -8.0f;
-            D2D1_RECT_F previous      = _previousRect;
+            D2D1_RECT_F previous = _previousRect;
             previous.left += Lerp(logicalOffset, 0.0f, neighborProgress);
             previous.right += Lerp(logicalOffset, 0.0f, neighborProgress);
             D2D1_RECT_F next = _nextRect;
@@ -783,32 +815,32 @@ private:
     ThemeCycleOverlaySnapshot _incomingSnapshot{};
     ThemeCycleOverlaySnapshot _outgoingSnapshot{};
     ThemeCycleOverlayAccessibility _accessibility{};
-    DxUi::Label* _previousSemantic          = nullptr;
-    DxUi::Label* _currentSemantic           = nullptr;
-    DxUi::Label* _nextSemantic              = nullptr;
-    bool _hasIncoming                       = false;
-    bool _hasOutgoing                       = false;
-    mutable bool _layoutsDirty              = true;
-    bool _reducedMotion                     = false;
-    bool _pressed                           = false;
-    bool _surfaceRecoveryActive             = false;
-    float _surfaceRecoveryFromOpacity       = 1.0f;
-    float _surfaceRecoveryFromScale         = 1.0f;
+    DxUi::Label* _previousSemantic = nullptr;
+    DxUi::Label* _currentSemantic  = nullptr;
+    DxUi::Label* _nextSemantic     = nullptr;
+    bool _hasIncoming  = false;
+    bool _hasOutgoing  = false;
+    mutable bool _layoutsDirty = true;
+    bool _reducedMotion = false;
+    bool _pressed = false;
+    bool _surfaceRecoveryActive = false;
+    float _surfaceRecoveryFromOpacity = 1.0f;
+    float _surfaceRecoveryFromScale = 1.0f;
     float _surfaceRecoveryFromTranslateYDip = 0.0f;
-    ThemeCycleOverlayPhase _phase           = ThemeCycleOverlayPhase::Hidden;
-    uint64_t _phaseStartTickMs              = 0u;
-    float _progress                         = 1.0f;
-    float _surfaceOpacity                   = 0.0f;
-    float _surfaceScale                     = 1.0f;
-    float _surfaceTranslateYDip             = 0.0f;
-    D2D1_RECT_F _surfaceRect                = D2D1::RectF();
-    D2D1_RECT_F _previousRect               = D2D1::RectF();
-    D2D1_RECT_F _currentRect                = D2D1::RectF();
-    D2D1_RECT_F _nextRect                   = D2D1::RectF();
+    ThemeCycleOverlayPhase _phase = ThemeCycleOverlayPhase::Hidden;
+    uint64_t _phaseStartTickMs = 0u;
+    float _progress = 1.0f;
+    float _surfaceOpacity = 0.0f;
+    float _surfaceScale = 1.0f;
+    float _surfaceTranslateYDip = 0.0f;
+    D2D1_RECT_F _surfaceRect = D2D1::RectF();
+    D2D1_RECT_F _previousRect = D2D1::RectF();
+    D2D1_RECT_F _currentRect = D2D1::RectF();
+    D2D1_RECT_F _nextRect = D2D1::RectF();
     mutable LayoutGroup _incomingLayouts{};
     mutable LayoutGroup _outgoingLayouts{};
-    mutable uint64_t _paintCount            = 0u;
-    mutable uint64_t _textLayoutBuildCount  = 0u;
+    mutable uint64_t _paintCount = 0u;
+    mutable uint64_t _textLayoutBuildCount = 0u;
     mutable uint64_t _textLayoutCreateCount = 0u;
     mutable DxUi::TransientSurfaceBackdrop _surfaceBackdrop{};
 };
@@ -841,19 +873,22 @@ private:
 }
 } // namespace
 
-ThemeCycleOverlayPlacement ComputeThemeCycleOverlayPlacement(const RECT& ownerClientScreenRectPx, const RECT& monitorWorkAreaPx, UINT dpi) noexcept
+ThemeCycleOverlayPlacement ComputeThemeCycleOverlayPlacement(
+    const RECT& ownerClientScreenRectPx,
+    const RECT& monitorWorkAreaPx,
+    UINT dpi) noexcept
 {
     const LONG clientWidthPx  = std::max<LONG>(0, ownerClientScreenRectPx.right - ownerClientScreenRectPx.left);
     const LONG clientHeightPx = std::max<LONG>(0, ownerClientScreenRectPx.bottom - ownerClientScreenRectPx.top);
-    const float scale         = static_cast<float>(dpi == 0u ? 96u : dpi) / 96.0f;
-    const float widthDip      = static_cast<float>(clientWidthPx) / scale;
-    const float heightDip     = static_cast<float>(clientHeightPx) / scale;
+    const float scale          = static_cast<float>(dpi == 0u ? 96u : dpi) / 96.0f;
+    const float widthDip       = static_cast<float>(clientWidthPx) / scale;
+    const float heightDip      = static_cast<float>(clientHeightPx) / scale;
     if (widthDip < kMinimumOwnerWidthDip || heightDip < kMinimumOwnerHeightDip)
     {
         return {};
     }
 
-    const float surfaceWidthDip  = std::min(std::clamp(widthDip * 0.58f, 360.0f, 640.0f), std::max(1.0f, widthDip - 32.0f));
+    const float surfaceWidthDip = std::min(std::clamp(widthDip * 0.58f, 360.0f, 640.0f), std::max(1.0f, widthDip - 32.0f));
     const float surfaceHeightDip = std::min(std::clamp(heightDip * 0.32f, 180.0f, 260.0f), std::max(1.0f, heightDip - 32.0f));
     const float gutterDip        = surfaceWidthDip < 360.0f || surfaceHeightDip < 180.0f ? kSmallGutterDip : kGutterDip;
     LONG windowWidthPx           = static_cast<LONG>(std::lround((surfaceWidthDip + (gutterDip * 2.0f)) * scale));
@@ -879,11 +914,12 @@ ThemeCycleOverlayPlacement ComputeThemeCycleOverlayPlacement(const RECT& ownerCl
     };
 }
 
-ThemeCycleOverlaySnapshot BuildThemeCycleOverlaySnapshot(std::span<const ThemeCycleOverlayTheme> ring,
-                                                         size_t selectedIndex,
-                                                         ThemeCycleDirection direction,
-                                                         uint64_t generation,
-                                                         std::chrono::steady_clock::time_point inputAcceptedAt)
+ThemeCycleOverlaySnapshot BuildThemeCycleOverlaySnapshot(
+    std::span<const ThemeCycleOverlayTheme> ring,
+    size_t selectedIndex,
+    ThemeCycleDirection direction,
+    uint64_t generation,
+    std::chrono::steady_clock::time_point inputAcceptedAt)
 {
     ThemeCycleOverlaySnapshot snapshot{};
     snapshot.generation      = generation;
@@ -894,11 +930,11 @@ ThemeCycleOverlaySnapshot BuildThemeCycleOverlaySnapshot(std::span<const ThemeCy
         return snapshot;
     }
 
-    selectedIndex               = std::min(selectedIndex, ring.size() - 1u);
-    const size_t previousIndex  = (selectedIndex + ring.size() - 1u) % ring.size();
-    const size_t nextIndex      = (selectedIndex + 1u) % ring.size();
-    snapshot.currentThemeId     = ring[selectedIndex].themeId;
-    snapshot.currentDisplayName = ring[selectedIndex].displayName;
+    selectedIndex = std::min(selectedIndex, ring.size() - 1u);
+    const size_t previousIndex = (selectedIndex + ring.size() - 1u) % ring.size();
+    const size_t nextIndex     = (selectedIndex + 1u) % ring.size();
+    snapshot.currentThemeId      = ring[selectedIndex].themeId;
+    snapshot.currentDisplayName  = ring[selectedIndex].displayName;
     if (ring.size() > 1u)
     {
         snapshot.previousThemeId     = ring[previousIndex].themeId;
@@ -912,7 +948,7 @@ ThemeCycleOverlaySnapshot BuildThemeCycleOverlaySnapshot(std::span<const ThemeCy
 class ThemeCycleOverlayWindow::Impl final
 {
 public:
-    Impl() noexcept              = default;
+    Impl() noexcept = default;
     Impl(const Impl&)            = delete;
     Impl(Impl&&)                 = delete;
     Impl& operator=(const Impl&) = delete;
@@ -922,7 +958,10 @@ public:
         Destroy();
     }
 
-    HRESULT Show(HWND owner, const DxUi::ThemePalette& palette, ThemeCycleOverlaySnapshot snapshot, ThemeCycleOverlayAccessibility accessibility) noexcept
+    HRESULT Show(HWND owner,
+                 const DxUi::ThemePalette& palette,
+                 ThemeCycleOverlaySnapshot snapshot,
+                 ThemeCycleOverlayAccessibility accessibility) noexcept
     {
         try
         {
@@ -934,7 +973,7 @@ public:
             }
 
             const auto createStartedAt = std::chrono::steady_clock::now();
-            const HRESULT createHr     = EnsureCreated(owner);
+            const HRESULT createHr = EnsureCreated(owner);
             if (FAILED(createHr))
             {
                 return createHr;
@@ -971,7 +1010,9 @@ public:
             {
                 const auto backdropStartedAt = std::chrono::steady_clock::now();
                 const bool backdropCaptured  = _root->CaptureBackdrop(SurfaceScreenRectPx());
-                Debug::Perf::EmitDurationUs(L"theme.cycle.overlay.backdrop_capture_us", Debug::Perf::ElapsedUs(backdropStartedAt), backdropCaptured ? 1u : 0u);
+                Debug::Perf::EmitDurationUs(L"theme.cycle.overlay.backdrop_capture_us",
+                                            Debug::Perf::ElapsedUs(backdropStartedAt),
+                                            backdropCaptured ? 1u : 0u);
                 if (backdropCaptured)
                 {
                     ++_backdropCaptureCount;
@@ -983,17 +1024,18 @@ public:
                     Debug::Perf::EmitCounter(L"theme.cycle.overlay.backdrop_capture_failure_count");
                 }
             }
-            const uint64_t paintCountBefore        = _root->GetPaintCount();
+            const uint64_t paintCountBefore = _root->GetPaintCount();
             const uint64_t layoutCreateCountBefore = _root->GetTextLayoutCreateCount();
             if (_root->GetGeneration() != 0u && _root->GetGeneration() != _lastPresentedGeneration)
             {
                 ++_droppedGenerationCount;
                 Debug::Perf::EmitCounter(L"theme.cycle.overlay.dropped_generation_count");
             }
-            _notification    = accessibility.notification;
+            _notification = accessibility.notification;
             _inputAcceptedAt = snapshot.inputAcceptedAt;
-            _root->SetFlowDirection((GetWindowLongPtrW(owner, GWL_EXSTYLE) & WS_EX_LAYOUTRTL) != 0 ? DxUi::FlowDirection::RightToLeft
-                                                                                                   : DxUi::FlowDirection::LeftToRight);
+            _root->SetFlowDirection((GetWindowLongPtrW(owner, GWL_EXSTYLE) & WS_EX_LAYOUTRTL) != 0
+                                        ? DxUi::FlowDirection::RightToLeft
+                                        : DxUi::FlowDirection::LeftToRight);
             _root->SetSnapshot(std::move(snapshot), std::move(accessibility), wasVisible, palette.reducedMotion, GetTickCount64());
             _host.RefreshAccessibilitySnapshot();
 
@@ -1034,9 +1076,13 @@ public:
 
             if (_root->GetGeneration() != 0u)
             {
-                Debug::Perf::EmitDurationUs(L"theme.cycle.input_to_visible_us", Debug::Perf::ElapsedUs(_inputAcceptedAt), _root->GetGeneration());
+                Debug::Perf::EmitDurationUs(L"theme.cycle.input_to_visible_us",
+                                            Debug::Perf::ElapsedUs(_inputAcceptedAt),
+                                            _root->GetGeneration());
             }
-            Debug::Perf::EmitDurationUs(L"theme.cycle.overlay.update_us", Debug::Perf::ElapsedUs(updateStartedAt), _root->GetGeneration());
+            Debug::Perf::EmitDurationUs(L"theme.cycle.overlay.update_us",
+                                        Debug::Perf::ElapsedUs(updateStartedAt),
+                                        _root->GetGeneration());
             return S_OK;
         }
         catch (const std::bad_alloc&)
@@ -1061,9 +1107,9 @@ public:
             _host.ResetInteractionState();
             ShowWindow(_hwnd.get(), SW_HIDE);
         }
-        _visible             = false;
-        _steadyVisibleTickMs = 0u;
-        _disappearDeadlineMs = 0u;
+        _visible                = false;
+        _steadyVisibleTickMs    = 0u;
+        _disappearDeadlineMs    = 0u;
         if (_root)
         {
             _root->SetHidden();
@@ -1096,8 +1142,7 @@ public:
 
     void OnOwnerAvailabilityChanged() noexcept
     {
-        if (_visible &&
-            (! _owner || IsWindow(_owner) == FALSE || IsWindowVisible(_owner) == FALSE || IsWindowEnabled(_owner) == FALSE || IsIconic(_owner) != FALSE))
+        if (_visible && (!_owner || IsWindow(_owner) == FALSE || IsWindowVisible(_owner) == FALSE || IsWindowEnabled(_owner) == FALSE || IsIconic(_owner) != FALSE))
         {
             Hide();
         }
@@ -1116,53 +1161,53 @@ public:
     [[nodiscard]] ThemeCycleOverlayDebugSnapshot DebugGetSnapshot() const noexcept
     {
         ThemeCycleOverlayDebugSnapshot result{};
-        result.created               = static_cast<bool>(_hwnd);
-        result.visible               = _visible;
-        result.dismissalTimerArmed   = _dismissTimerArmed;
-        result.fallbackDeadlineArmed = _fallbackDeadlineArmed;
-        result.animationActive =
-            _root && (_root->GetPhase() == ThemeCycleOverlayPhase::Appearing || _root->GetPhase() == ThemeCycleOverlayPhase::ContentTransition ||
-                      _root->GetPhase() == ThemeCycleOverlayPhase::Disappearing);
-        result.pressed                     = _root && _root->IsPressed();
-        result.captured                    = _hwnd && GetCapture() == _hwnd.get();
-        result.reducedMotion               = _palette.reducedMotion;
-        result.highContrast                = _palette.highContrast;
-        result.backdropCaptured            = _root && _root->HasBackdropCapture();
-        result.phase                       = _root ? _root->GetPhase() : ThemeCycleOverlayPhase::Hidden;
-        result.direction                   = _root ? _root->GetDirection() : ThemeCycleDirection::Next;
-        result.generation                  = _root ? _root->GetGeneration() : 0u;
-        result.phaseStartTickMs            = _root ? _root->GetPhaseStartTickMs() : 0u;
-        result.steadyVisibleTickMs         = _steadyVisibleTickMs;
-        result.disappearDeadlineMs         = _disappearDeadlineMs;
-        result.progress                    = _root ? _root->GetProgress() : 1.0f;
-        result.surfaceOpacity              = _root ? _root->GetSurfaceOpacity() : 0.0f;
-        result.surfaceScale                = _root ? _root->GetSurfaceScale() : 1.0f;
-        result.surfaceTranslateYDip        = _root ? _root->GetSurfaceTranslateYDip() : 0.0f;
-        result.paintCount                  = _root ? _root->GetPaintCount() : 0u;
-        result.textLayoutBuildCount        = _root ? _root->GetTextLayoutBuildCount() : 0u;
-        result.textLayoutCreateCount       = _root ? _root->GetTextLayoutCreateCount() : 0u;
-        result.explicitDismissCount        = _explicitDismissCount;
-        result.windowCreateCount           = _windowCreateCount;
-        result.windowReuseCount            = _windowReuseCount;
-        result.dismissTimerArmCount        = _dismissTimerArmCount;
-        result.staleTimerIgnoredCount      = _staleTimerIgnoredCount;
-        result.droppedGenerationCount      = _droppedGenerationCount;
-        result.backdropCaptureCount        = _backdropCaptureCount;
+        result.created                  = static_cast<bool>(_hwnd);
+        result.visible                  = _visible;
+        result.dismissalTimerArmed      = _dismissTimerArmed;
+        result.fallbackDeadlineArmed    = _fallbackDeadlineArmed;
+        result.animationActive         = _root && (_root->GetPhase() == ThemeCycleOverlayPhase::Appearing ||
+                                                   _root->GetPhase() == ThemeCycleOverlayPhase::ContentTransition ||
+                                                   _root->GetPhase() == ThemeCycleOverlayPhase::Disappearing);
+        result.pressed                  = _root && _root->IsPressed();
+        result.captured                 = _hwnd && GetCapture() == _hwnd.get();
+        result.reducedMotion            = _palette.reducedMotion;
+        result.highContrast             = _palette.highContrast;
+        result.backdropCaptured         = _root && _root->HasBackdropCapture();
+        result.phase                    = _root ? _root->GetPhase() : ThemeCycleOverlayPhase::Hidden;
+        result.direction                = _root ? _root->GetDirection() : ThemeCycleDirection::Next;
+        result.generation               = _root ? _root->GetGeneration() : 0u;
+        result.phaseStartTickMs         = _root ? _root->GetPhaseStartTickMs() : 0u;
+        result.steadyVisibleTickMs      = _steadyVisibleTickMs;
+        result.disappearDeadlineMs      = _disappearDeadlineMs;
+        result.progress                 = _root ? _root->GetProgress() : 1.0f;
+        result.surfaceOpacity           = _root ? _root->GetSurfaceOpacity() : 0.0f;
+        result.surfaceScale             = _root ? _root->GetSurfaceScale() : 1.0f;
+        result.surfaceTranslateYDip     = _root ? _root->GetSurfaceTranslateYDip() : 0.0f;
+        result.paintCount               = _root ? _root->GetPaintCount() : 0u;
+        result.textLayoutBuildCount     = _root ? _root->GetTextLayoutBuildCount() : 0u;
+        result.textLayoutCreateCount    = _root ? _root->GetTextLayoutCreateCount() : 0u;
+        result.explicitDismissCount     = _explicitDismissCount;
+        result.windowCreateCount        = _windowCreateCount;
+        result.windowReuseCount         = _windowReuseCount;
+        result.dismissTimerArmCount     = _dismissTimerArmCount;
+        result.staleTimerIgnoredCount   = _staleTimerIgnoredCount;
+        result.droppedGenerationCount   = _droppedGenerationCount;
+        result.backdropCaptureCount     = _backdropCaptureCount;
         result.backdropCaptureFailureCount = _backdropCaptureFailureCount;
-        result.backdropWidthPx             = _root ? _root->GetBackdropWidthPx() : 0u;
-        result.backdropHeightPx            = _root ? _root->GetBackdropHeightPx() : 0u;
+        result.backdropWidthPx          = _root ? _root->GetBackdropWidthPx() : 0u;
+        result.backdropHeightPx         = _root ? _root->GetBackdropHeightPx() : 0u;
         if (_root)
         {
             const ThemeCycleOverlaySnapshot& snapshot = _root->GetSnapshot();
-            result.previousThemeId                    = snapshot.previousThemeId;
-            result.previousDisplayName                = snapshot.previousDisplayName;
-            result.currentThemeId                     = snapshot.currentThemeId;
-            result.currentDisplayName                 = snapshot.currentDisplayName;
-            result.nextThemeId                        = snapshot.nextThemeId;
-            result.nextDisplayName                    = snapshot.nextDisplayName;
-            result.previousRectDip                    = _root->GetPreviousRect();
-            result.currentRectDip                     = _root->GetCurrentRect();
-            result.nextRectDip                        = _root->GetNextRect();
+            result.previousThemeId          = snapshot.previousThemeId;
+            result.previousDisplayName      = snapshot.previousDisplayName;
+            result.currentThemeId           = snapshot.currentThemeId;
+            result.currentDisplayName       = snapshot.currentDisplayName;
+            result.nextThemeId              = snapshot.nextThemeId;
+            result.nextDisplayName          = snapshot.nextDisplayName;
+            result.previousRectDip          = _root->GetPreviousRect();
+            result.currentRectDip           = _root->GetCurrentRect();
+            result.nextRectDip              = _root->GetNextRect();
         }
         if (_hwnd)
         {
@@ -1197,7 +1242,7 @@ public:
 
     void DebugAdvanceTo(uint64_t nowTickMs) noexcept
     {
-        if (! _root)
+        if (!_root)
         {
             return;
         }
@@ -1220,7 +1265,10 @@ private:
         const auto* deadline = static_cast<const FallbackDeadlineContext*>(context);
         if (deadline && deadline->hwnd)
         {
-            static_cast<void>(PostMessageW(deadline->hwnd, WndMsg::kThemeCycleOverlayFallbackDeadline, static_cast<WPARAM>(deadline->cookie), 0));
+            static_cast<void>(PostMessageW(deadline->hwnd,
+                                           WndMsg::kThemeCycleOverlayFallbackDeadline,
+                                           static_cast<WPARAM>(deadline->cookie),
+                                           0));
         }
     }
 
@@ -1241,13 +1289,13 @@ private:
 
     void OnSettled(uint64_t generation) noexcept
     {
-        if (! _visible || ! _root || generation != _root->GetGeneration())
+        if (! _visible || !_root || generation != _root->GetGeneration())
         {
             return;
         }
         KillDismissTimer();
-        _steadyVisibleTickMs    = GetTickCount64();
-        _disappearDeadlineMs    = _steadyVisibleTickMs + kThemeCycleDisappearDelayMs;
+        _steadyVisibleTickMs = GetTickCount64();
+        _disappearDeadlineMs = _steadyVisibleTickMs + kThemeCycleDisappearDelayMs;
         _dismissTimerGeneration = generation;
         ++_dismissTimerArmCount;
         Debug::Perf::EmitCounter(L"theme.cycle.overlay.dismiss_timer_arm_count");
@@ -1268,7 +1316,7 @@ private:
 
     void BeginDisappearing(uint64_t nowTickMs) noexcept
     {
-        if (! _visible || ! _root)
+        if (! _visible || !_root)
         {
             return;
         }
@@ -1334,7 +1382,7 @@ private:
         LARGE_INTEGER dueTime{};
         const uint64_t boundedDelayMs = std::max<uint64_t>(1u, delayMs);
         const uint64_t maximumDelayMs = static_cast<uint64_t>((std::numeric_limits<LONGLONG>::max)() / 10'000ll);
-        dueTime.QuadPart              = -static_cast<LONGLONG>(std::min(boundedDelayMs, maximumDelayMs) * 10'000u);
+        dueTime.QuadPart = -static_cast<LONGLONG>(std::min(boundedDelayMs, maximumDelayMs) * 10'000u);
         FILETIME dueFileTime{};
         dueFileTime.dwLowDateTime  = dueTime.LowPart;
         dueFileTime.dwHighDateTime = static_cast<DWORD>(dueTime.HighPart);
@@ -1371,15 +1419,25 @@ private:
         wc.lpfnWndProc   = &WndProcThunk;
         wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
         wc.lpszClassName = kWindowClassName;
-        const ATOM atom  = RegisterClassExW(&wc);
+        const ATOM atom = RegisterClassExW(&wc);
         if (atom == 0u && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
         {
             return HRESULT_FROM_WIN32(GetLastError());
         }
 
         const DWORD exStyle = WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_NOREDIRECTIONBITMAP;
-        wil::unique_hwnd hwnd(
-            CreateWindowExW(exStyle, kWindowClassName, L"", WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, 0, 0, 1, 1, owner, nullptr, wc.hInstance, this));
+        wil::unique_hwnd hwnd(CreateWindowExW(exStyle,
+                                              kWindowClassName,
+                                              L"",
+                                              WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+                                              0,
+                                              0,
+                                              1,
+                                              1,
+                                              owner,
+                                              nullptr,
+                                              wc.hInstance,
+                                              this));
         if (! hwnd)
         {
             return HRESULT_FROM_WIN32(GetLastError());
@@ -1412,7 +1470,7 @@ private:
 
     [[nodiscard]] bool UpdatePlacement() noexcept
     {
-        if (! _hwnd || ! _owner)
+        if (!_hwnd || !_owner)
         {
             return false;
         }
@@ -1434,9 +1492,10 @@ private:
             origin.y + (client.bottom - client.top),
         };
         MONITORINFO monitorInfo{sizeof(monitorInfo)};
-        const HMONITOR monitor                     = MonitorFromRect(&ownerClientScreenRect, MONITOR_DEFAULTTONEAREST);
-        const RECT workArea                        = monitor && GetMonitorInfoW(monitor, &monitorInfo) != FALSE ? monitorInfo.rcWork : ownerClientScreenRect;
-        const ThemeCycleOverlayPlacement placement = ComputeThemeCycleOverlayPlacement(ownerClientScreenRect, workArea, GetDpiForWindow(_owner));
+        const HMONITOR monitor = MonitorFromRect(&ownerClientScreenRect, MONITOR_DEFAULTTONEAREST);
+        const RECT workArea = monitor && GetMonitorInfoW(monitor, &monitorInfo) != FALSE ? monitorInfo.rcWork : ownerClientScreenRect;
+        const ThemeCycleOverlayPlacement placement =
+            ComputeThemeCycleOverlayPlacement(ownerClientScreenRect, workArea, GetDpiForWindow(_owner));
         if (! placement.visible)
         {
             return false;
@@ -1460,7 +1519,7 @@ private:
     {
         RECT result = SurfaceRectPx();
         POINT origin{};
-        if (! _hwnd || ClientToScreen(_hwnd.get(), &origin) == FALSE)
+        if (!_hwnd || ClientToScreen(_hwnd.get(), &origin) == FALSE)
         {
             return {};
         }
@@ -1471,26 +1530,26 @@ private:
     [[nodiscard]] RECT SurfaceRectPx() const noexcept
     {
         RECT result{};
-        if (! _hwnd || ! _root)
+        if (!_hwnd || !_root)
         {
             return result;
         }
-        const float scale         = static_cast<float>(GetDpiForWindow(_hwnd.get())) / 96.0f;
+        const float scale = static_cast<float>(GetDpiForWindow(_hwnd.get())) / 96.0f;
         const D2D1_RECT_F surface = _root->GetTransformedSurfaceRect();
-        result.left               = static_cast<LONG>(std::lround(surface.left * scale));
-        result.top                = static_cast<LONG>(std::lround(surface.top * scale));
-        result.right              = static_cast<LONG>(std::lround(surface.right * scale));
-        result.bottom             = static_cast<LONG>(std::lround(surface.bottom * scale));
+        result.left   = static_cast<LONG>(std::lround(surface.left * scale));
+        result.top    = static_cast<LONG>(std::lround(surface.top * scale));
+        result.right  = static_cast<LONG>(std::lround(surface.right * scale));
+        result.bottom = static_cast<LONG>(std::lround(surface.bottom * scale));
         return result;
     }
 
     [[nodiscard]] bool IsSurfacePoint(POINT clientPoint) const noexcept
     {
         const RECT surface = SurfaceRectPx();
-        const int radius =
-            _palette.highContrast
-                ? 0
-                : static_cast<int>(std::lround(kCornerRadiusDip * _root->GetSurfaceScale() * static_cast<float>(GetDpiForWindow(_hwnd.get())) / 96.0f));
+        const int radius = _palette.highContrast
+            ? 0
+            : static_cast<int>(std::lround(kCornerRadiusDip * _root->GetSurfaceScale() *
+                                           static_cast<float>(GetDpiForWindow(_hwnd.get())) / 96.0f));
         return IsPointInRoundedRect(clientPoint, surface, radius);
     }
 
@@ -1500,7 +1559,7 @@ private:
         if (message == WM_NCCREATE)
         {
             const auto* create = reinterpret_cast<const CREATESTRUCTW*>(lParam);
-            self               = static_cast<Impl*>(create->lpCreateParams);
+            self = static_cast<Impl*>(create->lpCreateParams);
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
         }
         return self ? self->WndProc(hwnd, message, wParam, lParam) : DefWindowProcW(hwnd, message, wParam, lParam);
@@ -1523,7 +1582,7 @@ private:
     {
         KillDismissTimer();
         const uint64_t nowTickMs = GetTickCount64();
-        if (! _root || _dismissTimerGeneration != _root->GetGeneration())
+        if (!_root || _dismissTimerGeneration != _root->GetGeneration())
         {
             RecordStaleDeadline();
             return 0;
@@ -1535,7 +1594,7 @@ private:
         }
 
         const uint64_t remaining = _disappearDeadlineMs - nowTickMs;
-        const bool rearmed       = fallbackDeadline ? StartFallbackDeadline(remaining) : ArmPhysicalDeadline(remaining);
+        const bool rearmed = fallbackDeadline ? StartFallbackDeadline(remaining) : ArmPhysicalDeadline(remaining);
         if (! rearmed)
         {
             Debug::Error(L"Theme cycle overlay could not re-arm an early disappearance deadline.");
@@ -1557,7 +1616,7 @@ private:
     [[nodiscard]] LRESULT OnNcDestroy(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
     {
         KillDismissTimer();
-        bool handled         = false;
+        bool handled        = false;
         const LRESULT result = _host.HandleMessage(hwnd, message, wParam, lParam, handled);
         // WindowHost::HandleMessage(WM_NCDESTROY) detaches and destroys the retained
         // control tree. Clear every non-owning view of that tree and release the HWND
@@ -1582,8 +1641,7 @@ private:
             case WM_NCHITTEST: return OnNcHitTest(hwnd, lParam);
             case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
             case WM_TIMER:
-                if (wParam == kDismissTimerId)
-                    return OnDeadlineObserved(false);
+                if (wParam == kDismissTimerId) return OnDeadlineObserved(false);
                 break;
             case WndMsg::kThemeCycleOverlayFallbackDeadline: return OnFallbackDeadline(static_cast<uint64_t>(wParam));
             case WM_MBUTTONDOWN:
@@ -1596,7 +1654,7 @@ private:
             default: break;
         }
 
-        bool handled         = false;
+        bool handled = false;
         const LRESULT result = _host.HandleMessage(hwnd, message, wParam, lParam, handled);
         return handled ? result : DefWindowProcW(hwnd, message, wParam, lParam);
     }
@@ -1608,23 +1666,23 @@ private:
     ThemeCycleOverlayControl* _root = nullptr;
     DxUi::ThemePalette _palette{};
     std::wstring _notification;
-    bool _visible                         = false;
-    bool _createdNow                      = false;
-    bool _dismissTimerArmed               = false;
-    bool _fallbackDeadlineArmed           = false;
-    uint64_t _dismissTimerGeneration      = 0u;
-    uint64_t _fallbackDeadlineCookie      = 0u;
-    uint64_t _steadyVisibleTickMs         = 0u;
-    uint64_t _disappearDeadlineMs         = 0u;
-    uint64_t _explicitDismissCount        = 0u;
-    uint64_t _windowCreateCount           = 0u;
-    uint64_t _windowReuseCount            = 0u;
-    uint64_t _dismissTimerArmCount        = 0u;
-    uint64_t _staleTimerIgnoredCount      = 0u;
-    uint64_t _droppedGenerationCount      = 0u;
-    uint64_t _backdropCaptureCount        = 0u;
+    bool _visible = false;
+    bool _createdNow = false;
+    bool _dismissTimerArmed = false;
+    bool _fallbackDeadlineArmed = false;
+    uint64_t _dismissTimerGeneration = 0u;
+    uint64_t _fallbackDeadlineCookie = 0u;
+    uint64_t _steadyVisibleTickMs = 0u;
+    uint64_t _disappearDeadlineMs = 0u;
+    uint64_t _explicitDismissCount = 0u;
+    uint64_t _windowCreateCount = 0u;
+    uint64_t _windowReuseCount = 0u;
+    uint64_t _dismissTimerArmCount = 0u;
+    uint64_t _staleTimerIgnoredCount = 0u;
+    uint64_t _droppedGenerationCount = 0u;
+    uint64_t _backdropCaptureCount = 0u;
     uint64_t _backdropCaptureFailureCount = 0u;
-    uint64_t _lastPresentedGeneration     = 0u;
+    uint64_t _lastPresentedGeneration = 0u;
     UniqueThreadpoolTimer _fallbackDeadlineTimer;
     std::unique_ptr<FallbackDeadlineContext> _fallbackDeadlineContext;
 #if defined(ENABLE_TESTS)
@@ -1642,7 +1700,7 @@ HRESULT ThemeCycleOverlayWindow::Show(HWND owner,
                                       ThemeCycleOverlaySnapshot snapshot,
                                       ThemeCycleOverlayAccessibility accessibility) noexcept
 {
-    if (! _impl)
+    if (!_impl)
     {
         try
         {

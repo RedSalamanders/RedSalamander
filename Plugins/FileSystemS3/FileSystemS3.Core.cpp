@@ -10,7 +10,7 @@ namespace
 {
 [[nodiscard]] std::string BuildCapabilityRootId(FileSystemS3Mode mode, std::wstring_view path) noexcept
 {
-    const std::wstring normalized                 = FsS3::NormalizePluginPath(path);
+    const std::wstring normalized = FsS3::NormalizePluginPath(path);
     const std::vector<std::wstring_view> segments = FsS3::SplitPathSegments(normalized);
     if (segments.empty())
     {
@@ -324,7 +324,7 @@ void FileSystemS3::EmitSyntheticWatchNotification(std::wstring_view watchedPath,
 
 void FileSystemS3::NotifySyntheticPathCreated(std::wstring_view fullPath) noexcept
 {
-    const std::wstring normalized = FsS3::NormalizePluginPath(fullPath);
+    const std::wstring normalized          = FsS3::NormalizePluginPath(fullPath);
     {
         std::lock_guard lock(_stateMutex);
         _writableDirectoryValidationTicks.erase(normalized);
@@ -360,7 +360,7 @@ void FileSystemS3::NotifySyntheticPathCreated(std::wstring_view fullPath) noexce
 void FileSystemS3::RememberWritableDirectoryValidation(std::wstring_view fullPath) noexcept
 {
     constexpr size_t kMaxCachedDirectories = 4096u;
-    const std::wstring normalized          = FsS3::NormalizePluginPath(fullPath);
+    const std::wstring normalized = FsS3::NormalizePluginPath(fullPath);
     std::lock_guard lock(_stateMutex);
     if (_writableDirectoryValidationTicks.size() >= kMaxCachedDirectories)
     {
@@ -372,8 +372,8 @@ void FileSystemS3::RememberWritableDirectoryValidation(std::wstring_view fullPat
 bool FileSystemS3::HasFreshWritableDirectoryValidation(std::wstring_view fullPath) noexcept
 {
     constexpr ULONGLONG kValidationLifetimeMs = 60'000ull;
-    const std::wstring normalized             = FsS3::NormalizePluginPath(fullPath);
-    const ULONGLONG nowTick                   = GetTickCount64();
+    const std::wstring normalized = FsS3::NormalizePluginPath(fullPath);
+    const ULONGLONG nowTick = GetTickCount64();
     std::lock_guard lock(_stateMutex);
     const auto found = _writableDirectoryValidationTicks.find(normalized);
     if (found == _writableDirectoryValidationTicks.end())
@@ -557,7 +557,9 @@ const char* FileSystemS3::StaticConfigurationSchema(FileSystemS3Mode mode) noexc
     return (mode == FileSystemS3Mode::S3) ? kSchemaJsonS3 : kSchemaJsonS3Table;
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemS3::GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemS3::GetPathCapabilities(const wchar_t* path,
+                                                             FileSystemOperation operation,
+                                                             const char** jsonUtf8) noexcept
 {
     if (jsonUtf8 == nullptr)
     {
@@ -576,16 +578,14 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetPathCapabilities(const wchar_t* path,
     }
 
     const std::string_view templateJson = (_mode == FileSystemS3Mode::S3) ? std::string_view(kCapabilitiesJsonS3) : std::string_view(kCapabilitiesJsonS3Table);
-    const std::string_view placeholder =
-        (_mode == FileSystemS3Mode::S3) ? std::string_view("configured-s3-root") : std::string_view("configured-s3-table-root");
+    const std::string_view placeholder  = (_mode == FileSystemS3Mode::S3) ? std::string_view("configured-s3-root")
+                                                                         : std::string_view("configured-s3-table-root");
     std::lock_guard lock(_stateMutex);
     _capabilitiesJson = MaterializeCapabilityRoot(templateJson, placeholder, rootId);
     if (_mode == FileSystemS3Mode::S3 && ! _capabilitiesJson.empty())
     {
-        _capabilitiesJson =
-            MaterializeCapabilityRoot(_capabilitiesJson,
-                                      "configured-s3-watchdog-ms",
-                                      std::to_string(FsS3::S3ProviderWatchdogTimeoutMs(_settings.connectTimeoutMs, _settings.requestTimeoutMs)));
+        _capabilitiesJson = MaterializeCapabilityRoot(
+            _capabilitiesJson, "configured-s3-watchdog-ms", std::to_string(FsS3::S3ProviderWatchdogTimeoutMs(_settings.connectTimeoutMs, _settings.requestTimeoutMs)));
     }
     if (_capabilitiesJson.empty())
     {
@@ -595,7 +595,9 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetPathCapabilities(const wchar_t* path,
     return S_OK;
 }
 
-HRESULT FileSystemS3::BuildFileSystemRouteDescriptor(const wchar_t* path, FileSystemOperation operation, FileSystemRouteDescriptor& descriptor) noexcept
+HRESULT FileSystemS3::BuildFileSystemRouteDescriptor(const wchar_t* path,
+                                                      FileSystemOperation operation,
+                                                      FileSystemRouteDescriptor& descriptor) noexcept
 {
     static_cast<void>(operation);
     if (path == nullptr || path[0] == L'\0')
@@ -603,42 +605,42 @@ HRESULT FileSystemS3::BuildFileSystemRouteDescriptor(const wchar_t* path, FileSy
         return E_INVALIDARG;
     }
 
-    const std::string rootId      = BuildCapabilityRootId(_mode, path);
+    const std::string rootId = BuildCapabilityRootId(_mode, path);
     const std::wstring rootIdWide = Common::Strings::Utf16FromUtf8StrictOrEmpty(rootId);
     if (rootIdWide.empty())
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
-    const bool standardS3                     = _mode == FileSystemS3Mode::S3;
-    descriptor                                = {};
-    descriptor.providerId                     = _metaData.id != nullptr ? _metaData.id : L"";
-    descriptor.pathProfileId                  = standardS3 ? L"s3-flat-prefix" : L"s3-table-read-only";
-    descriptor.rootId                         = rootIdWide;
-    descriptor.availability                   = FILESYSTEM_ROUTE_AVAILABLE;
-    descriptor.cancellationRoute              = standardS3 ? FILESYSTEM_CANCELLATION_PROVIDER_WATCHDOG : FILESYSTEM_CANCELLATION_UNCONTAINED;
-    descriptor.namespaceKind                  = FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER;
-    descriptor.componentComparison            = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
-    descriptor.caseOnlyRename                 = standardS3 ? FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED : FILESYSTEM_ROUTE_CASE_ONLY_NOT_APPLICABLE;
-    descriptor.copyMoveMaxConcurrency         = 1u;
-    descriptor.deleteMaxConcurrency           = standardS3 ? 8u : 1u;
+    const bool standardS3 = _mode == FileSystemS3Mode::S3;
+    descriptor = {};
+    descriptor.providerId = _metaData.id != nullptr ? _metaData.id : L"";
+    descriptor.pathProfileId = standardS3 ? L"s3-flat-prefix" : L"s3-table-read-only";
+    descriptor.rootId = rootIdWide;
+    descriptor.availability = FILESYSTEM_ROUTE_AVAILABLE;
+    descriptor.cancellationRoute = standardS3 ? FILESYSTEM_CANCELLATION_PROVIDER_WATCHDOG : FILESYSTEM_CANCELLATION_UNCONTAINED;
+    descriptor.namespaceKind = FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER;
+    descriptor.componentComparison = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE;
+    descriptor.caseOnlyRename = standardS3 ? FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED : FILESYSTEM_ROUTE_CASE_ONLY_NOT_APPLICABLE;
+    descriptor.copyMoveMaxConcurrency = 1u;
+    descriptor.deleteMaxConcurrency = standardS3 ? 8u : 1u;
     descriptor.deleteRecycleBinMaxConcurrency = 1u;
-    descriptor.maxComponentUtf16              = 1024u;
-    descriptor.propertiesOperation            = true;
-    descriptor.readOperation                  = true;
-    descriptor.exportCopyAll                  = true;
+    descriptor.maxComponentUtf16 = 1024u;
+    descriptor.propertiesOperation = true;
+    descriptor.readOperation = true;
+    descriptor.exportCopyAll = true;
     if (standardS3)
     {
-        descriptor.copyOperation            = true;
-        descriptor.moveOperation            = true;
-        descriptor.nativeMoveOperation      = true;
-        descriptor.deleteOperation          = true;
+        descriptor.copyOperation = true;
+        descriptor.moveOperation = true;
+        descriptor.nativeMoveOperation = true;
+        descriptor.deleteOperation = true;
         descriptor.createDirectoryOperation = true;
-        descriptor.writeOperation           = true;
-        descriptor.committedSize            = true;
-        descriptor.exportMoveAll            = true;
-        descriptor.importCopyAll            = true;
-        descriptor.importMoveAll            = true;
+        descriptor.writeOperation = true;
+        descriptor.committedSize = true;
+        descriptor.exportMoveAll = true;
+        descriptor.importCopyAll = true;
+        descriptor.importMoveAll = true;
         // R0f-S3: every request under a task polls the operation control from the CRT callbacks and
         // is bounded by the provider-owned watchdog (connect + stall monitor, one bounded retry).
         descriptor.cancellationDeadline = true;

@@ -876,10 +876,10 @@ ButtonChromeResolvedStyle ResolveButtonChromeResolvedStyle(const ThemePalette& t
     if (spec.variant == ButtonVariant::Selector)
     {
         const float chevronEmphasis = spec.pressed ? 1.0f : (std::clamp)(hoverStrength, 0.0f, 1.0f);
-        resolved.chevron            = BlendColor(spec.enabled ? theme.subduedText : theme.disabledText, resolved.text, chevronEmphasis);
-        resolved.cornerRadiusDip    = 6.0f;
-        resolved.textOffsetXDip     = 0.0f;
-        resolved.textOffsetYDip     = 0.0f;
+        resolved.chevron             = BlendColor(spec.enabled ? theme.subduedText : theme.disabledText, resolved.text, chevronEmphasis);
+        resolved.cornerRadiusDip     = 6.0f;
+        resolved.textOffsetXDip      = 0.0f;
+        resolved.textOffsetYDip      = 0.0f;
     }
     return resolved;
 }
@@ -984,17 +984,20 @@ void DrawCenteredText(WindowHost& host,
     }
 }
 
-void DrawChevronGlyph(WindowHost& host, const D2D1_RECT_F& rect, ChevronDirection direction, const D2D1_COLOR_F& color) noexcept
+void DrawChevronGlyph(WindowHost& host,
+                      const D2D1_RECT_F& rect,
+                      ChevronDirection direction,
+                      const D2D1_COLOR_F& color) noexcept
 {
     if (! host.GetDeviceContext() || rect.right <= rect.left || rect.bottom <= rect.top)
     {
         return;
     }
 
-    constexpr wchar_t kFluentChevronLeft    = L'\uE76B';
-    constexpr wchar_t kFluentChevronUp      = L'\uE70E';
-    constexpr wchar_t kFluentChevronRight   = L'\uE76C';
-    constexpr wchar_t kFluentChevronDown    = L'\uE70D';
+    constexpr wchar_t kFluentChevronLeft  = L'\uE76B';
+    constexpr wchar_t kFluentChevronUp    = L'\uE70E';
+    constexpr wchar_t kFluentChevronRight = L'\uE76C';
+    constexpr wchar_t kFluentChevronDown  = L'\uE70D';
     constexpr wchar_t kFallbackChevronLeft  = L'\u2039';
     constexpr wchar_t kFallbackChevronUp    = L'\u25B4';
     constexpr wchar_t kFallbackChevronRight = L'\u203A';
@@ -1014,8 +1017,11 @@ void DrawChevronGlyph(WindowHost& host, const D2D1_RECT_F& rect, ChevronDirectio
     DrawCenteredText(host, std::wstring_view(&glyph, 1u), rect, useFluent ? FontRole::Icon : FontRole::Small, color);
 }
 
-void DrawDisclosureChevron(
-    WindowHost& host, const D2D1_RECT_F& rect, float expandedProgress, const D2D1_COLOR_F& color, ChevronDirection collapsedDirection) noexcept
+void DrawDisclosureChevron(WindowHost& host,
+                           const D2D1_RECT_F& rect,
+                           float expandedProgress,
+                           const D2D1_COLOR_F& color,
+                           ChevronDirection collapsedDirection) noexcept
 {
     auto* context = host.GetDeviceContext();
     if (! context || rect.right <= rect.left || rect.bottom <= rect.top)
@@ -1041,7 +1047,7 @@ void DrawDisclosureChevron(
 
 DisclosureChevronVisualState ResolveDisclosureChevronVisualState(float expandedProgress, ChevronDirection collapsedDirection) noexcept
 {
-    collapsedDirection   = collapsedDirection == ChevronDirection::Left ? ChevronDirection::Left : ChevronDirection::Right;
+    collapsedDirection = collapsedDirection == ChevronDirection::Left ? ChevronDirection::Left : ChevronDirection::Right;
     const float progress = std::clamp(expandedProgress, 0.0f, 1.0f);
     if (progress <= 0.0f)
     {
@@ -2004,13 +2010,13 @@ void Button::SetDisclosureExpanded(bool expanded) noexcept
         return;
     }
 
-    _disclosureExpanded                 = expanded;
-    _disclosureTransition.startProgress = _disclosureTransition.progress;
-    _disclosureTransition.target        = target;
-    _disclosureTransition.startTickMs   = GetTickCount64();
-    _disclosureTransition.initialized   = true;
-    WindowHost* const host              = GetHost();
-    _disclosureTransition.active        = host && ! host->GetTheme().reducedMotion;
+    _disclosureExpanded                    = expanded;
+    _disclosureTransition.startProgress    = _disclosureTransition.progress;
+    _disclosureTransition.target           = target;
+    _disclosureTransition.startTickMs      = GetTickCount64();
+    _disclosureTransition.initialized      = true;
+    WindowHost* const host                 = GetHost();
+    _disclosureTransition.active           = host && ! host->GetTheme().reducedMotion;
     if (_disclosureTransition.active)
     {
         host->RequestAnimation();
@@ -2135,10 +2141,10 @@ void Button::Paint(WindowHost& host) const
         spec.hoverStrength   = ResolveHoverAnimationProgress(host);
         spec.focusStrength   = ResolveFocusAnimationProgress(host);
 
-        IDWriteTextFormat* const textFormat =
-            host.GetTextFormat(FontRole::Body, DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, false, ResolveReadingDirection(flowDirection));
-        IDWriteTextFormat* const iconFormat =
-            host.GetTextFormat(FontRole::Icon, DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, false, ResolveReadingDirection(flowDirection));
+        IDWriteTextFormat* const textFormat = host.GetTextFormat(
+            FontRole::Body, DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, false, ResolveReadingDirection(flowDirection));
+        IDWriteTextFormat* const iconFormat = host.GetTextFormat(
+            FontRole::Icon, DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, false, ResolveReadingDirection(flowDirection));
         DrawButtonChrome(host.GetDeviceContext(), host.GetSolidBrush(style.text), textFormat, iconFormat, host.GetTheme(), spec);
         return;
     }
@@ -2357,8 +2363,8 @@ bool Button::DebugIsDisclosureAnimationActive() const noexcept
 
 bool Button::Tick(WindowHost& host, uint64_t nowTickMs)
 {
-    const bool hoverAnimating      = AdvanceInteractionTransition(host, _hoverTransition, nowTickMs);
-    const bool focusAnimating      = AdvanceInteractionTransition(host, _focusTransition, nowTickMs);
+    const bool hoverAnimating = AdvanceInteractionTransition(host, _hoverTransition, nowTickMs);
+    const bool focusAnimating = AdvanceInteractionTransition(host, _focusTransition, nowTickMs);
     const bool disclosureAnimating = AdvanceDisclosureTransition(host, nowTickMs);
     return hoverAnimating || focusAnimating || disclosureAnimating;
 }
@@ -2603,9 +2609,9 @@ bool Button::AdvanceDisclosureTransition(WindowHost& host, uint64_t nowTickMs) n
         return false;
     }
 
-    const uint64_t elapsedMs       = nowTickMs > _disclosureTransition.startTickMs ? nowTickMs - _disclosureTransition.startTickMs : 0u;
-    const float linearProgress     = std::clamp(static_cast<float>(elapsedMs) / static_cast<float>(_disclosureAnimationDurationMs), 0.0f, 1.0f);
-    const float easedProgress      = EvaluateEasing(EasingCurve::PointToPoint, linearProgress);
+    const uint64_t elapsedMs = nowTickMs > _disclosureTransition.startTickMs ? nowTickMs - _disclosureTransition.startTickMs : 0u;
+    const float linearProgress = std::clamp(static_cast<float>(elapsedMs) / static_cast<float>(_disclosureAnimationDurationMs), 0.0f, 1.0f);
+    const float easedProgress  = EvaluateEasing(EasingCurve::PointToPoint, linearProgress);
     _disclosureTransition.progress = std::lerp(_disclosureTransition.startProgress, _disclosureTransition.target, easedProgress);
     if (linearProgress >= 1.0f)
     {
@@ -3274,12 +3280,12 @@ void ProgressBar::Paint(WindowHost& host) const
     }
 
     // Track: 2 DIP rest, 4 DIP indeterminate (spec §3.8)
-    const float availableHeight    = std::max(0.0f, bounds.bottom - bounds.top);
+    const float availableHeight = std::max(0.0f, bounds.bottom - bounds.top);
     const float defaultTrackHeight = _indeterminate ? 4.0f : 2.0f;
-    const float trackHeight        = std::min(availableHeight, _trackHeightDip > 0.0f ? _trackHeightDip : defaultTrackHeight);
-    const float trackTop           = bounds.top + ((bounds.bottom - bounds.top - trackHeight) * 0.5f);
-    const D2D1_RECT_F track        = D2D1::RectF(bounds.left, trackTop, bounds.right, trackTop + trackHeight);
-    const float radius             = trackHeight * 0.5f;
+    const float trackHeight = std::min(availableHeight, _trackHeightDip > 0.0f ? _trackHeightDip : defaultTrackHeight);
+    const float trackTop    = bounds.top + ((bounds.bottom - bounds.top - trackHeight) * 0.5f);
+    const D2D1_RECT_F track = D2D1::RectF(bounds.left, trackTop, bounds.right, trackTop + trackHeight);
+    const float radius      = trackHeight * 0.5f;
 
     DrawRoundedRect(host, track, style.trackFill, style.trackFill, radius);
 
@@ -3300,24 +3306,26 @@ void ProgressBar::Paint(WindowHost& host) const
     }
     else if (_segmented)
     {
-        const double range             = (_maximum > _minimum) ? (_maximum - _minimum) : 1.0;
-        const double primaryFraction   = std::clamp((_primarySegmentValue - _minimum) / range, 0.0, 1.0);
+        const double range = (_maximum > _minimum) ? (_maximum - _minimum) : 1.0;
+        const double primaryFraction = std::clamp((_primarySegmentValue - _minimum) / range, 0.0, 1.0);
         const double secondaryFraction = std::clamp((_secondarySegmentValue - _minimum) / range, 0.0, 1.0);
-        const float midpoint           = bounds.left + (bounds.right - bounds.left) * 0.5f;
-        const float primaryWidth       = static_cast<float>(primaryFraction) * (midpoint - bounds.left);
+        const float midpoint = bounds.left + (bounds.right - bounds.left) * 0.5f;
+        const float primaryWidth = static_cast<float>(primaryFraction) * (midpoint - bounds.left);
         if (primaryWidth > 0.5f)
         {
-            const D2D1_RECT_F primaryFill = D2D1::RectF(bounds.left, trackTop, bounds.left + primaryWidth, trackTop + trackHeight);
+            const D2D1_RECT_F primaryFill =
+                D2D1::RectF(bounds.left, trackTop, bounds.left + primaryWidth, trackTop + trackHeight);
             DrawRoundedRect(host, primaryFill, style.progressFill, style.progressFill, radius);
         }
 
         const float secondaryWidth = static_cast<float>(secondaryFraction) * (bounds.right - midpoint);
         if (secondaryWidth > 0.5f)
         {
-            const D2D1_RECT_F secondaryFill = D2D1::RectF(midpoint, trackTop, midpoint + secondaryWidth, trackTop + trackHeight);
+            const D2D1_RECT_F secondaryFill =
+                D2D1::RectF(midpoint, trackTop, midpoint + secondaryWidth, trackTop + trackHeight);
             DrawRoundedRect(host, secondaryFill, _secondarySegmentColor, _secondarySegmentColor, radius);
 
-            auto* const context    = host.GetDeviceContext();
+            auto* const context = host.GetDeviceContext();
             auto* const hatchBrush = host.GetSolidBrush(style.progressFill);
             if (context && hatchBrush)
             {
@@ -3325,7 +3333,10 @@ void ProgressBar::Paint(WindowHost& host) const
                 constexpr float hatchStep = 5.0f;
                 for (float x = secondaryFill.left - trackHeight; x < secondaryFill.right; x += hatchStep)
                 {
-                    context->DrawLine(D2D1::Point2F(x, secondaryFill.bottom), D2D1::Point2F(x + trackHeight, secondaryFill.top), hatchBrush, 1.0f);
+                    context->DrawLine(D2D1::Point2F(x, secondaryFill.bottom),
+                                      D2D1::Point2F(x + trackHeight, secondaryFill.top),
+                                      hatchBrush,
+                                      1.0f);
                 }
                 context->PopAxisAlignedClip();
             }
@@ -3333,7 +3344,8 @@ void ProgressBar::Paint(WindowHost& host) const
 
         if (auto* dividerBrush = host.GetSolidBrush(style.trackFill); dividerBrush && host.GetDeviceContext())
         {
-            host.GetDeviceContext()->DrawLine(D2D1::Point2F(midpoint, trackTop), D2D1::Point2F(midpoint, trackTop + trackHeight), dividerBrush, 1.0f);
+            host.GetDeviceContext()->DrawLine(
+                D2D1::Point2F(midpoint, trackTop), D2D1::Point2F(midpoint, trackTop + trackHeight), dividerBrush, 1.0f);
         }
     }
     else
@@ -3394,37 +3406,37 @@ D2D1_COLOR_F ThroughputGraphColorFromHue(float hueDegrees, bool dark) noexcept
     const float chroma     = value * saturation;
     const float section    = hue / 60.0f;
     const float x          = chroma * (1.0f - std::abs(std::fmod(section, 2.0f) - 1.0f));
-    float red              = 0.0f;
-    float green            = 0.0f;
-    float blue             = 0.0f;
+    float red = 0.0f;
+    float green = 0.0f;
+    float blue = 0.0f;
     if (section < 1.0f)
     {
-        red   = chroma;
+        red = chroma;
         green = x;
     }
     else if (section < 2.0f)
     {
-        red   = x;
+        red = x;
         green = chroma;
     }
     else if (section < 3.0f)
     {
         green = chroma;
-        blue  = x;
+        blue = x;
     }
     else if (section < 4.0f)
     {
         green = x;
-        blue  = chroma;
+        blue = chroma;
     }
     else if (section < 5.0f)
     {
-        red  = x;
+        red = x;
         blue = chroma;
     }
     else
     {
-        red  = chroma;
+        red = chroma;
         blue = x;
     }
     const float match = value - chroma;
@@ -3433,8 +3445,11 @@ D2D1_COLOR_F ThroughputGraphColorFromHue(float hueDegrees, bool dark) noexcept
 
 namespace
 {
-[[nodiscard]] wil::com_ptr<ID2D1PathGeometry> CreateThroughputGraphAreaGeometry(
-    ID2D1RenderTarget* context, const D2D1_RECT_F& bounds, std::span<const ThroughputGraphSample> samples, double displayedLatestValue, double maximum) noexcept
+[[nodiscard]] wil::com_ptr<ID2D1PathGeometry> CreateThroughputGraphAreaGeometry(ID2D1RenderTarget* context,
+                                                                                const D2D1_RECT_F& bounds,
+                                                                                std::span<const ThroughputGraphSample> samples,
+                                                                                double displayedLatestValue,
+                                                                                double maximum) noexcept
 {
     wil::com_ptr<ID2D1PathGeometry> geometry;
     if (! context || samples.size() < 2u || maximum <= 0.0)
@@ -3485,7 +3500,7 @@ namespace
     for (const auto& sample : samples)
     {
         std::array<bool, ThroughputGraphSample::kMaxHueWeights> present{};
-        size_t count             = 0u;
+        size_t count = 0u;
         const size_t weightCount = std::min(sample.hueWeightCount, sample.hueWeights.size());
         for (size_t weightIndex = 0u; weightIndex < weightCount; ++weightIndex)
         {
@@ -3503,7 +3518,10 @@ namespace
 }
 } // namespace
 
-bool ShouldRenderThroughputGraphBands(bool rainbowMode, bool perStreamBands, bool highContrast, size_t maximumConcurrentColorSlots) noexcept
+bool ShouldRenderThroughputGraphBands(bool rainbowMode,
+                                      bool perStreamBands,
+                                      bool highContrast,
+                                      size_t maximumConcurrentColorSlots) noexcept
 {
     if (highContrast || maximumConcurrentColorSlots == 0u)
     {
@@ -3513,17 +3531,17 @@ bool ShouldRenderThroughputGraphBands(bool rainbowMode, bool perStreamBands, boo
 }
 
 ThroughputGraphBandPaintMetrics PaintThroughputGraphBands(ID2D1RenderTarget* target,
-                                                          const D2D1_RECT_F& bounds,
-                                                          std::span<const ThroughputGraphSample> samples,
-                                                          double displayedLatestValue,
-                                                          double maximum,
-                                                          const ThroughputGraphBandPaintOptions& options) noexcept
+                                                           const D2D1_RECT_F& bounds,
+                                                           std::span<const ThroughputGraphSample> samples,
+                                                           double displayedLatestValue,
+                                                           double maximum,
+                                                           const ThroughputGraphBandPaintOptions& options) noexcept
 {
     ThroughputGraphBandPaintMetrics metrics{};
-    metrics.sampleCount  = samples.size();
-    metrics.fillAlpha    = std::clamp(options.baseFillColor.a, 0.0f, 1.0f);
+    metrics.sampleCount = samples.size();
+    metrics.fillAlpha   = std::clamp(options.baseFillColor.a, 0.0f, 1.0f);
     const auto startedAt = std::chrono::steady_clock::now();
-    const auto finish    = [&]() noexcept
+    const auto finish = [&]() noexcept
     {
         metrics.renderDurationUs = Debug::Perf::ElapsedUs(startedAt);
         return metrics;
@@ -3535,7 +3553,8 @@ ThroughputGraphBandPaintMetrics PaintThroughputGraphBands(ID2D1RenderTarget* tar
     }
 
     const size_t maximumConcurrentColorSlots = MaximumConcurrentThroughputGraphColorSlots(samples);
-    metrics.bandsActive = ShouldRenderThroughputGraphBands(options.rainbowMode, options.perStreamBands, options.highContrast, maximumConcurrentColorSlots);
+    metrics.bandsActive = ShouldRenderThroughputGraphBands(
+        options.rainbowMode, options.perStreamBands, options.highContrast, maximumConcurrentColorSlots);
 
     wil::com_ptr<ID2D1SolidColorBrush> brush;
     if (FAILED(target->CreateSolidColorBrush(options.baseFillColor, brush.addressof())) || ! brush)
@@ -3545,7 +3564,8 @@ ThroughputGraphBandPaintMetrics PaintThroughputGraphBands(ID2D1RenderTarget* tar
 
     if (! metrics.bandsActive)
     {
-        const wil::com_ptr<ID2D1PathGeometry> areaGeometry = CreateThroughputGraphAreaGeometry(target, bounds, samples, displayedLatestValue, maximum);
+        const wil::com_ptr<ID2D1PathGeometry> areaGeometry =
+            CreateThroughputGraphAreaGeometry(target, bounds, samples, displayedLatestValue, maximum);
         if (areaGeometry)
         {
             target->FillGeometry(areaGeometry.get(), brush.get());
@@ -3561,7 +3581,7 @@ ThroughputGraphBandPaintMetrics PaintThroughputGraphBands(ID2D1RenderTarget* tar
         std::array<float, ThroughputGraphSample::kMaxSamples> lowerShares{};
         std::array<float, ThroughputGraphSample::kMaxSamples> upperShares{};
         float hueDegrees = -1.0f;
-        bool active      = false;
+        bool active = false;
     };
     std::array<BandBatch, kBatchCount> batches{};
     std::array<bool, ThroughputGraphSample::kMaxHueWeights> activeSlots{};
@@ -3573,7 +3593,7 @@ ThroughputGraphBandPaintMetrics PaintThroughputGraphBands(ID2D1RenderTarget* tar
         std::array<double, ThroughputGraphSample::kMaxHueWeights> weightsBySlot{};
         std::array<float, ThroughputGraphSample::kMaxHueWeights> huesBySlot{};
         huesBySlot.fill(-1.0f);
-        double totalWeight       = 0.0;
+        double totalWeight = 0.0;
         const size_t weightCount = std::min(sample.hueWeightCount, sample.hueWeights.size());
         for (size_t weightIndex = 0u; weightIndex < weightCount; ++weightIndex)
         {
@@ -3590,7 +3610,7 @@ ThroughputGraphBandPaintMetrics PaintThroughputGraphBands(ID2D1RenderTarget* tar
             }
         }
 
-        double lowerShare = 0.0;
+        double lowerShare          = 0.0;
 
         const auto setBandColumn = [&](size_t batchIndex, float hueDegrees, double requestedUpperShare, bool active) noexcept
         {
@@ -3632,9 +3652,12 @@ ThroughputGraphBandPaintMetrics PaintThroughputGraphBands(ID2D1RenderTarget* tar
     std::array<uint32_t, ThroughputGraphSample::kMaxSamples * kRasterRows> pixels{};
     const auto packPremultipliedBgra = [](D2D1_COLOR_F color) noexcept
     {
-        const float alpha  = std::clamp(color.a, 0.0f, 1.0f);
-        const auto channel = [alpha](float value) noexcept { return static_cast<uint32_t>(std::lround(std::clamp(value, 0.0f, 1.0f) * alpha * 255.0f)); };
-        const uint32_t a   = static_cast<uint32_t>(std::lround(alpha * 255.0f));
+        const float alpha = std::clamp(color.a, 0.0f, 1.0f);
+        const auto channel = [alpha](float value) noexcept
+        {
+            return static_cast<uint32_t>(std::lround(std::clamp(value, 0.0f, 1.0f) * alpha * 255.0f));
+        };
+        const uint32_t a = static_cast<uint32_t>(std::lround(alpha * 255.0f));
         return channel(color.b) | (channel(color.g) << 8u) | (channel(color.r) << 16u) | (a << 24u);
     };
     const uint32_t basePixel = packPremultipliedBgra(options.baseFillColor);
@@ -3649,7 +3672,7 @@ ThroughputGraphBandPaintMetrics PaintThroughputGraphBands(ID2D1RenderTarget* tar
         D2D1_COLOR_F color = options.baseFillColor;
         if (batchIndex < ThroughputGraphSample::kMaxHueWeights && batch.hueDegrees >= 0.0f)
         {
-            color   = ThroughputGraphColorFromHue(batch.hueDegrees, options.dark);
+            color = ThroughputGraphColorFromHue(batch.hueDegrees, options.dark);
             color.a = metrics.fillAlpha;
         }
         const uint32_t colorPixel = packPremultipliedBgra(color);
@@ -3661,8 +3684,10 @@ ThroughputGraphBandPaintMetrics PaintThroughputGraphBands(ID2D1RenderTarget* tar
             {
                 continue;
             }
-            const size_t topRow    = std::min(kRasterRows, static_cast<size_t>(std::floor((1.0f - std::clamp(upper, 0.0f, 1.0f)) * kRasterRows)));
-            const size_t bottomRow = std::min(kRasterRows, static_cast<size_t>(std::ceil((1.0f - std::clamp(lower, 0.0f, 1.0f)) * kRasterRows)));
+            const size_t topRow = std::min(kRasterRows,
+                                           static_cast<size_t>(std::floor((1.0f - std::clamp(upper, 0.0f, 1.0f)) * kRasterRows)));
+            const size_t bottomRow = std::min(kRasterRows,
+                                              static_cast<size_t>(std::ceil((1.0f - std::clamp(lower, 0.0f, 1.0f)) * kRasterRows)));
             for (size_t row = topRow; row < bottomRow; ++row)
             {
                 pixels[row * sampleCount + sampleIndex] = colorPixel;
@@ -3705,13 +3730,13 @@ ThroughputGraphBandPaintMetrics PaintThroughputGraphBands(ID2D1RenderTarget* tar
 void ThroughputGraph::SetSamples(std::span<const ThroughputGraphSample> samples)
 {
     const double previousTarget = _targetLatestValue;
-    const size_t retainedCount  = std::min(samples.size(), ThroughputGraphSample::kMaxSamples);
+    const size_t retainedCount = std::min(samples.size(), ThroughputGraphSample::kMaxSamples);
     _samples.assign(samples.end() - static_cast<std::ptrdiff_t>(retainedCount), samples.end());
     _targetLatestValue = _samples.empty() ? 0.0 : std::max(0.0, _samples.back().value);
 
-    WindowHost* const host   = GetHost();
+    WindowHost* const host = GetHost();
     const bool targetChanged = previousTarget != _targetLatestValue;
-    if (host && ! host->GetTheme().reducedMotion && ! _samples.empty() && targetChanged)
+    if (host && ! host->GetTheme().reducedMotion && !_samples.empty() && targetChanged)
     {
         _transitionStartValue  = _displayedLatestValue;
         _transitionStartTickMs = 0u;
@@ -3751,9 +3776,9 @@ void ThroughputGraph::SetLimit(double value) noexcept
 
 void ThroughputGraph::SetCurrentValueMarker(double value, std::wstring label, std::wstring trailingLabel)
 {
-    const double nextTarget    = std::max(0.0, value);
-    _currentValueLabel         = std::move(label);
-    _currentValueTrailingLabel = std::move(trailingLabel);
+    const double nextTarget          = std::max(0.0, value);
+    _currentValueLabel               = std::move(label);
+    _currentValueTrailingLabel       = std::move(trailingLabel);
 
     WindowHost* const host   = GetHost();
     const bool targetChanged = _targetCurrentValue != nextTarget;
@@ -3799,23 +3824,23 @@ void ThroughputGraph::SetTransitionDuration(uint64_t durationMs) noexcept
 ThroughputGraphDebugState ThroughputGraph::GetDebugState() const noexcept
 {
     ThroughputGraphDebugState state{};
-    state.sampleCount                      = _samples.size();
-    state.usesRainbowStroke                = _rainbowMode && ! _lastHighContrast;
-    state.renderedQuadCount                = _lastBandPaintMetrics.quadCount;
-    state.renderedGeometryCount            = _lastBandPaintMetrics.geometryCount;
-    state.activeColorSlotCount             = _lastBandPaintMetrics.activeColorSlotCount;
-    state.bandsActive                      = _lastBandPaintMetrics.bandsActive;
-    state.transitionActive                 = _transitionActive;
-    state.reducedMotion                    = _lastReducedMotion;
-    state.highContrast                     = _lastHighContrast;
-    state.bandRenderDurationUs             = _lastBandPaintMetrics.renderDurationUs;
-    state.bandFillAlpha                    = _lastBandPaintMetrics.fillAlpha;
-    state.displayedLatestValue             = _displayedLatestValue;
-    state.targetLatestValue                = _targetLatestValue;
+    state.sampleCount          = _samples.size();
+    state.usesRainbowStroke    = _rainbowMode && ! _lastHighContrast;
+    state.renderedQuadCount     = _lastBandPaintMetrics.quadCount;
+    state.renderedGeometryCount = _lastBandPaintMetrics.geometryCount;
+    state.activeColorSlotCount  = _lastBandPaintMetrics.activeColorSlotCount;
+    state.bandsActive           = _lastBandPaintMetrics.bandsActive;
+    state.transitionActive     = _transitionActive;
+    state.reducedMotion        = _lastReducedMotion;
+    state.highContrast         = _lastHighContrast;
+    state.bandRenderDurationUs = _lastBandPaintMetrics.renderDurationUs;
+    state.bandFillAlpha        = _lastBandPaintMetrics.fillAlpha;
+    state.displayedLatestValue = _displayedLatestValue;
+    state.targetLatestValue    = _targetLatestValue;
     state.currentValueMarkerVisible        = _displayedCurrentValue > 0.0 || _targetCurrentValue > 0.0;
     state.secondarySeriesVisible           = std::ranges::any_of(_secondarySamples, [](double value) noexcept { return value > 0.0; });
     state.secondarySeriesColorCustomized   = _secondarySeriesColor.has_value();
-    state.currentValueTrailingLabelVisible = ! _currentValueTrailingLabel.empty();
+    state.currentValueTrailingLabelVisible = !_currentValueTrailingLabel.empty();
     state.displayedCurrentValue            = _displayedCurrentValue;
     state.targetCurrentValue               = _targetCurrentValue;
     for (const auto& sample : _samples)
@@ -3838,7 +3863,7 @@ void ThroughputGraph::Paint(WindowHost& host) const
         return;
     }
 
-    const D2D1_RECT_F bounds = GetBounds();
+    const D2D1_RECT_F bounds    = GetBounds();
     if (bounds.right <= bounds.left || bounds.bottom <= bounds.top)
     {
         return;
@@ -3866,9 +3891,9 @@ void ThroughputGraph::Paint(WindowHost& host) const
     {
         observedMaximum = std::max(observedMaximum, sample);
     }
-    observedMaximum                      = std::max(observedMaximum, _displayedLatestValue);
-    observedMaximum                      = std::max(observedMaximum, _displayedCurrentValue);
-    observedMaximum                      = std::max(observedMaximum, _targetCurrentValue);
+    observedMaximum = std::max(observedMaximum, _displayedLatestValue);
+    observedMaximum = std::max(observedMaximum, _displayedCurrentValue);
+    observedMaximum = std::max(observedMaximum, _targetCurrentValue);
     const bool currentValueMarkerVisible = _displayedCurrentValue > 0.0 || _targetCurrentValue > 0.0;
     const double graphMaximum            = currentValueMarkerVisible ? observedMaximum * 1.10 : observedMaximum;
     const double maximum                 = std::max({1.0, _limit, graphMaximum});
@@ -3882,41 +3907,41 @@ void ThroughputGraph::Paint(WindowHost& host) const
         }
     }
 
-    if (! _samples.empty())
+    if (!_samples.empty())
     {
         const float step = _samples.size() > 1u ? (bounds.right - bounds.left) / static_cast<float>(_samples.size() - 1u) : 0.0f;
         if (_perStreamBands || _rainbowMode)
         {
             D2D1_COLOR_F bandFillColor = palette.accent;
-            bandFillColor.a            = palette.highContrast ? 0.32f : (palette.dark ? 0.22f : 0.18f);
-            _lastBandPaintMetrics      = PaintThroughputGraphBands(context,
-                                                                   bounds,
-                                                                   _samples,
-                                                                   _displayedLatestValue,
-                                                                   maximum,
-                                                                   ThroughputGraphBandPaintOptions{
-                                                                       .baseFillColor  = bandFillColor,
-                                                                       .rainbowMode    = _rainbowMode,
-                                                                       .perStreamBands = _perStreamBands,
-                                                                       .highContrast   = palette.highContrast,
-                                                                       .dark           = palette.dark,
-                                                                   });
+            bandFillColor.a = palette.highContrast ? 0.32f : (palette.dark ? 0.22f : 0.18f);
+            _lastBandPaintMetrics = PaintThroughputGraphBands(context,
+                                                              bounds,
+                                                              _samples,
+                                                              _displayedLatestValue,
+                                                              maximum,
+                                                              ThroughputGraphBandPaintOptions{
+                                                                  .baseFillColor = bandFillColor,
+                                                                  .rainbowMode = _rainbowMode,
+                                                                  .perStreamBands = _perStreamBands,
+                                                                  .highContrast = palette.highContrast,
+                                                                  .dark = palette.dark,
+                                                              });
         }
 
         if (_samples.size() > 1u)
         {
             for (size_t index = 1u; index < _samples.size(); ++index)
             {
-                const auto& previous       = _samples[index - 1u];
-                const auto& current        = _samples[index];
+                const auto& previous = _samples[index - 1u];
+                const auto& current  = _samples[index];
                 const double previousValue = std::max(0.0, previous.value);
                 const double currentValue  = index + 1u == _samples.size() ? _displayedLatestValue : std::max(0.0, current.value);
-                const D2D1_POINT_2F from   = D2D1::Point2F(bounds.left + step * static_cast<float>(index - 1u),
-                                                           bounds.bottom - static_cast<float>(previousValue / maximum) * (bounds.bottom - bounds.top));
-                const D2D1_POINT_2F to     = D2D1::Point2F(bounds.left + step * static_cast<float>(index),
-                                                           bounds.bottom - static_cast<float>(currentValue / maximum) * (bounds.bottom - bounds.top));
-                const bool useRainbow      = _rainbowMode && ! palette.highContrast && current.hueDegrees >= 0.0f;
-                const D2D1_COLOR_F color   = useRainbow ? ThroughputGraphColorFromHue(current.hueDegrees, palette.dark) : palette.accent;
+                const D2D1_POINT_2F from = D2D1::Point2F(bounds.left + step * static_cast<float>(index - 1u),
+                                                         bounds.bottom - static_cast<float>(previousValue / maximum) * (bounds.bottom - bounds.top));
+                const D2D1_POINT_2F to = D2D1::Point2F(bounds.left + step * static_cast<float>(index),
+                                                       bounds.bottom - static_cast<float>(currentValue / maximum) * (bounds.bottom - bounds.top));
+                const bool useRainbow = _rainbowMode && ! palette.highContrast && current.hueDegrees >= 0.0f;
+                const D2D1_COLOR_F color = useRainbow ? ThroughputGraphColorFromHue(current.hueDegrees, palette.dark) : palette.accent;
                 if (auto* brush = host.GetSolidBrush(color))
                 {
                     context->DrawLine(from, to, brush, 2.0f);
@@ -3927,18 +3952,20 @@ void ThroughputGraph::Paint(WindowHost& host) const
 
     if (_secondarySamples.size() > 1u)
     {
-        const float secondaryStep         = (bounds.right - bounds.left) / static_cast<float>(_secondarySamples.size() - 1u);
+        const float secondaryStep = (bounds.right - bounds.left) / static_cast<float>(_secondarySamples.size() - 1u);
         const D2D1_COLOR_F secondaryColor = _secondarySeriesColor.value_or(palette.warningText);
         if (auto* secondaryBrush = host.GetSolidBrush(secondaryColor))
         {
             for (size_t index = 1u; index < _secondarySamples.size(); ++index)
             {
                 const double previousValue = _secondarySamples[index - 1u];
-                const double currentValue  = _secondarySamples[index];
-                const D2D1_POINT_2F from   = D2D1::Point2F(bounds.left + secondaryStep * static_cast<float>(index - 1u),
-                                                           bounds.bottom - static_cast<float>(previousValue / maximum) * (bounds.bottom - bounds.top));
-                const D2D1_POINT_2F to     = D2D1::Point2F(bounds.left + secondaryStep * static_cast<float>(index),
-                                                           bounds.bottom - static_cast<float>(currentValue / maximum) * (bounds.bottom - bounds.top));
+                const double currentValue = _secondarySamples[index];
+                const D2D1_POINT_2F from = D2D1::Point2F(
+                    bounds.left + secondaryStep * static_cast<float>(index - 1u),
+                    bounds.bottom - static_cast<float>(previousValue / maximum) * (bounds.bottom - bounds.top));
+                const D2D1_POINT_2F to = D2D1::Point2F(
+                    bounds.left + secondaryStep * static_cast<float>(index),
+                    bounds.bottom - static_cast<float>(currentValue / maximum) * (bounds.bottom - bounds.top));
                 context->DrawLine(from, to, secondaryBrush, 1.5f);
             }
         }
@@ -3952,17 +3979,20 @@ void ThroughputGraph::Paint(WindowHost& host) const
             context->DrawLine(D2D1::Point2F(bounds.left, y), D2D1::Point2F(bounds.right, y), markerBrush, 1.0f);
         }
 
-        if (! _currentValueLabel.empty())
+        if (!_currentValueLabel.empty())
         {
-            constexpr float kLabelInsetDip  = 6.0f;
-            constexpr float kLabelGapDip    = 8.0f;
+            constexpr float kLabelInsetDip = 6.0f;
+            constexpr float kLabelGapDip   = 8.0f;
             const float labelCenter         = (bounds.left + bounds.right) * 0.5f;
-            const bool hasTrailingLabel     = ! _currentValueTrailingLabel.empty();
+            const bool hasTrailingLabel     = !_currentValueTrailingLabel.empty();
             const D2D1_RECT_F leadingBounds = D2D1::RectF(bounds.left + kLabelInsetDip,
                                                           bounds.top + 3.0f,
                                                           hasTrailingLabel ? labelCenter - kLabelGapDip * 0.5f : bounds.right - kLabelInsetDip,
                                                           bounds.bottom);
-            if (auto* format = host.GetTextFormat(FontRole::Small, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_PARAGRAPH_ALIGNMENT_NEAR, false))
+            if (auto* format = host.GetTextFormat(FontRole::Small,
+                                                  DWRITE_TEXT_ALIGNMENT_LEADING,
+                                                  DWRITE_PARAGRAPH_ALIGNMENT_NEAR,
+                                                  false))
             {
                 if (auto* textBrush = host.GetSolidBrush(palette.text))
                 {
@@ -3977,12 +4007,17 @@ void ThroughputGraph::Paint(WindowHost& host) const
 
             if (hasTrailingLabel)
             {
-                if (auto* format = host.GetTextFormat(FontRole::Small, DWRITE_TEXT_ALIGNMENT_TRAILING, DWRITE_PARAGRAPH_ALIGNMENT_NEAR, false))
+                if (auto* format = host.GetTextFormat(FontRole::Small,
+                                                      DWRITE_TEXT_ALIGNMENT_TRAILING,
+                                                      DWRITE_PARAGRAPH_ALIGNMENT_NEAR,
+                                                      false))
                 {
                     if (auto* textBrush = host.GetSolidBrush(palette.text))
                     {
-                        const D2D1_RECT_F trailingBounds =
-                            D2D1::RectF(labelCenter + kLabelGapDip * 0.5f, bounds.top + 3.0f, bounds.right - kLabelInsetDip, bounds.bottom);
+                        const D2D1_RECT_F trailingBounds = D2D1::RectF(labelCenter + kLabelGapDip * 0.5f,
+                                                                      bounds.top + 3.0f,
+                                                                      bounds.right - kLabelInsetDip,
+                                                                      bounds.bottom);
                         context->DrawTextW(_currentValueTrailingLabel.data(),
                                            static_cast<UINT32>(_currentValueTrailingLabel.size()),
                                            format,
@@ -3995,9 +4030,12 @@ void ThroughputGraph::Paint(WindowHost& host) const
         }
     }
 
-    if (! _overlayText.empty())
+    if (!_overlayText.empty())
     {
-        if (auto* format = host.GetTextFormat(FontRole::Small, DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, false))
+        if (auto* format = host.GetTextFormat(FontRole::Small,
+                                              DWRITE_TEXT_ALIGNMENT_CENTER,
+                                              DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
+                                              false))
         {
             if (auto* textBrush = host.GetSolidBrush(palette.text))
             {
@@ -4009,22 +4047,25 @@ void ThroughputGraph::Paint(WindowHost& host) const
 
 bool ThroughputGraph::Tick(WindowHost& host, uint64_t nowTickMs)
 {
-    if (! _transitionActive && ! _currentValueTransitionActive)
+    if (!_transitionActive && !_currentValueTransitionActive)
     {
         return false;
     }
     if (host.GetTheme().reducedMotion)
     {
-        _displayedLatestValue         = _targetLatestValue;
-        _displayedCurrentValue        = _targetCurrentValue;
-        _transitionActive             = false;
+        _displayedLatestValue          = _targetLatestValue;
+        _displayedCurrentValue         = _targetCurrentValue;
+        _transitionActive              = false;
         _currentValueTransitionActive = false;
         Invalidate(host);
         return false;
     }
 
-    const auto advanceTransition =
-        [nowTickMs, this](double startValue, double targetValue, uint64_t& startTickMs, double& displayedValue, bool& active) noexcept
+    const auto advanceTransition = [nowTickMs, this](double startValue,
+                                                     double targetValue,
+                                                     uint64_t& startTickMs,
+                                                     double& displayedValue,
+                                                     bool& active) noexcept
     {
         if (! active)
         {
@@ -4042,8 +4083,11 @@ bool ThroughputGraph::Tick(WindowHost& host, uint64_t nowTickMs)
     };
 
     advanceTransition(_transitionStartValue, _targetLatestValue, _transitionStartTickMs, _displayedLatestValue, _transitionActive);
-    advanceTransition(
-        _currentValueTransitionStart, _targetCurrentValue, _currentValueTransitionStartTickMs, _displayedCurrentValue, _currentValueTransitionActive);
+    advanceTransition(_currentValueTransitionStart,
+                      _targetCurrentValue,
+                      _currentValueTransitionStartTickMs,
+                      _displayedCurrentValue,
+                      _currentValueTransitionActive);
     Invalidate(host);
     return _transitionActive || _currentValueTransitionActive;
 }
@@ -8369,7 +8413,9 @@ bool TooltipLayer::SetTooltipDelayed(std::wstring text, const D2D1_POINT_2F& ori
         return true;
     }
 
-    const uint64_t nextShowTickMs = delayMs > (std::numeric_limits<uint64_t>::max)() - nowTickMs ? (std::numeric_limits<uint64_t>::max)() : nowTickMs + delayMs;
+    const uint64_t nextShowTickMs = delayMs > (std::numeric_limits<uint64_t>::max)() - nowTickMs
+                                        ? (std::numeric_limits<uint64_t>::max)()
+                                        : nowTickMs + delayMs;
     if (_showScheduled && _pendingText == text)
     {
         if (! TooltipPointsMatch(_pendingOriginDip, originDip))
@@ -8484,13 +8530,14 @@ bool TooltipLayer::Tick(WindowHost& host, uint64_t nowTickMs)
         std::wstring text             = std::move(_pendingText);
         const D2D1_POINT_2F originDip = _pendingOriginDip;
         _pendingText.clear();
-        _showScheduled                               = false;
-        _showTickMs                                  = 0u;
-        const bool changed                           = SetTooltip(std::move(text), originDip);
+        _showScheduled = false;
+        _showTickMs    = 0u;
+        const bool changed = SetTooltip(std::move(text), originDip);
         constexpr uint64_t kTooltipDisplayDurationMs = 5000u;
-        _hideScheduled                               = true;
-        _hideTickMs = kTooltipDisplayDurationMs > (std::numeric_limits<uint64_t>::max)() - nowTickMs ? (std::numeric_limits<uint64_t>::max)()
-                                                                                                     : nowTickMs + kTooltipDisplayDurationMs;
+        _hideScheduled = true;
+        _hideTickMs    = kTooltipDisplayDurationMs > (std::numeric_limits<uint64_t>::max)() - nowTickMs
+                             ? (std::numeric_limits<uint64_t>::max)()
+                             : nowTickMs + kTooltipDisplayDurationMs;
         return changed;
     }
 

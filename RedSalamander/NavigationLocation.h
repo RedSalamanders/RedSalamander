@@ -1,7 +1,7 @@
 #pragma once
 
-#include "PathUtils.h"
 #include "StringConversion.h"
+#include "PathUtils.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -12,12 +12,8 @@
 #include <string>
 #include <string_view>
 
-#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
 #define NOMINMAX
-#endif
 #include <Windows.h>
 
 namespace NavigationLocation

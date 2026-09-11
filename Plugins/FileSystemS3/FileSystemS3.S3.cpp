@@ -206,20 +206,20 @@ void RunCopySourceSerializationContractSelfTest(unsigned int& passed, unsigned i
 
     for (const CopySourceCase& testCase : cases)
     {
-        const std::string logical   = BuildS3CopySource(testCase.bucket, testCase.key, testCase.versionId);
+        const std::string logical = BuildS3CopySource(testCase.bucket, testCase.key, testCase.versionId);
         const std::wstring caseName = Utf16FromUtf8(testCase.name);
 
         Aws::S3Crt::Model::CopyObjectRequest copyRequest;
         copyRequest.SetCopySource(Aws::String(logical.data(), logical.size()));
         const Aws::Http::HeaderValueCollection copyHeaders = copyRequest.GetRequestSpecificHeaders();
-        const auto copyHeader                              = copyHeaders.find("x-amz-copy-source");
+        const auto copyHeader = copyHeaders.find("x-amz-copy-source");
         check(copyHeader != copyHeaders.end() && AwsStringEquals(testCase.expectedHeader, copyHeader->second),
               std::format(L"CopyObject should serialize the logical {} source exactly once", caseName));
 
         Aws::S3Crt::Model::UploadPartCopyRequest partRequest;
         partRequest.SetCopySource(Aws::String(logical.data(), logical.size()));
         const Aws::Http::HeaderValueCollection partHeaders = partRequest.GetRequestSpecificHeaders();
-        const auto partHeader                              = partHeaders.find("x-amz-copy-source");
+        const auto partHeader = partHeaders.find("x-amz-copy-source");
         check(partHeader != partHeaders.end() && AwsStringEquals(testCase.expectedHeader, partHeader->second),
               std::format(L"UploadPartCopy should serialize the logical {} source exactly once", caseName));
     }

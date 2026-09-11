@@ -12,8 +12,8 @@ namespace RedSalamanderMonitor
 {
 namespace
 {
-constexpr HRESULT kCancelled       = HRESULT_FROM_WIN32(ERROR_CANCELLED);
-constexpr HRESULT kEncodingError   = HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
+constexpr HRESULT kCancelled = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+constexpr HRESULT kEncodingError = HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
 constexpr size_t kOutputChunkBytes = 64u * 1024u;
 
 [[nodiscard]] MonitorFileExportResult Failed(HRESULT hr, uint64_t bytesWritten, size_t completedLines) noexcept
@@ -59,7 +59,8 @@ MonitorFileExportResult WriteMonitorTextSnapshot(const std::filesystem::path& pa
     }
 
     Common::Files::LocalFileTransaction transaction;
-    const HRESULT createHr = Common::Files::LocalFileTransaction::Create(path, Common::Files::ExistingTargetPolicy::Replace, false, transaction);
+    const HRESULT createHr = Common::Files::LocalFileTransaction::Create(
+        path, Common::Files::ExistingTargetPolicy::Replace, false, transaction);
     if (FAILED(createHr))
     {
         return Failed(createHr, 0u, 0u);
@@ -67,7 +68,7 @@ MonitorFileExportResult WriteMonitorTextSnapshot(const std::filesystem::path& pa
 
     uint64_t bytesWritten = 0u;
     size_t completedLines = 0u;
-    const auto write      = [&](std::string_view bytes) -> HRESULT
+    const auto write = [&](std::string_view bytes) -> HRESULT
     {
         const HRESULT hr = transaction.Write(bytes);
         if (SUCCEEDED(hr))
@@ -106,7 +107,7 @@ MonitorFileExportResult WriteMonitorTextSnapshot(const std::filesystem::path& pa
             }
 
             const uint16_t codeUnit = static_cast<uint16_t>(line[index]);
-            uint32_t scalar         = codeUnit;
+            uint32_t scalar = codeUnit;
             if (codeUnit >= 0xD800u && codeUnit <= 0xDBFFu)
             {
                 if (index + 1u >= line.size())

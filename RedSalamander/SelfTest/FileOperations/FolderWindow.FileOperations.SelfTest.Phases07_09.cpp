@@ -853,18 +853,12 @@ case SelfTestState::Step::Phase7_ParallelCopyMoveKnobs:
         const FileSystemFlags flags =
             static_cast<FileSystemFlags>(FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
 
-        const uint64_t speedLimit = state.copyKnobRetryCount == 0 ? (512ull * 1024ull) : state.copyKnobRetryCount == 1 ? (128ull * 1024ull) : (64ull * 1024ull);
+        const uint64_t speedLimit = state.copyKnobRetryCount == 0   ? (512ull * 1024ull)
+                                   : state.copyKnobRetryCount == 1 ? (128ull * 1024ull)
+                                                                   : (64ull * 1024ull);
         // Publish the limit at admission; applying it after Start races fast workers.
-        state.taskA = StartFileOperationAndGetId(state.fileOps,
-                                                 FILESYSTEM_COPY,
-                                                 FolderWindow::Pane::Left,
-                                                 FolderWindow::Pane::Right,
-                                                 state.fsLocal,
-                                                 std::move(sources),
-                                                 dstDir,
-                                                 flags,
-                                                 false,
-                                                 speedLimit);
+        state.taskA = StartFileOperationAndGetId(state.fileOps, FILESYSTEM_COPY, FolderWindow::Pane::Left, FolderWindow::Pane::Right,
+                                                state.fsLocal, std::move(sources), dstDir, flags, false, speedLimit);
         if (! state.taskA.has_value())
         {
             Fail(L"Failed to start copy task for knob test.");
@@ -1079,15 +1073,12 @@ case SelfTestState::Step::Phase7_ParallelCopyMoveKnobs:
 
             // Keep the observation window open until concurrency and per-call sharing are
             // proved. A wall-clock release could drain short items before this UI tick.
-            Debug::Perf::Emit(L"FileOps.SelfTest.CopyMoveKnobObserved",
-                              std::format(L"configured={};activeCalls={}", conc, activeCalls),
-                              (nowTick - state.copyTaskStartTick) * 1000ull,
-                              inFlightCount,
-                              state.copyKnobObservedPerCallShare ? 1u : 0u,
-                              S_OK);
+            Debug::Perf::Emit(L"FileOps.SelfTest.CopyMoveKnobObserved", std::format(L"configured={};activeCalls={}", conc, activeCalls),
+                              (nowTick - state.copyTaskStartTick) * 1000ull, inFlightCount,
+                              state.copyKnobObservedPerCallShare ? 1u : 0u, S_OK);
             task->SetDesiredSpeedLimit(0);
             state.copySpeedLimitCleared = true;
-            state.stepState             = 7;
+            state.stepState = 7;
             return false;
         }
     }
@@ -2491,15 +2482,15 @@ case SelfTestState::Step::Phase7_CopyItemsSingleFolderRecursiveParallelism:
                 return E_POINTER;
             }
             *expectedDestination = nullptr;
-            *action              = FileSystemIssueAction::Cancel;
+            *action = FileSystemIssueAction::Cancel;
             return S_OK;
         }
     };
 
-    const std::filesystem::path srcRoot = state.tempRoot / L"copyitems-single-src";
-    const std::filesystem::path dstRoot = state.tempRoot / L"copyitems-single-dst";
-    const std::filesystem::path srcDir  = srcRoot / L"payload";
-    std::filesystem::path nestedDir     = srcDir;
+    const std::filesystem::path srcRoot   = state.tempRoot / L"copyitems-single-src";
+    const std::filesystem::path dstRoot   = state.tempRoot / L"copyitems-single-dst";
+    const std::filesystem::path srcDir    = srcRoot / L"payload";
+    std::filesystem::path nestedDir = srcDir;
     // Exercise the recursive provider below its 128-level stack-safety ceiling while retaining
     // headroom for the provider and host callback frames on the default Windows worker stack.
     constexpr unsigned int kNestedDepth = 96u;
@@ -2569,8 +2560,8 @@ case SelfTestState::Step::Phase7_CopyItemsSingleFolderRecursiveParallelism:
     }
 
     const std::filesystem::path relativeNestedDir = nestedDir.lexically_relative(srcDir);
-    const std::filesystem::path dstNestedDir      = dstRoot / srcDir.filename() / relativeNestedDir;
-    const size_t dstCount                         = CountFiles(dstNestedDir);
+    const std::filesystem::path dstNestedDir = dstRoot / srcDir.filename() / relativeNestedDir;
+    const size_t dstCount                    = CountFiles(dstNestedDir);
     if (dstCount != static_cast<size_t>(kFileCount))
     {
         Fail(std::format(L"CopyItems single-folder recursive parallelism output mismatch: expected {} files, got {}.", kFileCount, dstCount));
@@ -2752,7 +2743,7 @@ case SelfTestState::Step::Phase7_CopyItemsMultiRootUnevenRecursiveParallelism:
                 return E_POINTER;
             }
             *expectedDestination = nullptr;
-            *action              = FileSystemIssueAction::Cancel;
+            *action = FileSystemIssueAction::Cancel;
             return S_OK;
         }
     };
@@ -3140,7 +3131,8 @@ case SelfTestState::Step::Phase7_CopyRecursiveParallelismMatrix:
     std::optional<std::filesystem::path> alternateVolumeRoot = TryCreateAlternateWritableVolumeSelfTestRoot(state.tempRoot, alternateVolumeSkipDetail);
     if (! alternateVolumeRoot.has_value())
     {
-        Debug::Perf::Emit(L"FileOps.SelfTest.LocalProviderCrossVolumeMoveNoFallback", std::format(L"skip={}", alternateVolumeSkipDetail), 0, 0, 0, S_FALSE);
+        Debug::Perf::Emit(
+            L"FileOps.SelfTest.LocalProviderCrossVolumeMoveNoFallback", std::format(L"skip={}", alternateVolumeSkipDetail), 0, 0, 0, S_FALSE);
     }
     else
     {
@@ -3181,7 +3173,8 @@ case SelfTestState::Step::Phase7_CopyRecursiveParallelismMatrix:
                   hr);
         if (hr != HRESULT_FROM_WIN32(ERROR_NOT_SAME_DEVICE))
         {
-            Fail(std::format(L"Local provider cross-volume Move expected ERROR_NOT_SAME_DEVICE, got 0x{:08X}.", static_cast<unsigned long>(hr)));
+            Fail(std::format(L"Local provider cross-volume Move expected ERROR_NOT_SAME_DEVICE, got 0x{:08X}.",
+                             static_cast<unsigned long>(hr)));
             return true;
         }
         if (! std::filesystem::exists(realMovePayload, ec) || ec || CountFilesRecursive(realMovePayload) != 3u)
@@ -3339,11 +3332,11 @@ case SelfTestState::Step::Phase7_SharedPerItemScheduler:
                     completedFolders = task->_completedTopLevelFolders;
                 }
 
-                const bool started          = task->HasStarted();
-                const bool entered          = task->HasEnteredOperation();
-                const bool waiting          = task->IsWaitingInQueue();
-                const bool queuePaused      = task->IsQueuePaused();
-                const bool paused           = task->IsPaused();
+                const bool started        = task->HasStarted();
+                const bool entered        = task->HasEnteredOperation();
+                const bool waiting        = task->IsWaitingInQueue();
+                const bool queuePaused    = task->IsQueuePaused();
+                const bool paused         = task->IsPaused();
                 const bool discoveryInProg  = task->_discoveryAheadActive.load(std::memory_order_acquire);
                 const bool discoverySkipped = task->_discoverySkipped.load(std::memory_order_acquire);
                 const bool discoveryDone    = task->_discoveryClosed.load(std::memory_order_acquire);
@@ -3554,7 +3547,8 @@ case SelfTestState::Step::Phase7_SharedPerItemScheduler:
 
         const auto hasCanceledItem = [](const CompletedTaskInfo& info) noexcept
         {
-            return std::ranges::any_of(info.sourceItemResults, [](const auto& item) noexcept {
+            return std::ranges::any_of(info.sourceItemResults, [](const auto& item) noexcept
+            {
                 return item.has_value() && item->completion == FileOperations::ItemCompletion::Canceled;
             });
         };
@@ -3563,7 +3557,8 @@ case SelfTestState::Step::Phase7_SharedPerItemScheduler:
         // This fixture waits for at least one completed item in both tasks before requesting
         // cancellation. The typed aggregate is therefore Partial, while the interrupted sources
         // remain explicitly Canceled; a task-wide ERROR_CANCELLED would hide prior publication.
-        if (itA->second.hr != partialHr || itB->second.hr != partialHr || ! hasCanceledItem(itA->second) || ! hasCanceledItem(itB->second))
+        if (itA->second.hr != partialHr || itB->second.hr != partialHr ||
+            ! hasCanceledItem(itA->second) || ! hasCanceledItem(itB->second))
         {
             Fail(std::format(L"Expected partial/canceled shared scheduler tasks. A=0x{:08X} B=0x{:08X} canceledA={} canceledB={}",
                              static_cast<unsigned long>(itA->second.hr),
@@ -3938,17 +3933,18 @@ case SelfTestState::Step::Phase7_RecycleBinBatchDelete:
         }
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_USE_RECYCLE_BIN | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
-        taskSlot                    = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_DELETE,
-                                                                 FolderWindow::Pane::Left,
-                                                                 std::nullopt,
-                                                                 state.fsLocal,
-                                                                 std::move(sourcePaths),
-                                                                 {},
-                                                                 flags,
-                                                                 false,
-                                                                 0u,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::BulkItems);
+        taskSlot                    = StartFileOperationAndGetId(
+            state.fileOps,
+            FILESYSTEM_DELETE,
+            FolderWindow::Pane::Left,
+            std::nullopt,
+            state.fsLocal,
+            std::move(sourcePaths),
+            {},
+            flags,
+            false,
+            0u,
+            FolderWindow::FileOperationState::ExecutionMode::BulkItems);
         if (! taskSlot.has_value())
         {
             Fail(std::format(L"Failed to start recycle-bin delete task for {}.", label));
@@ -4126,8 +4122,9 @@ case SelfTestState::Step::Phase7_RecycleBinBatchDelete:
         Fail(std::format(L"Failed to read the recycle-bin candidate route snapshot: hr=0x{:08X}.", static_cast<unsigned long>(snapshotHr)));
         return true;
     }
-    if (candidateSnapshot.batchCalls != 1u || candidateSnapshot.requestedItems != kBatchFileCount || candidateSnapshot.observedItems != kBatchFileCount ||
-        candidateSnapshot.failedItems != 0u || candidateSnapshot.fallbackCount != 0u || candidateSnapshot.maxBatchSize != kBatchFileCount)
+    if (candidateSnapshot.batchCalls != 1u || candidateSnapshot.requestedItems != kBatchFileCount ||
+        candidateSnapshot.observedItems != kBatchFileCount || candidateSnapshot.failedItems != 0u || candidateSnapshot.fallbackCount != 0u ||
+        candidateSnapshot.maxBatchSize != kBatchFileCount)
     {
         Fail(std::format(L"Recycle-bin candidate route mismatch: calls={} requested={} observed={} failed={} fallback={} maxBatch={}; expected 1/{}/{}/0/0/{}.",
                          candidateSnapshot.batchCalls,
@@ -4155,7 +4152,12 @@ case SelfTestState::Step::Phase7_RecycleBinBatchDelete:
         (state.recycleBinBatchBaselineUs > state.recycleBinBatchCandidateUs) ? (state.recycleBinBatchBaselineUs - state.recycleBinBatchCandidateUs) : 0ull;
     Debug::Perf::Emit(
         L"FileOps.SelfTest.RecycleBinBatchImprovement", detail, improvementUs, state.recycleBinBatchBaselineUs, state.recycleBinBatchCandidateUs, S_OK);
-    Debug::Perf::Emit(L"FileOps.SelfTest.RecycleBinBatchRoute", L"candidate", 0u, candidateSnapshot.batchCalls, candidateSnapshot.observedItems, S_OK);
+    Debug::Perf::Emit(L"FileOps.SelfTest.RecycleBinBatchRoute",
+                      L"candidate",
+                      0u,
+                      candidateSnapshot.batchCalls,
+                      candidateSnapshot.observedItems,
+                      S_OK);
 
     AppendLog(std::format(L"Phase7_RecycleBinBatchDelete baseline={}us candidate={}us batchSize1={} batchSize2={} routeCalls={} observed={}",
                           state.recycleBinBatchBaselineUs,
@@ -4170,7 +4172,8 @@ case SelfTestState::Step::Phase7_RecycleBinBatchDelete:
     // process-local route snapshot above is the deterministic correctness gate.
     constexpr uint64_t kAbsoluteNoiseAllowanceUs = 500'000ull;
     constexpr uint64_t kRelativeNoiseDivisor     = 10ull;
-    const uint64_t regressionAllowanceUs         = (std::max)(kAbsoluteNoiseAllowanceUs, state.recycleBinBatchBaselineUs / kRelativeNoiseDivisor);
+    const uint64_t regressionAllowanceUs =
+        (std::max)(kAbsoluteNoiseAllowanceUs, state.recycleBinBatchBaselineUs / kRelativeNoiseDivisor);
     if (state.recycleBinBatchCandidateUs > state.recycleBinBatchBaselineUs + regressionAllowanceUs)
     {
         const uint64_t regressionUs = state.recycleBinBatchCandidateUs - state.recycleBinBatchBaselineUs;
@@ -4261,17 +4264,18 @@ case SelfTestState::Step::Phase7_RecycleBinBatchDeleteMultiBatch:
         }
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_USE_RECYCLE_BIN | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_DELETE,
-                                                                 FolderWindow::Pane::Left,
-                                                                 std::nullopt,
-                                                                 state.fsLocal,
-                                                                 std::move(sourcePaths),
-                                                                 {},
-                                                                 flags,
-                                                                 false,
-                                                                 0u,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::BulkItems);
+        state.taskA                 = StartFileOperationAndGetId(
+            state.fileOps,
+            FILESYSTEM_DELETE,
+            FolderWindow::Pane::Left,
+            std::nullopt,
+            state.fsLocal,
+            std::move(sourcePaths),
+            {},
+            flags,
+            false,
+            0u,
+            FolderWindow::FileOperationState::ExecutionMode::BulkItems);
         if (! state.taskA.has_value())
         {
             Fail(L"Failed to start recycle-bin multi-batch delete task.");
@@ -4343,21 +4347,21 @@ case SelfTestState::Step::Phase7_RecycleBinBatchDeleteMultiBatch:
         return true;
     }
     constexpr uint64_t kExpectedBatchCalls = 3u;
-    if (batchSnapshot.batchCalls != kExpectedBatchCalls || batchSnapshot.requestedItems != kBatchFileCount || batchSnapshot.observedItems != kBatchFileCount ||
-        batchSnapshot.failedItems != 0u || batchSnapshot.fallbackCount != 0u || batchSnapshot.maxBatchSize != kConfiguredBatchSize)
+    if (batchSnapshot.batchCalls != kExpectedBatchCalls || batchSnapshot.requestedItems != kBatchFileCount ||
+        batchSnapshot.observedItems != kBatchFileCount || batchSnapshot.failedItems != 0u || batchSnapshot.fallbackCount != 0u ||
+        batchSnapshot.maxBatchSize != kConfiguredBatchSize)
     {
-        Fail(std::format(
-            L"Recycle-bin multi-batch route mismatch: calls={} requested={} observed={} failed={} fallback={} maxBatch={}; expected {}/{}/{}/0/0/{}.",
-            batchSnapshot.batchCalls,
-            batchSnapshot.requestedItems,
-            batchSnapshot.observedItems,
-            batchSnapshot.failedItems,
-            batchSnapshot.fallbackCount,
-            batchSnapshot.maxBatchSize,
-            kExpectedBatchCalls,
-            kBatchFileCount,
-            kBatchFileCount,
-            kConfiguredBatchSize));
+        Fail(std::format(L"Recycle-bin multi-batch route mismatch: calls={} requested={} observed={} failed={} fallback={} maxBatch={}; expected {}/{}/{}/0/0/{}.",
+                         batchSnapshot.batchCalls,
+                         batchSnapshot.requestedItems,
+                         batchSnapshot.observedItems,
+                         batchSnapshot.failedItems,
+                         batchSnapshot.fallbackCount,
+                         batchSnapshot.maxBatchSize,
+                         kExpectedBatchCalls,
+                         kBatchFileCount,
+                         kBatchFileCount,
+                         kConfiguredBatchSize));
         return true;
     }
 
@@ -4365,7 +4369,8 @@ case SelfTestState::Step::Phase7_RecycleBinBatchDeleteMultiBatch:
         std::format(L"fileCount={} fileBytes={} configuredBatchSize={} root={}", kBatchFileCount, kBatchFileBytes, kConfiguredBatchSize, batchRoot.wstring());
     Debug::Perf::Emit(
         L"FileOps.SelfTest.RecycleBinBatchConfiguredSize", detail, kConfiguredBatchSize, kBatchFileCount, completion.progressCompletedItems, S_OK);
-    Debug::Perf::Emit(L"FileOps.SelfTest.RecycleBinBatchRoute", L"multi-batch", 0u, batchSnapshot.batchCalls, batchSnapshot.observedItems, S_OK);
+    Debug::Perf::Emit(
+        L"FileOps.SelfTest.RecycleBinBatchRoute", L"multi-batch", 0u, batchSnapshot.batchCalls, batchSnapshot.observedItems, S_OK);
 
     if (! state.localConfigOriginal.empty() && ! SetPluginConfiguration(state.infoLocal.get(), state.localConfigOriginal))
     {
@@ -4541,19 +4546,19 @@ case SelfTestState::Step::Phase8_DefaultBandwidthLimitFromSettings:
                                                 : 0ull;
 
         EnsureFileOperationsSettingsForSelfTest().defaultBandwidthLimitBytesPerSecond = kDefaultBandwidthLimitBytesPerSecond;
-        state.taskB = StartFileOperationAndGetId(state.fileOps,
-                                                 FILESYSTEM_COPY,
-                                                 FolderWindow::Pane::Right,
-                                                 FolderWindow::Pane::Left,
-                                                 state.fsDummy,
-                                                 {dummySourceFile},
-                                                 std::filesystem::path(dummyCandidateDestinationRoot),
-                                                 flags,
-                                                 false,
-                                                 0,
-                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                 false,
-                                                 state.fsDummy);
+        state.taskB                                                    = StartFileOperationAndGetId(state.fileOps,
+                                                                                                    FILESYSTEM_COPY,
+                                                                                                    FolderWindow::Pane::Right,
+                                                                                                    FolderWindow::Pane::Left,
+                                                                                                    state.fsDummy,
+                                                                                                    {dummySourceFile},
+                                                                                                    std::filesystem::path(dummyCandidateDestinationRoot),
+                                                                                                    flags,
+                                                                                                    false,
+                                                                                                    0,
+                                                                                                    FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                                                                    false,
+                                                                                                    state.fsDummy);
         if (! state.taskB.has_value())
         {
             restoreDefaultBandwidthState();
@@ -4665,7 +4670,7 @@ case SelfTestState::Step::Phase8_DefaultBandwidthLimitFromSettings:
 }
 case SelfTestState::Step::Phase8_TightDefaults_NoOverwrite:
 {
-    using Task              = FolderWindow::FileOperationState::Task;
+    using Task = FolderWindow::FileOperationState::Task;
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick))
     {
@@ -4707,7 +4712,7 @@ case SelfTestState::Step::Phase8_TightDefaults_NoOverwrite:
 
     if (state.stepState == 1)
     {
-        Task* task        = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
+        Task* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
         const auto prompt = TryGetConflictPromptCopy(task);
         if (! prompt.has_value())
         {
@@ -5029,7 +5034,7 @@ case SelfTestState::Step::Phase9_ConflictPrompt_OverwriteReplaceReadonly:
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
-        Task* task        = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
+        Task* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
         const auto prompt = TryGetConflictPromptCopy(task);
         Fail(std::format(L"Phase9_ConflictPrompt_OverwriteReplaceReadonly timed out (stepState={} taskPresent={} promptActive={} "
                          L"sourceMetadata={} destinationMetadata={}).",
@@ -5041,10 +5046,10 @@ case SelfTestState::Step::Phase9_ConflictPrompt_OverwriteReplaceReadonly:
         return true;
     }
 
-    const std::filesystem::path srcDir                = state.tempRoot / L"conflict-src";
-    const std::filesystem::path dstDir                = state.tempRoot / L"conflict-dst";
-    const std::filesystem::path srcFile               = srcDir / L"conflict.bin";
-    const std::filesystem::path dstFile               = dstDir / L"conflict.bin";
+    const std::filesystem::path srcDir  = state.tempRoot / L"conflict-src";
+    const std::filesystem::path dstDir  = state.tempRoot / L"conflict-dst";
+    const std::filesystem::path srcFile = srcDir / L"conflict.bin";
+    const std::filesystem::path dstFile = dstDir / L"conflict.bin";
     const std::filesystem::path nativeMoveSource      = srcDir / L"native-move.bin";
     const std::filesystem::path nativeMoveDestination = dstDir / L"native-move.bin";
 
@@ -5110,7 +5115,8 @@ case SelfTestState::Step::Phase9_ConflictPrompt_OverwriteReplaceReadonly:
             return true;
         }
 
-        if (! PromptHasAction(prompt.value(), Task::ConflictAction::ReplaceReadOnly) || ! PromptHasAction(prompt.value(), Task::ConflictAction::KeepBoth) ||
+        if (! PromptHasAction(prompt.value(), Task::ConflictAction::ReplaceReadOnly) ||
+            ! PromptHasAction(prompt.value(), Task::ConflictAction::KeepBoth) ||
             PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
         {
             Fail(L"Combined read-only file collision must offer Replace read-only and Keep both, but not Overwrite.");
@@ -5178,7 +5184,7 @@ case SelfTestState::Step::Phase9_ConflictPrompt_OverwriteReplaceReadonly:
 
     if (state.stepState == 4)
     {
-        Task* task        = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
+        Task* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
         const auto prompt = TryGetConflictPromptCopy(task);
         if (! prompt.has_value())
         {
@@ -5189,7 +5195,8 @@ case SelfTestState::Step::Phase9_ConflictPrompt_OverwriteReplaceReadonly:
             }
             return false;
         }
-        if (prompt->bucket != Task::ConflictBucket::RegularFileExists || ! PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
+        if (prompt->bucket != Task::ConflictBucket::RegularFileExists ||
+            ! PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
         {
             Fail(L"Native Move file collision must expose an executable Overwrite action.");
             return true;
@@ -5471,18 +5478,19 @@ case SelfTestState::Step::Phase9_ConflictPrompt_KeepBothNestedCacheEligibility:
         {FILESYSTEM_MOVE, 1u, L"move-sequential"},
         {FILESYSTEM_MOVE, 2u, L"move-parallel"},
     }};
-    constexpr uint64_t kPrimeSourceBytes          = 2u * 1024u;
-    constexpr uint64_t kPrimeDestinationBytes     = 4u * 1024u;
-    constexpr uint64_t kCollisionSourceBytes      = 3u * 1024u;
+    constexpr uint64_t kPrimeSourceBytes       = 2u * 1024u;
+    constexpr uint64_t kPrimeDestinationBytes  = 4u * 1024u;
+    constexpr uint64_t kCollisionSourceBytes   = 3u * 1024u;
     constexpr uint64_t kCollisionDestinationBytes = 8u * 1024u;
-    constexpr uint64_t kMovedSiblingBytes         = 6u * 1024u;
+    constexpr uint64_t kMovedSiblingBytes      = 6u * 1024u;
 
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 180'000ull))
     {
         ReleaseFileOpsKeepBothNestedConflictPauseForSelfTest();
-        Fail(std::format(
-            L"Phase9_ConflictPrompt_KeepBothNestedCacheEligibility timed out in scenario {} at state {}.", state.keepBothNestedScenarioIndex, state.stepState));
+        Fail(std::format(L"Phase9_ConflictPrompt_KeepBothNestedCacheEligibility timed out in scenario {} at state {}.",
+                         state.keepBothNestedScenarioIndex,
+                         state.stepState));
         return true;
     }
 
@@ -5500,20 +5508,20 @@ case SelfTestState::Step::Phase9_ConflictPrompt_KeepBothNestedCacheEligibility:
         return false;
     }
 
-    const Scenario& scenario                            = kScenarios[state.keepBothNestedScenarioIndex];
-    const std::filesystem::path scenarioRoot            = state.tempRoot / L"keepboth-nested-cache" / scenario.label;
-    const std::filesystem::path sourceRoot              = scenarioRoot / L"src";
-    const std::filesystem::path destinationRoot         = scenarioRoot / L"dst";
-    const std::filesystem::path sourcePrime             = sourceRoot / L"prime.bin";
-    const std::filesystem::path destinationPrime        = destinationRoot / L"prime.bin";
+    const Scenario& scenario = kScenarios[state.keepBothNestedScenarioIndex];
+    const std::filesystem::path scenarioRoot = state.tempRoot / L"keepboth-nested-cache" / scenario.label;
+    const std::filesystem::path sourceRoot = scenarioRoot / L"src";
+    const std::filesystem::path destinationRoot = scenarioRoot / L"dst";
+    const std::filesystem::path sourcePrime = sourceRoot / L"prime.bin";
+    const std::filesystem::path destinationPrime = destinationRoot / L"prime.bin";
     const std::filesystem::path destinationPrimeSibling = destinationRoot / L"prime (2).bin";
-    const std::filesystem::path sourceTree              = sourceRoot / L"tree";
-    const std::filesystem::path destinationTree         = destinationRoot / L"tree";
-    const std::filesystem::path retriedDestinationTree  = destinationRoot / L"tree (2)";
-    const std::filesystem::path sourceMovedSibling      = sourceTree / L"a-moved.bin";
+    const std::filesystem::path sourceTree = sourceRoot / L"tree";
+    const std::filesystem::path destinationTree = destinationRoot / L"tree";
+    const std::filesystem::path retriedDestinationTree = destinationRoot / L"tree (2)";
+    const std::filesystem::path sourceMovedSibling = sourceTree / L"a-moved.bin";
     const std::filesystem::path destinationMovedSibling = destinationTree / L"a-moved.bin";
-    const std::filesystem::path sourceCollision         = sourceTree / L"z-collision.bin";
-    const std::filesystem::path destinationCollision    = destinationTree / L"z-collision.bin";
+    const std::filesystem::path sourceCollision = sourceTree / L"z-collision.bin";
+    const std::filesystem::path destinationCollision = destinationTree / L"z-collision.bin";
 
     if (state.stepState == 0)
     {
@@ -5545,17 +5553,17 @@ case SelfTestState::Step::Phase9_ConflictPrompt_KeepBothNestedCacheEligibility:
 
         SetFileOpsKeepBothNestedConflictPauseForSelfTest(true);
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 scenario.operation,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {sourcePrime, sourceTree},
-                                                                 destinationRoot,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 scenario.operation,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {sourcePrime, sourceTree},
+                                                 destinationRoot,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             ReleaseFileOpsKeepBothNestedConflictPauseForSelfTest();
@@ -5564,13 +5572,13 @@ case SelfTestState::Step::Phase9_ConflictPrompt_KeepBothNestedCacheEligibility:
         }
 
         state.keepBothNestedScenarioStartTick = nowTick;
-        state.stepState                       = 1;
+        state.stepState = 1;
         return false;
     }
 
     if (state.stepState == 1)
     {
-        Task* task        = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
+        Task* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
         const auto prompt = TryGetConflictPromptCopy(task);
         if (! prompt.has_value())
         {
@@ -5579,8 +5587,9 @@ case SelfTestState::Step::Phase9_ConflictPrompt_KeepBothNestedCacheEligibility:
         if (! OrdinalString::EqualsNoCasePath(std::filesystem::path(prompt->destinationPath), destinationPrime))
         {
             ReleaseFileOpsKeepBothNestedConflictPauseForSelfTest();
-            Fail(std::format(
-                L"Cached Keep Both scenario {} did not prompt for the top-level priming collision first: {}.", scenario.label, prompt->destinationPath));
+            Fail(std::format(L"Cached Keep Both scenario {} did not prompt for the top-level priming collision first: {}.",
+                             scenario.label,
+                             prompt->destinationPath));
             return true;
         }
         if (prompt->bucket != Task::ConflictBucket::RegularFileExists || ! PromptHasAction(prompt.value(), Task::ConflictAction::KeepBoth))
@@ -5597,7 +5606,7 @@ case SelfTestState::Step::Phase9_ConflictPrompt_KeepBothNestedCacheEligibility:
 
     if (state.stepState == 2)
     {
-        Task* task              = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
+        Task* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
         const auto nestedPrompt = TryGetConflictPromptCopy(task);
         if (! task || (! nestedPrompt.has_value() && ! HasFileOpsKeepBothNestedConflictPauseEnteredForSelfTest()))
         {
@@ -5617,13 +5626,14 @@ case SelfTestState::Step::Phase9_ConflictPrompt_KeepBothNestedCacheEligibility:
 
     if (state.stepState == 3)
     {
-        Task* task        = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
+        Task* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
         const auto prompt = TryGetConflictPromptCopy(task);
         if (! prompt.has_value())
         {
             if (state.completedTasks.contains(state.taskA.value()))
             {
-                Fail(std::format(L"Cached Keep Both scenario {} completed without prompting for the independently decided nested collision.", scenario.label));
+                Fail(std::format(L"Cached Keep Both scenario {} completed without prompting for the independently decided nested collision.",
+                                 scenario.label));
                 return true;
             }
             return false;
@@ -5657,14 +5667,14 @@ case SelfTestState::Step::Phase9_ConflictPrompt_KeepBothNestedCacheEligibility:
             const auto statusAt = [&](size_t index) noexcept -> HRESULT
             {
                 return index < completed->second.sourceItemStatuses.size() && completed->second.sourceItemStatuses[index].has_value()
-                           ? completed->second.sourceItemStatuses[index].value()
-                           : E_PENDING;
+                    ? completed->second.sourceItemStatuses[index].value()
+                    : E_PENDING;
             };
             const auto resultStatusAt = [&](size_t index) noexcept -> HRESULT
             {
                 return index < completed->second.sourceItemResults.size() && completed->second.sourceItemResults[index].has_value()
-                           ? completed->second.sourceItemResults[index].value().status
-                           : E_PENDING;
+                    ? completed->second.sourceItemResults[index].value().status
+                    : E_PENDING;
             };
             Fail(std::format(L"Cached Keep Both scenario {} expected two prompts and intentional-Skip S_FALSE (0x{:08X}); prompts={} hr=0x{:08X} "
                              L"itemStatuses=[0x{:08X},0x{:08X}] typedStatuses=[0x{:08X},0x{:08X}].",
@@ -5689,10 +5699,10 @@ case SelfTestState::Step::Phase9_ConflictPrompt_KeepBothNestedCacheEligibility:
             return true;
         }
 
-        const bool isMove                        = scenario.operation == FILESYSTEM_MOVE;
-        const DWORD sourcePrimeAttributes        = GetFileAttributesW(sourcePrime.c_str());
+        const bool isMove = scenario.operation == FILESYSTEM_MOVE;
+        const DWORD sourcePrimeAttributes = GetFileAttributesW(sourcePrime.c_str());
         const DWORD sourceMovedSiblingAttributes = GetFileAttributesW(sourceMovedSibling.c_str());
-        const DWORD retriedTreeAttributes        = GetFileAttributesW(retriedDestinationTree.c_str());
+        const DWORD retriedTreeAttributes = GetFileAttributesW(retriedDestinationTree.c_str());
         if (! FileSizeEquals(destinationPrime, kPrimeDestinationBytes) || ! FileSizeEquals(destinationPrimeSibling, kPrimeSourceBytes) ||
             ! FileSizeEquals(destinationCollision, kCollisionDestinationBytes) || ! FileSizeEquals(sourceCollision, kCollisionSourceBytes) ||
             ! FileSizeEquals(destinationMovedSibling, kMovedSiblingBytes) || retriedTreeAttributes != INVALID_FILE_ATTRIBUTES ||
@@ -5703,14 +5713,17 @@ case SelfTestState::Step::Phase9_ConflictPrompt_KeepBothNestedCacheEligibility:
             return true;
         }
 
-        const uint64_t durationUs = nowTick >= state.keepBothNestedScenarioStartTick ? (nowTick - state.keepBothNestedScenarioStartTick) * 1000ull : 0ull;
-        Debug::Perf::Emit(
-            L"FileOps.SelfTest.KeepBothNestedCacheEligibilityUs",
-            std::format(L"operation={} concurrency={} prompts=2", scenario.operation == FILESYSTEM_MOVE ? L"move" : L"copy", scenario.concurrency),
-            durationUs,
-            scenario.concurrency,
-            completed->second.conflictPromptCount,
-            S_OK);
+        const uint64_t durationUs = nowTick >= state.keepBothNestedScenarioStartTick
+                                        ? (nowTick - state.keepBothNestedScenarioStartTick) * 1000ull
+                                        : 0ull;
+        Debug::Perf::Emit(L"FileOps.SelfTest.KeepBothNestedCacheEligibilityUs",
+                          std::format(L"operation={} concurrency={} prompts=2",
+                                      scenario.operation == FILESYSTEM_MOVE ? L"move" : L"copy",
+                                      scenario.concurrency),
+                          durationUs,
+                          scenario.concurrency,
+                          completed->second.conflictPromptCount,
+                          S_OK);
 
         state.taskA.reset();
         ++state.keepBothNestedScenarioIndex;
@@ -5794,7 +5807,8 @@ case SelfTestState::Step::Phase9_ConflictPrompt_TypeMismatchNoOverwrite:
             return true;
         }
 
-        if (PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite) || ! PromptHasAction(prompt.value(), Task::ConflictAction::KeepBoth) ||
+        if (PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite) ||
+            ! PromptHasAction(prompt.value(), Task::ConflictAction::KeepBoth) ||
             ! PromptHasAction(prompt.value(), Task::ConflictAction::SkipAll))
         {
             Fail(L"A file-on-folder type mismatch must offer Keep both and Skip all, but never Overwrite.");
@@ -5853,20 +5867,20 @@ case SelfTestState::Step::Phase9_ConflictPrompt_LocalFileOntoDirectory:
         return true;
     }
 
-    const std::filesystem::path srcDir                        = state.tempRoot / L"local-file-dir-conflict-src";
-    const std::filesystem::path dstDir                        = state.tempRoot / L"local-file-dir-conflict-dst";
-    const std::filesystem::path srcFile                       = srcDir / L"stuck.bin";
-    const std::filesystem::path dstConflictDirectory          = dstDir / L"stuck.bin";
-    const std::filesystem::path srcLinkConflict               = srcDir / L"occupied-link.bin";
-    const std::filesystem::path dstConflictLink               = dstDir / L"occupied-link.bin";
-    const std::filesystem::path destinationLinkTarget         = state.tempRoot / L"local-destination-link-target";
-    const std::filesystem::path sourceFolderConflict          = srcDir / L"folder-on-file";
-    const std::filesystem::path sourceFolderChild             = sourceFolderConflict / L"child.bin";
+    const std::filesystem::path srcDir               = state.tempRoot / L"local-file-dir-conflict-src";
+    const std::filesystem::path dstDir               = state.tempRoot / L"local-file-dir-conflict-dst";
+    const std::filesystem::path srcFile              = srcDir / L"stuck.bin";
+    const std::filesystem::path dstConflictDirectory = dstDir / L"stuck.bin";
+    const std::filesystem::path srcLinkConflict      = srcDir / L"occupied-link.bin";
+    const std::filesystem::path dstConflictLink      = dstDir / L"occupied-link.bin";
+    const std::filesystem::path destinationLinkTarget = state.tempRoot / L"local-destination-link-target";
+    const std::filesystem::path sourceFolderConflict = srcDir / L"folder-on-file";
+    const std::filesystem::path sourceFolderChild = sourceFolderConflict / L"child.bin";
     const std::filesystem::path destinationFolderConflictFile = dstDir / L"folder-on-file";
-    const std::filesystem::path destinationFolderKeepBoth     = dstDir / L"folder-on-file (2)";
-    const std::filesystem::path samePaneDirectory             = state.tempRoot / L"same-pane-copy";
-    const std::filesystem::path samePaneSource                = samePaneDirectory / L"duplicate.bin";
-    const std::filesystem::path samePaneSibling               = samePaneDirectory / L"duplicate (2).bin";
+    const std::filesystem::path destinationFolderKeepBoth = dstDir / L"folder-on-file (2)";
+    const std::filesystem::path samePaneDirectory     = state.tempRoot / L"same-pane-copy";
+    const std::filesystem::path samePaneSource        = samePaneDirectory / L"duplicate.bin";
+    const std::filesystem::path samePaneSibling       = samePaneDirectory / L"duplicate (2).bin";
 
     if (state.stepState == 0)
     {
@@ -5971,17 +5985,17 @@ case SelfTestState::Step::Phase9_ConflictPrompt_LocalFileOntoDirectory:
         }
 
         const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_COPY,
-                                                                 FolderWindow::Pane::Left,
-                                                                 FolderWindow::Pane::Right,
-                                                                 state.fsLocal,
-                                                                 {sourceFolderConflict},
-                                                                 dstDir,
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {sourceFolderConflict},
+                                                 dstDir,
+                                                 flags,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
         if (! state.taskA.has_value())
         {
             Fail(L"Failed to start the local folder-on-file conflict task.");
@@ -5994,7 +6008,7 @@ case SelfTestState::Step::Phase9_ConflictPrompt_LocalFileOntoDirectory:
 
     if (state.stepState == 3)
     {
-        Task* task        = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
+        Task* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
         const auto prompt = TryGetConflictPromptCopy(task);
         if (! prompt.has_value())
         {
@@ -6005,7 +6019,8 @@ case SelfTestState::Step::Phase9_ConflictPrompt_LocalFileOntoDirectory:
             }
             return false;
         }
-        if (prompt->bucket != Task::ConflictBucket::TypeMismatch || ! PromptHasAction(prompt.value(), Task::ConflictAction::KeepBoth) ||
+        if (prompt->bucket != Task::ConflictBucket::TypeMismatch ||
+            ! PromptHasAction(prompt.value(), Task::ConflictAction::KeepBoth) ||
             PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
         {
             Fail(L"Local folder-on-file Copy must expose TypeMismatch with Keep Both and never Overwrite.");
@@ -6084,8 +6099,10 @@ case SelfTestState::Step::Phase9_ConflictPrompt_LocalFileOntoDirectory:
         }
 
         if (prompt->bucket != Task::ConflictBucket::DestinationLink || ! prompt->destinationMetadata.isLink ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::ReplaceLink) || ! PromptHasAction(prompt.value(), Task::ConflictAction::KeepBoth) ||
-            ! PromptHasAction(prompt.value(), Task::ConflictAction::Skip) || ! PromptHasAction(prompt.value(), Task::ConflictAction::SkipAll) ||
+            ! PromptHasAction(prompt.value(), Task::ConflictAction::ReplaceLink) ||
+            ! PromptHasAction(prompt.value(), Task::ConflictAction::KeepBoth) ||
+            ! PromptHasAction(prompt.value(), Task::ConflictAction::Skip) ||
+            ! PromptHasAction(prompt.value(), Task::ConflictAction::SkipAll) ||
             PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite) || ! prompt->applyToAllEligible ||
             prompt->destinationMetadata.linkKind != Task::ConflictLinkKind::Junction)
         {
@@ -6147,7 +6164,7 @@ case SelfTestState::Step::Phase9_ConflictPrompt_LocalFileOntoDirectory:
 
     if (state.stepState == 61)
     {
-        Task* task        = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
+        Task* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
         const auto prompt = TryGetConflictPromptCopy(task);
         if (! prompt.has_value())
         {
@@ -6158,7 +6175,8 @@ case SelfTestState::Step::Phase9_ConflictPrompt_LocalFileOntoDirectory:
             }
             return false;
         }
-        if (prompt->bucket != Task::ConflictBucket::DestinationLink || ! PromptHasAction(prompt.value(), Task::ConflictAction::ReplaceLink) ||
+        if (prompt->bucket != Task::ConflictBucket::DestinationLink ||
+            ! PromptHasAction(prompt.value(), Task::ConflictAction::ReplaceLink) ||
             ! prompt->destinationMetadata.objectKindKnown || ! prompt->destinationMetadata.isLink)
         {
             Fail(L"File-on-directory-link must offer a consumable exact Replace link action only after authoritative kind resolution.");
@@ -6178,8 +6196,9 @@ case SelfTestState::Step::Phase9_ConflictPrompt_LocalFileOntoDirectory:
         }
         const DWORD replacedAttributes = GetFileAttributesW(dstConflictLink.c_str());
         if (FAILED(completed->second.hr) || replacedAttributes == INVALID_FILE_ATTRIBUTES ||
-            (replacedAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0u || ! FileSizeEquals(dstConflictLink, 4096u) ||
-            ! FileSizeEquals(srcLinkConflict, 4096u) || ! FileSizeEquals(destinationLinkTarget / L"keep.bin", 1024u))
+            (replacedAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0u ||
+            ! FileSizeEquals(dstConflictLink, 4096u) || ! FileSizeEquals(srcLinkConflict, 4096u) ||
+            ! FileSizeEquals(destinationLinkTarget / L"keep.bin", 1024u))
         {
             Fail(std::format(L"Exact Replace link did not replace only the link object while preserving its target (hr=0x{0:08X}).",
                              static_cast<unsigned long>(completed->second.hr)));
@@ -6223,7 +6242,8 @@ case SelfTestState::Step::Phase9_ConflictPrompt_LocalFileOntoDirectory:
         }
         if (FAILED(completed->second.hr) || ! FilesEqualBytes(samePaneSource, samePaneSibling))
         {
-            Fail(std::format(L"Same-pane Copy did not publish an equal Keep Both sibling: 0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
+            Fail(std::format(L"Same-pane Copy did not publish an equal Keep Both sibling: 0x{:08X}.",
+                             static_cast<unsigned long>(completed->second.hr)));
             return true;
         }
 
@@ -6528,7 +6548,8 @@ case SelfTestState::Step::Phase9_ConflictPrompt_RetryCap:
         if (prompt->bucket != Task::ConflictBucket::SharingViolation || ! PromptHasAction(prompt.value(), Task::ConflictAction::Retry) ||
             prompt->attemptCount != 2u)
         {
-            Fail(std::format(L"Expected the third SharingViolation prompt to offer Retry again after two attempts (C2; attempts={}).", prompt->attemptCount));
+            Fail(std::format(L"Expected the third SharingViolation prompt to offer Retry again after two attempts (C2; attempts={}).",
+                             prompt->attemptCount));
             return true;
         }
         task->SubmitConflictDecision(Task::ConflictAction::Retry, false);

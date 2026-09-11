@@ -1,13 +1,10 @@
 #pragma once
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
 #include <cstddef>
 #include <cstdint>
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <windows.h>
 
 namespace WndMsg
@@ -37,10 +34,10 @@ inline constexpr UINT kDxUiWindowHostProcessExitDetach = WM_APP + 0x06C;
 
 // Embedded Terminal plugin. These messages are process-global even though the
 // receiver lives in Terminal.dll, so they belong in the central registry.
-inline constexpr UINT kTerminalOutputReady         = WM_APP + 0x365;
-inline constexpr UINT kTerminalSessionExited       = WM_APP + 0x366;
-inline constexpr UINT kTerminalClipboardWrite      = WM_APP + 0x367;
-inline constexpr UINT kTerminalKittyReady          = WM_APP + 0x368;
+inline constexpr UINT kTerminalOutputReady   = WM_APP + 0x365;
+inline constexpr UINT kTerminalSessionExited = WM_APP + 0x366;
+inline constexpr UINT kTerminalClipboardWrite = WM_APP + 0x367;
+inline constexpr UINT kTerminalKittyReady = WM_APP + 0x368;
 inline constexpr UINT kTerminalCommandSurfaceReady = WM_APP + 0x369;
 // Payload-less cross-thread completion: wParam is TRUE only when the
 // authenticated shell accepted a pending Suggestions insertion response.
@@ -65,10 +62,10 @@ inline constexpr UINT kPaneSelectionSizeComputed = WM_APP + 0x401;
 inline constexpr UINT kPaneSelectionSizeProgress = WM_APP + 0x402;
 inline constexpr UINT kPaneRestoreFolderFocus    = WM_APP + 0x403;
 
-inline constexpr UINT kFileOperationCompleted                 = WM_APP + 0x450;
-inline constexpr UINT kFileOperationPresentationChanged       = WM_APP + 0x455;
+inline constexpr UINT kFileOperationCompleted           = WM_APP + 0x450;
+inline constexpr UINT kFileOperationPresentationChanged = WM_APP + 0x455;
 inline constexpr UINT kFileOperationBatchRenameArtifactPrompt = WM_APP + 0x457;
-inline constexpr UINT kFileOperationClipboardMoveReady        = WM_APP + 0x459;
+inline constexpr UINT kFileOperationClipboardMoveReady  = WM_APP + 0x459;
 #ifdef ENABLE_TESTS
 inline constexpr UINT kFileOpsPopupSelfTestInvoke       = WM_APP + 0x451;
 inline constexpr UINT kFileOpsPopupSelfTestSnapshot     = WM_APP + 0x452;
@@ -437,35 +434,35 @@ enum class ViewerTextDebugAsyncStreamFault : uint8_t
 
 struct ViewerTextDebugGeometryRequest
 {
-    ViewerTextDebugGeometryOperation operation       = ViewerTextDebugGeometryOperation::ProbeLayout;
-    ViewerTextDebugAsyncStreamFault asyncStreamFault = ViewerTextDebugAsyncStreamFault::None;
-    size_t cacheMaxEntries                           = 0u;
-    size_t cacheMaxBytes                             = 0u;
-    size_t segmentStart                              = 0u;
-    size_t segmentEnd                                = 0u;
-    size_t textPosition                              = 0u;
-    size_t rangeStart                                = 0u;
-    size_t rangeEnd                                  = 0u;
-    size_t logicalLine                               = 0u;
-    float widthDip                                   = 0.0f;
-    float hitX                                       = 0.0f;
-    size_t normalizedTextPosition                    = 0u;
-    size_t previousTextPosition                      = 0u;
-    size_t nextTextPosition                          = 0u;
-    size_t hitTextPosition                           = 0u;
-    float caretX                                     = 0.0f;
-    float rangeLeft                                  = 0.0f;
-    float rangeRight                                 = 0.0f;
-    size_t wrappedSegmentCount                       = 0u;
-    size_t wrappedCoveredStart                       = 0u;
-    size_t wrappedCoveredEnd                         = 0u;
-    size_t wrappedSecondSegmentStart                 = 0u;
-    size_t wrappedSecondSegmentEnd                   = 0u;
-    float wrappedWidthDip                            = 0.0f;
-    float wrappedLineHeightDip                       = 0.0f;
-    bool wrappedHasGapOrOverlap                      = false;
-    bool wrappedAllSegmentsFit                       = false;
-    HRESULT result                                   = E_UNEXPECTED;
+    ViewerTextDebugGeometryOperation operation          = ViewerTextDebugGeometryOperation::ProbeLayout;
+    ViewerTextDebugAsyncStreamFault asyncStreamFault    = ViewerTextDebugAsyncStreamFault::None;
+    size_t cacheMaxEntries                              = 0u;
+    size_t cacheMaxBytes                                = 0u;
+    size_t segmentStart                                 = 0u;
+    size_t segmentEnd                                   = 0u;
+    size_t textPosition                                 = 0u;
+    size_t rangeStart                                   = 0u;
+    size_t rangeEnd                                     = 0u;
+    size_t logicalLine                                  = 0u;
+    float widthDip                                      = 0.0f;
+    float hitX                                          = 0.0f;
+    size_t normalizedTextPosition = 0u;
+    size_t previousTextPosition   = 0u;
+    size_t nextTextPosition       = 0u;
+    size_t hitTextPosition        = 0u;
+    float caretX                  = 0.0f;
+    float rangeLeft               = 0.0f;
+    float rangeRight              = 0.0f;
+    size_t wrappedSegmentCount    = 0u;
+    size_t wrappedCoveredStart    = 0u;
+    size_t wrappedCoveredEnd      = 0u;
+    size_t wrappedSecondSegmentStart = 0u;
+    size_t wrappedSecondSegmentEnd   = 0u;
+    float wrappedWidthDip         = 0.0f;
+    float wrappedLineHeightDip    = 0.0f;
+    bool wrappedHasGapOrOverlap   = false;
+    bool wrappedAllSegmentsFit    = false;
+    HRESULT result                = E_UNEXPECTED;
 };
 
 struct ViewerTextDebugSaveRequest
@@ -481,7 +478,7 @@ inline constexpr size_t kViewerTextDebugHexLineChars = 32u;
 
 struct ViewerTextDebugHexLineRequest
 {
-    uint64_t offset   = 0u;
+    uint64_t offset = 0u;
     size_t validBytes = 0u;
     wchar_t text[kViewerTextDebugHexLineChars]{};
     size_t sourceLengths[16]{};
@@ -541,14 +538,14 @@ inline constexpr UINT kViewerDebugGetNativeMenuModelSnapshot = WM_APP + 0x612;
 
 struct ViewerImgRawDecodeDebugSnapshot
 {
-    bool hasImage            = false;
-    bool displayingThumbnail = false;
-    uint16_t baseOrientation = 1u;
-    uint16_t viewOrientation = 1u;
-    uint32_t sourceWidth     = 0u;
-    uint32_t sourceHeight    = 0u;
-    uint32_t orientedWidth   = 0u;
-    uint32_t orientedHeight  = 0u;
+    bool hasImage              = false;
+    bool displayingThumbnail   = false;
+    uint16_t baseOrientation   = 1u;
+    uint16_t viewOrientation   = 1u;
+    uint32_t sourceWidth       = 0u;
+    uint32_t sourceHeight      = 0u;
+    uint32_t orientedWidth     = 0u;
+    uint32_t orientedHeight    = 0u;
 };
 
 inline constexpr UINT kViewerImgRawDebugGetDecodeSnapshot = WM_APP + 0x624;
@@ -628,15 +625,15 @@ struct ViewerVlcDebugSnapshot
     uint64_t loadQueueAccepted           = 0;
     uint64_t loadQueueRejected           = 0;
     uint64_t staleLoadResults            = 0;
-    uint64_t cleanupCompletions          = 0;
-    uint64_t deferredCleanupCount        = 0;
-    uint64_t cleanupDeferrals            = 0;
-    uint64_t cleanupSubmitFailures       = 0;
-    uint64_t cleanupAllocationFailures   = 0;
-    uint64_t asyncResultPostFailures     = 0;
-    uint64_t loadPostFallbacks           = 0;
-    uint64_t cleanupPostFallbacks        = 0;
-    bool closePending                    = false;
+    uint64_t cleanupCompletions           = 0;
+    uint64_t deferredCleanupCount         = 0;
+    uint64_t cleanupDeferrals             = 0;
+    uint64_t cleanupSubmitFailures        = 0;
+    uint64_t cleanupAllocationFailures    = 0;
+    uint64_t asyncResultPostFailures      = 0;
+    uint64_t loadPostFallbacks            = 0;
+    uint64_t cleanupPostFallbacks         = 0;
+    bool closePending                     = false;
 };
 
 struct ViewerVlcDebugPlaybackState
@@ -656,18 +653,18 @@ struct ViewerVlcDebugWheel
 
 struct ViewerVlcDebugStopDelay
 {
-    uint32_t delayMs   = 0;
+    uint32_t delayMs = 0;
     HANDLE releaseGate = nullptr;
 };
 
 struct ViewerVlcDebugAsyncControl
 {
-    uint32_t loadDelayMs             = 0;
-    bool failNextLoadSubmit          = false;
-    bool failNextLoadCompletionPost  = false;
+    uint32_t loadDelayMs = 0;
+    bool failNextLoadSubmit = false;
+    bool failNextLoadCompletionPost = false;
     bool failNextCloseCompletionPost = false;
-    bool failNextCleanupSubmit       = false;
-    bool failNextCleanupAllocation   = false;
+    bool failNextCleanupSubmit = false;
+    bool failNextCleanupAllocation = false;
 };
 
 inline constexpr UINT kViewerVlcDebugGetSnapshot         = WM_APP + 0x614;
@@ -719,67 +716,67 @@ enum class ViewerSpacePerfScanState : uint8_t
 
 struct ViewerSpacePerfDebugSnapshot
 {
-    ViewerSpacePerfRendererMode rendererMode  = ViewerSpacePerfRendererMode::None;
-    ViewerSpacePerfScanState scanState        = ViewerSpacePerfScanState::NotStarted;
-    bool hasRenderTarget                      = false;
-    size_t realDirectoryCount                 = 0u;
-    size_t fileCandidateCount                 = 0u;
-    size_t syntheticCount                     = 0u;
-    size_t pendingQueueCount                  = 0u;
-    uint64_t pendingQueueBytes                = 0u;
-    size_t drawItemCount                      = 0u;
-    size_t visibleTileCount                   = 0u;
-    size_t culledTileCount                    = 0u;
-    uint64_t rootTotalBytes                   = 0u;
-    uint64_t fileCandidateBytes               = 0u;
-    uint64_t syntheticBytes                   = 0u;
-    uint64_t lastTileDrawCount                = 0u;
-    uint64_t lastTextDrawCount                = 0u;
-    uint64_t staticCacheGeneration            = 0u;
-    uint64_t staticCacheHits                  = 0u;
-    uint64_t staticCacheMisses                = 0u;
-    uint64_t staticCacheRecordCount           = 0u;
-    uint64_t staticCacheBytes                 = 0u;
-    uint64_t scanCacheSnapshotBytes           = 0u;
-    uint64_t lastStaticCacheRecordUs          = 0u;
-    uint64_t lastPaintUs                      = 0u;
-    uint64_t lastLayoutUs                     = 0u;
-    uint64_t lastDrainUs                      = 0u;
-    uint64_t lastWorkingSetBytes              = 0u;
-    uint64_t lastHitTestUs                    = 0u;
-    uint32_t lastHitTestCandidatesChecked     = 0u;
-    uint32_t effectiveFileCandidateBudget     = 0u;
-    uint32_t rendererDeviceCreateCount        = 0u;
-    uint32_t swapChainResizeCount             = 0u;
-    uint32_t rendererBrushCreateCount         = 0u;
-    uint32_t rendererTextFormatCreateCount    = 0u;
-    uint32_t swapChainWidthPx                 = 0u;
-    uint32_t swapChainHeightPx                = 0u;
-    uint32_t rendererFailureStage             = 0u;
-    uint32_t rendererFailureHr                = 0u;
-    uint64_t layoutGeneration                 = 0u;
-    uint32_t hitGridCellCount                 = 0u;
-    uint32_t hitGridMaxCandidatesPerCell      = 0u;
-    uint64_t aggregateBytes                   = 0u;
-    uint64_t aggregateFolders                 = 0u;
-    uint64_t aggregateFiles                   = 0u;
-    uint64_t scannedFolders                   = 0u;
-    uint64_t scannedFiles                     = 0u;
-    uint64_t childReferenceCount              = 0u;
-    uint64_t childArenaSlots                  = 0u;
-    uint64_t childArenaFreeSlots              = 0u;
-    uint64_t modelAcceptedEntries             = 0u;
-    uint64_t modelRejectedEntries             = 0u;
-    uint64_t modelCappedDirectories           = 0u;
-    uint64_t modelCappedFiles                 = 0u;
-    uint64_t modelRetainedNameBytes           = 0u;
-    uint64_t modelRetainedChildReferences     = 0u;
-    uint64_t modelTraversedDirectories        = 0u;
-    uint64_t modelRetainedDirectoryLimit      = 0u;
-    uint64_t modelRetainedFileLimit           = 0u;
-    uint64_t modelChildReferenceLimit         = 0u;
-    uint64_t modelChildArenaSlotLimit         = 0u;
-    uint32_t modelValidationError             = 0u;
+    ViewerSpacePerfRendererMode rendererMode = ViewerSpacePerfRendererMode::None;
+    ViewerSpacePerfScanState scanState       = ViewerSpacePerfScanState::NotStarted;
+    bool hasRenderTarget                     = false;
+    size_t realDirectoryCount                = 0u;
+    size_t fileCandidateCount                = 0u;
+    size_t syntheticCount                    = 0u;
+    size_t pendingQueueCount                 = 0u;
+    uint64_t pendingQueueBytes               = 0u;
+    size_t drawItemCount                     = 0u;
+    size_t visibleTileCount                  = 0u;
+    size_t culledTileCount                   = 0u;
+    uint64_t rootTotalBytes                  = 0u;
+    uint64_t fileCandidateBytes              = 0u;
+    uint64_t syntheticBytes                  = 0u;
+    uint64_t lastTileDrawCount               = 0u;
+    uint64_t lastTextDrawCount               = 0u;
+    uint64_t staticCacheGeneration           = 0u;
+    uint64_t staticCacheHits                 = 0u;
+    uint64_t staticCacheMisses               = 0u;
+    uint64_t staticCacheRecordCount          = 0u;
+    uint64_t staticCacheBytes                = 0u;
+    uint64_t scanCacheSnapshotBytes          = 0u;
+    uint64_t lastStaticCacheRecordUs         = 0u;
+    uint64_t lastPaintUs                     = 0u;
+    uint64_t lastLayoutUs                    = 0u;
+    uint64_t lastDrainUs                     = 0u;
+    uint64_t lastWorkingSetBytes             = 0u;
+    uint64_t lastHitTestUs                   = 0u;
+    uint32_t lastHitTestCandidatesChecked    = 0u;
+    uint32_t effectiveFileCandidateBudget    = 0u;
+    uint32_t rendererDeviceCreateCount       = 0u;
+    uint32_t swapChainResizeCount            = 0u;
+    uint32_t rendererBrushCreateCount        = 0u;
+    uint32_t rendererTextFormatCreateCount   = 0u;
+    uint32_t swapChainWidthPx                = 0u;
+    uint32_t swapChainHeightPx               = 0u;
+    uint32_t rendererFailureStage            = 0u;
+    uint32_t rendererFailureHr               = 0u;
+    uint64_t layoutGeneration                = 0u;
+    uint32_t hitGridCellCount                = 0u;
+    uint32_t hitGridMaxCandidatesPerCell     = 0u;
+    uint64_t aggregateBytes                  = 0u;
+    uint64_t aggregateFolders                = 0u;
+    uint64_t aggregateFiles                  = 0u;
+    uint64_t scannedFolders                  = 0u;
+    uint64_t scannedFiles                    = 0u;
+    uint64_t childReferenceCount             = 0u;
+    uint64_t childArenaSlots                 = 0u;
+    uint64_t childArenaFreeSlots             = 0u;
+    uint64_t modelAcceptedEntries            = 0u;
+    uint64_t modelRejectedEntries            = 0u;
+    uint64_t modelCappedDirectories          = 0u;
+    uint64_t modelCappedFiles                = 0u;
+    uint64_t modelRetainedNameBytes          = 0u;
+    uint64_t modelRetainedChildReferences    = 0u;
+    uint64_t modelTraversedDirectories       = 0u;
+    uint64_t modelRetainedDirectoryLimit     = 0u;
+    uint64_t modelRetainedFileLimit          = 0u;
+    uint64_t modelChildReferenceLimit        = 0u;
+    uint64_t modelChildArenaSlotLimit        = 0u;
+    uint32_t modelValidationError            = 0u;
     uint64_t postUpdateInnerGenerationRejects = 0u;
 };
 
@@ -807,12 +804,12 @@ enum class ViewerSpaceRendererFaultDebugMode : uint8_t
     DxgiDeviceRemoved = 2,
 };
 
-inline constexpr UINT kViewerSpaceDebugGetTooltipSnapshot  = WM_APP + 0x61B;
-inline constexpr UINT kViewerSpaceDebugShowTooltipOverlay  = WM_APP + 0x61C;
-inline constexpr UINT kViewerSpaceDebugGetPerfSnapshot     = WM_APP + 0x61D;
-inline constexpr UINT kViewerSpaceDebugForcePerfSample     = WM_APP + 0x61E;
-inline constexpr UINT kViewerSpaceDebugCompareHitTesting   = WM_APP + 0x61F;
-inline constexpr UINT kViewerSpaceDebugForceRendererFault  = WM_APP + 0x623;
+inline constexpr UINT kViewerSpaceDebugGetTooltipSnapshot = WM_APP + 0x61B;
+inline constexpr UINT kViewerSpaceDebugShowTooltipOverlay = WM_APP + 0x61C;
+inline constexpr UINT kViewerSpaceDebugGetPerfSnapshot    = WM_APP + 0x61D;
+inline constexpr UINT kViewerSpaceDebugForcePerfSample    = WM_APP + 0x61E;
+inline constexpr UINT kViewerSpaceDebugCompareHitTesting  = WM_APP + 0x61F;
+inline constexpr UINT kViewerSpaceDebugForceRendererFault = WM_APP + 0x623;
 inline constexpr UINT kViewerSpaceDebugPauseNextPostUpdate = WM_APP + 0x635;
 #endif
 

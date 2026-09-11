@@ -1,8 +1,8 @@
 #pragma once
 
-#include <cstdint>
 #include <optional>
 #include <span>
+#include <cstdint>
 #include <string_view>
 
 enum class CommandExecutorOwner : uint8_t
@@ -91,15 +91,15 @@ enum class CommandVisualId : uint8_t
     return static_cast<uint8_t>(scope);
 }
 
-inline constexpr uint8_t kLegacyShortcutScopeMask =
-    static_cast<uint8_t>(CommandShortcutScopeMask(CommandShortcutScope::FunctionBar) | CommandShortcutScopeMask(CommandShortcutScope::FolderView));
+inline constexpr uint8_t kLegacyShortcutScopeMask = static_cast<uint8_t>(
+    CommandShortcutScopeMask(CommandShortcutScope::FunctionBar) | CommandShortcutScopeMask(CommandShortcutScope::FolderView));
 
 struct CommandInfo
 {
     std::wstring_view id;
-    unsigned int displayNameStringId   = 0;
-    unsigned int descriptionStringId   = 0;
-    unsigned int wmCommandId           = 0;
+    unsigned int displayNameStringId = 0;
+    unsigned int descriptionStringId = 0;
+    unsigned int wmCommandId         = 0;
     CommandExecutorOwner executorOwner = CommandExecutorOwner::LegacyHost;
     CommandDispatchPath dispatchPath   = CommandDispatchPath::Legacy;
     CommandStateSource stateSource     = CommandStateSource::LegacyHost;

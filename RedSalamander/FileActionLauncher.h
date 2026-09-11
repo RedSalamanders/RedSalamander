@@ -1,13 +1,16 @@
 #pragma once
 
 #include <cstddef>
-#include <cstdint>
 #include <filesystem>
+#include <cstdint>
 #include <span>
 #include <string>
 #include <string_view>
 
-#include <Windows.h>
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027) // WIL: deleted copy/move operators
@@ -24,30 +27,30 @@ namespace Testing
 struct SelectedPathsFileObservation final
 {
     std::filesystem::path collidedPath;
-    uint64_t recordCount         = 0u;
-    uint64_t pathBytes           = 0u;
-    uint64_t writeCallCount      = 0u;
-    uint64_t peakAdditionalBytes = 0u;
-    uint64_t selectionCopyBytes  = 0u;
-    size_t createAttempts        = 0u;
-    bool usedAggregatePayload    = false;
+    uint64_t recordCount             = 0u;
+    uint64_t pathBytes               = 0u;
+    uint64_t writeCallCount          = 0u;
+    uint64_t peakAdditionalBytes     = 0u;
+    uint64_t selectionCopyBytes      = 0u;
+    size_t createAttempts            = 0u;
+    bool usedAggregatePayload        = false;
 };
 
 struct SelectedPathsFileOptions final
 {
     std::filesystem::path rootOverride;
-    size_t injectedCreateCollisions           = 0u;
-    size_t maximumCreateAttempts              = 32u;
+    size_t injectedCreateCollisions = 0u;
+    size_t maximumCreateAttempts    = 32u;
     SelectedPathsFileObservation* observation = nullptr;
 };
 
 struct SelectedPathsRecoveryObservation final
 {
-    uint64_t inspected        = 0u;
-    uint64_t deleted          = 0u;
-    uint64_t skipped          = 0u;
-    uint64_t errors           = 0u;
-    uint64_t elapsedUs        = 0u;
+    uint64_t inspected = 0u;
+    uint64_t deleted   = 0u;
+    uint64_t skipped   = 0u;
+    uint64_t errors    = 0u;
+    uint64_t elapsedUs = 0u;
     bool stoppedByEntryBound  = false;
     bool stoppedByDeleteBound = false;
     bool stoppedByTimeBound   = false;
@@ -71,18 +74,18 @@ struct MacroContext
 
 struct ExternalActionPathReferences final
 {
-    bool itemPath          = false;
-    bool currentDirectory  = false;
-    bool oppositePanePath  = false;
+    bool itemPath         = false;
+    bool currentDirectory = false;
+    bool oppositePanePath = false;
     bool selectedPathsFile = false;
 };
 
 struct LaunchPlan
 {
-    LaunchPlan()                                 = default;
-    LaunchPlan(const LaunchPlan&)                = delete;
-    LaunchPlan& operator=(const LaunchPlan&)     = delete;
-    LaunchPlan(LaunchPlan&&) noexcept            = default;
+    LaunchPlan()                              = default;
+    LaunchPlan(const LaunchPlan&)             = delete;
+    LaunchPlan& operator=(const LaunchPlan&)  = delete;
+    LaunchPlan(LaunchPlan&&) noexcept         = default;
     LaunchPlan& operator=(LaunchPlan&&) noexcept = default;
 
     std::wstring executablePath;
@@ -118,11 +121,11 @@ struct LaunchPlan
 
 struct LaunchOptions
 {
-    HWND ownerWindow                      = nullptr;
-    int showCommand                       = SW_SHOWNORMAL;
-    bool waitForExit                      = false;
-    DWORD waitTimeoutMs                   = INFINITE;
-    bool captureProcessHandle             = false;
+    HWND ownerWindow          = nullptr;
+    int showCommand           = SW_SHOWNORMAL;
+    bool waitForExit          = false;
+    DWORD waitTimeoutMs       = INFINITE;
+    bool captureProcessHandle = false;
     DWORD selectedPathsMaximumRetentionMs = 10u * 60u * 1000u;
 };
 
@@ -142,8 +145,10 @@ struct LaunchResult
 
 [[nodiscard]] HRESULT ExpandMacros(std::wstring_view templateText, const MacroContext& context, std::wstring& out) noexcept;
 [[nodiscard]] bool TemplateContainsSupportedMacro(std::wstring_view templateText) noexcept;
-[[nodiscard]] HRESULT GetExternalActionPathReferences(const Common::Settings::FileActionDefinition& action, ExternalActionPathReferences& references) noexcept;
-[[nodiscard]] HRESULT ExternalActionUsesSelectedPathsFile(const Common::Settings::FileActionDefinition& action, bool& usesSelectedPathsFile) noexcept;
+[[nodiscard]] HRESULT GetExternalActionPathReferences(const Common::Settings::FileActionDefinition& action,
+                                                      ExternalActionPathReferences& references) noexcept;
+[[nodiscard]] HRESULT ExternalActionUsesSelectedPathsFile(const Common::Settings::FileActionDefinition& action,
+                                                          bool& usesSelectedPathsFile) noexcept;
 [[nodiscard]] HRESULT BuildExternalLaunchPlan(const Common::Settings::FileActionDefinition& action, const MacroContext& context, LaunchPlan& out) noexcept;
 [[nodiscard]] HRESULT LaunchExternalPlan(LaunchPlan plan, const LaunchOptions& options = {}, LaunchResult* result = nullptr) noexcept;
 
