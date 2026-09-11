@@ -403,8 +403,10 @@ Describe 'Release workflow source contracts' {
         $ghosttyProductWorkflow | Should Match "'cmd_pane_open_command_shell_prefers_windows_terminal'"
         $ghosttyProductWorkflow | Should Match 'Select test-data root'
         $ghosttyProductWorkflow | Should Match 'Join-Path \(\[IO\.Path\]::GetPathRoot\(\$env:GITHUB_WORKSPACE\)\) ''RedSalamander\.Perf'''
+        $ghosttyProductWorkflow | Should Match '(?s)Initialize-RSTestSandboxRoot.*?-TestRoot \$candidate.*?-AllowExternalInitialization'
         $ghosttyProductWorkflow | Should Match 'REDSALAMANDER_TEST_ROOT=\$root'
         $ghosttyProductWorkflow | Should Match '-AllowExternalTestRoot'
+        $ghosttyProductWorkflow.IndexOf('Initialize-RSTestSandboxRoot') | Should BeLessThan $ghosttyProductWorkflow.IndexOf('PluginContractTests.exe --terminal-selftests')
         $ghosttyProductWorkflow | Should Not Match '\$caseIndex|ghostty-product[\\\\/]\{0:D2\}'
         $ghosttyProductWorkflow | Should Match 'RSBuildEnableTests:\s*''false'''
         $ghosttyProductWorkflow | Should Match '(?s)build\.ps1.*?-Configuration Release.*?-Platform ARM64.*?-Rebuild'
