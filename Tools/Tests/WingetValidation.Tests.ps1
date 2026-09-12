@@ -150,7 +150,7 @@ Describe 'Winget release workflow' {
     It 'pins winget-create by its banner version and cleans up only an installed package' {
         $workflow | Should Match 'WingetCreateCLI\\s\+\(\?<version>'
         $workflow | Should Match '\\\+\[0-9a-fA-F\]\{7,40\}'
-        $workflow | Should Match "\`$versionMatch\.Groups\['version'\]\.Value"
+        $workflow | Should Match ([regex]::Escape("`$versionMatch.Groups['version'].Value"))
         $workflow | Should Not Match '\$resolvedVersion = \(& \$resolvedPath --version\)'
 
         $cleanupIndex = $workflow.IndexOf('Cleanup Winget install test')
