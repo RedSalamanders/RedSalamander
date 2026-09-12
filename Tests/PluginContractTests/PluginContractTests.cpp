@@ -2098,6 +2098,16 @@ void TestTrack13ProviderContracts(IFileSystem& fileSystem, std::wstring_view rel
     }
 }
 
+void SkipTrack13ProviderContracts(std::wstring_view relativePath) noexcept
+{
+    if (relativePath != L"Plugins\\FileSystem.dll" && relativePath != L"Plugins\\FileSystemDummy.dll")
+    {
+        return;
+    }
+    std::wcout << L"[  SKIPPED ] " << relativePath
+               << L": provider mutation proofs need a TestSandbox scratch root that a packaged extraction does not have\n";
+}
+
 void TestTypedRouteValidatorContracts(bool& success) noexcept
 {
     {
@@ -2304,7 +2314,7 @@ void TestTypedRouteValidatorContracts(bool& success) noexcept
           success);
 }
 
-bool TestCapabilities(std::wstring_view relPath, bool& success) noexcept
+bool TestCapabilities(std::wstring_view relPath, bool runProviderMutationProofs, bool& success) noexcept
 {
     const std::wstring exeDir  = GetExeDir();
     const std::wstring absPath = exeDir + std::wstring(relPath);
@@ -2452,7 +2462,14 @@ bool TestCapabilities(std::wstring_view relPath, bool& success) noexcept
                   success);
         }
 
-        TestTrack13ProviderContracts(*fs.get(), relPath, success);
+        if (runProviderMutationProofs)
+        {
+            TestTrack13ProviderContracts(*fs.get(), relPath, success);
+        }
+        else
+        {
+            SkipTrack13ProviderContracts(relPath);
+        }
 
         if (RequiresTransactionalConfigurationProof(relPath))
         {
@@ -2919,12 +2936,12 @@ bool RunEnumerateAndSchemaPass(std::span<const std::wstring_view> dlls, const II
     return success;
 }
 
-bool RunCapabilitiesPass(std::span<const std::wstring_view> dlls) noexcept
+bool RunCapabilitiesPass(std::span<const std::wstring_view> dlls, bool runProviderMutationProofs) noexcept
 {
     bool success = true;
     for (const std::wstring_view relPath : dlls)
     {
-        TestCapabilities(relPath, success);
+        TestCapabilities(relPath, runProviderMutationProofs, success);
     }
     return success;
 }
@@ -3670,7 +3687,7 @@ int wmain(int argc, wchar_t** argv)
 
     std::wcout << L"[ RUN      ] Step3: typed route validator and provider capabilities\n";
     TestTypedRouteValidatorContracts(success);
-    success = RunCapabilitiesPass(kFilesystemDlls) && success;
+    success = RunCapabilitiesPass(kFilesystemDlls, ! packageSmoke) && success;
 
     std::wcout << L"[ RUN      ] Step4: Negative bogus plugin id\n";
     {

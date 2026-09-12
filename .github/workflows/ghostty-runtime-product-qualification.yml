@@ -295,8 +295,17 @@ jobs:
           path: |
             .build/logs/
             .build/BuildReceipts/
-            ${{ steps.test-root.outputs.path }}/
             .build/AppPackages/*ARM64*.zip
             .build/TerminalEngine/Product/ARM64/terminal-runtime-identity.json
+          if-no-files-found: error
+          retention-days: 30
+
+      # The test root lives outside the workspace, so it needs its own artifact root.
+      - name: Upload native product test-root evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ghostty-product-native-arm64-testroot-${{ github.run_id }}
+          path: ${{ steps.test-root.outputs.path }}/
           if-no-files-found: error
           retention-days: 30

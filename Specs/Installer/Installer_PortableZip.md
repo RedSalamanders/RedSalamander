@@ -77,7 +77,9 @@ Every ZIP is expanded into a new directory by `Tools/Modules/Packaging/PortableP
 - The matching `PluginContractTests.exe` is copied into the extraction for validation only and run with
   `--package-smoke`. That mode loads every built-in plugin and validates enumeration, required exports, schemas,
   filesystem capabilities, and invalid-ID handling. Debug-only selftests and runtime-refresh probes remain part of
-  the normal harness and are deliberately outside the package-smoke mode.
+  the normal harness and are deliberately outside the package-smoke mode. Provider mutation proofs that acquire
+  TestSandbox scratch are also outside that mode and must report an explicit skip: the harness runs from a
+  temporary extraction with no repository root, so sandbox acquisition fails closed there by design.
 - `PluginContractTests` is the sole test project that remains an application in a tests-disabled production
   Release build. It is compiled without `ENABLE_TESTS`, attested in the same full-profile build receipt as the
   package inputs, required before ZIP construction, and never copied into the published archive. Its disabled-test
