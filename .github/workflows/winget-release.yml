@@ -149,7 +149,7 @@ jobs:
           $resolvedPath = $command.Source
           # wingetcreate prints "WingetCreateCLI <version>+<commit>" and then appends its verb help.
           $versionText = (@(& $resolvedPath --version 2>&1 | ForEach-Object { $_.ToString() })) -join "`n"
-          $versionMatch = [regex]::Match($versionText, '(?m)^\s*WingetCreateCLI\s+(?<version>\d+(?:\.\d+){1,3})')
+          $versionMatch = [regex]::Match($versionText, '(?m)^\s*WingetCreateCLI\s+(?<version>\d+(?:\.\d+){1,3})\+[0-9a-fA-F]{7,40}(?:\s|$)')
           if (-not $versionMatch.Success) {
             throw "Could not read a winget-create version from: $($versionText -replace '\s+', ' ')"
           }
@@ -258,15 +258,22 @@ jobs:
           $ErrorActionPreference = "Continue"
           $PSNativeCommandUseErrorActionPreference = $false
 
+          # APPINSTALLER_CLI_ERROR_NO_APPLICATIONS_FOUND (0x8A150014).
+          $noApplicationsFound = -1978335212
+
           # Cleanup also runs when the install test was skipped or failed before installing.
           winget list `
             --exact `
             --id RedSalamanders.RedSalamander `
             --accept-source-agreements `
             --disable-interactivity
-          if ($LASTEXITCODE -ne 0) {
+          $listExitCode = $LASTEXITCODE
+          if ($listExitCode -eq $noApplicationsFound) {
             Write-Host "RedSalamander is not installed; nothing to clean up."
             exit 0
+          }
+          if ($listExitCode -ne 0) {
+            throw "winget list failed with exit code $listExitCode."
           }
 
           winget uninstall `

@@ -182,13 +182,15 @@ The workflow:
 4. Fails with the available asset names if either `RedSalamander-<version>-x64-Portable.zip` or `RedSalamander-<version>-ARM64-Portable.zip` is missing.
 5. Downloads both ZIPs and computes their SHA256 values through `Installer/winget/generate-manifest.ps1`.
 6. Runs a self-contained `winget validate --manifest` wrapper in the workflow. It is intentionally inline because the workflow checks out the release tag before generating the manifest, and older release tags may not contain helper scripts added later. The wrapper treats the known `winget.exe v1.11.x` schema-header warning for `ManifestVersion: 1.12.0` as non-fatal, but only when the manifest otherwise reports validation success and all warnings are that exact legacy schema-header warning.
-7. Enables Winget `LocalManifestFiles`, runs `winget install --manifest .build\AppPackages\winget-manifest` on the disposable runner, checks that `RedSalamander` appears in `winget list`, and then uninstalls it with `winget uninstall --id RedSalamanders.RedSalamander --purge`. That cleanup always runs, including when an earlier step failed before installing, so it first lists the package and reports nothing to clean up when it is absent rather than failing the job on a `winget uninstall` that found no match.
+7. Enables Winget `LocalManifestFiles`, runs `winget install --manifest .build\AppPackages\winget-manifest` on the disposable runner, checks that `RedSalamander` appears in `winget list`, and then uninstalls it with `winget uninstall --id RedSalamanders.RedSalamander --purge`. That cleanup always runs, including when an earlier step failed before installing, so it first lists the package and reports nothing to clean up when it is absent rather than failing the job on a `winget uninstall` that found no match. Only Winget's no-match result (`0x8A150014`) counts as absent; any other `winget list` failure fails the step, so a source or service error can never silently leave an installed package behind.
 8. For direct release calls or manual runs where `submit=true`, resolves the token owner, computes the manifest-bound publication marker, and directly lists upstream PRs and changed files to classify the exact-version state.
 9. Installs the reviewed WingetCreate package version `1.12.8.0`, resolves its absolute
    executable path, and verifies the executable version before the publication secret
    is exposed. Verification reads the version from the `WingetCreateCLI <version>+<commit>`
    banner line, because `wingetcreate --version` also prints its verb help; the whole
-   captured output is never compared against the reviewed version. It then submits the generated manifest directory with
+   captured output is never compared against the reviewed version. The match must reach the
+   `+<commit>` delimiter, so a longer or pre-release version whose leading components equal
+   the reviewed version cannot satisfy the exact gate. It then submits the generated manifest directory with
    `wingetcreate submit` using Winget's
    `Update: RedSalamanders.RedSalamander to <version>` title format plus the stable creation marker. It does not
    trust or log WingetCreate's PR URL output; the bounded direct-list state machine finds and verifies the PR.

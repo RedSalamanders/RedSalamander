@@ -149,6 +149,7 @@ Describe 'Winget release workflow' {
 
     It 'pins winget-create by its banner version and cleans up only an installed package' {
         $workflow | Should Match 'WingetCreateCLI\\s\+\(\?<version>'
+        $workflow | Should Match '\\\+\[0-9a-fA-F\]\{7,40\}'
         $workflow | Should Match "\`$versionMatch\.Groups\['version'\]\.Value"
         $workflow | Should Not Match '\$resolvedVersion = \(& \$resolvedPath --version\)'
 
@@ -156,7 +157,9 @@ Describe 'Winget release workflow' {
         $cleanupSection = $workflow.Substring($cleanupIndex)
         $cleanupSection = $cleanupSection.Substring(0, $cleanupSection.IndexOf('- name: Submit to Winget'))
         $cleanupSection | Should Match 'winget list'
+        $cleanupSection | Should Match '\$noApplicationsFound = -1978335212'
         $cleanupSection | Should Match 'nothing to clean up'
+        $cleanupSection | Should Match 'winget list failed with exit code'
         ($cleanupSection.IndexOf('winget list') -lt $cleanupSection.IndexOf('winget uninstall')) | Should Be $true
     }
 
