@@ -153,6 +153,13 @@ Describe 'Winget release workflow' {
         $workflow | Should Match ([regex]::Escape("`$versionMatch.Groups['version'].Value"))
         $workflow | Should Not Match '\$resolvedVersion = \(& \$resolvedPath --version\)'
 
+        $installIndex = $workflow.IndexOf('- name: Install winget-create')
+        $installSection = $workflow.Substring($installIndex)
+        $installSection = $installSection.Substring(0, $installSection.IndexOf('- name: Validate Winget manifest'))
+        $installSection | Should Match ([regex]::Escape('$global:LASTEXITCODE = 0'))
+        ($installSection.IndexOf('$global:LASTEXITCODE = 0') -gt $installSection.IndexOf('--version 2>&1')) | Should Be $true
+        $installSection.TrimEnd() | Should Match '(?m)^\s+exit 0$'
+
         $cleanupIndex = $workflow.IndexOf('Cleanup Winget install test')
         $cleanupSection = $workflow.Substring($cleanupIndex)
         $cleanupSection = $cleanupSection.Substring(0, $cleanupSection.IndexOf('- name: Submit to Winget'))
