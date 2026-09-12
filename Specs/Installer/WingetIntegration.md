@@ -190,7 +190,11 @@ The workflow:
    banner line, because `wingetcreate --version` also prints its verb help; the whole
    captured output is never compared against the reviewed version. The match must reach the
    `+<commit>` delimiter, so a longer or pre-release version whose leading components equal
-   the reviewed version cannot satisfy the exact gate. It then submits the generated manifest directory with
+   the reviewed version cannot satisfy the exact gate. Because `wingetcreate --version` exits
+   non-zero when it appends that help, the step clears the probe's exit code and ends with an
+   explicit success so the version probe cannot fail a step whose install and banner gates both
+   passed. The reviewed-version install itself is still checked against its own exit code.
+   It then submits the generated manifest directory with
    `wingetcreate submit` using Winget's
    `Update: RedSalamanders.RedSalamander to <version>` title format plus the stable creation marker. It does not
    trust or log WingetCreate's PR URL output; the bounded direct-list state machine finds and verifies the PR.
