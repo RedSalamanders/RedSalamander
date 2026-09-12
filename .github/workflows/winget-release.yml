@@ -147,7 +147,13 @@ jobs:
 
           $command = Get-Command wingetcreate.exe -CommandType Application -ErrorAction Stop
           $resolvedPath = $command.Source
-          $resolvedVersion = (& $resolvedPath --version).Trim() -replace '^[vV]', ''
+          # wingetcreate prints "WingetCreateCLI <version>+<commit>" and then appends its verb help.
+          $versionText = (@(& $resolvedPath --version 2>&1 | ForEach-Object { $_.ToString() })) -join "`n"
+          $versionMatch = [regex]::Match($versionText, '(?m)^\s*WingetCreateCLI\s+(?<version>\d+(?:\.\d+){1,3})\+[0-9a-fA-F]{7,40}(?:\s|$)')
+          if (-not $versionMatch.Success) {
+            throw "Could not read a winget-create version from: $($versionText -replace '\s+', ' ')"
+          }
+          $resolvedVersion = $versionMatch.Groups['version'].Value
           if ($resolvedVersion -ne $expectedVersion) {
             throw "Resolved winget-create version '$resolvedVersion' does not match reviewed version '$expectedVersion'."
           }
@@ -250,6 +256,25 @@ jobs:
         timeout-minutes: 10
         run: |
           $ErrorActionPreference = "Continue"
+          $PSNativeCommandUseErrorActionPreference = $false
+
+          # APPINSTALLER_CLI_ERROR_NO_APPLICATIONS_FOUND (0x8A150014).
+          $noApplicationsFound = -1978335212
+
+          # Cleanup also runs when the install test was skipped or failed before installing.
+          winget list `
+            --exact `
+            --id RedSalamanders.RedSalamander `
+            --accept-source-agreements `
+            --disable-interactivity
+          $listExitCode = $LASTEXITCODE
+          if ($listExitCode -eq $noApplicationsFound) {
+            Write-Host "RedSalamander is not installed; nothing to clean up."
+            exit 0
+          }
+          if ($listExitCode -ne 0) {
+            throw "winget list failed with exit code $listExitCode."
+          }
 
           winget uninstall `
             --exact `
@@ -259,6 +284,10 @@ jobs:
             --accept-source-agreements `
             --disable-interactivity `
             --ignore-warnings
+          if ($LASTEXITCODE -ne 0) {
+            throw "winget uninstall failed with exit code $LASTEXITCODE."
+          }
+          exit 0
 
       - name: Submit to Winget
         id: winget_submission
