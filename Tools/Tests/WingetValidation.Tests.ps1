@@ -147,6 +147,19 @@ Describe 'Winget release workflow' {
         ($enableIndex -lt $installMatch.Index) | Should Be $true
     }
 
+    It 'pins winget-create by its banner version and cleans up only an installed package' {
+        $workflow | Should Match 'WingetCreateCLI\\s\+\(\?<version>'
+        $workflow | Should Match "\`$versionMatch\.Groups\['version'\]\.Value"
+        $workflow | Should Not Match '\$resolvedVersion = \(& \$resolvedPath --version\)'
+
+        $cleanupIndex = $workflow.IndexOf('Cleanup Winget install test')
+        $cleanupSection = $workflow.Substring($cleanupIndex)
+        $cleanupSection = $cleanupSection.Substring(0, $cleanupSection.IndexOf('- name: Submit to Winget'))
+        $cleanupSection | Should Match 'winget list'
+        $cleanupSection | Should Match 'nothing to clean up'
+        ($cleanupSection.IndexOf('winget list') -lt $cleanupSection.IndexOf('winget uninstall')) | Should Be $true
+    }
+
     It 'uses one guarded manifest root and exact versioned portable inputs end to end' {
         $workflow | Should Match '(?m)^\s+WINGET_MANIFEST_ROOT: \.build\\AppPackages\\winget-manifest\r?$'
         $workflow | Should Match '-OutputDir \$env:WINGET_MANIFEST_ROOT'
