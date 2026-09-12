@@ -124,7 +124,8 @@ function Get-RSPagedResults {
     $results = @()
     for ($page = 1; $page -le $MaximumPages; $page++) {
         $arguments = @($LeadingArguments) + @($page, $PageSize)
-        $pageResults = @(& $Operation @arguments)
+        # Invoke-RestMethod emits a JSON array as one object, so enumerate the page before counting it.
+        $pageResults = @(& $Operation @arguments | ForEach-Object { $_ })
         $results += $pageResults
         if ($pageResults.Count -lt $PageSize) {
             break
@@ -176,12 +177,13 @@ function Get-RSWingetPublicationState {
                 -MaximumPages $MaximumPullRequestPages)
     }
     catch [System.Exception] {
-        return [pscustomobject]@{ Kind = 'Pending'; Reason = 'The upstream pull-request list is not yet readable.'; PullRequest = $null }
+        return [pscustomobject]@{ Kind = 'Pending'; Reason = "The upstream pull-request list is not yet readable: $($_.Exception.Message)"; PullRequest = $null }
     }
 
     $expectedPaths = @($Identity.ManifestHashes.Keys)
     $candidates = @()
     $scanIncomplete = $false
+    $scanFailure = $null
     foreach ($pullRequest in $pullRequests) {
         $hasMarker = (($pullRequest.title -ceq $Identity.InitialTitle) -or
             ([string]$pullRequest.body).Contains($Identity.BodyMarker, [StringComparison]::Ordinal))
@@ -193,6 +195,9 @@ function Get-RSWingetPublicationState {
         }
         catch [System.Exception] {
             $scanIncomplete = $true
+            if ($null -eq $scanFailure) {
+                $scanFailure = "pull request #$($pullRequest.number): $($_.Exception.Message)"
+            }
             if ($hasMarker) {
                 $candidates += [pscustomobject]@{
                     PullRequest = $pullRequest
@@ -224,7 +229,7 @@ function Get-RSWingetPublicationState {
     }
     if ($candidates.Count -eq 0) {
         if ($scanIncomplete) {
-            return [pscustomobject]@{ Kind = 'Pending'; Reason = 'The exact-version pull-request scan is incomplete.'; PullRequest = $null }
+            return [pscustomobject]@{ Kind = 'Pending'; Reason = "The exact-version pull-request scan is incomplete: $scanFailure"; PullRequest = $null }
         }
         return [pscustomobject]@{ Kind = 'None'; Reason = 'No exact-version pull request exists.'; PullRequest = $null }
     }
@@ -401,7 +406,9 @@ function Invoke-RSWingetPublication {
     }
 
     $failureSuffix = if ([string]::IsNullOrWhiteSpace([string]$submitFailure)) { '' } else { " $submitFailure" }
-    throw "No exact automation-owned Winget pull request became visible after $MaximumVisibilityAttempts direct-list attempts.$failureSuffix"
+    $submitSuffix = if ($submitted) { '' } else { ' Submission never ran because the exact-version state stayed unreadable.' }
+    $stateSuffix = if ([string]::IsNullOrWhiteSpace([string]$state.Reason)) { '' } else { " Last state: $($state.Kind) - $($state.Reason)" }
+    throw "No exact automation-owned Winget pull request became visible after $MaximumVisibilityAttempts direct-list attempts.$failureSuffix$submitSuffix$stateSuffix"
 }
 
 Export-ModuleMember -Function @(

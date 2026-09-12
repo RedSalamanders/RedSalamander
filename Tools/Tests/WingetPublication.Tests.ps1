@@ -51,30 +51,35 @@ function New-RSWingetPublicationTestRepository {
         HashesByRefAndPath = @{}
         HiddenListCalls = 0
         ListCalls = 0
+        ListFailure = $null
         PatchCalls = 0
         SubmitCalls = 0
         WaitCalls = 0
         NextNumber = 100
     }
 
+    # The comma keeps these arrays unenumerated, which is how Invoke-RestMethod returns a JSON array.
     $listPullRequests = {
         param([int]$Page, [int]$PageSize)
         $state.ListCalls++
+        if ($state.ListFailure) {
+            throw $state.ListFailure
+        }
         if ($Page -ne 1) {
-            return @()
+            return ,@()
         }
         if ($state.HiddenListCalls -gt 0) {
             $state.HiddenListCalls--
-            return @()
+            return ,@()
         }
-        return @($state.PullRequests)
+        return ,@($state.PullRequests)
     }.GetNewClosure()
     $listPullRequestFiles = {
         param([int]$Number, [int]$Page, [int]$PageSize)
         if ($Page -ne 1) {
-            return @()
+            return ,@()
         }
-        return @($state.FilesByNumber[[string]$Number])
+        return ,@($state.FilesByNumber[[string]$Number])
     }.GetNewClosure()
     $getFileSha256 = {
         param([string]$RepositoryFullName, [string]$Path, [string]$Ref)
@@ -414,6 +419,42 @@ Describe 'Resumable Winget pull-request publication' {
             Should Throw 'after 3 direct-list attempts'
         $emptyRepository.State.ListCalls | Should Be 4
         $emptyRepository.State.WaitCalls | Should Be 2
+    }
+
+    It 'names the blocking reason when the upstream list never becomes readable' {
+        $blockedRepository = New-RSWingetPublicationTestRepository
+        $blockedRepository.State.ListFailure = 'Response status code does not indicate success: 403 (Forbidden).'
+        $blockedWait = {
+            param([int]$Attempt, [hashtable]$Repository)
+            $Repository['_TestState']['WaitCalls']++
+        }
+        $submit = {
+            param([string]$InitialTitle, [pscustomobject]$PublicationIdentity, [hashtable]$Repository)
+            $Repository['_TestState']['SubmitCalls']++
+            return [pscustomobject]@{ ExitCode = 0; Output = @() }
+        }
+
+        $failure = $null
+        try {
+            Invoke-RSWingetPublication `
+                -Identity $identity `
+                -ExpectedAuthor $expectedAuthor `
+                -ExpectedHeadRepository $expectedHeadRepository `
+                -PullRequestBody $body `
+                -Repository $blockedRepository.Operations `
+                -Submit $submit `
+                -Wait $blockedWait `
+                -MaximumVisibilityAttempts 2
+        }
+        catch {
+            $failure = [string]$_.Exception.Message
+        }
+
+        $failure | Should Match 'after 2 direct-list attempts'
+        $failure | Should Match 'Submission never ran'
+        $failure | Should Match 'Last state: Pending'
+        $failure | Should Match '403 \(Forbidden\)'
+        $blockedRepository.State.SubmitCalls | Should Be 0
     }
 
     It 'repairs idempotently and serialized attempts converge on one PR' {

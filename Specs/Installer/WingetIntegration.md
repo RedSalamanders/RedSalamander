@@ -174,6 +174,15 @@ multiple, closed, extra-file, or content-mismatched candidates stop without muta
 WingetCreate output is not authoritative: bounded direct-list retries recover a newly created exact PR after GitHub
 eventual consistency. If stable ownership cannot be proven, publication stops; titles are never fuzzy-searched.
 
+Every paged upstream read enumerates each page before counting it. `Invoke-RestMethod` returns a JSON array as a
+single object, so a page collected without enumeration looks like one unusable result: paging stops after the first
+page and the scan inspects the page array instead of each pull request. Publication tests therefore return page
+results unenumerated, exactly as `Invoke-RestMethod` does, so this shape is covered rather than assumed.
+
+When publication stops because no exact automation-owned pull request became visible, the failure names the last
+state kind and reason and states whether submission ever ran. A state that stays unreadable must not be reported as
+a bare visibility timeout, because that hides the upstream error that actually blocked the release.
+
 The workflow:
 
 1. Resolves the release version from `Common/Version.h` plus `GITHUB_RUN_NUMBER`.
