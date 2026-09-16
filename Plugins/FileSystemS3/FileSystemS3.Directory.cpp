@@ -1,4 +1,5 @@
 #include "FileSystemS3.Internal.h"
+#include "FileSystemDiscoveryScope.h"
 #include "PaginationGuard.h"
 
 #include <aws/s3-crt/model/DeleteObjectRequest.h>
@@ -175,6 +176,40 @@ struct TransferPlan
     std::vector<PlannedTransferObject> objects;
     uint64_t totalBytes = 0;
 };
+
+// What a listed plan means in the caller's namespace. S3 has no directories, only keys: an object
+// whose key names a directory (its marker, a key ending in '/') is that directory rather than a
+// file, and a listed prefix is one directory even when the bucket keeps no marker for it.
+struct DiscoveredPlanTotals
+{
+    uint64_t bytes       = 0;
+    uint64_t files       = 0;
+    uint64_t directories = 0;
+};
+
+[[nodiscard]] DiscoveredPlanTotals ClassifyPlannedObjects(std::span<const PlannedTransferObject> objects, std::string_view rootPrefix) noexcept
+{
+    DiscoveredPlanTotals totals{};
+    bool rootMarkerListed = false;
+    for (const PlannedTransferObject& object : objects)
+    {
+        totals.bytes += object.sizeBytes;
+        if (! object.sourceKey.empty() && object.sourceKey.back() == '/')
+        {
+            ++totals.directories;
+            rootMarkerListed = rootMarkerListed || object.sourceKey == rootPrefix;
+        }
+        else
+        {
+            ++totals.files;
+        }
+    }
+    if (! rootPrefix.empty() && ! rootMarkerListed)
+    {
+        ++totals.directories;
+    }
+    return totals;
+}
 
 struct DestinationState
 {
@@ -2405,8 +2440,12 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
     return S_OK;
 }
 
-[[nodiscard]] HRESULT DeleteResolvedPath(
-    FileSystemS3& fs, const ResolvedS3Path& path, const ResolvedS3Probe& probe, FileSystemFlags flags, const std::function<HRESULT()>& checkCancel) noexcept
+[[nodiscard]] HRESULT DeleteResolvedPath(FileSystemS3& fs,
+                                         const ResolvedS3Path& path,
+                                         const ResolvedS3Probe& probe,
+                                         FileSystemFlags flags,
+                                         const std::function<HRESULT()>& checkCancel,
+                                         const std::function<void(const DiscoveredPlanTotals&)>& reportDiscovery = {}) noexcept
 {
     if (path.isRoot || path.isBucketRoot)
     {
@@ -2420,6 +2459,11 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
 
     if (probe.kind == S3ResolvedKind::Object)
     {
+        if (reportDiscovery)
+        {
+            // One object of a size the probe already holds, reported before it is removed.
+            reportDiscovery(DiscoveredPlanTotals{.bytes = probe.sizeBytes, .files = 1u, .directories = 0u});
+        }
         FsS3::S3ObjectRevision deleteCondition;
         const HRESULT conditionHr = BuildCurrentKeyDeleteCondition(probe.sourceRevision, deleteCondition);
         if (FAILED(conditionHr))
@@ -2468,6 +2512,12 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
         {
             return complete(hr);
         }
+        if (pass == 0u && reportDiscovery)
+        {
+            // The first listing is what this call has to remove; later passes retry the same
+            // work against late writers and are not new discovery.
+            reportDiscovery(ClassifyPlannedObjects(objects, prefix));
+        }
         metrics.observedObjectCount += objects.size();
         metrics.residualObjectCount = objects.size();
         if (objects.empty())
@@ -2514,9 +2564,14 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
                                             const FileSystemS3::Settings& settings,
                                             const wchar_t* sourcePath,
                                             const wchar_t* destinationPath,
-                                            uint64_t& outTotalBytes) noexcept
+                                            uint64_t& outTotalBytes,
+                                            DiscoveredPlanTotals* outDiscovered = nullptr) noexcept
 {
     outTotalBytes = 0;
+    if (outDiscovered != nullptr)
+    {
+        *outDiscovered = {};
+    }
 
     ResolvedS3Path source{};
     ResolvedS3Path destination{};
@@ -2563,6 +2618,10 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
         return hr;
     }
     outTotalBytes = plan.totalBytes;
+    if (outDiscovered != nullptr)
+    {
+        *outDiscovered = ClassifyPlannedObjects(plan.objects, plan.sourceIsPrefix ? std::string_view(plan.sourcePrefix) : std::string_view{});
+    }
     return S_OK;
 }
 
@@ -2581,7 +2640,8 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
                                         S3TransferCommitResult* commitResult                        = nullptr,
                                         DestinationProbeMetrics* destinationProbeMetricsOut         = nullptr,
                                         DirectoryPublicationMetrics* directoryPublicationMetricsOut = nullptr,
-                                        SourceRevisionMetrics* sourceRevisionMetricsOut             = nullptr) noexcept
+                                        SourceRevisionMetrics* sourceRevisionMetricsOut             = nullptr,
+                                        const std::function<void(const DiscoveredPlanTotals&)>& reportDiscovery = {}) noexcept
 {
     outTotalBytes = 0;
     DestinationProbeMetrics localDestinationProbeMetrics{};
@@ -2659,6 +2719,13 @@ void RunDebugHiddenSiblingKeyEntropySelfTest(unsigned int& passed, unsigned int&
         return hr;
     }
     outTotalBytes = plan.totalBytes;
+    if (reportDiscovery)
+    {
+        // The plan is complete and read-only from here on, so this is the call's exact final
+        // total, published before any object is touched. The caller owns the scope and its
+        // closure: this helper runs once per selected root and may only add.
+        reportDiscovery(ClassifyPlannedObjects(plan.objects, plan.sourceIsPrefix ? std::string_view(plan.sourcePrefix) : std::string_view{}));
+    }
 
     // Process objects ancestor-first (lexicographic destination order) so that when the source contains both
     // an object "a" and its descendant "a/b" (legal in S3's flat keyspace) the ancestor is staged before the
@@ -4969,6 +5036,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderS3DebugSelfTests
     RunDebugDurableDirectoryMarkerSelfTest(*passed, *failed);
     FsS3::RunS3StalledRequestCancelSelfTests(*passed, *failed);
     FsS3::RunS3ZeroTimestampReplaceSelfTests(*passed, *failed);
+    FsS3::RunS3DirectoryMarkerTransferSelfTests(*passed, *failed);
 
     return *failed == 0u ? S_OK : E_FAIL;
 }
@@ -5009,6 +5077,16 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CopyItem(const wchar_t* sourcePath,
     }
     optionsState.sizeBytes             = sizeof(FileSystemOptions);
     FileSystemOptions* callbackOptions = callback ? &optionsState : nullptr;
+    // One governed call is one discovery scope. It reports through this call's own options
+    // copy, never through the thread-local S3OperationOptionsScope, which belongs to whichever
+    // call owns the current thread. The transfer plan is complete before any object is touched,
+    // so the scope closes on that exact total up front and the caller's card never has to guess.
+    Common::FileOperations::DiscoveryScope discovery(options != nullptr ? &optionsState : nullptr);
+    const auto reportDiscovery = [&discovery](const DiscoveredPlanTotals& totals) noexcept
+    {
+        static_cast<void>(discovery.AddPlan(totals.bytes, totals.files, totals.directories));
+        discovery.Close();
+    };
 
     Settings settings;
     {
@@ -5074,7 +5152,11 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CopyItem(const wchar_t* sourcePath,
                                        reportBytes,
                                        totalBytes,
                                        callback ? TransferIssueReporter(reportIssue) : TransferIssueReporter{},
-                                       &commitResult);
+                                       &commitResult,
+                                       nullptr,
+                                       nullptr,
+                                       nullptr,
+                                       reportDiscovery);
 
     if (FAILED(itemHr))
     {
@@ -5143,6 +5225,16 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItem(const wchar_t* sourcePath,
     }
     optionsState.sizeBytes             = sizeof(FileSystemOptions);
     FileSystemOptions* callbackOptions = callback ? &optionsState : nullptr;
+    // One governed call is one discovery scope. It reports through this call's own options
+    // copy, never through the thread-local S3OperationOptionsScope, which belongs to whichever
+    // call owns the current thread. The transfer plan is complete before any object is touched,
+    // so the scope closes on that exact total up front and the caller's card never has to guess.
+    Common::FileOperations::DiscoveryScope discovery(options != nullptr ? &optionsState : nullptr);
+    const auto reportDiscovery = [&discovery](const DiscoveredPlanTotals& totals) noexcept
+    {
+        static_cast<void>(discovery.AddPlan(totals.bytes, totals.files, totals.directories));
+        discovery.Close();
+    };
 
     Settings settings;
     {
@@ -5208,7 +5300,11 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItem(const wchar_t* sourcePath,
                                        reportBytes,
                                        totalBytes,
                                        callback ? TransferIssueReporter(reportIssue) : TransferIssueReporter{},
-                                       &commitResult);
+                                       &commitResult,
+                                       nullptr,
+                                       nullptr,
+                                       nullptr,
+                                       reportDiscovery);
 
     if (FAILED(itemHr))
     {
@@ -5407,6 +5503,15 @@ HRESULT FileSystemS3::DeleteItemWithPinnedIdentity(const wchar_t* path,
     optionsState.sizeBytes = sizeof(FileSystemOptions);
 
     FileSystemOptions* callbackOptions = callback ? &optionsState : nullptr;
+    // One governed call is one discovery scope, reported through this call's own options copy.
+    // A delete discovers the object it removes, or the first listing of the prefix it clears, and
+    // closes on that the moment it is known.
+    Common::FileOperations::DiscoveryScope discovery(options != nullptr ? &optionsState : nullptr);
+    const auto reportDiscovery = [&discovery](const DiscoveredPlanTotals& totals) noexcept
+    {
+        static_cast<void>(discovery.AddPlan(totals.bytes, totals.files, totals.directories));
+        discovery.Close();
+    };
 
     const auto normalizeCancellation = [](HRESULT hr) noexcept
     {
@@ -5481,7 +5586,7 @@ HRESULT FileSystemS3::DeleteItemWithPinnedIdentity(const wchar_t* path,
     }
     else
     {
-        itemHr = DeleteResolvedPath(*this, resolved, probe, flags, checkCancel);
+        itemHr = DeleteResolvedPath(*this, resolved, probe, flags, checkCancel, reportDiscovery);
     }
 
     if (callback)
@@ -5635,6 +5740,11 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CopyItems(const wchar_t* const* sourcePa
     const bool continueOnError = (flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) != 0;
     uint64_t totalBytes        = 0;
     std::vector<std::wstring> destinations(count);
+    // One governed call is one discovery scope, reported through this call's own options copy
+    // rather than the thread-local S3OperationOptionsScope. The pre-pass below plans every root
+    // before any object is touched, so the whole selection's exact total is published, and the
+    // scope closed, before the first transfer; the per-root helper is not asked to add again.
+    Common::FileOperations::DiscoveryScope discovery(options != nullptr ? &optionsState : nullptr);
     for (unsigned long index = 0; index < count; ++index)
     {
         const wchar_t* sourcePath = sourcePaths[index];
@@ -5653,12 +5763,15 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CopyItems(const wchar_t* const* sourcePa
             destinations[index] = JoinPluginPath(destinationFolder, leaf);
 
             uint64_t itemBytes = 0;
-            if (SUCCEEDED(EstimateTransferBytes(*this, _mode, _hostConnections.get(), settings, sourcePath, destinations[index].c_str(), itemBytes)))
+            DiscoveredPlanTotals itemDiscovered{};
+            if (SUCCEEDED(EstimateTransferBytes(*this, _mode, _hostConnections.get(), settings, sourcePath, destinations[index].c_str(), itemBytes, &itemDiscovered)))
             {
                 totalBytes += itemBytes;
+                static_cast<void>(discovery.AddPlan(itemDiscovered.bytes, itemDiscovered.files, itemDiscovered.directories));
             }
         }
     }
+    discovery.Close();
 
     const auto checkCancel = [&]() noexcept -> HRESULT
     {
@@ -5860,6 +5973,11 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItems(const wchar_t* const* sourcePa
     const bool continueOnError = (flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) != 0;
     uint64_t totalBytes        = 0;
     std::vector<std::wstring> destinations(count);
+    // One governed call is one discovery scope, reported through this call's own options copy
+    // rather than the thread-local S3OperationOptionsScope. The pre-pass below plans every root
+    // before any object is touched, so the whole selection's exact total is published, and the
+    // scope closed, before the first transfer; the per-root helper is not asked to add again.
+    Common::FileOperations::DiscoveryScope discovery(options != nullptr ? &optionsState : nullptr);
     for (unsigned long index = 0; index < count; ++index)
     {
         const wchar_t* sourcePath = sourcePaths[index];
@@ -5878,12 +5996,15 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItems(const wchar_t* const* sourcePa
             destinations[index] = JoinPluginPath(destinationFolder, leaf);
 
             uint64_t itemBytes = 0;
-            if (SUCCEEDED(EstimateTransferBytes(*this, _mode, _hostConnections.get(), settings, sourcePath, destinations[index].c_str(), itemBytes)))
+            DiscoveredPlanTotals itemDiscovered{};
+            if (SUCCEEDED(EstimateTransferBytes(*this, _mode, _hostConnections.get(), settings, sourcePath, destinations[index].c_str(), itemBytes, &itemDiscovered)))
             {
                 totalBytes += itemBytes;
+                static_cast<void>(discovery.AddPlan(itemDiscovered.bytes, itemDiscovered.files, itemDiscovered.directories));
             }
         }
     }
+    discovery.Close();
 
     const auto checkCancel = [&]() noexcept -> HRESULT
     {
@@ -6070,6 +6191,13 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
     optionsState.sizeBytes = sizeof(FileSystemOptions);
 
     FileSystemOptions* callbackOptions = callback ? &optionsState : nullptr;
+    // One governed call is one discovery scope: each selected root adds what it has to remove and
+    // the call closes once, after the last root, when the scope leaves this frame.
+    Common::FileOperations::DiscoveryScope discovery(options != nullptr ? &optionsState : nullptr);
+    const auto reportDiscovery = [&discovery](const DiscoveredPlanTotals& totals) noexcept
+    {
+        static_cast<void>(discovery.AddPlan(totals.bytes, totals.files, totals.directories));
+    };
 
     const auto normalizeCancellation = [](HRESULT hr) noexcept
     {
@@ -6208,7 +6336,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
             continue;
         }
 
-        const HRESULT itemHr = DeleteResolvedPath(*this, resolved, probe, flags, checkCancel);
+        const HRESULT itemHr = DeleteResolvedPath(*this, resolved, probe, flags, checkCancel, reportDiscovery);
         if (FAILED(itemHr))
         {
             hadFailure = true;

@@ -4,25 +4,25 @@
 
 #include "Preferences.General.h"
 
-#include "DxUi/DxUi.h"
 #include "Helpers.h"
 #include "LocalizationManager.h"
 #include "SettingsHotReload.h"
 #include "UiMetrics.h"
+#include <DxUi/DxUi.h>
 
 #include "resource.h"
 
 namespace
 {
-using RedSalamander::DxUi::CardPanel;
-using RedSalamander::DxUi::ComboBox;
-using RedSalamander::DxUi::ComboBoxVariant;
-using RedSalamander::DxUi::FontRole;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::ThemePalette;
-using RedSalamander::DxUi::Toggle;
-using RedSalamander::DxUi::WindowHost;
+using DxUi::CardPanel;
+using DxUi::ComboBox;
+using DxUi::ComboBoxVariant;
+using DxUi::FontRole;
+using DxUi::Label;
+using DxUi::Panel;
+using DxUi::ThemePalette;
+using DxUi::Toggle;
+using DxUi::WindowHost;
 
 [[nodiscard]] Common::Settings::MainMenuState GetMainMenuState(const Common::Settings::Settings& settings) noexcept
 {
@@ -342,6 +342,10 @@ bool GeneralPane::EnsureDxCardHosts(HWND parent, PreferencesDialogState& state) 
     const auto addCombo = [&](ComboBox*& outCombo, bool& syncFlag, const std::vector<ComboBox::Item>& items, const UINT commandId) noexcept
     {
         outCombo = root->AddChild<ComboBox>();
+        if (outCombo)
+        {
+            outCombo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+        }
         outCombo->SetVariant(ComboBoxVariant::Window);
         outCombo->SetItems(items);
         outCombo->SetOnSelectionChanged([this, host = parent, &syncFlag, commandId](size_t itemIndex) noexcept
@@ -701,10 +705,10 @@ void GeneralPane::LayoutDxPage(HWND host, PreferencesDialogState& state, int x, 
     const int stateTextWidth = std::max(onWidth, offWidth);
 
     const int measuredToggleWidth = std::max(minToggleWidth, (2 * paddingX) + stateTextWidth + gapX + trackWidth);
-    const int toggleWidth         = static_cast<int>(RedSalamander::DxUi::ResolveConstrainedExtent(
-        {.minExtent = static_cast<float>(minToggleWidth), .preferredExtent = static_cast<float>(measuredToggleWidth)},
-        static_cast<float>(std::max(0, width - 2 * cardPaddingX))));
-    const int comboWidth          = std::min(std::max(minComboWidth, UiMetrics::ScaleDip(dpi, 140)), std::max(minComboWidth, maxComboWidth));
+    const int toggleWidth         = static_cast<int>(
+        DxUi::ResolveConstrainedExtent({.minExtent = static_cast<float>(minToggleWidth), .preferredExtent = static_cast<float>(measuredToggleWidth)},
+                                       static_cast<float>(std::max(0, width - 2 * cardPaddingX))));
+    const int comboWidth = std::min(std::max(minComboWidth, UiMetrics::ScaleDip(dpi, 140)), std::max(minComboWidth, maxComboWidth));
 
     DxCardState* dxState  = _dxCardState.get();
     GeneralDxPage* dxPage = (dxState && _pageHostDx && _pageContentRoot) ? &dxState->page : nullptr;
@@ -895,8 +899,8 @@ PreferencesGeneralDebugFocusTarget GeneralPane::DebugGetFocusTarget() const noex
         return PreferencesGeneralDebugFocusTarget::None;
     }
 
-    const auto& page                                   = _dxCardState->page;
-    RedSalamander::DxUi::Control* const focusedControl = _pageHostDx->GetFocusControl();
+    const auto& page                    = _dxCardState->page;
+    DxUi::Control* const focusedControl = _pageHostDx->GetFocusControl();
     if (! focusedControl)
     {
         return PreferencesGeneralDebugFocusTarget::None;

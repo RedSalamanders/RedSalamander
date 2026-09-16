@@ -18,13 +18,13 @@
 #include <vector>
 
 #include "AppTheme.h"
-#include "DxUi/DxUi.Typography.h"
-#include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
 #include "Helpers.h"
 #include "PluginConfiguration.h"
 #include "SettingsStore.h"
 #include "UiMetrics.h"
+#include <DxUi/DxUi.h>
+#include <DxUi/Typography.h>
 
 // Window props used by Preferences UI controls.
 inline constexpr wchar_t kPrefsVisuallyDisabledProp[] = L"RedSalamander.Preferences.VisuallyDisabled";
@@ -61,10 +61,10 @@ struct PreferencesDialogState;
 struct PreferencesTypographyContext
 {
     UINT dpi = USER_DEFAULT_SCREEN_DPI;
-    RedSalamander::DxUi::Typography::TypographySpec body;
-    RedSalamander::DxUi::Typography::TypographySpec caption;
-    RedSalamander::DxUi::Typography::TypographySpec title;
-    RedSalamander::DxUi::Typography::TypographySpec strong;
+    DxUi::Typography::TypographySpec body;
+    DxUi::Typography::TypographySpec caption;
+    DxUi::Typography::TypographySpec title;
+    DxUi::Typography::TypographySpec strong;
 };
 
 [[nodiscard]] bool PrefsKeyboardCaptureWantsAllKeys(const PreferencesDialogState* state) noexcept;
@@ -143,7 +143,7 @@ inline constexpr int kMediumComboWidthDip = 140;
 inline constexpr int kLargeComboWidthDip  = 180;
 } // namespace PrefsLayoutConstants
 
-void PrefsReorderPanelChildren(RedSalamander::DxUi::Panel* root, std::span<RedSalamander::DxUi::Control* const> orderedControls);
+void PrefsReorderPanelChildren(DxUi::Panel* root, std::span<DxUi::Control* const> orderedControls);
 
 // Monitor filter mask bits for the Monitor Preferences page.
 enum class MonitorFilterBit : uint32_t
@@ -242,7 +242,7 @@ struct PrefsPluginConfigChoiceDxControl
     PrefsPluginConfigChoiceDxControl(PrefsPluginConfigChoiceDxControl&&)            = default;
     PrefsPluginConfigChoiceDxControl& operator=(PrefsPluginConfigChoiceDxControl&&) = default;
 
-    RedSalamander::DxUi::Checkbox* checkbox = nullptr;
+    DxUi::Checkbox* checkbox = nullptr;
 };
 
 struct PrefsPluginConfigFieldControls
@@ -261,14 +261,14 @@ struct PrefsPluginConfigFieldControls
     bool retainedToggleValue = false;
     std::wstring retainedOptionValue;
     std::vector<std::wstring> retainedSelectionValues;
-    RedSalamander::DxUi::Label* dxLabelControl         = nullptr;
-    RedSalamander::DxUi::Label* dxDescriptionControl   = nullptr;
-    RedSalamander::DxUi::TextField* dxEditControl      = nullptr;
-    RedSalamander::DxUi::Button* dxBrowseButtonControl = nullptr;
-    RedSalamander::DxUi::ComboBox* dxComboControl      = nullptr;
-    RedSalamander::DxUi::Toggle* dxToggleControl       = nullptr;
-    size_t toggleOnChoiceIndex                         = 0;
-    size_t toggleOffChoiceIndex                        = 0;
+    DxUi::Label* dxLabelControl         = nullptr;
+    DxUi::Label* dxDescriptionControl   = nullptr;
+    DxUi::TextField* dxEditControl      = nullptr;
+    DxUi::Button* dxBrowseButtonControl = nullptr;
+    DxUi::ComboBox* dxComboControl      = nullptr;
+    DxUi::Toggle* dxToggleControl       = nullptr;
+    size_t toggleOnChoiceIndex          = 0;
+    size_t toggleOffChoiceIndex         = 0;
     std::vector<PrefsPluginConfigChoiceDxControl> dxChoiceControls;
 };
 
@@ -279,12 +279,12 @@ struct KeyboardShortcutRow
     std::wstring commandDisplayName;
     std::wstring chordText;
     std::optional<size_t> bindingIndex;
-    uint32_t vk        = 0;
-    uint32_t modifiers = 0;
+    uint32_t vk                               = 0;
+    uint32_t modifiers                        = 0;
     Common::Keyboard::KeyPosition keyPosition = Common::Keyboard::KeyPosition::None;
-    bool placeholder   = false;
-    bool hasConflict   = false;
-    bool overridesGlobal = false;
+    bool placeholder                          = false;
+    bool hasConflict                          = false;
+    bool overridesGlobal                      = false;
 };
 
 struct PreferencesDialogState
@@ -318,7 +318,7 @@ struct PreferencesDialogState
     bool pluginsDetailsActive = false;
     std::wstring viewersSearchText;
     std::wstring viewersSelectedExtensionText;
-    RedSalamander::DxUi::GridSortSpec viewersListSortSpec{};
+    DxUi::GridSortSpec viewersListSortSpec{};
     std::wstring keyboardSearchText;
     std::wstring pluginsSearchText;
     std::wstring pluginsSelectedCustomPathText;
@@ -352,7 +352,7 @@ struct PreferencesDialogState
     bool pageHostIgnoreSize         = false;
     bool updatingPageText           = false;
     std::array<bool, kPrefCategoryCount> paneFirstCreateDone{};
-    std::array<RedSalamander::DxUi::Panel*, kPrefCategoryCount> paneWrapperPanels{};
+    std::array<DxUi::Panel*, kPrefCategoryCount> paneWrapperPanels{};
 
 #ifdef ENABLE_TESTS
     bool debugLastWheelRouteSeen                      = false;
@@ -386,15 +386,15 @@ struct PreferencesDialogState
     wil::unique_hbrush inputDisabledBrush;
     COLORREF inputDisabledBackgroundColor = RGB(255, 255, 255);
     // Dialog Structure Controls
-    HWND categoryTreeWindow                                        = nullptr;
-    bool categoryTreeUsesDxUi                                      = false;
-    bool pageHostUsesDxUi                                          = false;
-    RedSalamander::DxUi::WindowHost* pageHostDxHost                = nullptr;
-    RedSalamander::DxUi::Panel* pageHostDxRootControl              = nullptr;
-    RedSalamander::DxUi::ScrollPanel* pageHostDxScrollPanelControl = nullptr;
-    RedSalamander::DxUi::Panel* pageHostDxContentRootControl       = nullptr;
-    RedSalamander::DxUi::Control* pageHostDxNoteControl            = nullptr;
-    HWND pageHostWindow                                            = nullptr;
+    HWND categoryTreeWindow                         = nullptr;
+    bool categoryTreeUsesDxUi                       = false;
+    bool pageHostUsesDxUi                           = false;
+    DxUi::WindowHost* pageHostDxHost                = nullptr;
+    DxUi::Panel* pageHostDxRootControl              = nullptr;
+    DxUi::ScrollPanel* pageHostDxScrollPanelControl = nullptr;
+    DxUi::Panel* pageHostDxContentRootControl       = nullptr;
+    DxUi::Control* pageHostDxNoteControl            = nullptr;
+    HWND pageHostWindow                             = nullptr;
 
     std::vector<std::wstring> viewersExtensionKeys;
     std::vector<ViewerPluginOption> viewersPluginOptions;
@@ -408,7 +408,7 @@ struct PreferencesDialogState
     std::wstring keyboardCaptureCommandId;
     std::optional<size_t> keyboardCaptureBindingIndex;
     std::optional<uint32_t> keyboardCapturePendingVk;
-    uint32_t keyboardCapturePendingModifiers = 0;
+    uint32_t keyboardCapturePendingModifiers                        = 0;
     Common::Keyboard::KeyPosition keyboardCapturePendingKeyPosition = Common::Keyboard::KeyPosition::None;
     std::wstring keyboardCaptureConflictCommandId;
     std::optional<size_t> keyboardCaptureConflictBindingIndex;
@@ -442,7 +442,7 @@ struct PreferencesDialogState
     bool pluginsDetailsConfigIsFileSystem = false;
     std::string pluginsDetailsConfigSourceJsonUtf8;
     std::vector<PrefsPluginConfigFieldControls> pluginsDetailsConfigFields;
-    RedSalamander::DxUi::Panel* pluginsDetailsConfigDxPanel = nullptr;
+    DxUi::Panel* pluginsDetailsConfigDxPanel = nullptr;
 
     std::vector<PrefsPluginListItem> pluginsListItems;
 
@@ -458,7 +458,7 @@ struct PreferencesDialogState
 void SetDirty(HWND dlg, PreferencesDialogState& state) noexcept;
 
 // Shared debug diagnostics helpers for DxUi host surfaces.
-[[nodiscard]] inline UINT GetDxHostDebugWidthPx(const RedSalamander::DxUi::WindowHost* host) noexcept
+[[nodiscard]] inline UINT GetDxHostDebugWidthPx(const DxUi::WindowHost* host) noexcept
 {
 #ifdef ENABLE_TESTS
     return host ? host->DebugGetWidthPx() : 0u;
@@ -468,7 +468,7 @@ void SetDirty(HWND dlg, PreferencesDialogState& state) noexcept;
 #endif
 }
 
-[[nodiscard]] inline UINT GetDxHostDebugHeightPx(const RedSalamander::DxUi::WindowHost* host) noexcept
+[[nodiscard]] inline UINT GetDxHostDebugHeightPx(const DxUi::WindowHost* host) noexcept
 {
 #ifdef ENABLE_TESTS
     return host ? host->DebugGetHeightPx() : 0u;
@@ -478,7 +478,7 @@ void SetDirty(HWND dlg, PreferencesDialogState& state) noexcept;
 #endif
 }
 
-[[nodiscard]] inline uint64_t GetDxHostDebugRenderCount(const RedSalamander::DxUi::WindowHost* host) noexcept
+[[nodiscard]] inline uint64_t GetDxHostDebugRenderCount(const DxUi::WindowHost* host) noexcept
 {
 #ifdef ENABLE_TESTS
     return host ? host->DebugGetRenderCount() : 0u;
@@ -488,7 +488,7 @@ void SetDirty(HWND dlg, PreferencesDialogState& state) noexcept;
 #endif
 }
 
-[[nodiscard]] inline uint64_t GetDxHostDebugResizeCount(const RedSalamander::DxUi::WindowHost* host) noexcept
+[[nodiscard]] inline uint64_t GetDxHostDebugResizeCount(const DxUi::WindowHost* host) noexcept
 {
 #ifdef ENABLE_TESTS
     return host ? host->DebugGetResizeCount() : 0u;
@@ -498,7 +498,7 @@ void SetDirty(HWND dlg, PreferencesDialogState& state) noexcept;
 #endif
 }
 
-[[nodiscard]] inline uint64_t GetDxHostDebugResizeFailureCount(const RedSalamander::DxUi::WindowHost* host) noexcept
+[[nodiscard]] inline uint64_t GetDxHostDebugResizeFailureCount(const DxUi::WindowHost* host) noexcept
 {
 #ifdef ENABLE_TESTS
     return host ? host->DebugGetResizeFailureCount() : 0u;
@@ -509,23 +509,23 @@ void SetDirty(HWND dlg, PreferencesDialogState& state) noexcept;
 }
 
 // Reference overloads for non-nullable host references.
-[[nodiscard]] inline UINT GetDxHostDebugWidthPx(const RedSalamander::DxUi::WindowHost& host) noexcept
+[[nodiscard]] inline UINT GetDxHostDebugWidthPx(const DxUi::WindowHost& host) noexcept
 {
     return GetDxHostDebugWidthPx(&host);
 }
-[[nodiscard]] inline UINT GetDxHostDebugHeightPx(const RedSalamander::DxUi::WindowHost& host) noexcept
+[[nodiscard]] inline UINT GetDxHostDebugHeightPx(const DxUi::WindowHost& host) noexcept
 {
     return GetDxHostDebugHeightPx(&host);
 }
-[[nodiscard]] inline uint64_t GetDxHostDebugRenderCount(const RedSalamander::DxUi::WindowHost& host) noexcept
+[[nodiscard]] inline uint64_t GetDxHostDebugRenderCount(const DxUi::WindowHost& host) noexcept
 {
     return GetDxHostDebugRenderCount(&host);
 }
-[[nodiscard]] inline uint64_t GetDxHostDebugResizeCount(const RedSalamander::DxUi::WindowHost& host) noexcept
+[[nodiscard]] inline uint64_t GetDxHostDebugResizeCount(const DxUi::WindowHost& host) noexcept
 {
     return GetDxHostDebugResizeCount(&host);
 }
-[[nodiscard]] inline uint64_t GetDxHostDebugResizeFailureCount(const RedSalamander::DxUi::WindowHost& host) noexcept
+[[nodiscard]] inline uint64_t GetDxHostDebugResizeFailureCount(const DxUi::WindowHost& host) noexcept
 {
     return GetDxHostDebugResizeFailureCount(&host);
 }
@@ -535,10 +535,10 @@ namespace PrefsUi
 using Win32Text::GetWindowTextString;
 [[nodiscard]] PreferencesTypographyContext MakeTypographyContext(HWND hwnd) noexcept;
 [[nodiscard]] int MeasureSingleLineTextWidthPx(const PreferencesTypographyContext& typography,
-                                               const RedSalamander::DxUi::Typography::TypographySpec& spec,
+                                               const DxUi::Typography::TypographySpec& spec,
                                                std::wstring_view text) noexcept;
 [[nodiscard]] int MeasureWrappedTextHeightPx(const PreferencesTypographyContext& typography,
-                                             const RedSalamander::DxUi::Typography::TypographySpec& spec,
+                                             const DxUi::Typography::TypographySpec& spec,
                                              int width,
                                              std::wstring_view text) noexcept;
 [[nodiscard]] std::wstring_view TrimWhitespace(std::wstring_view text) noexcept;
@@ -563,7 +563,7 @@ void HideSharedPageEmptyState(PreferencesDialogState& state) noexcept;
                                            const PreferencesTypographyContext& typography) noexcept;
 
 [[nodiscard]] bool IsActuallyVisibleChildWindow(HWND hwnd) noexcept;
-[[nodiscard]] inline bool HasRetainedDxChildren(const RedSalamander::DxUi::Panel* root) noexcept
+[[nodiscard]] inline bool HasRetainedDxChildren(const DxUi::Panel* root) noexcept
 {
     return root != nullptr && ! root->GetChildren().empty();
 }
@@ -571,7 +571,7 @@ void HideSharedPageEmptyState(PreferencesDialogState& state) noexcept;
 
 namespace PrefsDxHost
 {
-[[nodiscard]] bool Attach(HWND hwnd, RedSalamander::DxUi::WindowHost& host) noexcept;
+[[nodiscard]] bool Attach(HWND hwnd, DxUi::WindowHost& host) noexcept;
 void ResetOwnedHostWindow(wil::unique_hwnd& hwnd) noexcept;
 #ifdef ENABLE_TESTS
 [[nodiscard]] size_t CountVisibleRenderedHosts(HWND parent) noexcept;

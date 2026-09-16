@@ -222,6 +222,9 @@ try {
     }
 
     # Copy Themes folder
+    Import-Module (Join-Path $RepoRoot 'Tools/Modules/Build/DxUiDependency.psm1')
+    Copy-RSDxUiPackageProvenance -RepoRoot $RepoRoot -BuildOutputDir $BuildOutputDir -PackageRoot $TempDir
+
     $ThemesSource = Join-Path $BuildOutputDir "Themes"
     if (Test-Path $ThemesSource) {
         Copy-Item $ThemesSource -Destination (Join-Path $TempDir "Themes") -Recurse -Force

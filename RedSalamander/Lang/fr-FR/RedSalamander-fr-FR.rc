@@ -987,6 +987,7 @@ BEGIN
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_LABEL "Configuration"
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_UNAVAILABLE "La configuration n’est pas disponible pour ce plug-in."
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_DEFAULT "Aucune configuration n’est enregistrée pour ce plug-in (valeurs par défaut utilisées)."
+    IDS_PREFS_PLUGINS_DETAILS_CONFIG_REJECTED "Le plug-in a refusé ces paramètres (erreur 0x{0:08X}) ; ils n’ont donc pas été enregistrés. Vérifiez les valeurs mises en évidence et réessayez."
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_BROWSE_ELLIPSIS "Parcourir..."
     IDS_PREFS_PLUGINS_DETAILS_SCHEMA_UNAVAILABLE "🧩\r\nCe plug-in ne fournit pas d’éditeur de configuration."
     IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NOT_LOADABLE "🚧\r\nCe plug-in ne peut pas être chargé pour le moment ; son éditeur de configuration est donc indisponible."

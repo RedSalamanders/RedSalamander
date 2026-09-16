@@ -23,6 +23,7 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include "FileSystemDiscoveryScope.h"
 #include "FileSystemMtp.Internal.h"
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
@@ -282,6 +283,29 @@ private:
                             const FileSystemOptions* options,
                             IFileSystemCallback* callback,
                             void* cookie) noexcept;
+    // One governed call is one discovery scope, owned by the public entry point. These cores run
+    // one item each, report it into the caller's scope before the device mutates, and close the
+    // scope only when a singular call asks them to; a batch closes once, after its last item.
+    HRESULT CopyOrMoveSingleItem(bool move,
+                                 const wchar_t* sourcePath,
+                                 const wchar_t* destinationPath,
+                                 FileSystemFlags flags,
+                                 const FileSystemOptions* options,
+                                 IFileSystemCallback* callback,
+                                 void* cookie,
+                                 Common::FileOperations::DiscoveryScope& discovery,
+                                 bool closeDiscoveryWhenFinal) noexcept;
+    HRESULT DeleteSingleItem(const wchar_t* path,
+                             FileSystemFlags flags,
+                             const FileSystemOptions* options,
+                             IFileSystemCallback* callback,
+                             void* cookie,
+                             Common::FileOperations::DiscoveryScope& discovery,
+                             bool closeDiscoveryWhenFinal) noexcept;
+    // The source a mutation is about to touch, described from the backend's own path cache and
+    // reported before the mutation. It runs as its own command so the report precedes the
+    // mutation on this thread and an abandoned command can never reach this frame.
+    void ReportSourceDiscovery(std::wstring_view normalizedSource, Common::FileOperations::DiscoveryScope& discovery) noexcept;
     HRESULT AccumulateDirectorySize(std::wstring_view path,
                                     bool recursive,
                                     IFileSystemDirectorySizeCallback* callback,

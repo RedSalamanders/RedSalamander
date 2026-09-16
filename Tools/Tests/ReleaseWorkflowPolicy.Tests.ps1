@@ -241,6 +241,36 @@ Describe 'Release artifact fail-closed policy' {
 }
 
 Describe 'Release workflow source contracts' {
+    It 'keeps native Full tooling, rebuild integration and external evidence available' {
+        $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/build-reusable.yml') -Raw
+        $workflow | Should Match 'Import-Module Pester -RequiredVersion 3\.4\.0 -Force'
+        $workflow | Should Match 'Install-Module Pester -RequiredVersion 3\.4\.0'
+        $workflow | Should Match 'GetEnvironmentVariable\(\$name, ''Process''\)'
+        $workflow | Should Match '>> \$env:GITHUB_ENV'
+        $workflow | Should Match 'Native Fresh Full failed with exit code'
+        $workflow | Should Match 'MaxCpuCount\s*=\s*2'
+        $evidence = [regex]::Match($workflow, '(?s)- name: Upload native qualification evidence(.*?)(?=      - name:)').Groups[1].Value
+        $evidence | Should Match 'steps\.test_root\.outputs\.path'
+        $evidence | Should Not Match '\.build/'
+        $diagnostics = [regex]::Match($workflow, '(?s)- name: Upload native build diagnostics(.*?)(?=      - name:)').Groups[1].Value
+        $diagnostics | Should Match 'include-hidden-files: true'
+        $diagnostics | Should Not Match 'steps\.test_root\.outputs\.path'
+    }
+
+    It 'maps every MSIX profile to matching product inputs without automatic sanitizer packaging' {
+        [xml]$project = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer/msix/RedSalamanderInstaller.wapproj') -Raw
+        $solution = Get-Content -LiteralPath (Join-Path $repoRoot 'RedSalamander.sln') -Raw
+        foreach ($platform in @('x64', 'ARM64')) {
+            foreach ($configuration in @('Debug', 'Release', 'ASan Debug')) {
+                $profile = "$configuration|$platform"
+                @($project.SelectNodes('//*[local-name()="ProjectConfiguration"]') | Where-Object Include -EQ $profile).Count | Should Be 1
+                $mapping = '{9A97489C-F552-4B8C-875A-199D3E5A1E3A}.' + $profile + '.ActiveCfg = ' + $profile
+                $solution | Should Match ([regex]::Escape($mapping))
+            }
+        }
+        $solution | Should Not Match '9A97489C-F552-4B8C-875A-199D3E5A1E3A\}\.ASan Debug\|[^\r\n]+\.(Build|Deploy)\.0'
+    }
+
     BeforeAll {
         $releaseWorkflowPath = Join-Path $repoRoot '.github\workflows\release.yml'
         $releaseWorkflow = Get-Content -LiteralPath $releaseWorkflowPath -Raw
@@ -440,7 +470,10 @@ Describe 'Release workflow source contracts' {
         $buildWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\build-reusable.yml') -Raw
 
         $ciWorkflow | Should Match '(?ms)^permissions:\s+contents:\s*read'
-        $ciWorkflow | Should Match '(?ms)^  format:.*?permissions:\s+contents:\s*write'
+        $formatJob = [regex]::Match($ciWorkflow, '(?ms)^  format:\r?\n(?<body>.*?)(?=^  [a-zA-Z][\w-]*:|\z)').Groups['body'].Value
+        $formatJob | Should Match 'Check changed native sources'
+        $formatJob | Should Match 'persist-credentials:\s*false'
+        $formatJob | Should Not Match 'contents:\s*write|git\s+push'
         $releaseWorkflow | Should Match '(?ms)^permissions:\s+contents:\s*read'
         $releaseWorkflow | Should Match '(?ms)^  release:.*?permissions:\s+contents:\s*write'
         $buildWorkflow | Should Match 'persist-credentials:\s*false'

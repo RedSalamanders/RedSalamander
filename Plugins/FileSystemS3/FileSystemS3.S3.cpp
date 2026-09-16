@@ -241,8 +241,13 @@ void RunCopySourceSerializationContractSelfTest(unsigned int& passed, unsigned i
 [[nodiscard]] HRESULT ValidateS3SourceRevisionStillExists(Aws::S3Crt::S3CrtClient& client,
                                                           std::string_view bucket,
                                                           std::string_view key,
-                                                          const S3ObjectRevision& revision) noexcept
+                                                          const S3ObjectRevision& revision,
+                                                          uint64_t* outContentLength = nullptr) noexcept
 {
+    if (outContentLength != nullptr)
+    {
+        *outContentLength = 0;
+    }
     Aws::S3Crt::Model::HeadObjectRequest request;
     request.SetBucket(Aws::String(bucket.data(), bucket.size()));
     request.SetKey(Aws::String(key.data(), key.size()));
@@ -267,6 +272,11 @@ void RunCopySourceSerializationContractSelfTest(unsigned int& passed, unsigned i
         return hr;
     }
 
+    if (outContentLength != nullptr)
+    {
+        const long long contentLength = outcome.GetResult().GetContentLength();
+        *outContentLength             = contentLength > 0 ? static_cast<uint64_t>(contentLength) : 0u;
+    }
     return ValidateS3RevisionResponse(revision, outcome.GetResult().GetETag(), outcome.GetResult().GetVersionId());
 }
 
@@ -596,6 +606,29 @@ void RunCopySourceSerializationContractSelfTest(unsigned int& passed, unsigned i
     }
 
     const std::shared_ptr<Aws::S3Crt::S3CrtClient> client = GetS3Client(fs, ctx);
+    if (expectedSizeBytes == 0u)
+    {
+        // A zero-byte object has nothing to fetch and no range a GET could satisfy: the CRT client
+        // splits every GetObject into ranged parts, and S3 answers a range on an empty object with
+        // 416. Directory markers are the common case, and the server-side copy that would normally
+        // spare them the relay fails first on any path-style endpoint. The relay still owes the
+        // caller what the GET's response would have proved, that the pinned source still exists at
+        // its revision and is still empty, so it asks for the object's identity instead and hands
+        // back the empty file it already holds.
+        uint64_t contentLength   = 0;
+        const HRESULT revisionHr = ValidateS3SourceRevisionStillExists(*client, bucket, key, sourceRevision, &contentLength);
+        if (FAILED(revisionHr))
+        {
+            return revisionHr;
+        }
+        if (contentLength != 0u)
+        {
+            return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+        }
+        outFile = std::move(file);
+        return S_OK;
+    }
+
     Aws::S3Crt::Model::GetObjectRequest req;
     req.SetBucket(Aws::String(bucket.data(), bucket.size()));
     req.SetKey(Aws::String(key.data(), key.size()));

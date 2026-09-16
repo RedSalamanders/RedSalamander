@@ -12,12 +12,12 @@
 
 namespace
 {
-using RedSalamander::DxUi::CardPanel;
-using RedSalamander::DxUi::FontRole;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::ThemePalette;
-using RedSalamander::DxUi::Toggle;
+using DxUi::CardPanel;
+using DxUi::FontRole;
+using DxUi::Label;
+using DxUi::Panel;
+using DxUi::ThemePalette;
+using DxUi::Toggle;
 
 [[nodiscard]] Common::Settings::MouseSettings GetMouseSettings(const Common::Settings::Settings& settings) noexcept
 {
@@ -38,27 +38,27 @@ void SetMouseSettings(PreferencesDialogState& state, const Common::Settings::Mou
 
 struct MouseDxPage
 {
-    Label* paneFocusHeader                       = nullptr;
-    CardPanel* focusFollowsPointerCard           = nullptr;
-    Label* focusFollowsPointerTitle              = nullptr;
-    Label* focusFollowsPointerDescription        = nullptr;
-    Toggle* focusFollowsPointerToggle            = nullptr;
-    CardPanel* terminalOpenFocusCard             = nullptr;
-    Label* terminalOpenFocusTitle                = nullptr;
-    Label* terminalOpenFocusDescription          = nullptr;
-    Toggle* terminalOpenFocusToggle              = nullptr;
+    Label* paneFocusHeader                = nullptr;
+    CardPanel* focusFollowsPointerCard    = nullptr;
+    Label* focusFollowsPointerTitle       = nullptr;
+    Label* focusFollowsPointerDescription = nullptr;
+    Toggle* focusFollowsPointerToggle     = nullptr;
+    CardPanel* terminalOpenFocusCard      = nullptr;
+    Label* terminalOpenFocusTitle         = nullptr;
+    Label* terminalOpenFocusDescription   = nullptr;
+    Toggle* terminalOpenFocusToggle       = nullptr;
 
     void Detach() noexcept
     {
-        paneFocusHeader                       = nullptr;
-        focusFollowsPointerCard               = nullptr;
-        focusFollowsPointerTitle              = nullptr;
-        focusFollowsPointerDescription        = nullptr;
-        focusFollowsPointerToggle             = nullptr;
-        terminalOpenFocusCard                 = nullptr;
-        terminalOpenFocusTitle                = nullptr;
-        terminalOpenFocusDescription          = nullptr;
-        terminalOpenFocusToggle               = nullptr;
+        paneFocusHeader                = nullptr;
+        focusFollowsPointerCard        = nullptr;
+        focusFollowsPointerTitle       = nullptr;
+        focusFollowsPointerDescription = nullptr;
+        focusFollowsPointerToggle      = nullptr;
+        terminalOpenFocusCard          = nullptr;
+        terminalOpenFocusTitle         = nullptr;
+        terminalOpenFocusDescription   = nullptr;
+        terminalOpenFocusToggle        = nullptr;
     }
 };
 } // namespace
@@ -119,13 +119,13 @@ bool MousePane::EnsureDxCardHosts(HWND parent, PreferencesDialogState& state) no
     _pageHostDx->ResetInteractionState();
     _pageContentRoot->ClearChildren();
 
-    Panel* const root = _pageContentRoot;
+    Panel* const root             = _pageContentRoot;
     dxState->page.paneFocusHeader = root->AddChild<Label>();
     dxState->page.paneFocusHeader->SetFontRole(FontRole::Header);
 
     const auto addToggleCard = [&](CardPanel*& card, Label*& title, Label*& description, Toggle*& toggle, bool terminalOpenOnly) noexcept
     {
-        card = root->AddChild<CardPanel>();
+        card  = root->AddChild<CardPanel>();
         title = root->AddChild<Label>();
         title->SetFontRole(FontRole::Body);
         description = root->AddChild<Label>();
@@ -213,7 +213,7 @@ void MousePane::SyncDxControlsFromState(const PreferencesDialogState& state) noe
         return;
     }
 
-    MouseDxPage& page = _dxCardState->page;
+    MouseDxPage& page                      = _dxCardState->page;
     const std::wstring paneFocusHeader     = LoadStringResource(nullptr, IDS_PREFS_MOUSE_SECTION_PANE_FOCUS);
     const std::wstring focusTitle          = LoadStringResource(nullptr, IDS_PREFS_MOUSE_LABEL_FOCUS_FOLLOWS_POINTER);
     const std::wstring focusDescription    = LoadStringResource(nullptr, IDS_PREFS_MOUSE_DESC_FOCUS_FOLLOWS_POINTER);
@@ -231,7 +231,7 @@ void MousePane::SyncDxControlsFromState(const PreferencesDialogState& state) noe
     page.terminalOpenFocusToggle->SetAccessibleHelpText(terminalDescription);
 
     const Common::Settings::MouseSettings mouse = GetMouseSettings(state.workingSettings);
-    _syncingToggles = true;
+    _syncingToggles                             = true;
     page.focusFollowsPointerToggle->SetChecked(mouse.focusFollowsPointer);
     page.focusFollowsPointerToggle->SetEnabled(true);
     page.terminalOpenFocusToggle->SetChecked(mouse.focusFollowsPointerWhenTerminalOpen);
@@ -285,12 +285,10 @@ void MousePane::LayoutPage(HWND host,
     const int paddingX                    = UiMetrics::ScaleDip(dpi, kTogglePaddingXDip);
     const int toggleGapX                  = UiMetrics::ScaleDip(dpi, kToggleGapXDip);
     const int trackWidth                  = UiMetrics::ScaleDip(dpi, kToggleTrackWidthDip);
-    const int onWidth = PrefsUi::MeasureSingleLineTextWidthPx(
-        typography, typography.strong, LoadStringResource(nullptr, IDS_PREFS_COMMON_ON));
-    const int offWidth = PrefsUi::MeasureSingleLineTextWidthPx(
-        typography, typography.strong, LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF));
+    const int onWidth     = PrefsUi::MeasureSingleLineTextWidthPx(typography, typography.strong, LoadStringResource(nullptr, IDS_PREFS_COMMON_ON));
+    const int offWidth    = PrefsUi::MeasureSingleLineTextWidthPx(typography, typography.strong, LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF));
     const int toggleWidth = std::max(minToggleWidth, (2 * paddingX) + std::max(onWidth, offWidth) + toggleGapX + trackWidth);
-    const auto pxToDip = [dpi](int pixels) noexcept { return static_cast<float>(pixels) * 96.0f / static_cast<float>(dpi); };
+    const auto pxToDip    = [dpi](int pixels) noexcept { return static_cast<float>(pixels) * 96.0f / static_cast<float>(dpi); };
 
     MouseDxPage& page = _dxCardState->page;
     page.paneFocusHeader->SetVisible(true);
@@ -299,15 +297,15 @@ void MousePane::LayoutPage(HWND host,
 
     const auto layoutToggleCard = [&](CardPanel* card, Label* title, Label* description, Toggle* toggle, const std::wstring& descriptionText) noexcept
     {
-        const int textWidth        = std::max(0, width - 2 * cardPaddingX - cardGapX - toggleWidth);
+        const int textWidth         = std::max(0, width - 2 * cardPaddingX - cardGapX - toggleWidth);
         const int descriptionHeight = PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, textWidth, descriptionText);
-        const int contentHeight    = titleHeight + cardGapY + descriptionHeight;
-        const int cardHeight       = std::max(rowHeight + 2 * cardPaddingY, contentHeight + 2 * cardPaddingY);
-        const int textLeft         = x + cardPaddingX;
-        const int titleTop         = y + cardPaddingY;
-        const int descriptionTop   = titleTop + titleHeight + cardGapY;
-        const int toggleLeft       = x + width - cardPaddingX - toggleWidth;
-        const int toggleTop        = y + (cardHeight - rowHeight) / 2;
+        const int contentHeight     = titleHeight + cardGapY + descriptionHeight;
+        const int cardHeight        = std::max(rowHeight + 2 * cardPaddingY, contentHeight + 2 * cardPaddingY);
+        const int textLeft          = x + cardPaddingX;
+        const int titleTop          = y + cardPaddingY;
+        const int descriptionTop    = titleTop + titleHeight + cardGapY;
+        const int toggleLeft        = x + width - cardPaddingX - toggleWidth;
+        const int toggleTop         = y + (cardHeight - rowHeight) / 2;
 
         card->SetVisible(true);
         card->SetBounds(D2D1::RectF(pxToDip(x), pxToDip(y), pxToDip(x + width), pxToDip(y + cardHeight)));
@@ -349,7 +347,7 @@ bool MousePane::DebugSetFocusFollowsPointerSettings(bool always, bool whenTermin
 
     SetMouseSettings(*state,
                      Common::Settings::MouseSettings{
-                         .focusFollowsPointer = always,
+                         .focusFollowsPointer                 = always,
                          .focusFollowsPointerWhenTerminalOpen = whenTerminalOpen,
                      });
     if (const HWND dialog = GetAncestor(_pageHost, GA_ROOT); dialog && IsWindow(dialog) != FALSE)
@@ -357,8 +355,7 @@ bool MousePane::DebugSetFocusFollowsPointerSettings(bool always, bool whenTermin
         SetDirty(dialog, *state);
     }
     SyncDxControlsFromState(*state);
-    return _dxCardState->page.focusFollowsPointerToggle->IsChecked() == always &&
-        _dxCardState->page.terminalOpenFocusToggle->IsChecked() == whenTerminalOpen;
+    return _dxCardState->page.focusFollowsPointerToggle->IsChecked() == always && _dxCardState->page.terminalOpenFocusToggle->IsChecked() == whenTerminalOpen;
 }
 
 bool MousePane::DebugGetFocusFollowsPointerSettings(Common::Settings::MouseSettings& outSettings) const noexcept

@@ -1,0 +1,18 @@
+{
+  "counts": {
+    "screenshots": 437,
+    "scenarios": 124,
+    "revisedConcepts": 3,
+    "byCulture": {
+      "en-US": 128,
+      "fr-FR": 309
+    }
+  },
+  "nativeDpis": [
+    96,
+    144
+  ],
+  "errors": [],
+  "allPngsDecode": true,
+  "galleryJsSyntax": "pass"
+}

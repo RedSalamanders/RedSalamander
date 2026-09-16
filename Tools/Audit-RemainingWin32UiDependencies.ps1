@@ -69,33 +69,6 @@ $patterns = @(
 $allowedResidualDependencies = @(
     @{
         Category      = 'HDC text/selection bridge'
-        Path          = 'Common\DxUi\DxUi.cpp'
-        LinePattern   = 'GetDC\(nullptr\)|SelectObject\(memoryDc\.get\(\), bitmap\.get\(\)\)'
-        Visibility    = 'visual bitmap interop'
-        Owner         = 'DxUi shared backdrop capture'
-        Reason        = 'The shared popup backdrop helper snapshots screen pixels into a DIB for Direct2D composition; it does not render native text, fonts, or controls.'
-        ExitCondition = 'Replace when shared popup backdrop capture moves to DirectComposition/WIC-only capture or the backdrop effect is removed.'
-    },
-    @{
-        Category      = 'HDC text/selection bridge'
-        Path          = 'Common\DxUi\DxUi.ComboBox.cpp'
-        LinePattern   = 'GetDC\(nullptr\)|SelectObject\(memoryDc\.get\(\), bitmap\.get\(\)\)'
-        Visibility    = 'visual bitmap interop'
-        Owner         = 'DxUi ComboBox'
-        Reason        = 'Popup backdrop capture uses a memory DC only to snapshot pixels behind the Direct2D popup; it does not render native text, fonts, or controls.'
-        ExitCondition = 'Replace when the popup backdrop path moves to DirectComposition/WIC-only capture or the backdrop effect is removed.'
-    },
-    @{
-        Category      = 'HDC text/selection bridge'
-        Path          = 'Common\DxUi\DxUi.Menu.cpp'
-        LinePattern   = 'GetDC\(nullptr\)|SelectObject\(memoryDc\.get\(\), bitmap\.get\(\)\)'
-        Visibility    = 'visual bitmap interop'
-        Owner         = 'DxUi Menu'
-        Reason        = 'Popup backdrop capture uses a memory DC only to snapshot pixels behind the Direct2D menu; it does not render native text, fonts, or controls.'
-        ExitCondition = 'Replace when the popup backdrop path moves to DirectComposition/WIC-only capture or the backdrop effect is removed.'
-    },
-    @{
-        Category      = 'HDC text/selection bridge'
         Path          = 'RedSalamander\FolderView.Icons.cpp'
         LinePattern   = 'GetDC\(nullptr\)'
         Visibility    = 'test-only bitmap interop'
@@ -192,33 +165,6 @@ $allowedResidualDependencies = @(
         Owner         = 'Find dialog command self-tests'
         Reason        = 'The queue-order test creates hidden Static probe windows without WS_VISIBLE to verify parent/child input-drain ordering.'
         ExitCondition = 'Remove if the drain-order test gains a non-HWND message queue probe.'
-    },
-    @{
-        Category      = 'HDC text/selection bridge'
-        Path          = 'Tests\DxUiTests\DxUiTests.Menu.cpp'
-        LinePattern   = 'GetDC\(nullptr\)'
-        Visibility    = 'test-only'
-        Owner         = 'DxUiTests'
-        Reason        = 'Menu test uses a screen DC only to verify popup backdrop capture behavior.'
-        ExitCondition = 'Replace when popup backdrop tests use a non-HDC capture helper.'
-    },
-    @{
-        Category      = 'Native visible control creation'
-        Path          = 'Tests\DxUiTests\DxUiTestHelpers.h'
-        LinePattern   = 'DxUiTestsClipboardOwner'
-        Visibility    = 'test-only hidden clipboard owner'
-        Owner         = 'DxUiTests'
-        Reason        = 'Offscreen clipboard owner HWND exists only for deterministic clipboard tests and is not an app-owned visible control.'
-        ExitCondition = 'Remove if clipboard tests move to a process-level test harness owner.'
-    },
-    @{
-        Category      = 'Native visible control creation'
-        Path          = 'Tests\DxUiTests\DxUiTests.WindowHost.cpp'
-        LinePattern   = 'CreateWindowExW\(0u, L"STATIC", L"waiting"'
-        Visibility    = 'test-only message queue probe'
-        Owner         = 'DxUi WindowHost tests'
-        Reason        = 'The zero-sized message-only Static HWND exists only to verify the shared bounded message-pump helper.'
-        ExitCondition = 'Remove if the message-pump contract test gains a registered test-only window class or non-HWND probe.'
     },
     @{
         Category      = 'HFONT handle'

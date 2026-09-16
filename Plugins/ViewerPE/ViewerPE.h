@@ -17,14 +17,14 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
-#include "DxUi/DxUi.h"
-#include "DxUi/DxUiNativeMenuInterop.h"
 #include "EmbeddedViewerBase.h"
 #include "Helpers.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Viewer.h"
+#include <DxUi/DxUi.h>
+#include <DxUi/NativeMenuInterop.h>
 
 struct ID2D1Factory;
 struct ID2D1HwndRenderTarget;
@@ -107,9 +107,9 @@ private:
 
     struct AsyncParseResult
     {
-        uint64_t requestId = 0;
+        uint64_t requestId      = 0;
         uint64_t windowIdentity = 0;
-        HRESULT hr         = E_FAIL;
+        HRESULT hr              = E_FAIL;
         std::wstring title;
         std::wstring subtitle;
         std::wstring body;
@@ -137,7 +137,7 @@ private:
 
     std::string _configurationJson;
 
-    bool _isLoading = false;
+    bool _isLoading      = false;
     HRESULT _lastParseHr = E_PENDING;
 
     wil::com_ptr<IHostAlerts> _hostAlerts;
@@ -149,12 +149,12 @@ private:
     bool _syncingFileCombo = false;
 
     wil::unique_hmenu _menuHandle;
-    RedSalamander::DxUi::NativeMenuBarHost _menuBarHost;
+    DxUi::NativeMenuBarHost _menuBarHost;
     wil::unique_hwnd _hFileComboHost;
-    RedSalamander::DxUi::WindowHost _fileComboHost;
-    RedSalamander::DxUi::ComboBox* _fileComboControl = nullptr;
-    bool _fileComboHostPreExpandPopup                = false;
-    UINT _dpi                                        = 96;
+    DxUi::WindowHost _fileComboHost;
+    DxUi::ComboBox* _fileComboControl = nullptr;
+    bool _fileComboHostPreExpandPopup = false;
+    UINT _dpi                         = 96;
 
     wil::com_ptr<ID2D1Factory> _d2dFactory;
     wil::com_ptr<IDWriteFactory> _writeFactory;

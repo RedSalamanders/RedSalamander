@@ -22,25 +22,25 @@
 #include "ViewerPluginManager.h"
 #include "resource.h"
 
-using RedSalamander::DxUi::Button;
-using RedSalamander::DxUi::Checkbox;
-using RedSalamander::DxUi::ComboBox;
-using RedSalamander::DxUi::ComboBoxVariant;
-using RedSalamander::DxUi::Grid;
-using RedSalamander::DxUi::GridCellData;
-using RedSalamander::DxUi::GridColumnDesc;
-using RedSalamander::DxUi::GridColumnKind;
-using RedSalamander::DxUi::GridRowStyle;
-using RedSalamander::DxUi::GridRowTone;
-using RedSalamander::DxUi::GridSelectionMode;
-using RedSalamander::DxUi::GridSortSpec;
-using RedSalamander::DxUi::GridVisibleWorkMetrics;
-using RedSalamander::DxUi::IDxGridModel;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::SortDirection;
-using RedSalamander::DxUi::TabControl;
-using RedSalamander::DxUi::TextField;
+using DxUi::Button;
+using DxUi::Checkbox;
+using DxUi::ComboBox;
+using DxUi::ComboBoxVariant;
+using DxUi::Grid;
+using DxUi::GridCellData;
+using DxUi::GridColumnDesc;
+using DxUi::GridColumnKind;
+using DxUi::GridRowStyle;
+using DxUi::GridRowTone;
+using DxUi::GridSelectionMode;
+using DxUi::GridSortSpec;
+using DxUi::GridVisibleWorkMetrics;
+using DxUi::IDxGridModel;
+using DxUi::Label;
+using DxUi::Panel;
+using DxUi::SortDirection;
+using DxUi::TabControl;
+using DxUi::TextField;
 
 namespace
 {
@@ -990,7 +990,7 @@ template <typename TControl> void SetControlBounds(TControl* control, const floa
 }
 
 #ifdef ENABLE_TESTS
-[[nodiscard]] RECT DipRectToPx(const RedSalamander::DxUi::WindowHost& host, const D2D1_RECT_F& rect) noexcept
+[[nodiscard]] RECT DipRectToPx(const DxUi::WindowHost& host, const D2D1_RECT_F& rect) noexcept
 {
     RECT out{};
     out.left   = static_cast<LONG>(std::lround(host.DipsToPixels(rect.left)));
@@ -1154,7 +1154,7 @@ bool FileActionPreferencesPage::EnsureDxPageHost(HWND parent, PreferencesDialogS
     bool ownsCurrentChildren = false;
     if (_tabs)
     {
-        for (const std::unique_ptr<RedSalamander::DxUi::Control>& child : _pageContentRoot->GetChildren())
+        for (const std::unique_ptr<DxUi::Control>& child : _pageContentRoot->GetChildren())
         {
             if (child.get() == _tabs)
             {
@@ -1190,23 +1190,43 @@ bool FileActionPreferencesPage::EnsureDxPageHost(HWND parent, PreferencesDialogS
         callbackPerf.SetValue1(_activeGrid == ActiveGrid::Actions ? 1u : 0u);
     });
 
-    _searchLabel          = _associationsPage->AddChild<Label>();
-    _searchField          = _associationsPage->AddChild<TextField>();
-    _associationsGrid     = _associationsPage->AddChild<Grid>();
-    _matchKindLabel       = _associationsPage->AddChild<Label>();
-    _matchKindCombo       = _associationsPage->AddChild<ComboBox>();
-    _matchValueLabel      = _associationsPage->AddChild<Label>();
-    _matchValueField      = _associationsPage->AddChild<TextField>();
-    _computerLabel        = _associationsPage->AddChild<Label>();
-    _computerField        = _associationsPage->AddChild<TextField>();
-    _primaryActionLabel   = _associationsPage->AddChild<Label>();
-    _primaryActionCombo   = _associationsPage->AddChild<ComboBox>();
+    _searchLabel      = _associationsPage->AddChild<Label>();
+    _searchField      = _associationsPage->AddChild<TextField>();
+    _associationsGrid = _associationsPage->AddChild<Grid>();
+    if (_associationsGrid)
+    {
+        _associationsGrid->SetEmptyStateText(LoadStringResource(nullptr, IDS_DXUI_NO_DATA));
+    }
+    _matchKindLabel = _associationsPage->AddChild<Label>();
+    _matchKindCombo = _associationsPage->AddChild<ComboBox>();
+    if (_matchKindCombo)
+    {
+        _matchKindCombo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+    }
+    _matchValueLabel    = _associationsPage->AddChild<Label>();
+    _matchValueField    = _associationsPage->AddChild<TextField>();
+    _computerLabel      = _associationsPage->AddChild<Label>();
+    _computerField      = _associationsPage->AddChild<TextField>();
+    _primaryActionLabel = _associationsPage->AddChild<Label>();
+    _primaryActionCombo = _associationsPage->AddChild<ComboBox>();
+    if (_primaryActionCombo)
+    {
+        _primaryActionCombo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+    }
     _alternateActionLabel = _associationsPage->AddChild<Label>();
     _alternateActionCombo = _associationsPage->AddChild<ComboBox>();
+    if (_alternateActionCombo)
+    {
+        _alternateActionCombo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+    }
     if (IsEditorsFamily())
     {
         _editNewActionLabel = _associationsPage->AddChild<Label>();
         _editNewActionCombo = _associationsPage->AddChild<ComboBox>();
+        if (_editNewActionCombo)
+        {
+            _editNewActionCombo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+        }
     }
     _testFileLabel           = _associationsPage->AddChild<Label>();
     _testFileField           = _associationsPage->AddChild<TextField>(LoadEmbeddedStringResource(nullptr, IDS_PREFS_FILE_ACTION_TEST_FILE_DEFAULT));
@@ -1215,18 +1235,30 @@ bool FileActionPreferencesPage::EnsureDxPageHost(HWND parent, PreferencesDialogS
     _associationRemoveButton = _associationsPage->AddChild<Button>(LoadRes(IDS_PREFS_FILE_ACTION_BUTTON_REMOVE));
     _associationResetButton  = _associationsPage->AddChild<Button>(LoadRes(IDS_PREFS_FILE_ACTION_BUTTON_RESET_DEFAULTS));
 
-    _actionsGrid           = _actionsPage->AddChild<Grid>();
-    _actionIdLabel         = _actionsPage->AddChild<Label>();
-    _actionIdField         = _actionsPage->AddChild<TextField>();
-    _actionNameLabel       = _actionsPage->AddChild<Label>();
-    _actionNameField       = _actionsPage->AddChild<TextField>();
-    _actionKindLabel       = _actionsPage->AddChild<Label>();
-    _actionKindCombo       = _actionsPage->AddChild<ComboBox>();
+    _actionsGrid = _actionsPage->AddChild<Grid>();
+    if (_actionsGrid)
+    {
+        _actionsGrid->SetEmptyStateText(LoadStringResource(nullptr, IDS_DXUI_NO_DATA));
+    }
+    _actionIdLabel   = _actionsPage->AddChild<Label>();
+    _actionIdField   = _actionsPage->AddChild<TextField>();
+    _actionNameLabel = _actionsPage->AddChild<Label>();
+    _actionNameField = _actionsPage->AddChild<TextField>();
+    _actionKindLabel = _actionsPage->AddChild<Label>();
+    _actionKindCombo = _actionsPage->AddChild<ComboBox>();
+    if (_actionKindCombo)
+    {
+        _actionKindCombo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+    }
     _actionEnabledCheckbox = _actionsPage->AddChild<Checkbox>(LoadRes(IDS_PREFS_FILE_ACTION_CHECK_ENABLED));
     if (IsViewerFamily())
     {
         _pluginIdLabel = _actionsPage->AddChild<Label>();
         _pluginIdCombo = _actionsPage->AddChild<ComboBox>();
+        if (_pluginIdCombo)
+        {
+            _pluginIdCombo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+        }
     }
     _executableLabel       = _actionsPage->AddChild<Label>();
     _executableField       = _actionsPage->AddChild<TextField>();
@@ -1271,7 +1303,7 @@ bool FileActionPreferencesPage::EnsureDxPageHost(HWND parent, PreferencesDialogS
         _pluginIdCombo->SetVariant(ComboBoxVariant::Window);
     }
     _previewLabel->SetMultiline(true);
-    _previewLabel->SetFontRole(RedSalamander::DxUi::FontRole::Small);
+    _previewLabel->SetFontRole(DxUi::FontRole::Small);
 
     _searchField->SetOnTextChanged([this](std::wstring_view text) noexcept
     {
@@ -1924,9 +1956,9 @@ bool FileActionPreferencesPage::HandleDeferredAction(HWND host, PreferencesDialo
 
 void FileActionPreferencesPage::OnGridSortRequested(const GridSortSpec& sortSpec)
 {
-    const RedSalamander::DxUi::Control* focus = _pageHost ? _pageHost->GetFocusControl() : nullptr;
-    const bool associationsFocused            = focus == _associationsGrid;
-    const bool actionsFocused                 = focus == _actionsGrid;
+    const DxUi::Control* focus     = _pageHost ? _pageHost->GetFocusControl() : nullptr;
+    const bool associationsFocused = focus == _associationsGrid;
+    const bool actionsFocused      = focus == _actionsGrid;
     if (_associationsGrid && (associationsFocused || (! actionsFocused && _activeGrid == ActiveGrid::Associations)))
     {
         _activeGrid = ActiveGrid::Associations;
@@ -2402,7 +2434,7 @@ PreferencesViewersDebugFocusTarget FileActionPreferencesPage::DebugGetViewersFoc
         return PreferencesViewersDebugFocusTarget::None;
     }
 
-    const RedSalamander::DxUi::Control* focus = _pageHost->GetFocusControl();
+    const DxUi::Control* focus = _pageHost->GetFocusControl();
     if (! focus)
     {
         return PreferencesViewersDebugFocusTarget::None;
@@ -2619,7 +2651,7 @@ bool FileActionPreferencesPage::DebugHitTestAssociationClientPoint(
         D2D1::Point2F(_pageHost->PixelsToDip(static_cast<float>(clientPoint.x)), _pageHost->PixelsToDip(static_cast<float>(clientPoint.y)));
     outHostHitsList = _pageHost->DebugHitTestControl(pointDip) == _associationsGrid;
     Grid::GridDebugHitInfo hit{};
-    if (! _associationsGrid->DebugHitTestPoint(RedSalamander::DxUi::MakePointDip(pointDip), hit))
+    if (! _associationsGrid->DebugHitTestPoint(DxUi::MakePointDip(pointDip), hit))
     {
         return false;
     }

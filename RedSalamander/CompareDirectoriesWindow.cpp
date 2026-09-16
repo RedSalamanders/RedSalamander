@@ -1,9 +1,9 @@
 #include "Framework.h"
 
 #include "CompareDirectoriesWindow.Internal.h"
-#include "DxUi/DxUi.Typography.h"
 #include "FileMetadataFormatting.h"
 #include "LocalizationManager.h"
+#include <DxUi/Typography.h>
 
 #include <windowsx.h>
 
@@ -219,8 +219,8 @@ struct CreatedFileSystemInstance
     std::wstring result;
     result.reserve(64);
 
-    const auto fields = Common::FileMetadata::FormatDisplayFields(
-        {.lastWriteTime100nsSince1601 = lastWriteTime, .fileAttributes = fileAttributes}, Common::FileMetadata::DisplayProfile::CompactDetails);
+    const auto fields = Common::FileMetadata::FormatDisplayFields({.lastWriteTime100nsSince1601 = lastWriteTime, .fileAttributes = fileAttributes},
+                                                                  Common::FileMetadata::DisplayProfile::CompactDetails);
 
     auto appendToken = [&](std::wstring_view token) noexcept
     {
@@ -1395,9 +1395,11 @@ void CompareDirectoriesWindow::ApplyTheme() noexcept
 
     const COLORREF surface = UiMetrics::GetControlSurfaceColor(_theme);
     _optionsPanel.cardBrush.reset(CreateSolidBrush(surface));
-    _optionsPanel.inputBackgroundColor         = UiMetrics::BlendColorRefWeightedTruncate(surface, _theme.windowBackground, _theme.dark ? 50 : 30, 255);
-    _optionsPanel.inputFocusedBackgroundColor  = UiMetrics::BlendColorRefWeightedTruncate(_optionsPanel.inputBackgroundColor, _theme.menu.text, _theme.dark ? 20 : 16, 255);
-    _optionsPanel.inputDisabledBackgroundColor = UiMetrics::BlendColorRefWeightedTruncate(_theme.windowBackground, _optionsPanel.inputBackgroundColor, _theme.dark ? 70 : 40, 255);
+    _optionsPanel.inputBackgroundColor = UiMetrics::BlendColorRefWeightedTruncate(surface, _theme.windowBackground, _theme.dark ? 50 : 30, 255);
+    _optionsPanel.inputFocusedBackgroundColor =
+        UiMetrics::BlendColorRefWeightedTruncate(_optionsPanel.inputBackgroundColor, _theme.menu.text, _theme.dark ? 20 : 16, 255);
+    _optionsPanel.inputDisabledBackgroundColor =
+        UiMetrics::BlendColorRefWeightedTruncate(_theme.windowBackground, _optionsPanel.inputBackgroundColor, _theme.dark ? 70 : 40, 255);
     _optionsPanel.inputBrush.reset(CreateSolidBrush(_optionsPanel.inputBackgroundColor));
     _optionsPanel.inputFocusedBrush.reset(CreateSolidBrush(_optionsPanel.inputFocusedBackgroundColor));
     _optionsPanel.inputDisabledBrush.reset(CreateSolidBrush(_optionsPanel.inputDisabledBackgroundColor));
@@ -2711,8 +2713,8 @@ void CompareDirectoriesWindow::OnFolderWindowFileOperationCompleted(const Folder
         const std::filesystem::path& src = e.sourcePaths[index];
         _session->InvalidateForAbsolutePath(src, true);
 
-        const auto outcome = std::ranges::find_if(e.itemOutcomes, [index](const FolderWindow::FileOperationItemOutcome& item) noexcept
-        { return item.sourceIndex == index; });
+        const auto outcome =
+            std::ranges::find_if(e.itemOutcomes, [index](const FolderWindow::FileOperationItemOutcome& item) noexcept { return item.sourceIndex == index; });
         if (outcome != e.itemOutcomes.end() && outcome->publication != FileOperations::PublicationState::Published &&
             outcome->publication != FileOperations::PublicationState::Unknown)
         {

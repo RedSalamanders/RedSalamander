@@ -13,8 +13,8 @@
 #include <windows.h>
 #pragma warning(pop)
 
-#include "DxUi/DxUi.FrameRuntime.h"
 #include "Helpers.h"
+#include <DxUi/FrameRuntime.h>
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)

@@ -126,32 +126,16 @@ Organised into 12 families spanning phases 5–16.
 
 ---
 
-## 4. DxUi Component Tests
+## 4. Product UI and shared DxUi tests
 
-**Project:** `Tests\DxUiTests\`  •  **Run:** `.\.build\x64\Debug\DxUiTests.exe`
+`Tests/ProductUiTests/` contains product helper, palette, viewer adapter and lifetime regressions.
+The canonical Full runner builds and executes it against the exact external DxUi pin. RedConfigure
+and in-product Commands tests qualify actual windows, localization, focus, accessibility and teardown.
 
-Tests the DirectX UI framework: controls, text input, rendering, theming, and accessibility.
-Run HWND focus-sensitive suites such as `NativeTextInput` serially when collecting closeout evidence; they create real test windows and can legitimately affect process/global Win32 focus. Real Win32 focus/caret/foreground assertions must use `TryFocusDxUiTestWindow` or `TryActivateDxUiTestWindow`, and must emit an explicit `SKIPPED:` reason when the current desktop session cannot provide the required capability.
-The unified runner passes `--no-activate` to every focus-independent DxUi
-suite. Menu and NativeTextInput are the only DxUi suites permitted to activate;
-Accessibility remains serialized for UI Automation but is still no-activate.
-
-| Family | File |
-|--------|------|
-| MultilineText | `DxUiTests.MultilineText.cpp` |
-| Theme | `DxUiTests.Theme.cpp` |
-| WindowHost | `DxUiTests.WindowHost.cpp` |
-| TextField | `DxUiTests.TextField.cpp` |
-| Grid | `DxUiTests.Grid.cpp` |
-| ReadOnly | `DxUiTests.ReadOnly.cpp` |
-| Animation | `DxUiTests.Animation.cpp` |
-| Controls | `DxUiTests.Controls.cpp` |
-| Tree | `DxUiTests.Tree.cpp` |
-| Rendering | `DxUiTests.Rendering.cpp` |
-| ComboBox | `DxUiTests.ComboBox.cpp` |
-| Accessibility | `DxUiTests.Accessibility.cpp` |
-| Tooltip | `DxUiTests.Tooltip.cpp` |
-| NativeTextInput | `DxUiTests.NativeTextInput.cpp` |
+Shared controls, native/embedded hosting and gallery tests belong in the
+[DxUi repository](https://github.com/RedSalamanders/DxUi). Run its `test.ps1` in the required profiles;
+use its `gallery.ps1` for shared control images. The old in-tree DxUiTests project is retired.
+Neither library-only results nor a ProductUiTests pass replaces Full product qualification.
 
 ## 5. Performance Tests
 
@@ -348,6 +332,11 @@ empty-leaf fallback, and clean-versus-retain behavior. UI waits use the bounded
 message-pump and typed-snapshot helpers so timeout diagnostics include the
 operation, budget, elapsed time, and dispatched-message count.
 
+The shared support and sandbox-path headers accept compiler-provided Windows
+feature macros without redefining them. `RelocatedTestSandbox.Tests.ps1` builds
+and executes this header-only path outside the checkout with warnings as errors;
+its ASan Debug fixture also requires actual sanitizer instrumentation.
+
 `SettingsSchemaTests` also owns Settings Store connection-identity recovery proof: strict reload rejects case-colliding
 IDs, startup recovery assigns distinct canonical replacements without copying ambiguous saved-secret references, the
 repaired snapshot persists through source CAS, and subsequent strict reload succeeds. The focused Commands case
@@ -394,3 +383,40 @@ the process temp directory.
 | [Testing_TestCoverage.md](../Specs/Testing/Testing_TestCoverage.md) | Coverage policy, required risk domains, and inventory authority |
 | [Testing_PerformanceValidation.md](../Specs/Testing/Testing_PerformanceValidation.md) | Performance validation requirements |
 | [Testing_SelfTestRemoteCredentials.md](../Specs/Testing/Testing_SelfTestRemoteCredentials.md) | Remote storage credential setup |
+
+
+## File Operations documentation gallery
+
+Run the real application renderer with named synthetic scenarios, without taking desktop focus:
+
+```powershell
+.\Tools\Run-AllTests.ps1 -Suite FileOps -CaseFilter FileOps_VisualGallery -Platform x64 -Configuration Debug -TestRoot C:\RedSalamander.Perf
+```
+
+Use an already marked test root; the usual explicit first-initialization rule applies otherwise.
+The runner prints the run ID. PNGs and `scenarios.tsv` are in
+`<test-root>/runs/<run-id>/artifacts/selftest/last_run/fileops/visual-gallery/`.
+The case is intentionally absent from the broad FileOps suite; select its exact name.
+
+Add presentation scenarios in
+`RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp`.
+Use coherent snapshot facts and the existing engine policy. The test-only fixture affects no
+ordinary popup when it is unset. Extend representative theme/width coverage in that same case.
+`Tests/TestSupport/WindowScreenshot.h` supplies complete owned-window capture for other UI fixtures.
+It needs a Windows session with Windows Graphics Capture and D3D11 available; it never captures the desktop.
+
+Inspect every output before publishing documentation. Copy accepted images with a manifest that records
+source revision, dirty source identity, executable identity, scenario/theme/DPI/width and image hashes.
+Keep generated proposal mockups separate. This gallery is presentation evidence; retain normal engine,
+interaction and accessibility tests for behavioural claims.
+
+The gallery now uses French UI resources, long French text, both available monitor DPIs, real
+confirmation overlays, Issues views, destination history and recovery choices. For explicitly
+authorized hover/focus/pressed and same-window DPI transition captures, select the separate lane:
+
+```powershell
+.\Tools\Run-AllTests.ps1 -Suite FileOps -CaseFilter FileOps_VisualGalleryInteraction -Configuration Debug -Platform x64 -TestRoot C:\RedSalamander.Perf
+```
+
+This exact case takes the runner desktop lease and displays the shared warning before briefly
+using the foreground. It restores cursor/foreground state. Static capture remains non-activating.

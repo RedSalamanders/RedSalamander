@@ -384,6 +384,7 @@ private:
     void TouchNode(DummyNode& node) noexcept;
     void TouchParent(DummyNode* parent) noexcept;
     uint64_t ComputeNodeBytes(const DummyNode& node) const noexcept;
+    void AccumulateDiscoveredNodes(const DummyNode& node, uint64_t& files, uint64_t& directories, uint64_t& bytes) const noexcept;
     bool IsAncestor(const DummyNode& node, const DummyNode& possibleDescendant) const noexcept;
     std::unique_ptr<DummyNode> CloneNode(const DummyNode& source);
     HRESULT CreateDirectoryClone(

@@ -11,8 +11,8 @@
 
 namespace
 {
-using RedSalamander::DxUi::MenuFlyoutItem;
-using RedSalamander::DxUi::MenuItemKind;
+using DxUi::MenuFlyoutItem;
+using DxUi::MenuItemKind;
 
 enum HelperCommand : int
 {

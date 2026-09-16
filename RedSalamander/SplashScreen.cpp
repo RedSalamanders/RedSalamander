@@ -2,7 +2,7 @@
 
 #include "Framework.h"
 
-#include "DxUi/DxUi.h"
+#include <DxUi/DxUi.h>
 
 #include <wincodec.h>
 
@@ -98,12 +98,12 @@ struct SplashWindowState
     SplashWindowState(SplashWindowState&&)                 = delete;
     SplashWindowState& operator=(SplashWindowState&&)      = delete;
 
-    RedSalamander::DxUi::WindowHost dxHost;
-    class SplashRootControl* root              = nullptr;
-    RedSalamander::DxUi::Label* titleLabel     = nullptr;
-    RedSalamander::DxUi::Label* versionLabel   = nullptr;
-    RedSalamander::DxUi::Label* copyrightLabel = nullptr;
-    RedSalamander::DxUi::Label* statusLabel    = nullptr;
+    DxUi::WindowHost dxHost;
+    class SplashRootControl* root = nullptr;
+    DxUi::Label* titleLabel       = nullptr;
+    DxUi::Label* versionLabel     = nullptr;
+    DxUi::Label* copyrightLabel   = nullptr;
+    DxUi::Label* statusLabel      = nullptr;
     wil::com_ptr<IWICImagingFactory> wicFactory;
     wil::com_ptr<ID2D1Bitmap1> splashLogoBitmap;
     wil::com_ptr<ID2D1Device> splashLogoDevice;
@@ -115,7 +115,7 @@ LRESULT CALLBACK SplashWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
 void StartSplashDrag(HWND hwnd) noexcept;
 void CenterOverOwner(HWND hwnd, HWND owner) noexcept;
 [[nodiscard]] std::wstring GetStatusText() noexcept;
-[[nodiscard]] bool EnsureSplashLogoBitmap(SplashWindowState& state, RedSalamander::DxUi::WindowHost& host) noexcept;
+[[nodiscard]] bool EnsureSplashLogoBitmap(SplashWindowState& state, DxUi::WindowHost& host) noexcept;
 
 [[nodiscard]] bool EnsureSplashWindowClassRegistered(HINSTANCE instance) noexcept
 {
@@ -136,14 +136,14 @@ void CenterOverOwner(HWND hwnd, HWND owner) noexcept;
     return RegisterClassExW(&wc) != 0 || GetLastError() == ERROR_CLASS_ALREADY_EXISTS;
 }
 
-class SplashRootControl final : public RedSalamander::DxUi::Panel
+class SplashRootControl final : public DxUi::Panel
 {
 public:
     explicit SplashRootControl(SplashWindowState* state) noexcept : _state(state)
     {
     }
 
-    void Paint(RedSalamander::DxUi::WindowHost& host) const override
+    void Paint(DxUi::WindowHost& host) const override
     {
         if (auto* dc = host.GetDeviceContext())
         {
@@ -225,7 +225,7 @@ public:
         Panel::Paint(host);
     }
 
-    bool OnMouseDown(RedSalamander::DxUi::WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override
+    bool OnMouseDown(DxUi::WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override
     {
         if (! rightButton)
         {
@@ -332,28 +332,28 @@ void BuildSplashUi(SplashWindowState& state) noexcept
     auto root  = std::make_unique<SplashRootControl>(&state);
     state.root = root.get();
 
-    state.titleLabel = root->AddChild<RedSalamander::DxUi::Label>(L"");
-    state.titleLabel->SetFontRole(RedSalamander::DxUi::FontRole::Header);
+    state.titleLabel = root->AddChild<DxUi::Label>(L"");
+    state.titleLabel->SetFontRole(DxUi::FontRole::Header);
     state.titleLabel->SetTextColor(D2D1::ColorF(ColorRefR(kTitleText) / 255.0f, ColorRefG(kTitleText) / 255.0f, ColorRefB(kTitleText) / 255.0f, 1.0f));
 
-    state.versionLabel = root->AddChild<RedSalamander::DxUi::Label>(L"");
+    state.versionLabel = root->AddChild<DxUi::Label>(L"");
     state.versionLabel->SetTextColor(
         D2D1::ColorF(ColorRefR(kSecondaryText) / 255.0f, ColorRefG(kSecondaryText) / 255.0f, ColorRefB(kSecondaryText) / 255.0f, 1.0f));
 
-    state.copyrightLabel = root->AddChild<RedSalamander::DxUi::Label>(L"");
+    state.copyrightLabel = root->AddChild<DxUi::Label>(L"");
     state.copyrightLabel->SetTextColor(
         D2D1::ColorF(ColorRefR(kSecondaryText) / 255.0f, ColorRefG(kSecondaryText) / 255.0f, ColorRefB(kSecondaryText) / 255.0f, 1.0f));
 
-    state.statusLabel = root->AddChild<RedSalamander::DxUi::Label>(L"");
+    state.statusLabel = root->AddChild<DxUi::Label>(L"");
     state.statusLabel->SetTextColor(D2D1::ColorF(ColorRefR(kStatusText) / 255.0f, ColorRefG(kStatusText) / 255.0f, ColorRefB(kStatusText) / 255.0f, 1.0f));
 
-    state.dxHost.SetTheme(RedSalamander::DxUi::MakeDefaultThemePalette(true));
+    state.dxHost.SetTheme(DxUi::MakeDefaultThemePalette(true));
     state.dxHost.SetRoot(std::move(root));
     UpdateSplashLabels(state);
     LayoutSplashUi(state);
 }
 
-[[nodiscard]] bool EnsureSplashLogoBitmap(SplashWindowState& state, RedSalamander::DxUi::WindowHost& host) noexcept
+[[nodiscard]] bool EnsureSplashLogoBitmap(SplashWindowState& state, DxUi::WindowHost& host) noexcept
 {
     auto* dc = host.GetDeviceContext();
     if (! dc)
@@ -673,7 +673,7 @@ void ThreadMain(std::stop_token stopToken, std::chrono::milliseconds delay, HINS
 #endif
     const auto comCleanup = wil::scope_exit([&]
     {
-        RedSalamander::DxUi::ShutdownNativeTextInputForCurrentThread();
+        DxUi::ShutdownNativeTextInputForCurrentThread();
         if (SUCCEEDED(comHr))
         {
             CoUninitialize();

@@ -1,0 +1,6 @@
+{
+  "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallerySurfaces.cpp",
+  "testedSha256": "033878023890a4620b9d832cf36527d2501ddb7cf2e34d690e08be9578566691",
+  "formattedSha256": "176703b8f780e5f88b2e89f1ed8a4d8d9929eac00c30074fef279a3f91382115",
+  "change": "clang-format line wrapping only; string contents and non-string tokens verified unchanged"
+}

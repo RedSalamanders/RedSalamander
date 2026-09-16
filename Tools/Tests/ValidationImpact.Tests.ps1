@@ -96,6 +96,38 @@ Describe 'Operation Startrail governed impact graph' {
             -TrackedPaths @($tracked + 'new/Unmapped.vcxproj') -RepoRoot $repoRoot).IsValid | Should Be $false
     }
 
+    It 'routes current product UI tests through their live consumer project' {
+        $rules = @(Get-RSValidationImpactRulesForPath -Manifest $manifest -Path 'Tests/ProductUiTests/ProductUiTests.cpp')
+        $owned = @($rules | Where-Object derived_closure_source -eq 'Tests/ProductUiTests/ProductUiTests.vcxproj')
+        $owned.Count | Should Be 1
+        (Test-Path -LiteralPath (Join-Path $repoRoot $owned[0].derived_closure_source) -PathType Leaf) | Should Be $true
+        @($manifest.rules | Where-Object derived_closure_source -in @(
+                'Common/DxUi/DxUi.vcxproj', 'Tests/DxUiTests/DxUiTests.vcxproj')).Count | Should Be 0
+    }
+
+    It 'keeps current UI adapters and the exact library pin covered by product UI tests' {
+        $entries = @(
+            (New-RSTestRunPlanEntry -Id 'standalone.product-ui' -Name ProductUiTests -Kind Executable -Path (Join-Path $repoRoot 'ProductUiTests.exe'))
+            (New-RSTestRunPlanEntry -Id 'selftest.commands' -Name Commands -Kind SelfTest -Path (Join-Path $repoRoot 'app.exe'))
+            (New-RSTestRunPlanEntry -Id 'selftest.file-operations' -Name FileOps -Kind SelfTest -Path (Join-Path $repoRoot 'app.exe'))
+        )
+        $productPlan = New-RSValidationPlan -RepoRoot $repoRoot -RequestedSuite Full -Entries $entries -ValidationMode Affected
+        foreach ($path in @('Common/ViewerDxUiTheme.h', 'Dependencies/DxUi.lock.json', 'Tests/ProductUiTests/ProductUiTests.cpp')) {
+            (Test-Path -LiteralPath (Join-Path $repoRoot $path) -PathType Leaf) | Should Be $true
+            $decision = Get-RSValidationImpactDecision -Manifest $manifest `
+                -WorkspaceSnapshot (New-RSImpactSnapshot @([pscustomobject]@{ path = $path; old_path = $null })) `
+                -ValidationPlan $productPlan
+            ($decision.entries | Where-Object id -eq 'standalone.product-ui').affected | Should Be $true
+            if ($path -eq 'Tests/ProductUiTests/ProductUiTests.cpp') {
+                ($decision.entries | Where-Object id -eq 'selftest.commands').affected | Should Be $false
+                ($decision.entries | Where-Object id -eq 'selftest.file-operations').affected | Should Be $false
+            } else {
+                $decision.advisory_build_action | Should Be 'full'
+                @($decision.entries | Where-Object affected).Count | Should Be $entries.Count
+            }
+        }
+    }
+
     It 'emits deterministic schema-valid shadow decisions and never claims reuse' {
         $snapshot = New-RSImpactSnapshot @([pscustomobject]@{ path = 'Tools/Tests/new.Tests.ps1'; old_path = $null })
         $estimates = @{ 'selftest.commands' = 3000L; 'selftest.file-operations' = 2000L; 'tooling.pester' = 1000L }

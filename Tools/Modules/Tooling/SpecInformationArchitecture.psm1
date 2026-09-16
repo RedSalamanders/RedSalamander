@@ -456,7 +456,14 @@ function Test-RSProtectedDoneHistory {
             'Specs/Plans/Done/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md',
             'Specs/Plans/Done/Operation_FileOperations_ReliabilityFirst_ExecutionRecord_2026-09-05.md',
             'Specs/Plans/Done/Operation_Beeline_SameEndpointMoveIsRename_2026-09-07.md',
-            'Specs/Plans/Done/FileOperations_BeelineResidualsAndProviderRoutes_2026-09-08.md'
+            'Specs/Plans/Done/FileOperations_BeelineResidualsAndProviderRoutes_2026-09-08.md',
+            'Specs/Plans/Done/FileOperations_DiscoveryScopeAndLeafProgress_2026-09-13.md',
+            'Specs/Plans/Done/FileOperations_DirectApiDiscoveryContract_2026-09-14.md',
+            'Specs/Plans/Done/FileOperations_ProviderDiscoveryParity_2026-09-14.md',
+            'Specs/Plans/Done/FileOperations_S3MarkerAndResiduals_2026-09-15.md',
+            'Specs/Plans/Done/DxUi_SharedLibraryAdoptionAndReleasePlan_2026-09-09.md',
+            'Specs/Plans/Done/DxUi_SharedLibrary/GapAnalysis_2026-09-09.md',
+            'Specs/Plans/Done/DxUi_SharedLibrary/RetirementDispositions_2026-09-12.md'
         )
     )
 

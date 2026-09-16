@@ -16,7 +16,6 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
-#include "DxUi/DxUi.h"
 #include "EmbeddedViewerBase.h"
 #include "Helpers.h"
 #include "PlugInterfaces/FileSystem.h"
@@ -24,12 +23,13 @@
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Viewer.h"
 #include "ViewerSqlite.Engine.h"
+#include <DxUi/DxUi.h>
 
 struct ViewerSqliteGridModel;
 
 [[nodiscard]] const char* GetViewerSqliteStaticConfigurationSchema() noexcept;
 
-class ViewerSqlite final : public EmbeddedViewerBase<ViewerSqlite>, public IInformations, public RedSalamander::DxUi::IDxGridDelegate
+class ViewerSqlite final : public EmbeddedViewerBase<ViewerSqlite>, public IInformations, public DxUi::IDxGridDelegate
 {
 public:
     ViewerSqlite();
@@ -56,7 +56,7 @@ public:
     HRESULT STDMETHODCALLTYPE Close() noexcept override;
     HRESULT STDMETHODCALLTYPE SetTheme(const ViewerTheme* theme) noexcept override;
 
-    void OnGridSortRequested(const RedSalamander::DxUi::GridSortSpec& sortSpec) override;
+    void OnGridSortRequested(const DxUi::GridSortSpec& sortSpec) override;
 
 private:
     struct AsyncOpenResult
@@ -153,25 +153,25 @@ private:
     ViewerSqliteEngine::QueryPage _currentPage;
     std::shared_ptr<ViewerSqliteEngine::DatabaseSource> _databaseSource;
     std::vector<ViewerSqliteEngine::TableInfo> _tables;
-    RedSalamander::DxUi::GridSortSpec _tableSortSpec{};
+    DxUi::GridSortSpec _tableSortSpec{};
 
     UINT _dpi = USER_DEFAULT_SCREEN_DPI;
 
-    RedSalamander::DxUi::WindowHost _dxHost;
-    RedSalamander::DxUi::Panel* _root              = nullptr;
-    RedSalamander::DxUi::Grid* _resultGrid         = nullptr;
-    RedSalamander::DxUi::StatusStrip* _statusStrip = nullptr;
-    RedSalamander::DxUi::Label* _fileLabel         = nullptr;
-    RedSalamander::DxUi::ComboBox* _fileCombo      = nullptr;
-    RedSalamander::DxUi::Button* _reloadButton     = nullptr;
-    RedSalamander::DxUi::Label* _tableLabel        = nullptr;
-    RedSalamander::DxUi::ComboBox* _tableCombo     = nullptr;
-    RedSalamander::DxUi::Button* _prevButton       = nullptr;
-    RedSalamander::DxUi::Button* _nextButton       = nullptr;
-    RedSalamander::DxUi::Label* _queryLabel        = nullptr;
-    RedSalamander::DxUi::TextField* _queryField    = nullptr;
-    RedSalamander::DxUi::Button* _runButton        = nullptr;
-    RedSalamander::DxUi::Button* _tableButton      = nullptr;
+    DxUi::WindowHost _dxHost;
+    DxUi::Panel* _root              = nullptr;
+    DxUi::Grid* _resultGrid         = nullptr;
+    DxUi::StatusStrip* _statusStrip = nullptr;
+    DxUi::Label* _fileLabel         = nullptr;
+    DxUi::ComboBox* _fileCombo      = nullptr;
+    DxUi::Button* _reloadButton     = nullptr;
+    DxUi::Label* _tableLabel        = nullptr;
+    DxUi::ComboBox* _tableCombo     = nullptr;
+    DxUi::Button* _prevButton       = nullptr;
+    DxUi::Button* _nextButton       = nullptr;
+    DxUi::Label* _queryLabel        = nullptr;
+    DxUi::TextField* _queryField    = nullptr;
+    DxUi::Button* _runButton        = nullptr;
+    DxUi::Button* _tableButton      = nullptr;
     std::unique_ptr<ViewerSqliteGridModel> _gridModel;
 
     std::atomic_uint64_t _requestId{0};

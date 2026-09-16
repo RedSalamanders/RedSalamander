@@ -55,7 +55,6 @@
 
 #include "ColorTextView.h"
 #include "Configuration.h"
-#include "DxUi/DxUi.h"
 #include "EtwListener.h"
 #include "ExceptionHelpers.h" // Shared exception handling utilities
 #include "LocalizationManager.h"
@@ -69,6 +68,7 @@
 #include "WindowBackdropPolicy.h"
 #include "WindowSizing.h"
 #include "resource.h"
+#include <DxUi/DxUi.h>
 
 // Global Variables:
 // All globals below are accessed exclusively from the UI thread (message loop).
@@ -80,8 +80,8 @@ ColorTextView g_colorView;       // ColorTextView instance for the right panel
 wil::unique_hwnd g_hColorView;   // ColorTextView window handle
 wil::unique_hwnd g_hToolbar;     // Toolbar window handle
 wil::unique_hwnd g_hStatusBar;   // Status bar window handle
-RedSalamander::DxUi::WindowHost g_toolbarDxHost;
-RedSalamander::DxUi::WindowHost g_statusDxHost;
+DxUi::WindowHost g_toolbarDxHost;
+DxUi::WindowHost g_statusDxHost;
 bool g_showIds            = true;  // Show Process/Thread IDs in output
 bool g_alwaysOnTop        = false; // Main window always-on-top flag
 bool g_toolbarVisible     = true;  // Toolbar visibility (menu state)
@@ -102,15 +102,15 @@ static uint64_t g_lastMessageCount               = 0;   // Track message rate fo
 
 namespace
 {
-using RedSalamander::DxUi::Button;
-using RedSalamander::DxUi::BlendColor;
-using RedSalamander::DxUi::ColorFromArgb;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::StatusStrip;
-using RedSalamander::DxUi::ThemePalette;
-using RedSalamander::DxUi::Toggle;
-using RedSalamander::DxUi::Toolbar;
-using RedSalamander::DxUi::WindowHost;
+using DxUi::BlendColor;
+using DxUi::Button;
+using DxUi::ColorFromArgb;
+using DxUi::Label;
+using DxUi::StatusStrip;
+using DxUi::ThemePalette;
+using DxUi::Toggle;
+using DxUi::Toolbar;
+using DxUi::WindowHost;
 
 constexpr wchar_t kAppId[]                                = L"RedSalamanderMonitor";
 constexpr wchar_t kWindowId[]                             = L"MonitorWindow";
@@ -124,10 +124,10 @@ constexpr std::wstring_view kMonitorEtwBurstLatencyMode   = L"latency";
 constexpr std::wstring_view kMonitorAreaName              = L"Monitor";
 constexpr std::wstring_view kMonitorScenarioName          = L"monitor.chrome.dxui_toolbar_statusstrip";
 constexpr UINT kMsgRunMonitorChromeSelfTest               = WM_APP + 0x61C;
-constexpr UINT kMsgMonitorFileOpenProgress                 = WM_APP + 0x61D;
-constexpr UINT kMsgMonitorFileOpenCompleted                = WM_APP + 0x61E;
-constexpr UINT kMsgMonitorFileSaveProgress                 = WM_APP + 0x61F;
-constexpr UINT kMsgMonitorFileSaveCompleted                = WM_APP + 0x620;
+constexpr UINT kMsgMonitorFileOpenProgress                = WM_APP + 0x61D;
+constexpr UINT kMsgMonitorFileOpenCompleted               = WM_APP + 0x61E;
+constexpr UINT kMsgMonitorFileSaveProgress                = WM_APP + 0x61F;
+constexpr UINT kMsgMonitorFileSaveCompleted               = WM_APP + 0x620;
 
 #if defined(_DEBUG)
 constexpr std::wstring_view kMonitorBuildFlavor = L"Debug";
@@ -307,7 +307,7 @@ struct MonitorFileSaveCompletion final
 
 struct MonitorFileSaveWorkerState final
 {
-    MonitorFileSaveWorkerState() = default;
+    MonitorFileSaveWorkerState()                                             = default;
     MonitorFileSaveWorkerState(const MonitorFileSaveWorkerState&)            = delete;
     MonitorFileSaveWorkerState& operator=(const MonitorFileSaveWorkerState&) = delete;
     MonitorFileSaveWorkerState(MonitorFileSaveWorkerState&&)                 = delete;
@@ -1374,15 +1374,14 @@ void FinalizeMonitorChromeSelfTest(bool passed, std::wstring_view summary) noexc
         return;
     }
 
-    const std::string perfJsonl                                        = ReadMonitorPerfJsonl();
-    const std::vector<MonitorChromeMetricPresence> metricPresence      = BuildMetricPresence(perfJsonl, kRequiredMonitorFrameMetrics);
-    const bool allRequiredMetricsPresent                               = AreAllMetricsPresent(metricPresence);
-    const std::vector<MonitorChromeMetricPresence> retainedStateMetricPresence =
-        BuildMetricPresence(perfJsonl, kRequiredMonitorRetainedStateMetrics);
-    const bool allRetainedStateMetricsPresent = AreAllMetricsPresent(retainedStateMetricPresence);
-    const std::vector<MonitorChromeMetricPresence> burstMetricPresence = g_monitorEtwBurstOptions.latencyMode
-                                                                             ? BuildMetricPresence(perfJsonl, kRequiredMonitorEtwBurstLatencyMetrics)
-                                                                             : std::vector<MonitorChromeMetricPresence>{};
+    const std::string perfJsonl                                                = ReadMonitorPerfJsonl();
+    const std::vector<MonitorChromeMetricPresence> metricPresence              = BuildMetricPresence(perfJsonl, kRequiredMonitorFrameMetrics);
+    const bool allRequiredMetricsPresent                                       = AreAllMetricsPresent(metricPresence);
+    const std::vector<MonitorChromeMetricPresence> retainedStateMetricPresence = BuildMetricPresence(perfJsonl, kRequiredMonitorRetainedStateMetrics);
+    const bool allRetainedStateMetricsPresent                                  = AreAllMetricsPresent(retainedStateMetricPresence);
+    const std::vector<MonitorChromeMetricPresence> burstMetricPresence         = g_monitorEtwBurstOptions.latencyMode
+                                                                                     ? BuildMetricPresence(perfJsonl, kRequiredMonitorEtwBurstLatencyMetrics)
+                                                                                     : std::vector<MonitorChromeMetricPresence>{};
     const bool allBurstMetricsPresent                                  = ! g_monitorEtwBurstOptions.latencyMode || AreAllMetricsPresent(burstMetricPresence);
     const std::vector<MonitorChromeMetricSummary> burstMetricSummaries = g_monitorEtwBurstOptions.latencyMode
                                                                              ? BuildMetricSummaries(perfJsonl, kSummarizedMonitorEtwBurstLatencyMetrics)
@@ -1412,8 +1411,7 @@ void FinalizeMonitorChromeSelfTest(bool passed, std::wstring_view summary) noexc
                                          allScrollbackMetricsPresent ? L"" : L"one or more scrollback frame metrics missing");
     }
 
-    const bool finalPassed =
-        passed && allRequiredMetricsPresent && allRetainedStateMetricsPresent && allBurstMetricsPresent && allScrollbackMetricsPresent;
+    const bool finalPassed = passed && allRequiredMetricsPresent && allRetainedStateMetricsPresent && allBurstMetricsPresent && allScrollbackMetricsPresent;
     std::wstring finalSummary(summary);
     if (passed && ! allRequiredMetricsPresent)
     {
@@ -1586,14 +1584,13 @@ bool InitializeMonitorChromeSelfTestArtifacts() noexcept
     AppendMonitorChromeSelfTestTrace(std::format(L"Scenario: {}", kMonitorScenarioName));
     AppendMonitorChromeSelfTestTrace(std::format(L"ArchiveToRepo: {}", g_monitorChromeSelfTest.runRoot.native()));
 
-    Debug::Perf::ConfigureJsonlOutput(
-        g_monitorChromeSelfTest.perfPath,
-        L"MonitorChromeSelfTest",
-        kMonitorBuildFlavor,
-        {},
-        {},
-        g_monitorChromeSelfTest.machineHash,
-        g_monitorChromeSelfTest.runId);
+    Debug::Perf::ConfigureJsonlOutput(g_monitorChromeSelfTest.perfPath,
+                                      L"MonitorChromeSelfTest",
+                                      kMonitorBuildFlavor,
+                                      {},
+                                      {},
+                                      g_monitorChromeSelfTest.machineHash,
+                                      g_monitorChromeSelfTest.runId);
 
     return true;
 }
@@ -1746,19 +1743,32 @@ void ApplyMonitorThemeOverrides(ColorTextView::Theme& theme, const std::unordere
         { return static_cast<uint32_t>(std::clamp(std::lround(std::clamp(value, 0.0f, 1.0f) * 255.0f), 0l, 255l)); };
         return (channel(color.a) << 24u) | (channel(color.r) << 16u) | (channel(color.g) << 8u) | channel(color.b);
     };
-    if (key == L"monitor.textView.bg") return argb(theme.bg);
-    if (key == L"monitor.textView.fg") return argb(theme.fg);
-    if (key == L"monitor.textView.caret") return argb(theme.caret);
-    if (key == L"monitor.textView.selection") return argb(theme.selection);
-    if (key == L"monitor.textView.searchHighlight") return argb(theme.searchHighlight);
-    if (key == L"monitor.textView.gutterBg") return argb(theme.gutterBg);
-    if (key == L"monitor.textView.gutterFg") return argb(theme.gutterFg);
-    if (key == L"monitor.textView.metaText") return argb(theme.metaText);
-    if (key == L"monitor.textView.metaError") return argb(theme.metaError);
-    if (key == L"monitor.textView.metaWarning") return argb(theme.metaWarning);
-    if (key == L"monitor.textView.metaInfo") return argb(theme.metaInfo);
-    if (key == L"monitor.textView.metaPerf") return argb(theme.metaPerf);
-    if (key == L"monitor.textView.metaDebug") return argb(theme.metaDebug);
+    if (key == L"monitor.textView.bg")
+        return argb(theme.bg);
+    if (key == L"monitor.textView.fg")
+        return argb(theme.fg);
+    if (key == L"monitor.textView.caret")
+        return argb(theme.caret);
+    if (key == L"monitor.textView.selection")
+        return argb(theme.selection);
+    if (key == L"monitor.textView.searchHighlight")
+        return argb(theme.searchHighlight);
+    if (key == L"monitor.textView.gutterBg")
+        return argb(theme.gutterBg);
+    if (key == L"monitor.textView.gutterFg")
+        return argb(theme.gutterFg);
+    if (key == L"monitor.textView.metaText")
+        return argb(theme.metaText);
+    if (key == L"monitor.textView.metaError")
+        return argb(theme.metaError);
+    if (key == L"monitor.textView.metaWarning")
+        return argb(theme.metaWarning);
+    if (key == L"monitor.textView.metaInfo")
+        return argb(theme.metaInfo);
+    if (key == L"monitor.textView.metaPerf")
+        return argb(theme.metaPerf);
+    if (key == L"monitor.textView.metaDebug")
+        return argb(theme.metaDebug);
     return std::nullopt;
 }
 
@@ -1880,10 +1890,10 @@ MonitorResolvedTheme ResolveMonitorTheme() noexcept
 
     if (custom)
     {
-        auto context = Common::Settings::MakeSystemThemeResolutionContext(resolved.dark);
-        context.highContrast = resolved.highContrast;
+        auto context                            = Common::Settings::MakeSystemThemeResolutionContext(resolved.dark);
+        context.highContrast                    = resolved.highContrast;
         const ColorTextView::Theme baseTextView = resolved.textView;
-        context.baseColor = [baseTextView](std::wstring_view key) { return FindMonitorThemeColorArgb(baseTextView, key); };
+        context.baseColor                       = [baseTextView](std::wstring_view key) { return FindMonitorThemeColorArgb(baseTextView, key); };
         if (SUCCEEDED(Common::Settings::ResolveThemeDefinition(*custom, context, resolvedOverrides)))
         {
             overrides = &resolvedOverrides.colors;
@@ -1909,7 +1919,7 @@ MonitorResolvedTheme ResolveMonitorTheme() noexcept
 
 [[nodiscard]] ThemePalette MakeMonitorDxPalette(const MonitorResolvedTheme& theme) noexcept
 {
-    ThemePalette palette          = RedSalamander::DxUi::MakeDefaultThemePalette(theme.dark);
+    ThemePalette palette          = DxUi::MakeDefaultThemePalette(theme.dark);
     palette.dark                  = theme.dark;
     palette.highContrast          = theme.highContrast;
     palette.rainbowMode           = theme.rainbow;
@@ -1928,9 +1938,9 @@ MonitorResolvedTheme ResolveMonitorTheme() noexcept
     palette.subduedText           = theme.textView.metaText;
     palette.disabledText          = BlendColor(theme.textView.bg, theme.textView.metaText, 0.48f);
     palette.selectionFill         = palette.accent;
-    palette.selectionText = Common::Colors::WeightedSrgbLuminanceWithoutLinearization(palette.accent.r, palette.accent.g, palette.accent.b) < 0.56
-                                ? D2D1::ColorF(D2D1::ColorF::White)
-                                : D2D1::ColorF(D2D1::ColorF::Black);
+    palette.selectionText         = Common::Colors::WeightedSrgbLuminanceWithoutLinearization(palette.accent.r, palette.accent.g, palette.accent.b) < 0.56
+                                        ? D2D1::ColorF(D2D1::ColorF::White)
+                                        : D2D1::ColorF(D2D1::ColorF::Black);
     palette.selectionInactiveFill = D2D1::ColorF(palette.accent.r, palette.accent.g, palette.accent.b, theme.highContrast ? 1.0f : 0.55f);
     palette.focusStroke           = theme.textView.metaInfo;
     palette.hoverFill             = D2D1::ColorF(palette.accent.r, palette.accent.g, palette.accent.b, theme.dark ? 0.16f : 0.10f);
@@ -1950,7 +1960,7 @@ MonitorResolvedTheme ResolveMonitorTheme() noexcept
     palette.warningText           = theme.textView.metaWarning;
     palette.errorFill             = BlendColor(theme.textView.bg, theme.textView.metaError, theme.dark ? 0.20f : 0.12f);
     palette.errorText             = theme.textView.metaError;
-    palette.density               = theme.compactMode ? RedSalamander::DxUi::Density::Compact : RedSalamander::DxUi::Density::Standard;
+    palette.density               = theme.compactMode ? DxUi::Density::Compact : DxUi::Density::Standard;
     if (theme.reducedMotionOverride.has_value())
     {
         palette.reducedMotion = theme.reducedMotionOverride.value();
@@ -2481,14 +2491,14 @@ void LayoutToolbarControls() noexcept
     GetClientRect(g_hToolbar.get(), &client);
     const float widthDip               = g_toolbarDxHost.PixelsToDip(static_cast<float>((std::max)(0L, client.right - client.left)));
     const float heightDip              = g_toolbarDxHost.PixelsToDip(static_cast<float>((std::max)(0L, client.bottom - client.top)));
-    const MonitorChromeMetrics metrics = ResolveMonitorChromeMetrics(g_toolbarDxHost.GetTheme().density == RedSalamander::DxUi::Density::Compact);
+    const MonitorChromeMetrics metrics = ResolveMonitorChromeMetrics(g_toolbarDxHost.GetTheme().density == DxUi::Density::Compact);
     g_toolbarRoot->SetBounds(D2D1::RectF(0.0f, 0.0f, widthDip, heightDip));
 
     const float topDip    = (std::max)(0.0f, (heightDip - metrics.toolbarButtonHeightDip) * 0.5f);
     const float bottomDip = topDip + metrics.toolbarButtonHeightDip;
     float leftDip         = metrics.toolbarPaddingDip;
 
-    const auto layoutControl = [&](RedSalamander::DxUi::Control* control, const float width) noexcept
+    const auto layoutControl = [&](DxUi::Control* control, const float width) noexcept
     {
         if (! control)
         {
@@ -2596,7 +2606,7 @@ void CreateStatusStripHost(HWND hWnd)
 
     auto strip                         = std::make_unique<StatusStrip>();
     g_statusStrip                      = strip.get();
-    const MonitorChromeMetrics metrics = ResolveMonitorChromeMetrics(g_statusDxHost.GetTheme().density == RedSalamander::DxUi::Density::Compact);
+    const MonitorChromeMetrics metrics = ResolveMonitorChromeMetrics(g_statusDxHost.GetTheme().density == DxUi::Density::Compact);
     g_statusStrip->SetSections({
         StatusStrip::Section{.text = {}, .widthDip = metrics.statusAutoWidthDip},
         StatusStrip::Section{.text = {}, .widthDip = metrics.statusFilterWidthDip},
@@ -2640,8 +2650,8 @@ void CloseMonitorFileOpenWorker() noexcept
     const auto closeStarted = std::chrono::steady_clock::now();
     RequestMonitorFileOpenCancellation();
     constexpr DWORD kCloseWaitMs = 2'000u;
-    const DWORD waitResult = WaitForSingleObject(g_monitorFileOpenThread.native_handle(), kCloseWaitMs);
-    const DWORD waitError = waitResult == WAIT_FAILED ? GetLastError() : ERROR_SUCCESS;
+    const DWORD waitResult       = WaitForSingleObject(g_monitorFileOpenThread.native_handle(), kCloseWaitMs);
+    const DWORD waitError        = waitResult == WAIT_FAILED ? GetLastError() : ERROR_SUCCESS;
     if (waitResult == WAIT_OBJECT_0)
     {
         g_monitorFileOpenThread.join();
@@ -2667,9 +2677,7 @@ void CloseMonitorFileOpenWorker() noexcept
     return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY);
 }
 
-[[nodiscard]] HRESULT StartMonitorFileOpenWorker(HWND owner,
-                                                 std::filesystem::path path,
-                                                 RedSalamanderMonitor::MonitorFileReadLimits limits) noexcept
+[[nodiscard]] HRESULT StartMonitorFileOpenWorker(HWND owner, std::filesystem::path path, RedSalamanderMonitor::MonitorFileReadLimits limits) noexcept
 {
     const uint64_t generation = ++g_monitorFileOpenGeneration;
     g_monitorFileOpenActive.store(true, std::memory_order_release);
@@ -2678,33 +2686,32 @@ void CloseMonitorFileOpenWorker() noexcept
 #if defined(ENABLE_TESTS)
         if (g_failNextMonitorFileOpenThreadStart.exchange(false, std::memory_order_acq_rel))
         {
-            throw std::system_error(
-                std::error_code(ERROR_NOT_ENOUGH_MEMORY, std::system_category()), "injected Monitor open thread-start failure");
+            throw std::system_error(std::error_code(ERROR_NOT_ENOUGH_MEMORY, std::system_category()), "injected Monitor open thread-start failure");
         }
 #endif
         g_monitorFileOpenThread = std::jthread([owner, path = std::move(path), limits, generation](std::stop_token stopToken)
         {
-            const auto started = std::chrono::steady_clock::now();
+            const auto started       = std::chrono::steady_clock::now();
             uint64_t lastPostedBytes = 0u;
-            RedSalamanderMonitor::MonitorFileReadResult result = RedSalamanderMonitor::ReadMonitorTextFile(
-                path,
-                stopToken,
-                limits,
-                [owner, generation, &lastPostedBytes](uint64_t bytesRead, uint64_t totalBytes)
+            RedSalamanderMonitor::MonitorFileReadResult result =
+                RedSalamanderMonitor::ReadMonitorTextFile(path,
+                                                          stopToken,
+                                                          limits,
+                                                          [owner, generation, &lastPostedBytes](uint64_t bytesRead, uint64_t totalBytes)
+            {
+                constexpr uint64_t kProgressStepBytes = 1u * 1024u * 1024u;
+                if (bytesRead != totalBytes && bytesRead - lastPostedBytes < kProgressStepBytes)
                 {
-                    constexpr uint64_t kProgressStepBytes = 1u * 1024u * 1024u;
-                    if (bytesRead != totalBytes && bytesRead - lastPostedBytes < kProgressStepBytes)
-                    {
-                        return;
-                    }
-                    lastPostedBytes = bytesRead;
-                    auto progress = std::make_unique<MonitorFileOpenProgress>(MonitorFileOpenProgress{
-                        .generation = generation,
-                        .bytesRead  = bytesRead,
-                        .totalBytes = totalBytes,
-                    });
-                    static_cast<void>(PostMessagePayload(owner, kMsgMonitorFileOpenProgress, 0, std::move(progress)));
+                    return;
+                }
+                lastPostedBytes = bytesRead;
+                auto progress   = std::make_unique<MonitorFileOpenProgress>(MonitorFileOpenProgress{
+                    .generation = generation,
+                    .bytesRead  = bytesRead,
+                    .totalBytes = totalBytes,
                 });
+                static_cast<void>(PostMessagePayload(owner, kMsgMonitorFileOpenProgress, 0, std::move(progress)));
+            });
 
             auto completion = std::make_unique<MonitorFileOpenCompletion>(MonitorFileOpenCompletion{
                 .result     = std::move(result),
@@ -2760,8 +2767,7 @@ bool DoFileOpen(HWND owner)
     if (! GetOpenFileNameW(&ofn))
         return false;
 
-    const Common::Settings::MonitorRetentionSettings retention =
-        g_settings.monitor.value_or(Common::Settings::MonitorSettings{}).retention;
+    const Common::Settings::MonitorRetentionSettings retention = g_settings.monitor.value_or(Common::Settings::MonitorSettings{}).retention;
     const RedSalamanderMonitor::MonitorFileReadLimits limits{
         .maxEncodedBytes      = retention.maxRetainedTextBytes,
         .maxRetainedTextBytes = retention.maxRetainedTextBytes,
@@ -2783,8 +2789,7 @@ LRESULT OnMonitorFileOpenProgress(LPARAM lParam)
     auto progress = TakeMessagePayload<MonitorFileOpenProgress>(lParam);
     if (progress && progress->generation == g_monitorFileOpenGeneration && g_statusStrip)
     {
-        g_statusStrip->SetSectionText(
-            4u, FormatStringResource(g_hInstance, IDS_STATUS_OPEN_PROGRESS_FMT, progress->bytesRead, progress->totalBytes));
+        g_statusStrip->SetSectionText(4u, FormatStringResource(g_hInstance, IDS_STATUS_OPEN_PROGRESS_FMT, progress->bytesRead, progress->totalBytes));
     }
     return 0;
 }
@@ -2867,8 +2872,8 @@ void CloseMonitorFileSaveWorker() noexcept
     const auto closeStarted = std::chrono::steady_clock::now();
     RequestMonitorFileSaveCancellation();
     constexpr DWORD kCloseWaitMs = 2'000u;
-    const DWORD waitResult = WaitForSingleObject(g_monitorFileSaveThread.native_handle(), kCloseWaitMs);
-    const DWORD waitError = waitResult == WAIT_FAILED ? GetLastError() : ERROR_SUCCESS;
+    const DWORD waitResult       = WaitForSingleObject(g_monitorFileSaveThread.native_handle(), kCloseWaitMs);
+    const DWORD waitError        = waitResult == WAIT_FAILED ? GetLastError() : ERROR_SUCCESS;
     if (waitResult == WAIT_OBJECT_0)
     {
         g_monitorFileSaveThread.join();
@@ -2890,8 +2895,7 @@ LRESULT OnMonitorFileSaveProgress(LPARAM lParam)
     auto progress = TakeMessagePayload<MonitorFileSaveProgress>(lParam);
     if (progress && progress->generation == g_monitorFileSaveGeneration && g_statusStrip)
     {
-        g_statusStrip->SetSectionText(
-            4u, FormatStringResource(g_hInstance, IDS_STATUS_SAVE_PROGRESS_FMT, progress->bytesWritten, progress->completedLines));
+        g_statusStrip->SetSectionText(4u, FormatStringResource(g_hInstance, IDS_STATUS_SAVE_PROGRESS_FMT, progress->bytesWritten, progress->completedLines));
     }
     return 0;
 }
@@ -2909,9 +2913,8 @@ LRESULT OnMonitorFileSaveCompleted(HWND owner, LPARAM lParam)
                                 completion->result.bytesWritten,
                                 static_cast<uint64_t>(completion->result.lineCount),
                                 completion->result.hr);
-    const uint64_t throughput = completion->durationUs == 0u
-                                    ? completion->result.bytesWritten
-                                    : (completion->result.bytesWritten * 1'000'000u) / completion->durationUs;
+    const uint64_t throughput =
+        completion->durationUs == 0u ? completion->result.bytesWritten : (completion->result.bytesWritten * 1'000'000u) / completion->durationUs;
     Debug::Perf::EmitValue(L"monitor.file_save.throughput_bytes_per_sec", throughput, completion->result.hr);
     if (completion->result.hr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
     {
@@ -2931,13 +2934,9 @@ LRESULT OnMonitorFileSaveCompleted(HWND owner, LPARAM lParam)
 
 void EmitMonitorFileSaveSnapshotMetrics(const RedSalamanderMonitor::MonitorTextSnapshot& snapshot, uint64_t captureUs, HRESULT hr) noexcept
 {
+    Debug::Perf::EmitDurationUs(L"monitor.file_save.snapshot_us", captureUs, static_cast<uint64_t>(snapshot.lines.size()), snapshot.retainedTextBytes, hr);
     Debug::Perf::EmitDurationUs(
-        L"monitor.file_save.snapshot_us", captureUs, static_cast<uint64_t>(snapshot.lines.size()), snapshot.retainedTextBytes, hr);
-    Debug::Perf::EmitDurationUs(L"monitor.file_save.snapshot_lock_us",
-                                snapshot.lockHoldUs,
-                                static_cast<uint64_t>(snapshot.lines.size()),
-                                snapshot.retainedTextBytes,
-                                hr);
+        L"monitor.file_save.snapshot_lock_us", snapshot.lockHoldUs, static_cast<uint64_t>(snapshot.lines.size()), snapshot.retainedTextBytes, hr);
     Debug::Perf::EmitValue(L"monitor.file_save.retained_text_bytes", snapshot.retainedTextBytes, hr);
     Debug::Perf::EmitValue(L"monitor.file_save.retained_line_count", static_cast<uint64_t>(snapshot.lines.size()), hr);
     Debug::Perf::EmitValue(L"monitor.file_save.shared_block_count", snapshot.sharedBlockCount, hr);
@@ -2947,45 +2946,42 @@ void EmitMonitorFileSaveSnapshotMetrics(const RedSalamanderMonitor::MonitorTextS
     Debug::Perf::EmitValue(L"monitor.file_save.peak_additional_snapshot_bytes", snapshot.peakAdditionalSnapshotBytes, hr);
 }
 
-[[nodiscard]] HRESULT StartMonitorFileSaveWorker(HWND owner,
-                                                 std::filesystem::path path,
-                                                 RedSalamanderMonitor::MonitorTextSnapshot snapshot) noexcept
+[[nodiscard]] HRESULT StartMonitorFileSaveWorker(HWND owner, std::filesystem::path path, RedSalamanderMonitor::MonitorTextSnapshot snapshot) noexcept
 {
     const uint64_t generation = ++g_monitorFileSaveGeneration;
-    auto state = std::make_shared<MonitorFileSaveWorkerState>();
-    g_monitorFileSaveState = state;
+    auto state                = std::make_shared<MonitorFileSaveWorkerState>();
+    g_monitorFileSaveState    = state;
     try
     {
 #if defined(ENABLE_TESTS)
         if (g_failNextMonitorFileSaveThreadStart.exchange(false, std::memory_order_acq_rel))
         {
-            throw std::system_error(
-                std::error_code(ERROR_NOT_ENOUGH_MEMORY, std::system_category()), "injected Monitor save thread-start failure");
+            throw std::system_error(std::error_code(ERROR_NOT_ENOUGH_MEMORY, std::system_category()), "injected Monitor save thread-start failure");
         }
 #endif
         g_monitorFileSaveThread = std::thread([owner, path = std::move(path), snapshot = std::move(snapshot), state, generation]()
         {
-            const auto started = std::chrono::steady_clock::now();
+            const auto started       = std::chrono::steady_clock::now();
             uint64_t lastPostedBytes = 0u;
-            RedSalamanderMonitor::MonitorFileExportResult result = RedSalamanderMonitor::WriteMonitorTextSnapshot(
-                path,
-                snapshot,
-                state->stopSource.get_token(),
-                [owner, generation, &lastPostedBytes](uint64_t bytesWritten, size_t completedLines)
+            RedSalamanderMonitor::MonitorFileExportResult result =
+                RedSalamanderMonitor::WriteMonitorTextSnapshot(path,
+                                                               snapshot,
+                                                               state->stopSource.get_token(),
+                                                               [owner, generation, &lastPostedBytes](uint64_t bytesWritten, size_t completedLines)
+            {
+                constexpr uint64_t kProgressStepBytes = 1u * 1024u * 1024u;
+                if (bytesWritten - lastPostedBytes < kProgressStepBytes)
                 {
-                    constexpr uint64_t kProgressStepBytes = 1u * 1024u * 1024u;
-                    if (bytesWritten - lastPostedBytes < kProgressStepBytes)
-                    {
-                        return;
-                    }
-                    lastPostedBytes = bytesWritten;
-                    auto progress = std::make_unique<MonitorFileSaveProgress>(MonitorFileSaveProgress{
-                        .generation     = generation,
-                        .bytesWritten   = bytesWritten,
-                        .completedLines = completedLines,
-                    });
-                    static_cast<void>(PostMessagePayload(owner, kMsgMonitorFileSaveProgress, 0, std::move(progress)));
+                    return;
+                }
+                lastPostedBytes = bytesWritten;
+                auto progress   = std::make_unique<MonitorFileSaveProgress>(MonitorFileSaveProgress{
+                    .generation     = generation,
+                    .bytesWritten   = bytesWritten,
+                    .completedLines = completedLines,
                 });
+                static_cast<void>(PostMessagePayload(owner, kMsgMonitorFileSaveProgress, 0, std::move(progress)));
+            });
 
             auto completion = std::make_unique<MonitorFileSaveCompletion>(MonitorFileSaveCompletion{
                 .result     = result,
@@ -3043,8 +3039,8 @@ bool DoFileSaveAs(HWND owner)
     if (! GetSaveFileNameW(&ofn))
         return false;
 
-    const auto uiStarted       = std::chrono::steady_clock::now();
-    const auto snapshotStarted = std::chrono::steady_clock::now();
+    const auto uiStarted                               = std::chrono::steady_clock::now();
+    const auto snapshotStarted                         = std::chrono::steady_clock::now();
     RedSalamanderMonitor::MonitorTextSnapshot snapshot = g_colorView.CaptureTextSnapshot();
     EmitMonitorFileSaveSnapshotMetrics(snapshot, Debug::Perf::ElapsedUs(snapshotStarted), S_OK);
 
@@ -3072,7 +3068,7 @@ void AdjustLayout(HWND hWnd)
     RECT clientRect{};
     GetClientRect(hWnd, &clientRect);
 
-    const MonitorChromeMetrics metrics = ResolveMonitorChromeMetrics(g_toolbarDxHost.GetTheme().density == RedSalamander::DxUi::Density::Compact);
+    const MonitorChromeMetrics metrics = ResolveMonitorChromeMetrics(g_toolbarDxHost.GetTheme().density == DxUi::Density::Compact);
     const int toolbarHeight            = (g_hToolbar && g_toolbarVisible) ? DipsToPx(hWnd, static_cast<int>(std::lround(metrics.toolbarHeightDip))) : 0;
     const int statusBarHeight          = g_hStatusBar ? DipsToPx(hWnd, static_cast<int>(std::lround(metrics.statusStripHeightDip))) : 0;
     const bool toolbarWindowVisible    = g_hToolbar && g_toolbarVisible;
@@ -3183,8 +3179,7 @@ void UpdateStatusBar()
     const std::wstring autoText    = LoadStringResource(g_hInstance, isAutoScrollEnabled ? IDS_STATUS_AUTOSCROLL_ON : IDS_STATUS_AUTOSCROLL_OFF);
     const std::wstring visibleText = FormatStringResource(g_hInstance, IDS_STATUS_VISIBLE_FMT, visibleLines);
     const std::wstring totalText   = FormatStringResource(g_hInstance, IDS_STATUS_TOTAL_FMT, totalLines);
-    const std::wstring etwText =
-        FormatStringResource(g_hInstance, IDS_STATUS_ETW_RECEIVED_FMT, etwReceived, g_colorView.GetDroppedEventCount());
+    const std::wstring etwText     = FormatStringResource(g_hInstance, IDS_STATUS_ETW_RECEIVED_FMT, etwReceived, g_colorView.GetDroppedEventCount());
 
     g_statusStrip->SetSectionText(0u, autoText);
     g_statusStrip->SetSectionText(1u, filterText);
@@ -3267,53 +3262,39 @@ bool RunMonitorSnapshotScalingSelfTest()
             lines.push_back(Document::InfoLineInput{.info = info, .text = std::format(L"{:05} {}", index, payload)});
         }
         document.AppendInfoLines(std::move(lines));
-        Debug::Perf::EmitDurationUs(L"monitor.snapshot_scale.append_us",
-                                    Debug::Perf::ElapsedUs(appendStarted),
-                                    static_cast<uint64_t>(lineCount),
-                                    document.RetainedTextBytes(),
-                                    S_OK);
+        Debug::Perf::EmitDurationUs(
+            L"monitor.snapshot_scale.append_us", Debug::Perf::ElapsedUs(appendStarted), static_cast<uint64_t>(lineCount), document.RetainedTextBytes(), S_OK);
 
         for (size_t repeat = 0u; repeat < kRepeats; ++repeat)
         {
             RedSalamanderMonitor::MonitorTextSnapshot source = document.CaptureTextSnapshot();
-            const auto baselineStarted = std::chrono::steady_clock::now();
+            const auto baselineStarted                       = std::chrono::steady_clock::now();
             std::deque<std::wstring> legacyDeepCopy;
             for (const RedSalamanderMonitor::MonitorTextBlock& block : source.lines)
             {
                 legacyDeepCopy.push_back(block.Text());
             }
             const uint64_t baselineUs = Debug::Perf::ElapsedUs(baselineStarted);
-            Debug::Perf::EmitDurationUs(L"monitor.file_save.baseline_deep_copy_us",
-                                        baselineUs,
-                                        source.retainedTextBytes,
-                                        static_cast<uint64_t>(lineCount),
-                                        S_OK);
+            Debug::Perf::EmitDurationUs(
+                L"monitor.file_save.baseline_deep_copy_us", baselineUs, source.retainedTextBytes, static_cast<uint64_t>(lineCount), S_OK);
             passed = passed && legacyDeepCopy.size() == lineCount;
 
-            const auto snapshotStarted = std::chrono::steady_clock::now();
+            const auto snapshotStarted                         = std::chrono::steady_clock::now();
             RedSalamanderMonitor::MonitorTextSnapshot snapshot = document.CaptureTextSnapshot();
-            const uint64_t captureUs = Debug::Perf::ElapsedUs(snapshotStarted);
+            const uint64_t captureUs                           = Debug::Perf::ElapsedUs(snapshotStarted);
             EmitMonitorFileSaveSnapshotMetrics(snapshot, captureUs, S_OK);
-            Debug::Perf::EmitDurationUs(L"monitor.file_save.ui_return_us",
-                                        captureUs,
-                                        static_cast<uint64_t>(lineCount),
-                                        snapshot.retainedTextBytes,
-                                        S_OK);
+            Debug::Perf::EmitDurationUs(L"monitor.file_save.ui_return_us", captureUs, static_cast<uint64_t>(lineCount), snapshot.retainedTextBytes, S_OK);
 
-            const std::filesystem::path outputPath =
-                g_monitorChromeSelfTest.runRoot / std::format(L"snapshot_scale_{}_{}.txt", lineCount, repeat);
-            const auto saveStarted = std::chrono::steady_clock::now();
-            const RedSalamanderMonitor::MonitorFileExportResult result =
-                RedSalamanderMonitor::WriteMonitorTextSnapshot(outputPath, snapshot, {});
-            const uint64_t saveUs = Debug::Perf::ElapsedUs(saveStarted);
-            Debug::Perf::EmitDurationUs(
-                L"monitor.file_save.total_us", saveUs, result.bytesWritten, static_cast<uint64_t>(result.lineCount), result.hr);
+            const std::filesystem::path outputPath = g_monitorChromeSelfTest.runRoot / std::format(L"snapshot_scale_{}_{}.txt", lineCount, repeat);
+            const auto saveStarted                 = std::chrono::steady_clock::now();
+            const RedSalamanderMonitor::MonitorFileExportResult result = RedSalamanderMonitor::WriteMonitorTextSnapshot(outputPath, snapshot, {});
+            const uint64_t saveUs                                      = Debug::Perf::ElapsedUs(saveStarted);
+            Debug::Perf::EmitDurationUs(L"monitor.file_save.total_us", saveUs, result.bytesWritten, static_cast<uint64_t>(result.lineCount), result.hr);
             const uint64_t throughput = saveUs == 0u ? result.bytesWritten : (result.bytesWritten * 1'000'000u) / saveUs;
             Debug::Perf::EmitValue(L"monitor.file_save.throughput_bytes_per_sec", throughput, result.hr);
 
             passed = passed && SUCCEEDED(result.hr) && result.lineCount == lineCount && snapshot.copiedTextBytes == 0u &&
-                     snapshot.activeTailCopiedBytes <= RedSalamanderMonitor::kMonitorSnapshotMaxActiveTailBytes &&
-                     snapshot.sharedBlockCount == lineCount &&
+                     snapshot.activeTailCopiedBytes <= RedSalamanderMonitor::kMonitorSnapshotMaxActiveTailBytes && snapshot.sharedBlockCount == lineCount &&
                      snapshot.sharedBlockBytes == snapshot.retainedTextBytes &&
                      snapshot.peakAdditionalSnapshotBytes <= lineCount * sizeof(RedSalamanderMonitor::MonitorTextBlock);
             std::error_code cleanupError;
@@ -3326,25 +3307,25 @@ bool RunMonitorSnapshotScalingSelfTest()
 
 struct MonitorRetainedStateIoSelfTestResult final
 {
-    bool inputWritten = false;
-    bool openSucceeded = false;
-    bool published = false;
-    bool saveSucceeded = false;
-    bool cancellationObserved = false;
+    bool inputWritten                = false;
+    bool openSucceeded               = false;
+    bool published                   = false;
+    bool saveSucceeded               = false;
+    bool cancellationObserved        = false;
     bool workerStartFailureRecovered = false;
-    bool cleanupSucceeded = false;
-    size_t openedLineCount = 0u;
-    uint64_t retainedTextBytes = 0u;
-    uint64_t savedBytes = 0u;
-    HRESULT openHr = E_FAIL;
-    HRESULT saveHr = E_FAIL;
-    HRESULT cancellationHr = E_FAIL;
+    bool cleanupSucceeded            = false;
+    size_t openedLineCount           = 0u;
+    uint64_t retainedTextBytes       = 0u;
+    uint64_t savedBytes              = 0u;
+    HRESULT openHr                   = E_FAIL;
+    HRESULT saveHr                   = E_FAIL;
+    HRESULT cancellationHr           = E_FAIL;
 };
 
 MonitorRetainedStateIoSelfTestResult RunMonitorRetainedStateIoSelfTest()
 {
     MonitorRetainedStateIoSelfTestResult selfTest;
-    const std::filesystem::path inputPath = g_monitorChromeSelfTest.runRoot / L"retained_state_input.txt";
+    const std::filesystem::path inputPath  = g_monitorChromeSelfTest.runRoot / L"retained_state_input.txt";
     const std::filesystem::path outputPath = g_monitorChromeSelfTest.runRoot / L"retained_state_output.txt";
     std::error_code cleanupError;
     static_cast<void>(std::filesystem::remove(inputPath, cleanupError));
@@ -3371,8 +3352,7 @@ MonitorRetainedStateIoSelfTestResult RunMonitorRetainedStateIoSelfTest()
     {
         openResult = RedSalamanderMonitor::ReadMonitorTextFile(inputPath, {}, limits);
     }
-    Debug::Perf::EmitDurationUs(
-        L"monitor.file_open.total_us", Debug::Perf::ElapsedUs(openStarted), openResult.bytesRead, openResult.lineCount, openResult.hr);
+    Debug::Perf::EmitDurationUs(L"monitor.file_open.total_us", Debug::Perf::ElapsedUs(openStarted), openResult.bytesRead, openResult.lineCount, openResult.hr);
     Debug::Perf::EmitValue(L"monitor.file_open.peak_retained_text_bytes", openResult.peakRetainedTextBytes, openResult.hr);
     selfTest.openHr            = openResult.hr;
     selfTest.openedLineCount   = openResult.lineCount;
@@ -3391,18 +3371,15 @@ MonitorRetainedStateIoSelfTestResult RunMonitorRetainedStateIoSelfTest()
                                 selfTest.openSucceeded ? S_OK : selfTest.openHr);
     selfTest.published = selfTest.openSucceeded && g_colorView.GetTotalLineCount() == selfTest.openedLineCount;
 
-    const auto snapshotStarted = std::chrono::steady_clock::now();
+    const auto snapshotStarted                             = std::chrono::steady_clock::now();
     RedSalamanderMonitor::MonitorTextSnapshot saveSnapshot = g_colorView.CaptureTextSnapshot();
-    EmitMonitorFileSaveSnapshotMetrics(
-        saveSnapshot, Debug::Perf::ElapsedUs(snapshotStarted), selfTest.published ? S_OK : E_FAIL);
+    EmitMonitorFileSaveSnapshotMetrics(saveSnapshot, Debug::Perf::ElapsedUs(snapshotStarted), selfTest.published ? S_OK : E_FAIL);
 
-    auto saveResult = std::make_shared<RedSalamanderMonitor::MonitorFileExportResult>();
-    const auto saveStarted = std::chrono::steady_clock::now();
+    auto saveResult            = std::make_shared<RedSalamanderMonitor::MonitorFileExportResult>();
+    const auto saveStarted     = std::chrono::steady_clock::now();
     const auto uiReturnStarted = std::chrono::steady_clock::now();
     std::thread saveThread([outputPath, snapshot = std::move(saveSnapshot), saveResult]()
-    {
-        *saveResult = RedSalamanderMonitor::WriteMonitorTextSnapshot(outputPath, snapshot, {});
-    });
+    { *saveResult = RedSalamanderMonitor::WriteMonitorTextSnapshot(outputPath, snapshot, {}); });
     Debug::Perf::EmitDurationUs(L"monitor.file_save.ui_return_us",
                                 Debug::Perf::ElapsedUs(uiReturnStarted),
                                 static_cast<uint64_t>(selfTest.openedLineCount),
@@ -3410,18 +3387,14 @@ MonitorRetainedStateIoSelfTestResult RunMonitorRetainedStateIoSelfTest()
                                 S_OK);
     saveThread.join();
     const uint64_t saveDurationUs = Debug::Perf::ElapsedUs(saveStarted);
-    Debug::Perf::EmitDurationUs(L"monitor.file_save.total_us",
-                                saveDurationUs,
-                                saveResult->bytesWritten,
-                                static_cast<uint64_t>(saveResult->lineCount),
-                                saveResult->hr);
-    const uint64_t saveThroughput =
-        saveDurationUs == 0u ? saveResult->bytesWritten : (saveResult->bytesWritten * 1'000'000u) / saveDurationUs;
+    Debug::Perf::EmitDurationUs(
+        L"monitor.file_save.total_us", saveDurationUs, saveResult->bytesWritten, static_cast<uint64_t>(saveResult->lineCount), saveResult->hr);
+    const uint64_t saveThroughput = saveDurationUs == 0u ? saveResult->bytesWritten : (saveResult->bytesWritten * 1'000'000u) / saveDurationUs;
     Debug::Perf::EmitValue(L"monitor.file_save.throughput_bytes_per_sec", saveThroughput, saveResult->hr);
-    selfTest.saveHr        = saveResult->hr;
-    selfTest.savedBytes    = saveResult->bytesWritten;
+    selfTest.saveHr                   = saveResult->hr;
+    selfTest.savedBytes               = saveResult->bytesWritten;
     const std::string canonicalOutput = std::string("\xEF\xBB\xBF", 3u) + encodedInput;
-    selfTest.saveSucceeded = selfTest.published && SUCCEEDED(saveResult->hr) && ReadBinaryFile(outputPath) == canonicalOutput;
+    selfTest.saveSucceeded            = selfTest.published && SUCCEEDED(saveResult->hr) && ReadBinaryFile(outputPath) == canonicalOutput;
 
     const std::filesystem::path failedSavePath = g_monitorChromeSelfTest.runRoot / L"worker_start_failure_output.txt";
     cleanupError.clear();
@@ -3429,22 +3402,20 @@ MonitorRetainedStateIoSelfTestResult RunMonitorRetainedStateIoSelfTest()
     const uint64_t openPostsBeforeFailure = g_monitorFileOpenCompletionPostCount.load(std::memory_order_acquire);
     g_failNextMonitorFileOpenThreadStart.store(true, std::memory_order_release);
     const HRESULT failedOpenStart = StartMonitorFileOpenWorker(g_hMainWindow, inputPath, limits);
-    const bool openRolledBack = FAILED(failedOpenStart) && ! g_monitorFileOpenActive.load(std::memory_order_acquire) &&
-                                ! g_monitorFileOpenThread.joinable() &&
+    const bool openRolledBack = FAILED(failedOpenStart) && ! g_monitorFileOpenActive.load(std::memory_order_acquire) && ! g_monitorFileOpenThread.joinable() &&
                                 g_monitorFileOpenCompletionPostCount.load(std::memory_order_acquire) == openPostsBeforeFailure;
     const HRESULT retryOpenStart = StartMonitorFileOpenWorker(g_hMainWindow, inputPath, limits);
-    const bool openRetryStarted = SUCCEEDED(retryOpenStart) && g_monitorFileOpenThread.joinable();
+    const bool openRetryStarted  = SUCCEEDED(retryOpenStart) && g_monitorFileOpenThread.joinable();
     CloseMonitorFileOpenWorker();
 
     RedSalamanderMonitor::MonitorTextSnapshot failedSaveSnapshot = g_colorView.CaptureTextSnapshot();
-    const uint64_t savePostsBeforeFailure = g_monitorFileSaveCompletionPostCount.load(std::memory_order_acquire);
+    const uint64_t savePostsBeforeFailure                        = g_monitorFileSaveCompletionPostCount.load(std::memory_order_acquire);
     g_failNextMonitorFileSaveThreadStart.store(true, std::memory_order_release);
     const HRESULT failedSaveStart = StartMonitorFileSaveWorker(g_hMainWindow, failedSavePath, failedSaveSnapshot);
-    const bool saveRolledBack = FAILED(failedSaveStart) && ! g_monitorFileSaveState && ! g_monitorFileSaveThread.joinable() &&
-                                ! PathExists(failedSavePath) &&
+    const bool saveRolledBack = FAILED(failedSaveStart) && ! g_monitorFileSaveState && ! g_monitorFileSaveThread.joinable() && ! PathExists(failedSavePath) &&
                                 g_monitorFileSaveCompletionPostCount.load(std::memory_order_acquire) == savePostsBeforeFailure;
     const HRESULT retrySaveStart = StartMonitorFileSaveWorker(g_hMainWindow, failedSavePath, std::move(failedSaveSnapshot));
-    const bool saveRetryStarted = SUCCEEDED(retrySaveStart) && g_monitorFileSaveThread.joinable();
+    const bool saveRetryStarted  = SUCCEEDED(retrySaveStart) && g_monitorFileSaveThread.joinable();
     if (saveRetryStarted)
     {
         static_cast<void>(::WaitForSingleObject(g_monitorFileSaveThread.native_handle(), 2'000u));
@@ -3550,10 +3521,10 @@ LRESULT RunMonitorChromeSelfTest(HWND hWnd)
 
     const uint64_t droppedBeforeOverload = g_colorView.GetDroppedEventCount();
     g_colorView.SetRetentionLimits(ColorTextView::RetentionLimits{
-        .maxQueuedEvents       = 32u,
-        .maxRetainedLines      = 24u,
-        .maxRetainedTextBytes  = 1u * 1024u * 1024u,
-        .maxSearchMatches      = 1'000u,
+        .maxQueuedEvents      = 32u,
+        .maxRetainedLines     = 24u,
+        .maxRetainedTextBytes = 1u * 1024u * 1024u,
+        .maxSearchMatches     = 1'000u,
     });
     for (size_t i = 0u; i < 80u; ++i)
     {
@@ -3577,19 +3548,17 @@ LRESULT RunMonitorChromeSelfTest(HWND hWnd)
         }
     }
     const uint64_t overloadDropped = g_colorView.GetDroppedEventCount() - droppedBeforeOverload;
-    passed &= require(L"etw overload stays bounded",
-                      g_colorView.DebugGetQueuedEventCount() == 0u && g_colorView.GetTotalLineCount() == 24u && overloadDropped == 56u,
-                      std::format(L"queued={} retained={} dropped={}",
-                                  g_colorView.DebugGetQueuedEventCount(),
-                                  g_colorView.GetTotalLineCount(),
-                                  overloadDropped));
+    passed &=
+        require(L"etw overload stays bounded",
+                g_colorView.DebugGetQueuedEventCount() == 0u && g_colorView.GetTotalLineCount() == 24u && overloadDropped == 56u,
+                std::format(L"queued={} retained={} dropped={}", g_colorView.DebugGetQueuedEventCount(), g_colorView.GetTotalLineCount(), overloadDropped));
 
     g_colorView.ClearText();
     g_colorView.SetRetentionLimits(ColorTextView::RetentionLimits{
-        .maxQueuedEvents       = 32u,
-        .maxRetainedLines      = 3u,
-        .maxRetainedTextBytes  = 1u * 1024u * 1024u,
-        .maxSearchMatches      = 2u,
+        .maxQueuedEvents      = 32u,
+        .maxRetainedLines     = 3u,
+        .maxRetainedTextBytes = 1u * 1024u * 1024u,
+        .maxSearchMatches     = 2u,
     });
     g_colorView.SetSearchQuery(L"hit", true);
     Debug::InfoParam searchInfo{};
@@ -3601,24 +3570,20 @@ LRESULT RunMonitorChromeSelfTest(HWND hWnd)
         g_colorView.DebugAppendRetainedLine(searchInfo, std::format(L"hit {}", ordinal));
     }
     const RedSalamanderMonitor::MonitorTextSnapshot firstSearchSnapshot = g_colorView.CaptureTextSnapshot();
-    const std::vector<UINT32> firstMatchStarts = g_colorView.DebugGetMatchStarts();
-    const auto firstFrontier = g_colorView.DebugGetSearchFrontier();
-    passed &= require(L"search cap refill scans oldest retained frontier",
-                      firstSearchSnapshot.lines.size() == 3u && firstSearchSnapshot.lines[0] == L"hit 2" &&
-                          firstSearchSnapshot.lines[1] == L"hit 3" && firstSearchSnapshot.lines[2] == L"hit 4" &&
-                          firstMatchStarts.size() == 2u && firstMatchStarts[0] < firstMatchStarts[1] && firstFrontier.first == 1u,
-                      std::format(L"lines={} matches={} frontier={}:{}",
-                                  firstSearchSnapshot.lines.size(),
-                                  firstMatchStarts.size(),
-                                  firstFrontier.first,
-                                  firstFrontier.second));
+    const std::vector<UINT32> firstMatchStarts                          = g_colorView.DebugGetMatchStarts();
+    const auto firstFrontier                                            = g_colorView.DebugGetSearchFrontier();
+    passed &= require(
+        L"search cap refill scans oldest retained frontier",
+        firstSearchSnapshot.lines.size() == 3u && firstSearchSnapshot.lines[0] == L"hit 2" && firstSearchSnapshot.lines[1] == L"hit 3" &&
+            firstSearchSnapshot.lines[2] == L"hit 4" && firstMatchStarts.size() == 2u && firstMatchStarts[0] < firstMatchStarts[1] && firstFrontier.first == 1u,
+        std::format(
+            L"lines={} matches={} frontier={}:{}", firstSearchSnapshot.lines.size(), firstMatchStarts.size(), firstFrontier.first, firstFrontier.second));
     g_colorView.DebugAppendRetainedLine(searchInfo, L"hit 5");
     const RedSalamanderMonitor::MonitorTextSnapshot secondSearchSnapshot = g_colorView.CaptureTextSnapshot();
-    const std::vector<UINT32> secondMatchStarts = g_colorView.DebugGetMatchStarts();
+    const std::vector<UINT32> secondMatchStarts                          = g_colorView.DebugGetMatchStarts();
     passed &= require(L"search cap refill remains ordered across repeated eviction",
-                      secondSearchSnapshot.lines.size() == 3u && secondSearchSnapshot.lines[0] == L"hit 3" &&
-                          secondSearchSnapshot.lines[1] == L"hit 4" && secondSearchSnapshot.lines[2] == L"hit 5" &&
-                          secondMatchStarts.size() == 2u && secondMatchStarts[0] < secondMatchStarts[1]);
+                      secondSearchSnapshot.lines.size() == 3u && secondSearchSnapshot.lines[0] == L"hit 3" && secondSearchSnapshot.lines[1] == L"hit 4" &&
+                          secondSearchSnapshot.lines[2] == L"hit 5" && secondMatchStarts.size() == 2u && secondMatchStarts[0] < secondMatchStarts[1]);
     g_colorView.DebugSetSelectionState(0u, 0u, 0u);
     g_colorView.FindNext();
     const auto firstFindSelection = g_colorView.DebugGetSelectionState();
@@ -3631,10 +3596,10 @@ LRESULT RunMonitorChromeSelfTest(HWND hWnd)
                           std::get<0>(wrappedFindSelection) == secondMatchStarts[0]);
 
     g_colorView.SetRetentionLimits(ColorTextView::RetentionLimits{
-        .maxQueuedEvents       = 32u,
-        .maxRetainedLines      = 10u,
-        .maxRetainedTextBytes  = 1u * 1024u * 1024u,
-        .maxSearchMatches      = 10u,
+        .maxQueuedEvents      = 32u,
+        .maxRetainedLines     = 10u,
+        .maxRetainedTextBytes = 1u * 1024u * 1024u,
+        .maxSearchMatches     = 10u,
     });
     g_colorView.SetText(L"ordinary hit");
     g_colorView.DebugAppendRetainedLine(searchInfo, L"metadata hit");
@@ -3642,21 +3607,19 @@ LRESULT RunMonitorChromeSelfTest(HWND hWnd)
     const std::vector<UINT32> showIdsBeforeMatches = g_colorView.DebugGetMatchStarts();
     g_colorView.DebugSetSelectionState(1u, 4u, 3u);
     g_colorView.EnableShowIds(! g_showIds);
-    const std::vector<UINT32> showIdsAfterMatches = g_colorView.DebugGetMatchStarts();
+    const std::vector<UINT32> showIdsAfterMatches                         = g_colorView.DebugGetMatchStarts();
     const auto [showIdsSelectionStart, showIdsSelectionEnd, showIdsCaret] = g_colorView.DebugGetSelectionState();
     passed &= require(L"Show IDs rebuilds offsets and resets interaction state",
-                      showIdsBeforeMatches.size() == 2u && showIdsAfterMatches.size() == 2u &&
-                          showIdsBeforeMatches[0] == showIdsAfterMatches[0] && showIdsBeforeMatches[1] != showIdsAfterMatches[1] &&
-                          showIdsSelectionStart == 0u && showIdsSelectionEnd == 0u && showIdsCaret == 0u);
+                      showIdsBeforeMatches.size() == 2u && showIdsAfterMatches.size() == 2u && showIdsBeforeMatches[0] == showIdsAfterMatches[0] &&
+                          showIdsBeforeMatches[1] != showIdsAfterMatches[1] && showIdsSelectionStart == 0u && showIdsSelectionEnd == 0u && showIdsCaret == 0u);
     g_colorView.EnableShowIds(g_showIds);
     g_colorView.ClearText();
-    const Common::Settings::MonitorRetentionSettings configuredRetention =
-        g_settings.monitor.value_or(Common::Settings::MonitorSettings{}).retention;
+    const Common::Settings::MonitorRetentionSettings configuredRetention = g_settings.monitor.value_or(Common::Settings::MonitorSettings{}).retention;
     g_colorView.SetRetentionLimits(ColorTextView::RetentionLimits{
-        .maxQueuedEvents       = configuredRetention.maxQueuedEvents,
-        .maxRetainedLines      = configuredRetention.maxRetainedLines,
-        .maxRetainedTextBytes  = configuredRetention.maxRetainedTextBytes,
-        .maxSearchMatches      = configuredRetention.maxSearchMatches,
+        .maxQueuedEvents      = configuredRetention.maxQueuedEvents,
+        .maxRetainedLines     = configuredRetention.maxRetainedLines,
+        .maxRetainedTextBytes = configuredRetention.maxRetainedTextBytes,
+        .maxSearchMatches     = configuredRetention.maxSearchMatches,
     });
 
     const MonitorRetainedStateIoSelfTestResult retainedStateIo = RunMonitorRetainedStateIoSelfTest();
@@ -3707,8 +3670,8 @@ LRESULT RunMonitorChromeSelfTest(HWND hWnd)
         const float compactStatusHeightDip = g_statusDxHost.PixelsToDip(static_cast<float>((std::max)(0L, compactStatusRect.bottom - compactStatusRect.top)));
         const auto appliedBackdrop         = Common::WindowBackdrop::TryGetAppliedWindowBackdropKind(hWnd);
 
-        passed &= require(L"toolbar compact density", g_toolbarDxHost.GetTheme().density == RedSalamander::DxUi::Density::Compact);
-        passed &= require(L"status compact density", g_statusDxHost.GetTheme().density == RedSalamander::DxUi::Density::Compact);
+        passed &= require(L"toolbar compact density", g_toolbarDxHost.GetTheme().density == DxUi::Density::Compact);
+        passed &= require(L"status compact density", g_statusDxHost.GetTheme().density == DxUi::Density::Compact);
         passed &= require(L"toolbar reduced motion override", g_toolbarDxHost.GetTheme().reducedMotion);
         passed &= require(L"status reduced motion override", g_statusDxHost.GetTheme().reducedMotion);
         passed &= require(L"toolbar compact height shrinks",
@@ -3884,7 +3847,7 @@ LRESULT RunMonitorChromeSelfTest(HWND hWnd)
     Debug::Perf::EmitValue(L"monitor.ui.status_render_count", g_statusDxHost.DebugGetRenderCount(), S_OK);
     Debug::Perf::EmitValue(L"monitor.ui.toolbar_present_failure_count", g_toolbarDxHost.DebugGetPresentFailureCount(), S_OK);
     Debug::Perf::EmitValue(L"monitor.ui.status_present_failure_count", g_statusDxHost.DebugGetPresentFailureCount(), S_OK);
-    Debug::Perf::EmitValue(L"monitor.ui.dxhost_attached_count", static_cast<uint64_t>(RedSalamander::DxUi::DebugGetAttachedWindowHostCount()), S_OK);
+    Debug::Perf::EmitValue(L"monitor.ui.dxhost_attached_count", static_cast<uint64_t>(DxUi::DebugGetAttachedWindowHostCount()), S_OK);
 
     FinalizeMonitorChromeSelfTest(passed,
                                   passed ? L"Monitor DxUI toolbar/status strip selftest passed." : L"Monitor DxUI toolbar/status strip selftest failed.");
@@ -4157,6 +4120,10 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     }
 
     // Set DPI awareness before creating any windows
+    // Monitor's measured frame stages belong to the product; the library only borrows this sink.
+    DxUi::SetFrameMetricSink([](void*, std::wstring_view metric, uint64_t valueUs) noexcept { Debug::Perf::EmitDurationUs(metric, valueUs); }, nullptr);
+    const auto frameMetricsCleanup = wil::scope_exit([]() noexcept { DxUi::SetFrameMetricSink(nullptr, nullptr); });
+
     InitializeDpiAwareness();
 
     g_config.Load();
@@ -4489,13 +4456,12 @@ LRESULT OnCreateMainWindow(HWND hWnd)
     g_colorView.EnableLineNumbers(g_lineNumbersVisible);
     g_colorView.SetAutoScroll(g_autoScrollEnabled);
     g_colorView.SetFilterMask(g_filterMask);
-    const Common::Settings::MonitorRetentionSettings retention =
-        g_settings.monitor.value_or(Common::Settings::MonitorSettings{}).retention;
+    const Common::Settings::MonitorRetentionSettings retention = g_settings.monitor.value_or(Common::Settings::MonitorSettings{}).retention;
     g_colorView.SetRetentionLimits(ColorTextView::RetentionLimits{
-        .maxQueuedEvents       = retention.maxQueuedEvents,
-        .maxRetainedLines      = retention.maxRetainedLines,
-        .maxRetainedTextBytes  = retention.maxRetainedTextBytes,
-        .maxSearchMatches      = retention.maxSearchMatches,
+        .maxQueuedEvents      = retention.maxQueuedEvents,
+        .maxRetainedLines     = retention.maxRetainedLines,
+        .maxRetainedTextBytes = retention.maxRetainedTextBytes,
+        .maxSearchMatches     = retention.maxSearchMatches,
     });
     ApplyMonitorTheme();
 
@@ -4948,9 +4914,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case WM_COMMAND: return OnCommandMainWindow(hWnd, LOWORD(wParam), HIWORD(wParam), reinterpret_cast<HWND>(lParam));
         case WM_PAINT: return OnPaintMainWindow(hWnd);
         case WM_DESTROY: return OnDestroyMainWindow(hWnd);
-        case WM_NCDESTROY:
-            static_cast<void>(DrainPostedPayloadsForWindow(hWnd));
-            return DefWindowProc(hWnd, message, wParam, lParam);
+        case WM_NCDESTROY: static_cast<void>(DrainPostedPayloadsForWindow(hWnd)); return DefWindowProc(hWnd, message, wParam, lParam);
         default: return DefWindowProc(hWnd, message, wParam, lParam);
     }
 }

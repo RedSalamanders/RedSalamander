@@ -315,6 +315,21 @@ void ReleaseFileOpsBridgeMoveSourceCleanupPauseForSelfTest() noexcept
     g_fileOpsBridgeMoveSourceCleanupPausePoint.Release();
 }
 
+void SetFileOpsSelectedLeafDiscoveryPublishedPauseForSelfTest(bool enabled) noexcept
+{
+    g_fileOpsSelectedLeafDiscoveryPublishedPausePoint.Set(enabled);
+}
+
+bool HasFileOpsSelectedLeafDiscoveryPublishedPauseEnteredForSelfTest() noexcept
+{
+    return g_fileOpsSelectedLeafDiscoveryPublishedPausePoint.HasEntered();
+}
+
+void ReleaseFileOpsSelectedLeafDiscoveryPublishedPauseForSelfTest() noexcept
+{
+    g_fileOpsSelectedLeafDiscoveryPublishedPausePoint.Release();
+}
+
 void SetFileOpsNativeMoveCreateDirectoryRaceForSelfTest(unsigned long count) noexcept
 {
     g_fileOpsNativeMoveCreateDirectoryRaceAttempts.store(0u, std::memory_order_release);

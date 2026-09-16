@@ -1179,6 +1179,77 @@ workers, so provider and host implementations must not depend on UI-thread affin
 metadata is outside the byte-bandwidth budget; transfer and verification bytes remain governed by
 `FileSystemOptions::bandwidthLimitBytesPerSecond`.
 
+The cookie, not the interface pointer, identifies the discovery scope a report belongs to. A caller
+that is itself the traversal owner for a selected root gives its own nested provider calls a
+different `operationControlCookie`, so a provider always reports honestly for the call it was given
+and can never publish its record into a scope it does not own. Providers must therefore treat the
+cookie as opaque, pass back exactly the one handed to the call, and never cache or share it between
+calls. `FileSystemShouldAbort` and `FileSystemGetDiscoveryMode` stay live on such a nested call: a
+suppressed discovery scope never weakens cancellation, deadline or discovery-mode behavior. The
+ordinary `IFileSystemCallback` cookie is a separate argument and is unaffected.
+
+A provider that reports `traversalClosed` is asserting that its governed call fully resolved the
+root it was given. When the same call can instead end without committing and hand the remaining work
+back to the host, as a Native directory rename refused by an existing destination directory does,
+the host may keep the reported counts and withhold that closure until it knows which traversal owns
+the rest. That staging is a host decision; providers report their own truth unchanged.
+
+One governed call is one discovery scope, whatever the shape of its selection. A bulk entry point is
+given one operation-control cookie for the whole call and the caller has no way to tell one selected
+root's scope from another's, so the provider adds its roots' cumulative streams together and closes
+once, after the last root. Several closures in one call are a contract violation: the first would
+declare the caller's totals final while later roots are still producing work. When roots run
+concurrently the aggregate must be advanced and emitted under the same lock, or two workers can
+deliver their snapshots out of order and hand the caller a cumulative stream that goes backwards.
+
+Every mutation entry point closes its scope exactly once, on every exit, including error, partial
+and cancellation. A scope the caller can never close is worse than one that closes on the totals the
+call actually reached. Two silences are deliberate and are not this defect. A recursive directory
+copy reports nothing for its root, because the walker owns the root and descendant totals. A bound
+conditional delete reports its closed record for files only, because a bound directory delete
+continues into a recursive removal that owns its own accounting.
+
+Discovery describes what a call had to discover, not what it moved. A Move of a directory is one
+rename that relocates the whole subtree without enumerating it, so that root contributes one
+directory and no descendant files or bytes, while a Copy of the same directory walks it and reports
+every descendant.
+
+Every shipped provider that mutates on a route the host calls directly, which is every profile that
+advertises Copy, Move or Delete, reports discovery for that governed call through the shared
+`Common::FileOperations::DiscoveryScope` (`Common/FileSystemDiscoveryScope.h`) and never assembles a
+`FileSystemDiscoveryProgress` by hand. The scope is constructed from the call's own options, never
+from a thread-local ambient carrier such as the Curl, S3, Google Drive and Microsoft Drive
+operation-options scopes, which belong to whichever call owns the current thread; the options header
+is validated before the scope reads it. The scope is hoisted to the public entry point: a helper that
+a singular and a bulk entry point share runs once per selected root and may only add to it, never
+close it. A singular call closes as soon as its totals are final, before the first byte moves
+whenever the provider already holds the size, so the caller's card never has to guess; a bulk call
+closes once, after its last root. An unknown size is reported as an item with no bytes, never as a
+zero-byte file.
+
+What each provider already holds before it mutates, and therefore reports on its direct routes:
+
+| Provider | Copy, Move and Delete discovery record |
+|---|---|
+| Local | Its own aggregator (`FileSystem.FileOps.cpp`), with the two deliberate silences above. |
+| Dummy | The node, before mutating: a leaf's exact size; a directory Copy or Delete the generated subtree, where an ungenerated child count is unknown rather than zero and discovery never forces generation; a single-item Move one directory; a bulk walk one discovery per node it visits. |
+| Curl | Each listing entry on the single-threaded enumeration: a leaf's exact size where the dialect reports one and an unknown-size file where it does not; a server-side rename the object and nothing beneath it; a bulk entry point each selected root on its pre-pass, then the walk's descendants. |
+| S3 | The complete transfer plan, classified before any object work: a key ending in `/` is a directory, any other key a file, and a listed prefix is one directory even when the bucket keeps no marker. A singular call closes on that total up front; a bulk call publishes every root from its existing estimate pre-pass and closes before the first transfer; a delete reports the object, or the first listing of the prefix it clears. S3 always knows a size. |
+| Google Drive | The resolved leaf's `size` when the API reports one, otherwise an unknown-size file (native documents); a tree Copy the root folder and every child at the point it is popped from its frame, skipped collisions included; a native folder Move one directory; a Delete the item alone, because Drive removes a subtree as one object. |
+| Microsoft Drive | The item the move's own metadata GET already describes: a leaf's exact size, a folder one directory and none of its descendants unless a merge visits them, in which case each visited or skipped child once; a Delete the item alone. No request is added for discovery. |
+| MTP | The source as the backend's path cache already holds it (`IMtpBackend::GetCachedItemSummary`), reported before the device mutates by its own read-only command so that a command the watchdog abandons can never reach the caller's frame: a file's size as last listed, a directory one directory because the device relocates or copies it as one object. The live committed size stays with `GetFileSize`, which refreshes first. `FileOps.Mtp.Discovery.SourceLookupUs` records each lookup's cost and whether the cache served it. |
+| 7-Zip | Exempt: every mutation entry point is `ERROR_NOT_SUPPORTED` and the profile advertises none. |
+
+The executable witness for each provider is its `DiscoveryScope_<Provider>DirectApi` case in the FileOps
+`FileOpsFamily_DiscoveryScope` family, which drives the entry points against the provider's fake
+backend through a recording `IFileSystemOperationControl` and asserts that the cumulative stream
+never decreases, that exactly one report closes it, that the closure is the last event and that it
+closed on the exact expected totals, then runs one same-endpoint leaf transfer through the host and
+requires the task to have seen a closed exact record before the transfer completed.
+`Tools/Tests/TestHarnessSourceContracts.Tests.ps1` guards the source: every `Plugins/FileSystem*`
+directory is either described there or exempt, every mutation entry point carries the scope or
+delegates to a helper that does, and no provider calls `FileSystemReportDiscoveryProgress` itself.
+
 The built-in Local, Curl, Microsoft Drive, MTP, and S3 providers join
 `FileSystemShouldAbort` at their bounded enumeration, item-start, reader/writer, retry, commit, and
 recursive scheduling boundaries even while a profile advertises `abort: false` and

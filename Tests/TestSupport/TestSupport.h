@@ -14,8 +14,12 @@
 #include <thread>
 #include <utility>
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h>
 
 #include "TestSandboxPath.h"
@@ -40,15 +44,14 @@ struct TestDirectoryOptions final
     std::wstring_view leafSegment;
     std::wstring_view fallbackRunIdPrefix;
     std::wstring_view emptyLeafFallback = L"case";
-    TestDirectoryKind kind               = TestDirectoryKind::Scratch;
-    bool includeLeafSegment              = true;
-    bool cleanExisting                   = true;
+    TestDirectoryKind kind              = TestDirectoryKind::Scratch;
+    bool includeLeafSegment             = true;
+    bool cleanExisting                  = true;
 };
 
 [[nodiscard]] inline bool IsSafeTestSandboxSegmentCharacter(const wchar_t ch) noexcept
 {
-    return (ch >= L'0' && ch <= L'9') || (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') || ch == L'.' || ch == L'-' ||
-           ch == L'_';
+    return (ch >= L'0' && ch <= L'9') || (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') || ch == L'.' || ch == L'-' || ch == L'_';
 }
 
 [[nodiscard]] inline std::wstring SanitizeTestSandboxSegment(std::wstring_view text, std::wstring_view emptyFallback = L"case")
@@ -184,17 +187,11 @@ private:
     ec.clear();
     try
     {
-        const std::filesystem::path repositoryRoot = Common::Testing::FindTestRepositoryRoot(ec);
-        if (ec || repositoryRoot.empty())
-        {
-            return {};
-        }
-
         const std::wstring configuredRoot = GetEnvironmentString(kTestRootEnvironmentVariable);
         if (! configuredRoot.empty())
         {
             const std::filesystem::path requested = Common::Testing::NormalizeAbsoluteTestSandboxPath(configuredRoot, ec);
-            if (ec || ! Common::Testing::IsAuthorizedTestSandboxPath(requested, repositoryRoot, false, ec))
+            if (ec || ! Common::Testing::IsAuthorizedTestSandboxPath(requested, {}, false, ec))
             {
                 if (! ec)
                 {
@@ -205,8 +202,15 @@ private:
             return requested;
         }
 
-        const std::filesystem::path requested =
-            (repositoryRoot.root_path() / std::wstring(Common::Testing::kTestSandboxDirectoryName)).lexically_normal();
+        // An explicit marked root is valid for a relocated package harness with no checkout.
+        // Repository discovery is needed only to choose the default drive.
+        const std::filesystem::path repositoryRoot = Common::Testing::FindTestRepositoryRoot(ec);
+        if (ec || repositoryRoot.empty())
+        {
+            return {};
+        }
+
+        const std::filesystem::path requested = (repositoryRoot.root_path() / std::wstring(Common::Testing::kTestSandboxDirectoryName)).lexically_normal();
         if (! Common::Testing::IsAuthorizedTestSandboxPath(requested, repositoryRoot, true, ec))
         {
             if (! ec)
@@ -262,19 +266,16 @@ private:
             ec = std::make_error_code(std::errc::invalid_argument);
             return {};
         }
-        const std::wstring_view areaName =
-            options.kind == TestDirectoryKind::Scratch ? kScratchDirectoryName : kArtifactsDirectoryName;
-        const std::wstring harnessSegment = SanitizeTestSandboxSegment(options.harnessSegment, L"harness");
-        const std::filesystem::path areaRoot =
-            sandboxBase / std::wstring(kRunsDirectoryName) / runId / std::wstring(areaName);
-        std::filesystem::path directory = areaRoot / harnessSegment;
+        const std::wstring_view areaName     = options.kind == TestDirectoryKind::Scratch ? kScratchDirectoryName : kArtifactsDirectoryName;
+        const std::wstring harnessSegment    = SanitizeTestSandboxSegment(options.harnessSegment, L"harness");
+        const std::filesystem::path areaRoot = sandboxBase / std::wstring(kRunsDirectoryName) / runId / std::wstring(areaName);
+        std::filesystem::path directory      = areaRoot / harnessSegment;
         if (options.includeLeafSegment)
         {
             directory /= SanitizeTestSandboxSegment(options.leafSegment, options.emptyLeafFallback);
         }
         directory = directory.lexically_normal();
-        if (! Common::Testing::IsSameOrDescendantTestSandboxPath(directory, areaRoot) ||
-            ! Common::Testing::IsExistingTestSandboxPathReparseFree(directory, ec))
+        if (! Common::Testing::IsSameOrDescendantTestSandboxPath(directory, areaRoot) || ! Common::Testing::IsExistingTestSandboxPathReparseFree(directory, ec))
         {
             if (! ec)
             {
@@ -321,7 +322,7 @@ struct MessagePumpWaitOptions final
 
 struct MessagePumpWaitResult final
 {
-    bool conditionMet = false;
+    bool conditionMet             = false;
     size_t dispatchedMessageCount = 0u;
     std::chrono::milliseconds elapsed{};
     std::wstring timeoutDiagnostic;
@@ -340,8 +341,7 @@ struct MessagePumpWaitResult final
     return dispatchedCount;
 }
 
-template <typename Predicate>
-[[nodiscard]] inline MessagePumpWaitResult PumpMessagesUntil(Predicate&& predicate, const MessagePumpWaitOptions& options)
+template <typename Predicate> [[nodiscard]] inline MessagePumpWaitResult PumpMessagesUntil(Predicate&& predicate, const MessagePumpWaitOptions& options)
 {
     MessagePumpWaitResult result{};
     const auto startedAt = std::chrono::steady_clock::now();
@@ -388,12 +388,12 @@ template <typename Snapshot, typename CaptureSnapshot, typename Predicate>
 [[nodiscard]] inline bool WaitForSnapshot(CaptureSnapshot&& captureSnapshot,
                                           Predicate&& predicate,
                                           const MessagePumpWaitOptions& options,
-                                          Snapshot* outSnapshot = nullptr,
+                                          Snapshot* outSnapshot           = nullptr,
                                           std::wstring* timeoutDiagnostic = nullptr)
 {
     Snapshot snapshot{};
     Snapshot lastSnapshot{};
-    bool sawSnapshot = false;
+    bool sawSnapshot                 = false;
     MessagePumpWaitResult waitResult = PumpMessagesUntil(
         [&]() noexcept
     {
@@ -427,4 +427,4 @@ template <typename Snapshot, typename CaptureSnapshot, typename Predicate>
     }
     return waitResult.conditionMet;
 }
-}
+} // namespace RedSalamander::TestSupport

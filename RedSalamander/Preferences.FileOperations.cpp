@@ -10,11 +10,11 @@
 #include <string_view>
 #include <vector>
 
-#include "DxUi/DxUi.h"
 #include "Helpers.h"
 #include "ThroughputParsing.h"
 #include "UiMetrics.h"
 #include "resource.h"
+#include <DxUi/DxUi.h>
 
 namespace
 {
@@ -22,14 +22,14 @@ using PrefsFileOperations::EnsureWorkingFileOperationsSettings;
 using PrefsFileOperations::GetFileOperationsSettingsOrDefault;
 using PrefsFileOperations::MaybeResetWorkingFileOperationsSettingsIfEmpty;
 
-using RedSalamander::DxUi::CardPanel;
-using RedSalamander::DxUi::ComboBox;
-using RedSalamander::DxUi::ComboBoxVariant;
-using RedSalamander::DxUi::FontRole;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::TextField;
-using RedSalamander::DxUi::Toggle;
+using DxUi::CardPanel;
+using DxUi::ComboBox;
+using DxUi::ComboBoxVariant;
+using DxUi::FontRole;
+using DxUi::Label;
+using DxUi::Panel;
+using DxUi::TextField;
+using DxUi::Toggle;
 
 constexpr uint64_t kMiB                      = 1024ull * 1024ull;
 constexpr size_t kBandwidthCustomPresetIndex = 7u;
@@ -98,7 +98,7 @@ struct FileOperationsDxPage
     void Detach() noexcept
     {
         verificationHeader = nullptr;
-        verifyAfterCopy     = {};
+        verifyAfterCopy    = {};
         bandwidthHeader    = nullptr;
         bandwidthPreset    = {};
         customBandwidth    = {};
@@ -280,6 +280,10 @@ bool FileOperationsPane::EnsureDxHosts(HWND parent, PreferencesDialogState& stat
     dxState->page.bandwidthPreset.description->SetFontRole(FontRole::Small);
     dxState->page.bandwidthPreset.description->SetMultiline(true);
     dxState->page.bandwidthPreset.combo = root->AddChild<ComboBox>();
+    if (dxState->page.bandwidthPreset.combo)
+    {
+        dxState->page.bandwidthPreset.combo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+    }
     dxState->page.bandwidthPreset.title->SetMnemonicTarget(dxState->page.bandwidthPreset.combo);
     dxState->page.bandwidthPreset.combo->SetVariant(ComboBoxVariant::Window);
     {

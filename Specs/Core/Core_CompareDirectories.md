@@ -516,7 +516,7 @@ When `GetOrComputeDecision` is called for a folder:
    - Enqueue a content-compare job.
    - When the item is surfaced in the list, set the `ContentPending` diff bit. `ContentPending` does not imply a final difference and must not select the item.
    - When `keepIdenticalItems` is off, the host MAY elide per-file `ContentPending` placeholders to keep memory bounded, but it MUST keep folder-level pending state (`anyPending`) accurate until all content jobs complete.
-5. Return the decision immediately — the UI shows progress via per-item "Comparing..." (when placeholders are surfaced) and/or folder-level progress indicators.
+5. Return the decision immediately — the UI shows progress via per-item "Comparing..." (when placeholders are surfaced) and/or folder-level progress indicators. Worker completions available before this return are applied to the cached decision; the initial returned snapshot may already be complete. Callers must not require observing a transient pending state.
 
 ### Phase 2: Background content compare (asynchronous, worker pool)
 

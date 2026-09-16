@@ -28,7 +28,7 @@
     locks, launches contained MSBuild, and writes ordinary build outputs/logs. Primary use
     is direct build diagnosis; build.ps1 remains the canonical repository build entrypoint.
 .EXAMPLE
-    .\Tools\Invoke-SanitizedMsbuild.ps1 Z:\src\RedSalamander\Common\DxUi\DxUi.vcxproj /t:Build /p:Configuration=Debug /p:Platform=x64
+    .\Tools\Invoke-SanitizedMsbuild.ps1 Z:\src\RedSalamander\Tests\ProductUiTests\ProductUiTests.vcxproj /t:Build /p:Configuration=Debug /p:Platform=x64
 #>
 
 [CmdletBinding()]

@@ -1,0 +1,64 @@
+{
+  "TagFilter": [
+    ""
+  ],
+  "ExcludeTagFilter": [
+    ""
+  ],
+  "TestNameFilter": [
+    "Commands family runtime membership"
+  ],
+  "TotalCount": 1,
+  "PassedCount": 1,
+  "FailedCount": 0,
+  "SkippedCount": 0,
+  "PendingCount": 0,
+  "Time": {
+    "Ticks": 12323176,
+    "Days": 0,
+    "Hours": 0,
+    "Milliseconds": 232,
+    "Microseconds": 317,
+    "Nanoseconds": 600,
+    "Minutes": 0,
+    "Seconds": 1,
+    "TotalDays": 1.4262935185185185E-05,
+    "TotalHours": 0.00034231044444444443,
+    "TotalMilliseconds": 1232.3176,
+    "TotalMicroseconds": 1232317.6,
+    "TotalNanoseconds": 1232317600.0,
+    "TotalMinutes": 0.020538626666666667,
+    "TotalSeconds": 1.2323176
+  },
+  "TestResult": [
+    {
+      "Describe": "Commands family runtime membership",
+      "Context": "",
+      "Name": "partitions the broad native inventory into an exact non-overlapping family union",
+      "Result": "Passed",
+      "Passed": true,
+      "Time": {
+        "Ticks": 12323176,
+        "Days": 0,
+        "Hours": 0,
+        "Milliseconds": 232,
+        "Microseconds": 317,
+        "Nanoseconds": 600,
+        "Minutes": 0,
+        "Seconds": 1,
+        "TotalDays": 1.4262935185185185E-05,
+        "TotalHours": 0.00034231044444444443,
+        "TotalMilliseconds": 1232.3176,
+        "TotalMicroseconds": 1232317.6,
+        "TotalNanoseconds": 1232317600.0,
+        "TotalMinutes": 0.020538626666666667,
+        "TotalSeconds": 1.2323176
+      },
+      "FailureMessage": "",
+      "StackTrace": "",
+      "ErrorRecord": null,
+      "ParameterizedSuiteName": "",
+      "Parameters": {}
+    }
+  ]
+}

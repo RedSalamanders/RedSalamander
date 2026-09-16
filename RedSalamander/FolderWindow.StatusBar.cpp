@@ -1,14 +1,14 @@
 #include "FolderWindowInternal.h"
 
 #include "ConnectionProfileUtils.h"
-#include "DxUi/DxUi.Typography.h"
-#include "FileOperationArtifactRegistry.h"
 #include "FileMetadataFormatting.h"
+#include "FileOperationArtifactRegistry.h"
 #include "FluentIcons.h"
 #include "Helpers.h"
 #include "HwndRenderTargetResources.h"
 #include "SettingsStore.h"
 #include "WindowSizing.h"
+#include <DxUi/Typography.h>
 
 #include <d2d1.h>
 #include <windowsx.h>
@@ -133,8 +133,8 @@ void DestroyStatusBarRenderResources(HWND hwnd) noexcept
         }
     }
 
-    resources.fluentIconAvailable = resources.dwriteFactory && RedSalamander::DxUi::Typography::IsFontFamilyAvailable(
-                                                                   resources.dwriteFactory.get(), RedSalamander::DxUi::Typography::kSegoeFluentIconsFamily);
+    resources.fluentIconAvailable =
+        resources.dwriteFactory && DxUi::Typography::IsFontFamilyAvailable(resources.dwriteFactory.get(), DxUi::Typography::kSegoeFluentIconsFamily);
     return resources.d2dFactory && resources.dwriteFactory;
 }
 
@@ -163,7 +163,7 @@ void ApplyStatusBarTextTrimming(IDWriteTextFormat* format, IDWriteInlineObject* 
 }
 
 [[nodiscard]] HRESULT CreateStatusBarTextFormat(StatusBarRenderResources& resources,
-                                                const RedSalamander::DxUi::Typography::TypographySpec& spec,
+                                                const DxUi::Typography::TypographySpec& spec,
                                                 DWRITE_TEXT_ALIGNMENT alignment,
                                                 IDWriteTextFormat** outFormat) noexcept
 {
@@ -172,7 +172,7 @@ void ApplyStatusBarTextTrimming(IDWriteTextFormat* format, IDWriteInlineObject* 
         return E_INVALIDARG;
     }
 
-    const HRESULT hr = RedSalamander::DxUi::Typography::CreateTextFormat(resources.dwriteFactory.get(), spec, outFormat, L"");
+    const HRESULT hr = DxUi::Typography::CreateTextFormat(resources.dwriteFactory.get(), spec, outFormat, L"");
     if (FAILED(hr) || ! *outFormat)
     {
         return FAILED(hr) ? hr : E_FAIL;
@@ -185,7 +185,7 @@ void ApplyStatusBarTextTrimming(IDWriteTextFormat* format, IDWriteInlineObject* 
 
 [[nodiscard]] bool EnsureStatusBarTextFormats(HWND hwnd, StatusBarRenderResources& resources) noexcept
 {
-    const UINT dpi = RedSalamander::DxUi::Typography::GetEffectiveDpi(hwnd);
+    const UINT dpi = DxUi::Typography::GetEffectiveDpi(hwnd);
     if (resources.dpi != dpi)
     {
         resources.dpi = dpi;
@@ -197,8 +197,8 @@ void ApplyStatusBarTextTrimming(IDWriteTextFormat* format, IDWriteInlineObject* 
         return false;
     }
 
-    const auto textSpec = RedSalamander::DxUi::Typography::MakeUiTextSpec(kStatusBarTextSizeDip);
-    const auto iconSpec = RedSalamander::DxUi::Typography::MakeUiIconSpec(FluentIcons::kDefaultSizeDip);
+    const auto textSpec = DxUi::Typography::MakeUiTextSpec(kStatusBarTextSizeDip);
+    const auto iconSpec = DxUi::Typography::MakeUiIconSpec(FluentIcons::kDefaultSizeDip);
 
     if (! resources.selectionFormat)
     {
@@ -282,8 +282,7 @@ void ApplyStatusBarTextTrimming(IDWriteTextFormat* format, IDWriteInlineObject* 
         return 0;
     }
 
-    return RedSalamander::DxUi::Typography::MeasureSingleLineTextMetrics(resources->dwriteFactory.get(), resources->securityFormat.get(), resources->dpi, text)
-        .widthPx;
+    return DxUi::Typography::MeasureSingleLineTextMetrics(resources->dwriteFactory.get(), resources->securityFormat.get(), resources->dpi, text).widthPx;
 }
 
 [[nodiscard]] bool EnsureStatusBarTarget(HWND hwnd, StatusBarRenderResources& resources) noexcept
@@ -909,8 +908,7 @@ namespace
 std::wstring BuildSingleItemSummaryText(const FolderView::SelectionStats::SelectedItemDetails& details, std::wstring_view directorySizeText)
 {
     const auto fields = Common::FileMetadata::FormatDisplayFields(
-        {.lastWriteTime100nsSince1601 = details.lastWriteTime, .fileAttributes = details.fileAttributes},
-        Common::FileMetadata::DisplayProfile::CompactDetails);
+        {.lastWriteTime100nsSince1601 = details.lastWriteTime, .fileAttributes = details.fileAttributes}, Common::FileMetadata::DisplayProfile::CompactDetails);
 
     if (details.isDirectory)
     {
@@ -922,8 +920,7 @@ std::wstring BuildSingleItemSummaryText(const FolderView::SelectionStats::Select
 
         if (! fields.localTime.empty())
         {
-            return FormatEmbeddedStringResource(
-                nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_DIR_TIME_ATTRS, sizeText, fields.localTime, fields.attributes);
+            return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_DIR_TIME_ATTRS, sizeText, fields.localTime, fields.attributes);
         }
         return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_DIR_ATTRS, sizeText, fields.attributes);
     }
@@ -931,8 +928,7 @@ std::wstring BuildSingleItemSummaryText(const FolderView::SelectionStats::Select
     const std::wstring sizeText = FormatBytesCompact(details.sizeBytes);
     if (! fields.localTime.empty())
     {
-        return FormatEmbeddedStringResource(
-            nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_TIME_ATTRS, sizeText, fields.localTime, fields.attributes);
+        return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_TIME_ATTRS, sizeText, fields.localTime, fields.attributes);
     }
     return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_ATTRS, sizeText, fields.attributes);
 }
@@ -1105,8 +1101,7 @@ void FolderWindow::UpdatePaneStatusBar(Pane pane)
         state.statusSelectionText = BuildSelectionSummaryText(state.selectionStats, selectionSizeText, focusedItemDetails);
         if (state.selectionStats.selectedFiles == 0 && state.selectionStats.selectedFolders == 0)
         {
-            const std::shared_ptr<const FileOperationArtifacts::Projection> projection =
-                state.folderView.GetFocusedArtifactProjection();
+            const std::shared_ptr<const FileOperationArtifacts::Projection> projection = state.folderView.GetFocusedArtifactProjection();
             if (projection && projection->classification != FileOperationArtifacts::Classification::Ordinary)
             {
                 const std::wstring badge = LoadStringResource(nullptr, IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE);

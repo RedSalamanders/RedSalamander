@@ -7649,11 +7649,15 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlCopyTraversa
                         options.sizeBytes           = sizeof(options);
                         options.linkPolicy          = FILESYSTEM_LINK_PRESERVE;
                         options.operationControl    = &control;
-                        // Serial 4,097-file loopback Copy was 108s on the archived
-                        // Debug lane and now sits near 120s. Keep 180s of headroom
-                        // so listing-before-descent and machine load cannot miss
-                        // the last few publications on the documented 120s clock.
-                        options.deadlineTickCount64 = GetTickCount64() + (shape == Shape::Wide ? 180'000u : 120'000u);
+                        // The fixed 4,097-file corpus must finish under instrumentation too.
+                        // Master and migration ASan runs both exhaust the ordinary wide-fixture
+                        // deadline; retain a bounded instrumentation allowance for this corpus.
+#if defined(__SANITIZE_ADDRESS__)
+                        constexpr ULONGLONG kWideFixtureDeadlineMs = 360'000u;
+#else
+                        constexpr ULONGLONG kWideFixtureDeadlineMs = 180'000u;
+#endif
+                        options.deadlineTickCount64 = GetTickCount64() + (shape == Shape::Wide ? kWideFixtureDeadlineMs : 120'000u);
                         CleanupDebtOperationCallback callback;
                         constexpr FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE);
                         const std::wstring route        = std::format(L"shape={};{}{};concurrency={}",

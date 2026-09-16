@@ -70,7 +70,7 @@ void ApplyAncestorRedrawSuppression(HWND hwnd) noexcept
 
 LRESULT CALLBACK PrefsDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
-    auto* host = reinterpret_cast<RedSalamander::DxUi::WindowHost*>(GetPropW(hwnd, kPrefsDxHostProp));
+    auto* host = reinterpret_cast<DxUi::WindowHost*>(GetPropW(hwnd, kPrefsDxHostProp));
     if (! host)
     {
         return CallStoredWndProc(hwnd, kPrefsDxHostOriginalWndProcProp, msg, wp, lp);
@@ -108,7 +108,7 @@ LRESULT CALLBACK PrefsDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) n
 
 } // namespace
 
-void PrefsReorderPanelChildren(RedSalamander::DxUi::Panel* root, std::span<RedSalamander::DxUi::Control* const> orderedControls)
+void PrefsReorderPanelChildren(DxUi::Panel* root, std::span<DxUi::Control* const> orderedControls)
 {
     if (! root)
     {
@@ -121,10 +121,10 @@ void PrefsReorderPanelChildren(RedSalamander::DxUi::Panel* root, std::span<RedSa
         return;
     }
 
-    std::vector<std::unique_ptr<RedSalamander::DxUi::Control>> reordered;
+    std::vector<std::unique_ptr<DxUi::Control>> reordered;
     reordered.reserve(children.size());
 
-    auto moveChild = [&](RedSalamander::DxUi::Control* wanted) noexcept
+    auto moveChild = [&](DxUi::Control* wanted) noexcept
     {
         if (! wanted)
         {
@@ -453,8 +453,8 @@ void BuildListItems(std::vector<PrefsPluginListItem>& out) noexcept
     {
         if (! viewerPlugins[i].id.empty())
         {
-            const PrefsPluginType type = viewerPlugins[i].type == ViewerPluginManager::PluginType::Terminal ? PrefsPluginType::Terminal
-                                                                                                            : PrefsPluginType::Viewer;
+            const PrefsPluginType type =
+                viewerPlugins[i].type == ViewerPluginManager::PluginType::Terminal ? PrefsPluginType::Terminal : PrefsPluginType::Viewer;
             out.push_back(PrefsPluginListItem{type, i});
         }
     }
@@ -516,8 +516,8 @@ void BuildListItems(std::vector<PrefsPluginListItem>& out) noexcept
     {
         if (CompareTextNoCase(viewerPlugins[i].id, pluginId) == 0)
         {
-            const PrefsPluginType type = viewerPlugins[i].type == ViewerPluginManager::PluginType::Terminal ? PrefsPluginType::Terminal
-                                                                                                            : PrefsPluginType::Viewer;
+            const PrefsPluginType type =
+                viewerPlugins[i].type == ViewerPluginManager::PluginType::Terminal ? PrefsPluginType::Terminal : PrefsPluginType::Viewer;
             return PrefsPluginListItem{type, i};
         }
     }
@@ -636,8 +636,8 @@ namespace PrefsUi
 {
 PreferencesTypographyContext MakeTypographyContext(HWND hwnd) noexcept
 {
-    using RedSalamander::DxUi::FontRole;
-    using RedSalamander::DxUi::Typography::GetDxUiTypographySpec;
+    using DxUi::FontRole;
+    using DxUi::Typography::GetDxUiTypographySpec;
 
     const UINT dpi = hwnd ? GetDpiForWindow(hwnd) : USER_DEFAULT_SCREEN_DPI;
     return PreferencesTypographyContext{
@@ -649,11 +649,9 @@ PreferencesTypographyContext MakeTypographyContext(HWND hwnd) noexcept
     };
 }
 
-int MeasureSingleLineTextWidthPx(const PreferencesTypographyContext& typography,
-                                 const RedSalamander::DxUi::Typography::TypographySpec& spec,
-                                 std::wstring_view text) noexcept
+int MeasureSingleLineTextWidthPx(const PreferencesTypographyContext& typography, const DxUi::Typography::TypographySpec& spec, std::wstring_view text) noexcept
 {
-    using namespace RedSalamander::DxUi::Typography;
+    using namespace DxUi::Typography;
 
     IDWriteFactory* factory = GetSharedMeasurementFactory();
     if (! factory)
@@ -671,11 +669,11 @@ int MeasureSingleLineTextWidthPx(const PreferencesTypographyContext& typography,
 }
 
 int MeasureWrappedTextHeightPx(const PreferencesTypographyContext& typography,
-                               const RedSalamander::DxUi::Typography::TypographySpec& spec,
+                               const DxUi::Typography::TypographySpec& spec,
                                int width,
                                std::wstring_view text) noexcept
 {
-    using namespace RedSalamander::DxUi::Typography;
+    using namespace DxUi::Typography;
 
     if (width <= 0 || text.empty() || text.size() > static_cast<size_t>((std::numeric_limits<UINT32>::max)()))
     {
@@ -890,7 +888,7 @@ void TryPushCard(std::vector<RECT>& cards, const RECT& card) noexcept
 
 namespace PrefsDxHost
 {
-bool Attach(HWND hwnd, RedSalamander::DxUi::WindowHost& host) noexcept
+bool Attach(HWND hwnd, DxUi::WindowHost& host) noexcept
 {
     if (! hwnd)
     {
@@ -922,7 +920,7 @@ void ResetOwnedHostWindow(wil::unique_hwnd& hwnd) noexcept
         return;
     }
 
-    if (auto* host = reinterpret_cast<RedSalamander::DxUi::WindowHost*>(GetPropW(hwnd.get(), kPrefsDxHostProp)))
+    if (auto* host = reinterpret_cast<DxUi::WindowHost*>(GetPropW(hwnd.get(), kPrefsDxHostProp)))
     {
         host->Detach();
     }
@@ -948,7 +946,7 @@ size_t CountVisibleRenderedHosts(HWND parent) noexcept
             continue;
         }
 
-        auto* host = reinterpret_cast<RedSalamander::DxUi::WindowHost*>(GetPropW(child, kPrefsDxHostProp));
+        auto* host = reinterpret_cast<DxUi::WindowHost*>(GetPropW(child, kPrefsDxHostProp));
         if (! host)
         {
             continue;
@@ -978,7 +976,7 @@ size_t CountVisibleHostsWithResizeFailures(HWND parent) noexcept
             continue;
         }
 
-        auto* host = reinterpret_cast<RedSalamander::DxUi::WindowHost*>(GetPropW(child, kPrefsDxHostProp));
+        auto* host = reinterpret_cast<DxUi::WindowHost*>(GetPropW(child, kPrefsDxHostProp));
         if (! host)
         {
             continue;
@@ -1014,7 +1012,7 @@ uint64_t SumVisibleRenderedHostRenderCounts(HWND parent) noexcept
             return TRUE;
         }
 
-        auto* host = reinterpret_cast<RedSalamander::DxUi::WindowHost*>(GetPropW(child, kPrefsDxHostProp));
+        auto* host = reinterpret_cast<DxUi::WindowHost*>(GetPropW(child, kPrefsDxHostProp));
         if (! host)
         {
             return TRUE;
@@ -1039,7 +1037,7 @@ bool TryGetDirectHostMetrics(HWND hwnd, size_t& visibleHostCount, size_t& resize
         return false;
     }
 
-    auto* host = reinterpret_cast<RedSalamander::DxUi::WindowHost*>(GetPropW(hwnd, kPrefsDxHostProp));
+    auto* host = reinterpret_cast<DxUi::WindowHost*>(GetPropW(hwnd, kPrefsDxHostProp));
     if (! host)
     {
         return false;
@@ -1480,14 +1478,14 @@ void MaybeResetWorkingFileOperationsSettingsIfEmpty(Common::Settings::Settings& 
 
     const Common::Settings::FileOperationsSettings defaults{};
     const auto& fileOperations = settings.fileOperations.value();
-    const bool hasNonDefault =
-        fileOperations.autoDismissSuccess != defaults.autoDismissSuccess || fileOperations.verifyAfterCopy != defaults.verifyAfterCopy ||
-        fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
-        fileOperations.defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
-        fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles || fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
-        fileOperations.diagnosticsDebugEnabled != defaults.diagnosticsDebugEnabled || fileOperations.maxIssueReportFiles.has_value() ||
-        fileOperations.maxDiagnosticsInMemory.has_value() || fileOperations.maxDiagnosticsPerFlush.has_value() ||
-        fileOperations.diagnosticsFlushIntervalMs.has_value() || fileOperations.diagnosticsCleanupIntervalMs.has_value();
+    const bool hasNonDefault = fileOperations.autoDismissSuccess != defaults.autoDismissSuccess || fileOperations.verifyAfterCopy != defaults.verifyAfterCopy ||
+                               fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
+                               fileOperations.defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
+                               fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles ||
+                               fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
+                               fileOperations.diagnosticsDebugEnabled != defaults.diagnosticsDebugEnabled || fileOperations.maxIssueReportFiles.has_value() ||
+                               fileOperations.maxDiagnosticsInMemory.has_value() || fileOperations.maxDiagnosticsPerFlush.has_value() ||
+                               fileOperations.diagnosticsFlushIntervalMs.has_value() || fileOperations.diagnosticsCleanupIntervalMs.has_value();
 
     if (! hasNonDefault)
     {

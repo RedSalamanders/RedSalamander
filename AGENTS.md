@@ -58,6 +58,14 @@ Any new feature, hot-path change, or optimization that can affect responsiveness
 from the beginning. Do not defer perf validation to a later cleanup pass. See [perf-validation skill](.github/skills/perf-validation/SKILL.md) and `Specs/Testing/Testing_PerformanceValidation.md`.
 
 ### Spec Closeout is Mandatory
+
+Application screenshots for specifications, documentation, and UI reviews MUST be generated through the test
+harness with deterministic scenarios and no desktop takeover. Reuse or extend harness capture support rather
+than using Computer Use or manual desktop screenshots. Save scenario/build provenance with the captures and
+label proposal mockups separately from actual application screenshots.
+Default to no activation. When the user explicitly authorizes brief focus for interaction captures, use
+the harness’s existing warning and interactive desktop lease, target only owned test windows, and restore
+cursor and foreground focus. Never substitute Computer Use or manual desktop screenshots.
 Completed WIP plans MUST be moved to `Specs/Plans/Done/`. Any durable behavior, UI contract, validation rule, or workflow requirement discovered during implementation MUST be merged into the authoritative domain spec under `Specs/<Domain>/` (or repo-level guidance such as `AGENTS.md` / `Specs/Testing/*` when appropriate) before the work is considered closed. Do not leave normative requirements stranded only in `Specs/Plans/WIP/` or `Specs/Plans/Done/`.
 
 ### Tooling Governance is Mandatory
@@ -175,14 +183,14 @@ RedSalamanderMonitor/      # ETW monitoring/debug tool with ColorTextView
 RedSalamanderSearchService/# Background search/index Windows service (named pipe + SQLite)
 RedConfigure/              # Standalone configuration tool
 RedLauncher/               # Launcher app
-Common/                    # Shared library (utilities, settings, DxUi framework)
+Common/                    # Shared library (utilities, settings, product UI adapters)
   └── PlugInterfaces/      # COM-style plugin interfaces (IFileSystem, IViewer, ...)
 Plugins/                   # All plugin DLLs
   ├── FileSystem, FileSystem7z, FileSystemCurl, FileSystemS3,
   │   FileSystemGoogleDrive, FileSystemMicrosoftDrive, FileSystemDummy
   └── ViewerText, ViewerSqlite, ViewerSpace, ViewerImgRaw,
       ViewerVLC, ViewerPE, ViewerWeb
-Tests/                     # 8 standalone test projects (DxUiTests, PerformanceTests2, ...)
+Tests/                     # Standalone test projects (ProductUiTests, PerformanceTests2, ...)
 Tools/                     # Inventoried commands/modules; start with Tools/README.md
 Installer/                 # MSIX + MSI packaging
 PoC/                       # Proof-of-concept projects

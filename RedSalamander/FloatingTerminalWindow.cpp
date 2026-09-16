@@ -4,7 +4,6 @@
 
 #include "CommandRegistry.h"
 #include "CommandRuntimeState.h"
-#include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
 #include "Helpers.h"
 #include "Keyboard.h"
@@ -14,6 +13,7 @@
 #include "WindowMessages.h"
 #include "WindowPlacementPersistence.h"
 #include "resource.h"
+#include <DxUi/DxUi.h>
 
 #include <algorithm>
 #include <array>
@@ -27,21 +27,19 @@
 
 namespace
 {
-using RedSalamander::DxUi::Button;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::TabControl;
-using RedSalamander::DxUi::WindowHost;
+using DxUi::Button;
+using DxUi::Panel;
+using DxUi::TabControl;
+using DxUi::WindowHost;
 
-constexpr wchar_t kClassName[] = L"RedSalamander.FloatingTerminalWindow";
+constexpr wchar_t kClassName[]     = L"RedSalamander.FloatingTerminalWindow";
 constexpr UINT_PTR kPersistTimerId = 1u;
-constexpr UINT kPersistDelayMs = 250u;
+constexpr UINT kPersistDelayMs     = 250u;
 constexpr float kTabStripHeightDip = 32.0f;
 
 [[nodiscard]] int64_t CurrentSteadyTimestampNs() noexcept
 {
-    return std::chrono::duration_cast<std::chrono::nanoseconds>(
-               std::chrono::steady_clock::now().time_since_epoch())
-        .count();
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
 struct FloatingTerminalEventPayload final
@@ -54,29 +52,29 @@ struct FloatingTerminalEventPayload final
 class FloatingTerminalWindow final : public ITerminalEventCallback
 {
 public:
-    FloatingTerminalWindow() = default;
-    ~FloatingTerminalWindow() = default;
-    FloatingTerminalWindow(const FloatingTerminalWindow&) = delete;
-    FloatingTerminalWindow(FloatingTerminalWindow&&) = delete;
+    FloatingTerminalWindow()                                         = default;
+    ~FloatingTerminalWindow()                                        = default;
+    FloatingTerminalWindow(const FloatingTerminalWindow&)            = delete;
+    FloatingTerminalWindow(FloatingTerminalWindow&&)                 = delete;
     FloatingTerminalWindow& operator=(const FloatingTerminalWindow&) = delete;
-    FloatingTerminalWindow& operator=(FloatingTerminalWindow&&) = delete;
+    FloatingTerminalWindow& operator=(FloatingTerminalWindow&&)      = delete;
 
     [[nodiscard]] HWND Create(HWND activationSource, Common::Settings::Settings& settings, const AppTheme& theme) noexcept;
     [[nodiscard]] HRESULT RestoreRememberedTabs(const std::optional<FloatingTerminalOpenRequest>& invocation, bool addWhenMissing) noexcept;
     [[nodiscard]] HRESULT BeginRememberedTabsRestore() noexcept;
     [[nodiscard]] HRESULT AddTab(const FloatingTerminalOpenRequest& request, std::wstring_view requestedTabId = {}) noexcept;
     [[nodiscard]] bool IsInputTarget(HWND targetWindow) const noexcept;
-    [[nodiscard]] HRESULT RouteShortcut(HWND targetWindow,
-                                        std::wstring_view commandId,
-                                        const MSG& message,
-                                        uint32_t modifiers,
-                                        TerminalShortcutRoute& route) noexcept;
+    [[nodiscard]] HRESULT RouteShortcut(
+        HWND targetWindow, std::wstring_view commandId, const MSG& message, uint32_t modifiers, TerminalShortcutRoute& route) noexcept;
     [[nodiscard]] bool QueryCommandState(std::wstring_view commandId, CommandRuntimeState& state) noexcept;
     [[nodiscard]] bool ExecuteCommand(std::wstring_view commandId) noexcept;
     [[nodiscard]] std::optional<FloatingTerminalOpenRequest> ActiveRequest() const noexcept;
     void UpdateTheme(const AppTheme& theme) noexcept;
     void PrepareForAppShutdown() noexcept;
-    [[nodiscard]] HWND GetHwnd() const noexcept { return _window.get(); }
+    [[nodiscard]] HWND GetHwnd() const noexcept
+    {
+        return _window.get();
+    }
 #if defined(ENABLE_TESTS)
     [[nodiscard]] bool DebugSnapshot(FloatingTerminalDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugCloseTab(size_t index) noexcept;
@@ -116,24 +114,24 @@ private:
     [[nodiscard]] std::wstring NewStableTabId() const noexcept;
 
     wil::unique_hwnd _window;
-    HWND _activationSource = nullptr;
+    HWND _activationSource                = nullptr;
     Common::Settings::Settings* _settings = nullptr;
     AppTheme _theme{};
     WindowHost _host;
-    Panel* _root = nullptr;
+    Panel* _root             = nullptr;
     TabControl* _tabsControl = nullptr;
-    Button* _newTabButton = nullptr;
+    Button* _newTabButton    = nullptr;
     std::vector<std::unique_ptr<Tab>> _tabs;
     std::vector<Common::Settings::FloatingTerminalTabSettings> _pendingRestoreTabs;
     std::wstring _pendingRestoreActiveTabId;
-    size_t _pendingRestoreIndex = 0u;
-    bool _restoreInProgress = false;
-    size_t _selectedIndex = 0u;
-    bool _appShutdown = false;
-    bool _closing = false;
+    size_t _pendingRestoreIndex              = 0u;
+    bool _restoreInProgress                  = false;
+    size_t _selectedIndex                    = 0u;
+    bool _appShutdown                        = false;
+    bool _closing                            = false;
     uint64_t _coalescedPlacementMessageCount = 0u;
-    uint64_t _placementWriteEpisodeCount = 0u;
-    uint64_t _stateSnapshotCount = 0u;
+    uint64_t _placementWriteEpisodeCount     = 0u;
+    uint64_t _stateSnapshotCount             = 0u;
     std::atomic_uint64_t _pendingExitPayloadCount{0u};
 };
 
@@ -159,38 +157,38 @@ ATOM FloatingTerminalWindow::RegisterClass(HINSTANCE instance) noexcept
         return atom;
     }
     WNDCLASSEXW windowClass{};
-    windowClass.cbSize = sizeof(windowClass);
-    windowClass.lpfnWndProc = &FloatingTerminalWindow::WindowProc;
-    windowClass.hInstance = instance;
-    windowClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    windowClass.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(IDI_REDSALAMANDER));
-    windowClass.hIconSm = windowClass.hIcon;
+    windowClass.cbSize        = sizeof(windowClass);
+    windowClass.lpfnWndProc   = &FloatingTerminalWindow::WindowProc;
+    windowClass.hInstance     = instance;
+    windowClass.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
+    windowClass.hIcon         = LoadIconW(instance, MAKEINTRESOURCEW(IDI_REDSALAMANDER));
+    windowClass.hIconSm       = windowClass.hIcon;
     windowClass.lpszClassName = kClassName;
-    atom = RegisterClassExW(&windowClass);
+    atom                      = RegisterClassExW(&windowClass);
     return atom;
 }
 
 HWND FloatingTerminalWindow::Create(HWND activationSource, Common::Settings::Settings& settings, const AppTheme& theme) noexcept
 {
-    _activationSource = activationSource;
-    _settings = &settings;
-    _theme = theme;
+    _activationSource        = activationSource;
+    _settings                = &settings;
+    _theme                   = theme;
     const HINSTANCE instance = GetModuleHandleW(nullptr);
     if (RegisterClass(instance) == 0u)
     {
         return nullptr;
     }
 
-    const UINT dpi = activationSource != nullptr ? GetDpiForWindow(activationSource) : GetDpiForSystem();
-    const int width = MulDiv(900, static_cast<int>(std::max(dpi, 96u)), USER_DEFAULT_SCREEN_DPI);
+    const UINT dpi   = activationSource != nullptr ? GetDpiForWindow(activationSource) : GetDpiForSystem();
+    const int width  = MulDiv(900, static_cast<int>(std::max(dpi, 96u)), USER_DEFAULT_SCREEN_DPI);
     const int height = MulDiv(620, static_cast<int>(std::max(dpi, 96u)), USER_DEFAULT_SCREEN_DPI);
     RECT sourceRect{80, 80, 80 + width, 80 + height};
     if (activationSource != nullptr)
     {
         GetWindowRect(activationSource, &sourceRect);
     }
-    const int x = sourceRect.left + MulDiv(48, static_cast<int>(std::max(dpi, 96u)), USER_DEFAULT_SCREEN_DPI);
-    const int y = sourceRect.top + MulDiv(48, static_cast<int>(std::max(dpi, 96u)), USER_DEFAULT_SCREEN_DPI);
+    const int x     = sourceRect.left + MulDiv(48, static_cast<int>(std::max(dpi, 96u)), USER_DEFAULT_SCREEN_DPI);
+    const int y     = sourceRect.top + MulDiv(48, static_cast<int>(std::max(dpi, 96u)), USER_DEFAULT_SCREEN_DPI);
     const HWND hwnd = CreateWindowExW(WS_EX_APPWINDOW,
                                       kClassName,
                                       LoadStringResource(nullptr, IDS_PREVIEW_TAB_TERMINAL).c_str(),
@@ -223,7 +221,7 @@ LRESULT CALLBACK FloatingTerminalWindow::WindowProc(HWND hwnd, UINT message, WPA
     if (message == WM_NCCREATE)
     {
         const auto* create = reinterpret_cast<CREATESTRUCTW*>(lParam);
-        auto* self = static_cast<FloatingTerminalWindow*>(create != nullptr ? create->lpCreateParams : nullptr);
+        auto* self         = static_cast<FloatingTerminalWindow*>(create != nullptr ? create->lpCreateParams : nullptr);
         if (self == nullptr)
         {
             return FALSE;
@@ -259,7 +257,7 @@ LRESULT FloatingTerminalWindow::HandleMessage(HWND hwnd, UINT message, WPARAM wP
         }
         return DefWindowProcW(hwnd, message, wParam, lParam);
     }
-    bool handled = false;
+    bool handled             = false;
     const LRESULT hostResult = message == WM_CREATE ? 0 : _host.HandleMessage(hwnd, message, wParam, lParam, handled);
     if (handled)
     {
@@ -296,8 +294,8 @@ LRESULT FloatingTerminalWindow::HandleMessage(HWND hwnd, UINT message, WPARAM wP
             return 0;
         case WM_GETMINMAXINFO:
         {
-            auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
-            const UINT dpi = GetDpiForWindow(hwnd);
+            auto* info             = reinterpret_cast<MINMAXINFO*>(lParam);
+            const UINT dpi         = GetDpiForWindow(hwnd);
             info->ptMinTrackSize.x = MulDiv(480, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
             info->ptMinTrackSize.y = MulDiv(300, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
             return 0;
@@ -343,9 +341,7 @@ LRESULT FloatingTerminalWindow::HandleMessage(HWND hwnd, UINT message, WPARAM wP
             Layout();
             return 0;
         }
-        case WM_ACTIVATE:
-            ApplyWindowChromeTheme(hwnd, _theme, WindowBackdropTarget::Primary, LOWORD(wParam) != WA_INACTIVE);
-            return 0;
+        case WM_ACTIVATE: ApplyWindowChromeTheme(hwnd, _theme, WindowBackdropTarget::Primary, LOWORD(wParam) != WA_INACTIVE); return 0;
         case WndMsg::kTerminalSessionExited:
         {
             std::unique_ptr<FloatingTerminalEventPayload> payload = TakeMessagePayload<FloatingTerminalEventPayload>(lParam);
@@ -364,12 +360,11 @@ LRESULT FloatingTerminalWindow::HandleMessage(HWND hwnd, UINT message, WPARAM wP
             }
             Tab& tab = *_tabs[index.value()];
             TerminalViewState view{};
-            view.sizeBytes = sizeof(view);
+            view.sizeBytes        = sizeof(view);
             const HRESULT stateHr = tab.terminal ? tab.terminal->GetViewState(&view) : E_HANDLE;
-            const bool matches = SUCCEEDED(stateHr) &&
-                memcmp(view.instanceId.bytes, payload->event.instanceId.bytes, sizeof(view.instanceId.bytes)) == 0 &&
-                view.sessionGeneration == payload->event.sessionGeneration && view.activity.lifecycleState == TerminalLifecycleState::Exited &&
-                view.finalSnapshotComplete != 0u && payload->event.finalSnapshotComplete != 0u;
+            const bool matches = SUCCEEDED(stateHr) && memcmp(view.instanceId.bytes, payload->event.instanceId.bytes, sizeof(view.instanceId.bytes)) == 0 &&
+                                 view.sessionGeneration == payload->event.sessionGeneration && view.activity.lifecycleState == TerminalLifecycleState::Exited &&
+                                 view.finalSnapshotComplete != 0u && payload->event.finalSnapshotComplete != 0u;
             CoTaskMemFree(view.title.data);
             CoTaskMemFree(view.status.data);
             if (matches)
@@ -378,25 +373,16 @@ LRESULT FloatingTerminalWindow::HandleMessage(HWND hwnd, UINT message, WPARAM wP
                 if (CloseTab(closingIndex, true) && _tabsControl != nullptr)
                 {
                     const int64_t closedAtNs = CurrentSteadyTimestampNs();
-                    if (payload->event.rootExitObservedTimestampNs > 0 &&
-                        closedAtNs >= payload->event.rootExitObservedTimestampNs)
+                    if (payload->event.rootExitObservedTimestampNs > 0 && closedAtNs >= payload->event.rootExitObservedTimestampNs)
                     {
-                        const uint64_t rootExitToHostCloseUs =
-                            static_cast<uint64_t>((closedAtNs - payload->event.rootExitObservedTimestampNs) / 1'000);
-                        Debug::Perf::EmitDurationUs(
-                            L"terminal.session.root_exit_to_host_close_us",
-                            rootExitToHostCloseUs,
-                            1u,
-                            _tabs.size());
+                        const uint64_t rootExitToHostCloseUs = static_cast<uint64_t>((closedAtNs - payload->event.rootExitObservedTimestampNs) / 1'000);
+                        Debug::Perf::EmitDurationUs(L"terminal.session.root_exit_to_host_close_us", rootExitToHostCloseUs, 1u, _tabs.size());
 #if defined(ENABLE_TESTS)
                         g_debugRootExitToHostCloseUs.store(rootExitToHostCloseUs, std::memory_order_release);
                         g_debugRootExitTimingGeneration.fetch_add(1u, std::memory_order_acq_rel);
 #endif
                     }
-                    Debug::Perf::EmitDurationUs(L"terminal.session.exit_to_host_close_us",
-                                                Debug::Perf::ElapsedUs(payload->publishedAt),
-                                                1u,
-                                                _tabs.size());
+                    Debug::Perf::EmitDurationUs(L"terminal.session.exit_to_host_close_us", Debug::Perf::ElapsedUs(payload->publishedAt), 1u, _tabs.size());
                     _tabsControl->RemoveTab(closingIndex);
                     if (_tabs.empty())
                     {
@@ -418,9 +404,7 @@ LRESULT FloatingTerminalWindow::HandleMessage(HWND hwnd, UINT message, WPARAM wP
                 _window.reset();
             }
             return 0;
-        case WndMsg::kFloatingTerminalRestoreNextTab:
-            RestoreNextRememberedTab();
-            return 0;
+        case WndMsg::kFloatingTerminalRestoreNextTab: RestoreNextRememberedTab(); return 0;
         case WM_CLOSE:
             if (! _closing)
             {
@@ -437,8 +421,8 @@ LRESULT FloatingTerminalWindow::HandleMessage(HWND hwnd, UINT message, WPARAM wP
 
 void FloatingTerminalWindow::BuildUi()
 {
-    auto root = std::make_unique<Panel>();
-    _root = root.get();
+    auto root    = std::make_unique<Panel>();
+    _root        = root.get();
     _tabsControl = root->AddChild<TabControl>();
     _tabsControl->SetTabReorderingEnabled(true);
     _tabsControl->SetOnSelectionChanged([this](size_t index) noexcept { SelectTab(index, true); });
@@ -476,8 +460,8 @@ void FloatingTerminalWindow::Layout() noexcept
     }
     RECT client{};
     GetClientRect(_window.get(), &client);
-    const float dpiScale = static_cast<float>(std::max(GetDpiForWindow(_window.get()), 96u)) / static_cast<float>(USER_DEFAULT_SCREEN_DPI);
-    const float widthDip = static_cast<float>(std::max(0L, client.right - client.left)) / dpiScale;
+    const float dpiScale  = static_cast<float>(std::max(GetDpiForWindow(_window.get()), 96u)) / static_cast<float>(USER_DEFAULT_SCREEN_DPI);
+    const float widthDip  = static_cast<float>(std::max(0L, client.right - client.left)) / dpiScale;
     const float heightDip = static_cast<float>(std::max(0L, client.bottom - client.top)) / dpiScale;
     _root->SetBounds(D2D1::RectF(0.0f, 0.0f, widthDip, heightDip));
     if (_tabsControl != nullptr)
@@ -490,8 +474,8 @@ void FloatingTerminalWindow::Layout() noexcept
     }
 
     const int headerHeight = static_cast<int>(std::lround(_host.DipsToPixels(kTabStripHeightDip)));
-    const int width = std::max(0L, client.right - client.left);
-    const int height = std::max(0L, client.bottom - client.top - headerHeight);
+    const int width        = std::max(0L, client.right - client.left);
+    const int height       = std::max(0L, client.bottom - client.top - headerHeight);
     for (const std::unique_ptr<Tab>& tab : _tabs)
     {
         if (tab && tab->child != nullptr && IsWindow(tab->child) != FALSE)
@@ -552,11 +536,11 @@ HRESULT FloatingTerminalWindow::AddTab(const FloatingTerminalOpenRequest& reques
         return HRESULT_FROM_WIN32(ERROR_BAD_PATHNAME);
     }
 
-    auto tab = std::make_unique<Tab>();
-    tab->owner = this;
-    tab->tabId = requestedTabId.empty() ? NewStableTabId() : std::wstring(requestedTabId);
-    tab->profileId = request.profileId;
-    tab->providerId = request.providerId;
+    auto tab           = std::make_unique<Tab>();
+    tab->owner         = this;
+    tab->tabId         = requestedTabId.empty() ? NewStableTabId() : std::wstring(requestedTabId);
+    tab->profileId     = request.profileId;
+    tab->providerId    = request.providerId;
     tab->canonicalPath = request.canonicalPath;
     if (tab->tabId.empty() || FindTabById(tab->tabId).has_value())
     {
@@ -574,15 +558,15 @@ HRESULT FloatingTerminalWindow::AddTab(const FloatingTerminalOpenRequest& reques
         return hr;
     }
     TerminalOpenContext context{};
-    context.sizeBytes = sizeof(context);
+    context.sizeBytes    = sizeof(context);
     context.parentWindow = _window.get();
     memcpy(context.instanceId.bytes, &instanceGuid, sizeof(instanceGuid));
     context.originalSource.folderWindowInstanceId = reinterpret_cast<uint64_t>(this);
-    context.originalSource.paneInstanceId = static_cast<uint64_t>(_tabs.size() + 1u);
-    context.sourceGeneration = 1u;
-    context.sourceLocation = location.View();
-    context.launchLocation = location.View();
-    const TerminalTheme terminalTheme = TerminalHostSupport::BuildTerminalTheme(_theme, GetDpiForWindow(_window.get()));
+    context.originalSource.paneInstanceId         = static_cast<uint64_t>(_tabs.size() + 1u);
+    context.sourceGeneration                      = 1u;
+    context.sourceLocation                        = location.View();
+    context.launchLocation                        = location.View();
+    const TerminalTheme terminalTheme             = TerminalHostSupport::BuildTerminalTheme(_theme, GetDpiForWindow(_window.get()));
     static_cast<void>(tab->terminal->SetTheme(&terminalTheme));
     if (FAILED(hr = tab->terminal->Open(&context)))
     {
@@ -612,15 +596,11 @@ HRESULT FloatingTerminalWindow::AddTab(const FloatingTerminalOpenRequest& reques
     SelectTab(_tabs.size() - 1u, true);
     Layout();
     SyncSettings(false);
-    Debug::Perf::EmitDurationUs(L"terminal.floating.tab_open_to_visible_us",
-                                Debug::Perf::ElapsedUs(startedAt),
-                                _tabs.size(),
-                                1u);
+    Debug::Perf::EmitDurationUs(L"terminal.floating.tab_open_to_visible_us", Debug::Perf::ElapsedUs(startedAt), _tabs.size(), 1u);
     return S_OK;
 }
 
-HRESULT FloatingTerminalWindow::RestoreRememberedTabs(
-    const std::optional<FloatingTerminalOpenRequest>& invocation, bool addWhenMissing) noexcept
+HRESULT FloatingTerminalWindow::RestoreRememberedTabs(const std::optional<FloatingTerminalOpenRequest>& invocation, bool addWhenMissing) noexcept
 {
     if (_settings == nullptr)
     {
@@ -630,14 +610,13 @@ HRESULT FloatingTerminalWindow::RestoreRememberedTabs(
     std::wstring activeTabId;
     if (_settings->terminal.has_value() && _settings->terminal->floatingWindow.has_value())
     {
-        remembered = _settings->terminal->floatingWindow->tabs;
+        remembered  = _settings->terminal->floatingWindow->tabs;
         activeTabId = _settings->terminal->floatingWindow->activeTabId;
     }
     HRESULT firstFailure = S_OK;
     for (const Common::Settings::FloatingTerminalTabSettings& saved : remembered)
     {
-        const FloatingTerminalOpenRequest request{
-            .profileId = saved.profileId, .providerId = saved.providerId, .canonicalPath = saved.canonicalPath};
+        const FloatingTerminalOpenRequest request{.profileId = saved.profileId, .providerId = saved.providerId, .canonicalPath = saved.canonicalPath};
         const HRESULT hr = AddTab(request, saved.tabId);
         if (FAILED(hr) && SUCCEEDED(firstFailure))
         {
@@ -648,10 +627,11 @@ HRESULT FloatingTerminalWindow::RestoreRememberedTabs(
     std::optional<size_t> selection = FindTabById(activeTabId);
     if (invocation.has_value())
     {
-        const auto match = std::ranges::find_if(_tabs, [&](const std::unique_ptr<Tab>& tab) noexcept
+        const auto match = std::ranges::find_if(_tabs,
+                                                [&](const std::unique_ptr<Tab>& tab) noexcept
         {
             return tab && tab->profileId == invocation->profileId && tab->providerId == invocation->providerId &&
-                CompareStringOrdinal(tab->canonicalPath.c_str(), -1, invocation->canonicalPath.c_str(), -1, TRUE) == CSTR_EQUAL;
+                   CompareStringOrdinal(tab->canonicalPath.c_str(), -1, invocation->canonicalPath.c_str(), -1, TRUE) == CSTR_EQUAL;
         });
         if (match != _tabs.end())
         {
@@ -679,7 +659,7 @@ HRESULT FloatingTerminalWindow::RestoreRememberedTabs(
         }
         selection = 0u;
     }
-    if (!_tabs.empty())
+    if (! _tabs.empty())
     {
         SelectTab(selection.value_or(0u), true);
         SyncSettings(false);
@@ -690,22 +670,21 @@ HRESULT FloatingTerminalWindow::RestoreRememberedTabs(
 
 HRESULT FloatingTerminalWindow::BeginRememberedTabsRestore() noexcept
 {
-    if (_settings == nullptr || !_window)
+    if (_settings == nullptr || ! _window)
     {
         return E_HANDLE;
     }
-    if (!_settings->terminal.has_value() || !_settings->terminal->floatingWindow.has_value() ||
-        _settings->terminal->floatingWindow->tabs.empty())
+    if (! _settings->terminal.has_value() || ! _settings->terminal->floatingWindow.has_value() || _settings->terminal->floatingWindow->tabs.empty())
     {
         return S_FALSE;
     }
-    _pendingRestoreTabs = _settings->terminal->floatingWindow->tabs;
+    _pendingRestoreTabs        = _settings->terminal->floatingWindow->tabs;
     _pendingRestoreActiveTabId = _settings->terminal->floatingWindow->activeTabId;
-    _pendingRestoreIndex = 0u;
-    _restoreInProgress = true;
+    _pendingRestoreIndex       = 0u;
+    _restoreInProgress         = true;
     if (PostMessageW(_window.get(), WndMsg::kFloatingTerminalRestoreNextTab, 0u, 0) == FALSE)
     {
-        const HRESULT hr = HRESULT_FROM_WIN32(GetLastError());
+        const HRESULT hr   = HRESULT_FROM_WIN32(GetLastError());
         _restoreInProgress = false;
         _pendingRestoreTabs.clear();
         _pendingRestoreActiveTabId.clear();
@@ -716,15 +695,14 @@ HRESULT FloatingTerminalWindow::BeginRememberedTabsRestore() noexcept
 
 void FloatingTerminalWindow::RestoreNextRememberedTab() noexcept
 {
-    if (!_restoreInProgress || _closing || !_window)
+    if (! _restoreInProgress || _closing || ! _window)
     {
         return;
     }
     if (_pendingRestoreIndex < _pendingRestoreTabs.size())
     {
         const Common::Settings::FloatingTerminalTabSettings& saved = _pendingRestoreTabs[_pendingRestoreIndex++];
-        const FloatingTerminalOpenRequest request{
-            .profileId = saved.profileId, .providerId = saved.providerId, .canonicalPath = saved.canonicalPath};
+        const FloatingTerminalOpenRequest request{.profileId = saved.profileId, .providerId = saved.providerId, .canonicalPath = saved.canonicalPath};
         static_cast<void>(AddTab(request, saved.tabId));
     }
     if (_pendingRestoreIndex < _pendingRestoreTabs.size())
@@ -735,11 +713,11 @@ void FloatingTerminalWindow::RestoreNextRememberedTab() noexcept
         }
     }
 
-    _restoreInProgress = false;
+    _restoreInProgress                    = false;
     const std::optional<size_t> selection = FindTabById(_pendingRestoreActiveTabId);
     _pendingRestoreTabs.clear();
     _pendingRestoreActiveTabId.clear();
-    if (!_tabs.empty())
+    if (! _tabs.empty())
     {
         SelectTab(selection.value_or(0u), true);
         SyncSettings(false);
@@ -841,15 +819,15 @@ void FloatingTerminalWindow::ReorderTab(size_t fromIndex, size_t toIndex) noexce
 
 void FloatingTerminalWindow::CapturePlacement() noexcept
 {
-    if (_settings == nullptr || !_window)
+    if (_settings == nullptr || ! _window)
     {
         return;
     }
-    if (!_settings->terminal.has_value())
+    if (! _settings->terminal.has_value())
     {
         _settings->terminal.emplace();
     }
-    if (!_settings->terminal->floatingWindow.has_value())
+    if (! _settings->terminal->floatingWindow.has_value())
     {
         _settings->terminal->floatingWindow.emplace();
     }
@@ -866,11 +844,11 @@ void FloatingTerminalWindow::SyncSettings(std::optional<bool> cleanShutdownOpen)
     {
         return;
     }
-    if (!_settings->terminal.has_value())
+    if (! _settings->terminal.has_value())
     {
         _settings->terminal.emplace();
     }
-    if (!_settings->terminal->floatingWindow.has_value())
+    if (! _settings->terminal->floatingWindow.has_value())
     {
         _settings->terminal->floatingWindow.emplace();
     }
@@ -883,7 +861,7 @@ void FloatingTerminalWindow::SyncSettings(std::optional<bool> cleanShutdownOpen)
     if (_restoreInProgress)
     {
         saved.activeTabId = _pendingRestoreActiveTabId;
-        saved.tabs = _pendingRestoreTabs;
+        saved.tabs        = _pendingRestoreTabs;
         return;
     }
     saved.activeTabId = _tabs.empty() ? std::wstring{} : _tabs[_selectedIndex]->tabId;
@@ -923,27 +901,24 @@ bool FloatingTerminalWindow::IsInputTarget(HWND targetWindow) const noexcept
     return targetWindow != nullptr && FindTabByTarget(targetWindow).has_value();
 }
 
-HRESULT FloatingTerminalWindow::RouteShortcut(HWND targetWindow,
-                                              std::wstring_view commandId,
-                                              const MSG& message,
-                                              uint32_t modifiers,
-                                              TerminalShortcutRoute& route) noexcept
+HRESULT FloatingTerminalWindow::RouteShortcut(
+    HWND targetWindow, std::wstring_view commandId, const MSG& message, uint32_t modifiers, TerminalShortcutRoute& route) noexcept
 {
-    route = TerminalShortcutRoute::PassThrough;
+    route                             = TerminalShortcutRoute::PassThrough;
     const std::optional<size_t> index = FindTabByTarget(targetWindow);
-    if (! index.has_value() || !_tabs[index.value()]->terminal)
+    if (! index.has_value() || ! _tabs[index.value()]->terminal)
     {
         return E_HANDLE;
     }
     wil::com_ptr<ITerminalActions> actions;
     HRESULT hr = _tabs[index.value()]->terminal->QueryInterface(__uuidof(ITerminalActions), actions.put_void());
-    if (FAILED(hr) || !actions)
+    if (FAILED(hr) || ! actions)
     {
         return FAILED(hr) ? hr : E_NOINTERFACE;
     }
     TerminalViewState view{};
     view.sizeBytes = sizeof(view);
-    hr = _tabs[index.value()]->terminal->GetViewState(&view);
+    hr             = _tabs[index.value()]->terminal->GetViewState(&view);
     if (FAILED(hr))
     {
         return hr;
@@ -951,19 +926,19 @@ HRESULT FloatingTerminalWindow::RouteShortcut(HWND targetWindow,
     CoTaskMemFree(view.title.data);
     CoTaskMemFree(view.status.data);
     TerminalShortcutRequest request{};
-    request.sizeBytes = sizeof(request);
-    request.commandId = {commandId.data(), static_cast<uint32_t>(commandId.size())};
-    request.instanceId = view.instanceId;
+    request.sizeBytes         = sizeof(request);
+    request.commandId         = {commandId.data(), static_cast<uint32_t>(commandId.size())};
+    request.instanceId        = view.instanceId;
     request.sessionGeneration = view.sessionGeneration;
-    request.message = message.message;
-    request.virtualKey = static_cast<uint32_t>(message.wParam);
-    request.scanCode = Common::Keyboard::ScanCodeFromKeyMessageLParam(message.lParam);
-    request.extended = Common::Keyboard::IsExtendedKeyMessageLParam(message.lParam) ? 1u : 0u;
-    request.systemKey = message.message == WM_SYSKEYDOWN ? 1u : 0u;
-    request.repeatCount = static_cast<uint32_t>(message.lParam & 0xFFFFu);
-    request.previousDown = (static_cast<ULONG_PTR>(message.lParam) & (1ull << 30u)) != 0u ? 1u : 0u;
-    request.modifierFlags = modifiers & 0x7u;
-    const auto addModifier = [&](int virtualKey, uint32_t flag) noexcept
+    request.message           = message.message;
+    request.virtualKey        = static_cast<uint32_t>(message.wParam);
+    request.scanCode          = Common::Keyboard::ScanCodeFromKeyMessageLParam(message.lParam);
+    request.extended          = Common::Keyboard::IsExtendedKeyMessageLParam(message.lParam) ? 1u : 0u;
+    request.systemKey         = message.message == WM_SYSKEYDOWN ? 1u : 0u;
+    request.repeatCount       = static_cast<uint32_t>(message.lParam & 0xFFFFu);
+    request.previousDown      = (static_cast<ULONG_PTR>(message.lParam) & (1ull << 30u)) != 0u ? 1u : 0u;
+    request.modifierFlags     = modifiers & 0x7u;
+    const auto addModifier    = [&](int virtualKey, uint32_t flag) noexcept
     {
         if ((GetKeyState(virtualKey) & 0x8000) != 0)
         {
@@ -981,7 +956,7 @@ HRESULT FloatingTerminalWindow::RouteShortcut(HWND targetWindow,
 
 bool FloatingTerminalWindow::QueryCommandState(std::wstring_view commandId, CommandRuntimeState& state) noexcept
 {
-    state = {};
+    state         = {};
     state.enabled = false;
     if (_tabs.empty() || _selectedIndex >= _tabs.size() || ! _tabs[_selectedIndex])
     {
@@ -995,8 +970,8 @@ bool FloatingTerminalWindow::QueryCommandState(std::wstring_view commandId, Comm
     {
         wil::unique_cotaskmem_string title(view.title.data);
         wil::unique_cotaskmem_string status(view.status.data);
-        state.terminalIdentityPresent = true;
-        state.terminalInstanceId = view.instanceId;
+        state.terminalIdentityPresent   = true;
+        state.terminalInstanceId        = view.instanceId;
         state.terminalSessionGeneration = view.sessionGeneration;
 
         const bool pluginAction = IsTerminalPluginActionId(commandId);
@@ -1008,9 +983,9 @@ bool FloatingTerminalWindow::QueryCommandState(std::wstring_view commandId, Comm
                 return true;
             }
             TerminalActionRequest request{};
-            request.sizeBytes = sizeof(request);
-            request.commandId = {commandId.data(), static_cast<uint32_t>(commandId.size())};
-            request.instanceId = view.instanceId;
+            request.sizeBytes         = sizeof(request);
+            request.commandId         = {commandId.data(), static_cast<uint32_t>(commandId.size())};
+            request.instanceId        = view.instanceId;
             request.sessionGeneration = view.sessionGeneration;
             TerminalActionState actionState{};
             actionState.sizeBytes = sizeof(actionState);
@@ -1023,9 +998,8 @@ bool FloatingTerminalWindow::QueryCommandState(std::wstring_view commandId, Comm
         }
     }
 
-    if (commandId == L"cmd/terminal/close" || commandId == L"cmd/terminal/contextMenu" ||
-        commandId == L"cmd/terminal/sessionMenu" || commandId == L"cmd/terminal/tab/next" ||
-        commandId == L"cmd/terminal/tab/previous" || commandId == L"cmd/terminal/tab/last")
+    if (commandId == L"cmd/terminal/close" || commandId == L"cmd/terminal/contextMenu" || commandId == L"cmd/terminal/sessionMenu" ||
+        commandId == L"cmd/terminal/tab/next" || commandId == L"cmd/terminal/tab/previous" || commandId == L"cmd/terminal/tab/last")
     {
         state.enabled = true;
         return true;
@@ -1039,7 +1013,7 @@ bool FloatingTerminalWindow::QueryCommandState(std::wstring_view commandId, Comm
     if (commandId.starts_with(selectPrefix) && commandId.size() == selectPrefix.size() + 1u)
     {
         const wchar_t digit = commandId.back();
-        state.enabled = digit >= L'1' && digit <= L'8' && static_cast<size_t>(digit - L'1') < _tabs.size();
+        state.enabled       = digit >= L'1' && digit <= L'8' && static_cast<size_t>(digit - L'1') < _tabs.size();
         return true;
     }
     return true;
@@ -1053,12 +1027,12 @@ bool FloatingTerminalWindow::ExecuteCommand(std::wstring_view commandId) noexcep
     }
     const auto showCommandMenu = [&](std::span<const std::wstring_view> actionIds) noexcept
     {
-        if (!_window)
+        if (! _window)
         {
             return false;
         }
         wil::unique_hmenu menu(CreatePopupMenu());
-        if (!menu)
+        if (! menu)
         {
             return false;
         }
@@ -1068,17 +1042,18 @@ bool FloatingTerminalWindow::ExecuteCommand(std::wstring_view commandId) noexcep
             const std::wstring_view actionId = actionIds[index];
             if (actionId.empty())
             {
-                if (AppendMenuW(menu.get(), MF_SEPARATOR, 0u, nullptr) == FALSE) return false;
+                if (AppendMenuW(menu.get(), MF_SEPARATOR, 0u, nullptr) == FALSE)
+                    return false;
                 continue;
             }
             const CommandInfo* info = FindCommandInfo(actionId);
-            const std::wstring label = info != nullptr && info->displayNameStringId != 0u
-                ? LoadStringResource(nullptr, info->displayNameStringId)
-                : std::wstring(actionId);
+            const std::wstring label =
+                info != nullptr && info->displayNameStringId != 0u ? LoadStringResource(nullptr, info->displayNameStringId) : std::wstring(actionId);
             CommandRuntimeState actionState{};
             const bool enabled = QueryCommandState(actionId, actionState) && actionState.enabled;
-            if (AppendMenuW(menu.get(), static_cast<UINT>(MF_STRING | (enabled ? MF_ENABLED : MF_GRAYED)),
-                            kFirstCommand + static_cast<UINT>(index), label.c_str()) == FALSE)
+            if (AppendMenuW(
+                    menu.get(), static_cast<UINT>(MF_STRING | (enabled ? MF_ENABLED : MF_GRAYED)), kFirstCommand + static_cast<UINT>(index), label.c_str()) ==
+                FALSE)
             {
                 return false;
             }
@@ -1103,24 +1078,27 @@ bool FloatingTerminalWindow::ExecuteCommand(std::wstring_view commandId) noexcep
             }
         }
         SetForegroundWindow(_window.get());
-        const UINT selected = static_cast<UINT>(TrackPopupMenuEx(
-            menu.get(), TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD,
-            anchor.x, anchor.y, _window.get(), nullptr));
-        if (selected < kFirstCommand || selected >= kFirstCommand + actionIds.size()) return true;
+        const UINT selected = static_cast<UINT>(
+            TrackPopupMenuEx(menu.get(), TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, anchor.x, anchor.y, _window.get(), nullptr));
+        if (selected < kFirstCommand || selected >= kFirstCommand + actionIds.size())
+            return true;
         const std::wstring_view selectedAction = actionIds[selected - kFirstCommand];
-        return !selectedAction.empty() && ExecuteCommand(selectedAction);
+        return ! selectedAction.empty() && ExecuteCommand(selectedAction);
     };
     if (commandId == L"cmd/terminal/contextMenu")
     {
-        constexpr std::array<std::wstring_view, 7u> actions{{
-            L"cmd/terminal/copy", L"cmd/terminal/paste", L"cmd/terminal/selectAll", std::wstring_view{},
-            L"cmd/terminal/find", L"cmd/terminal/suggestions", L"cmd/terminal/close"}};
+        constexpr std::array<std::wstring_view, 7u> actions{{L"cmd/terminal/copy",
+                                                             L"cmd/terminal/paste",
+                                                             L"cmd/terminal/selectAll",
+                                                             std::wstring_view{},
+                                                             L"cmd/terminal/find",
+                                                             L"cmd/terminal/suggestions",
+                                                             L"cmd/terminal/close"}};
         return showCommandMenu(actions);
     }
     if (commandId == L"cmd/terminal/sessionMenu")
     {
-        constexpr std::array<std::wstring_view, 3u> actions{{
-            L"cmd/terminal/tab/new", std::wstring_view{}, L"cmd/terminal/close"}};
+        constexpr std::array<std::wstring_view, 3u> actions{{L"cmd/terminal/tab/new", std::wstring_view{}, L"cmd/terminal/close"}};
         return showCommandMenu(actions);
     }
     if (commandId == L"cmd/terminal/tab/new")
@@ -1131,7 +1109,7 @@ bool FloatingTerminalWindow::ExecuteCommand(std::wstring_view commandId) noexcep
     if (commandId == L"cmd/terminal/close")
     {
         const size_t index = _selectedIndex;
-        if (!CloseTab(index, true))
+        if (! CloseTab(index, true))
         {
             return false;
         }
@@ -1143,7 +1121,7 @@ bool FloatingTerminalWindow::ExecuteCommand(std::wstring_view commandId) noexcep
         {
             static_cast<void>(PostMessageW(_window.get(), WndMsg::kFloatingTerminalCloseEmpty, 0u, 0));
         }
-        else if (!_tabs.empty())
+        else if (! _tabs.empty())
         {
             SelectTab(std::min(index, _tabs.size() - 1u), true);
         }
@@ -1151,7 +1129,7 @@ bool FloatingTerminalWindow::ExecuteCommand(std::wstring_view commandId) noexcep
     }
     if (commandId == L"cmd/terminal/tab/next" || commandId == L"cmd/terminal/tab/previous")
     {
-        const bool forward = commandId == L"cmd/terminal/tab/next";
+        const bool forward  = commandId == L"cmd/terminal/tab/next";
         const size_t target = forward ? (_selectedIndex + 1u) % _tabs.size() : (_selectedIndex + _tabs.size() - 1u) % _tabs.size();
         SelectTab(target, true);
         return true;
@@ -1165,7 +1143,7 @@ bool FloatingTerminalWindow::ExecuteCommand(std::wstring_view commandId) noexcep
     if (commandId.starts_with(selectPrefix) && commandId.size() == selectPrefix.size() + 1u)
     {
         const wchar_t digit = commandId.back();
-        const size_t index = digit >= L'1' && digit <= L'8' ? static_cast<size_t>(digit - L'1') : _tabs.size();
+        const size_t index  = digit >= L'1' && digit <= L'8' ? static_cast<size_t>(digit - L'1') : _tabs.size();
         if (index >= _tabs.size())
         {
             return false;
@@ -1175,12 +1153,12 @@ bool FloatingTerminalWindow::ExecuteCommand(std::wstring_view commandId) noexcep
     }
 
     const bool pluginAction = IsTerminalPluginActionId(commandId);
-    if (!pluginAction || !_tabs[_selectedIndex]->terminal)
+    if (! pluginAction || ! _tabs[_selectedIndex]->terminal)
     {
         return false;
     }
     wil::com_ptr<ITerminalActions> actions;
-    if (FAILED(_tabs[_selectedIndex]->terminal->QueryInterface(__uuidof(ITerminalActions), actions.put_void())) || !actions)
+    if (FAILED(_tabs[_selectedIndex]->terminal->QueryInterface(__uuidof(ITerminalActions), actions.put_void())) || ! actions)
     {
         return false;
     }
@@ -1193,42 +1171,41 @@ bool FloatingTerminalWindow::ExecuteCommand(std::wstring_view commandId) noexcep
     CoTaskMemFree(view.title.data);
     CoTaskMemFree(view.status.data);
     TerminalActionRequest request{};
-    request.sizeBytes = sizeof(request);
-    request.commandId = {commandId.data(), static_cast<uint32_t>(commandId.size())};
-    request.instanceId = view.instanceId;
+    request.sizeBytes         = sizeof(request);
+    request.commandId         = {commandId.data(), static_cast<uint32_t>(commandId.size())};
+    request.instanceId        = view.instanceId;
     request.sessionGeneration = view.sessionGeneration;
     return actions->ExecuteAction(&request) == S_OK;
 }
 
 std::optional<FloatingTerminalOpenRequest> FloatingTerminalWindow::ActiveRequest() const noexcept
 {
-    if (_tabs.empty() || _selectedIndex >= _tabs.size() || !_tabs[_selectedIndex])
+    if (_tabs.empty() || _selectedIndex >= _tabs.size() || ! _tabs[_selectedIndex])
     {
         return std::nullopt;
     }
     const Tab& tab = *_tabs[_selectedIndex];
-    return FloatingTerminalOpenRequest{
-        .profileId = tab.profileId, .providerId = tab.providerId, .canonicalPath = tab.canonicalPath};
+    return FloatingTerminalOpenRequest{.profileId = tab.profileId, .providerId = tab.providerId, .canonicalPath = tab.canonicalPath};
 }
 
 void FloatingTerminalWindow::PrepareForAppShutdown() noexcept
 {
     _appShutdown = true;
     CapturePlacement();
-    SyncSettings(!_tabs.empty());
+    SyncSettings(! _tabs.empty());
 }
 
 void FloatingTerminalWindow::OnTerminalEvent(const TerminalEvent* event, void* cookie) noexcept
 {
     auto* tab = static_cast<Tab*>(cookie);
     if (event == nullptr || event->sizeBytes < sizeof(TerminalEvent) || event->kind != TerminalEventKind::RootSessionExited ||
-        event->finalSnapshotComplete == 0u || tab == nullptr || tab->owner != this || !_window)
+        event->finalSnapshotComplete == 0u || tab == nullptr || tab->owner != this || ! _window)
     {
         return;
     }
-    auto payload = std::make_unique<FloatingTerminalEventPayload>();
-    payload->tabId = tab->tabId;
-    payload->event = *event;
+    auto payload         = std::make_unique<FloatingTerminalEventPayload>();
+    payload->tabId       = tab->tabId;
+    payload->event       = *event;
     payload->publishedAt = std::chrono::steady_clock::now();
     if (PostMessagePayload(_window.get(), WndMsg::kTerminalSessionExited, 0u, std::move(payload)))
     {
@@ -1239,23 +1216,23 @@ void FloatingTerminalWindow::OnTerminalEvent(const TerminalEvent* event, void* c
 #if defined(ENABLE_TESTS)
 bool FloatingTerminalWindow::DebugSnapshot(FloatingTerminalDebugSnapshot& out) const noexcept
 {
-    out = {};
-    out.root = _window.get();
-    out.tabCount = _tabs.size();
-    out.selectedIndex = _selectedIndex;
+    out                         = {};
+    out.root                    = _window.get();
+    out.tabCount                = _tabs.size();
+    out.selectedIndex           = _selectedIndex;
     out.pendingExitPayloadCount = _pendingExitPayloadCount.load(std::memory_order_acquire);
-    out.selectedChild = _tabs.empty() || _selectedIndex >= _tabs.size() ? nullptr : _tabs[_selectedIndex]->child;
-    if (!_tabs.empty() && _selectedIndex < _tabs.size() && _tabs[_selectedIndex] && _tabs[_selectedIndex]->terminal)
+    out.selectedChild           = _tabs.empty() || _selectedIndex >= _tabs.size() ? nullptr : _tabs[_selectedIndex]->child;
+    if (! _tabs.empty() && _selectedIndex < _tabs.size() && _tabs[_selectedIndex] && _tabs[_selectedIndex]->terminal)
     {
         TerminalViewState view{};
         view.sizeBytes = sizeof(view);
         if (SUCCEEDED(_tabs[_selectedIndex]->terminal->GetViewState(&view)))
         {
-            out.selectedLifecycle = view.activity.lifecycleState;
-            out.selectedActivityTrust = view.activity.activityTrust;
-            out.selectedSessionGeneration = view.sessionGeneration;
+            out.selectedLifecycle             = view.activity.lifecycleState;
+            out.selectedActivityTrust         = view.activity.activityTrust;
+            out.selectedSessionGeneration     = view.sessionGeneration;
             out.selectedFinalSnapshotComplete = view.finalSnapshotComplete != 0u;
-            out.selectedIdleAtPrimaryPrompt = view.activity.idleAtPrimaryPrompt != 0u;
+            out.selectedIdleAtPrimaryPrompt   = view.activity.idleAtPrimaryPrompt != 0u;
         }
         CoTaskMemFree(view.title.data);
         CoTaskMemFree(view.status.data);
@@ -1273,7 +1250,7 @@ bool FloatingTerminalWindow::DebugSnapshot(FloatingTerminalDebugSnapshot& out) c
 
 bool FloatingTerminalWindow::DebugCloseTab(size_t index) noexcept
 {
-    if (!CloseTab(index, true))
+    if (! CloseTab(index, true))
     {
         return false;
     }
@@ -1300,7 +1277,7 @@ bool FloatingTerminalWindow::DebugReorderTab(size_t fromIndex, size_t toIndex) n
 
 HRESULT FloatingTerminalWindow::DebugTerminateRootProcess(uint32_t exitCode) noexcept
 {
-    if (_tabs.empty() || _selectedIndex >= _tabs.size() || !_tabs[_selectedIndex] || !_tabs[_selectedIndex]->terminal)
+    if (_tabs.empty() || _selectedIndex >= _tabs.size() || ! _tabs[_selectedIndex] || ! _tabs[_selectedIndex]->terminal)
     {
         return E_HANDLE;
     }
@@ -1331,7 +1308,7 @@ HRESULT ShowFloatingTerminalWindow(HWND activationSource,
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
-    g_floatingTerminal = std::move(window);
+    g_floatingTerminal      = std::move(window);
     const HRESULT restoreHr = g_floatingTerminal->RestoreRememberedTabs(request, true);
     if (FAILED(restoreHr))
     {
@@ -1340,15 +1317,12 @@ HRESULT ShowFloatingTerminalWindow(HWND activationSource,
         return restoreHr;
     }
     SetForegroundWindow(g_floatingTerminal->GetHwnd());
-    Debug::Perf::EmitDurationUs(L"terminal.floating.window_open_to_visible_us",
-                                Debug::Perf::ElapsedUs(startedAt),
-                                g_floatingTerminal ? 1u : 0u,
-                                g_floatingTerminal ? 1u : 0u);
+    Debug::Perf::EmitDurationUs(
+        L"terminal.floating.window_open_to_visible_us", Debug::Perf::ElapsedUs(startedAt), g_floatingTerminal ? 1u : 0u, g_floatingTerminal ? 1u : 0u);
     return S_OK;
 }
 
-HRESULT RestoreFloatingTerminalWindowAfterStartup(
-    HWND activationSource, Common::Settings::Settings& settings, const AppTheme& theme) noexcept
+HRESULT RestoreFloatingTerminalWindowAfterStartup(HWND activationSource, Common::Settings::Settings& settings, const AppTheme& theme) noexcept
 {
     const auto startedAt = std::chrono::steady_clock::now();
     DropDestroyedSingleton();
@@ -1356,8 +1330,8 @@ HRESULT RestoreFloatingTerminalWindowAfterStartup(
     {
         return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
     }
-    if (!settings.terminal.has_value() || !settings.terminal->floatingWindow.has_value() ||
-        !settings.terminal->floatingWindow->wasOpenAtCleanShutdown || settings.terminal->floatingWindow->tabs.empty())
+    if (! settings.terminal.has_value() || ! settings.terminal->floatingWindow.has_value() || ! settings.terminal->floatingWindow->wasOpenAtCleanShutdown ||
+        settings.terminal->floatingWindow->tabs.empty())
     {
         return S_FALSE;
     }
@@ -1366,7 +1340,7 @@ HRESULT RestoreFloatingTerminalWindowAfterStartup(
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
-    g_floatingTerminal = std::move(window);
+    g_floatingTerminal      = std::move(window);
     const HRESULT restoreHr = g_floatingTerminal->BeginRememberedTabsRestore();
     if (FAILED(restoreHr) || restoreHr == S_FALSE)
     {
@@ -1374,10 +1348,8 @@ HRESULT RestoreFloatingTerminalWindowAfterStartup(
         DropDestroyedSingleton();
         return FAILED(restoreHr) ? restoreHr : E_FAIL;
     }
-    Debug::Perf::EmitDurationUs(L"terminal.floating.window_open_to_visible_us",
-                                Debug::Perf::ElapsedUs(startedAt),
-                                settings.terminal->floatingWindow->tabs.size(),
-                                1u);
+    Debug::Perf::EmitDurationUs(
+        L"terminal.floating.window_open_to_visible_us", Debug::Perf::ElapsedUs(startedAt), settings.terminal->floatingWindow->tabs.size(), 1u);
     return S_OK;
 }
 
@@ -1411,11 +1383,8 @@ bool IsFloatingTerminalInputTarget(HWND targetWindow) noexcept
     return g_floatingTerminal && g_floatingTerminal->IsInputTarget(targetWindow);
 }
 
-HRESULT RouteFloatingTerminalShortcut(HWND targetWindow,
-                                      std::wstring_view commandId,
-                                      const MSG& message,
-                                      uint32_t modifiers,
-                                      TerminalShortcutRoute& route) noexcept
+HRESULT RouteFloatingTerminalShortcut(
+    HWND targetWindow, std::wstring_view commandId, const MSG& message, uint32_t modifiers, TerminalShortcutRoute& route) noexcept
 {
     DropDestroyedSingleton();
     return g_floatingTerminal ? g_floatingTerminal->RouteShortcut(targetWindow, commandId, message, modifiers, route) : E_HANDLE;
@@ -1432,7 +1401,7 @@ bool QueryFloatingTerminalCommandState(std::wstring_view commandId, CommandRunti
     DropDestroyedSingleton();
     if (! g_floatingTerminal)
     {
-        state = {};
+        state         = {};
         state.enabled = false;
         return true;
     }

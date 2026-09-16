@@ -121,3 +121,8 @@ IDR_VIEWERWEB_JSONEDITOR_ICONS_SVG RCDATA "Assets\\jsoneditor-icons.svg"
 IDR_VIEWERWEB_MARKDOWNIT_JS RCDATA "Assets\\markdown-it.min.js"
 IDR_VIEWERWEB_HIGHLIGHT_JS RCDATA "Assets\\highlight.min.js"
 
+
+STRINGTABLE
+BEGIN
+    IDS_DXUI_NO_MATCHES "No matches"
+END

@@ -1,0 +1,9 @@
+<Project>
+  <Import Project="$(MSBuildThisFileDirectory)..\.build\dependencies\DxUi\DxUi.resolved.$(Platform).props"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\.build\dependencies\DxUi\DxUi.resolved.$(Platform).props')" />
+  <Import Project="$(DxUiRoot)\Build\DxUi.Consumer.props" Condition="'$(DxUiRoot)'!=''" />
+  <PropertyGroup><RSDxUiConsumer>true</RSDxUiConsumer></PropertyGroup>
+  <Target Name="RequireRestoredDxUi" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(DxUiRoot)'==''" Text="Run Tools/Restore-DxUi.ps1 for this platform before building a DxUi consumer." />
+  </Target>
+</Project>

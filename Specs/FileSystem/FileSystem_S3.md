@@ -178,8 +178,13 @@ Host-level extra keys:
   once the host has handed the reader its control (scenario 4, C8),
   with the host's verdict after Cancel and as a transport failure without it; FileOps
   `R0fS3_FakeS3ReadWriteCreateDelete` proves cross-provider Copy both ways (byte-exact), provider
-  CreateDirectory and Rename, and Delete through a task on the same fixture. The gated
-  `REDSALAMANDER_SELFTEST_CONN_S3` profile remains the live proof. S3 is a full file-manager
+  CreateDirectory and Rename, and Delete through a task on the same fixture. One limit of that
+  fixture is recorded rather than assumed away: the CRT client turns a small-object `CopyObject`
+  into a meta-request whose source-size `HEAD` is built virtual-hosted, so against a path-style
+  endpoint that `HEAD` names the wrong bucket, the server-side copy never reaches the fake's
+  `CopyObject` handler, and every same-bucket object transfer the fake witnesses runs through the
+  bounded relay. Server-side copy of small objects is therefore proven only by the live profile.
+  The gated `REDSALAMANDER_SELFTEST_CONN_S3` profile remains the live proof. S3 is a full file-manager
   destination. Residual: `operations.rename` stays `false` until the central Rename route consumes
   S3's typed receipt; the provider `RenameItem` works and is exercised by the fixture case.
 - Directory-size progress/cancellation failures are authoritative, including the final completion callback; the plugin must not overwrite that callback status with `S_OK`.
@@ -217,6 +222,13 @@ For `flatPrefix`:
 - The marker is an engine-owned publication object with the same exact revision/conditional
   publication and cleanup rules as another S3 object. A pathname or trailing-`/` pattern alone is
   never rollback/delete authority.
+- A zero-byte object, the marker included, transfers on the same pinned-revision route as any other
+  object. When that route takes the bounded relay, the relay fetches nothing for it: there is no
+  range of an empty object a GET can satisfy, and the CRT client issues every GetObject as ranged
+  parts, so the relay proves with one identity request that the pinned source still exists at its
+  revision and is still empty, then publishes from the empty file it already holds.
+  `RunS3DirectoryMarkerTransferSelfTests` is the witness: Copy, bulk Copy and Move of a prefix that
+  carries an explicit marker, against the loopback fake.
 - An existing marker means directory-on-directory merge. A non-marker object at the would-be
   directory key or an object/directory ancestor mismatch is a typed conflict; it is never silently
   overwritten to manufacture a folder.

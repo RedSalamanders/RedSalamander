@@ -371,6 +371,7 @@ template <typename AwsErrors>
 void RunDebugMultipartWriterContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
 void RunS3StalledRequestCancelSelfTests(unsigned int& passed, unsigned int& failed) noexcept;
 void RunS3ZeroTimestampReplaceSelfTests(unsigned int& passed, unsigned int& failed) noexcept;
+void RunS3DirectoryMarkerTransferSelfTests(unsigned int& passed, unsigned int& failed) noexcept;
 void RunDirectoryTransferProbeContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
 void RunSourceRevisionTransferContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
 void RunCopySourceSerializationContractSelfTest(unsigned int& passed, unsigned int& failed) noexcept;

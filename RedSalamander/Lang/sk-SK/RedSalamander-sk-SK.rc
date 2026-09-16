@@ -987,6 +987,7 @@ BEGIN
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_LABEL "Konfigurácia"
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_UNAVAILABLE "Konfigurácia nie je pre tento doplnok dostupná."
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_DEFAULT "Pre tento doplnok nie je uložená žiadna konfigurácia (s použitím predvolených nastavení)."
+    IDS_PREFS_PLUGINS_DETAILS_CONFIG_REJECTED "Doplnok tieto nastavenia odmietol (chyba 0x{0:08X}), preto neboli uložené. Skontrolujte zvýraznené hodnoty a skúste to znova."
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_BROWSE_ELLIPSIS "Prehliadať..."
     IDS_PREFS_PLUGINS_DETAILS_SCHEMA_UNAVAILABLE "🧩\r\nTento plugin neposkytuje konfiguračný editor."
     IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NOT_LOADABLE "🚧\r\nTento doplnok sa momentálne nedá načítať, takže jeho konfiguračný editor je nedostupný."

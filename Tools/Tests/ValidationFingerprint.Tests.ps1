@@ -184,6 +184,27 @@ Describe 'Operation Startrail dependency closure' {
 }
 
 Describe 'Operation Startrail workspace snapshots' {
+    It 'keeps the CI managed tool checkout outside product source identity' {
+        $fixture = New-RSValidationGitFixture -Root (Join-Path $TestDrive 'managed build checkout')
+        [IO.File]::WriteAllText((Join-Path $fixture.Root '.gitignore'), ".build/`n", [Text.UTF8Encoding]::new($false))
+        $before = Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root
+        $toolRoot = Join-Path $fixture.Root '.build\vcpkg-tool'
+        [void](New-Item -ItemType Directory -Path $toolRoot -Force)
+        & git -C $toolRoot init --quiet
+        $LASTEXITCODE | Should Be 0
+        [IO.File]::WriteAllText((Join-Path $toolRoot 'bootstrap-vcpkg.bat'), 'managed tool', [Text.UTF8Encoding]::new($false))
+        (Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root).snapshot_id | Should Be $before.snapshot_id
+
+        # A checkout at the old CI location must still fail closed, not become an
+        # unreviewed exclusion from the source-integrity boundary.
+        $unmanagedRoot = Join-Path $fixture.Root 'vcpkg'
+        [void](New-Item -ItemType Directory -Path $unmanagedRoot -Force)
+        & git -C $unmanagedRoot init --quiet
+        $LASTEXITCODE | Should Be 0
+        [IO.File]::WriteAllText((Join-Path $unmanagedRoot 'unexpected.txt'), 'unmanaged tool', [Text.UTF8Encoding]::new($false))
+        (Test-RSActionThrows { Get-RSWorkspaceSnapshot -RepoRoot $fixture.Root }) | Should Be $true
+    }
+
     It 'preserves distinct base index and worktree identities for every Git mutation class' {
         $fixture = New-RSValidationGitFixture -Root (Join-Path $TestDrive 'workspace identities')
         $dirtyPath = Join-Path $fixture.Root $fixture.DirtyPath

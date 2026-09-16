@@ -622,7 +622,30 @@ Each provider reports the selected root even when it is a single leaf and no rec
 is needed. A leaf's discovery record contains its exact file byte size and closes that item's
 traversal before publication starts; recursive roots let their existing walker own the root and
 descendant cumulative totals. A provider must not leave leaf totals at zero merely because the copy
-path itself does not enumerate a directory.
+path itself does not enumerate a directory. The host bridge is a traversal owner under this rule for
+every route it executes. When its selected root is a known regular file, including a cloud, WOF or
+dedup placeholder that binds as regular content, it publishes that exact size and closes the root's
+scope at authoritative source binding, before writer, stage or payload work. A selected root that
+classifies as a name-surrogate link is one item under both Preserve and Skip: neither follows the
+target, so the record is item-based with no target enumeration and no target byte total. Closing a
+discovery scope is neither transfer completion nor permission to remove a source; publication,
+verification, conflict decisions and exact source cleanup all follow it.
+
+Discovery scope belongs to whichever traversal is actually producing the work. A provider call that
+a traversal owner makes inside its own walk is a different discovery scope even though it shares the
+task's cancellation, deadline and bandwidth controls: exact source cleanup, a child's Native rename,
+and owned-stage creation or removal must not publish child-local totals or closure into the selected
+root. The host passes such calls an operation-control cookie that suppresses discovery reporting,
+while the ordinary progress, conflict and result callbacks keep the root's own cookie. A provisional
+mutation whose own report cannot yet know whether it resolved the root is treated the same way in
+one direction only: a Native directory rename that may continue as a host rename merge keeps its
+cumulative counts and has its one-way closure withheld until the host knows which traversal owns the
+rest of that root. Closure stays one-way and idempotent, and the per-item terminal guard remains the
+fallback that closes every root exactly once.
+
+Because closure means the totals are final, a correct task never discovers more work after it. The
+host counts any such late report as `FileOps.Discovery.GrowthAfterClose`; the value is observation
+only and must be zero.
 
 The traversal retains queued file/reparse work plus O(depth) directory/ancestor state; it never
 retains a completed-tree-sized directory list or pathname manifest. `Common/FileOperationTraversalPolicy.h`

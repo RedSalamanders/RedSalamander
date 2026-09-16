@@ -35,7 +35,7 @@ $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'Modules\Auditing\RepositorySourceScanner.psm1') -Force
 
 $sourceRoots = @(
-    'Common/DxUi',
+    'Common',
     'RedSalamander',
     'Plugins'
 )

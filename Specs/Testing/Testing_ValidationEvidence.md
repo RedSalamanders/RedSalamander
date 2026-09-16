@@ -19,6 +19,14 @@ CI, nightly, release, and final closeout remain explicit Fresh.
 
 ## Workspace and entry identity (Phase 3 active)
 
+FileOperations child-profile isolation is runner-owned execution policy. Its unique
+`LOCALAPPDATA` path is derived beneath the selected run's scratch root, independently
+for every launch and classification retry. It is not a caller-controlled capability
+or a reusable input directory. The existing runner dependency digest includes this
+policy, so receipts produced before the change cannot authorize exact reuse afterward.
+The process owns that directory for its complete lifetime; caller environment and
+journal files are not modified.
+
 `Get-RSWorkspaceSnapshot` is the canonical local source identity. It resolves only
 local Git objects, uses the merge base of an explicit impact base without fetching,
 and records separate committed-base, index, and worktree byte identities for changed,
@@ -67,6 +75,13 @@ without a specific reviewed rule selects the broad fallback and Full build/valid
 surface. Every tracked solution/project/import/runtime input must be a member of the
 derived graph or an exact reviewed standalone rule; adding an ungoverned project input
 is a planning error rather than a silent fallback.
+
+After shared-library adoption, current product UI test sources map to the live
+`Tests/ProductUiTests/ProductUiTests.vcxproj` consumer and the existing standalone
+validation surface. Retired `Common/DxUi` and `Tests/DxUiTests` projects must not remain
+as live derived-closure owners. Exact DxUi pin changes and current shared UI adapter
+changes must still select `ProductUiTests` and their product consumers; the conservative
+Full fallback remains valid for shared adapters without a narrower reviewed mapping.
 
 Executable specification inputs are not prose exclusions. Build and validation schemas,
 settings schemas, theme runtime data, performance budgets, terminal corpora/evidence,

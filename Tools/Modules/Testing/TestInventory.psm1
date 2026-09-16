@@ -86,7 +86,8 @@ function Get-RSFileOpsPhaseIntegrity {
         [string]$FilePath
     )
 
-    $excluded = @('Idle', 'Setup', 'Cleanup_RestorePluginConfig', 'Done', 'Failed')
+    # VisualGallery is an explicitly selected documentation fixture, never a broad-suite phase.
+    $excluded = @('Idle', 'Setup', 'FileOps_VisualGallery', 'FileOps_VisualGalleryInteraction', 'Cleanup_RestorePluginConfig', 'Done', 'Failed')
     $enumValues = @(Get-RSFileOpsStepEnumNames -FilePath $FilePath)
     $orderedPhases = @(Get-RSFileOpsPhaseOrderNames -FilePath $FilePath)
     $activeEnumValues = @($enumValues | Where-Object { $_ -notin $excluded })
@@ -130,7 +131,9 @@ function Get-RSTestProjectNames {
 
     $testsRoot = Join-Path $RepoRoot 'Tests'
     return @(Get-ChildItem -LiteralPath $testsRoot -Recurse -Filter '*.vcxproj' |
-        Where-Object { $_.FullName -notmatch '[\\/]Lang[\\/]' } |
+        # I19 retains the retired library fixture files until native consumer qualification.
+        # ProductUiTests owns the retained product cases; all other test projects still require runner coverage.
+        Where-Object { $_.FullName -notmatch '[\\/]Lang[\\/]' -and $_.BaseName -ne 'DxUiTests' } |
         ForEach-Object { $_.BaseName } |
         Sort-Object -Unique)
 }
@@ -246,10 +249,10 @@ function Get-RSTestRunPlanSurfaceInventory {
         $matchingEntries = @($ciPlan + $fullPlan | Where-Object {
                 [System.IO.Path]::GetFileNameWithoutExtension([string]$_.Path) -eq $projectName
             })
-        $kinds = @($matchingEntries.Kind | Sort-Object -Unique)
         if ($matchingEntries.Count -eq 0) {
             throw "Test project '$projectName' is not represented in the CI or Full run plan."
         }
+        $kinds = @($matchingEntries.Kind | Sort-Object -Unique)
         if ($kinds.Count -ne 1) {
             throw "Test project '$projectName' has inconsistent run-plan kinds: $($kinds -join ', ')."
         }
@@ -304,7 +307,7 @@ function Get-RSTestInventory {
     $compareFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'RedSalamander\SelfTest\CompareDirectories') -Filter '*.cpp')
     $fileOpsCoordinator = Join-Path $RepoRoot 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp'
     $performanceFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'Tests\PerformanceTests2') -Filter '*.cpp')
-    $nativeTextInputTests = Join-Path $RepoRoot 'Tests\DxUiTests\DxUiTests.NativeTextInput.cpp'
+    $productUiTests = Join-Path $RepoRoot 'Tests\ProductUiTests\ProductUiTests.cpp'
     $toolTestFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'Tools\Tests') -Filter '*.Tests.ps1')
     $sourceContractFile = Join-Path $RepoRoot 'Tools\Tests\TestHarnessSourceContracts.Tests.ps1'
     $syntheticScript = Join-Path $RepoRoot 'Tests\vcpkg-merge-synthetic-test.ps1'
@@ -359,8 +362,8 @@ function Get-RSTestInventory {
             PerformanceTests2 = [pscustomobject]@{
                 TestMethods = Get-RSSelectStringCount -Path @($performanceFiles.FullName) -Pattern 'TEST_METHOD\('
             }
-            DxUiTests = [pscustomobject]@{
-                NativeTextInputCases = Get-RSSelectStringCount -Path @($nativeTextInputTests) -Pattern '^void\s+TestNativeTextInput'
+            ProductUiTests = [pscustomobject]@{
+                Cases = Get-RSSelectStringCount -Path @($productUiTests) -Pattern '^void\s+Test'
             }
         }
         Scripts = [pscustomobject]@{
@@ -414,8 +417,8 @@ function ConvertTo-RSTestInventoryJson {
             performanceTests2 = [ordered]@{
                 testMethods = $Inventory.Standalone.PerformanceTests2.TestMethods
             }
-            dxUiTests = [ordered]@{
-                nativeTextInputCases = $Inventory.Standalone.DxUiTests.NativeTextInputCases
+            productUiTests = [ordered]@{
+                cases = $Inventory.Standalone.ProductUiTests.Cases
             }
         }
         scripts = [ordered]@{

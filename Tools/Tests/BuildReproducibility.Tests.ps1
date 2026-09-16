@@ -162,8 +162,6 @@ Describe 'Declarative runtime dependency graph' {
         $testTargets | Should Match '<Delete Files="@\(_RSDisabledTestOutput\)"'
 
         foreach ($project in @(
-            'Common\DxUi\DxUi.vcxproj',
-            'Tests\DxUiTests\DxUiTests.vcxproj',
             'Tests\FileSystemCurlTests\FileSystemCurlTests.vcxproj',
             'Tests\RedConfigureTests\RedConfigureTests.vcxproj',
             'Tests\ViewerPETests\ViewerPETests.vcxproj'
@@ -172,14 +170,6 @@ Describe 'Declarative runtime dependency graph' {
                 Should Not Match '<RSBuildEnableTests'
         }
 
-        $accessibilitySource = Get-Content -LiteralPath (Join-Path $repoRoot 'Common\DxUi\DxUi.Accessibility.cpp') -Raw
-        $dxUiProject = Get-Content -LiteralPath (Join-Path $repoRoot 'Common\DxUi\DxUi.vcxproj') -Raw
-        $windowMessages = Get-Content -LiteralPath (Join-Path $repoRoot 'Common\WindowMessages.h') -Raw
-        $windowMessages | Should Match 'kDxUiAccessibilityAction\s*=\s*WM_APP'
-        $windowMessages | Should Match 'kDxUiAccessibilityCreateProvider\s*=\s*WM_APP'
-        $accessibilitySource | Should Match 'WndMsg::kDxUiAccessibilityCreateProvider'
-        $accessibilitySource | Should Not Match '#if defined\(ENABLE_TESTS\)\s*\r?\n\s*if \(msg == WndMsg::kDxUiAccessibilityCreateProvider'
-        $dxUiProject | Should Match '(?s)DxUi\.Accessibility\.cpp.+DebugInformationFormat Condition="''\$\(Configuration\)''==''Release'' and ''\$\(RSBuildEnableTests\)''==''true''">OldStyle'
     }
 
     It 'rejects a missing required staged dependency by exact output name' {
@@ -657,7 +647,13 @@ Describe 'Pinned build-tool and CI identity' {
         $ci | Should Match '\$env:VcpkgManifestInstall\s*=\s*"false"'
         $ci | Should Match '\$env:VcpkgXUseBuiltInApplocalDeps\s*=\s*"false"'
         $ci | Should Match '\$env:VCPkgLocalAppDataDisabled\s*=\s*"true"'
-        $ci | Should Match 'vcpkg\\scripts\\buildsystems\\msbuild'
+        $ci | Should Match '\$vcpkgMsbuildRoot\s*=\s*Join-Path \$env:VCPKG_ROOT "scripts\\buildsystems\\msbuild"'
+        $ci | Should Match '\$vcpkgProps\s*=\s*Join-Path \$vcpkgMsbuildRoot "vcpkg\.props"'
+        $ci | Should Match '\$vcpkgTargets\s*=\s*Join-Path \$vcpkgMsbuildRoot "vcpkg\.targets"'
+        $ci | Should Match 'VCPKG_ROOT:.*\\\.build\\vcpkg-tool'
+        $ci | Should Match '\.build/vcpkg-tool/downloads'
+        $ci | Should Match 'Resolve-RSVcpkgSafeChildPath -Root \$env:GITHUB_WORKSPACE -Child ''\.build\\vcpkg-tool'''
+        $ci | Should Not Match 'git clone \$toolRepository \.\\\\vcpkg'
         $ci.IndexOf('$env:ForceImportBeforeCppTargets') | Should BeLessThan $ci.IndexOf('& $buildScript @buildArgs')
         $ci.IndexOf('$env:ForceImportAfterCppTargets') | Should BeLessThan $ci.IndexOf('& $buildScript @buildArgs')
         $ci.IndexOf('$env:VcpkgXUseBuiltInApplocalDeps') | Should BeLessThan $ci.IndexOf('& $buildScript @buildArgs')
@@ -677,16 +673,19 @@ Describe 'Pinned build-tool and CI identity' {
         $selfTests = Get-Content -LiteralPath (Join-Path $repoRoot 'Specs\Testing\Testing_SelfTests.md') -Raw
         $ci | Should Match 'push:\s*\r?\n\s*branches:\s*\[main, master\]'
         $ci | Should Match 'pull_request:\s*\r?\n\s*branches:\s*\[main, master\]'
-        $ci | Should Match 'id:\s*cpp_changes'
-        $ci | Should Match 'git diff --name-only "\$env:BASE_SHA\.\.\.HEAD"'
-        @($ci | Select-String -Pattern "if: steps\.cpp_changes\.outputs\.changed == 'true'" -AllMatches).Matches.Count | Should Be 3
+        $ci | Should Match 'contents:\s*read'
+        $ci | Should Not Match 'contents:\s*write|git commit|git push|format-all\.ps1'
+        $ci | Should Match 'git diff --name-only --diff-filter=ACMR'
+        $ci | Should Match '--require-hashes --only-binary=:all: --no-deps'
+        $ci | Should Match '--dry-run --Werror --style=file'
+        $ci | Should Match '\^\(Common\|Plugins\|PoC\|Red\[\^/\]\+\|Tests\|Tools\)'
         $subclassGuard | Should Match "Get-Command 'rg' -ErrorAction SilentlyContinue"
         $subclassGuard | Should Match 'Select-String -SimpleMatch -Pattern \$pattern'
         $subclassGuard | Should Match '\$global:LASTEXITCODE\s*=\s*0\s*$'
         $ci | Should Match 'platform:\s*ARM64'
         $ci | Should Match 'configuration:\s*Debug'
         $selfTests | Should Match 'PluginContractTests, SettingsSchemaTests, and CrashHandlingTests'
-        $selfTests | Should Match 'RedSalamanderMonitorEtwLatency remains a broader closeout-only `-Suite Full` gate'
+        $ci | Should Match 'run_full_tests:\s*true'
     }
 
     It 'runs scheduled and high-risk ASan with a seeded detector proof before green contracts' {

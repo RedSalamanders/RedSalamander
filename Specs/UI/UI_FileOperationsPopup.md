@@ -18,20 +18,32 @@ changes, and expose enough debug state for deterministic selftests without pixel
 
 ## Reference Captures
 
-Documentation screenshots MUST be captured from the real product popup, not from the HTML mockup.
-Current Debug x64 product captures:
+Documentation screenshots MUST be captured from the real product popup through the named test-scenario
+harness. Static captures do not activate; explicitly authorized interaction captures use the existing
+warning and desktop lease, then restore focus/cursor. `FileOps_VisualGallery` supplies deterministic presentation fixtures;
+its capture and provenance contract is in `Specs/Testing/Testing_SelfTests.md`. Mockups remain proposals.
+The images below are historical Debug x64 captures; they do not prove the current checkout's appearance:
 
-- Current conflict and minimum-width footer: `Specs/UI/Images/FileOperationsPopup_Product_Conflict_2026-07-10.png`.
+- Historical conflict and minimum-width footer: `Specs/UI/Images/FileOperationsPopup_Product_Conflict_2026-07-10.png`.
 - Active running/waiting popup: `Specs/UI/Images/FileOperationsPopup_Product_Active_2026-07-09.png`.
 - Completed partial-result popup: `Specs/UI/Images/FileOperationsPopup_Product_Partial_2026-07-09.png`.
 
-![Current conflict and minimum-width footer product capture](Images/FileOperationsPopup_Product_Conflict_2026-07-10.png)
+![Historical conflict and minimum-width footer product capture](Images/FileOperationsPopup_Product_Conflict_2026-07-10.png)
 
 ![Active running/waiting File Operations popup product capture](Images/FileOperationsPopup_Product_Active_2026-07-09.png)
 
 ![Completed partial-result File Operations popup product capture](Images/FileOperationsPopup_Product_Partial_2026-07-09.png)
 
 ## Regions
+
+Implementation observation, 2026-09-16: the I26 harness gallery at dirty `9c68026dd` exposes existing
+deviations from the intended action/checkbox layout below: ordinary expanded task actions receive a
+zero-height row, the hosted repeat-decision strip does not visibly convey the checked fixture state,
+and some long conflict-action labels clip at minimum width. French captures on physical 96/144 DPI
+displays additionally show custom-speed help/error overlap at 96 DPI and vertically clipped Issues
+messages. Capture-driver support is implemented; these product defects remain open. These are open implementation defects,
+not changes to the required behavior. Evidence and proposed remediation are in
+[the I26 review](../Plans/WIP/FileOperationsUiReview_2026-09-16/proposal.md).
 
 The popup has three visible regions:
 
@@ -175,6 +187,12 @@ the card exposes `Skip discovery`; selecting it atomically switches the task to 
 discovery, releases discovery-ahead reservations and scheduler throttles, removes the action, and
 allows eligible transfer work to use the full task bandwidth/concurrency budget. The status becomes
 `Discovering as needed` until traversal closes.
+
+A task whose selection is a single known file never presents this state during its transfer. Its
+exact byte total is published and its discovery scope closes before any payload moves, so the card
+shows a fixed full-file denominator, a determinate meter and a real item count from the first frame.
+With several selected roots an early leaf closure is still correct while another root keeps
+discovering: the task aggregate stays open until every root resolves.
 
 `Skip discovery` skips only the run-ahead user experience. It never skips recursive enumeration,
 name validation, identity/containment checks, capability queries, conflicts, or revalidation before
@@ -403,6 +421,10 @@ bar. During streaming discovery it is indeterminate: a visible marquee once tran
 a fraction over the growing discovered-so-far denominator (D2-A08). The separate discovery indicator
 and the exact counters line make the open scope explicit. Compact cards show no meter or percent text
 until `discoveryClosed`; percent, ordinary ETA, and the hosted progress value begin only after closure.
+The cure for an indeterminate meter is an honest producer, never a forced determinate presentation:
+a task that knows its total closes its scope and this rule then yields a determinate meter on its
+own. ETA still waits for the estimator's normal warm-up, so a closed total does not imply an
+immediate remaining-time figure.
 
 The whole-task bar has equal semantic halves when verification is requested: the left half is
 transfer/publication and the right half is verification. Verification uses the
@@ -721,8 +743,15 @@ enabled:
 ## Conflict Layout
 
 Conflict prompts are inline on the affected card. Source and destination paths MUST be stacked in
-full-width rows rather than side-by-side columns so long names keep useful width. The primary action
-row exposes at most three buttons plus a `More...` menu for overflow actions.
+full-width rows rather than side-by-side columns so long names keep useful width. This applies at
+every width: Incoming is always above Existing, including wide layouts. File names and parent
+locations retain the full available width and wrap independently, without silently dropping the
+root or extension. Complete values remain keyboard-accessible. The primary action
+group exposes the engine-published primary choices (currently at most three) plus a `More...` menu
+for overflow actions. Measure localized labels and wrap whole controls into additional rows when
+needed, preserving published action order, default and Escape semantics. Critical action labels
+MUST NOT be clipped or ellipsized. At a short work area, scroll content while keeping decisions
+and safe exit reachable; do not grow beyond that monitor’s work area.
 
 The popup is a presentation-only consumer of the immutable engine conflict policy. It copies and
 renders the supplied complete action order, primary/`More...` placement, default action, Escape
@@ -892,3 +921,20 @@ Release captures retain the bounded 180-sample, 16-slot, 2,864-quad, one-geometr
 report a 111 us median band-painter cost. This is candidate-only evidence because the accepted
 before/after archive belongs to a different machine profile; it does not establish a cross-profile
 performance comparison.
+
+## DPI, long text and interaction acceptance
+
+Confirmation instructions and consequences use a readable body foreground independent of the semantic
+accent color. Colored icons, borders or tints must not reduce paragraph or disabled-reason legibility.
+
+File-operation dialogs MUST remeasure text and layout after DPI, localization and validation-state
+changes. Input, explanatory/error text and actions occupy separate non-overlapping measured regions.
+Window geometry respects the active monitor work area. Long French sentences and names are required
+fixtures, including actual 96/144 DPI monitor transitions. A future 200% run must use a genuine native
+DPI environment; scaled PNGs do not qualify.
+
+Focus, hover, pressed, disabled and checked states must remain distinct. Reflow preserves focus and
+uses the same rectangles for paint, input, tooltip and UIA. A long path remains available without
+requiring hover. Issues grids use readable bounded rows and accessible complete values; clipped
+multiline paragraphs do not satisfy that requirement. The I26 proposal describes a selected-issue
+detail region and revised column priority; that restructuring is proposed, not implemented.

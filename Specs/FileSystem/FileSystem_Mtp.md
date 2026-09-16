@@ -228,6 +228,8 @@ If original deletion fails after the temp was verified and identified, the write
 
 Overwrite commits (writer and device-source) decide destination occupancy live: the backend forgets its cached leaf (`IMtpBackend::RefreshPathOccupancy`) before the existence check, so the existence check, the destination PUID read, and the original delete all resolve the current occupant; a destination replaced by another writer is seen with its current identity, which the commit compares with the decided one. Exclusive create and journal replay already looked the destination up live. The deterministic `mtp_wpd_overwrite_occupancy_is_live_on_stale_path_cache` selftest guards this on the WPD path cache (fixture option `replacePhotoAfterFirstLookup`).
 
+Discovery on a mutation's direct route describes the source before the device is touched. `IMtpBackend::GetCachedItemSummary` answers the item's kind and its last-listed size from the path cache without invalidating it, so a warm cache costs no device round trip and a cold one pays the same resolution the mutation would pay next; the core runs it as its own read-only command so that a command the watchdog abandons can never reach the caller's frame, reports through the shared `Common::FileOperations::DiscoveryScope` (a file with its size, a directory as one directory because the device relocates or copies it as one object), and records `FileOps.Mtp.Discovery.SourceLookupUs` with whether the cache served the answer. The live committed size stays with `GetFileSize`, which refreshes first. One governed call is one scope: the singular entry points close it once the source is described, and `CopyOrMoveItems` / `DeleteItems` close theirs once after the last item. The `DiscoveryScope_MtpDirectApi` FileOps case is the witness.
+
 Device-sourced copy/move overwrites that replace an existing destination must use the same safe temp-sibling swap model rather than direct backend overwrite: resolve the original destination's PUID before the temp copy (C9: the start of the operation is the decision), copy the source to a GUID temp sibling without overwrite, verify the temp using the configured device-source policy, require a non-empty temp PUID, delete only that original identity, rename the temp into the final destination path, and delete the source only after the final-path swap when the operation is a move. The deterministic `mtp_copy_overwrite_refuses_occupant_replaced_during_temp_copy` selftest guards an occupant replaced while the temp is copied. The deterministic `mtp_copy_move_overwrite_uses_temp_puid_swap` selftest guards copy and move replacement contents, final-path PUID handoff, copy-source retention, move-source deletion, exactly one final sibling, no leaked temp sibling, and `mtp.overwrite.device_source_temp_swap_committed`.
 
 The temp-sibling overwrite protocol is file-only. Before recording journal intent or mutating the device, copy, move, and rename with `FILESYSTEM_FLAG_ALLOW_OVERWRITE` must read both source and existing-destination attributes and fail with `ERROR_ACCESS_DENIED` when either object is a directory. The deterministic `mtp_fake_backend_move_rejects_directory_transfer_fallback` selftest also exercises copy, move, and rename of a directory over an existing file and guards that the source tree and destination bytes remain unchanged.
@@ -305,6 +307,13 @@ hotplug validation remain explicit environment-dependent evidence, not a
 prerequisite for deterministic fake-backend coverage.
 
 ## Performance Validation
+
+Every MTP self-test attempt redirects `LOCALAPPDATA` to its own native TestSandbox directory before
+creating a plugin or touching recovery state, then restores the caller's environment after fixture teardown.
+Repeats and shuffled execution receive distinct directories. Explicit journal-replay fixtures may nest their
+own sandbox inside this scope. Existing user-profile journals and quarantine files must remain untouched;
+their presence or a full quarantine must not affect synthetic-device tests. This is test isolation, not a
+change to the production recovery retention limit or replay behavior.
 
 Metrics use the `mtp.*` namespace. Device-less fake-backend tests may validate
 round trips, call counts, byte counts, progress cadence, cancellation, path

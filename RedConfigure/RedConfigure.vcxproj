@@ -91,7 +91,7 @@
       <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
       <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /MP %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)Common;$(SolutionDir)Common\DxUi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4710;4711;4514;%(DisableSpecificWarnings)</DisableSpecificWarnings>
     </ClCompile>
     <Link>
@@ -178,9 +178,6 @@
     <ProjectReference Include="..\Common\Common\Common.vcxproj">
       <Project>{87fb9a11-83cc-44d8-9fec-9aa9d72667ef}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\Common\DxUi\DxUi.vcxproj">
-      <Project>{E0D8E4A1-7AA7-4377-9E4C-A53794E43A1F}</Project>
-    </ProjectReference>
     <ProjectReference Include="Lang\ja-JP\RedConfigure-ja-JP.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
       <Project>{25272eaa-f0a5-5026-afde-0219adf15eac}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
@@ -200,7 +197,9 @@
       <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
     </ProjectReference>
   </ItemGroup>
+  <Import Project="..\Build\RedSalamander.DxUi.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="..\Build\RedSalamander.DxUi.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "DxUi/DxUi.h"
 #include "FolderWindow.h"
+#include <DxUi/DxUi.h>
 
 #include <array>
 #include <filesystem>
@@ -53,7 +53,7 @@ struct PopupHitTest
 };
 
 #ifdef ENABLE_TESTS
-inline constexpr uint32_t kPopupSelfTestDestroyOnNextShowData        = 0xD1570001u;
+inline constexpr uint32_t kPopupSelfTestDestroyOnNextShowData = 0xD1570001u;
 
 struct PopupSelfTestInvoke
 {
@@ -73,7 +73,7 @@ struct PopupButton
 struct PopupMenuAnchor
 {
     POINT screenPoint{};
-    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
 };
 
 enum class PopupStatusVisualTone : uint8_t
@@ -442,26 +442,26 @@ struct PopupLayoutDebugSnapshot
     std::wstring globalSummaryText;
 
     // Graph hue fairness (Fairstream 4D): aggregated over the task's live rate-history buckets.
-    uint32_t graphMultiHueBucketCount            = 0u;
-    uint32_t graphSingleHueBucketCount           = 0u;
-    uint32_t graphDistinctHueCount               = 0u;
-    double graphMinHueShare                      = 0.0; // per-hue share of summed multi-hue bucket weight
-    double graphMaxHueShare                      = 0.0;
-    uint32_t graphDebugAccumulateCalls           = 0u;
-    uint32_t graphDebugLastPending               = 0u;
-    uint32_t graphDebugMaxStreams                = 0u;
-    uint32_t graphRowColorMatchCount             = 0u;
-    uint32_t graphRowColorMismatchCount          = 0u;
-    bool graphCurrentBandwidthLineVisible        = false;
-    bool graphCurrentBandwidthLabelVisible       = false;
-    bool graphEtaLabelVisible                    = false;
-    bool graphEtaLabelRightAligned               = false;
-    bool taskInlineSpeedRowVisible               = false;
-    bool taskInlineEtaRowVisible                 = false;
-    float taskExpandedBaseHeightDip              = 0.0f;
-    double graphCurrentBandwidthBytesPerSecond   = 0.0;
-    bool failureSurfaceActive                    = false; // C4: native text + Cancel all + Close, no D2D/DxUi
-    size_t failureSurfaceChildCount              = 0u;
+    uint32_t graphMultiHueBucketCount          = 0u;
+    uint32_t graphSingleHueBucketCount         = 0u;
+    uint32_t graphDistinctHueCount             = 0u;
+    double graphMinHueShare                    = 0.0; // per-hue share of summed multi-hue bucket weight
+    double graphMaxHueShare                    = 0.0;
+    uint32_t graphDebugAccumulateCalls         = 0u;
+    uint32_t graphDebugLastPending             = 0u;
+    uint32_t graphDebugMaxStreams              = 0u;
+    uint32_t graphRowColorMatchCount           = 0u;
+    uint32_t graphRowColorMismatchCount        = 0u;
+    bool graphCurrentBandwidthLineVisible      = false;
+    bool graphCurrentBandwidthLabelVisible     = false;
+    bool graphEtaLabelVisible                  = false;
+    bool graphEtaLabelRightAligned             = false;
+    bool taskInlineSpeedRowVisible             = false;
+    bool taskInlineEtaRowVisible               = false;
+    float taskExpandedBaseHeightDip            = 0.0f;
+    double graphCurrentBandwidthBytesPerSecond = 0.0;
+    bool failureSurfaceActive                  = false; // C4: native text + Cancel all + Close, no D2D/DxUi
+    size_t failureSurfaceChildCount            = 0u;
     std::wstring failureSurfaceText;
 };
 
@@ -521,7 +521,7 @@ struct RateHistory
     {
         float hue         = -1.0f;
         double weight     = 0.0;
-        uint8_t colorSlot = RedSalamander::DxUi::ThroughputGraphSample::kInvalidColorSlot;
+        uint8_t colorSlot = DxUi::ThroughputGraphSample::kInvalidColorSlot;
     };
 
     struct StreamProgress
@@ -535,7 +535,7 @@ struct RateHistory
         // stream's lifetime and well-separated from its concurrent neighbors (a raw path-hash
         // hue gives no minimum separation, so equal streams often looked identical).
         float assignedHue         = -1.0f;
-        uint8_t assignedColorSlot = RedSalamander::DxUi::ThroughputGraphSample::kInvalidColorSlot;
+        uint8_t assignedColorSlot = DxUi::ThroughputGraphSample::kInvalidColorSlot;
     };
 
     std::array<float, kMaxSamples> samples{};
@@ -578,8 +578,8 @@ struct RateHistory
     double smoothedEtaSeconds               = 0.0;
     bool hasSmoothedEta                     = false;
     // D2-A08: while discovery is open, the remaining time over the workload discovered so far.
-    double provisionalEtaSeconds            = 0.0;
-    bool hasProvisionalEta                  = false;
+    double provisionalEtaSeconds = 0.0;
+    bool hasProvisionalEta       = false;
 };
 
 class FileOperationsPopupState final
@@ -588,6 +588,24 @@ public:
     FolderWindow::FileOperationState* fileOps = nullptr;
     FolderWindow* folderWindow                = nullptr;
     std::weak_ptr<void> hostLifetime;
+
+#ifdef ENABLE_TESTS
+    // UI-thread-only documentation fixture; never starts workers or admits operations.
+    void DebugSetVisualScenario(std::vector<TaskSnapshot> tasks, bool collapsed, bool completedGroupExpanded);
+    std::optional<std::vector<TaskSnapshot>> debugVisualScenario;
+    std::vector<std::filesystem::path> debugVisualDestinationHistory;
+    [[nodiscard]] const std::vector<PopupButton>& DebugVisualButtons() const noexcept
+    {
+        return _buttons;
+    }
+    [[nodiscard]] bool DebugVisualButtonHovered(PopupHitTest::Kind kind) const noexcept
+    {
+        for (size_t index = 0u; index < _hostedButtonHits.size() && index < _hostedButtons.size(); ++index)
+            if (_hostedButtonHits[index].kind == kind && _hostedButtons[index])
+                return _hostedButtons[index]->IsHovered();
+        return false;
+    }
+#endif
 
     static LRESULT CALLBACK WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
     LRESULT WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
@@ -618,7 +636,7 @@ private:
     {
         D2D1_RECT_F bounds{};
         uint64_t taskId = 0u;
-        std::vector<RedSalamander::DxUi::ThroughputGraphSample> samples;
+        std::vector<DxUi::ThroughputGraphSample> samples;
         std::vector<double> verificationSamples;
         std::wstring overlayText;
         std::wstring currentBandwidthText;
@@ -683,10 +701,7 @@ private:
     void AutoResizeWindow(HWND hwnd, float desiredContentHeight, size_t taskCount, bool footerOnly, bool reducedMotion) noexcept;
     void ArmUiMotionTimer(HWND hwnd) noexcept;
 
-    void DrawDxUiButtonChrome(const PopupButton& button,
-                              IDWriteTextFormat* format,
-                              std::wstring_view text,
-                              RedSalamander::DxUi::ButtonVariant variant) noexcept;
+    void DrawDxUiButtonChrome(const PopupButton& button, IDWriteTextFormat* format, std::wstring_view text, DxUi::ButtonVariant variant) noexcept;
     void DrawButton(const PopupButton& button, IDWriteTextFormat* format, std::wstring_view text) noexcept;
     void DrawFooterQueueModeControl(const PopupButton& button, bool queueMode) noexcept;
     void DrawFooterAutoDismissControl(const PopupButton& button, bool enabled) noexcept;
@@ -718,9 +733,7 @@ private:
     void ClearTaskbarProgress(HWND hwnd) noexcept;
 
     PopupHitTest HitTest(float x, float y) const noexcept;
-    std::optional<PopupMenuAnchor> ResolveButtonMenuAnchor(HWND hwnd,
-                                                           const PopupHitTest& hit,
-                                                           RedSalamander::DxUi::ContextMenuRootVerticalPlacement placement) const noexcept;
+    std::optional<PopupMenuAnchor> ResolveButtonMenuAnchor(HWND hwnd, const PopupHitTest& hit, DxUi::ContextMenuRootVerticalPlacement placement) const noexcept;
     void Invalidate(HWND hwnd) const noexcept;
 
     LRESULT OnActivatedHit(HWND hwnd, const PopupHitTest& hit) noexcept;
@@ -803,8 +816,8 @@ private:
 
     std::vector<PopupButton> _buttons;
 
-    RedSalamander::DxUi::WindowHost _controlsHost;
-    RedSalamander::DxUi::Panel* _controlsRoot = nullptr;
+    DxUi::WindowHost _controlsHost;
+    DxUi::Panel* _controlsRoot = nullptr;
     bool _failureSurface       = false;
     HWND _failureText          = nullptr;
     HWND _failureCancelAll     = nullptr;
@@ -812,18 +825,18 @@ private:
     UINT _failureFontDpi       = 0u;
     wil::unique_hfont _failureFont;
     std::wstring _failureTextValue;
-    std::vector<RedSalamander::DxUi::Button*> _hostedButtons;
+    std::vector<DxUi::Button*> _hostedButtons;
     std::vector<PopupHitTest> _hostedButtonHits;
     uint64_t _recycleEscalationFocusedTaskId = 0u;
     uint64_t _conflictEscapeTaskId           = 0u;
     uint8_t _conflictEscapeAction            = 0u;
     std::vector<HostedProgressDescriptor> _hostedProgressDescriptors;
-    std::vector<RedSalamander::DxUi::ProgressBar*> _hostedProgressBars;
+    std::vector<DxUi::ProgressBar*> _hostedProgressBars;
     std::vector<ScalarAnimation> _hostedProgressAnimations;
     std::vector<HostedGraphDescriptor> _hostedGraphDescriptors;
-    std::vector<RedSalamander::DxUi::ThroughputGraph*> _hostedGraphs;
+    std::vector<DxUi::ThroughputGraph*> _hostedGraphs;
     std::vector<HostedTooltipDescriptor> _hostedTooltipDescriptors;
-    std::vector<RedSalamander::DxUi::Label*> _hostedTooltipRegions;
+    std::vector<DxUi::Label*> _hostedTooltipRegions;
     std::unordered_map<uint64_t, TaskSnapshot::StatusKind> _announcedTaskStatuses;
     std::unordered_map<uint64_t, bool> _announcedConflictMetadataLoading;
     bool _hostedRightToLeft                        = false;
@@ -903,6 +916,23 @@ private:
 
     int _mouseWheelRemainder = 0;
 };
+
+#ifdef ENABLE_TESTS
+// The whole-task presentation the card actually renders, exposed so a test can assert the real
+// projection of a live task instead of recomputing the rules it is meant to be checking.
+struct TaskProgressPresentationDebugSnapshot final
+{
+    double fraction               = 0.0;
+    bool determinate              = false;
+    bool provisional              = false;
+    bool transferActive           = false;
+    bool showDiscoveryActivity    = false;
+    bool showTransferProgress     = false;
+    bool showTransferMarquee      = false;
+    bool showThroughputGraph      = false;
+    bool includeInAggregateCohort = false;
+};
+#endif
 } // namespace FileOperationsPopupInternal
 
 class FileOperationsPopup final
@@ -944,8 +974,11 @@ void DebugFailNextFileOperationsD2DTargetAttempts(unsigned int attempts) noexcep
 [[nodiscard]] float DebugComputeFileOperationsTaskCompleteFraction(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept;
 void DebugPublishFileOperationsPlannedItemTotalAfterDiscovery(FileOperationsPopupInternal::TaskSnapshot& task) noexcept;
 [[nodiscard]] bool DebugFileOperationsTaskHasKnownCompactProgress(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept;
+void DebugResolveFileOperationsWholeTaskProgress(const FileOperationsPopupInternal::TaskSnapshot& task,
+                                                 FileOperationsPopupInternal::TaskProgressPresentationDebugSnapshot& out) noexcept;
+[[nodiscard]] std::wstring DebugBuildFileOperationsTaskHeaderText(const FileOperationsPopupInternal::TaskSnapshot& task, ULONGLONG nowTick);
 [[nodiscard]] std::wstring DebugFormatFileOperationsConflictTimestamp(__int64 fileTime) noexcept;
-[[nodiscard]] RedSalamander::DxUi::ButtonVariant DebugResolveFileOperationsHostedButtonVariant(FileOperationsPopupInternal::PopupHitTest::Kind kind) noexcept;
+[[nodiscard]] DxUi::ButtonVariant DebugResolveFileOperationsHostedButtonVariant(FileOperationsPopupInternal::PopupHitTest::Kind kind) noexcept;
 [[nodiscard]] std::wstring DebugFormatFileOperationsSpeedLimitSelectorText(uint64_t bytesPerSecond);
 [[nodiscard]] double DebugSmoothRateForDisplay(double previousRate, double sampleRate, ULONGLONG elapsedMs) noexcept;
 [[nodiscard]] double DebugDecayRateForCallbackSilence(double smoothedRate, ULONGLONG silenceMs) noexcept;
@@ -954,6 +987,7 @@ void DebugPublishFileOperationsPlannedItemTotalAfterDiscovery(FileOperationsPopu
 [[nodiscard]] float DebugEaseFileOperationsAutoResizeFraction(ULONGLONG elapsedMs, ULONGLONG durationMs) noexcept;
 [[nodiscard]] D2D1_RECT_F DebugComputeFileOperationsIndeterminateBarFill(const D2D1_RECT_F& bar, ULONGLONG tick, bool reducedMotion) noexcept;
 [[nodiscard]] HWND GetFileOperationsSpeedLimitPromptHandle() noexcept;
+void DebugShowFileOperationsSpeedLimitPromptForGallery(HWND owner, const AppTheme& theme) noexcept;
 [[nodiscard]] bool DebugGetFileOperationsSpeedLimitPromptSnapshot(FileOperationsSpeedLimitPromptDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugSetFileOperationsSpeedLimitPromptText(std::wstring_view text) noexcept;
 [[nodiscard]] bool DebugConfirmFileOperationsSpeedLimitPrompt() noexcept;

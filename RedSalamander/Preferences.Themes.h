@@ -3,14 +3,14 @@
 #include <memory>
 #include <string_view>
 
-#include "DxUi/DxUi.h"
 #include "Preferences.Internal.h"
 #include "Preferences.h"
+#include <DxUi/DxUi.h>
 
-class ThemesPane final : public RedSalamander::DxUi::IDxGridDelegate
+class ThemesPane final : public DxUi::IDxGridDelegate
 {
 public:
-    using RedSalamander::DxUi::IDxGridDelegate::OnGridSelectionChanged;
+    using DxUi::IDxGridDelegate::OnGridSelectionChanged;
 
     ThemesPane();
     ~ThemesPane();
@@ -37,7 +37,7 @@ public:
     void OnGridSelectionChanged() override;
 #ifdef ENABLE_TESTS
     [[nodiscard]] size_t DebugListRowCount() const noexcept;
-    [[nodiscard]] RedSalamander::DxUi::GridVisibleWorkMetrics DebugListVisibleWorkMetrics() const noexcept;
+    [[nodiscard]] DxUi::GridVisibleWorkMetrics DebugListVisibleWorkMetrics() const noexcept;
     [[nodiscard]] uint64_t DebugListRenderCount() const noexcept;
     [[nodiscard]] uint64_t DebugListResizeCount() const noexcept;
     [[nodiscard]] uint64_t DebugListResizeFailureCount() const noexcept;
@@ -68,9 +68,9 @@ private:
                       int sectionY,
                       const PreferencesTypographyContext& typography) noexcept;
 
-    HWND _pageHost                               = nullptr;
-    RedSalamander::DxUi::WindowHost* _pageHostDx = nullptr;
-    RedSalamander::DxUi::Panel* _pageContentRoot = nullptr;
+    HWND _pageHost                = nullptr;
+    DxUi::WindowHost* _pageHostDx = nullptr;
+    DxUi::Panel* _pageContentRoot = nullptr;
     std::unique_ptr<DxState> _dxState;
     bool _syncingDxInputs          = false;
     bool _syncingDxSelection       = false;

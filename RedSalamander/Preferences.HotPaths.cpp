@@ -22,17 +22,17 @@
 
 namespace
 {
+using DxUi::Button;
+using DxUi::CardPanel;
+using DxUi::FontRole;
+using DxUi::Label;
+using DxUi::Panel;
+using DxUi::TextField;
+using DxUi::ThemePalette;
+using DxUi::Toggle;
 using PrefsHotPaths::EnsureWorkingHotPathsSettings;
 using PrefsHotPaths::GetHotPathsSettingsOrDefault;
 using PrefsHotPaths::MaybeResetWorkingHotPathsSettingsIfEmpty;
-using RedSalamander::DxUi::Button;
-using RedSalamander::DxUi::CardPanel;
-using RedSalamander::DxUi::FontRole;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::TextField;
-using RedSalamander::DxUi::ThemePalette;
-using RedSalamander::DxUi::Toggle;
 
 constexpr int kSlotCount = 10;
 
@@ -889,7 +889,7 @@ void HotPathsPane::DebugPopulateSnapshot(PreferencesDebugSnapshot& out) const no
         return;
     }
 
-    const auto accumulate = [&](const RedSalamander::DxUi::Control* control) noexcept
+    const auto accumulate = [&](const DxUi::Control* control) noexcept
     {
         if (! control)
         {

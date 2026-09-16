@@ -3,15 +3,15 @@
 #include <memory>
 #include <string_view>
 
-#include "DxUi/DxUi.h"
 #include "Preferences.Internal.h"
 #include "Preferences.h"
+#include <DxUi/DxUi.h>
 
-class PluginsPane final : public RedSalamander::DxUi::IDxGridDelegate
+class PluginsPane final : public DxUi::IDxGridDelegate
 {
 public:
-    using RedSalamander::DxUi::IDxGridDelegate::OnGridCheckboxToggled;
-    using RedSalamander::DxUi::IDxGridDelegate::OnGridSelectionChanged;
+    using DxUi::IDxGridDelegate::OnGridCheckboxToggled;
+    using DxUi::IDxGridDelegate::OnGridSelectionChanged;
 
     PluginsPane();
     ~PluginsPane();
@@ -24,8 +24,8 @@ public:
     void InitializePage(HWND parent, PreferencesDialogState& state) noexcept;
     void Refresh(HWND host, PreferencesDialogState& state) noexcept;
     [[nodiscard]] bool HandleDeferredAction(HWND host, PreferencesDialogState& state, PreferencesDeferredActionKind action) noexcept;
-    void OnGridSelectionChanged(RedSalamander::DxUi::Grid& sender) override;
-    void OnGridCheckboxToggled(RedSalamander::DxUi::Grid& sender, size_t rowIndex, size_t columnIndex, bool checked) override;
+    void OnGridSelectionChanged(DxUi::Grid& sender) override;
+    void OnGridCheckboxToggled(DxUi::Grid& sender, size_t rowIndex, size_t columnIndex, bool checked) override;
     void LayoutPage(HWND host,
                     PreferencesDialogState& state,
                     int x,
@@ -37,7 +37,7 @@ public:
                     const PreferencesTypographyContext& typography) noexcept;
 #ifdef ENABLE_TESTS
     [[nodiscard]] size_t DebugMainListRowCount() const noexcept;
-    [[nodiscard]] RedSalamander::DxUi::GridVisibleWorkMetrics DebugMainListVisibleWorkMetrics() const noexcept;
+    [[nodiscard]] DxUi::GridVisibleWorkMetrics DebugMainListVisibleWorkMetrics() const noexcept;
     [[nodiscard]] uint64_t DebugMainListRenderCount() const noexcept;
     [[nodiscard]] uint64_t DebugMainListResizeCount() const noexcept;
     [[nodiscard]] uint64_t DebugMainListResizeFailureCount() const noexcept;
@@ -47,7 +47,7 @@ public:
     [[nodiscard]] bool DebugGetMainListCheckboxClientRect(size_t rowIndex, RECT& outRect) const noexcept;
     [[nodiscard]] bool DebugGetMainListHeaderClientRect(size_t columnIndex, RECT& outRect) const noexcept;
     [[nodiscard]] size_t DebugCustomPathsListRowCount() const noexcept;
-    [[nodiscard]] RedSalamander::DxUi::GridVisibleWorkMetrics DebugCustomPathsListVisibleWorkMetrics() const noexcept;
+    [[nodiscard]] DxUi::GridVisibleWorkMetrics DebugCustomPathsListVisibleWorkMetrics() const noexcept;
     [[nodiscard]] uint64_t DebugCustomPathsListRenderCount() const noexcept;
     [[nodiscard]] uint64_t DebugCustomPathsListResizeCount() const noexcept;
     [[nodiscard]] uint64_t DebugCustomPathsListResizeFailureCount() const noexcept;
@@ -91,9 +91,9 @@ private:
     void OnCustomPathsAddButtonClick(HWND host, PreferencesDialogState& state) noexcept;
     void OnCustomPathsRemoveButtonClick(HWND host, PreferencesDialogState& state) noexcept;
 
-    HWND _pageHost                               = nullptr;
-    RedSalamander::DxUi::WindowHost* _pageHostDx = nullptr;
-    RedSalamander::DxUi::Panel* _pageContentRoot = nullptr;
+    HWND _pageHost                = nullptr;
+    DxUi::WindowHost* _pageHostDx = nullptr;
+    DxUi::Panel* _pageContentRoot = nullptr;
     std::unique_ptr<DxState> _dxState;
     bool _syncingDxInputs          = false;
     bool _syncingDxSelection       = false;

@@ -2,9 +2,9 @@
 
 #include "Framework.h"
 
-#include "DxUi/DxUi.Typography.h"
 #include "Preferences.Plugin.Configuration.h"
 #include "Preferences.Plugins.h"
+#include <DxUi/Typography.h>
 
 #include <algorithm>
 #include <array>
@@ -48,18 +48,18 @@
 
 namespace
 {
-using RedSalamander::DxUi::Button;
-using RedSalamander::DxUi::FontRole;
-using RedSalamander::DxUi::Grid;
-using RedSalamander::DxUi::GridCellData;
-using RedSalamander::DxUi::GridColumnDesc;
-using RedSalamander::DxUi::GridSelectionMode;
-using RedSalamander::DxUi::IDxGridModel;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::TextField;
-using RedSalamander::DxUi::ThemePalette;
-using RedSalamander::DxUi::WindowHost;
+using DxUi::Button;
+using DxUi::FontRole;
+using DxUi::Grid;
+using DxUi::GridCellData;
+using DxUi::GridColumnDesc;
+using DxUi::GridSelectionMode;
+using DxUi::IDxGridModel;
+using DxUi::Label;
+using DxUi::Panel;
+using DxUi::TextField;
+using DxUi::ThemePalette;
+using DxUi::WindowHost;
 
 constexpr int kPluginsColumnName            = 0;
 constexpr int kPluginsColumnType            = 1;
@@ -188,10 +188,10 @@ public:
     PluginsGridModel()
     {
         _columns = {
-            {L"name", LoadStringResource(nullptr, IDS_PREFS_PLUGINS_COL_NAME), 240.0f, 140.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
-            {L"type", LoadStringResource(nullptr, IDS_PREFS_PLUGINS_COL_TYPE), 120.0f, 90.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
-            {L"origin", LoadStringResource(nullptr, IDS_PREFS_PLUGINS_COL_ORIGIN), 120.0f, 90.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
-            {L"id", LoadStringResource(nullptr, IDS_PREFS_PLUGINS_COL_ID), 220.0f, 120.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
+            {L"name", LoadStringResource(nullptr, IDS_PREFS_PLUGINS_COL_NAME), 240.0f, 140.0f, DxUi::GridColumnKind::Text, false, false},
+            {L"type", LoadStringResource(nullptr, IDS_PREFS_PLUGINS_COL_TYPE), 120.0f, 90.0f, DxUi::GridColumnKind::Text, false, false},
+            {L"origin", LoadStringResource(nullptr, IDS_PREFS_PLUGINS_COL_ORIGIN), 120.0f, 90.0f, DxUi::GridColumnKind::Text, false, false},
+            {L"id", LoadStringResource(nullptr, IDS_PREFS_PLUGINS_COL_ID), 220.0f, 120.0f, DxUi::GridColumnKind::Text, false, false},
         };
     }
 
@@ -248,7 +248,7 @@ public:
         switch (columnIndex)
         {
             case kPluginsColumnName:
-                outCell.kind    = RedSalamander::DxUi::GridCellKind::Checkbox;
+                outCell.kind    = DxUi::GridCellKind::Checkbox;
                 outCell.checked = row.enabled;
                 outCell.text    = row.name;
                 break;
@@ -297,7 +297,7 @@ public:
     PluginsCustomPathsGridModel()
     {
         _columns = {
-            {L"path", L"", 320.0f, 180.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
+            {L"path", L"", 320.0f, 180.0f, DxUi::GridColumnKind::Text, false, false},
         };
     }
 
@@ -943,18 +943,26 @@ bool PluginsPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noex
     _pageHostDx->ResetInteractionState();
     _pageContentRoot->ClearChildren();
 
-    dxState->page.note                    = _pageContentRoot->AddChild<Label>();
-    dxState->page.searchLabel             = _pageContentRoot->AddChild<Label>();
-    dxState->page.searchEdit              = _pageContentRoot->AddChild<TextField>();
-    dxState->page.listControl             = _pageContentRoot->AddChild<Grid>();
-    dxState->page.configureButton         = _pageContentRoot->AddChild<Button>();
-    dxState->page.testButton              = _pageContentRoot->AddChild<Button>();
-    dxState->page.testAllButton           = _pageContentRoot->AddChild<Button>();
-    dxState->page.detailsIdLabel          = _pageContentRoot->AddChild<Label>();
-    dxState->page.detailsConfigError      = _pageContentRoot->AddChild<Label>();
-    dxState->page.customPathsHeader       = _pageContentRoot->AddChild<Label>();
-    dxState->page.customPathsNote         = _pageContentRoot->AddChild<Label>();
-    dxState->page.customPathsListControl  = _pageContentRoot->AddChild<Grid>();
+    dxState->page.note        = _pageContentRoot->AddChild<Label>();
+    dxState->page.searchLabel = _pageContentRoot->AddChild<Label>();
+    dxState->page.searchEdit  = _pageContentRoot->AddChild<TextField>();
+    dxState->page.listControl = _pageContentRoot->AddChild<Grid>();
+    if (dxState->page.listControl)
+    {
+        dxState->page.listControl->SetEmptyStateText(LoadStringResource(nullptr, IDS_DXUI_NO_DATA));
+    }
+    dxState->page.configureButton        = _pageContentRoot->AddChild<Button>();
+    dxState->page.testButton             = _pageContentRoot->AddChild<Button>();
+    dxState->page.testAllButton          = _pageContentRoot->AddChild<Button>();
+    dxState->page.detailsIdLabel         = _pageContentRoot->AddChild<Label>();
+    dxState->page.detailsConfigError     = _pageContentRoot->AddChild<Label>();
+    dxState->page.customPathsHeader      = _pageContentRoot->AddChild<Label>();
+    dxState->page.customPathsNote        = _pageContentRoot->AddChild<Label>();
+    dxState->page.customPathsListControl = _pageContentRoot->AddChild<Grid>();
+    if (dxState->page.customPathsListControl)
+    {
+        dxState->page.customPathsListControl->SetEmptyStateText(LoadStringResource(nullptr, IDS_DXUI_NO_DATA));
+    }
     dxState->page.customPathsAddButton    = _pageContentRoot->AddChild<Button>();
     dxState->page.customPathsRemoveButton = _pageContentRoot->AddChild<Button>();
 
@@ -1120,8 +1128,8 @@ void PluginsPane::SyncDxControlsFromState(PreferencesDialogState& state) noexcep
             row.stableId    = MakeStableRowId(row.pluginId);
             row.name        = std::wstring(GetPluginDisplayName(item));
             row.typeText    = item.type == PrefsPluginType::FileSystem ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_FILE_SYSTEM)
-                              : item.type == PrefsPluginType::Terminal  ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_TERMINAL)
-                                                                        : LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
+                              : item.type == PrefsPluginType::Terminal ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_TERMINAL)
+                                                                       : LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
             row.originText  = GetPluginOriginText(item);
             row.shortIdText = std::wstring(GetPluginShortIdOrId(item));
             row.enabled     = ! IsPluginDisabledInWorkingSettings(state, pluginId);
@@ -1231,7 +1239,7 @@ size_t PluginsPane::DebugMainListRowCount() const noexcept
     return _dxState->page.listModel->GetRowCount();
 }
 
-RedSalamander::DxUi::GridVisibleWorkMetrics PluginsPane::DebugMainListVisibleWorkMetrics() const noexcept
+DxUi::GridVisibleWorkMetrics PluginsPane::DebugMainListVisibleWorkMetrics() const noexcept
 {
     if (! _dxState || ! _dxState->page.listControl)
     {
@@ -1409,7 +1417,7 @@ size_t PluginsPane::DebugCustomPathsListRowCount() const noexcept
     return _dxState->page.customPathsListModel->GetRowCount();
 }
 
-RedSalamander::DxUi::GridVisibleWorkMetrics PluginsPane::DebugCustomPathsListVisibleWorkMetrics() const noexcept
+DxUi::GridVisibleWorkMetrics PluginsPane::DebugCustomPathsListVisibleWorkMetrics() const noexcept
 {
     if (! _dxState || ! _dxState->page.customPathsListControl)
     {
@@ -1463,7 +1471,7 @@ PreferencesPluginsDebugFocusTarget PluginsPane::DebugGetFocusTarget() const noex
         return PreferencesPluginsDebugFocusTarget::None;
     }
 
-    RedSalamander::DxUi::Control* const focusedControl = _pageHostDx->GetFocusControl();
+    DxUi::Control* const focusedControl = _pageHostDx->GetFocusControl();
     if (! focusedControl)
     {
         return PreferencesPluginsDebugFocusTarget::None;
@@ -2125,9 +2133,9 @@ void PluginsPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
             const std::wstring_view displayName = GetPluginDisplayName(item);
             const std::wstring_view shortId     = GetPluginShortIdOrId(item);
             const std::wstring originText       = GetPluginOriginText(item);
-            const std::wstring typeText = item.type == PrefsPluginType::FileSystem ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_FILE_SYSTEM)
-                                          : item.type == PrefsPluginType::Terminal  ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_TERMINAL)
-                                                                                    : LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
+            const std::wstring typeText         = item.type == PrefsPluginType::FileSystem ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_FILE_SYSTEM)
+                                                  : item.type == PrefsPluginType::Terminal ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_TERMINAL)
+                                                                                           : LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
             return ! (PrefsUi::ContainsCaseInsensitive(pluginId, filter) || PrefsUi::ContainsCaseInsensitive(displayName, filter) ||
                       PrefsUi::ContainsCaseInsensitive(shortId, filter) || PrefsUi::ContainsCaseInsensitive(originText, filter) ||
                       PrefsUi::ContainsCaseInsensitive(typeText, filter));

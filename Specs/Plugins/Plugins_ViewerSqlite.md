@@ -103,3 +103,7 @@ The plugin configuration schema currently exposes:
 - `Specs/Plugins/Plugins_ViewerPlugins.md`
 - `Specs/UI/UI_DxUiSharedGrid.md`
 - `Specs/Testing/Testing_SelfTests.md`
+
+The Debug theme-cycle regression uses the same UI Automation selection helpers in
+ASan Debug. Those helpers must compile with instrumentation; do not hide their
+declarations behind a sanitizer exclusion while leaving the caller enabled.

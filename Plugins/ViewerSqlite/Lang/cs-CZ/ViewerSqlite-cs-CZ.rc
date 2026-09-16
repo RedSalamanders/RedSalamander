@@ -77,3 +77,13 @@ BEGIN
     IDS_VIEWERSQLITE_ERROR_IDENTIFIER_TOO_LONG "Databáze obsahuje název tabulky nebo zobrazení, který je příliš dlouhý pro bezpečné zobrazení."
     IDS_VIEWERSQLITE_ERROR_ROW_OFFSET "Požadovaný posun stránky je mimo podporovaný rozsah."
 END
+
+STRINGTABLE
+BEGIN
+    IDS_DXUI_NO_MATCHES "Žádné shody"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_DXUI_NO_DATA "Žádná data"
+END

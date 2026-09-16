@@ -15,8 +15,8 @@
 #include "DxUiThemePalette.h"
 #include "Helpers.h"
 #include "SettingsHotReload.h"
-#include "ShortcutManager.h"
 #include "ShortcutCommandCatalog.h"
+#include "ShortcutManager.h"
 #include "ShortcutText.h"
 #include "WindowMaximizeBehavior.h"
 #include "WindowPlacementPersistence.h"
@@ -31,20 +31,20 @@
 
 namespace
 {
-using RedSalamander::DxUi::FontRole;
-using RedSalamander::DxUi::Grid;
-using RedSalamander::DxUi::GridCellData;
-using RedSalamander::DxUi::GridColumnDesc;
-using RedSalamander::DxUi::GridGroupDesc;
-using RedSalamander::DxUi::GridSelectionMode;
-using RedSalamander::DxUi::GridSortSpec;
-using RedSalamander::DxUi::IDxGridDelegate;
-using RedSalamander::DxUi::IDxGridModel;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::SortDirection;
-using RedSalamander::DxUi::TextField;
-using RedSalamander::DxUi::WindowHost;
+using DxUi::FontRole;
+using DxUi::Grid;
+using DxUi::GridCellData;
+using DxUi::GridColumnDesc;
+using DxUi::GridGroupDesc;
+using DxUi::GridSelectionMode;
+using DxUi::GridSortSpec;
+using DxUi::IDxGridDelegate;
+using DxUi::IDxGridModel;
+using DxUi::Label;
+using DxUi::Panel;
+using DxUi::SortDirection;
+using DxUi::TextField;
+using DxUi::WindowHost;
 
 constexpr wchar_t kShortcutsWindowId[] = L"ShortcutsWindow";
 constexpr wchar_t kSettingsAppId[]     = L"RedSalamander";
@@ -60,9 +60,9 @@ constexpr uint64_t kGroupStableIdTerminal    = 4u;
     return CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE) - CSTR_EQUAL;
 }
 
-[[nodiscard]] std::vector<RedSalamander::DxUi::GridColumnLayoutEntry> ConvertColumnLayout(const std::vector<Common::Settings::GridColumnLayoutEntry>& layout)
+[[nodiscard]] std::vector<DxUi::GridColumnLayoutEntry> ConvertColumnLayout(const std::vector<Common::Settings::GridColumnLayoutEntry>& layout)
 {
-    std::vector<RedSalamander::DxUi::GridColumnLayoutEntry> converted;
+    std::vector<DxUi::GridColumnLayoutEntry> converted;
     converted.reserve(layout.size());
     for (const auto& entry : layout)
     {
@@ -71,7 +71,7 @@ constexpr uint64_t kGroupStableIdTerminal    = 4u;
             continue;
         }
 
-        converted.push_back(RedSalamander::DxUi::GridColumnLayoutEntry{
+        converted.push_back(DxUi::GridColumnLayoutEntry{
             .columnId     = entry.columnId,
             .displayIndex = entry.displayIndex,
             .widthDip     = entry.widthDip,
@@ -80,7 +80,7 @@ constexpr uint64_t kGroupStableIdTerminal    = 4u;
     return converted;
 }
 
-[[nodiscard]] std::vector<Common::Settings::GridColumnLayoutEntry> ConvertColumnLayout(const std::vector<RedSalamander::DxUi::GridColumnLayoutEntry>& layout)
+[[nodiscard]] std::vector<Common::Settings::GridColumnLayoutEntry> ConvertColumnLayout(const std::vector<DxUi::GridColumnLayoutEntry>& layout)
 {
     std::vector<Common::Settings::GridColumnLayoutEntry> converted;
     converted.reserve(layout.size());
@@ -213,9 +213,9 @@ constexpr uint64_t kGroupStableIdTerminal    = 4u;
 
 struct ShortcutRow final
 {
-    uint64_t stableId  = 0u;
-    uint32_t vk        = 0u;
-    uint32_t modifiers = 0u;
+    uint64_t stableId                         = 0u;
+    uint32_t vk                               = 0u;
+    uint32_t modifiers                        = 0u;
     Common::Keyboard::KeyPosition keyPosition = Common::Keyboard::KeyPosition::None;
     std::wstring commandId;
     std::wstring commandText;
@@ -286,9 +286,8 @@ struct ShortcutKeySortKey final
 
 [[nodiscard]] ShortcutKeySortKey MakeShortcutKeySortKey(const ShortcutRow& row)
 {
-    const uint32_t displayVk = row.keyPosition == Common::Keyboard::KeyPosition::None
-                                   ? row.vk
-                                   : Common::Keyboard::VirtualKeyForPosition(row.keyPosition, GetKeyboardLayout(0));
+    const uint32_t displayVk =
+        row.keyPosition == Common::Keyboard::KeyPosition::None ? row.vk : Common::Keyboard::VirtualKeyForPosition(row.keyPosition, GetKeyboardLayout(0));
     ShortcutKeySortKey key{
         .modifierText = FormatModifierSortText(row.modifiers),
     };
@@ -355,8 +354,8 @@ public:
     ShortcutsGridModel()
     {
         _columns = {
-            {L"command", LoadStringResource(nullptr, IDS_SHORTCUTS_COL_COMMAND), 460.0f, 260.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
-            {L"key", LoadStringResource(nullptr, IDS_SHORTCUTS_COL_KEY), 220.0f, 140.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
+            {L"command", LoadStringResource(nullptr, IDS_SHORTCUTS_COL_COMMAND), 460.0f, 260.0f, DxUi::GridColumnKind::Text, false, false},
+            {L"key", LoadStringResource(nullptr, IDS_SHORTCUTS_COL_KEY), 220.0f, 140.0f, DxUi::GridColumnKind::Text, false, false},
         };
     }
 
@@ -392,8 +391,7 @@ public:
         const ShortcutRow& row = _rows[rowIndex];
         if (columnIndex == 0u)
         {
-            outCell.kind        = row.hasConflict || ! row.iconText.empty() ? RedSalamander::DxUi::GridCellKind::IconText
-                                                                            : RedSalamander::DxUi::GridCellKind::Text;
+            outCell.kind        = row.hasConflict || ! row.iconText.empty() ? DxUi::GridCellKind::IconText : DxUi::GridCellKind::Text;
             outCell.iconText    = row.hasConflict ? GetConflictMark() : row.iconText;
             outCell.text        = row.commandText;
             outCell.multiline   = true;
@@ -406,7 +404,7 @@ public:
         outCell.tooltipText   = row.tooltipText;
     }
 
-    [[nodiscard]] RedSalamander::DxUi::GridRowStyle GetRowStyle(size_t rowIndex) const override
+    [[nodiscard]] DxUi::GridRowStyle GetRowStyle(size_t rowIndex) const override
     {
         if (rowIndex >= _rows.size())
         {
@@ -414,8 +412,8 @@ public:
         }
 
         const ShortcutRow& row = _rows[rowIndex];
-        return RedSalamander::DxUi::GridRowStyle{
-            .tone        = RedSalamander::DxUi::GridRowTone::None,
+        return DxUi::GridRowStyle{
+            .tone        = DxUi::GridRowTone::None,
             .rainbowSeed = ! row.commandText.empty() ? row.commandText : row.keyText,
         };
     }
@@ -1149,6 +1147,10 @@ void ShortcutsWindow::BuildUi()
     });
 
     _grid = _root->AddChild<Grid>();
+    if (_grid)
+    {
+        _grid->SetEmptyStateText(LoadStringResource(nullptr, IDS_DXUI_NO_DATA));
+    }
     _grid->SetDelegate(this);
     _grid->SetSelectionMode(GridSelectionMode::Single);
     _grid->SetHeaderHeightDip(30.0f);
@@ -1245,10 +1247,8 @@ void ShortcutsWindow::RebuildRows() noexcept
     std::vector<ShortcutRow> rows;
     rows.reserve(_shortcuts.application.size() + _shortcuts.functionBar.size() + _shortcuts.folderView.size() + _shortcuts.terminal.size());
 
-    const std::vector<ShortcutCommandCatalogEntry> folderCatalog =
-        BuildShortcutCommandCatalog(_shortcuts, ShortcutCommandContext::Folder);
-    const std::vector<ShortcutCommandCatalogEntry> terminalCatalog =
-        BuildShortcutCommandCatalog(_shortcuts, ShortcutCommandContext::Terminal);
+    const std::vector<ShortcutCommandCatalogEntry> folderCatalog   = BuildShortcutCommandCatalog(_shortcuts, ShortcutCommandContext::Folder);
+    const std::vector<ShortcutCommandCatalogEntry> terminalCatalog = BuildShortcutCommandCatalog(_shortcuts, ShortcutCommandContext::Terminal);
     std::unordered_map<std::wstring, const ShortcutCommandCatalogEntry*> catalogByCommand;
     const auto indexCatalog = [&](const std::vector<ShortcutCommandCatalogEntry>& catalog)
     {
@@ -1284,14 +1284,14 @@ void ShortcutsWindow::RebuildRows() noexcept
             row.hasConflict   = IsConflictChord(ShortcutManager::MakeChordKey(binding), conflicts);
             row.keyText       = ShortcutText::FormatChordText(binding.keyPosition, binding.vk, binding.modifiers);
 
-            const bool isPassThrough = ShortcutIds::IsPassThroughCommandId(binding.commandId);
-            const auto catalogEntry = catalogByCommand.find(std::wstring(CanonicalizeCommandId(binding.commandId)));
-            const std::wstring displayName = isPassThrough
-                ? LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_PASS_THROUGH)
-                : catalogEntry != catalogByCommand.end() ? catalogEntry->second->displayName : GetCommandDisplayName(binding.commandId);
-            const std::wstring description = isPassThrough
-                ? LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_PASS_THROUGH_DESC)
-                : catalogEntry != catalogByCommand.end() ? catalogEntry->second->description : GetCommandDescription(binding.commandId);
+            const bool isPassThrough       = ShortcutIds::IsPassThroughCommandId(binding.commandId);
+            const auto catalogEntry        = catalogByCommand.find(std::wstring(CanonicalizeCommandId(binding.commandId)));
+            const std::wstring displayName = isPassThrough                            ? LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_PASS_THROUGH)
+                                             : catalogEntry != catalogByCommand.end() ? catalogEntry->second->displayName
+                                                                                      : GetCommandDisplayName(binding.commandId);
+            const std::wstring description = isPassThrough                            ? LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_PASS_THROUGH_DESC)
+                                             : catalogEntry != catalogByCommand.end() ? catalogEntry->second->description
+                                                                                      : GetCommandDescription(binding.commandId);
             row.commandText                = displayName;
             if (! description.empty())
             {
@@ -1455,7 +1455,7 @@ bool ShortcutsWindow::DebugGetSnapshot(ShortcutsWindowDebugSnapshot& out) const 
     out.folderViewCollapsed     = _gridModel && _gridModel->IsGroupCollapsed(kGroupStableIdFolderView);
     out.terminalCollapsed       = _gridModel && _gridModel->IsGroupCollapsed(kGroupStableIdTerminal);
     out.collapsedGroupCount     = static_cast<size_t>(out.applicationCollapsed) + static_cast<size_t>(out.functionBarCollapsed) +
-                              static_cast<size_t>(out.folderViewCollapsed) + static_cast<size_t>(out.terminalCollapsed);
+                                  static_cast<size_t>(out.folderViewCollapsed) + static_cast<size_t>(out.terminalCollapsed);
     if (_gridModel)
     {
         out.rowCommandIds.reserve(_gridModel->GetRowCount());
@@ -1531,7 +1531,7 @@ bool ShortcutsWindow::DebugGetSnapshot(ShortcutsWindowDebugSnapshot& out) const 
                 }
                 out.selectedRowKeyCellRect        = _grid->GetVisibleCellRect(selectedRow.value(), 1u).value_or(D2D1::RectF());
                 out.selectedRowCommandCellHasIcon = _grid->GetCellLayoutMetrics(_dxHost, selectedRow.value(), 0u).hasIcon;
-                RedSalamander::DxUi::GridDebugRowVisualState rowVisualState{};
+                DxUi::GridDebugRowVisualState rowVisualState{};
                 if (_grid->DebugGetRowVisualState(_dxHost.GetTheme(), selectedRow.value(), rowVisualState))
                 {
                     out.selectedRowFillArgb    = rowVisualState.fillArgb;
@@ -1548,7 +1548,7 @@ bool ShortcutsWindow::DebugGetSnapshot(ShortcutsWindowDebugSnapshot& out) const 
     out.hasTooltip         = _dxHost.HasTooltip();
     out.tooltipBounds      = _dxHost.DebugGetTooltipBoundsDip();
     out.tooltipText        = std::wstring(_dxHost.GetTooltipText());
-    if (RedSalamander::DxUi::Control* const focusedControl = _dxHost.GetFocusControl())
+    if (DxUi::Control* const focusedControl = _dxHost.GetFocusControl())
     {
         if (focusedControl == _searchEdit)
         {
@@ -1562,8 +1562,8 @@ bool ShortcutsWindow::DebugGetSnapshot(ShortcutsWindowDebugSnapshot& out) const 
     if (_grid)
     {
         const auto sortSpec = _grid->GetSortSpec();
-        out.sortDirection   = sortSpec.direction == RedSalamander::DxUi::SortDirection::None ? 0xFFu : static_cast<uint8_t>(sortSpec.direction);
-        out.sortColumnIndex = sortSpec.direction == RedSalamander::DxUi::SortDirection::None ? 0xFFu : static_cast<uint8_t>(sortSpec.columnIndex);
+        out.sortDirection   = sortSpec.direction == DxUi::SortDirection::None ? 0xFFu : static_cast<uint8_t>(sortSpec.direction);
+        out.sortColumnIndex = sortSpec.direction == DxUi::SortDirection::None ? 0xFFu : static_cast<uint8_t>(sortSpec.columnIndex);
     }
     return true;
 }

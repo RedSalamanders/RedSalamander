@@ -417,7 +417,9 @@
       <Project>{87fb9a11-83cc-44d8-9fec-9aa9d72667ef}</Project>
     </ProjectReference>
   </ItemGroup>
+  <Import Project="..\..\Build\RedSalamander.DxUi.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="..\..\Build\RedSalamander.DxUi.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>

@@ -686,7 +686,7 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
             }
             if (! run.completed.load(std::memory_order_acquire))
             {
-                run.recoverySent = true;
+                run.recoverySent   = true;
                 const HWND overlay = getOverlayWindow();
                 if (overlay && IsWindow(overlay) != FALSE)
                 {
@@ -713,7 +713,9 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
             run.completed.store(true, std::memory_order_release);
         });
 
-        static_cast<void>(waitForWorker(run.completed, operation, [&]() noexcept
+        static_cast<void>(waitForWorker(run.completed,
+                                        operation,
+                                        [&]() noexcept
         {
             const HWND overlay = getOverlayWindow();
             if (overlay && IsWindow(overlay) != FALSE)
@@ -817,7 +819,7 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
             }
             if (! run.completed.load(std::memory_order_acquire))
             {
-                run.recoverySent = true;
+                run.recoverySent  = true;
                 const HWND window = GetConnectionManagerDialogHandle();
                 if (window && IsWindow(window) != FALSE)
                 {
@@ -835,7 +837,9 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
             run.completed.store(true, std::memory_order_release);
         });
 
-        static_cast<void>(waitForWorker(run.completed, operation, [&]() noexcept
+        static_cast<void>(waitForWorker(run.completed,
+                                        operation,
+                                        [&]() noexcept
         {
             const HWND window = GetConnectionManagerDialogHandle();
             if (window && IsWindow(window) != FALSE)
@@ -1607,21 +1611,21 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
     { return WaitForWindow([] noexcept { return GetConnectionManagerDialogHandle(); }, SelfTest::Scale(3000ms)); };
 
     auto dialog                                  = HWND{};
-    const size_t baselineAttachedWindowHostCount = RedSalamander::DxUi::DebugGetAttachedWindowHostCount();
+    const size_t baselineAttachedWindowHostCount = DxUi::DebugGetAttachedWindowHostCount();
     const auto waitForAttachedWindowHostCount    = [&](const size_t expectedCount, const auto timeout) noexcept
     {
         const auto deadline = std::chrono::steady_clock::now() + timeout;
         while (std::chrono::steady_clock::now() < deadline)
         {
             PumpPendingMessages();
-            if (RedSalamander::DxUi::DebugGetAttachedWindowHostCount() == expectedCount)
+            if (DxUi::DebugGetAttachedWindowHostCount() == expectedCount)
             {
                 return true;
             }
             std::this_thread::sleep_for(20ms);
         }
 
-        return RedSalamander::DxUi::DebugGetAttachedWindowHostCount() == expectedCount;
+        return DxUi::DebugGetAttachedWindowHostCount() == expectedCount;
     };
     SelfTest::AppendSelfTestTrace(L"ConnectionManager live-dx: sending open command");
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CONNECTION_MANAGER, 0), 0);
@@ -2255,7 +2259,7 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
     dialog = nullptr;
     state.Require(waitForAttachedWindowHostCount(baselineAttachedWindowHostCount, SelfTest::Scale(3000ms)),
                   std::format(L"Connection Manager left {} attached DxUI hosts after close; expected baseline {}.",
-                              RedSalamander::DxUi::DebugGetAttachedWindowHostCount(),
+                              DxUi::DebugGetAttachedWindowHostCount(),
                               baselineAttachedWindowHostCount));
     SelfTest::AppendSelfTestTrace(L"ConnectionManager live-dx: complete");
     return state.failure.empty();
@@ -3772,16 +3776,16 @@ enum class ConnectionManagerCloseAction
             ConnectionManagerDebugSnapshot diagnostic{};
             const bool capturedSnapshot = DebugGetConnectionManagerDialogSnapshot(diagnostic);
             const HWND currentHandle    = GetConnectionManagerDialogHandle();
-            state.failure = std::format(L"Connection Manager window did not open during cycle {}. currentHandle=0x{:X} currentIsWindow={} "
-                                        L"mainEnabled={} activePane={} focusedPane={} capturedSnapshot={} snapshot={}",
-                                        cycle,
-                                        reinterpret_cast<UINT_PTR>(currentHandle),
-                                        (currentHandle && IsWindow(currentHandle) != FALSE) ? 1 : 0,
-                                        IsWindowEnabled(mainWindow) != FALSE ? 1 : 0,
-                                        static_cast<int>(g_folderWindow.GetActivePane()),
-                                        static_cast<int>(g_folderWindow.GetFocusedPane()),
-                                        capturedSnapshot ? 1 : 0,
-                                        DescribeConnectionManagerSnapshot(diagnostic));
+            state.failure               = std::format(L"Connection Manager window did not open during cycle {}. currentHandle=0x{:X} currentIsWindow={} "
+                                                      L"mainEnabled={} activePane={} focusedPane={} capturedSnapshot={} snapshot={}",
+                                                      cycle,
+                                                      reinterpret_cast<UINT_PTR>(currentHandle),
+                                                      (currentHandle && IsWindow(currentHandle) != FALSE) ? 1 : 0,
+                                                      IsWindowEnabled(mainWindow) != FALSE ? 1 : 0,
+                                                      static_cast<int>(g_folderWindow.GetActivePane()),
+                                                      static_cast<int>(g_folderWindow.GetFocusedPane()),
+                                                      capturedSnapshot ? 1 : 0,
+                                                      DescribeConnectionManagerSnapshot(diagnostic));
             return false;
         }
 

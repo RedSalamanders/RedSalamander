@@ -379,3 +379,12 @@ seed, use it for the active border/caption, blend it toward the theme background
 select black or white caption text using the shared integer-luma boundary. Each viewer retains ownership of its
 seed, active-state tracking, invalidation, and window procedure. ViewerSpace remains outside this shared policy
 because its dynamically loaded DWM/topmost-host behavior is a distinct compatibility contract.
+
+## Canonical DxUi dependency
+
+Native viewer UI links the exact external archive through the product imports.
+The Common viewer adapter copies the validated plugin theme to the neutral public
+library record. Viewer combo empty-result strings belong to each plugin and its
+satellites. Typography-only ViewerVLC uses the same public header/pin. Plugin DLLs
+retain their own control ownership; no DxUi object crosses `IViewer`. Module provenance
+is attested in the existing build receipt. Candidate runtime qualification remains required.

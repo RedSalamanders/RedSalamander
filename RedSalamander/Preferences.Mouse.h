@@ -2,8 +2,8 @@
 
 #include <memory>
 
-#include "DxUi/DxUi.h"
 #include "Preferences.Internal.h"
+#include <DxUi/DxUi.h>
 
 class MousePane final
 {
@@ -39,9 +39,9 @@ private:
     void ApplyDxTheme(const PreferencesDialogState& state) noexcept;
     void SyncDxControlsFromState(const PreferencesDialogState& state) noexcept;
 
-    HWND _pageHost                               = nullptr;
-    RedSalamander::DxUi::WindowHost* _pageHostDx = nullptr;
-    RedSalamander::DxUi::Panel* _pageContentRoot = nullptr;
+    HWND _pageHost                = nullptr;
+    DxUi::WindowHost* _pageHostDx = nullptr;
+    DxUi::Panel* _pageContentRoot = nullptr;
     std::unique_ptr<DxCardState> _dxCardState;
     bool _syncingToggles = false;
 };

@@ -28,9 +28,9 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
-#include "DxUi/DxUi.Typography.h"
-#include "DxUi/DxUi.h"
 #include "FluentIcons.h"
+#include <DxUi/DxUi.h>
+#include <DxUi/Typography.h>
 
 namespace RedSalamander::Ui
 {
@@ -76,7 +76,7 @@ struct AlertOption
 
 struct AlertModel
 {
-    AlertSeverity severity = AlertSeverity::Error;
+    AlertSeverity severity         = AlertSeverity::Error;
     AlertPresentation presentation = AlertPresentation::Severity;
     std::wstring title;
     std::wstring message;
@@ -258,7 +258,7 @@ public:
         if (_model.buttons.empty())
         {
             const bool changed = _focusedControl.part == AlertHitTest::Part::Button;
-            _focusedControl = {};
+            _focusedControl    = {};
             return changed;
         }
 
@@ -322,7 +322,7 @@ public:
         if (controls.empty())
         {
             const bool changed = _focusedControl.part != AlertHitTest::Part::None;
-            _focusedControl = {};
+            _focusedControl    = {};
             return changed;
         }
 
@@ -488,11 +488,10 @@ public:
             textHeightDip += _bodyLayoutHeightDip;
         }
 
-        const float buttonRowHeightDip = _model.buttons.empty() ? 0.0f : kButtonHeightDip;
-        const float optionBlockHeightDip = _model.options.empty()
-            ? 0.0f
-            : static_cast<float>(_model.options.size()) * kOptionHeightDip +
-                  static_cast<float>(_model.options.size() - 1u) * kOptionGapDip;
+        const float buttonRowHeightDip      = _model.buttons.empty() ? 0.0f : kButtonHeightDip;
+        const float optionBlockHeightDip    = _model.options.empty() ? 0.0f
+                                                                     : static_cast<float>(_model.options.size()) * kOptionHeightDip +
+                                                                           static_cast<float>(_model.options.size() - 1u) * kOptionGapDip;
         const float textAndOptionsHeightDip = textHeightDip + (optionBlockHeightDip > 0.0f ? kOptionsTextGapDip + optionBlockHeightDip : 0.0f);
         const float contentHeightDip        = std::max(showIcon ? kIconSizeDip : 0.0f, textAndOptionsHeightDip);
 
@@ -653,7 +652,7 @@ public:
 #if defined(ENABLE_TESTS)
         _debugUsesSharedCloseChrome  = false;
         _debugUsesSharedButtonChrome = false;
-        _debugLastDrawnCloseGlyph     = L'\0';
+        _debugLastDrawnCloseGlyph    = L'\0';
 #endif
         if (! target || ! dwriteFactory)
         {
@@ -844,46 +843,42 @@ private:
         ResetTextResources();
         _dwriteIdentity = dwriteFactory;
 
-        constexpr float kTitleSizeDip  = 18.0f;
-        constexpr float kBodySizeDip   = 14.0f;
-        constexpr float kButtonSizeDip = 13.0f;
-        constexpr float kIconSizeDip   = 56.0f;
+        constexpr float kTitleSizeDip     = 18.0f;
+        constexpr float kBodySizeDip      = 14.0f;
+        constexpr float kButtonSizeDip    = 13.0f;
+        constexpr float kIconSizeDip      = 56.0f;
         constexpr float kCloseIconSizeDip = 16.0f;
 
-        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
-            dwriteFactory, RedSalamander::DxUi::Typography::MakeUiTextSpec(kTitleSizeDip, DWRITE_FONT_WEIGHT_SEMI_BOLD), _titleFormat.put(), L""));
-        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
-            dwriteFactory, RedSalamander::DxUi::Typography::MakeUiTextSpec(kBodySizeDip), _bodyFormat.put(), L""));
-        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
-            dwriteFactory, RedSalamander::DxUi::Typography::MakeUiTextSpec(kButtonSizeDip, DWRITE_FONT_WEIGHT_SEMI_BOLD), _buttonFormat.put(), L""));
+        static_cast<void>(DxUi::Typography::CreateTextFormat(
+            dwriteFactory, DxUi::Typography::MakeUiTextSpec(kTitleSizeDip, DWRITE_FONT_WEIGHT_SEMI_BOLD), _titleFormat.put(), L""));
+        static_cast<void>(DxUi::Typography::CreateTextFormat(dwriteFactory, DxUi::Typography::MakeUiTextSpec(kBodySizeDip), _bodyFormat.put(), L""));
+        static_cast<void>(DxUi::Typography::CreateTextFormat(
+            dwriteFactory, DxUi::Typography::MakeUiTextSpec(kButtonSizeDip, DWRITE_FONT_WEIGHT_SEMI_BOLD), _buttonFormat.put(), L""));
 
-        if (FAILED(RedSalamander::DxUi::Typography::CreateTextFormat(
-                dwriteFactory, RedSalamander::DxUi::Typography::MakeUiIconSpec(kIconSizeDip), _iconFormat.put(), L"")))
+        if (FAILED(DxUi::Typography::CreateTextFormat(dwriteFactory, DxUi::Typography::MakeUiIconSpec(kIconSizeDip), _iconFormat.put(), L"")))
         {
             _iconFormat.reset();
-            static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
-                dwriteFactory,
-                RedSalamander::DxUi::Typography::TypographySpec{
-                    .familyName = RedSalamander::DxUi::Typography::kSegoeMdl2AssetsFamily, .weight = DWRITE_FONT_WEIGHT_NORMAL, .sizeDip = kIconSizeDip},
-                _iconFormat.put(),
-                L""));
+            static_cast<void>(DxUi::Typography::CreateTextFormat(dwriteFactory,
+                                                                 DxUi::Typography::TypographySpec{.familyName = DxUi::Typography::kSegoeMdl2AssetsFamily,
+                                                                                                  .weight     = DWRITE_FONT_WEIGHT_NORMAL,
+                                                                                                  .sizeDip    = kIconSizeDip},
+                                                                 _iconFormat.put(),
+                                                                 L""));
         }
 
         if (_iconFormat)
         {
             _iconGlyphSet = IconGlyphSet::Fluent;
 
-            if (FAILED(RedSalamander::DxUi::Typography::CreateTextFormat(
-                    dwriteFactory, RedSalamander::DxUi::Typography::MakeUiIconSpec(kCloseIconSizeDip), _closeIconFormat.put(), L"")))
+            if (FAILED(DxUi::Typography::CreateTextFormat(dwriteFactory, DxUi::Typography::MakeUiIconSpec(kCloseIconSizeDip), _closeIconFormat.put(), L"")))
             {
                 _closeIconFormat.reset();
-                static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
-                    dwriteFactory,
-                    RedSalamander::DxUi::Typography::TypographySpec{.familyName = RedSalamander::DxUi::Typography::kSegoeMdl2AssetsFamily,
-                                                                    .weight = DWRITE_FONT_WEIGHT_NORMAL,
-                                                                    .sizeDip = kCloseIconSizeDip},
-                    _closeIconFormat.put(),
-                    L""));
+                static_cast<void>(DxUi::Typography::CreateTextFormat(dwriteFactory,
+                                                                     DxUi::Typography::TypographySpec{.familyName = DxUi::Typography::kSegoeMdl2AssetsFamily,
+                                                                                                      .weight     = DWRITE_FONT_WEIGHT_NORMAL,
+                                                                                                      .sizeDip    = kCloseIconSizeDip},
+                                                                     _closeIconFormat.put(),
+                                                                     L""));
             }
         }
         else
@@ -1195,12 +1190,12 @@ private:
         const wchar_t closeText[2]{closeGlyph, L'\0'};
 
         _backgroundBrush->SetOpacity(opacity);
-        RedSalamander::DxUi::ButtonChromeDrawSpec chrome{};
+        DxUi::ButtonChromeDrawSpec chrome{};
         chrome.bounds      = rect;
         chrome.text        = _closeIconFormat ? std::wstring_view(closeText, 1u) : std::wstring_view{};
-        chrome.variant     = RedSalamander::DxUi::ButtonVariant::IconOnly;
+        chrome.variant     = DxUi::ButtonVariant::IconOnly;
         chrome.hovered     = hot;
-        chrome.customStyle = RedSalamander::DxUi::ButtonChromeCustomStyle{
+        chrome.customStyle = DxUi::ButtonChromeCustomStyle{
             .fill            = D2D1::ColorF(accentColor.r, accentColor.g, accentColor.b, 0.14f),
             .text            = accentColor,
             .showFill        = hot,
@@ -1208,7 +1203,7 @@ private:
             .showFocus       = false,
             .cornerRadiusDip = radius,
         };
-        RedSalamander::DxUi::DrawButtonChrome(target, _backgroundBrush.get(), nullptr, _closeIconFormat.get(), MakeChromeThemePalette(), chrome);
+        DxUi::DrawButtonChrome(target, _backgroundBrush.get(), nullptr, _closeIconFormat.get(), MakeChromeThemePalette(), chrome);
 #if defined(ENABLE_TESTS)
         _debugUsesSharedCloseChrome = true;
         _debugLastDrawnCloseGlyph   = _closeIconFormat ? closeGlyph : L'\0';
@@ -1262,18 +1257,18 @@ private:
         std::reverse(_buttonRects.begin(), _buttonRects.end());
     }
 
-    [[nodiscard]] RedSalamander::DxUi::ThemePalette MakeChromeThemePalette() const noexcept
+    [[nodiscard]] DxUi::ThemePalette MakeChromeThemePalette() const noexcept
     {
         // AlertOverlay paints from its own AlertTheme, but the shared button
         // chrome helper consumes a DxUi::ThemePalette (a Standard focus ring is
         // painted from the palette's focus strokes). Derive the fields the
         // chrome path can read from the overlay theme so the ring stays visible
         // and theme-correct instead of relying on default-palette colors.
-        RedSalamander::DxUi::ThemePalette palette{};
+        DxUi::ThemePalette palette{};
         palette.dark         = _theme.darkBase;
         palette.highContrast = _theme.highContrast;
         palette.accent       = _theme.accent;
-        RedSalamander::DxUi::RefreshAccentVariants(palette, _theme.darkBase);
+        DxUi::RefreshAccentVariants(palette, _theme.darkBase);
         palette.text             = _theme.text;
         palette.windowBackground = _theme.background;
         palette.focusStroke      = _theme.accent;
@@ -1287,14 +1282,11 @@ private:
         return palette;
     }
 
-    [[nodiscard]] RedSalamander::DxUi::ButtonChromeCustomStyle MakeOverlayButtonChromeStyle(const ButtonRect& btn,
-                                                                                            bool hot,
-                                                                                            bool focused,
-                                                                                            float cornerDip) const noexcept
+    [[nodiscard]] DxUi::ButtonChromeCustomStyle MakeOverlayButtonChromeStyle(const ButtonRect& btn, bool hot, bool focused, float cornerDip) const noexcept
     {
         if (btn.primary)
         {
-            return RedSalamander::DxUi::ButtonChromeCustomStyle{
+            return DxUi::ButtonChromeCustomStyle{
                 .fill            = hot ? D2D1::ColorF(_theme.accent.r, _theme.accent.g, _theme.accent.b, 0.95f) : _theme.accent,
                 .border          = _theme.selectionText,
                 .focus           = _theme.selectionText,
@@ -1311,7 +1303,7 @@ private:
 
         const D2D1::ColorF border = hot ? _theme.accent : _theme.text;
         const D2D1::ColorF fill   = hot ? D2D1::ColorF(border.r, border.g, border.b, 0.10f) : D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
-        return RedSalamander::DxUi::ButtonChromeCustomStyle{
+        return DxUi::ButtonChromeCustomStyle{
             .fill            = fill,
             .border          = border,
             .focus           = _theme.accent,
@@ -1339,7 +1331,7 @@ private:
             const bool focused = (_focusedControl.part == AlertHitTest::Part::Button && _focusedControl.buttonId == btn.id);
 
             _backgroundBrush->SetOpacity(opacity);
-            RedSalamander::DxUi::ButtonChromeDrawSpec chrome{};
+            DxUi::ButtonChromeDrawSpec chrome{};
             chrome.bounds          = btn.rect;
             chrome.text            = btn.label;
             chrome.primary         = btn.primary;
@@ -1347,7 +1339,7 @@ private:
             chrome.focused         = focused;
             chrome.keyboardFocused = focused;
             chrome.customStyle     = MakeOverlayButtonChromeStyle(btn, hot, focused, cornerDip);
-            RedSalamander::DxUi::DrawButtonChrome(target, _backgroundBrush.get(), _buttonFormat.get(), nullptr, MakeChromeThemePalette(), chrome);
+            DxUi::DrawButtonChrome(target, _backgroundBrush.get(), _buttonFormat.get(), nullptr, MakeChromeThemePalette(), chrome);
 #if defined(ENABLE_TESTS)
             _debugUsesSharedButtonChrome = true;
 #endif
@@ -1363,7 +1355,7 @@ private:
 
         for (const auto& option : _optionRects)
         {
-            const bool hot = _hot.part == AlertHitTest::Part::Option && _hot.buttonId == option.id;
+            const bool hot     = _hot.part == AlertHitTest::Part::Option && _hot.buttonId == option.id;
             const bool focused = _focusedControl.part == AlertHitTest::Part::Option && _focusedControl.buttonId == option.id;
             ButtonRect chromeSource{};
             chromeSource.id      = option.id;
@@ -1372,15 +1364,14 @@ private:
             chromeSource.primary = false;
 
             _backgroundBrush->SetOpacity(opacity);
-            RedSalamander::DxUi::ButtonChromeDrawSpec chrome{};
+            DxUi::ButtonChromeDrawSpec chrome{};
             chrome.bounds          = option.rect;
             chrome.text            = option.label;
             chrome.hovered         = hot;
             chrome.focused         = focused;
             chrome.keyboardFocused = focused;
             chrome.customStyle     = MakeOverlayButtonChromeStyle(chromeSource, hot, focused, cornerDip);
-            RedSalamander::DxUi::DrawButtonChrome(
-                target, _backgroundBrush.get(), _buttonFormat.get(), nullptr, MakeChromeThemePalette(), chrome);
+            DxUi::DrawButtonChrome(target, _backgroundBrush.get(), _buttonFormat.get(), nullptr, MakeChromeThemePalette(), chrome);
 #if defined(ENABLE_TESTS)
             _debugUsesSharedButtonChrome = true;
 #endif
@@ -1430,14 +1421,14 @@ private:
                 return;
             }
 
-            const float cardWidth  = size * 0.52f;
-            const float cardHeight = size * 0.62f;
-            const float offset     = size * 0.13f;
-            const float radius     = std::max(2.0f, size * 0.05f);
-            const D2D1_RECT_F back = D2D1::RectF(center.x - cardWidth * 0.5f - offset,
-                                                 center.y - cardHeight * 0.5f - offset,
-                                                 center.x + cardWidth * 0.5f - offset,
-                                                 center.y + cardHeight * 0.5f - offset);
+            const float cardWidth   = size * 0.52f;
+            const float cardHeight  = size * 0.62f;
+            const float offset      = size * 0.13f;
+            const float radius      = std::max(2.0f, size * 0.05f);
+            const D2D1_RECT_F back  = D2D1::RectF(center.x - cardWidth * 0.5f - offset,
+                                                  center.y - cardHeight * 0.5f - offset,
+                                                  center.x + cardWidth * 0.5f - offset,
+                                                  center.y + cardHeight * 0.5f - offset);
             const D2D1_RECT_F front = D2D1::RectF(center.x - cardWidth * 0.5f + offset,
                                                   center.y - cardHeight * 0.5f + offset,
                                                   center.x + cardWidth * 0.5f + offset,
@@ -1451,8 +1442,7 @@ private:
         {
             if (_iconFormat && _iconGlyphSet != IconGlyphSet::None)
             {
-                const wchar_t glyph =
-                    _iconGlyphSet == IconGlyphSet::Fluent ? FluentIcons::kMoveToFolder : FluentIcons::kFallbackMoveToFolder;
+                const wchar_t glyph = _iconGlyphSet == IconGlyphSet::Fluent ? FluentIcons::kMoveToFolder : FluentIcons::kFallbackMoveToFolder;
 #if defined(ENABLE_TESTS)
                 _debugLastDrawnIconGlyph = glyph;
 #endif
@@ -1664,13 +1654,13 @@ private:
     AlertHitTest _focusedControl{};
     uint64_t _startTickMs = 0;
 #if defined(ENABLE_TESTS)
-    float _debugLastDrawOpacity       = 0.0f;
-    float _debugLastDrawScrimOpacity  = 0.0f;
-    bool _debugUsesSharedCloseChrome  = false;
-    bool _debugUsesSharedButtonChrome = false;
+    float _debugLastDrawOpacity                       = 0.0f;
+    float _debugLastDrawScrimOpacity                  = 0.0f;
+    bool _debugUsesSharedCloseChrome                  = false;
+    bool _debugUsesSharedButtonChrome                 = false;
     AlertPresentation _debugLastDrawnIconPresentation = AlertPresentation::Severity;
-    wchar_t _debugLastDrawnIconGlyph = L'\0';
-    wchar_t _debugLastDrawnCloseGlyph = L'\0';
+    wchar_t _debugLastDrawnIconGlyph                  = L'\0';
+    wchar_t _debugLastDrawnCloseGlyph                 = L'\0';
 #endif
 };
 } // namespace RedSalamander::Ui

@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-#include "DxUi/DxUi.h"
+#include <DxUi/DxUi.h>
 
 namespace BatchRenameMenus
 {
@@ -31,10 +31,10 @@ struct HelperCommandInsertion final
     size_t selectionEnd   = 0u;
 };
 
-[[nodiscard]] std::vector<RedSalamander::DxUi::MenuFlyoutItem> BuildTemplateHelperMenuItems();
-[[nodiscard]] std::vector<RedSalamander::DxUi::MenuFlyoutItem> BuildRegexSearchHelperMenuItems();
-[[nodiscard]] std::vector<RedSalamander::DxUi::MenuFlyoutItem> BuildReplacementHelperMenuItems();
-[[nodiscard]] std::vector<RedSalamander::DxUi::MenuFlyoutItem> BuildHelperMenuItems(HelperMenuKind kind);
+[[nodiscard]] std::vector<DxUi::MenuFlyoutItem> BuildTemplateHelperMenuItems();
+[[nodiscard]] std::vector<DxUi::MenuFlyoutItem> BuildRegexSearchHelperMenuItems();
+[[nodiscard]] std::vector<DxUi::MenuFlyoutItem> BuildReplacementHelperMenuItems();
+[[nodiscard]] std::vector<DxUi::MenuFlyoutItem> BuildHelperMenuItems(HelperMenuKind kind);
 
 [[nodiscard]] int RegexEscapedLiteralHelperCommandId() noexcept;
 [[nodiscard]] int ReplacementCustomSubexpressionHelperCommandId() noexcept;

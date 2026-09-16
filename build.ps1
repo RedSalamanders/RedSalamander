@@ -409,7 +409,11 @@ function Find-MSBuild {
                 $installVersion = [version]"0.0"
             }
 
+            $nativeMSBuild = if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64') {
+                Join-Path $installPath 'MSBuild/Current/Bin/MSBuild.exe'
+            } else { Join-Path $installPath 'MSBuild/Current/Bin/amd64/MSBuild.exe' }
             $msbuildCandidates = @(
+                $nativeMSBuild,
                 (Join-Path $installPath "MSBuild\\Current\\Bin\\amd64\\MSBuild.exe"),
                 (Join-Path $installPath "MSBuild\\Current\\Bin\\MSBuild.exe"),
                 (Join-Path $installPath "MSBuild\\15.0\\Bin\\amd64\\MSBuild.exe"),
@@ -773,6 +777,8 @@ if ([string]::IsNullOrWhiteSpace($requestedTestsEnabled)) {
 $receiptTestsEnabled = $effectiveTestsEnabled
 $receiptBuildArguments += "tests-enabled=$($effectiveTestsEnabled.ToString().ToLowerInvariant())"
 Write-Host 'Computing build evidence identity...' -ForegroundColor Gray
+Import-Module (Join-Path $SolutionDir 'Tools/Modules/Build/DxUiDependency.psm1') -Force -ErrorAction Stop
+Restore-RSDxUiDependency -RepoRoot $SolutionDir -MSBuildPath $msbuildPath -Platform $Platform -Configuration $Configuration -CheckUpdates -Rebuild:$Rebuild -ProjectName $ProjectName
 $buildSourceSnapshotBefore = Get-RSBuildSourceSnapshot -RepoRoot $SolutionDir
 $buildIdentity = Get-RSBuildIdentityBundle -RepoRoot $SolutionDir -MSBuildPath $msbuildPath `
     -Platform $Platform -Configuration $Configuration
@@ -977,6 +983,7 @@ function Assert-BuildOutputProcessNotRunning {
     if ($buildSourceSnapshotAfter.SnapshotId -ne $buildSourceSnapshotBefore.SnapshotId) {
         throw 'Repository source changed while the build was running; no success receipt was published.'
     }
+    Write-RSDxUiModuleProvenance -RepoRoot $SolutionDir -ArtifactManifestDir $artifactManifestDir -Platform $Platform -Configuration $Configuration
     $buildArtifacts = @(Get-RSBuildArtifactRecords `
             -RepoRoot $SolutionDir `
             -BuildOutputDir $buildOutputDir `

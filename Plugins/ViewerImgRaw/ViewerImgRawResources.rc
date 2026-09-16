@@ -142,3 +142,8 @@ BEGIN
     IDS_VIEWERRAW_RAW_BUFFER_TRUNCATED "The decoded RAW image buffer is truncated."
     IDS_VIEWERRAW_RAW_OUTPUT_BUDGET "The RAW output exceeds the decoded-image memory budget."
 END
+
+STRINGTABLE
+BEGIN
+    IDS_DXUI_NO_MATCHES "No matches"
+END

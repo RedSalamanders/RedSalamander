@@ -2,9 +2,9 @@
 
 #include <memory>
 
-#include "DxUi/DxUi.h"
 #include "Preferences.Internal.h"
 #include "Preferences.h"
+#include <DxUi/DxUi.h>
 
 class GeneralPane final
 {
@@ -42,9 +42,9 @@ private:
     void SyncDxControlsFromState(const PreferencesDialogState& state) noexcept;
     void LayoutDxPage(HWND host, PreferencesDialogState& state, int x, int& y, int width, const PreferencesTypographyContext& typography) noexcept;
 
-    HWND _pageHost                               = nullptr;
-    RedSalamander::DxUi::WindowHost* _pageHostDx = nullptr;
-    RedSalamander::DxUi::Panel* _pageContentRoot = nullptr;
+    HWND _pageHost                = nullptr;
+    DxUi::WindowHost* _pageHostDx = nullptr;
+    DxUi::Panel* _pageContentRoot = nullptr;
     std::unique_ptr<DxCardState> _dxCardState;
     bool _syncingLanguageCombo       = false;
     bool _syncingReducedMotionCombo  = false;

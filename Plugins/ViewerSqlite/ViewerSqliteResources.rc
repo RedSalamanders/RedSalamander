@@ -76,3 +76,13 @@ BEGIN
     IDS_VIEWERSQLITE_ERROR_IDENTIFIER_TOO_LONG "The database contains a table or view name that is too long to display safely."
     IDS_VIEWERSQLITE_ERROR_ROW_OFFSET "The requested page offset is outside the supported range."
 END
+
+STRINGTABLE
+BEGIN
+    IDS_DXUI_NO_MATCHES "No matches"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_DXUI_NO_DATA "No data"
+END

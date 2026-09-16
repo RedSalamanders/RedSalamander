@@ -468,6 +468,26 @@ public:
         return S_OK;
     }
 
+    HRESULT GetCachedItemSummary(std::wstring_view path, unsigned long& attributes, uint64_t& sizeBytes, bool& servedFromCache) noexcept override
+    {
+        const FakeMtpActiveCallScope activeCall(*this);
+        std::lock_guard lock(_mutex);
+        attributes      = 0;
+        sizeBytes       = 0;
+        servedFromCache = false;
+        const FakeNode* node = FindNodeLocked(path);
+        if (! node)
+        {
+            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        }
+
+        // The whole fake tree is the cache: nothing here costs a device round trip.
+        attributes      = node->attributes;
+        sizeBytes       = node->sizeBytes;
+        servedFromCache = true;
+        return S_OK;
+    }
+
     HRESULT GetBasicInformation(std::wstring_view path, FileSystemBasicInformation& info) noexcept override
     {
         const FakeMtpActiveCallScope activeCall(*this);

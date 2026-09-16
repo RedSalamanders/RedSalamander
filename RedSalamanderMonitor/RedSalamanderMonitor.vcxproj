@@ -235,9 +235,6 @@
     <ProjectReference Include="..\Common\Common\Common.vcxproj">
       <Project>{87fb9a11-83cc-44d8-9fec-9aa9d72667ef}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\Common\DxUi\DxUi.vcxproj">
-      <Project>{e0d8e4a1-7aa7-4377-9e4c-a53794e43a1f}</Project>
-    </ProjectReference>
     <ProjectReference Include="Lang\fr-FR\RedSalamanderMonitor-fr-FR.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
       <Project>{463d2b6c-325f-4586-a036-06ec94577521}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
@@ -263,7 +260,9 @@
       <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
     </ProjectReference>
   </ItemGroup>
+  <Import Project="..\Build\RedSalamander.DxUi.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="..\Build\RedSalamander.DxUi.targets" />
   <Target Name="CopyPredefinedThemes" AfterTargets="Build">
     <PropertyGroup>
       <ThemeSourceDir>$(MSBuildThisFileDirectory)..\Specs\Themes</ThemeSourceDir>

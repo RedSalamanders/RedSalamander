@@ -9,6 +9,7 @@ $artifactOperationModule = Join-Path $PSScriptRoot 'ArtifactOperationLock.psm1'
 Import-Module $validationModule -Scope Local -ErrorAction Stop
 Import-Module $runtimeDependencyModule -Scope Local -ErrorAction Stop
 Import-Module $artifactOperationModule -Scope Local -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'DxUiDependency.psm1') -Scope Local -ErrorAction Stop
 
 function Get-RSFileSha256 {
     param([Parameter(Mandatory = $true)][string]$LiteralPath)
@@ -288,7 +289,7 @@ function Get-RSBuildToolchainIdentity {
 
     $root = [IO.Path]::GetFullPath($RepoRoot)
     $probeProject = Join-Path $root 'RedSalamander\RedSalamander.vcxproj'
-    $propertyNames = 'VCToolsInstallDir,VCToolsVersion,WindowsSdkDir,WindowsTargetPlatformVersion'
+    $propertyNames = 'VCToolsInstallDir,VCToolsVersion,WindowsSdkDir,WindowsTargetPlatformVersion,PreferredToolArchitecture'
     $jsonText = Invoke-RSNativeTextOutput -FilePath $MSBuildPath -WorkingDirectory $root -Argument @(
         $probeProject,
         "/p:Configuration=$Configuration",
@@ -305,15 +306,17 @@ function Get-RSBuildToolchainIdentity {
     }
 
     $target = $Platform.ToLowerInvariant()
+    $compilerHost = ([string]$properties.PreferredToolArchitecture).ToLowerInvariant()
+    if ($compilerHost -notin @('x86','x64','arm64')) { throw "Unsupported compiler host: $compilerHost" }
     $vcToolsRoot = [IO.Path]::GetFullPath([string]$properties.VCToolsInstallDir)
     $sdkRoot = [IO.Path]::GetFullPath([string]$properties.WindowsSdkDir)
     $sdkVersion = ([string]$properties.WindowsTargetPlatformVersion).Trim().TrimEnd('\')
     $record = New-RSBuildToolchainIdentityRecord -Platform $Platform `
         -VcToolsVersion ([string]$properties.VCToolsVersion) -WindowsSdkVersion $sdkVersion `
         -MSBuildPath $MSBuildPath `
-        -CompilerPath (Join-Path $vcToolsRoot "bin\Hostx64\$target\cl.exe") `
-        -LinkerPath (Join-Path $vcToolsRoot "bin\Hostx64\$target\link.exe") `
-        -ResourceCompilerPath (Join-Path $sdkRoot "bin\$sdkVersion\x64\rc.exe") `
+        -CompilerPath (Join-Path $vcToolsRoot "bin\Host$compilerHost\$target\cl.exe") `
+        -LinkerPath (Join-Path $vcToolsRoot "bin\Host$compilerHost\$target\link.exe") `
+        -ResourceCompilerPath (Join-Path $sdkRoot "bin\$sdkVersion\$compilerHost\rc.exe") `
         -WindowsHeaderPath (Join-Path $sdkRoot "Include\$sdkVersion\um\Windows.h") `
         -UmImportLibraryPath (Join-Path $sdkRoot "Lib\$sdkVersion\um\$target\kernel32.lib") `
         -UcrtImportLibraryPath (Join-Path $sdkRoot "Lib\$sdkVersion\ucrt\$target\ucrt.lib")
@@ -669,6 +672,7 @@ function Get-RSBuildSourceSnapshot {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][string]$RepoRoot)
 
+    $null = Get-RSDxUiSourceIdentity -RepoRoot $RepoRoot -AllowMissing
     $snapshot = Get-RSWorkspaceSnapshot -RepoRoot $RepoRoot
     [pscustomobject]@{
         GitHead = $snapshot.git_head
@@ -749,7 +753,7 @@ function Get-RSBuildIdentityBundle {
         ToolchainIdentityDigest = $toolchain.Digest
         VcpkgIdentityDigest = Get-RSFileSetDigest -RepoRoot $root -RelativePath @('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-tool.json')
         GhosttyRuntimeIdentity = Get-RSGhosttyRuntimeIdentityDigest -RepoRoot $root
-        ProjectGraphDigest = Get-RSFileSetDigest -RepoRoot $root -RelativePath $projectFiles
+        ProjectGraphDigest = Get-RSFileSetDigest -RepoRoot $root -RelativePath @($projectFiles + @('Dependencies/DxUi.lock.json','Tools/Modules/Build/DxUiDependency.psm1'))
         RuntimeDependencyDigest = Get-RSFileSetDigest -RepoRoot $root -RelativePath $runtimeFiles
     }
 }
@@ -993,6 +997,7 @@ function Test-RSBuildReceiptForArtifactUse {
         [string[]]$RequiredRelativePath = @()
     )
 
+    try { $null = Get-RSDxUiSourceIdentity -RepoRoot $RepoRoot } catch { return $false }
     if ($null -eq $Receipt) { return $false }
     try { $null = Assert-RSBuildReceiptSemantics -Receipt $Receipt } catch { return $false }
     if ($Receipt.target -ne 'solution' -or

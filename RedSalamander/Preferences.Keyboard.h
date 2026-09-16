@@ -3,14 +3,14 @@
 #include <memory>
 #include <optional>
 
-#include "DxUi/DxUi.h"
 #include "Preferences.Internal.h"
 #include "Preferences.h"
+#include <DxUi/DxUi.h>
 
-class KeyboardPane final : public RedSalamander::DxUi::IDxGridDelegate
+class KeyboardPane final : public DxUi::IDxGridDelegate
 {
 public:
-    using RedSalamander::DxUi::IDxGridDelegate::OnGridSelectionChanged;
+    using DxUi::IDxGridDelegate::OnGridSelectionChanged;
 
     KeyboardPane();
     ~KeyboardPane();
@@ -47,11 +47,11 @@ public:
     static void ExportShortcuts(HWND host, PreferencesDialogState& state) noexcept;
     static void ImportShortcuts(HWND host, PreferencesDialogState& state) noexcept;
     [[nodiscard]] bool HandleDeferredAction(HWND host, PreferencesDialogState& state, PreferencesDeferredActionKind action) noexcept;
-    void OnGridSelectionChanged(RedSalamander::DxUi::Grid& sender) override;
+    void OnGridSelectionChanged(DxUi::Grid& sender) override;
 #ifdef ENABLE_TESTS
     [[nodiscard]] static bool DebugApplyCapturedShortcut(HWND host, PreferencesDialogState& state, uint32_t vk, uint32_t modifiers) noexcept;
     [[nodiscard]] size_t DebugListRowCount() const noexcept;
-    [[nodiscard]] RedSalamander::DxUi::GridVisibleWorkMetrics DebugListVisibleWorkMetrics() const noexcept;
+    [[nodiscard]] DxUi::GridVisibleWorkMetrics DebugListVisibleWorkMetrics() const noexcept;
     [[nodiscard]] uint64_t DebugListRenderCount() const noexcept;
     [[nodiscard]] uint64_t DebugListResizeCount() const noexcept;
     [[nodiscard]] uint64_t DebugListResizeFailureCount() const noexcept;
@@ -64,10 +64,9 @@ public:
     [[nodiscard]] bool DebugGetListPointerState(PreferencesGridPointerDebugState& outState) const noexcept;
     [[nodiscard]] bool DebugFindListRowByCommandId(std::wstring_view commandId, size_t& outRowIndex) const noexcept;
     [[nodiscard]] bool DebugGetVisibleRowChordByCommandId(std::wstring_view commandId, std::wstring& outChordText) const noexcept;
-    [[nodiscard]] bool DebugGetVisibleRowPresentationByCommandId(
-        std::wstring_view commandId,
-        std::wstring& outScopeText,
-        std::wstring& outTooltipText) const noexcept;
+    [[nodiscard]] bool DebugGetVisibleRowPresentationByCommandId(std::wstring_view commandId,
+                                                                 std::wstring& outScopeText,
+                                                                 std::wstring& outTooltipText) const noexcept;
     [[nodiscard]] bool DebugSelectListRow(size_t rowIndex) noexcept;
     [[nodiscard]] bool DebugSetSearchText(std::wstring_view text) noexcept;
     [[nodiscard]] bool DebugSetFunctionBarScope() noexcept;
@@ -99,9 +98,9 @@ private:
     void OnKeyboardImportClicked(HWND host, PreferencesDialogState& state) noexcept;
     void OnKeyboardExportClicked(HWND host, PreferencesDialogState& state) noexcept;
 
-    HWND _pageHost                               = nullptr;
-    RedSalamander::DxUi::WindowHost* _pageHostDx = nullptr;
-    RedSalamander::DxUi::Panel* _pageContentRoot = nullptr;
+    HWND _pageHost                = nullptr;
+    DxUi::WindowHost* _pageHostDx = nullptr;
+    DxUi::Panel* _pageContentRoot = nullptr;
     std::unique_ptr<DxState> _dxState;
     bool _syncingDxInputs          = false;
     bool _syncingDxSelection       = false;

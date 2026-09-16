@@ -487,17 +487,17 @@ void EnsureD2DResources() {
     // Separator (›): 80% of bar height for visual prominence
     float separatorSize = barHeight * 0.8f;   // ~19.2pt at 96 DPI, 24pt at 120 DPI
     
-    RedSalamander::DxUi::Typography::CreateTextFormat(
+    DxUi::Typography::CreateTextFormat(
         _dwriteFactory.get(),
-        RedSalamander::DxUi::Typography::MakeUiTextSpec(breadcrumbSize),
+        DxUi::Typography::MakeUiTextSpec(breadcrumbSize),
         _pathFormat.put(),
         L"");
     
     _pathFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
     
-    RedSalamander::DxUi::Typography::CreateTextFormat(
+    DxUi::Typography::CreateTextFormat(
         _dwriteFactory.get(),
-        RedSalamander::DxUi::Typography::MakeUiIconSpec(separatorSize),
+        DxUi::Typography::MakeUiIconSpec(separatorSize),
         _separatorFormat.put(),
         L"");
     
@@ -1663,8 +1663,8 @@ NavigationView must support the shared theme system with **Light**, **Dark**, **
   - Pane focus is driven by `FolderWindow::UpdatePaneFocusStates()` calling `NavigationView::SetPaneFocused(...)`.
   - In Rainbow mode, any per-segment rainbow accents (e.g., breadcrumb underline / current segment text) must also be dimmed for the inactive pane.
 - Hosts that embed NavigationView outside a pane, such as the Find window's destination footer, must opt into embedded destination presentation with `SetEmbeddedDestinationMode(true)`. Embedded mode keeps the normal breadcrumb, edit, autosuggest, validation, and history/menu behavior, but paints into the host footer/window background, suppresses pane-only focused chrome such as the active-pane bottom border and current-segment accent/rainbow underline, and uses upward scroll-capped root dropdowns whose visible surfaces anchor to the footer top edge.
-- NavigationView history/menu diagnostic tracing participates in the shared DxUI menu trace switch. When enabled, pointer input must log raw mouse-down/double-click context, stale-pointer rejection with delivered-message metadata, resolved branch (`menu`, `history`, `disk`, `segment`, `siblings`, or ignored), dropdown entry/show/result, elapsed popup duration, and skip reasons so delayed message routing can be diagnosed from live application logs without changing normal release behavior. Diagnostic logs may include `GetCursorPos()` / `WindowFromPoint()` evidence, but that evidence is observational only and must not feed production routing decisions.
-- NavigationView destination/debug repro tracing must also expose whether input is reaching the application queue, the NavigationView HWND, its edit child host, the embedding owner/DxUi host, or an active popup/menu loop: `app.message-loop.find` queue/dequeue records for Find-hosted instances, `navigation.wndproc.raw` child-window activation/pointer boundary records, `navigation.input-state` snapshots, edit-host mouse/focus messages, `find.wndproc.raw` owner dispatch records, `dxui.windowhost.raw` / `dxui.windowhost.pointer-*` host dispatch records, hover candidates/changes/renders, hover-timer state/cursor ticks, cancel/capture/menu-loop transitions, and paint/present decisions are part of the diagnostic contract under the same trace switch.
+- NavigationView history/menu observations use the optional borrowed UI-thread diagnostic sink described in [Menu Diagnostics](UI_DxUiWinUIDesign.md#menu-diagnostics). Available observations include delivered pointer metadata, resolved input branches, dropdown entry/show/result, elapsed duration and skip decisions. DxUi owns no persistent trace file or legacy environment switch. Diagnostic cursor/window observations must never feed production routing decisions.
+- Destination/debug investigations may combine application queue/owner observations, NavigationView input and edit-host snapshots, and shared host/menu diagnostics to locate a delayed delivery or teardown. Legacy event names and exhaustive trace-stream compatibility are not preserved by the library adoption; the adapter owns sampling, formatting and persistence without re-entering controls.
 
 **Rainbow Mode (Implementation Guidance):**
 - Keep a neutral light/dark base for readability.
@@ -1729,7 +1729,7 @@ Current behavior is exercised by:
 - `RedSalamander/SelfTest/Commands/Commands.SelfTest.ViewCommands.cpp` for
   breadcrumb, focus traversal, menus, history, edit suggestions, invalid paths,
   pointer routing, and teardown;
-- `Tests/DxUiTests/DxUiTests.Menu.cpp` for popup and NavigationView input-source
+- DxUi `Tests/Controls/DxUiTests.Menu.cpp` for shared popups and product `Tools/Tests/TestHarnessSourceContracts.Tests.ps1` for NavigationView input-source
   contracts;
 - `Tools/Tests/TestHarnessSourceContracts.Tests.ps1` for harness and focus
   restoration boundaries.

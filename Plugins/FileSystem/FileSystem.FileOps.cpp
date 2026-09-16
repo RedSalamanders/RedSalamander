@@ -625,17 +625,17 @@ void ShutdownSharedFileOpsJobScheduler() noexcept
 }
 
 #if defined(_DEBUG)
+// Every check in this plugin's debug self-tests goes through the shared Check so a failure is
+// mirrored to stderr. The plugin's Debug::Error stream is invisible to PluginContractTests and to
+// the FileOps case that runs these self-tests in-process unless an ETW listener is attached, and a
+// failed contract that nobody can name cost a whole Fresh Full on 2026-09-15.
+constexpr Common::DebugSelfTest::Check kFileSystemDebugCheck{L"FileSystem"};
+
 void RunDebugReparseCopyErrorMappingSelfTest(unsigned int& passed, unsigned int& failed) noexcept
 {
-    const auto check = [&](bool condition, const wchar_t* message) noexcept
+    const auto check = [&](bool condition, const wchar_t* message) noexcept -> bool
     {
-        if (condition)
-        {
-            ++passed;
-            return;
-        }
-        ++failed;
-        Debug::Error(L"FileSystem debug selftest failed: {}", message);
+        return kFileSystemDebugCheck(condition, message, passed, failed);
     };
 
     constexpr HRESULT invalidParameter = HRESULT_FROM_WIN32(ERROR_INVALID_PARAMETER);
@@ -649,15 +649,7 @@ void RunDebugSharedFileOpsSchedulerShutdownSelfTest(unsigned int& passed, unsign
 {
     const auto check = [&](bool condition, const wchar_t* message) noexcept -> bool
     {
-        if (condition)
-        {
-            ++passed;
-            return true;
-        }
-
-        ++failed;
-        Debug::Error(L"FileSystem debug selftest failed: {}", message);
-        return false;
+        return kFileSystemDebugCheck(condition, message, passed, failed);
     };
 
     SharedFileOpsJobScheduler scheduler;
@@ -967,6 +959,46 @@ struct DeleteDiscoveryState final
     uint64_t discoveredDirectories = 0;
 };
 
+// One governed bulk call is one discovery scope, because the caller supplies one operation-control
+// cookie for the whole call and has no way to tell one selected root's scope from another's. Each
+// root's traversal still produces its own cumulative stream starting at zero, so the call adds those
+// streams together here and closes exactly once, after the last root. Without this a bulk call
+// reports several closures and several restarting streams, and the first root would declare the
+// caller's totals final while later roots are still producing work.
+struct CallDiscoveryAggregator final
+{
+    CallDiscoveryAggregator() = default;
+    CallDiscoveryAggregator(const CallDiscoveryAggregator&) = delete;
+    CallDiscoveryAggregator(CallDiscoveryAggregator&&) = delete;
+    CallDiscoveryAggregator& operator=(const CallDiscoveryAggregator&) = delete;
+    CallDiscoveryAggregator& operator=(CallDiscoveryAggregator&&) = delete;
+    ~CallDiscoveryAggregator() = default;
+
+    std::mutex mutex;
+    uint64_t discoveredBytes = 0;
+    uint64_t discoveredFiles = 0;
+    uint64_t discoveredDirectories = 0;
+    uint32_t queuedItems = 0;
+};
+
+// The last cumulative values one selected root reported, so the aggregator receives deltas. A retry
+// or a restarted root lowers its own cumulative value; that is never new discovery. One root owns
+// one record, so the aggregator's mutex covers both.
+struct RootDiscoveryTranslation final
+{
+    CallDiscoveryAggregator* aggregator = nullptr;
+    uint64_t lastBytes = 0;
+    uint64_t lastFiles = 0;
+    uint64_t lastDirectories = 0;
+
+    void BeginRoot() noexcept
+    {
+        lastBytes = 0;
+        lastFiles = 0;
+        lastDirectories = 0;
+    }
+};
+
 enum class TrackedPublicationTruth : uint8_t
 {
     NotObserved,
@@ -1011,6 +1043,8 @@ struct OperationContext
     unsigned int deleteConcurrencyBudget = 1;
     unsigned int recycleBinBatchSize     = 1;
     DeleteDiscoveryState* deleteDiscovery = nullptr;
+    // Set only by a bulk entry point, where several selected roots share one governed call scope.
+    RootDiscoveryTranslation* discoveryTranslation = nullptr;
     uint64_t deleteTraversalDepth = 0;
     uint64_t deleteTraversalMaxDepth = 0;
     uint64_t deleteTraversalMaxBatchEntries = 0;
@@ -4441,12 +4475,17 @@ PreserveReparsePointInternal(OperationContext& context, const PathInfo& source, 
     return mode;
 }
 
-HRESULT ReportDiscoveryProgress(OperationContext& context,
-                                uint64_t discoveredBytes,
-                                uint64_t discoveredFiles,
-                                uint64_t discoveredDirectories,
-                                uint32_t queuedItems,
-                                bool traversalClosed) noexcept
+[[nodiscard]] uint64_t AddSaturatingDiscoveryTotal(uint64_t left, uint64_t right) noexcept
+{
+    return left > std::numeric_limits<uint64_t>::max() - right ? std::numeric_limits<uint64_t>::max() : left + right;
+}
+
+HRESULT ReportRawDiscoveryProgress(OperationContext& context,
+                                   uint64_t discoveredBytes,
+                                   uint64_t discoveredFiles,
+                                   uint64_t discoveredDirectories,
+                                   uint32_t queuedItems,
+                                   bool traversalClosed) noexcept
 {
     if (context.options == nullptr || context.options->operationControl == nullptr)
     {
@@ -4462,6 +4501,56 @@ HRESULT ReportDiscoveryProgress(OperationContext& context,
     progress.traversalClosed = traversalClosed ? TRUE : FALSE;
     return context.options->operationControl->FileSystemReportDiscoveryProgress(
         &progress, context.options->operationControlCookie);
+}
+
+// Every traversal reports through here. A single-root call passes its own cumulative totals straight
+// through and owns its closure. A root inside a bulk call is translated into the call's aggregate
+// instead, and its closure is withheld: only the bulk entry point knows when the last root is done.
+HRESULT ReportDiscoveryProgress(OperationContext& context,
+                                uint64_t discoveredBytes,
+                                uint64_t discoveredFiles,
+                                uint64_t discoveredDirectories,
+                                uint32_t queuedItems,
+                                bool traversalClosed) noexcept
+{
+    RootDiscoveryTranslation* const translation = context.discoveryTranslation;
+    if (translation == nullptr || translation->aggregator == nullptr)
+    {
+        return ReportRawDiscoveryProgress(context, discoveredBytes, discoveredFiles, discoveredDirectories, queuedItems, traversalClosed);
+    }
+
+    CallDiscoveryAggregator& aggregate = *translation->aggregator;
+    // The emission happens under the same lock that advances the aggregate. Roots run concurrently,
+    // so computing a total under the lock and emitting it afterwards lets two workers deliver their
+    // snapshots out of order and hand the caller a cumulative stream that goes backwards. The lock
+    // is provider-local and is never taken while holding a host lock, so serializing here cannot
+    // invert against the host's own discovery lock.
+    std::scoped_lock lock(aggregate.mutex);
+    const uint64_t bytesDelta = discoveredBytes > translation->lastBytes ? discoveredBytes - translation->lastBytes : 0u;
+    const uint64_t filesDelta = discoveredFiles > translation->lastFiles ? discoveredFiles - translation->lastFiles : 0u;
+    const uint64_t directoriesDelta =
+        discoveredDirectories > translation->lastDirectories ? discoveredDirectories - translation->lastDirectories : 0u;
+    translation->lastBytes = (std::max)(translation->lastBytes, discoveredBytes);
+    translation->lastFiles = (std::max)(translation->lastFiles, discoveredFiles);
+    translation->lastDirectories = (std::max)(translation->lastDirectories, discoveredDirectories);
+
+    aggregate.discoveredBytes = AddSaturatingDiscoveryTotal(aggregate.discoveredBytes, bytesDelta);
+    aggregate.discoveredFiles = AddSaturatingDiscoveryTotal(aggregate.discoveredFiles, filesDelta);
+    aggregate.discoveredDirectories = AddSaturatingDiscoveryTotal(aggregate.discoveredDirectories, directoriesDelta);
+    aggregate.queuedItems = (std::max)(aggregate.queuedItems, queuedItems);
+
+    return ReportRawDiscoveryProgress(
+        context, aggregate.discoveredBytes, aggregate.discoveredFiles, aggregate.discoveredDirectories, aggregate.queuedItems, false);
+}
+
+// The one closure a bulk call emits, after its last root has resolved. It runs on every exit,
+// including error, partial and cancellation, because a scope the caller cannot close is worse than
+// a scope that closes on totals the call actually reached.
+void ReportCallDiscoveryClosed(OperationContext& context, CallDiscoveryAggregator& aggregate) noexcept
+{
+    std::scoped_lock lock(aggregate.mutex);
+    static_cast<void>(ReportRawDiscoveryProgress(
+        context, aggregate.discoveredBytes, aggregate.discoveredFiles, aggregate.discoveredDirectories, aggregate.queuedItems, true));
 }
 
 [[nodiscard]] HRESULT ReportTopLevelDiscovery(OperationContext& context,
@@ -4494,6 +4583,18 @@ HRESULT ReportDiscoveryProgress(OperationContext& context,
                                    directory ? 1u : 0u,
                                    1u,
                                    true);
+}
+
+// Delete already accumulates into one call-level state, so only its closure was missing. The
+// governed call owns that scope and closes it exactly once on every exit, including error, partial
+// and cancellation: a scope the caller can never close is worse than one that closes on the totals
+// the call actually reached. The emission stays under the lock, matching every other delete report,
+// so the closure can never overtake a concurrent worker's report.
+void ReportDeleteDiscoveryClosed(OperationContext& context, DeleteDiscoveryState& discovery) noexcept
+{
+    std::scoped_lock lock(discovery.mutex);
+    static_cast<void>(ReportRawDiscoveryProgress(
+        context, discovery.discoveredBytes, discovery.discoveredFiles, discovery.discoveredDirectories, 0u, true));
 }
 
 [[nodiscard]] HRESULT ReportDeleteDiscoveryObject(OperationContext& context,
@@ -8277,14 +8378,7 @@ void FileSystemInternal::RunDebugObjectBindingSelfTest(unsigned int& passed, uns
 {
     const auto check = [&](bool condition, const wchar_t* message) noexcept -> bool
     {
-        if (condition)
-        {
-            ++passed;
-            return true;
-        }
-        ++failed;
-        Debug::Error(L"FileSystem object-binding selftest failed: {}", message);
-        return false;
+        return kFileSystemDebugCheck(condition, message, passed, failed);
     };
 
     if (! check(IsNameSurrogateReparseTag(IO_REPARSE_TAG_SYMLINK) &&
@@ -8525,10 +8619,11 @@ void FileSystemInternal::RunDebugObjectBindingSelfTest(unsigned int& passed, uns
         return;
     }
 
-    const auto createSymbolicLink = [](const std::filesystem::path& linkPath,
-                                       std::wstring_view targetText,
-                                       bool directory,
-                                       bool relative) noexcept -> bool
+    HRESULT lastSymlinkFixtureHr  = S_OK;
+    const auto createSymbolicLink = [&lastSymlinkFixtureHr](const std::filesystem::path& linkPath,
+                                                            std::wstring_view targetText,
+                                                            bool directory,
+                                                            bool relative) noexcept -> bool
     {
         bool placeholderCreated = false;
         if (directory)
@@ -8562,9 +8657,14 @@ void FileSystemInternal::RunDebugObjectBindingSelfTest(unsigned int& passed, uns
             }
         });
         ReparsePointData data{};
-        if (FAILED(BuildSymlinkReparseData(std::wstring(targetText), relative, data)) ||
-            FAILED(WriteReparsePointData(linkPath.wstring(), data)))
+        HRESULT hr = BuildSymlinkReparseData(std::wstring(targetText), relative, data);
+        if (SUCCEEDED(hr))
         {
+            hr = WriteReparsePointData(linkPath.wstring(), data);
+        }
+        if (FAILED(hr))
+        {
+            lastSymlinkFixtureHr = hr;
             return false;
         }
         removePlaceholder.release();
@@ -8585,6 +8685,18 @@ void FileSystemInternal::RunDebugObjectBindingSelfTest(unsigned int& passed, uns
         ! check(createSymbolicLink(outsideFileLink, outsideTarget.native(), false, false),
                 L"outside-root file-symlink fixture should be created"))
     {
+        // The fixtures need SeCreateSymbolicLinkPrivilege, which an unelevated session holds only
+        // with Developer Mode on. The failed check above names what did not happen; this names
+        // why, so a run on such a machine is not left to rediscover it. The contract is still
+        // reported as failed: a machine that cannot create the fixtures has not proved it, and
+        // this export has no channel for a declared skip.
+        if (lastSymlinkFixtureHr == HRESULT_FROM_WIN32(ERROR_PRIVILEGE_NOT_HELD))
+        {
+            std::fwprintf(stderr,
+                          L"[FileSystem] object-binding selftest is blocked: SeCreateSymbolicLinkPrivilege is not held. "
+                          L"Run from an elevated shell or enable Developer Mode; the symlink fixture checks cannot pass without it.\n");
+            std::fflush(stderr);
+        }
         return;
     }
 
@@ -9541,6 +9653,7 @@ FileSystem::DeleteItem(const wchar_t* path, FileSystemFlags flags, const FileSys
     InitializeOperationContext(context, FILESYSTEM_DELETE, flags, options, callback, cookie, 0, reparsePointPolicy);
     DeleteDiscoveryState discovery{};
     context.deleteDiscovery = &discovery;
+    const auto closeDeleteDiscovery = wil::scope_exit([&]() noexcept { ReportDeleteDiscoveryClosed(context, discovery); });
     const bool useRecycleBin                    = HasFlag(flags, FILESYSTEM_FLAG_USE_RECYCLE_BIN);
     const unsigned int maxConcurrencyFast       = std::clamp(deleteMaxConcurrency, 1u, kMaxDeleteMaxConcurrency);
     const unsigned int maxConcurrencyRecycleBin = std::clamp(deleteRecycleBinMaxConcurrency, 1u, kMaxDeleteRecycleBinMaxConcurrency);
@@ -9705,6 +9818,16 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItems(const wchar_t* const* sourcePath
         InitializeOperationContext(context, FILESYSTEM_COPY, flags, options, callback, cookie, count, reparsePointPolicy);
         context.objectBinding = static_cast<IFileSystemObjectBinding*>(this);
 
+        CallDiscoveryAggregator callDiscovery{};
+        RootDiscoveryTranslation rootDiscovery{};
+        rootDiscovery.aggregator = &callDiscovery;
+        context.discoveryTranslation = &rootDiscovery;
+        const auto closeCallDiscovery = wil::scope_exit([&]() noexcept
+        {
+            context.discoveryTranslation = nullptr;
+            ReportCallDiscoveryClosed(context, callDiscovery);
+        });
+
         bool hadFailure = false;
 
         for (unsigned long index = 0; index < count; ++index)
@@ -9738,9 +9861,15 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItems(const wchar_t* const* sourcePath
             context.reparseRootSourcePath      = TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(source.display)));
             context.reparseRootDestinationPath = TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(destination.display)));
 
+            // Each root restarts its own cumulative stream at zero; the call keeps the running sum.
+            rootDiscovery.BeginRoot();
             uint64_t bytesCopied = 0;
-            HRESULT itemHr =
-                CopyPathInternalWithDirectoryParallelism(context, source, destination, flags, context.reparsePointPolicy, maxConcurrency, &bytesCopied);
+            HRESULT itemHr = ReportTopLevelDiscovery(context, source.extended, context.recursive);
+            if (SUCCEEDED(itemHr))
+            {
+                itemHr = CopyPathInternalWithDirectoryParallelism(
+                    context, source, destination, flags, context.reparsePointPolicy, maxConcurrency, &bytesCopied);
+            }
 
             hr = ReportItemCompleted(context, index, itemHr);
             if (FAILED(hr))
@@ -9808,6 +9937,15 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItems(const wchar_t* const* sourcePath
     const unsigned int nestedConcurrency = CalculateNestedCopyMoveConcurrency(maxConcurrency, concurrency);
     Debug::Perf::Emit(L"FileOps.CopyItems.NestedConcurrencyBudget", L"", nestedConcurrency, maxConcurrency, concurrency, S_OK);
 
+    // Workers run roots concurrently, so each worker context owns its own translation record while
+    // the call owns the one aggregate and the one closure. The closing context carries no
+    // translation, so it emits the call's totals directly.
+    CallDiscoveryAggregator callDiscovery{};
+    OperationContext callDiscoveryContext{};
+    InitializeOperationContext(callDiscoveryContext, FILESYSTEM_COPY, flags, &sharedOptionsState, callback, cookie, count, reparsePointPolicy);
+    callDiscoveryContext.options  = &sharedOptionsState;
+    const auto closeCallDiscovery = wil::scope_exit([&]() noexcept { ReportCallDiscoveryClosed(callDiscoveryContext, callDiscovery); });
+
     auto job = GetSharedFileOpsJobScheduler().StartJob(options,
                                                        concurrency,
                                                        static_cast<size_t>(count),
@@ -9830,6 +9968,9 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItems(const wchar_t* const* sourcePath
         context.parallel         = &parallel;
         context.totalBytes       = 0; // discovered totals are reported by this traversal
         context.progressStreamId = schedulerStreamId;
+        RootDiscoveryTranslation rootDiscovery{};
+        rootDiscovery.aggregator     = &callDiscovery;
+        context.discoveryTranslation = &rootDiscovery;
 
         const unsigned long itemIndex = static_cast<unsigned long>((std::min)(index, static_cast<size_t>(ULONG_MAX)));
         const wchar_t* sourcePath     = sourcePaths[itemIndex];
@@ -9862,8 +10003,12 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItems(const wchar_t* const* sourcePath
         context.reparseRootDestinationPath = TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(destination.display)));
 
         uint64_t bytesCopied = 0;
-        HRESULT itemHr =
-            CopyPathInternalWithDirectoryParallelism(context, source, destination, flags, context.reparsePointPolicy, nestedConcurrency, &bytesCopied);
+        HRESULT itemHr = ReportTopLevelDiscovery(context, source.extended, context.recursive);
+        if (SUCCEEDED(itemHr))
+        {
+            itemHr = CopyPathInternalWithDirectoryParallelism(
+                context, source, destination, flags, context.reparsePointPolicy, nestedConcurrency, &bytesCopied);
+        }
 
         hr = ReportItemCompleted(context, itemIndex, itemHr);
         if (FAILED(hr))
@@ -9974,6 +10119,16 @@ HRESULT STDMETHODCALLTYPE FileSystem::MoveItems(const wchar_t* const* sourcePath
         InitializeOperationContext(context, FILESYSTEM_MOVE, flags, options, callback, cookie, count, reparsePointPolicy);
         context.objectBinding = static_cast<IFileSystemObjectBinding*>(this);
 
+        CallDiscoveryAggregator callDiscovery{};
+        RootDiscoveryTranslation rootDiscovery{};
+        rootDiscovery.aggregator = &callDiscovery;
+        context.discoveryTranslation = &rootDiscovery;
+        const auto closeCallDiscovery = wil::scope_exit([&]() noexcept
+        {
+            context.discoveryTranslation = nullptr;
+            ReportCallDiscoveryClosed(context, callDiscovery);
+        });
+
         bool hadFailure = false;
 
         for (unsigned long index = 0; index < count; ++index)
@@ -10007,6 +10162,9 @@ HRESULT STDMETHODCALLTYPE FileSystem::MoveItems(const wchar_t* const* sourcePath
             context.reparseRootSourcePath      = TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(source.display)));
             context.reparseRootDestinationPath = TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(destination.display)));
 
+            // Each root restarts its own cumulative stream at zero; the call keeps the running sum
+            // and closes once, so an early root can no longer declare the call's totals final.
+            rootDiscovery.BeginRoot();
             HRESULT itemHr = ReportTopLevelDiscovery(context, source.extended, false);
             if (SUCCEEDED(itemHr))
             {
@@ -10078,6 +10236,15 @@ HRESULT STDMETHODCALLTYPE FileSystem::MoveItems(const wchar_t* const* sourcePath
     const unsigned int nestedConcurrency = CalculateNestedCopyMoveConcurrency(maxConcurrency, concurrency);
     Debug::Perf::Emit(L"FileOps.MoveItems.NestedConcurrencyBudget", L"", nestedConcurrency, maxConcurrency, concurrency, S_OK);
 
+    // Workers run roots concurrently, so each worker context owns its own translation record while
+    // the call owns the one aggregate and the one closure. The closing context carries no
+    // translation, so it emits the call's totals directly.
+    CallDiscoveryAggregator callDiscovery{};
+    OperationContext callDiscoveryContext{};
+    InitializeOperationContext(callDiscoveryContext, FILESYSTEM_MOVE, flags, &sharedOptionsState, callback, cookie, count, reparsePointPolicy);
+    callDiscoveryContext.options  = &sharedOptionsState;
+    const auto closeCallDiscovery = wil::scope_exit([&]() noexcept { ReportCallDiscoveryClosed(callDiscoveryContext, callDiscovery); });
+
     auto job = GetSharedFileOpsJobScheduler().StartJob(options,
                                                        concurrency,
                                                        static_cast<size_t>(count),
@@ -10100,6 +10267,9 @@ HRESULT STDMETHODCALLTYPE FileSystem::MoveItems(const wchar_t* const* sourcePath
         context.parallel         = &parallel;
         context.totalBytes       = 0; // discovered totals are reported by this traversal
         context.progressStreamId = schedulerStreamId;
+        RootDiscoveryTranslation rootDiscovery{};
+        rootDiscovery.aggregator     = &callDiscovery;
+        context.discoveryTranslation = &rootDiscovery;
 
         const unsigned long itemIndex = static_cast<unsigned long>((std::min)(index, static_cast<size_t>(ULONG_MAX)));
         const wchar_t* sourcePath     = sourcePaths[itemIndex];
@@ -10238,6 +10408,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::DeleteItems(const wchar_t* const* paths,
     constexpr unsigned int kMaxSharedConcurrency     = 8u;
     const unsigned int concurrency                   = std::min<unsigned int>(std::min<unsigned int>(maxConcurrency, count), kMaxSharedConcurrency);
     DeleteDiscoveryState discovery{};
+    // Both branches below share this one call-level discovery state, so the call owns the single
+    // closure. The closing context exists only to carry the caller's operation control.
+    OperationContext callDiscoveryContext{};
+    InitializeOperationContext(callDiscoveryContext, FILESYSTEM_DELETE, flags, options, callback, cookie, count, reparsePointPolicy);
+    const auto closeDeleteDiscovery = wil::scope_exit([&]() noexcept { ReportDeleteDiscoveryClosed(callDiscoveryContext, discovery); });
 
     if (concurrency > 1u || (useRecycleBin && count > 1u))
     {

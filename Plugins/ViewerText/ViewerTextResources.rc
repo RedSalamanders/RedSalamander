@@ -417,3 +417,8 @@ IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_TOO_LARGE "[unchanged lines hidden: referenced
 IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_BINARY "[unchanged lines hidden: referenced file is binary]"
 IDS_VIEWERTEXT_MSG_HEX_COPY_TRUNCATED "The selection was too large. Only the first 256 KiB was copied."
 END
+
+STRINGTABLE
+BEGIN
+    IDS_DXUI_NO_MATCHES "No matches"
+END

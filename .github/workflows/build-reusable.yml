@@ -9,6 +9,12 @@ name: Build (reusable)
       platform:
         type: string
         default: x64
+      native_runner:
+        type: string
+        default: windows-latest
+      run_full_tests:
+        type: boolean
+        default: false
       build_number:
         type: string
         default: ""
@@ -34,12 +40,19 @@ jobs:
     outputs:
       portable_attestation_id: ${{ steps.portable_attestation.outputs.attestation_id }}
       portable_toolchain_identity_digest: ${{ steps.portable_attestation.outputs.toolchain_identity_digest }}
-    runs-on: windows-latest
+    runs-on: ${{ inputs.native_runner }}
+    timeout-minutes: 360
     env:
-      VCPKG_ROOT: ${{ github.workspace }}\.build\vcpkg
+      GH_TOKEN: ${{ github.token }}
+      RSBuildEnableTests: ${{ inputs.run_full_tests && 'true' || '' }}
+      VCPKG_ROOT: ${{ github.workspace }}\.build\vcpkg-tool
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}\.build\vcpkg_installed\${{ inputs.platform == 'ARM64' && 'arm64' || 'x64' }}
       VCPKG_DEFAULT_TRIPLET: ${{ inputs.platform == 'ARM64' && 'arm64-windows' || 'x64-windows' }}
     steps:
+      - name: Enable long Windows checkout paths
+        shell: pwsh
+        run: git config --global core.longpaths true
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,6 +61,7 @@ jobs:
       # ── Setup toolchain ──────────────────────────────────────────────
 
       - name: Install VS 2026 Build Tools + VC++ workload
+        if: ${{ inputs.native_runner == 'windows-latest' }}
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -122,7 +136,7 @@ jobs:
           $arm64Compiler =
             Get-ChildItem -Path $vcToolsRoot -Directory -ErrorAction SilentlyContinue |
             Sort-Object -Property Name -Descending |
-            ForEach-Object { Join-Path $_.FullName "bin\Hostx64\arm64\cl.exe" } |
+            ForEach-Object { Join-Path $_.FullName "bin\Host$([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant())\arm64\cl.exe" } |
             Where-Object { Test-Path $_ } |
             Select-Object -First 1
 
@@ -183,7 +197,7 @@ jobs:
         with:
           path: |
             ${{ env.VCPKG_INSTALLED_DIR }}
-            .build/vcpkg/downloads
+            .build/vcpkg-tool/downloads
           key: ${{ runner.os }}-vcpkg-${{ env.VCPKG_DEFAULT_TRIPLET }}-${{ steps.toolchain_identity.outputs.digest }}-${{ hashFiles('vcpkg.json', 'vcpkg-tool.json') }}
 
       - name: Cache pinned Terminal runtime inputs and product
@@ -232,34 +246,28 @@ jobs:
           }
           Write-Host "vcpkg tool commit: $toolCommit"
 
-          # Cache may restore the downloads directory without the vcpkg repo itself.
-          # The checkout lives under ignored .build so repository identity stays clean;
-          # an untracked nested repository at the workspace root fails build evidence.
-          $vcpkgRoot = $env:VCPKG_ROOT
-          $bootstrap = Join-Path $vcpkgRoot "bootstrap-vcpkg.bat"
-          $gitDir = Join-Path $vcpkgRoot ".git"
+          # Keep the managed tool checkout outside the source snapshot.
+          Import-Module .\Tools\Modules\Build\VcpkgInstallSafety.psm1 -Force
+          $toolRoot = Resolve-RSVcpkgSafeChildPath -Root $env:GITHUB_WORKSPACE -Child '.build\vcpkg-tool'
+          $bootstrap = Join-Path $toolRoot 'bootstrap-vcpkg.bat'
+          $gitDir = Join-Path $toolRoot '.git'
           if (-not (Test-Path $bootstrap) -or -not (Test-Path $gitDir)) {
-            $downloads = Join-Path $vcpkgRoot "downloads"
-            $downloadsStash = $null
-
-            if (Test-Path $downloads) {
-              $downloadsStash = Join-Path $env:RUNNER_TEMP "vcpkg-downloads"
-              if (Test-Path $downloadsStash) { Remove-Item $downloadsStash -Recurse -Force }
-              Move-Item -Path $downloads -Destination $downloadsStash
+            $downloads = Resolve-RSVcpkgSafeChildPath -Root $toolRoot -Child 'downloads'
+            $downloadsStash = Resolve-RSVcpkgSafeChildPath -Root $env:GITHUB_WORKSPACE -Child '.build\vcpkg-downloads-cache'
+            $hadDownloads = Test-Path -LiteralPath $downloads
+            if ($hadDownloads) {
+              if (Test-Path -LiteralPath $downloadsStash) { Remove-Item -LiteralPath $downloadsStash -Recurse -Force }
+              Move-Item -LiteralPath $downloads -Destination $downloadsStash
             }
-
-            if (Test-Path $vcpkgRoot) { Remove-Item $vcpkgRoot -Recurse -Force }
-            New-Item -ItemType Directory -Path (Split-Path -Parent $vcpkgRoot) -Force | Out-Null
-            git clone $toolRepository $vcpkgRoot
+            if (Test-Path -LiteralPath $toolRoot) { Remove-Item -LiteralPath $toolRoot -Recurse -Force }
+            git clone $toolRepository $toolRoot
             if ($LASTEXITCODE -ne 0) { throw "git clone vcpkg failed with exit code $LASTEXITCODE" }
-
-            if ($downloadsStash) {
-              if (Test-Path $downloads) { Remove-Item $downloads -Recurse -Force }
-              Move-Item -Path $downloadsStash -Destination $downloads
+            if ($hadDownloads) {
+              if (Test-Path -LiteralPath $downloads) { Remove-Item -LiteralPath $downloads -Recurse -Force }
+              Move-Item -LiteralPath $downloadsStash -Destination $downloads
             }
           }
-
-          Push-Location $vcpkgRoot
+          Push-Location $toolRoot
 
           # vcpkg port versioning needs git objects that are typically missing in shallow clones.
           # Unshallow to avoid "failed to unpack tree object" during `vcpkg install`.
@@ -418,12 +426,23 @@ jobs:
 
           if (Test-Path $binRoot) { $env:Path = "$binRoot;$env:Path" }
 
+          # Fresh Full rebuilds after artifact-writing tests in a later step.
+          # Preserve the same process-local integration for that re-attestation.
+          if ('${{ inputs.run_full_tests }}' -eq 'true') {
+            foreach ($name in @('ForceImportBeforeCppTargets', 'ForceImportAfterCppTargets', 'VcpkgRoot',
+                                'VcpkgConfiguration', 'VcpkgManifestInstall', 'VcpkgXUseBuiltInApplocalDeps',
+                                'VCPkgLocalAppDataDisabled', 'CL', 'LINK', 'Path')) {
+              "$name=$([Environment]::GetEnvironmentVariable($name, 'Process'))" >> $env:GITHUB_ENV
+            }
+          }
+
           $buildScript = Join-Path $env:GITHUB_WORKSPACE "build.ps1"
           if (-not (Test-Path $buildScript)) { throw "build.ps1 not found at: $buildScript" }
 
           $buildArgs = @{
             Configuration = "${{ inputs.configuration }}"
             Platform      = "${{ inputs.platform }}"
+            MaxCpuCount   = 2
           }
           if ("${{ inputs.build_number }}" -ne "") {
             $buildArgs.BuildNumber = "${{ inputs.build_number }}"
@@ -433,6 +452,10 @@ jobs:
           }
 
           & $buildScript @buildArgs
+          if ($LASTEXITCODE -ne 0) { throw "Solution build failed with exit code $LASTEXITCODE." }
+          $pin = Get-Content Dependencies/DxUi.lock.json -Raw | ConvertFrom-Json
+          python ".build/dependencies/DxUi/source/$($pin.commit)/Tools/validate_build_matrix.py" --root .
+          if ($LASTEXITCODE -ne 0) { throw 'First-party six-profile matrix validation failed.' }
 
       - name: Create portable same-workflow build attestation
         id: portable_attestation
@@ -464,15 +487,28 @@ jobs:
           "payload_path=$payloadPath" >> $env:GITHUB_OUTPUT
           Write-Host "Portable build payload: $payloadPath"
 
+      - name: Select governed test root
+        if: ${{ inputs.run_full_tests || inputs.run_asan_plugin_contracts }}
+        id: test_root
+        shell: pwsh
+        run: |
+          $root = Join-Path ([IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE)) 'RedSalamander.Perf'
+          "REDSALAMANDER_TEST_ROOT=$root" >> $env:GITHUB_ENV
+          "path=$root" >> $env:GITHUB_OUTPUT
+          Import-Module ./Tools/Modules/Testing/TestSandbox.psm1
+          Initialize-RSTestSandboxRoot -TestRoot $root -RepoRoot $env:GITHUB_WORKSPACE -AllowExternalInitialization | Out-Null
+
       - name: Run ASan plugin contracts
         if: ${{ inputs.run_asan_plugin_contracts }}
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          if ("${{ inputs.configuration }}" -ne "ASan Debug" -or "${{ inputs.platform }}" -ne "x64") {
-            throw "run_asan_plugin_contracts requires the x64 ASan Debug configuration."
+          if ("${{ inputs.configuration }}" -ne "ASan Debug") {
+            throw "run_asan_plugin_contracts requires ASan Debug."
           }
-          $testExe = ".\.build\x64\ASan Debug\PluginContractTests.exe"
+          $nativePlatform = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+          if ($nativePlatform -ine "${{ inputs.platform }}") { throw 'Sanitizer qualification requires a native runner.' }
+          $testExe = ".\.build\${{ inputs.platform }}\ASan Debug\PluginContractTests.exe"
           $oldNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
           try {
             $PSNativeCommandUseErrorActionPreference = $false
@@ -487,8 +523,50 @@ jobs:
             throw "The seeded heap overflow failed without an AddressSanitizer diagnostic."
           }
 
-          & $testExe
-          if ($LASTEXITCODE -ne 0) { throw "ASan PluginContractTests failed with exit code $LASTEXITCODE." }
+          $global:LASTEXITCODE = 0
+          if ('${{ inputs.run_full_tests }}' -ne 'true') {
+            & $testExe
+            if ($LASTEXITCODE -ne 0) { throw "ASan PluginContractTests failed with exit code $LASTEXITCODE." }
+          }
+
+      - name: Run native Fresh Full suite
+        if: ${{ inputs.run_full_tests }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # These suites use Pester 3 assertion and setup semantics.
+          if (-not (Get-Module -ListAvailable Pester | Where-Object Version -EQ '3.4.0')) {
+            Install-Module Pester -RequiredVersion 3.4.0 -Scope CurrentUser -Force -SkipPublisherCheck
+          }
+          Import-Module Pester -RequiredVersion 3.4.0 -Force
+          if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -ine '${{ inputs.platform }}') {
+            throw 'Runtime qualification requires a native runner for the target architecture.'
+          }
+          ./Tools/Run-AllTests.ps1 -Suite Full -ValidationMode Fresh -SkipBuild -Configuration '${{ inputs.configuration }}' -Platform '${{ inputs.platform }}' -TestRoot $env:REDSALAMANDER_TEST_ROOT -TimeoutMultiplier 2.0 -AllowAlternateVolumeTestRoot
+          if ($LASTEXITCODE -ne 0) { throw "Native Fresh Full failed with exit code $LASTEXITCODE." }
+
+      - name: Upload native qualification evidence
+        if: ${{ always() && inputs.run_full_tests && steps.test_root.outputs.path != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-validation-${{ inputs.platform }}-${{ inputs.configuration }}
+          path: |
+            ${{ steps.test_root.outputs.path }}/evidence/
+            ${{ steps.test_root.outputs.path }}/runs/*/artifacts/selftest/
+            !${{ steps.test_root.outputs.path }}/runs/*/artifacts/selftest/**/work/**
+          retention-days: 14
+
+      - name: Upload native build diagnostics
+        if: ${{ always() && inputs.run_full_tests }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-build-${{ inputs.platform }}-${{ inputs.configuration }}
+          include-hidden-files: true
+          path: |
+            .build/logs/
+            .build/${{ inputs.platform }}/${{ inputs.configuration }}/*.DxUi.json
+            .build/${{ inputs.platform }}/${{ inputs.configuration }}/Plugins/*.DxUi.json
+          retention-days: 14
 
       - name: Upload build output
         if: ${{ inputs.upload_build_output }}

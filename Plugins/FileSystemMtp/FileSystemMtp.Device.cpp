@@ -1684,6 +1684,32 @@ public:
         return S_OK;
     }
 
+    HRESULT GetCachedItemSummary(std::wstring_view path, unsigned long& attributes, uint64_t& sizeBytes, bool& servedFromCache) noexcept override
+    {
+        attributes      = 0;
+        sizeBytes       = 0;
+        servedFromCache = false;
+        const ComInitialization com;
+        if (! com.IsUsable())
+        {
+            return com.hr;
+        }
+
+        // No invalidation on purpose: this answers from the listing the caller already has, and a
+        // cold cache pays the same resolution the mutation that follows would have paid anyway.
+        ResolvedObject resolved;
+        const HRESULT hr = ResolvePathCached(path, resolved, kReadAccess);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        attributes      = resolved.item.attributes;
+        sizeBytes       = resolved.item.sizeBytes;
+        servedFromCache = resolved.fromPathCache;
+        return S_OK;
+    }
+
     HRESULT GetBasicInformation(std::wstring_view path, FileSystemBasicInformation& info) noexcept override
     {
         const ComInitialization com;

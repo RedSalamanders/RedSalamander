@@ -33,15 +33,15 @@
 
 namespace
 {
-using RedSalamander::DxUi::Button;
-using RedSalamander::DxUi::Checkbox;
-using RedSalamander::DxUi::ComboBox;
-using RedSalamander::DxUi::ComboBoxVariant;
-using RedSalamander::DxUi::FontRole;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::TextField;
-using RedSalamander::DxUi::Toggle;
+using DxUi::Button;
+using DxUi::Checkbox;
+using DxUi::ComboBox;
+using DxUi::ComboBoxVariant;
+using DxUi::FontRole;
+using DxUi::Label;
+using DxUi::Panel;
+using DxUi::TextField;
+using DxUi::Toggle;
 
 #ifdef ENABLE_TESTS
 std::mutex g_debugPluginConfigurationBrowseResultMutex;
@@ -271,15 +271,15 @@ void ApplyFieldValueToControls(const PrefsPluginConfigField& field,
             out.retainedText     = std::to_wstring(value.integer);
             break;
         case PrefsPluginConfigFieldType::Bool:
-            out.field.defaultBool    = value.boolean;
+            out.field.defaultBool   = value.boolean;
             out.retainedToggleValue = value.boolean;
             break;
         case PrefsPluginConfigFieldType::Option:
-            out.field.defaultOption    = value.text;
-            out.retainedOptionValue   = value.text;
+            out.field.defaultOption = value.text;
+            out.retainedOptionValue = value.text;
             break;
         case PrefsPluginConfigFieldType::Selection:
-            out.field.defaultSelection    = value.selection;
+            out.field.defaultSelection  = value.selection;
             out.retainedSelectionValues = value.selection;
             break;
     }
@@ -390,7 +390,7 @@ void Clear(PreferencesDialogState& state) noexcept
     }
 
     Clear(state);
-    state.pluginsDetailsConfigPluginId    = std::wstring(pluginId);
+    state.pluginsDetailsConfigPluginId     = std::wstring(pluginId);
     state.pluginsDetailsConfigIsFileSystem = pluginItem.type == PrefsPluginType::FileSystem;
 
     std::string schemaUtf8;
@@ -411,7 +411,7 @@ void Clear(PreferencesDialogState& state) noexcept
     }
 
     const Common::PluginConfiguration::SchemaParseResult schema = ParsePluginConfigSchema(schemaUtf8);
-    const std::vector<PrefsPluginConfigField>& fields            = schema.fields;
+    const std::vector<PrefsPluginConfigField>& fields           = schema.fields;
     if (fields.empty())
     {
         SetDetailsConfigEmptyStateText(state, LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NO_FIELDS));
@@ -448,9 +448,8 @@ void Clear(PreferencesDialogState& state) noexcept
     {
         configUtf8 = "{}";
     }
-    state.pluginsDetailsConfigSourceJsonUtf8 = configUtf8;
-    const Common::PluginConfiguration::ConfigurationParseResult configuration =
-        Common::PluginConfiguration::ParseConfiguration(fields, configUtf8);
+    state.pluginsDetailsConfigSourceJsonUtf8                                  = configUtf8;
+    const Common::PluginConfiguration::ConfigurationParseResult configuration = Common::PluginConfiguration::ParseConfiguration(fields, configUtf8);
 
     SetDetailsConfigErrorText(state, L"");
 
@@ -476,8 +475,8 @@ void Clear(PreferencesDialogState& state) noexcept
         const PrefsPluginConfigField& field = fields[fieldIndex];
         PrefsPluginConfigFieldControls controls{};
         ApplyFieldValueToControls(field, configuration.values[fieldIndex], controls);
-        const bool useOptionToggle = Common::PluginConfiguration::TryGetBoolToggleChoiceIndices(
-            controls.field, controls.toggleOnChoiceIndex, controls.toggleOffChoiceIndex);
+        const bool useOptionToggle =
+            Common::PluginConfiguration::TryGetBoolToggleChoiceIndices(controls.field, controls.toggleOnChoiceIndex, controls.toggleOffChoiceIndex);
 
         if (controls.field.uiHidden)
         {
@@ -654,6 +653,10 @@ void Clear(PreferencesDialogState& state) noexcept
                 }
 
                 controls.dxComboControl = dxPanel->AddChild<ComboBox>();
+                if (controls.dxComboControl)
+                {
+                    controls.dxComboControl->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+                }
                 if (controls.dxComboControl)
                 {
                     controls.dxComboControl->SetVariant(ComboBoxVariant::Window);
@@ -1128,8 +1131,7 @@ void LayoutCards(HWND host, PreferencesDialogState& state, int x, int& y, int wi
 
 namespace
 {
-std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldControls>& controls,
-                                   std::string_view originalConfigurationJsonUtf8) noexcept
+std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldControls>& controls, std::string_view originalConfigurationJsonUtf8) noexcept
 {
     std::vector<PrefsPluginConfigField> fields;
     std::vector<Common::PluginConfiguration::FieldValue> values;
@@ -1145,9 +1147,7 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
         value.type = field.type;
         switch (field.type)
         {
-            case PrefsPluginConfigFieldType::Text:
-                value.text = controlsForField.retainedText;
-                break;
+            case PrefsPluginConfigFieldType::Text: value.text = controlsForField.retainedText; break;
             case PrefsPluginConfigFieldType::Value:
             {
                 value.integer = field.defaultInt;
@@ -1163,15 +1163,9 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
                 }
                 break;
             }
-            case PrefsPluginConfigFieldType::Bool:
-                value.boolean = controlsForField.retainedToggleValue;
-                break;
-            case PrefsPluginConfigFieldType::Option:
-                value.text = controlsForField.retainedOptionValue;
-                break;
-            case PrefsPluginConfigFieldType::Selection:
-                value.selection = controlsForField.retainedSelectionValues;
-                break;
+            case PrefsPluginConfigFieldType::Bool: value.boolean = controlsForField.retainedToggleValue; break;
+            case PrefsPluginConfigFieldType::Option: value.text = controlsForField.retainedOptionValue; break;
+            case PrefsPluginConfigFieldType::Selection: value.selection = controlsForField.retainedSelectionValues; break;
         }
         values.push_back(std::move(value));
     }
@@ -1200,8 +1194,7 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
         return false;
     }
 
-    const std::string configJson =
-        BuildConfigurationJson(state.pluginsDetailsConfigFields, state.pluginsDetailsConfigSourceJsonUtf8);
+    const std::string configJson = BuildConfigurationJson(state.pluginsDetailsConfigFields, state.pluginsDetailsConfigSourceJsonUtf8);
     if (configJson.empty())
     {
         return false;
@@ -1225,13 +1218,12 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
     // Persisting a configuration the plugin rejects makes the setting look saved while every later
     // instance silently falls back to compiled defaults.
     const HRESULT validateHr = state.pluginsDetailsConfigIsFileSystem
-        ? FileSystemPluginManager::GetInstance().ValidateConfiguration(state.pluginsDetailsConfigPluginId, configJson)
-        : ViewerPluginManager::GetInstance().ValidateConfiguration(state.pluginsDetailsConfigPluginId, configJson);
+                                   ? FileSystemPluginManager::GetInstance().ValidateConfiguration(state.pluginsDetailsConfigPluginId, configJson)
+                                   : ViewerPluginManager::GetInstance().ValidateConfiguration(state.pluginsDetailsConfigPluginId, configJson);
     if (FAILED(validateHr))
     {
         PrefsPluginConfiguration::SetDetailsConfigErrorText(
-            state,
-            FormatStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_CONFIG_REJECTED, static_cast<unsigned long>(validateHr)));
+            state, FormatStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_CONFIG_REJECTED, static_cast<unsigned long>(validateHr)));
         return false;
     }
     PrefsPluginConfiguration::SetDetailsConfigErrorText(state, L"");

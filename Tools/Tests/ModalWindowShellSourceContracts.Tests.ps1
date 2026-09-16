@@ -7,7 +7,6 @@ Describe 'Modal window shell contracts' {
     BeforeAll {
         $appSource = Get-Content -LiteralPath (Join-Path $repoRoot 'RedSalamander\RedSalamander.cpp') -Raw
         $shellSource = Get-Content -LiteralPath (Join-Path $repoRoot 'Common\ModalWindowShell.h') -Raw
-        $dxUiSource = Get-Content -LiteralPath (Join-Path $repoRoot 'Common\DxUi\DxUi.cpp') -Raw
 
         $aboutStart = $appSource.IndexOf('class AboutDialogWindow final', [StringComparison]::Ordinal)
         $aboutEnd = $appSource.IndexOf('class FatalErrorDialogWindow final', $aboutStart, [StringComparison]::Ordinal)
@@ -37,9 +36,6 @@ Describe 'Modal window shell contracts' {
         $shellSource | Should Match 'EnableWindow\(_ownerWindow, TRUE\)'
         $shellSource | Should Match 'SetActiveWindow\(_ownerWindow\)'
         $shellSource | Should Not Match 'WM_QUERYENDSESSION|WM_ENDSESSION'
-        $dxUiSource | Should Match 'PostQuitMessage\(static_cast<int>\(msg\.wParam\)\)'
-        $dxUiSource | Should Match 'const DWORD lastError = GetLastError\(\)'
-        $dxUiSource | Should Match 'SetLastError\(lastError\)'
     }
 
     It 'does not extend the modal helper to unrelated application paths' {

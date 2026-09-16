@@ -11,24 +11,24 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
-#include "DxUi/DxUi.h"
 #include "Helpers.h"
 #include "UiMetrics.h"
 #include "WindowMessages.h"
 #include "WindowSizing.h"
 #include "resource.h"
+#include <DxUi/DxUi.h>
 
 namespace
 {
-using RedSalamander::DxUi::Button;
-using RedSalamander::DxUi::Control;
-using RedSalamander::DxUi::FontRole;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::TextField;
-using RedSalamander::DxUi::ThemePalette;
-using RedSalamander::DxUi::Toggle;
-using RedSalamander::DxUi::WindowHost;
+using DxUi::Button;
+using DxUi::Control;
+using DxUi::FontRole;
+using DxUi::Label;
+using DxUi::Panel;
+using DxUi::TextField;
+using DxUi::ThemePalette;
+using DxUi::Toggle;
+using DxUi::WindowHost;
 
 constexpr wchar_t kPromptWindowClassName[] = L"RedSalamander.ConnectionCredentialPromptWindow";
 constexpr UINT kPromptDeferredCloseMessage = WM_APP + 1u;
@@ -127,11 +127,11 @@ struct PromptDebugHostRect
         return D2D1::ColorF(a.r + ((b.r - a.r) * clamped), a.g + ((b.g - a.g) * clamped), a.b + ((b.b - a.b) * clamped), a.a + ((b.a - a.a) * clamped));
     };
 
-    ThemePalette palette = RedSalamander::DxUi::MakeDefaultThemePalette(theme.dark);
+    ThemePalette palette = DxUi::MakeDefaultThemePalette(theme.dark);
     palette.dark         = theme.dark;
     palette.highContrast = theme.highContrast;
     palette.accent       = theme.accent;
-    RedSalamander::DxUi::RefreshAccentVariants(palette, theme.dark);
+    DxUi::RefreshAccentVariants(palette, theme.dark);
     palette.windowBackground      = ColorFromCOLORREF(theme.windowBackground);
     palette.surfaceBackground     = ColorFromCOLORREF(UiMetrics::GetControlSurfaceColor(theme));
     palette.headerBackground      = ColorFromCOLORREF(theme.menu.background);

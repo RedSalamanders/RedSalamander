@@ -21,14 +21,14 @@
 #include <wil/win32_helpers.h>
 #pragma warning(pop)
 
-#include "DxUi/DxUi.h"
-#include "DxUi/DxUiNativeMenuInterop.h"
 #include "EmbeddedViewerBase.h"
 #include "Helpers.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Viewer.h"
+#include <DxUi/DxUi.h>
+#include <DxUi/NativeMenuInterop.h>
 
 struct ID2D1Factory;
 struct ID2D1HwndRenderTarget;
@@ -319,7 +319,7 @@ private:
         DiffTextVariant diffSideBySideHunksOnly;
         DiffTextVariant diffSideBySideExpanded;
         std::vector<StreamedDiffSectionEntry> streamedDiffSections;
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
         uint64_t diffParseCount = 0u;
 #endif
 
@@ -342,15 +342,15 @@ private:
 
     struct AsyncTextStreamResult
     {
-        ViewerText* viewer        = nullptr;
-        uint64_t requestId        = 0u;
-        uint64_t windowIdentity   = 0u;
-        HRESULT hr                = E_FAIL;
-        uint64_t startOffset      = 0u;
-        uint64_t endOffset        = 0u;
-        bool scrollToEnd          = false;
-        bool streamActive         = false;
-        uint64_t elapsedUs        = 0u;
+        ViewerText* viewer      = nullptr;
+        uint64_t requestId      = 0u;
+        uint64_t windowIdentity = 0u;
+        HRESULT hr              = E_FAIL;
+        uint64_t startOffset    = 0u;
+        uint64_t endOffset      = 0u;
+        bool scrollToEnd        = false;
+        bool streamActive       = false;
+        uint64_t elapsedUs      = 0u;
         std::wstring textBuffer;
         std::vector<uint32_t> textLineStarts;
         std::vector<uint32_t> textLineEnds;
@@ -623,13 +623,13 @@ private:
     bool _allowEraseBkgndHexView  = true;
 
     wil::unique_hmenu _menuHandle;
-    RedSalamander::DxUi::NativeMenuBarHost _menuBarHost;
+    DxUi::NativeMenuBarHost _menuBarHost;
     wil::unique_hwnd _hEdit;
     wil::unique_hwnd _hHex;
     wil::unique_hwnd _hFileComboHost;
-    RedSalamander::DxUi::WindowHost _fileComboHost;
-    RedSalamander::DxUi::ComboBox* _fileComboControl = nullptr;
-    bool _fileComboHostPreExpandPopup                = false;
+    DxUi::WindowHost _fileComboHost;
+    DxUi::ComboBox* _fileComboControl = nullptr;
+    bool _fileComboHostPreExpandPopup = false;
 
     wil::unique_hicon _windowIconSmall;
     wil::unique_hicon _windowIconBig;
@@ -741,16 +741,16 @@ private:
     };
     struct SparseTextVisualLineSummary
     {
-        uint32_t logicalLine      = 0u;
-        uint32_t lineStartIndex   = 0u;
-        uint32_t lineEndIndex     = 0u;
-        uint64_t firstVisualLine  = 0u;
-        uint32_t visualLineCount  = 1u;
-        bool splitPanes           = false;
-        uint32_t leftStartIndex   = 0u;
-        uint32_t leftEndIndex     = 0u;
-        uint32_t rightStartIndex  = 0u;
-        uint32_t rightEndIndex    = 0u;
+        uint32_t logicalLine         = 0u;
+        uint32_t lineStartIndex      = 0u;
+        uint32_t lineEndIndex        = 0u;
+        uint64_t firstVisualLine     = 0u;
+        uint32_t visualLineCount     = 1u;
+        bool splitPanes              = false;
+        uint32_t leftStartIndex      = 0u;
+        uint32_t leftEndIndex        = 0u;
+        uint32_t rightStartIndex     = 0u;
+        uint32_t rightEndIndex       = 0u;
         uint32_t separatorStartIndex = 0u;
         uint32_t separatorEndIndex   = 0u;
         uint32_t leftPaneColumns     = 0u;
@@ -759,9 +759,9 @@ private:
     };
     struct SparseTextViewportCheckpoint
     {
-        uint64_t visualLine = 0u;
-        size_t summaryIndex = 0u;
-        uint64_t rowOrdinal = 0u;
+        uint64_t visualLine  = 0u;
+        size_t summaryIndex  = 0u;
+        uint64_t rowOrdinal  = 0u;
         uint32_t plainCursor = 0u;
         uint32_t leftCursor  = 0u;
         uint32_t rightCursor = 0u;
@@ -794,11 +794,11 @@ private:
     std::vector<SparseTextViewportCheckpoint> _textSparseViewportCheckpoints;
     std::vector<SparseTextViewportCheckpoint> _textSparseCheckpointCache;
     std::vector<uint32_t> _textSparseTopHistory;
-    uint64_t _textSparseVisualLineCount = 0u;
-    bool _textSparseWrapActive          = false;
-    uint64_t _textSparseViewportTop     = 0u;
+    uint64_t _textSparseVisualLineCount     = 0u;
+    bool _textSparseWrapActive              = false;
+    uint64_t _textSparseViewportTop         = 0u;
     size_t _textSparseViewportRequestedRows = 0u;
-    bool _textSparseViewportComplete         = false;
+    bool _textSparseViewportComplete        = false;
     std::vector<TextLayoutCacheEntry> _textLayoutCache;
     wil::com_ptr<IDWriteTextLayout> _textUncachedLayout;
     size_t _textLayoutCacheBytes       = 0u;
@@ -833,7 +833,7 @@ private:
     float _textPreferredXDip                 = 0.0f;
     bool _textPreferredXValid                = false;
     std::vector<TextVerticalCaretHistoryEntry> _textVerticalCaretHistory;
-    bool _textSelecting                      = false;
+    bool _textSelecting = false;
 
     bool _textStreamActive          = false;
     uint64_t _textStreamSkipBytes   = 0;
@@ -887,7 +887,7 @@ private:
     bool _diffSideBySideExpandedBuilt = false;
     bool _diffParsedAvailable         = false;
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     uint64_t _debugTextRenderCount           = 0u;
     uint64_t _debugTextLastPaintUs           = 0u;
     size_t _debugTextVisibleRowCount         = 0u;
@@ -920,7 +920,7 @@ private:
     uint64_t _debugDiffParseCount            = 0u;
 #if defined(ENABLE_TESTS)
     AsyncTextStreamFault _debugNextAsyncTextStreamFault = AsyncTextStreamFault::None;
-    bool _debugHasLastContextMenuScreenPoint = false;
+    bool _debugHasLastContextMenuScreenPoint            = false;
     POINT _debugLastContextMenuScreenPoint{};
     bool _debugHasLastTextViewMouseMoveClientPoint = false;
     POINT _debugLastTextViewMouseMoveClientPoint{};

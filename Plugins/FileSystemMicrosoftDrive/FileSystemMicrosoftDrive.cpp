@@ -35,6 +35,7 @@
 
 #include "FileSystemMicrosoftDriveResources.h"
 #include "DeleteOnCloseTemporaryFile.h"
+#include "FileSystemDiscoveryScope.h"
 #include "HandleIo.h"
 #include "ContentDigest.h"
 #include "Helpers.h"
@@ -4045,13 +4046,27 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
     return IsNotFoundStatus(hr) ? S_OK : hr;
 }
 
-[[nodiscard]] HRESULT DeleteItemByPath(FileSystemMicrosoftDrive& fs, const DriveContext& context, std::wstring_view drivePath) noexcept
+// One item this call discovered, as Graph already describes it on the metadata GET every mutation
+// pays for anyway: a folder, or a file of the reported size. The entry point owns the governed
+// call's scope and its closure; the helpers below only report what they found.
+using MoveDiscoveryReporter = std::function<void(bool isFolder, uint64_t sizeBytes)>;
+
+[[nodiscard]] HRESULT DeleteItemByPath(FileSystemMicrosoftDrive& fs,
+                                       const DriveContext& context,
+                                       std::wstring_view drivePath,
+                                       const MoveDiscoveryReporter& reportDiscovery = {}) noexcept
 {
     ItemMetadata item{};
     HRESULT hr = GetItemMetadata(fs, context, drivePath, false, item);
     if (FAILED(hr))
     {
         return hr;
+    }
+    if (reportDiscovery)
+    {
+        // Graph recycles an item as one object, so a delete discovers the item it names and
+        // nothing beneath it, known before anything is removed.
+        reportDiscovery(item.isFolder, item.sizeBytes);
     }
 
     return DeleteItemById(fs, context, item.id);
@@ -4267,7 +4282,8 @@ struct MoveDestinationLookupHint
                                        const CancelProbe& checkCancel       = {},
                                        MoveCommitResult* commitResultOut    = nullptr,
                                        MoveMetadataMetrics* moveMetrics     = nullptr,
-                                       const MoveDestinationLookupHint* destinationHint = nullptr) noexcept;
+                                       const MoveDestinationLookupHint* destinationHint = nullptr,
+                                       const MoveDiscoveryReporter& reportDiscovery     = {}) noexcept;
 
 [[nodiscard]] bool IsMergeChildPartialFailure(HRESULT hr) noexcept
 {
@@ -4289,7 +4305,8 @@ struct MoveDestinationLookupHint
                                                   const CancelProbe& checkCancel,
                                                   bool& anySkipped,
                                                   bool& subtreeFullyMovedOut,
-                                                  MoveMetadataMetrics* moveMetrics) noexcept
+                                                  MoveMetadataMetrics* moveMetrics,
+                                                  const MoveDiscoveryReporter& reportDiscovery) noexcept
 {
     subtreeFullyMovedOut = false;
     const bool allowOverwriteFlag = (flags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) != 0;
@@ -4380,7 +4397,8 @@ struct MoveDestinationLookupHint
                                   CancelProbe{},
                                   nullptr,
                                   moveMetrics,
-                                  &destinationHint);
+                                  &destinationHint,
+                                  reportDiscovery);
             if (FAILED(hr))
             {
                 if (IsMergeChildPartialFailure(hr))
@@ -4477,6 +4495,11 @@ struct MoveDestinationLookupHint
 
         if (childSkipped)
         {
+            if (reportDiscovery)
+            {
+                // Never reaches a move call, but it is still work this call found.
+                reportDiscovery(childIsFolder, child.sizeBytes);
+            }
             anySkipped = true;
             continue;
         }
@@ -4492,7 +4515,8 @@ struct MoveDestinationLookupHint
                               CancelProbe{},
                               nullptr,
                               moveMetrics,
-                              &destinationHint);
+                              &destinationHint,
+                              reportDiscovery);
         if (FAILED(hr))
         {
             if (IsMergeChildPartialFailure(hr))
@@ -4532,7 +4556,8 @@ struct MoveDestinationLookupHint
                                        const CancelProbe& checkCancel,
                                        MoveCommitResult* commitResultOut,
                                        MoveMetadataMetrics* moveMetrics,
-                                       const MoveDestinationLookupHint* destinationHint) noexcept
+                                       const MoveDestinationLookupHint* destinationHint,
+                                       const MoveDiscoveryReporter& reportDiscovery) noexcept
 {
     if (commitResultOut)
     {
@@ -4557,6 +4582,12 @@ struct MoveDestinationLookupHint
     if (FAILED(hr))
     {
         return hr;
+    }
+    if (reportDiscovery)
+    {
+        // The item this move relocates, known before anything changes. A folder moved whole is one
+        // directory and none of its descendants; a merge below reports each child it visits.
+        reportDiscovery(sourceItem.isFolder, sourceItem.sizeBytes);
     }
 
     std::wstring sourceParentPath;
@@ -4632,7 +4663,8 @@ struct MoveDestinationLookupHint
                                                                  checkCancel,
                                                                  anySkipped,
                                                                  subtreeFullyMoved,
-                                                                 moveMetrics);
+                                                                 moveMetrics,
+                                                                 reportDiscovery);
             if (FAILED(hr))
             {
                 return hr;
@@ -5955,7 +5987,8 @@ HRESULT MoveSingleItemWithConflicts(FileSystemMicrosoftDrive& fs,
                                      const FileSystemOptions* options,
                                      IFileSystemCallback* callback,
                                      void* cookie,
-                                     MoveCommitResult* commitResultOut = nullptr) noexcept
+                                     MoveCommitResult* commitResultOut          = nullptr,
+                                     const MoveDiscoveryReporter& reportDiscovery = {}) noexcept
 {
     if (! sourcePath || ! destinationPath || sourcePath[0] == L'\0' || destinationPath[0] == L'\0')
     {
@@ -6070,7 +6103,9 @@ HRESULT MoveSingleItemWithConflicts(FileSystemMicrosoftDrive& fs,
                                              true,
                                              checkCancel,
                                              commitResultOut,
-                                             &moveMetrics);
+                                             &moveMetrics,
+                                             nullptr,
+                                             reportDiscovery);
     if (moveMetrics.mergeChildCount != 0u && Debug::Perf::IsCaptureEnabled())
     {
         const std::wstring_view detail(destinationPath);
@@ -6122,8 +6157,18 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::MoveItem(const wchar_t* sour
                                                              void* cookie) noexcept
 {
     const GraphOperationOptionsScope operationOptionsScope(options);
+    // One governed call is one discovery scope, reported through this call's own options and
+    // never through the thread-local GraphOperationOptionsScope, which belongs to whichever call
+    // owns the current thread. The header is validated before the scope reads it; the helper
+    // reports the same E_INVALIDARG it always did, into an inert scope.
+    Common::FileOperations::DiscoveryScope discovery(FileSystemOptionsHaveValidHeader(options) ? options : nullptr);
+    const auto reportDiscovery = [&discovery](bool isFolder, uint64_t sizeBytes) noexcept
+    {
+        static_cast<void>(isFolder ? discovery.AddDirectory() : discovery.AddFile(sizeBytes));
+    };
     MoveCommitResult commitResult{};
-    const HRESULT hr = MoveSingleItemWithConflicts(*this, sourcePath, destinationPath, flags, options, callback, cookie, &commitResult);
+    const HRESULT hr = MoveSingleItemWithConflicts(*this, sourcePath, destinationPath, flags, options, callback, cookie, &commitResult, reportDiscovery);
+    discovery.Close();
     FileSystemItemMutationResult itemMutationResult{};
     const FileSystemItemMutationResult* mutationResult = BuildMoveMutationResult(commitResult, itemMutationResult);
     const HRESULT callbackHr =
@@ -6131,10 +6176,18 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::MoveItem(const wchar_t* sour
     return FAILED(callbackHr) ? callbackHr : hr;
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::DeleteItem(
-    const wchar_t* path, FileSystemFlags flags, const FileSystemOptions* options, IFileSystemCallback* callback, void* cookie) noexcept
+namespace
 {
-    const GraphOperationOptionsScope operationOptionsScope(options);
+// Shared core for DeleteItem/DeleteItems: recycle one path and report its item result. The
+// discovery scope stays with the caller so a batch closes it once, after its last root.
+HRESULT DeleteSingleItem(FileSystemMicrosoftDrive& fs,
+                         const wchar_t* path,
+                         FileSystemFlags flags,
+                         const FileSystemOptions* options,
+                         IFileSystemCallback* callback,
+                         void* cookie,
+                         const MoveDiscoveryReporter& reportDiscovery) noexcept
+{
     if (! FileSystemOptionsHaveValidHeader(options))
     {
         return E_INVALIDARG;
@@ -6162,7 +6215,7 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::DeleteItem(
     }
 
     DriveContext context{};
-    hr = BuildDriveContext(*this, path, context);
+    hr = BuildDriveContext(fs, path, context);
     if (FAILED(hr))
     {
         return hr;
@@ -6171,7 +6224,7 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::DeleteItem(
     if ((flags & FILESYSTEM_FLAG_RECURSIVE) == 0)
     {
         ItemMetadata item{};
-        hr = GetItemMetadata(*this, context, context.drivePath, false, item);
+        hr = GetItemMetadata(fs, context, context.drivePath, false, item);
         if (FAILED(hr))
         {
             return hr;
@@ -6180,7 +6233,7 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::DeleteItem(
         if (item.isFolder)
         {
             std::vector<FilesInformationMicrosoftDrive::Entry> entries;
-            hr = ListDirectory(*this, context, context.drivePath, entries);
+            hr = ListDirectory(fs, context, context.drivePath, entries);
             if (FAILED(hr))
             {
                 return hr;
@@ -6196,11 +6249,26 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::DeleteItem(
         }
     }
 
-    hr = DeleteItemByPath(*this, context, context.drivePath);
+    hr = DeleteItemByPath(fs, context, context.drivePath, reportDiscovery);
     FileSystemItemMutationResult itemMutationResult{};
     const HRESULT callbackHr =
         ReportItemResult(callback, FILESYSTEM_DELETE, 1, 1, 0, path, nullptr, hr, options, cookie, BuildRecycleMutationResult(hr, itemMutationResult));
     return FAILED(callbackHr) ? callbackHr : hr;
+}
+} // namespace
+
+HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::DeleteItem(
+    const wchar_t* path, FileSystemFlags flags, const FileSystemOptions* options, IFileSystemCallback* callback, void* cookie) noexcept
+{
+    const GraphOperationOptionsScope operationOptionsScope(options);
+    // One governed call is one discovery scope, reported through this call's own options and
+    // never through the thread-local GraphOperationOptionsScope. The item is the whole total, so
+    // the scope closes the moment it is known.
+    Common::FileOperations::DiscoveryScope discovery(FileSystemOptionsHaveValidHeader(options) ? options : nullptr);
+    return DeleteSingleItem(*this, path, flags, options, callback, cookie, [&discovery](bool isFolder, uint64_t sizeBytes) noexcept {
+        static_cast<void>(isFolder ? discovery.AddDirectory() : discovery.AddFile(sizeBytes));
+        discovery.Close();
+    });
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::RenameItem(const wchar_t* sourcePath,
@@ -6387,6 +6455,13 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::MoveItems(const wchar_t* con
     const bool continueOnError         = (flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) != 0;
     HRESULT firstFailure               = S_OK;
     bool hadFailure                    = false;
+    // One governed call is one discovery scope for every selected root, reported through this
+    // call's own options; it closes once, after the last root, when this frame ends.
+    Common::FileOperations::DiscoveryScope discovery(options);
+    const auto reportDiscovery = [&discovery](bool isFolder, uint64_t sizeBytes) noexcept
+    {
+        static_cast<void>(isFolder ? discovery.AddDirectory() : discovery.AddFile(sizeBytes));
+    };
     for (unsigned long i = 0; i < count; ++i)
     {
         bool cancelled = false;
@@ -6429,7 +6504,7 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::MoveItems(const wchar_t* con
             const std::wstring destinationPath = JoinMicrosoftDrivePath(destinationRoot, leafName);
             // Pass the real callback so directory merges can prompt per child; the batch-level
             // ReportItemResult below stays the single item-result reporter.
-            hr = MoveSingleItemWithConflicts(*this, sourcePaths[i], destinationPath.c_str(), flags, options, callback, cookie, &commitResult);
+            hr = MoveSingleItemWithConflicts(*this, sourcePaths[i], destinationPath.c_str(), flags, options, callback, cookie, &commitResult, reportDiscovery);
             FileSystemItemMutationResult itemMutationResult{};
             const FileSystemItemMutationResult* mutationResult = BuildMoveMutationResult(commitResult, itemMutationResult);
             const HRESULT callbackHr = ReportItemResult(
@@ -6482,6 +6557,13 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::DeleteItems(const wchar_t* c
     const bool continueOnError = (flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) != 0;
     HRESULT firstFailure       = S_OK;
     bool hadFailure            = false;
+    // One governed call is one discovery scope for every selected root, reported through this
+    // call's own options; it closes once, after the last root, when this frame ends.
+    Common::FileOperations::DiscoveryScope discovery(options);
+    const auto reportDiscovery = [&discovery](bool isFolder, uint64_t sizeBytes) noexcept
+    {
+        static_cast<void>(isFolder ? discovery.AddDirectory() : discovery.AddFile(sizeBytes));
+    };
     for (unsigned long i = 0; i < count; ++i)
     {
         bool cancelled = false;
@@ -6515,7 +6597,7 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::DeleteItems(const wchar_t* c
             continue;
         }
 
-        hr = DeleteItem(paths[i], flags, options, nullptr, nullptr);
+        hr = DeleteSingleItem(*this, paths[i], flags, options, nullptr, nullptr, reportDiscovery);
         FileSystemItemMutationResult itemMutationResult{};
         const HRESULT callbackHr = ReportItemResult(
             callback, FILESYSTEM_DELETE, count, i + 1u, i, paths[i], nullptr, hr, options, cookie, BuildRecycleMutationResult(hr, itemMutationResult));

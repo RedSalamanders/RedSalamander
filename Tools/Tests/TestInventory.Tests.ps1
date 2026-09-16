@@ -88,7 +88,7 @@ Describe 'Test inventory helper' {
         $roundTrip = ConvertTo-RSTestInventoryJson -Inventory $inventory | ConvertFrom-Json
 
         Assert-RSEqual -Actual $roundTrip.selfTests.commands.runCaseRegistrations -Expected $inventory.SelfTests.Commands.RunCaseRegistrations -Message 'JSON manifest should preserve the derived Commands registration count.'
-        Assert-RSEqual -Actual $roundTrip.standalone.dxUiTests.nativeTextInputCases -Expected $inventory.Standalone.DxUiTests.NativeTextInputCases -Message 'JSON manifest should preserve the derived NativeTextInput count.'
+        Assert-RSEqual -Actual $roundTrip.standalone.productUiTests.cases -Expected $inventory.Standalone.ProductUiTests.Cases -Message 'JSON manifest should preserve the derived product UI count.'
         Assert-RSEqual -Actual $roundTrip.scripts.toolsPester.cases -Expected $inventory.Scripts.ToolsPester.Cases -Message 'JSON manifest should preserve the derived Tools Pester count.'
         Assert-RSEqual -Actual @($roundTrip.scripts.toolsPester.sourceContracts.cases).Count -Expected @($inventory.Scripts.ToolsPester.SourceContracts.Cases).Count -Message 'JSON manifest should preserve every classified source-contract case.'
         Assert-RSEqual -Actual @($roundTrip.scripts.toolsPester.sourceContracts.replacementCandidates).Count -Expected @($inventory.Scripts.ToolsPester.SourceContracts.ReplacementCandidates).Count -Message 'JSON manifest should preserve the behavioral replacement queue.'
@@ -119,6 +119,11 @@ Describe 'Test inventory helper' {
         Assert-RSEqual -Actual $integrity.MissingActivePhases.Count -Expected 0 -Message 'Every active Step enum value should appear in kFileOpsPhaseOrder.'
         Assert-RSEqual -Actual $integrity.DuplicateOrderedPhases.Count -Expected 0 -Message 'kFileOpsPhaseOrder should not list an active phase more than once.'
         Assert-RSEqual -Actual $integrity.ExtraOrderedPhases.Count -Expected 0 -Message 'kFileOpsPhaseOrder should not reference unknown Step values.'
+        Assert-RSEqual -Actual ($integrity.OrderedPhases -contains 'FileOps_VisualGalleryInteraction') -Expected $false -Message 'Interactive documentation capture remains exact-case only.'
+        Assert-RSEqual -Actual ($integrity.ActiveEnumValues -contains 'FileOps_VisualGalleryInteraction') -Expected $false -Message 'Interactive capture must not inflate broad behavioral coverage.'
+        Assert-RSEqual -Actual ($integrity.EnumValues -contains 'FileOps_VisualGallery') -Expected $true -Message 'The explicit documentation gallery must remain a discoverable Step.'
+        Assert-RSEqual -Actual ($integrity.OrderedPhases -contains 'FileOps_VisualGallery') -Expected $false -Message 'Documentation capture must not enter the broad native phase sequence.'
+        Assert-RSEqual -Actual ($integrity.ActiveEnumValues -contains 'FileOps_VisualGallery') -Expected $false -Message 'Opt-in documentation capture must not inflate behavioral coverage inventory.'
     }
 
     It 'documents commands for live inventory instead of checked-in current totals' {

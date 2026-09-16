@@ -148,6 +148,7 @@ SelfTestPausePoint g_fileOpsPermanentDeleteBeforeRecheckPausePoint;
 SelfTestPausePoint g_fileOpsPermanentDeleteBeforeLiveOutputGuardPausePoint;
 SelfTestPausePoint g_fileOpsLiveOutputPublishedPausePoint;
 SelfTestPausePoint g_fileOpsVerificationReadbackPausePoint;
+SelfTestPausePoint g_fileOpsSelectedLeafDiscoveryPublishedPausePoint;
 std::atomic<unsigned long> g_fileOpsNativeMoveCreateDirectoryRaceCount{0u};
 std::atomic<unsigned long> g_fileOpsNativeMoveCreateDirectoryRaceAttempts{0u};
 std::atomic<DWORD> g_fileOpsInlineRenameAdmissionThreadId{0u};
@@ -952,6 +953,15 @@ void RecordPreparedTransferStrategyForSelfTest(const FolderWindow::FileOperation
 void MaybePauseBeforeBridgeMoveSourceCleanupForSelfTest() noexcept
 {
     g_fileOpsBridgeMoveSourceCleanupPausePoint.Pause(5'000ull);
+}
+
+// Held immediately after a selected regular leaf has published its exact byte total and closed its
+// discovery scope, and before any writer, stage or payload work. It is the only point at which a
+// test can observe the live task and the real popup projection for a known leaf whose transfer has
+// not started. Time spent held here is deliberate and is never a latency measurement.
+void MaybePauseAfterSelectedLeafDiscoveryPublishedForSelfTest() noexcept
+{
+    g_fileOpsSelectedLeafDiscoveryPublishedPausePoint.Pause(30'000ull);
 }
 
 void MaybeCreateNativeMoveDestinationDirectoryRaceForSelfTest(const std::wstring& destinationPath) noexcept
@@ -6853,6 +6863,24 @@ bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept
            loading.defaultAction == ConflictAction::None && loading.escapeAction == ConflictAction::None && ! loading.applyToAllEligible &&
            ! loading.skipAllEligible && ! loading.buttonsPublishable;
 }
+
+void DebugBuildFileOpsVisualConflictPolicyForSelfTest(Task::ConflictPromptState& prompt, bool allowReplacement) noexcept
+{
+    const bool collision       = prompt.bucket == ConflictBucket::RegularFileExists || prompt.bucket == ConflictBucket::ReadOnlyRegularFileExists ||
+                                 prompt.bucket == ConflictBucket::DestinationLink;
+    const auto policy          = BuildConflictActionPolicy(prompt.bucket, ! collision, collision, true, allowReplacement, true);
+    prompt.actions             = policy.actions;
+    prompt.actionCount         = policy.actionCount;
+    prompt.primaryActions      = policy.primaryActions;
+    prompt.primaryActionCount  = policy.primaryActionCount;
+    prompt.overflowActions     = policy.overflowActions;
+    prompt.overflowActionCount = policy.overflowActionCount;
+    prompt.defaultAction       = policy.defaultAction;
+    prompt.escapeAction        = policy.escapeAction;
+    prompt.applyToAllEligible  = policy.applyToAllEligible;
+    prompt.skipAllEligible     = policy.skipAllEligible;
+    prompt.buttonsPublishable  = policy.buttonsPublishable;
+}
 #endif
 
 FolderWindow::FileOperationState::Task::Task(FileOperationState& state) noexcept : _state(&state), _folderWindow(&state._owner)
@@ -7607,6 +7635,7 @@ void FolderWindow::FileOperationState::Task::BeginDiscovery() noexcept
     _discoveryMaxQueueDepth.store(0u, std::memory_order_release);
     _discoveryStarvationCount.store(0u, std::memory_order_release);
     _firstMutationBeforeDiscoveryClosed.store(false, std::memory_order_release);
+    _discoveryGrowthAfterCloseCount.store(0u, std::memory_order_release);
 }
 
 void FolderWindow::FileOperationState::Task::NoteDiscoveryCompletionWhileOpen(const uint64_t observedAtPerfUs,
@@ -7737,6 +7766,13 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemRepo
     const auto recordDuration = wil::scope_exit([&]() noexcept { _perf.discoveryCallbackUs.fetch_add(PerfElapsedUs(startedUs), std::memory_order_relaxed); });
 
     auto* itemCookie          = static_cast<PerItemCallbackCookie*>(cookie);
+    if (itemCookie != nullptr && itemCookie->suppressDiscoveryReports)
+    {
+        // A nested provider call inside a traversal the host already owns. Its cancellation,
+        // deadline and bandwidth controls stay live; its discovery record belongs to its own
+        // scope and must not reach the selected root's totals or close that root.
+        return S_OK;
+    }
     uint64_t bytesDelta       = progress->discoveredBytes;
     uint64_t filesDelta       = progress->discoveredFiles;
     uint64_t directoriesDelta = progress->discoveredDirectories;
@@ -7757,6 +7793,13 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemRepo
         itemCookie->lastDiscoveredDirectories = (std::max)(itemCookie->lastDiscoveredDirectories, progress->discoveredDirectories);
     }
 
+    if ((bytesDelta > 0u || filesDelta > 0u || directoriesDelta > 0u) && _discoveryClosed.load(std::memory_order_acquire))
+    {
+        // Discovery closure is one-way and means "this task's totals are final". Work arriving
+        // afterwards proves some scope closed a root whose traversal was still producing, which is
+        // exactly the presentation defect a growing denominator would hide. Measurement only.
+        _discoveryGrowthAfterCloseCount.fetch_add(1u, std::memory_order_relaxed);
+    }
     SaturatingAtomicAdd(_discoveredTotalBytes, bytesDelta);
 
     const auto addClampedUlong = [](std::atomic<unsigned long>& target, uint64_t value) noexcept
@@ -7790,7 +7833,7 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemRepo
         PublishProgressCountersLocked(*this);
     }
 
-    if (progress->traversalClosed != FALSE)
+    if (progress->traversalClosed != FALSE && (itemCookie == nullptr || ! itemCookie->deferDiscoveryClosure.load(std::memory_order_acquire)))
     {
         MarkDiscoveryItemClosed(sourceIndex);
     }
@@ -9533,6 +9576,8 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         Debug::Perf::Emit(
             L"FileOps.Discovery.SkipReleaseUs", L"", discoverySkipReleaseUs, _discoverySkipped.load(std::memory_order_acquire) ? 1u : 0u, 50'000u, hr);
         Debug::Perf::Emit(L"FileOps.Discovery.Closed", L"", 0u, _discoveryClosed.load(std::memory_order_acquire) ? 1u : 0u, 1u, hr);
+        Debug::Perf::Emit(
+            L"FileOps.Discovery.GrowthAfterClose", L"", 0u, _discoveryGrowthAfterCloseCount.load(std::memory_order_acquire), 0u, hr);
         Debug::Perf::Emit(L"FileOps.Progress.CallbackUs",
                           L"",
                           perfStats.progressCallbackUs.load(std::memory_order_acquire),
@@ -11595,6 +11640,13 @@ struct CrossFileSystemBridge
     uint64_t discoveredBytes       = 0u;
     uint64_t discoveredFiles       = 0u;
     uint64_t discoveredDirectories = 0u;
+    // One-way: the selected root is a known regular file and its exact byte total has already been
+    // published with this root's discovery scope closed. A replace re-prompt re-binds the same
+    // source, so the record must not be added a second time.
+    bool selectedLeafDiscoveryPublished = false;
+    // Control cookie for every provider call this traversal makes inside its own walk. It carries
+    // the same operation controls as the root cookie but cannot publish into the root's discovery.
+    Task::PerItemCallbackCookie nestedProviderCookie;
 
     CrossFileSystemBridge(Task& owner,
                           IFileSystem& source,
@@ -11660,7 +11712,15 @@ struct CrossFileSystemBridge
                                                      NavigationLocation::EqualsNoCase(task._destinationPluginId, L"builtin/file-system") ||
                                                      NavigationLocation::EqualsNoCase(task._destinationPluginId, L"builtin/file-system-dummy");
         const uint64_t initialBandwidth            = task._desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
-        task.InitializeFileSystemOptions(options, cookie);
+        // This bridge is the traversal owner for its selected root: it reports that root's
+        // cumulative discovery itself through ReportDiscovery on the root cookie. Every provider
+        // call made through these options (exact source cleanup, a child's Native rename, owned-stage
+        // creation and removal, readers and metadata) is nested inside that walk, so its options
+        // carry the suppressed cookie. Ordinary progress, conflict and result callbacks keep the
+        // root cookie, which is passed separately at each call site.
+        nestedProviderCookie.itemIndex               = cookie != nullptr ? static_cast<Task::PerItemCallbackCookie*>(cookie)->itemIndex : 0u;
+        nestedProviderCookie.suppressDiscoveryReports = true;
+        task.InitializeFileSystemOptions(options, static_cast<void*>(&nestedProviderCookie));
         options.bandwidthLimitBytesPerSecond = initialBandwidth;
         options.copyMoveMaxConcurrency       = std::min(sourcePluginMaxConcurrencyBudget, destinationPluginMaxConcurrencyBudget);
         bandwidthLimitBytesPerSecond.store(initialBandwidth, std::memory_order_release);
@@ -11723,6 +11783,32 @@ struct CrossFileSystemBridge
         progress.queuedItems           = queuedItems;
         progress.traversalClosed       = traversalClosed ? TRUE : FALSE;
         return task.FileSystemReportDiscoveryProgress(&progress, cookie);
+    }
+
+    // The selected root is one known regular file. Its exact size becomes authoritative the moment
+    // the source binds, which is the earliest point at which this root's discovery record is
+    // complete: there is nothing left to enumerate. Publishing it here replaces an open scope that
+    // would otherwise stay open for the whole transfer and leave the task without a fixed
+    // denominator. Closing discovery is not transfer completion and not permission to remove a
+    // source: publication, verification, conflict decisions and exact source cleanup all follow.
+    [[nodiscard]] HRESULT PublishSelectedLeafDiscovery(uint64_t fileTotalBytes, bool hasKnownFileTotalBytes) noexcept
+    {
+        if (! hasKnownFileTotalBytes || selectedLeafDiscoveryPublished)
+        {
+            // An unknown source size is a hard failure upstream; never invent a zero-byte total.
+            // A replace re-prompt re-binds the same source and must not add the record twice.
+            return S_OK;
+        }
+        selectedLeafDiscoveryPublished = true;
+        discoveredBytes                = AddRetainedBytes(discoveredBytes, fileTotalBytes);
+        const HRESULT reportHr         = ReportDiscovery(0u, true);
+#ifdef ENABLE_TESTS
+        if (SUCCEEDED(reportHr))
+        {
+            MaybePauseAfterSelectedLeafDiscoveryPublishedForSelfTest();
+        }
+#endif
+        return reportHr;
     }
 
     [[nodiscard]] static uint64_t RetainedPathBytes(std::wstring_view sourcePath, std::wstring_view destinationPath) noexcept
@@ -14185,14 +14271,22 @@ struct CrossFileSystemBridge
                                unsigned long bufferBytesIn,
                                uint64_t progressStreamId,
                                std::atomic<uint64_t>& overallCompletedBytes,
-                               bool adoptFileSizeAsTotalWhenUnknown = false) noexcept
+                               bool adoptFileSizeAsTotalWhenUnknown = false,
+                               bool publishSelectedLeafDiscovery    = false) noexcept
     {
         constexpr unsigned int kMaxReplaceRePrompts = 2u;
         for (unsigned int attempt = 0u;; ++attempt)
         {
             bool replaceRefused = false;
-            const HRESULT hr    = PumpAndPublishFileOnce(
-                sourcePath, destinationPath, bufferIn, bufferBytesIn, progressStreamId, overallCompletedBytes, adoptFileSizeAsTotalWhenUnknown, replaceRefused);
+            const HRESULT hr    = PumpAndPublishFileOnce(sourcePath,
+                                                         destinationPath,
+                                                         bufferIn,
+                                                         bufferBytesIn,
+                                                         progressStreamId,
+                                                         overallCompletedBytes,
+                                                         adoptFileSizeAsTotalWhenUnknown,
+                                                         publishSelectedLeafDiscovery,
+                                                         replaceRefused);
             if (! replaceRefused || attempt >= kMaxReplaceRePrompts || CancelRequested())
             {
                 return hr;
@@ -15410,6 +15504,7 @@ struct CrossFileSystemBridge
                                    uint64_t progressStreamId,
                                    std::atomic<uint64_t>& overallCompletedBytes,
                                    bool adoptFileSizeAsTotalWhenUnknown,
+                                   bool publishSelectedLeafDiscovery,
                                    bool& replaceRefused) noexcept
     {
         replaceRefused = false;
@@ -15461,6 +15556,14 @@ struct CrossFileSystemBridge
         {
             return hr;
         }
+        if (publishSelectedLeafDiscovery)
+        {
+            hr = PublishSelectedLeafDiscovery(txn.fileTotalBytes, txn.hasKnownFileTotalBytes);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+        }
         hr = RouteWriter(txn);
         if (FAILED(hr))
         {
@@ -15499,7 +15602,10 @@ struct CrossFileSystemBridge
         return FinishCleanup(txn);
     }
 
-    HRESULT CopyFile(const std::wstring& sourcePath, std::wstring destinationPath) noexcept
+    // publishSelectedLeafDiscovery is true only when this file IS the selected root. It is not
+    // implied by adoptFileSizeAsTotalWhenUnknown, which sequential directory children also set:
+    // a child's size belongs to its walker's cumulative totals, never to a root closure.
+    HRESULT CopyFile(const std::wstring& sourcePath, std::wstring destinationPath, bool publishSelectedLeafDiscovery = false) noexcept
     {
         if (! buffer || bufferBytes == 0)
         {
@@ -15511,7 +15617,8 @@ struct CrossFileSystemBridge
             InitializeConnectionLimits(sourcePath, destinationPath);
         }
         std::atomic<uint64_t> overallCompletedBytes{completedBytes};
-        const HRESULT hr = PumpAndPublishFile(sourcePath, destinationPath, buffer.get(), bufferBytes, 0, overallCompletedBytes, true);
+        const HRESULT hr =
+            PumpAndPublishFile(sourcePath, destinationPath, buffer.get(), bufferBytes, 0, overallCompletedBytes, true, publishSelectedLeafDiscovery);
         if (SUCCEEDED(hr))
         {
             completedBytes = overallCompletedBytes.load(std::memory_order_acquire);
@@ -15714,7 +15821,9 @@ struct CrossFileSystemBridge
                 *enqueueAsFile = true;
                 return S_OK;
             }
-            return CopyFile(sourcePath, destinationPath);
+            // A selected-root placeholder is an ordinary known regular file, so it owns the same
+            // exact leaf discovery record as any other selected leaf.
+            return CopyFile(sourcePath, destinationPath, isRoot);
         }
         if (classification.authority.kind == FILESYSTEM_BOUND_DIRECTORY)
         {
@@ -15730,6 +15839,17 @@ struct CrossFileSystemBridge
         if (classification.authority.kind != FILESYSTEM_BOUND_LINK)
         {
             return unsupported(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED), L"Source reparse kind has no executable Preserve contract.");
+        }
+        if (isRoot)
+        {
+            // A selected root that classifies as a name-surrogate link is complete as one item under
+            // both Preserve and Skip: neither follows the target, so there is nothing to enumerate
+            // and no target byte total to adopt. Close this root's scope on the item already counted.
+            const HRESULT linkDiscoveryHr = ReportDiscovery(0u, true);
+            if (FAILED(linkDiscoveryHr))
+            {
+                return linkDiscoveryHr;
+            }
         }
         if (reparsePointPolicy == ReparsePointPolicy::Skip)
         {
@@ -17134,7 +17254,10 @@ struct CrossFileSystemBridge
             return dirHr;
         }
 
-        const HRESULT fileHr = CopyFile(sourcePath, destinationPath);
+        // The selected root is one known regular file. Its exact size is not readable until the
+        // source binds, so this root's byte total and its closure are published there, before any
+        // writer, stage or payload work. The exit guard above stays the idempotent terminal fallback.
+        const HRESULT fileHr = CopyFile(sourcePath, destinationPath, true);
         if (fileHr == S_FALSE)
         {
             // Single top-level file skipped at its conflict prompt.
@@ -18832,6 +18955,16 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     InitializeFileSystemOptions(options, static_cast<void*>(&cookie));
                     options.moveMode = FILESYSTEM_MOVE_NATIVE_ONLY;
                     result.providerMutationAttempted = true;
+                    // The provider reports this selected root closed before it attempts the rename.
+                    // That is exact when the rename resolves the whole root, but a regular-directory
+                    // collision turns the same item into a host rename merge that keeps discovering,
+                    // and totals would then grow after being presented as final. Keep the provider's
+                    // cumulative counts and withhold only the one-way closure: whichever traversal
+                    // ends up owning this root closes it once, the merge walk at its true end and
+                    // every other outcome through the per-item scope guard.
+                    cookie.deferDiscoveryClosure.store(true, std::memory_order_release);
+                    const auto resumeDiscoveryClosure =
+                        wil::scope_exit([&]() noexcept { cookie.deferDiscoveryClosure.store(false, std::memory_order_release); });
                     return _fileSystem->MoveItem(sourceText.c_str(), destinationItemText.c_str(), itemFlags, &options, this, static_cast<void*>(&cookie));
                 });
                 result.verification = FileOperations::VerificationState::NotApplicable;

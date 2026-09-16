@@ -28,14 +28,14 @@
 #include <wil/win32_helpers.h>
 #pragma warning(pop)
 
-#include "DxUi/DxUi.h"
-#include "DxUi/DxUiNativeMenuInterop.h"
 #include "EmbeddedViewerBase.h"
 #include "Helpers.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Viewer.h"
+#include <DxUi/DxUi.h>
+#include <DxUi/NativeMenuInterop.h>
 
 struct ID2D1Bitmap;
 struct ID2D1Factory;
@@ -286,11 +286,11 @@ private:
 
     // Viewer state
     wil::unique_hmenu _menuHandle;
-    RedSalamander::DxUi::NativeMenuBarHost _menuBarHost;
+    DxUi::NativeMenuBarHost _menuBarHost;
     wil::unique_hwnd _hFileComboHost;
-    RedSalamander::DxUi::WindowHost _fileComboHost;
-    RedSalamander::DxUi::ComboBox* _fileComboControl = nullptr;
-    bool _fileComboHostPreExpandPopup                = false;
+    DxUi::WindowHost _fileComboHost;
+    DxUi::ComboBox* _fileComboControl = nullptr;
+    bool _fileComboHostPreExpandPopup = false;
 
     RECT _headerRect{};
     RECT _contentRect{};
@@ -317,13 +317,13 @@ private:
     std::atomic_uint64_t _openRequestId{0};
     std::shared_ptr<AsyncOpenSchedulerState> _asyncOpenScheduler;
 #if defined(ENABLE_TESTS)
-    uint64_t _debugFinalSuccessCount   = 0u;
-    uint64_t _debugFinalFailureCount   = 0u;
-    uint64_t _debugPreviewSuccessCount = 0u;
-    uint64_t _debugApplyOrdinal = 0u;
+    uint64_t _debugFinalSuccessCount       = 0u;
+    uint64_t _debugFinalFailureCount       = 0u;
+    uint64_t _debugPreviewSuccessCount     = 0u;
+    uint64_t _debugApplyOrdinal            = 0u;
     uint64_t _debugLastPreviewApplyOrdinal = 0u;
-    uint64_t _debugLastFinalApplyOrdinal = 0u;
-    uint64_t _debugProgressApplyCount = 0u;
+    uint64_t _debugLastFinalApplyOrdinal   = 0u;
+    uint64_t _debugProgressApplyCount      = 0u;
     std::atomic_bool _debugPrefetchCommitPaused{false};
 #endif
     bool _isLoading = false;

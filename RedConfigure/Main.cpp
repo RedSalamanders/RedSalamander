@@ -2,7 +2,6 @@
 #define NOMINMAX
 #include <Windows.h>
 
-#include "DxUi.h"
 #include "Helpers.h"
 #include "MinimumOsVersion.h"
 #include "RedConfigureApp.h"
@@ -11,6 +10,7 @@
 #include "RedConfigureSplashScreen.h"
 #include "SettingsStore.h"
 #include "resource.h"
+#include <DxUi/DxUi.h>
 
 #include <algorithm>
 #include <array>
@@ -179,7 +179,7 @@ private:
             return false;
         }
 
-        _dxHost.SetTheme(RedSalamander::DxUi::MakeDefaultThemePalette(false));
+        _dxHost.SetTheme(DxUi::MakeDefaultThemePalette(false));
 
         SetSplashStatus(IDS_REDCONFIGURE_SPLASH_STATUS_DETECTING_WORKSPACE);
         std::filesystem::path root;
@@ -235,9 +235,9 @@ private:
 
     HINSTANCE _instance = nullptr;
     HWND _hwnd          = nullptr;
-    RedSalamander::DxUi::WindowHost _dxHost;
+    DxUi::WindowHost _dxHost;
     RedConfigure::RedConfigureSession _session;
-    RedSalamander::DxUi::Panel* _root                             = nullptr;
+    DxUi::Panel* _root                                            = nullptr;
     RedConfigure::Ui::RedConfigureRootController* _rootController = nullptr;
 };
 } // namespace
